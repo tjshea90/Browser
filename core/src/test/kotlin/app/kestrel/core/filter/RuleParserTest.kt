@@ -73,12 +73,20 @@ class RuleParserTest {
     fun unsupportedConstructsAreSkippedNotMisread() {
         assertEquals(Skip.REGEX, skipOf("/banner/"))
         assertEquals(Skip.REGEX, skipOf("/ad[sz]/\$script"))
-        for (o in listOf("popup", "csp=script-src 'none'", "redirect=noopjs", "removeparam=x", "match-case", "replace=/a/b/", "header=x", "inline-script", "denyallow=x.com"))
+        for (o in listOf("csp=script-src 'none'", "redirect=noopjs", "removeparam=x", "match-case", "replace=/a/b/", "header=x", "inline-script", "denyallow=x.com"))
             assertEquals("option $o", Skip.UNSUPPORTED_OPTION, skipOf("||e.com^\$$o"))
         assertEquals(Skip.NON_ASCII, skipOf("||bücher.example^"))
         assertEquals(Skip.BAD_SYNTAX, skipOf("||e.com/a b^"))
         assertEquals(Skip.BAD_SYNTAX, skipOf("|\$script"))
         assertEquals(Skip.EMPTY, skipOf("   "))
+    }
+
+    @Test
+    fun popupRules() {
+        assertEquals(RequestType.POPUP, net("||pop.example^\$popup")!!.types)
+        assertEquals(RequestType.POPUP or RequestType.SUBDOCUMENT, net("/earn.php?z=\$popup,subdocument")!!.types)
+        assertEquals("a plain rule never applies to popups", 0, net("||pop.example^")!!.types and RequestType.POPUP)
+        assertEquals("nor does \$all", 0, net("||pop.example^\$all")!!.types and RequestType.POPUP)
     }
 
     @Test

@@ -19,6 +19,9 @@ object RequestType {
     const val OBJECT = 1024
     const val OTHER = 2048
 
+    /** A navigation inside a window the page opened (`$popup` rules). Not part of ALL / ALL_SUBRESOURCES: only explicit rules use it. */
+    const val POPUP = 4096
+
     /** Everything except the main document: what a rule without type options applies to. */
     const val ALL_SUBRESOURCES = 0xFFE
     const val ALL = 0xFFF
@@ -41,6 +44,7 @@ object RequestType {
         "ping", "beacon" -> PING
         "object", "object-subrequest" -> OBJECT
         "other" -> OTHER
+        "popup" -> POPUP
         else -> 0
     }
 

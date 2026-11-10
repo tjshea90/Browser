@@ -1,0 +1,107 @@
+package app.kestrel.core.filter
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
+import org.junit.Before
+import org.junit.Test
+import java.io.File
+
+/**
+ * Regression guard on the REAL bundled snapshot (app/src/main/assets). Skipped when the snapshot is absent.
+ * "Must not block" is the important half: a false positive here is a broken website for the user.
+ */
+class DefaultListsRegressionTest {
+    private lateinit var fs: FilterSet
+    private lateinit var psl: Psl
+
+    @Before
+    fun load() {
+        val kfs = File("../app/src/main/assets/filters/default.kfs")
+        val pslFile = File("../app/src/main/assets/psl.txt")
+        assumeTrue("snapshot not generated", kfs.isFile && pslFile.isFile)
+        fs = FilterSetCodec.read(kfs.readBytes())
+        psl = Psl.parse(pslFile.readLines().asSequence())
+    }
+
+    private fun verdict(url: String, page: String, type: Int) = fs.check(url, page, type, psl)
+
+    @Test
+    fun blocksWellKnownAdAndTrackerRequests() {
+        val s = RequestType.SCRIPT
+        val cases = listOf(
+            Triple("https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js", "news.example", s),
+            Triple("https://securepubads.g.doubleclick.net/tag/js/gpt.js", "news.example", s),
+            Triple("https://www.google-analytics.com/analytics.js", "news.example", s),
+            Triple("https://www.google-analytics.com/g/collect?v=2&tid=G-1", "news.example", RequestType.XHR),
+            Triple("https://connect.facebook.net/en_US/fbevents.js", "shop.example", s),
+            Triple("https://www.facebook.com/tr/?id=1&ev=PageView", "shop.example", RequestType.IMAGE),
+            Triple("https://static.criteo.net/js/ld/publishertag.js", "news.example", s),
+            Triple("https://cdn.taboola.com/libtrc/loader.js", "news.example", s),
+            Triple("https://widgets.outbrain.com/outbrain.js", "news.example", s),
+            Triple("https://c.amazon-adsystem.com/aax2/apstag.js", "news.example", s),
+            Triple("https://ib.adnxs.com/ut/v3", "news.example", RequestType.XHR),
+            Triple("https://sb.scorecardresearch.com/beacon.js", "news.example", s),
+            Triple("https://static.hotjar.com/c/hotjar-1.js", "shop.example", s),
+            Triple("https://bat.bing.com/bat.js", "shop.example", s),
+            Triple("https://px.ads.linkedin.com/collect?pid=1", "shop.example", RequestType.IMAGE),
+            Triple("https://analytics.tiktok.com/i18n/pixel/events.js", "shop.example", s),
+        )
+        val missed = cases.filter { (u, p, t) -> !Verdict.isBlocked(verdict(u, p, t)) }.map { it.first }
+        assertTrue("real lists failed to block: $missed", missed.isEmpty())
+    }
+
+    @Test
+    fun neverBlocksPagesOrEssentialInfrastructure() {
+        val doc = RequestType.DOCUMENT
+        val pages = listOf(
+            "https://en.wikipedia.org/wiki/Web_browser", "https://github.com/", "https://www.google.com/search?q=hello", "https://www.bbc.com/news",
+            "https://www.reddit.com/r/android/", "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "https://www.amazon.com/", "https://news.ycombinator.com/",
+            "https://example.com/", "https://search.brave.com/search?q=hello", "https://duckduckgo.com/?q=hello", "https://www.nytimes.com/",
+            "https://stackoverflow.com/questions/1", "https://developer.android.com/", "https://www.paypal.com/signin", "https://accounts.google.com/signin",
+        )
+        val blockedPages = pages.filter { Verdict.isBlocked(verdict(it, "", doc)) }
+        assertTrue("main-frame navigations blocked: $blockedPages", blockedPages.isEmpty())
+
+        val s = RequestType.SCRIPT
+        val sub = listOf(
+            Triple("https://fonts.googleapis.com/css2?family=Roboto", "news.example", RequestType.STYLESHEET),
+            Triple("https://fonts.gstatic.com/s/roboto/v30/x.woff2", "news.example", RequestType.FONT),
+            Triple("https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js", "news.example", s),
+            Triple("https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js", "news.example", s),
+            Triple("https://code.jquery.com/jquery-3.6.0.min.js", "news.example", s),
+            Triple("https://unpkg.com/react@18/umd/react.production.min.js", "news.example", s),
+            Triple("https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js", "news.example", s),
+            Triple("https://www.google.com/recaptcha/api.js", "login.example", s),
+            Triple("https://www.gstatic.com/recaptcha/releases/x/recaptcha__en.js", "login.example", s),
+            Triple("https://challenges.cloudflare.com/turnstile/v0/api.js", "login.example", s),
+            Triple("https://js.stripe.com/v3/", "shop.example", s),
+            Triple("https://www.paypal.com/sdk/js?client-id=x", "shop.example", s),
+            Triple("https://maps.googleapis.com/maps/api/js?key=x", "shop.example", s),
+            Triple("https://i.ytimg.com/vi/abc/hqdefault.jpg", "www.youtube.com", RequestType.IMAGE),
+            Triple("https://static.licdn.com/sc/h/x.js", "www.linkedin.com", s),
+            Triple("https://cdn.shopify.com/s/files/1/x/theme.js", "shop.example", s),
+            Triple("https://upload.wikimedia.org/wikipedia/commons/a/a9/x.png", "en.wikipedia.org", RequestType.IMAGE),
+            Triple("https://avatars.githubusercontent.com/u/1?v=4", "github.com", RequestType.IMAGE),
+        )
+        val blocked = sub.filter { (u, p, t) -> Verdict.isBlocked(verdict(u, p, t)) }.map { it.first }
+        assertTrue("essential resources blocked (would break sites): $blocked", blocked.isEmpty())
+    }
+
+    @Test
+    fun firstPartyLoadsOfAdvertisedDomainsStillWorkWhereListsSayNothing() {
+        // Visiting the tracker's own site must work (documents are exempt from ordinary rules).
+        for (u in listOf("https://www.doubleclick.net/", "https://www.criteo.com/", "https://www.taboola.com/", "https://hotjar.com/")) {
+            assertEquals(u, Verdict.NONE, verdict(u, "", RequestType.DOCUMENT) and Verdict.BLOCK)
+        }
+    }
+
+    @Test
+    fun snapshotLooksSane() {
+        assertTrue("host rules ${fs.meta.hostRules}", fs.meta.hostRules > 50_000)
+        assertTrue("pattern rules ${fs.meta.patternRules}", fs.meta.patternRules > 5_000)
+        assertTrue("cosmetic ${fs.meta.cosmeticSite}", fs.meta.cosmeticSite > 5_000)
+        val css = fs.cosmeticCss("www.example.com")
+        assertTrue("generic css should be capped, was ${css.length} chars", css.length < 200_000)
+    }
+}

@@ -11,7 +11,11 @@ internal object CosmeticSelectors {
         ":has-text(", ":contains(", ":-abp-", ":xpath(", ":matches-", ":min-text-length(", ":nth-ancestor(", ":others(",
         ":upward(", ":watch-attr(", ":remove(", ":style(", ":if(", ":if-not(", ":not-has(", ":has-text", ":-ext-",
     )
-    private val FORBIDDEN = arrayOf("{", "}", ";", "\\", "<", "url(", "@import", "/*", "expression(", "javascript:", "image-set(", "src(")
+    /** Forbidden anywhere, even inside quotes. */
+    private val FORBIDDEN = arrayOf("\\", "<", "url(", "@import", "/*", "expression(", "javascript:", "image-set(", "src(")
+
+    /** Forbidden outside quoted strings only: inside `[style^="width:100%;"]` a semicolon is data, not syntax. */
+    private const val STRUCTURAL = "{};"
 
     fun isProcedural(selector: String): Boolean {
         val low = selector.lowercase()
@@ -30,12 +34,18 @@ internal object CosmeticSelectors {
         return balanced(selector)
     }
 
+    /**
+     * One pass with quote state: brackets/parens must balance, quotes must close, and the structural characters
+     * `{ } ;` may appear only INSIDE quotes. (Backslashes are rejected globally, so a quote can never be escaped and
+     * this scanner's idea of "inside a string" always agrees with the CSS parser's.)
+     */
     private fun balanced(s: String): Boolean {
         var square = 0
         var paren = 0
         var quote = 0.toChar()
         for (c in s) {
             if (quote != 0.toChar()) { if (c == quote) quote = 0.toChar(); continue }
+            if (STRUCTURAL.indexOf(c) >= 0) return false
             when (c) {
                 '"', '\'' -> quote = c
                 '[' -> square++

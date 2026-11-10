@@ -21,14 +21,14 @@ object Verdict {
 
 /** Bit layout shared by host-rule flags and pattern-rule meta words. */
 internal object Bits {
-    const val TYPES = 0xFFF
-    const val PARTY_SHIFT = 12 // 2 bits: 0 any, 1 third-party only, 2 first-party only
-    const val IMPORTANT = 1 shl 14
-    const val EXCEPTION = 1 shl 15
-    const val CAT_SHIFT = 16 // 2 bits
-    const val LEFT_HOST = 1 shl 18
-    const val LEFT_ANCHOR = 1 shl 19
-    const val RIGHT_ANCHOR = 1 shl 20
+    const val TYPES = 0x1FFF // 13 request-type bits (12 network types + POPUP)
+    const val PARTY_SHIFT = 13 // 2 bits: 0 any, 1 third-party only, 2 first-party only
+    const val IMPORTANT = 1 shl 15
+    const val EXCEPTION = 1 shl 16
+    const val CAT_SHIFT = 17 // 2 bits
+    const val LEFT_HOST = 1 shl 19
+    const val LEFT_ANCHOR = 1 shl 20
+    const val RIGHT_ANCHOR = 1 shl 21
 
     fun pack(types: Int, party: Int, important: Boolean, category: Int): Int =
         (types and TYPES) or (party shl PARTY_SHIFT) or (if (important) IMPORTANT else 0) or (category shl CAT_SHIFT)

@@ -171,6 +171,17 @@ class FilterSetTest {
     }
 
     @Test
+    fun popupRulesOnlyApplyToPopupNavigations() {
+        val f = set("||pop.example^\$popup", "/earn.php?z=\$popup,subdocument")
+        assertTrue(f.blocked("https://pop.example/x", page = "opener.example", type = RequestType.POPUP))
+        assertFalse("not a script", f.blocked("https://pop.example/x", page = "opener.example", type = RequestType.SCRIPT))
+        assertFalse("not a document", f.blocked("https://pop.example/x", page = null, type = RequestType.DOCUMENT))
+        assertTrue(f.blocked("https://a.example/earn.php?z=1", page = "opener.example", type = RequestType.POPUP))
+        assertTrue(f.blocked("https://a.example/earn.php?z=1", page = "opener.example", type = RequestType.SUBDOCUMENT))
+        assertFalse(set("||pop.example^").blocked("https://pop.example/x", page = "o.example", type = RequestType.POPUP))
+    }
+
+    @Test
     fun categoryIsReported() {
         val f = set("||ads.example^")
         assertEquals(Category.ADS, Verdict.category(f.check("https://ads.example/x", "p.example", script)))
@@ -251,6 +262,25 @@ class FilterSetTest {
     }
 
     @Test
+    fun structuralCharactersAreAllowedOnlyInsideQuotes() {
+        val b = FilterSetBuilder()
+        b.addAbpList("t", Category.ADS, sequenceOf(
+            "example.com##div[style^=\"width:100%;height:5px;\"]", // legit: ';' is data inside a string
+            "example.com##.ok2",
+            "example.com##.a{color:red}",            // braces outside quotes: injection
+            "example.com##.b;color:red",               // ';' outside quotes
+            "example.com##.c[x=\"y\"]{x:y}",          // quote closes, then a block
+            "example.com##.d[x=\"unclosed]",          // unbalanced quote
+            "example.com##.e[x=\"a\\\"b\"]",         // backslash-escaped quote
+        ))
+        val css = b.build(1L).cosmeticCss("example.com")
+        assertTrue(css, css.contains("div[style^=\"width:100%;height:5px;\"]{display:none!important}"))
+        assertTrue(css, css.contains(".ok2{"))
+        for (bad in listOf(".a{", ".b;", ".c[", ".d[", ".e[")) assertFalse("$bad must be rejected: $css", css.contains(bad))
+        assertEquals(2, b.report.cosmeticSite)
+    }
+
+    @Test
     fun modernPseudoSelectorsGetTheirOwnRuleSoOldWebViewsDoNotDropTheGroup() {
         val css = set("example.com##div:has(> .ad)", "example.com##.plain").cosmeticCss("example.com")
         assertTrue(css, css.contains("div:has(> .ad){display:none!important}\n"))
@@ -282,7 +312,7 @@ class FilterSetTest {
     fun reportCountsWhatWasSkipped() {
         val b = FilterSetBuilder()
         b.addAbpList("t", Category.ADS, sequenceOf(
-            "! comment", "[Adblock Plus 2.0]", "", "||a.example^", "/regex[0-9]/", "||b.example^\$popup", "||c.example^\$csp=x",
+            "! comment", "[Adblock Plus 2.0]", "", "||a.example^", "/regex[0-9]/", "||b.example^\$replace=/a/b/", "||c.example^\$csp=x",
         ))
         b.build(1L)
         assertEquals(1, b.report.skippedCount(Skip.REGEX))

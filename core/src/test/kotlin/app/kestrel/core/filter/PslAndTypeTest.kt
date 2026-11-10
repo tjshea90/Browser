@@ -56,7 +56,9 @@ class PslAndTypeTest {
         assertEquals(RequestType.XHR, RequestType.fromName("xmlhttprequest"))
         assertEquals(RequestType.XHR, RequestType.fromName("fetch"))
         assertEquals(RequestType.SUBDOCUMENT, RequestType.fromName("frame"))
-        assertEquals(0, RequestType.fromName("popup"))
+        assertEquals(RequestType.POPUP, RequestType.fromName("popup"))
+        assertEquals(0, RequestType.fromName("csp"))
+        assertEquals(0, RequestType.fromName("redirect"))
         assertEquals(0, RequestType.fromName("nonsense"))
     }
 

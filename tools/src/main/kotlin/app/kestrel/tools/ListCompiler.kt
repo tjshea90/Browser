@@ -54,12 +54,10 @@ fun main(args: Array<String>) {
         }
         val file = File(parts[2])
         val t0 = System.nanoTime()
-        file.bufferedReader(Charsets.UTF_8).use { r ->
-            when (parts[0]) {
-                "abp" -> b.addAbpList(file.name, category, r.lineSequence())
-                "hosts" -> b.addHostsList(file.name, category, r.lineSequence())
-                else -> error("unknown format ${parts[0]}")
-            }
+        when (parts[0]) {
+            "abp" -> b.addAbpList(file.name, category, linesOf(file))
+            "hosts" -> b.addHostsList(file.name, category, linesOf(file))
+            else -> error("unknown format ${parts[0]}")
         }
         println("%-34s %6d ms   %s".format(file.name, (System.nanoTime() - t0) / 1_000_000, b.report))
     }
@@ -72,4 +70,23 @@ fun main(args: Array<String>) {
     println("meta: host=${fs.meta.hostRules} hostExc=${fs.meta.hostExceptions} pattern=${fs.meta.patternRules} site=${fs.meta.siteRules} cosSite=${fs.meta.cosmeticSite} cosGeneric=${fs.meta.cosmeticGeneric}")
     println("skipped:")
     for (s in Skip.values()) if (s != Skip.NONE && b.report.skippedCount(s) > 0) println("  %-22s %d".format(s, b.report.skippedCount(s)))
+}
+
+/**
+ * Lines of [file] with uBlock-style `!#include sibling.txt` directives expanded (the published lists are pre-expanded;
+ * repository checkouts are not). Only plain sibling file names are followed, never paths, and nesting is capped.
+ */
+private fun linesOf(file: File, depth: Int = 0): Sequence<String> = sequence {
+    file.bufferedReader(Charsets.UTF_8).use { r ->
+        for (line in r.lineSequence()) {
+            if (line.startsWith("!#include ")) {
+                val name = line.substring(10).trim()
+                val safe = name.isNotEmpty() && depth < 3 && name.indexOf('/') < 0 && name.indexOf('\\') < 0 && !name.startsWith(".")
+                val inc = if (safe) File(file.parentFile, name) else null
+                if (inc != null && inc.isFile) yieldAll(linesOf(inc, depth + 1))
+            } else {
+                yield(line)
+            }
+        }
+    }
 }
