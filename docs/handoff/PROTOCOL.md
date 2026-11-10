@@ -7,8 +7,11 @@ once it is **pushed to origin**. Every level below ends with a push; the higher 
 |---|---|---|---|---|
 | **L0 autosave** | `wip(autosave)` commit + push | automatic: after Write/Edit/Bash (>=120 s apart), on Stop, on PreCompact; SessionStart recovers a dirty tree | hooks | `scripts/autosave.sh [--force]` |
 | **L1 step** | refresh STATE checkpoint block, journal line, commit, push, **verify origin has it** | every finished unit; at least every ~15 min of work | Claude | `scripts/checkpoint.sh "summary"` |
-| **L2 milestone** | L1 + tag `cp/<name>-<utc>` (STATE phase table + RESUME HERE must be updated first) | end of each phase | Claude | `scripts/checkpoint.sh --milestone p3 "summary"` |
-| **L3 release** | L2 + tag `vX.Y.Z`; requires `verify.sh full` green and APK in `dist/` | shippable build | Claude | `scripts/checkpoint.sh --release 0.1.0 "summary"` |
+| **L2 milestone** | L1 + commit subject `checkpoint(milestone <name>): ...` (STATE phase table + RESUME HERE must be updated first) | end of each phase | Claude | `scripts/checkpoint.sh --milestone p3 "summary"` |
+| **L3 release** | L2 + commit subject `release vX.Y.Z: ...`; requires `verify.sh full` green and APK in `dist/` | shippable build | Claude | `scripts/checkpoint.sh --release 0.1.0 "summary"` |
+
+**No git tags:** this environment's git proxy answers HTTP 403 to any non-branch push, and tags would not survive a container reset. Find
+milestones with `git log --grep='^checkpoint(milestone' --grep='^release v' --oneline` (resume.sh prints them).
 
 `checkpoint.sh` prints `CHECKPOINT OK ...` only after `git ls-remote` shows origin at the local HEAD. Anything else
 (`LOCAL-ONLY`, `WARN`) means the work is NOT safe — retry `git push -u origin <branch>` before continuing.

@@ -49,6 +49,7 @@ fi
 
 # 3) the handoff
 echo "--- last commits"; git log --oneline -8 2>/dev/null
+echo "--- last milestones/releases"; git log -4 --oneline --grep='^checkpoint(milestone' --grep='^release v' 2>/dev/null
 echo "--- docs/handoff/STATE.md :: RESUME HERE"
 if [ -f docs/handoff/STATE.md ]; then
   awk '/<!-- RESUME:BEGIN -->/{f=1;next} /<!-- RESUME:END -->/{f=0} f' docs/handoff/STATE.md

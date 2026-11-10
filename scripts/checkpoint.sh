@@ -3,8 +3,9 @@
 # 2/4/8/16s retries) and VERIFY that origin has the commit.
 #   checkpoint.sh [--milestone NAME] [--release VERSION] [-t "Trailer: value"]... "summary"
 #   L1 (default)  after each finished unit of work (~10-20 min)
-#   L2 --milestone  also tags cp/<NAME>-<utc>; update STATE.md phase table BEFORE running
-#   L3 --release    also tags v<VERSION>; run scripts/verify.sh full BEFORE running
+#   L2 --milestone  commit subject becomes "checkpoint(milestone NAME): ..."; update STATE.md phase table BEFORE running
+#   L3 --release    commit subject becomes "release vVERSION: ..."; run scripts/verify.sh full BEFORE running
+#   (No git tags: the environment's git proxy rejects tag pushes. Find milestones with git log --grep.)
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 2
@@ -59,18 +60,14 @@ else
   git commit -q "${args[@]}" || { echo "[kestrel] commit FAILED" >&2; exit 1; }
 fi
 
-# 4) tags (L2/L3)
-TAG=""
-if [ -n "$MILESTONE" ]; then TAG="cp/${MILESTONE}-$(date -u +%Y%m%d-%H%M%S)"; fi
-if [ -n "$RELEASE" ]; then TAG="v${RELEASE}"; fi
-[ -n "$TAG" ] && git tag -f "$TAG" >/dev/null 2>&1
+# 4) NOTE: the git proxy in this environment rejects tag pushes (HTTP 403), and tags would not survive a
+#    container reset anyway. Milestones/releases are found with:  git log --grep='^checkpoint(milestone' --oneline
 
 # 5) push with retries, then verify the remote really has our commit
 if kst_push "$BR" 5; then
-  [ -n "$TAG" ] && { timeout 40 git push -q -f origin "refs/tags/$TAG" 2>/dev/null || echo "[kestrel] tag push failed (non-fatal)" >&2; }
   LOCAL="$(git rev-parse HEAD)"; REMOTE="$(kst_remote_sha "$BR")"
   if [ "$LOCAL" = "$REMOTE" ]; then
-    echo "CHECKPOINT OK  [$LEVEL] $(git rev-parse --short HEAD) is on origin/$BR${TAG:+  tag=$TAG}"
+    echo "CHECKPOINT OK  [$LEVEL] $(git rev-parse --short HEAD) is on origin/$BR"
     date +%s > "$(git rev-parse --git-dir)/kestrel-autosave.stamp"
     exit 0
   fi
