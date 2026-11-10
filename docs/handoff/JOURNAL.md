@@ -7,3 +7,4 @@
 - 2026-11-10T23:20:17Z [L1] core filter engine: parser, host table, token+4-gram index, matcher, cosmetic, codec, seed; 97+ tests incl. 60k-case oracle; 1.7us/req @140k rules
 - 2026-11-10T23:22:50Z [L1] oracle test strengthened with overlapping URL words; 7/7 matcher mutants killed
 - 2026-11-10T23:27:40Z [L1] real EasyList/EasyPrivacy/uBO/PGL snapshot compiled (4.3MB, 102k host + 21k pattern rules), $popup support, include resolution, quote-aware cosmetic sanitizer, real-list regression test (no false positives)
+- 2026-11-10T23:29:53Z [L2] Phase 3 done: core engine complete + real-list snapshot; 114 tests, oracle+mutation validated, no false positives on major sites
