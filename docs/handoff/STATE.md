@@ -1,8 +1,8 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** 2026-11-10T23:22:50Z (L1) on `ccr-a57c163e-mtq8js` after 04d99bc
-- **Summary:** oracle test strengthened with overlapping URL words; 7/7 matcher mutants killed
+- **Last checkpoint:** 2026-11-10T23:27:40Z (L1) on `ccr-a57c163e-mtq8js` after 8095c6c
+- **Summary:** real EasyList/EasyPrivacy/uBO/PGL snapshot compiled (4.3MB, 102k host + 21k pattern rules), $popup support, include resolution, quote-aware cosmetic sanitizer, real-list regression test (no false positives)
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE
