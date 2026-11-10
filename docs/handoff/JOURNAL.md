@@ -10,3 +10,4 @@
 - 2026-11-10T23:29:53Z [L2] Phase 3 done: core engine complete + real-list snapshot; 114 tests, oracle+mutation validated, no false positives on major sites
 - 2026-11-10T23:40:23Z [L1] app: manifest, themes, icons, Prefs, Engine, Shields, Interceptor, WebView factory/clients (compiles clean); JsEscape fix
 - 2026-11-10T23:50:02Z [L1] app UI complete: BrowserActivity (tabs, hibernation, session, navigation, panels, permissions, dialogs, fullscreen, downloads), toolbar, NTP, error screens, settings, shields panel; verify full PASS (lint clean, 2.3MB APK)
+- 2026-11-10T23:57:18Z [L1] 40 Robolectric app tests + 117 core tests green; fixed: JsEscape doubled slash, PING in ambiguous mask (blocked Stripe etc), live-WebView limit not enforced at creation

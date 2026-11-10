@@ -1,8 +1,8 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** 2026-11-10T23:50:02Z (L1) on `ccr-a57c163e-mtq8js` after 24d3ae1
-- **Summary:** app UI complete: BrowserActivity (tabs, hibernation, session, navigation, panels, permissions, dialogs, fullscreen, downloads), toolbar, NTP, error screens, settings, shields panel; verify full PASS (lint clean, 2.3MB APK)
+- **Last checkpoint:** 2026-11-10T23:57:18Z (L1) on `ccr-a57c163e-mtq8js` after 5697a1f
+- **Summary:** 40 Robolectric app tests + 117 core tests green; fixed: JsEscape doubled slash, PING in ambiguous mask (blocked Stripe etc), live-WebView limit not enforced at creation
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE

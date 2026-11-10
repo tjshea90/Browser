@@ -377,6 +377,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
                 wv.loadUrl(pending)
             }
         }
+        enforceLiveLimit() // WebViews are also created by the omnibox pre-warm and by navigating from a new tab, not only by show()
         return wv
     }
 
