@@ -88,7 +88,10 @@ class FilterSetMetamorphicTest {
         if (rnd.nextInt(8) == 0) sb.append(":8080")
         val segs = rnd.nextInt(4)
         for (i in 0 until segs) sb.append('/').append(pick(words))
-        if (rnd.nextBoolean()) sb.append('.').append(pick(listOf("gif", "js", "png", "html")))
+        if (rnd.nextBoolean()) {
+            if (segs == 0) sb.append('/').append(pick(words)) // an extension needs a path; "host:8080.png" is not a valid URL
+            sb.append('.').append(pick(listOf("gif", "js", "png", "html")))
+        }
         if (rnd.nextInt(3) == 0) sb.append("?q=").append(pick(words)).append('&').append(pick(words)).append('=').append(pick(hosts))
         return sb.toString()
     }

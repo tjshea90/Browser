@@ -231,7 +231,6 @@ class FilterSetBuilder {
         val chosen = IntArray(n)
         val hasTok = BooleanArray(n)
         val noTok = ArrayList<Int>()
-        val bucketCount = HashMap<Int, Int>()
         for (i in 0 until n) {
             val c = cand[i]
             if (c == null) { noTok.add(i); continue }
@@ -243,28 +242,82 @@ class FilterSetBuilder {
                 k += 2
             }
             chosen[i] = best; hasTok[i] = true
-            bucketCount[best] = (bucketCount[best] ?: 0) + 1
         }
+        val tokenIndex = buildIndex(chosen, hasTok, n)
 
+        // ---- fallback for rules with no safe whole token (e.g. "foo.js|", "adserver."): index by the rarest literal 4-gram,
+        //      so they cost one probe per URL position instead of being scanned for every single request.
+        val gramCand = arrayOfNulls<IntArray>(n)
+        val gramFreq = HashMap<Int, Int>()
+        for (i in noTok) {
+            val g = literalGrams(list[i].r.pattern)
+            if (g.isNotEmpty()) {
+                gramCand[i] = g
+                for (k in g) gramFreq[k] = (gramFreq[k] ?: 0) + 1
+            }
+        }
+        val gramChosen = IntArray(n)
+        val hasGram = BooleanArray(n)
+        val stillNone = ArrayList<Int>()
+        for (i in noTok) {
+            val g = gramCand[i]
+            if (g == null) { stillNone.add(i); continue }
+            var best = g[0]
+            var bestF = gramFreq[best]!!
+            for (k in 1 until g.size) {
+                val f = gramFreq[g[k]]!!
+                if (f < bestF) { best = g[k]; bestF = f }
+            }
+            gramChosen[i] = best; hasGram[i] = true
+        }
+        val gramIndex = buildIndex(gramChosen, hasGram, n)
+        return PatternTable(
+            n, bytes, offs, meta, dom, pool.copyOf(poolN),
+            tokenIndex.key, tokenIndex.start, tokenIndex.len, tokenIndex.ids,
+            gramIndex.key, gramIndex.start, gramIndex.len, gramIndex.ids,
+            stillNone.toIntArray(),
+        )
+    }
+
+    private class Index(val key: IntArray, val start: IntArray, val len: IntArray, val ids: IntArray)
+
+    /** Open-addressing key -> bucket-of-rule-ids table (CSR layout). Probing must match FilterSet.scanBucket exactly. */
+    private fun buildIndex(keyOf: IntArray, has: BooleanArray, n: Int): Index {
+        val counts = HashMap<Int, Int>()
+        for (i in 0 until n) if (has[i]) counts[keyOf[i]] = (counts[keyOf[i]] ?: 0) + 1
         var cap = 16
-        while (cap < bucketCount.size * 2) cap = cap shl 1
-        val tabKey = IntArray(cap); val tabStart = IntArray(cap); val tabLen = IntArray(cap)
-        val cursor = IntArray(cap)
+        while (cap < counts.size * 2) cap = cap shl 1
+        val key = IntArray(cap); val start = IntArray(cap); val len = IntArray(cap); val cursor = IntArray(cap)
         var running = 0
-        for ((tok, cnt) in bucketCount) {
-            var slot = tok and (cap - 1)
-            while (tabLen[slot] != 0) slot = (slot + 1) and (cap - 1)
-            tabKey[slot] = tok; tabStart[slot] = running; tabLen[slot] = cnt; cursor[slot] = running
-            running += cnt
+        for ((k, c) in counts) {
+            var slot = Hash.slot(k, cap - 1)
+            while (len[slot] != 0) slot = (slot + 1) and (cap - 1)
+            key[slot] = k; start[slot] = running; len[slot] = c; cursor[slot] = running
+            running += c
         }
-        val ruleIds = IntArray(running)
+        val ids = IntArray(running)
         for (i in 0 until n) {
-            if (!hasTok[i]) continue
-            var slot = chosen[i] and (cap - 1)
-            while (!(tabLen[slot] != 0 && tabKey[slot] == chosen[i])) slot = (slot + 1) and (cap - 1)
-            ruleIds[cursor[slot]++] = i
+            if (!has[i]) continue
+            var slot = Hash.slot(keyOf[i], cap - 1)
+            while (!(len[slot] != 0 && key[slot] == keyOf[i])) slot = (slot + 1) and (cap - 1)
+            ids[cursor[slot]++] = i
         }
-        return PatternTable(n, bytes, offs, meta, dom, pool.copyOf(poolN), tabKey, tabStart, tabLen, ruleIds, noTok.toIntArray())
+        return Index(key, start, len, ids)
+    }
+
+    /** Every 4-char window inside the pattern's literal runs (runs are broken by '*' and '^'); at most 64 per rule. */
+    private fun literalGrams(p: String): IntArray {
+        val out = ArrayList<Int>()
+        var i = 0
+        while (i < p.length && out.size < 64) {
+            if (p[i] == '*' || p[i] == '^') { i++; continue }
+            var j = i
+            while (j < p.length && p[j] != '*' && p[j] != '^') j++
+            var g = i
+            while (g + 4 <= j && out.size < 64) { out.add(Hash.gram(p, g)); g++ }
+            i = j
+        }
+        return out.toIntArray()
     }
 
     /** (hash, length) pairs of pattern runs that are guaranteed to appear as WHOLE tokens in any URL the rule matches. */

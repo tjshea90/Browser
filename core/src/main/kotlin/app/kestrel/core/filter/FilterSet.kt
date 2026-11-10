@@ -47,14 +47,21 @@ internal class PatternTable(
     @JvmField val meta: IntArray, // Bits.* per rule
     @JvmField val dom: IntArray, // 0 = no domain constraint, else 1 + offset into domPool
     @JvmField val domPool: LongArray, // [nInclude, nExclude, includeHashes..., excludeHashes...]
-    @JvmField val tabKey: IntArray, // open-addressing table: token hash -> bucket
+    @JvmField val tabKey: IntArray, // open-addressing table: whole-URL-token hash -> bucket of rule ids
     @JvmField val tabStart: IntArray,
     @JvmField val tabLen: IntArray, // 0 = empty slot
     @JvmField val ruleIds: IntArray,
-    @JvmField val noToken: IntArray,
+    @JvmField val gramKey: IntArray, // same structure keyed by a 4-char literal gram, for rules with no safe whole token
+    @JvmField val gramStart: IntArray,
+    @JvmField val gramLen: IntArray,
+    @JvmField val gramRuleIds: IntArray,
+    @JvmField val noToken: IntArray, // rules with neither (e.g. "a*b*c"): scanned for every request, so keep this tiny
 ) {
     companion object {
-        val EMPTY = PatternTable(0, ByteArray(0), IntArray(1), IntArray(0), IntArray(0), LongArray(0), IntArray(16), IntArray(16), IntArray(16), IntArray(0), IntArray(0))
+        val EMPTY = PatternTable(
+            0, ByteArray(0), IntArray(1), IntArray(0), IntArray(0), LongArray(0),
+            IntArray(16), IntArray(16), IntArray(16), IntArray(0), IntArray(16), IntArray(16), IntArray(16), IntArray(0), IntArray(0),
+        )
     }
 }
 
@@ -203,7 +210,7 @@ class FilterSet internal constructor(
                 while (j < n && isAlnum(url[j])) j++
                 val len = j - i
                 if (len in MIN_TOKEN..MAX_TOKEN_LEN) {
-                    scanBucket(t, Hash.token32(url, i, j), ctx)
+                    scanBucket(t, t.tabKey, t.tabStart, t.tabLen, t.ruleIds, Hash.token32(url, i, j), ctx)
                     if (ctx.important) return
                     if (++tokens >= MAX_URL_TOKENS) break
                 }
@@ -212,22 +219,28 @@ class FilterSet internal constructor(
                 i++
             }
         }
+        if (t.gramRuleIds.isNotEmpty() && n >= 4) {
+            for (g in 0..n - 4) {
+                scanBucket(t, t.gramKey, t.gramStart, t.gramLen, t.gramRuleIds, Hash.gram(url, g), ctx)
+                if (ctx.important) return
+            }
+        }
         for (id in t.noToken) {
             evalRule(t, id, ctx)
             if (ctx.important) return
         }
     }
 
-    private fun scanBucket(t: PatternTable, th: Int, ctx: Ctx) {
-        val mask = t.tabKey.size - 1
-        var slot = th and mask
+    private fun scanBucket(t: PatternTable, keys: IntArray, starts: IntArray, lens: IntArray, ids: IntArray, key: Int, ctx: Ctx) {
+        val mask = keys.size - 1
+        var slot = Hash.slot(key, mask)
         while (true) {
-            val len = t.tabLen[slot]
+            val len = lens[slot]
             if (len == 0) return
-            if (t.tabKey[slot] == th) {
-                val st = t.tabStart[slot]
+            if (keys[slot] == key) {
+                val st = starts[slot]
                 for (k in st until st + len) {
-                    evalRule(t, t.ruleIds[k], ctx)
+                    evalRule(t, ids[k], ctx)
                     if (ctx.important) return
                 }
                 return
@@ -373,9 +386,14 @@ class FilterSet internal constructor(
         private fun makeCtx(rawUrl: String, pageHost: String?, typeMask: Int, psl: Psl): Ctx? {
             var s = if (rawUrl.length > MAX_URL) rawUrl.substring(0, MAX_URL) else rawUrl
             s = s.lowercase()
-            val schemeEnd = s.indexOf("://")
-            if (schemeEnd < 0 || schemeEnd > 12) return null // data:, blob:, about:, javascript: ... are never filtered
-            var hs = schemeEnd + 3
+            // Only real network schemes are filtered; data:, blob:, about:, javascript:, file: ... never reach the network.
+            var hs = when {
+                s.startsWith("https://") -> 8
+                s.startsWith("http://") -> 7
+                s.startsWith("wss://") -> 6
+                s.startsWith("ws://") -> 5
+                else -> return null
+            }
             var authEnd = hs
             while (authEnd < s.length) {
                 val c = s[authEnd]

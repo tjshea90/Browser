@@ -34,7 +34,8 @@ object FilterSetCodec {
         val p = fs.patterns
         d.writeInt(p.count)
         bytes(d, p.patBytes); ints(d, p.patOff); ints(d, p.meta); ints(d, p.dom); longs(d, p.domPool)
-        ints(d, p.tabKey); ints(d, p.tabStart); ints(d, p.tabLen); ints(d, p.ruleIds); ints(d, p.noToken)
+        ints(d, p.tabKey); ints(d, p.tabStart); ints(d, p.tabLen); ints(d, p.ruleIds)
+        ints(d, p.gramKey); ints(d, p.gramStart); ints(d, p.gramLen); ints(d, p.gramRuleIds); ints(d, p.noToken)
 
         val c = fs.cosmetic
         longs(d, c.siteHash); ints(d, c.siteOff); bytes(d, c.sitePool)
@@ -73,6 +74,7 @@ object FilterSetCodec {
         val count = b.int
         val pat = PatternTable(
             count, rBytes(b), rInts(b), rInts(b), rInts(b), rLongs(b),
+            rInts(b), rInts(b), rInts(b), rInts(b),
             rInts(b), rInts(b), rInts(b), rInts(b), rInts(b),
         )
         val cos = CosmeticIndex(
@@ -91,16 +93,8 @@ object FilterSetCodec {
         require(p.count >= 0 && p.patOff.size == p.count + 1 && p.meta.size == p.count && p.dom.size == p.count) { "pattern arrays" }
         require(p.patOff[0] == 0 && p.patOff[p.count] == p.patBytes.size) { "pattern offsets" }
         for (i in 0 until p.count) require(p.patOff[i] <= p.patOff[i + 1]) { "pattern offsets not monotonic" }
-        val cap = p.tabKey.size
-        require(cap >= 16 && (cap and (cap - 1)) == 0 && p.tabStart.size == cap && p.tabLen.size == cap) { "token table" }
-        var anyEmpty = false
-        for (i in 0 until cap) {
-            val len = p.tabLen[i]
-            if (len == 0) { anyEmpty = true; continue }
-            require(len > 0 && p.tabStart[i] >= 0 && p.tabStart[i].toLong() + len <= p.ruleIds.size) { "bucket range" }
-        }
-        require(anyEmpty) { "token table has no empty slot (probe would not terminate)" }
-        for (id in p.ruleIds) require(id in 0 until p.count) { "rule id" }
+        validateIndex(p.tabKey, p.tabStart, p.tabLen, p.ruleIds, p.count)
+        validateIndex(p.gramKey, p.gramStart, p.gramLen, p.gramRuleIds, p.count)
         for (id in p.noToken) require(id in 0 until p.count) { "no-token id" }
         for (i in 0 until p.count) {
             val d = p.dom[i]
@@ -113,6 +107,20 @@ object FilterSetCodec {
         validateGroups(c.siteHash.size, c.siteOff, c.sitePool.size)
         validateGroups(c.excHash.size, c.excOff, c.excPool.size)
         require(c.genericCount >= 0) { "generic count" }
+    }
+
+    /** The probe loop only terminates if the table has an empty slot; bucket ranges and ids must be in bounds. */
+    private fun validateIndex(key: IntArray, start: IntArray, len: IntArray, ids: IntArray, count: Int) {
+        val cap = key.size
+        require(cap >= 16 && (cap and (cap - 1)) == 0 && start.size == cap && len.size == cap) { "index table shape" }
+        var anyEmpty = false
+        for (i in 0 until cap) {
+            val l = len[i]
+            if (l == 0) { anyEmpty = true; continue }
+            require(l > 0 && start[i] >= 0 && start[i].toLong() + l <= ids.size) { "bucket range" }
+        }
+        require(anyEmpty) { "index table has no empty slot (probe would not terminate)" }
+        for (id in ids) require(id in 0 until count) { "rule id out of range" }
     }
 
     private fun validateGroups(n: Int, offs: IntArray, poolSize: Int) {

@@ -1,8 +1,8 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** 2026-11-10T23:00:18Z (L2) on `ccr-a57c163e-mtq8js` after a3e7739
-- **Summary:** Phase 2 done: Gradle skeleton (core/app/tools), R8 release APK builds + audited, verify.sh gate
+- **Last checkpoint:** 2026-11-10T23:20:17Z (L1) on `ccr-a57c163e-mtq8js` after 0762a9f
+- **Summary:** core filter engine: parser, host table, token+4-gram index, matcher, cosmetic, codec, seed; 97+ tests incl. 60k-case oracle; 1.7us/req @140k rules
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE

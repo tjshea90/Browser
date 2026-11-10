@@ -31,6 +31,19 @@ internal object Hash {
         return (h xor (h ushr 32)).toInt()
     }
 
+    /** Open-addressing slot for an int key (shared by builder and matcher so both probe identically). */
+    @JvmStatic
+    fun slot(key: Int, mask: Int): Int {
+        var h = key * -1640531527 // 2^32 / golden ratio
+        h = h xor (h ushr 16)
+        return h and mask
+    }
+
+    /** Four ASCII chars packed into one int: the key of the 4-gram fallback index. */
+    @JvmStatic
+    fun gram(s: CharSequence, i: Int): Int =
+        ((s[i].code and 0xFF) shl 24) or ((s[i + 1].code and 0xFF) shl 16) or ((s[i + 2].code and 0xFF) shl 8) or (s[i + 3].code and 0xFF)
+
     /** Index of the first element equal to [key] in a sorted array, or -1. */
     @JvmStatic
     fun firstIndexOf(sorted: LongArray, key: Long): Int {
