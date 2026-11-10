@@ -46,6 +46,6 @@ interface TabHost {
     fun download(tab: Tab, url: String, userAgent: String?, contentDisposition: String?, mime: String?, length: Long)
 
     /** Non-web URL (intent:, mailto:, custom scheme). Returns true when handled/blocked (never loaded into the WebView). */
-    fun externalLaunch(tab: Tab, url: String): Boolean
+    fun externalLaunch(tab: Tab, url: String, userGesture: Boolean): Boolean
     fun hitTestLongPress(tab: Tab, view: WebView): Boolean
 }

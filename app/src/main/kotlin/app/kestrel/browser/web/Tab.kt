@@ -49,6 +49,8 @@ class Tab(@JvmField val id: Long) {
     val httpOkHosts = HashSet<String>()
     val dangerOkHosts = HashSet<String>()
     var findOpen = false
+    var dialogCount = 0 // JS alert/confirm/prompt count for this page load (spam guard)
+    var dialogsSuppressed = false
 
     val isNewTab: Boolean get() = url.isEmpty() && pendingLoad == null
     val displayTitle: String get() = if (title.isNotBlank()) title else if (url.isEmpty()) "New tab" else url

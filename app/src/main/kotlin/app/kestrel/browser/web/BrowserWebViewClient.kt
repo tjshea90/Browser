@@ -51,7 +51,7 @@ class BrowserWebViewClient(
             }
             return false
         }
-        return host.externalLaunch(tab, url)
+        return host.externalLaunch(tab, url, request.hasGesture())
     }
 
     private fun load(view: WebView, url: String) {
@@ -67,6 +67,8 @@ class BrowserWebViewClient(
         tab.loading = true
         tab.progress = maxOf(tab.progress, 5)
         tab.resetPageCounters()
+        tab.dialogCount = 0
+        tab.dialogsSuppressed = false
         tab.shields = Shields.effective(prefs, UrlParts.hostOf(url))
         WebViewFactory.configure(view, tab, prefs)
         val failing = (tab.error as? ErrorScreen.Network)?.failingUrl
