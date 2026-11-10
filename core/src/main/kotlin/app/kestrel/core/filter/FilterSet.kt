@@ -177,9 +177,7 @@ class FilterSet internal constructor(
             }
             val dot = h.indexOf('.', start)
             if (dot < 0) break
-            val next = dot + 1
-            if (h.indexOf('.', next) < 0) break // never look up a bare TLD
-            start = next
+            start = dot + 1 // walk down to the bare TLD too: lists do contain TLD rules such as ||zip^
         }
     }
 
@@ -324,7 +322,7 @@ class FilterSet internal constructor(
             return false
         }
 
-        /** Hashes of [host] and each parent suffix that still contains a dot (a single-label host hashes as itself). */
+        /** Hashes of [host] and EVERY parent suffix down to the bare TLD ("a.b.com" -> a.b.com, b.com, com). */
         internal fun suffixHashes(host: String?): LongArray {
             if (host.isNullOrEmpty()) return LongArray(0)
             var count = 1
@@ -336,9 +334,7 @@ class FilterSet internal constructor(
                 out[n++] = Hash.h64(host, start, host.length)
                 val dot = host.indexOf('.', start)
                 if (dot < 0) break
-                val next = dot + 1
-                if (host.indexOf('.', next) < 0) break
-                start = next
+                start = dot + 1
             }
             return if (n == out.size) out else out.copyOf(n)
         }
