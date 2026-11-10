@@ -1,8 +1,8 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** 2026-11-10T23:29:53Z (L2) on `ccr-a57c163e-mtq8js` after 84a5e5a
-- **Summary:** Phase 3 done: core engine complete + real-list snapshot; 114 tests, oracle+mutation validated, no false positives on major sites
+- **Last checkpoint:** 2026-11-10T23:40:23Z (L1) on `ccr-a57c163e-mtq8js` after 24ba86d
+- **Summary:** app: manifest, themes, icons, Prefs, Engine, Shields, Interceptor, WebView factory/clients (compiles clean); JsEscape fix
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE

@@ -18,7 +18,7 @@ object JsEscape {
                 c == '\t' -> sb.append("\\t")
                 c == ' ' -> sb.append("\\u2028") // line terminators are illegal inside JS string literals
                 c == ' ' -> sb.append("\\u2029")
-                c == '<' && i + 1 < s.length && s[i + 1] == '/' -> sb.append("<\\/") // never emit "</script" / "</style"
+                c == '<' && i + 1 < s.length && s[i + 1] == '/' -> sb.append("<\\") // "<" + "\" here; the "/" is appended next iteration: never emits "</script" / "</style"
                 c < ' ' -> sb.append(String.format("\\u%04x", c.code))
                 else -> sb.append(c)
             }
