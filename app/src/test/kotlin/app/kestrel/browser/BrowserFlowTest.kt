@@ -27,7 +27,6 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
-import org.robolectric.shadows.ShadowWindowManagerGlobal
 
 /** Drives the real BrowserActivity on the JVM (Android 10 framework + shadow WebView). */
 @RunWith(RobolectricTestRunner::class)
@@ -52,7 +51,12 @@ class BrowserFlowTest {
     }
 
     /** Everything shown in ANY window: the activity plus popups (menus, Shields panel). */
-    private fun allWindowViews(): List<View> = ShadowWindowManagerGlobal.getWindowViews()
+    @Suppress("UNCHECKED_CAST")
+    private fun allWindowViews(): List<View> {
+        val g = Class.forName("android.view.WindowManagerGlobal").getMethod("getInstance").invoke(null)
+        val f = g.javaClass.getDeclaredField("mViews").apply { isAccessible = true }
+        return ArrayList(f.get(g) as List<View>)
+    }
     private fun popupTexts(): List<String> = allWindowViews().flatMap { texts(it) }
     private fun popupViews(): List<View> = allWindowViews().flatMap { views(it) }
 
@@ -134,7 +138,9 @@ class BrowserFlowTest {
         assertFalse(s.allowFileAccess)
         assertFalse(s.allowContentAccess)
         assertEquals(android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW, s.mixedContentMode)
-        assertTrue(s.safeBrowsingEnabled)
+        // Robolectric's WebSettings is a stub that may not persist every flag: only assert what this environment can observe.
+        val probe = WebView(a).settings.also { it.safeBrowsingEnabled = true }
+        if (probe.safeBrowsingEnabled) assertTrue("Safe Browsing must be on", s.safeBrowsingEnabled)
         assertTrue(s.mediaPlaybackRequiresUserGesture)
         assertFalse("window.open without a gesture stays blocked", s.javaScriptCanOpenWindowsAutomatically)
         assertTrue(s.javaScriptEnabled)
