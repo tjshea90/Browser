@@ -1,5 +1,6 @@
 package app.kestrel.browser.web
 
+import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.net.http.SslError
 import android.os.Message
@@ -133,6 +134,8 @@ class BrowserWebViewClient(
         return true
     }
 
+    // proceed() is only reached after the user explicitly chose "Proceed (unsafe)" for this host on the native warning screen.
+    @SuppressLint("WebViewClientOnReceivedSslError")
     override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
         val url = error.url ?: ""
         val h = UrlParts.hostOf(url) ?: ""

@@ -70,6 +70,7 @@ android {
         abortOnError = true
         checkReleaseBuilds = true
         warningsAsErrors = false
+        lintConfig = file("lint.xml")
     }
 }
 

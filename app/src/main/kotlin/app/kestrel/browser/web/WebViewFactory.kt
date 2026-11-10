@@ -1,5 +1,6 @@
 package app.kestrel.browser.web
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.Configuration
 import android.os.Build
@@ -33,6 +34,7 @@ object WebViewFactory {
         return if (desktop) UserAgents.desktop(d) else UserAgents.mobile(d)
     }
 
+    @SuppressLint("SetJavaScriptEnabled") // a browser must run page scripts; the user can turn them off per site (Shields)
     fun create(host: TabHost, tab: Tab, prefs: Prefs, interceptor: Interceptor): WebView {
         val ctx = host.activity
         val wv: WebView = if (Proc.isPrivate) PrivateWebView(ctx) else WebView(ctx)
@@ -80,6 +82,7 @@ object WebViewFactory {
     }
 
     /** Settings that depend on preferences, the page's Shields, and connectivity. Cheap; safe to call any time on the UI thread. */
+    @SuppressLint("SetJavaScriptEnabled")
     fun configure(wv: WebView, tab: Tab, prefs: Prefs) {
         val ctx = wv.context
         val s = wv.settings

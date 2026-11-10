@@ -1,5 +1,6 @@
 package app.kestrel.browser
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.ActivityManager
 import android.app.AlertDialog
@@ -80,11 +81,9 @@ import app.kestrel.browser.web.WebViewFactory
 import app.kestrel.core.session.Session
 import app.kestrel.core.session.SessionCodec
 import app.kestrel.core.session.TabRecord
-import app.kestrel.core.shield.DataSaver
 import app.kestrel.core.url.Nav
 import app.kestrel.core.url.Omnibox
 import app.kestrel.core.url.UrlParts
-import app.kestrel.core.url.UserAgents
 import java.io.File
 
 /**
@@ -124,7 +123,6 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
     private var pendingGeo: Pair<String, GeolocationPermissions.Callback>? = null
     private var backCallback: Any? = null
     private var suggestSeq = 0
-    private var started = false
 
     private val netListener: () -> Unit = { onNetworkChanged() }
     private val saveRunnable = Runnable { saveSessionNow() }
@@ -137,8 +135,10 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         Shields.init(this)
         pal = Pal(this, isPrivate)
         if (isPrivate) window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
-        window.statusBarColor = pal.chromeBg
-        window.navigationBarColor = pal.chromeBg
+        @Suppress("DEPRECATION") run { // no-ops on Android 15+ (edge-to-edge); needed for the private window's colored bars on older versions
+            window.statusBarColor = pal.chromeBg
+            window.navigationBarColor = pal.chromeBg
+        }
         buildUi()
         installBackHandling()
         NetworkMonitor.addListener(netListener)
@@ -164,12 +164,12 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
     override fun onStart() {
         super.onStart()
         NetworkMonitor.start(this)
-        WebView.enableSlowWholeDocumentDraw().let { }
-        started = true
     }
 
     override fun onResume() {
         super.onResume()
+        val t = current
+        if (t != null && !t.isNewTab && t.webView == null) attachContent(t) // hibernated while we were in the background: bring it back (from cache)
         current?.webView?.onResume()
         current?.webView?.resumeTimers()
         refreshNtpIfShown()
@@ -221,7 +221,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         super.onTrimMemory(level)
         // 10/15 = RUNNING_LOW/CRITICAL (we are visible); 20 = UI_HIDDEN (user left); 60+ = we are a prime kill candidate.
         if (level >= 10) { for (t in tabs.toList()) if (t !== current) hibernate(t) }
-        if (level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE && !started.not() && !window.decorView.hasWindowFocus()) current?.let { hibernate(it) }
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE && !window.decorView.hasWindowFocus()) current?.let { hibernate(it) }
     }
 
     // ================================================================== UI construction
@@ -253,7 +253,11 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         root.addView(suggestions, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(54) })
         tabSwitcher = TabSwitcher(this, pal, object : TabSwitcher.Listener {
             override fun select(tab: Tab) { hideTabSwitcher(); show(tab) }
-            override fun close(tab: Tab) { doCloseTab(tab); tabSwitcher.bind(tabs, current); if (tabs.size == 1 && tabs[0].isNewTab && tab.isNewTab) hideTabSwitcher() }
+            override fun close(tab: Tab) {
+                val wasLast = tabs.size == 1
+                doCloseTab(tab)
+                if (wasLast) hideTabSwitcher() else tabSwitcher.bind(tabs, current)
+            }
             override fun newTab() { hideTabSwitcher(); newTabAndShow() }
             override fun dismiss() { hideTabSwitcher() }
         }).apply { visibility = View.GONE }
@@ -842,6 +846,8 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         }
     }
 
+    // Serves Android 10-12. On Android 13+ (incl. 16's predictive back) the OnBackInvokedCallback registered in installBackHandling() runs instead.
+    @SuppressLint("GestureBackNavigation")
     @Deprecated("Used below API 33; API 33+ uses OnBackInvokedCallback")
     override fun onBackPressed() { if (!handleBack()) moveTaskToBack(true) }
 
@@ -890,7 +896,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         customCallback = cb
         fullscreen.addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         fullscreen.visibility = View.VISIBLE
-        setImmersive(true)
+        applyImmersive(true)
     }
 
     override fun exitFullscreen() {
@@ -898,12 +904,12 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         fullscreen.removeView(v)
         fullscreen.visibility = View.GONE
         customView = null
-        setImmersive(false)
+        applyImmersive(false)
         customCallback?.onCustomViewHidden()
         customCallback = null
     }
 
-    private fun setImmersive(on: Boolean) {
+    private fun applyImmersive(on: Boolean) {
         if (Build.VERSION.SDK_INT >= 30) {
             val c = window.insetsController ?: return
             if (on) { c.hide(WindowInsets.Type.systemBars()); c.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE } else c.show(WindowInsets.Type.systemBars())
@@ -933,17 +939,17 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
 
     override fun webPermission(tab: Tab, request: PermissionRequest) {
         val grantable = ArrayList<String>()
-        val android = ArrayList<String>()
+        val needed = ArrayList<String>()
         val names = ArrayList<String>()
         for (r in request.resources) when (r) {
-            PermissionRequest.RESOURCE_VIDEO_CAPTURE -> { grantable.add(r); android.add(android.Manifest.permission.CAMERA); names.add("camera") }
-            PermissionRequest.RESOURCE_AUDIO_CAPTURE -> { grantable.add(r); android.add(android.Manifest.permission.RECORD_AUDIO); names.add("microphone") }
+            PermissionRequest.RESOURCE_VIDEO_CAPTURE -> { grantable.add(r); needed.add(android.Manifest.permission.CAMERA); names.add("camera") }
+            PermissionRequest.RESOURCE_AUDIO_CAPTURE -> { grantable.add(r); needed.add(android.Manifest.permission.RECORD_AUDIO); names.add("microphone") }
         }
         if (grantable.isEmpty()) { request.deny(); return }
         val host = request.origin.host ?: request.origin.toString()
         askYesNo("$host wants to use your ${names.joinToString(" and ")}", "Only allow this if you trust the site.", "Allow", "Block", { allow ->
             if (!allow) { request.deny(); return@askYesNo }
-            val missing = android.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+            val missing = needed.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
             if (missing.isEmpty()) request.grant(grantable.toTypedArray()) else {
                 pendingWeb = request to grantable.toTypedArray()
                 requestPermissions(missing.toTypedArray(), REQ_WEB)
