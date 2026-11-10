@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="window_bg">#FF121212</color>
+    <color name="chrome_bg">#FF1F2023</color>
+    <color name="chrome_fg">#FFE8EAED</color>
+    <color name="chrome_fg_muted">#FF9AA0A6</color>
+    <color name="pill_bg">#FF35363A</color>
+    <color name="divider">#FF3C4043</color>
+    <color name="accent">#FFFF8A50</color>
+    <color name="accent_on">#FF1A1A1A</color>
+    <color name="danger">#FFF28B82</color>
+    <color name="warn">#FFFDD663</color>
+    <color name="ok">#FF81C995</color>
+    <color name="card_bg">#FF1F2023</color>
+    <color name="scrim">#99000000</color>
+</resources>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Framework-only theme (no AppCompat/Material): DeviceDefault.DayNight exists since API 29 = the device's own API level. -->
+    <style name="Theme.Kestrel" parent="@android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowBackground">@color/window_bg</item>
+        <item name="android:statusBarColor">@color/chrome_bg</item>
+        <item name="android:navigationBarColor">@color/chrome_bg</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <!-- Our native UI has its own dark palette; do not let the OS "force dark" re-colour it a second time. -->
+        <item name="android:forceDarkAllowed">false</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+        <item name="android:textColorPrimary">@color/chrome_fg</item>
+        <item name="android:textColorSecondary">@color/chrome_fg_muted</item>
+    </style>
+</resources>
