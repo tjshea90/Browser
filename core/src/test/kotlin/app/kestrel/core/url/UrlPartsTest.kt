@@ -25,7 +25,7 @@ class UrlPartsTest {
         val p = UrlParts.parse("http://good.com@evil.com/login")!!
         assertEquals("evil.com", p.host)
         assertEquals("good.com", p.userInfo)
-        assertEquals("evil.com", UrlParts.parse("https://user:pw@host.example/")!!.host)
+        assertEquals("host.example", UrlParts.parse("https://user:pw@host.example/")!!.host)
         assertEquals("user:pw", UrlParts.parse("https://user:pw@host.example/")!!.userInfo)
     }
 
