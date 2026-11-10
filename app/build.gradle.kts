@@ -66,6 +66,13 @@ android {
         }
     }
 
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
+    }
+
     lint {
         abortOnError = true
         checkReleaseBuilds = true
@@ -87,4 +94,13 @@ kotlin {
 
 dependencies {
     implementation(project(":core"))
+    testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+}
+
+// Robolectric downloads its Android framework jar at test time; the sandbox's Maven Central route is the Google-hosted mirror.
+tasks.withType<Test>().configureEach {
+    systemProperty("robolectric.dependency.repo.url", "https://maven-central.storage-download.googleapis.com/maven2/")
+    systemProperty("robolectric.dependency.repo.id", "central")
+    jvmArgs("-Xmx2g")
 }

@@ -111,6 +111,9 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
 
     private val tabs = ArrayList<Tab>()
     private var current: Tab? = null
+
+    /** For tests (same module): the selected tab. */
+    internal val currentTab: Tab? get() = current
     private var nextTabId = 1L
     private var db: BrowserDb? = null
     private val interceptor by lazy { Interceptor(this, prefs) }
