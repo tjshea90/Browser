@@ -33,6 +33,10 @@ scripting), `redirect=`/`csp=`/`replace=`/`removeparam=`/`cname`/`denyallow` opt
 uses, installs the assets, and runs `DefaultListsRegressionTest` (must block known ad/tracker URLs, must NOT block 16 major sites' pages
 or 18 essential third-party resources such as fonts, CDNs, reCAPTCHA, Stripe, PayPal, Maps).
 
-## On-device update sources (Phase 5)
-Defined in code (`FilterSources`), HTTPS only, one host where possible so a single TLS connection serves all lists on the hotspot.
-URLs must be verified from a networked machine; a failing source is reported in Settings, never fatal (the bundled/previous set stays active).
+## On-device update sources
+Defined in code (`FilterSources`), HTTPS only. Verified reachable on 2026-11-10 via the `web-fetch` agent (curl is blocked in the sandbox):
+EasyList (2.0 MB), EasyPrivacy (1.5 MB), uBlock `filters.min` (1.9 MB), `privacy.min` (141 KB), `badware.min` (165 KB), `unbreak.min` (178 KB),
+and the EasyList cookie list at `secure.fanboy.co.nz/fanboy-cookiemonster.txt` (0.9 MB). A first guess at a uAssets mirror URL for the cookie list was a
+404 and was replaced. Total about 6.8 MB uncompressed, roughly 2 MB gzipped; unchanged lists cost a conditional-GET round trip (a few hundred bytes).
+`FilterUpdater` keeps the SAFETY INVARIANT: the compiled set only replaces the active one if every list is available, the new rule count is >= 60 % of the old
+and >= 20 000, and it round-trips through the codec. A failing source is reported in Settings and is never fatal.

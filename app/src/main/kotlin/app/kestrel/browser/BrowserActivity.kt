@@ -53,6 +53,8 @@ import app.kestrel.browser.data.Prefs
 import app.kestrel.browser.net.Downloads
 import app.kestrel.browser.net.NetworkMonitor
 import app.kestrel.browser.shield.Engine
+import app.kestrel.browser.shield.FilterUpdater
+import app.kestrel.browser.shield.UpdateJob
 import app.kestrel.browser.shield.Shields
 import app.kestrel.browser.ui.ErrorView
 import app.kestrel.browser.ui.FindBar
@@ -148,7 +150,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         NetworkMonitor.addListener(netListener)
         if (!isPrivate) {
             db = BrowserDb(this)
-            Io.exec { db?.purge(5000, 90) }
+            Io.exec { db?.purge(5000, 90); UpdateJob.schedule(applicationContext) }
         }
         val firstTab = Tab(nextTabId++)
         tabs.add(firstTab)
@@ -686,15 +688,27 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
 
     private val settingsListener = object : SettingsListener {
         override fun closeSettings() { this@BrowserActivity.closeSettings() }
-        override fun prefsChanged() { for (t in tabs) { t.shields = Shields.effective(prefs, t.topHost); t.webView?.let { WebViewFactory.configure(it, t, prefs) } } }
+        override fun prefsChanged() {
+            for (t in tabs) { t.shields = Shields.effective(prefs, t.topHost); t.webView?.let { WebViewFactory.configure(it, t, prefs) } }
+            if (!isPrivate) Io.exec { UpdateJob.schedule(applicationContext) } // the update schedule may have changed
+        }
         override fun clearBrowsingData() { this@BrowserActivity.clearBrowsingData() }
         override fun resetSiteShields() { Shields.clearAll(); toast("Per-site Shields reset") }
-        override fun updateFiltersNow() { toast("Filter updates arrive in the next build") }
+        override fun updateFiltersNow() {
+            toast("Checking the filter lists…")
+            // own thread: compiling the lists can take several seconds on this CPU and must not hold up history writes on the IO thread
+            Thread({
+                val r = FilterUpdater.run(applicationContext, manual = true)
+                Io.ui { toast(r.message); settingsView?.rebuild() }
+            }, "kestrel-update-now").apply { priority = Thread.MIN_PRIORITY; isDaemon = true }.start()
+        }
         override fun resetDataCounter() { DataMeter.reset(prefs) }
         override fun filterStatus(): String {
             val fs = Engine.peek()
             val rules = fs?.meta?.let { it.totalNetwork } ?: 0
-            return "${Engine.sourceDescription}: ${"%,d".format(rules)} network rules" + if (prefs.lastUpdateMs > 0) "\nLast update: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(prefs.lastUpdateMs))}" else ""
+            return "${Engine.sourceDescription}: ${"%,d".format(rules)} network rules" +
+                (if (prefs.lastUpdateMs > 0) "\nLast successful check: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(prefs.lastUpdateMs))}" else "") +
+                (if (prefs.lastUpdateNote.isNotEmpty()) "\n${prefs.lastUpdateNote}" else "")
         }
         override fun dataUsed(): String = DataMeter.totalBytes(prefs).let { if (it < 0) "not available on this device" else NewTabPage.fmtBytes(it) }
         override fun aboutLines(): List<Pair<String, String>> = this@BrowserActivity.aboutLines()
