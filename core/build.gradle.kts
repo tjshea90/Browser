@@ -10,13 +10,14 @@ plugins {
 }
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_11
-    targetCompatibility = JavaVersion.VERSION_11
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
 }
 
 kotlin {
     compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_11)
+        // -Xjdk-release=8 requires the JVM target to be 1.8 as well (Kotlin rejects any other combination).
+        jvmTarget.set(JvmTarget.JVM_1_8)
         freeCompilerArgs.addAll(
             "-Xjdk-release=8",
             "-Xno-param-assertions",
