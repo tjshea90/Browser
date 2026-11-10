@@ -315,7 +315,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         return t
     }
 
-    private fun newTabAndShow(): Tab { val t = newTabInternal(); show(t); focusUrlBar(); return t }
+    internal fun newTabAndShow(): Tab { val t = newTabInternal(); show(t); focusUrlBar(); return t }
 
     private fun openInNewTabOrCurrent(url: String) {
         val cur = current
@@ -745,7 +745,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         Io.main.postDelayed(saveRunnable, 600)
     }
 
-    private fun saveSessionNow() {
+    internal fun saveSessionNow() {
         if (isPrivate || tabs.isEmpty()) return
         val sel = current?.id ?: tabs.last().id
         val records = tabs.map { TabRecord(it.id, it.url.ifEmpty { "about:blank" }, it.title, it.lastActive, it.parentId, it.desktop) }
@@ -997,7 +997,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
     }
 
     /** JS dialogs: origin shown, only for the visible tab, and a "stop this page" checkbox after the third one. */
-    private fun jsDialog(tab: Tab, url: String, message: String, input: String?, hasCancel: Boolean, onOk: (String?) -> Unit, onCancel: () -> Unit): Boolean {
+    internal fun jsDialog(tab: Tab, url: String, message: String, input: String?, hasCancel: Boolean, onOk: (String?) -> Unit, onCancel: () -> Unit): Boolean {
         if (tab.dialogsSuppressed || isFinishing || isDestroyed || tab !== current) { onCancel(); return true }
         tab.dialogCount++
         val host = UrlParts.hostOf(url) ?: url

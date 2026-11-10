@@ -84,5 +84,7 @@ class PslAndTypeTest {
         assertEquals(RequestType.SUBDOCUMENT, inf(dest = "iframe"))
         assertTrue((inf(dest = "empty") and RequestType.XHR) != 0)
         assertEquals("a dot in a directory name is not an extension", RequestType.UNKNOWN, inf(path = "/v1.2/data"))
+        assertEquals("ambiguous requests must never be treated as pings (catch-all \$ping rules would block everything)", 0, RequestType.UNKNOWN and RequestType.PING)
+        assertEquals(0, inf(dest = "empty") and RequestType.PING)
     }
 }

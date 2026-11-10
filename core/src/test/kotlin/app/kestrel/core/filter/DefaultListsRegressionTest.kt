@@ -89,6 +89,21 @@ class DefaultListsRegressionTest {
     }
 
     @Test
+    fun essentialResourcesSurviveEvenWhenTheRequestTypeIsAmbiguous() {
+        // shouldInterceptRequest cannot always tell the type (extension-less script URLs, fetch()): such requests must still pass.
+        val essential = listOf(
+            "https://js.stripe.com/v3/", "https://fonts.googleapis.com/css2?family=Roboto", "https://www.google.com/recaptcha/api.js",
+            "https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js", "https://maps.googleapis.com/maps/api/js?key=x",
+            "https://www.paypal.com/sdk/js?client-id=x", "https://challenges.cloudflare.com/turnstile/v0/api.js",
+            "https://api.github.com/repos/x/y", "https://accounts.google.com/gsi/client", "https://www.gstatic.com/firebasejs/9/firebase-app.js",
+        )
+        for (type in listOf(RequestType.UNKNOWN, RequestType.XHR or RequestType.OTHER, RequestType.OTHER)) {
+            val blocked = essential.filter { Verdict.isBlocked(verdict(it, "news.example", type)) }
+            assertTrue("blocked for type mask $type: $blocked", blocked.isEmpty())
+        }
+    }
+
+    @Test
     fun firstPartyLoadsOfAdvertisedDomainsStillWorkWhereListsSayNothing() {
         // Visiting the tracker's own site must work (documents are exempt from ordinary rules).
         for (u in listOf("https://www.doubleclick.net/", "https://www.criteo.com/", "https://www.taboola.com/", "https://hotjar.com/")) {

@@ -26,8 +26,12 @@ object RequestType {
     const val ALL_SUBRESOURCES = 0xFFE
     const val ALL = 0xFFF
 
-    /** Ambiguous fetch-like request whose real type we could not determine. */
-    const val UNKNOWN = SCRIPT or XHR or OTHER or PING
+    /**
+     * Ambiguous fetch-like request whose real type we could not determine. Deliberately WITHOUT PING: the real lists contain a
+     * catch-all `$ping` rule (block every third-party ping), so including PING here would block every request whose type we
+     * cannot infer (e.g. `https://js.stripe.com/v3/`). We never infer PING at all.
+     */
+    const val UNKNOWN = SCRIPT or XHR or OTHER
 
     /** Type option name -> bit, or 0 when the name is not a (supported) request type. */
     @JvmStatic
@@ -66,7 +70,7 @@ object RequestType {
                 "font" -> return FONT
                 "audio", "video", "track" -> return MEDIA
                 "object", "embed" -> return OBJECT
-                "empty" -> return XHR or OTHER or PING
+                "empty" -> return XHR or OTHER
                 "websocket" -> return WEBSOCKET
             }
         }
