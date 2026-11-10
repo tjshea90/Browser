@@ -1,3 +1,33 @@
 # simple-workflow plugin artifacts (local-only; delete entries to share via git)
 .simple-workflow/
 .simple-workflow
+
+# Gradle / Android build output
+.gradle/
+.kotlin/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+local.properties
+*.iml
+.idea/
+.cxx/
+captures/
+*.hprof
+
+# Private signing material. The PUBLIC dev key in signing/dev/ is committed on purpose (see docs/ARCHITECTURE.md).
+keystore.properties
+*.jks
+*.keystore
+!signing/dev/*.jks
+*.p12
+*.pem
+.env
+.env.*
+
+# Node (web-tests)
+node_modules/
+
+# Local scratch + logs
+/scratch/
+*.log
+.DS_Store

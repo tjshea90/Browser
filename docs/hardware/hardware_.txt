@@ -1,0 +1,50 @@
+
+Secure generic Alps 711 tb8168p1_bsp
+
+Mt8168B
+
+GPU: Mali-G52 MC2
+
+Modified Android 10 Go Api level 29, security patch level July 5, 2021
+
+Build fingerprint: alps/vnd_tb8168p1_bsp/tb8168p1_bsp:10/QP1A.190711.020/1719850017:user/release-keys
+
+Android device id: efecad8ee802edae
+
+Treble: supported
+
+Kernel: 4.14.141
+
+Secure boot
+
+Locked bootloader
+
+Build no. : sys_mssi_t_32_ago-user.2024070111 release-keys
+
+Custom build version: alps-mp-q0.mp3-V4.160
+Stock launcher: Quickstep version 10
+
+model: alps 711 / tb8168p1_bsp
+android: 10 (API 29), patch 2021-07-05
+fingerprint: alps/vnd_tb8168p1_bsp/tb8168p1_bsp:10/QP1A.190711.020/1719850017:user/release-keys
+display id: sys_mssi_t_32_ago-user.2024070111 release-keys
+ro.lineage.version: 
+ro.modversion: 
+ro.crypto.state: unencrypted
+ro.crypto.type: 
+ro.boot.flash.locked: 1
+ro.boot.verifiedbootstate: green
+ro.config.low_ram: true
+fw.max_users: 
+fw.show_multiuserui: 
+persist.adb.tcp.port: 
+service.adb.tcp.port: 
+ro.sf.lcd_density: 170
+UserManager.getMaxSupportedUsers (hidden API): 1
+UserManager.supportsMultipleUsers: false
+low-RAM (Go) device: true
+memory class MB: 128
+screen: 600x973 @170 dpi, font scale 1.2
+
+
+
