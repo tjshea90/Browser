@@ -31,6 +31,8 @@ android {
             storePassword = keystoreProps.getProperty("storePassword") ?: "kestrel-dev"
             keyAlias = keystoreProps.getProperty("keyAlias") ?: "kestrel-dev"
             keyPassword = keystoreProps.getProperty("keyPassword") ?: "kestrel-dev"
+            enableV2Signing = true
+            enableV3Signing = true   // allows a later key rotation without uninstalling
         }
     }
 

@@ -1,14 +1,15 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** 2026-11-10T22:54:56Z (L2) on `ccr-a57c163e-mtq8js` after a685d71
-- **Summary:** Phase 1 done: ladder checkpoint system, hooks, handoff docs, hardware+hotspot constraints
+- **Last checkpoint:** 2026-11-10T23:00:18Z (L2) on `ccr-a57c163e-mtq8js` after a3e7739
+- **Summary:** Phase 2 done: Gradle skeleton (core/app/tools), R8 release APK builds + audited, verify.sh gate
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE
 <!-- RESUME:BEGIN -->
-**Phase 1 (scaffold + checkpoint system) is DONE. Phase 2 (Gradle skeleton) is next — start Next action #1.**
-Nothing is built yet beyond docs + scripts (no Gradle files exist). `scripts/verify.sh` and `scripts/build-apk.sh` are referenced but NOT written yet.
+**Phases 0-2 DONE. Phase 3 (core engine in `core/`) is next — start Next action #1 (was #2 before renumbering).**
+Build works: `./gradlew :core:test`, `bash scripts/verify.sh quick|full`, `bash scripts/build-apk.sh`. `:app` is still a stub Activity.
+`:core` is compiled with `-Xjdk-release=8` + jvmTarget 1.8 (Android lint does NOT check pure-JVM modules; this flag is the API-level guard).
 Project = "Kestrel" lightweight Brave-like WebView browser for the MT8168B Go tablet on hotspot data (see CLAUDE.md).
 <!-- RESUME:END -->
 
@@ -17,7 +18,7 @@ Project = "Kestrel" lightweight Brave-like WebView browser for the MT8168B Go ta
 |---|---|---|
 | 0 | Recon: toolchain, hardware facts, constraints | DONE |
 | 1 | Scaffold + ladder checkpoint system + hooks + docs | DONE (autosave hook + secret guard verified live) |
-| 2 | Gradle skeleton: `:core` (JVM), `:app` (Android), `:tools`; builds green | TODO |
+| 2 | Gradle skeleton: `:core` (JVM), `:app` (Android), `:tools`; builds green | DONE (`scripts/verify.sh full` PASS; R8 release APK 11 KB) |
 | 3 | Core engine + JVM tests (filters, URL/omnibox, HTTPS policy, param stripping, session codec) | TODO |
 | 4 | Browser app: UI, tabs, WebView hardening, Shields, private window, downloads, settings, data-saver | TODO |
 | 5 | Filter-list pipeline: compile tool, bundled snapshot, conditional-GET updater | TODO |
@@ -25,20 +26,21 @@ Project = "Kestrel" lightweight Brave-like WebView browser for the MT8168B Go ta
 | 7 | Release: R8 APK, lint, aapt2 checks, independent review, docs, deliver APK in `dist/` | TODO |
 
 ## IN PROGRESS
-- Phase 2: Gradle skeleton (nothing written yet). Done when `./gradlew :core:test :app:assembleDebug` succeeds.
+- Phase 3: core engine. Order: (a) url/ (UrlParts, Omnibox, HttpsPolicy, TrackingParams) (b) filter/ parser + host list + matcher + cosmetic
+  (c) codec + PSL (d) metamorphic + perf tests. Done when `./gradlew :core:test` is green with those suites.
 
 ## Done (with evidence)
 - Phase 0 recon (see "Facts" below).
+- Phase 2: `bash scripts/verify.sh full` PASS (core test 1/1, tools build, lintRelease, R8 release APK 11 KB, minSdk 29, targetSdk 36,
+  perms INTERNET+ACCESS_NETWORK_STATE only, v2 signature verifies with public dev key, no native libs, no AndroidX, not debuggable).
+  Gate negative-tested (impossible budget -> FAIL). Git tags are impossible here (proxy 403) -> milestones = commit subjects.
 - Phase 1: hooks fire automatically (commit 4406689 autosaved + pushed with no manual action); `git ls-remote` shows origin == local HEAD;
   secret-guard refused a decoy `id_rsa_*` file while still saving everything else; all scripts pass `bash -n`; settings.json valid JSON.
 
 ## Next actions (ordered; each has an acceptance test)
-1. **Gradle skeleton** — `settings.gradle.kts`, root `build.gradle.kts`, `gradle/libs.versions.toml`, wrapper (8.14.3),
-   modules `:core` (kotlin-jvm), `:app` (com.android.application; applicationId `app.kestrel.browser`; minSdk 29; target/compile 36),
-   `:tools`. Accept: `./gradlew :core:test :app:assembleDebug` succeed; APK < 1 MB; no AndroidX in `:app` deps.
-2. **Core engine** (Phase 3) — see ARCHITECTURE.md §6. Accept: metamorphic test (optimized matcher == naive reference on random
-   rules/URLs) passes; 100k-rule bench < 50 µs/request avg; parser handles EasyList/uBO fixtures.
-3. **App** (Phase 4) — native NTP first (no WebView on startup), then WebView tab, Shields, panels. Accept: `lintDebug` has no NewApi errors.
+1. **Core engine** (Phase 3) — see ARCHITECTURE.md §6. Accept: metamorphic test (optimized matcher == naive reference on random
+   rules/URLs) passes; 100k-rule bench < 50 µs/request avg; parser handles EasyList/uBO-style fixtures.
+2. **App** (Phase 4) — native NTP first (no WebView on startup), then WebView tab, Shields, panels. Accept: `lintDebug` has no NewApi errors.
 4. **Lists** (Phase 5) — obtain real lists (try `add_repo` for `uBlockOrigin/uAssets`; clone shallow into scratchpad, NOT into the repo).
 5. **Injected JS + Playwright** (Phase 6). 6. **Release + review** (Phase 7).
 
