@@ -1,13 +1,14 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** (none yet)
+- **Last checkpoint:** 2026-11-10T22:54:56Z (L2) on `ccr-a57c163e-mtq8js` after a685d71
+- **Summary:** Phase 1 done: ladder checkpoint system, hooks, handoff docs, hardware+hotspot constraints
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE
 <!-- RESUME:BEGIN -->
-**Phase 1 (scaffold + checkpoint system) is finishing; Phase 2 (Gradle skeleton) is next.**
-Do this first: `bash scripts/resume.sh`, then start Next action #1 below. Nothing is built yet beyond docs + scripts.
+**Phase 1 (scaffold + checkpoint system) is DONE. Phase 2 (Gradle skeleton) is next — start Next action #1.**
+Nothing is built yet beyond docs + scripts (no Gradle files exist). `scripts/verify.sh` and `scripts/build-apk.sh` are referenced but NOT written yet.
 Project = "Kestrel" lightweight Brave-like WebView browser for the MT8168B Go tablet on hotspot data (see CLAUDE.md).
 <!-- RESUME:END -->
 
@@ -15,7 +16,7 @@ Project = "Kestrel" lightweight Brave-like WebView browser for the MT8168B Go ta
 | # | Phase | Status |
 |---|---|---|
 | 0 | Recon: toolchain, hardware facts, constraints | DONE |
-| 1 | Scaffold + ladder checkpoint system + hooks + docs | IN PROGRESS (files written; first push pending) |
+| 1 | Scaffold + ladder checkpoint system + hooks + docs | DONE (autosave hook + secret guard verified live) |
 | 2 | Gradle skeleton: `:core` (JVM), `:app` (Android), `:tools`; builds green | TODO |
 | 3 | Core engine + JVM tests (filters, URL/omnibox, HTTPS policy, param stripping, session codec) | TODO |
 | 4 | Browser app: UI, tabs, WebView hardening, Shields, private window, downloads, settings, data-saver | TODO |
@@ -24,10 +25,12 @@ Project = "Kestrel" lightweight Brave-like WebView browser for the MT8168B Go ta
 | 7 | Release: R8 APK, lint, aapt2 checks, independent review, docs, deliver APK in `dist/` | TODO |
 
 ## IN PROGRESS
-- Phase 1: pushing the scaffold (scripts/, .claude/settings.json, CLAUDE.md, docs/). Done when `checkpoint.sh` prints `CHECKPOINT OK`.
+- Phase 2: Gradle skeleton (nothing written yet). Done when `./gradlew :core:test :app:assembleDebug` succeeds.
 
 ## Done (with evidence)
 - Phase 0 recon (see "Facts" below).
+- Phase 1: hooks fire automatically (commit 4406689 autosaved + pushed with no manual action); `git ls-remote` shows origin == local HEAD;
+  secret-guard refused a decoy `id_rsa_*` file while still saving everything else; all scripts pass `bash -n`; settings.json valid JSON.
 
 ## Next actions (ordered; each has an acceptance test)
 1. **Gradle skeleton** — `settings.gradle.kts`, root `build.gradle.kts`, `gradle/libs.versions.toml`, wrapper (8.14.3),
