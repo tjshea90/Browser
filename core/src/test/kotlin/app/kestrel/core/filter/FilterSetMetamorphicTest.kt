@@ -15,6 +15,9 @@ class FilterSetMetamorphicTest {
     private val hosts = listOf("ads.example.com", "example.com", "cdn.example.org", "track.net", "a.b.track.net", "news.site.co.uk", "img.site.co.uk", "page.example")
     private val pageHosts = listOf("example.com", "www.example.com", "track.net", "news.site.co.uk", "other.co.uk", "page.example", "a.b.c.example.org")
     private val words = listOf("ads", "banner", "track", "img", "x", "pixel", "v1", "api", "ad", "analytics")
+
+    /** URL-only words that CONTAIN rule words as prefix/suffix/infix: they punish any index that wrongly assumes rule text is a whole URL token. */
+    private val urlWords = words + listOf("uploads", "headads", "tracker", "retrack", "xbanner", "bannerx", "pixels", "xpixel", "myapi", "apis", "analytics2", "grad", "adsx", "bigimg", "imgs")
     private val types = listOf(RequestType.SCRIPT, RequestType.IMAGE, RequestType.XHR, RequestType.STYLESHEET, RequestType.SUBDOCUMENT, RequestType.UNKNOWN, RequestType.DOCUMENT)
 
     private class R(
@@ -87,12 +90,12 @@ class FilterSetMetamorphicTest {
         sb.append(pick(hosts))
         if (rnd.nextInt(8) == 0) sb.append(":8080")
         val segs = rnd.nextInt(4)
-        for (i in 0 until segs) sb.append('/').append(pick(words))
+        for (i in 0 until segs) sb.append('/').append(pick(urlWords))
         if (rnd.nextBoolean()) {
-            if (segs == 0) sb.append('/').append(pick(words)) // an extension needs a path; "host:8080.png" is not a valid URL
+            if (segs == 0) sb.append('/').append(pick(urlWords)) // an extension needs a path; "host:8080.png" is not a valid URL
             sb.append('.').append(pick(listOf("gif", "js", "png", "html")))
         }
-        if (rnd.nextInt(3) == 0) sb.append("?q=").append(pick(words)).append('&').append(pick(words)).append('=').append(pick(hosts))
+        if (rnd.nextInt(3) == 0) sb.append("?q=").append(pick(urlWords)).append('&').append(pick(urlWords)).append('=').append(pick(hosts))
         return sb.toString()
     }
 
