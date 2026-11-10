@@ -1,8 +1,8 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** 2026-11-10T23:40:23Z (L1) on `ccr-a57c163e-mtq8js` after 24ba86d
-- **Summary:** app: manifest, themes, icons, Prefs, Engine, Shields, Interceptor, WebView factory/clients (compiles clean); JsEscape fix
+- **Last checkpoint:** 2026-11-10T23:50:02Z (L1) on `ccr-a57c163e-mtq8js` after 24d3ae1
+- **Summary:** app UI complete: BrowserActivity (tabs, hibernation, session, navigation, panels, permissions, dialogs, fullscreen, downloads), toolbar, NTP, error screens, settings, shields panel; verify full PASS (lint clean, 2.3MB APK)
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE
