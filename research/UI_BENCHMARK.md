@@ -76,7 +76,7 @@ PORTRAIT 564x892 (split)                        LANDSCAPE 916x540 (unified)
   payment autofill, default-browser nags, promo/"what's new"/rating dialogs. Brave itself ships a page on hiding its extra features [S] https://support.brave.app/hc/en-us/articles/38305898674957/ .
 
 ## 6. Visual identity: CERE (recommended) and alternatives
-Why a falcon palette alone is not enough. A 2026 catalogue of AI-template "tells" lists first-wave (purple gradients, one font, same radius and shadow everywhere, glass, fade-ups) and second-wave looks (cream + terracotta = "the Claude palette", near-black + one neon, hairline broadsheet,
+Why a falcon palette alone is not enough. A recent catalogue of AI-template "tells" lists first-wave (purple gradients, one font, same radius and shadow everywhere, glass, fade-ups) and second-wave looks (cream + terracotta = "the Claude palette", near-black + one neon, hairline broadsheet,
 tracked caps + monospace "template chrome") [V]. Its remedy is process: derive choices from the product, write the direction down, audit against the tells. Applied here:
 - **Derived from the product**: hotspot -> real byte/block readouts in three places (NTP, Shields, Downloads); no animation -> state words, fixed geometry, a loud "armed / under finger" marker; falcon -> one geometric cut and one yellow
   (kestrels hover; males have a blue-grey cap [V Wikipedia]; yellow cere, eye-ring and feet [U, not in the fetched text]); Shields is the product -> the yellow block in the chrome is always the Shield chip.
