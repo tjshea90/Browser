@@ -73,7 +73,7 @@ file upload, camera/microphone/location prompts (asked every time), full-screen 
   Set a screen lock; use the private window or *Settings → Clear browsing data when I quit* for sensitive browsing.
 
 ## No Google Play on this tablet: what that changes
-- **Installing and updating Kestrel is manual** (sideload the APK from `dist/`; newer builds install over older ones).
+- **Installing and updating Kestrel is manual** (sideload the APK from the Releases page; newer builds install over older ones).
 - **Google Safe Browsing does not exist here** (it lives in Google Play services). Kestrel's own malware/phishing list is the only protection against known-bad sites; it refreshes weekly.
 - **The web engine does not update itself.** Kestrel draws pages with the tablet's Android System WebView, and without Google Play nothing keeps that current.
 - **The tablet's list of trusted certificate authorities stops at its last system update** (July 2021). A very new site can show a "connection isn't private" page even though it is fine; if
