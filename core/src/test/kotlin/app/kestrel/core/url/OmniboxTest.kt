@@ -66,6 +66,23 @@ class OmniboxTest {
     }
 
     @Test
+    fun anythingThatIsNotAnAddressIsASearch() {
+        // The owner's rule: if what was typed is not a URL, search for it. These are all things people type that merely LOOK address-like.
+        for (x in listOf(
+            "3:1", "10:30", "2:30", "12:00", "1:1", "5:0", "0:0", // scores, times, ratios (a bare number is never an intranet host)
+            "weather", "weather today", "2+2", "what's 5%", "c# tutorial", "node.js", "next.js", "e.g.", "U.S.A", "i.e.", "hello!", "100km to miles",
+            "how to fix: error 404", "re:zero", "note:buy", "#hashtag", "@user", "~/notes", "C:\\Users\\me", "/etc/hosts", "a/b", "a/b/c.txt", "...", "?",
+            "東京", "ünïcode word", "😀", "1,000", "$5", "50%", "(555) 123-4567", "tel:5551234",
+        )) assertTrue("must be a search: '$x' -> ${r(x)}", r(x) is Nav.Search)
+    }
+
+    @Test
+    fun realAddressesStillNavigate() {
+        for (x in listOf("example.com", "sub.example.co.uk/a?b=c", "localhost:3000", "intranet:8080", "192.168.0.1:8080/admin", "[::1]:8080", "http://x.test", "xn--bcher-kva.example"))
+            assertTrue("must navigate: '$x' -> ${r(x)}", r(x) is Nav.Go)
+    }
+
+    @Test
     fun dangerousSchemesAreRejected() {
         for (x in listOf(
             "javascript:alert(1)", "JAVASCRIPT:alert(1)", "file:///sdcard/x.html", "data:text/html,hi", "intent://x#Intent;end",

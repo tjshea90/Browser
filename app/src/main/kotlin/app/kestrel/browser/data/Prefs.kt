@@ -62,14 +62,15 @@ class Prefs private constructor(ctx: Context) {
         @Volatile private var inst: Prefs? = null
         fun get(ctx: Context): Prefs = inst ?: synchronized(this) { inst ?: Prefs(ctx).also { inst = it } }
 
+        /** The FIRST entry is the default: anything typed in the address bar that is not an address is searched on Google (owner's requirement). */
         val ENGINES = listOf(
+            SearchEngine("google", "Google", "https://www.google.com/search?q=%s"),
             SearchEngine("brave", "Brave Search", "https://search.brave.com/search?q=%s"),
             SearchEngine("ddg", "DuckDuckGo", "https://duckduckgo.com/?q=%s"),
             SearchEngine("startpage", "Startpage", "https://www.startpage.com/do/search?q=%s"),
             SearchEngine("qwant", "Qwant", "https://www.qwant.com/?q=%s"),
             SearchEngine("mojeek", "Mojeek", "https://www.mojeek.com/search?q=%s"),
             SearchEngine("ecosia", "Ecosia", "https://www.ecosia.org/search?q=%s"),
-            SearchEngine("google", "Google", "https://www.google.com/search?q=%s"),
             SearchEngine("bing", "Bing", "https://www.bing.com/search?q=%s"),
         )
     }

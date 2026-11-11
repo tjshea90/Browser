@@ -70,7 +70,8 @@ object Omnibox {
             parsed.isIpLiteral -> true
             host == "localhost" -> true
             NetHosts.isLocal(host) && host.indexOf('.') >= 0 -> true // foo.local, nas.lan
-            host.indexOf('.') < 0 -> hostPort.contains(':') && parsed.port > 0 // "intranet:8080" yes, "hello" no
+            // "intranet:8080" yes, "hello" no, and "3:1" / "10:30" (scores, times, ratios: a host label with no letter in it) no
+            host.indexOf('.') < 0 -> hostPort.contains(':') && parsed.port > 0 && host.any { it.isLetter() }
             else -> tldPlausible(host) && !(rest.isEmpty() && parsed.port < 0 && isFileLookalike(host))
         }
         if (!plausible) return search(s, searchTemplate)

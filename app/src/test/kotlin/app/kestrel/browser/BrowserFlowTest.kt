@@ -117,7 +117,29 @@ class BrowserFlowTest {
     fun textBecomesASearch() {
         val a = launch()
         typeAndGo(a, "hello world")
-        assertEquals("https://search.brave.com/search?q=hello+world", loadedUrl(a))
+        assertEquals("https://www.google.com/search?q=hello+world", loadedUrl(a))
+    }
+
+    @Test
+    fun everythingThatIsNotAnAddressGoesToGoogleByDefault() {
+        val a = launch()
+        for ((typed, expected) in listOf(
+            "weather" to "https://www.google.com/search?q=weather",
+            "10:30" to "https://www.google.com/search?q=10%3A30",
+            "what is c++" to "https://www.google.com/search?q=what+is+c%2B%2B",
+            "node.js" to "https://www.google.com/search?q=node.js",
+        )) {
+            typeAndGo(a, typed)
+            assertEquals(typed, expected, loadedUrl(a))
+        }
+        typeAndGo(a, "example.org") // a real address still navigates
+        assertEquals("https://example.org", loadedUrl(a))
+    }
+
+    @Test
+    fun googleIsTheFirstAndDefaultEngine() {
+        assertEquals("google", app.kestrel.browser.data.Prefs.ENGINES.first().id)
+        assertEquals("https://www.google.com/search?q=%s", app.kestrel.browser.data.Prefs.get(launch()).searchTemplate)
     }
 
     @Test
