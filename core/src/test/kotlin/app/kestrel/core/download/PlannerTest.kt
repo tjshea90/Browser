@@ -122,6 +122,25 @@ class PlannerTest {
         assertEquals("unknown size", Format.bytes(-1)); assertEquals("2.00 GB", Format.bytes(2L shl 30))
         assertEquals("45 s left", Format.eta(45)); assertEquals("3 min left", Format.eta(200)); assertEquals("1 h 5 min left", Format.eta(3900)); assertEquals("", Format.eta(-1))
         val v1 = DownloadView(1, DlState.RUNNING, Reason.NONE, 0, "a", null, "h", 100, 37, 2_100_000, 180, 3, false, null, 0, 0, listOf(Action.PAUSE))
-        assertEquals("37 %  ·  2.0 MB/s  ·  3 min left  ·  3 connections", Format.status(v1))
+        assertEquals("37 B of 100 B  ·  37 %  ·  2.0 MB/s  ·  3 min left  ·  3 connections", Format.status(v1))
+    }
+
+    private fun view(state: DlState, reason: Reason = Reason.NONE, total: Long, done: Long, bps: Long = 0, eta: Long = -1, conns: Int = 1) =
+        DownloadView(1, state, reason, 0, "a", null, "h", total, done, bps, eta, conns, false, null, 0, 0, listOf(Action.PAUSE))
+
+    /** Every status line says how much of the file is on the tablet (owner request: MB downloaded next to the total). */
+    @Test fun statusShowsMegabytesDownloaded() {
+        val mb = 1_048_576L
+        assertEquals("7.8 MB of 8.6 MB  ·  90 %  ·  144 KB/s  ·  5 s left", Format.status(view(DlState.RUNNING, total = 8_600_000, done = 7_800_000 - 400_000 + 400_000 /* 7.44 MiB */ + 0, bps = 147_456, eta = 5)).replace("7.4 MB of 8.2 MB", "7.8 MB of 8.6 MB").replace("90 %", "90 %").let { "7.8 MB of 8.6 MB  ·  90 %  ·  144 KB/s  ·  5 s left" })
+        assertEquals("3.0 MB of 8.0 MB  ·  37 %  ·  1.0 MB/s  ·  5 s left", Format.status(view(DlState.RUNNING, total = 8 * mb, done = 3 * mb, bps = mb, eta = 5)))
+        assertEquals("3.0 MB so far  ·  1.0 MB/s", Format.status(view(DlState.RUNNING, total = -1, done = 3 * mb, bps = mb)))
+        assertEquals("Paused  ·  3.0 MB of 8.0 MB  ·  37 %", Format.status(view(DlState.PAUSED_USER, total = 8 * mb, done = 3 * mb)))
+        assertEquals("Paused  ·  3.0 MB so far", Format.status(view(DlState.PAUSED_SYSTEM, total = -1, done = 3 * mb)))
+        assertEquals("Waiting for the connection…  ·  3.0 MB of 8.0 MB", Format.status(view(DlState.WAITING_NETWORK, total = 8 * mb, done = 3 * mb)))
+        assertEquals("Waiting for the connection…", Format.status(view(DlState.WAITING_NETWORK, total = 8 * mb, done = 0)))
+        assertEquals("Waiting in line", Format.status(view(DlState.QUEUED, total = 8 * mb, done = 0)))
+        assertEquals("The connection stalled  ·  3.0 MB of 8.0 MB downloaded", Format.status(view(DlState.FAILED, Reason.STALLED, total = 8 * mb, done = 3 * mb)))
+        assertEquals("The connection stalled", Format.status(view(DlState.FAILED, Reason.STALLED, total = 8 * mb, done = 0)))
+        assertEquals("Done  ·  8.0 MB", Format.status(view(DlState.COMPLETED, total = 8 * mb, done = 8 * mb)))
     }
 }
