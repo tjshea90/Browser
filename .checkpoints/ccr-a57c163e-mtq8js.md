@@ -1,21 +1,23 @@
-# CHECKPOINT 214 — read me first, then TASKS.md
+# CHECKPOINT 219 — read me first, then TASKS.md
 
-**Written:** 2026-11-11T04:22:08Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `9f08306` (this checkpoint is the commit after it)
+**Written:** 2026-11-11T04:47:36Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `a443ac9` (this checkpoint is the commit after it)
 
 ## Just done
-A2/A4 part: gecko-prefs.txt -> YAML config (AV1 off, memory/cache budget, no animations, push/notifications off, WebRTC LAN leak off) + check-gecko-prefs.sh (18/18 names exist in GeckoView 160); GeckoEngine pins (enterprise roots off, LNA, FPP, CT, PQ, fetchpriority), runtime created after first frame + warmUp; bridge sender check; manifest CSP + host perms + version 1.0.<code>; geckoapp 0.2.0-alpha3 (102) in progress.
+alpha3 candidate: freeze fixes verified on emulator (worker bridge, cosmetics pre-warm, URL typing mode, one attached GeckoView), prefs readback proves config, workflow checks prefs; TASKS A1-A5 updated.
 
 ## Do this next
-Build x86_64 debug (-PgeckoAbi=x86_64), boot AVD kestrel29x64 (scratchpad emu.sh), smoke test: launch, page loads, tabs, typing, Diagnostics screen + Refresh screen, ads blocked; screenshots. Then add check-gecko-prefs.sh to android.yml build-gecko job, ship alpha3.
+ship.sh gecko (0.2.0-alpha3, code 102) then dispatch android.yml app=gecko full_build=true, wait, get_release_by_tag, record-release; then tell the owner (alpha3 notes: what to test: typing, claude.ai, Diagnostics > Refresh screen).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M .github/workflows/android.yml
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  04dab0c ckpt 214: A2/A4 part: gecko-prefs.txt -> YAML config (AV1 off, memory/cache budget, no a
   1739d76 ckpt 209: A3 evidence layer: core RingLog (+tests), app Health (watchdog, frame jank, re
   9c46642 ckpt 175: A3 P0 part 1 (Kestrel G): GeckoView attached ONCE (ntp/error as overlays, setS
   21706f6 ckpt 119: A1 part 1: native UI animations off - instant pressed-state overlay instead of

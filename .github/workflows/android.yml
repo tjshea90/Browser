@@ -239,6 +239,9 @@ jobs:
       - name: Build the release APK (GeckoView 160 armeabi-v7a, R8, signed)
         run: ./gradlew :geckoapp:assembleRelease --console=plain
 
+      - name: Every configured Gecko pref must exist in the bundled engine
+        run: bash tools/check-gecko-prefs.sh
+
       - name: Verify the APK itself (certificate pin, package, version, no GMS, size)
         run: bash tools/verify-apk.sh "$APP"
 
