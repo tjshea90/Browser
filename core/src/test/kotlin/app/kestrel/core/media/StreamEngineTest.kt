@@ -227,6 +227,17 @@ class StreamEngineTest {
         assertTrue(h.store.stagedFiles(id).isEmpty())
     }
 
+    @Test(timeout = 60_000) fun theEstimateTracksTheRealSizeWhileItRuns() {
+        val h = H(); h.cdn.chunkDelayMs = 5; h.cdn.chunk = 4096
+        val (pl, expected) = plainStream(h, 16, 40_000)
+        val id = h.enqueue(pl)                                                          // no size guess: it comes from the segments fetched so far
+        val mid = h.await(id, "past half way") { it != null && it.state == DlState.RUNNING && it.done > expected.size * 6 / 10 }!!
+        assertTrue(mid.estimated)
+        val ratio = mid.total.toDouble() / expected.size
+        assertTrue("the estimate was $ratio of the real size", ratio in 0.85..1.2)     // a counter that kept counting appended segments twice made it half
+        h.completed(id)
+    }
+
     @Test(timeout = 60_000) fun theSizeIsAnEstimateUntilItIsKnown() {
         val h = H(); h.cdn.chunkDelayMs = 3; h.cdn.chunk = 4096
         val (pl, expected) = plainStream(h, 10, 40_000)
