@@ -1,8 +1,8 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** 2026-11-11T02:18:13Z (L1) on `ccr-a57c163e-mtq8js` after 6f0bce8
-- **Summary:** Kestrel G (Firefox/GeckoView 160) module: shared UI/data/shield + Gecko session/delegates/prompts/permissions/downloads/private tabs; release APK builds (92 MB, signed); not yet run anywhere
+- **Last checkpoint:** 2026-11-11T02:21:28Z (L1) on `ccr-a57c163e-mtq8js` after 150bda4
+- **Summary:** Gecko M3: built-in Kestrel Shields WebExtension (webRequest blocking + document_start cosmetic CSS) bridged to the app's filter engine via native messaging; x86_64 emulator build option
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE

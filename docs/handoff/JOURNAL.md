@@ -25,3 +25,4 @@
 - 2026-11-11T02:01:35Z [L1] STATE: engine decision after the first tablet run (WebView 74 cannot run claude.ai; GeckoView 160 verified downloadable, 89 MB AAR); Gecko flavor plan M1-M4
 - 2026-11-11T02:05:55Z [L1] refactor: WebView-specific sources moved to app/src/webview (shared tree = src/main) so a Gecko module can reuse UI/data/shield code; Tab.engineData slot; Proc extracted; 81 app tests green
 - 2026-11-11T02:18:13Z [L1] Kestrel G (Firefox/GeckoView 160) module: shared UI/data/shield + Gecko session/delegates/prompts/permissions/downloads/private tabs; release APK builds (92 MB, signed); not yet run anywhere
+- 2026-11-11T02:21:28Z [L1] Gecko M3: built-in Kestrel Shields WebExtension (webRequest blocking + document_start cosmetic CSS) bridged to the app's filter engine via native messaging; x86_64 emulator build option

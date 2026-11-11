@@ -66,6 +66,7 @@ import app.kestrel.core.session.TabRecord
 import app.kestrel.core.url.Nav
 import app.kestrel.core.url.Omnibox
 import app.kestrel.core.url.UrlParts
+import app.kestrel.browser.web.ShieldsBridge
 import app.kestrel.browser.web.TabDelegates
 import app.kestrel.browser.web.gecko
 import app.kestrel.browser.web.isPrivateTab
@@ -142,7 +143,11 @@ open class BrowserActivity : Activity(), ToolbarListener {
         installBackHandling()
         NetworkMonitor.addListener(netListener)
         db = BrowserDb(this)
-        Io.main.postDelayed({ GeckoEngine.runtime(this) }, 600) // start the engine right after the first frame (it takes a moment on this CPU)
+        // Start the engine right after the first frame (it takes a moment on this CPU), then attach the ad/tracker blocking extension to the app's filter engine.
+        Io.main.postDelayed({
+            GeckoEngine.runtime(this)
+            ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }))
+        }, 600)
         val firstTab = Tab(nextTabId++)
         tabs.add(firstTab)
         show(firstTab)
@@ -290,6 +295,13 @@ open class BrowserActivity : Activity(), ToolbarListener {
         t.parentId = parent?.id ?: 0L
         tabs.add(t)
         return t
+    }
+
+    /** The tab showing a page of this URL's host (the filter-engine bridge only knows page URLs): the selected tab first. */
+    internal fun tabForPage(url: String): Tab? {
+        val h = UrlParts.hostOf(url) ?: return null
+        current?.takeIf { it.topHost == h }?.let { return it }
+        return tabs.firstOrNull { it.topHost == h }
     }
 
     internal fun newTabAndShow(): Tab { val t = newTabInternal(); show(t); focusUrlBar(); return t }
