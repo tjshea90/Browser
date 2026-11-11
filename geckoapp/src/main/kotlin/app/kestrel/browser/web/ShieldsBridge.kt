@@ -134,7 +134,7 @@ class ShieldsBridge(
         return ExtImage.contentId(snap.fs, Psl.default, salt).also { idCache = Pair(snap.generation, it) }
     }
 
-    /** `img`: chunk [index] of the KEX1 image of generation [gen] (base64; chunk 0 is prefixed with "<gen>:<total bytes>:<chunk bytes>:"), or "" when that generation is gone. */
+    /** `img`: chunk [index] of the KEX1 image of generation [gen] (base64; chunk 0 is prefixed with "<gen>:<total bytes>:<chunk bytes>:<encode ms>:<content id>:"), or "" when that generation is gone. */
     private fun imageChunk(gen: Int, index: Int): String {
         val snap = Engine.snapshot() ?: return ""
         if (snap.generation != gen || index < 0) return ""
@@ -143,7 +143,7 @@ class ShieldsBridge(
         if (from >= bytes.size) return ""
         val len = minOf(ExtImage.CHUNK.toLong(), bytes.size - from).toInt()
         val b64 = android.util.Base64.encodeToString(bytes, from.toInt(), len, android.util.Base64.NO_WRAP)
-        return if (index == 0) "$gen:${bytes.size}:${ExtImage.CHUNK}:${images.encodeMs}:$b64" else b64
+        return if (index == 0) "$gen:${bytes.size}:${ExtImage.CHUNK}:${images.encodeMs}:${contentId(snap)}:$b64" else b64
     }
 
     private val images = ImageCache()

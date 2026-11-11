@@ -25,46 +25,78 @@ function askCfg(host) {
   if (p) return p;
   p = send({ k: 'cfg', h: host }).then(function (r) {
     cfgWait.delete(host);
-    var s = (typeof r === 'string') ? r : '';
-    var c = s.indexOf(':');
-    var mode = s.charAt(0) === '1' ? MODE_ON : (s.charAt(0) === 'L' ? MODE_LEGACY : MODE_OFF);
-    if (c < 0) return MODE_OFF; // not an answer from the app: do not cache, never break the page
+    var parts = ((typeof r === 'string') ? r : '').split(':'); // "<mode>:<generation>:<content id>"
+    if (parts.length < 2) return MODE_OFF; // not an answer from the app: do not cache, never break the page
+    var mode = parts[0] === '1' ? MODE_ON : (parts[0] === 'L' ? MODE_LEGACY : MODE_OFF);
     if (cfgMode.size >= CFG_MAX) cfgMode.delete(cfgMode.keys().next().value);
     cfgMode.set(host, mode);
-    var parts = s.split(':');
-    probeFile(parts.length > 2 ? parts.slice(2).join(':') : '');
-    if (mode !== MODE_LEGACY) wantImage(parseInt(parts[1], 10) || 0);
+    if (mode !== MODE_LEGACY) wantImage(parseInt(parts[1], 10) || 0, parts[2] || '');
     return mode;
   }, function () { cfgWait.delete(host); return MODE_OFF; }); // the app could not answer: fail open
   cfgWait.set(host, p);
   return p;
 }
 
-// ---------------------------------------------------------------- the list image (transfer in chunks, replaced atomically)
+// ---------------------------------------------------------------- the list image: a saved copy at start-up, otherwise a transfer in chunks; replaced atomically
+var engineId = ''; // content id of the loaded image (the app's ExtImage.contentId): equal ids mean equal bytes
+function noop() {}
 function b64Into(s, out, at) {
   var bin = atob(s), n = bin.length;
   for (var i = 0; i < n; i++) out[at + i] = bin.charCodeAt(i);
   return n;
 }
 function later(ms) { return new Promise(function (res) { setTimeout(res, ms); }); }
-function wantImage(gen) {
-  if (gen <= 0 || gen === engineGen || pulling || engineOff || Date.now() < pullRetryAt) return;
+
+// The last image is kept in the extension's own IndexedDB, so a new launch has an engine before the first request instead of transferring the lists again.
+function idb() {
+  return new Promise(function (res, rej) {
+    var r = indexedDB.open('kestrel-engine', 1);
+    r.onupgradeneeded = function () { r.result.createObjectStore('img'); };
+    r.onsuccess = function () { res(r.result); };
+    r.onerror = function () { rej(r.error); };
+  });
+}
+function idbDo(mode, f) {
+  return idb().then(function (db) {
+    return new Promise(function (res, rej) {
+      var tx = db.transaction('img', mode), out = f(tx.objectStore('img'));
+      tx.oncomplete = function () { db.close(); res(out && out.result); };
+      tx.onerror = tx.onabort = function () { db.close(); rej(tx.error); };
+    });
+  });
+}
+var cacheLoaded = (function () {
+  var t0 = performance.now();
+  return idbDo('readonly', function (st) { return st.get('current'); }).then(function (rec) {
+    if (!rec || !rec.buf || !rec.id) return;
+    var e = E.create(rec.buf); // throws when damaged
+    if (engine === null) { engine = e; engineId = rec.id; engineGen = -1; stats.loadMs = Math.round(performance.now() - t0); stats.last = 'saved copy ' + rec.id; }
+  }).catch(function (e) {
+    stats.last = 'saved copy unusable: ' + (e && e.message);
+    idbDo('readwrite', function (st) { return st.delete('current'); }).catch(noop);
+  });
+})();
+
+function wantImage(gen, id) { cacheLoaded.then(function () { wantImage2(gen, id); }); }
+function wantImage2(gen, id) {
+  if (gen <= 0 || pulling || engineOff) return;
+  if (id && id === engineId) { engineGen = gen; return; } // the copy we hold IS the app's current lists
+  if (gen === engineGen || Date.now() < pullRetryAt) return;
   pulling = true;
-  var t0 = performance.now(), buf = null, got = 0, total = 0, i = 0, tFetch = 0, tDecode = 0, encMs = 0, tSend = 0;
+  var t0 = performance.now(), buf = null, got = 0, total = 0, i = 0, tFetch = 0, tDecode = 0, encMs = 0, tSend = 0, newId = '';
   function next() {
     tSend = performance.now();
     return send({ k: 'img', g: gen, i: i }).then(function (r) {
       tFetch += performance.now() - tSend;
       if (typeof r !== 'string' || r.length === 0) throw new Error('the app no longer has generation ' + gen);
       var body = r;
-      if (i === 0) { // "<gen>:<total bytes>:<chunk bytes>:<encode ms>:" then base64
-        var a = r.indexOf(':'), b = r.indexOf(':', a + 1), c = r.indexOf(':', b + 1), e = r.indexOf(':', c + 1);
-        if (a < 0 || b < 0 || c < 0 || e < 0 || parseInt(r.substring(0, a), 10) !== gen) throw new Error('image header');
-        total = parseInt(r.substring(a + 1, b), 10);
-        encMs = parseInt(r.substring(c + 1, e), 10) || 0;
+      if (i === 0) { // "<gen>:<total bytes>:<chunk bytes>:<encode ms>:<content id>:" then base64
+        var h = r.split(':', 5);
+        if (h.length < 5 || parseInt(h[0], 10) !== gen) throw new Error('image header');
+        total = parseInt(h[1], 10); encMs = parseInt(h[3], 10) || 0; newId = h[4];
         if (!(total > 0 && total < 64 * 1024 * 1024)) throw new Error('image size ' + total);
         buf = new Uint8Array(total);
-        body = r.substring(e + 1);
+        body = r.substring(h[0].length + h[1].length + h[2].length + h[3].length + h[4].length + 5);
       }
       if (got + Math.floor(body.length * 3 / 4) > total + 3) throw new Error('image overrun');
       var td = performance.now();
@@ -74,26 +106,16 @@ function wantImage(gen) {
       if (got < total) return later(0).then(next); // yield between chunks: this thread also serves page loads
       if (got !== total) throw new Error('image length');
       var tc = performance.now();
-      engine = E.create(buf.buffer); engineGen = gen; pullFailures = 0; stats.pulls++;
+      engine = E.create(buf.buffer); engineGen = gen; engineId = newId; pullFailures = 0; stats.pulls++;
       stats.loadMs = Math.round(performance.now() - t0);
-      stats.last = 'image ' + gen + ' ok: ' + i + ' chunks, waiting for the app ' + Math.round(tFetch) + ' ms (its encode ' + encMs + ' ms), base64 decode ' + Math.round(tDecode) + ' ms, verify+views ' + Math.round(performance.now() - tc) + ' ms';
+      stats.last = 'image ' + gen + ' from the app: ' + i + ' chunks, waiting for the app ' + Math.round(tFetch) + ' ms (its encode ' + encMs + ' ms), base64 decode ' + Math.round(tDecode) + ' ms, verify+warm-up ' + Math.round(performance.now() - tc) + ' ms';
+      idbDo('readwrite', function (st) { return st.put({ id: newId, buf: buf.buffer }, 'current'); }).catch(noop); // keep it for the next launch
     });
   }
   next().catch(function (e) {
     pullFailures++; stats.last = 'image ' + gen + ' failed: ' + (e && e.message);
     if (pullFailures >= 5) engineOff = true; else pullRetryAt = Date.now() + 5000 * pullFailures;
   }).then(function () { pulling = false; reportStats(true); });
-}
-
-// ---- spike (D1): may the background page read a file the app wrote? If yes the image needs no chunked transfer at all.
-var fileProbed = false;
-function probeFile(dir) {
-  if (fileProbed || !dir) return;
-  fileProbed = true;
-  var t0 = performance.now(), url = 'file://' + dir + '/shields/probe.txt';
-  fetch(url).then(function (r) { return r.text(); }).then(function (t) {
-    stats.file = 'file fetch ok (' + t.length + ' chars, ' + Math.round(performance.now() - t0) + ' ms) ' + url; markStats();
-  }, function (e) { stats.file = 'file fetch refused: ' + e + ' ' + url; markStats(); });
 }
 
 // ---------------------------------------------------------------- counters (blocked requests are added up and sent twice a second)
@@ -120,7 +142,7 @@ function markStats() { // lazy timer: nothing is scheduled while no request is b
 function reportStats(force) {
   if (!force && !statsDirty) return;
   statsDirty = false;
-  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, w: (stats.last + (stats.file ? ' | ' + stats.file : '')).slice(0, 400) }).catch(function () {});
+  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, w: stats.last.slice(0, 400) }).catch(function () {});
 }
 
 // ---------------------------------------------------------------- the legacy path: one question to the app per request (cached per page; used while no engine is loaded)
