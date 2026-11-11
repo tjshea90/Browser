@@ -115,7 +115,7 @@ class UpdatePanel(ctx: Context, private val pal: Pal, private val prefs: Prefs, 
                 val old = app.kestrel.browser.download.DownloadController.oldInstallers()
                 if (old.isNotEmpty()) {
                     val bytes = old.sumOf { maxOf(it.total, it.done) }
-                    sub("Quick room: ${old.size} Kestrel installer ${if (old.size == 1) "file" else "files"} from earlier updates (${UpdateLogic.formatSize(bytes)}) are still in your Downloads.", pal.fg)
+                    sub("Quick room: ${old.size} Kestrel installer ${if (old.size == 1) "file from an earlier update is" else "files from earlier updates are"} still in your Downloads (${UpdateLogic.formatSize(bytes)}).", pal.fg)
                     buttons(primary("Delete old installers") {
                         val freed = app.kestrel.browser.download.DownloadController.deleteOldInstallers()
                         android.widget.Toast.makeText(ctx, "Deleted ${UpdateLogic.formatSize(freed)}", android.widget.Toast.LENGTH_SHORT).show()
