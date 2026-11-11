@@ -16,6 +16,7 @@ import app.kestrel.core.download.DEST_APP_PRIVATE
 import app.kestrel.core.download.DlState
 import app.kestrel.core.download.DownloadView
 import app.kestrel.core.download.Engine
+import app.kestrel.core.download.FetchRequest
 import app.kestrel.core.download.Fetcher
 import app.kestrel.core.download.NetGate
 import app.kestrel.core.download.Source
@@ -127,7 +128,7 @@ object DownloadController {
             var text: String? = null
             try {
                 val f = fetchers[kind] ?: fetchers[0]!!
-                val resp = f.open(app.kestrel.core.download.FetchRequest(url, -1, -1, null, headers, 15_000, 20_000, priv))
+                val resp = f.open(FetchRequest(url, -1, -1, null, headers, 15_000, 20_000, priv))
                 try {
                     if (resp.status in 200..299) {
                         val out = java.io.ByteArrayOutputStream()
