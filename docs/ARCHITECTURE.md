@@ -94,3 +94,15 @@ the tablet has, cosmetic filtering is best-effort (injection after commit). Not 
 - **Updater**: `core/update/UpdateLogic` (pure: which release, checksum, resume rules; `UpdateLogicTest`) + `app/update/UpdateManager` (Releases API with ETag, resumable download, SHA-256, PackageInstaller session)
   + `InstallResultReceiver` + `ui/UpdatePanel`. The tag prefix comes from `Flavor.updateTagPrefix`. A debug build can read a local feed: `adb shell setprop debug.kestrel.feed http://10.0.2.2:8000/releases.json`
   (the whole flow incl. pause/resume and the system installer was run that way on the emulator). Android only installs an APK signed with the installed app's certificate (`signing/CERT_SHA256`).
+
+## Kestrel G: engine process death, scroll tests, memory facts (alpha6)
+- **Engine process death** (`BrowserActivity.sessionGone`, called from `ContentDelegate.onKill` / `onCrash`): with one content process every live tab dies together. The first death in a quiet
+  period (15 s) restores the tab's last `GeckoSession.SessionState` (history AND scroll position) behind `ui/RestoreOverlay` (the tab's last preview dimmed, "Page freed to save memory - bringing
+  it back"; it goes away at `onFirstContentfulPaint`, after 20 s at the latest); a second death within 15 s reloads the plain URL (the state itself may be the cause); a third shows the error screen.
+  Every recovery is logged with `memFacts()` (free RAM, threshold, newest trim level and its age) and counted (`gecko.kill`, `gecko.recover.state`, `mem.trim.<level>`).
+- **Engine prefs v2** (`assets/gecko-prefs.txt`): the decoded-image cache is RAM / `image.mem.surfacecache.size_factor` (engine default 4 = about 475 MB here; `max_size_kb` is ignored on a 32-bit
+  engine), so we set `size_factor = 20` (about 95 MB). Facts and evidence: `research/SCROLL.md`. **Scroll feel** (Settings, `Prefs.scrollFeel`, `GeckoEngine.applyScrollFeel`) switches the live apz.*
+  prefs (pre-drawn margin, touch-handler wait, top fling speed); default = the engine's own values.
+- **Measuring** (Diagnostics): `web/ScrollTest` drives the bundled offline page `assets/scrolltest/` with 32 swipes through the real touch path and reports compositor frames per second, gaps and a
+  verdict; `GlInfo` reads the GPU vendor / renderer / driver through an EGL pbuffer; the pref read-back shows what the engine really has; compositor events (first composite, paint reset) are logged.
+- **While the user scrolls** nothing of ours competes for frames: the neon pulse holds still while a finger is down (+1.5 s), the post-load preview capture (a GPU read-back) waits for 3 s without touch.
