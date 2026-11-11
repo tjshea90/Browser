@@ -41,6 +41,9 @@ object GeckoEngine {
             .extensionsProcessEnabled(false) // one process less on a 1.9 GB tablet
             .fissionEnabled(false)           // no per-site process isolation: too much RAM for this device
             .lowMemoryDetection(true)
+            // Encrypted DNS on a carrier hotspot (carriers can read and rewrite plain DNS). MODE_FIRST = try DoH, fall back to the system resolver.
+            .trustedRecursiveResolverMode(GeckoRuntimeSettings.TRR_MODE_FIRST)
+            .trustedRecursiveResolverUri("https://mozilla.cloudflare-dns.com/dns-query")
             .automaticFontSizeAdjustment(false)
             .fontSizeFactor(prefs.textZoom / 100f)
             .preferredColorScheme(colorScheme(prefs))
