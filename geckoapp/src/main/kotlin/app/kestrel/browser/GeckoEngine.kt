@@ -69,7 +69,21 @@ object GeckoEngine {
 
     /** What the engine really has for the preferences we set (Diagnostics): proves assets/gecko-prefs.txt reached it. Call on the UI thread. */
     @Volatile var prefReadback: String = "Engine prefs: (not read yet)"
+    /** The engine's own scroll / touch / network defaults on this device (what the tuning in applyScrollFeel starts from): shown in Diagnostics so the numbers come from the tablet, not from the source tree. */
+    @Volatile var prefReadback2: String = "Engine scroll prefs: (not read yet)"
+    private val scrollPrefs = listOf("apz.touch_start_tolerance", "apz.touch_move_tolerance", "apz.fling_stop_on_tap_threshold", "apz.fling_min_velocity_threshold", "apz.velocity_bias",
+        "apz.displayport_expiry_ms", "apz.prefer_jank_minimal_displayports", "apz.min_skate_speed", "apz.allow_immediate_handoff", "apz.fling_friction",
+        "apz.android.chrome_fling_physics.friction", "apz.android.chrome_fling_physics.inflexion", "apz.android.chrome_fling_physics.stop_threshold", "apz.paint_skipping.enabled",
+        "layout.display-list.retain", "dom.ipc.processPriorityManager.enabled", "browser.cache.memory.capacity", "layout.frame_rate", "network.http.max-connections",
+        "network.http.max-persistent-connections-per-server", "network.http.speculative-parallel-limit", "network.http.pacing.requests.enabled", "network.dnsCacheEntries",
+        "network.dnsCacheExpiration", "layout.css.scroll-anchoring.enabled", "dom.lazy-loading.margin.top", "image.cache.size")
     fun readBackPrefs(done: () -> Unit) {
+        try {
+            org.mozilla.geckoview.GeckoPreferenceController.getGeckoPrefs(scrollPrefs).accept({ list ->
+                prefReadback2 = "Engine scroll/network prefs: " + (list?.joinToString(", ") { "${it.pref.removePrefix("apz.").removePrefix("network.").removePrefix("android.")}=${it.value}" } ?: "none")
+                done()
+            }, { e -> prefReadback2 = "Engine scroll/network prefs: read failed ($e)"; done() })
+        } catch (e: Exception) { prefReadback2 = "Engine scroll/network prefs: unavailable ($e)"; done() }
         val names = listOf("kestrel.config.version", "media.av1.enabled", "dom.ipc.processCount", "ui.prefersReducedMotion", "network.prefetch-next",
             "image.mem.surfacecache.size_factor", "image.mem.surfacecache.discard_factor", "image.mem.surfacecache.min_expiration_ms", "browser.cache.disk.capacity", "dom.push.enabled",
             "apz.y_skate_size_multiplier", "apz.y_stationary_size_multiplier", "apz.content_response_timeout", "apz.max_velocity_inches_per_ms",

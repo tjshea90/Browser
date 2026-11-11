@@ -1055,6 +1055,7 @@ open class BrowserActivity : Activity(), DockListener {
         val ver = try { Class.forName("org.mozilla.geckoview.BuildConfig").getField("MOZ_APP_VERSION").get(null) } catch (e: Exception) { "?" }
         out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null }} of ${tabs.size} tabs; current ${current?.url?.take(60) ?: "-"}")
         out.add(GeckoEngine.prefReadback)
+        out.add(GeckoEngine.prefReadback2)
         out.add(GlInfo.text)
         val animScale = try { android.provider.Settings.Global.getFloat(contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) } catch (e: Exception) { 1f }
         out.add("Neon glow: ${Neon.status()}; system animation scale ${if (animScale == 0f) "off (the glow ignores it)" else "x$animScale"}")
