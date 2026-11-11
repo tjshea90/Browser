@@ -90,7 +90,8 @@ object UpdateLogic {
 
     /**
      * What Android's installer needs before it will finish an install or an update. MEASURED (research/UPDATE_STORAGE.md): it refuses (INSTALL_FAILED_INSUFFICIENT_STORAGE, installd "Failed to free up <10 % of /data>")
-     * unless, once the install has taken its own room, 10 % of the data partition ([reserve]) is still free. The install takes the staged copy of the APK, the native libraries it unpacks and the optimised code.
+     * unless, once the install has taken its own room, 10 % of the data partition ([reserve]) is still free. The install takes the APK TWICE (the installer's staged copy and the installed one; measured: the
+     * threshold rises by 2 MiB for every MiB of APK), the native libraries it unpacks and about 32 MiB of optimised code.
      * [free] = free space + the caches the system may clear (StorageStatsManager.getFreeBytes). Our own downloaded copy is already counted as used; it is deleted once the installer holds its own copy
      * ([StoragePlan.fitsDropping]), which hands one APK of room back.
      * This is why "uninstall first" always worked: the uninstall frees the old install and its data (about a gigabyte), so the same APK then clears the bar. In place and fresh need the same free space BEFORE.
@@ -104,10 +105,10 @@ object UpdateLogic {
         val shortBy: Long get() = if (free >= needDrop) 0L else needDrop - free
     }
 
-    /** [marginBytes]: the optimised code the installer compiles (measured about 100 MB for a debug build with a big dex; a release build needs far less). */
-    fun storagePlan(apkBytes: Long, nativeLibBytes: Long, freeBytes: Long, reserveBytes: Long, marginBytes: Long = 64L shl 20): StoragePlan {
-        val needDrop = reserveBytes + nativeLibBytes + marginBytes // the staged copy takes what our deleted copy gives back
-        return StoragePlan(needKeep = needDrop + apkBytes, needDrop = needDrop, free = freeBytes, reserve = reserveBytes, installTakes = apkBytes + nativeLibBytes + marginBytes)
+    /** [marginBytes]: the optimised code the installer compiles (measured 31 MiB for the release build; 48 leaves room for a larger dex). */
+    fun storagePlan(apkBytes: Long, nativeLibBytes: Long, freeBytes: Long, reserveBytes: Long, marginBytes: Long = 48L shl 20): StoragePlan {
+        val needDrop = reserveBytes + apkBytes + nativeLibBytes + marginBytes // our own copy is deleted once the installer has its own: that frees one APK
+        return StoragePlan(needKeep = needDrop + apkBytes, needDrop = needDrop, free = freeBytes, reserve = reserveBytes, installTakes = 2 * apkBytes + nativeLibBytes + marginBytes)
     }
 
     /** Round a byte count UP to whole tens of megabytes (what the owner is told to free). */
