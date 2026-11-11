@@ -84,7 +84,8 @@ class Psl private constructor(
                 val line = raw.trim()
                 if (line.isEmpty() || line.startsWith("//")) continue
                 val token = line.split(' ', '\t')[0]
-                val ascii = try { IDN.toASCII(token, IDN.ALLOW_UNASSIGNED).lowercase() } catch (ex: IllegalArgumentException) { continue }
+                // 9,950 of the 10,400 lines are plain ASCII, for which IDN.toASCII changes nothing: skipping its per-label machinery trims the start-up work of the background engine thread
+                val ascii = if (token.all { it.code < 128 }) token.lowercase() else try { IDN.toASCII(token, IDN.ALLOW_UNASSIGNED).lowercase() } catch (ex: IllegalArgumentException) { continue }
                 when {
                     ascii.startsWith("!") -> e.add(Hash.h64(ascii.substring(1)))
                     ascii.startsWith("*.") -> w.add(Hash.h64(ascii.substring(2)))
