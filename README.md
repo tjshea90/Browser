@@ -26,7 +26,8 @@ Everything Brave-like (Shields, HTTPS-first, hotspot behaviour, UI) is implement
 > websites over a real hotspot, and Google Search on an old engine. Expect rough edges on first use and please report them. See *Known limits* below.
 
 ## Install on the tablet (sideload)
-1. Get `dist/kestrel-0.1.0.apk` from this repository (open the file on GitHub on the tablet and tap *Download*). Optional: check it against `dist/kestrel-0.1.0.apk.sha256`.
+1. Open the [Releases](../../releases) page on the tablet and download the APK of the build you want (`kestrel-g-<version>.apk` for the Firefox-engine build, `kestrel-<version>.apk` for the WebView build).
+   Optional: check it against the `.sha256` file next to it.
 2. Open the downloaded file. Android 10 will ask you to allow **Install unknown apps** for the app you opened it from (your file manager or current
    browser): allow it once, go back, tap *Install*.
 3. Optional: *Settings → Apps → Default apps → Browser app → Kestrel*, so links from other apps open here.
