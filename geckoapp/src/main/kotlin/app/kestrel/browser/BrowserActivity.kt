@@ -243,6 +243,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun buildUi() {
         root = FrameLayout(this)
         root.setBackgroundColor(pal.windowBg)
+        root.defaultFocusHighlightEnabled = false // clearUrlFocus() parks the focus on this view: without this the framework tints the WHOLE screen with its focus highlight
         column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         dock = BottomDock(this, pal, this)
         progress = ProgressLine(this, pal.accent).apply { visibility = View.INVISIBLE }
@@ -412,7 +413,7 @@ open class BrowserActivity : Activity(), DockListener {
             if (geckoView.session !== s) { geckoView.releaseSession(); geckoView.setSession(s) }
         }
         val homeNow = homeShown(tab)
-        if (homeNow) { if (home.visibility != View.VISIBLE) home.visibility = View.VISIBLE; refreshNtp() }
+        if (homeNow) { if (home.visibility != View.VISIBLE) { home.visibility = View.VISIBLE; home.field.setText("") }; refreshNtp() } // Home always starts with an empty field
         else if (home.visibility != View.GONE) { home.visibility = View.GONE; home.hideSuggestions() }
         val e = tab.error
         if (e != null && !homeNow) { errorView.show(e); if (errorView.visibility != View.VISIBLE) errorView.visibility = View.VISIBLE }
