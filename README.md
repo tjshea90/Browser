@@ -5,8 +5,16 @@ A very light, fast, private Android browser built for **one specific tablet**: t
 blocking, HTTPS-first, cookie and fingerprint protection, private window) and none of the bloat: no news, no AI, no rewards, no wallet,
 no VPN, no sync, no accounts, no telemetry.
 
-It is **not Brave** and contains no Brave code or branding. Pages are drawn by the tablet's own **Android System WebView** (the same
-Blink/V8 engine family Brave is built on, shared with the OS so it costs no extra RAM); everything Brave-like is implemented in this app.
+It is **not Brave** and contains no Brave code or branding. There are **two builds** of the same browser, both built and signed by GitHub Actions and published on the [Releases](../../releases) page:
+
+| | **Kestrel** | **Kestrel G** |
+|---|---|---|
+| Draws pages with | the tablet's own **Android System WebView** (Blink/V8, shared with the OS, no extra RAM) | **Firefox's engine (GeckoView)**, bundled in the app |
+| Size | about 2.3 MB | about 92 MB |
+| Modern sites (e.g. claude.ai) | refused on this tablet: its WebView is Chromium 74 and cannot be updated | meant to work (checked on an Android 10 emulator only) |
+| Installs as | `app.kestrel.browser` | `app.kestrel.browser.gecko`, **beside** Kestrel |
+
+Everything Brave-like (Shields, HTTPS-first, hotspot behaviour, UI) is implemented in this app and shared by both builds; only the engine under it differs.
 
 > ### Please read: what has and has not been verified
 > This app was written in a cloud build sandbox with **no Android device**. It was run **once, briefly, on an Android 10 emulator** (an AOSP image whose web engine is the very old
