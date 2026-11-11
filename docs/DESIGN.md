@@ -40,8 +40,10 @@ Window animations are off, state lists have 0 fade, sheets and grids appear in o
 1. the **halo above the dock** (a 16 dp blue bloom rising from the 2 dp progress line into the page),
 2. the **Home field's glow** (a 10 dp bloom around the chamfered field),
 3. the **selected tab card's glow** in the tab grid.
-Each is a static, pre-built glow drawable on a `GlowView`; "pulsing" is only `View.animate().alpha()` (RenderThread, interpolator `AccelerateDecelerate`, 4.2 s per breath, alpha 0.45-0.5 -> 1.0).
-No blur, no `RenderEffect`, no bitmap redraw, no layout, no UI-thread work per frame (the UI thread wakes twice per breath to chain the next half).
+Each is a static, pre-built glow drawable on a `GlowView`; "pulsing" is only an alpha change of that view (a RenderNode property: no bitmap redraw, no layout, no off-screen layer, no blur, no
+`RenderEffect`), a cosine breath of 4.2 s between alpha 0.45-0.5 and 1.0 on ONE shared clock (all glows breathe together). It is **stepped at ~12 Hz** (80 ms) instead of animated at 60 Hz: a slow
+breath moves ~1 % of alpha per step, the eye cannot tell it from a smooth ramp, and each step is one tiny frame (5x fewer frames than a RenderThread animation: measured 199 frames per 10 s
+for the 60 Hz version on the emulator vs 0 when resting; the stepped version is measured below).
 It **holds still** (a steady glow at ~70 %) while typing or while a page loads (the screen is already changing), in battery-saver, when the system's animations are off, when the app is not
 on screen, and after **25 s without a touch** (so a tablet left on a page lets the screen go quiet; the next touch resumes it). Settings > Appearance > **Neon glow**: Off / Steady / Subtle pulse (default).
 Rules for a new glow: a `GlowView` + `Neon.pulse(view)`, small area only (never a full-screen layer), never behind text that is being read, never in the page area except the dock halo.
