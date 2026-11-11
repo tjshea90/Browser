@@ -36,15 +36,18 @@ Dark only (the owner uses the tablet dark; a light skin is a later option). Syst
 - Icons: hand-made 24 dp vectors, 2 dp stroke, square caps, mitred joins (`res/drawable/ic_*.xml`), tinted at runtime. Adding one: copy an existing file.
 
 ## Motion: instant everywhere, except the neon (`ui/Neon.kt`)
-Window animations are off, state lists have 0 fade, sheets and grids appear in one frame, the keyboard lift jumps. **The only motion is the neon breathing**, in exactly three places:
+Window animations are off, state lists have 0 fade, sheets and grids appear in one frame, the keyboard lift jumps. **The only motion is the neon breathing**, in exactly four places:
 1. the **halo above the dock** (a 16 dp blue bloom rising from the 2 dp progress line into the page),
-2. the **Home field's glow** (a 10 dp bloom around the chamfered field),
-3. the **selected tab card's glow** in the tab grid.
-Each is a static, pre-built glow drawable on a `GlowView`; "pulsing" is only an alpha change of that view (a RenderNode property: no bitmap redraw, no layout, no off-screen layer, no blur, no
-`RenderEffect`), a cosine breath of 4.2 s between alpha 0.45-0.5 and 1.0 on ONE shared clock (all glows breathe together). It is **stepped at 10 Hz** (100 ms) instead of animated at 60 Hz: a slow breath moves 1-2 % of alpha per step, the eye cannot tell it from a smooth ramp, and each step is one tiny frame
-(6x fewer than a RenderThread animation). While it runs each glow is a small hardware layer (strokes drawn once, a step only re-blends a texture); at rest the layer is dropped.
-It **holds still** (a steady glow at ~70 %) while typing or while a page loads (the screen is already changing), while a finger is on the screen and for 1.5 s after it lifts (the page's scrolling gets every frame), in battery-saver, when the system's animations are off, when the app is not
-on screen, and after **25 s without a touch** (so a tablet left on a page lets the screen go quiet; the next touch resumes it). Settings > Appearance > **Neon glow**: Off / Steady / Subtle pulse (default).
+2. the **address pill's ring** in the dock (a crisp 1.4 dp tube of ice-cyan just outside the pill's chamfered edge plus a 6 dp bloom; the pill itself is drawn above it),
+3. the **Home field's glow** (a 10 dp bloom and a crisp 1.8 dp ring around the chamfered field),
+4. the **selected tab card's glow** in the tab grid.
+Each is a static, pre-built glow drawable on a `GlowView` (`NeonGlowDrawable`: three bloom strokes 0x18/0x2C/0x50 plus the core ring at 0xF0, plain strokes, no blur); "pulsing" is only an alpha change of that view (a RenderNode property: no bitmap
+redraw, no layout, no `RenderEffect`), a cosine breath of **3.4 s between alpha 0.3 and 1.0** on ONE shared clock (all glows breathe together). It is **stepped at 10 Hz** (100 ms) instead of animated at 60 Hz: a slow breath moves 1-2 % of alpha per step,
+the eye cannot tell it from a smooth ramp, and each step is one tiny frame (6x fewer than a RenderThread animation). While it runs each glow is a small hardware layer; at rest the layer is dropped.
+**It is NOT gated on the system's animation scale** (Developer options > Animator duration scale 0 does not stop it: alpha5 gated on it and the owner, who runs with animations off, saw nothing); Settings > Appearance > **Neon glow** (Off / Steady / Subtle pulse, default) is the only switch.
+It **holds still** (a steady glow at ~70 %, no frames) only when the screen is already busy: while the keyboard is up or coming (a focused field with the keyboard hidden is NOT typing: that state froze the glow in alpha6), for the first 3 s of a page load, while a finger is on the screen
+(1.5 s after a swipe for the fling, 0.35 s after a plain tap), in battery-saver, when the app is not on screen, and after **2 min without a touch while a page is in front** (never on Home, in the tab grid or under a sheet: `Neon.canRest`).
+Diagnostics shows one line (`Neon glow: pulsing (n glows running)` or `holding still: <why>`, plus the system animation scale) so a silent glow can be explained.
 Rules for a new glow: a `GlowView` + `Neon.pulse(view)`, small area only (never a full-screen layer), never behind text that is being read, never in the page area except the dock halo.
 The Home screen backdrop (`HomeBackdrop`) is the reaper photo's mood and is **static**: faint vignette, two ghostly blue flames rising from the bottom corners (a 40 KB procedural mask, generated once on
 a background thread), a thin glowing scythe arc in the top-left.
@@ -55,7 +58,7 @@ a background thread), a thin glowing scythe arc in the top-left.
   `research/FREEZE.md`), the address row sits on the keyboard, the suggestion list sits on the address row with the best match nearest the bar. The glossy dock carries a blue edge; a 2 dp neon
   progress line (`NeonBar`) with its halo sits on top of it.
 - **Home (`ui/HomeView.kt`)** = new-tab page and the Home button. Pure black with the reaper backdrop, wordmark (+ PRIVATE badge), one 72 dp glossy chamfered field with a blue search block and a
-  breathing glow; focus turns its edge ice-bright. Words search Google, an address opens it. One faint line: what Shields blocked. While typing the field slides to the top and its suggestions sit below it.
+  breathing glow and ring; focus turns its edge ice-bright. Words search Google, an address opens it. One faint line: what Shields blocked. While typing the field slides to the top and its suggestions sit below it.
   The dock hides its address row on Home. Home over a page (Home button) keeps the page alive underneath; Back returns to it.
 - **Tab grid (`ui/TabGrid.kt`)**. Header: segmented `Tabs n | Private n` (each in its own colour), `Close all`. Cards: favicon/letter, title, close X, page preview (`ui/ThumbStore.kt`: 240 px RGB_565,
   GPU read-back when the grid opens and 2 s after a load, WebP cache for regular tabs, RAM only for private). Selected card = 3 dp accent edge + breathing glow. Bottom: `+ New tab` (accent) and `Done`.
