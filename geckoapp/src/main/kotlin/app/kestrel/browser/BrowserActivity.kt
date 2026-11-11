@@ -164,7 +164,9 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ProcessLife.uiAlive = true; ProcessLife.cancel()
         prefs = Prefs.get(this)
+        coldStartClear()
         Shields.init(this)
         palRegular = Pal(this, false)
         palPrivate = Pal(this, true)
@@ -208,6 +210,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onStart() {
         super.onStart()
+        ProcessLife.uiVisible = true; DownloadController.uiVisibilityChanged()
         NetworkMonitor.start(this)
         Neon.foreground(true)
     }
@@ -236,6 +239,7 @@ open class BrowserActivity : Activity(), DockListener {
         current?.session?.setActive(false) // stops rendering and throttles the page: saves battery and mobile data
         NetworkMonitor.stop()
         Neon.foreground(false)
+        ProcessLife.uiVisible = false; DownloadController.uiVisibilityChanged()
     }
 
     private var lastTouchAt = 0L
@@ -275,6 +279,22 @@ open class BrowserActivity : Activity(), DockListener {
         Io.main.removeCallbacks(saveRunnable)
         for (t in tabs) { try { t.session?.close() } catch (e: Exception) { /* already gone */ }; t.session = null }
         super.onDestroy()
+        if (!isChangingConfigurations) { ProcessLife.uiAlive = false; ProcessLife.uiVisible = false; ProcessLife.maybeExit() } // swiped away: leave unless a download is still running
+    }
+
+    /**
+     * "Clear browsing data when the app is closed": there is no Quit button any more (the user swipes the app away, and Android may end the process before any callback runs), so the
+     * promise is kept at the next COLD start - the first screen of a new process - before anything is restored. Nothing is cleared when only the screen is re-created.
+     */
+    private fun coldStartClear() {
+        if (ProcessLife.coldStartHandled) return
+        ProcessLife.coldStartHandled = true
+        if (!prefs.clearOnExit) return
+        sessionRestored = false
+        val appCtx = applicationContext
+        File(filesDir, "session.txt").delete()
+        Io.exec { try { BrowserDb(appCtx).clearHistory() } catch (e: Exception) { /* ignore */ }; ThumbStore.clearAll(appCtx) }
+        Io.main.post { try { GeckoEngine.runtime(this).storageController.clearData(StorageController.ClearFlags.ALL) } catch (e: Exception) { /* engine not ready: next time */ } }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -938,7 +958,6 @@ open class BrowserActivity : Activity(), DockListener {
         items.add(MenuItemSpec(M.DIAG, "Diagnostics", null, R.drawable.ic_pulse))
         if (!updateHot) items.add(MenuItemSpec(M.UPDATE, "Updates", null, R.drawable.ic_update))
         if (tabs.size > 1) items.add(MenuItemSpec(M.CLOSE_ALL, "Close all tabs", null, R.drawable.ic_close))
-        items.add(MenuItemSpec(M.QUIT, "Quit", null, R.drawable.ic_power))
         hideKeyboard()
         val cols = if (resources.displayMetrics.widthPixels >= dp(700)) 3 else 2
         sheet.show(null, menuGrid(this, pal, items, cols) { id -> sheet.dismiss(); onMenuPick(id) })
@@ -970,7 +989,6 @@ open class BrowserActivity : Activity(), DockListener {
             }
             M.SETTINGS -> showSettings()
             M.CLOSE_ALL -> { for (x in tabs.toList()) { x.session?.let { s -> if (geckoView.session === s) geckoView.releaseSession(); try { s.close() } catch (e: Exception) { /* ignore */ } }; x.session = null }; tabs.clear(); current = null; show(newTabInternal()) }
-            M.QUIT -> quit()
         }
     }
 
@@ -1205,18 +1223,6 @@ open class BrowserActivity : Activity(), DockListener {
         Io.exec { db?.clearHistory(); ThumbStore.clearAll(appCtx) }
         for (t in tabs) t.thumb = null // the previews are page contents too
         toast("Browsing data cleared")
-    }
-
-    private fun quit() {
-        if (prefs.clearOnExit) {
-            GeckoEngine.runtime(this).storageController.clearData(StorageController.ClearFlags.ALL)
-            sessionRestored = false // nothing may re-create the tab list after this point
-            val appCtx = applicationContext
-            Io.exec { db?.clearHistory(); sessionFile().delete(); ThumbStore.clearAll(appCtx) }
-        } else saveSessionNow()
-        finishAndRemoveTask()
-        // Free the memory right away: this tablet is low-RAM and the user asked to quit. The engine gets a moment to flush its profile first.
-        Io.main.postDelayed({ Process.killProcess(Process.myPid()) }, 1500)
     }
 
     private fun sessionFile() = File(filesDir, "session.txt")

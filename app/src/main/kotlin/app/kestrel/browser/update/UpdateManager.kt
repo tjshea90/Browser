@@ -105,6 +105,9 @@ object UpdateManager {
         }
     }
 
+    /** True while the process must stay alive for an update: a check or an install handshake is in flight (a download is counted by the download engine). */
+    fun busy(): Boolean = state.phase == Phase.CHECKING || state.phase == Phase.INSTALLING
+
     /** Called when the app comes to the front: the once-a-day check, only if enabled, online, and nothing else is going on. */
     fun maybeAutoCheck(ctx: Context, enabled: Boolean, online: Boolean) {
         if (!enabled || !online) return
