@@ -31,6 +31,9 @@ class Psl private constructor(
         return computed
     }
 
+    /** The three sorted hash tables (rules, wildcard parents, exceptions): [ExtImage] hands them to the extension's JS engine, which must answer `siteOf` identically. */
+    internal fun tables(): Array<LongArray> = arrayOf(rules, wildcardParents, exceptions)
+
     fun isSameSite(a: String, b: String): Boolean {
         if (a == b) return true
         val sa = siteOf(a) ?: return false
