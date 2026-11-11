@@ -33,6 +33,7 @@ class KestrelGeckoView(ctx: Context) : GeckoView(ctx) {
     private var gesture = 0 // counts touch-downs: a late engine answer for an earlier gesture is ignored
     private var downX = 0f
     private var downY = 0f
+    private var lastX = 0f
     private var lastY = 0f
     private var topKnown = false // the engine has answered for this gesture's touch-down
     private var atTop = false
@@ -47,13 +48,13 @@ class KestrelGeckoView(ctx: Context) : GeckoView(ctx) {
         when (action) {
             MotionEvent.ACTION_DOWN -> {
                 gesture++
-                downX = event.x; downY = event.y; lastY = event.y
+                downX = event.x; downY = event.y; lastX = event.x; lastY = event.y
                 topKnown = false; atTop = false; pageHandles = false; overscrollOk = true; pulling = false
                 dead = pull == null || !pullEnabled()
             }
             MotionEvent.ACTION_POINTER_DOWN -> { dead = true; if (pulling) endPull(false) } // a pinch or a second finger: not a pull
-            MotionEvent.ACTION_MOVE -> if (!dead) { lastY = event.y; track() }
-            MotionEvent.ACTION_UP -> { lastY = event.y; if (pulling) endPull(true); dead = true }
+            MotionEvent.ACTION_MOVE -> if (!dead) { lastX = event.x; lastY = event.y; track() }
+            MotionEvent.ACTION_UP -> { lastX = event.x; lastY = event.y; if (pulling) endPull(true); dead = true }
             MotionEvent.ACTION_CANCEL -> { if (pulling) endPull(false); dead = true }
         }
         if (action == MotionEvent.ACTION_DOWN && !dead) {
@@ -76,9 +77,9 @@ class KestrelGeckoView(ctx: Context) : GeckoView(ctx) {
     /** Decides whether the finger has started a pull, and reports its distance. Needs the engine's answer for the touch-down before it will start one. */
     private fun track() {
         val dy = lastY - downY
-        val dx = Math.abs(lastY.let { 0f } + 0f) // placeholder removed below
+        val dx = Math.abs(lastX - downX)
         if (!pulling) {
-            if (dy < -slop) { dead = true; return } // dragging up = scrolling the page down
+            if (dy < -slop || dx > 2 * slop && dx > dy) { dead = true; return } // dragging up = scrolling the page down; mostly sideways = a swipe, not a pull
             if (dy > slop && topKnown) {
                 if (!(atTop && !pageHandles && overscrollOk)) { dead = true; return }
                 pulling = true

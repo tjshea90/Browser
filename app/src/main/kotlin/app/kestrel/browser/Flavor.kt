@@ -13,4 +13,7 @@ object Flavor {
 
     /** The engine has the "Scroll feel" prefs (Gecko build only): Settings shows the row. */
     @JvmField var hasScrollFeel = false
+
+    /** The engine view reports pull-down gestures (Gecko build only): Settings shows the "Pull down to refresh" row. */
+    @JvmField var hasPullRefresh = false
 }
