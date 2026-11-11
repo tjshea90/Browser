@@ -85,6 +85,7 @@ class TabGrid(ctx: Context, private var pal: Pal, private val isPrivate: (Tab) -
         root.addView(header, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ctx.dp(64)))
 
         gridBox.orientation = LinearLayout.VERTICAL
+        gridBox.clipChildren = false; gridBox.clipToPadding = false // the selected card's neon glow spills into the gutters
         gridBox.setPadding(ctx.dp(PAD_DP), ctx.dp(4), ctx.dp(PAD_DP), ctx.dp(16))
         scroller.addView(gridBox, ViewGroupLP(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         scroller.isVerticalScrollBarEnabled = false
@@ -190,7 +191,7 @@ class TabGrid(ctx: Context, private var pal: Pal, private val isPrivate: (Tab) -
         val cardW = (avail - gap * (cols - 1)) / cols
         var i = 0
         while (i < shown.size) {
-            val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+            val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; clipChildren = false }
             for (c in 0 until cols) {
                 val t = shown.getOrNull(i + c)
                 val lp = LinearLayout.LayoutParams(cardW, LinearLayout.LayoutParams.WRAP_CONTENT).apply { if (c < cols - 1) marginEnd = gap; topMargin = gap }
@@ -240,7 +241,15 @@ class TabGrid(ctx: Context, private var pal: Pal, private val isPrivate: (Tab) -
         thumb.setBitmap(tab.thumb)
         thumbViews[tab.id] = thumb
         outer.addView(thumb, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (cardW * 1.05f).toInt() - ctx.dp(44)))
-        return outer
+        if (!selected) return outer
+        // the selected card glows (and breathes, see Neon): a GlowView behind it, grown past the card by the glow radius
+        val g = ctx.dp(GLOW_DP)
+        val wrap = FrameLayout(ctx).apply { clipChildren = false }
+        val glow = GlowView(ctx).apply { background = NeonGlowDrawable(skin.accent, ctx.dpf(CUT_DP), ChamferDrawable.TL or ChamferDrawable.BR, ctx.dpf(GLOW_DP.toFloat())) }
+        wrap.addView(glow, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT).apply { setMargins(-g, -g, -g, -g) })
+        wrap.addView(outer, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+        Neon.pulse(glow, 0.5f, 1f, 4200L)
+        return wrap
     }
 
     companion object {
@@ -248,6 +257,7 @@ class TabGrid(ctx: Context, private var pal: Pal, private val isPrivate: (Tab) -
         const val GAP_DP = 12
         const val MIN_CARD_DP = 215
         const val CUT_DP = 14f
+        const val GLOW_DP = 10
     }
 }
 
