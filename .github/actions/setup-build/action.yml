@@ -1,0 +1,24 @@
+name: Set up the Android build
+description: JDK 21, the Gradle cache, and the SDK packages this repo needs (platform 36, platform 37.0 for GeckoView, build-tools 36.0.0)
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-java@v5
+      with:
+        distribution: temurin
+        java-version: '21'
+
+    - uses: gradle/actions/setup-gradle@v4
+
+    - name: Android SDK packages
+      shell: bash
+      run: |
+        SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+        [ -x "$SDKM" ] || SDKM="$(command -v sdkmanager || true)"
+        [ -n "$SDKM" ] || { echo "::error::sdkmanager not found on this runner ($ANDROID_HOME)"; exit 1; }
+        yes | "$SDKM" --licenses >/dev/null 2>&1 || true
+        install() { "$SDKM" "platforms;android-36" "platforms;android-37.0" "build-tools;36.0.0" 2>&1 | tr '\r' '\n' | tail -6; }
+        # platform 37.0 needs a recent sdkmanager: update the command-line tools once if the first try fails
+        install || { "$SDKM" "cmdline-tools;latest" 2>&1 | tr '\r' '\n' | tail -3; install; }
+        [ -d "$ANDROID_HOME/platforms/android-37.0" ] || { echo "::error::platform android-37.0 (GeckoView 160 compiles against API 37) is not installed"; exit 1; }
+        echo "SDK ready: $(ls "$ANDROID_HOME/platforms" | tr '\n' ' ')"

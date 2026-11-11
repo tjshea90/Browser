@@ -1,46 +1,254 @@
-# CI for Kestrel. NOTE: written in the build sandbox and NOT yet exercised on GitHub's runners - expect to fix small things on the first run.
-name: android
+# Build, sign and release the Kestrel APKs on GitHub's runners (the owner's rule across all his repos: "GitHub actions should do all the
+# app compiling and apk making. Claude codes the app, GitHub makes the apk.").
+#
+# TWO APPS, one workflow:   web   = Kestrel   (:app, system WebView, ~2 MB, tag kestrel-v<version>)
+#                           gecko = Kestrel G (:geckoapp, Firefox engine, ~92 MB, tag kestrel-g-v<version>)
+# Dispatch with  app = gecko | web | both  and  full_build = true.  full_build = false is a ~1 minute check that the gates still pass.
+# Claude dispatches it through the GitHub API (mcp__github__actions_run_trigger, run_workflow) after `bash ship.sh <app> "note"`.
+#
+# MINUTES ARE THE SCARCE RESOURCE (tools/test_handoff.sh fails if either rule is undone):
+#   1. NEVER add a `push:` branch trigger. autosave commits and pushes after every tool call; a push trigger would start a run every few
+#      seconds. Tags and manual dispatch only.
+#   2. Cheap gates first; a manual run does the gates only unless full_build is ticked.
+#
+# SIGNING: every APK must carry the certificate pinned in signing/CERT_SHA256, because the tablet refuses an update signed by anything else.
+#   - default: the PUBLIC dev key committed in signing/dev/ (the same key that signed every APK delivered so far);
+#   - if the repo secret SIGNING_KEYSTORE_BASE64 exists (with SIGNING_STORE_PASSWORD, SIGNING_KEY_ALIAS, SIGNING_KEY_PASSWORD) that private key signs
+#     instead, and signing/CERT_SHA256 must then be re-pinned on purpose. tools/verify-apk.sh checks the ARTIFACT, not just the key that went in.
+#
+# GitHub creates the release tag itself (`gh release create --target`): a tag PUSH from the Claude sandbox is refused (403). This workflow COMMITS
+# NOTHING (a workflow that pushed would retrigger the autosave machinery); tools/record-release.sh writes BUILDLOG.md after the run is green.
+name: Build APK
 
-# Runs only on milestone/release checkpoints and on demand (Actions tab -> Run workflow). The hooks push an autosave commit every
-# couple of minutes while Claude works; building each one would waste runner minutes.
 on:
   push:
-    branches: ["**"]
+    tags: ['kestrel-v*', 'kestrel-g-v*']
   workflow_dispatch:
+    inputs:
+      app:
+        description: 'Which app: gecko = Kestrel G (Firefox engine), web = Kestrel (system WebView), or both'
+        type: choice
+        options: [gecko, web, both]
+        default: gecko
+      full_build:
+        description: 'Test, build, sign and publish (several minutes of Actions time). Leave OFF for a ~1 min check of the gates.'
+        type: boolean
+        default: false
+      note:
+        description: 'What changed in this release (goes into the Release text)'
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-${{ github.ref }}-${{ inputs.app || github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
-  build:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'checkpoint(milestone') || contains(github.event.head_commit.message, 'checkpoint(release')
+  # ------------------------------------------------------------------ seconds: decide the plan and run the cheap gates
+  check:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      web: ${{ steps.plan.outputs.web }}
+      gecko: ${{ steps.plan.outputs.gecko }}
+      full: ${{ steps.plan.outputs.full }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-      - name: Android SDK
-        run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
-      - uses: gradle/actions/setup-gradle@v4
-      - name: Test, lint, build
-        run: ./gradlew :core:test :app:testDebugUnitTest :app:lintRelease :app:assembleRelease --no-daemon
-      - uses: actions/upload-artifact@v4
-        with:
-          name: kestrel-apk
-          path: app/build/outputs/apk/release/app-release.apk
+      - uses: actions/checkout@v5
 
-  js:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'checkpoint(milestone') || contains(github.event.head_commit.message, 'checkpoint(release')
+      - name: Decide how much of this run costs money
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          APP: ${{ inputs.app }}
+          FULL: ${{ inputs.full_build }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          web=false; gecko=false; full=false
+          if [ "$EVENT" = "push" ]; then
+            full=true
+            case "$REF_NAME" in kestrel-g-v*) gecko=true ;; kestrel-v*) web=true ;; esac
+          else
+            [ "$FULL" = "true" ] && full=true
+            case "$APP" in web) web=true ;; gecko) gecko=true ;; both) web=true; gecko=true ;; esac
+          fi
+          { echo "web=$web"; echo "gecko=$gecko"; echo "full=$full"; } >> "$GITHUB_OUTPUT"
+          if [ "$full" = true ]; then
+            echo "FULL BUILD of: web=$web gecko=$gecko (tests, APK, signature check, publish)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "GATES ONLY for: web=$web gecko=$gecko. Re-run with **full_build** ticked, or create a Release tag, to build." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Gate - shell tooling self-test (save ladder, secret scan, workflow rules)
+        run: bash tools/test_handoff.sh
+
+      - name: Gate - the signing key is the pinned one
+        env:
+          KS_B64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          STORE_PW: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          KEY_PW: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            printf '%s' "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            KS="$RUNNER_TEMP/release.jks"; PW="$STORE_PW"; AL="$KEY_ALIAS"; SRC="private key from the repo secrets"
+          else
+            KS=signing/dev/kestrel-dev.jks; PW=kestrel-dev; AL=kestrel-dev; SRC="public dev key (signing/dev)"
+          fi
+          GOT="$(keytool -list -v -keystore "$KS" -storepass "$PW" -alias "$AL" 2>/dev/null | sed -n 's/.*SHA256: *//p' | head -1 | tr -d ':' | tr 'A-F' 'a-f')"
+          WANT="$(tr -d ' \r\n' < signing/CERT_SHA256)"
+          rm -f "$RUNNER_TEMP/release.jks"
+          if [ -z "$GOT" ] || [ "$GOT" != "$WANT" ]; then
+            echo "::error::The signing key ($SRC) does not have the pinned certificate. expected $WANT got ${GOT:-unreadable}. An APK signed with it would NOT update the tablet in place."
+            exit 1
+          fi
+          echo "Signing with the $SRC; certificate $WANT matches the pin." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Gate - versionCode is not a downgrade
+        env:
+          WEB: ${{ steps.plan.outputs.web }}
+          GECKO: ${{ steps.plan.outputs.gecko }}
+        run: |
+          . tools/appinfo.sh
+          for app in web gecko; do
+            case "$app" in web) on="$WEB" ;; gecko) on="$GECKO" ;; esac
+            [ "$on" = true ] || continue
+            VC="$(app_vcode "$app")"; PREV="$(app_last_code "$app")"
+            echo "$app: $(app_title "$app") $(app_vname "$app") versionCode $VC, highest shipped $PREV"
+            if [ "$VC" -lt "$PREV" ]; then
+              echo "::error::$app versionCode $VC is LOWER than the highest shipped ($PREV): Android refuses a downgrade."
+              exit 1
+            fi
+            # An EQUAL code is a rebuild of the current release (allowed: same certificate => in-place reinstall). ship.sh, which publishes
+            # a NEW release, enforces the stricter "higher".
+          done
+
+  # ------------------------------------------------------------------ minutes: the JVM suites + lint (once, shared by both apps)
+  test-jvm:
+    needs: check
+    if: needs.check.outputs.full == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-build
+      - name: Core + filter-list tool + app unit tests, lint
+        run: ./gradlew :core:test :tools:build :app:testDebugUnitTest :app:lintRelease --console=plain
+
+  # ------------------------------------------------------------------ the injected WebView scripts in real headless Chromium
+  test-js:
+    needs: check
+    if: needs.check.outputs.full == 'true' && needs.check.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: '22'
       - name: Injected-script tests in Chromium
         working-directory: web-tests
         run: |
           npm install --no-save playwright
           npx playwright install --with-deps chromium
           npm test
+
+  # ------------------------------------------------------------------ Kestrel (system WebView)
+  build-web:
+    needs: [check, test-jvm, test-js]
+    if: needs.check.outputs.full == 'true' && needs.check.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      APP: web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-build
+
+      - name: Private signing key (only when the repo secret exists)
+        env:
+          KS_B64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          STORE_PW: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          KEY_PW: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            printf '%s' "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            { echo "storeFile=$RUNNER_TEMP/release.jks"; echo "storePassword=$STORE_PW"; echo "keyAlias=$KEY_ALIAS"; echo "keyPassword=$KEY_PW"; } > keystore.properties
+          fi
+
+      - name: Build the release APK (R8, signed)
+        run: ./gradlew :app:assembleRelease --console=plain
+
+      - name: Verify the APK itself (certificate pin, package, version, no GMS, size)
+        run: bash tools/verify-apk.sh "$APP"
+
+      - name: Publish the Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTE: ${{ inputs.note }}
+        run: bash .github/scripts/publish-release.sh "$APP"
+
+      - name: Keep the APK for inspection (failed runs only)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unpublished-web-apk
+          path: app/build/outputs/apk/release/app-release.apk
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Remove the signing material from the workspace
+        if: always()
+        run: rm -f keystore.properties "$RUNNER_TEMP/release.jks"
+
+  # ------------------------------------------------------------------ Kestrel G (Firefox engine)
+  build-gecko:
+    needs: [check, test-jvm]
+    if: needs.check.outputs.full == 'true' && needs.check.outputs.gecko == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      APP: gecko
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-build
+
+      - name: Private signing key (only when the repo secret exists)
+        env:
+          KS_B64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          STORE_PW: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          KEY_PW: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            printf '%s' "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            { echo "storeFile=$RUNNER_TEMP/release.jks"; echo "storePassword=$STORE_PW"; echo "keyAlias=$KEY_ALIAS"; echo "keyPassword=$KEY_PW"; } > keystore.properties
+          fi
+
+      - name: Build the release APK (GeckoView 160 armeabi-v7a, R8, signed)
+        run: ./gradlew :geckoapp:assembleRelease --console=plain
+
+      - name: Verify the APK itself (certificate pin, package, version, no GMS, size)
+        run: bash tools/verify-apk.sh "$APP"
+
+      - name: Publish the Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTE: ${{ inputs.note }}
+        run: bash .github/scripts/publish-release.sh "$APP"
+
+      - name: Keep the APK for inspection (failed runs only)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unpublished-gecko-apk
+          path: geckoapp/build/outputs/apk/release/geckoapp-release.apk
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Remove the signing material from the workspace
+        if: always()
+        run: rm -f keystore.properties "$RUNNER_TEMP/release.jks"
