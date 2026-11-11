@@ -18,8 +18,10 @@ var MODE_OFF = 0, MODE_ON = 1, MODE_LEGACY = 2;
 
 // ---------------------------------------------------------------- per-page configuration ("cfg"): one question per main-frame navigation
 var cfgMode = new Map();   // page host -> MODE_*
+var cfgAt = new Map();     // page host -> when the answer arrived
 var cfgWait = new Map();   // page host -> promise of the answer being fetched
 var CFG_MAX = 300;
+var CFG_TTL = 60000;       // a Shields switch changed in Settings reaches pages that are already open within this time (a switch on the page itself reloads it at once)
 function askCfg(host) {
   var p = cfgWait.get(host);
   if (p) return p;
@@ -28,8 +30,8 @@ function askCfg(host) {
     var parts = ((typeof r === 'string') ? r : '').split(':'); // "<mode>:<generation>:<content id>"
     if (parts.length < 2) return MODE_OFF; // not an answer from the app: do not cache, never break the page
     var mode = parts[0] === '1' ? MODE_ON : (parts[0] === 'L' ? MODE_LEGACY : MODE_OFF);
-    if (cfgMode.size >= CFG_MAX) cfgMode.delete(cfgMode.keys().next().value);
-    cfgMode.set(host, mode);
+    if (cfgMode.size >= CFG_MAX) { var old = cfgMode.keys().next().value; cfgMode.delete(old); cfgAt.delete(old); }
+    cfgMode.set(host, mode); cfgAt.set(host, Date.now());
     if (mode !== MODE_LEGACY) wantImage(parseInt(parts[1], 10) || 0, parts[2] || '');
     return mode;
   }, function () { cfgWait.delete(host); return MODE_OFF; }); // the app could not answer: fail open
@@ -217,7 +219,7 @@ browser.webRequest.onBeforeRequest.addListener(function (d) {
     sniffed.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again
     verdicts.clear(); // legacy verdicts are only worth keeping while ONE page loads
     var h = pageHost(d.url);
-    if (h) { cfgMode.delete(h); askCfg(h); } // a Shields switch may have changed: ask again. Not awaited - the answer beats the document's first bytes over a hotspot
+    if (h) { cfgMode.delete(h); cfgAt.delete(h); askCfg(h); } // a Shields switch may have changed: ask again. Not awaited - the answer beats the document's first bytes over a hotspot
     return {};
   }
   var page = topPage(d);
@@ -226,6 +228,7 @@ browser.webRequest.onBeforeRequest.addListener(function (d) {
   if (!host) return {};
   var mode = cfgMode.get(host);
   if (mode === undefined) return askCfg(host).then(function (m) { return decide(d, page, host, m); }); // asked once per page, before its first sub-resource is judged
+  if (Date.now() - cfgAt.get(host) > CFG_TTL) askCfg(host); // refresh in the background; this request still uses the answer we have
   return decide(d, page, host, mode);
 }, { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] }, ['blocking']);
 

@@ -51,9 +51,9 @@ function fakeIdb(store) {
 /** @param app (message) => reply string (may be async). @param opts { idb: Map } */
 function harness(app, opts) {
   opts = opts || {};
-  const sent = [], timers = [], listeners = {};
+  const sent = [], timers = [], listeners = {}, clock = { now: 1700000000000 };
   const ctx = {
-    console, Promise, Map, Set, Uint8Array, ArrayBuffer, Int32Array, Math, Date, JSON, parseInt, Object, Error, RegExp, String, Array,
+    console, Promise, Map, Set, Uint8Array, ArrayBuffer, Int32Array, Math, Date: { now: () => clock.now }, JSON, parseInt, Object, Error, RegExp, String, Array,
     performance: { now: () => Number(process.hrtime.bigint()) / 1e6 },
     atob: (s) => Buffer.from(s, 'base64').toString('latin1'),
     // short timers (the chunk-transfer yields) run at once; the 500 ms / 5 s batching timers wait until the test runs them
@@ -74,7 +74,7 @@ function harness(app, opts) {
   vm.runInContext(SRC, ctx);
   const req = (type, url, page) => listeners.before({ type, url, tabId: 1, frameId: 0, documentUrl: page, frameAncestors: [{ url: page, frameId: 0 }] });
   return {
-    sent, ctx, listeners,
+    sent, ctx, listeners, clock,
     mainFrame: (url) => listeners.before({ type: 'main_frame', url, tabId: 1, frameId: 0 }),
     req,
     flushTimers: async () => { const t = timers.splice(0); t.forEach((f) => f()); await tick(); },
@@ -161,6 +161,23 @@ test('a new navigation asks again: switching Shields off for the site takes effe
   h.mainFrame(PAGE); // reload
   eq(await h.req('script', AD, PAGE), {}, 'the first sub-resource of the new load waits for the fresh answer');
   assert.equal(h.of('cfg').length, 2);
+});
+
+test('an answer older than a minute is refreshed in the background: a Settings switch reaches open pages without a reload', async () => {
+  let mode = '1';
+  const h = harness((m) => (m.k === 'cfg' ? `${mode}:1:${ID}` : standardApp()(m)));
+  h.mainFrame(PAGE);
+  await until(() => h.of('img').length >= 3, 'the image transfer');
+  await until(() => !isPromise(h.req('script', PLAIN, PAGE)), 'the engine');
+  eq(h.req('script', AD, PAGE), { cancel: true });
+  mode = '0';
+  eq(h.req('script', AD, PAGE), { cancel: true }, 'inside the minute the old answer stands');
+  assert.equal(h.of('cfg').length, 1);
+  h.clock.now += 61000;
+  eq(h.req('script', AD, PAGE), { cancel: true }, 'the request that finds the answer old still uses it (no waiting)...');
+  await until(() => h.of('cfg').length === 2, 'the refresh');
+  await tick(10);
+  eq(h.req('script', AD, PAGE), {}, '...and the next one follows the new switch');
 });
 
 test('the saved copy gives an engine before the first request, and an unchanged list costs no transfer', async () => {
