@@ -67,3 +67,8 @@ So far I like alpha 3.
 6) when I go to downloads, it tries to open my file manager. I want this browser to have a full featured smart and fast download manager with pause and resume and fast features. 
 7) begin work on the other things I already asked for. Show me what Claude can do, make the gui amazing and intuitive. Make the entire app snappy and fast. I want to be impressed 
 ```
+
+## 2026-11-11T10:50:18Z
+```
+The goal for this browser is to be as lightweight and fast as possible, snappy. Research the hardware I have  and make sure the browser is well optimized and takes advantage of the ram and cpu and GPU to their full power for maximum speed and snappiness. Research online and consider other engines to use other than Firefox. Consider cromite. Keep the gui except instead of yellow highlights, make them blue. Get design ideas based on the attached grim reaper photo. I love the dark black glossy black look with the neon blue color. Somehow incorporate the visuals and colors of the attached photo into the browser theme. If possible without using too much cpu and ram, add very subtle pulsing blue animation to the gui in logical places such as button edges and places it makes sense to have the animation. Get the animation idea from the pulsating neon colors around the modern smartphone screens when the phone is talking or using Ai. Make the colors of the animated accents look like the contrast between the very dark black and the blue colors in the attached photo
+```
