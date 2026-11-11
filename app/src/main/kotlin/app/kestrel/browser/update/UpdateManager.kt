@@ -71,7 +71,7 @@ object UpdateManager {
         private set
 
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
-    @Volatile private var cancelled = false
+    @Volatile private var appCtx: Context? = null
     private var ready = false
 
     private const val DAY_MS = 24L * 3600 * 1000
@@ -97,6 +97,8 @@ object UpdateManager {
 
     /** Restore what the last session knew (offer, last check) so the dot and the panel are right at once, without any network. */
     fun init(ctx: Context) {
+        appCtx = ctx.applicationContext
+        hookEngine(ctx.applicationContext)
         val s = sp(ctx)
         val installed = installedCode(ctx)
         val offer = s.getString("offer", null)?.let { offerFromJson(it) }
@@ -105,7 +107,7 @@ object UpdateManager {
         if (offer != null && offer.versionCode > installed) {
             val f = File(dir(ctx), offer.apkName)
             val isReady = f.isFile && f.length() == offer.size && s.getString("verified", null) == offer.tag
-            set(ctx, if (isReady) Phase.READY else Phase.AVAILABLE, offer, if (isReady) offer.size else File(dir(ctx), offer.apkName + ".part").length(), offer.size, checkedAt = checked)
+            set(ctx, if (isReady) Phase.READY else Phase.AVAILABLE, offer, if (isReady) offer.size else 0, offer.size, checkedAt = checked)
         } else {
             if (offer != null) { cleanup(ctx); s.edit().remove("floor").apply() } // the update was installed: drop the leftover APK and what we learned about this tablet's storage
             set(ctx, if (checked > 0) Phase.UP_TO_DATE else Phase.IDLE, null, checkedAt = checked)
@@ -172,9 +174,19 @@ object UpdateManager {
                 c.disconnect()
                 s.edit().putLong("checked", now).apply()
                 if (offer != null && offer.versionCode > installed) {
+                    // a NEWER release than the file we hold (or are downloading): forget the old one
+                    val heldTag = s.getString("job_tag", null)
+                    if (heldTag != null && heldTag != offer.tag) { val id = jobId(app); if (id != 0L) { DownloadController.cancel(id); DownloadController.remove(id, true) }; s.edit().remove("job").remove("verified").remove("job_tag").apply(); cleanup(app) }
+                    s.edit().putString("job_tag", offer.tag).apply()
                     val f = File(dir(app), offer.apkName)
                     val isReady = f.isFile && f.length() == offer.size && s.getString("verified", null) == offer.tag
-                    set(app, if (isReady) Phase.READY else Phase.AVAILABLE, offer, if (isReady) offer.size else File(dir(app), offer.apkName + ".part").length(), offer.size, checkedAt = now)
+                    set(app, if (isReady) Phase.READY else Phase.AVAILABLE, offer, if (isReady) offer.size else 0, offer.size, checkedAt = now)
+                    val prefs = Prefs.get(app)
+                    when {
+                        isReady -> UpdateNotifier.ready(app, offer)
+                        prefs.autoUpdateDownload -> download(app, auto = true)
+                        !manual -> UpdateNotifier.available(app, offer)
+                    }
                 } else set(app, Phase.UP_TO_DATE, null, checkedAt = now)
             } catch (e: SSLException) {
                 fail(app, "Could not verify GitHub's security certificate. This tablet's certificate list may be too old. Open the release page in the browser instead.")
