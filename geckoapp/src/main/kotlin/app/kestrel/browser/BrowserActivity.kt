@@ -230,6 +230,7 @@ open class BrowserActivity : Activity(), DockListener {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         Health.log("win", "focus", hasFocus.toString())
+        if (hasFocus && ::root.isInitialized) kbProbe.attach(root) // the keyboard probe needs the window token: have it ready before the first keystroke
     }
 
     override fun onNewIntent(intent: Intent) {
