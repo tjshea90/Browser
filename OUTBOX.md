@@ -184,3 +184,37 @@
 > - Settings restyle.
 > - Your pending decisions: signing key, licence and YouTube switch, and the landscape tab strip.
 <!-- sha:e83205b8b0cf -->
+
+## 2026-11-11T16:18:17Z
+> **Short answer:** Cromite can't replace GeckoView inside Kestrel. It's a finished Chrome-style browser app, not a part another app can build on. So the real choice is Kestrel (Firefox engine) or Cromite as your browser, not an engine swap.
+>
+> **Why it can't be swapped in**
+> - Cromite's embeddable form (Android WebView) exists only for 64-bit phones. Your tablet is 32-bit, and its WebView can't be replaced because the system image is locked.
+> - Putting Cromite's engine under Kestrel's bottom bar, Home page, tabs, downloads and Shields would mean building Chromium ourselves. That needs about 100 GB of disk and 8–16 GB of RAM, and roughly 8 hours per build on a 4-core machine. It would have to be redone every 2 weeks for security fixes. GitHub's free builders (4 cores, 14 GB disk, 6-hour limit) can't do it.
+> - What is possible: install Cromite next to Kestrel, or add an "Open in Cromite" menu item.
+>
+> **Cromite pros**
+> - Chrome-style engines often scroll smoother on weak hardware, and sites are built and tested for them.
+> - It has built-in ad blocking, privacy patches and no Google services.
+> - It has a 32-bit build for Android 10 and up. I haven't tried installing it on your tablet.
+> - Video uses the tablet's hardware decoder, same as Firefox.
+>
+> **Cromite cons**
+> - You'd lose Kestrel's own features: bottom bar, Home page, private tabs kept separate, neon theme, tab previews, download manager, in-app updates and our Shields.
+> - The APK is 232 MB (Kestrel G is 92 MB), and every update is another 232 MB over your hotspot.
+> - JavaScript acceleration is off by default, which makes JavaScript about 40% slower. You can turn it on per site.
+> - It gives every website its own process, which costs more RAM on a 1.9 GB tablet.
+> - It has one maintainer. The last stable build was 15 Sep, which is about 8 weeks and 4 Chromium versions behind. For a browser, that means missing security fixes.
+> - There are no extensions on Android.
+> - Nobody has published speed numbers for your chip, so I can't promise it's faster.
+>
+> **GeckoView (what Kestrel G uses)**
+> - **Pros:** it's built to be embedded, so everything in Kestrel works. It's small, updated every 2 weeks, and Mozilla says 32-bit ARM stays supported.
+> - **Cons:** the stutter and white screens you're seeing, and more memory per page. Some sites are tuned for Chrome.
+>
+> **My recommendation:** stay on GeckoView and fix the real causes of the stutter, which is what alpha 6 does. To settle the engine question, install Cromite's `arm_ChromePublic.apk` beside Kestrel for 15 minutes and scroll the same 3 heavy pages in both. If Cromite is dramatically smoother, I'd add "Open in Cromite" to Kestrel's menu, which is about half a day of work. I'd also revisit if Mozilla drops 32-bit ARM, or if Developer options shows a second "WebView implementation" choice.
+>
+> Alpha 6 is here: https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.2.0-alpha6
+>
+> I'm still waiting on three things from you: did alpha 3 scroll smoothly, the Scroll test "Result:" line (Menu → Diagnostics) under Standard, Smoother and Neon Off, and a Diagnostics → Copy after the next white screen.
+<!-- sha:3accbfaf5b7a -->
