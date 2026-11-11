@@ -4,7 +4,7 @@ Tags: [V] read in a fetched primary page; [S] search snippet only (page blocked/
 
 ## 1. Decisions (read this first)
 1. **Pick the chrome layout at RUNTIME from window dp, never with `sw600dp` resources.** The tablet is sw564, so `sw600dp` never matches. Chromium's tablet test is exactly sw600dp [V], so Chrome and (being Chromium) Brave show
-   their PHONE layout here [U for Brave]: the owner's "Brave look" is Brave's phone layout (address bar on top, no tab strip, optional bottom toolbar [S]). Size classes: portrait = compact width + ~expanded height; landscape = expanded width + medium height [V].
+   their PHONE layout here [U for Brave]: the owner's "Brave look" is Brave's phone layout (address bar on top, no tab strip, optional bottom toolbar [S]). Window size classes [V]: portrait = compact width (<600) and expanded height (916 vs the 900 threshold); landscape = expanded width (>=840) and medium height.
 2. **Touch targets: 56 dp default; 64 dp for the bottom-bar cells; 48 dp is the absolute floor** (card close, row-end buttons). On this ~170 ppi panel 48 dp = 7.6 mm, 56 = 8.9 mm, 64 = 10.2 mm (section 2).
 3. **Portrait = SPLIT chrome**: address row on top (56) + action bar at the bottom (64: Back, Forward, New tab, Tabs, Menu). **Landscape = UNIFIED**: one 56 dp row + a 48 dp tab strip when >= 2 tabs.
    Precedent: Vivaldi moves the bottom icons to the top bar on larger screens [V]; Samsung, Opera, Edge, DuckDuckGo, Vivaldi, Chrome and Brave all offer bottom controls [S/V]. Setting "Toolbar: Split / All on top".
