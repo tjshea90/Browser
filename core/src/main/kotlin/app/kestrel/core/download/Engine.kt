@@ -425,7 +425,7 @@ class Engine(
             if (first != null) { opened = first; first = null }
             else {
                 if (synchronized(lock) { job.alive > job.climb.target && !seg.live && job.rec.state == DlState.RUNNING }) return // fewer connections wanted: leave the segment for later
-                val win = job.sink.let { (fetchers(job.rec.fetcher)?.windowBytes ?: 0L).takeIf { it > 0 } ?: cfg.windowBytes }
+                val win = (fetchers(job.rec.fetcher)?.windowBytes ?: 0L).takeIf { it > 0 } ?: cfg.windowBytes
                 val reqEnd = if (end >= 0) minOf(end, cursor + Planner.window(seg, win)) else -1L
                 try { opened = openWindow(job, w, seg, cursor, reqEnd) } catch (r: Retry) { continue }
             }
