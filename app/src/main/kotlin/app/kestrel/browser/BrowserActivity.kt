@@ -1091,9 +1091,9 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
     }
 
     override fun externalLaunch(tab: Tab, url: String, userGesture: Boolean): Boolean {
+        if (!userGesture) return true // a page cannot launch apps on its own (redirect / script): ignored, and not even parsed
         val plan = ExternalIntents.plan(this, url)
-        if (plan == null) { if (userGesture) toast("Blocked a link that isn't a web page"); return true }
-        if (!userGesture) return true // a page cannot launch apps on its own (redirect / script): ignored
+        if (plan == null) { toast("Blocked a link that isn't a web page"); return true }
         val go = {
             try { startActivity(plan.intent) } catch (e: Exception) {
                 val fb = plan.fallbackUrl

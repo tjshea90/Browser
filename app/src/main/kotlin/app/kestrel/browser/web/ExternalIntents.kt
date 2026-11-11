@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import java.net.URISyntaxException
 
 /**
  * Turns a non-web URL a page tried to open (`intent:`, `mailto:`, custom schemes) into a SAFE explicit plan, or refuses it.
@@ -18,13 +17,19 @@ object ExternalIntents {
     private const val GRANT_FLAGS = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
         Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
 
-    fun plan(ctx: Context, url: String): Plan? {
+    /**
+     * Never throws: [Intent.parseUri] lets NumberFormatException and friends escape for crafted input like `intent:#Intent;i.x=zz;end`,
+     * and this runs on the UI thread for URLs chosen by a web page. Anything unparseable is simply refused.
+     */
+    fun plan(ctx: Context, url: String): Plan? = try { planUnchecked(ctx, url) } catch (e: Exception) { null }
+
+    private fun planUnchecked(ctx: Context, url: String): Plan? {
         val scheme = url.substringBefore(':', "").lowercase()
         if (scheme.isEmpty() || scheme in BLOCKED) return null
         val intent: Intent
         var fallback: String? = null
         if (scheme == "intent") {
-            intent = try { Intent.parseUri(url, Intent.URI_INTENT_SCHEME) } catch (e: URISyntaxException) { return null }
+            intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME) // URISyntaxException / NumberFormatException are caught by plan()
             fallback = intent.getStringExtra("browser_fallback_url")?.takeIf { it.startsWith("https://") }
             // never let a page choose the exact component or smuggle a selector intent
             intent.component = null

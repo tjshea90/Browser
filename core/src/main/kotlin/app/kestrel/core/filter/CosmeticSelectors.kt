@@ -40,21 +40,22 @@ internal object CosmeticSelectors {
      * this scanner's idea of "inside a string" always agrees with the CSS parser's.)
      */
     private fun balanced(s: String): Boolean {
-        var square = 0
-        var paren = 0
+        // A stack, not two counters: "[(])" has equal counts but is misnested, and one invalid selector makes the browser drop
+        // the WHOLE rule that groups it (or, for some shapes, the rest of the stylesheet).
+        val stack = CharArray(s.length)
+        var depth = 0
         var quote = 0.toChar()
         for (c in s) {
             if (quote != 0.toChar()) { if (c == quote) quote = 0.toChar(); continue }
-            if (STRUCTURAL.indexOf(c) >= 0) return false
+            if (STRUCTURAL.indexOf(c) >= 0 || c == '@') return false // '@' outside quotes is only ever an at-rule
             when (c) {
                 '"', '\'' -> quote = c
-                '[' -> square++
-                ']' -> { square--; if (square < 0) return false }
-                '(' -> paren++
-                ')' -> { paren--; if (paren < 0) return false }
+                '[' -> stack[depth++] = ']'
+                '(' -> stack[depth++] = ')'
+                ']', ')' -> { if (depth == 0 || stack[--depth] != c) return false }
             }
         }
-        return quote == 0.toChar() && square == 0 && paren == 0
+        return quote == 0.toChar() && depth == 0
     }
 
     /** Modern pseudo-classes (`:has()`, `:is()`, ...) get a rule of their own so an old WebView can't void a whole group. */
