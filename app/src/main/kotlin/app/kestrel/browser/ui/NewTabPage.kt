@@ -155,17 +155,22 @@ class NewTabPage(ctx: Context, private val pal: Pal, private val l: Listener) : 
 /** Round avatar with the site's first letter (no favicon downloads: saves data). */
 class LetterAvatar(ctx: Context, host: String, private val pal: Pal) : View(ctx) {
     private val letter = host.removePrefix("www.").firstOrNull()?.uppercaseChar()?.toString() ?: "?"
-    private val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette(host.hashCode()) }
-    private val fg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt(); textAlign = Paint.Align.CENTER; typeface = Typeface.DEFAULT_BOLD; textSize = ctx.dpf(20f) }
+    private val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = tone(host.hashCode()) }
+    private val fg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFF2F3F5.toInt(); textAlign = Paint.Align.CENTER; typeface = Typeface.DEFAULT_BOLD }
+    private val shape = android.graphics.Path()
+    private val box = android.graphics.RectF()
 
+    /** A chamfered tile in a deep, muted tone picked from the host name (the CERE identity: no bright circles). */
     override fun onDraw(c: Canvas) {
-        val r = minOf(width, height) / 2f
-        c.drawCircle(width / 2f, height / 2f, r, bg)
+        box.set(0f, 0f, width.toFloat(), height.toFloat())
+        ChamferDrawable.path(box, height * 0.28f, ChamferDrawable.TL or ChamferDrawable.BR, shape)
+        c.drawPath(shape, bg)
+        fg.textSize = height * 0.56f
         c.drawText(letter, width / 2f, height / 2f - (fg.descent() + fg.ascent()) / 2f, fg)
     }
 
-    private fun palette(h: Int): Int {
-        val colors = intArrayOf(0xFF5E35B1.toInt(), 0xFF00796B.toInt(), 0xFFC2185B.toInt(), 0xFF1565C0.toInt(), 0xFFEF6C00.toInt(), 0xFF2E7D32.toInt(), 0xFF6D4C41.toInt(), 0xFF455A64.toInt())
+    private fun tone(h: Int): Int {
+        val colors = intArrayOf(0xFF3A2F6B.toInt(), 0xFF0F5B52.toInt(), 0xFF7A2A4B.toInt(), 0xFF1F4E8C.toInt(), 0xFF8A4B12.toInt(), 0xFF2C6B34.toInt(), 0xFF5A4636.toInt(), 0xFF3F5160.toInt())
         return colors[(h and 0x7fffffff) % colors.size]
     }
 }
