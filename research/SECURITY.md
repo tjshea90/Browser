@@ -154,6 +154,7 @@ jobs:
         with: { subject-path: kestrel-g-*.apk }
       - run: gh release create "$TAG" --draft --target "$GITHUB_SHA" ... && gh release upload "$TAG" kestrel-g-*.apk{,.sha256} && gh release edit "$TAG" --draft=false   # immutable releases lock tag + assets at publish
 # Delete the 'Keep the APK for inspection (failed runs only)' steps (they publish a signed apk of a failed run). Same split for the web build.
+# The `check` job's gate "the signing key is the pinned one" reads SIGNING_* secrets: replace it with a secret-free test (last signer printed by `apksigner lineage --in signing/kestrel.lineage --print-certs` == signing/CERT_SHA256); the real key is checked by verify-apk.sh in sign-publish.
 # Resolve a pin: gh api repos/actions/checkout/git/ref/tags/v5 --jq .object  (type "tag" -> gh api repos/actions/checkout/git/tags/<sha> --jq .object.sha). 40-hex values are NOT listed: the sandbox cannot read other repos.
 ```
 ```yaml
