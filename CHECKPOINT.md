@@ -1,13 +1,13 @@
-# CHECKPOINT 392 — read me first, then TASKS.md
+# CHECKPOINT 400 — read me first, then TASKS.md
 
-**Written:** 2026-11-11T16:46:17Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `7ff59eb` (this checkpoint is the commit after it)
+**Written:** 2026-11-11T17:06:33Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `ef683ff` (this checkpoint is the commit after it)
 
 ## Just done
-S1+S2 code done: updater storage plan (core UpdateLogic.storagePlan + tests; UpdateManager.space/needSpace/recheckSpace/installNeedsSpace with a rising floor, abandon leftover sessions, drop own APK copy only when needed, mapped installer failures), Updates sheet NEEDS_SPACE screen (numbers, Try again, Storage settings), download cards show 'X MB of Y MB'. Emulator-verified with a filled /data (pre-download check, auto-clear after freeing space, cancel keeps file, simulated STATUS_FAILURE_STORAGE). The 'floor' variant (ask 150 MB more than Android's own refusal) compiled but not yet run.
+R1 neon DONE on the emulator (system animations off): pulse no longer gated on the animator scale, keyboard-hidden-but-focused no longer counts as typing, ring+bloom stronger (0.3..1.0), new pulsing ring around the address pill, canRest false on Home/grid/sheet (rest 2 min), tap hold 0.35 s, load hold 3 s, Diagnostics 'Neon glow:' line; docs/DESIGN.md updated
 
 ## Do this next
-1) R1 neon (drop areAnimatorsEnabled gate, stronger pulse, more places, Home/tab grid never rest, Diagnostics line); 2) R3 pull-to-refresh; 3) R2 scroll work (emulator evidence first: sb0-sb4 screenshots in scratchpad were never read; extend readBack with candidate prefs; apz wait; speculative connect; priority hint; live-session policy); 4) rebuild debug, re-run the STORAGE broadcast test (expect 'about 150 MB more') + check download card text on a Range-server download; 5) alpha7 (106): ship.sh gecko, dispatch android.yml, record-release; 6) reply to the owner: how to get past the storage failure NOW was already told; tell them the exact number logic + that they need Menu > Updates > Try again
+R3 pull-to-refresh (design in TASKS.md R3; KestrelGeckoView.onTouchEventForDetailResult), then R2 scroll work (read sb0-sb4 screenshots in scratchpad first), then alpha7 (106) ship: ship.sh gecko, dispatch android.yml, record-release; reply to owner incl. S1/S2
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ S1+S2 code done: updater storage plan (core UpdateLogic.storagePlan + tests; Upd
 
 ## Last ten checkpoints
 ```
+  dec2a93 ckpt 392: S1+S2 code done: updater storage plan (core UpdateLogic.storagePlan + tests; U
   f0bff4b ckpt 384: Owner request 7 recorded (S1 in-app update blocked by INSTALL_FAILED_INSUFFICI
   fcf63d9 ckpt 382: Owner request 6 recorded in TASKS.md (R1 neon not visible, R2 scrolling stutte
   4ac5081 ckpt 376: alpha6 SHIPPED + RECORDED (kestrel-g-v0.2.0-alpha6, gecko code 105, run 430556
@@ -25,7 +26,6 @@ S1+S2 code done: updater storage plan (core UpdateLogic.storagePlan + tests; Upd
   6339191 ckpt 352: alpha5 SHIPPED + RECORDED (run 42989432755 green, kestrel-g-v0.2.0-alpha5, APK
   e9f12cd ckpt 344: gated kestrel-g-v0.2.0-alpha5 (gecko code 104) and pushed it: handoff self-tes
   b84308a ckpt 342: P3+P4 DONE and verified on the emulator (blue REAPER theme: Home flames/scythe
-  bf1ed62 ckpt 316: P3/P4 neon wired and compiling (both modules): Neon engine (RenderThread alpha
 ```
 
 (7 automatic checkpoint(s) since the last deliberate one — the
