@@ -132,7 +132,8 @@ var KestrelEngine = (function () {
   // ---------------------------------------------------------------- the engine over one image
   /** @param buf ArrayBuffer holding a complete KEX1 image. Throws (and the caller keeps the old engine) when it is damaged. */
   function create(buf) {
-    if (!(buf instanceof ArrayBuffer) || buf.byteLength < 16 + SECTIONS * 8 + 4 || (buf.byteLength & 3) !== 0) throw new Error('image size');
+    // (toString, not instanceof: a buffer from another realm - a worker, a structured clone - must load too)
+    if (Object.prototype.toString.call(buf) !== '[object ArrayBuffer]' || buf.byteLength < 16 + SECTIONS * 8 + 4 || (buf.byteLength & 3) !== 0) throw new Error('image size');
     var all = new Int32Array(buf);
     if (all[0] !== MAGIC) throw new Error('image magic');
     if (all[1] !== VERSION) throw new Error('image version');
