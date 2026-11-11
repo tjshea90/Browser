@@ -15,6 +15,7 @@ class FilterSetMetamorphicTest {
     private val hosts = listOf("ads.example.com", "example.com", "cdn.example.org", "track.net", "a.b.track.net", "news.site.co.uk", "img.site.co.uk", "page.example")
     private val pageHosts = listOf("example.com", "www.example.com", "track.net", "news.site.co.uk", "other.co.uk", "page.example", "a.b.c.example.org")
     private val words = listOf("ads", "banner", "track", "img", "x", "pixel", "v1", "api", "ad", "analytics")
+    private val longWords = words.filter { it.length >= 2 }
 
     /** URL-only words that CONTAIN rule words as prefix/suffix/infix: they punish any index that wrongly assumes rule text is a whole URL token. */
     private val urlWords = words + listOf("uploads", "headads", "tracker", "retrack", "xbanner", "bannerx", "pixels", "xpixel", "myapi", "apis", "analytics2", "grad", "adsx", "bigimg", "imgs")
@@ -47,10 +48,10 @@ class FilterSetMetamorphicTest {
             0 -> { leftHost = true; pattern = pick(hosts).let { h -> h.substring(h.indexOf('.').let { if (rnd.nextBoolean() && it > 0) it + 1 else 0 }) } + "^" }
             1 -> { leftHost = true; pattern = pick(hosts) + "/" + pick(words) }
             2 -> pattern = "/" + pick(words) + "/" + pick(words)
-            3 -> pattern = pick(words) + "/"
+            3 -> pattern = pick(longWords) + "/" // the parser refuses unanchored patterns with fewer than 3 literal characters (poisoned-list guard)
             4 -> { leftAnchor = true; pattern = (if (rnd.nextBoolean()) "https://" else "http://") + pick(hosts).substringBefore('.') }
             5 -> { pattern = "/" + pick(words) + "/*/" + pick(words) }
-            6 -> { pattern = "/" + pick(words) + "^" }
+            6 -> { pattern = "/" + pick(longWords) + "^" }
             else -> { pattern = pick(words) + "." + pick(listOf("gif", "js", "png")); rightAnchor = rnd.nextBoolean() }
         }
         val exception = rnd.nextInt(5) == 0

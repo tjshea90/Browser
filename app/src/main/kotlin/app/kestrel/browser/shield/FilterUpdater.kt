@@ -10,6 +10,8 @@ import app.kestrel.core.filter.Category
 import app.kestrel.core.filter.FilterSet
 import app.kestrel.core.filter.FilterSetBuilder
 import app.kestrel.core.filter.FilterSetCodec
+import app.kestrel.core.filter.Verdict
+import app.kestrel.core.filter.RequestType
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -174,7 +176,11 @@ object FilterUpdater {
         val compiled = File(dir, "current.kfs")
         val everyListPresent = sources.all { File(srcDir, it.id + ".txt").isFile }
         val summary = "${changed} of ${sources.size} lists changed" + if (bytes > 0) " (${"%.1f".format(bytes / 1_000_000.0)} MB downloaded)" else ""
-        if (changed == 0 && compiled.isFile) {
+        // Sources are cached and their ETags saved BEFORE compiling, so a failed compile would otherwise look like "up to date" next week
+        // (every list answers 304). The marker survives until a compiled set was actually installed.
+        val pending = File(srcDir, "needs-compile")
+        if (changed > 0) pending.writeText("1")
+        if (changed == 0 && compiled.isFile && !pending.exists()) {
             return if (failures.isEmpty()) Result.Unchanged("Up to date ($summary)") else Result.Failed("Some lists could not be checked: ${failures.joinToString("; ")}")
         }
         if (!everyListPresent) {
@@ -190,15 +196,60 @@ object FilterUpdater {
             return Result.Failed("Not enough memory to build the lists; kept the current ones")
         }
         val fs = builder.build()
-        val previous = Engine.peek()?.meta?.totalNetwork ?: 0
+        val active = Engine.peek()
+        val previous = active?.meta?.totalNetwork ?: 0
         if (!sane(fs, previous)) return Result.Failed("The new lists looked incomplete (${fs.meta.totalNetwork} rules); kept the current ones")
+        Canaries.problem(active, fs)?.let { return Result.Failed("The new lists were rejected ($it); kept the current ones") }
         val data = FilterSetCodec.write(fs)
         FilterSetCodec.read(data) // must round-trip, or it never ships
         val tmp = File(dir, "current.kfs.tmp")
         tmp.writeBytes(data)
         if (!tmp.renameTo(compiled)) { compiled.delete(); tmp.renameTo(compiled) }
+        pending.delete()
         Engine.swap(fs, "updated list")
         return Result.Updated("Updated: $summary, ${"%,d".format(fs.meta.totalNetwork)} network rules")
+    }
+
+    /**
+     * A fixed panel of URLs every candidate set is checked against before it can replace the active one. Rule COUNTS cannot tell a good list
+     * from a poisoned one (a single "@@*"-style line, or a broken `||wikimedia.org^`, keeps the count intact); verdicts on known URLs can.
+     */
+    internal object Canaries {
+        class C(val url: String, val page: String?, val type: Int)
+
+        /** Resources no sane filter list blocks: if the candidate would, sites visibly break. */
+        val ALLOWED = listOf(
+            C("https://fonts.googleapis.com/css2?family=Roboto", "news.example", RequestType.STYLESHEET),
+            C("https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js", "news.example", RequestType.SCRIPT),
+            C("https://js.stripe.com/v3/", "shop.example", RequestType.SCRIPT),
+            C("https://upload.wikimedia.org/wikipedia/commons/a/a9/x.png", "en.wikipedia.org", RequestType.IMAGE),
+            C("https://avatars.githubusercontent.com/u/1?v=4", "github.com", RequestType.IMAGE),
+            C("https://www.gstatic.com/og/_/js/k=og.qtm.en_US.abc/rt=j/m=q_dnp,qmd/d=1/ed=1/rs=AA2YrT", "www.google.com", RequestType.SCRIPT),
+            C("https://www.google.com/xjs/_/js/k=xjs.s.en_US.abc/am=AAAA/d=1/ed=1/dg=0/ujg=1/rs=ACT90o/m=sy1,syn,sy2", "www.google.com", RequestType.SCRIPT),
+            C("https://www.paypal.com/sdk/js?client-id=x", "shop.example", RequestType.SCRIPT),
+            C("https://i.ytimg.com/vi/abc/hqdefault.jpg", "www.youtube.com", RequestType.IMAGE),
+        )
+
+        /** Well-known ad/tracker requests every real list blocks. */
+        val BLOCKED = listOf(
+            C("https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js", "news.example", RequestType.SCRIPT),
+            C("https://securepubads.g.doubleclick.net/tag/js/gpt.js", "news.example", RequestType.SCRIPT),
+            C("https://www.google-analytics.com/analytics.js", "news.example", RequestType.SCRIPT),
+            C("https://connect.facebook.net/en_US/fbevents.js", "shop.example", RequestType.SCRIPT),
+            C("https://static.criteo.net/js/ld/publishertag.js", "news.example", RequestType.SCRIPT),
+            C("https://cdn.taboola.com/libtrc/loader.js", "news.example", RequestType.SCRIPT),
+        )
+
+        /** Null when [next] looks fine, else a short reason. [active] = the set currently protecting the user (null if none). */
+        fun problem(active: FilterSet?, next: FilterSet): String? {
+            for (c in ALLOWED) if (Verdict.isBlocked(next.check(c.url, c.page, c.type))) return "it would block ${c.url.substringAfter("://").substringBefore('/')}"
+            if (active != null) {
+                val was = BLOCKED.filter { Verdict.isBlocked(active.check(it.url, it.page, it.type)) }
+                val still = was.count { Verdict.isBlocked(next.check(it.url, it.page, it.type)) }
+                if (was.isNotEmpty() && still * 2 < was.size) return "it stopped blocking well-known trackers"
+            }
+            return null
+        }
     }
 
     /** A new set must be roughly as big as the old one: guards against a truncated or poisoned download weakening protection. */

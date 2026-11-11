@@ -47,8 +47,10 @@ class FilterUpdaterTest {
 
     @After fun restore() { Engine.swap(original, "restored") }
 
-    private fun listText(prefix: String, n: Int) = buildString {
+    /** [trackers]: include the handful of real tracker hosts every genuine list blocks (the updater's canary check expects them to keep being blocked). */
+    private fun listText(prefix: String, n: Int, trackers: Boolean = true) = buildString {
         append("! Title: test list\n[Adblock Plus 2.0]\n")
+        if (trackers) for (t in listOf("googlesyndication.com", "doubleclick.net", "google-analytics.com", "facebook.net", "criteo.net", "taboola.com")) append("||").append(t).append("^\n")
         for (i in 0 until n) append("||").append(prefix).append(i).append(".example^\n")
     }
 
@@ -145,5 +147,43 @@ class FilterUpdaterTest {
     fun defaultSourcesAreAllHttps() {
         assertTrue(FilterSources.DEFAULT.all { it.url.startsWith("https://") })
         assertEquals(FilterSources.DEFAULT.size, FilterSources.DEFAULT.map { it.id }.toSet().size)
+    }
+
+    // ------------------------------------------------------------------ independent security review: S4 (poisoned lists), C9 (forgotten failed compile)
+
+    @Test
+    fun aListThatWouldBlockAWellKnownSiteIsRefused() {
+        val f = fresh()
+        f.bodies["https://lists.example/small.txt"] = listText("trk", 500) + "||wikimedia.org^\n"
+        val r = run(f)
+        assertTrue(r.message, r is FilterUpdater.Result.Failed && r.message.contains("wikimedia"))
+        assertFalse("nothing may be installed", File(ctx.filesDir, "filters/current.kfs").exists())
+    }
+
+    @Test
+    fun aListThatStopsBlockingWellKnownTrackersIsRefused() {
+        val b = app.kestrel.core.filter.FilterSetBuilder()
+        b.addAbpList("base", Category.ADS, sequence {
+            yield("||googlesyndication.com^"); yield("||doubleclick.net^"); yield("||google-analytics.com^"); yield("||facebook.net^")
+            for (i in 0 until 21_000) yield("||base$i.example^")
+        })
+        Engine.swap(b.build(1L), "test baseline")
+        val f = fresh()
+        f.bodies["https://lists.example/big.txt"] = listText("adhost", 25_000, trackers = false)
+        val r = run(f) // 25.5k synthetic rules: big enough to pass the size check, but blocks none of the canary trackers
+        assertTrue(r.message, r is FilterUpdater.Result.Failed && r.message.contains("trackers"))
+        assertFalse(File(ctx.filesDir, "filters/current.kfs").exists())
+    }
+
+    @Test
+    fun aRejectedCompileIsRetriedNextTimeInsteadOfBeingReportedAsUpToDate() {
+        val f = fresh()
+        assertTrue(run(f) is FilterUpdater.Result.Updated)
+        f.bodies["https://lists.example/small.txt"] = listText("trk", 500) + "||wikimedia.org^\n" // next week's list is poisoned
+        assertTrue(run(f) is FilterUpdater.Result.Failed)
+        f.notModified.addAll(sources.map { it.url }) // the week after: the server answers 304 for everything (ETags were saved)
+        val r = run(f)
+        assertTrue("must retry and keep failing visibly, not say 'Up to date': ${r.message}", r is FilterUpdater.Result.Failed)
+        assertTrue("the last good set is still active", Verdict.isBlocked(Engine.filters().check("https://adhost7.example/x.js", "page.example", RequestType.SCRIPT)))
     }
 }

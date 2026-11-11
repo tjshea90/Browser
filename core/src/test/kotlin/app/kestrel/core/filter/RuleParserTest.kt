@@ -38,7 +38,8 @@ class RuleParserTest {
         assertEquals("/a*b", net("/a***b")!!.pattern)
         assertEquals("ads", net("*ads")!!.pattern)
         assertFalse(net("|*ads")!!.leftAnchor)
-        assertEquals("", net("*\$script")!!.pattern) // options-only rule
+        assertNull("an options-only rule with no domain would block every script on every site", net("*\$script"))
+        assertEquals("", net("*\$script,domain=a.com")!!.pattern) // ... but confined to a site it is a legitimate uBlock-style rule
     }
 
     @Test
