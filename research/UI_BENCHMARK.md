@@ -70,7 +70,7 @@ PORTRAIT 564x892 (split)                        LANDSCAPE 916x540 (unified)
 ## 5. What users expect
 - **MUST** (every major browser): URL/search field; back, forward, reload/stop with progress; tab-count button, new/close tab, tab grid, undo close; menu with find, share, desktop site, bookmark; bookmarks and history with search; downloads with progress/open;
   private window; per-site Shields with a counter; long-press link/image menus; text size; page dark mode; HTTPS warning; error page with retry and saved copy; clear data; search engine; permissions; fullscreen video; print/PDF.
-- **NICE** (later): wide tab strip, swipe-to-close card, swipe field to switch tab, long-press Tabs = new tab, one-tap "clear data and close" (DDG Fire Button [V]), block element (Brave [V]), reader mode (Firefox), pinned tabs, Paste & go,
+- **NICE** (later): swipe-to-close card, swipe field to switch tab, long-press Tabs = new tab, one-tap "clear data and close" (DDG Fire Button [V], Focus erase [S]), block element (Brave [V]), reader mode (Firefox), pinned tabs, Paste & go,
   add to home screen, hardware-keyboard shortcuts (Ctrl+T/W/L/F/R), configurable bottom slot (Brave, Firefox, Samsung [V/S]).
 - **LEAVE OUT** (owner + weight): news/feed, AI, rewards, wallet/web3, VPN, sync/accounts, Tor, telemetry, sponsored tiles/wallpapers, shopping, Lens/voice/cast/translate (Google services), password vault (use Android Autofill),
   payment autofill, default-browser nags, promo/"what's new"/rating dialogs. Brave itself ships a page on hiding its extra features [S] https://support.brave.app/hc/en-us/articles/38305898674957/ .
