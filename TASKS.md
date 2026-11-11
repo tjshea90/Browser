@@ -75,7 +75,7 @@ Work order: M (process) and R (research, in parallel) -> A (speed, freeze, secur
 
 ## Owner request 3, 2026-11-11 (verbatim in INBOX.md; "So far I like alpha 3.") - work order: UI shell (N2-N5) -> updater (N1) -> alpha4 -> downloads (N6) -> alpha5 -> the rest (N7)
 - [ ] N1 "make it so when github makes a new release the app itself will see it and I can update the browser inside of the app" (checks GitHub Releases at most once a day + "Check now"; shows the new version; downloads with the new download manager; installs through PackageInstaller; sha256 verified; confirm on a metered link)
-- [ ] N2 "move the entire top navigation bar to the bottom, including url bar, refresh, new tab button, etc." (one bottom dock; lifts above the keyboard WITHOUT resizing the page view)
+- [~] N2 "move the entire top navigation bar to the bottom, including url bar, refresh, new tab button, etc." (one bottom dock; lifts above the keyboard WITHOUT resizing the page view) {ccr-a57c163e-mtq8js 2026-11-11T05:29Z}
 - [ ] N3 "add a home button to the navigation bar. Make the home page a very simple black screen with a large stylized text field in the middle which does a Google search for any words or if I type a url it goes to that url"
 - [ ] N4 "separate private tabs from regular tabs, make sure there is an indicator for private tabs" (own list/mode in the tab switcher, private skin on the dock + home, never mixed)
 - [ ] N5 "make the tab switching easier and with a good gui like major browsers, with a small thumbnail preview of a live view of every website tab open." (card grid with thumbnails captured from the live page; cached, also on disk)
