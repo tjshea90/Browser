@@ -11,6 +11,13 @@ import android.os.Build
 import android.provider.Settings
 import app.kestrel.browser.Flavor
 import app.kestrel.browser.Io
+import app.kestrel.core.download.Source
+import app.kestrel.core.download.Format
+import app.kestrel.core.download.DlState
+import app.kestrel.core.download.DEST_APP_PRIVATE
+import app.kestrel.browser.download.DownloadController
+import app.kestrel.browser.data.Prefs
+import app.kestrel.browser.ProcessLife
 import app.kestrel.core.update.Release
 import app.kestrel.core.update.ReleaseAsset
 import app.kestrel.core.update.UpdateLogic
@@ -184,80 +191,108 @@ object UpdateManager {
         set(ctx, Phase.ERROR, o, message = message)
     }
 
-    // ------------------------------------------------------------------------------------------- download
+    // ------------------------------------------------------------------------------------------- download (the download engine + service do the work)
 
-    fun download(ctx: Context) {
+    private fun jobId(ctx: Context): Long = sp(ctx).getLong("job", 0L)
+    private val verifying = java.util.concurrent.atomic.AtomicBoolean(false)
+    private var syncHooked = false
+
+    /**
+     * Download the update through the app's one download engine (parallel segments, pause and resume, the foreground service with its wake and Wi-Fi locks: it keeps going with the
+     * screen off and after the app is swiped away). [auto]: started by the app itself after a check (notification only, no sheet needed).
+     */
+    fun download(ctx: Context, auto: Boolean = false) {
         val offer = state.offer ?: return
         val p = state.phase
         if (p == Phase.DOWNLOADING || p == Phase.CHECKING || p == Phase.INSTALLING) return
         val app = ctx.applicationContext
-        val d = dir(app); d.mkdirs()
-        val part = File(d, offer.apkName + ".part")
-        val done = File(d, offer.apkName)
-        cancelled = false
-        set(app, Phase.DOWNLOADING, offer, part.length(), offer.size)
+        hookEngine(app)
+        set(app, Phase.DOWNLOADING, offer, 0, offer.size)
         Thread({
             try {
                 // Before spending the hotspot's data: will Android's installer find room for this update once the file is here? (the same numbers its own check uses)
-                val sp0 = space(app, offer, null, pending = (offer.size - part.length()).coerceAtLeast(0))
-                if (sp0.shortBy > 0) { needSpace(app, offer, sp0, fileKept = false); return@Thread }
-                var have = part.length()
-                if (have > offer.size) { part.delete(); have = 0 }
-                val c = open(offer.apkUrl)
-                c.setRequestProperty("Accept-Encoding", "identity")
-                if (have > 0) c.setRequestProperty("Range", "bytes=$have-")
-                val code = c.responseCode
-                val rangeStart = c.getHeaderField("Content-Range")?.let { Regex("""bytes (\d+)-""").find(it)?.groupValues?.get(1)?.toLongOrNull() }
-                if (code !in 200..299) { fail(app, "The download was refused (HTTP $code)."); return@Thread }
-                val append = UpdateLogic.canResume(have, code, rangeStart)
-                if (!append) have = 0 // the server ignored the offset: start the file again
-                val total = if (offer.size > 0) offer.size else (c.contentLengthLong.takeIf { it > 0 }?.let { it + have } ?: -1L)
-                var lastTick = 0L
-                FileOutputStream(part, append).use { out ->
-                    c.inputStream.use { ins ->
-                        val buf = ByteArray(64 * 1024)
-                        while (true) {
-                            if (cancelled) break
-                            val n = ins.read(buf)
-                            if (n < 0) break
-                            out.write(buf, 0, n)
-                            have += n
-                            val t = System.nanoTime()
-                            if (t - lastTick > 250_000_000L) { lastTick = t; set(app, Phase.DOWNLOADING, offer, have, total) }
-                        }
-                        out.fd.sync()
-                    }
-                }
-                c.disconnect()
-                if (cancelled) { set(app, Phase.AVAILABLE, offer, part.length(), offer.size); return@Thread }
-                if (offer.size > 0 && part.length() != offer.size) { fail(app, "The download stopped early (${UpdateLogic.formatSize(part.length())} of ${UpdateLogic.formatSize(offer.size)}). Tap Download to continue."); return@Thread }
-                val sum = sha256(part)
+                val old = jobId(app)
+                val oldView = if (old != 0L) DownloadController.allViews().firstOrNull { it.id == old } else null
+                val reuse = oldView != null && oldView.name == offer.apkName && oldView.state != DlState.FAILED && oldView.state != DlState.CANCELED && oldView.state != DlState.COMPLETED
+                val sp0 = space(app, offer, null, pending = if (reuse) (offer.size - (oldView?.done ?: 0)).coerceAtLeast(0) else offer.size)
+                if (sp0.shortBy > 0) { needSpace(app, offer, sp0, fileKept = false); if (auto) UpdateNotifier.needsSpace(app, UpdateLogic.roundUpTenMb(sp0.shortBy)); return@Thread }
+                if (reuse) { DownloadController.resume(app, old); return@Thread } // paused or interrupted: continue where it stopped
+                if (old != 0L) DownloadController.remove(old, true) // a finished / failed / cancelled one: forget it
+                val src = Source(
+                    url = offer.apkUrl, nameHint = offer.apkName, mime = "application/vnd.android.package-archive",
+                    headers = mapOf("User-Agent" to "Kestrel-updater/1"), fetcher = 0,
+                    meteredOk = true, // the owner's whole connection is a hotspot: he switched automatic updates on, or tapped Download himself
+                    destKind = DEST_APP_PRIVATE,
+                )
+                DownloadController.enqueue(app, src) { id -> sp(app).edit().putLong("job", id).apply() }
+            } catch (e: Exception) { fail(app, "The download could not start (${e.javaClass.simpleName}).") }
+        }, "kestrel-update-download").apply { isDaemon = true }.start()
+    }
+
+    /** Follow the engine job: the sheet and the notifications show what the download engine reports. */
+    private fun hookEngine(app: Context) {
+        if (syncHooked) return
+        syncHooked = true
+        DownloadController.addListener { syncFromEngine(app) }
+    }
+
+    private fun syncFromEngine(app: Context) {
+        val id = jobId(app)
+        if (id == 0L) return
+        val offer = state.offer ?: return
+        val ph = state.phase
+        if (ph == Phase.INSTALLING || ph == Phase.READY || ph == Phase.NEEDS_SPACE || ph == Phase.NEEDS_PERMISSION) return
+        val v = DownloadController.allViews().firstOrNull { it.id == id } ?: return
+        if (v.name != offer.apkName) return
+        when (v.state) {
+            DlState.QUEUED, DlState.STARTING, DlState.RUNNING, DlState.WAITING_NETWORK -> set(app, Phase.DOWNLOADING, offer, v.done, if (v.total > 0) v.total else offer.size)
+            DlState.PAUSED_USER -> set(app, Phase.AVAILABLE, offer, v.done, offer.size)
+            DlState.PAUSED_SYSTEM -> if (Prefs.get(app).autoUpdateDownload) DownloadController.resume(app, id) else set(app, Phase.AVAILABLE, offer, v.done, offer.size) // an interrupted download continues by itself
+            DlState.VERIFYING -> set(app, Phase.DOWNLOADING, offer, v.total.coerceAtLeast(0), if (v.total > 0) v.total else offer.size)
+            DlState.COMPLETED -> finishDownload(app, offer, id)
+            DlState.FAILED -> { fail(app, Format.failure(v) + ". Tap Try again."); UpdateNotifier.failed(app, Format.failure(v)) }
+            DlState.CANCELED -> set(app, Phase.AVAILABLE, offer, 0, offer.size)
+            DlState.NEEDS_DECISION -> DownloadController.resume(app, id) // the owner asked for this download
+        }
+    }
+
+    /** The engine wrote the whole file: check it against the checksum published with the release (off the UI thread: hashing 92 MB takes a few seconds). */
+    private fun finishDownload(app: Context, offer: UpdateOffer, id: Long) {
+        if (!verifying.compareAndSet(false, true)) return
+        Thread({
+            try {
+                val f = File(dir(app), offer.apkName)
+                if (!f.isFile || (offer.size > 0 && f.length() != offer.size)) { fail(app, "The downloaded file is incomplete. Tap Try again."); DownloadController.remove(id, true); return@Thread }
+                val sum = sha256(f)
                 if (offer.sha256 != null && sum != offer.sha256) {
-                    part.delete()
+                    DownloadController.remove(id, true)
                     fail(app, "The downloaded file does not match its published checksum, so it was deleted. Try again.")
+                    UpdateNotifier.failed(app, "The file did not match its checksum")
                     return@Thread
                 }
-                done.delete()
-                if (!part.renameTo(done)) { fail(app, "Could not store the downloaded file."); return@Thread }
                 sp(app).edit().putString("verified", offer.tag).apply()
-                set(app, Phase.READY, offer, done.length(), done.length())
-            } catch (e: SSLException) {
-                fail(app, "Could not verify the download server's security certificate. Open the release page in the browser instead.")
-            } catch (e: IOException) {
-                fail(app, "Connection lost. Tap Download to continue where it stopped.") // the partial file is kept
-            } catch (e: Exception) {
-                fail(app, "The download failed (${e.javaClass.simpleName}).")
-            }
-        }, "kestrel-update-download").apply { priority = Thread.MIN_PRIORITY; isDaemon = true }.start()
+                set(app, Phase.READY, offer, f.length(), f.length())
+                UpdateNotifier.ready(app, offer)
+                maybeInstallByItself(app)
+            } finally { verifying.set(false) }
+        }, "kestrel-update-verify").apply { isDaemon = true }.start()
+    }
+
+    /** Android 12+ may install an update without the confirmation when this app is its installer: let it, while nobody is looking at the app. Android 10 always asks (the notification carries that tap). */
+    private fun maybeInstallByItself(app: Context) {
+        if (Build.VERSION.SDK_INT < 31 || !Prefs.get(app).autoUpdateInstall || ProcessLife.uiVisible) return
+        install(app)
     }
 
     /** Stop the download but keep what was fetched: Download continues from there. */
-    fun pause() { cancelled = true }
+    fun pause() { val id = jobId(appCtx ?: return); if (id != 0L) DownloadController.pause(id) }
 
     fun discard(ctx: Context) {
         val offer = state.offer
+        val id = jobId(ctx)
+        if (id != 0L) { DownloadController.cancel(id); DownloadController.remove(id, true) }
+        sp(ctx).edit().remove("verified").remove("job").apply()
         cleanup(ctx)
-        sp(ctx).edit().remove("verified").apply()
         if (offer != null) set(ctx, Phase.AVAILABLE, offer, 0, offer.size)
     }
 
