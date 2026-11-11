@@ -98,7 +98,21 @@ class Toolbar(ctx: Context, private val pal: Pal, private val l: ToolbarListener
         super.onMeasure(w, MeasureSpec.makeMeasureSpec(context.dp(52), MeasureSpec.EXACTLY))
     }
 
+    /** Everything bind() shows. When nothing changed since the last call the toolbar is left alone (no setImageResource / setText / relayout on the UI thread). */
+    private data class Shown(
+        val tabCount: Int, val canGoBack: Boolean, val canGoForward: Boolean, val loading: Boolean, val shieldsUp: Boolean, val blocked: Int,
+        val noTab: Boolean, val newTab: Boolean, val urlText: String, val urlFocused: Boolean, val errorKind: Int, val secure: Boolean,
+    )
+    private var shown: Shown? = null
+
     fun bind(tab: Tab?, tabCount: Int, canGoBack: Boolean) {
+        val now = Shown(
+            tabCount, canGoBack, tab?.canGoForward == true, tab?.loading == true, tab?.shields?.shieldsUp ?: true, tab?.blockedTotal() ?: 0,
+            tab == null, tab?.isNewTab == true, display(tab), urlField.hasFocus(),
+            when { tab?.error == null -> 0; tab.error is ErrorScreen.Network -> 1; else -> 2 }, tab?.url?.startsWith("https://") == true,
+        )
+        if (now == shown) return
+        shown = now
         tabs.count = tabCount
         back.isEnabled = canGoBack
         back.alpha = if (canGoBack) 1f else 0.38f
