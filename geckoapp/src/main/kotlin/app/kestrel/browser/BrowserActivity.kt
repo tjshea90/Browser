@@ -1129,6 +1129,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(GeckoEngine.prefReadback2)
         out.add(GlInfo.text)
         out.add(app.kestrel.browser.diag.StorageInfo.text)
+        out.add(ShieldsBridge.statsLine(prefs.engineInExtension))
         val animScale = try { android.provider.Settings.Global.getFloat(contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) } catch (e: Exception) { 1f }
         out.add("Neon glow: ${Neon.status()}; system animation scale ${if (animScale == 0f) "off (the glow ignores it)" else "x$animScale"}")
         out.add("Page view: attached=${geckoView.parent != null} session=${geckoView.session != null} windowFocus=${hasWindowFocus()}")
@@ -1138,11 +1139,20 @@ open class BrowserActivity : Activity(), DockListener {
     private fun showDiagnostics() {
         GeckoEngine.readBackPrefs { diagView?.refresh() }
         Io.exec { GlInfo.read(); app.kestrel.browser.diag.StorageInfo.read(this); Io.ui { diagView?.refresh() } }
-        val v = diagView ?: DiagnosticsView(this, pal, ::engineFacts, { refreshScreen("diagnostics") }, { closeDiagnostics() }, { runScrollTest() }, { runScrollTest(compare = true) }).also { diagView = it }
+        val v = diagView ?: DiagnosticsView(this, pal, ::engineFacts, { refreshScreen("diagnostics") }, { closeDiagnostics() }, { runScrollTest() }, { runScrollTest(compare = true) }, ::blockerLabel, ::toggleBlocker).also { diagView = it }
         if (v.parent == null) root.addView(v, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) else v.refresh()
     }
 
     private fun closeDiagnostics() { diagView?.let { detach(it) } }
+
+    private fun blockerLabel(): String = if (prefs.engineInExtension) "Blocker: fast (tap for compatibility)" else "Blocker: compatibility (tap for fast)"
+
+    /** Flips where ad-blocking decisions are made; the extension learns it with the next page's `cfg` answer, so it applies from the next page load. */
+    private fun toggleBlocker() {
+        prefs.engineInExtension = !prefs.engineInExtension
+        Health.log("blocker", if (prefs.engineInExtension) "fast mode on" else "compatibility mode on")
+        android.widget.Toast.makeText(this, if (prefs.engineInExtension) "Fast blocker: applies from the next page" else "Compatibility blocker: applies from the next page", android.widget.Toast.LENGTH_SHORT).show()
+    }
 
     private var scrollTestTab: Tab? = null
 
