@@ -7,6 +7,7 @@ import app.kestrel.browser.Io
 import app.kestrel.browser.data.Prefs
 import app.kestrel.browser.shield.Engine
 import app.kestrel.browser.shield.Shields
+import app.kestrel.core.filter.ExtImage
 import app.kestrel.core.filter.Psl
 import app.kestrel.core.filter.RequestType
 import app.kestrel.core.filter.Verdict
@@ -18,9 +19,13 @@ import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.WebExtension
 
 /**
- * The bridge between the built-in "Kestrel Shields" WebExtension (assets/kestrel-shields) and Kestrel's own filter engine: the extension's
- * webRequest listener asks [onMessage] "block this request?", and its content script asks for the element-hiding CSS of the page's host.
- * Same lists, same per-site Shields switches, same counters as the WebView build - only the transport differs.
+ * The bridge between the built-in "Kestrel Shields" WebExtension (assets/kestrel-shields) and Kestrel's own filter engine.
+ * Since D1 the extension decides requests itself (engine.js over an image of the app's lists, research/D1-DESIGN.md) and only asks the app per PAGE:
+ *  - `cfg`: does blocking apply to this site (the per-site Shields switches live here) and which list generation is current,
+ *  - `img`: the list image in chunks, `cnt`: blocked counts per category (batched), `st`: the engine's own timing numbers (Diagnostics),
+ *  - `css`: element-hiding CSS of a host, `media`/`vid`: the video sniffer.
+ * `req` (is THIS request blocked?) remains for the moments before the engine has loaded and for the compatibility switch in Diagnostics.
+ * Same lists, same per-site switches, same counters as the WebView build - only the transport differs.
  */
 class ShieldsBridge(
     private val prefs: () -> Prefs,
@@ -48,7 +53,7 @@ class ShieldsBridge(
         // Only OUR extension's background page may ask (content scripts relay through it with runtime.sendMessage; web pages cannot reach native messaging at all).
         if (nativeApp != "kestrel" || sender.webExtension.id != EXTENSION_ID || sender.environmentType != WebExtension.MessageSender.ENV_TYPE_EXTENSION) return null
         val raw = message
-        val slow = (raw is String && raw.startsWith("{\"k\":\"css\""))
+        val slow = (raw is String && (raw.startsWith("{\"k\":\"css\"") || raw.startsWith("{\"k\":\"img\""))) // slow work: its own thread, never behind the page's verdicts
         val handler = if (slow) cosmeticHandler else workerHandler
         val result = GeckoResult<Any>(handler)
         handler.post {
@@ -56,7 +61,10 @@ class ShieldsBridge(
                 val m = parse(raw)
                 if (m == null) "" else when (m.optString("k")) {
                     "req" -> if (shouldBlock(m.optString("u"), m.optString("t"), m.optString("p"))) "1" else "0"
-                    "cnt" -> { countBlocked(m.optString("p"), Category.PRIVACY_INDEX, m.optInt("n", 1)); "" }
+                    "cfg" -> pageConfig(m.optString("h"))
+                    "img" -> imageChunk(m.optInt("g"), m.optInt("i", -1))
+                    "cnt" -> { counts(m); "" }
+                    "st" -> { stats = EngineStats.from(m); "" }
                     "css" -> cosmeticCss(m.optString("h"))
                     "media" -> { onMedia(m); "" }
                     "vid" -> { onVid(m); "" }
@@ -107,6 +115,50 @@ class ShieldsBridge(
         return true
     }
 
+    /** `cfg`: "<mode>:<generation>". mode 1 = block on pages of this host, 0 = Shields off / site allowed, L = ask per request (lists still loading, or compatibility mode). */
+    private fun pageConfig(host: String): String {
+        val snap = Engine.snapshot() ?: return "L:0" // lists still loading at cold start: the per-request path fails open until they are there
+        if (!prefs().engineInExtension) return "L:${snap.generation}"
+        if (host.isEmpty()) return "0:${snap.generation}"
+        val s = Shields.effective(prefs(), host)
+        val on = s.shieldsUp && s.blockAds && !snap.fs.isPageAllowed(host)
+        return (if (on) "1:" else "0:") + snap.generation
+    }
+
+    /** `img`: chunk [index] of the KEX1 image of generation [gen] (base64; chunk 0 is prefixed with "<gen>:<total bytes>:<chunk bytes>:"), or "" when that generation is gone. */
+    private fun imageChunk(gen: Int, index: Int): String {
+        val snap = Engine.snapshot() ?: return ""
+        if (snap.generation != gen || index < 0) return ""
+        val bytes = images.get(snap)
+        val from = index.toLong() * ExtImage.CHUNK
+        if (from >= bytes.size) return ""
+        val len = minOf(ExtImage.CHUNK.toLong(), bytes.size - from).toInt()
+        val b64 = android.util.Base64.encodeToString(bytes, from.toInt(), len, android.util.Base64.NO_WRAP)
+        return if (index == 0) "$gen:${bytes.size}:${ExtImage.CHUNK}:$b64" else b64
+    }
+
+    private val images = ImageCache()
+
+    /** The encoded image of the current generation, kept softly (the garbage collector may drop it; it is rebuilt in a few tens of milliseconds). */
+    private class ImageCache {
+        private var ref: java.lang.ref.SoftReference<Pair<Int, ByteArray>>? = null
+        fun get(snap: Engine.Snap): ByteArray {
+            val cur = ref?.get()
+            if (cur != null && cur.first == snap.generation) return cur.second
+            val bytes = ExtImage.encode(snap.fs, Psl.default, snap.generation)
+            ref = java.lang.ref.SoftReference(Pair(snap.generation, bytes))
+            return bytes
+        }
+    }
+
+    /** `cnt`: either the batched per-category counts of the engine in the extension (`c`: ads, trackers, malware, annoyance) or the older single number `n` (trackers). */
+    private fun counts(m: JSONObject) {
+        val page = m.optString("p")
+        val c = m.optJSONArray("c")
+        if (c == null) { countBlocked(page, Category.PRIVACY_INDEX, m.optInt("n", 1)); return }
+        for (cat in 0 until minOf(4, c.length())) { val n = c.optInt(cat); if (n > 0) countBlocked(page, cat, n) }
+    }
+
     private fun countBlocked(pageUrl: String, category: Int, n: Int = 1) {
         val t = tabForPage(pageUrl) ?: return
         t.blocked.addAndGet(category, n)
@@ -122,8 +174,38 @@ class ShieldsBridge(
         return fs.cosmeticCss(host)
     }
 
+    /** What the extension's engine reports about itself (`st`), shown in Diagnostics. */
+    class EngineStats(
+        val generation: Int, val checks: Long, val totalUs: Long, val maxUs: Long, val perRequestAsks: Long, val errors: Int,
+        val loadMs: Long, val imageBytes: Int, val transfers: Int, val off: Boolean, val note: String, val at: Long,
+    ) {
+        companion object {
+            fun from(m: JSONObject) = EngineStats(
+                m.optInt("g"), m.optLong("n"), m.optLong("us"), m.optLong("mx"), m.optLong("lg"), m.optInt("er"),
+                m.optLong("ld"), m.optInt("by"), m.optInt("pl"), m.optInt("off") != 0, m.optString("w").take(120), System.currentTimeMillis(),
+            )
+        }
+    }
+
     companion object {
         const val EXTENSION_ID = "shields@kestrel.local"
+
+        /** The latest numbers from the extension's engine (null until it has judged a request or finished a transfer). */
+        @Volatile var stats: EngineStats? = null
+
+        /** One line for Diagnostics: where the blocking decisions are made and how long they take. */
+        fun statsLine(inExtension: Boolean): String {
+            if (!inExtension) return "Blocker: compatibility mode - every request asks the app (slower). Tap the Blocker button to go back to fast mode."
+            val s = stats ?: return "Blocker: fast mode (decisions inside the page engine). No numbers yet: open a page, then press Update."
+            val avg = if (s.checks > 0) s.totalUs / s.checks else 0L
+            val state = when {
+                s.off -> "OFF this session (too many errors)"
+                s.generation > 0 && s.imageBytes > 0 -> "list #${s.generation}, ${s.imageBytes / 1024} KB, loaded in ${s.loadMs} ms, ${s.transfers} transfer(s)"
+                else -> "list not loaded yet"
+            }
+            return "Blocker: fast mode, $state. ${s.checks} requests judged in the engine (average ${avg} us, slowest ${s.maxUs} us), ${s.perRequestAsks} asked the app one by one, ${s.errors} errors. ${s.note}".trim()
+        }
+
         private const val ASSET_URI = "resource://android/assets/kestrel-shields/"
 
         /** webRequest resource type -> filter-engine request type. */
