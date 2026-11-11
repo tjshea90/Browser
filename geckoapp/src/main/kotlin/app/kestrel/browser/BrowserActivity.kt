@@ -931,6 +931,9 @@ open class BrowserActivity : Activity(), DockListener {
             override fun openInstallSettings() {
                 try { startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))) } catch (e: Exception) { toast("Open Settings > Apps > Special access > Install unknown apps") }
             }
+            override fun openStorageSettings() {
+                try { startActivity(Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS)) } catch (e: Exception) { toast("Open Settings > Storage") }
+            }
         })
         sheet.show("Updates", panel)
     }

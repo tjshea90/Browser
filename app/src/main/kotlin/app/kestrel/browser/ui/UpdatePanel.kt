@@ -27,6 +27,8 @@ class UpdatePanel(ctx: Context, private val pal: Pal, private val prefs: Prefs, 
         /** The user tapped Download: the activity asks first on a metered link (a hotspot), then calls [UpdateManager.download]. */
         fun download()
         fun openInstallSettings()
+        /** Android's Storage screen, to free room for the installer. */
+        fun openStorageSettings()
     }
 
     private val listener: () -> Unit = { render() }
@@ -39,7 +41,7 @@ class UpdatePanel(ctx: Context, private val pal: Pal, private val prefs: Prefs, 
         setPadding(ctx.dp(20), ctx.dp(4), ctx.dp(20), ctx.dp(18))
     }
 
-    override fun onAttachedToWindow() { super.onAttachedToWindow(); UpdateManager.addListener(listener); render() }
+    override fun onAttachedToWindow() { super.onAttachedToWindow(); UpdateManager.addListener(listener); render(); UpdateManager.recheckSpace(context) } // a stale "not enough space" goes away as soon as there is enough
     override fun onDetachedFromWindow() { UpdateManager.removeListener(listener); super.onDetachedFromWindow() }
 
     private fun render() {
@@ -103,6 +105,16 @@ class UpdatePanel(ctx: Context, private val pal: Pal, private val prefs: Prefs, 
                 headline("Android needs your OK first", pal.warn)
                 sub("Open settings, switch on \"Allow from this source\" for $name, come back and tap Install. This is asked once.")
                 buttons(primary("Open settings") { actions.openInstallSettings() }, secondary("Install") { UpdateManager.install(ctx) })
+            }
+            Phase.NEEDS_SPACE -> {
+                headline("Not enough free storage", pal.warn)
+                sub("Free up about ${UpdateLogic.formatSize(s.shortBy)} more, then tap Try again.", pal.fg)
+                sub("Why so much: Android unpacks the new version (about ${UpdateLogic.formatSize(s.installedBytes)}) while it still keeps the current one, and it never uses the last part of the storage. Free space now: ${UpdateLogic.formatSize(s.freeNow)}.")
+                sub(if (s.fileKept) "The update file is already downloaded: nothing is downloaded again." else "The update file has to be downloaded again (${o?.let { UpdateLogic.formatSize(it.size) } ?: ""}).")
+                buttons(
+                    primary("Try again") { if (s.fileKept) UpdateManager.install(ctx) else actions.download() },
+                    secondary("Storage settings") { actions.openStorageSettings() },
+                )
             }
             Phase.ERROR -> {
                 headline("That did not work", pal.danger)
