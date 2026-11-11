@@ -38,6 +38,15 @@ object DownloadController {
     @Volatile private var netMetered = true
     private var netCallback: ConnectivityManager.NetworkCallback? = null
     private val lastStates = HashMap<Long, DlState>()
+    /** Threads of the download engine (control thread + workers): at background priority while the browser is on screen (scrolling comes first), at normal priority otherwise (full speed with the screen off). */
+    private val engineTids = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
+    private fun threadPrio(): Int = if (app.kestrel.browser.ProcessLife.uiVisible) Process.THREAD_PRIORITY_BACKGROUND else Process.THREAD_PRIORITY_DEFAULT
+
+    /** The browser came to the front / went away: re-prioritise every engine thread. */
+    fun uiVisibilityChanged() {
+        val p = threadPrio()
+        for (tid in engineTids) try { Process.setThreadPriority(tid, p) } catch (e: Exception) { /* the thread has ended */ }
+    }
 
     /** Another engine's fetcher (kind 1 = Firefox's network stack in Kestrel G). Kind 0 is always HttpURLConnection. */
     fun setFetcher(kind: Int, f: Fetcher) { fetchers[kind] = f }
@@ -45,7 +54,7 @@ object DownloadController {
     @Synchronized fun init(ctx: Context): Engine {
         engine?.let { return it }
         app = ctx.applicationContext
-        val ht = HandlerThread("kestrel-downloads", Process.THREAD_PRIORITY_BACKGROUND).also { it.start() }
+        val ht = HandlerThread("kestrel-downloads", threadPrio()).also { it.start(); engineTids.add(it.threadId) }
         handler = Handler(ht.looper)
         val control = Executor { r -> handler.post(r) }
         fetchers.putIfAbsent(0, UrlConnectionFetcher())
@@ -58,7 +67,12 @@ object DownloadController {
         val cfg = Config(maxConnsTotal = if (low) 3 else 6, maxConnsPerDownload = if (low) 3 else 4)
         val e = Engine(
             { fetchers[it] ?: fetchers[0] }, MediaStoreSinks(app), SqliteStore(app), net, control, Clock.System, cfg,
-            Spawner { name, task -> Thread({ Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND); task.run() }, name).also { it.isDaemon = true; it.start() } },
+            Spawner { name, task ->
+                Thread({
+                    val tid = Process.myTid(); engineTids.add(tid)
+                    try { Process.setThreadPriority(threadPrio()); task.run() } finally { engineTids.remove(tid) }
+                }, name).also { it.isDaemon = true; it.start() }
+            },
         )
         e.addListener(object : Engine.Listener { override fun onChanged(id: Long) { uiChanged() } })
         engine = e

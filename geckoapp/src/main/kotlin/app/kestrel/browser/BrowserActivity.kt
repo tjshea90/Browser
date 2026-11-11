@@ -934,7 +934,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     // ---- menu
     private object M { const val REFRESH = 14; const val DIAG = 15; const val NEW = 1; const val PRIVATE = 2; const val FIND = 3; const val SHARE = 4; const val BOOKMARK = 5; const val BOOKMARKS = 6; const val HISTORY = 7
-        const val DOWNLOADS = 8; const val UPDATE = 17; const val DESKTOP = 9; const val IMAGES = 10; const val PRINT = 11; const val SETTINGS = 12; const val QUIT = 13; const val CLOSE_ALL = 16 }
+        const val DOWNLOADS = 8; const val UPDATE = 17; const val DESKTOP = 9; const val IMAGES = 10; const val PRINT = 11; const val SETTINGS = 12; const val CLOSE_ALL = 16 }
 
     override fun onMenu(anchor: View) {
         val t = current

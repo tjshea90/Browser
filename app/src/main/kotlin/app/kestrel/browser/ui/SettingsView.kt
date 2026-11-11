@@ -54,7 +54,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         toggle("Hide ad spaces & cookie banners", null, prefs.shieldCosmetic) { prefs.shieldCosmetic = it }
         toggle("Block cross-site cookies", null, prefs.shieldCookies) { prefs.shieldCookies = it }
         toggle("Block fingerprinting", null, prefs.shieldFingerprint) { prefs.shieldFingerprint = it }
-        toggle("Clear browsing data when I quit", "Cookies, cache, history and saved site settings", prefs.clearOnExit) { prefs.clearOnExit = it }
+        toggle("Clear browsing data when the app is closed", "Cookies, cache, history and saved site settings, the next time it opens after you swipe it away", prefs.clearOnExit) { prefs.clearOnExit = it }
         button("Clear browsing data now", "Cookies, cache, history, site permissions") { confirm("Clear all browsing data?", "Cookies, cache, history and saved logins will be deleted. Bookmarks are kept.") { l.clearBrowsingData() } }
         button("Reset per-site Shields", "Forget the choices you made in the Shields panel") { confirm("Reset per-site Shields?", "Every site goes back to the defaults above.") { l.resetSiteShields() } }
 

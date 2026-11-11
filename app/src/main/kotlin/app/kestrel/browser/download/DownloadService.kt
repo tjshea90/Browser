@@ -8,7 +8,9 @@ import android.content.pm.ServiceInfo
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.Build
 import android.os.PowerManager
+import android.net.wifi.WifiManager
 import android.app.NotificationManager
 
 /**
@@ -32,6 +34,7 @@ class DownloadService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private var idleTicks = 0
     private var wake: PowerManager.WakeLock? = null
+    private var wifi: WifiManager.WifiLock? = null
     private val listener: () -> Unit = { refresh() }
 
     private val tick = object : Runnable {
@@ -40,7 +43,7 @@ class DownloadService : Service() {
             if (DownloadController.needsService()) idleTicks = 0 else idleTicks++
             keepAwake(DownloadController.counts()[0] > 0)
             refresh()
-            if (idleTicks >= 3) { stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); return }
+            if (idleTicks >= 3) { stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); app.kestrel.browser.ProcessLife.maybeExit(); return }
             handler.postDelayed(this, 1000)
         }
     }
@@ -70,12 +73,23 @@ class DownloadService : Service() {
         try { getSystemService(NotificationManager::class.java)?.notify(Notifier.ID_PROGRESS, Notifier.progress(this, DownloadController.views())) } catch (e: Exception) { /* ignore */ }
     }
 
-    /** A partial wake lock only while bytes move (10 minute timeout, renewed): the CPU may sleep otherwise, the screen never stays on. */
+    /**
+     * Only while bytes move: a partial wake lock (10 minute timeout, renewed every tick) keeps the CPU running with the screen off, and a Wi-Fi lock keeps the radio from sleeping, so a download
+     * runs at full speed on the lock screen. Both are released the moment nothing is moving; the screen never stays on.
+     */
     private fun keepAwake(on: Boolean) {
         if (on) {
             if (wake == null) wake = getSystemService(PowerManager::class.java)?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "kestrel:download")?.apply { setReferenceCounted(false) }
             wake?.acquire(10 * 60 * 1000L)
-        } else if (wake?.isHeld == true) wake?.release()
+            if (wifi == null) wifi = try {
+                @Suppress("DEPRECATION") // HIGH_PERF is deprecated from API 29 (the system then treats it as the basic lock); LOW_LATENCY only works with the screen on
+                (applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager)?.createWifiLock(if (Build.VERSION.SDK_INT >= 29) WifiManager.WIFI_MODE_FULL else WifiManager.WIFI_MODE_FULL_HIGH_PERF, "kestrel:download")?.apply { setReferenceCounted(false) }
+            } catch (e: Exception) { null }
+            if (wifi?.isHeld == false) try { wifi?.acquire() } catch (e: Exception) { /* no Wi-Fi service */ }
+        } else {
+            if (wake?.isHeld == true) wake?.release()
+            if (wifi?.isHeld == true) try { wifi?.release() } catch (e: Exception) { /* ignore */ }
+        }
     }
 
     override fun onDestroy() {
@@ -83,6 +97,7 @@ class DownloadService : Service() {
         DownloadController.removeListener(listener)
         DownloadController.stopNetWatch()
         if (wake?.isHeld == true) wake?.release()
+        if (wifi?.isHeld == true) try { wifi?.release() } catch (e: Exception) { /* ignore */ }
         super.onDestroy()
     }
 
