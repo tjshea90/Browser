@@ -1066,6 +1066,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(GeckoEngine.prefReadback)
         out.add(GeckoEngine.prefReadback2)
         out.add(GlInfo.text)
+        out.add(app.kestrel.browser.diag.StorageInfo.text)
         val animScale = try { android.provider.Settings.Global.getFloat(contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) } catch (e: Exception) { 1f }
         out.add("Neon glow: ${Neon.status()}; system animation scale ${if (animScale == 0f) "off (the glow ignores it)" else "x$animScale"}")
         out.add("Page view: attached=${geckoView.parent != null} session=${geckoView.session != null} windowFocus=${hasWindowFocus()}")
@@ -1074,7 +1075,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     private fun showDiagnostics() {
         GeckoEngine.readBackPrefs { diagView?.refresh() }
-        Io.exec { GlInfo.read(); Io.ui { diagView?.refresh() } }
+        Io.exec { GlInfo.read(); app.kestrel.browser.diag.StorageInfo.read(this); Io.ui { diagView?.refresh() } }
         val v = diagView ?: DiagnosticsView(this, pal, ::engineFacts, { refreshScreen("diagnostics") }, { closeDiagnostics() }, { runScrollTest() }, { runScrollTest(compare = true) }).also { diagView = it }
         if (v.parent == null) root.addView(v, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) else v.refresh()
     }
