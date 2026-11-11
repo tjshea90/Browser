@@ -17,16 +17,18 @@ Measured on the Android 10 x86_64 emulator (`adb install -r`, i.e. the same Pack
 
 `logcat` on every failure: `installd: Failed to free up 624066560 on /data; final free space ...` and 624,066,560 B is **exactly 10 % of the data partition** (6,094,400 KiB x 1024 / 10). So the installer will not finish unless, AFTER the install has taken its own space, at least 10 % of the partition is still free
 (it first tries to clear every app's cache, then gives up). `sys_storage_cache_percentage = 5` did not move the threshold, so it is not that setting.
-Model that fits the numbers: **free before >= 10 % of the partition + staged APK + unpacked native libraries + optimised code** = 624 + 116 + 187 + ~100 = about 1030 MB for the emulator's debug build.
-For the real release APK (92.6 MB, 131.7 MB of arm32 libraries because the APK stores them compressed and `extractNativeLibs=true`, minified dex so little dexopt output) that is **10 % of the tablet's partition + about 270 MB**, plus another 92.6 MB if our own downloaded copy is still on the disk.
-On a 16 GB-class tablet (about 11 GB data partition) that is roughly 1.1 GB + 0.27 GB = **about 1.4 GB free**; the owner "made 900 MB" and fell short.
+FINER MEASUREMENTS (fresh installs of an x86_64 RELEASE build, fallocate fillers, `adb install --no-incremental`; MiB; reserve R = 595.2 MiB): release APK A = 95.5 MiB with L = 187.4 MiB of libraries passes at 1010, fails at 1000;
+the same APK PADDED to A = 155.5 MiB (60 MiB of incompressible data added to the zip and re-signed) passes at 1130, fails at 1115. So the threshold rises **2 MiB per MiB of APK**: **T = R + 2A + L + ~32 MiB** (the APK is held twice - the installer's staged copy and the installed one - then the unpacked libraries and the optimised code).
+Release: 595.2 + 191 + 187.4 + 32 = 1005.6 (measured 1000-1010); padded: 595.2 + 311 + 187.4 + 32 = 1125.6 (measured 1115-1130); debug build (A = 116): predicted 1046 (measured 1000-1050).
+For the real arm32 release APK (A = 92.6 MiB, L = 131.7 MiB) that is **T = R + 365 MiB** with our own downloaded copy still on the disk (R + 272 MiB once it is deleted after the installer took its own: that frees one APK).
+On a 16 GB-class tablet (about 11 GB data partition, R about 1.1 GB) that is **about 1.4-1.5 GB free**; the owner "made 900 MB" and fell short.
 
 ## Why "uninstall first" works
 The uninstall frees the old install (about 250 MB) and its data and caches (up to 0.7 GB: the Gecko disk cache alone is 512 MB), so free space jumps by roughly a gigabyte and the SAME APK now clears the bar. Installing "fine from GitHub" was always after an uninstall.
 In-place and fresh need the same free space BEFORE the install (the old version's bytes are already counted as used); uninstalling changes the "before".
 
 ## What the updater does about it (alpha8)
-- `UpdateLogic.storagePlan`: needed free = **10 % of the partition (the installer's reserve) + unpacked libraries + staged APK + 64 MB margin**; the free space it compares with is Android's "free + caches the system may clear" (`StorageStatsManager.getFreeBytes`).
+- `UpdateLogic.storagePlan`: needed free = **10 % of the partition (the installer's reserve) + 2 x APK + unpacked libraries + 48 MB margin** (minus one APK once our own copy is deleted); the free space it compares with is Android's "free + caches the system may clear" (`StorageStatsManager.getFreeBytes`). (alpha8 still had one APK and a 64 MB margin: about 90 MB too optimistic; fixed in alpha9.)
   The old model assumed a reserve of at most 500 MB, so it told the owner "it fits" at about 870 MB free and Android then refused.
 - The Updates sheet says the real numbers ("Android keeps 1.1 GB free, the update needs 0.3 GB, you have 0.9 GB: free 0.5 GB more") and offers the quick wins: delete Kestrel installers it downloaded earlier (one per release, 92 MB each), Android's Storage screen.
 - Diagnostics has a Storage line (free, installer-usable, reserve, this app's package / libraries / data / cache).
@@ -34,5 +36,5 @@ In-place and fresh need the same free space BEFORE the install (the old version'
 - Not done (decided against): `extractNativeLibs=false` (GeckoView needs the libraries on disk; the APK would also grow by 62 MB on a metered link).
 
 ## Open
-- Measure the release build (R8, x86_64) to replace the 64 MB margin for dexopt output by a number.
+- (done) the optimised-code margin measured 31 MiB for the release build.
 - Ask the owner for Settings > Storage (total, free) to confirm the 10 % figure on the tablet, and the exact error of a manual in-place install.

@@ -25,7 +25,7 @@ object StorageInfo {
             val files = size(app.filesDir)
             val cache = size(app.cacheDir)
             "Storage: ${f(dir.usableSpace)} free of ${f(dir.totalSpace)}; free + caches Android can clear: ${if (installerFree >= 0) f(installerFree) else "?"}; Android keeps ${f(dir.totalSpace / 10)} free after an install (a tenth); " +
-                "this app: package ${f(apk)} + unpacked libraries ${f(libs)} + data ${f(files)} + cache ${f(cache)}; an install or update needs free >= reserve + package + libraries + about 64 MB"
+                "this app: package ${f(apk)} + unpacked libraries ${f(libs)} + data ${f(files)} + cache ${f(cache)}; an install or update needs free >= reserve + 2 x package + libraries + about 48 MB"
         } catch (e: Exception) { "Storage: unavailable (${e.javaClass.simpleName})" }
     }
 
