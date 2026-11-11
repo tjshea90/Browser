@@ -6,19 +6,35 @@ var verdicts = new Map();
 var VERDICT_MAX = 4000;
 var cssCache = new Map();
 
+// Blocked requests answered from the cache are counted in the app, but one message per hit was a full round trip to the UI thread again: they are added up and sent twice a second.
+var pendingCounts = new Map();
+var countTimer = 0;
+function countLater(page) {
+  pendingCounts.set(page, (pendingCounts.get(page) || 0) + 1);
+  if (!countTimer) countTimer = setTimeout(function () {
+    countTimer = 0;
+    pendingCounts.forEach(function (n, p) { browser.runtime.sendNativeMessage(NATIVE, JSON.stringify({ k: 'cnt', p: p, n: n })).catch(function () {}); });
+    pendingCounts.clear();
+  }, 500);
+}
+
 function topPage(d) {
   if (d.frameAncestors && d.frameAncestors.length) return d.frameAncestors[d.frameAncestors.length - 1].url;
   return d.documentUrl || d.originUrl || '';
 }
 
 browser.webRequest.onBeforeRequest.addListener(function (d) {
-  if (d.type === 'main_frame') { sniffed.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); return {}; } // a new page in this tab: what it loads is news again
+  if (d.type === 'main_frame') {
+    sniffed.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again
+    verdicts.clear(); // verdicts are only worth keeping while ONE page loads; a reload after a Shields switch or a list update must ask the app again, not repeat an old answer
+    return {};
+  }
   var page = topPage(d);
   if (!page) return {};
   var key = d.type + '|' + d.url + '|' + page;
   var hit = verdicts.get(key);
   if (hit !== undefined) {
-    if (hit) { browser.runtime.sendNativeMessage(NATIVE, JSON.stringify({ k: 'cnt', p: page })).catch(function () {}); return { cancel: true }; }
+    if (hit) { countLater(page); return { cancel: true }; }
     return {};
   }
   // Plain strings both ways (JSON text in, "1"/"0" out): the engine's object marshalling rejected structured replies ("Invalid event data for callback").

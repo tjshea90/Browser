@@ -36,19 +36,27 @@ class ShieldsBridge(
     // So onMessage only hands the message to ONE worker and returns a GeckoResult at once; the worker parses, decides and completes it (research/FREEZE.md 4.2).
     // NORMAL priority on purpose: Java priority 4 (NORM_PRIORITY - 1) is nice 10 and Android moves such a thread into the BACKGROUND scheduler group, where it competes with a
     // fraction of one core while Gecko holds every request until this thread answers (research/HW_SPEED.md H1).
-    private val worker = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "kestrel-shield").apply { isDaemon = true } }
+    // A HandlerThread (not an executor) so the GeckoResult can be created WITH its handler: its callbacks (the reply to Gecko) then run on this thread instead of being posted back to the
+    // Android UI thread (the third UI task of every request; sendSuccess / sendError are dispatched to Gecko's own thread by the engine, any thread may call them).
+    private val workerThread = android.os.HandlerThread("kestrel-shield", android.os.Process.THREAD_PRIORITY_DEFAULT).also { it.start() }
+    private val workerHandler = android.os.Handler(workerThread.looper)
+    // Element-hiding CSS is slow the first time a host is seen (the generic selector set is built once, about 2 s on the emulator): it must not hold up the verdicts queued behind it.
+    private val cosmeticThread = android.os.HandlerThread("kestrel-cosmetic", android.os.Process.THREAD_PRIORITY_DEFAULT).also { it.start() }
+    private val cosmeticHandler = android.os.Handler(cosmeticThread.looper)
 
     override fun onMessage(nativeApp: String, message: Any, sender: WebExtension.MessageSender): GeckoResult<Any>? {
         // Only OUR extension's background page may ask (content scripts relay through it with runtime.sendMessage; web pages cannot reach native messaging at all).
         if (nativeApp != "kestrel" || sender.webExtension.id != EXTENSION_ID || sender.environmentType != WebExtension.MessageSender.ENV_TYPE_EXTENSION) return null
-        val result = GeckoResult<Any>()
         val raw = message
-        worker.execute {
+        val slow = (raw is String && raw.startsWith("{\"k\":\"css\""))
+        val handler = if (slow) cosmeticHandler else workerHandler
+        val result = GeckoResult<Any>(handler)
+        handler.post {
             val reply: Any = try {
                 val m = parse(raw)
                 if (m == null) "" else when (m.optString("k")) {
                     "req" -> if (shouldBlock(m.optString("u"), m.optString("t"), m.optString("p"))) "1" else "0"
-                    "cnt" -> { countBlocked(m.optString("p"), Category.PRIVACY_INDEX); "" }
+                    "cnt" -> { countBlocked(m.optString("p"), Category.PRIVACY_INDEX, m.optInt("n", 1)); "" }
                     "css" -> cosmeticCss(m.optString("h"))
                     "media" -> { onMedia(m); "" }
                     "vid" -> { onVid(m); "" }
@@ -99,10 +107,10 @@ class ShieldsBridge(
         return true
     }
 
-    private fun countBlocked(pageUrl: String, category: Int) {
+    private fun countBlocked(pageUrl: String, category: Int, n: Int = 1) {
         val t = tabForPage(pageUrl) ?: return
-        t.blocked.incrementAndGet(category)
-        t.pendingLifetime.incrementAndGet()
+        t.blocked.addAndGet(category, n)
+        t.pendingLifetime.addAndGet(n.toLong())
         blockedOnTab(t)
     }
 
@@ -139,7 +147,9 @@ class ShieldsBridge(
             controller.ensureBuiltIn(ASSET_URI, EXTENSION_ID).accept(
                 { ext ->
                     ext?.setMessageDelegate(bridge, "kestrel")
-                    if (ext != null) controller.setAllowedInPrivateBrowsing(ext, true) // blocking must cover private tabs too (built-ins usually are, this makes it certain)
+                    // Blocking must cover private tabs too. Built-in extensions are allowed there already; asking again RELOADS the running extension (a full shutdown and start of its background page,
+                    // measured in the engine's own code), which this used to do at every launch and every Activity re-creation, right while the first page loaded. Ask only if it is really off.
+                    if (ext != null && !ext.metaData.allowedInPrivateBrowsing) controller.setAllowedInPrivateBrowsing(ext, true)
                 },
                 { e -> Log.w(Io.TAG, "Kestrel Shields extension failed to install", e) },
             )
