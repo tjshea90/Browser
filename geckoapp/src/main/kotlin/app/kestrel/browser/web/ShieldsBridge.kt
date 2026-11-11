@@ -122,8 +122,11 @@ class ShieldsBridge(
         if (host.isEmpty()) return "0:${snap.generation}"
         val s = Shields.effective(prefs(), host)
         val on = s.shieldsUp && s.blockAds && !snap.fs.isPageAllowed(host)
-        return (if (on) "1:" else "0:") + snap.generation
+        return (if (on) "1:" else "0:") + snap.generation + ":" + filesPath
     }
+
+    /** Spike D1: the app's files directory, so the extension can try to read a file the app wrote. */
+    @Volatile var filesPath: String = ""
 
     /** `img`: chunk [index] of the KEX1 image of generation [gen] (base64; chunk 0 is prefixed with "<gen>:<total bytes>:<chunk bytes>:"), or "" when that generation is gone. */
     private fun imageChunk(gen: Int, index: Int): String {
@@ -134,7 +137,7 @@ class ShieldsBridge(
         if (from >= bytes.size) return ""
         val len = minOf(ExtImage.CHUNK.toLong(), bytes.size - from).toInt()
         val b64 = android.util.Base64.encodeToString(bytes, from.toInt(), len, android.util.Base64.NO_WRAP)
-        return if (index == 0) "$gen:${bytes.size}:${ExtImage.CHUNK}:$b64" else b64
+        return if (index == 0) "$gen:${bytes.size}:${ExtImage.CHUNK}:${images.encodeMs}:$b64" else b64
     }
 
     private val images = ImageCache()
@@ -142,10 +145,13 @@ class ShieldsBridge(
     /** The encoded image of the current generation, kept softly (the garbage collector may drop it; it is rebuilt in a few tens of milliseconds). */
     private class ImageCache {
         private var ref: java.lang.ref.SoftReference<Pair<Int, ByteArray>>? = null
+        @Volatile var encodeMs = 0L
         fun get(snap: Engine.Snap): ByteArray {
             val cur = ref?.get()
             if (cur != null && cur.first == snap.generation) return cur.second
+            val t0 = android.os.SystemClock.elapsedRealtime()
             val bytes = ExtImage.encode(snap.fs, Psl.default, snap.generation)
+            encodeMs = android.os.SystemClock.elapsedRealtime() - t0
             ref = java.lang.ref.SoftReference(Pair(snap.generation, bytes))
             return bytes
         }
@@ -225,6 +231,8 @@ class ShieldsBridge(
 
         /** Installs the built-in extension (idempotent) and (re)attaches [bridge]; call from every Activity instance. */
         fun install(ctx: Context, bridge: ShieldsBridge) {
+            bridge.filesPath = ctx.filesDir.absolutePath
+            Io.exec { try { java.io.File(ctx.filesDir, "shields").also { it.mkdirs() }.let { java.io.File(it, "probe.txt").writeText("kestrel probe") } } catch (e: Exception) { /* spike only */ } }
             val controller = GeckoEngine.runtime(ctx).webExtensionController
             controller.ensureBuiltIn(ASSET_URI, EXTENSION_ID).accept(
                 { ext ->

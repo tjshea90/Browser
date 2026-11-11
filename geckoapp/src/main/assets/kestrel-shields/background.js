@@ -31,7 +31,9 @@ function askCfg(host) {
     if (c < 0) return MODE_OFF; // not an answer from the app: do not cache, never break the page
     if (cfgMode.size >= CFG_MAX) cfgMode.delete(cfgMode.keys().next().value);
     cfgMode.set(host, mode);
-    if (mode !== MODE_LEGACY) wantImage(parseInt(s.substring(c + 1), 10) || 0);
+    var parts = s.split(':');
+    probeFile(parts.length > 2 ? parts.slice(2).join(':') : '');
+    if (mode !== MODE_LEGACY) wantImage(parseInt(parts[1], 10) || 0);
     return mode;
   }, function () { cfgWait.delete(host); return MODE_OFF; }); // the app could not answer: fail open
   cfgWait.set(host, p);
@@ -48,32 +50,50 @@ function later(ms) { return new Promise(function (res) { setTimeout(res, ms); })
 function wantImage(gen) {
   if (gen <= 0 || gen === engineGen || pulling || engineOff || Date.now() < pullRetryAt) return;
   pulling = true;
-  var t0 = performance.now(), buf = null, got = 0, total = 0, i = 0;
+  var t0 = performance.now(), buf = null, got = 0, total = 0, i = 0, tFetch = 0, tDecode = 0, encMs = 0, tSend = 0;
   function next() {
+    tSend = performance.now();
     return send({ k: 'img', g: gen, i: i }).then(function (r) {
+      tFetch += performance.now() - tSend;
       if (typeof r !== 'string' || r.length === 0) throw new Error('the app no longer has generation ' + gen);
       var body = r;
-      if (i === 0) { // "<gen>:<total bytes>:<chunk bytes>:" then base64
-        var a = r.indexOf(':'), b = r.indexOf(':', a + 1), c = r.indexOf(':', b + 1);
-        if (a < 0 || b < 0 || c < 0 || parseInt(r.substring(0, a), 10) !== gen) throw new Error('image header');
+      if (i === 0) { // "<gen>:<total bytes>:<chunk bytes>:<encode ms>:" then base64
+        var a = r.indexOf(':'), b = r.indexOf(':', a + 1), c = r.indexOf(':', b + 1), e = r.indexOf(':', c + 1);
+        if (a < 0 || b < 0 || c < 0 || e < 0 || parseInt(r.substring(0, a), 10) !== gen) throw new Error('image header');
         total = parseInt(r.substring(a + 1, b), 10);
+        encMs = parseInt(r.substring(c + 1, e), 10) || 0;
         if (!(total > 0 && total < 64 * 1024 * 1024)) throw new Error('image size ' + total);
         buf = new Uint8Array(total);
-        body = r.substring(c + 1);
+        body = r.substring(e + 1);
       }
       if (got + Math.floor(body.length * 3 / 4) > total + 3) throw new Error('image overrun');
+      var td = performance.now();
       got += b64Into(body, buf, got);
+      tDecode += performance.now() - td;
       i++;
       if (got < total) return later(0).then(next); // yield between chunks: this thread also serves page loads
       if (got !== total) throw new Error('image length');
-      engine = E.create(buf.buffer); engineGen = gen; pullFailures = 0; stats.pulls++; stats.loadMs = Math.round(performance.now() - t0);
-      stats.last = 'image ' + gen + ' ok';
+      var tc = performance.now();
+      engine = E.create(buf.buffer); engineGen = gen; pullFailures = 0; stats.pulls++;
+      stats.loadMs = Math.round(performance.now() - t0);
+      stats.last = 'image ' + gen + ' ok: ' + i + ' chunks, waiting for the app ' + Math.round(tFetch) + ' ms (its encode ' + encMs + ' ms), base64 decode ' + Math.round(tDecode) + ' ms, verify+views ' + Math.round(performance.now() - tc) + ' ms';
     });
   }
   next().catch(function (e) {
     pullFailures++; stats.last = 'image ' + gen + ' failed: ' + (e && e.message);
     if (pullFailures >= 5) engineOff = true; else pullRetryAt = Date.now() + 5000 * pullFailures;
   }).then(function () { pulling = false; reportStats(true); });
+}
+
+// ---- spike (D1): may the background page read a file the app wrote? If yes the image needs no chunked transfer at all.
+var fileProbed = false;
+function probeFile(dir) {
+  if (fileProbed || !dir) return;
+  fileProbed = true;
+  var t0 = performance.now(), url = 'file://' + dir + '/shields/probe.txt';
+  fetch(url).then(function (r) { return r.text(); }).then(function (t) {
+    stats.file = 'file fetch ok (' + t.length + ' chars, ' + Math.round(performance.now() - t0) + ' ms) ' + url; markStats();
+  }, function (e) { stats.file = 'file fetch refused: ' + e + ' ' + url; markStats(); });
 }
 
 // ---------------------------------------------------------------- counters (blocked requests are added up and sent twice a second)
@@ -100,7 +120,7 @@ function markStats() { // lazy timer: nothing is scheduled while no request is b
 function reportStats(force) {
   if (!force && !statsDirty) return;
   statsDirty = false;
-  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), lg: stats.legacy, er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, w: stats.last }).catch(function () {});
+  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), lg: stats.legacy, er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, w: (stats.last + (stats.file ? ' | ' + stats.file : '')).slice(0, 400) }).catch(function () {});
 }
 
 // ---------------------------------------------------------------- the legacy path: one question to the app per request (cached per page; used while no engine is loaded)
