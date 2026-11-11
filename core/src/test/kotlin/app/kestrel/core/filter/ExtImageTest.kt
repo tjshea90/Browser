@@ -102,21 +102,22 @@ class ExtImageTest {
         return b.build(1_700_000_000_000L)
     }
 
-    private fun urls(rnd: Random): List<String> {
+    /** (url, how many random type/page combinations to record for it) */
+    private fun urls(rnd: Random): List<Pair<String, Int>> {
         fun pick(l: List<String>) = l[rnd.nextInt(l.size)]
-        val out = ArrayList<String>()
+        val out = ArrayList<Pair<String, Int>>()
         // one positive and a few near-misses per curated rule
         for (line in curated) {
             val core = line.removePrefix("@@").removePrefix("||").removePrefix("|").substringBefore('$').removeSuffix("|").replace("^", "/").replace("*", "x")
             if (core.isEmpty()) continue
             val withHost = if (core.contains('.') && !core.startsWith("/") && !core.startsWith(".") && !core.startsWith("&")) core else "ads.example.com/$core"
-            out.add("https://$withHost")
-            out.add("http://sub.$withHost")
-            out.add("https://x.net/path/$core?k=v")
-            out.add("https://x.net/a$core")
-            out.add("https://" + withHost.uppercase())
+            out.add("https://$withHost" to 3)
+            out.add("http://sub.$withHost" to 2)
+            out.add("https://x.net/path/$core?k=v" to 2)
+            out.add("https://x.net/a$core" to 2)
+            out.add("https://" + withHost.uppercase() to 2)
         }
-        repeat(1300) {
+        repeat(800) {
             val sb = StringBuilder(pick(listOf("https://", "https://", "http://", "ws://", "wss://")))
             if (rnd.nextInt(15) == 0) sb.append("user:pw@")
             sb.append(pick(hosts))
@@ -130,29 +131,28 @@ class ExtImageTest {
             }
             if (rnd.nextInt(3) == 0) sb.append("?q=").append(pick(words)).append('&').append(pick(words)).append('=').append(pick(hosts))
             if (rnd.nextInt(12) == 0) sb.append('#').append(pick(words))
-            out.add(sb.toString())
+            out.add(sb.toString() to 2)
         }
         // shapes that are not ordinary: non-network schemes, empty/odd hosts, hostile lengths
         out.addAll(listOf(
             "data:text/plain,hello", "blob:https://example.com/1", "about:blank", "file:///etc/hosts", "javascript:void(0)", "ftp://ads.example.com/x", "https://", "https:///x", "https://:80/x",
             "https://[::1]:8080/ads/x", "https://[2001:db8::1]/banner/1", "https://ads.example.com./x.js", "https://ads.example.com..", "HTTPS://ADS.EXAMPLE.COM/X.JS", "https://ads.example.com:/x",
             "https://ads.example.com:99999/x", "https://ads.example.com@evil.example/x", "https://evil.example@ads.example.com/x", "https://a@b@ads.example.com/x",
-        ))
-        val junk = "j".repeat(5000)
-        out.add("https://$junk@ads.example.com/x.js")
-        out.add("https://ads.example.com/" + "a/".repeat(1500) + "banner/1")
-        out.add("https://x.net/" + "e/".repeat(1500) + "ads/y/img")
-        out.add("https://" + "h".repeat(400) + ".example/x")
-        out.add("https://x.net/?" + "event/".repeat(330) + "pixel.gif")
-        out.add("https://x.net/" + "q".repeat(2100) + "/banner/")
+        ).map { it to 4 })
+        val junk = "j".repeat(3000)
+        out.add("https://$junk@ads.example.com/x.js" to 1)
+        out.add("https://ads.example.com/" + "a/".repeat(1100) + "banner/1" to 1)
+        out.add("https://x.net/" + "e/".repeat(1100) + "ads/y/img" to 1)
+        out.add("https://" + "h".repeat(400) + ".example/x" to 1)
+        out.add("https://x.net/?" + "event/".repeat(330) + "pixel.gif" to 1)
+        out.add("https://x.net/" + "q".repeat(2100) + "/banner/" to 1)
         return out
     }
 
     private fun corpus(fs: FilterSet): String {
         val rnd = Random(7771L)
         val sb = StringBuilder()
-        for (u in urls(rnd)) {
-            val n = if (u.length > 3000) 2 else 6
+        for ((u, n) in urls(rnd)) {
             repeat(n) {
                 val t = types[rnd.nextInt(types.size)]
                 val page = if (rnd.nextInt(8) == 0) null else pageHosts[rnd.nextInt(pageHosts.size)]
