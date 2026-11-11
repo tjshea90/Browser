@@ -19,6 +19,21 @@
 set -uo pipefail
 D="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; cd "$D" || exit 0
 
+# ---- PATH GUARD: unstage (never block) key material by NAME and files GitHub would refuse ----------------------------------
+# Names: keystores, .env files, *.pem and friends must never be committed (the one exception is the PUBLIC dev key in signing/dev/).
+# Size: GitHub rejects a push that contains a file over 100 MB, and that would wedge EVERY later autosave push, so anything over
+# 90 MB (a built Kestrel G APK is ~92 MB) is unstaged too. Both are reported on stderr; the rest of the commit goes ahead.
+while IFS= read -r F; do
+  [ -z "$F" ] && continue
+  BADWHY=""
+  if printf '%s\n' "$F" | grep -E '(^|/)(keystore\.properties|\.env(\..*)?|id_rsa[^/]*|local\.properties)$|\.(pem|p12|key|jks|keystore)$' | grep -qv '^signing/dev/'; then BADWHY="key material"; fi
+  if [ -z "$BADWHY" ] && [ -f "$F" ] && [ "$(stat -c %s "$F" 2>/dev/null || echo 0)" -gt 94371840 ]; then BADWHY="over 90 MB (GitHub refuses files over 100 MB)"; fi
+  if [ -n "$BADWHY" ]; then
+    git reset -q HEAD -- "$F" 2>/dev/null
+    echo "  secretscan: left $F out of the commit ($BADWHY)" >&2
+  fi
+done < <(git diff --cached --name-only 2>/dev/null)
+
 # Added lines only. An existing line that already looked like this was already
 # pushed long ago; re-flagging it would wedge every future checkpoint.
 #

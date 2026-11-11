@@ -17,6 +17,8 @@ D="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; cd "$D" || exit 0
 
 BR="$(git branch --show-current 2>/dev/null || true)"
 [ -z "$BR" ] && exit 0   # detached HEAD — no branch to push to
+# Never auto-push a default branch from a session (the owner decides what lands on main; see tools/MIRROR_MAIN).
+case "$BR" in main|master) [ "${KESTREL_ALLOW_MAIN:-0}" = 1 ] || exit 0 ;; esac
 
 UP="$(git rev-parse --abbrev-ref '@{u}' 2>/dev/null || true)"
 [ -z "$UP" ] && UP="origin/$BR"
