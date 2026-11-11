@@ -123,6 +123,7 @@ open class BrowserActivity : Activity(), DockListener {
     private lateinit var content: FrameLayout
     private lateinit var home: HomeView
     private lateinit var errorView: ErrorView
+    private lateinit var pullChip: PullChip // the pull-down-to-refresh indicator, over the page
     private lateinit var restoreOverlay: RestoreOverlay // over the page view while a page whose engine process died comes back (last preview instead of white)
     private var restoringTab: Tab? = null
     private val restoreTimeout = Runnable { hideRestoring() }
@@ -145,7 +146,7 @@ open class BrowserActivity : Activity(), DockListener {
     private var db: BrowserDb? = null
     private fun shieldsPanel() = ShieldsPanel(this, pal) { host -> onShieldsChanged(host) } // built per use: it takes the colours of the current (regular or private) skin
 
-    private lateinit var geckoView: GeckoView
+    private lateinit var geckoView: KestrelGeckoView
     private var fullscreenOn = false
     private var pendingFilePick: ((List<Uri>) -> Unit)? = null
     private var pendingAndroidPerms: PermissionDelegate.Callback? = null
@@ -315,6 +316,14 @@ open class BrowserActivity : Activity(), DockListener {
         content.addView(geckoView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         restoreOverlay = RestoreOverlay(this, pal)
         content.addView(restoreOverlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) // above the page, below Home / error screens
+        pullChip = PullChip(this, pal)
+        content.addView(pullChip, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
+        geckoView.pull = pullListener
+        geckoView.pullEnabled = {
+            val t = current
+            prefs.pullRefresh && t != null && !t.isNewTab && !t.showHome && t.error == null && t.session != null && !fullscreenOn && tabGrid.visibility != View.VISIBLE &&
+                !sheet.isShowing && restoreOverlay.visibility != View.VISIBLE && !t.url.startsWith("resource://android/assets/scrolltest")
+        }
         // The navigation bar is at the BOTTOM (owner request): page on top, a 2 dp load-progress line, then the dock.
         column.addView(content, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         column.addView(progress, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(2)))
@@ -426,7 +435,7 @@ open class BrowserActivity : Activity(), DockListener {
         skinApplied = true
         skinPrivate = priv
         pal = if (priv) palPrivate else palRegular
-        dock.applyPal(pal); home.applyPal(pal); suggestions.setPal(pal); sheet.applyPal(pal); progress.setColors(pal.accent, pal.accentHi); restoreOverlay.setPal(pal)
+        dock.applyPal(pal); home.applyPal(pal); suggestions.setPal(pal); sheet.applyPal(pal); progress.setColors(pal.accent, pal.accentHi); restoreOverlay.setPal(pal); pullChip.setPal(pal)
         @Suppress("DEPRECATION") run {
             window.statusBarColor = if (priv) pal.chromeBg else pal.windowBg
             window.navigationBarColor = pal.chromeBg
@@ -690,6 +699,32 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** The + button opens a tab of the CURRENT kind: private mode stays private until you pick a regular tab in the tab list. */
     override fun onNewTab() { newTabAndShow(isPrivate) }
+
+    // ---- pull down to refresh (the finger tracking lives in KestrelGeckoView; here: the chip, the arming distance and the reload)
+    private var pullArmed = false
+    private val pullListener = object : KestrelGeckoView.PullListener {
+        override fun pullStart() { pullArmed = false }
+        override fun pullMove(dyPx: Float) {
+            val arm = pullChip.context.dpf(PULL_ARM_DP)
+            val travel = minOf(dyPx * 0.6f, pullChip.context.dpf(PULL_MAX_DP)) // the chip follows at 60 % of the finger: a pull has weight
+            val armed = travel >= arm
+            if (armed && !pullArmed) pullChip.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+            pullArmed = armed
+            pullChip.pull(travel, travel / arm, armed)
+        }
+        override fun pullEnd(released: Boolean) {
+            val fire = released && pullArmed
+            pullArmed = false
+            pullChip.hide()
+            if (fire) pullRefresh()
+        }
+    }
+
+    private fun pullRefresh() {
+        val t = current ?: return
+        Health.log("pull", "refresh", t.url.take(60)); Health.count("pull.refresh")
+        if (t.error != null) retry(t) else t.session?.reload()
+    }
 
     override fun onReloadOrStop() {
         val t = current ?: return
