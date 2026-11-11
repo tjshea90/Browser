@@ -164,9 +164,10 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
         super.onMeasure(w, h)
     }
 
+    /** Set BOTH layouts' states every time: the pill keeps the visibility the wide layout gave it, so rotating landscape -> portrait on Home left an empty address row once a page opened. */
     private fun applyVisibility() {
-        if (wide) { pill.visibility = if (homeMode) GONE else VISIBLE; spacer.visibility = if (homeMode) VISIBLE else GONE }
-        else { urlRow.visibility = if (homeMode) GONE else VISIBLE }
+        if (wide) { pill.visibility = if (homeMode) GONE else VISIBLE; spacer.visibility = if (homeMode) VISIBLE else GONE; urlRow.visibility = VISIBLE }
+        else { urlRow.visibility = if (homeMode) GONE else VISIBLE; pill.visibility = VISIBLE; spacer.visibility = GONE }
     }
 
     /** Re-colour everything for the regular or the private skin. */
