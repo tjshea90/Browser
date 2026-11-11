@@ -1,13 +1,13 @@
-# CHECKPOINT 528 — read me first, then TASKS.md
+# CHECKPOINT 543 — read me first, then TASKS.md
 
-**Written:** 2026-11-11T21:48:34Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `7589d06` (this checkpoint is the commit after it)
+**Written:** 2026-11-11T22:07:00Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `b69c135` (this checkpoint is the commit after it)
 
 ## Just done
-TS->MP4 (Remuxer + ADTS->raw AAC frames with an exact AudioClock; verified on the emulator before the refactor: 1724 audio packets, raw frames, decodes clean) ; Adts/AudioClock moved to core with 5 tests; Mp4Probe (picture size/length/codec from the moov, also when it is at the end) + 4 tests + app fetchBytes + VideoFlow probes bare MP4s when the sheet opens; sniffer attributes media to the exact tab page (extension sends top-level URL). Two review agents (page-load and stutter) running in the background; their reports arrive as notifications
+DASH + merge DONE and emulator-verified: core/media/Dash.kt (MPD parser: SegmentTemplate number/timeline, SegmentList, single file; live/DRM/multi-period flagged; 8 tests incl. a real ffmpeg MPD), StreamEngine repId/ext + companion jobs (picture + hidden sound job, family pause/resume/cancel/remove, aggregated row, failure cascade, merge via StreamFinisher.merge; 24 tests), Android Remuxer.merge (two MediaExtractors -> MediaMuxer, time-ordered), VideoFlow DASH rows ('720p DASH about 6.0 MB 0:40' + 'Audio only'), HLS with separate audio now also merges. Emulator: ffmpeg DASH stream -> one MP4 h264 1280x720 + aac 1724 raw frames, 40.03 s, decodes clean. Review agent #1 (stutter) report received: top items = download notification/UI refresh storm (5x/s, 5-6 Binder calls each, allViews() 2-3x per tick), KestrelGeckoView per-touch onTouchEventForDetailResult, tab grid rebuilt on every tab event, suggestions not debounced, keyboard probe IPC every 100 ms. Page-load review (agent a8108ab8a54aee18d) still running
 
 ## Do this next
-1) rebuild debug apk + test on the emulator: remux regression (page hlse.html title 'Kestrel HLS E'), MP4 probe (page probe.html: 3 candidates should show 1080p / 360p / 720p without a player); 2) when review agents report (task-notifications), triage findings: apply cheap high-value fixes (e.g. ShieldsBridge per-block updateUi coalescing, Log.d per block), plan D1 only if cheap; 3) gate + ship alpha12 (versionCode 111, bash tools/sync-ext-version.sh) 4) DASH + merge later
+1) apply the stutter fixes: Notifier/DownloadService (build intents once, post only when changed and at most ~1/s, one snapshot per tick, renew wake lock rarely), KestrelGeckoView touch (super.onTouchEvent except DOWN), tabGrid.rebind coalescing, suggestions debounce 70 ms, PullChip INVISIBLE, progress quantize 2%; 2) wait for the page-load review then triage (per-request ShieldsBridge cost, D1 decision); 3) rebuild debug apk and emulator-check downloads screen + notifications still fine; 4) gate, alpha12 (versionCode 111 + bash tools/sync-ext-version.sh), ship, record, reply
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ TS->MP4 (Remuxer + ADTS->raw AAC frames with an exact AudioClock; verified on th
 
 ## Last ten checkpoints
 ```
+  5220430 ckpt 528: TS->MP4 (Remuxer + ADTS->raw AAC frames with an exact AudioClock; verified on 
   bb6a984 ckpt 523: alpha11 SHIPPED and recorded: https://github.com/tjshea90/Browser/releases/tag
   5d55a7b ckpt 513: alpha11 DISPATCHED: run 43101503028 (android.yml, head 6d529ad, 21:15Z). Gate 
   6d529ad ckpt 512: gated kestrel-g-v0.2.0-alpha11 (gecko code 110) and pushed it: handoff self-te
@@ -25,8 +26,7 @@ TS->MP4 (Remuxer + ADTS->raw AAC frames with an exact AudioClock; verified on th
   50d5718 ckpt 478: alpha10 CI run 43093416759 FAILED in test-jvm: EngineTest.plainDownloadWithout
   b9e656d ckpt 476: alpha10 DISPATCHED on GitHub Actions: run 43093416759 (android.yml, ref ccr-a5
   d69353d ckpt 475: gated kestrel-g-v0.2.0-alpha10 (gecko code 109) and pushed it: handoff self-te
-  80e35c0 ckpt 473: V3 verified on the emulator (idle swipe-away = all processes end, active downl
 ```
 
-(4 automatic checkpoint(s) since the last deliberate one — the
+(14 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
