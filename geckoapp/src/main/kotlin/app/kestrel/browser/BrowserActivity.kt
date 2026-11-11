@@ -417,6 +417,7 @@ open class BrowserActivity : Activity(), DockListener {
         val prev = current
         if (prev != null && prev !== tab) { prev.session?.setActive(false); tab.showHome = false } // coming back to a tab shows its page, not the Home overlay
         current = tab
+        if (restoringTab != null && restoringTab !== tab) hideRestoring() // another tab came to the front: the overlay belonged to the one that died
         tab.lastActive = System.currentTimeMillis()
         applySkin()
         attachContent(tab)
@@ -549,6 +550,7 @@ open class BrowserActivity : Activity(), DockListener {
         val idx = tabs.indexOf(tab)
         if (idx < 0) return
         tabs.removeAt(idx)
+        if (tab === restoringTab) hideRestoring()
         tab.thumb = null
         val appCtx = applicationContext
         Io.exec { ThumbStore.delete(appCtx, tab.id) }
