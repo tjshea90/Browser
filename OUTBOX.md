@@ -363,3 +363,43 @@
 >
 > Continuing with the MP4 conversion and the speed review.
 <!-- sha:f4410ccf2f64 -->
+
+## 2026-11-11T22:29:38Z
+> **alpha12 is out.** It installs over your current Kestrel G because the signing key is the same. Android 10 will still show its own "Install?" screen, because it can't update silently.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.2.0-alpha12
+>
+> **What changed**
+> - **Download video works on more sites.**
+>   - Long-press a video, or use Menu > Download video, to get the quality list with sizes.
+>   - New: DASH streams, the Reddit-style kind with separate picture and sound. Kestrel downloads both and joins them into one MP4.
+>   - New: `.ts` streams are converted to MP4, and HLS streams with separate sound are joined.
+>   - New: plain video files get their resolution from their header, so rows read like "720p - MP4 - 48 MB".
+> - **Smoother, faster pages (first round):**
+>   - Ad blocking no longer restarts at every launch, so the first page after starting is blocked and scanned for videos straight away.
+>   - Its answers skip an extra detour through the interface thread, and blocked requests are counted in batches.
+>   - Download notifications refresh about once a second instead of up to five times.
+>   - Touch handling, the tab grid, suggestions and keyboard tracking do less work.
+>
+> **What I could and couldn't verify**
+> - Everything was tested on the Android 10 emulator with generated test videos: plain files, HLS with AES-128 and fMP4, `.ts` to MP4, and the DASH merge. Nothing ran on your tablet or on real sites yet. If a site refuses, tell me which one and I'll look at what it does.
+> - Not possible in any app: DRM video (Netflix, Disney+, Prime), YouTube, and live streams.
+> - I couldn't open InShot's internals, only its store pages. This uses the standard method for such apps: watching the page's network traffic and reading its video elements.
+> - The neon pulse and the scroll feel are still unconfirmed on your tablet.
+>
+> **Next, already started:** moving the ad-block decisions fully inside the browser engine, so there is no per-request round trip to the app. That is the big page-load fix. It will ship as alpha13 with timing numbers in Diagnostics, so we can see the difference on your tablet.
+>
+> **Open on my side:** that ad-block change, the cold-start glitch where a restored tab briefly shows Home, tab-grid swipe-to-close, the Settings restyle, and a download-only process after swipe-away. Back up/Restore only comes into play if updates fail again.
+>
+> **Open on your side:**
+> - Tablet numbers: Compare-3-feels and Settings > Storage.
+> - Whether the neon pulse and the white-gap/scroll fixes show.
+> - The Cromite A/B, if you want to run it.
+> - Decisions:
+>   - SEC-1: a private signing key.
+>   - LIC-1: the licence.
+>   - UI-2: the look.
+>   - UI-3: landscape tabs.
+>
+> Now D1 step 1: the image encoder in `:core`.
+<!-- sha:3a01500ddbdc -->
