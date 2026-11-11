@@ -60,6 +60,18 @@ class EngineTest {
         assertEquals(DlState.COMPLETED, h.store.rows[id]!!.state)
     }
 
+    @Test(timeout = 60_000) fun theDestinationKindReachesTheSinkAndTheView() {
+        val data = testBytes(MiB)
+        val h = H(FakeServer(data))
+        val update = h.engine.enqueue(Source("https://files.test/pub/kestrel-g-9.9.9.apk", destKind = DEST_APP_PRIVATE))
+        val v = h.completed(update)
+        assertEquals(DEST_APP_PRIVATE, v.kind)
+        assertEquals(DEST_APP_PRIVATE, h.store.rows[update]!!.destKind) // stored: a restart re-opens the file in the right place
+        val plain = h.completed(h.enqueue("https://files.test/pub/other.bin"))
+        assertEquals(DEST_PUBLIC, plain.kind)
+        assertEquals(listOf(DEST_APP_PRIVATE, DEST_PUBLIC), h.sinks.kinds.toList())
+    }
+
     @Test(timeout = 60_000) fun unknownLengthIsStreamedToTheEnd() {
         val data = testBytes(2 * MiB, 5)
         val s = FakeServer(data).also { it.sendLength = false; it.etag = null }

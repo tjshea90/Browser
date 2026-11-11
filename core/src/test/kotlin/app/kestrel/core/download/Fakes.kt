@@ -119,12 +119,15 @@ class FakeSinks : SinkFactory {
     val sinks = ConcurrentHashMap<String, FakeSink>()
     @Volatile var failCreate: SinkException? = null
     val deleted = CopyOnWriteArrayList<String>()
+    /** The destination kind of every sink the engine asked for, in order. */
+    val kinds = CopyOnWriteArrayList<Int>()
     private val n = AtomicInteger()
     override fun create(name: String, mime: String?, total: Long, priv: Boolean): Sink {
         failCreate?.let { throw it }
         val uri = "mem://${n.incrementAndGet()}/$name"
         return FakeSink(name, total, uri).also { sinks[uri] = it }
     }
+    override fun create(name: String, mime: String?, total: Long, priv: Boolean, kind: Int): Sink { kinds.add(kind); return create(name, mime, total, priv) }
     override fun reopen(uri: String, total: Long): Sink? = sinks[uri]?.takeIf { !it.discarded }
     override fun delete(uri: String): Boolean { deleted.add(uri); sinks[uri]?.discarded = true; return true }
 }
