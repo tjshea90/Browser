@@ -1,8 +1,8 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** 2026-11-11T01:42:34Z (L1) on `ccr-a57c163e-mtq8js` after 562847e
-- **Summary:** handoff: STATE resume block + review board updated (batches 1-2 done; S7/S8 + release build remain)
+- **Last checkpoint:** 2026-11-11T01:44:17Z (L1) on `ccr-a57c163e-mtq8js` after c4241aa
+- **Summary:** dist: kestrel-0.1.0 APK candidate (verify full PASS: core 127, app 80, 13 Chromium, lint, R8); S7/S8 still to do
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE
