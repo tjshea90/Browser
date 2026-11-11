@@ -1,0 +1,76 @@
+{
+  "_comment": "TEMPLATE for Kestrel - install with `bash tools/install-hooks.sh`, never copy by hand. It substitutes __KESTREL_TOOLS__ for this repo's absolute tools/ path and MERGES these entries into the session root's settings file (entries tagged 'kestrel-checkpoint-hooks' are the only ones ever replaced; other repos' hooks, permissions and env survive). Scoped to THIS repo only - never a glob over sibling directories. Claude Code on the web does not load hooks from a repo's own .claude/settings.json when the repo sits under a shared session root, which is why the installer targets the root. When the repo itself is the session root (the normal single-repo case) the committed .claude/settings.json is read directly.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"__KESTREL_TOOLS__/resume.sh\" 2>/dev/null || true  # kestrel-checkpoint-hooks",
+            "timeout": 120,
+            "statusMessage": "Kestrel: reading where the last session stopped..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"__KESTREL_TOOLS__/capture_inbox.sh\" 2>/dev/null || true  # kestrel-checkpoint-hooks",
+            "timeout": 30,
+            "statusMessage": "Kestrel: saving your message before starting..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"__KESTREL_TOOLS__/autosave.sh\" 2>/dev/null || true  # kestrel-checkpoint-hooks",
+            "timeout": 60,
+            "statusMessage": "Kestrel: checkpointing to GitHub..."
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"__KESTREL_TOOLS__/posttool.sh\" 2>/dev/null || true  # kestrel-checkpoint-hooks",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"__KESTREL_TOOLS__/autosave.sh\" 2>/dev/null || true  # kestrel-checkpoint-hooks",
+            "timeout": 60,
+            "statusMessage": "Kestrel: final checkpoint..."
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"__KESTREL_TOOLS__/toobig.sh\" 2>/dev/null || true  # kestrel-checkpoint-hooks",
+            "timeout": 60,
+            "statusMessage": "Kestrel: session is large - saving before compaction..."
+          }
+        ]
+      }
+    ]
+  }
+}
