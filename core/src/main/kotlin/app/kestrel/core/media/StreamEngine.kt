@@ -120,6 +120,8 @@ class StreamEngine(
     private val cfg: Config = Config(),
     private val spawner: Spawner = Spawner { name, task -> Thread(task, name).also { it.isDaemon = true; it.start() } },
     private val finisher: StreamFinisher? = null,
+    /** Where unexpected failures are written down (the Android layer: logcat); the engine itself only turns them into a failed download. */
+    private val log: (String, Throwable?) -> Unit = { _, _ -> },
     /** The first id handed out (the Android layer keeps these apart from the single-file engine's). */
     private val idBase: Long = 1_000_000_000L,
 ) {
@@ -364,12 +366,15 @@ class StreamEngine(
         } catch (e: Failed) {
             outcome = DlState.FAILED
             synchronized(lock) { rec.reason = e.reason; rec.detail = e.detail }
+            log("stream ${rec.id} failed: ${e.reason} ${e.detail}", null)
         } catch (e: SinkException) {
             outcome = DlState.FAILED
             synchronized(lock) { rec.reason = e.reason }
+            log("stream ${rec.id}: the output failed (${e.reason})", e)
         } catch (e: Throwable) {
             outcome = DlState.FAILED
             synchronized(lock) { rec.reason = Reason.STORAGE }
+            log("stream ${rec.id}: unexpected failure", e)
         }
         settle(job, outcome)
     }

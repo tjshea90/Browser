@@ -96,6 +96,7 @@ object DownloadController {
                 }, name).also { it.isDaemon = true; it.start() }
             },
             Remuxer(app, streamSinks),
+            { msg, t -> android.util.Log.w(Io.TAG, msg, t) },
         )
         st.addListener(object : StreamEngine.Listener { override fun onChanged(id: Long) { uiChanged() } })
         streams = st
