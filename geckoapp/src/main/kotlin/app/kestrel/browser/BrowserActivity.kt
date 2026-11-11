@@ -217,7 +217,10 @@ open class BrowserActivity : Activity(), ToolbarListener {
         toolbar = Toolbar(this, pal, this)
         progress = ProgressLine(this, pal.accent).apply { visibility = View.INVISIBLE }
         content = FrameLayout(this)
-        geckoView = GeckoView(this)
+        geckoView = GeckoView(this).apply { setAutofillEnabled(false) } // no logins are stored; GeckoView's autofill hooks only add window-focus churn (research/FREEZE.md 4.7)
+        // ONE GeckoView, attached once and never removed: detaching it pauses/resumes the compositor through synchronous IPC while the keyboard resizes the window,
+        // which is the race family behind "the screen stops updating while typing". Tabs swap with setSession; the new-tab page and error screens are opaque overlays above it.
+        content.addView(geckoView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         column.addView(toolbar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52)))
         column.addView(progress, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(2)))
         column.addView(content, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -228,6 +231,10 @@ open class BrowserActivity : Activity(), ToolbarListener {
             override fun onOpen(url: String) { current?.let { navigateTo(it, url) } }
         })
         errorView = ErrorView(this, pal, errorListener)
+        content.addView(ntp, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        content.addView(errorView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        ntp.visibility = View.GONE
+        errorView.visibility = View.GONE
         findBar = FindBar(this, pal, object : FindBar.Listener {
             override fun query(q: String) { findIn(q, false) }
             override fun next(forward: Boolean) { findIn(findBar.input.text.toString(), !forward) }
@@ -329,28 +336,26 @@ open class BrowserActivity : Activity(), ToolbarListener {
     }
 
     /** Private tab in front: no screenshots / recents thumbnail, and no autofill service sees what is typed. */
+    private var secureWindow = false
     private fun applyPrivacyFlags() {
         val priv = current?.isPrivateTab == true
-        if (priv) window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE) else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        root.importantForAutofill = if (priv) View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS else View.IMPORTANT_FOR_AUTOFILL_AUTO
+        if (priv != secureWindow) { // a window flag change relayouts the window: only when the private state flips
+            secureWindow = priv
+            if (priv) window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE) else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            root.importantForAutofill = if (priv) View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS else View.IMPORTANT_FOR_AUTOFILL_AUTO
+        }
     }
 
     private fun attachContent(tab: Tab) {
-        content.removeAllViews()
-        if (tab.isNewTab) {
-            content.addView(ntp, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-            refreshNtp()
-        } else {
+        if (!tab.isNewTab) {
             val s = ensureSession(tab)
-            if (geckoView.session !== s) geckoView.setSession(s)
-            detach(geckoView)
-            content.addView(geckoView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            if (geckoView.session !== s) { geckoView.releaseSession(); geckoView.setSession(s) }
         }
+        if (tab.isNewTab) { if (ntp.visibility != View.VISIBLE) ntp.visibility = View.VISIBLE; refreshNtp() }
+        else if (ntp.visibility != View.GONE) ntp.visibility = View.GONE
         val e = tab.error
-        if (e != null) {
-            errorView.show(e)
-            content.addView(errorView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        }
+        if (e != null) { errorView.show(e); if (errorView.visibility != View.VISIBLE) errorView.visibility = View.VISIBLE }
+        else if (errorView.visibility != View.GONE) errorView.visibility = View.GONE
         findBar.visibility = if (tab.findOpen) View.VISIBLE else View.GONE
     }
 
@@ -833,15 +838,25 @@ open class BrowserActivity : Activity(), ToolbarListener {
 
     // ================================================================== UI refresh
 
-    private fun updateUi() {
+    // Coalesced: any number of state changes in one burst (progress ticks, title, blocked-count) cost ONE toolbar pass on the next looper turn.
+    private var uiPosted = false
+    private val uiRunnable = Runnable { uiPosted = false; applyUi() }
+    private fun updateUi() { if (!uiPosted) { uiPosted = true; Io.main.post(uiRunnable) } }
+
+    private fun applyUi() {
         val t = current
         val canBack = t?.canGoBack == true || (t != null && t.parentId != 0L && tabs.any { it.id == t.parentId })
         toolbar.bind(t, tabs.size, canBack || (t != null && !t.isNewTab))
-        progress.progress = if (t?.loading == true) t.progress else 0
+        val p = if (t?.loading == true) t.progress else 0
+        if (progress.progress != p) progress.progress = p
     }
 
     internal fun tabChanged(tab: Tab) { if (tab === current) updateUi() else if (tabSwitcher.visibility == View.VISIBLE) tabSwitcher.bind(tabs, current) }
-    internal fun shieldCountChanged(tab: Tab) { if (tab === current) updateUi() }
+    private val countPosted = java.util.concurrent.atomic.AtomicBoolean(false)
+    /** A request was blocked (may be called from any thread): the chip refreshes at most 4 times a second, however many requests a page blocks. */
+    internal fun shieldCountChanged(tab: Tab) {
+        if (tab === current && countPosted.compareAndSet(false, true)) Io.main.postDelayed({ countPosted.set(false); updateUi() }, 250)
+    }
     internal fun toast(message: String) { Toast.makeText(this, message, Toast.LENGTH_SHORT).show() }
 
     internal fun errorChanged(tab: Tab) {

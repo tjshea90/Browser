@@ -58,7 +58,6 @@ class ShieldsBridge(
         val v = fs.check(url, pageHost, requestType(type), Psl.default)
         if (!Verdict.isBlocked(v)) return false
         countBlocked(pageUrl, Verdict.category(v))
-        Log.d(Io.TAG, "shields blocked ${type} ${url.take(120)}")
         return true
     }
 
