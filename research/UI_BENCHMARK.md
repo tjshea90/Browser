@@ -121,8 +121,8 @@ choices from the product, write the direction down, audit against the tells. App
 - **Self-audit**: no purple gradient, no serif, no cream/terracotta (so the rufous back colour is NOT the accent), caps and monospace only for readouts and section labels (<= 2 places per
   screen), chamfer once per container, no glass. Honest caveat: dark theme + one accent is still the common pattern; kept because it is the most legible on a washed-out 170 ppi LCD in
   daylight.
-- **Against stock Material** (Chromium ships tab cards radius 24, toolbar radius 16, an 18 dp close glyph in a 48 dp button [V]): no pills or large radii, no tonal elevation or shadows, no
-  ripples, no circular icon buttons or avatars, no FAB, mitred icons, cells that fill the whole 56/64 dp target.
+- **Against stock Material** (Chromium ships tab cards radius 24, `toolbar_corner_radius` 16, an 18 dp close glyph in a 48 dp button [V]): no pills or large radii, no tonal elevation or
+  shadows, no ripples, no circular icon buttons or avatars, no FAB, mitred icons, cells that fill the whole 56/64 dp target.
 
 | Token | Light | Dark | Hood (private) | Contrast (computed, WCAG) |
 |---|---|---|---|---|
@@ -196,10 +196,11 @@ white.
   https://piunikaweb.com/2026/07/09/chrome-android-menu-redesign-back-button/
 - **Brave**: Shields icon in the address bar; Shields > Advanced controls > Block element [V] https://brave.com/privacy-updates/34-block-page-elements-android/ ; Android Shields panel
   strings [V] https://raw.githubusercontent.com/brave/brave-core/master/browser/ui/android/strings/android_brave_strings.grd ; Customize menu 1.84 [V]
-  https://brave.com/whats-new/customize-android-settings-menu/ ; settings root has Appearance, Shields & privacy, Leo, Rewards, News, Playlist [S] https://brave.com/whats-new/android/ ;
-  bottom toolbar added 1.0.88, optional 1.0.89 [S] https://www.apkmirror.com/?p=650878 ; NTP stats are estimates [S]
-  https://support.brave.app/hc/en-us/articles/360045401211-What-is-the-Privacy-Hub-in-Brave-iOS ; purple private theme, contrast complaints [S]
-  https://community.brave.com/t/i-cant-see-the-tabs-in-private-mode-because-of-the-absurd-and-disastrous-lack-of-contrast-in-the-purple-theme/95409 (Brave support pages returned 403)
+  https://brave.com/whats-new/customize-android-settings-menu/ ; settings sections named in Brave support pages: Appearance, Shields & privacy, Leo, Rewards, News, Playlist, Autofill, New
+  Tab Page [S, via search, e.g. https://brave.com/whats-new/android/] ; bottom toolbar added in 1.0.88 [S] https://www.apkmirror.com/?p=637297 , made optional in 1.0.89 [S]
+  https://www.apkmirror.com/?p=650878 ; NTP stats are estimates [S] https://support.brave.app/hc/en-us/articles/360045401211-What-is-the-Privacy-Hub-in-Brave-iOS ; purple private theme,
+  contrast complaints [S] https://community.brave.com/t/i-cant-see-the-tabs-in-private-mode-because-of-the-absurd-and-disastrous-lack-of-contrast-in-the-purple-theme/95409 (Brave support
+  pages returned 403)
 - **Firefox**: toolbar Simple/Expanded, top or bottom, auto-hide, tab bar forces the address bar to the top [S] https://support.mozilla.org/kb/toolbar-firefox-android ; tablet tab strip top
   only [S] https://connect.mozilla.org/t5/discussions/tab-strip-for-firefox-android-now-available-in-firefox-nightly/m-p/60214 ; grid/list inconsistency [S]
   https://bugzilla.mozilla.org/show_bug.cgi?id=2037273 ; menu is a bottom sheet, tab switching moved to a full-screen fragment [S] https://bugzilla.mozilla.org/show_bug.cgi?id=1979656 ; find
