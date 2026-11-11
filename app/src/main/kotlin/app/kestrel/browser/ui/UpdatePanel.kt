@@ -12,6 +12,7 @@ import android.widget.LinearLayout
 import android.widget.Switch
 import android.widget.TextView
 import app.kestrel.browser.Flavor
+import app.kestrel.browser.Io
 import app.kestrel.browser.data.Prefs
 import app.kestrel.browser.update.UpdateManager
 import app.kestrel.browser.update.UpdateManager.Phase
