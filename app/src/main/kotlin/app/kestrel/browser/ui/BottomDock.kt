@@ -10,6 +10,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -58,6 +59,9 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
     private val urlRow = LinearLayout(ctx)
     private val actionRow = LinearLayout(ctx)
     private val pill = LinearLayout(ctx)
+    /** The address pill inside a frame that also holds its neon glow (a [GlowView] behind it): the pill's edge breathes while you browse. */
+    private val pillHolder = FrameLayout(ctx)
+    private val pillGlow = GlowView(ctx)
 
     private val back = actionButton(R.drawable.ic_back, "Back") { l.onBack() }
     private val forward = actionButton(R.drawable.ic_forward, "Forward") { l.onForward() }
@@ -119,6 +123,10 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
         lock.layoutParams = LayoutParams(ctx.dp(20), ctx.dp(20)).apply { marginEnd = ctx.dp(10) }
         reload.layoutParams = LayoutParams(ctx.dp(46), ctx.dp(46))
         pill.addView(mask); pill.addView(lock); pill.addView(urlField); pill.addView(chip); pill.addView(reload)
+        pillHolder.clipChildren = false
+        pillHolder.addView(pillGlow, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        pillHolder.addView(pill, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, ctx.dp(44), Gravity.CENTER).apply { marginStart = ctx.dp(GLOW_DP); marginEnd = ctx.dp(GLOW_DP) })
+        Neon.pulse(pillGlow, 0.3f, 1f, 3400L)
         urlRow.apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(ctx.dp(10), 0, ctx.dp(10), 0) }
         actionRow.apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         addView(hairline, LayoutParams(LayoutParams.MATCH_PARENT, 1))
@@ -139,18 +147,18 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
         wide = wideNow
         urlRow.removeAllViews(); actionRow.removeAllViews()
         // children are re-parented below; remove from any previous parent first
-        for (v in listOf<View>(back, forward, home, newTab, tabs, menu, pill, spacer, urlRow, actionRow)) (v.parent as? android.view.ViewGroup)?.removeView(v)
+        for (v in listOf<View>(back, forward, home, newTab, tabs, menu, pillHolder, spacer, urlRow, actionRow)) (v.parent as? android.view.ViewGroup)?.removeView(v)
         while (childCount > 1) removeViewAt(1)
         val rowH = context.dp(ROW_DP)
         if (!wideNow) {
-            urlRow.addView(pill, LayoutParams(0, context.dp(44), 1f))
+            urlRow.addView(pillHolder, LayoutParams(0, rowH, 1f).apply { marginStart = -context.dp(GLOW_DP); marginEnd = -context.dp(GLOW_DP) })
             addView(urlRow, LayoutParams(LayoutParams.MATCH_PARENT, rowH))
             for (b in listOf(back, forward, home, newTab, tabs, menu)) actionRow.addView(b, LayoutParams(0, rowH, 1f))
             addView(actionRow, LayoutParams(LayoutParams.MATCH_PARENT, rowH))
         } else {
             val w = context.dp(52)
             for (b in listOf(back, forward, home)) actionRow.addView(b, LayoutParams(w, rowH))
-            actionRow.addView(pill, LayoutParams(0, context.dp(44), 1f).apply { marginStart = context.dp(6); marginEnd = context.dp(6) })
+            actionRow.addView(pillHolder, LayoutParams(0, rowH, 1f).apply { marginStart = context.dp(6) - context.dp(GLOW_DP); marginEnd = context.dp(6) - context.dp(GLOW_DP) })
             actionRow.addView(spacer, LayoutParams(0, 1, 1f))
             for (b in listOf(newTab, tabs, menu)) actionRow.addView(b, LayoutParams(w, rowH))
             addView(actionRow, LayoutParams(LayoutParams.MATCH_PARENT, rowH))
@@ -166,8 +174,8 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
 
     /** Set BOTH layouts' states every time: the pill keeps the visibility the wide layout gave it, so rotating landscape -> portrait on Home left an empty address row once a page opened. */
     private fun applyVisibility() {
-        if (wide) { pill.visibility = if (homeMode) GONE else VISIBLE; spacer.visibility = if (homeMode) VISIBLE else GONE; urlRow.visibility = VISIBLE }
-        else { urlRow.visibility = if (homeMode) GONE else VISIBLE; pill.visibility = VISIBLE; spacer.visibility = GONE }
+        if (wide) { pillHolder.visibility = if (homeMode) GONE else VISIBLE; spacer.visibility = if (homeMode) VISIBLE else GONE; urlRow.visibility = VISIBLE }
+        else { urlRow.visibility = if (homeMode) GONE else VISIBLE; pillHolder.visibility = VISIBLE; spacer.visibility = GONE }
     }
 
     /** Re-colour everything for the regular or the private skin. */
@@ -195,7 +203,12 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
         paintPill(urlField.hasFocus())
     }
 
+    private fun paintPillGlow() {
+        pillGlow.background = NeonGlowDrawable(pal.accent, context.dpf(10f), ChamferDrawable.TL or ChamferDrawable.BR, context.dpf(GLOW_DP.toFloat()), coreColor = pal.accentHi, coreWidthPx = context.dpf(1.4f))
+    }
+
     private fun paintPill(focused: Boolean) {
+        paintPillGlow()
         pill.background = ChamferDrawable(pal.pill, context.dpf(10f), ChamferDrawable.TL or ChamferDrawable.BR,
             if (focused) pal.accent else pal.divider, if (focused) context.dpf(2f) else context.dpf(1f), gloss = true)
     }
@@ -249,6 +262,7 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
     fun setMenuDot(on: Boolean) { menu.dot = on }
 
     companion object {
+        const val GLOW_DP = 6
         const val ROW_DP = 56
         const val WIDE_DP = 760
     }
