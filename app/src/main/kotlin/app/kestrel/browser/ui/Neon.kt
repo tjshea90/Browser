@@ -21,18 +21,19 @@ import android.os.PowerManager
 import android.os.SystemClock
 import android.view.Gravity
 import android.view.View
-import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.FrameLayout
 import java.nio.ByteBuffer
+import kotlin.math.cos
 import kotlin.math.pow
 
 /**
  * The neon (owner request 4): a very subtle pulsing blue glow in a few logical places - the edge above the dock, the Home field, the selected tab card - like the
  * glow around a phone screen while an assistant talks. Everything else in the app stays instant.
  *
- * Cost design: a pulse is ONLY an alpha animation of a [GlowView] that holds a static, pre-built glow drawable. [View.animate] on a hardware-accelerated view runs on
- * the RenderThread (RenderNodeAnimator): no per-frame work on the UI thread, no bitmaps re-drawn, no layout. The UI thread wakes twice per period to chain the next half.
- * The glows hold still (a steady glow, no frames) while typing or loading, in battery-saver, when the system's animations are off, when the app is not on screen, and
+ * Cost design: a pulse is ONLY an alpha change of a [GlowView] that holds a static, pre-built glow drawable (a RenderNode property: no bitmap re-drawn, no layout, no
+ * off-screen layer). It is stepped at about 12 Hz instead of animated at the display's 60 Hz: a slow breath changes ~1 % of alpha per step, which the eye cannot tell
+ * from a smooth ramp, and every step costs one tiny frame - five times fewer frames than a RenderThread animation on a tablet whose GPU would otherwise idle.
+ * All glows share one clock, so they breathe together. The glows hold still (a steady glow, no frames) while typing or loading, in battery-saver, when the system's animations are off, when the app is not on screen, and
  * after [IDLE_MS] without a touch - so a tablet left on a page lets the screen go quiet and the SoC idle.
  */
 object Neon {
@@ -45,10 +46,27 @@ object Neon {
     /** 0 = no glow at all, 1 = steady glow, 2 = subtle pulse (default). Set from Settings. */
     @JvmField @Volatile var mode = PULSE
 
-    private class Pulser(val v: GlowView, val lo: Float, val hi: Float, val halfMs: Long) { var running = false }
+    /** One breath every 4.2 s, stepped every 80 ms. */
+    private const val TICK_MS = 80L
+
+    private class Pulser(val v: GlowView, val lo: Float, val hi: Float, val periodMs: Long) { var running = false }
 
     private val pulsers = ArrayList<Pulser>() // UI thread only
-    private val ease = AccelerateDecelerateInterpolator()
+    private var ticking = false
+    private val tick = object : Runnable {
+        override fun run() {
+            val now = SystemClock.uptimeMillis()
+            var any = false
+            for (p in pulsers) if (p.running) {
+                any = true
+                val phase = (now % p.periodMs) / p.periodMs.toFloat() // one shared clock: every glow breathes in step
+                val k = 0.5f - 0.5f * cos(phase * 6.2831855f) // 0..1..0, eased at both ends
+                p.v.alpha = p.lo + (p.hi - p.lo) * k
+            }
+            ticking = any
+            if (any) handler.postDelayed(this, TICK_MS)
+        }
+    }
     private val handler = Handler(Looper.getMainLooper())
     private var busy = false // typing or loading: the screen is already changing, hold the glow still
     private var away = true // the app is not on screen
@@ -65,7 +83,7 @@ object Neon {
 
     /** Make [v] breathe between alpha [lo] and [hi]. Attach once per view; it follows the view's attach/detach/visibility by itself. */
     fun pulse(v: GlowView, lo: Float = 0.5f, hi: Float = 1f, periodMs: Long = 4200L) {
-        val p = Pulser(v, lo, hi, periodMs / 2)
+        val p = Pulser(v, lo, hi, periodMs)
         pulsers.add(p)
         v.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(view: View) { apply(p, view.isShown) }
@@ -114,20 +132,10 @@ object Neon {
     private fun start(p: Pulser) {
         if (p.running) return
         p.running = true
-        p.v.alpha = p.lo
-        step(p, true)
+        if (!ticking) { ticking = true; handler.post(tick) }
     }
 
-    private fun stop(p: Pulser) {
-        if (!p.running) return
-        p.running = false
-        p.v.animate().cancel()
-    }
-
-    private fun step(p: Pulser, up: Boolean) {
-        if (!p.running) return
-        p.v.animate().alpha(if (up) p.hi else p.lo).setDuration(p.halfMs).setInterpolator(ease).withEndAction { step(p, !up) }.start()
-    }
+    private fun stop(p: Pulser) { p.running = false } // the tick loop ends by itself when nobody is running
 }
 
 /** A view that only holds a glow drawable: no overlapping rendering (alpha is applied without an off-screen layer) and no size of its own (it never makes its parent grow). */
@@ -249,7 +257,7 @@ class HomeBackdrop(ctx: Context, private var accent: Int, private var deep: Int,
         val w = width.toFloat(); val h = height.toFloat()
         // flames: two mirrored copies of the mask in the bottom corners, tinted deep blue at the base to ice at the tips
         wisps?.let { m ->
-            val fw = w * 0.74f; val fh = h * 0.46f
+            val fw = w * 0.58f; val fh = h * 0.46f
             if (wispShader == null) wispShader = LinearGradient(0f, h - fh, 0f, h, intArrayOf(hi, accent, deep), floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP)
             paint.shader = wispShader; paint.alpha = 125
             dst.set(0f, h - fh, fw, h); c.drawBitmap(m, null, dst, paint)
