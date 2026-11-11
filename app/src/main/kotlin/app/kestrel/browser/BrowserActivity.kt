@@ -129,6 +129,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
     private var pendingGeo: Pair<String, GeolocationPermissions.Callback>? = null
     private var backCallback: Any? = null
     private var suggestSeq = 0
+    @Volatile private var sessionRestored = false
 
     private val netListener: () -> Unit = { onNetworkChanged() }
     private val saveRunnable = Runnable { saveSessionNow() }
@@ -148,10 +149,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         buildUi()
         installBackHandling()
         NetworkMonitor.addListener(netListener)
-        if (!isPrivate) {
-            db = BrowserDb(this)
-            Io.exec { db?.purge(5000, 90); UpdateJob.schedule(applicationContext) }
-        }
+        if (!isPrivate) db = BrowserDb(this)
         val firstTab = Tab(nextTabId++)
         tabs.add(firstTab)
         show(firstTab)
@@ -164,6 +162,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
                 val session = SessionCodec.decode(text)
                 Io.ui { restore(session, savedInstanceState, launch) }
             }
+            Io.exec { db?.purge(5000, 90); UpdateJob.schedule(applicationContext) } // after the session read: nothing at launch waits for this
         }
     }
 
@@ -184,7 +183,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
     override fun onPause() {
         super.onPause()
         flushCounters()
-        CookieManager.getInstance().flush()
+        Io.exec { CookieManager.getInstance().flush() }
         saveSessionNow()
     }
 
@@ -195,7 +194,16 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         NetworkMonitor.stop()
     }
 
+    /** Cookies, storage and HTTP cache of the private process. (App.wipePrivateData still sweeps leftovers at the next private start.) */
+    private fun wipePrivateSession() {
+        CookieManager.getInstance().removeAllCookies(null)
+        CookieManager.getInstance().flush()
+        WebStorage.getInstance().deleteAllData()
+        clearHttpCache()
+    }
+
     override fun onDestroy() {
+        if (isPrivate && isFinishing) wipePrivateSession()
         NetworkMonitor.removeListener(netListener)
         Io.main.removeCallbacks(saveRunnable)
         for (t in tabs) t.webView?.let { detach(it); WebViewFactory.destroy(it) }
@@ -226,7 +234,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         // 10/15 = RUNNING_LOW/CRITICAL (we are visible); 20 = UI_HIDDEN (user left); 60+ = we are a prime kill candidate.
-        if (level >= 10) { for (t in tabs.toList()) if (t !== current) hibernate(t) }
+        if (level >= 10) { for (t in tabs.toList()) if (t !== current && !hasLiveChild(t)) hibernate(t) } // a popup's opener must survive (window.opener)
         if (level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE && !window.decorView.hasWindowFocus()) current?.let { hibernate(it) }
     }
 
@@ -234,6 +242,8 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
 
     private fun buildUi() {
         root = FrameLayout(this)
+        // Private window: no autofill service may see what is typed here or offer to save a password for it.
+        if (isPrivate) root.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
         root.setBackgroundColor(pal.windowBg)
         val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         toolbar = Toolbar(this, pal, this)
@@ -288,6 +298,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
     // ================================================================== tabs
 
     private fun restore(session: Session?, saved: Bundle?, launch: String?) {
+        sessionRestored = true // from now on saving cannot clobber the saved session
         if (session != null && session.tabs.isNotEmpty()) {
             // Replace the placeholder tab. Nothing is loaded here except the selected tab (lazy: no network at startup).
             for (t in tabs.toList()) t.webView?.let { detach(it); WebViewFactory.destroy(it) }
@@ -385,6 +396,8 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         return wv
     }
 
+    private fun hasLiveChild(t: Tab) = tabs.any { it.parentId == t.id && it.webView != null }
+
     private fun detach(v: View) { (v.parent as? ViewGroup)?.removeView(v) }
 
     /** Low-RAM policy: at most 2 live WebViews (4 on bigger devices); the least recently used others are hibernated. */
@@ -395,7 +408,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         var count = live.size
         for (t in live) {
             if (count <= max) break
-            if (t === current || tabs.any { it.parentId == t.id && it.webView != null }) continue
+            if (t === current || hasLiveChild(t)) continue
             hibernate(t)
             count--
         }
@@ -463,7 +476,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
     private fun navigateTo(tab: Tab, url: String, savedCopy: Boolean = false) {
         // Single choke point for every way a URL reaches a tab (omnibox, links, menus, intents, session): only web pages. Long-press menus feed
         // page-controlled text (javascript:, data:, file:///android_asset/...) in here, which the omnibox allow-list never saw.
-        if (!url.startsWith("http://", ignoreCase = true) && !url.startsWith("https://", ignoreCase = true)) { toast("Can't open that kind of address"); return }
+        if (!NavPolicy.isWebUrl(url)) { toast("Can't open that kind of address"); return }
         val prep = NavPolicy.prepare(prefs, url, tab)
         loadUrl(tab, prep.url, prep.upgradedFrom, savedCopy)
     }
@@ -507,7 +520,9 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         if (target.isNotEmpty()) navigateTo(tab, target) // clears savedCopyOnce via loadUrl
     }
 
-    private fun urlFromIntent(i: Intent?): String? {
+    private fun urlFromIntent(i: Intent?): String? = try { urlFromIntentUnchecked(i) } catch (e: Exception) { null } // exported activity: a hostile extra (bad Parcelable) must not crash it
+
+    private fun urlFromIntentUnchecked(i: Intent?): String? {
         i ?: return null
         return when (i.action) {
             Intent.ACTION_VIEW -> i.dataString?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
@@ -743,29 +758,50 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
 
     // ================================================================== data / state
 
+    /** The HTTP cache is shared by every WebView of the process, but clearing needs ONE instance: use a live one, else a throwaway. */
+    private fun clearHttpCache() {
+        val live = tabs.firstNotNullOfOrNull { it.webView }
+        try { if (live != null) live.clearCache(true) else WebView(this).apply { clearCache(true); destroy() } } catch (e: Exception) { /* no WebView provider at all */ }
+    }
+
     private fun clearBrowsingData() {
         CookieManager.getInstance().removeAllCookies(null)
         CookieManager.getInstance().flush()
         WebStorage.getInstance().deleteAllData()
-        for (t in tabs) t.webView?.clearCache(true)
+        clearHttpCache()
         @Suppress("DEPRECATION") WebViewDatabase.getInstance(this).apply { clearHttpAuthUsernamePassword(); clearFormData() }
         Io.exec { db?.clearHistory() }
         toast("Browsing data cleared")
     }
 
     private fun quit() {
-        saveSessionNow()
-        if (!isPrivate && prefs.clearOnExit) {
+        if (isPrivate) wipePrivateSession()
+        else if (prefs.clearOnExit) {
             CookieManager.getInstance().removeAllCookies(null); CookieManager.getInstance().flush(); WebStorage.getInstance().deleteAllData()
-            for (t in tabs) t.webView?.clearCache(true)
-            Io.exec { db?.clearHistory() }
-        }
+            clearHttpCache()
+            sessionRestored = false // nothing may re-create the tab list after this point
+            Io.exec { db?.clearHistory(); sessionFile().delete() }
+        } else saveSessionNow()
         finishAndRemoveTask()
         // Free the memory right away: this tablet is low-RAM and the user asked to quit. The IO queue is flushed first.
         Io.exec { Io.main.post { Process.killProcess(Process.myPid()) } }
     }
 
     private fun sessionFile() = File(filesDir, "session.txt")
+
+    /** `https://user:pass@host/` -> `https://host/`: credentials in a URL must not be written to history or the session file (storage is unencrypted). */
+    private fun withoutUserinfo(url: String): String {
+        val schemeEnd = url.indexOf("://")
+        if (schemeEnd < 0) return url
+        var authEnd = schemeEnd + 3
+        while (authEnd < url.length && url[authEnd] != '/' && url[authEnd] != '?' && url[authEnd] != '#') authEnd++
+        val at = url.lastIndexOf('@', authEnd - 1)
+        return if (at > schemeEnd + 2) url.substring(0, schemeEnd + 3) + url.substring(at + 1) else url
+    }
+
+    // CookieManager.flush() blocks and does disk I/O: never on the UI thread, and not after every page.
+    private val cookieFlush = Runnable { Io.exec { CookieManager.getInstance().flush() } }
+    private fun scheduleCookieFlush() { Io.main.removeCallbacks(cookieFlush); Io.main.postDelayed(cookieFlush, 3000) }
 
     private fun scheduleSave() {
         if (isPrivate) return
@@ -774,9 +810,9 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
     }
 
     internal fun saveSessionNow() {
-        if (isPrivate || tabs.isEmpty()) return
+        if (isPrivate || tabs.isEmpty() || !sessionRestored) return
         val sel = current?.id ?: tabs.last().id
-        val records = tabs.map { TabRecord(it.id, it.url.ifEmpty { "about:blank" }, it.title, it.lastActive, it.parentId, it.desktop) }
+        val records = tabs.map { TabRecord(it.id, withoutUserinfo(it.url).ifEmpty { "about:blank" }, it.title, it.lastActive, it.parentId, it.desktop) }
         val text = SessionCodec.encode(Session(records, sel))
         val f = sessionFile()
         Io.exec {
@@ -844,8 +880,9 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
 
     override fun pageFinished(tab: Tab) {
         flushCounters()
-        if (!isPrivate && tab.url.startsWith("http")) { val u = tab.url; val ti = tab.title; Io.exec { db?.recordVisit(u, ti) } }
-        CookieManager.getInstance().flush()
+        // A failed or blocked load is not a visit (typos and malware URLs would otherwise fill history and the top sites).
+        if (!isPrivate && tab.error == null && tab.url.startsWith("http")) { val u = withoutUserinfo(tab.url); val ti = tab.title; Io.exec { db?.recordVisit(u, ti) } }
+        scheduleCookieFlush()
         scheduleSave()
         if (tab === current) updateUi()
     }
@@ -952,8 +989,11 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
             if (on) { c.hide(WindowInsets.Type.systemBars()); c.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE } else c.show(WindowInsets.Type.systemBars())
         } else {
             @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = if (on) (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_FULLSCREEN or
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN) else View.SYSTEM_UI_FLAG_VISIBLE
+            // Read-modify-write: assigning a whole new value would also clear the light status/navigation bar flags the theme set (icons invisible afterwards).
+            val immersive = View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            val dv = window.decorView
+            dv.systemUiVisibility = if (on) dv.systemUiVisibility or immersive else dv.systemUiVisibility and immersive.inv()
         }
     }
 
@@ -1003,9 +1043,11 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         val host = UrlParts.hostOf(origin) ?: origin
         askYesNo("$host wants to know your location", "Only allow this if you trust the site.", "Allow", "Block", { allow ->
             if (!allow) { cb.invoke(origin, false, false); return@askYesNo }
-            if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) cb.invoke(origin, true, false) else {
+            // Android 12+ ignores a FINE-only request (the user must be offered approximate too), so ask for both and accept either.
+            val perms = arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION)
+            if (perms.any { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }) cb.invoke(origin, true, false) else {
                 pendingGeo = origin to cb
-                requestPermissions(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION), REQ_GEO)
+                requestPermissions(perms, REQ_GEO)
             }
         })
     }
@@ -1016,7 +1058,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         val ok = grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }
         when (requestCode) {
             REQ_WEB -> { pendingWeb?.let { (req, res) -> if (ok) req.grant(res) else req.deny() }; pendingWeb = null }
-            REQ_GEO -> { pendingGeo?.let { (origin, cb) -> cb.invoke(origin, ok, false) }; pendingGeo = null }
+            REQ_GEO -> { val any = grantResults.any { it == PackageManager.PERMISSION_GRANTED }; pendingGeo?.let { (origin, cb) -> cb.invoke(origin, any, false) }; pendingGeo = null }
         }
     }
 
@@ -1038,7 +1080,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         tab.dialogCount++
         val host = UrlParts.hostOf(url) ?: url
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(24), dp(8), dp(24), 0) }
-        box.addView(TextView(this).apply { text = message; textSize = 16f; setTextColor(pal.fg) })
+        box.addView(TextView(this).apply { text = if (message.length > 2000) message.take(2000) + "…" else message; textSize = 16f; setTextColor(pal.fg) })
         var field: EditText? = null
         if (input != null) { field = EditText(this).apply { setText(input); setSingleLine() }; box.addView(field) }
         var stop: CheckBox? = null
@@ -1093,7 +1135,10 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
     }
 
     private fun startDownload(url: String, ua: String?, cd: String?, mime: String?, tab: Tab) {
-        toast(if (Downloads.enqueue(this, url, ua, cd, mime, tab.url)) "Download started" else "Can't download this link")
+        val go = { toast(if (Downloads.enqueue(this, url, ua, cd, mime, tab.url)) "Download started" else "Can't download this link") }
+        // The system DownloadManager keeps the file, its address and a notification OUTSIDE the private window.
+        if (isPrivate) askYesNo("Download from a private window?", "The file, its web address and a notification are kept on this tablet by Android, outside the private window.", "Download", "Cancel", { ok -> if (ok) go() })
+        else go()
     }
 
     override fun externalLaunch(tab: Tab, url: String, userGesture: Boolean): Boolean {
@@ -1133,7 +1178,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
 
     private fun linkMenu(tab: Tab, url: String, imageUrl: String? = null) {
         val labels = ArrayList<String>(); val acts = ArrayList<() -> Unit>()
-        val web = url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)
+        val web = NavPolicy.isWebUrl(url)
         if (web) { labels.add("Open in new tab"); acts.add { val t = newTabInternal(tab); show(t); navigateTo(t, url) } }
         if (web && !isPrivate) { labels.add("Open in private window"); acts.add { startActivity(Intent(this, PrivateActivity::class.java).setAction(Intent.ACTION_VIEW).setData(Uri.parse(url))) } }
         labels.add("Copy link address"); acts.add { copy(url) }
@@ -1143,7 +1188,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
     }
 
     private fun imageMenu(tab: Tab, url: String) {
-        val web = url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)
+        val web = NavPolicy.isWebUrl(url)
         val labels = ArrayList<String>(); val acts = ArrayList<() -> Unit>()
         if (web) {
             labels.add("Open image in new tab"); acts.add { val t = newTabInternal(tab); show(t); navigateTo(t, url) }

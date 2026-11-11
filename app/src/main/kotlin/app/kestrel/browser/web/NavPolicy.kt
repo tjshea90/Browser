@@ -10,6 +10,9 @@ import app.kestrel.core.url.UrlParts
 object NavPolicy {
     class Prepared(val url: String, val upgradedFrom: String?)
 
+    /** The only kind of address a tab may ever be navigated to by this app's own code (menus, links, session, intents all funnel through it). */
+    fun isWebUrl(url: String): Boolean = url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)
+
     fun prepare(prefs: Prefs, url: String, tab: Tab?): Prepared {
         val host = UrlParts.hostOf(url)
         val s = Shields.effective(prefs, host)

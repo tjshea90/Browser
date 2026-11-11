@@ -78,7 +78,7 @@
         <!-- Private window: its own process (separate WebView data directory, wiped at process start), FLAG_SECURE, nothing persisted. -->
         <activity
             android:name=".PrivateActivity"
-            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|fontScale|density|locale|layoutDirection"
             android:exported="false"
             android:launchMode="singleTask"
             android:process=":private"

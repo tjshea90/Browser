@@ -11,6 +11,7 @@ import app.kestrel.browser.R
 import app.kestrel.browser.net.NetworkMonitor
 import app.kestrel.browser.web.ErrorScreen
 import app.kestrel.core.filter.Category
+import app.kestrel.core.url.UrlParts
 
 /**
  * Native error / warning screen drawn over the page area. Native (not an HTML page) so it needs no network, no scripts, cannot be
@@ -104,7 +105,7 @@ class ErrorView(ctx: Context, private val pal: Pal, private val l: Listener) : S
     }
 
     private fun networkTexts(e: ErrorScreen.Network): Triple<String, String, String> {
-        val host = e.failingUrl.substringAfter("://").substringBefore('/').substringBefore(':')
+        val host = UrlParts.hostOf(e.failingUrl) ?: e.failingUrl.substringAfter("://").substringBefore('/').substringAfterLast('@').substringBefore(':')
         val detail = "$host  ·  ${e.description.ifEmpty { "error ${e.code}" }}"
         return when (NetworkMonitor.state) {
             NetworkMonitor.State.OFFLINE -> Triple(
