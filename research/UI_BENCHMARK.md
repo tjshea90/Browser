@@ -48,6 +48,7 @@ PORTRAIT 564x892 (split)                        LANDSCAPE 916x540 (unified)
 
 ## 4. Behaviour specs
 - **Address field** (48 tall in the 56 row, 6 dp radius, field fill + 2 dp outline). Idle: host bold 17 sp + path muted 15 sp (https and "www." hidden, as today). http shows the word "NOT SECURE" in danger colour; offline shows "SAVED COPY".
+  Shield chip (56x48, inside the field, hidden on the NTP): armed = yellow fill, ink shield + count (condensed 14 sp); site switched off = outline + shield-off glyph + word OFF.
   Tap: full URL, select-all, keyboard (`IME_FLAG_NO_EXTRACT_UI`; private: no personalised learning). Long-press: Paste & go / Copy / Share. Swipe on the idle field switches tabs (Chrome tablets do [V]) - nice-to-have.
 - **Typing mode**: the field spans the row with Clear (48) and Go; all other chrome is hidden; an opaque layer below shows rows of 56: "Search Google for ..." first, then <= 6 local history/bookmark matches, each with a 48 dp fill-arrow.
   Rows that fit = floor((892 - 56 - keyboard)/56): ~9 portrait, ~4 landscape (keyboard 280/230 dp assumed [U]; measure). Use `SOFT_INPUT_ADJUST_NOTHING` while the field has focus so the engine view never resizes [U: validate with R6, the typing freeze].
