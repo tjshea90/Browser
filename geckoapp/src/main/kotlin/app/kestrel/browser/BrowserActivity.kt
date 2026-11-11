@@ -115,13 +115,13 @@ open class BrowserActivity : Activity(), DockListener {
     /** True while the SELECTED tab is a private tab (private sessions live in the same window; the engine keeps nothing of them). */
     private val isPrivate get() = current?.isPrivateTab == true
     internal lateinit var prefs: Prefs
-    private lateinit var pal: Pal
+    internal lateinit var pal: Pal
     private lateinit var palRegular: Pal
     private lateinit var palPrivate: Pal
     private lateinit var root: FrameLayout
     private lateinit var column: LinearLayout
     private lateinit var dock: BottomDock
-    private lateinit var sheet: SheetHost
+    internal lateinit var sheet: SheetHost
     private lateinit var progress: NeonBar
     private lateinit var content: FrameLayout
     private lateinit var home: HomeView
@@ -140,7 +140,9 @@ open class BrowserActivity : Activity(), DockListener {
     private var listPanel: ListPanel? = null
 
     private val tabs = ArrayList<Tab>()
-    private var current: Tab? = null
+    internal var current: Tab? = null
+        private set
+    private val video = app.kestrel.browser.web.VideoFlow(this)
 
     /** For tests (same module): the selected tab. */
     internal val currentTab: Tab? get() = current
@@ -192,7 +194,7 @@ open class BrowserActivity : Activity(), DockListener {
                 GeckoEngine.runtime(this)
                 GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
                 GeckoEngine.warmUp(this)
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l -> video.info(p, u, w, h, d, l) }))
                 Health.log("engine", "runtime-ready")
             }
         }
@@ -703,6 +705,7 @@ open class BrowserActivity : Activity(), DockListener {
         tab.topHost = host
         tab.shields = Shields.effective(prefs, host)
         tab.resetPageCounters()
+        tab.media.clear()
         val s = ensureSession(tab)
         if (current === tab) attachContent(tab)
         s.loadUri(url)
@@ -960,13 +963,14 @@ open class BrowserActivity : Activity(), DockListener {
 
     // ---- menu
     private object M { const val REFRESH = 14; const val DIAG = 15; const val NEW = 1; const val PRIVATE = 2; const val FIND = 3; const val SHARE = 4; const val BOOKMARK = 5; const val BOOKMARKS = 6; const val HISTORY = 7
-        const val DOWNLOADS = 8; const val UPDATE = 17; const val DESKTOP = 9; const val IMAGES = 10; const val PRINT = 11; const val SETTINGS = 12; const val CLOSE_ALL = 16 }
+        const val DOWNLOADS = 8; const val UPDATE = 17; const val VIDEO = 18; const val DESKTOP = 9; const val IMAGES = 10; const val PRINT = 11; const val SETTINGS = 12; const val CLOSE_ALL = 16 }
 
     override fun onMenu(anchor: View) {
         val t = current
         val items = ArrayList<MenuItemSpec>()
         val updateHot = UpdateManager.pending()
         if (updateHot) items.add(MenuItemSpec(M.UPDATE, "Update available", null, R.drawable.ic_update, accent = true)) // first, so it is noticed
+        if (video.available(t)) items.add(MenuItemSpec(M.VIDEO, "Download video", null, R.drawable.ic_download, accent = true)) // the page played something that can be saved
         items.add(MenuItemSpec(M.NEW, "New tab", null, R.drawable.ic_plus))
         items.add(MenuItemSpec(M.PRIVATE, "New private tab", null, R.drawable.ic_mask))
         if (t != null && !t.isNewTab) {
@@ -995,6 +999,7 @@ open class BrowserActivity : Activity(), DockListener {
             M.REFRESH -> refreshScreen("menu")
             M.DIAG -> showDiagnostics()
             M.UPDATE -> showUpdates()
+            M.VIDEO -> t?.let { video.show(it) }
             M.NEW -> newTabAndShow()
             M.PRIVATE -> newTabAndShow(true)
             M.FIND -> openFind()
@@ -1667,13 +1672,13 @@ open class BrowserActivity : Activity(), DockListener {
 
     // ================================================================== downloads, external links, long-press
 
-    internal fun download(tab: Tab, url: String, userAgent: String?, contentDisposition: String?, mime: String?, length: Long) {
-        val name = Downloads.fileName(url, contentDisposition, mime)
+    internal fun download(tab: Tab, url: String, userAgent: String?, contentDisposition: String?, mime: String?, length: Long, nameOverride: String? = null) {
+        val name = nameOverride ?: Downloads.fileName(url, contentDisposition, mime)
         val limit = prefs.dataSaver.confirmDownloadBytes(NetworkMonitor.metered)
         val big = limit >= 0 && (length < 0 || length >= limit)
         val risky = Downloads.isRisky(name, mime)
         val cleartext = url.startsWith("http://", ignoreCase = true) // on a hotspot the carrier can read or change an unencrypted download
-        if (!big && !risky && !cleartext) { startDownload(url, userAgent, contentDisposition, mime, tab); leaveDownloadTab(tab); return }
+        if (!big && !risky && !cleartext) { startDownload(url, userAgent, contentDisposition, mime, tab, nameOverride); leaveDownloadTab(tab); return }
         val size = if (length >= 0) NewTabPage.fmtBytes(length) else "unknown size"
         val msg = buildString {
             append(name).append("\nFrom: ").append(UrlParts.hostOf(url) ?: "unknown site").append("\nSize: ").append(size)
@@ -1681,7 +1686,7 @@ open class BrowserActivity : Activity(), DockListener {
             if (big) append("\n\nYou're on a metered connection (your phone's hotspot). This may use a lot of mobile data.")
             if (risky) append("\n\nThis type of file can install software or run code. Only continue if you trust the site.")
         }
-        askYesNo("Download this file?", msg, "Download", "Cancel", { ok -> if (ok) startDownload(url, userAgent, contentDisposition, mime, tab); leaveDownloadTab(tab) })
+        askYesNo("Download this file?", msg, "Download", "Cancel", { ok -> if (ok) startDownload(url, userAgent, contentDisposition, mime, tab, nameOverride); leaveDownloadTab(tab) })
     }
 
     /** A tab whose only "page" was the download link has nothing to show: back to the page it came from, to Home, or closed when a page opened it. */
@@ -1696,12 +1701,12 @@ open class BrowserActivity : Activity(), DockListener {
         }
     }
 
-    private fun startDownload(url: String, ua: String?, cd: String?, mime: String?, tab: Tab) {
+    private fun startDownload(url: String, ua: String?, cd: String?, mime: String?, tab: Tab, nameOverride: String? = null) {
         val go = {
             // Referer = the page's ORIGIN only (never the full URL: it can carry tokens / search terms)
             val headers = HashMap<String, String>()
             UrlParts.parse(tab.url)?.let { headers["Referer"] = "${it.scheme}://${it.hostForAuthority}/" }
-            DownloadController.enqueue(this, Source(url, tab.url.takeIf { it.isNotEmpty() }, Downloads.fileName(url, cd, mime), mime, headers, fetcher = 1, priv = tab.isPrivateTab, meteredOk = true))
+            DownloadController.enqueue(this, Source(url, tab.url.takeIf { it.isNotEmpty() }, nameOverride ?: Downloads.fileName(url, cd, mime), mime, headers, fetcher = 1, priv = tab.isPrivateTab, meteredOk = true))
             askNotificationPermissionOnce()
             toast("Download started: Menu > Downloads")
         }
@@ -1772,6 +1777,8 @@ open class BrowserActivity : Activity(), DockListener {
         val link = el.linkUri
         val src = el.srcUri
         when {
+            el.type == ContentDelegate.ContextElement.TYPE_VIDEO || el.type == ContentDelegate.ContextElement.TYPE_AUDIO ->
+                video.longPress(tab, src, link) { url -> val t = newTabInternal(tab, tab.isPrivateTab); show(t); navigateTo(t, url) }
             link != null -> linkMenu(tab, link, if (el.type == ContentDelegate.ContextElement.TYPE_IMAGE) src else null)
             el.type == ContentDelegate.ContextElement.TYPE_IMAGE && src != null -> imageMenu(tab, src)
         }
@@ -1798,6 +1805,8 @@ open class BrowserActivity : Activity(), DockListener {
         labels.add("Copy image address"); acts.add { copy(url) } // a data: image can only be copied, never opened or downloaded from here
         AlertDialog.Builder(this).setTitle(url.take(80)).setItems(labels.toTypedArray()) { _, i -> acts[i]() }.show()
     }
+
+    internal fun copyText(text: String) = copy(text)
 
     private fun copy(text: String) {
         getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("link", text))
