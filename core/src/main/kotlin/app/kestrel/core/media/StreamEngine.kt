@@ -138,6 +138,8 @@ class StreamEngine(
         var lastCkpt = 0L
         var running = false             // a supervisor thread exists for this job
         var restartAfterStop = false
+        var wipeAfterStop = false
+        var base = 0L                   // bytes already on the tablet when this run started (output + staged segments)
     }
 
     private val lock = Any()
@@ -274,7 +276,7 @@ class StreamEngine(
             busy = job.running
             if (!busy && wipe) resetProgress(job)
             job.rec.state = DlState.QUEUED
-            if (busy) { job.restartAfterStop = true; job.stop = true }
+            if (busy) { job.restartAfterStop = true; job.wipeAfterStop = wipe; job.stop = true }
         }
         if (!busy && wipe) { wipeStaging(job); persist(job.rec) }
         changed(job.rec.id)
@@ -371,7 +373,10 @@ class StreamEngine(
             when (outcome) {
                 DlState.CANCELED -> { finishCancel(job); startQueued(); return@execute }
                 DlState.COMPLETED -> {}
-                DlState.QUEUED -> { synchronized(lock) { job.restartAfterStop = false; rec.state = DlState.QUEUED }; if (synchronized(lock) { rec.appended == 0L && !rec.initDone } && false) resetProgress(job) }
+                DlState.QUEUED -> {
+                    val wipe = synchronized(lock) { val w = job.wipeAfterStop; job.restartAfterStop = false; job.wipeAfterStop = false; rec.state = DlState.QUEUED; w }
+                    if (wipe) { synchronized(lock) { resetProgress(job) }; wipeStaging(job) }
+                }
                 else -> synchronized(lock) { rec.state = outcome; if (outcome == DlState.FAILED) rec.finished = clock.now() }
             }
             synchronized(lock) { rec.updated = clock.now() }
@@ -410,26 +415,17 @@ class StreamEngine(
             }
         }
         val media = synchronized(lock) { job.media!! }
-        // what an earlier run left in the staging folder
         val dir = store.dir(rec.id)
-        synchronized(lock) {
-            job.staged.clear(); job.claimed.clear(); job.stagedBytes = 0; job.stagedCount = 0
-            for (i in rec.next until media.segments.size) {
-                val f = File(dir, "$i.seg")
-                if (f.isFile) { job.staged.set(i); job.stagedBytes += f.length(); job.stagedCount++ } else File(dir, "$i.part").delete()
-            }
-        }
         // the output
         var sink: Sink? = null
         val uri = synchronized(lock) { rec.destUri }
         if (uri != null) sink = try { sinks.reopen(uri, -1) } catch (e: Exception) { null }
         if (sink == null) {
-            synchronized(lock) { rec.appended = 0; rec.next = 0; rec.initDone = false; job.written = 0; rec.destUri = null }
-            // everything staged is still valid; the pointer just starts over
-            synchronized(lock) { job.staged.clear(); job.stagedBytes = 0; job.stagedCount = 0; for (i in 0 until media.segments.size) { val f = File(dir, "$i.seg"); if (f.isFile) { job.staged.set(i); job.stagedBytes += f.length(); job.stagedCount++ } } }
+            synchronized(lock) { rec.appended = 0; rec.next = 0; rec.initDone = false; job.written = 0; rec.destUri = null } // the output is gone: the pointer starts over (staged segments are still good)
             sink = sinks.create(rec.name, rec.mime, -1, rec.priv, rec.destKind)
             synchronized(lock) { rec.destUri = sink.uri; sink.displayName?.let { rec.name = it } }
         } else synchronized(lock) { job.written = rec.appended }
+        scanStaged(job, media, dir) // what an earlier run left in the staging folder
         synchronized(lock) { job.sink = sink }
         persist(rec)
         // fragmented MP4: the init section comes first
@@ -444,6 +440,15 @@ class StreamEngine(
             }
             f.delete()
             synchronized(lock) { rec.initDone = true; rec.appended = job.written }
+        }
+        synchronized(lock) { job.base = job.written + job.stagedBytes; job.inflight.set(0) }
+    }
+
+    private fun scanStaged(job: Job, media: Hls.Media, dir: File) = synchronized(lock) {
+        job.staged.clear(); job.claimed.clear(); job.stagedBytes = 0; job.stagedCount = 0
+        for (i in job.rec.next until media.segments.size) {
+            val f = File(dir, "$i.seg")
+            if (f.isFile) { job.staged.set(i); job.stagedBytes += f.length(); job.stagedCount++ } else File(dir, "$i.part").delete()
         }
     }
 
@@ -464,6 +469,7 @@ class StreamEngine(
         synchronized(lock) { rec.state = DlState.VERIFYING }
         changed(rec.id)
         val sink = job.sink ?: throw SinkException(Reason.STORAGE, "no file")
+        if (synchronized(lock) { rec.next != job.media!!.segments.size }) throw SinkException(Reason.STORAGE, "stream incomplete")
         sink.sync()
         val uri = sink.publish()
         synchronized(lock) {
@@ -585,13 +591,13 @@ class StreamEngine(
         while (true) {
             if (job.stop) throw Stopped()
             if (!net.online) { synchronized(lock) { if (job.stopState == null) job.stopState = DlState.WAITING_NETWORK; job.stop = true }; throw Stopped() }
-            var counted = 0L
+            val ctr = LongArray(1)
             try {
-                FileOutputStream(part).use { out -> counted = readInto(job, fetcher, url, from, toInclusive, out, count) }
+                FileOutputStream(part).use { out -> readInto(job, fetcher, url, from, toInclusive, out, count, ctr) }
                 if (!part.renameTo(dest)) throw Failed(Reason.STORAGE)
                 return
             } catch (e: FetchException) {
-                if (count) job.inflight.addAndGet(-counted)
+                if (count) job.inflight.addAndGet(-ctr[0])
                 if (job.stop) throw Stopped()
                 when (e.kind) {
                     FetchException.Kind.TLS -> throw Failed(Reason.TLS)
@@ -603,12 +609,12 @@ class StreamEngine(
                 if (++tries >= MAX_TRIES) throw Failed(Reason.NETWORK)
                 backoff(job, tries)
             } catch (e: Retry) {
-                if (count) job.inflight.addAndGet(-counted)
+                if (count) job.inflight.addAndGet(-ctr[0])
                 if (job.stop) throw Stopped()
                 if (++tries >= MAX_TRIES) throw Failed(if (e.status > 0) Reason.HTTP else Reason.NETWORK, e.status)
                 backoff(job, tries, e.retryAfterMs)
             } catch (e: IOException) {
-                if (count) job.inflight.addAndGet(-counted)
+                if (count) job.inflight.addAndGet(-ctr[0])
                 if (job.stop) throw Stopped()
                 if (e is java.io.FileNotFoundException || e.message?.contains("ENOSPC") == true || e.message?.contains("No space") == true) throw Failed(Reason.NO_SPACE)
                 if (++tries >= MAX_TRIES) throw Failed(Reason.NETWORK)
@@ -625,48 +631,50 @@ class StreamEngine(
         while (clock.now() < end) { if (job.stop) throw Stopped(); try { Thread.sleep(minOf(100L, maxOf(1L, end - clock.now()))) } catch (e: InterruptedException) { /* look again */ } }
     }
 
-    /** Streams one segment (in bounded windows when the fetcher wants them) into [out]; returns the bytes counted toward progress. */
-    private fun readInto(job: Job, fetcher: Fetcher, url: String, from: Long, toInclusive: Long, out: FileOutputStream, count: Boolean): Long {
-        var counted = 0L
+    /** Streams one segment (in bounded windows when the fetcher wants them, resuming after a short reply) into [out]; [ctr] counts the bytes added to the progress. */
+    private fun readInto(job: Job, fetcher: Fetcher, url: String, from: Long, toInclusive: Long, out: FileOutputStream, count: Boolean, ctr: LongArray) {
         val window = fetcher.windowBytes
         val known = from >= 0 && toInclusive >= 0
-        var pos = 0L                                 // bytes of this segment stored so far
-        val end = if (known) toInclusive - from + 1 else -1L
+        val segLen = if (known) toInclusive - from + 1 else -1L
+        var pos = 0L                                   // bytes of this segment stored so far
         while (true) {
-            val windowed = window > 0
-            val reqFrom: Long; val reqTo: Long
-            if (known) { reqFrom = from + pos; reqTo = if (windowed) minOf(toInclusive, from + pos + window - 1) else toInclusive }
-            else if (windowed) { reqFrom = pos; reqTo = pos + window - 1 }
-            else { reqFrom = -1; reqTo = -1 }
-            val resp = open(job, fetcher, FetchRequest(url, reqFrom, reqTo, null, job.rec.headers, priv = job.rec.priv))
-            var got = 0L
-            var total = -1L
+            val rf: Long; val rt: Long
+            when {
+                known -> { rf = from + pos; rt = if (window > 0) minOf(toInclusive, rf + window - 1) else toInclusive }
+                window > 0 -> { rf = pos; rt = pos + window - 1 }
+                else -> { rf = -1; rt = -1 }
+            }
+            val resp = open(job, fetcher, FetchRequest(url, rf, rt, null, job.rec.headers, priv = job.rec.priv))
+            var got = 0L; var total = -1L; var whole = false
             try {
                 val st = resp.status
-                if (st == 416 && pos > 0) return counted                       // asked past the end: the segment is whole
+                if (st == 416 && pos > 0) return          // asked past the end: the segment is whole
                 if (st != 200 && st != 206) throw statusFailure(st, resp)
+                whole = st == 200
                 if (st == 206) total = totalOf(resp.header("Content-Range"))
                 val body = resp.body ?: throw FetchException(FetchException.Kind.PROTOCOL, "no body")
+                var skip = if (whole && rf > 0) rf else 0L // a server that ignored Range sent everything: drop what is before the part we asked for
+                var limit = if (whole && rt >= 0) rt - maxOf(rf, 0L) + 1 else Long.MAX_VALUE // and stop after it
                 val buf = ByteArray(32 * 1024)
-                var skip = if (st == 200 && reqFrom > 0) reqFrom else 0L   // a server that ignored Range sent everything: drop what is already stored (only for a first request this is 0)
-                while (true) {
+                while (limit > 0) {
                     if (job.stop) throw Stopped()
                     val r = body.read(buf)
                     if (r < 0) break
                     var off = 0; var len = r
                     if (skip > 0) { val s = minOf(skip, len.toLong()).toInt(); skip -= s; off += s; len -= s }
+                    if (len > limit) len = limit.toInt()
                     if (len > 0) {
-                        out.write(buf, off, len); got += len
-                        if (count) { job.inflight.addAndGet(len.toLong()); counted += len; job.meter.add(len, clock.now()); job.lastBytesAt = clock.now() }
+                        out.write(buf, off, len); got += len; limit -= len
+                        if (count) { job.inflight.addAndGet(len.toLong()); ctr[0] += len; job.meter.add(len, clock.now()); job.lastBytesAt = clock.now() }
                     }
                 }
-                if (st == 200) { pos += got; return counted }                  // the whole thing came in one reply
             } finally { job.responses.remove(resp); try { resp.close() } catch (e: Exception) { /* ignore */ } }
             pos += got
-            if (!windowed) return counted
-            if (known && pos >= end) return counted
-            if (total >= 0 && pos >= (if (known) end else total)) return counted
-            if (got == 0L || (!known && total < 0 && got < window)) return counted
+            if (whole || rf < 0) return                   // a full reply (or a plain GET) is everything there is
+            if (known && pos >= segLen) return
+            if (total >= 0 && rf + got >= total) return   // reached the end of the resource
+            if (got == 0L) return
+            if (!known && got < window) return            // a short window: that was the end
         }
     }
 
@@ -693,22 +701,24 @@ class StreamEngine(
         val running = r.state == DlState.RUNNING
         val media = job.media
         val n = media?.segments?.size ?: 0
-        val doneBytes = if (r.state == DlState.COMPLETED) r.total else job.written + job.stagedBytes + 0L
-        val inflight = if (r.state.active) job.inflight.get().coerceAtLeast(0) else 0L
-        // the part of the in-flight counter that is already staged or appended is counted twice: the counter only ever counts bytes of segments in progress, so use the larger of the two views
-        val fetched = maxOf(doneBytes, job.inflightTotal())
+        val fetched = when {
+            r.state == DlState.COMPLETED -> r.total
+            r.state.active -> job.base + job.inflight.get().coerceAtLeast(0)
+            else -> job.written + job.stagedBytes
+        }
         var total: Long
         var estimated = false
+        val have = r.next + job.stagedCount
         when {
             r.state == DlState.COMPLETED -> total = r.total
             media != null && media.exactBytes >= 0 -> total = media.exactBytes
-            media != null && n > 0 && (r.next + job.stagedCount) >= 2 -> { total = (fetched.toDouble() / (r.next + job.stagedCount) * n).toLong(); estimated = true }
+            media != null && n > 0 && have >= 2 -> { total = (fetched.toDouble() / have * n).toLong(); estimated = true }
             r.estimate > 0 -> { total = r.estimate; estimated = true }
             else -> total = -1
         }
         if (total in 0 until fetched) total = fetched
         val speed = if (running) job.meter.bytesPerSec(now).toLong() else 0L
-        val eta = if (running && speed > 0 && total > 0) (total - fetched) / speed else -1L
+        val eta = if (running && speed > 0 && total > 0) (total - fetched).coerceAtLeast(0) / speed else -1L
         val actions: List<Action> = when (r.state) {
             DlState.QUEUED, DlState.STARTING -> listOf(Action.CANCEL)
             DlState.RUNNING, DlState.WAITING_NETWORK -> listOf(Action.PAUSE, Action.CANCEL)
@@ -720,10 +730,8 @@ class StreamEngine(
             DlState.CANCELED -> emptyList()
         }
         val host = try { java.net.URI(r.url).host } catch (e: Exception) { null }
-        return DownloadView(r.id, r.state, r.reason, r.detail, r.name, r.mime, host, total, fetched + (if (inflight > 0 && inflight > doneBytes) 0 else 0), speed, eta, job.alive, r.priv, r.destUri, r.created, r.updated, actions, r.destKind, estimated)
+        return DownloadView(r.id, r.state, r.reason, r.detail, r.name, r.mime, host, total, fetched, speed, eta, job.alive, r.priv, r.destUri, r.created, r.updated, actions, r.destKind, estimated)
     }
-
-    private fun Job.inflightTotal(): Long = 0L
 
     companion object { private const val MAX_TRIES = 6 }
 }
