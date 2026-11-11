@@ -1,13 +1,13 @@
-# CHECKPOINT 294 — read me first, then TASKS.md
+# CHECKPOINT 301 — read me first, then TASKS.md
 
-**Written:** 2026-11-11T07:09:01Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `8d24a22` (this checkpoint is the commit after it)
+**Written:** 2026-11-11T07:15:54Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `a6b3158` (this checkpoint is the commit after it)
 
 ## Just done
-N6 step 1 done: pure-Kotlin download engine in core/ (app.kestrel.core.download: Model+ports, HttpSemantics, FileNames, Planner/HillClimb/Meter/Format, Engine) + 43 JVM tests green x3 (HttpSemantics 7, FileNames 5, Planner 9, EngineTest 22 with in-memory fake server: pause/resume, parallel ranges, If-Match, changed file, no-range, 429/503, truncation, offline, no space, cancel, crash recovery, link refresh, queue, private)
+N6 step 2 compiles: Android download shell (SqliteStore, MediaStoreSinks, UrlConnectionFetcher, DownloadController, DownloadService dataSync FGS + Notifier, ui/DownloadsScreen), GeckoFetcher via GeckoWebExecutor (bounded 4 MiB Range windows, falls back to URLConnection), Gecko activity wired: startDownload -> DownloadController.enqueue, Menu > Downloads -> DownloadsScreen, notification tap opens it, onExternalResponse closes the body; manifest perms+service; 266 unit tests green; NOT yet run on the emulator
 
 ## Do this next
-N6 step 2 Android shell in app/src/main/kotlin/app/kestrel/browser/download/: SqliteStore (WAL), MediaStoreSink(s) (pending row, Os.pwrite/fsync/fallocate), UrlConnectionFetcher (manual redirects, no https->http), DownloadController (engine singleton, control HandlerThread, NetGate from NetworkMonitor), DownloadService (dataSync FGS + notifications), then ui/DownloadsScreen + Gecko hook (BrowserActivity.startDownload/M.DOWNLOADS, onExternalResponse closes body), GeckoFetcher via GeckoWebExecutor; manifest perms FOREGROUND_SERVICE(_DATA_SYNC), POST_NOTIFICATIONS, WAKE_LOCK; test on emulator with a Range-capable python server. heartbeat trig_01HjJLZki7r2XgUqZazC4oup
+Emulator test (emulator rebooting after worker restart; emulator-5554, helper source scratchpad/emu.sh; Range server: python3 scratchpad/rangeserver.py scratchpad/dl 8001 700000 already running, files big.bin 60 MB + medium.bin 9 MB, log scratchpad/server.log): install debug APK, open http://10.0.2.2:8001/big.bin, Download, check Menu > Downloads progress/speed/connections, pause/resume, home-button + return, force-stop + resume, result in /sdcard/Download with sha256 match; then fix, ship alpha5 (bump geckoapp code 104 / 0.2.0-alpha5)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ N6 step 2 Android shell in app/src/main/kotlin/app/kestrel/browser/download/: Sq
 
 ## Last ten checkpoints
 ```
+  c7112dc ckpt 294: N6 step 1 done: pure-Kotlin download engine in core/ (app.kestrel.core.downloa
   ce4c6e7 ckpt 281: handoff saved via context-handoff plugin (.handoff/handoff.md + json + archive
   8a1eac9 ckpt 278: alpha4 RELEASED + RECORDED: kestrel-g-v0.2.0-alpha4 (gecko code 103), run 4297
   c5df399 ckpt 275: gated kestrel-g-v0.2.0-alpha4 (gecko code 103) and pushed it: handoff self-tes
@@ -25,8 +26,7 @@ N6 step 2 Android shell in app/src/main/kotlin/app/kestrel/browser/download/: Sq
   bf260ea ckpt 246: N2/N3 part 1 compiles: CERE dark palette+angular icon set, ChamferDrawable, Bo
   9458fe0 ckpt 227: Owner request 3 recorded in TASKS.md (N1-N7); owner likes alpha3; UI-1 answere
   04080cd ckpt 224: Alpha3 (kestrel-g-v0.2.0-alpha3, run 42961586675) built, signed, released and 
-  1ab978e ckpt 221: ship.sh gecko OK; dispatched android.yml app=gecko full_build=true: run 429615
 ```
 
-(12 automatic checkpoint(s) since the last deliberate one — the
+(6 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
