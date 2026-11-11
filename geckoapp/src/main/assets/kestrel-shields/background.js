@@ -41,3 +41,41 @@ browser.runtime.onMessage.addListener(function (m) {
     return css;
   }, function () { return ''; });
 });
+
+// ---- video / audio sniffer: tells the app which media files and playlists a page loads, so a long press can offer "Download video".
+// Passive: nothing is fetched here and nothing is blocked. One native message per NEW candidate (a player's flurry of Range requests for the same file is one).
+var MEDIA_TYPES = ['media', 'xmlhttprequest', 'other', 'object', 'sub_frame', 'main_frame'];
+var MEDIA_EXT = /\.(mp4|m4v|mov|webm|mkv|avi|wmv|flv|3gp|mpg|mpeg|m4a|mp3|aac|ogg|oga|ogv|opus|wav|flac|m3u8|m3u|mpd)(?:$|[?#])/i;
+var MEDIA_CT = /^(video|audio)\/|mpegurl|dash\+xml|\/mp4|\/ogg|matroska/;
+var SEGMENT = /\.(ts|m4s|cmfv|cmfa|cmft|m4f|mts)(?:$|[?#])/i;
+var sniffed = new Map();
+var SNIFFED_MAX = 800;
+
+browser.webRequest.onHeadersReceived.addListener(function (d) {
+  if (d.statusCode !== 200 && d.statusCode !== 206) return;
+  var url = d.url;
+  if (SEGMENT.test(url)) return;
+  var ct = '', len = -1, total = -1, h = d.responseHeaders || [];
+  for (var i = 0; i < h.length; i++) {
+    var n = h[i].name.toLowerCase();
+    if (n === 'content-type') ct = (h[i].value || '').toLowerCase();
+    else if (n === 'content-length') len = parseInt(h[i].value, 10);
+    else if (n === 'content-range') { var m = /\/(\d+)\s*$/.exec(h[i].value || ''); if (m) total = parseInt(m[1], 10); }
+  }
+  if (!MEDIA_CT.test(ct) && !MEDIA_EXT.test(url)) return;
+  if (ct.indexOf('video/mp2t') === 0 || ct.indexOf('iso.segment') > 0) return;
+  var size = total >= 0 ? total : (d.statusCode === 200 && len >= 0 ? len : -1);
+  var key = url + '|' + (size >= 0 ? 1 : 0);
+  if (sniffed.has(key)) return;
+  if (sniffed.size >= SNIFFED_MAX) sniffed.delete(sniffed.keys().next().value);
+  sniffed.set(key, true);
+  var page = (d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || '');
+  browser.runtime.sendNativeMessage(NATIVE, JSON.stringify({ k: 'media', u: url, c: ct, l: size, p: page, f: d.documentUrl || '' })).catch(function () {});
+}, { urls: ['http://*/*', 'https://*/*'], types: MEDIA_TYPES }, ['responseHeaders']);
+
+// What the page's own <video> says about the file it plays (picture size, length, the label next to a <source>): relayed by content.js.
+browser.runtime.onMessage.addListener(function (m) {
+  if (!m || m.k !== 'vid' || !m.u) return undefined;
+  browser.runtime.sendNativeMessage(NATIVE, JSON.stringify({ k: 'vid', u: m.u, w: m.w | 0, h: m.h | 0, d: Math.round((m.d || 0) * 1000), l: m.l || '', p: m.p || '' })).catch(function () {});
+  return undefined;
+});
