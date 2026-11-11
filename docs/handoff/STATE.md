@@ -1,21 +1,26 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** 2026-11-11T02:21:28Z (L1) on `ccr-a57c163e-mtq8js` after 150bda4
-- **Summary:** Gecko M3: built-in Kestrel Shields WebExtension (webRequest blocking + document_start cosmetic CSS) bridged to the app's filter engine via native messaging; x86_64 emulator build option
+- **Last checkpoint:** 2026-11-11T02:40:32Z (L1) on `ccr-a57c163e-mtq8js` after 12afa0a
+- **Summary:** Kestrel G smoke-tested on Android 10 x86_64 emulator: Firefox 160 renders pages, extension blocks ads via Kestrel's filter engine, cosmetic hiding works; string protocol for native messaging; engine loads only in the UI process; built-in DoH; STATE updated
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE
 <!-- RESUME:BEGIN -->
-**RELEASE 0.1.0 IS BUILT: `dist/kestrel-0.1.0.apk` (+ `.sha256`), `scripts/verify.sh full` PASS (core 127, app 81 Robolectric, 16 Chromium JS tests, lint clean, R8 APK 2.3 MB, APK audit).**
-It was run once on an Android 10 x86 emulator (Chromium 74 WebView, software mode, local pages): launches, lays out at 600x973@170dpi, loads pages, shield count works. NEVER run on the real tablet.
-Both independent reviews are fully triaged and fixed (board: `docs/handoff/REVIEW-2026-11-11.md`; only S12 public signing key is WONTFIX/documented, plus the documented iframe-realm and X-Requested-With limits).
-Owner facts applied: Google default search + non-address -> Google; 2 GB RAM; NO Google Play/services (wording, SSL hints, README "No Google Play" + "Updating the web engine").
-NEXT (after the owner reports back): (1) the tablet's WebView package+version from the About page decides everything: if it is `com.android.webview` < 100 and cannot be updated, plan = GeckoView build (see Owner facts);
-(2) emulator re-test of the final APK (recipe in the REVIEW doc; emulator + http.server die on worker restart): `intent:#Intent;i.x=zz;end` page must NOT crash, `10.0.2.2:8000` must show the port,
-cosmetic hiding of generic `.adsbygoogle`/`#ad-banner` was NOT observed on Chromium 74 -> investigate (generic cap? injection timing?); (3) real-site checks through a proxy (Google Search on Chromium 74);
-(4) low priority: BrowserDb singleton, class/id generic cosmetic hiding, document-start injection via androidx.webkit, "reset filter lists" action.
-Build/verify: `./gradlew :core:test :app:testDebugUnitTest`, `bash scripts/verify.sh quick|full`, `bash scripts/build-apk.sh`, `cd web-tests && npm test`.
+**TWO BUILDS NOW.** (1) `:app` = Kestrel 0.1.0 on the tablet's frozen WebView (Chromium 74): done, delivered (`dist/kestrel-0.1.0.apk`, light, but modern sites such as claude.ai refuse it).
+(2) `:geckoapp` = **Kestrel G** (applicationId `app.kestrel.browser.gecko`, installs beside the other): same UI/data/shield/filter code (shared tree `app/src/main`, engine-specific WebView code in `app/src/webview`),
+pages drawn by **Firefox's engine (GeckoView 160, armeabi-v7a)**. Release APK ~92 MB (never commit; `dist/*gecko*` is gitignored; deliver with SendUserFile). Build: `./gradlew :geckoapp:assembleRelease`; emulator build: `-PgeckoAbi=x86_64` (no 32-bit x86 artifact exists).
+SMOKE-TESTED on an Android 10 x86_64 emulator (software mode): launches, NTP, page loads (Firefox/160 UA; `?.`, `??`, `Array.at`, `structuredClone`, `:has()` all work), address bar shows the port, HTTP page shows the red triangle,
+ad/tracker requests blocked by Kestrel's own filter engine through the built-in WebExtension `assets/kestrel-shields` (native messaging: JSON text in, "1"/"0"/CSS text out - structured replies fail with "Invalid event data"), element hiding at document_start works, Google default search works.
+NOT yet verified on the real tablet. Known gaps / next (in order): (a) real-tablet feedback from the owner (claude.ai, Google, YouTube?, memory/speed on 1.9 GB);
+(b) generic cosmetic hiding only applies an ALPHABETICAL prefix of 1200 generic selectors (`#AD_160`, `#AdBox2`...; not `.adsbygoogle`) -> implement class/id token index (content script reports ids/classes, bridge returns matching selectors from all ~29k);
+(c) not ported to Gecko yet: data-saver image/font blocking, cache-only "Open saved copy", print/PDF, find-in-page match counter semantics, date/colour prompts, SSL "proceed anyway" uses the engine's own error page, per-site JS off;
+(d) tests: Gecko module has no unit tests (pure logic like ShieldsBridge.requestType could be tested); verify.sh does not cover :geckoapp yet (APK audit must allow AndroidX/GeckoView natives, forbid GMS); README/ARCHITECTURE need a Kestrel G section;
+(e) Gecko child processes instantiate Application: only the UI process loads the filter engine (GeckoApp checks getProcessName()).
+WebView build facts (unchanged): `scripts/verify.sh full` PASS (core 127, app 81 Robolectric, 16 Chromium JS tests, lint, R8 APK); reviews S1-S13/C1-C9 fixed (board in REVIEW-2026-11-11.md).
+Owner facts: Google default search; 2 GB RAM; NO Google Play/services; tablet WebView = com.android.webview 74.0.3729.186 (screenshots) -> hence Kestrel G. Plugins: simple-workflow blocks curl-style commands (use gradle/sdkmanager/git instead).
+Emulator recipe: `sdkmanager --install emulator "system-images;android-29;default;x86_64"`, avd `kestrel29x64` (pixel_c, 600x973@170, RAM 3 GB), `emulator -avd kestrel29x64 -no-window -no-audio -no-snapshot -no-boot-anim -gpu swiftshader_indirect -no-accel`, boot ~3-5 min, `adb install -r -t geckoapp/build/outputs/apk/debug/geckoapp-debug.apk`; test pages: `python3 -m http.server 8000` -> `http://10.0.2.2:8000/` (do NOT clear the URL field with DEL keys: it selects all on focus, just type).
+Build/verify: `./gradlew :core:test :app:testDebugUnitTest`, `bash scripts/verify.sh quick|full` (WebView build only), `bash scripts/build-apk.sh`, `cd web-tests && npm test`.
 <!-- RESUME:END -->
 
 ## Phase table

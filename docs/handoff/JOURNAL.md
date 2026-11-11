@@ -26,3 +26,4 @@
 - 2026-11-11T02:05:55Z [L1] refactor: WebView-specific sources moved to app/src/webview (shared tree = src/main) so a Gecko module can reuse UI/data/shield code; Tab.engineData slot; Proc extracted; 81 app tests green
 - 2026-11-11T02:18:13Z [L1] Kestrel G (Firefox/GeckoView 160) module: shared UI/data/shield + Gecko session/delegates/prompts/permissions/downloads/private tabs; release APK builds (92 MB, signed); not yet run anywhere
 - 2026-11-11T02:21:28Z [L1] Gecko M3: built-in Kestrel Shields WebExtension (webRequest blocking + document_start cosmetic CSS) bridged to the app's filter engine via native messaging; x86_64 emulator build option
+- 2026-11-11T02:40:32Z [L1] Kestrel G smoke-tested on Android 10 x86_64 emulator: Firefox 160 renders pages, extension blocks ads via Kestrel's filter engine, cosmetic hiding works; string protocol for native messaging; engine loads only in the UI process; built-in DoH; STATE updated
