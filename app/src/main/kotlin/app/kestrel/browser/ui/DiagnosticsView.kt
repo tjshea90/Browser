@@ -39,11 +39,11 @@ class DiagnosticsView(ctx: Context, private val pal: Pal, private val facts: () 
 
         val row = LinearLayout(ctx).apply { orientation = HORIZONTAL; setPadding(ctx.dp(10), ctx.dp(10), ctx.dp(10), ctx.dp(6)) }
         fun big(text: String, bg: Int, fg: Int, click: () -> Unit) = pillButton(ctx, text, bg, fg, click).apply { minHeight = ctx.dp(54); minimumWidth = 0 }
-        val lp = { LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(ctx.dp(4), 0, ctx.dp(4), 0) } }
-        row.addView(big("Refresh screen", pal.accent, pal.accentOn) { onRefreshScreen(); refresh() }, lp())
-        row.addView(big("Update", pal.pill, pal.fg) { refresh() }, lp())
-        row.addView(big("Copy", pal.pill, pal.fg) { copy() }, lp())
-        row.addView(big("Share", pal.pill, pal.fg) { share() }, lp())
+        val lp = { w: Float -> LayoutParams(0, LayoutParams.WRAP_CONTENT, w).apply { setMargins(ctx.dp(4), 0, ctx.dp(4), 0) } }
+        row.addView(big("Refresh screen", pal.accent, pal.accentOn) { onRefreshScreen(); refresh() }, lp(1.7f))
+        row.addView(big("Update", pal.pill, pal.fg) { refresh() }, lp(1f))
+        row.addView(big("Copy", pal.pill, pal.fg) { copy() }, lp(1f))
+        row.addView(big("Share", pal.pill, pal.fg) { share() }, lp(1f))
         addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
         val hint = label(ctx, "If the screen freezes while typing, tap Refresh screen, then tell Claude whether it helped. Copy/Share this page when you report it.", 12f, pal.muted)

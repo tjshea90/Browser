@@ -592,7 +592,18 @@ open class BrowserActivity : Activity(), ToolbarListener {
         current?.let { navigate(it, text) }
     }
 
+    /** While the address bar is being typed in, the page view must NOT resize under the keyboard (compositor resize while typing = the freeze race); pages keep adjustResize. */
+    private fun setUrlTypingMode(on: Boolean) {
+        val lp = window.attributes
+        val want = if (on) WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING else WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+        if ((lp.softInputMode and WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST) != want) {
+            window.setSoftInputMode((lp.softInputMode and WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST.inv()) or want)
+            Health.log("win", "typing-mode", on.toString())
+        }
+    }
+
     override fun onUrlFocus(focused: Boolean) {
+        setUrlTypingMode(focused)
         if (focused) {
             toolbar.urlField.setText(toolbar.fullUrlForEditing(current))
             toolbar.urlField.selectAll()
@@ -740,11 +751,13 @@ open class BrowserActivity : Activity(), ToolbarListener {
         val out = ArrayList<String>()
         val ver = try { Class.forName("org.mozilla.geckoview.BuildConfig").getField("MOZ_APP_VERSION").get(null) } catch (e: Exception) { "?" }
         out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null }} of ${tabs.size} tabs; current ${current?.url?.take(60) ?: "-"}")
+        out.add(GeckoEngine.prefReadback)
         out.add("Page view: attached=${geckoView.parent != null} session=${geckoView.session != null} windowFocus=${hasWindowFocus()}")
         return out
     }
 
     private fun showDiagnostics() {
+        GeckoEngine.readBackPrefs { diagView?.refresh() }
         val v = diagView ?: DiagnosticsView(this, pal, ::engineFacts, { refreshScreen("diagnostics") }, { closeDiagnostics() }).also { diagView = it }
         if (v.parent == null) root.addView(v, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) else v.refresh()
     }

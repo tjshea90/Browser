@@ -62,6 +62,19 @@ object GeckoEngine {
         }
     }
 
+    /** What the engine really has for the preferences we set (Diagnostics): proves assets/gecko-prefs.txt reached it. Call on the UI thread. */
+    @Volatile var prefReadback: String = "Engine prefs: (not read yet)"
+    fun readBackPrefs(done: () -> Unit) {
+        val names = listOf("kestrel.config.version", "media.av1.enabled", "dom.ipc.processCount", "ui.prefersReducedMotion", "network.prefetch-next",
+            "image.mem.surfacecache.max_size_kb", "browser.cache.disk.capacity", "dom.push.enabled")
+        try {
+            org.mozilla.geckoview.GeckoPreferenceController.getGeckoPrefs(names).accept({ list ->
+                prefReadback = "Engine prefs: " + (list?.joinToString(", ") { "${it.pref.substringAfterLast('.')}=${it.value}" } ?: "none")
+                done()
+            }, { e -> prefReadback = "Engine prefs: read failed ($e)"; done() })
+        } catch (e: Exception) { prefReadback = "Engine prefs: unavailable ($e)"; done() }
+    }
+
     /** Launch the content process early ("speeds up the first page load"); idempotent. Call on the UI thread right after the runtime exists. */
     fun warmUp(ctx: Context) { try { runtime(ctx).warmUp() } catch (e: Exception) { /* optional speed-up only */ } }
 

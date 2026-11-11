@@ -48,13 +48,12 @@ fun roundedBg(color: Int, radiusPx: Float, strokeColor: Int = 0, strokePx: Int =
         if (strokePx > 0) setStroke(strokePx, strokeColor)
     }
 
-/** Touch feedback WITHOUT animation (the owner wants everything instant): the pressed/focused state shows a flat overlay at once and is gone at once. */
+/** Touch feedback WITHOUT animation (the owner wants everything instant): the pressed state shows a flat overlay at once and is gone at once. */
 fun ripple(color: Int, content: Drawable?, radiusPx: Float = 0f): Drawable {
     val tint = (color and 0x00FFFFFF) or 0x33000000
     fun overlay(): Drawable = if (radiusPx > 0f) roundedBg(tint, radiusPx) else ColorDrawable(tint)
     val states = StateListDrawable().apply {
         addState(intArrayOf(android.R.attr.state_pressed), overlay())
-        addState(intArrayOf(android.R.attr.state_focused), overlay())
         addState(intArrayOf(), ColorDrawable(0))
         setEnterFadeDuration(0)
         setExitFadeDuration(0)
