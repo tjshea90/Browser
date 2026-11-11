@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 // Kestrel G: the same Kestrel UI / data / filter engine as :app, but pages are drawn by Firefox's engine (GeckoView) instead of the tablet's
 // frozen Android System WebView (Chromium 74 on the owner's tablet cannot run current websites). Shared code = ../app/src/main (UI, data,
-// shield, net); everything engine-specific is in this module's src/main. See docs/handoff/STATE.md "Engine decision".
+// shield, net); everything engine-specific is in this module's src/main. See BRIEF.md "Two builds, one repo".
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
