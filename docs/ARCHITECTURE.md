@@ -26,7 +26,8 @@ and every optional capability is feature-detected. Brave's own Rust adblock engi
   (runs on WebView IO threads) waits <=1.5 s for the first load, then falls back to the tiny built-in seed engine (fail-closed, never fail-open silently).
 - Max live WebViews = 2 on low-RAM (current + opener/most-recent); older tabs are hibernated (`saveState` -> Bundle + disk) and restored lazily with
   cache-first loading. `onTrimMemory` hibernates more; `onRenderProcessGone` recovers the tab; renderer priority: visible = IMPORTANT, hidden = WAIVED.
-- `configChanges` handled in-place so rotation / font-scale / dark-mode never destroys WebViews. No continuous animations in the chrome.
+- `configChanges` handles rotation / screen-size / keyboard in place (WebViews survive). Dark-mode and font-scale changes deliberately recreate the Activity so the
+  programmatic UI re-reads its colours/sizes: the session is saved in `onPause`, and `onCreate` restores it (only the visible tab loads, cache-first). No continuous animations in the chrome.
 
 ## 5. Shields (Brave feature -> mechanism)
 | Feature | Mechanism |
@@ -59,9 +60,13 @@ and every optional capability is feature-detected. Brave's own Rust adblock engi
 
 ## 7. Hotspot / data-frugal design
 Data saver levels OFF / **STANDARD (default)** / STRICT. STANDARD: ad+tracker blocking, no autoplay, injected `preload=none`, `navigator.connection.saveData=true`, confirm downloads
-> 20 MB or unknown size on metered links. STRICT adds: images blocked until "Load images", web fonts blocked. Always: tabs never reload at startup; when offline use
-`LOAD_CACHE_ELSE_NETWORK`; auto-retry the foreground tab when connectivity returns; error page distinguishes "not connected to Wi-Fi" from "connected but the hotspot has no
-internet" (`NET_CAPABILITY_VALIDATED`); no search suggestions by default; weekly conditional (ETag) list refresh <~3 MB, size-capped, HTTPS only; data-used counter from `TrafficStats`.
+> 20 MB or unknown size on metered links. STRICT adds: images blocked until "Load images", web fonts blocked. Always: tabs never reload at startup; auto-retry the foreground
+tab when connectivity returns; no search suggestions by default; weekly conditional (ETag) list refresh <~3 MB, size-capped, HTTPS only; data-used counter from `TrafficStats`.
+**Connectivity model (`NetworkMonitor`) — the rule is "never let a heuristic make browsing worse than the default":** `OFFLINE` = no network with `NET_CAPABILITY_INTERNET` at all
+(hotspot off / out of range): only then are pages served cache-first (`LOAD_CACHE_ELSE_NETWORK`, saved copies open even if stale) and HTTPS-fallback logic suspended.
+`NO_INTERNET` = Wi-Fi is up but Android has not *validated* it (`NET_CAPABILITY_VALIDATED` missing). That flag is also missing on a perfectly working hotspot whose carrier blocks
+Google's connectivity-check URL, and for a few seconds after every reconnect, so it is used **only for wording** (error page: "Android reports no internet") and for the manual
+"Open saved copy" action — pages still load live with normal HTTP caching. `ONLINE` = validated. Auto-retry of a failed foreground page fires when the state returns to `ONLINE`.
 Secure DNS cannot be set inside WebView: Settings explains the system *Private DNS* option.
 
 ## 8. Security baseline
