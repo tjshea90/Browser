@@ -604,11 +604,26 @@ open class BrowserActivity : Activity(), ToolbarListener {
         }
     }
 
-    private val endTypingMode = Runnable { if (!toolbar.urlField.hasFocus()) setUrlTypingMode(false) }
+    private var typingModeSince = 0L
+
+    /** Keyboard showing? (the visible display frame is shorter than the window while an IME is up, also with adjustNothing) */
+    private fun keyboardUp(): Boolean {
+        val r = android.graphics.Rect(); window.decorView.getWindowVisibleDisplayFrame(r)
+        return window.decorView.height - r.height() > dp(120)
+    }
+
+    /** Back to adjustResize only AFTER the keyboard is gone (else the page view shrinks once more under the closing keyboard); if the keyboard stays up for 1.5 s the user moved on to typing in the page. */
+    private val endTypingMode = object : Runnable {
+        override fun run() {
+            if (toolbar.urlField.hasFocus()) return
+            if (keyboardUp() && SystemClock.uptimeMillis() - typingModeSince < 1500) { Io.main.postDelayed(this, 100); return }
+            setUrlTypingMode(false)
+        }
+    }
 
     override fun onUrlFocus(focused: Boolean) {
         Io.main.removeCallbacks(endTypingMode)
-        if (focused) setUrlTypingMode(true) else Io.main.postDelayed(endTypingMode, 700) // keep adjustNothing while the keyboard is still closing
+        if (focused) setUrlTypingMode(true) else { typingModeSince = SystemClock.uptimeMillis(); Io.main.postDelayed(endTypingMode, 100) }
         if (focused) {
             toolbar.urlField.setText(toolbar.fullUrlForEditing(current))
             toolbar.urlField.selectAll()
