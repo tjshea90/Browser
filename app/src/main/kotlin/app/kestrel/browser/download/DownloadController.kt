@@ -86,14 +86,16 @@ object DownloadController {
         e.addListener(object : Engine.Listener { override fun onChanged(id: Long) { uiChanged() } })
         engine = e
         val store = StreamStoreFiles(File(app.filesDir, "streams"), File(app.cacheDir, "streams-private")).also { streamStore = it; it.wipePrivate() }
+        val streamSinks = AppSinks(MediaStoreSinks(app), FileSinks(File(app.filesDir, "updates")))
         val st = StreamEngine(
-            { fetchers[it] ?: fetchers[0] }, AppSinks(MediaStoreSinks(app), FileSinks(File(app.filesDir, "updates"))), store, net, control, Clock.System, cfg,
+            { fetchers[it] ?: fetchers[0] }, streamSinks, store, net, control, Clock.System, cfg,
             Spawner { name, task ->
                 Thread({
                     val tid = Process.myTid(); engineTids.add(tid)
                     try { Process.setThreadPriority(threadPrio()); task.run() } finally { engineTids.remove(tid) }
                 }, name).also { it.isDaemon = true; it.start() }
             },
+            Remuxer(app, streamSinks),
         )
         st.addListener(object : StreamEngine.Listener { override fun onChanged(id: Long) { uiChanged() } })
         streams = st
