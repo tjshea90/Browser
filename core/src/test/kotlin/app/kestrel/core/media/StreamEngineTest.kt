@@ -126,7 +126,7 @@ class StreamEngineTest {
         val h = H(); h.cdn.chunkDelayMs = 6; h.cdn.chunk = 2048
         val (pl, expected) = plainStream(h, 10, 60_000)
         val id = h.enqueue(pl)
-        h.await(id, "progress") { it != null && it.state == DlState.RUNNING && it.done > 150_000 }
+        h.await(id, "progress") { it != null && it.state == DlState.RUNNING && it.done > 260_000 }
         h.engine.pause(id)
         val paused = h.await(id, "paused") { it?.state == DlState.PAUSED_USER }!!
         assertTrue("paused with ${paused.done} of ${expected.size} on the tablet", paused.done in 1 until expected.size.toLong())
