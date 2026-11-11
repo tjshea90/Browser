@@ -1,7 +1,7 @@
 # GECKO_SPEED - tuning GeckoView 160 (armeabi-v7a) for the MT8168B / 2 GB / hotspot tablet (R3)
 
 Written 2026-11-11 by a research agent. No code changed; NOTHING here ran on a tablet or emulator (no KVM in the sandbox). Method: `javap -c` of the real `classes.jar`, the real `omni.ja` (prefs + JS), `strings` of the real `libxul.so` (118 MB), plus web sources (section 6).
-Tags: **[V]** verified in those 160 artifacts; **[S]** read in Mozilla source/docs (Firefox *main*, so a value may differ from 160); **[N]** not verified (section 7). "Exists" = exact string in libxul.so or a `pref()` line / consumer in omni.
+Tags: **[V]** verified in those 160 artifacts; **[S]** read in Mozilla source/docs (Firefox *main*, so a value may differ from 160); **[N]** not verified (section 7); **[E]** my estimate. "Exists" = exact string in libxul.so or a `pref()` line / consumer in omni.
 Defaults: [G] 160 greprefs.js / geckoview-prefs.js, [J] 160 GeckoRuntimeSettings bytecode, [Y] StaticPrefList.yaml of main. Sibling reports: ADBLOCK_ENGINE.md (R5), FREEZE.md (R6).
 **In plain words:** Firefox's engine already uses the GPU, hardware video decoding and several speed tricks by default; there is no "turbo" switch to flip. What we can do is (1) stop it picking video formats this CPU cannot decode (AV1), (2) keep memory small enough that Android does not kill tabs, (3) start the engine earlier and open connections before the page is requested, (4) stop wasting hotspot data, (5) remove our own per-request delay (the ad-block round trip), and (6) ship a diagnostics page so the owner can report real numbers instead of guesses.
 

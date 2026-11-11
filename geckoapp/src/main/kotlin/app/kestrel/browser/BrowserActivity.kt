@@ -203,11 +203,6 @@ open class BrowserActivity : Activity(), ToolbarListener {
         Health.log("win", "focus", hasFocus.toString())
     }
 
-    override fun onTrimMemory(level: Int) {
-        super.onTrimMemory(level)
-        Health.log("mem", "trim", "level=$level"); Health.count("mem.trim")
-    }
-
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -217,6 +212,7 @@ open class BrowserActivity : Activity(), ToolbarListener {
     @Suppress("DEPRECATION")
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
+        Health.log("mem", "trim", "level=$level"); Health.count("mem.trim")
         // 10/15 = RUNNING_LOW/CRITICAL (we are visible); 20 = UI_HIDDEN (user left); 60+ = we are a prime kill candidate.
         if (level >= 10) { for (t in tabs.toList()) if (t !== current && !hasLiveChild(t)) hibernate(t) } // a popup's opener must survive (window.opener)
         if (level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE && !window.decorView.hasWindowFocus()) current?.let { hibernate(it) }
