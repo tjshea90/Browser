@@ -31,8 +31,9 @@ import kotlin.math.pow
  * glow around a phone screen while an assistant talks. Everything else in the app stays instant.
  *
  * Cost design: a pulse is ONLY an alpha change of a [GlowView] that holds a static, pre-built glow drawable (a RenderNode property: no bitmap re-drawn, no layout, no
- * off-screen layer). It is stepped at about 12 Hz instead of animated at the display's 60 Hz: a slow breath changes ~1 % of alpha per step, which the eye cannot tell
- * from a smooth ramp, and every step costs one tiny frame - five times fewer frames than a RenderThread animation on a tablet whose GPU would otherwise idle.
+ * off-screen layer). It is stepped at 10 Hz instead of animated at the display's 60 Hz: a slow breath changes ~1-2 % of alpha per step, which the eye cannot tell
+ * from a smooth ramp, and every step costs one tiny frame - six times fewer frames than a RenderThread animation on a tablet whose GPU would otherwise idle.
+ * While a glow runs it is cached as a small hardware layer (the strokes are drawn once; a step only re-blends a texture); at rest the layer is dropped.
  * All glows share one clock, so they breathe together. The glows hold still (a steady glow, no frames) while typing or loading, in battery-saver, when the system's animations are off, when the app is not on screen, and
  * after [IDLE_MS] without a touch - so a tablet left on a page lets the screen go quiet and the SoC idle.
  */
@@ -46,8 +47,8 @@ object Neon {
     /** 0 = no glow at all, 1 = steady glow, 2 = subtle pulse (default). Set from Settings. */
     @JvmField @Volatile var mode = PULSE
 
-    /** One breath every 4.2 s, stepped every 80 ms. */
-    private const val TICK_MS = 80L
+    /** One breath every 4.2 s, stepped every 100 ms (10 Hz). */
+    private const val TICK_MS = 100L
 
     private class Pulser(val v: GlowView, val lo: Float, val hi: Float, val periodMs: Long) { var running = false }
 
@@ -132,10 +133,15 @@ object Neon {
     private fun start(p: Pulser) {
         if (p.running) return
         p.running = true
+        p.v.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         if (!ticking) { ticking = true; handler.post(tick) }
     }
 
-    private fun stop(p: Pulser) { p.running = false } // the tick loop ends by itself when nobody is running
+    private fun stop(p: Pulser) { // the tick loop ends by itself when nobody is running
+        if (!p.running) return
+        p.running = false
+        p.v.setLayerType(View.LAYER_TYPE_NONE, null)
+    }
 }
 
 /** A view that only holds a glow drawable: no overlapping rendering (alpha is applied without an off-screen layer) and no size of its own (it never makes its parent grow). */
