@@ -320,9 +320,20 @@ open class BrowserActivity : Activity(), DockListener {
         val install = i.getBooleanExtra(UpdateNotifier.EXTRA_INSTALL_UPDATE, false)
         i.removeExtra(UpdateNotifier.EXTRA_INSTALL_UPDATE)
         Io.main.post {
+            dismissOverlays() // a full-screen panel (Settings, Downloads...) would otherwise hide the sheet that opens next
             showUpdates()
             if (install && UpdateManager.state.phase == UpdateManager.Phase.READY) UpdateManager.install(this)
         }
+    }
+
+    /** Close every full-screen panel and the tab grid (not the page), so whatever opens next is on top and in plain sight. */
+    private fun dismissOverlays() {
+        if (sheet.isShowing) sheet.dismiss()
+        if (downloadsView?.parent != null) closeDownloads()
+        if (diagView?.parent != null) closeDiagnostics()
+        if (settingsView?.parent != null) closeSettings()
+        if (listPanel?.parent != null) closeList()
+        if (tabGrid.visibility == View.VISIBLE) hideTabGrid()
     }
 
     @Suppress("DEPRECATION")
