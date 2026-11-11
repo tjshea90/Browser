@@ -1,13 +1,13 @@
-# CHECKPOINT 571 — read me first, then TASKS.md
+# CHECKPOINT 592 — read me first, then TASKS.md
 
-**Written:** 2026-11-11T22:38:14Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `e4e68af` (this checkpoint is the commit after it)
+**Written:** 2026-11-11T23:43:55Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `7538353` (this checkpoint is the commit after it)
 
 ## Just done
-D1 steps 1+2 DONE and verified: core/.../filter/ExtImage.kt (KEX1 little-endian image writer, Psl.tables()), core ExtImageTest (writes + checks web-tests/fixtures/mini.* ; KESTREL_REGEN=1 to regenerate), geckoapp/.../kestrel-shields/engine.js (line-by-line JS port of FilterSet.check/Psl/hostOf, 32-bit-limb FNV+murmur hash), web-tests/engine.test.js: 9 node tests pass, 2210-request corpus + 317 hash vectors + PSL + hostOf equal Kotlin 100%; a mutation harness (10 injected bugs) is caught every time (28-552 mismatches each). Speed on x86 V8 printed by the informational test.
+D1 code complete and verified in unit tests: real-lists differential (63,378 requests from default.kfs, 0 mismatches, 7.07 us/check on x86 V8, image load+verify+warm-up 23.5 ms), 22 JS tests (engine 9 + background 13), core+app suites green. Emulator A/B (noisy, emulator degraded: System UI ANR): fast mode 38-44 s vs compat 45-51 s for a 300-request page in the first runs; engine path = 4.9 ms/check on the emulator, legacy path held first requests 3 s each at cold start. Provisional cfg (gen 0) + saved copy, top-frame-only generic CSS, PSL ASCII fast path, chunkReply extracted+tested, 60 s cfg TTL refresh added.
 
 ## Do this next
-D1 step 3: rewrite geckoapp/src/main/assets/kestrel-shields/background.js per research/D1-DESIGN.md (cfg per main_frame deduped per host, image pull in 256 KB chunks with setTimeout gaps, sync onBeforeRequest with engine.check, legacy 'req' fallback while no engine/mode L, counters flushed as {k:'cnt',p,c:[a,t,m,n]} every 500 ms, st stats every 5 s, 20 errors -> engine off) + manifest.json background.scripts = [engine.js, background.js]; then step 4 Kotlin ShieldsBridge cfg/img/cnt(c[])/st + Engine.generation + Prefs.engineInExtension + Diagnostics row; the ExtImage chunk cache = SoftReference.
+Final functional pass on the emulator with the LATEST code: ./gradlew :geckoapp:assembleDebug -PgeckoAbi=x86_64, adb install -r, pm clear, launch, load ads.html (blocked 3/3?), force-stop + relaunch (saved copy: 0 transfers, first page judged in engine), Diagnostics Blocker line. Then bump geckoapp versionCode 112 / 0.2.0-alpha13, bash ship.sh gecko "note", dispatch android.yml, wait, record-release.sh, tell the owner (release link, what changed, honest caveats: emulator only, tablet numbers via Diagnostics > Blocker > Copy).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ D1 step 3: rewrite geckoapp/src/main/assets/kestrel-shields/background.js per re
 
 ## Last ten checkpoints
 ```
+  4316802 ckpt 571: D1 steps 1+2 DONE and verified: core/.../filter/ExtImage.kt (KEX1 little-endia
   6e451c7 ckpt 555: alpha12 SHIPPED and recorded (run 43111148506 green, BUILDLOG written): https:
   66aa048 ckpt 551: alpha12 DISPATCHED on GitHub Actions: run 43111148506 (android.yml, head 77eac
   77eac10 ckpt 550: gated kestrel-g-v0.2.0-alpha12 (gecko code 111) and pushed it: handoff self-te
@@ -25,8 +26,7 @@ D1 step 3: rewrite geckoapp/src/main/assets/kestrel-shields/background.js per re
   5d55a7b ckpt 513: alpha11 DISPATCHED: run 43101503028 (android.yml, head 6d529ad, 21:15Z). Gate 
   6d529ad ckpt 512: gated kestrel-g-v0.2.0-alpha11 (gecko code 110) and pushed it: handoff self-te
   db137ac ckpt 509: V4/V5 P1 VERIFIED on the emulator: HLS streams via the Download video sheet. M
-  696b6f0 ckpt 501: V4 progress: P0 (direct files) WORKS on the emulator (sniffer in kestrel-shiel
 ```
 
-(15 automatic checkpoint(s) since the last deliberate one — the
+(20 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
