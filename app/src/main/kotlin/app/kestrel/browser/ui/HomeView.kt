@@ -154,26 +154,33 @@ class HomeView(ctx: Context, private var pal: Pal, private val brand: String, pr
 
     fun hideSuggestions() { suggest.visibility = GONE }
 
-    /** Sizes the column: the field sits slightly above the middle of the screen, and never moves when the suggestion list appears below it. */
-    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
-        super.onSizeChanged(w, h, ow, oh)
-        placeColumn()
+    private var placedW = -1
+    private var placedH = -1
+
+    /**
+     * Sizes the column and the glow BEFORE the children are measured, in the same pass (not from onSizeChanged + requestLayout: a layout request made while a layout pass
+     * is running was dropped after a rotation - the field kept its portrait width in landscape). The field sits slightly above the middle of the screen, and never
+     * moves when the suggestion list appears below it.
+     */
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val w = MeasureSpec.getSize(widthMeasureSpec)
+        val h = MeasureSpec.getSize(heightMeasureSpec)
+        if (w != placedW || h != placedH) { placedW = w; placedH = h; placeColumn(w, h) }
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
     }
 
-    private fun placeColumn() {
+    private fun placeColumn(w: Int, h: Int) {
         val ctx = context
         val contentH = ctx.dp(34 + GAP_DP + FIELD_DP)
-        val top = ((height * 0.44f) - contentH / 2f).toInt().coerceAtLeast(ctx.dp(24))
+        val top = ((h * 0.44f) - contentH / 2f).toInt().coerceAtLeast(ctx.dp(24))
         val sideMax = ctx.dp(MAX_W_DP)
-        val side = maxOf(ctx.dp(20), (width - sideMax) / 2)
+        val side = maxOf(ctx.dp(20), (w - sideMax) / 2)
         (column.layoutParams as LayoutParams).let { it.topMargin = top; it.leftMargin = side; it.rightMargin = side }
-        column.requestLayout()
         val g = ctx.dp(GLOW_DP)
         (glow.layoutParams as LayoutParams).let {
-            it.width = width - 2 * side + 2 * g; it.height = ctx.dp(FIELD_DP) + 2 * g
+            it.width = w - 2 * side + 2 * g; it.height = ctx.dp(FIELD_DP) + 2 * g
             it.leftMargin = side - g; it.topMargin = top + ctx.dp(34 + GAP_DP) - g
         }
-        glow.requestLayout()
     }
 
     /**
