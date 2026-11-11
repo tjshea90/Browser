@@ -1,0 +1,42 @@
+# CI for Kestrel. NOTE: written in the build sandbox and NOT yet exercised on GitHub's runners - expect to fix small things on the first run.
+name: android
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Android SDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Test, lint, build
+        run: ./gradlew :core:test :app:testDebugUnitTest :app:lintRelease :app:assembleRelease --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kestrel-apk
+          path: app/build/outputs/apk/release/app-release.apk
+
+  js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Injected-script tests in Chromium
+        working-directory: web-tests
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+          npm test

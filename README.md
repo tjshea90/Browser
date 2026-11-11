@@ -1,23 +1,90 @@
 # Kestrel Browser
 
-A very light, fast, private Android browser tuned for a **MediaTek MT8168B / Android 10 Go tablet** (low-RAM, 600x973 @170 dpi) that
-reaches the internet **only through a phone hotspot**. Brave-style Shields — ad/tracker blocking, HTTPS upgrade, cookie and
-fingerprint protection, private window — with none of the bloat (no news, AI, rewards, wallet, VPN, sync, telemetry).
+A very light, fast, private Android browser built for **one specific tablet**: the *Alps 711 / MediaTek MT8168B, Android 10 Go* tablet
+(low RAM, 600×973 at 170 dpi) that reaches the internet **only through a phone hotspot**. It has Brave-style Shields (ad and tracker
+blocking, HTTPS-first, cookie and fingerprint protection, private window) and none of the bloat: no news, no AI, no rewards, no wallet,
+no VPN, no sync, no accounts, no telemetry.
 
-> **Status:** under construction. See `docs/handoff/STATE.md` for exactly what is done and what is next.
-> The app has not yet been run on real hardware (the build sandbox has no emulator) — expect first-run bugs.
+It is **not Brave** and contains no Brave code or branding. Pages are drawn by the tablet's own **Android System WebView** (the same
+Blink/V8 engine family Brave is built on, shared with the OS so it costs no extra RAM); everything Brave-like is implemented in this app.
 
-Rendering uses the tablet's **Android System WebView** (Chromium); everything Brave-like is implemented in this app. Details and
-trade-offs: `docs/ARCHITECTURE.md`. Hardware analysis: `docs/HARDWARE.md`.
+> ### Please read: what has and has not been verified
+> This app was written and tested **in a build sandbox that has no emulator and no Android device**, so **it has never been run on a real
+> screen**. What *was* verified: the whole app compiles and passes Android Lint (including API-level checks for Android 10); 51 JVM tests
+> drive the real Activity, request interceptor, tab/memory logic, SQLite store and updater on an Android 10 framework (Robolectric);
+> 117 tests cover the filtering engine (including a 60 000-case comparison against an independent oracle); the page script was run in real
+> Chromium. What was **not** verified: real rendering, touch feel, startup time and memory on the tablet, and how *that tablet's* WebView
+> behaves. Expect to find rough edges on first use and please report them. See *Known limits* below.
 
-## Build
+## Install on the tablet (sideload)
+1. Get `dist/kestrel-0.1.0.apk` from this repository (open the file on GitHub on the tablet and tap *Download*). Optional: check it against `dist/kestrel-0.1.0.apk.sha256`.
+2. Open the downloaded file. Android 10 will ask you to allow **Install unknown apps** for the app you opened it from (your file manager or current
+   browser): allow it once, go back, tap *Install*.
+3. Optional: *Settings → Apps → Default apps → Browser app → Kestrel*, so links from other apps open here.
+4. Open Kestrel. If the new-tab page shows a yellow "Old web engine" notice, the tablet's *Android System WebView* is out of date: updating it
+   (Play Store, if the tablet has one) improves both site compatibility and security.
+
+Updating later: install the newer APK over the old one. It is signed with a *public development key* (see *Signing*), so updates from this repository install over each other.
+
+## What you get
+**Shields (per site, in the shield button on the toolbar)**
+- Blocks ads and trackers with EasyList, EasyPrivacy and the uBlock Origin lists (99 000+ host rules, 21 000+ pattern rules, 22 000+ site-specific hiding rules).
+- Hides empty ad boxes and cookie-consent banners; blocks pop-ups and pop-unders (including the lists' pop-up rules).
+- **HTTPS-first, strict by default**: plain `http://` sites are upgraded, and you get a warning screen before any plain-HTTP page loads. Local/LAN addresses are exempt.
+  This matters on a hotspot: your mobile carrier sits in the path and can read or alter cleartext pages.
+- Blocks cross-site cookies; adds small per-session noise to canvas/audio readouts and reports fewer CPU cores (anti-fingerprinting).
+- Strips tracking parameters (`utm_*`, `fbclid`, `gclid`, …) and skips tracking redirectors (Google/Facebook/YouTube/DuckDuckGo link wrappers).
+- Blocks a malware/phishing list at page level, plus Google Safe Browsing when the tablet has Google Play services.
+- Per-site switches for every one of the above, and for JavaScript.
+
+**Made for a metered, flaky hotspot**
+- *Data saver* (Standard by default): no autoplay, no media preloading, the "save data" signal for sites that honour it; *Strict* also holds back images (tap to load) and web fonts.
+- Tabs are **never reloaded at startup**; only the one you look at loads. Previously visited pages open from the saved copy when the hotspot drops.
+- Clear error pages that tell "tablet not on Wi-Fi" apart from "hotspot has no internet", and a page that fails because of that **reloads itself when the connection returns**.
+- Asks before big downloads on a metered link; shows how much data this browser has used; filter lists refresh weekly with conditional requests (a few hundred bytes when nothing changed, about 2 MB when everything did).
+
+**Built for a low-RAM Go device**
+- The new-tab page is native (no web engine started until you open a site); at most two web views stay alive, others are frozen and restored on demand;
+  the app survives the system killing the page renderer; no AndroidX/Compose/Material; the whole app is **195 KB of code** (APK 2.3 MB, mostly the filter lists).
+
+**Private window** (menu → *New private window*): runs in its own process with a separate WebView data directory that is wiped when it starts, blocks screenshots
+and the recents thumbnail, writes no history/tab list/session, and asks the keyboard not to learn from what you type.
+
+**Also**: tabs, bookmarks, history (capped at 90 days / 5 000 entries), find in page, share, desktop-site toggle, print/save as PDF, downloads through the system downloader,
+file upload, camera/microphone/location prompts (asked every time), full-screen video, dark mode that follows the system, text size, eight search engines (Brave Search by default).
+
+**Deliberately not here**: news/sponsored tiles, AI assistant, rewards/crypto/wallet, VPN, sync/accounts, Tor, extensions, telemetry of any kind.
+
+## Privacy: what this app talks to
+- The websites you open, and your search engine when you search (Brave Search by default; change it in Settings).
+- Once a week (or when you tap *Update now*) the filter-list hosts: `easylist.to`, `ublockorigin.github.io`, `secure.fanboy.co.nz`. No identifiers are sent.
+- Nothing else. No analytics, no crash reporting, no accounts. WebView usage metrics are opted out. Backups are disabled.
+- The tablet's storage is **not encrypted** (per its hardware report), so anything stored in the app, like cookies or history, sits on flash in the clear.
+  Set a screen lock; use the private window or *Settings → Clear browsing data when I quit* for sensitive browsing.
+
+## Known limits (honest)
+- **Page compatibility and engine security follow the tablet's WebView version**, which is unknown and may be old. The About page and new-tab page show it.
+- No uBlock-style *scriptlets* (so no YouTube-style ad stripping) and no extensions.
+- Fingerprint/data-saver scripts are injected at first paint (Android's document-start hook needs AndroidX WebKit, deliberately not used), so very early inline fingerprinting can run first.
+- Encrypted DNS cannot be set inside a WebView app; set *Private DNS* for the whole tablet (Settings explains where).
+- Generic ad-box hiding is limited to the 1 200 most common selectors (site-specific rules are complete); `blob:` downloads aren't supported; no omnibox network suggestions yet.
+- Never run on real hardware (see the notice above).
+
+## Signing
+The APK is signed with a **public development key** (`signing/dev/`, password `kestrel-dev`), chosen so every build from any machine can update the previous one.
+Anyone could build a look-alike APK with the same key, so install APKs only from your own copy of this repository. To use your own key, create `keystore.properties`
+(gitignored: `storeFile`, `storePassword`, `keyAlias`, `keyPassword`) and rebuild; you will need to uninstall once when switching keys.
+
+## Build, test, develop
 ```
-./gradlew :core:test            # engine tests (JVM, fast)
-./gradlew :app:assembleRelease  # APK (see scripts/build-apk.sh)
+./gradlew :core:test                  # filtering engine (JVM, ~10 s)
+./gradlew :app:testDebugUnitTest      # real Activity on Android 10 via Robolectric (downloads its framework jar once)
+cd web-tests && npm test              # injected page script in headless Chromium (Playwright)
+bash scripts/verify.sh full           # everything + lint + R8 + APK audit
+bash scripts/build-apk.sh             # -> dist/kestrel-<version>.apk
 ```
-Install on the tablet: copy the APK from `dist/` and sideload it (allow "install unknown apps" for your file manager/browser).
+Needs JDK 17+, the Android SDK (platform 36, build-tools 36). The bundled filter snapshot is regenerated with `scripts/make-default-lists.sh` (see `docs/FILTER-LISTS.md`).
+Design and rationale: `docs/ARCHITECTURE.md`, `docs/HARDWARE.md`. Licences of bundled lists: `docs/FILTER-LISTS.md`. This project has no licence chosen yet.
 
 ## For Claude sessions
-Read `CLAUDE.md` first, then `docs/handoff/STATE.md`. Work is auto-saved to GitHub by hooks (`scripts/autosave.sh`); see `docs/handoff/PROTOCOL.md`.
-
-License: not yet chosen by the owner. Third-party filter lists keep their own licenses (see `docs/FILTER-LISTS.md` once added).
+Read `CLAUDE.md`, then `docs/handoff/STATE.md`. Work is auto-saved to GitHub by hooks (`scripts/autosave.sh`); protocol in `docs/handoff/PROTOCOL.md`.
