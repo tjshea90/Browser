@@ -183,6 +183,16 @@ new=$(curl -fsS https://maven.mozilla.org/maven2/org/mozilla/geckoview/geckoview
 - **Correction:** ARCHITECTURE.md section 5 claims Chromium's default referrer policy is strict-origin-when-cross-origin; that changed in Chrome 85 (Aug 2020), so WebView 74 sends the FULL URL cross-origin [S]; `shouldInterceptRequest` cannot add headers, so subresources cannot be fixed.
 - **Mitigations in order:** owner's Private DNS (Quad9), Kestrel G for anything with a login, keep the NTP "outdated engine" banner, retire it eventually (B23).
 
+Malware / phishing sources without Google Play services (owner allows licensed third-party sources for personal use; record each licence in docs/FILTER-LISTS.md):
+| Source | Form | Terms [S] | Verdict |
+|---|---|---|---|
+| uBO `badware.min.txt` (already in `FilterSources`) | small ABP list, both builds | GPLv3 | keep |
+| Gecko Safe Browsing v5 (Google hash lists) | in-engine, hash prefixes, size unmeasured [U] | rides on Mozilla's embedded API key (ToS grey, B18) | keep ON in G |
+| Quad9 `dns.quad9.net` as Private DNS or DoH | nothing on the device; malware blocking + DNSSEC | free service | adopt (owner action, covers WebView) |
+| abuse.ch URLhaus hostfile | hostnames of live malware URLs, regenerated every 5 min | "free under fair use", download needs a free Auth-Key, commercial use may need a paid plan | owner registers a key; never ship a shared key in the APK; only through CI if redistribution is allowed [U] |
+| OpenPhish Community feed | phishing URLs, every 12 h, "limited" | terms only by link ("you accept the Terms of Use") | read the ToU first [U] |
+| Phishing.Database, hagezi TIF, CERT.PL warning list | - | not evaluated | skip |
+
 ## 6. Private key and v3 rotation (commands run on throw-away keys, build-tools 36.0.0 [V]; platform install behaviour [U])
 ```bash
 # OWNER, on his own PC. Never inside this repo tree or a Claude session (autosave pushes everything not ignored). Back the .p12 and passwords up OFFLINE twice.
