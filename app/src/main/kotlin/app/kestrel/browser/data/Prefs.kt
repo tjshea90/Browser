@@ -42,6 +42,8 @@ class Prefs private constructor(ctx: Context) {
     var neon: Int get() = sp.getInt("neon", 2); set(v) = put("neon", v.coerceIn(0, 2))
     /** Gecko build: how far ahead of the finger the page is pre-drawn. 0 = the engine's own values, 1 = wider margin + shorter touch wait, 2 = also slower top fling speed. */
     var scrollFeel: Int get() = sp.getInt("scroll_feel", 1); set(v) = put("scroll_feel", v.coerceIn(0, 2))
+    /** Kestrel G: the blocking engine runs inside the Gecko extension (fast). Off = compatibility mode, every request asks the app (the older, slower path). Diagnostics has the switch. */
+    var engineInExtension: Boolean get() = bool("eng_ext", true); set(v) = put("eng_ext", v)
     var pullRefresh: Boolean get() = bool("pull_refresh", true); set(v) = put("pull_refresh", v)
     var searchSuggestions: Boolean get() = bool("suggest", false); set(v) = put("suggest", v) // off: each keystroke would cost data + privacy
     var clearOnExit: Boolean get() = bool("clear_exit", false); set(v) = put("clear_exit", v)

@@ -23,7 +23,12 @@ object Engine {
     private const val WAIT_MS = 1500L
     private val latch = CountDownLatch(1)
     @Volatile private var started = false
-    @Volatile private var current: FilterSet? = null
+
+    /** A loaded set together with its generation (1, 2, ...: bumped at every publish), read as ONE reference so a caller never pairs a set with another set's number. */
+    class Snap(@JvmField val fs: FilterSet, @JvmField val generation: Int)
+    @Volatile private var snap: Snap? = null
+    private var counter = 0
+    private fun publish(fs: FilterSet) { synchronized(this) { counter++; snap = Snap(fs, counter) } }
     @Volatile var sourceDescription: String = "loading"
         private set
     @Volatile private var seed: FilterSet? = null
@@ -45,41 +50,44 @@ object Engine {
         val downloaded = File(File(app.filesDir, "filters"), "current.kfs")
         if (downloaded.isFile) {
             try {
-                current = FilterSetCodec.read(downloaded.readBytes())
+                publish(FilterSetCodec.read(downloaded.readBytes()))
                 sourceDescription = "updated list"
                 return
             } catch (t: Throwable) { Log.w(Io.TAG, "downloaded filter set rejected: ${t.message}") }
         }
         try {
-            current = app.assets.open("filters/default.kfs").use { FilterSetCodec.read(it.readBytes()) }
+            publish(app.assets.open("filters/default.kfs").use { FilterSetCodec.read(it.readBytes()) })
             sourceDescription = "bundled list"
             return
         } catch (t: Throwable) { Log.w(Io.TAG, "bundled filter set unreadable", t) }
-        current = seedSet()
+        publish(seedSet())
         sourceDescription = "built-in minimal list"
     }
 
     /** The element-hiding tables are built lazily on first use (about 2 s on the emulator): do it here, off every UI/request thread, so the first page does not pay for it. */
     private fun warmCosmetics() {
-        try { current?.cosmeticCss("warmup.invalid") } catch (t: Throwable) { Log.w(Io.TAG, "cosmetic warm-up failed", t) }
+        try { snap?.fs?.cosmeticCss("warmup.invalid") } catch (t: Throwable) { Log.w(Io.TAG, "cosmetic warm-up failed", t) }
     }
 
     private fun seedSet(): FilterSet = seed ?: SeedLists.build().also { seed = it }
 
     /** The active filter set; blocks the calling (WebView IO) thread for at most [WAIT_MS] during cold start. */
     fun filters(): FilterSet {
-        current?.let { return it }
+        snap?.let { return it.fs }
         latch.await(WAIT_MS, TimeUnit.MILLISECONDS)
-        return current ?: seedSet()
+        return snap?.fs ?: seedSet()
     }
 
     /** Non-blocking peek (UI thread safe): the loaded set or null while still loading. */
-    fun peek(): FilterSet? = current
+    fun peek(): FilterSet? = snap?.fs
+
+    /** The loaded set and its generation, or null while loading. The extension's engine image is built from exactly this pair (research/D1-DESIGN.md). */
+    fun snapshot(): Snap? = snap
 
     /** Called by the updater after atomically installing a new file. */
     fun swap(fs: FilterSet, description: String) {
         try { fs.cosmeticCss("warmup.invalid") } catch (t: Throwable) { /* warm-up only */ }
-        current = fs
+        publish(fs)
         sourceDescription = description
     }
 }
