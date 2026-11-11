@@ -18,11 +18,12 @@ browser.webRequest.onBeforeRequest.addListener(function (d) {
   var key = d.type + '|' + d.url + '|' + page;
   var hit = verdicts.get(key);
   if (hit !== undefined) {
-    if (hit) { browser.runtime.sendNativeMessage(NATIVE, { k: 'cnt', p: page }).catch(function () {}); return { cancel: true }; }
+    if (hit) { browser.runtime.sendNativeMessage(NATIVE, JSON.stringify({ k: 'cnt', p: page })).catch(function () {}); return { cancel: true }; }
     return {};
   }
-  return browser.runtime.sendNativeMessage(NATIVE, { k: 'req', u: d.url, t: d.type, p: page }).then(function (r) {
-    var blocked = !!(r && r.b);
+  // Plain strings both ways (JSON text in, "1"/"0" out): the engine's object marshalling rejected structured replies ("Invalid event data for callback").
+  return browser.runtime.sendNativeMessage(NATIVE, JSON.stringify({ k: 'req', u: d.url, t: d.type, p: page })).then(function (r) {
+    var blocked = r === '1';
     if (verdicts.size >= VERDICT_MAX) verdicts.delete(verdicts.keys().next().value);
     verdicts.set(key, blocked);
     return blocked ? { cancel: true } : {};
@@ -33,8 +34,8 @@ browser.runtime.onMessage.addListener(function (m) {
   if (!m || m.k !== 'css' || !m.h) return undefined;
   var cached = cssCache.get(m.h);
   if (cached !== undefined) return Promise.resolve(cached);
-  return browser.runtime.sendNativeMessage(NATIVE, { k: 'css', h: m.h, top: !!m.top }).then(function (r) {
-    var css = (r && r.css) || '';
+  return browser.runtime.sendNativeMessage(NATIVE, JSON.stringify({ k: 'css', h: m.h, top: !!m.top })).then(function (r) {
+    var css = (typeof r === 'string') ? r : '';
     if (cssCache.size >= 200) cssCache.delete(cssCache.keys().next().value);
     cssCache.set(m.h, css);
     return css;

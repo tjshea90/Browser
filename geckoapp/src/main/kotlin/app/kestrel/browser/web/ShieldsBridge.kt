@@ -27,19 +27,28 @@ class ShieldsBridge(
 ) : WebExtension.MessageDelegate {
 
     override fun onMessage(nativeApp: String, message: Any, sender: WebExtension.MessageSender): GeckoResult<Any>? {
-        val m = message as? JSONObject ?: return null
+        val m = parse(message) ?: return null
         return try {
             when (m.optString("k")) {
-                "req" -> GeckoResult.fromValue(JSONObject().put("b", shouldBlock(m.optString("u"), m.optString("t"), m.optString("p"))))
-                "cnt" -> { countBlocked(m.optString("p"), Category.PRIVACY_INDEX); GeckoResult.fromValue(JSONObject()) }
-                "css" -> GeckoResult.fromValue(JSONObject().put("css", cosmeticCss(m.optString("h"))))
+                "req" -> GeckoResult.fromValue(if (shouldBlock(m.optString("u"), m.optString("t"), m.optString("p"))) "1" else "0")
+                "cnt" -> { countBlocked(m.optString("p"), Category.PRIVACY_INDEX); GeckoResult.fromValue("") }
+                "css" -> GeckoResult.fromValue(cosmeticCss(m.optString("h")))
                 else -> null
             }
         } catch (e: Exception) {
             Log.w(Io.TAG, "shields bridge", e)
-            GeckoResult.fromValue(JSONObject())
+            GeckoResult.fromValue("")
         }
     }
+
+    /** The extension sends JSON text; tolerate the engine handing it over already parsed. */
+    private fun parse(message: Any): JSONObject? = try {
+        when (message) {
+            is JSONObject -> message
+            is org.mozilla.gecko.util.GeckoBundle -> message.toJSONObject()
+            else -> JSONObject(message.toString())
+        }
+    } catch (e: Exception) { null }
 
     private fun shouldBlock(url: String, type: String, pageUrl: String): Boolean {
         val fs = Engine.peek() ?: return false // lists still loading at cold start
@@ -49,6 +58,7 @@ class ShieldsBridge(
         val v = fs.check(url, pageHost, requestType(type), Psl.default)
         if (!Verdict.isBlocked(v)) return false
         countBlocked(pageUrl, Verdict.category(v))
+        Log.d(Io.TAG, "shields blocked ${type} ${url.take(120)}")
         return true
     }
 
