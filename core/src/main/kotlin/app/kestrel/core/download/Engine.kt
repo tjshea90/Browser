@@ -183,7 +183,7 @@ class Engine(
 
     private fun doEnqueue(id: Long, s: Source) {
         val r = Rec(id)
-        r.url = s.url; r.pageUrl = s.pageUrl; r.headers = s.headers; r.mime = s.mime; r.fetcher = s.fetcher; r.priv = s.priv; r.meteredOk = s.meteredOk; r.risk = s.risk; r.destKind = s.destKind
+        r.url = s.url; r.pageUrl = s.pageUrl; r.headers = s.headers; r.mime = s.mime; r.fetcher = s.fetcher; r.priv = s.priv; r.meteredOk = s.meteredOk; r.risk = s.risk; r.destKind = s.destKind; r.nameFixed = s.nameFixed
         r.name = FileNames.sanitize(s.nameHint ?: FileNames.fromUrl(s.url) ?: "download")
         r.created = clock.now(); r.updated = r.created
         if (!(s.url.startsWith("http://", true) || s.url.startsWith("https://", true))) { r.state = DlState.FAILED; r.reason = Reason.BAD_URL; r.finished = r.created }
@@ -392,7 +392,7 @@ class Engine(
             val etag = resp.header("ETag")?.trim()?.takeIf { HttpSemantics.isStrongEtag(it) }
             val lm = resp.header("Last-Modified")?.trim()
             val date = resp.header("Date")?.trim()
-            val name = FileNames.choose(resp.header("Content-Disposition"), resp.finalUrl, ctype ?: rec.mime, rec.name)
+            val name = if (rec.nameFixed) FileNames.withExtensionFor(ctype ?: rec.mime, rec.name) else FileNames.choose(resp.header("Content-Disposition"), resp.finalUrl, ctype ?: rec.mime, rec.name)
             val sink = try { sinks.create(name, ctype ?: rec.mime, total, rec.priv, rec.destKind) } catch (e: SinkException) { quiet(resp); fail(job, e.reason, 0); throw Exit() }
             val seg = Seg(0, 0, total, 0)
             seg.worker = true

@@ -50,6 +50,7 @@ class Rec(@JvmField val id: Long) {
     @JvmField var pageUrl: String? = null
     @JvmField var headers: Map<String, String> = emptyMap() // request headers to replay (User-Agent, Referer origin, Cookie for the URLConnection fetcher); scrubbed on terminal states
     @JvmField var name = ""
+    @JvmField var nameFixed = false          // the caller's name wins over Content-Disposition / the URL (videos: "Page title - 720p.mp4")
     @JvmField var mime: String? = null
     @JvmField var destKind = 0                // 0 MediaStore, 1 SAF, 2 staged file
     @JvmField var destUri: String? = null
@@ -79,7 +80,7 @@ class Rec(@JvmField val id: Long) {
     fun snapshot(): Rec {
         val r = Rec(id)
         r.state = state; r.reason = reason; r.detail = detail; r.prio = prio; r.url = url; r.finalUrl = finalUrl; r.finalAt = finalAt; r.pageUrl = pageUrl
-        r.headers = headers; r.name = name; r.mime = mime; r.destKind = destKind; r.destUri = destUri; r.total = total; r.etag = etag; r.lastMod = lastMod
+        r.headers = headers; r.name = name; r.nameFixed = nameFixed; r.mime = mime; r.destKind = destKind; r.destUri = destUri; r.total = total; r.etag = etag; r.lastMod = lastMod
         r.dateHdr = dateHdr; r.ranges = ranges; r.fetcher = fetcher; r.risk = risk; r.meteredOk = meteredOk; r.done = done; r.fails = fails; r.connsPeak = connsPeak
         r.priv = priv; r.created = created; r.updated = updated; r.lastProgress = lastProgress; r.finished = finished
         for (s in segs) r.segs.add(s.copy())
@@ -100,6 +101,8 @@ class Source(
     val risk: Int = 0,
     /** Where the file goes: [DEST_PUBLIC] = the public Downloads folder, [DEST_APP_PRIVATE] = the app's own staging folder (update APKs: not listed, not shown to other apps). */
     val destKind: Int = DEST_PUBLIC,
+    /** True: [nameHint] is the file name, whatever the server or the URL says (the extension is still added from the content type if missing). */
+    val nameFixed: Boolean = false,
 )
 
 const val DEST_PUBLIC = 0

@@ -1706,7 +1706,7 @@ open class BrowserActivity : Activity(), DockListener {
             // Referer = the page's ORIGIN only (never the full URL: it can carry tokens / search terms)
             val headers = HashMap<String, String>()
             UrlParts.parse(tab.url)?.let { headers["Referer"] = "${it.scheme}://${it.hostForAuthority}/" }
-            DownloadController.enqueue(this, Source(url, tab.url.takeIf { it.isNotEmpty() }, nameOverride ?: Downloads.fileName(url, cd, mime), mime, headers, fetcher = 1, priv = tab.isPrivateTab, meteredOk = true))
+            DownloadController.enqueue(this, Source(url, tab.url.takeIf { it.isNotEmpty() }, nameOverride ?: Downloads.fileName(url, cd, mime), mime, headers, fetcher = 1, priv = tab.isPrivateTab, meteredOk = true, nameFixed = nameOverride != null))
             askNotificationPermissionOnce()
             toast("Download started: Menu > Downloads")
         }

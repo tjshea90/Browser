@@ -78,6 +78,15 @@ class EngineTest {
         assertEquals(listOf(DEST_APP_PRIVATE, DEST_PUBLIC), h.sinks.kinds.toList())
     }
 
+    @Test(timeout = 60_000) fun aFixedNameBeatsTheServersName() {
+        val s = FakeServer(testBytes(MiB)).also { it.disposition = "attachment; filename=\"server-name.bin\""; it.contentType = "video/mp4" }
+        val h = H(s)
+        val fixed = h.completed(h.engine.enqueue(Source("https://files.test/pub/video-12345", nameHint = "My clip - 720p", nameFixed = true)))
+        assertEquals("My clip - 720p.mp4", h.sink(fixed).name)                 // ours, with the extension from the content type
+        val hinted = h.completed(h.engine.enqueue(Source("https://files.test/pub/video-67890", nameHint = "My clip - 720p")))
+        assertEquals("server-name.bin", h.sink(hinted).name)                    // a plain hint only fills in when the server says nothing
+    }
+
     @Test(timeout = 60_000) fun unknownLengthIsStreamedToTheEnd() {
         val data = testBytes(2 * MiB, 5)
         val s = FakeServer(data).also { it.sendLength = false; it.etag = null }
