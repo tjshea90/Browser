@@ -1,8 +1,8 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** 2026-11-11T00:16:50Z (L1) on `ccr-a57c163e-mtq8js` after c33f05a
-- **Summary:** STATE: phase 7 progress, review agents pending, resume instructions
+- **Last checkpoint:** 2026-11-11T00:26:40Z (L1) on `ccr-a57c163e-mtq8js` after f44880b
+- **Summary:** Google default search + omnibox rule (non-address -> search; 3:1/10:30 fixed), GMS-less wording (Safe Browsing, WebView updates, SSL hints), README/CLAUDE/HARDWARE/STATE owner facts; core 119 + app 62 tests green
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE
@@ -56,6 +56,16 @@ Build/verify: `./gradlew :core:test :app:testDebugUnitTest`, `bash scripts/verif
 4. Backlog (not started, in value order): class/id hash-set generic cosmetic hiding (29k generic selectors currently capped at 1200); omnibox network suggestions (setting removed
    until implemented); document-start script injection via androidx.webkit if the tablet's WebView supports it; blob: downloads; baseline profile for faster cold start;
    per-site permission memory; reader-free "Load images" per site; scriptlets/redirect resources for YouTube-style ads.
+
+## Owner facts (2026-11-11, said after the first build) - authoritative
+- Tablet: **2 GB RAM, Android 10 Go, NO Google Play Store and NO Google services**. => no Safe Browsing, no WebView auto-update, manual APK updates, never add a GMS dependency.
+- Anything typed in the URL bar that is not a URL must be searched on **Google** (done: default engine + omnibox rules + tests).
+- Licensed third-party products/sources are allowed (personal non-commercial use; owner gets permissions). Still record licences in docs/FILTER-LISTS.md.
+- Owner will switch Claude Code plugins on/off on request. Known blocker: the `simple-workflow` plugin's PreToolUse Bash guard denies curl/wget-style network commands, recursive force-deletes
+  and `git config user.*` reads (it even matches that text inside a heredoc). `Postman` etc. only add session-start noise. Do NOT bypass the guard; ask the owner, or use git clones via
+  add_repo / the web-fetch agent / sdkmanager+gradle instead, and write such text with the Edit tool.
+- BIGGEST UNKNOWN: the tablet's WebView package+version (About page shows it). If it is `com.android.webview` and old (<100) it cannot be updated by sideloading Google's APK
+  (provider allow-list + signature) -> fallback plan = a GeckoView-based build (MPL-2.0, ~70 MB, needs maven.mozilla.org access; uBlock Origin XPI could ride along as a built-in WebExtension). Decide only after the owner reports the version.
 
 ## Facts (Phase 0)
 - Device (hardware_.txt, kept in `docs/hardware/`): MT8168B, Mali-G52 MC2, Android 10 Go API 29, patch 2021-07-05, kernel 4.14.141,

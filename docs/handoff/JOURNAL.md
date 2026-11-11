@@ -15,3 +15,4 @@
 - 2026-11-11T00:04:06Z [L2] Phases 4-6 done: full browser app + updater + injected JS; verify full PASS (core 117, app 51 Robolectric, 13 Chromium JS tests, lint clean, 2.3MB APK)
 - 2026-11-11T00:15:44Z [L1] hotspot: unvalidated Wi-Fi no longer forces stale cache-first loads; Open saved copy action; https fallback only suppressed when offline; 9 new tests (mutation-checked); docs+CI trigger limited to milestones
 - 2026-11-11T00:16:50Z [L1] STATE: phase 7 progress, review agents pending, resume instructions
+- 2026-11-11T00:26:40Z [L1] Google default search + omnibox rule (non-address -> search; 3:1/10:30 fixed), GMS-less wording (Safe Browsing, WebView updates, SSL hints), README/CLAUDE/HARDWARE/STATE owner facts; core 119 + app 62 tests green
