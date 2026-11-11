@@ -13,3 +13,4 @@ attachments; they are recorded so the next version codes are gated correctly. Bo
 | kestrel-g-v0.2.0-gecko-alpha1 | gecko | code 100 | 2026-11-11T02:45Z | built in the sandbox, delivered as a chat attachment (sha256 ecd42ae8d8e0885e77b56346e775ee7764a4cdabc4115611d3174ddbe57288d9); first Firefox-engine build, smoke-tested on an Android 10 x86_64 emulator only
 | kestrel-v0.1.1 | web | code 2 | 2026-11-11T03:23Z | first build by GitHub Actions (run 42951742468): 0.1.0 plus an internal refactor so both builds share code; unit tests pass, not re-run on an emulator
 | kestrel-g-v0.2.0-alpha2 | gecko | code 101 | 2026-11-11T03:23Z | first Kestrel G built by GitHub Actions (run 42951742468); same code as alpha1
+| kestrel-g-v0.2.0-alpha3 | gecko | code 102 | 2026-11-11T04:53Z | Alpha 3 (run 42961586675): typing-freeze fixes, no animations, Diagnostics + Refresh screen, tuned engine settings, security pins; not yet run on the real tablet
