@@ -52,6 +52,7 @@ import app.kestrel.browser.ui.NewTabPage
 import app.kestrel.browser.ui.Pal
 import app.kestrel.browser.ui.Neon
 import app.kestrel.browser.ui.NeonBar
+import app.kestrel.browser.ui.RestoreOverlay
 import app.kestrel.browser.ui.SettingsListener
 import app.kestrel.browser.ui.SettingsView
 import app.kestrel.browser.ui.ShieldsPanel
@@ -121,6 +122,11 @@ open class BrowserActivity : Activity(), DockListener {
     private lateinit var content: FrameLayout
     private lateinit var home: HomeView
     private lateinit var errorView: ErrorView
+    private lateinit var restoreOverlay: RestoreOverlay // over the page view while a page whose engine process died comes back (last preview instead of white)
+    private var restoringTab: Tab? = null
+    private val restoreTimeout = Runnable { hideRestoring() }
+    private var lastTrim = 0           // the newest onTrimMemory level and when it came: logged with every process death (the evidence for "why did the page reload")
+    private var lastTrimAt = 0L
     private lateinit var findBar: FindBar
     private lateinit var suggestions: SuggestionList
     private lateinit var tabGrid: TabGrid
@@ -259,7 +265,8 @@ open class BrowserActivity : Activity(), DockListener {
     @Suppress("DEPRECATION")
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        Health.log("mem", "trim", "level=$level"); Health.count("mem.trim")
+        lastTrim = level; lastTrimAt = SystemClock.elapsedRealtime()
+        Health.log("mem", "trim", "level=$level ${memFacts()}"); Health.count("mem.trim")
         // 10/15 = RUNNING_LOW/CRITICAL (we are visible); 20 = UI_HIDDEN (user left); 60+ = we are a prime kill candidate.
         if (level >= 10) { for (t in tabs.toList()) if (t !== current && !hasLiveChild(t)) hibernate(t) } // a popup's opener must survive (window.opener)
         if (level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE && !window.decorView.hasWindowFocus()) current?.let { hibernate(it) }
@@ -281,6 +288,8 @@ open class BrowserActivity : Activity(), DockListener {
         // ONE GeckoView, attached once and never removed: detaching it pauses/resumes the compositor through synchronous IPC while the keyboard resizes the window,
         // which is the race family behind "the screen stops updating while typing". Tabs swap with setSession; the Home screen and error screens are opaque overlays above it.
         content.addView(geckoView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        restoreOverlay = RestoreOverlay(this, pal)
+        content.addView(restoreOverlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) // above the page, below Home / error screens
         // The navigation bar is at the BOTTOM (owner request): page on top, a 2 dp load-progress line, then the dock.
         column.addView(content, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         column.addView(progress, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(2)))
@@ -390,7 +399,7 @@ open class BrowserActivity : Activity(), DockListener {
         skinApplied = true
         skinPrivate = priv
         pal = if (priv) palPrivate else palRegular
-        dock.applyPal(pal); home.applyPal(pal); suggestions.setPal(pal); sheet.applyPal(pal); progress.setColors(pal.accent, pal.accentHi)
+        dock.applyPal(pal); home.applyPal(pal); suggestions.setPal(pal); sheet.applyPal(pal); progress.setColors(pal.accent, pal.accentHi); restoreOverlay.setPal(pal)
         @Suppress("DEPRECATION") run {
             window.statusBarColor = if (priv) pal.chromeBg else pal.windowBg
             window.navigationBarColor = pal.chromeBg
@@ -1162,22 +1171,58 @@ open class BrowserActivity : Activity(), DockListener {
         }, 4000)
     }
 
-    /** The engine's content process died (or the system killed it). Come back from the URL; a crash loop (3 in 15 s) shows the error screen instead. */
+    /** Free memory as Android sees it, for the Health log: "avail=412MB thr=150MB low=false trim=15@8s". */
+    private fun memFacts(): String {
+        return try {
+            val mi = ActivityManager.MemoryInfo()
+            getSystemService(ActivityManager::class.java)?.getMemoryInfo(mi)
+            val ago = if (lastTrimAt == 0L) "-" else "${(SystemClock.elapsedRealtime() - lastTrimAt) / 1000}s"
+            "avail=${mi.availMem shr 20}MB thr=${mi.threshold shr 20}MB low=${mi.lowMemory} trim=$lastTrim@$ago"
+        } catch (e: Exception) { "mem=?" }
+    }
+
+    /**
+     * The engine's content process died (Android reclaimed the memory = onKill, or it crashed = onCrash). With one content process every live tab dies together.
+     * Recovery: the FIRST death in a quiet period brings the page back where it was (the last session state keeps its history AND scroll position) behind a dimmed
+     * preview instead of a white screen; a second death within 15 s reloads the plain URL (the state itself may be the cause); a third shows the error screen.
+     */
     internal fun sessionGone(tab: Tab, crashed: Boolean) {
         val url = tab.url
+        val saved = tab.gecko.state
         tab.session?.let { s -> if (geckoView.session === s) geckoView.releaseSession(); try { s.close() } catch (e: Exception) { /* already unusable */ } }
         tab.session = null
-        tab.gecko.state = null
-        tab.pendingLoad = url.takeIf { it.startsWith("http") }
         val now = SystemClock.elapsedRealtime()
         tab.crashCount = if (now - tab.lastCrash < 15_000) tab.crashCount + 1 else 1
         tab.lastCrash = now
+        val withState = saved != null && tab.crashCount <= 1
+        tab.gecko.state = if (withState) saved else null
+        tab.pendingLoad = if (withState) null else url.takeIf { it.startsWith("http") }
+        Health.log("gecko", if (crashed) "recover-after-crash" else "recover-after-kill", "n=${tab.crashCount} state=$withState current=${tab === current} ${memFacts()} ${url.take(60)}")
+        Health.count(if (withState) "gecko.recover.state" else "gecko.recover.url")
         if (tab === current) {
-            if (tab.crashCount >= 3) { tab.error = ErrorScreen.Crashed(url); tab.pendingLoad = null }
+            if (tab.crashCount >= 3) { tab.error = ErrorScreen.Crashed(url); tab.pendingLoad = null; hideRestoring() }
+            else if (url.startsWith("http")) showRestoring(tab, crashed)
             attachContent(tab)
             updateUi()
         }
     }
+
+    private fun showRestoring(tab: Tab, crashed: Boolean) {
+        restoringTab = tab
+        val thumb = tab.thumb
+        restoreOverlay.show(thumb, if (crashed) "The page stopped - bringing it back" else "Page freed to save memory - bringing it back")
+        Io.main.removeCallbacks(restoreTimeout)
+        Io.main.postDelayed(restoreTimeout, 20_000) // never stay up for ever (a page that never paints, a dead connection)
+    }
+
+    private fun hideRestoring() {
+        Io.main.removeCallbacks(restoreTimeout)
+        restoringTab = null
+        restoreOverlay.hide()
+    }
+
+    /** The engine painted real content for [tab] (called from ContentDelegate.onFirstContentfulPaint). */
+    internal fun firstPaint(tab: Tab) { if (tab === restoringTab) hideRestoring() }
 
     // ================================================================== back handling (works on Android 10 and on 16's predictive back)
 
