@@ -3,13 +3,13 @@ package app.kestrel.browser.ui
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.ColorFilter
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
-import android.graphics.RadialGradient
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
@@ -24,7 +24,6 @@ import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.FrameLayout
 import java.nio.ByteBuffer
-import kotlin.math.floor
 import kotlin.math.pow
 
 /**
@@ -218,8 +217,8 @@ class NeonBar(ctx: Context, private var accent: Int, private var hi: Int) : Fram
 }
 
 /**
- * The Home screen's backdrop, drawn from the owner's reaper photo as a MOOD, not a copy: pure black, a faint vignette, two ghostly blue flames rising from the
- * bottom corners (a procedural mask generated once, 40 KB) and the thin glowing arc of the scythe in the top-left. Static; only its alpha breathes (very slowly).
+ * The Home screen's backdrop, drawn from the owner's reaper photo as a MOOD, not a copy: pure black, two ghostly blue flames rising from the bottom corners (a
+ * procedural mask generated once, 40 KB) and the thin glowing arc of the scythe in the top-left. Static: no animation, no per-frame work beyond replaying a few draw ops.
  */
 class HomeBackdrop(ctx: Context, private var accent: Int, private var deep: Int, private var hi: Int) : View(ctx) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -228,7 +227,6 @@ class HomeBackdrop(ctx: Context, private var accent: Int, private var deep: Int,
     private val arc = Path()
     private var wispShader: LinearGradient? = null
     private var arcShader: LinearGradient? = null
-    private var vignette: RadialGradient? = null
 
     init { isClickable = false; isFocusable = false; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
     override fun hasOverlappingRendering(): Boolean = false
@@ -242,7 +240,6 @@ class HomeBackdrop(ctx: Context, private var accent: Int, private var deep: Int,
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
         wispShader = null; arcShader = null
-        vignette = RadialGradient(w / 2f, h * 0.45f, maxOf(w, h) * 0.75f, intArrayOf(0x00000000, 0x00000000, 0xCC000000.toInt()), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
         arc.reset()
         arc.moveTo(w * 0.04f, h * 0.20f)
         arc.cubicTo(w * 0.16f, h * 0.085f, w * 0.40f, h * 0.045f, w * 0.70f, h * 0.075f)
@@ -254,7 +251,7 @@ class HomeBackdrop(ctx: Context, private var accent: Int, private var deep: Int,
         wisps?.let { m ->
             val fw = w * 0.74f; val fh = h * 0.46f
             if (wispShader == null) wispShader = LinearGradient(0f, h - fh, 0f, h, intArrayOf(hi, accent, deep), floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP)
-            paint.shader = wispShader; paint.alpha = 150
+            paint.shader = wispShader; paint.alpha = 125
             dst.set(0f, h - fh, fw, h); c.drawBitmap(m, null, dst, paint)
             c.save(); c.scale(-1f, 1f, w / 2f, 0f); dst.set(0f, h - fh, fw, h); c.drawBitmap(m, null, dst, paint); c.restore()
             paint.shader = null; paint.alpha = 255
@@ -266,47 +263,63 @@ class HomeBackdrop(ctx: Context, private var accent: Int, private var deep: Int,
         paint.alpha = 90; paint.strokeWidth = context.dpf(3.5f); c.drawPath(arc, paint)
         paint.alpha = 230; paint.strokeWidth = context.dpf(1.4f); c.drawPath(arc, paint)
         paint.shader = null; paint.style = Paint.Style.FILL; paint.alpha = 255
-        vignette?.let { paint.shader = it; c.drawRect(0f, 0f, w, h, paint); paint.shader = null }
     }
 }
 
-/** Ghostly flame wisps as an ALPHA_8 mask: warped fractal value noise that thickens toward the bottom and fades toward the inner side (the caller mirrors it). */
+/**
+ * Ghostly flame tongues as an ALPHA_8 mask (square, drawn once on a background thread, 40 KB): fifteen curved plumes rising from the bottom edge, leaning toward the
+ * screen centre, each a tapering filled shape drawn twice (a wide faint bloom, then a softer-edged body). Overlap combines like screen blend (SRC_OVER on alpha).
+ * x = 0 is the outer screen edge; the caller mirrors the mask for the other side and tints it with a gradient.
+ */
 object Wisps {
-    fun mask(w: Int = 240, h: Int = 150): Bitmap {
-        val px = ByteArray(w * h)
-        for (y in 0 until h) for (x in 0 until w) {
-            val nx = x / w.toFloat(); val ny = y / h.toFloat()
-            val wx = nx * 3.2f + 0.9f * fbm(nx * 2.3f, ny * 2.3f - 7f)
-            val wy = ny * 3.6f - 1.1f * fbm(nx * 2.0f + 5f, ny * 2.0f)
-            val n = fbm(wx * 1.6f, wy * 1.6f)
-            val rise = ny.pow(1.15f)
-            val side = (1f - nx).pow(0.8f)
-            var a = ((n - 0.40f) * 2.7f).coerceIn(0f, 1f) * rise * side
-            a = a * a * (3f - 2f * a)
-            px[y * w + x] = (a * 255f).toInt().coerceIn(0, 255).toByte()
+    fun mask(size: Int = 200): Bitmap {
+        val s = size.toFloat()
+        val bm = Bitmap.createBitmap(size, size, Bitmap.Config.ALPHA_8)
+        val c = Canvas(bm)
+        val rnd = java.util.Random(11)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        val path = Path()
+        val steps = 28
+        repeat(15) {
+            val x0 = rnd.nextFloat().toDouble().pow(1.3).toFloat() * 0.92f // 0 = outer edge, 1 = toward the centre
+            val reach = (1f - x0).pow(0.55f) * (0.45f + 0.55f * rnd.nextFloat()) // tongue height as a fraction of the mask
+            val lean = 0.05f + 0.20f * rnd.nextFloat()
+            val sway = (0.015f + 0.04f * rnd.nextFloat()) * (if (rnd.nextFloat() < 0.5f) 1f else -1f)
+            val freq = 2.2f + 2.6f * rnd.nextFloat()
+            val ph = rnd.nextFloat() * 6.28f
+            val w0 = (0.020f + 0.030f * rnd.nextFloat()) * (1f - 0.4f * x0)
+            val alpha = 90 + (90 * rnd.nextFloat()).toInt()
+            val soft = 2.0f + 1.6f * rnd.nextFloat()
+            path.reset()
+            val rx = FloatArray(steps + 1); val ry = FloatArray(steps + 1)
+            for (k in 0..steps) {
+                val t = k / steps.toFloat()
+                val cx = x0 + lean * t.pow(1.5f) + sway * kotlin.math.sin(t * freq + ph) * (0.3f + t)
+                val cy = 1.02f - t * reach
+                val hw = w0 * (1f - t).pow(0.85f) + 0.0015f
+                if (k == 0) path.moveTo((cx - hw) * s, cy * s) else path.lineTo((cx - hw) * s, cy * s)
+                rx[k] = (cx + hw) * s; ry[k] = cy * s
+            }
+            for (k in steps downTo 0) path.lineTo(rx[k], ry[k])
+            path.close()
+            paint.maskFilter = BlurMaskFilter(7f, BlurMaskFilter.Blur.NORMAL); paint.alpha = (alpha * 0.45f).toInt(); c.drawPath(path, paint) // the wide faint bloom
+            paint.maskFilter = BlurMaskFilter(soft, BlurMaskFilter.Blur.NORMAL); paint.alpha = alpha; c.drawPath(path, paint) // the body
         }
-        val bm = Bitmap.createBitmap(w, h, Bitmap.Config.ALPHA_8)
+        // a low glow along the bottom edge so the tongues grow out of something, and a soft fade at the inner side (no hard edge at the mask's border)
+        val px = ByteArray(size * size)
+        bm.copyPixelsToBuffer(ByteBuffer.wrap(px))
+        for (y in 0 until size) {
+            val u = 1f - y / s
+            val rise = (1f - u / 0.16f).coerceIn(0f, 1f).pow(1.8f)
+            for (x in 0 until size) {
+                val fx = x / s
+                val base = rise * (1f - fx).pow(1.2f) * 55f
+                var f = ((1f - fx) / 0.30f).coerceIn(0f, 1f); f = f * f * (3f - 2f * f)
+                val a = ((px[y * size + x].toInt() and 0xFF) + base).coerceAtMost(255f) * f
+                px[y * size + x] = a.toInt().coerceIn(0, 255).toByte()
+            }
+        }
         bm.copyPixelsFromBuffer(ByteBuffer.wrap(px))
         return bm
-    }
-
-    private fun hash(ix: Int, iy: Int): Float {
-        var n = ix * 374761393 + iy * 668265263
-        n = (n xor (n ushr 13)) * 1274126177
-        return ((n xor (n ushr 16)) and 0xFFFF) / 65535f
-    }
-
-    private fun vnoise(x: Float, y: Float): Float {
-        val ix = floor(x).toInt(); val iy = floor(y).toInt()
-        val fx = x - ix; val fy = y - iy
-        val sx = fx * fx * (3f - 2f * fx); val sy = fy * fy * (3f - 2f * fy)
-        val a = hash(ix, iy); val b = hash(ix + 1, iy); val c = hash(ix, iy + 1); val d = hash(ix + 1, iy + 1)
-        return (a + (b - a) * sx) + ((c + (d - c) * sx) - (a + (b - a) * sx)) * sy
-    }
-
-    private fun fbm(x: Float, y: Float): Float {
-        var amp = 0.5f; var f = 1f; var sum = 0f
-        repeat(4) { sum += amp * vnoise(x * f, y * f); f *= 2.03f; amp *= 0.5f }
-        return sum / 0.9375f
     }
 }
