@@ -164,9 +164,10 @@ class TabGrid(ctx: Context, private var pal: Pal, private val isPrivate: (Tab) -
     /** A preview arrived (capture finished / loaded from disk): swap it into its card without rebuilding the grid. */
     fun thumbChanged(tab: Tab) { thumbViews[tab.id]?.setBitmap(tab.thumb) }
 
+    /** Cards need the window width to know their size: build after the layout pass that gave this view its size (adding views from inside it leaves them unmeasured). */
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
         super.onSizeChanged(w, h, ow, oh)
-        if (w != ow && visibility == VISIBLE) { pendingBuild = false; refresh() } else if (pendingBuild) { pendingBuild = false; refresh() }
+        if (w > 0 && (pendingBuild || (w != ow && visibility == VISIBLE))) { pendingBuild = false; post { refresh() } }
     }
 
     private fun refresh() {
