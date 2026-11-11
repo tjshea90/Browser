@@ -218,3 +218,9 @@
 >
 > I'm still waiting on three things from you: did alpha 3 scroll smoothly, the Scroll test "Result:" line (Menu → Diagnostics) under Standard, Smoother and Neon Off, and a Diagnostics → Copy after the next white screen.
 <!-- sha:3accbfaf5b7a -->
+
+## 2026-11-11T16:18:30Z
+> Those four notifications are stale wake-ups from the old auto-resume timer, which I deleted earlier today. Everything they pointed at is already done: alpha 4, 5 and 6 are built and recorded, and the download manager is finished. I took no action, and nothing more will fire from that timer.
+>
+> Still waiting on your three answers: did alpha 3 scroll smoothly, the Scroll test "Result:" lines (Menu → Diagnostics), and a Diagnostics → Copy after the next white screen.
+<!-- sha:4b2628b2e072 -->
