@@ -4,10 +4,14 @@ import android.app.AlertDialog
 import app.kestrel.browser.BrowserActivity
 import app.kestrel.browser.Io
 import app.kestrel.browser.ui.VideoPanel
+import app.kestrel.browser.download.DownloadController
+import app.kestrel.browser.net.NetworkMonitor
+import app.kestrel.core.media.Hls
 import app.kestrel.core.media.MediaCandidate
 import app.kestrel.core.media.MediaKind
 import app.kestrel.core.media.MediaLabels
 import app.kestrel.core.media.MediaSniff
+import app.kestrel.core.media.StreamSource
 import app.kestrel.core.url.UrlParts
 
 /**
@@ -16,6 +20,16 @@ import app.kestrel.core.url.UrlParts
  * metered-link questions are the ones every download already has. Design and limits: research/VIDEO_DOWNLOADER.md.
  */
 class VideoFlow(private val a: BrowserActivity) {
+    /** One quality of an HLS stream, ready to download. */
+    private class StreamPick(val label: String, val url: String, val text: String?, val estimate: Long, val audioUrl: String?, val audioOnly: Boolean, val container: String)
+    private sealed class Loaded {
+        object Loading : Loaded()
+        class Failed(val message: String) : Loaded()
+        class Ready(val rows: List<Pair<VideoPanel.Choice, StreamPick>>, val note: String?) : Loaded()
+    }
+    private val streamInfo = HashMap<String, Loaded>()   // candidate key -> what its playlist turned out to be
+    private var panel: VideoPanel? = null
+    private var panelTab: Tab? = null
 
     /** Called on the Shields worker thread. */
     fun seen(c: MediaCandidate) = Io.ui {
@@ -51,23 +65,138 @@ class VideoFlow(private val a: BrowserActivity) {
             a.toast("No video found on this page yet. Start playing it for a few seconds, then try again.")
             return
         }
-        val panel = VideoPanel(a, a.pal) { choice -> (choice.tag as? MediaCandidate)?.let { pick(tab, it) } }
-        panel.show(tab.displayTitle, sections(tab, items))
-        a.sheet.show("Download video", panel)
+        val p = VideoPanel(a, a.pal) { choice -> when (val t = choice.tag) { is MediaCandidate -> pick(tab, t); is StreamPick -> pickStream(tab, t) } }
+        panel = p; panelTab = tab
+        render(p, tab, items)
+        a.sheet.show("Download video", p)
     }
 
-    private fun sections(tab: Tab, items: List<MediaCandidate>): List<VideoPanel.Section> {
+    private fun render(p: VideoPanel, tab: Tab, items: List<MediaCandidate>) {
+        val (sections, note) = sections(tab, items)
+        p.show(tab.displayTitle, sections, note)
+    }
+
+    /** A playlist finished loading: redraw the sheet if it is still open on this tab. */
+    private fun refresh(tab: Tab) {
+        val p = panel ?: return
+        if (panelTab !== tab || !a.sheet.isShowing || p.parent == null) return
+        render(p, tab, tab.media.usable())
+    }
+
+    private fun sections(tab: Tab, items: List<MediaCandidate>): Pair<List<VideoPanel.Section>, String?> {
         val video = ArrayList<VideoPanel.Choice>()
         val audio = ArrayList<VideoPanel.Choice>()
         val streams = ArrayList<VideoPanel.Choice>()
+        val streamAudio = ArrayList<VideoPanel.Choice>()
+        var note: String? = null
+        val names = HashMap<String, Int>()
         for (c in items) {
             when {
-                c.kind != MediaKind.FILE -> streams.add(VideoPanel.Choice(MediaLabels.format(c), "Streams are not downloadable yet", c, enabled = false))
+                c.kind == MediaKind.HLS -> when (val st = streamInfo[c.key] ?: loadStream(tab, c)) {
+                    is Loaded.Loading -> streams.add(VideoPanel.Choice("Stream", "Reading the quality list\u2026", null, enabled = false))
+                    is Loaded.Failed -> note = note ?: st.message
+                    is Loaded.Ready -> for ((ch, pick) in st.rows) (if (pick.audioOnly) streamAudio else streams).add(ch)
+                }
+                c.kind == MediaKind.DASH -> note = note ?: "This page streams in a format Kestrel cannot save yet (DASH)."
                 c.audioOnly -> audio.add(VideoPanel.Choice("Audio only", detail(c), c))
                 else -> video.add(VideoPanel.Choice(MediaLabels.quality(c.knownHeight).ifEmpty { "Video" }, detail(c), c))
             }
         }
-        return listOf(VideoPanel.Section("Video", video), VideoPanel.Section("Audio", audio), VideoPanel.Section("Streams", streams))
+        // two rows that read the same (two files of one quality) get the file's name so they can be told apart
+        for (list in listOf(video, audio)) for (ch in list) names.merge(ch.title + "|" + ch.detail, 1, Int::plus)
+        fun named(list: List<VideoPanel.Choice>) = list.map { ch -> if ((names[ch.title + "|" + ch.detail] ?: 0) > 1 && ch.tag is MediaCandidate) VideoPanel.Choice(ch.title, ch.detail + "  \u00B7  " + shortName(ch.tag.url), ch.tag) else ch }
+        return listOf(VideoPanel.Section("Video", named(video)), VideoPanel.Section("Stream", streams), VideoPanel.Section("Audio", named(audio) + streamAudio)) to note
+    }
+
+    private fun shortName(url: String): String = url.substringBefore('?').substringAfterLast('/').take(28)
+
+    // ---- HLS: read the playlist, list the qualities
+
+    private fun requestHeaders(tab: Tab): Map<String, String> {
+        val h = HashMap<String, String>()
+        UrlParts.parse(tab.url)?.let { h["Referer"] = "${it.scheme}://${it.hostForAuthority}/"; h["Origin"] = "${it.scheme}://${it.hostForAuthority}" } // the page's origin only, never its full address
+        return h
+    }
+
+    private fun loadStream(tab: Tab, c: MediaCandidate): Loaded {
+        streamInfo[c.key] = Loaded.Loading
+        val headers = requestHeaders(tab)
+        DownloadController.fetchText(a, c.url, headers, 1, tab.isPrivateTab) { text ->
+            val pl = text?.let { Hls.parse(it, c.url) }
+            when (pl) {
+                null -> { streamInfo[c.key] = Loaded.Failed("The stream's list could not be read (the site may have refused it)."); refresh(tab) }
+                is Hls.MediaPlaylist -> { streamInfo[c.key] = ready(tab, c, null, pl.media, text, null); refresh(tab) }
+                is Hls.MasterPlaylist -> loadVariants(tab, c, pl.master, headers)
+            }
+        }
+        return Loaded.Loading
+    }
+
+    /** One variant's playlist tells how long the video is (all variants are equally long); with that, every variant's size is its bit rate times it. */
+    private fun loadVariants(tab: Tab, c: MediaCandidate, master: Hls.Master, headers: Map<String, String>) {
+        val vs = master.variants
+        if (vs.isEmpty()) { streamInfo[c.key] = Loaded.Failed("This stream lists no qualities."); refresh(tab); return }
+        val probe = vs.filter { !it.audioOnly }.minByOrNull { it.bandwidth } ?: vs.minByOrNull { it.bandwidth }!!
+        DownloadController.fetchText(a, probe.url, headers, 1, tab.isPrivateTab) { text ->
+            val media = (text?.let { Hls.parse(it, probe.url) } as? Hls.MediaPlaylist)?.media
+            streamInfo[c.key] = if (media == null) Loaded.Failed("The stream's list could not be read.") else ready(tab, c, master, media, text, probe)
+            refresh(tab)
+        }
+    }
+
+    private fun ready(tab: Tab, c: MediaCandidate, master: Hls.Master?, media: Hls.Media, mediaText: String?, probe: Hls.Variant?): Loaded {
+        when (media.problem) {
+            Hls.Problem.LIVE -> return Loaded.Failed("This is a live stream. Live streams cannot be saved.")
+            Hls.Problem.DRM -> return Loaded.Failed("This video is copy-protected (DRM). Kestrel cannot save it.")
+            Hls.Problem.SAMPLE_AES, Hls.Problem.UNSUPPORTED -> return Loaded.Failed("This stream uses protection Kestrel cannot save yet.")
+            Hls.Problem.EMPTY -> return Loaded.Failed("This stream has no parts to save.")
+            null -> {}
+        }
+        val dur = MediaLabels.duration(media.durationMs)
+        val rows = ArrayList<Pair<VideoPanel.Choice, StreamPick>>()
+        if (master == null) {
+            val audio = media.container == "aac" || media.container == "mp3" || media.container == "m4a"
+            val est = media.exactBytes
+            val pick = StreamPick(if (audio) "audio" else "", c.url, mediaText, est, null, audio, media.container)
+            rows.add(VideoPanel.Choice(if (audio) "Audio only" else "Video", listOf("HLS", MediaLabels.size(est), dur).filter { it.isNotEmpty() && !(it == "size unknown") }.joinToString("  \u00B7  "), pick) to pick)
+            return Loaded.Ready(rows, null)
+        }
+        val seen = HashSet<String>()
+        for (v in master.variants.sortedWith(compareBy<Hls.Variant> { it.audioOnly }.thenByDescending { it.height }.thenByDescending { it.bandwidth })) {
+            if (!seen.add("${v.height}|${v.bandwidth / 100_000}|${v.audioOnly}")) continue
+            val est = v.bytesPerSecond * (media.durationMs / 1000)
+            val sepAudio = master.audioFor(v)
+            val text = if (v === probe) mediaText else null
+            val title = if (v.audioOnly) "Audio only" else v.label
+            val pick = StreamPick(if (v.audioOnly) "audio" else v.label, v.url, text, est, sepAudio?.url, v.audioOnly, media.container)
+            val detail = listOf("HLS", MediaLabels.size(est, estimate = true), dur, if (sepAudio != null) "picture and sound as two files" else "").filter { it.isNotEmpty() }.joinToString("  \u00B7  ")
+            rows.add(VideoPanel.Choice(title, detail, pick) to pick)
+        }
+        return Loaded.Ready(rows, null)
+    }
+
+    private fun pickStream(tab: Tab, p: StreamPick) {
+        a.sheet.dismiss()
+        val host = UrlParts.hostOf(tab.url) ?: ""
+        val stem = MediaLabels.fileStem(tab.title, host, p.label)
+        val size = MediaLabels.size(p.estimate, estimate = true)
+        val go = {
+            val h = requestHeaders(tab)
+            DownloadController.enqueueStream(a, StreamSource(p.url, p.text, tab.url.takeIf { it.isNotEmpty() }, stem, h, fetcher = 1, priv = tab.isPrivateTab, meteredOk = true, estimateBytes = p.estimate))
+            if (p.audioUrl != null) DownloadController.enqueueStream(a, StreamSource(p.audioUrl, null, tab.url.takeIf { it.isNotEmpty() }, MediaLabels.fileStem(tab.title, host, "sound"), h, fetcher = 1, priv = tab.isPrivateTab, meteredOk = true))
+            a.askNotificationPermissionOnce()
+            a.toast("Download started: Menu > Downloads")
+        }
+        val limit = a.prefs.dataSaver.confirmDownloadBytes(NetworkMonitor.metered)
+        val big = limit >= 0 && (p.estimate <= 0 || p.estimate >= limit)
+        val cleartext = p.url.startsWith("http://", true)
+        val msg = buildString {
+            append(stem).append("\nFrom: ").append(host.ifEmpty { "unknown site" }).append("\nSize: ").append(size)
+            if (cleartext) append("\n\nThis stream is not encrypted: your mobile carrier or anyone on the network could read or change the file.")
+            if (big) append("\n\nYou're on a metered connection (your phone's hotspot). This may use a lot of mobile data.")
+            if (tab.isPrivateTab) append("\n\nIt is saved in your Downloads folder and stays there after you close the private tab. Kestrel keeps no record of it.")
+        }
+        if (big || cleartext || tab.isPrivateTab) a.askYesNo("Download this video?", msg, "Download", "Cancel") { ok -> if (ok) go() } else go()
     }
 
     /** "MP4 - 48.2 MB - 1:02" */

@@ -1716,7 +1716,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     private var askedNotifications = false
     /** Android 13+: the progress notification needs the user's OK once. The downloads run either way (the service is visible in the task manager). */
-    private fun askNotificationPermissionOnce() {
+    internal fun askNotificationPermissionOnce() {
         if (askedNotifications || Build.VERSION.SDK_INT < 33) return
         askedNotifications = true
         if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 77)
