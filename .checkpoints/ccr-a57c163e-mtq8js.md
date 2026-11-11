@@ -1,13 +1,13 @@
-# CHECKPOINT 382 — read me first, then TASKS.md
+# CHECKPOINT 384 — read me first, then TASKS.md
 
-**Written:** 2026-11-11T16:23:18Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `3e0fcfe` (this checkpoint is the commit after it)
+**Written:** 2026-11-11T16:28:19Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `1315fca` (this checkpoint is the commit after it)
 
 ## Just done
-Owner request 6 recorded in TASKS.md (R1 neon not visible, R2 scrolling stutter/white space/unresponsive split second + 'implement what other browsers do', R3 pull-to-refresh). It came 3 min after alpha6 was published, so the owner is on alpha5 or older. Plan: evidence on the emulator first (scroll away/back test, dump real default prefs), then implement R1 (drop the areAnimatorsEnabled gate, stronger pulse, more places), R3 (pull-to-refresh via GeckoView InputResultDetail + a wrapper that intercepts a downward drag at the top), R2 (APZ wait, passive touch listeners, speculative connect, priority hint, memory/live-session policy) and ship alpha7.
+Owner request 7 recorded (S1 in-app update blocked by INSTALL_FAILED_INSUFFICIENT_STORAGE although 900 MB were freed; S2 'MB downloaded of total' on every download card). These come BEFORE R1-R3 because the owner cannot update to alpha6 at all. Scroll-away/back emulator experiment (R2a) finished in the background: screenshots sb0-sb4 in the scratchpad, not yet read.
 
 ## Do this next
-1) emulator is running (adb root works): measure scroll-away/back blank time on /site/long.html with alpha6 prefs; extend GeckoEngine.readBackPrefs with candidate prefs (dom.event.default_to_passive_touch_listeners, apz.*, image.mem.*, browser.sessionhistory.max_total_viewers, gfx.webrender.*) and read them in Diagnostics; 2) Neon.kt: remove ValueAnimator.areAnimatorsEnabled() gate, stronger core stroke, rest policy (Home/tab grid never rest), Diagnostics line 'neon: running/held because ...', Settings subtitle; 3) PullToRefresh: KestrelGeckoView.onTouchEventForDetailResult -> canScrollUp; wrapper intercepts downward drag; indicator chip; reload on release; 4) implement R2 items on evidence; 5) bump 106 / 0.2.0-alpha7, ship.sh gecko, dispatch android.yml (ToolSearch select mcp__github__actions_run_trigger,mcp__github__actions_list), record-release only after green; 6) answer the owner (Release link on its own line).
+1) read UpdateManager.kt / UpdatePanel.kt / InstallResultReceiver.kt: where the APK is stored, how the failure state is kept, what Check now does after a failure; 2) S1: free-space estimate via StorageManager.getAllocatableBytes + need = apk*2.5; show both numbers; Try again from the downloaded file; delete our APK copy after commit success; human error text for INSUFFICIENT_STORAGE; emulator test by filling /data (adb root) and installing; 3) S2: core/download/Planner.kt Format.status + DownloadsScreen card: 'X MB of Y MB'; update EngineTest/PlannerTest; 4) then R1 neon, R3 pull-to-refresh, R2 scrolling; 5) alpha7 (106) ship; the owner must be told how to get past the storage failure NOW (Settings > Storage, or Kestrel G > Clear cache, then Check now) in the reply
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ Owner request 6 recorded in TASKS.md (R1 neon not visible, R2 scrolling stutter/
 
 ## Last ten checkpoints
 ```
+  fcf63d9 ckpt 382: Owner request 6 recorded in TASKS.md (R1 neon not visible, R2 scrolling stutte
   4ac5081 ckpt 376: alpha6 SHIPPED + RECORDED (kestrel-g-v0.2.0-alpha6, gecko code 105, run 430556
   69d37b2 ckpt 372: gated kestrel-g-v0.2.0-alpha6 (gecko code 105) and pushed it: handoff self-tes
   3c8f9fe ckpt 371: pre-ship: alpha6: a page that Android frees to save memory now comes back wher
@@ -25,8 +26,7 @@ Owner request 6 recorded in TASKS.md (R1 neon not visible, R2 scrolling stutter/
   b84308a ckpt 342: P3+P4 DONE and verified on the emulator (blue REAPER theme: Home flames/scythe
   bf1ed62 ckpt 316: P3/P4 neon wired and compiling (both modules): Neon engine (RenderThread alpha
   6438c0a ckpt 306: Owner request 4 recorded (P1-P4: hardware speed research, engine research incl
-  8d8143c ckpt 301: N6 step 2 compiles: Android download shell (SqliteStore, MediaStoreSinks, UrlC
 ```
 
-(5 automatic checkpoint(s) since the last deliberate one — the
+(1 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
