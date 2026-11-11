@@ -26,6 +26,7 @@ esac
   echo "**$TITLE $VN** (versionCode $VC). $ABOUT"
   echo
   echo "- Install: open this page on the tablet, tap \`$ASSET\`, and allow installing from this source if Android asks. It installs over the previous $TITLE because the signing certificate is the same."
+  echo "- If Android says \"App not installed\" or \"not enough storage\": an install only finishes while a tenth of the tablet's storage stays free afterwards, on top of about 0.3 GB for the app itself (roughly 1.4 GB free on a 16 GB tablet). Free some room (old installer files in Downloads, Settings > Storage) and try again. Uninstalling first only ever worked because it frees about a gigabyte."
   echo "- Built and signed by GitHub Actions from commit \`${GITHUB_SHA:-unknown}\`; the certificate was verified on this exact APK (SHA-256 \`$CERT\`)."
   echo "- APK SHA-256: \`$SUM\`"
 } > release-notes.md
