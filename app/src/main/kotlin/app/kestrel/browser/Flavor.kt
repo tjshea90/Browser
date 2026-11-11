@@ -10,4 +10,7 @@ object Flavor {
 
     /** The app's name as shown in the updater ("Kestrel" / "Kestrel G"). */
     @JvmField var title = "Kestrel"
+
+    /** The engine has the "Scroll feel" prefs (Gecko build only): Settings shows the row. */
+    @JvmField var hasScrollFeel = false
 }

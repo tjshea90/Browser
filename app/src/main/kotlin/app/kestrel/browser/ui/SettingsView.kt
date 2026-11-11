@@ -63,6 +63,11 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
 
         section("Appearance")
         choice("Neon glow", listOf("Off", "Steady", "Subtle pulse (rests when idle)"), prefs.neon) { prefs.neon = it; app.kestrel.browser.ui.Neon.mode = it; app.kestrel.browser.ui.Neon.refresh() }
+        if (app.kestrel.browser.Flavor.hasScrollFeel) {
+            choice("Scroll feel", listOf("Standard (Firefox's own)", "Smoother: pre-draws more of the page ahead of your finger", "Smoothest: also a lower top fling speed"), prefs.scrollFeel) {
+                prefs.scrollFeel = it; l.prefsChanged()
+            }
+        }
         choice("Dark pages", listOf("Automatic", "Always", "Never"), prefs.webDark) { prefs.webDark = it }
         choice("Text size", listOf("75%", "100%", "125%", "150%", "175%", "200%"), listOf(75, 100, 125, 150, 175, 200).indexOfFirst { it >= prefs.textZoom }.let { if (it < 0) 1 else it }) {
             prefs.textZoom = listOf(75, 100, 125, 150, 175, 200)[it]
