@@ -776,6 +776,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     private var typingModeSince = 0L
+    private var focusedAt = 0L
     private var kbTopScreen = 0 // top edge of the keyboard in screen pixels while it is up, else 0
     private val kbProbe by lazy { KeyboardProbe(this) }
 
@@ -802,6 +803,7 @@ open class BrowserActivity : Activity(), DockListener {
     /** [topScreen]: the keyboard's top edge in screen pixels, 0 = no keyboard. Moves views with translationY only - nothing is re-laid-out, the page keeps its size. */
     private fun applyKeyboard(topScreen: Int) {
         kbTopScreen = topScreen
+        updateNeonBusy()
         val loc = IntArray(2)
         var lift = 0
         if (topScreen > 0 && !homeShown()) {
@@ -832,7 +834,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onUrlFocus(focused: Boolean) {
         Io.main.removeCallbacks(typingTick)
-        if (focused) { setUrlTypingMode(true); Neon.busy(true) } else typingModeSince = SystemClock.uptimeMillis()
+        if (focused) { setUrlTypingMode(true); focusedAt = SystemClock.uptimeMillis(); updateNeonBusy() } else typingModeSince = SystemClock.uptimeMillis()
         Io.main.post(typingTick)
         if (focused) {
             if (!homeShown()) { dock.urlField.setText(dock.fullUrlForEditing(current)); dock.urlField.selectAll() }
@@ -1213,7 +1215,16 @@ open class BrowserActivity : Activity(), DockListener {
         dock.bind(t, tabs.count { it.isPrivateTab == priv }, canBack || (t != null && (!t.isNewTab || t.showHome)), homeShown(t))
         val p = if (t?.loading == true) t.progress else 0
         if (progress.progress != p) progress.progress = p
-        Neon.busy(t?.loading == true || typing()) // the screen is already changing: the neon holds still
+        updateNeonBusy()
+    }
+
+    /**
+     * The neon holds still while the screen is already changing: a page is loading, or the keyboard is up (or on its way, 1.2 s after a field got focus). A field that
+     * merely HAS focus with the keyboard hidden is not typing: that state (new tab, keyboard dismissed with the keyboard's own back key) used to freeze the glow for good.
+     */
+    private fun updateNeonBusy() {
+        val keyboardComing = typing() && SystemClock.uptimeMillis() - focusedAt < 1200
+        Neon.busy(current?.loading == true || kbTopScreen > 0 || keyboardComing)
     }
 
     internal fun tabChanged(tab: Tab) { if (tab === current) updateUi(); if (tabGrid.visibility == View.VISIBLE) tabGrid.rebind(tabs, current) }
