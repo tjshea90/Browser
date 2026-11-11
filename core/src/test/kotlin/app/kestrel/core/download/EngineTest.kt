@@ -83,6 +83,8 @@ class EngineTest {
         val paused = h.pauseAt(id, 0.3)
         assertTrue(paused.done in 1 until data.size.toLong())
         // the saved record never runs ahead of the data: every cursor is inside what was written to the file
+        val end = System.currentTimeMillis() + 10_000
+        while (h.store.rows[id]?.state != DlState.PAUSED_USER && System.currentTimeMillis() < end) Thread.sleep(5) // the view shows "paused" at once; the checkpoint lands when the workers are gone
         val row = h.store.rows[id]!!
         assertTrue(row.segs.isNotEmpty() && row.state == DlState.PAUSED_USER)
         val written = h.sink(paused).bytes
