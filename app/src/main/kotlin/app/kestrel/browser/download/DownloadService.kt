@@ -24,6 +24,10 @@ class DownloadService : Service() {
     companion object {
         const val ACTION_PAUSE_ALL = "app.kestrel.browser.download.PAUSE_ALL"
         const val ACTION_RESUME_ALL = "app.kestrel.browser.download.RESUME_ALL"
+        const val ACTION_PAUSE_ID = "app.kestrel.browser.download.PAUSE_ID"
+        const val ACTION_RESUME_ID = "app.kestrel.browser.download.RESUME_ID"
+        const val ACTION_CANCEL_ID = "app.kestrel.browser.download.CANCEL_ID"
+        const val EXTRA_ID = "id"
 
         fun start(ctx: Context) {
             try { ctx.startForegroundService(Intent(ctx, DownloadService::class.java)) }
@@ -54,23 +58,26 @@ class DownloadService : Service() {
         DownloadController.init(this)
         DownloadController.startNetWatch()
         DownloadController.addListener(listener)
-        startForeground(Notifier.ID_PROGRESS, Notifier.progress(this, DownloadController.views()), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        startForeground(Notifier.ID_PROGRESS, Notifier.progress(this, DownloadController.allViews()), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         handler.postDelayed(tick, 1000)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // every startForegroundService() call must be answered with startForeground() (also when the service is already running)
-        startForeground(Notifier.ID_PROGRESS, Notifier.progress(this, DownloadController.views()), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        startForeground(Notifier.ID_PROGRESS, Notifier.progress(this, DownloadController.allViews()), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         when (intent?.action) {
             ACTION_PAUSE_ALL -> DownloadController.pauseAll()
             ACTION_RESUME_ALL -> DownloadController.resumeAll(this)
+            ACTION_PAUSE_ID -> DownloadController.pause(intent.getLongExtra(EXTRA_ID, 0L))
+            ACTION_RESUME_ID -> DownloadController.resume(this, intent.getLongExtra(EXTRA_ID, 0L))
+            ACTION_CANCEL_ID -> DownloadController.cancel(intent.getLongExtra(EXTRA_ID, 0L))
         }
         idleTicks = 0
         return START_STICKY
     }
 
     private fun refresh() {
-        try { getSystemService(NotificationManager::class.java)?.notify(Notifier.ID_PROGRESS, Notifier.progress(this, DownloadController.views())) } catch (e: Exception) { /* ignore */ }
+        try { getSystemService(NotificationManager::class.java)?.notify(Notifier.ID_PROGRESS, Notifier.progress(this, DownloadController.allViews())) } catch (e: Exception) { /* ignore */ }
     }
 
     /**

@@ -9,6 +9,7 @@ import android.content.Intent
 import android.net.Uri
 import app.kestrel.browser.R
 import app.kestrel.core.download.Action
+import app.kestrel.core.download.DEST_APP_PRIVATE
 import app.kestrel.core.download.DlState
 import app.kestrel.core.download.DownloadView
 import app.kestrel.core.download.Format
@@ -34,8 +35,10 @@ object Notifier {
         return PendingIntent.getActivity(ctx, 1, i, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
 
-    private fun serviceAction(ctx: Context, action: String, code: Int): PendingIntent =
-        PendingIntent.getService(ctx, code, Intent(ctx, DownloadService::class.java).setAction(action), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+    private fun serviceAction(ctx: Context, action: String, code: Int, id: Long = 0L): PendingIntent =
+        PendingIntent.getService(ctx, code, Intent(ctx, DownloadService::class.java).setAction(action).putExtra(DownloadService.EXTRA_ID, id), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
+    private fun title(v: DownloadView) = if (v.kind == DEST_APP_PRIVATE) "Downloading the Kestrel update" else v.name
 
     /** The ongoing notification of the foreground service. */
     fun progress(ctx: Context, views: List<DownloadView>): Notification {
@@ -52,7 +55,7 @@ object Notifier {
                 val total = running.filter { it.total > 0 }.sumOf { it.total }
                 val done = running.filter { it.total > 0 }.sumOf { it.done }
                 val speed = running.sumOf { it.bytesPerSec }
-                b.setContentTitle(if (priv) "Downloading (private)" else if (running.size == 1) running[0].name else "Downloading ${running.size} files")
+                b.setContentTitle(if (priv) "Downloading (private)" else if (running.size == 1) title(running[0]) else "Downloading ${running.size} files")
                 val text = buildString {
                     if (total > 0) append((done * 100 / total).toInt()).append(" %")
                     if (speed > 0) append(if (isEmpty()) "" else "  ·  ").append(Format.speed(speed))
@@ -60,7 +63,11 @@ object Notifier {
                 }
                 b.setContentText(text.ifEmpty { "Starting…" })
                 if (total > 0) b.setProgress(100, (done * 100 / total).toInt(), false) else b.setProgress(0, 0, true)
-                if (running.any { it.actions.contains(Action.PAUSE) }) b.addAction(Notification.Action.Builder(null, "Pause all", serviceAction(ctx, DownloadService.ACTION_PAUSE_ALL, 2)).build())
+                if (running.size == 1) {
+                    val one = running[0]
+                    if (one.actions.contains(Action.PAUSE)) b.addAction(Notification.Action.Builder(null, "Pause", serviceAction(ctx, DownloadService.ACTION_PAUSE_ID, 5, one.id)).build())
+                    b.addAction(Notification.Action.Builder(null, "Cancel", serviceAction(ctx, DownloadService.ACTION_CANCEL_ID, 6, one.id)).build())
+                } else if (running.any { it.actions.contains(Action.PAUSE) }) b.addAction(Notification.Action.Builder(null, "Pause all", serviceAction(ctx, DownloadService.ACTION_PAUSE_ALL, 2)).build())
             }
             waiting.isNotEmpty() -> {
                 b.setContentTitle("Downloads waiting")
@@ -87,6 +94,7 @@ object Notifier {
             .setContentText(if (v.priv) "A private download" else v.name + if (!ok) "  ·  " + Format.failure(v) else "")
             .setAutoCancel(true)
             .setContentIntent(openApp(ctx))
+        if (!ok && !v.priv) b.addAction(Notification.Action.Builder(null, "Retry", serviceAction(ctx, DownloadService.ACTION_RESUME_ID, 7 + (v.id and 0xff).toInt(), v.id)).build())
         val uri = v.destUri
         if (ok && uri != null && !v.priv) {
             val open = Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse(uri), v.mime ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
