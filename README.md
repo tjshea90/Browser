@@ -106,14 +106,16 @@ Anyone could build a look-alike APK with the same key, so install APKs only from
 `SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`, `SIGNING_KEY_PASSWORD` and re-pin `signing/CERT_SHA256` (the APKs use v3 signing, which allows a key rotation without uninstalling).
 
 ## Build, test, develop
+**Releases are built by GitHub Actions, not by hand**: the `Build APK` workflow (`.github/workflows/android.yml`, started from the Actions tab → *Run workflow*, choose the app and tick *full_build*)
+runs the tests, builds and signs the APK, checks its certificate, and publishes a GitHub Release (`kestrel-v<version>` / `kestrel-g-v<version>`) with the APK attached.
+Local checks while developing:
 ```
 ./gradlew :core:test                  # filtering engine (JVM, ~10 s)
 ./gradlew :app:testDebugUnitTest      # real Activity on Android 10 via Robolectric (downloads its framework jar once)
 cd web-tests && npm test              # injected page script in headless Chromium (Playwright)
-bash scripts/verify.sh full           # everything + lint + R8 + APK audit
-bash scripts/build-apk.sh             # -> dist/kestrel-<version>.apk
+bash scripts/verify.sh full           # WebView build: everything + lint + R8 + APK audit
 ```
-Needs JDK 17+, the Android SDK (platform 36, build-tools 36). The bundled filter snapshot is regenerated with `scripts/make-default-lists.sh` (see `docs/FILTER-LISTS.md`).
+Needs JDK 17+, the Android SDK (platform 36, build-tools 36; platform 37.0 for the Gecko module). The bundled filter snapshot is regenerated with `scripts/make-default-lists.sh` (see `docs/FILTER-LISTS.md`).
 Design and rationale: `docs/ARCHITECTURE.md`, `docs/HARDWARE.md`. Licences of bundled lists: `docs/FILTER-LISTS.md`. This project has no licence chosen yet.
 
 ## For Claude sessions
