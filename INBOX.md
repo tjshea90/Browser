@@ -23,3 +23,16 @@ To do :
 Send me the prompt again if I pressed deny on accident 
 Always keep my prompts and respond to each one even if I interrupt. Don't ignore any prompt. In addition to the features I asked you to build, keep in mind an issue I have with brave : it freezes a lot especially when I'm typing and I have to switch apps and go back to brave for it to refresh. I don't want this problem with kestrel
 ```
+
+## 2026-11-11T05:26:26Z
+```
+So far I like alpha 3.
+
+1) make it so when github makes a new release the app itself will see it and I can update the browser inside of the app
+2) move the entire top navigation bar to the bottom, including url bar, refresh, new tab button, etc.
+3) add a home button to the navigation bar. Make the home page a very simple black screen with a large stylized text field in the middle which does a Google search for any words or if I type a url it goes to that url
+4) separate private tabs from regular tabs, make sure there is an indicator for private tabs 
+5) make the tab switching easier and with a good gui like major browsers, with a small thumbnail preview of a live view of every website tab open. 
+6) when I go to downloads, it tries to open my file manager. I want this browser to have a full featured smart and fast download manager with pause and resume and fast features. 
+7) begin work on the other things I already asked for. Show me what Claude can do, make the gui amazing and intuitive. Make the entire app snappy and fast. I want to be impressed 
+```
