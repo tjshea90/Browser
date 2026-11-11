@@ -75,7 +75,7 @@ Do this next; stand down if another session's real work is under 60 minutes old"
 ## Engineering rules
 - Dependencies: kotlin-stdlib only (+ maybe androidx.profileinstaller) in `:app`. NO AppCompat/Compose/Material/Room/WorkManager/coroutines/Glide. `:geckoapp` adds GeckoView only (exclude kotlin-stdlib 2.4.x and every `com.google.android.gms`).
 - No native code of our own (device is 32-bit userspace). No `largeHeap`. Keep our own heap < ~25 MB. Never block the UI thread: disk/SQLite/network on the IO executor. `shouldInterceptRequest` must be allocation-light.
-- Injected JS must be conservative ES5. Hotspot rules: no background network except the weekly conditional filter-list refresh; never reload background tabs at startup; prefer cache when offline; confirm big downloads on metered links; no search suggestions unless the user enables them.
+- Injected JS must be conservative ES5. Hotspot rules: no background network except the weekly conditional filter-list refresh and the once-a-day conditional app-release check made when the app comes to the front (`update/UpdateManager`, ETag so "nothing new" is a 304; the APK itself is only ever downloaded after the user taps it and confirms the size on a metered link); never reload background tabs at startup; prefer cache when offline; confirm big downloads on metered links; no search suggestions unless the user enables them.
 - Security: no `addJavascriptInterface` on untrusted content; file/content access off; mixed content never allowed; SSL errors never auto-proceed; `allowBackup=false`. Do not use Brave's name/logo. "Kestrel" is a placeholder name (one string + applicationId).
 
 ## Environment quirks (this cloud sandbox)
