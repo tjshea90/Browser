@@ -26,7 +26,7 @@ class StreamStoreFiles(private val root: File, private val privateRoot: File) : 
                 r.fetcher = j.optInt("fetcher"); r.meteredOk = j.optBoolean("meteredOk")
                 r.nameStem = j.optString("nameStem"); r.name = j.optString("name"); r.mime = j.optString("mime").takeIf { it.isNotEmpty() }
                 r.destKind = j.optInt("destKind"); r.destUri = j.optString("destUri").takeIf { it.isNotEmpty() }
-                r.estimate = j.optLong("estimate", -1); r.appended = j.optLong("appended"); r.next = j.optInt("next"); r.initDone = j.optBoolean("initDone")
+                r.estimate = j.optLong("estimate", -1); r.repId = j.optString("repId").takeIf { it.isNotEmpty() }; r.ext = j.optString("ext").takeIf { it.isNotEmpty() }; r.appended = j.optLong("appended"); r.next = j.optInt("next"); r.initDone = j.optBoolean("initDone")
                 r.total = j.optLong("total", -1); r.created = j.optLong("created"); r.updated = j.optLong("updated"); r.finished = j.optLong("finished")
                 val pl = File(root, "${r.id}.m3u8")
                 if (pl.isFile) r.playlistText = pl.readText()
@@ -41,7 +41,7 @@ class StreamStoreFiles(private val root: File, private val privateRoot: File) : 
         j.put("id", r.id); j.put("state", r.state.code); j.put("reason", r.reason.code); j.put("detail", r.detail)
         j.put("url", r.url); j.put("pageUrl", r.pageUrl ?: ""); j.put("headers", JSONObject(r.headers as Map<*, *>))
         j.put("fetcher", r.fetcher); j.put("meteredOk", r.meteredOk); j.put("nameStem", r.nameStem); j.put("name", r.name); j.put("mime", r.mime ?: "")
-        j.put("destKind", r.destKind); j.put("destUri", r.destUri ?: ""); j.put("estimate", r.estimate); j.put("appended", r.appended); j.put("next", r.next)
+        j.put("destKind", r.destKind); j.put("destUri", r.destUri ?: ""); j.put("estimate", r.estimate); j.put("repId", r.repId ?: ""); j.put("ext", r.ext ?: ""); j.put("appended", r.appended); j.put("next", r.next)
         j.put("initDone", r.initDone); j.put("total", r.total); j.put("created", r.created); j.put("updated", r.updated); j.put("finished", r.finished)
         val text = r.playlistText
         val pl = File(root, "${r.id}.m3u8")

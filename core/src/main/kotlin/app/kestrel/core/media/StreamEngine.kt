@@ -46,6 +46,10 @@ class StreamSource(
     val destKind: Int = DEST_PUBLIC,
     /** A size guess for the progress bar before the first segments arrive (bit rate x length), -1 = none. */
     val estimateBytes: Long = -1,
+    /** DASH: which Representation of the manifest at [playlistUrl] to download. */
+    val repId: String? = null,
+    /** Force the file extension (DASH audio: "m4a"); null = from the stream's container. */
+    val ext: String? = null,
 )
 
 /** One stream download as stored (everything needed to carry on after the app was killed: the playlist text is kept, so the segment list is the same on resume). */
@@ -66,6 +70,8 @@ class StreamRec(@JvmField val id: Long) {
     @JvmField var destKind = DEST_PUBLIC
     @JvmField var destUri: String? = null
     @JvmField var estimate = -1L
+    @JvmField var repId: String? = null
+    @JvmField var ext: String? = null
     /** Bytes of the output written (and flushed) so far, and the index of the next segment to write. */
     @JvmField var appended = 0L
     @JvmField var next = 0
@@ -78,7 +84,7 @@ class StreamRec(@JvmField val id: Long) {
     fun snapshot(): StreamRec {
         val r = StreamRec(id)
         r.state = state; r.reason = reason; r.detail = detail; r.url = url; r.playlistText = playlistText; r.pageUrl = pageUrl; r.headers = headers; r.fetcher = fetcher; r.priv = priv
-        r.meteredOk = meteredOk; r.nameStem = nameStem; r.name = name; r.mime = mime; r.destKind = destKind; r.destUri = destUri; r.estimate = estimate; r.appended = appended
+        r.meteredOk = meteredOk; r.nameStem = nameStem; r.name = name; r.mime = mime; r.destKind = destKind; r.destUri = destUri; r.estimate = estimate; r.repId = repId; r.ext = ext; r.appended = appended
         r.next = next; r.initDone = initDone; r.total = total; r.created = created; r.updated = updated; r.finished = finished
         return r
     }
@@ -189,7 +195,7 @@ class StreamEngine(
         control.execute {
             val r = StreamRec(id)
             r.url = s.playlistUrl; r.playlistText = s.playlistText; r.pageUrl = s.pageUrl; r.headers = s.headers; r.fetcher = s.fetcher; r.priv = s.priv; r.meteredOk = s.meteredOk
-            r.nameStem = FileNames.sanitize(s.nameStem.ifBlank { "video" }); r.name = r.nameStem; r.destKind = s.destKind; r.estimate = s.estimateBytes
+            r.nameStem = FileNames.sanitize(s.nameStem.ifBlank { "video" }); r.name = r.nameStem; r.destKind = s.destKind; r.estimate = s.estimateBytes; r.repId = s.repId; r.ext = s.ext
             r.created = clock.now(); r.updated = r.created
             if (!(s.playlistUrl.startsWith("http://", true) || s.playlistUrl.startsWith("https://", true))) { r.state = DlState.FAILED; r.reason = Reason.BAD_URL; r.finished = r.created }
             persist(r)
@@ -412,8 +418,12 @@ class StreamEngine(
                 if (!net.online) throw Stopped().also { synchronized(lock) { job.stopState = DlState.WAITING_NETWORK } }
                 text = readText(job, fetcher, rec.url)
             }
-            val pl = Hls.parse(text, rec.url) as? Hls.MediaPlaylist ?: throw Failed(Reason.BAD_PLAYLIST)
-            val media = pl.media
+            val media: Hls.Media = if (text.trimStart('\uFEFF', ' ', '\n', '\r', '\t').startsWith("<")) {
+                val man = Dash.parse(text, rec.url) ?: throw Failed(Reason.BAD_PLAYLIST)
+                when (man.problem) { Hls.Problem.LIVE -> throw Failed(Reason.LIVE); Hls.Problem.DRM -> throw Failed(Reason.DRM); Hls.Problem.UNSUPPORTED -> throw Failed(Reason.UNSUPPORTED); else -> {} }
+                val rep = man.reps.firstOrNull { it.id == (rec.repId ?: it.id) } ?: throw Failed(Reason.BAD_PLAYLIST)
+                rep.media ?: throw Failed(Reason.UNSUPPORTED)
+            } else (Hls.parse(text, rec.url) as? Hls.MediaPlaylist ?: throw Failed(Reason.BAD_PLAYLIST)).media
             when (media.problem) {
                 Hls.Problem.LIVE -> throw Failed(Reason.LIVE)
                 Hls.Problem.DRM -> throw Failed(Reason.DRM)
@@ -424,9 +434,9 @@ class StreamEngine(
             synchronized(lock) {
                 job.media = media
                 rec.playlistText = text
-                val ext = media.container
+                val ext = rec.ext ?: media.container
                 rec.name = FileNames.sanitize(rec.nameStem + "." + ext)
-                rec.mime = when (ext) { "mp4" -> "video/mp4"; "aac" -> "audio/aac"; "mp3" -> "audio/mpeg"; "m4a" -> "audio/mp4"; else -> "video/mp2t" }
+                rec.mime = when (ext) { "mp4" -> "video/mp4"; "webm" -> "video/webm"; "aac" -> "audio/aac"; "mp3" -> "audio/mpeg"; "m4a" -> "audio/mp4"; else -> "video/mp2t" }
                 if (media.exactBytes >= 0) rec.estimate = media.exactBytes
             }
         }
