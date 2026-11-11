@@ -16,7 +16,6 @@ import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
-import android.os.PowerManager
 import android.os.SystemClock
 import android.view.Gravity
 import android.view.View
@@ -33,22 +32,17 @@ import kotlin.math.pow
  * off-screen layer). It is stepped at 10 Hz instead of animated at the display's 60 Hz: a slow breath changes ~1-2 % of alpha per step, which the eye cannot tell
  * from a smooth ramp, and every step costs one tiny frame - six times fewer frames than a RenderThread animation on a tablet whose GPU would otherwise idle.
  * While a glow runs it is cached as a small hardware layer (the strokes are drawn once; a step only re-blends a texture); at rest the layer is dropped.
- * All glows share one clock, so they breathe together. The glows hold still (a steady glow, no frames) while the keyboard is up, during the first seconds of a page load, while a finger is on the screen (and
- * after a swipe, for the fling), in battery-saver, when the app is not on screen, and after [IDLE_MS] without a touch while a page is in front - so a tablet left on a page lets the screen go quiet and the SoC idle.
- * NOT gated on the system's animation scale (the owner runs with animations off and still wants this).
+ * All glows share one clock, so they breathe together. The glows hold still (a steady glow, no frames) only while the keyboard is up, during the first seconds of a page load, while a finger is dragging
+ * (and after a swipe, for the fling), when the app is not on screen and while a full-screen page covers them. NOT gated on the system's animation scale, on battery saver or on idle time
+ * (the owner runs with animations off and asked twice for a pulse he can see); Settings > Neon glow shows what it is doing and can run a 10 second test.
  */
 object Neon {
     const val OFF = 0
     const val STATIC = 1
     const val PULSE = 2
-    /** No touch for this long, with a page in front: the glows settle to a steady glow until the next touch (never on Home, the tab grid or a sheet: see [canRest]). */
-    const val IDLE_MS = 120_000L
 
     /** 0 = no glow at all, 1 = steady glow, 2 = subtle pulse (default). Set from Settings. */
     @JvmField @Volatile var mode = PULSE
-
-    /** Set by the activity: false while Home / the tab grid / a sheet is in front. There nothing else happens on screen, so the glow keeps breathing. */
-    @JvmField var canRest: () -> Boolean = { true }
 
     /** One breath every 3.4 s, stepped every 100 ms (10 Hz). */
     private const val TICK_MS = 100L
@@ -57,6 +51,8 @@ object Neon {
 
     private val pulsers = ArrayList<Pulser>() // UI thread only
     private var ticking = false
+    private var steps = 0L
+    private var lastAlpha = 0f
     private val tick = object : Runnable {
         override fun run() {
             val now = SystemClock.uptimeMillis()
@@ -65,27 +61,21 @@ object Neon {
                 any = true
                 val phase = (now % p.periodMs) / p.periodMs.toFloat() // one shared clock: every glow breathes in step
                 val k = 0.5f - 0.5f * cos(phase * 6.2831855f) // 0..1..0, eased at both ends
-                p.v.alpha = p.lo + (p.hi - p.lo) * k
+                lastAlpha = p.lo + (p.hi - p.lo) * k
+                p.v.alpha = lastAlpha
             }
+            steps++
             ticking = any
             if (any) handler.postDelayed(this, TICK_MS)
         }
     }
     private val handler = Handler(Looper.getMainLooper())
-    private var busy = false // typing or loading: the screen is already changing, hold the glow still
-    private var touching = false // a finger is on the screen or a fling is still running: never compete with the page's scrolling for frames
+    private var busy = false // the keyboard is up (or on its way) or a page has only just started loading: the screen is changing already
+    private var touching = false // a finger is dragging or a fling is still running: never compete with the page's scrolling for frames
     private var away = true // the app is not on screen
     private var covered = false // a full-screen page (Downloads, Settings, History, Diagnostics) hides every glow: nothing to animate
-    private var resting = false // no touch for IDLE_MS
-    private var powerSave = false
-    private var lastTouch = 0L
-    private var restPosted = false
-    private val restCheck = Runnable {
-        restPosted = false
-        val left = IDLE_MS - (SystemClock.uptimeMillis() - lastTouch)
-        if (away) return@Runnable
-        if (left > 0) postRestCheck(left) else if (!resting) { if (canRest()) { resting = true; applyAll() } else postRestCheck(IDLE_MS) }
-    }
+    private var forcedUntil = 0L // "Test the pulse": every hold is ignored until then
+    private val endTest = Runnable { applyAll() }
 
     /** Make [v] breathe between alpha [lo] and [hi]. Attach once per view; it follows the view's attach/detach/visibility by itself. */
     fun pulse(v: GlowView, lo: Float = 0.5f, hi: Float = 1f, periodMs: Long = 4200L) {
@@ -98,30 +88,23 @@ object Neon {
         if (v.isAttachedToWindow) apply(p, v.isShown)
     }
 
-    /** Typing or loading: hold every glow still (true) or let them breathe again (false). */
+    /** The keyboard is up / a page just started loading (true), or the screen is calm again (false): hold every glow still while true. */
     fun busy(on: Boolean) { if (busy != on) { busy = on; applyAll() } }
 
-    /** A finger went down (true) / the last one is up and the fling has had time to end (false). The glows hold still while true. */
+    /** A finger is dragging / a fling is still running (true) / the last finger is up and the fling has had time to end (false). The glows hold still while true. */
     fun touching(on: Boolean) { if (touching != on) { touching = on; applyAll() } }
 
     /** A full-screen page covers the glows (true) / the glows are in view again (false): no frames for glows nobody can see. */
     fun covered(on: Boolean) { if (covered != on) { covered = on; applyAll() } }
 
-    /** The app came to the front / went away. Re-reads battery-saver. */
-    fun foreground(on: Boolean, ctx: Context? = null) {
-        if (ctx != null) powerSave = try { ctx.getSystemService(PowerManager::class.java)?.isPowerSaveMode == true } catch (e: Exception) { false }
-        away = !on
-        handler.removeCallbacks(restCheck); restPosted = false
-        if (on) { lastTouch = SystemClock.uptimeMillis(); resting = false; postRestCheck(IDLE_MS) }
-        applyAll()
-    }
+    /** The app came to the front / went away. */
+    fun foreground(on: Boolean) { away = !on; applyAll() }
 
-    /** Any touch on the screen (cheap: a clock read; the rest timer is re-armed lazily). */
-    fun touched() {
-        lastTouch = SystemClock.uptimeMillis()
-        if (away) return
-        if (resting) { resting = false; applyAll() }
-        if (!restPosted) postRestCheck(IDLE_MS)
+    /** Settings > "Test the pulse": every glow breathes for [ms] whatever else is going on (even with the setting off), so a pulse that never shows can be told apart from a hold. */
+    fun test(ms: Long) {
+        forcedUntil = SystemClock.uptimeMillis() + ms
+        handler.removeCallbacks(endTest); handler.postDelayed(endTest, ms + 50)
+        applyAll()
     }
 
     /** Re-read the mode and start or stop every pulse (after a settings change). */
@@ -129,24 +112,26 @@ object Neon {
 
     internal fun visibility(v: GlowView, visible: Boolean) { for (p in pulsers) if (p.v === v) apply(p, visible) }
 
-    private fun postRestCheck(delay: Long) { restPosted = true; handler.postDelayed(restCheck, delay) }
     private fun applyAll() { for (p in pulsers.toList()) apply(p, p.v.isShown) }
-    // NOT gated on the system's animation scale (Developer options): the owner switches system animations off and still asked for this pulse; Settings > Neon glow is the switch.
-    private fun animated(): Boolean = mode == PULSE && !busy && !touching && !away && !resting && !powerSave && !covered
+    private fun forced(): Boolean = SystemClock.uptimeMillis() < forcedUntil
+    // NOT gated on the system's animation scale (Developer options) and NOT on battery saver or on idle time: the owner asked for a pulse he can see, Settings > Neon glow is the switch.
+    private fun animated(): Boolean = mode == PULSE && !busy && !touching && !away && !covered
 
-    /** One line for Diagnostics / Settings: is the glow breathing, and if not, why. */
+    /** One line for Settings / Diagnostics: is the glow breathing, and if not, why. */
     fun status(): String {
-        if (mode == OFF) return "off (Settings)"
-        if (mode == STATIC) return "steady (Settings)"
+        if (forced()) return "test running: every glow is breathing"
+        if (mode == OFF) return "off (Settings > Neon glow)"
+        if (mode == STATIC) return "steady (Settings > Neon glow is set to Steady)"
         val why = ArrayList<String>()
         if (busy) why.add("keyboard up or page just started loading"); if (touching) why.add("finger on screen"); if (away) why.add("app not in front")
-        if (resting) why.add("idle rest"); if (powerSave) why.add("battery saver"); if (covered) why.add("a full-screen page covers them")
+        if (covered) why.add("a full-screen page covers them")
         val running = pulsers.count { it.running }
-        return if (why.isEmpty()) "pulsing ($running glows running)" else "holding still: " + why.joinToString(", ")
+        return if (why.isEmpty()) "pulsing ($running glows running, $steps steps, last alpha ${"%.2f".format(lastAlpha)})" else "holding still: " + why.joinToString(", ")
     }
 
     private fun apply(p: Pulser, visible: Boolean) {
         when {
+            visible && forced() -> start(p)
             mode == OFF -> { stop(p); p.v.alpha = 0f }
             visible && animated() -> start(p)
             else -> { stop(p); p.v.alpha = p.lo + (p.hi - p.lo) * 0.7f } // a steady glow at about 70 % of the peak

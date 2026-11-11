@@ -209,7 +209,7 @@ open class BrowserActivity : Activity(), DockListener {
     override fun onStart() {
         super.onStart()
         NetworkMonitor.start(this)
-        Neon.foreground(true, this)
+        Neon.foreground(true)
     }
 
     override fun onResume() {
@@ -252,7 +252,7 @@ open class BrowserActivity : Activity(), DockListener {
     override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
         when (ev.actionMasked) {
             android.view.MotionEvent.ACTION_DOWN -> {
-                Neon.touched(); Neon.touching(true)
+                Neon.touching(true)
                 lastTouchAt = SystemClock.uptimeMillis()
                 downX = ev.x; downY = ev.y; dragged = false
                 Io.main.removeCallbacks(touchRelease)
@@ -370,8 +370,6 @@ open class BrowserActivity : Activity(), DockListener {
             override fun onChildViewAdded(parent: View?, child: View?) { updateNeonCover() }
             override fun onChildViewRemoved(parent: View?, child: View?) { updateNeonCover() }
         })
-        // the neon only settles to a steady glow after 2 minutes without a touch while a PAGE is in front; on Home, in the tab grid and under a sheet it keeps breathing
-        Neon.canRest = { current != null && !homeShown() && tabGrid.visibility != View.VISIBLE && !sheet.isShowing }
         fullscreen = FrameLayout(this).apply { setBackgroundColor(0xFF000000.toInt()); visibility = View.GONE; isClickable = true }
         root.addView(fullscreen, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         setContentView(root)
