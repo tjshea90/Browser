@@ -16,3 +16,4 @@
 - 2026-11-11T00:15:44Z [L1] hotspot: unvalidated Wi-Fi no longer forces stale cache-first loads; Open saved copy action; https fallback only suppressed when offline; 9 new tests (mutation-checked); docs+CI trigger limited to milestones
 - 2026-11-11T00:16:50Z [L1] STATE: phase 7 progress, review agents pending, resume instructions
 - 2026-11-11T00:26:40Z [L1] Google default search + omnibox rule (non-address -> search; 3:1/10:30 fixed), GMS-less wording (Safe Browsing, WebView updates, SSL hints), README/CLAUDE/HARDWARE/STATE owner facts; core 119 + app 62 tests green
+- 2026-11-11T00:39:37Z [L1] review triage board (security 13 + correctness 9 findings), emulator boot recipe; first real-device run: app works on Android 10 / Chromium 74

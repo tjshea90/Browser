@@ -1,8 +1,8 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** 2026-11-11T00:26:40Z (L1) on `ccr-a57c163e-mtq8js` after f44880b
-- **Summary:** Google default search + omnibox rule (non-address -> search; 3:1/10:30 fixed), GMS-less wording (Safe Browsing, WebView updates, SSL hints), README/CLAUDE/HARDWARE/STATE owner facts; core 119 + app 62 tests green
+- **Last checkpoint:** 2026-11-11T00:39:37Z (L1) on `ccr-a57c163e-mtq8js` after 3a1ee21
+- **Summary:** review triage board (security 13 + correctness 9 findings), emulator boot recipe; first real-device run: app works on Android 10 / Chromium 74
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE
