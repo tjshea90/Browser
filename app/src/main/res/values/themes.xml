@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Framework-only theme (no AppCompat/Material): DeviceDefault.DayNight exists since API 29 = the device's own API level. -->
-    <style name="Theme.Kestrel" parent="@android:style/Theme.DeviceDefault.DayNight">
+    <!-- Framework-only theme (no AppCompat/Material). Dark only, no window animations anywhere. -->
+    <style name="Theme.Kestrel" parent="@android:style/Theme.DeviceDefault">
         <item name="android:windowAnimationStyle">@null</item>
         <item name="android:alertDialogTheme">@style/Theme.Kestrel.Alert</item>
         <item name="android:windowNoTitle">true</item>
@@ -9,16 +9,18 @@
         <item name="android:windowBackground">@color/window_bg</item>
         <item name="android:statusBarColor">@color/chrome_bg</item>
         <item name="android:navigationBarColor">@color/chrome_bg</item>
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:windowLightNavigationBar">true</item>
-        <!-- Our native UI has its own dark palette; do not let the OS "force dark" re-colour it a second time. -->
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <!-- Our native UI is already dark; do not let the OS "force dark" re-colour it a second time. -->
         <item name="android:forceDarkAllowed">false</item>
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
         <item name="android:textColorPrimary">@color/chrome_fg</item>
         <item name="android:textColorSecondary">@color/chrome_fg_muted</item>
+        <item name="android:colorAccent">@color/accent</item>
     </style>
     <!-- Alert dialogs without the framework's pop-in animation. -->
-    <style name="Theme.Kestrel.Alert" parent="@android:style/Theme.DeviceDefault.Light.Dialog.Alert">
+    <style name="Theme.Kestrel.Alert" parent="@android:style/Theme.DeviceDefault.Dialog.Alert">
         <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:colorAccent">@color/accent</item>
     </style>
 </resources>
