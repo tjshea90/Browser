@@ -133,11 +133,12 @@ N=$((N+1))
   # checkpoint forever would be pure overhead. One line is enough: it's the
   # thing CLAUDE.md can't say because CLAUDE.md doesn't know when this was
   # written.
-  echo "*(resuming? CLAUDE.md's \"FIRST ACTION OF EVERY SESSION\" comes before \"Starting a session\" — do that one first, or autosave stays off all session.)*"
+  echo "*(resuming? CLAUDE.md's \"FIRST ACTION OF EVERY SESSION\" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*"
   echo
   echo "## Uncommitted right now"
-  if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-    git status --porcelain 2>/dev/null | sed 's/^/    /'
+  # (this very file is always modified at this point: leave it out so the list only shows real work in flight)
+  if [ -n "$(git status --porcelain 2>/dev/null | grep -v ' CHECKPOINT\.md$')" ]; then
+    git status --porcelain 2>/dev/null | grep -v ' CHECKPOINT\.md$' | sed 's/^/    /'
   else
     echo "    (nothing — the tree is clean as of this checkpoint)"
   fi
