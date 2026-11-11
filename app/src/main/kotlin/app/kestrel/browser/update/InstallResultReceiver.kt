@@ -18,6 +18,11 @@ class InstallResultReceiver : BroadcastReceiver() {
             }
             PackageInstaller.STATUS_SUCCESS -> { /* the app is replaced and restarted by Android; UpdateManager.init() tidies the old file on the next start */ }
             PackageInstaller.STATUS_FAILURE_ABORTED -> UpdateManager.installCancelled(ctx)
+            PackageInstaller.STATUS_FAILURE_STORAGE -> UpdateManager.installNeedsSpace(ctx)
+            PackageInstaller.STATUS_FAILURE_BLOCKED -> UpdateManager.installFailed(ctx, "Android or a security setting on this tablet blocked the installation")
+            PackageInstaller.STATUS_FAILURE_CONFLICT -> UpdateManager.installFailed(ctx, "it conflicts with the app that is installed (usually a different signing key)")
+            PackageInstaller.STATUS_FAILURE_INCOMPATIBLE -> UpdateManager.installFailed(ctx, "this version is not compatible with this tablet")
+            PackageInstaller.STATUS_FAILURE_INVALID -> UpdateManager.installFailed(ctx, "the downloaded file is not a valid app; delete it and download it again")
             else -> UpdateManager.installFailed(ctx, intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE))
         }
     }

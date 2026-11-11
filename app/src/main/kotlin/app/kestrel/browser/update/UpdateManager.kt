@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInstaller
+import android.os.storage.StorageManager
 import android.os.Build
 import app.kestrel.browser.Flavor
 import app.kestrel.browser.Io
@@ -20,6 +21,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import java.util.zip.ZipFile
 import java.util.concurrent.CopyOnWriteArrayList
 import javax.net.ssl.SSLException
 
@@ -35,7 +37,7 @@ import javax.net.ssl.SSLException
  * Pure decisions (which release, checksum, resume) live in core/UpdateLogic and are unit-tested.
  */
 object UpdateManager {
-    enum class Phase { IDLE, CHECKING, UP_TO_DATE, AVAILABLE, DOWNLOADING, READY, INSTALLING, NEEDS_PERMISSION, ERROR }
+    enum class Phase { IDLE, CHECKING, UP_TO_DATE, AVAILABLE, DOWNLOADING, READY, INSTALLING, NEEDS_PERMISSION, NEEDS_SPACE, ERROR }
 
     class State(
         val phase: Phase,
@@ -45,6 +47,11 @@ object UpdateManager {
         val message: String = "",
         val checkedAt: Long = 0,
         val installedName: String = "",
+        /** NEEDS_SPACE only: bytes still to free (rounded up to 10 MB), free space now, whether the downloaded file is still there, and the installed size Android must find room for. */
+        val shortBy: Long = 0,
+        val freeNow: Long = 0,
+        val fileKept: Boolean = true,
+        val installedBytes: Long = 0,
     )
 
     @Volatile var state = State(Phase.IDLE)
@@ -73,7 +80,7 @@ object UpdateManager {
     }
 
     /** True while the user should be told about an update: a dot on the menu button. */
-    fun pending(): Boolean = state.phase == Phase.AVAILABLE || state.phase == Phase.DOWNLOADING || state.phase == Phase.READY || state.phase == Phase.INSTALLING || state.phase == Phase.NEEDS_PERMISSION
+    fun pending(): Boolean = state.phase == Phase.AVAILABLE || state.phase == Phase.DOWNLOADING || state.phase == Phase.READY || state.phase == Phase.INSTALLING || state.phase == Phase.NEEDS_SPACE || state.phase == Phase.NEEDS_PERMISSION
 
     /** Restore what the last session knew (offer, last check) so the dot and the panel are right at once, without any network. */
     fun init(ctx: Context) {
@@ -87,7 +94,7 @@ object UpdateManager {
             val isReady = f.isFile && f.length() == offer.size && s.getString("verified", null) == offer.tag
             set(ctx, if (isReady) Phase.READY else Phase.AVAILABLE, offer, if (isReady) offer.size else File(dir(ctx), offer.apkName + ".part").length(), offer.size, checkedAt = checked)
         } else {
-            if (offer != null) cleanup(ctx) // the update was installed: drop the leftover APK
+            if (offer != null) { cleanup(ctx); s.edit().remove("extra").apply() } // the update was installed: drop the leftover APK and what we learned about this tablet's storage
             set(ctx, if (checked > 0) Phase.UP_TO_DATE else Phase.IDLE, null, checkedAt = checked)
         }
     }
@@ -178,15 +185,13 @@ object UpdateManager {
         val d = dir(app); d.mkdirs()
         val part = File(d, offer.apkName + ".part")
         val done = File(d, offer.apkName)
-        val need = (offer.size - part.length()).coerceAtLeast(0) * 2 + 64L * 1024 * 1024 // the file, the installer's copy, some room
-        if (d.usableSpace < need) {
-            fail(app, "Not enough free space: about ${UpdateLogic.formatSize(need)} is needed. Free some storage and try again.")
-            return
-        }
         cancelled = false
         set(app, Phase.DOWNLOADING, offer, part.length(), offer.size)
         Thread({
             try {
+                // Before spending the hotspot's data: will Android's installer find room for this update once the file is here? (the same numbers its own check uses)
+                val sp0 = space(app, offer, null, pending = (offer.size - part.length()).coerceAtLeast(0))
+                if (sp0.plan.shortBy > 0) { needSpace(app, offer, sp0, fileKept = false); return@Thread }
                 var have = part.length()
                 if (have > offer.size) { part.delete(); have = 0 }
                 val c = open(offer.apkUrl)
@@ -257,6 +262,57 @@ object UpdateManager {
 
     // ------------------------------------------------------------------------------------------- install
 
+    /** Space Android's installer may use (free space + caches the system may clear - its own reserve): the number its own storage check compares with. */
+    private fun allocatable(ctx: Context): Long = try {
+        val sm = ctx.getSystemService(StorageManager::class.java)
+        sm.getAllocatableBytes(sm.getUuidForPath(dir(ctx)))
+    } catch (e: Exception) { (dir(ctx).usableSpace - (500L shl 20)).coerceAtLeast(0) }
+
+    /** Bytes the installer unpacks from the APK: read from the file when we have it, else estimated from the libraries of the app that is installed now. */
+    private fun nativeLibBytes(ctx: Context, apk: File?): Long {
+        if (apk != null && apk.isFile) try {
+            ZipFile(apk).use { z ->
+                var sum = 0L
+                val en = z.entries()
+                while (en.hasMoreElements()) { val e = en.nextElement(); if (!e.isDirectory && e.name.startsWith("lib/")) sum += e.size.coerceAtLeast(0) }
+                return sum
+            }
+        } catch (e: Exception) { /* fall through to the estimate */ }
+        return try { File(ctx.applicationInfo.nativeLibraryDir).listFiles()?.sumOf { it.length() } ?: 0L } catch (e: Exception) { 0L }
+    }
+
+    private class Space(val plan: UpdateLogic.StoragePlan, val free: Long, val installed: Long)
+
+    /** [pending]: bytes of the update file that are still to be downloaded (not on the disk yet, but about to be). */
+    private fun space(ctx: Context, offer: UpdateOffer, apk: File?, pending: Long = 0): Space {
+        val apkBytes = if (apk != null && apk.isFile) apk.length() else offer.size.coerceAtLeast(0)
+        val libs = nativeLibBytes(ctx, apk)
+        val learned = sp(ctx).getLong("extra", 0L) // what Android's own refusals taught us beyond our estimate
+        val plan = UpdateLogic.storagePlan(apkBytes, libs, (allocatable(ctx) - pending).coerceAtLeast(0), marginBytes = (48L shl 20) + learned)
+        return Space(plan, dir(ctx).usableSpace, apkBytes + libs)
+    }
+
+    private fun needSpace(ctx: Context, offer: UpdateOffer, sp: Space, fileKept: Boolean) {
+        val short = UpdateLogic.roundUpTenMb(sp.plan.shortBy).coerceAtLeast(10L shl 20)
+        state = State(Phase.NEEDS_SPACE, offer, 0, 0, "", state.checkedAt, state.installedName, shortBy = short, freeNow = sp.free, fileKept = fileKept, installedBytes = sp.installed)
+        Io.main.post { for (l in listeners) l() }
+    }
+
+    /** The sheet opened (or the user came back from Storage settings): measure again, and drop the old "not enough space" the moment there is enough. */
+    fun recheckSpace(ctx: Context) {
+        if (state.phase != Phase.NEEDS_SPACE) return
+        val offer = state.offer ?: return
+        val app = ctx.applicationContext
+        Thread({
+            val apk = File(dir(app), offer.apkName)
+            val kept = apk.isFile && sp(app).getString("verified", null) == offer.tag
+            val partLen = File(dir(app), offer.apkName + ".part").length()
+            val s = space(app, offer, if (kept) apk else null, pending = if (kept) 0 else (offer.size - partLen).coerceAtLeast(0))
+            if (s.plan.shortBy <= 0) set(app, if (kept) Phase.READY else Phase.AVAILABLE, offer, if (kept) offer.size else partLen, offer.size)
+            else needSpace(app, offer, s, kept)
+        }, "kestrel-update-space").apply { isDaemon = true }.start()
+    }
+
     /** Hand the verified APK to Android's installer. Android asks the user to confirm and refuses anything not signed with this app's own certificate. */
     fun install(ctx: Context) {
         val offer = state.offer ?: return
@@ -266,26 +322,52 @@ object UpdateManager {
         if (!app.packageManager.canRequestPackageInstalls()) { set(app, Phase.NEEDS_PERMISSION, offer, offer.size, offer.size); return }
         set(app, Phase.INSTALLING, offer, offer.size, offer.size)
         Thread({
+            var id = -1
+            val pi = app.packageManager.packageInstaller
             try {
-                val pi = app.packageManager.packageInstaller
+                // Will the installer find room? (staged copy + unpacked new version while the old one stays + its reserve). Too little: say how much, keep the file, start nothing.
+                val sp0 = space(app, offer, apk)
+                if (sp0.plan.shortBy > 0) { needSpace(app, offer, sp0, fileKept = true); return@Thread }
+                val dropOwnCopy = sp0.plan.fitsDropping // only enough room if our own copy goes once the installer has its own
+                // Sessions left over from earlier tries each still hold a full staged copy of the APK: give that space back first.
+                for (old in pi.mySessions) try { pi.abandonSession(old.sessionId) } catch (e: Exception) { /* already gone */ }
                 val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
                     setAppPackageName(app.packageName)
                     setSize(apk.length())
                 }
-                val id = pi.createSession(params)
+                id = pi.createSession(params)
                 pi.openSession(id).use { session ->
                     session.openWrite("kestrel-update.apk", 0, apk.length()).use { out ->
                         apk.inputStream().use { it.copyTo(out, 128 * 1024) }
                         session.fsync(out)
                     }
+                    if (dropOwnCopy) { apk.delete(); sp(app).edit().remove("verified").apply() } // frees one APK of room for the installer's own check
                     val intent = Intent(app, InstallResultReceiver::class.java).setAction(ACTION_RESULT)
                     val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
                     session.commit(PendingIntent.getBroadcast(app, id, intent, flags).intentSender)
                 }
             } catch (e: Exception) {
-                fail(app, "Could not start the installer (${e.javaClass.simpleName}: ${e.message?.take(80)}).")
+                if (id >= 0) try { pi.abandonSession(id) } catch (x: Exception) { /* ignore */ }
+                val noRoom = e is IOException && (e.message?.contains("space", true) == true || e.message?.contains("ENOSPC", true) == true)
+                if (noRoom) installNeedsSpace(app) else fail(app, "Could not start the installer (${e.javaClass.simpleName}: ${e.message?.take(80)}).")
             }
         }, "kestrel-update-install").apply { isDaemon = true }.start()
+    }
+
+    /**
+     * From [InstallResultReceiver]: Android itself said INSTALL_FAILED_INSUFFICIENT_STORAGE although our estimate said there was room. Believe Android: ask for 150 MB more
+     * than the estimate (and remember it, so the next estimate on this tablet is that much more careful), keep the file for a retry.
+     */
+    fun installNeedsSpace(ctx: Context) {
+        val offer = state.offer ?: return
+        val app = ctx.applicationContext
+        Thread({
+            sp(app).edit().putLong("extra", sp(app).getLong("extra", 0L) + (150L shl 20)).apply()
+            val apk = File(dir(app), offer.apkName)
+            val kept = apk.isFile
+            val s0 = space(app, offer, if (kept) apk else null, pending = if (kept) 0 else offer.size)
+            needSpace(app, offer, s0, kept)
+        }, "kestrel-update-space").apply { isDaemon = true }.start()
     }
 
     /** From [InstallResultReceiver]: Android reported how the installation went. */
@@ -293,7 +375,12 @@ object UpdateManager {
         fail(ctx.applicationContext, "Android could not install the update: ${message ?: "unknown reason"}.")
     }
 
-    fun installCancelled(ctx: Context) { val o = state.offer; if (o != null) set(ctx.applicationContext, Phase.READY, o, o.size, o.size) }
+    fun installCancelled(ctx: Context) {
+        val o = state.offer ?: return
+        val app = ctx.applicationContext
+        val kept = File(dir(app), o.apkName).isFile
+        set(app, if (kept) Phase.READY else Phase.AVAILABLE, o, if (kept) o.size else 0, o.size)
+    }
 
     // ------------------------------------------------------------------------------------------- JSON
 
