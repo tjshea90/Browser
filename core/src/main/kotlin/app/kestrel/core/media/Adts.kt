@@ -45,6 +45,9 @@ class AudioClock {
         if (streamUs - expected > 50_000) start += streamUs - expected
     }
 
+    /** A raw sample was written at [t] (kept as it came): later times stay above it. */
+    fun noteRaw(t: Long) { last = maxOf(last, t) }
+
     /** The time for the next frame (strictly increasing). */
     fun next(rate: Int): Long { val t = start + frames * 1_000_000L * 1024 / rate; frames++; last = t; return t }
 }

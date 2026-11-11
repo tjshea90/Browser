@@ -98,12 +98,84 @@ class Remuxer(private val ctx: Context, private val sinks: SinkFactory) : Stream
     }
 
     /**
+     * Picture and sound that DASH (or an HLS master) keeps in two files become ONE MP4: both are demuxed and the samples are written in time order. Anything the muxer or the extractor
+     * refuses returns null (the two files then stay as downloads of their own).
+     */
+    override fun merge(m: StreamFinisher.Merge): StreamFinisher.Converted? {
+        if (!enoughRoom(m.size)) return null
+        val vx = MediaExtractor(); val ax = MediaExtractor()
+        var out: Sink? = null
+        var muxer: MediaMuxer? = null
+        var started = false
+        try {
+            vx.setDataSource(ctx, Uri.parse(m.videoUri), null)
+            ax.setDataSource(ctx, Uri.parse(m.audioUri), null)
+            var vt = -1; var at = -1
+            for (i in 0 until vx.trackCount) if (vt < 0 && vx.getTrackFormat(i).getString(MediaFormat.KEY_MIME).let { it == "video/avc" || it == "video/hevc" }) vt = i
+            for (i in 0 until ax.trackCount) if (at < 0 && ax.getTrackFormat(i).getString(MediaFormat.KEY_MIME) == "audio/mp4a-latm") at = i
+            if (vt < 0 || at < 0) return null
+            val vf = vx.getTrackFormat(vt); val af = ax.getTrackFormat(at)
+            if (!af.containsKey("csd-0")) return null
+            val name = m.stem + ".mp4"
+            val sink = sinks.create(name, "video/mp4", -1, m.priv, m.destKind).also { out = it }
+            val fd = sink.descriptor() ?: run { sink.discard(); return null }
+            val mux = MediaMuxer(fd, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4).also { muxer = it }
+            val vOut = mux.addTrack(vf); val aOut = mux.addTrack(af)
+            vx.selectTrack(vt); ax.selectTrack(at)
+            val vBuf = ByteBuffer.allocate(maxOf(if (vf.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) vf.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE) else 0, 2 shl 20).coerceAtMost(8 shl 20))
+            val aBuf = ByteBuffer.allocate(maxOf(if (af.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) af.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE) else 0, 256 shl 10).coerceAtMost(4 shl 20))
+            val info = MediaCodec.BufferInfo()
+            val aclock = AudioClock()
+            mux.start(); started = true
+            val vBase = vx.sampleTime.coerceAtLeast(0); val aBase = ax.sampleTime.coerceAtLeast(0)
+            val base = minOf(vBase, aBase)
+            var videoSamples = 0
+            while (true) {
+                val vt0 = vx.sampleTime; val at0 = ax.sampleTime            // -1 when that extractor has no more samples
+                if (vt0 < 0 && at0 < 0) break
+                if (vt0 >= 0 && (at0 < 0 || vt0 <= at0)) {
+                    vBuf.clear(); val size = vx.readSampleData(vBuf, 0)
+                    if (size < 0) { vx.advance(); continue }
+                    info.set(0, size, (vt0 - base).coerceAtLeast(0), if (vx.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC != 0) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0)
+                    mux.writeSampleData(vOut, vBuf, info); videoSamples++
+                    vx.advance()
+                } else {
+                    aBuf.clear(); val size = ax.readSampleData(aBuf, 0)
+                    if (size < 0) { ax.advance(); continue }
+                    writeAudio(mux, aOut, aBuf, size, (at0 - base).coerceAtLeast(0), info, aclock, rawKeepsStreamTime = true)
+                    ax.advance()
+                }
+            }
+            if (videoSamples == 0) throw IllegalStateException("no video samples")
+            mux.stop(); started = false; mux.release(); muxer = null
+            sink.sync()
+            val len = sink.length()
+            val uri = sink.publish() ?: throw IllegalStateException("no uri")
+            out = null
+            Log.i(Io.TAG, "merge ok: ${m.size} -> $len bytes")
+            return StreamFinisher.Converted(uri, sink.displayName ?: name, "video/mp4", len)
+        } catch (e: Throwable) {
+            Log.w(Io.TAG, "merge failed, keeping the two files", e)
+            return null
+        } finally {
+            try { if (started) muxer?.stop() } catch (e: Exception) { /* ignore */ }
+            try { muxer?.release() } catch (e: Exception) { /* ignore */ }
+            try { out?.discard() } catch (e: Exception) { /* ignore */ }
+            try { vx.release() } catch (e: Exception) { /* ignore */ }
+            try { ax.release() } catch (e: Exception) { /* ignore */ }
+        }
+    }
+
+    /**
      * The platform's TS extractor hands over AAC the way it sits in the stream: several ADTS frames (each with its header) per sample. An MP4 wants ONE raw frame per sample, so
      * every frame is cut out and given its own time on the exact 1024-sample grid ([AudioClock]). A sample that is not ADTS is written as it is. Returns how many samples were written.
      */
-    private fun writeAudio(m: MediaMuxer, track: Int, buf: ByteBuffer, size: Int, timeUs: Long, info: MediaCodec.BufferInfo, clock: AudioClock): Int {
+    private fun writeAudio(m: MediaMuxer, track: Int, buf: ByteBuffer, size: Int, timeUs: Long, info: MediaCodec.BufferInfo, clock: AudioClock, rawKeepsStreamTime: Boolean = false): Int {
         val frames = Adts.frames(buf.array(), buf.arrayOffset(), size)
-        if (frames.isEmpty()) { buf.clear(); val t = maxOf(timeUs, clock.last + 1); info.set(0, size, t, 0); m.writeSampleData(track, buf, info); clock.sync(t, 44100); clock.next(44100); return 1 }
+        if (frames.isEmpty()) {
+            // raw AAC (from an MP4): one frame per sample already, with the stream's own exact time
+            buf.clear(); val t = if (rawKeepsStreamTime) maxOf(timeUs, clock.last + 1) else maxOf(timeUs, clock.last + 1); info.set(0, size, t, 0); m.writeSampleData(track, buf, info); clock.noteRaw(t); return 1
+        }
         clock.sync(timeUs, frames[0].sampleRate)
         for (f in frames) {
             buf.clear()
