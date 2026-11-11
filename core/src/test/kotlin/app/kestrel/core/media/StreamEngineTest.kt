@@ -343,7 +343,7 @@ class StreamEngineTest {
         val h = H(sinks = sinks, finisher = fin)
         val (url, video, sound) = dashPair(h)
         val v = h.completed(h.engine.enqueue(pairSource(url)))
-        assertArrayEquals(video, h.out(v)); assertEquals("Clip - 360p.mp4", v.name)
+        assertArrayEquals(video, h.out(v)); assertEquals("Clip - 360p (picture).mp4", v.name)
         val all = h.engine.views()
         assertEquals("the sound is now a download of its own", 2, all.size)
         val a = all.first { it.id != v.id }

@@ -473,7 +473,7 @@ class StreamEngine(
                 job.media = media
                 rec.playlistText = text
                 val ext = rec.ext ?: media.container
-                rec.name = FileNames.sanitize(rec.nameStem + "." + ext)
+                rec.name = FileNames.sanitize((if (rec.companionId != 0L) rec.nameStem + " (picture)" else rec.nameStem) + "." + ext) // the picture half of a pair is a stepping stone: the merged file gets the clean name
                 rec.mime = when (ext) { "mp4" -> "video/mp4"; "webm" -> "video/webm"; "aac" -> "audio/aac"; "mp3" -> "audio/mpeg"; "m4a" -> "audio/mp4"; else -> "video/mp2t" }
                 if (media.exactBytes >= 0) rec.estimate = media.exactBytes
             }
