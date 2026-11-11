@@ -6,7 +6,7 @@ import java.util.TimeZone
 
 /** The HTTP rules the engine relies on (RFC 9110 sections 8.8, 13, 14, 15; RFC 9530), pure and table-tested. */
 object HttpSemantics {
-    /** first = -1 for the "bytes *\/total" form (416); total = -1 for "bytes a-b/*". */
+    /** first = -1 when the range part is a star (a 416 reply); total = -1 when the total is a star (unknown). */
     class ContentRange(val first: Long, val last: Long, val total: Long)
 
     fun parseContentRange(v: String?): ContentRange? {
