@@ -299,7 +299,7 @@ open class BrowserActivity : Activity(), DockListener {
         column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; clipChildren = false } // the neon halo rises from the progress line into the page area
         dock = BottomDock(this, pal, this)
         progress = NeonBar(this, pal.accent, pal.accentHi)
-        Neon.pulse(progress.halo, 0.45f, 1f, 4200L)
+        Neon.pulse(progress.halo, 0.3f, 1f, 3400L)
         content = FrameLayout(this)
         geckoView = KestrelGeckoView(this).apply { setAutofillEnabled(false) } // no logins are stored; GeckoView's autofill hooks only add window-focus churn (research/FREEZE.md 4.7)
         // ONE GeckoView, attached once and never removed: detaching it pauses/resumes the compositor through synchronous IPC while the keyboard resizes the window,

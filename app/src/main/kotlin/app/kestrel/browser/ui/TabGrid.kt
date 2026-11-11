@@ -248,7 +248,7 @@ class TabGrid(ctx: Context, private var pal: Pal, private val isPrivate: (Tab) -
         val glow = GlowView(ctx).apply { background = NeonGlowDrawable(skin.accent, ctx.dpf(CUT_DP), ChamferDrawable.TL or ChamferDrawable.BR, ctx.dpf(GLOW_DP.toFloat())) }
         wrap.addView(glow, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT).apply { setMargins(-g, -g, -g, -g) })
         wrap.addView(outer, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
-        Neon.pulse(glow, 0.5f, 1f, 4200L)
+        Neon.pulse(glow, 0.35f, 1f, 3400L)
         return wrap
     }
 

@@ -104,7 +104,7 @@ class HomeView(ctx: Context, private var pal: Pal, private val brand: String, pr
         addView(column, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         addView(stats, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = ctx.dp(22) })
         tint()
-        Neon.pulse(glow, 0.5f, 1f, 4200L)
+        Neon.pulse(glow, 0.3f, 1f, 3400L)
     }
 
     fun applyPal(p: Pal) { pal = p; tint() }
@@ -130,7 +130,7 @@ class HomeView(ctx: Context, private var pal: Pal, private val brand: String, pr
         hint.visibility = if (pal.isPrivate) VISIBLE else GONE
         suggest.setPal(pal)
         backdrop.setColors(pal.accent, pal.deep, pal.accentHi)
-        glow.background = NeonGlowDrawable(pal.accent, context.dpf(FIELD_CUT_DP), ChamferDrawable.TL or ChamferDrawable.BR, context.dpf(GLOW_DP.toFloat()))
+        glow.background = NeonGlowDrawable(pal.accent, context.dpf(FIELD_CUT_DP), ChamferDrawable.TL or ChamferDrawable.BR, context.dpf(GLOW_DP.toFloat()), coreColor = pal.accentHi, coreWidthPx = context.dpf(1.8f))
         paintBox()
     }
 
