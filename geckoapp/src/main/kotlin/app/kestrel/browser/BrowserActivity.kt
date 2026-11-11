@@ -365,7 +365,12 @@ open class BrowserActivity : Activity(), DockListener {
         root.addView(tabGrid, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         sheet = SheetHost(this, pal)
         root.addView(sheet, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        // the neon only settles to a steady glow after a minute without a touch while a PAGE is in front; on Home, in the tab grid and under a sheet it keeps breathing
+        // Downloads / Settings / History / Diagnostics cover every glow: the neon makes no frames while one of them is open (the glows are alpha-stepped at 10 Hz, each step redraws the window)
+        root.setOnHierarchyChangeListener(object : ViewGroup.OnHierarchyChangeListener {
+            override fun onChildViewAdded(parent: View?, child: View?) { updateNeonCover() }
+            override fun onChildViewRemoved(parent: View?, child: View?) { updateNeonCover() }
+        })
+        // the neon only settles to a steady glow after 2 minutes without a touch while a PAGE is in front; on Home, in the tab grid and under a sheet it keeps breathing
         Neon.canRest = { current != null && !homeShown() && tabGrid.visibility != View.VISIBLE && !sheet.isShowing }
         fullscreen = FrameLayout(this).apply { setBackgroundColor(0xFF000000.toInt()); visibility = View.GONE; isClickable = true }
         root.addView(fullscreen, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -546,6 +551,10 @@ open class BrowserActivity : Activity(), DockListener {
     private fun hasLiveChild(t: Tab) = tabs.any { it.parentId == t.id && it.session != null }
 
     private fun detach(v: View) { (v.parent as? ViewGroup)?.removeView(v) }
+
+    private fun updateNeonCover() {
+        Neon.covered(listOf<View?>(downloadsView, diagView, settingsView, listPanel).any { it != null && it.parent === root })
+    }
 
     /** Low-RAM policy: at most 2 live engine sessions (4 on bigger devices); the least recently used others are hibernated. */
     private fun enforceLiveLimit() {

@@ -75,6 +75,7 @@ object Neon {
     private var busy = false // typing or loading: the screen is already changing, hold the glow still
     private var touching = false // a finger is on the screen or a fling is still running: never compete with the page's scrolling for frames
     private var away = true // the app is not on screen
+    private var covered = false // a full-screen page (Downloads, Settings, History, Diagnostics) hides every glow: nothing to animate
     private var resting = false // no touch for IDLE_MS
     private var powerSave = false
     private var lastTouch = 0L
@@ -103,6 +104,9 @@ object Neon {
     /** A finger went down (true) / the last one is up and the fling has had time to end (false). The glows hold still while true. */
     fun touching(on: Boolean) { if (touching != on) { touching = on; applyAll() } }
 
+    /** A full-screen page covers the glows (true) / the glows are in view again (false): no frames for glows nobody can see. */
+    fun covered(on: Boolean) { if (covered != on) { covered = on; applyAll() } }
+
     /** The app came to the front / went away. Re-reads battery-saver. */
     fun foreground(on: Boolean, ctx: Context? = null) {
         if (ctx != null) powerSave = try { ctx.getSystemService(PowerManager::class.java)?.isPowerSaveMode == true } catch (e: Exception) { false }
@@ -128,7 +132,7 @@ object Neon {
     private fun postRestCheck(delay: Long) { restPosted = true; handler.postDelayed(restCheck, delay) }
     private fun applyAll() { for (p in pulsers.toList()) apply(p, p.v.isShown) }
     // NOT gated on the system's animation scale (Developer options): the owner switches system animations off and still asked for this pulse; Settings > Neon glow is the switch.
-    private fun animated(): Boolean = mode == PULSE && !busy && !touching && !away && !resting && !powerSave
+    private fun animated(): Boolean = mode == PULSE && !busy && !touching && !away && !resting && !powerSave && !covered
 
     /** One line for Diagnostics / Settings: is the glow breathing, and if not, why. */
     fun status(): String {
@@ -136,7 +140,7 @@ object Neon {
         if (mode == STATIC) return "steady (Settings)"
         val why = ArrayList<String>()
         if (busy) why.add("keyboard up or page just started loading"); if (touching) why.add("finger on screen"); if (away) why.add("app not in front")
-        if (resting) why.add("idle rest"); if (powerSave) why.add("battery saver")
+        if (resting) why.add("idle rest"); if (powerSave) why.add("battery saver"); if (covered) why.add("a full-screen page covers them")
         val running = pulsers.count { it.running }
         return if (why.isEmpty()) "pulsing ($running glows running)" else "holding still: " + why.joinToString(", ")
     }
