@@ -96,3 +96,8 @@ Tell me the pros and cons of using the https://github.com/uazo/cromite cromite e
 3) make a pull down to refresh page gesture that I can use. 
 Correction: it may not be reloading pictures during the scrolling, but it does stutter. Sometimes when I scroll down then back up there is just white space for a second 
 ```
+
+## 2026-11-11T16:26:31Z
+```
+I made 900mb of space on my tablet but this message still shows. On the download manager, include a display of his many mb downloaded progress  for each file in addition to the total file size
+```
