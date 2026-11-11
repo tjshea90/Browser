@@ -137,6 +137,7 @@ permissions: {}                       # android.yml top level (today: contents: 
 jobs:
   check:    { permissions: { contents: read } }      # add this key to the existing check / test-jvm / test-js jobs
   build-gecko:                        # NO secrets here: Gradle plugins and npm packages run arbitrary code
+    needs: [check, test-jvm]
     permissions: { contents: read }
     steps:
       - uses: actions/checkout@<40-hex>   # v5.x
