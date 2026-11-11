@@ -1,21 +1,22 @@
-# CHECKPOINT 451 — read me first, then TASKS.md
+# CHECKPOINT 454 — read me first, then TASKS.md
 
-**Written:** 2026-11-11T19:15:00Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `9c8ee6f` (this checkpoint is the commit after it)
+**Written:** 2026-11-11T19:18:43Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `37166fe` (this checkpoint is the commit after it)
 
 ## Just done
-alpha9 SHIPPED + RECORDED (kestrel-g-v0.2.0-alpha9, gecko code 108, run 43084348983 green, APK 92.6 MB on the Release). U1 closed on the code side: Android's install rule is 10% of the partition + 2 x APK + libs + ~32 MiB (measured); updater, Diagnostics, release notes and docs updated
+Owner request 8 recorded in TASKS.md (V0-V7: background downloads + notifications, swipe-to-quit, InShot-style video downloader, parallel/fast/pausable downloads, neon still invisible, speed review). Plan: alpha10 = V1-V3+V6, alpha11 = V4-V5, alpha12 = V7
 
 ## Do this next
-Reply to the owner (in chat, done). Then wait for their answer: Settings > Storage total/free, whether alpha9 installed in place, Compare 3 feels numbers, neon/white-gap feedback. Next big job when asked: D1 in-extension blocking (research/ADBLOCK_ENGINE.md section 3); U1c Back up/Restore only if in-place updates still fail.
+Start V1-V3: read download/DownloadService.kt, Notifier.kt, update/UpdateManager.kt (download thread), BrowserActivity quit/onDestroy; add WakeLock+WifiLock to the service, move the update download into the engine, remove the Quit menu item, onDestroy/onTaskRemoved process exit when idle. Then V6 neon (drop battery-saver and idle-rest holds, Settings status line + 10 s test).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  df62246 ckpt 451: alpha9 SHIPPED + RECORDED (kestrel-g-v0.2.0-alpha9, gecko code 108, run 430843
   8ff3900 ckpt 448: alpha9 DISPATCHED: Actions run 43084348983 (gecko code 108, 19:08Z). alpha8 (c
   3b0bd85 ckpt 447: gated kestrel-g-v0.2.0-alpha9 (gecko code 108) and pushed it: handoff self-tes
   30794d6 ckpt 446: pre-ship: alpha9: the update screen's storage numbers now match what Android r
@@ -25,8 +26,7 @@ Reply to the owner (in chat, done). Then wait for their answer: Settings > Stora
   b39879a ckpt 427: Owner message after alpha7 recorded as TASKS U1: in-place updates never instal
   378cb59 ckpt 423: alpha7 SHIPPED + RECORDED (kestrel-g-v0.2.0-alpha7, gecko code 106, run 430722
   d87281f ckpt 419: alpha7 build DISPATCHED: Actions run 43072284547 (android.yml, ref ccr-a57c163
-  5f068ba ckpt 418: gated kestrel-g-v0.2.0-alpha7 (gecko code 106) and pushed it: handoff self-tes
 ```
 
-(1 automatic checkpoint(s) since the last deliberate one — the
+(2 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
