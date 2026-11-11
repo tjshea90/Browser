@@ -180,6 +180,24 @@ test('an answer older than a minute is refreshed in the background: a Settings s
   eq(h.req('script', AD, PAGE), {}, '...and the next one follows the new switch');
 });
 
+test('while the app\'s lists are still loading (generation 0) the saved copy already judges requests, and the answer is asked again within seconds', async () => {
+  const idb = new Map([['current', { id: ID, buf: IMAGE.buffer.slice(IMAGE.byteOffset, IMAGE.byteOffset + IMAGE.byteLength) }]]);
+  let cfg = '1:0:';
+  const h = harness((m) => (m.k === 'cfg' ? cfg : standardApp()(m)), { idb });
+  await tick(30);
+  h.mainFrame(PAGE);
+  await until(() => h.of('cfg').length >= 1, 'cfg');
+  await tick(20);
+  eq(h.req('script', AD, PAGE), { cancel: true }, 'blocked at once, from the saved copy');
+  assert.equal(h.of('img').length, 0, 'no transfer for generation 0');
+  cfg = `0:1:${ID}`; // the lists finished loading and say this site is allowed
+  h.clock.now += 3500;
+  eq(h.req('script', AD, PAGE), { cancel: true }, 'the request that finds the provisional answer old still uses it');
+  await until(() => h.of('cfg').length === 2, 'the second question');
+  await tick(10);
+  eq(h.req('script', AD, PAGE), {}, 'and the final answer (allowed) takes over');
+});
+
 test('the saved copy gives an engine before the first request, and an unchanged list costs no transfer', async () => {
   const idb = new Map([['current', { id: ID, buf: IMAGE.buffer.slice(IMAGE.byteOffset, IMAGE.byteOffset + IMAGE.byteLength) }]]);
   const h = harness(standardApp(), { idb });

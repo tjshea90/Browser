@@ -31,7 +31,8 @@ function askCfg(host) {
     if (parts.length < 2) return MODE_OFF; // not an answer from the app: do not cache, never break the page
     var mode = parts[0] === '1' ? MODE_ON : (parts[0] === 'L' ? MODE_LEGACY : MODE_OFF);
     if (cfgMode.size >= CFG_MAX) { var old = cfgMode.keys().next().value; cfgMode.delete(old); cfgAt.delete(old); }
-    cfgMode.set(host, mode); cfgAt.set(host, Date.now());
+    // generation 0 = the app's lists are still loading: the answer is provisional (the site allow-list is not known yet), so it is asked again in a few seconds instead of after a minute
+    cfgMode.set(host, mode); cfgAt.set(host, (parseInt(parts[1], 10) > 0) ? Date.now() : Date.now() - CFG_TTL + 3000);
     if (mode !== MODE_LEGACY) wantImage(parseInt(parts[1], 10) || 0, parts[2] || '');
     return mode;
   }, function () { cfgWait.delete(host); return MODE_OFF; }); // the app could not answer: fail open
@@ -236,12 +237,13 @@ browser.webRequest.onBeforeRequest.addListener(function (d) {
 var cssCache = new Map();
 browser.runtime.onMessage.addListener(function (m) {
   if (!m || m.k !== 'css' || !m.h) return undefined;
-  var cached = cssCache.get(m.h);
+  var key = (m.top ? 't|' : 'f|') + m.h; // the top document and an iframe of the same host get different CSS
+  var cached = cssCache.get(key);
   if (cached !== undefined) return Promise.resolve(cached);
   return send({ k: 'css', h: m.h, top: !!m.top }).then(function (r) {
     var css = (typeof r === 'string') ? r : '';
     if (cssCache.size >= 200) cssCache.delete(cssCache.keys().next().value);
-    cssCache.set(m.h, css);
+    cssCache.set(key, css);
     return css;
   }, function () { return ''; });
 });

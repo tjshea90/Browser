@@ -65,7 +65,7 @@ class ShieldsBridge(
                     "img" -> imageChunk(m.optInt("g"), m.optInt("i", -1))
                     "cnt" -> { counts(m); "" }
                     "st" -> { stats = EngineStats.from(m); "" }
-                    "css" -> cosmeticCss(m.optString("h"))
+                    "css" -> cosmeticCss(m.optString("h"), m.optBoolean("top", true))
                     "media" -> { onMedia(m); "" }
                     "vid" -> { onVid(m); "" }
                     else -> ""
@@ -115,14 +115,19 @@ class ShieldsBridge(
         return true
     }
 
-    /** `cfg`: "<mode>:<generation>:<content id>". mode 1 = block on pages of this host, 0 = Shields off / site allowed, L = ask per request (lists still loading, or compatibility mode). */
+    /**
+     * `cfg`: "<mode>:<generation>:<content id>". mode 1 = block on pages of this host, 0 = Shields off / site allowed, L = ask per request (compatibility mode).
+     * While the lists are still loading (cold start) the answer is provisional - generation 0, no id, the site allow-list unknown - so the extension can already judge requests with the
+     * copy it saved last time and asks again within seconds; before this, those first requests went unfiltered.
+     */
     private fun pageConfig(host: String): String {
-        val snap = Engine.snapshot() ?: return "L:0" // lists still loading at cold start: the per-request path fails open until they are there
-        if (!prefs().engineInExtension) return "L:${snap.generation}"
-        if (host.isEmpty()) return "0:${snap.generation}"
+        val snap = Engine.snapshot()
+        val gen = snap?.generation ?: 0
+        if (!prefs().engineInExtension) return "L:$gen:"
+        if (host.isEmpty()) return "0:$gen:"
         val s = Shields.effective(prefs(), host)
-        val on = s.shieldsUp && s.blockAds && !snap.fs.isPageAllowed(host)
-        return (if (on) "1:" else "0:") + snap.generation + ":" + contentId(snap)
+        val on = s.shieldsUp && s.blockAds && snap?.fs?.isPageAllowed(host) != true
+        return (if (on) "1:" else "0:") + gen + ":" + (if (snap != null) contentId(snap) else "")
     }
 
     /** Set by [install]: the app build, part of the image identity (a new build may ship a new Public Suffix List). */
@@ -173,12 +178,13 @@ class ShieldsBridge(
         blockedOnTab(t)
     }
 
-    private fun cosmeticCss(host: String): String {
+    /** Element-hiding CSS for a frame of [host]. Only the top document gets the big generic set (up to 1,200 selectors); an iframe, usually an ad itself, gets the rules written for its own site. */
+    private fun cosmeticCss(host: String, top: Boolean): String {
         if (host.isEmpty()) return ""
         val fs = Engine.peek() ?: return ""
         val s = Shields.effective(prefs(), host)
         if (!s.shieldsUp || !s.blockAds || !s.cosmetic) return ""
-        return fs.cosmeticCss(host)
+        return fs.cosmeticCss(host, includeGeneric = top)
     }
 
     /** What the extension's engine reports about itself (`st`), shown in Diagnostics. */
