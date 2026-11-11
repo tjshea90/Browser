@@ -29,6 +29,9 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import app.kestrel.browser.web.KestrelGeckoView
+import app.kestrel.browser.ui.DiagnosticsView
+import app.kestrel.browser.diag.Health
 import app.kestrel.browser.data.BrowserDb
 import app.kestrel.browser.data.DataMeter
 import app.kestrel.browser.data.Entry
@@ -167,6 +170,7 @@ open class BrowserActivity : Activity(), ToolbarListener {
 
     override fun onResume() {
         super.onResume()
+        Health.log("life", "resume"); Health.startWatchdog(); Health.watchFrames(window)
         val t = current
         if (t != null && !t.isNewTab && t.session == null) attachContent(t) // hibernated while we were in the background: bring it back
         t?.session?.setActive(true)
@@ -175,12 +179,14 @@ open class BrowserActivity : Activity(), ToolbarListener {
 
     override fun onPause() {
         super.onPause()
+        Health.log("life", "pause")
         flushCounters()
         saveSessionNow()
     }
 
     override fun onStop() {
         super.onStop()
+        Health.log("life", "stop"); Health.stopWatchdog(); Health.unwatchFrames(window)
         current?.session?.setActive(false) // stops rendering and throttles the page: saves battery and mobile data
         NetworkMonitor.stop()
     }
@@ -190,6 +196,16 @@ open class BrowserActivity : Activity(), ToolbarListener {
         Io.main.removeCallbacks(saveRunnable)
         for (t in tabs) { try { t.session?.close() } catch (e: Exception) { /* already gone */ }; t.session = null }
         super.onDestroy()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        Health.log("win", "focus", hasFocus.toString())
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        Health.log("mem", "trim", "level=$level"); Health.count("mem.trim")
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -217,7 +233,7 @@ open class BrowserActivity : Activity(), ToolbarListener {
         toolbar = Toolbar(this, pal, this)
         progress = ProgressLine(this, pal.accent).apply { visibility = View.INVISIBLE }
         content = FrameLayout(this)
-        geckoView = GeckoView(this).apply { setAutofillEnabled(false) } // no logins are stored; GeckoView's autofill hooks only add window-focus churn (research/FREEZE.md 4.7)
+        geckoView = KestrelGeckoView(this).apply { setAutofillEnabled(false) } // no logins are stored; GeckoView's autofill hooks only add window-focus churn (research/FREEZE.md 4.7)
         // ONE GeckoView, attached once and never removed: detaching it pauses/resumes the compositor through synchronous IPC while the keyboard resizes the window,
         // which is the race family behind "the screen stops updating while typing". Tabs swap with setSession; the new-tab page and error screens are opaque overlays above it.
         content.addView(geckoView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -602,7 +618,7 @@ open class BrowserActivity : Activity(), ToolbarListener {
     private fun hideKeyboard() { getSystemService(InputMethodManager::class.java)?.hideSoftInputFromWindow(root.windowToken, 0) }
 
     // ---- menu
-    private object M { const val NEW = 1; const val PRIVATE = 2; const val FIND = 3; const val SHARE = 4; const val BOOKMARK = 5; const val BOOKMARKS = 6; const val HISTORY = 7
+    private object M { const val REFRESH = 14; const val DIAG = 15; const val NEW = 1; const val PRIVATE = 2; const val FIND = 3; const val SHARE = 4; const val BOOKMARK = 5; const val BOOKMARKS = 6; const val HISTORY = 7
         const val DOWNLOADS = 8; const val DESKTOP = 9; const val IMAGES = 10; const val PRINT = 11; const val SETTINGS = 12; const val QUIT = 13; const val CLOSE_ALL = 14 }
 
     override fun onMenu(anchor: View) {
@@ -618,7 +634,9 @@ open class BrowserActivity : Activity(), ToolbarListener {
         }
         if (!isPrivate) { items.add(MenuItemSpec(M.BOOKMARKS, "Bookmarks")); items.add(MenuItemSpec(M.HISTORY, "History")) }
         items.add(MenuItemSpec(M.DOWNLOADS, "Downloads"))
+        if (t != null && !t.isNewTab) items.add(MenuItemSpec(M.REFRESH, "Refresh screen"))
         if (!isPrivate) items.add(MenuItemSpec(M.SETTINGS, "Settings"))
+        items.add(MenuItemSpec(M.DIAG, "Diagnostics"))
         if (tabs.size > 1) items.add(MenuItemSpec(M.CLOSE_ALL, "Close all tabs"))
         items.add(MenuItemSpec(M.QUIT, if (isPrivate) "Close private window" else "Quit"))
         MenuPopup.show(this, pal, anchor, items) { id -> onMenuPick(id) }
@@ -627,6 +645,8 @@ open class BrowserActivity : Activity(), ToolbarListener {
     private fun onMenuPick(id: Int) {
         val t = current
         when (id) {
+            M.REFRESH -> refreshScreen("menu")
+            M.DIAG -> showDiagnostics()
             M.NEW -> newTabAndShow()
             M.PRIVATE -> newPrivateTab()
             M.FIND -> openFind()
@@ -710,6 +730,39 @@ open class BrowserActivity : Activity(), ToolbarListener {
     }
 
     private fun closeSettings() { settingsView?.let { detach(it) } }
+
+    // ------------------------------------------------------------------ freeze evidence + manual recovery (research/FREEZE.md 5)
+    private var diagView: DiagnosticsView? = null
+
+    private fun engineFacts(): List<String> {
+        val out = ArrayList<String>()
+        val ver = try { Class.forName("org.mozilla.geckoview.BuildConfig").getField("MOZ_APP_VERSION").get(null) } catch (e: Exception) { "?" }
+        out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null }} of ${tabs.size} tabs; current ${current?.url?.take(60) ?: "-"}")
+        out.add("Page view: attached=${geckoView.parent != null} session=${geckoView.session != null} windowFocus=${hasWindowFocus()}")
+        return out
+    }
+
+    private fun showDiagnostics() {
+        val v = diagView ?: DiagnosticsView(this, pal, ::engineFacts, { refreshScreen("diagnostics") }, { closeDiagnostics() }).also { diagView = it }
+        if (v.parent == null) root.addView(v, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) else v.refresh()
+    }
+
+    private fun closeDiagnostics() { diagView?.let { detach(it) } }
+
+    /**
+     * What switching apps and coming back does to the page, on demand: re-send the focus and keyboard state (R0), toggle the session's active state (R1),
+     * then ask GeckoView for a brand-new rendering surface (R2). Logged so a report shows which step cured it.
+     */
+    private fun refreshScreen(why: String) {
+        Health.log("user", "refresh-screen", why); Health.count("user.refresh")
+        val s = current?.session ?: return
+        try {
+            s.setFocused(false); s.setFocused(true)
+            (getSystemService(INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager)?.restartInput(geckoView)
+            s.setActive(false); s.setActive(true)
+        } catch (e: Exception) { Health.log("user", "refresh-R0R1-failed", e.toString()) }
+        Io.main.postDelayed({ try { geckoView.requestNewSurface() } catch (e: Exception) { Health.log("user", "refresh-R2-failed", e.toString()) } }, 150)
+    }
 
     private val settingsListener = object : SettingsListener {
         override fun closeSettings() { this@BrowserActivity.closeSettings() }
@@ -905,6 +958,7 @@ open class BrowserActivity : Activity(), ToolbarListener {
 
     /** @return true if the back press did something. */
     private fun handleBack(): Boolean {
+        if (diagView?.parent != null) { closeDiagnostics(); return true }
         if (settingsView?.parent != null) { closeSettings(); return true }
         if (listPanel?.parent != null) { closeList(); return true }
         if (tabSwitcher.visibility == View.VISIBLE) { hideTabSwitcher(); return true }

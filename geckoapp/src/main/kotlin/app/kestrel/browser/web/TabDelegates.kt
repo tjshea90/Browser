@@ -1,5 +1,6 @@
 package app.kestrel.browser.web
 
+import app.kestrel.browser.diag.Health
 import app.kestrel.browser.BrowserActivity
 import app.kestrel.browser.shield.Shields
 import app.kestrel.core.filter.Category
@@ -139,8 +140,8 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
     override fun onCloseRequest(session: GeckoSession) { a.closeTab(tab) }
     override fun onFullScreen(session: GeckoSession, fullScreen: Boolean) { a.fullScreenChanged(fullScreen) }
     override fun onContextMenu(session: GeckoSession, screenX: Int, screenY: Int, element: ContentDelegate.ContextElement) { a.longPress(tab, element) }
-    override fun onCrash(session: GeckoSession) { a.sessionGone(tab, true) }
-    override fun onKill(session: GeckoSession) { a.sessionGone(tab, false) }
+    override fun onCrash(session: GeckoSession) { Health.log("gecko", "onCrash", tab.url.take(80)); Health.count("gecko.crash"); a.sessionGone(tab, true) }
+    override fun onKill(session: GeckoSession) { Health.log("gecko", "onKill", tab.url.take(80)); Health.count("gecko.kill"); a.sessionGone(tab, false) }
 
     override fun onExternalResponse(session: GeckoSession, response: WebResponse) {
         val h = response.headers
