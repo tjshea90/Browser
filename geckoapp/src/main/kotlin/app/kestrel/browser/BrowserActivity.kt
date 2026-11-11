@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.ActivityManager
 import android.app.AlertDialog
-import android.app.DownloadManager
 import android.app.SearchManager
 import android.content.ClipData
 import android.content.ClipboardManager
