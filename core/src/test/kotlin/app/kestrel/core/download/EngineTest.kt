@@ -39,6 +39,12 @@ class EngineTest {
             throw AssertionError("timeout waiting for $what; last=${view(id)?.state} ${view(id)?.reason} done=${view(id)?.done}/${view(id)?.total}")
         }
         fun completed(id: Long) = await(id, "completion") { it?.state == DlState.COMPLETED }!!
+        /** The view changes first and the store row a moment later (persist runs after the state flips): wait for the row before asserting on it. */
+        fun awaitRow(id: Long, what: String, ms: Long = 10_000, p: (Rec?) -> Boolean): Rec? {
+            val end = System.currentTimeMillis() + ms
+            while (System.currentTimeMillis() < end) { val r = store.rows[id]; if (p(r)) return r; Thread.sleep(5) }
+            throw AssertionError("store row never matched: $what; row state=${store.rows[id]?.state}")
+        }
         fun sink(v: DownloadView): FakeSink = sinks.sinks[v.destUri]!!
         fun pauseAt(id: Long, fraction: Double): DownloadView {
             await(id, "progress $fraction") { it != null && it.state == DlState.RUNNING && it.total > 0 && it.done >= it.total * fraction }
@@ -57,7 +63,7 @@ class EngineTest {
         assertTrue(h.sink(v).published)
         assertEquals(1, s.seen.size)
         assertEquals(data.size.toLong(), v.total)
-        assertEquals(DlState.COMPLETED, h.store.rows[id]!!.state)
+        h.awaitRow(id, "completed row") { it?.state == DlState.COMPLETED }
     }
 
     @Test(timeout = 60_000) fun theDestinationKindReachesTheSinkAndTheView() {
@@ -132,7 +138,7 @@ class EngineTest {
         h.engine.resume(id)
         val d = h.await(id, "decision") { it?.state == DlState.NEEDS_DECISION }!!
         assertEquals(Reason.FILE_CHANGED, d.reason)
-        assertTrue(h.store.rows[id]!!.segs.isNotEmpty())                              // partial kept until the user chooses
+        h.awaitRow(id, "partial kept") { it != null && it.state == DlState.NEEDS_DECISION && it.segs.isNotEmpty() } // partial kept until the user chooses
         assertTrue(Action.RESTART in d.actions && Action.CANCEL in d.actions)
         h.engine.restart(id)
         val v = h.completed(id)
@@ -209,7 +215,7 @@ class EngineTest {
         h.engine.cancel(id)
         h.await(id, "gone") { it == null }
         assertTrue(h.sinks.sinks[sinkUri]!!.discarded)
-        assertNull(h.store.rows[id])
+        h.awaitRow(id, "row removed") { it == null }
         assertTrue(h.engine.views().isEmpty())
     }
 
