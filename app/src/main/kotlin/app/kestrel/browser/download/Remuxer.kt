@@ -21,6 +21,7 @@ import java.nio.ByteBuffer
  * (one sample buffer). Needs about as much free room as the stream itself, so it declines when there is not.
  */
 class Remuxer(private val ctx: Context, private val sinks: SinkFactory) : StreamFinisher {
+    private companion object { val ADTS_RATES = intArrayOf(96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350) }
 
     override fun convert(j: StreamFinisher.Joined): StreamFinisher.Converted? {
         if (j.container != "ts" || !enoughRoom(j.size)) return null
@@ -65,9 +66,13 @@ class Remuxer(private val ctx: Context, private val sinks: SinkFactory) : Stream
                 val target = when (track) { vt -> vOut; at -> aOut; else -> -1 }
                 if (target >= 0 && t >= 0) {
                     if (base < 0) base = t
-                    info.set(0, size, (t - base).coerceAtLeast(0), if (ex.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC != 0) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0)
-                    m.writeSampleData(target, buf, info)
-                    written++; if (track == vt) videoSamples++
+                    val rel = (t - base).coerceAtLeast(0)
+                    if (track == at) written += writeAudio(m, target, buf, size, rel, info)
+                    else {
+                        info.set(0, size, rel, if (ex.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC != 0) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0)
+                        m.writeSampleData(target, buf, info)
+                        written++; videoSamples++
+                    }
                 }
                 ex.advance()
             }
@@ -88,6 +93,31 @@ class Remuxer(private val ctx: Context, private val sinks: SinkFactory) : Stream
             try { out?.discard() } catch (e: Exception) { /* ignore */ }
             try { ex.release() } catch (e: Exception) { /* ignore */ }
         }
+    }
+
+    /**
+     * The platform's TS extractor hands over AAC the way it sits in the stream: several ADTS frames (each with its 7-byte header) per sample. An MP4 wants ONE raw frame per sample, so
+     * every frame is cut out (header dropped) and given its own time, 1024 samples after the one before. A sample that is not ADTS is written as it is. Returns how many samples were written.
+     */
+    private fun writeAudio(m: MediaMuxer, track: Int, buf: ByteBuffer, size: Int, timeUs: Long, info: MediaCodec.BufferInfo): Int {
+        val b = buf.array(); val base = buf.arrayOffset()
+        var pos = 0; var n = 0
+        var at = timeUs
+        while (pos + 7 <= size) {
+            val b0 = b[base + pos].toInt() and 0xFF; val b1 = b[base + pos + 1].toInt() and 0xFF
+            if (b0 != 0xFF || (b1 and 0xF0) != 0xF0) break
+            val hdr = if ((b1 and 1) == 1) 7 else 9                       // protection_absent: no CRC
+            val len = ((b[base + pos + 3].toInt() and 3) shl 11) or ((b[base + pos + 4].toInt() and 0xFF) shl 3) or ((b[base + pos + 5].toInt() and 0xFF) ushr 5)
+            if (len < hdr || pos + len > size) break
+            val rate = ADTS_RATES.getOrElse((b[base + pos + 2].toInt() ushr 2) and 0xF) { 44100 }
+            buf.clear()
+            info.set(pos + hdr, len - hdr, at, 0)
+            m.writeSampleData(track, buf, info)
+            pos += len; n++
+            at += 1_000_000L * 1024 / rate
+        }
+        if (n == 0) { buf.clear(); info.set(0, size, timeUs, 0); m.writeSampleData(track, buf, info); return 1 }
+        return n
     }
 
     private fun enoughRoom(size: Long): Boolean = try {
