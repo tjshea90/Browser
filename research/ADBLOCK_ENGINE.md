@@ -2,6 +2,8 @@
 
 Written 2026-11-11 by a research agent; no repo file other than this one was touched. Tags: **[V]** verified this session (source read, program run, page fetched), **[E]** my estimate, **[N]** not verified (section 11). Sizes are MiB (1024^2 bytes) unless a source uses its own unit.
 Evidence stayed in the session scratchpad, outside the repo: shallow clones of uBlock (2bc679d), uAssets (bafdbd3), ghostery/adblocker 2.20.3, brave/adblock-rust 0.13.5, brave/adblock-resources, Hagezi, AdguardFilters; GeckoView 160 `classes.jar` (javap) and unpacked omni.ja; a JS port of our matcher; Playwright crawls. Downloaded code was read, never executed.
+Map to the brief: question 1 = sections 4 and 7; 2 = section 6; 3 = sections 1, 2 and 8; 4 = sections 5 and 10; 5 = section 9; 6 = section 3 (TASKS D1 = P0, D2 = P1, D3 = P1 harness + policies, D4 = P0 tests).
+**In plain words:** most of the slowness on ad-heavy sites is not the ads you see but 80-100 hidden connections per page (header-bidding auctions, cookie-sync pixels, tag managers, consent scripts). On 13 real pages, blocking them cut requests by 78%, bytes by 49% and the median load time from 14 s to 2 s (Chromium, fast link, section 5). The freeze and the slow blocking share one cause: today every request makes a round trip to the Android UI thread.
 
 ## 1. Decision
 
