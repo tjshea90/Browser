@@ -20,21 +20,20 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import app.kestrel.browser.R
 
-/** Colors resolved for the current (light/dark) configuration. */
+/** Colors for the CERE identity. The private skin is violet end to end (chrome, accent, progress) so it can never be mistaken for a normal tab. */
 class Pal(ctx: Context, val isPrivate: Boolean = false) {
     val windowBg = ctx.getColor(R.color.window_bg)
-    // The private window gets its own dark-violet chrome so it can never be mistaken for a normal window.
-    val chromeBg = if (isPrivate) 0xFF2D1B3D.toInt() else ctx.getColor(R.color.chrome_bg)
-    val fg = if (isPrivate) 0xFFF3EDF8.toInt() else ctx.getColor(R.color.chrome_fg)
-    val muted = if (isPrivate) 0xFFB9A9C9.toInt() else ctx.getColor(R.color.chrome_fg_muted)
-    val pill = if (isPrivate) 0xFF443055.toInt() else ctx.getColor(R.color.pill_bg)
-    val divider = ctx.getColor(R.color.divider)
-    val accent = ctx.getColor(R.color.accent)
-    val accentOn = ctx.getColor(R.color.accent_on)
+    val chromeBg = if (isPrivate) 0xFF130D21.toInt() else ctx.getColor(R.color.chrome_bg)
+    val fg = if (isPrivate) 0xFFF2ECFF.toInt() else ctx.getColor(R.color.chrome_fg)
+    val muted = if (isPrivate) 0xFFA797C8.toInt() else ctx.getColor(R.color.chrome_fg_muted)
+    val pill = if (isPrivate) 0xFF231939.toInt() else ctx.getColor(R.color.pill_bg)
+    val divider = if (isPrivate) 0xFF33264F.toInt() else ctx.getColor(R.color.divider)
+    val accent = if (isPrivate) 0xFFB794FF.toInt() else ctx.getColor(R.color.accent)
+    val accentOn = if (isPrivate) 0xFF120A22.toInt() else ctx.getColor(R.color.accent_on)
     val danger = ctx.getColor(R.color.danger)
     val warn = ctx.getColor(R.color.warn)
     val ok = ctx.getColor(R.color.ok)
-    val card = ctx.getColor(R.color.card_bg)
+    val card = if (isPrivate) 0xFF1A1230.toInt() else ctx.getColor(R.color.card_bg)
     val scrim = ctx.getColor(R.color.scrim)
 }
 
@@ -84,25 +83,38 @@ fun iconButton(ctx: Context, icon: Int, description: String, tint: Int, sizeDp: 
         setOnClickListener { onClick() }
     }
 
-/** A filled/outlined rounded "button" TextView. */
+/** A filled chamfered button (the primary action of a screen or dialog). 48dp tall, instant pressed state. */
 fun pillButton(ctx: Context, text: String, bg: Int, fg: Int, onClick: () -> Unit): TextView =
-    label(ctx, text, 15f, fg, bold = true).apply {
+    label(ctx, text, 16f, fg, bold = true).apply {
         gravity = Gravity.CENTER
-        minHeight = ctx.dp(44)
+        minHeight = ctx.dp(48)
         minimumWidth = ctx.dp(96)
-        setPadding(ctx.dp(20), ctx.dp(10), ctx.dp(20), ctx.dp(10))
-        background = ripple(fg, roundedBg(bg, ctx.dpf(22f)), ctx.dpf(22f))
+        setPadding(ctx.dp(22), ctx.dp(10), ctx.dp(22), ctx.dp(10))
+        background = chamferSurface(ctx, bg, 9f)
+        isClickable = true
+        isFocusable = true
+        setOnClickListener { onClick() }
+    }
+
+/** A quiet chamfered button with an outline (secondary action). */
+fun outlineButton(ctx: Context, text: String, fill: Int, stroke: Int, fg: Int, onClick: () -> Unit): TextView =
+    label(ctx, text, 16f, fg, bold = true).apply {
+        gravity = Gravity.CENTER
+        minHeight = ctx.dp(48)
+        minimumWidth = ctx.dp(96)
+        setPadding(ctx.dp(22), ctx.dp(10), ctx.dp(22), ctx.dp(10))
+        background = chamferSurface(ctx, fill, 9f, strokeColor = stroke, strokeDp = 1.5f)
         isClickable = true
         isFocusable = true
         setOnClickListener { onClick() }
     }
 
 fun textButton(ctx: Context, text: String, fg: Int, onClick: () -> Unit): TextView =
-    label(ctx, text, 15f, fg, bold = true).apply {
+    label(ctx, text, 16f, fg, bold = true).apply {
         gravity = Gravity.CENTER
-        minHeight = ctx.dp(44)
+        minHeight = ctx.dp(48)
         setPadding(ctx.dp(16), ctx.dp(10), ctx.dp(16), ctx.dp(10))
-        background = ripple(fg, null, ctx.dpf(22f))
+        background = ripple(fg, null, 0f)
         isClickable = true
         isFocusable = true
         setOnClickListener { onClick() }
@@ -119,17 +131,18 @@ class ProgressLine(ctx: Context, private val color: Int) : View(ctx) {
     }
 }
 
-/** The "N tabs" button: a rounded square outline with the count inside (no bitmap assets, themed by color). */
+/** The "N tabs" button: a chamfered square outline with the count inside (no bitmap assets, themed by color). A private-mode dot sits on its corner. */
 class TabsButton(ctx: Context, private val color: Int) : View(ctx) {
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE; strokeWidth = ctx.dpf(2f); this.color = this@TabsButton.color
+        style = Paint.Style.STROKE; strokeWidth = ctx.dpf(2f); strokeJoin = Paint.Join.MITER; this.color = this@TabsButton.color
     }
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textAlign = Paint.Align.CENTER; textSize = ctx.dpf(12f); typeface = Typeface.DEFAULT_BOLD; this.color = this@TabsButton.color
+        textAlign = Paint.Align.CENTER; textSize = ctx.dpf(13f); typeface = Typeface.DEFAULT_BOLD; this.color = this@TabsButton.color
     }
     private val box = RectF()
+    private val outline = android.graphics.Path()
     var count = 1
-        set(v) { field = v; contentDescription = "Tabs, $v open"; invalidate() }
+        set(v) { if (field != v) { field = v; contentDescription = "Tabs, $v open"; invalidate() } }
 
     init {
         background = ripple(color, null, 0f)
@@ -139,11 +152,12 @@ class TabsButton(ctx: Context, private val color: Int) : View(ctx) {
     }
 
     override fun onDraw(c: Canvas) {
-        val s = context.dpf(22f)
+        val s = context.dpf(24f)
         val l = (width - s) / 2f
         val t = (height - s) / 2f
         box.set(l, t, l + s, t + s)
-        c.drawRoundRect(box, context.dpf(5f), context.dpf(5f), stroke)
+        ChamferDrawable.path(box, context.dpf(6f), ChamferDrawable.TL or ChamferDrawable.BR, outline)
+        c.drawPath(outline, stroke)
         val label = if (count > 99) ":D" else count.toString()
         c.drawText(label, width / 2f, height / 2f - (text.descent() + text.ascent()) / 2f, text)
     }
