@@ -261,7 +261,7 @@ class SuggestionList(ctx: Context, private var pal: Pal, private val reverse: Bo
     fun contentHeightPx(): Int = rows.size * rowPx + maxOf(0, rows.size - 1) * dividerHeight
 }
 
-class MenuItemSpec(val id: Int, val text: String, val checked: Boolean? = null, val icon: Int = 0)
+class MenuItemSpec(val id: Int, val text: String, val checked: Boolean? = null, val icon: Int = 0, val accent: Boolean = false)
 
 /** Light popup menu anchored under a button (framework PopupWindow: no AppCompat). */
 object MenuPopup {

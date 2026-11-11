@@ -64,7 +64,11 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
     private val home = actionButton(R.drawable.ic_home, "Home") { l.onHome() }
     private val newTab = actionButton(R.drawable.ic_plus, "New tab") { l.onNewTab() }
     private val tabs = TabsButton(ctx, pal.fg).apply { setOnClickListener { l.onTabs() } }
-    private val menu: ImageButton = actionButton(R.drawable.ic_more, "Menu") { }.also { b -> b.setOnClickListener { l.onMenu(b) } }
+    private val menu = DotImageButton(ctx).apply {
+        setImageResource(R.drawable.ic_more); contentDescription = "Menu"; scaleType = ImageView.ScaleType.FIT_CENTER
+        setPadding(0, ctx.dp(15), 0, ctx.dp(15))
+        setOnClickListener { l.onMenu(this) }
+    }
     private val mask = ImageView(ctx).apply { setImageResource(R.drawable.ic_mask); contentDescription = "Private tab"; visibility = GONE }
     private val lock = ImageView(ctx)
     val urlField = EditText(ctx)
@@ -180,6 +184,7 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
         tabs.setPalette(pal.fg, pal.accent)
         reload.setColorFilter(pal.fg); reload.background = ripple(pal.fg, null, 0f)
         mask.setColorFilter(pal.accent)
+        menu.dotColor = pal.accent
         chip.setPal(pal)
         urlField.setTextColor(pal.fg)
         urlField.setHintTextColor(pal.muted)
@@ -239,8 +244,24 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
 
     fun fullUrlForEditing(tab: Tab?): String = tab?.url ?: ""
 
+    /** An accent dot on the menu button: an app update is waiting. */
+    fun setMenuDot(on: Boolean) { menu.dot = on }
+
     companion object {
         const val ROW_DP = 56
         const val WIDE_DP = 760
+    }
+}
+
+/** An ImageButton with an optional accent dot at its top-right (e.g. "an update is waiting" on the menu button). */
+class DotImageButton(ctx: Context) : ImageButton(ctx) {
+    private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    var dotColor = 0
+    var dot = false
+        set(v) { if (field != v) { field = v; invalidate() } }
+
+    override fun onDraw(c: android.graphics.Canvas) {
+        super.onDraw(c)
+        if (dot) { paint.color = dotColor; c.drawCircle(width / 2f + context.dpf(10f), height / 2f - context.dpf(11f), context.dpf(5f), paint) }
     }
 }

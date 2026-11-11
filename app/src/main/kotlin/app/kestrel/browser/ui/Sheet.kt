@@ -94,7 +94,7 @@ fun menuGrid(ctx: Context, pal: Pal, items: List<MenuItemSpec>, columns: Int, on
 }
 
 private fun tile(ctx: Context, pal: Pal, spec: MenuItemSpec, onPick: (Int) -> Unit): View {
-    val on = spec.checked == true
+    val on = spec.checked == true || spec.accent
     val t = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
