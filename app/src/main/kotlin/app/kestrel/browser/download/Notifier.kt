@@ -76,6 +76,7 @@ object Notifier {
     }
 
     /** One per finished or failed file; tap opens the Downloads screen, "Open" opens the file. */
+    @android.annotation.SuppressLint("NotificationPermission") // POST_NOTIFICATIONS is declared in the Kestrel G manifest; a denied permission just means no notification (caught below)
     fun finished(ctx: Context, v: DownloadView) {
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
         channels(ctx)

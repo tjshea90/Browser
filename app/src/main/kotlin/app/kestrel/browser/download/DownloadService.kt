@@ -1,5 +1,6 @@
 package app.kestrel.browser.download
 
+import android.annotation.SuppressLint
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -13,7 +14,10 @@ import android.app.NotificationManager
 /**
  * Keeps the process (and so the downloads) alive while anything is queued or moving: a foreground service of type dataSync with one quiet notification.
  * It owns nothing: the engine lives in [DownloadController]. It ticks the engine once a second, refreshes the notification, and stops itself when idle.
+ * The service entry, FOREGROUND_SERVICE(_DATA_SYNC) and POST_NOTIFICATIONS are declared in the Kestrel G manifest (the only build with the download manager); lint on the
+ * shared source tree of the WebView build cannot see that, hence the suppressions.
  */
+@SuppressLint("NotificationPermission", "ForegroundServiceType")
 class DownloadService : Service() {
     companion object {
         const val ACTION_PAUSE_ALL = "app.kestrel.browser.download.PAUSE_ALL"
