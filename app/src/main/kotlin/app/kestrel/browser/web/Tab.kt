@@ -3,6 +3,7 @@ package app.kestrel.browser.web
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.webkit.WebView
+import app.kestrel.core.media.MediaList
 import app.kestrel.core.shield.ShieldSettings
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicIntegerArray
@@ -59,6 +60,8 @@ class Tab(@JvmField val id: Long) {
     var thumbAt = 0L // uptime millis of that snapshot
     var dialogCount = 0 // JS alert/confirm/prompt count for this page load (spam guard)
     var dialogsSuppressed = false
+    /** Videos, audio files and stream playlists this page has loaded (Gecko build: filled by the Shields extension's sniffer); cleared when a new page starts. UI thread only. */
+    val media = MediaList()
 
     val isNewTab: Boolean get() = url.isEmpty() && pendingLoad == null
     val displayTitle: String get() = if (title.isNotBlank()) title else if (url.isEmpty()) "New tab" else url
