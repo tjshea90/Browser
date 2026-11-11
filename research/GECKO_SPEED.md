@@ -1,5 +1,8 @@
 # GECKO_SPEED - tuning GeckoView 160 (armeabi-v7a) for the MT8168B / 2 GB / hotspot tablet (R3)
 
+> CORRECTION 2026-11-11 (research/SCROLL.md Q1): the decoded-image cache is RAM / `image.mem.surfacecache.size_factor` (default 4, about 475 MB on the 1.9 GB tablet) and `image.mem.surfacecache.max_size_kb` is forced to 1 GB on a 32-bit engine, so a `max_size_kb` of 96 MB below does nothing. The working lever is `size_factor` (20 = about 95 MB); gecko-prefs.txt v2 sets it.
+
+
 Written 2026-11-11 by a research agent. No code changed; NOTHING here ran on a tablet or emulator (no KVM in the sandbox). Method: `javap -c` of the real `classes.jar`, the real `omni.ja` (prefs + JS), `strings` of the real `libxul.so` (118 MB), plus web sources (section 6).
 Tags: **[V]** verified in those 160 artifacts; **[S]** read in Mozilla source/docs (Firefox *main*, so a value may differ from 160); **[N]** not verified (section 7); **[E]** my estimate. "Exists" = exact string in libxul.so or a `pref()` line / consumer in omni.
 Defaults: [G] 160 greprefs.js / geckoview-prefs.js, [J] 160 GeckoRuntimeSettings bytecode, [Y] StaticPrefList.yaml of main. Sibling reports: ADBLOCK_ENGINE.md (R5), FREEZE.md (R6).
