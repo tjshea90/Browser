@@ -12,7 +12,7 @@ function topPage(d) {
 }
 
 browser.webRequest.onBeforeRequest.addListener(function (d) {
-  if (d.type === 'main_frame') return {};
+  if (d.type === 'main_frame') { sniffed.delete(d.tabId); return {}; } // a new page in this tab: what it loads is news again
   var page = topPage(d);
   if (!page) return {};
   var key = d.type + '|' + d.url + '|' + page;
@@ -48,8 +48,9 @@ var MEDIA_TYPES = ['media', 'xmlhttprequest', 'other', 'object', 'sub_frame', 'm
 var MEDIA_EXT = /\.(mp4|m4v|mov|webm|mkv|avi|wmv|flv|3gp|mpg|mpeg|m4a|mp3|aac|ogg|oga|ogv|opus|wav|flac|m3u8|m3u|mpd)(?:$|[?#])/i;
 var MEDIA_CT = /^(video|audio)\/|mpegurl|dash\+xml|\/mp4|\/ogg|matroska/;
 var SEGMENT = /\.(ts|m4s|cmfv|cmfa|cmft|m4f|mts)(?:$|[?#])/i;
-var sniffed = new Map();
-var SNIFFED_MAX = 800;
+var sniffed = new Map(); // tabId -> Set of "url|sizeKnown" already reported for the tab's CURRENT page (a reload or another page reports the same file again)
+var SNIFFED_TABS = 40;
+var SNIFFED_PER_TAB = 300;
 
 browser.webRequest.onHeadersReceived.addListener(function (d) {
   if (d.statusCode !== 200 && d.statusCode !== 206) return;
@@ -66,9 +67,14 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
   if (ct.indexOf('video/mp2t') === 0 || ct.indexOf('iso.segment') > 0) return;
   var size = total >= 0 ? total : (d.statusCode === 200 && len >= 0 ? len : -1);
   var key = url + '|' + (size >= 0 ? 1 : 0);
-  if (sniffed.has(key)) return;
-  if (sniffed.size >= SNIFFED_MAX) sniffed.delete(sniffed.keys().next().value);
-  sniffed.set(key, true);
+  var seen = sniffed.get(d.tabId);
+  if (!seen) {
+    if (sniffed.size >= SNIFFED_TABS) sniffed.delete(sniffed.keys().next().value);
+    seen = new Set(); sniffed.set(d.tabId, seen);
+  }
+  if (seen.has(key)) return;
+  if (seen.size >= SNIFFED_PER_TAB) seen.delete(seen.values().next().value);
+  seen.add(key);
   var page = (d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || '');
   browser.runtime.sendNativeMessage(NATIVE, JSON.stringify({ k: 'media', u: url, c: ct, l: size, p: page, f: d.documentUrl || '' })).catch(function () {});
 }, { urls: ['http://*/*', 'https://*/*'], types: MEDIA_TYPES }, ['responseHeaders']);
