@@ -612,14 +612,28 @@ class Engine(
         startQueued()
     }
 
-    private fun persist(job: Job) { if (!job.rec.priv) store.save(synchronized(lock) { job.rec.snapshot() }) }
+    /**
+     * Every snapshot gets a number when it is taken (under [lock]); the store only ever takes a newer one than the last it saved for that download. A checkpoint snapshots, then fsyncs for a while,
+     * then saves: without the number a finished download could be overwritten by that older "verifying" snapshot (the row then claimed the file was unfinished).
+     */
+    private val snapSeq = AtomicLong()
+    private val savedSeq = HashMap<Long, Long>()
+    private fun saveSnapshot(id: Long, n: Long, snap: Rec) = synchronized(savedSeq) { if (n > (savedSeq[id] ?: 0L)) { store.save(snap); savedSeq[id] = n } }
+
+    private fun persist(job: Job) {
+        if (job.rec.priv) return
+        val n: Long; val snap: Rec
+        synchronized(lock) { n = snapSeq.incrementAndGet(); snap = job.rec.snapshot() }
+        saveSnapshot(job.rec.id, n, snap)
+    }
 
     /** Data first, metadata second: the offsets saved here never run ahead of bytes that were fsynced. */
     private fun checkpoint(job: Job) {
         val rec = job.rec
-        val snap = synchronized(lock) { job.ckptPending = false; job.lastCkpt = clock.now(); job.sinceCkpt = 0; rec.updated = job.lastCkpt; rec.snapshot() }
+        val n: Long
+        val snap = synchronized(lock) { job.ckptPending = false; job.lastCkpt = clock.now(); job.sinceCkpt = 0; rec.updated = job.lastCkpt; n = snapSeq.incrementAndGet(); rec.snapshot() }
         try { job.sink?.sync() } catch (e: SinkException) { /* a failing disk shows up on the next write */ }
-        if (!rec.priv) store.save(snap)
+        if (!rec.priv) saveSnapshot(rec.id, n, snap)
     }
 
     private fun completeJob(job: Job) {
