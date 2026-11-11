@@ -34,7 +34,7 @@ Everything Brave-like (Shields, HTTPS-first, hotspot behaviour, UI) is implement
 4. Open Kestrel. Open the menu → *Settings* → *About* and read the **Browser engine** line (package name and version): that is the tablet's own web engine,
    and it decides how many modern websites will display correctly. If the new-tab page shows an "Old web engine" notice, see *Updating the web engine* below.
 
-Updating later: install the newer APK over the old one. It is signed with a *public development key* (see *Signing*), so updates from this repository install over each other.
+Updating later: install the newer APK from the Releases page over the old one. Every release is signed with the same certificate (see *Signing*), so updates install over each other.
 
 ## What you get
 **Shields (per site, in the shield button on the toolbar)**
