@@ -390,8 +390,15 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** Private tab in front: no screenshots / recents thumbnail, and no autofill service sees what is typed. */
     private var secureWindow = false
+
+    /** DEBUG builds only (never a release): `adb shell setprop debug.kestrel.nosecure 1` lets screenshots show private tabs, so the private skin can be checked on an emulator. */
+    private val debugAllowsScreenshots: Boolean by lazy {
+        (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0 && try {
+            Class.forName("android.os.SystemProperties").getMethod("get", String::class.java).invoke(null, "debug.kestrel.nosecure") == "1"
+        } catch (e: Throwable) { false }
+    }
     private fun applyPrivacyFlags() {
-        val priv = current?.isPrivateTab == true || (tabGrid.visibility == View.VISIBLE && tabGrid.showingPrivate)
+        val priv = (current?.isPrivateTab == true || (tabGrid.visibility == View.VISIBLE && tabGrid.showingPrivate)) && !debugAllowsScreenshots
         if (priv != secureWindow) { // a window flag change relayouts the window: only when the private state flips
             secureWindow = priv
             if (priv) window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE) else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
