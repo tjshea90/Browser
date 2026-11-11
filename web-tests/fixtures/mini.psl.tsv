@@ -43,6 +43,8 @@ a.b.blogspot.com	b.blogspot.com
 localhost	localhost
 intranet	intranet
 cookie-banner.example	cookie-banner.example
+impath.example	impath.example
+impanchor.example	impanchor.example
 malware.example.net	example.net
 phish.example.org	example.org
 bad.example	bad.example
@@ -91,32 +93,32 @@ co.za	null
 x.co.za	x.co.za
 same	ads.example.com	track.net	0
 same	track.net	media.example	0
-same	img.site.co.uk	malware.example.net	0
-same	first.example	www.city.kobe.jp	0
-same	imp.example	a.blogspot.com	0
-same	t.example	evil.example	0
-same	x.zip	city.kobe.jp	0
-same	ws.example	www.ck	0
-same	media.example	[::1]	0
-same	style.example	pixel.example	0
-same	excl.example	foo.beacon.example	0
-same	1.2.3.4	uk	0
-same	www.ck	x.sch.uk	0
-same	x.kobe.jp	track.net	0
-same	localhost	media.example	0
-same	malware.example.net	malware.example.net	1
-same	www.malware.example.net	www.city.kobe.jp	0
-same	a.b.c.co.uk	a.blogspot.com	0
-same	example.com	evil.example	0
-same	foo.ck	city.kobe.jp	0
-same	a.www.ck	www.ck	1
-same	a.kobe.jp	[::1]	0
-same	www.city.kobe.jp	pixel.example	0
-same	github.io	foo.beacon.example	0
-same	sch.uk	uk	0
-same	localhost	x.sch.uk	0
-same	256.1.1.1	track.net	0
-same	::1	media.example	0
-same	.x	malware.example.net	0
-same	a.blogspot.com	www.city.kobe.jp	0
-same	x.co.za	a.blogspot.com	0
+same	img.site.co.uk	impath.example	0
+same	first.example	b.a.kobe.jp	0
+same	imp.example		0
+same	t.example	t.example	1
+same	x.zip	www.ck	0
+same	ws.example	www.example.com	0
+same	media.example	intranet	0
+same	style.example	img.site.co.uk	0
+same	excl.example	style.example	0
+same	1.2.3.4	phish.example.org	0
+same	www.ck	jp	0
+same	x.kobe.jp	xn--bcher-kva.example	0
+same	localhost	x.zip	0
+same	impath.example	x.kobe.jp	0
+same	phish.example.org	bar.foo.ck	0
+same	co.uk	1.2.3	0
+same	uk	first.example	0
+same	www.example.com	excl.example	0
+same	bar.foo.ck	co.uk	0
+same	ck	a.github.io	0
+same	b.a.kobe.jp	ads.example.com	0
+same	jp	ws.example	0
+same	a.github.io	localhost	0
+same	x.sch.uk	ck	0
+same	intranet	a..b	0
+same	1.2.3	imp.example	0
+same	a..b	1.2.3.4	0
+same		uk	0
+same	xn--bcher-kva.example	x.sch.uk	0

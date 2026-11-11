@@ -35,7 +35,7 @@ class ExtImageTest {
         "||cdn.example.org/ads/", "/pixel.gif?", "|https://*.beacon.", "/stat^\$ping", "||ws.example^\$websocket", "||frame.example^\$subdocument",
         "||font.example^\$font", "||media.example^\$media", "||obj.example^\$object", "||other.example^\$other", "||style.example^\$stylesheet",
         "||notimg.example^\$~image", "||dom.example^\$domain=example.com", "||excl.example^\$domain=~example.com", "/analytics.js", "/collect?v=",
-        "/AdBanner.", "||UPPER.example^", "||ipv4.example^", "||1.2.3.4^", "/\$ext/",
+        "/impban/*\$important", "||impath.example/ads/\$important", "@@||impath.example^", "|https://impanchor.\$important,script", "/AdBanner.", "||UPPER.example^", "||ipv4.example^", "||1.2.3.4^", "/\$ext/",
     )
 
     private val hosts = listOf(
@@ -43,13 +43,13 @@ class ExtImageTest {
         "first.example", "pixel.example", "both.example", "imp.example", "hostonly.example", "plain.example", "t.example", "a.example", "evil.example", "x.zip",
         "sub.deep.example.co.uk", "x.example", "ws.example", "frame.example", "font.example", "media.example", "obj.example", "other.example", "style.example",
         "notimg.example", "dom.example", "excl.example", "foo.beacon.example", "UPPER.example", "1.2.3.4", "[::1]", "xn--bcher-kva.example", "www.ck", "a.b.ck", "city.kobe.jp", "x.kobe.jp",
-        "user.github.io", "a.b.blogspot.com", "localhost", "intranet", "cookie-banner.example", "malware.example.net", "phish.example.org", "bad.example", "www.malware.example.net",
+        "user.github.io", "a.b.blogspot.com", "localhost", "intranet", "cookie-banner.example", "impath.example", "impanchor.example", "malware.example.net", "phish.example.org", "bad.example", "www.malware.example.net",
     )
     private val pageHosts = listOf(
         "example.com", "www.example.com", "a.com", "b.com", "a.b.c.example.org", "news.site.co.uk", "other.co.uk", "page.example", "tracker.example", "track.net", "www.ck", "foo.ck",
         "city.kobe.jp", "x.y.kobe.jp", "user.github.io", "other.github.io", "1.2.3.4", "localhost",
     )
-    private val words = listOf("ads", "banner", "track", "img", "x", "pixel", "v1", "api", "ad", "analytics", "promo", "stat", "collect", "p", "q", "z", "foo", "adserver", "beacon", "AdBanner", "y", "consent.js", "consent")
+    private val words = listOf("ads", "banner", "track", "img", "x", "pixel", "v1", "api", "ad", "analytics", "promo", "stat", "collect", "p", "q", "z", "foo", "adserver", "beacon", "AdBanner", "y", "consent.js", "consent", "impban")
     private val rareWords = listOf("beacon", "adserver", "collect", "stat", "promo", "pixel", "AdBanner").map { it.lowercase() }
     private val neutralHosts = listOf(
         "www.wikipedia.org", "cdn.jsdelivr.net", "fonts.gstatic.com", "news.bbc.co.uk", "docs.example.net", "static.cdn-example.com", "shop.example.co.uk", "img.example.com.au", "api.service.dev",
