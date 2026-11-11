@@ -148,3 +148,39 @@
 >
 > All of this is checked on an emulator only, not on your tablet.
 <!-- sha:e1e451c1f32d -->
+
+## 2026-11-11T16:17:28Z
+> Alpha 6 is built, signed and published, and I tested it on the Android 10 emulator only, not on your tablet.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.2.0-alpha6
+>
+> To update inside the app: Menu → Updates → Check now → Download.
+>
+> **White screen and reload.** When Android takes memory back from Firefox's page process, Kestrel used to reload the page from the top. Now it brings the page back at the same scroll position, behind a dimmed copy of the page with "Page freed to save memory - bringing it back". It never shows plain white. I tested it on the emulator by killing the page process mid-scroll: the dimmed preview appeared, then the page returned where it was.
+>
+> **Likely cause of the stutter.** An agent read Firefox's 160 source for me. Firefox's cache of decoded images could grow to about 475 MB on a 2 GB tablet. I had assumed it was already capped, and my old setting did nothing. A full cache makes Android signal "low memory", and Firefox answers by throwing away all decoded images and graphics caches. That gives hitches and blank areas when you scroll back up. I capped it at about 95 MB.
+>
+> **Our own overhead.** The neon glow now stays still while a finger is down, and page previews wait until 3 seconds after your last touch.
+>
+> **What I can't confirm:** how often Android sends "low memory" on your tablet, and whether the GPU driver plays a part.
+>
+> **New tools** so we stop guessing:
+> - **Scroll feel** (Settings → Appearance): Standard, Smoother (draws more of the page ahead of your finger, aimed at white strips when you fling), or Smoothest (also a lower top fling speed). It defaults to Standard. Nothing proves either alternative helps here, so flip it and tell me.
+> - **Scroll test** (Menu → Diagnostics, about 30 s): swipes a built-in page and prints one line like "Result: SMOOTH - about 55 frames a second…".
+> - **GPU line** in Diagnostics: shows your GPU name and driver version.
+>
+> **Please send me any of these:**
+> 1. Did alpha 3 scroll smoothly, or was it always like this?
+> 2. The Scroll test Result line under Standard, under Smoother, and with Neon glow set to Off.
+> 3. After a white screen: Menu → Diagnostics → Copy, then paste it here.
+>
+> **Cromite.** It can't be the engine inside Kestrel because it's a separate app; the full pros and cons are in my earlier message. To compare, install Cromite's `arm_ChromePublic.apk` (232 MB) beside Kestrel for 15 minutes and scroll the same three pages in both. If Cromite is dramatically smoother, I'll add "Open in Cromite" to the menu.
+>
+> **Still open:**
+> - Your numbers above, which decide what I tune next.
+> - The in-extension ad-blocking engine, which removes a per-request delay and could help blank areas when scrolling into lazy-loaded content.
+> - A small startup glitch: a restored page briefly shows the Home screen with the page-style bottom bar.
+> - Swipe-to-close in the tab grid.
+> - Settings restyle.
+> - Your pending decisions: signing key, licence and YouTube switch, and the landscape tab strip.
+<!-- sha:e83205b8b0cf -->
