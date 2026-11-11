@@ -47,11 +47,15 @@ object UpdateManager {
         val message: String = "",
         val checkedAt: Long = 0,
         val installedName: String = "",
-        /** NEEDS_SPACE only: bytes still to free (rounded up to 10 MB), free space now, whether the downloaded file is still there, and the installed size Android must find room for. */
+        /**
+         * NEEDS_SPACE only: bytes still to free (rounded up to 10 MB); the free space the installer can count on now (free + caches it may clear); whether the downloaded file is still there;
+         * what the install itself takes (APK + unpacked libraries + optimised code); and the part of the storage Android insists on keeping free afterwards (10 % of the partition).
+         */
         val shortBy: Long = 0,
         val freeNow: Long = 0,
         val fileKept: Boolean = true,
         val installedBytes: Long = 0,
+        val reserveBytes: Long = 0,
     )
 
     @Volatile var state = State(Phase.IDLE)
@@ -262,11 +266,20 @@ object UpdateManager {
 
     // ------------------------------------------------------------------------------------------- install
 
-    /** Space Android's installer may use (free space + caches the system may clear - its own reserve): the number its own storage check compares with. */
-    private fun allocatable(ctx: Context): Long = try {
+    /** Free space the installer can count on: what is free plus the caches the system may clear (installd clears every app's cache before it gives up). */
+    private fun freeForInstall(ctx: Context): Long = try {
         val sm = ctx.getSystemService(StorageManager::class.java)
-        sm.getAllocatableBytes(sm.getUuidForPath(dir(ctx)))
-    } catch (e: Exception) { (dir(ctx).usableSpace - (500L shl 20)).coerceAtLeast(0) }
+        ctx.getSystemService(StorageStatsManager::class.java).getFreeBytes(sm.getUuidForPath(dir(ctx)))
+    } catch (e: Exception) { dir(ctx).usableSpace }
+
+    /**
+     * What Android insists on keeping free AFTER the install: 10 % of the data partition (measured, research/UPDATE_STORAGE.md: installd "Failed to free up 624066560 on /data" on a 6.2 GB partition).
+     * The settings key is honoured when somebody raised it above 10 %.
+     */
+    private fun reserveBytes(ctx: Context): Long {
+        val pct = try { Settings.Global.getInt(ctx.contentResolver, "sys_storage_cache_percentage", 10).coerceIn(10, 50) } catch (e: Exception) { 10 }
+        return dir(ctx).totalSpace * pct / 100
+    }
 
     /** Bytes the installer unpacks from the APK: read from the file when we have it, else estimated from the libraries of the app that is installed now. */
     private fun nativeLibBytes(ctx: Context, apk: File?): Long {
@@ -290,15 +303,15 @@ object UpdateManager {
     private fun space(ctx: Context, offer: UpdateOffer, apk: File?, pending: Long = 0): Space {
         val apkBytes = if (apk != null && apk.isFile) apk.length() else offer.size.coerceAtLeast(0)
         val libs = nativeLibBytes(ctx, apk)
-        val alloc = (allocatable(ctx) - pending).coerceAtLeast(0)
-        val floor = sp(ctx).getLong("floor", 0L) // Android once refused with this much allocatable space plus 150 MB: ask for at least that much
-        val plan = UpdateLogic.storagePlan(apkBytes, libs, alloc)
-        return Space(plan, dir(ctx).usableSpace, apkBytes + libs, (floor - alloc).coerceAtLeast(0))
+        val free = (freeForInstall(ctx) - pending).coerceAtLeast(0)
+        val floor = sp(ctx).getLong("floor2", 0L) // Android once refused with this much free space plus 150 MB: ask for at least that much
+        val plan = UpdateLogic.storagePlan(apkBytes, libs, free, reserveBytes(ctx))
+        return Space(plan, free, plan.installTakes, (floor - free).coerceAtLeast(0))
     }
 
     private fun needSpace(ctx: Context, offer: UpdateOffer, sp: Space, fileKept: Boolean) {
         val short = UpdateLogic.roundUpTenMb(sp.shortBy).coerceAtLeast(10L shl 20)
-        state = State(Phase.NEEDS_SPACE, offer, 0, 0, "", state.checkedAt, state.installedName, shortBy = short, freeNow = sp.free, fileKept = fileKept, installedBytes = sp.installed)
+        state = State(Phase.NEEDS_SPACE, offer, 0, 0, "", state.checkedAt, state.installedName, shortBy = short, freeNow = sp.free, fileKept = fileKept, installedBytes = sp.installed, reserveBytes = sp.plan.reserve)
         Io.main.post { for (l in listeners) l() }
     }
 
@@ -366,8 +379,8 @@ object UpdateManager {
         val offer = state.offer ?: return
         val app = ctx.applicationContext
         Thread({
-            val now = allocatable(app)
-            sp(app).edit().putLong("floor", maxOf(sp(app).getLong("floor", 0L), now) + (150L shl 20)).apply()
+            val now = freeForInstall(app)
+            sp(app).edit().putLong("floor2", maxOf(sp(app).getLong("floor2", 0L), now) + (150L shl 20)).apply()
             val apk = File(dir(app), offer.apkName)
             val kept = apk.isFile
             val s0 = space(app, offer, if (kept) apk else null, pending = if (kept) 0 else offer.size)
