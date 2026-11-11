@@ -634,6 +634,16 @@ open class BrowserActivity : Activity(), DockListener {
         current?.let { navigate(it, text) }
     }
 
+    // ---- typing in the address field / the Home field
+
+    /** The Home screen is showing (new tab, or the Home button was pressed): its big field is the one to type in. */
+    private fun homeShown(t: Tab? = current): Boolean = t != null && (t.isNewTab || t.showHome)
+    private val activeField: EditText get() = if (homeShown()) home.field else dock.urlField
+    private fun typing(): Boolean = dock.urlField.hasFocus() || home.field.hasFocus()
+
+    /** True while an address field has (or just had) the keyboard: the keyboard's insets must not shrink the page then (API 30+ sends them whatever the soft-input mode). */
+    @Volatile private var urlTyping = false
+
     /** While the address bar is being typed in, the page view must NOT resize under the keyboard (compositor resize while typing = the freeze race); pages keep adjustResize. */
     private fun setUrlTypingMode(on: Boolean) {
         val lp = window.attributes
@@ -642,31 +652,71 @@ open class BrowserActivity : Activity(), DockListener {
             window.setSoftInputMode((lp.softInputMode and WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST.inv()) or want)
             Health.log("win", "typing-mode", on.toString())
         }
+        if (urlTyping != on) { urlTyping = on; if (Build.VERSION.SDK_INT >= 30) root.requestApplyInsets() }
     }
 
     private var typingModeSince = 0L
+    private var kbTopScreen = 0 // top edge of the keyboard in screen pixels while it is up, else 0
 
     /** Keyboard showing? (the visible display frame is shorter than the window while an IME is up, also with adjustNothing) */
     private fun keyboardUp(): Boolean {
-        val r = android.graphics.Rect(); window.decorView.getWindowVisibleDisplayFrame(r)
+        val r = Rect(); window.decorView.getWindowVisibleDisplayFrame(r)
         return window.decorView.height - r.height() > dp(120)
     }
 
-    /** Back to adjustResize only AFTER the keyboard is gone (else the page view shrinks once more under the closing keyboard); if the keyboard stays up for 1.5 s the user moved on to typing in the page. */
-    private val endTypingMode = object : Runnable {
+    /**
+     * Follows the keyboard while a field is typed in and until it is gone again (at most 1.5 s after focus is lost): lifts the dock so the address row sits right above
+     * it, keeps the suggestion list and the Home field in view. Back to adjustResize only AFTER the keyboard is gone (else the page shrinks once more under the closing keyboard).
+     */
+    private val typingTick = object : Runnable {
         override fun run() {
-            if (toolbar.urlField.hasFocus()) return
-            if (keyboardUp() && SystemClock.uptimeMillis() - typingModeSince < 1500) { Io.main.postDelayed(this, 100); return }
+            val focused = typing()
+            val up = keyboardUp()
+            if (up) { val r = Rect(); window.decorView.getWindowVisibleDisplayFrame(r); applyKeyboard(r.bottom) } else applyKeyboard(0)
+            if (focused) { Io.main.postDelayed(this, 100); return }
+            if (up && SystemClock.uptimeMillis() - typingModeSince < 1500) { Io.main.postDelayed(this, 80); return }
+            applyKeyboard(0)
             setUrlTypingMode(false)
         }
     }
 
+    /** [topScreen]: the keyboard's top edge in screen pixels, 0 = no keyboard. Moves views with translationY only - nothing is re-laid-out, the page keeps its size. */
+    private fun applyKeyboard(topScreen: Int) {
+        kbTopScreen = topScreen
+        val loc = IntArray(2)
+        var lift = 0
+        if (topScreen > 0 && !homeShown()) {
+            column.getLocationOnScreen(loc)
+            val bandBottom = loc[1] + column.height - dock.actionRowPx // bottom edge of the address row while the dock is not lifted
+            lift = maxOf(0, bandBottom - topScreen)
+        }
+        if (dock.translationY != -lift.toFloat()) dock.translationY = -lift.toFloat()
+        if (topScreen > 0 && homeShown()) { home.getLocationOnScreen(loc); home.onKeyboard(topScreen - loc[1]) } else home.onKeyboard(0)
+        positionSuggestions()
+    }
+
+    /** The dock's suggestion list sits right on top of the address row; the best match is the row nearest to the bar. */
+    private fun positionSuggestions() {
+        if (suggestions.visibility != View.VISIBLE) return
+        val lp = suggestions.layoutParams as FrameLayout.LayoutParams
+        val dockTop = dock.top + dock.translationY.toInt() // relative to `column`
+        val bottomMargin = (column.height - dockTop).coerceAtLeast(0)
+        val h = minOf(suggestions.contentHeightPx(), (dockTop - dp(12)).coerceAtLeast(dp(56)))
+        if (lp.bottomMargin != bottomMargin || lp.height != h) { lp.bottomMargin = bottomMargin; lp.height = h; suggestions.layoutParams = lp }
+    }
+
+    private fun homeKeyboardTop(): Int {
+        if (kbTopScreen <= 0) return 0
+        val loc = IntArray(2); home.getLocationOnScreen(loc)
+        return kbTopScreen - loc[1]
+    }
+
     override fun onUrlFocus(focused: Boolean) {
-        Io.main.removeCallbacks(endTypingMode)
-        if (focused) setUrlTypingMode(true) else { typingModeSince = SystemClock.uptimeMillis(); Io.main.postDelayed(endTypingMode, 100) }
+        Io.main.removeCallbacks(typingTick)
+        if (focused) setUrlTypingMode(true) else typingModeSince = SystemClock.uptimeMillis()
+        Io.main.post(typingTick)
         if (focused) {
-            toolbar.urlField.setText(toolbar.fullUrlForEditing(current))
-            toolbar.urlField.selectAll()
+            if (!homeShown()) { dock.urlField.setText(dock.fullUrlForEditing(current)); dock.urlField.selectAll() }
         } else {
             hideSuggestions()
             updateUi()
@@ -675,44 +725,53 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onUrlText(text: String) {
         val q = text.trim()
-        if (q.isEmpty() || q == current?.url) { hideSuggestions(); return }
+        val toHome = homeShown()
+        if (q.isEmpty() || (!toHome && q == current?.url)) { hideSuggestions(); return }
         val seq = ++suggestSeq
         val dbRef = db
-        if (dbRef == null) { suggestions.bind(q, emptyList()); suggestions.visibility = View.VISIBLE; return }
-        Io.exec {
-            val entries = dbRef.suggest(q, 6)
-            Io.ui { if (seq == suggestSeq && toolbar.urlField.hasFocus()) { suggestions.bind(q, entries); suggestions.visibility = View.VISIBLE } }
+        fun showRows(entries: List<Entry>) {
+            if (seq != suggestSeq || !typing()) return
+            if (toHome) home.bindSuggestions(q, entries, home.suggestionRoom(homeKeyboardTop()))
+            else { suggestions.bind(q, entries); suggestions.visibility = View.VISIBLE; positionSuggestions() }
         }
+        if (dbRef == null) { showRows(emptyList()); return }
+        Io.exec { val entries = dbRef.suggest(q, 6); Io.ui { showRows(entries) } }
     }
 
-    private fun hideSuggestions() { suggestSeq++; suggestions.visibility = View.GONE }
-    private fun focusUrlBar() { toolbar.urlField.requestFocus(); getSystemService(InputMethodManager::class.java)?.showSoftInput(toolbar.urlField, 0) }
-    private fun clearUrlFocus() { toolbar.urlField.clearFocus(); hideKeyboard() }
+    private fun hideSuggestions() { suggestSeq++; suggestions.visibility = View.GONE; home.hideSuggestions() }
+    private fun focusUrlBar() { val f = activeField; f.requestFocus(); getSystemService(InputMethodManager::class.java)?.showSoftInput(f, 0) }
+    private fun clearUrlFocus() {
+        dock.urlField.clearFocus(); home.field.clearFocus()
+        root.isFocusableInTouchMode = true; root.requestFocus() // else the framework hands the focus (and the keyboard) to the other text field
+        hideKeyboard()
+    }
     private fun hideKeyboard() { getSystemService(InputMethodManager::class.java)?.hideSoftInputFromWindow(root.windowToken, 0) }
 
     // ---- menu
     private object M { const val REFRESH = 14; const val DIAG = 15; const val NEW = 1; const val PRIVATE = 2; const val FIND = 3; const val SHARE = 4; const val BOOKMARK = 5; const val BOOKMARKS = 6; const val HISTORY = 7
-        const val DOWNLOADS = 8; const val DESKTOP = 9; const val IMAGES = 10; const val PRINT = 11; const val SETTINGS = 12; const val QUIT = 13; const val CLOSE_ALL = 14 }
+        const val DOWNLOADS = 8; const val DESKTOP = 9; const val IMAGES = 10; const val PRINT = 11; const val SETTINGS = 12; const val QUIT = 13; const val CLOSE_ALL = 16 }
 
     override fun onMenu(anchor: View) {
         val t = current
         val items = ArrayList<MenuItemSpec>()
-        items.add(MenuItemSpec(M.NEW, "New tab"))
-        items.add(MenuItemSpec(M.PRIVATE, "New private tab"))
+        items.add(MenuItemSpec(M.NEW, "New tab", null, R.drawable.ic_plus))
+        items.add(MenuItemSpec(M.PRIVATE, "New private tab", null, R.drawable.ic_mask))
         if (t != null && !t.isNewTab) {
-            items.add(MenuItemSpec(M.FIND, "Find in page"))
-            items.add(MenuItemSpec(M.SHARE, "Share…"))
-            if (!isPrivate) items.add(MenuItemSpec(M.BOOKMARK, "Add bookmark"))
-            items.add(MenuItemSpec(M.DESKTOP, "Desktop site", t.desktop))
+            items.add(MenuItemSpec(M.FIND, "Find in page", null, R.drawable.ic_search))
+            items.add(MenuItemSpec(M.SHARE, "Share", null, R.drawable.ic_share))
+            if (!isPrivate) items.add(MenuItemSpec(M.BOOKMARK, "Add bookmark", null, R.drawable.ic_star))
+            items.add(MenuItemSpec(M.DESKTOP, "Desktop site", t.desktop, R.drawable.ic_desktop))
         }
-        if (!isPrivate) { items.add(MenuItemSpec(M.BOOKMARKS, "Bookmarks")); items.add(MenuItemSpec(M.HISTORY, "History")) }
-        items.add(MenuItemSpec(M.DOWNLOADS, "Downloads"))
-        if (t != null && !t.isNewTab) items.add(MenuItemSpec(M.REFRESH, "Refresh screen"))
-        if (!isPrivate) items.add(MenuItemSpec(M.SETTINGS, "Settings"))
-        items.add(MenuItemSpec(M.DIAG, "Diagnostics"))
-        if (tabs.size > 1) items.add(MenuItemSpec(M.CLOSE_ALL, "Close all tabs"))
-        items.add(MenuItemSpec(M.QUIT, if (isPrivate) "Close private window" else "Quit"))
-        MenuPopup.show(this, pal, anchor, items) { id -> onMenuPick(id) }
+        if (!isPrivate) { items.add(MenuItemSpec(M.BOOKMARKS, "Bookmarks", null, R.drawable.ic_bookmarks)); items.add(MenuItemSpec(M.HISTORY, "History", null, R.drawable.ic_history)) }
+        items.add(MenuItemSpec(M.DOWNLOADS, "Downloads", null, R.drawable.ic_download))
+        if (t != null && !t.isNewTab) items.add(MenuItemSpec(M.REFRESH, "Refresh screen", null, R.drawable.ic_refresh))
+        if (!isPrivate) items.add(MenuItemSpec(M.SETTINGS, "Settings", null, R.drawable.ic_settings))
+        items.add(MenuItemSpec(M.DIAG, "Diagnostics", null, R.drawable.ic_pulse))
+        if (tabs.size > 1) items.add(MenuItemSpec(M.CLOSE_ALL, "Close all tabs", null, R.drawable.ic_close))
+        items.add(MenuItemSpec(M.QUIT, "Quit", null, R.drawable.ic_power))
+        hideKeyboard()
+        val cols = if (resources.displayMetrics.widthPixels >= dp(700)) 3 else 2
+        sheet.show(null, menuGrid(this, pal, items, cols) { id -> sheet.dismiss(); onMenuPick(id) })
     }
 
     private fun onMenuPick(id: Int) {
@@ -721,7 +780,7 @@ open class BrowserActivity : Activity(), DockListener {
             M.REFRESH -> refreshScreen("menu")
             M.DIAG -> showDiagnostics()
             M.NEW -> newTabAndShow()
-            M.PRIVATE -> newPrivateTab()
+            M.PRIVATE -> newTabAndShow(true)
             M.FIND -> openFind()
             M.SHARE -> t?.takeIf { !it.isNewTab }?.let { share(it.url) }
             M.BOOKMARK -> t?.takeIf { it.url.isNotEmpty() }?.let { tab ->
@@ -942,20 +1001,10 @@ open class BrowserActivity : Activity(), DockListener {
         if (n > 0 && !isPrivate) prefs.blockedTotal = prefs.blockedTotal + n
     }
 
-    private fun refreshNtpIfShown() { if (current?.isNewTab == true) refreshNtp() }
+    private fun refreshNtpIfShown() { if (homeShown()) refreshNtp() }
 
-    private fun refreshNtp() {
-        val dbRef = db
-        Io.exec {
-            val sites = dbRef?.topSites(8)?.map { TopSite(it.first, it.second) } ?: emptyList()
-            val data = DataMeter.totalBytes(prefs)
-            Io.ui {
-                ntp.bindSites(sites)
-                ntp.bindStats(prefs.blockedTotal, data, Engine.sourceDescription, NetworkMonitor.metered)
-                ntp.bindNotices(emptyList())
-            }
-        }
-    }
+    /** The Home screen has one data-driven line: what Shields blocked so far. */
+    private fun refreshNtp() { home.bindStats(prefs.blockedTotal, NetworkMonitor.metered) }
 
     private fun onNetworkChanged() {
         val t = current
@@ -974,7 +1023,8 @@ open class BrowserActivity : Activity(), DockListener {
     private fun applyUi() {
         val t = current
         val canBack = t?.canGoBack == true || (t != null && t.parentId != 0L && tabs.any { it.id == t.parentId })
-        toolbar.bind(t, tabs.size, canBack || (t != null && !t.isNewTab))
+        val priv = t?.isPrivateTab == true
+        dock.bind(t, tabs.count { it.isPrivateTab == priv }, canBack || (t != null && (!t.isNewTab || t.showHome)), homeShown(t))
         val p = if (t?.loading == true) t.progress else 0
         if (progress.progress != p) progress.progress = p
     }
@@ -1033,13 +1083,15 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** @return true if the back press did something. */
     private fun handleBack(): Boolean {
+        if (sheet.isShowing) { sheet.dismiss(); return true }
         if (diagView?.parent != null) { closeDiagnostics(); return true }
         if (settingsView?.parent != null) { closeSettings(); return true }
         if (listPanel?.parent != null) { closeList(); return true }
         if (tabSwitcher.visibility == View.VISIBLE) { hideTabSwitcher(); return true }
         if (findBar.visibility == View.VISIBLE) { closeFind(); return true }
-        if (suggestions.visibility == View.VISIBLE || toolbar.urlField.hasFocus()) { hideSuggestions(); clearUrlFocus(); updateUi(); return true }
+        if (suggestions.visibility == View.VISIBLE || home.suggest.visibility == View.VISIBLE || typing()) { hideSuggestions(); clearUrlFocus(); updateUi(); return true }
         val t = current ?: return false
+        if (t.showHome && !t.isNewTab) { t.showHome = false; attachContent(t); updateUi(); return true } // Home laid over a page: Back returns to the page
         if (t.error != null) {
             t.error = null
             if (t.canGoBack && t.session != null) { attachContent(t); t.session?.goBack() } else if (t.parentId != 0L && tabs.any { it.id == t.parentId }) doCloseTab(t) else showNewTabPage(t)
@@ -1075,7 +1127,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     internal fun fullScreenChanged(on: Boolean) {
         fullscreenOn = on
-        toolbar.visibility = if (on) View.GONE else View.VISIBLE
+        dock.visibility = if (on) View.GONE else View.VISIBLE
         progress.visibility = if (on) View.GONE else View.VISIBLE
         applyImmersive(on)
     }
