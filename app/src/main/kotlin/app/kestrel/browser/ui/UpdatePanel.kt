@@ -119,7 +119,9 @@ class UpdatePanel(ctx: Context, private val pal: Pal, private val prefs: Prefs, 
                     buttons(primary("Delete old installers") {
                         val freed = app.kestrel.browser.download.DownloadController.deleteOldInstallers()
                         android.widget.Toast.makeText(ctx, "Deleted ${UpdateLogic.formatSize(freed)}", android.widget.Toast.LENGTH_SHORT).show()
-                        Io.main.postDelayed({ UpdateManager.recheckSpace(ctx) }, 800)
+                        // the files go away on the download engine's own thread and Android's free-space figure lags a little: look again twice
+                        Io.main.postDelayed({ UpdateManager.recheckSpace(ctx) }, 1200)
+                        Io.main.postDelayed({ UpdateManager.recheckSpace(ctx) }, 3500)
                     }, secondary("Storage settings") { actions.openStorageSettings() })
                     buttons(secondary("Try again") { if (s.fileKept) UpdateManager.install(ctx) else actions.download() })
                 } else buttons(
