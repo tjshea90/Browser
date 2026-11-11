@@ -168,9 +168,11 @@ class HomeView(ctx: Context, private var pal: Pal, private val brand: String, pr
     fun onKeyboard(keyboardTop: Int) {
         val ctx = context
         if (keyboardTop <= 0 || keyboardTop >= height) { column.translationY = 0f; return }
-        val fieldTop = (column.layoutParams as LayoutParams).topMargin + ctx.dp(34 + GAP_DP)
-        val want = ctx.dp(14)
-        column.translationY = -(fieldTop - want).coerceAtLeast(0).toFloat()
+        val top = (column.layoutParams as LayoutParams).topMargin
+        // room for the wordmark (and its PRIVATE badge) above the field while the visible area is tall enough; on a short window only the field matters
+        val keepBrand = keyboardTop > ctx.dp(400)
+        val anchor = if (keepBrand) top else top + ctx.dp(34 + GAP_DP)
+        column.translationY = -(anchor - ctx.dp(16)).coerceAtLeast(0).toFloat()
     }
 
     /** Pixels between the field and the keyboard (or the bottom edge): the room the suggestion list may use. */
