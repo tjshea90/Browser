@@ -13,6 +13,7 @@ import org.mozilla.geckoview.GeckoSession.ContentDelegate
 import org.mozilla.geckoview.GeckoSession.NavigationDelegate
 import org.mozilla.geckoview.GeckoSession.PermissionDelegate
 import org.mozilla.geckoview.GeckoSession.ProgressDelegate
+import org.mozilla.geckoview.SlowScriptResponse
 import org.mozilla.geckoview.GeckoSession.PromptDelegate
 import org.mozilla.geckoview.WebRequestError
 import org.mozilla.geckoview.WebResponse
@@ -34,7 +35,6 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         // Only COMMITTED pages reach the address bar. Engine-internal pages (about:neterror, our blank error backdrop) never do.
         if (url == null || url.startsWith("about:") || url.startsWith("data:")) return
         tab.url = url
-        tab.canGoBackUnknown = false
         val host = UrlParts.hostOf(url)
         tab.topHost = host
         tab.mainUrl = url
@@ -148,7 +148,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         a.download(tab, response.uri, null, header("Content-Disposition"), header("Content-Type")?.substringBefore(';')?.trim(), header("Content-Length")?.toLongOrNull() ?: -1L)
     }
 
-    override fun onSlowScript(session: GeckoSession, scriptFileName: String): GeckoResult<ContentDelegate.SlowScriptResponse>? = a.askSlowScript(tab)
+    override fun onSlowScript(session: GeckoSession, scriptFileName: String): GeckoResult<SlowScriptResponse>? = a.askSlowScript(tab)
 
     // ------------------------------------------------------------------ shields counters (engine-side tracking protection)
 

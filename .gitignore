@@ -31,3 +31,7 @@ node_modules/
 /scratch/
 *.log
 .DS_Store
+
+# Kestrel G (Firefox engine) APKs are ~92 MB: deliver as attachments, never commit (GitHub rejects files over 100 MB)
+dist/*gecko*
+geckoapp/build/

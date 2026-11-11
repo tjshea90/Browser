@@ -15,6 +15,8 @@ val keystoreProps = Properties().apply {
 }
 
 val geckoVersion = "160.0.20261104181552"
+// `-PgeckoAbi=x86` builds a debug APK for the x86 emulator; the tablet build is always armeabi-v7a.
+val geckoAbi = (findProperty("geckoAbi") as String?) ?: "armeabi-v7a"
 
 android {
     namespace = "app.kestrel.browser"   // shared sources and resources use app.kestrel.browser.R
@@ -27,7 +29,7 @@ android {
         targetSdk = 36
         versionCode = 100
         versionName = "0.2.0-gecko-alpha1"
-        ndk { abiFilters += "armeabi-v7a" } // the tablet's userspace is 32-bit; only this engine build is bundled (~90 MB)
+        ndk { abiFilters += geckoAbi } // the tablet's userspace is 32-bit; only this engine build is bundled (~90 MB)
     }
 
     signingConfigs {
@@ -94,7 +96,7 @@ configurations.all {
 
 dependencies {
     implementation(project(":core"))
-    implementation("org.mozilla.geckoview:geckoview-armeabi-v7a:$geckoVersion") {
+    implementation("org.mozilla.geckoview:geckoview-$geckoAbi:$geckoVersion") {
         exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
         exclude(group = "com.google.android.gms") // WebAuthn via Google Play services: this tablet has none, and this project never depends on GMS
     }

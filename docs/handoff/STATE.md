@@ -1,8 +1,8 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** 2026-11-11T02:05:55Z (L1) on `ccr-a57c163e-mtq8js` after 6c09e25
-- **Summary:** refactor: WebView-specific sources moved to app/src/webview (shared tree = src/main) so a Gecko module can reuse UI/data/shield code; Tab.engineData slot; Proc extracted; 81 app tests green
+- **Last checkpoint:** 2026-11-11T02:18:13Z (L1) on `ccr-a57c163e-mtq8js` after 6f0bce8
+- **Summary:** Kestrel G (Firefox/GeckoView 160) module: shared UI/data/shield + Gecko session/delegates/prompts/permissions/downloads/private tabs; release APK builds (92 MB, signed); not yet run anywhere
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE
