@@ -129,7 +129,7 @@ object GeckoEngine {
         // The painted area is NOT the multiplier: Gecko scales (multiplier - 1) down by viewport pixels / 250 (this tablet: about 2.9 vertically), so Firefox's 1.5 is only
         // +16 % of the screen height (about 60 px each side) and 4.0 is +96 % (about 370 px each side). research/SCROLL.md "R2 update".
         val (skate, still, bias, wait, expiry, vel) = when (level) {
-            1 -> listOf("4.0", "3.0", "1.0", "300", "0", "0.07")
+            1 -> listOf("4.0", "3.0", "1.0", "300", "180000", "0.07")
             2 -> listOf("6.0", "4.0", "2.0", "200", "0", "0.04")
             else -> listOf("1.5", "1.5", "0.0", "600", "15000", "0.07")
         }
