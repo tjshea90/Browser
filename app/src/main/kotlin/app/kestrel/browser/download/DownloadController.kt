@@ -20,6 +20,8 @@ import app.kestrel.core.download.Fetcher
 import app.kestrel.core.download.NetGate
 import app.kestrel.core.download.Source
 import app.kestrel.core.download.Spawner
+import app.kestrel.core.media.StreamEngine
+import app.kestrel.core.media.StreamSource
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
@@ -32,6 +34,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 object DownloadController {
     private var engine: Engine? = null
+    /** The second engine: segmented streams (HLS) into one file. Same list, same notifications; its ids live above 1e9 ([StreamEngine.owns]). */
+    private var streams: StreamEngine? = null
+    private var streamStore: StreamStoreFiles? = null
     private lateinit var app: Context
     private lateinit var handler: Handler
     private val fetchers = ConcurrentHashMap<Int, Fetcher>()
@@ -79,7 +84,19 @@ object DownloadController {
         )
         e.addListener(object : Engine.Listener { override fun onChanged(id: Long) { uiChanged() } })
         engine = e
-        control.execute { e.restore(); uiChanged() }
+        val store = StreamStoreFiles(File(app.filesDir, "streams"), File(app.cacheDir, "streams-private")).also { streamStore = it; it.wipePrivate() }
+        val st = StreamEngine(
+            { fetchers[it] ?: fetchers[0] }, AppSinks(MediaStoreSinks(app), FileSinks(File(app.filesDir, "updates"))), store, net, control, Clock.System, cfg,
+            Spawner { name, task ->
+                Thread({
+                    val tid = Process.myTid(); engineTids.add(tid)
+                    try { Process.setThreadPriority(threadPrio()); task.run() } finally { engineTids.remove(tid) }
+                }, name).also { it.isDaemon = true; it.start() }
+            },
+        )
+        st.addListener(object : StreamEngine.Listener { override fun onChanged(id: Long) { uiChanged() } })
+        streams = st
+        control.execute { e.restore(); st.restore(); uiChanged() }
         return e
     }
 
@@ -92,17 +109,52 @@ object DownloadController {
         DownloadService.start(ctx)
     }
 
+    /** Queue a video stream (an HLS playlist the user picked a quality of) and make sure the foreground service is running. */
+    fun enqueueStream(ctx: Context, src: StreamSource, onId: ((Long) -> Unit)? = null) {
+        init(ctx)
+        val s = streams ?: return
+        handler.post { val id = s.enqueue(src); onId?.invoke(id) }
+        DownloadService.start(ctx)
+    }
+
+    /**
+     * Fetch a small text (a playlist) through the same network stack the downloads use (Firefox's, so the page's cookies apply) and hand it to [onDone] on the UI thread;
+     * null = it could not be read. At most 4 MB.
+     */
+    fun fetchText(ctx: Context, url: String, headers: Map<String, String>, kind: Int, priv: Boolean, onDone: (String?) -> Unit) {
+        init(ctx)
+        Io.exec {
+            var text: String? = null
+            try {
+                val f = fetchers[kind] ?: fetchers[0]!!
+                val resp = f.open(app.kestrel.core.download.FetchRequest(url, -1, -1, null, headers, 15_000, 20_000, priv))
+                try {
+                    if (resp.status in 200..299) {
+                        val out = java.io.ByteArrayOutputStream()
+                        val buf = ByteArray(16 * 1024)
+                        val body = resp.body
+                        while (body != null) { val n = body.read(buf); if (n < 0) break; out.write(buf, 0, n); if (out.size() > 4 * 1024 * 1024) { out.reset(); break } }
+                        if (out.size() > 0) text = out.toString("UTF-8")
+                    }
+                } finally { try { resp.close() } catch (e: Exception) { /* ignore */ } }
+            } catch (e: Exception) { /* null: the caller says so */ }
+            Io.ui { onDone(text) }
+        }
+    }
+
+    private fun isStream(id: Long) = streams?.owns(id) == true
+
     /** The downloads the user sees (the Downloads screen, "Delete old installers"): not the app's own update file. */
-    fun views(): List<DownloadView> = (engine?.views() ?: emptyList()).filter { it.kind != DEST_APP_PRIVATE }
-    /** Everything the engine holds, update downloads included (the service notification, the updater). */
-    fun allViews(): List<DownloadView> = engine?.views() ?: emptyList()
-    fun view(id: Long): DownloadView? = engine?.view(id)
-    fun pause(id: Long) { engine?.pause(id) }
-    fun resume(ctx: Context, id: Long) { init(ctx).resume(id); DownloadService.start(ctx) }
-    fun cancel(id: Long) { engine?.cancel(id) }
-    fun restart(ctx: Context, id: Long) { init(ctx).restart(id); DownloadService.start(ctx) }
-    fun remove(id: Long, deleteFile: Boolean) { engine?.remove(id, deleteFile) }
-    fun clearFinished() { engine?.clearFinished() }
+    fun views(): List<DownloadView> = allViews().filter { it.kind != DEST_APP_PRIVATE }
+    /** Everything the engines hold, update downloads included (the service notification, the updater). */
+    fun allViews(): List<DownloadView> = ((engine?.views() ?: emptyList()) + (streams?.views() ?: emptyList())).sortedByDescending { it.created }
+    fun view(id: Long): DownloadView? = if (isStream(id)) streams?.view(id) else engine?.view(id)
+    fun pause(id: Long) { if (isStream(id)) streams?.pause(id) else engine?.pause(id) }
+    fun resume(ctx: Context, id: Long) { init(ctx); if (isStream(id)) streams?.resume(id) else engine?.resume(id); DownloadService.start(ctx) }
+    fun cancel(id: Long) { if (isStream(id)) streams?.cancel(id) else engine?.cancel(id) }
+    fun restart(ctx: Context, id: Long) { init(ctx); if (isStream(id)) streams?.restart(id) else engine?.restart(id); DownloadService.start(ctx) }
+    fun remove(id: Long, deleteFile: Boolean) { if (isStream(id)) streams?.remove(id, deleteFile) else engine?.remove(id, deleteFile) }
+    fun clearFinished() { engine?.clearFinished(); streams?.clearFinished() }
 
     private val installerName = Regex("""^kestrel(-g)?[-_].*\.apk$""", RegexOption.IGNORE_CASE)
 
@@ -119,11 +171,11 @@ object DownloadController {
         for (v in list) { bytes += maxOf(v.total, v.done); engine?.remove(v.id, true) }
         return bytes
     }
-    fun pauseAll() { engine?.pauseAll() }
-    fun resumeAll(ctx: Context) { init(ctx).resumeAll(); DownloadService.start(ctx) }
+    fun pauseAll() { engine?.pauseAll(); streams?.pauseAll() }
+    fun resumeAll(ctx: Context) { init(ctx).resumeAll(); streams?.resumeAll(); DownloadService.start(ctx) }
     fun tick() { engine?.tick() }
-    fun needsService(): Boolean = engine?.needsService() ?: false
-    fun counts(): IntArray = engine?.counts() ?: intArrayOf(0, 0, 0)
+    fun needsService(): Boolean = (engine?.needsService() ?: false) || (streams?.needsService() ?: false)
+    fun counts(): IntArray { val a = engine?.counts() ?: intArrayOf(0, 0, 0); val b = streams?.counts() ?: intArrayOf(0, 0, 0); return intArrayOf(a[0] + b[0], a[1] + b[1], a[2] + b[2]) }
 
     fun addListener(l: () -> Unit) { uiListeners.add(l) }
     fun removeListener(l: () -> Unit) { uiListeners.remove(l) }
@@ -133,7 +185,7 @@ object DownloadController {
         if (!dirty.compareAndSet(false, true)) return
         Io.main.postDelayed({
             dirty.set(false)
-            val now = engine?.views() ?: emptyList()
+            val now = allViews()
             for (v in now) {
                 val before = lastStates.put(v.id, v.state)
                 // the update file has its own notifications (UpdateNotifier)
@@ -153,7 +205,7 @@ object DownloadController {
             override fun onAvailable(network: Network) { changed() }
             override fun onLost(network: Network) { changed() }
             override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) { changed() }
-            private fun changed() { refreshNet(); engine?.onNetwork() }
+            private fun changed() { refreshNet(); engine?.onNetwork(); streams?.onNetwork() }
         }
         try { cm.registerDefaultNetworkCallback(cb, handler); netCallback = cb } catch (e: Exception) { /* the engine's own failure handling still works */ }
     }
