@@ -107,3 +107,44 @@
 > - Project licence and the YouTube setting (LIC-1).
 > - Whether landscape should keep the tab strip on top (UI-3).
 <!-- sha:65c2dd8d41b3 -->
+
+## 2026-11-11T15:27:06Z
+> Your Cromite question, answered now. The scroll and white-screen work continues below.
+>
+> **Short answer: I can't swap Cromite in as Kestrel's engine, and I don't think I should.**
+> Cromite is a whole Chrome-style browser app, not a component other apps can use. Its Android WebView exists only for 64-bit phones. Your tablet's WebView can't be replaced (locked, 32-bit). Running Cromite's engine under Kestrel's bottom bar, neon theme, download manager and Shields would mean building Chromium ourselves. That needs about 100 GB of disk and many hours per build, plus a rebuild every 2 weeks. GitHub's free builders can't do it.
+>
+> So the real choices are: keep Kestrel G, or run Cromite as a separate browser beside it (or add an "Open in Cromite" menu item).
+>
+> **Cromite, pros**
+> - Chrome's engine often scrolls smoother on weak hardware. Sites are tested against it, so fewer "this site breaks".
+> - Built-in ad blocking, privacy patches, no Google services.
+> - Video uses the tablet's hardware decoder (H.264), same as Firefox.
+> - One person with a similar 2 GB phone says it feels smooth. That's one anecdote.
+>
+> **Cromite, cons**
+> - You lose everything that makes Kestrel yours: bottom bar, Home page, separated private tabs, neon theme, tab previews, download manager, in-app updates, our Shields.
+> - The APK is 232 MB (Kestrel G is 92 MB). Every update is 232 MB over your hotspot.
+> - JavaScript acceleration is switched off by default, which makes JavaScript about 40% slower. You can turn it on per site.
+> - It forces one process per website, which costs more RAM on a 1.9 GB tablet.
+> - It has one maintainer. The last stable build was 15 Sep (Chromium 153) while Chromium 157 is out, so about 8 weeks of security fixes are missing.
+> - No extensions on Android.
+> - Nobody has published speed numbers for your exact chip, so I can't promise it's faster.
+>
+> **GeckoView (Kestrel G), pros:** it can be embedded, so everything in Kestrel works. It's small, updated every 2 weeks, and Mozilla says 32-bit ARM stays supported.
+> **Cons:** the scroll stutter you're describing, and it uses more memory per page.
+>
+> **My recommendation:** stay on GeckoView and fix the real causes of the stutter. Then settle the engine question with a 15-minute test on your tablet. Install Cromite's `arm_ChromePublic.apk` from its GitHub releases and scroll the same 3 heavy pages in both. If Cromite is dramatically smoother, I'll add "Open in Cromite" to Kestrel's menu. It's about half a day of work.
+>
+> **Your scrolling and white-screen report.** I found one cause in the code. When Android kills Firefox's page process to free memory (likely on a 2 GB tablet), Kestrel throws away where you were and reloads the page from the top, with a white screen in between. That matches "goes white and has to reload". I can't see your tablet, so I'm adding a log of every kill with free memory, and fixing it so the page returns at the same scroll position with its last preview shown instead of white.
+>
+> I never sent you the alpha 5 link before. It has the blue neon theme, the download manager and some speed fixes:
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.2.0-alpha5
+>
+> Two questions that would save me hours:
+> 1. Did alpha 3 scroll smoothly, or was it always like this?
+> 2. Does scrolling feel better with Settings → Appearance → Neon glow → Off?
+>
+> All of this is checked on an emulator only, not on your tablet.
+<!-- sha:e1e451c1f32d -->
