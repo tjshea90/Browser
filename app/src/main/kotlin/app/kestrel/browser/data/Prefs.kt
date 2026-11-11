@@ -46,6 +46,8 @@ class Prefs private constructor(ctx: Context) {
     var updateUnmeteredOnly: Boolean get() = bool("upd_unmetered", false); set(v) = put("upd_unmetered", v)
     var lastUpdateMs: Long get() = sp.getLong("upd_last", 0L); set(v) = put("upd_last", v)
     var updateJobSig: String get() = sp.getString("upd_sig", "") ?: ""; set(v) = put("upd_sig", v)
+    /** Look for a new app release (GitHub Releases) once a day, when the app opens. Off = only the "Check now" button. */
+    var autoUpdateCheck: Boolean get() = bool("app_upd_auto", true); set(v) = put("app_upd_auto", v)
     var lastUpdateNote: String get() = sp.getString("upd_note", "") ?: ""; set(v) = put("upd_note", v)
 
     var blockedTotal: Long get() = sp.getLong("blocked_total", 0L); set(v) = put("blocked_total", v)
