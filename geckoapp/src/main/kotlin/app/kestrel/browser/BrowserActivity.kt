@@ -501,6 +501,9 @@ open class BrowserActivity : Activity(), DockListener {
         val idx = tabs.indexOf(tab)
         if (idx < 0) return
         tabs.removeAt(idx)
+        tab.thumb = null
+        val appCtx = applicationContext
+        Io.exec { ThumbStore.delete(appCtx, tab.id) }
         tab.session?.let { s -> if (geckoView.session === s) geckoView.releaseSession(); try { s.close() } catch (e: Exception) { /* ignore */ } }
         tab.session = null
         if (current === tab) {
@@ -1085,6 +1088,8 @@ open class BrowserActivity : Activity(), DockListener {
         if (!tab.isPrivateTab && tab.error == null && tab.url.startsWith("http")) { val u = withoutUserinfo(tab.url); val ti = tab.title; Io.exec { db?.recordVisit(u, ti) } }
         scheduleSave()
         if (tab === current) updateUi()
+        // a moment after the load: the page has painted, nobody is typing -> take the preview the tab grid will show
+        Io.main.postDelayed({ if (tab === current && !tab.loading && !typing() && tabGrid.visibility != View.VISIBLE) captureThumb(tab) }, 2000)
     }
 
     /** The engine's content process died (or the system killed it). Come back from the URL; a crash loop (3 in 15 s) shows the error screen instead. */
