@@ -1,13 +1,13 @@
-# CHECKPOINT 478 — read me first, then TASKS.md
+# CHECKPOINT 487 — read me first, then TASKS.md
 
-**Written:** 2026-11-11T20:11:53Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `6d61701` (this checkpoint is the commit after it)
+**Written:** 2026-11-11T20:16:17Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `e8b347f` (this checkpoint is the commit after it)
 
 ## Just done
-alpha10 CI run 43093416759 FAILED in test-jvm: EngineTest.plainDownloadWithoutRangeSupport (a pre-existing race in the TEST: the view shows COMPLETED a moment before the store row is saved; it passed locally by luck). Fixed the 3 racy store assertions with a polling awaitRow helper; 288 JVM tests pass 3x under 6 busy CPU loops. No tag/release was created by the failed run
+alpha10 SHIPPED and recorded: Release https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.2.0-alpha10 (run 43094237718 green, APK 92.6 MB, BUILDLOG line committed e8b347f). V4 P0 groundwork written (not yet compiled together): core/media/MediaSniff.kt + MediaList.kt (+17 tests green), extension background.js onHeadersReceived sniffer + content.js <video> info relay, ShieldsBridge handles 'media'/'vid' messages (mediaSeen/mediaInfo callbacks), Tab.media, ui/VideoPanel.kt
 
 ## Do this next
-re-dispatch android.yml (app=gecko full_build=true, note = alpha10 text from ckpt 475) on this head; then wait for it: mcp__github__actions_list list_workflow_runs; when green: get_release_by_tag kestrel-g-v0.2.0-alpha10, bash tools/record-release.sh kestrel-g-v0.2.0-alpha10 <same note>, ckpt, reply to owner. Meanwhile V4 P0 (see research/VIDEO_DOWNLOADER.md section 9); ffmpeg exists at /usr/bin/ffmpeg for generating test media (mp4 faststart, HLS ts + fMP4, AES-128 HLS)
+V4 P0 wiring in geckoapp: (1) BrowserActivity: pass mediaSeen/mediaInfo to ShieldsBridge (line ~195: attach to tabForPage(page) ?: current, Io.ui), clear tab.media in TabDelegates.onPageStart and in navigateTo; (2) new geckoapp web/VideoFlow.kt: sheet with VideoPanel rows from tab.media.usable() (title = quality or 'Video', detail = 'MP4 - 48.2 MB - 1:02'), start = DownloadController.enqueue(Source(url, pageUrl, name 'Page title - 720p.mp4', mime, headers Referer origin, fetcher=1, priv, meteredOk=true)); (3) longPress: TYPE_VIDEO/TYPE_AUDIO -> menu 'Download video'; menu tile M.VIDEO=18 with count; (4) compile (:geckoapp:compileDebugKotlin), build x86_64 debug apk, test on emulator with ffmpeg-made mp4s served by scratchpad rangeserver (page with <video> + <source label>), (5) then P1 HLS: core/media/Hls.kt parser+tests, StreamEngine (segment jobs, parallel, resume, AES-128), merge views in DownloadController; bump versionCode 110 + sync-ext-version for alpha11
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ re-dispatch android.yml (app=gecko full_build=true, note = alpha10 text from ckp
 
 ## Last ten checkpoints
 ```
+  50d5718 ckpt 478: alpha10 CI run 43093416759 FAILED in test-jvm: EngineTest.plainDownloadWithout
   b9e656d ckpt 476: alpha10 DISPATCHED on GitHub Actions: run 43093416759 (android.yml, ref ccr-a5
   d69353d ckpt 475: gated kestrel-g-v0.2.0-alpha10 (gecko code 109) and pushed it: handoff self-te
   80e35c0 ckpt 473: V3 verified on the emulator (idle swipe-away = all processes end, active downl
@@ -25,8 +26,7 @@ re-dispatch android.yml (app=gecko full_build=true, note = alpha10 text from ckp
   8ff3900 ckpt 448: alpha9 DISPATCHED: Actions run 43084348983 (gecko code 108, 19:08Z). alpha8 (c
   3b0bd85 ckpt 447: gated kestrel-g-v0.2.0-alpha9 (gecko code 108) and pushed it: handoff self-tes
   30794d6 ckpt 446: pre-ship: alpha9: the update screen's storage numbers now match what Android r
-  e822130 ckpt 442: alpha8 build DISPATCHED: Actions run 43080438606 (android.yml, ref ccr-a57c163
 ```
 
-(1 automatic checkpoint(s) since the last deliberate one — the
+(7 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
