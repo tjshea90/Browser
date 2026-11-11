@@ -31,7 +31,7 @@ class ExtImageTest {
         "||ads.example.com^", "||tracker.example^\$third-party", "||first.example^\$~third-party", "||pixel.example^\$image", "||both.example^\$script,xhr",
         "||imp.example^\$important", "@@||ads.example.com/ok/", "@@||tracker.example/safe.js", "@@||hostonly.example^", "||hostonly.example^",
         "/banner^", "/ads/*/img", "|https://t.", "|http://plain.", ".gif|", "||a.example/p*q", "/promo.js\$domain=a.com|~b.com", "||evil.example^\$important,script",
-        "||zip^", "||sub.deep.example.co.uk^", "||x.example^\$domain=news.site.co.uk", "/track.php?", "&adslot=", "foo.js|", "adserver.", "a*b*c", "/x*y*z",
+        "||zip^", "||sub.deep.example.co.uk^", "||x.example^\$domain=news.site.co.uk", "/track.php?", "&adslot=", "foo.js|", "adserver.", "q*z*y", "/x*y*z",
         "||cdn.example.org/ads/", "/pixel.gif?", "|https://*.beacon.", "/stat^\$ping", "||ws.example^\$websocket", "||frame.example^\$subdocument",
         "||font.example^\$font", "||media.example^\$media", "||obj.example^\$object", "||other.example^\$other", "||style.example^\$stylesheet",
         "||notimg.example^\$~image", "||dom.example^\$domain=example.com", "||excl.example^\$domain=~example.com", "/analytics.js", "/collect?v=",
@@ -50,6 +50,11 @@ class ExtImageTest {
         "city.kobe.jp", "x.y.kobe.jp", "user.github.io", "other.github.io", "1.2.3.4", "localhost",
     )
     private val words = listOf("ads", "banner", "track", "img", "x", "pixel", "v1", "api", "ad", "analytics", "promo", "stat", "collect", "p", "q", "z", "foo", "adserver", "beacon", "AdBanner", "y")
+    private val rareWords = listOf("beacon", "adserver", "collect", "stat", "promo", "pixel", "AdBanner").map { it.lowercase() }
+    private val neutralHosts = listOf(
+        "www.wikipedia.org", "cdn.jsdelivr.net", "fonts.gstatic.com", "news.bbc.co.uk", "docs.example.net", "static.cdn-example.com", "shop.example.co.uk", "img.example.com.au", "api.service.dev",
+        "files.example.io", "video.example.tv", "www.example.com",
+    )
     private val types = listOf(
         RequestType.SCRIPT, RequestType.IMAGE, RequestType.XHR, RequestType.STYLESHEET, RequestType.SUBDOCUMENT, RequestType.UNKNOWN, RequestType.DOCUMENT, RequestType.WEBSOCKET,
         RequestType.OTHER, RequestType.MEDIA, RequestType.FONT, RequestType.PING, RequestType.OBJECT,
@@ -72,7 +77,7 @@ class ExtImageTest {
                 5 -> pattern = "/" + pick(words).lowercase() + "/*/" + pick(words).lowercase()
                 6 -> pattern = "/" + pick(words).lowercase() + "^"
                 7 -> { pattern = pick(words).lowercase() + "." + pick(listOf("gif", "js", "png")); suffix = "|" }
-                else -> pattern = pick(words).lowercase() + "*" + pick(words).lowercase() + "*" + pick(words).lowercase()
+                else -> pattern = pick(rareWords) + "*" + pick(rareWords) + "*" + pick(rareWords)
             }
             val exception = rnd.nextInt(5) == 0
             val opts = ArrayList<String>()
@@ -80,7 +85,7 @@ class ExtImageTest {
             else if (rnd.nextInt(6) == 0) opts.add("~" + pick(listOf("image", "script", "xhr")))
             val party = rnd.nextInt(4)
             if (party == 0) opts.add("third-party") else if (party == 1) opts.add("~third-party")
-            if (!exception && rnd.nextInt(8) == 0) opts.add("important")
+            if (!exception && rnd.nextInt(30) == 0) opts.add("important")
             if (rnd.nextInt(5) == 0) {
                 val d = ArrayList<String>()
                 if (rnd.nextBoolean()) d.add(pick(pageHosts))
@@ -120,7 +125,7 @@ class ExtImageTest {
         repeat(800) {
             val sb = StringBuilder(pick(listOf("https://", "https://", "http://", "ws://", "wss://")))
             if (rnd.nextInt(15) == 0) sb.append("user:pw@")
-            sb.append(pick(hosts))
+            sb.append(if (rnd.nextInt(5) < 2) pick(neutralHosts) else pick(hosts))
             if (rnd.nextInt(8) == 0) sb.append(":8080")
             if (rnd.nextInt(30) == 0) sb.append('.')
             val segs = rnd.nextInt(4)
@@ -244,6 +249,18 @@ class ExtImageTest {
         check("mini.hash.tsv", hashVectors().toByteArray(Charsets.UTF_8))
         check("mini.psl.tsv", pslVectors().toByteArray(Charsets.UTF_8))
         check("mini.host.tsv", hostVectors().toByteArray(Charsets.UTF_8))
+    }
+
+    @Test
+    fun theCorpusIsAMixNotAWallOfOneVerdict() {
+        val fs = build()
+        val rows = corpus(fs).lineSequence().filter { it.isNotEmpty() }.map { it.substringAfterLast('\t').toInt() }.toList()
+        fun share(f: (Int) -> Boolean) = rows.count(f) * 100.0 / rows.size
+        assertTrue("passes: ${share { it == 0 }}", share { it == 0 } >= 25.0)
+        assertTrue("blocks (not important): ${share { it and 1 != 0 && it and 16 == 0 }}", share { it and 1 != 0 && it and 16 == 0 } >= 15.0)
+        assertTrue("exceptions: ${share { it == 2 }}", share { it == 2 } >= 3.0)
+        assertTrue("important: ${share { it and 16 != 0 }}", share { it and 16 != 0 } in 1.0..20.0)
+        assertTrue("several categories", rows.filter { it and 1 != 0 }.map { (it shr 2) and 3 }.toSet().size >= 3)
     }
 
     @Test
