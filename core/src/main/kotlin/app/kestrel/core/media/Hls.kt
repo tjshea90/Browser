@@ -33,7 +33,7 @@ object Hls {
         /** "1080p", "720p60" (frame rate >= 50), "Audio only". */
         val label: String get() = when {
             audioOnly -> "Audio only"
-            height > 0 -> "${MediaLabels.quality(height)}" + (if (frameRate >= 50.0) frameRate.toInt().toString() else "")
+            height > 0 -> "${height}p" + (if (frameRate >= 50.0) frameRate.toInt().toString() else "") + (if (height >= 2000) "  \u00B7  4K" else "")
             width > 0 -> "${width}px wide"
             else -> "Stream"
         }
