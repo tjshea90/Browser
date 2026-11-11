@@ -564,7 +564,7 @@ class StreamEngine(
         } catch (e: IOException) { throw SinkException(Reason.STORAGE, "could not read a staged segment", e) }
         synchronized(lock) {
             job.written = written; rec.next = idx + 1; rec.appended = written
-            job.stagedBytes -= size; job.staged.clear(idx)
+            job.stagedBytes -= size; job.stagedCount--; job.staged.clear(idx)
         }
         f.delete()
         return true
