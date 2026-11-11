@@ -95,6 +95,13 @@ class NavigationHardeningTest {
 
     private fun client(wv: WebView) = shadowOf(wv).webViewClient as BrowserWebViewClient
 
+    /** Polls (idling the main looper, which also runs posted restore() calls) until [cond] holds; the IO executor is a real thread. */
+    private fun waitUntil(ms: Long = 5000, cond: () -> Boolean): Boolean {
+        val end = System.currentTimeMillis() + ms
+        while (System.currentTimeMillis() < end) { ShadowLooper.idleMainLooper(); if (cond()) return true; Thread.sleep(25) }
+        return cond()
+    }
+
     // ------------------------------------------------------------------ C1: redirect targets must be classified like any other main-frame URL
 
     @Test
@@ -212,19 +219,24 @@ class NavigationHardeningTest {
         val file = File(ctx.filesDir, "session.txt")
         file.writeText(SessionCodec.encode(Session(listOf(TabRecord(1, "https://one.example/", "One", 1L, 0, false), TabRecord(2, "https://two.example/", "Two", 2L, 0, false)), 2)))
         val before = file.readText()
-        val c = Robolectric.buildActivity(MainActivity::class.java).create() // restore() is posted to the main looper and not run yet
+        val c = Robolectric.buildActivity(MainActivity::class.java).create() // restore() is posted to the main looper and has not run yet
         controller = c
-        c.get().saveSessionNow(); Thread.sleep(300)
+        c.get().saveSessionNow(); Thread.sleep(500)
         assertEquals("a one-tab placeholder session must not replace the real one", before, file.readText())
+        // positive control: the saved session really was waiting to be restored, and restoring it makes saving legal again
+        c.start().resume().visible()
+        assertTrue("restore() never ran", waitUntil { c.get().allTabs.size == 2 })
     }
 
     @Test
     fun credentialsInAUrlAreNotWrittenToTheSessionFile() {
         val ctx = RuntimeEnvironment.getApplication()
-        val a = launch(); Thread.sleep(300); ShadowLooper.idleMainLooper() // let restore() run
+        val file = File(ctx.filesDir, "session.txt")
+        val a = launch()
+        // wait for the (empty) restore to have run: saving is only allowed afterwards
         a.currentTab!!.url = "https://user:s3cretpass@host.example/x?y=1"
-        a.saveSessionNow(); Thread.sleep(300)
-        val text = File(ctx.filesDir, "session.txt").readText()
+        assertTrue("session never written", waitUntil { a.saveSessionNow(); file.isFile && file.readText().contains("host.example") })
+        val text = file.readText()
         assertFalse(text, text.contains("s3cretpass"))
         assertTrue(text, text.contains("host.example/x?y=1"))
     }

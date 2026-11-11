@@ -1,8 +1,8 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** 2026-11-11T00:48:17Z (L1) on `ccr-a57c163e-mtq8js` after c3cdb9a
-- **Summary:** security review fixes #1: intent: crash (S1), URL-truncation host bypass (S2), poisoned-list guards + canaries + retry marker (S4,C9), token dedupe CPU bound (S5), selector nesting (S11); core 127 + updater tests green
+- **Last checkpoint:** 2026-11-11T00:54:03Z (L1) on `ccr-a57c163e-mtq8js` after 68be041
+- **Summary:** security/correctness fixes #2: redirects classified (C1), https upgrade loop+stale state (C2), address bar shows committed URL + port (S3), long-press allow-list (S13), file chooser content-only (S9), opener survives trim (C3), geolocation FINE+COARSE (C4), immersive flags (C6), history only on success (C7), session restore gate + no credentials in session/history (C8), clear data via throwaway WebView, private wipe/autofill/downloads (S6); core 127 + app tests green
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE
