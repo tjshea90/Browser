@@ -170,7 +170,8 @@ class LetterAvatar(ctx: Context, host: String, private val pal: Pal) : View(ctx)
     }
 
     private fun tone(h: Int): Int {
-        val colors = intArrayOf(0xFF3A2F6B.toInt(), 0xFF0F5B52.toInt(), 0xFF7A2A4B.toInt(), 0xFF1F4E8C.toInt(), 0xFF8A4B12.toInt(), 0xFF2C6B34.toInt(), 0xFF5A4636.toInt(), 0xFF3F5160.toInt())
+        // cool, deep tones only (the REAPER look: black and blue); violet is left to the private skin
+        val colors = intArrayOf(0xFF123F6B.toInt(), 0xFF0B5A6B.toInt(), 0xFF1F3F8C.toInt(), 0xFF174A5E.toInt(), 0xFF0F5B52.toInt(), 0xFF3F5160.toInt(), 0xFF1B4F8C.toInt(), 0xFF0E4D75.toInt())
         return colors[(h and 0x7fffffff) % colors.size]
     }
 }
