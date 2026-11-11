@@ -170,6 +170,7 @@ class FilterUpdaterTest {
         Engine.swap(b.build(1L), "test baseline")
         val f = fresh()
         f.bodies["https://lists.example/big.txt"] = listText("adhost", 25_000, trackers = false)
+        f.bodies["https://lists.example/small.txt"] = listText("trk", 500, trackers = false)
         val r = run(f) // 25.5k synthetic rules: big enough to pass the size check, but blocks none of the canary trackers
         assertTrue(r.message, r is FilterUpdater.Result.Failed && r.message.contains("trackers"))
         assertFalse(File(ctx.filesDir, "filters/current.kfs").exists())

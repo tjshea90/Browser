@@ -1,8 +1,8 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** 2026-11-11T00:39:37Z (L1) on `ccr-a57c163e-mtq8js` after 3a1ee21
-- **Summary:** review triage board (security 13 + correctness 9 findings), emulator boot recipe; first real-device run: app works on Android 10 / Chromium 74
+- **Last checkpoint:** 2026-11-11T00:48:17Z (L1) on `ccr-a57c163e-mtq8js` after c3cdb9a
+- **Summary:** security review fixes #1: intent: crash (S1), URL-truncation host bypass (S2), poisoned-list guards + canaries + retry marker (S4,C9), token dedupe CPU bound (S5), selector nesting (S11); core 127 + updater tests green
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE

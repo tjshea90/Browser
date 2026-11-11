@@ -17,3 +17,4 @@
 - 2026-11-11T00:16:50Z [L1] STATE: phase 7 progress, review agents pending, resume instructions
 - 2026-11-11T00:26:40Z [L1] Google default search + omnibox rule (non-address -> search; 3:1/10:30 fixed), GMS-less wording (Safe Browsing, WebView updates, SSL hints), README/CLAUDE/HARDWARE/STATE owner facts; core 119 + app 62 tests green
 - 2026-11-11T00:39:37Z [L1] review triage board (security 13 + correctness 9 findings), emulator boot recipe; first real-device run: app works on Android 10 / Chromium 74
+- 2026-11-11T00:48:17Z [L1] security review fixes #1: intent: crash (S1), URL-truncation host bypass (S2), poisoned-list guards + canaries + retry marker (S4,C9), token dedupe CPU bound (S5), selector nesting (S11); core 127 + updater tests green
