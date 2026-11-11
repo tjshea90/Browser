@@ -91,6 +91,7 @@ mkdir -p "$T/work/tools" "$T/work/app" "$T/work/geckoapp" "$T/work/signing"
 cp "$D"/tools/*.sh "$D"/tools/session-root-hooks.json "$D"/tools/MIRROR_MAIN "$T/work/tools/" 2>/dev/null
 echo off > "$T/work/tools/MIRROR_MAIN"
 cp "$D"/ship.sh "$D"/signing/CERT_SHA256 "$T/work/" 2>/dev/null
+cp "$D/.gitattributes" "$T/work/.gitattributes" 2>/dev/null
 mv "$T/work/CERT_SHA256" "$T/work/signing/CERT_SHA256"
 cd "$T/work" || exit 1
 rm -f tools/test_handoff.sh   # the fixture must not recurse into this test via ckpt.sh
@@ -181,12 +182,32 @@ bash tools/ckpt.sh "finished wip" "next" >/dev/null 2>&1
 git checkout -q -b sess2 2>/dev/null; echo more > c.txt; bash tools/ckpt.sh "other session work" "continue" >/dev/null 2>&1
 git checkout -q sess1 2>/dev/null
 OUT="$(bash tools/resume.sh --text 2>&1)"
-check "resume names another branch's unlanded work" 'printf "%s" "$OUT" | grep -q "sess2 has"'
+check "resume MERGES another session's checkpointed work (sync), keeps its card, and lists its lane" 'printf "%s" "$OUT" | grep -q "merged sess2" && [ -f c.txt ] && [ -f .checkpoints/sess2.md ] && printf "%s" "$OUT" | grep -q "lane sess2"'
 check "resume briefing fits the 10,000-char hook cap (with a long INBOX + TASKS + CHECKPOINT)" '
   for i in $(seq 1 80); do echo "- [ ] open task number $i with a reasonably long description of what must be done" >> TASKS.md; done
   head -c 6000 /dev/zero | tr "\0" "x" >> INBOX.md
   bash tools/ckpt.sh "$(head -c 7000 /dev/zero | tr "\0" "d")" "$(head -c 3000 /dev/zero | tr "\0" "n")" >/dev/null 2>&1
   [ "$(bash tools/resume.sh --text | wc -c)" -lt 10000 ]'
+
+# ---------------------------------------------------------------- many sessions and accounts: cards, merge driver, union files, conflicts, claims, cold clone
+check "ckpt keeps this session's own card in .checkpoints/" '[ -f .checkpoints/sess1.md ] && grep -q "^# CHECKPOINT" .checkpoints/sess1.md'
+git checkout -q -b sess3; echo "from sess3" >> INBOX.md; bash tools/ckpt.sh "sess3 work" "sess3 next" >/dev/null 2>&1
+git checkout -q sess1; echo "from sess1" >> INBOX.md; bash tools/ckpt.sh "sess1 later" "sess1 next" >/dev/null 2>&1
+check "parallel sessions merge with NO conflict: INBOX keeps both lines, CHECKPOINT.md is the newest card, both cards survive, all pushed" 'grep -q "from sess1" INBOX.md && grep -q "from sess3" INBOX.md && ! grep -q "<<<<<<<" INBOX.md CHECKPOINT.md && grep -q "sess1 later" CHECKPOINT.md && [ -f .checkpoints/sess3.md ] && grep -q "sess3 next" .checkpoints/sess3.md && [ -z "$(git status --porcelain)" ] && [ "$(bash tools/unpushed.sh)" = 0 ]'
+printf -- '- [ ] Z1 claim test item\n- [ ] Z2 second item\n' >> TASKS.md; bash tools/autosave.sh --text >/dev/null 2>&1
+check "claim marks an item [~] with branch and time, release gives it back, done ticks it with evidence" 'bash tools/claim.sh Z1 >/dev/null && grep -Eq "^- \[~\] Z1 claim test item \{sess1 [0-9T:-]+Z\}$" TASKS.md && bash tools/claim.sh Z1 --release >/dev/null && grep -q "^- \[ \] Z1 claim test item$" TASKS.md && bash tools/claim.sh Z1 --done "proved by run 7" >/dev/null && grep -q "^- \[x\] Z1 claim test item - proved by run 7$" TASKS.md'
+git push -q origin sess1:refs/heads/sess9 >/dev/null 2>&1
+sed -i "s/^- \[ \] Z2 second item$/- [~] Z2 second item {sess9 2026-11-11T00:00Z}/" TASKS.md
+check "an item claimed by a LIVE other session is refused; --force takes it over" '! bash tools/claim.sh Z2 >/dev/null 2>&1 && bash tools/claim.sh Z2 --force >/dev/null 2>&1 && grep -q "Z2 second item {sess1 " TASKS.md'
+OUT="$(bash tools/resume.sh --text 2>&1)"
+check "resume lists the claimed items" 'printf "%s" "$OUT" | grep -q "CLAIMED by sessions"'
+git checkout -q -b sess4 sess1; echo "sess4 version" > a.txt; bash tools/ckpt.sh "sess4 edits a.txt" "n" >/dev/null 2>&1
+git checkout -q sess1; echo "sess1 version" > a.txt; bash tools/ckpt.sh "sess1 edits a.txt" "n" >/dev/null 2>&1
+check "a real conflict is reported, the merge is aborted and nothing is lost" 'OUTS="$(bash tools/sync.sh 2>&1)"; printf "%s" "$OUTS" | grep -q "SYNC CONFLICT" && [ -z "$(git status --porcelain)" ] && [ "$(cat a.txt)" = "sess1 version" ] && [ -z "$(git diff --name-only --diff-filter=U)" ]'
+git merge -q -s ours --no-edit origin/sess4 >/dev/null 2>&1; bash tools/push.sh
+git clone -q -b sess1 "$T/remote.git" "$T/cold" 2>/dev/null
+NEXTWORD="$(sed -n '/^## Do this next/{n;p}' CHECKPOINT.md | cut -c1-12)"
+check "a COLD clone with no context is told the exact next step" 'COUT="$(cd "$T/cold" && bash tools/resume.sh --text 2>&1)"; printf "%s" "$COUT" | grep -q "RESUMING KESTREL" && printf "%s" "$COUT" | grep -q "Do this next" && printf "%s" "$COUT" | grep -qF "$NEXTWORD"'
 
 # ---------------------------------------------------------------- inbox capture
 printf '{"prompt":"please build X, my key is ghp_%s ok"}' "$(printf 'c%.0s' $(seq 1 36))" | bash tools/capture_inbox.sh
