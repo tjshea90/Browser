@@ -193,7 +193,10 @@ class NeonBar(ctx: Context, private var accent: Int, private var hi: Int) : Fram
 
     private fun paintHalo() {
         val rgb = accent and 0x00FFFFFF
-        halo.background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(rgb, rgb or 0x10000000, rgb or 0x3C000000)).also { it.setColors(intArrayOf(rgb, rgb or 0x10000000, rgb or 0x3C000000), floatArrayOf(0f, 0.55f, 1f)) }
+        halo.background = GradientDrawable().apply {
+            orientation = GradientDrawable.Orientation.TOP_BOTTOM
+            setColors(intArrayOf(rgb, rgb or 0x10000000, rgb or 0x3C000000), floatArrayOf(0f, 0.55f, 1f)) // quiet far from the line, brightest at it
+        }
     }
 
     private inner class Line(ctx: Context) : View(ctx) {
