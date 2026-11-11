@@ -40,6 +40,8 @@ class Prefs private constructor(ctx: Context) {
     var textZoom: Int get() = sp.getInt("text_zoom", 100); set(v) = put("text_zoom", v.coerceIn(50, 200))
     /** The blue neon glow around the dock, the Home field and the selected tab: 0 off, 1 steady, 2 subtle pulse (default). */
     var neon: Int get() = sp.getInt("neon", 2); set(v) = put("neon", v.coerceIn(0, 2))
+    /** Gecko build: how far ahead of the finger the page is pre-drawn. 0 = the engine's own values, 1 = wider margin + shorter touch wait, 2 = also slower top fling speed. */
+    var scrollFeel: Int get() = sp.getInt("scroll_feel", 0); set(v) = put("scroll_feel", v.coerceIn(0, 2))
     var searchSuggestions: Boolean get() = bool("suggest", false); set(v) = put("suggest", v) // off: each keystroke would cost data + privacy
     var clearOnExit: Boolean get() = bool("clear_exit", false); set(v) = put("clear_exit", v)
 

@@ -63,6 +63,7 @@ object GeckoEngine {
             r.settings.setFingerprintingProtectionPrivateBrowsing(true)
             r.settings.setCertificateTransparencyMode(2)                  // enforce (= the engine default, pinned so a future default cannot weaken it)
             r.settings.setPostQuantumKeyExchangeEnabled(true)             // X25519MLKEM768 for TLS / HTTP-3 (= default, pinned)
+            applyScrollFeel(prefs.scrollFeel)                             // live apz.* prefs of the "Scroll feel" setting
         }
     }
 
@@ -70,7 +71,9 @@ object GeckoEngine {
     @Volatile var prefReadback: String = "Engine prefs: (not read yet)"
     fun readBackPrefs(done: () -> Unit) {
         val names = listOf("kestrel.config.version", "media.av1.enabled", "dom.ipc.processCount", "ui.prefersReducedMotion", "network.prefetch-next",
-            "image.mem.surfacecache.max_size_kb", "browser.cache.disk.capacity", "dom.push.enabled")
+            "image.mem.surfacecache.size_factor", "image.mem.surfacecache.discard_factor", "image.mem.surfacecache.min_expiration_ms", "browser.cache.disk.capacity", "dom.push.enabled",
+            "apz.y_skate_size_multiplier", "apz.y_stationary_size_multiplier", "apz.content_response_timeout", "apz.max_velocity_inches_per_ms",
+            "javascript.options.gc_on_memory_pressure", "layers.gpu-process.enabled", "gfx.webrender.software")
         try {
             org.mozilla.geckoview.GeckoPreferenceController.getGeckoPrefs(names).accept({ list ->
                 prefReadback = "Engine prefs: " + (list?.joinToString(", ") { "${it.pref.substringAfterLast('.')}=${it.value}" } ?: "none")
@@ -88,11 +91,33 @@ object GeckoEngine {
         else -> GeckoRuntimeSettings.COLOR_SCHEME_SYSTEM
     }
 
-    /** Settings that can change while running (text size, dark mode). */
+    /** Settings that can change while running (text size, dark mode, scroll feel). */
     fun applyPrefs(ctx: Context) {
         val r = rt ?: return
         val prefs = Prefs.get(ctx)
         r.settings.fontSizeFactor = prefs.textZoom / 100f
         r.settings.preferredColorScheme = colorScheme(prefs)
+        applyScrollFeel(prefs.scrollFeel)
+    }
+
+    /**
+     * "Scroll feel" (Settings): how far ahead of the finger the engine pre-draws the page and how long it waits for a page's touch handler. These apz.* prefs are
+     * live (mirror: always). 0 = the engine's own values on Android; 1 = a bigger pre-drawn margin and a shorter wait; 2 = also a lower top fling speed (research/SCROLL.md B1-B5).
+     * Values are strings for the float prefs, exactly as GeckoView's own prefs file writes them.
+     */
+    fun applyScrollFeel(level: Int) {
+        val d = org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_DEFAULT
+        val (skate, still, wait, vel) = when (level) {
+            1 -> listOf("2.5", "2.0", "400", "0.07")
+            2 -> listOf("2.5", "2.0", "400", "0.03")
+            else -> listOf("1.5", "1.5", "600", "0.07")
+        }
+        try {
+            org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("apz.y_skate_size_multiplier", skate, d)
+            org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("apz.y_stationary_size_multiplier", still, d)
+            org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("apz.content_response_timeout", wait.toInt(), d)
+            org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("apz.max_velocity_inches_per_ms", vel, d)
+            app.kestrel.browser.diag.Health.log("engine", "scroll-feel", "level=$level skate=$skate still=$still wait=$wait vel=$vel")
+        } catch (e: Exception) { app.kestrel.browser.diag.Health.log("engine", "scroll-feel-failed", e.toString()) }
     }
 }
