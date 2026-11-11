@@ -25,7 +25,8 @@ class Tab(@JvmField val id: Long) {
     // ---- UI-thread state
     var url: String = "" // "" = new-tab page
     var title: String = ""
-    var webView: WebView? = null
+    var webView: WebView? = null // WebView build only
+    var engineData: Any? = null // Gecko build only: its per-tab session state (this shared class must not name Gecko types)
     var savedState: Bundle? = null // WebView state while hibernated
     var progress = 0
     var loading = false

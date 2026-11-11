@@ -82,6 +82,8 @@ android {
 }
 
 kotlin {
+    // Engine-specific (WebView) code lives in src/webview; src/main is shared with the :geckoapp module.
+    sourceSets.getByName("main").kotlin.srcDir("src/webview/kotlin")
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_11)
         freeCompilerArgs.addAll(

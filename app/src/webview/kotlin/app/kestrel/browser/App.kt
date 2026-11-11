@@ -5,11 +5,6 @@ import android.content.Context
 import android.webkit.WebView
 import app.kestrel.browser.shield.Engine
 
-/** Which process we are in: the regular one, or the isolated `:private` window process. */
-object Proc {
-    @JvmField var isPrivate = false
-}
-
 class App : Application() {
     override fun onCreate() {
         super.onCreate()

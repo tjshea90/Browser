@@ -95,14 +95,14 @@ class ActivityLogicTest {
         go(a, "second.example")
         val file = File(a.filesDir, "session.txt")
         // saving is deliberately refused until the previous session was restored (it could overwrite it with a one-tab placeholder)
-        assertTrue("restore ran", waitFor { org.robolectric.shadows.ShadowLooper.idleMainLooper(); a.sessionRestored })
+        assertTrue("restore ran", waitFor(20_000) { org.robolectric.shadows.ShadowLooper.idleMainLooper(); a.sessionRestored }) // the single IO thread may still be busy with an earlier test (engine load) on a loaded machine
         a.saveSessionNow()
-        assertTrue("session file written", waitFor { file.isFile && file.readText().contains("second.example") })
+        assertTrue("session file written", waitFor(20_000) { file.isFile && file.readText().contains("second.example") })
         val text = file.readText()
         assertTrue(text, text.contains("https://first.example") && text.contains("https://second.example"))
 
         val b = launch()
-        assertTrue("tabs restored", waitFor { b.allTabs.size == 2 })
+        assertTrue("tabs restored", waitFor(20_000) { b.allTabs.size == 2 })
         val restored = b.allTabs
         assertEquals(listOf("https://first.example", "https://second.example"), restored.map { it.url })
         // only the SELECTED tab has a WebView: no network traffic at startup for the other tab
