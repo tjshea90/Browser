@@ -37,6 +37,7 @@ class ShieldsPanel(private val ctx: Context, private val pal: Pal, private val o
         popup.setBackgroundDrawable(roundedBg(pal.card, ctx.dpf(14f), pal.divider, ctx.dp(1)))
         popup.elevation = ctx.dpf(12f)
         popup.isOutsideTouchable = true
+        popup.animationStyle = 0   // no fade: everything must feel instant
 
         var current = Shields.overrideFor(host) ?: SiteShields(0, 0)
         val effective = { current.applyTo(global) }

@@ -249,6 +249,7 @@ object MenuPopup {
         popup.setBackgroundDrawable(roundedBg(pal.card, ctx.dpf(12f), pal.divider, ctx.dp(1)))
         popup.elevation = ctx.dpf(12f)
         popup.isOutsideTouchable = true
+        popup.animationStyle = 0   // no fade: everything must feel instant
         for (it in items) {
             val prefix = when (it.checked) { true -> "✓  "; false -> "    "; null -> "" }
             col.addView(label(ctx, prefix + it.text, 15f, pal.fg).apply {

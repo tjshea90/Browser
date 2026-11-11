@@ -9,7 +9,8 @@ import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.RippleDrawable
+import android.graphics.drawable.LayerDrawable
+import android.graphics.drawable.StateListDrawable
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -47,10 +48,18 @@ fun roundedBg(color: Int, radiusPx: Float, strokeColor: Int = 0, strokePx: Int =
         if (strokePx > 0) setStroke(strokePx, strokeColor)
     }
 
-/** Touch feedback: a ripple over [content] (optionally clipped to rounded corners). */
+/** Touch feedback WITHOUT animation (the owner wants everything instant): the pressed/focused state shows a flat overlay at once and is gone at once. */
 fun ripple(color: Int, content: Drawable?, radiusPx: Float = 0f): Drawable {
-    val mask: Drawable? = if (radiusPx > 0f) roundedBg(0xFFFFFFFF.toInt(), radiusPx) else if (content == null) null else ColorDrawable(0xFFFFFFFF.toInt())
-    return RippleDrawable(ColorStateList.valueOf((color and 0x00FFFFFF) or 0x33000000), content, mask)
+    val tint = (color and 0x00FFFFFF) or 0x33000000
+    fun overlay(): Drawable = if (radiusPx > 0f) roundedBg(tint, radiusPx) else ColorDrawable(tint)
+    val states = StateListDrawable().apply {
+        addState(intArrayOf(android.R.attr.state_pressed), overlay())
+        addState(intArrayOf(android.R.attr.state_focused), overlay())
+        addState(intArrayOf(), ColorDrawable(0))
+        setEnterFadeDuration(0)
+        setExitFadeDuration(0)
+    }
+    return if (content == null) states else LayerDrawable(arrayOf(content, states))
 }
 
 fun label(ctx: Context, text: CharSequence, sizeSp: Float, color: Int, bold: Boolean = false): TextView =
