@@ -162,6 +162,11 @@ N=$((N+1))
   fi
 } > CHECKPOINT.md
 
+# This session's OWN card, kept per branch: CHECKPOINT.md is the newest card overall, but when two sessions/accounts work in parallel each
+# one's "Do this next" must survive the other's rewrite (tools/merge-newest.sh keeps the newest in CHECKPOINT.md; resume.sh lists the lanes).
+CARD="$(git branch --show-current 2>/dev/null | tr -c 'A-Za-z0-9._\n-' '_')"; [ -z "$CARD" ] && CARD="detached"
+mkdir -p .checkpoints && cp CHECKPOINT.md ".checkpoints/$CARD.md"
+
 # ---- commit -----------------------------------------------------------------
 # A merge with unresolved conflicts is never committed (2026-11-10, TASKS BP1e / BP2e): `git add -A` would mark the
 # files resolved and publish the conflict markers. CHECKPOINT.md above is already rewritten, so nothing is lost.
@@ -197,6 +202,10 @@ Co-Authored-By: Claude <noreply@anthropic.com>" >/dev/null 2>&1
   echo "  ckpt $N committed · $TESTS"
 fi
 [ "$FAIL" -gt 0 ] && echo "  NOTE: red suites recorded, not hidden:$REDS"
+
+# ---- other sessions ----------------------------------------------------------
+# Merge what other Claude sessions/accounts have checkpointed (a clean merge or nothing; a conflict is reported and aborted - tools/sync.sh).
+bash tools/sync.sh --quiet 2>&1 | sed 's/^/  /' || true
 
 # ---- push --------------------------------------------------------------------
 # A commit that never leaves this container is not a checkpoint. Each session

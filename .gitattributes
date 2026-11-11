@@ -6,3 +6,11 @@
 *.kfs binary
 *.png binary
 *.webp binary
+
+# Many Claude sessions/accounts share this repo (tools/sync.sh merges their branches): append-only files must never conflict.
+INBOX.md merge=union
+OUTBOX.md merge=union
+BUILDLOG.md merge=union
+TASKS.md merge=union
+# the checkpoint card is rewritten by every ckpt: the newest wins (tools/merge-newest.sh); each session also keeps its own in .checkpoints/
+CHECKPOINT.md merge=newest
