@@ -252,3 +252,7 @@
 > - **Your decisions:** the private signing key, the licence, the look, and the landscape tab layout.
 > - **Cromite comparison:** the 15-minute side-by-side test is still yours to run.
 <!-- sha:462eaea8001f -->
+
+## 2026-11-11T18:02:58Z
+> The owner's report points at the in-place update itself, not at free space. I'm checking whether consecutive releases are signed with the same certificate, which is the usual reason Android refuses an update but accepts a fresh install.
+<!-- sha:61c18391d18e -->
