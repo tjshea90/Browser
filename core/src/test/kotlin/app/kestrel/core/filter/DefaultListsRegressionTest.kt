@@ -83,6 +83,17 @@ class DefaultListsRegressionTest {
             Triple("https://cdn.shopify.com/s/files/1/x/theme.js", "shop.example", s),
             Triple("https://upload.wikimedia.org/wikipedia/commons/a/a9/x.png", "en.wikipedia.org", RequestType.IMAGE),
             Triple("https://avatars.githubusercontent.com/u/1?v=4", "github.com", RequestType.IMAGE),
+            // Google Search is now the default search: its results page must keep working (shapes taken from a real mobile results page).
+            Triple("https://www.google.com/xjs/_/js/k=xjs.s.en_US.abc/am=AAAA/d=1/ed=1/dg=0/ujg=1/rs=ACT90o/m=sy1,syn,sy2", "www.google.com", s),
+            Triple("https://www.gstatic.com/og/_/js/k=og.qtm.en_US.abc/rt=j/m=q_dnp,qmd,qcwid,qapid/exm=qaaw/d=1/ed=1/rs=AA2YrT", "www.google.com", s),
+            Triple("https://ssl.gstatic.com/gb/images/bar/al-icon.png", "www.google.com", RequestType.IMAGE),
+            Triple("https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTx", "www.google.com", RequestType.IMAGE),
+            Triple("https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png", "www.google.com", RequestType.IMAGE),
+            Triple("https://www.google.com/textinputassistant/tia.png", "www.google.com", RequestType.IMAGE),
+            Triple("https://fonts.gstatic.com/s/googlesans/v58/4UaGrENHsxJlGDuGo1OIlL3Owps.woff2", "www.google.com", RequestType.FONT),
+            Triple("https://apis.google.com/_/scs/abc-static/_/js/k=gapi.gapi.en.xyz/m=gapi_iframes", "www.google.com", s),
+            Triple("https://www.google.com/complete/search?q=hel&client=gws-wiz", "www.google.com", RequestType.XHR),
+            Triple("https://consent.google.com/ml?continue=https://www.google.com/search?q=x", "www.google.com", RequestType.SUBDOCUMENT),
         )
         val blocked = sub.filter { (u, p, t) -> Verdict.isBlocked(verdict(u, p, t)) }.map { it.first }
         assertTrue("essential resources blocked (would break sites): $blocked", blocked.isEmpty())

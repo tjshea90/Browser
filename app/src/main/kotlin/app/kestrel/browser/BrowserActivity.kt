@@ -718,17 +718,23 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         override fun aboutLines(): List<Pair<String, String>> = this@BrowserActivity.aboutLines()
     }
 
+    private fun hasPlayServices(): Boolean = try { packageManager.getPackageInfo("com.google.android.gms", 0); true } catch (e: Exception) { false }
+
     private fun aboutLines(): List<Pair<String, String>> {
         val out = ArrayList<Pair<String, String>>()
         val ver = try { packageManager.getPackageInfo(packageName, 0).versionName } catch (e: Exception) { "?" }
         out.add("Kestrel" to "Version $ver")
         val wvp = WebView.getCurrentWebViewPackage()
-        out.add("Browser engine" to (if (wvp != null) "${wvp.packageName} ${wvp.versionName}" else "No WebView installed") + "\nThis is the tablet's Android System WebView. Pages render as well as that engine allows, and it is only as secure as its version.")
+        out.add("Browser engine" to (if (wvp != null) "${wvp.packageName} ${wvp.versionName}" else "No WebView installed") +
+            "\nThis is the tablet's Android System WebView. Pages render as well as that engine allows, and it is only as secure as its version. " +
+            "Without Google Play it only updates when you install a newer Android System WebView APK yourself (see the README, \"Updating the web engine\").")
         out.add("User agent" to WebViewFactory.userAgent(this, false))
         val am = getSystemService(ActivityManager::class.java)
-        out.add("Device" to "Memory class ${am?.memoryClass} MB, low-RAM mode: ${am?.isLowRamDevice}")
-        out.add("Safe Browsing" to "Uses Google Safe Browsing when this tablet has Google Play services; the built-in malware list works either way.")
-        out.add("Licenses" to "Filter lists: EasyList and EasyPrivacy (GPLv3+ / CC BY-SA 3.0), uBlock Origin filters (GPLv3). Public Suffix List (MPL-2.0).")
+        val ram = ActivityManager.MemoryInfo().also { am?.getMemoryInfo(it) }.totalMem
+        out.add("Device" to "RAM ${"%.1f".format(ram / 1_073_741_824.0)} GB, app memory class ${am?.memoryClass} MB, low-RAM mode: ${am?.isLowRamDevice}")
+        out.add("Safe Browsing" to if (hasPlayServices()) "Google Safe Browsing is available on this tablet, on top of Kestrel's built-in malware list."
+            else "Google Safe Browsing needs Google Play services, which this tablet doesn't have. Protection against malware and phishing sites comes only from Kestrel's built-in list, which updates weekly.")
+        out.add("Licenses" to "Filter lists: EasyList and EasyPrivacy (GPLv3+ / CC BY-SA 3.0), uBlock Origin filters (GPLv3), Fanboy Cookiemonster (CC BY 3.0 / GPLv3). Public Suffix List (MPL-2.0). Personal, non-commercial use.")
         return out
     }
 
@@ -803,7 +809,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         val pkg = WebView.getCurrentWebViewPackage()
         val major = pkg?.versionName?.substringBefore('.')?.toIntOrNull()
         if (pkg == null) out.add("No web engine found" to "This tablet has no Android System WebView installed, so web pages cannot be shown.")
-        else if (major != null && major < 100) out.add("Old web engine (version $major)" to "Many websites may not display correctly, and this engine is missing years of security fixes. Update \"Android System WebView\" from the Play Store if the tablet has it.")
+        else if (major != null && major < 100) out.add("Old web engine (version $major)" to "Many websites may not display correctly, and this engine is missing years of security fixes. This tablet has no Google Play to update it: install a newer \"Android System WebView\" APK yourself (README, \"Updating the web engine\").")
         return out
     }
 

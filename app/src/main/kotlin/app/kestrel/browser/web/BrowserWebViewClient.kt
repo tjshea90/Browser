@@ -161,10 +161,11 @@ class BrowserWebViewClient(
     }
 
     private fun sslSummary(primary: Int) = when (primary) {
-        SslError.SSL_EXPIRED -> "The site's security certificate has expired."
+        SslError.SSL_EXPIRED -> "The site's security certificate has expired. If many sites say this, the tablet's date and time are probably wrong."
         SslError.SSL_NOTYETVALID -> "The site's security certificate is not valid yet (check this tablet's date and time)."
         SslError.SSL_IDMISMATCH -> "The certificate was issued for a different website name."
-        SslError.SSL_UNTRUSTED -> "The certificate was not issued by a trusted authority."
+        // This tablet gets no system updates, so its list of trusted certificate authorities stops at its last update.
+        SslError.SSL_UNTRUSTED -> "The certificate was not issued by an authority this tablet trusts. The tablet's built-in list of authorities is old, so a very new site can fail this way even when it is fine."
         SslError.SSL_DATE_INVALID -> "The certificate's dates are invalid (check this tablet's date and time)."
         else -> "The site's security certificate is invalid."
     }

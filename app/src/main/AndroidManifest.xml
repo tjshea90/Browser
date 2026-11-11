@@ -19,6 +19,8 @@
 
     <!-- Android 11+ package visibility: lets us name the app that would handle an external link in the confirmation dialog. -->
     <queries>
+        <!-- Only to tell, on the About page, whether Google Play services (and so Google Safe Browsing) exist on this device. -->
+        <package android:name="com.google.android.gms" />
         <intent><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="https" /></intent>
         <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="mailto" /></intent>
         <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="tel" /></intent>
@@ -40,7 +42,7 @@
         android:theme="@style/Theme.Kestrel"
         tools:targetApi="33">
 
-        <!-- WebView: use Google Safe Browsing when the device has it; never report WebView usage metrics. -->
+        <!-- WebView: use Google Safe Browsing when the device has it (the owner's tablet has no Google services, so this is a no-op there); never report WebView usage metrics. -->
         <meta-data android:name="android.webkit.WebView.EnableSafeBrowsing" android:value="true" />
         <meta-data android:name="android.webkit.WebView.MetricsOptOut" android:value="true" />
 
