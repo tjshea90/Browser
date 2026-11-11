@@ -39,16 +39,16 @@ interrupted by usage or finished its last task; no progress/data loss, no wasted
 deny on accident" (a denied tool call is re-sent ONCE, say so in one line); the Brave problem - "it freezes a lot especially when I'm typing and I have to switch apps and go back to brave for it to refresh. I don't want this
 problem with kestrel".
 Work order: M (process) and R (research, in parallel) -> A (speed, freeze, security quick wins) -> B (downloads) -> C (UI) -> D (blocking engine v2). Every step: ckpt. Every release: ship.sh + Actions + record-release.
-- [ ] M1 Many sessions/accounts: a session start merges newer sibling-branch work automatically (tools/sync.sh), every session keeps its OWN checkpoint card (.checkpoints/<branch>.md) so two sessions never overwrite each other's "Do this next", append-only files merge without conflicts, items can be claimed ([~]) - proven by tools/test_handoff.sh with two simulated sessions
-- [ ] M2 Releases cannot collide: one build/publish per app at a time across all branches (job-level concurrency in android.yml)
-- [ ] M3 Cold-start drill: a fresh clone with no context runs resume.sh and is told the exact next step (checked in test_handoff.sh)
-- [ ] M4 Standing rules above written into CLAUDE.md; research findings go into research/*.md at once (a cut-off session must not lose them)
-- [ ] R1 UI benchmark: Brave (tablet) + Chrome/Firefox/Samsung/Edge/Opera/Vivaldi/Focus - what users expect, touch sizes -> research/UI_BENCHMARK.md
-- [ ] R2 Download-manager techniques (segments, pause/resume, scoped storage, services, Gecko network stack) -> research/DOWNLOADS.md
-- [ ] R3 Gecko speed for a 32-bit Android 10 Go 2 GB tablet (prefs, GPU, video decode, memory, startup, network) -> research/GECKO_SPEED.md
-- [ ] R4 Newest security standards/tools (browser, Android app, CI supply chain) -> research/SECURITY.md
-- [ ] R5 Blocking-engine state of the art + our design (uBlock Origin, Brave adblock-rust, AdGuard, lists, JS-in-extension, DNR, scriptlets) -> research/ADBLOCK_ENGINE.md
-- [ ] R6 The typing freeze (Brave/Chromium/Gecko on Android): causes, prevention, recovery -> research/FREEZE.md
+- [x] M1 (done 2026-11-11, tools/test_handoff.sh 60 checks) Many sessions/accounts: a session start merges newer sibling-branch work automatically (tools/sync.sh), every session keeps its OWN checkpoint card (.checkpoints/<branch>.md) so two sessions never overwrite each other's "Do this next", append-only files merge without conflicts, items can be claimed ([~]) - proven by tools/test_handoff.sh with two simulated sessions
+- [x] M2 Releases cannot collide: one build/publish per app at a time across all branches (job-level concurrency in android.yml)
+- [x] M3 Cold-start drill: a fresh clone with no context runs resume.sh and is told the exact next step (checked in test_handoff.sh)
+- [x] M4 Standing rules above written into CLAUDE.md; research findings go into research/*.md at once (a cut-off session must not lose them)
+- [x] R1 UI benchmark: Brave (tablet) + Chrome/Firefox/Samsung/Edge/Opera/Vivaldi/Focus - what users expect, touch sizes -> research/UI_BENCHMARK.md
+- [x] R2 Download-manager techniques (segments, pause/resume, scoped storage, services, Gecko network stack) -> research/DOWNLOADS.md
+- [x] R3 Gecko speed for a 32-bit Android 10 Go 2 GB tablet (prefs, GPU, video decode, memory, startup, network) -> research/GECKO_SPEED.md
+- [x] R4 Newest security standards/tools (browser, Android app, CI supply chain) -> research/SECURITY.md
+- [x] R5 Blocking-engine state of the art + our design (uBlock Origin, Brave adblock-rust, AdGuard, lists, JS-in-extension, DNR, scriptlets) -> research/ADBLOCK_ENGINE.md
+- [x] R6 The typing freeze (Brave/Chromium/Gecko on Android): causes, prevention, recovery -> research/FREEZE.md
 - [x] A1 "Have no animations. Everything should feel snappy and instant": native UI animations off (instant pressed state instead of ripples, no popup/dialog/window animation) + page side: ui.prefersReducedMotion=1, GIFs once, no smooth scroll (assets/gecko-prefs.txt) - alpha3; the redesign (C) must keep it
 - [~] A2 Firefox engine tuned for the tablet - DONE in alpha3: YAML config (gecko-prefs.txt, 18 prefs verified to exist: AV1 off, 1 content process, 96 MB image cap, 512 MB disk cache, page-cache cap, media read-ahead, no prefetch), runtime after first frame + warmUp, fetch priority; GPU/WebRender/MediaCodec are already the Android defaults (R3: nothing to switch on). OPEN: preconnect with GeckoWebExecutor.speculativeConnect on URL focus/commit; graphics safe-mode switch; measure on the tablet (Diagnostics)
 - [~] A3 No freezes - DONE in alpha3: ad-block decisions on a worker thread (stop-gap until D1), cosmetic tables pre-built off the UI thread (the emulator log caught a 2 s UI stall there), ONE GeckoView attached for ever (tabs swap with setSession, NTP/error = overlays), toolbar updates coalesced + diffed, FLAG_SECURE only on change, autofill off, address-bar typing no longer resizes the page view (adjustNothing until the keyboard is gone), watchdog + frame-jank + timeline ring + Diagnostics + manual Refresh screen (R0+R1+R2). OPEN (research/FREEZE.md P1): echo probes, automatic recovery ladder (log-only first), TextureView/extensions-process A/B switches, suggestion debounce, NetworkMonitor.start off the UI thread (stalled 2 s at start on the emulator), stress page web-tests/freeze-stress.html
@@ -64,3 +64,11 @@ Work order: M (process) and R (research, in parallel) -> A (speed, freeze, secur
 - [ ] D2 Cosmetic filtering for all ~29k generic selectors (class/id token index), procedural :has()/:has-text(), common scriptlets (YouTube-style ads), redirect neutering
 - [ ] D3 "Anything unnecessary that slows down page loading": heavy third-party widgets/trackers, autoplay/preload policy, annoyance lists - measured by a requests/bytes/time benchmark on real pages (desktop Firefox in CI) before vs after
 - [ ] D4 Differential tests: the new engine gives the same verdicts as the Kotlin engine on the 60k-case corpus + real-list samples
+
+## Decisions waiting for the owner (defaults are used until they answer; all switchable later)
+- [ ] OWNER UI-1: toolbar layout. Default: SPLIT in portrait (address row on top, 64 dp action bar at the bottom: Back, Forward, New tab, Tabs, Menu), one row in landscape. Alternative: everything on top.
+- [ ] OWNER UI-2: look. Default: "CERE" (slate neutrals + one cere-yellow accent, flat, chamfered corners; research/UI_BENCHMARK.md section 6). Alternatives: RUFOUS (safer, warm), STOOP (HUD style).
+- [ ] OWNER UI-3: landscape tabs. Default: tab strip on top. Alternative: a 56 dp left tab rail.
+- [ ] OWNER SEC-1: private release key (the public dev key lets anyone sign an update to the owner's app): needs GitHub secrets + a reviewer-gated environment; research/SECURITY.md B1-B3. Needs the owner at github.com.
+- [ ] OWNER LIC-1: project licence (research recommends GPLv3-or-later because the filter lists and uBO scriptlets are GPL) and the default of a labelled YouTube-ads switch (YouTube forbids circumventing its ads).
+- [ ] OWNER TEST-1: alpha3 on the tablet: type for a while (address bar, Claude.ai, forms): does the screen still freeze? If yes: Menu > Diagnostics > Refresh screen, then Copy/Share the report.
