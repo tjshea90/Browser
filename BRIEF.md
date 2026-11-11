@@ -44,7 +44,8 @@ form except that system WebView (Brave/Cromite are whole browsers built from Chr
 - Signing: the PUBLIC dev key in `signing/dev/` (pinned in `signing/CERT_SHA256`) signs every release, so any session/CI build updates the installed app. A private key may replace it later (see TASKS.md).
 
 ## Known issues / risks
-- **Nothing has run on the real tablet yet** (WebView build was run on an Android 10 emulator with the same Chromium 74; Gecko build on an Android 10 x86_64 emulator in software mode). Say so honestly.
+- **First real-tablet result (owner, 2026-11-11): "The new version of the browser loads Claude.ai"** = Kestrel G works on the real tablet (claude.ai is the page the WebView build refused). Nothing else has been reported yet:
+  speed, memory, UI feel and the rest are still unmeasured there. The WebView build and the Gecko build were otherwise only run on Android 10 emulators (software mode). Say so honestly.
 - Generic cosmetic hiding applies an alphabetical prefix of 1200 generic selectors (site-specific rules, 22k, are complete): TASKS.md has the class/id index plan.
 - The cloud sandbox has no emulator acceleration (no KVM): emulator runs take minutes per step; builds belong on GitHub Actions.
 - Licences: bundled lists are GPLv3 / CC BY-SA data (`docs/FILTER-LISTS.md`); the owner has not chosen a project licence.
