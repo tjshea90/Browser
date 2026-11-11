@@ -283,7 +283,7 @@ open class BrowserActivity : Activity(), DockListener {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         lastTrim = level; lastTrimAt = SystemClock.elapsedRealtime()
-        Health.log("mem", "trim", "level=$level ${memFacts()}"); Health.count("mem.trim")
+        Health.log("mem", "trim", "level=$level ${memFacts()}"); Health.count("mem.trim"); Health.count("mem.trim.$level")
         // 10/15 = RUNNING_LOW/CRITICAL (we are visible); 20 = UI_HIDDEN (user left); 60+ = we are a prime kill candidate.
         if (level >= 10) { for (t in tabs.toList()) if (t !== current && !hasLiveChild(t)) hibernate(t) } // a popup's opener must survive (window.opener)
         if (level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE && !window.decorView.hasWindowFocus()) current?.let { hibernate(it) }
@@ -1003,12 +1003,14 @@ open class BrowserActivity : Activity(), DockListener {
         val ver = try { Class.forName("org.mozilla.geckoview.BuildConfig").getField("MOZ_APP_VERSION").get(null) } catch (e: Exception) { "?" }
         out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null }} of ${tabs.size} tabs; current ${current?.url?.take(60) ?: "-"}")
         out.add(GeckoEngine.prefReadback)
+        out.add(GlInfo.text)
         out.add("Page view: attached=${geckoView.parent != null} session=${geckoView.session != null} windowFocus=${hasWindowFocus()}")
         return out
     }
 
     private fun showDiagnostics() {
         GeckoEngine.readBackPrefs { diagView?.refresh() }
+        Io.exec { GlInfo.read(); Io.ui { diagView?.refresh() } }
         val v = diagView ?: DiagnosticsView(this, pal, ::engineFacts, { refreshScreen("diagnostics") }, { closeDiagnostics() }, { runScrollTest() }).also { diagView = it }
         if (v.parent == null) root.addView(v, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) else v.refresh()
     }
@@ -1225,6 +1227,10 @@ open class BrowserActivity : Activity(), DockListener {
             if (tab === current && !tab.loading && !typing() && tabGrid.visibility != View.VISIBLE && now - tab.thumbAt > 15_000 && now - lastTouchAt > 3_000) captureThumb(tab)
         }, 4000)
     }
+
+    /** "trim=15@8s": the newest memory-trim level and how long ago (engine compositor events are logged next to it). */
+    internal fun sinceTrim(): String = "trim=$lastTrim@" + (if (lastTrimAt == 0L) "-" else "${(SystemClock.elapsedRealtime() - lastTrimAt) / 1000}s")
+    internal fun isCurrentTab(tab: Tab): Boolean = tab === current
 
     /** Free memory as Android sees it, for the Health log: "avail=412MB thr=150MB low=false trim=15@8s". */
     private fun memFacts(): String {

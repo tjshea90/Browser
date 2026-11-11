@@ -142,6 +142,8 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
     override fun onFullScreen(session: GeckoSession, fullScreen: Boolean) { a.fullScreenChanged(fullScreen) }
     override fun onContextMenu(session: GeckoSession, screenX: Int, screenY: Int, element: ContentDelegate.ContextElement) { a.longPress(tab, element) }
     override fun onCrash(session: GeckoSession) { Health.log("gecko", "onCrash", tab.url.take(80)); Health.count("gecko.crash"); a.sessionGone(tab, true) }
+    override fun onFirstComposite(session: GeckoSession) { if (a.isCurrentTab(tab)) { Health.log("gecko", "first-composite", a.sinceTrim()); Health.count("gecko.firstComposite") } } // a repeat without a navigation = the compositor restarted
+    override fun onPaintStatusReset(session: GeckoSession) { if (a.isCurrentTab(tab)) { Health.log("gecko", "paint-reset", a.sinceTrim()); Health.count("gecko.paintReset") } }
     override fun onFirstContentfulPaint(session: GeckoSession) { a.firstPaint(tab) } // a page that is coming back after its process died: take the preview down
     override fun onKill(session: GeckoSession) { Health.log("gecko", "onKill", tab.url.take(80)); Health.count("gecko.kill"); a.sessionGone(tab, false) }
 

@@ -26,14 +26,16 @@ class ScrollTest(private val session: GeckoSession, private val touchTarget: Vie
 
     private val compositorDelegate = object : GeckoSession.CompositorScrollDelegate {
         override fun onScrollChanged(session: GeckoSession, update: GeckoSession.ScrollPositionUpdate) { // compositor thread
+            val now = SystemClock.uptimeMillis()
             val i = nComp
-            if (i < MAX_FRAMES) { comp[i] = SystemClock.uptimeMillis(); nComp = i + 1 }
+            if (i < MAX_FRAMES && (i == 0 || now - comp[i - 1] >= SAME_FRAME_MS)) { comp[i] = now; nComp = i + 1 } // several callbacks inside one composited frame count once
         }
     }
     private val uiDelegate = object : GeckoSession.ScrollDelegate {
         override fun onScrollChanged(session: GeckoSession, scrollX: Int, scrollY: Int) { // UI thread
+            val now = SystemClock.uptimeMillis()
             val i = nUi
-            if (i < MAX_FRAMES) { ui[i] = SystemClock.uptimeMillis(); nUi = i + 1 }
+            if (i < MAX_FRAMES && (i == 0 || now - ui[i - 1] >= SAME_FRAME_MS)) { ui[i] = now; nUi = i + 1 }
         }
     }
 
@@ -74,10 +76,28 @@ class ScrollTest(private val session: GeckoSession, private val touchTarget: Vie
         try { session.compositorScrollDelegate = null; session.scrollDelegate = null } catch (e: Exception) { /* ignore */ }
         val out = StringBuilder()
         out.append(String.format(Locale.US, "%d finger swipes through the real touch path (page scrolled down, then back up)\n", STEPS))
+        out.append(verdict()).append('\n')
         out.append("Compositor frames: ").append(summary(comp, nComp)).append('\n')
         out.append("Main-thread updates: ").append(summary(ui, nUi)).append('\n')
         out.append("Memory before: ").append(memBefore).append("\nMemory after:  ").append(memNow())
         finished(out.toString())
+    }
+
+    /** One plain sentence from the compositor numbers (50+ frames/s with small gaps is smooth; below 30 is stuttering). */
+    private fun verdict(): String {
+        val t = comp; val total = nComp
+        var motionMs = 0L; var idx = 0; val gaps = ArrayList<Long>()
+        for (s in 0 until STEPS) {
+            val a = stepStart[s]; val b = stepStart[s + 1]; var first = -1L; var prev = -1L
+            while (idx < total && t[idx] < b) { val x = t[idx]; if (x >= a) { if (first < 0) first = x; if (prev >= 0) gaps.add(x - prev); prev = x }; idx++ }
+            if (first >= 0) motionMs += prev - first
+        }
+        if (motionMs <= 0 || gaps.isEmpty()) return "Result: no scroll frames were measured (the page did not scroll)."
+        gaps.sort()
+        val fps = total * 1000.0 / motionMs
+        val p95 = gaps[((gaps.size - 1) * 0.95).toInt()]
+        val word = when { fps >= 50 && p95 <= 40 -> "SMOOTH"; fps >= 35 && p95 <= 70 -> "mostly smooth, some stutter"; fps >= 25 -> "STUTTERING"; else -> "VERY CHOPPY" }
+        return String.format(Locale.US, "Result: %s - about %.0f frames a second, 95%% of gaps under %d ms.", word, fps, p95)
     }
 
     /** "612 in 9.8 s = 62/s; gap median 16 ms, 95% 33 ms, worst 214 ms (7 over 50 ms); first frame after touch: median 21 ms, worst 130 ms; swipes with a gap over 100 ms: 2". */
@@ -112,5 +132,6 @@ class ScrollTest(private val session: GeckoSession, private val touchTarget: Vie
         private const val STEPS = 32
         private const val STEP_MS = 800L
         private const val MAX_FRAMES = 8000
+        private const val SAME_FRAME_MS = 4L
     }
 }
