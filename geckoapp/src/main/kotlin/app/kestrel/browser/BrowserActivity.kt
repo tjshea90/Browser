@@ -883,13 +883,17 @@ open class BrowserActivity : Activity(), DockListener {
      * Follows the keyboard while a field is typed in and until it is gone again (at most 1.5 s after focus is lost): lifts the dock so the address row sits right above
      * it, keeps the suggestion list and the Home field in view. Back to adjustResize only AFTER the keyboard is gone (else the page shrinks once more under the closing keyboard).
      */
+    private var lastKbTop = -1
+    private var kbStillTicks = 0
     private val typingTick = object : Runnable {
         override fun run() {
             val focused = typing()
             val top = keyboardTop()
             val up = top > 0
             applyKeyboard(top)
-            if (focused) { Io.main.postDelayed(this, 100); return }
+            // every look is a call into the window manager on Android 10: 100 ms while the keyboard moves, 300 ms once it has sat still for a second
+            if (top == lastKbTop) kbStillTicks++ else { lastKbTop = top; kbStillTicks = 0 }
+            if (focused) { Io.main.postDelayed(this, if (kbStillTicks >= 10) 300L else 100L); return }
             if (up && SystemClock.uptimeMillis() - typingModeSince < 1500) { Io.main.postDelayed(this, 80); return }
             applyKeyboard(0)
             setUrlTypingMode(false)
@@ -940,7 +944,15 @@ open class BrowserActivity : Activity(), DockListener {
         }
     }
 
+    private val suggestLater = Runnable { runSuggest() }
+
     override fun onUrlText(text: String) {
+        Io.main.removeCallbacks(suggestLater)
+        if (text.trim().isEmpty()) runSuggest() else Io.main.postDelayed(suggestLater, 70) // the user is still typing: the database is asked once for a burst of keys
+    }
+
+    private fun runSuggest() {
+        val text = if (homeShown()) home.field.text.toString() else dock.urlField.text.toString()
         val q = text.trim()
         val toHome = homeShown()
         if (q.isEmpty() || (!toHome && q == current?.url)) { hideSuggestions(); return }
@@ -1342,7 +1354,12 @@ open class BrowserActivity : Activity(), DockListener {
     private var loadSeen: Tab? = null
     private var loadSeenAt = 0L
 
-    internal fun tabChanged(tab: Tab) { if (tab === current) updateUi(); if (tabGrid.visibility == View.VISIBLE) tabGrid.rebind(tabs, current) }
+    private var gridRebindPending = false
+    internal fun tabChanged(tab: Tab) {
+        if (tab === current) updateUi()
+        // the open tab grid is rebuilt (every card is a handful of views) at most once per turn of the message loop, however many progress / title / address events arrive
+        if (tabGrid.visibility == View.VISIBLE && !gridRebindPending) { gridRebindPending = true; Io.main.post { gridRebindPending = false; if (tabGrid.visibility == View.VISIBLE) tabGrid.rebind(tabs, current) } }
+    }
     private val countPosted = java.util.concurrent.atomic.AtomicBoolean(false)
     /** A request was blocked (may be called from any thread): the chip refreshes at most 4 times a second, however many requests a page blocks. */
     internal fun shieldCountChanged(tab: Tab) {

@@ -47,8 +47,11 @@ class KestrelGeckoView(ctx: Context) : GeckoView(ctx) {
             MotionEvent.ACTION_UP -> tracker.up(event.x, event.y)
             MotionEvent.ACTION_CANCEL -> tracker.cancel()
         }
-        val result = super.onTouchEventForDetailResult(event) // the engine gets every touch event, exactly as with onTouchEvent
-        if (action == MotionEvent.ACTION_DOWN && tracker.alive) {
+        // The engine gets every touch event either way; only the touch-DOWN of a possible pull needs its answer (what the page does with it), so only that one asks for it. The detail variant
+        // allocates a result and crosses into native for every event of a drag (60-120 a second); the plain one does not.
+        if (action != MotionEvent.ACTION_DOWN || !tracker.alive) { super.onTouchEvent(event); return true }
+        val result = super.onTouchEventForDetailResult(event)
+        run {
             val g = gesture
             result.accept { d ->
                 if (d == null || g != gesture) return@accept
