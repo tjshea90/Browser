@@ -19,8 +19,8 @@ import app.kestrel.browser.data.Entry
 
 /**
  * The Home screen (owner request): pure black, one large stylized field in the middle. Words search Google, an address opens that address.
- * Nothing else competes with it - a small wordmark above, one faint line of what Shields saved below. The field is a chamfered slab with a
- * cere-yellow search block; it turns yellow-edged while it has focus. It is also the new-tab page.
+ * Nothing else competes with it - a small wordmark above, one faint line of what Shields saved below. The field is a glossy chamfered slab with a
+ * neon-blue search block and a soft breathing glow; its edge goes ice-bright while it has focus. It is also the new-tab page.
  */
 class HomeView(ctx: Context, private var pal: Pal, private val brand: String, private val l: AddressListener) : FrameLayout(ctx) {
     val field = EditText(ctx)
@@ -35,6 +35,10 @@ class HomeView(ctx: Context, private var pal: Pal, private val brand: String, pr
     private val hint = label(ctx, "", 13f, pal.muted)
     val suggest = SuggestionList(ctx, pal, reverse = false) { value -> l.onSubmit(value) }
     private var lastFieldFocus = false
+    /** Behind everything: the mood of the owner's reaper photo (blue flames from the bottom corners, the scythe's arc). Static. */
+    private val backdrop = HomeBackdrop(ctx, pal.accent, pal.deep, pal.accentHi)
+    /** The glow around the field (a sibling BEHIND the column, so the layout of the column is untouched); it breathes via [Neon]. */
+    private val glow = GlowView(ctx)
 
     init {
         isClickable = true // swallow touches: the page underneath must never receive them
@@ -95,9 +99,12 @@ class HomeView(ctx: Context, private var pal: Pal, private val brand: String, pr
         column.addView(hint, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(14) })
         suggest.visibility = GONE
         column.addView(suggest, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(10) })
+        addView(backdrop, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(glow, LayoutParams(0, 0, Gravity.TOP or Gravity.START))
         addView(column, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         addView(stats, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = ctx.dp(22) })
         tint()
+        Neon.pulse(glow, 0.5f, 1f, 4200L)
     }
 
     fun applyPal(p: Pal) { pal = p; tint() }
@@ -122,13 +129,15 @@ class HomeView(ctx: Context, private var pal: Pal, private val brand: String, pr
         hint.text = if (pal.isPrivate) "Private tabs leave no history, cookies or cache on this device" else ""
         hint.visibility = if (pal.isPrivate) VISIBLE else GONE
         suggest.setPal(pal)
+        backdrop.setColors(pal.accent, pal.deep, pal.accentHi)
+        glow.background = NeonGlowDrawable(pal.accent, context.dpf(FIELD_CUT_DP), ChamferDrawable.TL or ChamferDrawable.BR, context.dpf(GLOW_DP.toFloat()))
         paintBox()
     }
 
     private fun paintBox() {
         val ctx = context
-        box.background = ChamferDrawable(if (pal.isPrivate) 0xFF1A1230.toInt() else 0xFF101215.toInt(), ctx.dpf(18f), ChamferDrawable.TL or ChamferDrawable.BR,
-            if (lastFieldFocus) pal.accent else pal.divider, ctx.dpf(if (lastFieldFocus) 2f else 1.5f))
+        box.background = ChamferDrawable(pal.pill, ctx.dpf(FIELD_CUT_DP), ChamferDrawable.TL or ChamferDrawable.BR,
+            if (lastFieldFocus) pal.accentHi else pal.deep, ctx.dpf(if (lastFieldFocus) 2f else 1.5f), gloss = true)
     }
 
     /** A faint line under everything: what Shields did (the only "stat" on Home). */
@@ -159,6 +168,12 @@ class HomeView(ctx: Context, private var pal: Pal, private val brand: String, pr
         val side = maxOf(ctx.dp(20), (width - sideMax) / 2)
         (column.layoutParams as LayoutParams).let { it.topMargin = top; it.leftMargin = side; it.rightMargin = side }
         column.requestLayout()
+        val g = ctx.dp(GLOW_DP)
+        (glow.layoutParams as LayoutParams).let {
+            it.width = width - 2 * side + 2 * g; it.height = ctx.dp(FIELD_DP) + 2 * g
+            it.leftMargin = side - g; it.topMargin = top + ctx.dp(34 + GAP_DP) - g
+        }
+        glow.requestLayout()
     }
 
     /**
@@ -167,12 +182,13 @@ class HomeView(ctx: Context, private var pal: Pal, private val brand: String, pr
      */
     fun onKeyboard(keyboardTop: Int) {
         val ctx = context
-        if (keyboardTop <= 0 || keyboardTop >= height) { column.translationY = 0f; return }
+        if (keyboardTop <= 0 || keyboardTop >= height) { column.translationY = 0f; glow.translationY = 0f; return }
         val top = (column.layoutParams as LayoutParams).topMargin
         // room for the wordmark (and its PRIVATE badge) above the field while the visible area is tall enough; on a short window only the field matters
         val keepBrand = keyboardTop > ctx.dp(400)
         val anchor = if (keepBrand) top else top + ctx.dp(34 + GAP_DP)
         column.translationY = -(anchor - ctx.dp(16)).coerceAtLeast(0).toFloat()
+        glow.translationY = column.translationY
     }
 
     /** Pixels between the field and the keyboard (or the bottom edge): the room the suggestion list may use. */
@@ -187,5 +203,7 @@ class HomeView(ctx: Context, private var pal: Pal, private val brand: String, pr
         const val FIELD_DP = 72
         const val GAP_DP = 26
         const val MAX_W_DP = 560
+        const val GLOW_DP = 10
+        const val FIELD_CUT_DP = 18f
     }
 }
