@@ -85,7 +85,7 @@ class ExtImageTest {
             else if (rnd.nextInt(6) == 0) opts.add("~" + pick(listOf("image", "script", "xhr")))
             val party = rnd.nextInt(4)
             if (party == 0) opts.add("third-party") else if (party == 1) opts.add("~third-party")
-            if (!exception && rnd.nextInt(30) == 0) opts.add("important")
+            if (!exception && kind <= 1 && rnd.nextInt(10) == 0) opts.add("important") // host-anchored only: a broad $important rule would end most scans early and hide the paths behind it
             if (rnd.nextInt(5) == 0) {
                 val d = ArrayList<String>()
                 if (rnd.nextBoolean()) d.add(pick(pageHosts))
