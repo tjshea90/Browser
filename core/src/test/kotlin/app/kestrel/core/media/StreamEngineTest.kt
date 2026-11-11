@@ -123,13 +123,13 @@ class StreamEngineTest {
     }
 
     @Test(timeout = 60_000) fun pauseKeepsFinishedSegmentsAndResumeFinishesTheJob() {
-        val h = H(); h.cdn.chunkDelayMs = 4; h.cdn.chunk = 2048
-        val (pl, expected) = plainStream(h, 10, 30_000)
+        val h = H(); h.cdn.chunkDelayMs = 6; h.cdn.chunk = 2048
+        val (pl, expected) = plainStream(h, 10, 60_000)
         val id = h.enqueue(pl)
-        h.await(id, "progress") { it != null && it.state == DlState.RUNNING && it.done > 60_000 }
+        h.await(id, "progress") { it != null && it.state == DlState.RUNNING && it.done > 150_000 }
         h.engine.pause(id)
         val paused = h.await(id, "paused") { it?.state == DlState.PAUSED_USER }!!
-        assertTrue(paused.done in 1 until expected.size.toLong())
+        assertTrue("paused with ${paused.done} of ${expected.size} on the tablet", paused.done in 1 until expected.size.toLong())
         val before = (0 until 10).associate { i -> i to h.cdn.count("https://cdn.test/v/s$i.ts") }
         h.engine.resume(id)
         val v = h.completed(id)
