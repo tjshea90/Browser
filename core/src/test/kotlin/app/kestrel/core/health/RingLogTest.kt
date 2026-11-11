@@ -15,13 +15,13 @@ class RingLogTest {
 
     @Test fun lessThanCapacityAndEmptyAndClear() {
         val r = RingLog(5)
-        assertEquals(emptyList(), r.last())
+        assertEquals(emptyList<String>(), r.last())
         r.add("x"); r.add("y")
         assertEquals(listOf("x", "y"), r.last())
         assertEquals(listOf("x", "y"), r.last(99))
         r.clear()
         assertEquals(0, r.size())
-        assertEquals(emptyList(), r.last())
+        assertEquals(emptyList<String>(), r.last())
         r.add("z")
         assertEquals(listOf("z"), r.last())
     }
@@ -30,7 +30,7 @@ class RingLogTest {
         val r = RingLog(0) // coerced to 1
         r.add("p"); r.add("q")
         assertEquals(listOf("q"), r.last())
-        assertEquals(emptyList(), r.last(-4))
+        assertEquals(emptyList<String>(), r.last(-4))
     }
 
     @Test fun survivesConcurrentWriters() {
