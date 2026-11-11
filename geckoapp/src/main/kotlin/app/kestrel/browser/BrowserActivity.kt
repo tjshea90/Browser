@@ -56,7 +56,8 @@ import app.kestrel.browser.ui.SettingsListener
 import app.kestrel.browser.ui.SettingsView
 import app.kestrel.browser.ui.ShieldsPanel
 import app.kestrel.browser.ui.SuggestionList
-import app.kestrel.browser.ui.TabSwitcher
+import app.kestrel.browser.ui.TabGrid
+import app.kestrel.browser.ui.ThumbStore
 import app.kestrel.browser.ui.BottomDock
 import app.kestrel.browser.ui.DockListener
 import app.kestrel.browser.ui.HomeView
@@ -114,7 +115,7 @@ open class BrowserActivity : Activity(), DockListener {
     private lateinit var errorView: ErrorView
     private lateinit var findBar: FindBar
     private lateinit var suggestions: SuggestionList
-    private lateinit var tabSwitcher: TabSwitcher
+    private lateinit var tabGrid: TabGrid
     private lateinit var fullscreen: FrameLayout
     private var settingsView: SettingsView? = null
     private var listPanel: ListPanel? = null
@@ -268,17 +269,23 @@ open class BrowserActivity : Activity(), DockListener {
         root.addView(findBar, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dp(52))) // find stays at the TOP: the keyboard never covers it
         suggestions = SuggestionList(this, pal, reverse = true) { value -> hideSuggestions(); clearUrlFocus(); current?.let { navigate(it, value) } }.apply { visibility = View.GONE }
         root.addView(suggestions, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
-        tabSwitcher = TabSwitcher(this, pal, object : TabSwitcher.Listener {
-            override fun select(tab: Tab) { hideTabSwitcher(); show(tab) }
+        tabGrid = TabGrid(this, pal, { it.isPrivateTab }, object : TabGrid.Listener {
+            override fun select(tab: Tab) { hideTabGrid(); show(tab) }
             override fun close(tab: Tab) {
-                val wasLast = tabs.size == 1
                 doCloseTab(tab)
-                if (wasLast) hideTabSwitcher() else tabSwitcher.bind(tabs, current)
+                tabGrid.rebind(tabs, current)
             }
-            override fun newTab() { hideTabSwitcher(); newTabAndShow() }
-            override fun dismiss() { hideTabSwitcher() }
+            override fun newTab(privateTab: Boolean) { hideTabGrid(); newTabAndShow(privateTab) }
+            override fun closeAll(privateTab: Boolean) {
+                val n = tabs.count { it.isPrivateTab == privateTab }
+                askYesNo(if (privateTab) "Close all private tabs?" else "Close all tabs?", "$n ${if (n == 1) "tab" else "tabs"} will be closed.", "Close", "Cancel") { yes ->
+                    if (yes) { for (t in tabs.filter { it.isPrivateTab == privateTab }) doCloseTab(t); tabGrid.rebind(tabs, current) }
+                }
+            }
+            override fun dismiss() { hideTabGrid() }
+            override fun paneChanged(privateTab: Boolean) { applyPrivacyFlags() }
         }).apply { visibility = View.GONE }
-        root.addView(tabSwitcher, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        root.addView(tabGrid, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         sheet = SheetHost(this, pal)
         root.addView(sheet, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         fullscreen = FrameLayout(this).apply { setBackgroundColor(0xFF000000.toInt()); visibility = View.GONE; isClickable = true }
@@ -382,7 +389,7 @@ open class BrowserActivity : Activity(), DockListener {
     /** Private tab in front: no screenshots / recents thumbnail, and no autofill service sees what is typed. */
     private var secureWindow = false
     private fun applyPrivacyFlags() {
-        val priv = current?.isPrivateTab == true
+        val priv = current?.isPrivateTab == true || (tabGrid.visibility == View.VISIBLE && tabGrid.showingPrivate)
         if (priv != secureWindow) { // a window flag change relayouts the window: only when the private state flips
             secureWindow = priv
             if (priv) window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE) else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -626,8 +633,39 @@ open class BrowserActivity : Activity(), DockListener {
         updateUi()
     }
 
-    override fun onTabs() { hideKeyboard(); tabSwitcher.bind(tabs, current); tabSwitcher.visibility = View.VISIBLE }
-    private fun hideTabSwitcher() { tabSwitcher.visibility = View.GONE }
+    override fun onTabs() {
+        hideKeyboard()
+        val cur = current
+        tabGrid.visibility = View.VISIBLE
+        tabGrid.open(tabs, cur)
+        // fresh preview of the page in front (the others keep the one taken when they were last in front); previews of restored tabs come from the cache directory
+        if (cur != null) captureThumb(cur)
+        val appCtx = applicationContext
+        val missing = tabs.filter { it.thumb == null && !it.isPrivateTab && !it.isNewTab }
+        if (missing.isNotEmpty()) Io.exec { for (t in missing) { val b = ThumbStore.load(appCtx, t.id); if (b != null) Io.ui { if (t.thumb == null) { t.thumb = b; t.thumbAt = SystemClock.uptimeMillis(); tabGrid.thumbChanged(t) } } } }
+    }
+
+    private fun hideTabGrid() { tabGrid.visibility = View.GONE; applyPrivacyFlags() }
+
+    /**
+     * Snapshot the page in front for the tab grid: a GPU read-back (not a screenshot, so it also works under FLAG_SECURE), scaled down on the IO thread.
+     * Only for a page that is really on screen - not the Home screen, an error screen or a page that is still loading.
+     */
+    private fun captureThumb(tab: Tab) {
+        if (tab !== current || homeShown(tab) || tab.error != null || tab.session == null || geckoView.session !== tab.session) return
+        val appCtx = applicationContext
+        try {
+            geckoView.capturePixels().accept({ full ->
+                if (full != null) Io.exec {
+                    val small = ThumbStore.shrink(full)
+                    if (small != null) {
+                        if (!tab.isPrivateTab) ThumbStore.save(appCtx, tab.id, small)
+                        Io.ui { tab.thumb = small; tab.thumbAt = SystemClock.uptimeMillis(); ThumbStore.trim(tabs, tab); if (tabGrid.visibility == View.VISIBLE) tabGrid.thumbChanged(tab) }
+                    }
+                }
+            }, { _ -> /* the surface was not ready: keep the previous preview */ })
+        } catch (e: Throwable) { /* no session attached right now */ }
+    }
 
     override fun onSubmit(text: String) {
         hideSuggestions(); clearUrlFocus()
@@ -1029,7 +1067,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (progress.progress != p) progress.progress = p
     }
 
-    internal fun tabChanged(tab: Tab) { if (tab === current) updateUi() else if (tabSwitcher.visibility == View.VISIBLE) tabSwitcher.bind(tabs, current) }
+    internal fun tabChanged(tab: Tab) { if (tab === current) updateUi(); if (tabGrid.visibility == View.VISIBLE) tabGrid.rebind(tabs, current) }
     private val countPosted = java.util.concurrent.atomic.AtomicBoolean(false)
     /** A request was blocked (may be called from any thread): the chip refreshes at most 4 times a second, however many requests a page blocks. */
     internal fun shieldCountChanged(tab: Tab) {
@@ -1087,7 +1125,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (diagView?.parent != null) { closeDiagnostics(); return true }
         if (settingsView?.parent != null) { closeSettings(); return true }
         if (listPanel?.parent != null) { closeList(); return true }
-        if (tabSwitcher.visibility == View.VISIBLE) { hideTabSwitcher(); return true }
+        if (tabGrid.visibility == View.VISIBLE) { hideTabGrid(); return true }
         if (findBar.visibility == View.VISIBLE) { closeFind(); return true }
         if (suggestions.visibility == View.VISIBLE || home.suggest.visibility == View.VISIBLE || typing()) { hideSuggestions(); clearUrlFocus(); updateUi(); return true }
         val t = current ?: return false
