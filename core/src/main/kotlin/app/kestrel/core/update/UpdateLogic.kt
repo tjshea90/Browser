@@ -89,23 +89,25 @@ object UpdateLogic {
     }
 
     /**
-     * What Android's installer needs, in bytes of ALLOCATABLE space (= StorageManager.getAllocatableBytes: free space + caches the system may clear - the low-storage
-     * reserve Android keeps for itself, up to 500 MB). Installing an update takes: the installer's own staged copy of the APK, then the installed size (the APK again, plus
-     * the native libraries it unpacks) - the OLD version stays until the new one is complete - plus a margin for the optimised code.
-     * Our own downloaded copy counts against free space too, unless we delete it once the installer has taken its copy ([StoragePlan.fitsDropping]).
+     * What Android's installer needs before it will finish an install or an update. MEASURED (research/UPDATE_STORAGE.md): it refuses (INSTALL_FAILED_INSUFFICIENT_STORAGE, installd "Failed to free up <10 % of /data>")
+     * unless, once the install has taken its own room, 10 % of the data partition ([reserve]) is still free. The install takes the staged copy of the APK, the native libraries it unpacks and the optimised code.
+     * [free] = free space + the caches the system may clear (StorageStatsManager.getFreeBytes). Our own downloaded copy is already counted as used; it is deleted once the installer holds its own copy
+     * ([StoragePlan.fitsDropping]), which hands one APK of room back.
+     * This is why "uninstall first" always worked: the uninstall frees the old install and its data (about a gigabyte), so the same APK then clears the bar. In place and fresh need the same free space BEFORE.
      */
-    class StoragePlan(val needKeep: Long, val needDrop: Long, val allocatable: Long) {
+    class StoragePlan(val needKeep: Long, val needDrop: Long, val free: Long, val reserve: Long, val installTakes: Long) {
         /** Starts with our downloaded file kept (so a retry needs no new download). */
-        val fitsKeeping: Boolean get() = allocatable >= needKeep
+        val fitsKeeping: Boolean get() = free >= needKeep
         /** Fits only if our own copy is deleted right after the installer has taken its copy. */
-        val fitsDropping: Boolean get() = !fitsKeeping && allocatable >= needDrop
+        val fitsDropping: Boolean get() = !fitsKeeping && free >= needDrop
         /** Bytes that must still be freed (the copy being dropped); 0 = it fits. */
-        val shortBy: Long get() = if (allocatable >= needDrop) 0L else needDrop - allocatable
+        val shortBy: Long get() = if (free >= needDrop) 0L else needDrop - free
     }
 
-    fun storagePlan(apkBytes: Long, nativeLibBytes: Long, allocatable: Long, marginBytes: Long = 48L shl 20): StoragePlan {
-        val installed = apkBytes + nativeLibBytes
-        return StoragePlan(needKeep = apkBytes + installed + marginBytes, needDrop = installed + marginBytes, allocatable = allocatable)
+    /** [marginBytes]: the optimised code the installer compiles (measured about 100 MB for a debug build with a big dex; a release build needs far less). */
+    fun storagePlan(apkBytes: Long, nativeLibBytes: Long, freeBytes: Long, reserveBytes: Long, marginBytes: Long = 64L shl 20): StoragePlan {
+        val needDrop = reserveBytes + nativeLibBytes + marginBytes // the staged copy takes what our deleted copy gives back
+        return StoragePlan(needKeep = needDrop + apkBytes, needDrop = needDrop, free = freeBytes, reserve = reserveBytes, installTakes = apkBytes + nativeLibBytes + marginBytes)
     }
 
     /** Round a byte count UP to whole tens of megabytes (what the owner is told to free). */

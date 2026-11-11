@@ -83,21 +83,33 @@ class UpdateLogicTest {
 
     @Test fun storagePlanForTheGeckoApk() {
         val mb = 1L shl 20
-        // the real alpha numbers: 92 MB APK, 135 MB of libraries to unpack, 48 MB margin
-        val plan = UpdateLogic.storagePlan(92 * mb, 135 * mb, allocatable = 400 * mb)
-        assertEquals((92 + 92 + 135 + 48) * mb, plan.needKeep)
-        assertEquals((92 + 135 + 48) * mb, plan.needDrop)
+        // alpha numbers: 92 MB APK, 132 MB of libraries to unpack, 64 MB margin, and Android's reserve of 10 % of an 11 GB data partition
+        val reserve = 1100 * mb
+        val plan = UpdateLogic.storagePlan(92 * mb, 132 * mb, freeBytes = 1700 * mb, reserveBytes = reserve)
+        assertEquals((1100 + 132 + 64 + 92) * mb, plan.needKeep)
+        assertEquals((1100 + 132 + 64) * mb, plan.needDrop)
+        assertEquals((92 + 132 + 64) * mb, plan.installTakes)
         assertTrue(plan.fitsKeeping); assertFalse(plan.fitsDropping); assertEquals(0L, plan.shortBy)
-        val tight = UpdateLogic.storagePlan(92 * mb, 135 * mb, allocatable = 300 * mb) // enough only without our own copy
+        val tight = UpdateLogic.storagePlan(92 * mb, 132 * mb, freeBytes = 1350 * mb, reserveBytes = reserve) // enough only without our own copy
         assertFalse(tight.fitsKeeping); assertTrue(tight.fitsDropping); assertEquals(0L, tight.shortBy)
-        val short = UpdateLogic.storagePlan(92 * mb, 135 * mb, allocatable = 200 * mb)
-        assertFalse(short.fitsKeeping); assertFalse(short.fitsDropping); assertEquals(75 * mb, short.shortBy)
+        val short = UpdateLogic.storagePlan(92 * mb, 132 * mb, freeBytes = 900 * mb, reserveBytes = reserve) // the owner made 900 MB: not enough on such a tablet
+        assertFalse(short.fitsKeeping); assertFalse(short.fitsDropping); assertEquals(396 * mb, short.shortBy)
         assertEquals(80 * mb, UpdateLogic.roundUpTenMb(75 * mb)); assertEquals(0L, UpdateLogic.roundUpTenMb(0)); assertEquals(10 * mb, UpdateLogic.roundUpTenMb(1))
     }
 
-    @Test fun storagePlanWithoutNativeLibraries() { // the WebView build: a 2 MB app
+    @Test fun storagePlanMatchesWhatTheEmulatorMeasured() {
         val mb = 1L shl 20
-        val plan = UpdateLogic.storagePlan(2 * mb, 0, allocatable = 60 * mb)
+        // Android 10 emulator: 6,094,400 KiB data partition (reserve 624,066,560 B), debug APK 116 MB with 187 MB of libraries and a big dex (about 100 MB of optimised code).
+        // `adb install` (no copy of ours on the disk) passed at 1050 MB free and failed at 1000 MB.
+        val reserve = 624_066_560L
+        val atOneGig = UpdateLogic.storagePlan(116 * mb, 187 * mb, freeBytes = 1000 * mb, reserveBytes = reserve, marginBytes = 100 * mb)
+        val atPass = UpdateLogic.storagePlan(116 * mb, 187 * mb, freeBytes = 1050 * mb, reserveBytes = reserve, marginBytes = 100 * mb)
+        assertFalse(atOneGig.fitsKeeping); assertTrue(atPass.fitsKeeping)
+    }
+
+    @Test fun storagePlanWithoutNativeLibraries() { // the WebView build: a 2 MB app on a small partition
+        val mb = 1L shl 20
+        val plan = UpdateLogic.storagePlan(2 * mb, 0, freeBytes = 400 * mb, reserveBytes = 300 * mb)
         assertTrue(plan.fitsKeeping); assertEquals(0L, plan.shortBy)
     }
 }
