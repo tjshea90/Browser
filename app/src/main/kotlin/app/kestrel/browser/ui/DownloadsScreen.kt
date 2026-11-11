@@ -38,7 +38,7 @@ class DownloadsScreen(ctx: Context, private var pal: Pal, private val l: Listene
     private val scroller = ScrollView(ctx)
     private val list = LinearLayout(ctx)
     private val empty = LinearLayout(ctx)
-    private var signature = ""
+    private var signature = NONE
     private val rows = HashMap<Long, Row>()
     private val listener: () -> Unit = { render() }
 
@@ -65,10 +65,10 @@ class DownloadsScreen(ctx: Context, private var pal: Pal, private val l: Listene
         empty.addView(label(ctx, "Files you download appear here. Big ones can be paused and picked up again, even after the app was closed.", 14f, pal.muted).apply { gravity = Gravity.CENTER; includeFontPadding = true })
     }
 
-    override fun onAttachedToWindow() { super.onAttachedToWindow(); DownloadController.addListener(listener); signature = ""; render() }
+    override fun onAttachedToWindow() { super.onAttachedToWindow(); DownloadController.init(context); DownloadController.addListener(listener); signature = NONE; render() }
     override fun onDetachedFromWindow() { DownloadController.removeListener(listener); super.onDetachedFromWindow() }
 
-    fun refresh() { signature = ""; render() }
+    fun refresh() { signature = NONE; render() }
 
     private fun clearFinished() {
         l.confirm("Clear the finished list?", "The downloaded files stay on your tablet; only this list is cleared.", "Clear") { DownloadController.clearFinished() }
@@ -97,6 +97,8 @@ class DownloadsScreen(ctx: Context, private var pal: Pal, private val l: Listene
         rows[v.id] = r
         list.addView(r.root, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = context.dp(10) })
     }
+
+    private companion object { const val NONE = "\u0000" } // "nothing drawn yet": differs from the signature of an EMPTY list
 
     private inner class Row(ctx: Context, v: DownloadView) {
         val root = LinearLayout(ctx)

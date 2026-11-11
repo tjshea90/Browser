@@ -163,6 +163,7 @@ open class BrowserActivity : Activity(), DockListener {
             window.navigationBarColor = pal.chromeBg
         }
         buildUi()
+        DownloadController.init(this) // restores interrupted downloads (they come back paused) so the list and the menu are right from the start
         UpdateManager.init(this)
         UpdateManager.addListener(updateListener)
         dock.setMenuDot(UpdateManager.pending())
