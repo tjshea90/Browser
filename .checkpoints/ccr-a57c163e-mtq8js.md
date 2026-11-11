@@ -1,13 +1,13 @@
-# CHECKPOINT 513 — read me first, then TASKS.md
+# CHECKPOINT 523 — read me first, then TASKS.md
 
-**Written:** 2026-11-11T21:15:54Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `6d529ad` (this checkpoint is the commit after it)
+**Written:** 2026-11-11T21:38:50Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `776e53c` (this checkpoint is the commit after it)
 
 ## Just done
-alpha11 DISPATCHED: run 43101503028 (android.yml, head 6d529ad, 21:15Z). Gate green (331 tests). Also fixed a real engine race found by CI-like flake: a checkpoint snapshot taken before an fsync could overwrite the COMPLETED row with an older VERIFYING one (Engine.saveSnapshot sequence numbers). Docs: ARCHITECTURE sections for background downloads + video downloader; TASKS V4/V5 evidence
+alpha11 SHIPPED and recorded: https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.2.0-alpha11 (run 43101503028 green, APK 92.66 MB, BUILDLOG recorded). In progress for alpha12: TS->MP4 conversion (core StreamFinisher hook + tests done; app/download/Remuxer.kt works on the emulator for video, AAC arrives from Android's TS extractor as ADTS-bundled samples: now split into raw frames with an exact audio clock; previous attempt failed 'writeSampleData returned an error' because audio times stepped back), sniffer now attributes media to the tab with the exact page URL (extension sends the top-level address per tab). Debug logging callback in StreamEngine
 
 ## Do this next
-1) wait for run 43101503028 (list_workflow_runs / get_workflow_run), then mcp__github__get_release_by_tag kestrel-g-v0.2.0-alpha11, then bash tools/record-release.sh kestrel-g-v0.2.0-alpha11 with the note saved in the scratchpad note11.txt (same text as the dispatch), ckpt, reply to owner with the Release link on its own line 2) meanwhile P2: TS->MP4 conversion (StreamFinisher hook in StreamEngine.finish + Android Remuxer with MediaExtractor/MediaMuxer, joined TS staged via a DEST_STAGING file sink, fallback keep .ts), test on emulator with the ffmpeg TS streams 3) then V7: D1 in-extension blocking engine per research/ADBLOCK_ENGINE.md section 3 and code review of hot paths
+1) rebuild debug apk, retest TS->MP4 on emulator (page hlsc.html title 'Kestrel HLS C' is taken: use a NEW page title per test because deleting Download files with adb rm leaves stale MediaStore rows that make inserts fail), verify with ffprobe: audio packets ~1724 raw frames (first bytes not ff f1), decode ok 2) if audio is right: gate + keep in alpha12; if not, disable the finisher (pass null in DownloadController) and ship .ts only 3) then DASH parser (P3) or V7 speed work: D1 in-extension blocking per research/ADBLOCK_ENGINE.md section 3, ship:ship-code-reviewer agents on hot paths 4) ship alpha12 (versionCode 111 / 0.2.0-alpha12, bash tools/sync-ext-version.sh)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ alpha11 DISPATCHED: run 43101503028 (android.yml, head 6d529ad, 21:15Z). Gate gr
 
 ## Last ten checkpoints
 ```
+  5d55a7b ckpt 513: alpha11 DISPATCHED: run 43101503028 (android.yml, head 6d529ad, 21:15Z). Gate 
   6d529ad ckpt 512: gated kestrel-g-v0.2.0-alpha11 (gecko code 110) and pushed it: handoff self-te
   db137ac ckpt 509: V4/V5 P1 VERIFIED on the emulator: HLS streams via the Download video sheet. M
   696b6f0 ckpt 501: V4 progress: P0 (direct files) WORKS on the emulator (sniffer in kestrel-shiel
@@ -25,5 +26,7 @@ alpha11 DISPATCHED: run 43101503028 (android.yml, head 6d529ad, 21:15Z). Gate gr
   d69353d ckpt 475: gated kestrel-g-v0.2.0-alpha10 (gecko code 109) and pushed it: handoff self-te
   80e35c0 ckpt 473: V3 verified on the emulator (idle swipe-away = all processes end, active downl
   9b84b98 ckpt 468: Request 8 first batch CODE (compiles, tests+lint green, NOT yet run on the emu
-  ded35f9 ckpt 454: Owner request 8 recorded in TASKS.md (V0-V7: background downloads + notificati
 ```
+
+(8 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
