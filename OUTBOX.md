@@ -295,3 +295,41 @@
 > - The Cromite side-by-side test.
 > - A backup/restore feature, only if updates still fail after alpha9.
 <!-- sha:5bca6ce07171 -->
+
+## 2026-11-11T20:16:30Z
+> Alpha10 is out. Here's where things stand, then I carry on with the video downloader.
+>
+> **Kestrel G alpha10** — built and signed by GitHub Actions, run green:
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.2.0-alpha10
+>
+> What's in it, and what I did and didn't check (all testing was on the Android 10 emulator, not your tablet):
+>
+> - **Background downloads at full speed.** The update now downloads through the same engine as files. A foreground service plus a wake lock and a Wi-Fi lock keep it moving with the screen off. I saw it keep going with the screen off, using several connections at once.
+> - **Notifications.** There are notifications for update available, downloading, ready to install (with an Install button), failed, and not enough space. Every download gets Pause/Cancel, and Retry on failure.
+> - **Android 10 limit.** It cannot install silently, so the system "Install?" screen is mandatory. The "ready to install" notification takes you straight to it, so it's one tap.
+> - **Quit is gone from the menu; swipe the app away instead.**
+>   - With nothing running, the swipe ended all four processes and none came back.
+>   - With a download running, the app stayed alive, finished the file, then exited by itself about 7 seconds later.
+>   - While a download runs after the swipe, the browser engine stays in memory. That is a real RAM cost. A download-only process would fix it; I wrote that down as V3b.
+> - **Neon pulse.** I can't confirm it shows on your tablet. If it still doesn't, Settings → Appearance now shows "The glow right now" with the reason it is holding, plus a "Test the pulse (10 s)" button.
+> - **Notification tap.** Tapping a notification now closes Settings first, so the Updates sheet isn't hidden behind it.
+>
+> The first alpha10 build failed in CI. A flaky test caught a race in the test itself, not in the app. I fixed it, ran the full suite under heavy CPU load, and the second run was green.
+>
+> **Video downloader (in progress, alpha11).** I couldn't look inside InShot's app, only its store descriptions, so its internals are unconfirmed. The standard technique is to watch the page's network traffic for video files and playlists and offer them. I'm building that, with the research saved in `research/VIDEO_DOWNLOADER.md`. Long-press a video, tap "Download video", and pick a quality listed with its name and size. Plain MP4/WebM files come first, then HLS streams.
+>
+> What will not work, so you aren't surprised:
+> - DRM video (Netflix, Disney+, Prime).
+> - YouTube.
+> - Live streams.
+> - Links the site has already expired.
+>
+> **Still open:**
+> - Speed and stutter review (alpha12).
+> - The in-extension blocking engine (D1).
+> - Your tablet checks: neon pulse, the three scroll feels (Compare 3 feels), and Settings → Storage.
+> - Decisions SEC-1, LIC-1, UI-2 and UI-3.
+>
+> Now wiring the sniffer into the browser: tab state, long-press, menu entry and the quality sheet.
+<!-- sha:2d37a9419a01 -->
