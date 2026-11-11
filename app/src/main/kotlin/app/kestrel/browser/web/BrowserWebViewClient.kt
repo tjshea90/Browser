@@ -45,14 +45,27 @@ class BrowserWebViewClient(
             if (s.shieldsUp && s.blockAds) RedirectUnwrapper.unwrap(next)?.let { next = it }
             val prep = NavPolicy.prepare(prefs, next, tab)
             if (prep.url != url) {
+                // A server that answers https://x/ with a redirect back to http://x/ would loop forever (upgrade -> redirect -> upgrade ...):
+                // seeing our own upgraded target bounce back means that site has no usable HTTPS.
+                val up = tab.upgradedTo
+                if (request.isRedirect && up != null && prep.upgradedFrom != null && sameHostAndPort(up, url) && handleHttpsUnavailable(view, up)) return true
                 tab.upgradedFrom = prep.upgradedFrom
                 tab.upgradedTo = if (prep.upgradedFrom != null) prep.url else null
                 load(view, prep.url)
                 return true
             }
+            // shouldInterceptRequest is NOT called for server-side redirect targets, so the landing page of a link shortener / tracking
+            // redirector / "example.com -> www.other.com" never had its host, Shields or malware verdict looked at. Do it here.
+            if (request.isRedirect && interceptor.redirectedMainFrame(tab, url)) return true
             return false
         }
-        return host.externalLaunch(tab, url, request.hasGesture())
+        return try { host.externalLaunch(tab, url, request.hasGesture()) } catch (e: Exception) { true } // never let a page's link crash the UI thread
+    }
+
+    private fun sameHostAndPort(a: String, b: String): Boolean {
+        val pa = UrlParts.parse(a) ?: return false
+        val pb = UrlParts.parse(b) ?: return false
+        return pa.host == pb.host
     }
 
     private fun load(view: WebView, url: String) {
@@ -64,7 +77,10 @@ class BrowserWebViewClient(
     // ------------------------------------------------------------------ page lifecycle
 
     override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-        tab.url = if (url == "about:blank" && tab.url.isNotEmpty()) tab.url else url
+        // The address bar shows only COMMITTED pages (doUpdateVisitedHistory below). A page-initiated navigation that never commits
+        // (black-holed port, endless load) must not make the bar claim we are already on a lookalike address. Navigations the user
+        // starts set tab.url themselves before loading.
+        if (tab.url.isEmpty() && url != "about:blank") tab.url = url
         tab.loading = true
         tab.progress = maxOf(tab.progress, 5)
         tab.resetPageCounters()
@@ -78,6 +94,8 @@ class BrowserWebViewClient(
     }
 
     override fun onPageCommitVisible(view: WebView, url: String) {
+        // The upgraded page is up. A later hiccup (flaky hotspot on Reload) is a network problem, not proof that the site has no HTTPS.
+        if (tab.error == null) { tab.upgradedFrom = null; tab.upgradedTo = null }
         CosmeticInjector.inject(view, tab)
         ScriptInjector.inject(view, tab, prefs)
     }
@@ -165,7 +183,7 @@ class BrowserWebViewClient(
         SslError.SSL_NOTYETVALID -> "The site's security certificate is not valid yet (check this tablet's date and time)."
         SslError.SSL_IDMISMATCH -> "The certificate was issued for a different website name."
         // This tablet gets no system updates, so its list of trusted certificate authorities stops at its last update.
-        SslError.SSL_UNTRUSTED -> "The certificate was not issued by an authority this tablet trusts. The tablet's built-in list of authorities is old, so a very new site can fail this way even when it is fine."
+        SslError.SSL_UNTRUSTED -> "The certificate was not issued by an authority this tablet trusts. On a hotspot this can mean someone is intercepting the connection. The tablet's list of trusted authorities is also old, so a brand-new site can fail this way, but do not continue on any page where you sign in or pay."
         SslError.SSL_DATE_INVALID -> "The certificate's dates are invalid (check this tablet's date and time)."
         else -> "The site's security certificate is invalid."
     }

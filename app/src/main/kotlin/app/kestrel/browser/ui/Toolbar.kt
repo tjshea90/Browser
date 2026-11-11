@@ -125,9 +125,11 @@ class Toolbar(ctx: Context, private val pal: Pal, private val l: ToolbarListener
         val url = tab?.url ?: return ""
         if (url.isEmpty()) return ""
         val p = UrlParts.parse(url) ?: return url
-        val hostShown = if (p.host.startsWith("www.")) p.host.substring(4) else p.host
+        // A non-default port is part of the site's identity (https://bank.example:8443 is not https://bank.example): always show it.
+        val port = if (p.port > 0 && !(p.scheme == "https" && p.port == 443) && !(p.scheme == "http" && p.port == 80)) ":${p.port}" else ""
+        val hostShown = (if (p.host.startsWith("www.")) p.host.substring(4) else p.host) + port
         val rest = (if (p.path == "/") "" else p.path) + (p.query?.let { "?$it" } ?: "")
-        return if (p.scheme == "https") hostShown + rest else "${p.scheme}://${p.host}${p.path}${p.query?.let { "?$it" } ?: ""}"
+        return if (p.scheme == "https") hostShown + rest else "${p.scheme}://${p.host}$port${p.path}${p.query?.let { "?$it" } ?: ""}"
     }
 
     fun fullUrlForEditing(tab: Tab?): String = tab?.url ?: ""

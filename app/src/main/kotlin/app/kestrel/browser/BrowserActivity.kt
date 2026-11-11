@@ -461,6 +461,9 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
     }
 
     private fun navigateTo(tab: Tab, url: String, savedCopy: Boolean = false) {
+        // Single choke point for every way a URL reaches a tab (omnibox, links, menus, intents, session): only web pages. Long-press menus feed
+        // page-controlled text (javascript:, data:, file:///android_asset/...) in here, which the omnibox allow-list never saw.
+        if (!url.startsWith("http://", ignoreCase = true) && !url.startsWith("https://", ignoreCase = true)) { toast("Can't open that kind of address"); return }
         val prep = NavPolicy.prepare(prefs, url, tab)
         loadUrl(tab, prep.url, prep.upgradedFrom, savedCopy)
     }
@@ -966,7 +969,10 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQ_FILE) {
-            pendingFiles?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data))
+            // Only content:// results are acceptable. The picker is another app: a rogue one could answer with file:///data/data/<this app>/...
+            // and the page would then upload the browser's own private files.
+            val picked = WebChromeClient.FileChooserParams.parseResult(resultCode, data)?.filter { it.scheme == "content" }?.toTypedArray()
+            pendingFiles?.onReceiveValue(picked?.takeIf { it.isNotEmpty() })
             pendingFiles = null
         }
     }
@@ -1127,8 +1133,9 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
 
     private fun linkMenu(tab: Tab, url: String, imageUrl: String? = null) {
         val labels = ArrayList<String>(); val acts = ArrayList<() -> Unit>()
-        labels.add("Open in new tab"); acts.add { val t = newTabInternal(tab); show(t); navigateTo(t, url) }
-        if (!isPrivate) { labels.add("Open in private window"); acts.add { startActivity(Intent(this, PrivateActivity::class.java).setAction(Intent.ACTION_VIEW).setData(Uri.parse(url))) } }
+        val web = url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)
+        if (web) { labels.add("Open in new tab"); acts.add { val t = newTabInternal(tab); show(t); navigateTo(t, url) } }
+        if (web && !isPrivate) { labels.add("Open in private window"); acts.add { startActivity(Intent(this, PrivateActivity::class.java).setAction(Intent.ACTION_VIEW).setData(Uri.parse(url))) } }
         labels.add("Copy link address"); acts.add { copy(url) }
         labels.add("Share link"); acts.add { share(url) }
         if (imageUrl != null) { labels.add("Download image"); acts.add { startDownload(imageUrl, null, null, null, tab) } }
@@ -1136,10 +1143,14 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
     }
 
     private fun imageMenu(tab: Tab, url: String) {
-        val labels = arrayOf("Open image in new tab", "Download image", "Copy image address")
-        AlertDialog.Builder(this).setTitle(url.take(80)).setItems(labels) { _, i ->
-            when (i) { 0 -> { val t = newTabInternal(tab); show(t); navigateTo(t, url) }; 1 -> startDownload(url, null, null, null, tab); 2 -> copy(url) }
-        }.show()
+        val web = url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)
+        val labels = ArrayList<String>(); val acts = ArrayList<() -> Unit>()
+        if (web) {
+            labels.add("Open image in new tab"); acts.add { val t = newTabInternal(tab); show(t); navigateTo(t, url) }
+            labels.add("Download image"); acts.add { startDownload(url, null, null, null, tab) }
+        }
+        labels.add("Copy image address"); acts.add { copy(url) } // a data: image can only be copied, never opened or downloaded from here
+        AlertDialog.Builder(this).setTitle(url.take(80)).setItems(labels.toTypedArray()) { _, i -> acts[i]() }.show()
     }
 
     private fun copy(text: String) {

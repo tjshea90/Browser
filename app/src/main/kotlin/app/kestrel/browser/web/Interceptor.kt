@@ -51,6 +51,15 @@ class Interceptor(private val host: TabHost, private val prefs: Prefs) {
         return Neutered.forType(type)
     }
 
+    /**
+     * UI-thread entry for a main-frame URL reached by a server-side redirect (see BrowserWebViewClient.shouldOverrideUrlLoading).
+     * Refreshes the per-page state and applies the malware check to the landing host. True = do not load it.
+     */
+    fun redirectedMainFrame(tab: Tab, url: String): Boolean {
+        if (Engine.peek() == null) return false // lists still loading at cold start: do not block the UI thread waiting for them
+        return mainFrame(tab, url) != null
+    }
+
     private fun mainFrame(tab: Tab, url: String): WebResourceResponse? {
         val parts = UrlParts.parse(url)
         val h = parts?.host
