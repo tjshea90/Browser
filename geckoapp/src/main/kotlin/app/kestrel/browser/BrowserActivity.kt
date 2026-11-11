@@ -57,6 +57,8 @@ import app.kestrel.browser.ui.SettingsView
 import app.kestrel.browser.ui.ShieldsPanel
 import app.kestrel.browser.ui.SuggestionList
 import app.kestrel.browser.ui.TabGrid
+import app.kestrel.browser.ui.UpdatePanel
+import app.kestrel.browser.update.UpdateManager
 import app.kestrel.browser.ui.ThumbStore
 import app.kestrel.browser.ui.BottomDock
 import app.kestrel.browser.ui.DockListener
@@ -140,6 +142,7 @@ open class BrowserActivity : Activity(), DockListener {
     @Volatile internal var sessionRestored = false // false until restore() ran: saving earlier could replace the saved session with a one-tab placeholder
 
     private val netListener: () -> Unit = { onNetworkChanged() }
+    private val updateListener: () -> Unit = { if (::dock.isInitialized) dock.setMenuDot(UpdateManager.pending()) }
     private val saveRunnable = Runnable { saveSessionNow() }
 
     // ================================================================== lifecycle
@@ -156,6 +159,9 @@ open class BrowserActivity : Activity(), DockListener {
             window.navigationBarColor = pal.chromeBg
         }
         buildUi()
+        UpdateManager.init(this)
+        UpdateManager.addListener(updateListener)
+        dock.setMenuDot(UpdateManager.pending())
         installBackHandling()
         NetworkMonitor.addListener(netListener)
         db = BrowserDb(this)
@@ -194,6 +200,8 @@ open class BrowserActivity : Activity(), DockListener {
         if (t != null && !t.isNewTab && t.session == null) attachContent(t) // hibernated while we were in the background: bring it back
         t?.session?.setActive(true)
         refreshNtpIfShown()
+        // once a day, when the app comes to the front: one tiny conditional request (an ETag makes "nothing new" free). Never in the background.
+        UpdateManager.maybeAutoCheck(this, prefs.autoUpdateCheck, NetworkMonitor.state == NetworkMonitor.State.ONLINE)
     }
 
     override fun onPause() {
@@ -211,6 +219,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     override fun onDestroy() {
+        UpdateManager.removeListener(updateListener)
         kbProbe.detach()
         NetworkMonitor.removeListener(netListener)
         Io.main.removeCallbacks(saveRunnable)
@@ -799,11 +808,13 @@ open class BrowserActivity : Activity(), DockListener {
 
     // ---- menu
     private object M { const val REFRESH = 14; const val DIAG = 15; const val NEW = 1; const val PRIVATE = 2; const val FIND = 3; const val SHARE = 4; const val BOOKMARK = 5; const val BOOKMARKS = 6; const val HISTORY = 7
-        const val DOWNLOADS = 8; const val DESKTOP = 9; const val IMAGES = 10; const val PRINT = 11; const val SETTINGS = 12; const val QUIT = 13; const val CLOSE_ALL = 16 }
+        const val DOWNLOADS = 8; const val UPDATE = 17; const val DESKTOP = 9; const val IMAGES = 10; const val PRINT = 11; const val SETTINGS = 12; const val QUIT = 13; const val CLOSE_ALL = 16 }
 
     override fun onMenu(anchor: View) {
         val t = current
         val items = ArrayList<MenuItemSpec>()
+        val updateHot = UpdateManager.pending()
+        if (updateHot) items.add(MenuItemSpec(M.UPDATE, "Update available", null, R.drawable.ic_update, accent = true)) // first, so it is noticed
         items.add(MenuItemSpec(M.NEW, "New tab", null, R.drawable.ic_plus))
         items.add(MenuItemSpec(M.PRIVATE, "New private tab", null, R.drawable.ic_mask))
         if (t != null && !t.isNewTab) {
@@ -817,6 +828,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (t != null && !t.isNewTab) items.add(MenuItemSpec(M.REFRESH, "Refresh screen", null, R.drawable.ic_refresh))
         if (!isPrivate) items.add(MenuItemSpec(M.SETTINGS, "Settings", null, R.drawable.ic_settings))
         items.add(MenuItemSpec(M.DIAG, "Diagnostics", null, R.drawable.ic_pulse))
+        if (!updateHot) items.add(MenuItemSpec(M.UPDATE, "Updates", null, R.drawable.ic_update))
         if (tabs.size > 1) items.add(MenuItemSpec(M.CLOSE_ALL, "Close all tabs", null, R.drawable.ic_close))
         items.add(MenuItemSpec(M.QUIT, "Quit", null, R.drawable.ic_power))
         hideKeyboard()
@@ -829,6 +841,7 @@ open class BrowserActivity : Activity(), DockListener {
         when (id) {
             M.REFRESH -> refreshScreen("menu")
             M.DIAG -> showDiagnostics()
+            M.UPDATE -> showUpdates()
             M.NEW -> newTabAndShow()
             M.PRIVATE -> newTabAndShow(true)
             M.FIND -> openFind()
@@ -851,6 +864,23 @@ open class BrowserActivity : Activity(), DockListener {
             M.CLOSE_ALL -> { for (x in tabs.toList()) { x.session?.let { s -> if (geckoView.session === s) geckoView.releaseSession(); try { s.close() } catch (e: Exception) { /* ignore */ } }; x.session = null }; tabs.clear(); current = null; show(newTabInternal()) }
             M.QUIT -> quit()
         }
+    }
+
+    /** The Updates sheet (GitHub Releases): check, download (asks first on a metered link), install through Android's installer. */
+    private fun showUpdates() {
+        val panel = UpdatePanel(this, pal, prefs, object : UpdatePanel.Actions {
+            override fun openPage(url: String) { sheet.dismiss(); val t = newTabInternal(null, isPrivate); show(t); navigateTo(t, url) }
+            override fun download() {
+                val o = UpdateManager.state.offer ?: return
+                val size = app.kestrel.core.update.UpdateLogic.formatSize(o.size)
+                if (NetworkMonitor.metered) askYesNo("Download over a metered connection?", "This update is $size and the connection looks metered (a phone hotspot). Download it now?", "Download", "Not now") { yes -> if (yes) UpdateManager.download(this@BrowserActivity) }
+                else UpdateManager.download(this@BrowserActivity)
+            }
+            override fun openInstallSettings() {
+                try { startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))) } catch (e: Exception) { toast("Open Settings > Apps > Special access > Install unknown apps") }
+            }
+        })
+        sheet.show("Updates", panel)
     }
 
     private fun share(url: String) {
