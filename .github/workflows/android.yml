@@ -1,6 +1,8 @@
 # CI for Kestrel. NOTE: written in the build sandbox and NOT yet exercised on GitHub's runners - expect to fix small things on the first run.
 name: android
 
+# Runs only on milestone/release checkpoints and on demand (Actions tab -> Run workflow). The hooks push an autosave commit every
+# couple of minutes while Claude works; building each one would waste runner minutes.
 on:
   push:
     branches: ["**"]
@@ -8,6 +10,7 @@ on:
 
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'checkpoint(milestone') || contains(github.event.head_commit.message, 'checkpoint(release')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
