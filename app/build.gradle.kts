@@ -21,8 +21,8 @@ android {
         applicationId = "app.kestrel.browser"
         minSdk = 29            // the tablet is Android 10 (API 29); anything newer must be guarded
         targetSdk = 36         // also runs on Android 16 (edge-to-edge + predictive back handled in code)
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.1"
     }
 
     signingConfigs {

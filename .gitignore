@@ -32,6 +32,7 @@ node_modules/
 *.log
 .DS_Store
 
-# Kestrel G (Firefox engine) APKs are ~92 MB: deliver as attachments, never commit (GitHub rejects files over 100 MB)
-dist/*gecko*
+# APKs are built by GitHub Actions and published as Release assets: never commit one (Kestrel G is ~92 MB; GitHub rejects files over 100 MB)
+dist/*.apk
+dist/*.sha256
 geckoapp/build/
