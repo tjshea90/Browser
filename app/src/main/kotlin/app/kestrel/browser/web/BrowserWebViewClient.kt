@@ -87,7 +87,7 @@ class BrowserWebViewClient(
         tab.progress = 100
         tab.canGoBack = view.canGoBack()
         tab.canGoForward = view.canGoForward()
-        if (tab.cacheFirstOnce) { tab.cacheFirstOnce = false; WebViewFactory.configure(view, tab, prefs) }
+        if (tab.cacheFirstOnce || tab.savedCopyOnce) { tab.cacheFirstOnce = false; tab.savedCopyOnce = false; WebViewFactory.configure(view, tab, prefs) }
         CosmeticInjector.verify(view, tab)
         ScriptInjector.verify(view, tab, prefs)
         host.pageFinished(tab)
@@ -104,10 +104,18 @@ class BrowserWebViewClient(
 
     override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
         if (!request.isForMainFrame) return
-        val failing = request.url.toString()
-        if (httpsFallback(view, failing, error.errorCode)) return
+        mainFrameFailed(view, request.url.toString(), error.errorCode, error.description?.toString() ?: "")
+    }
+
+    /** The page itself (not a subresource) failed to load. Split out of [onReceivedError] because WebResourceError cannot be built in a JVM test. */
+    internal fun mainFrameFailed(view: WebView, failing: String, code: Int, description: String) {
+        if (tab.savedCopyOnce) { // "Open saved copy" found nothing in the cache: back to normal loading, keep the error page up
+            tab.savedCopyOnce = false
+            WebViewFactory.configure(view, tab, prefs)
+            host.toast("No saved copy of this page")
+        } else if (httpsFallback(view, failing, code)) return
         tab.loading = false
-        tab.error = ErrorScreen.Network(failing, error.errorCode, error.description?.toString() ?: "")
+        tab.error = ErrorScreen.Network(failing, code, description)
         host.errorChanged(tab)
     }
 
@@ -115,7 +123,7 @@ class BrowserWebViewClient(
     private fun httpsFallback(view: WebView, failing: String, code: Int): Boolean {
         val up = tab.upgradedTo ?: return false
         if (!sameDocument(up, failing)) return false
-        if (NetworkMonitor.state != NetworkMonitor.State.ONLINE) return false // hotspot problem, not an HTTPS problem
+        if (NetworkMonitor.state == NetworkMonitor.State.OFFLINE) return false // no link at all: not an HTTPS problem
         val https = code == ERROR_CONNECT || code == ERROR_TIMEOUT || code == ERROR_FAILED_SSL_HANDSHAKE || code == ERROR_IO
         if (!https) return false
         return handleHttpsUnavailable(view, up)

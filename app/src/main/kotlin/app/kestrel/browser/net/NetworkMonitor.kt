@@ -8,14 +8,21 @@ import app.kestrel.browser.Io
 
 /**
  * Connectivity as the tablet sees it: this device lives on a phone hotspot, so the interesting states are
- * "no Wi-Fi at all" (hotspot off / out of range), "Wi-Fi up but the hotspot has no internet" (phone has no data/signal), and online.
+ * "no Wi-Fi at all" (hotspot off / out of range), "Wi-Fi up but Android has not confirmed internet" (phone has no data/signal, OR the carrier
+ * blocks Google's connectivity-check URL while everything else works, OR the few seconds after a reconnect), and online.
  * Everything is delivered on the main thread.
+ *
+ * RULE: only [State.OFFLINE] may change how pages load ([cacheFirst]). [State.NO_INTERNET] is a guess, so it only changes wording and
+ * offers an "Open saved copy" button; a working hotspot that fails Android's connectivity check must still browse normally and fresh.
  */
 object NetworkMonitor {
     enum class State { OFFLINE, NO_INTERNET, ONLINE }
 
     @Volatile var state = State.ONLINE
         private set
+
+    /** Serve pages from the HTTP cache (even stale) first: true only when there is no network with INTERNET capability at all. */
+    val cacheFirst: Boolean get() = state == State.OFFLINE
     @Volatile var metered = true // assume metered until the network says otherwise: a hotspot almost always is
         private set
 
@@ -46,12 +53,14 @@ object NetworkMonitor {
         callback = null
     }
 
-    private fun update(caps: NetworkCapabilities?) {
-        val newState = when {
-            caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) -> State.OFFLINE
-            !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) -> State.NO_INTERNET
-            else -> State.ONLINE
-        }
+    internal fun classify(caps: NetworkCapabilities?): State = when {
+        caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) -> State.OFFLINE
+        !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) -> State.NO_INTERNET
+        else -> State.ONLINE
+    }
+
+    internal fun update(caps: NetworkCapabilities?) {
+        val newState = classify(caps)
         val newMetered = caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
         if (newState == state && newMetered == metered) return
         state = newState

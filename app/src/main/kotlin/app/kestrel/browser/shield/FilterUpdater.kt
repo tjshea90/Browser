@@ -102,10 +102,14 @@ object FilterUpdater {
 
     fun cancel() { cancelled = true }
 
+    /**
+     * A network with INTERNET capability exists. Deliberately NOT requiring NET_CAPABILITY_VALIDATED: a working hotspot whose carrier blocks Google's
+     * connectivity check never gets that flag, and the download itself fails safely (HTTPS only, HTML/oversized bodies rejected) if the link is dead.
+     */
     fun isOnline(ctx: Context): Boolean {
         val cm = ctx.getSystemService(ConnectivityManager::class.java) ?: return false
         val caps = cm.getNetworkCapabilities(cm.activeNetwork ?: return false) ?: return false
-        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
     fun isMetered(ctx: Context): Boolean {

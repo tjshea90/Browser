@@ -19,6 +19,7 @@ import app.kestrel.core.filter.Category
 class ErrorView(ctx: Context, private val pal: Pal, private val l: Listener) : ScrollView(ctx) {
     interface Listener {
         fun retry()
+        fun openSavedCopy()
         fun backToSafety()
         fun proceedUnsafeSsl(host: String)
         fun continueHttp(httpUrl: String, host: String)
@@ -61,7 +62,9 @@ class ErrorView(ctx: Context, private val pal: Pal, private val l: Listener) : S
             is ErrorScreen.Network -> {
                 primary("Try again") { l.retry() }
                 val net = NetworkMonitor.state
-                if (net == NetworkMonitor.State.OFFLINE) secondary("Wi-Fi settings") { l.openWifiSettings() }
+                // OFFLINE already tried the saved copy first; for "Android says no internet" it is the user's call (the guess may be wrong).
+                if (net == NetworkMonitor.State.NO_INTERNET) secondary("Open saved copy") { l.openSavedCopy() }
+                if (net != NetworkMonitor.State.ONLINE) secondary("Wi-Fi settings") { l.openWifiSettings() }
             }
             is ErrorScreen.Ssl -> {
                 primary("Back to safety") { l.backToSafety() }
@@ -110,8 +113,8 @@ class ErrorView(ctx: Context, private val pal: Pal, private val l: Listener) : S
                 detail,
             )
             NetworkMonitor.State.NO_INTERNET -> Triple(
-                "The hotspot has no internet",
-                "The tablet is connected to Wi-Fi, but nothing is coming through. Check that your phone has mobile data and signal and that the hotspot is on. This page reloads by itself when the connection comes back.",
+                "Can't reach this page",
+                "The tablet is connected to Wi-Fi, but Android says no internet is getting through. Check that your phone has mobile data and signal and that its hotspot is on. If other pages load, this site may simply be down. This page reloads by itself when Android confirms the connection.",
                 detail,
             )
             NetworkMonitor.State.ONLINE -> when (e.code) {

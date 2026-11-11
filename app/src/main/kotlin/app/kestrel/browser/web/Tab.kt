@@ -38,6 +38,7 @@ class Tab(@JvmField val id: Long) {
     var error: ErrorScreen? = null
     var pendingLoad: String? = null // restored from the session but not loaded yet (lazy: no network at startup)
     var cacheFirstOnce = false // next load prefers the HTTP cache (restoring / hibernated tabs cost no data)
+    var savedCopyOnce = false // next load may ONLY use the HTTP cache ("Open saved copy" on the hotspot-has-no-internet page)
     var isFreshPopup = false // opened by a page: its first navigation is checked against $popup rules
     var openerHost: String? = null
     var upgradedFrom: String? = null // http URL we rewrote to https (needed for the strict fallback screen)

@@ -94,8 +94,13 @@ object WebViewFactory {
         val blockImages = saver.blockImages && !tab.imagesAllowedOnce
         s.blockNetworkImage = blockImages
         s.loadsImagesAutomatically = !blockImages
-        // Offline / hotspot without internet: serve from cache even if stale, so already-visited pages still open.
-        s.cacheMode = if (NetworkMonitor.state == NetworkMonitor.State.ONLINE && !tab.cacheFirstOnce) WebSettings.LOAD_DEFAULT else WebSettings.LOAD_CACHE_ELSE_NETWORK
+        // No network at all: serve from cache even if stale, so already-visited pages still open. NOT keyed off "validated":
+        // a working hotspot that fails Android's connectivity check must keep loading live (see NetworkMonitor).
+        s.cacheMode = when {
+            tab.savedCopyOnce -> WebSettings.LOAD_CACHE_ONLY
+            tab.cacheFirstOnce || NetworkMonitor.cacheFirst -> WebSettings.LOAD_CACHE_ELSE_NETWORK
+            else -> WebSettings.LOAD_DEFAULT
+        }
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, !shields.blockThirdPartyCookies)
         applyDark(wv, prefs, ctx)
     }

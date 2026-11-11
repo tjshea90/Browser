@@ -365,6 +365,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         when {
             state != null -> {
                 tab.savedState = null
+                tab.savedCopyOnce = false
                 tab.cacheFirstOnce = true // restoring costs no data: prefer the HTTP cache
                 tab.shields = Shields.effective(prefs, UrlParts.hostOf(tab.url))
                 WebViewFactory.configure(wv, tab, prefs)
@@ -372,6 +373,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
             }
             pending != null -> {
                 tab.pendingLoad = null
+                tab.savedCopyOnce = false
                 tab.cacheFirstOnce = true
                 tab.shields = Shields.effective(prefs, UrlParts.hostOf(pending))
                 tab.topHost = UrlParts.hostOf(pending)
@@ -458,12 +460,14 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         }
     }
 
-    private fun navigateTo(tab: Tab, url: String) {
+    private fun navigateTo(tab: Tab, url: String, savedCopy: Boolean = false) {
         val prep = NavPolicy.prepare(prefs, url, tab)
-        loadUrl(tab, prep.url, prep.upgradedFrom)
+        loadUrl(tab, prep.url, prep.upgradedFrom, savedCopy)
     }
 
-    private fun loadUrl(tab: Tab, url: String, upgradedFrom: String?) {
+    /** [savedCopy]: load from the HTTP cache only (the flag is per navigation, so any other navigation clears it). */
+    private fun loadUrl(tab: Tab, url: String, upgradedFrom: String?, savedCopy: Boolean = false) {
+        tab.savedCopyOnce = savedCopy
         tab.error = null
         tab.pendingLoad = null
         tab.savedState = null
@@ -497,7 +501,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         }
         tab.error = null
         tab.cacheFirstOnce = false
-        if (target.isNotEmpty()) navigateTo(tab, target)
+        if (target.isNotEmpty()) navigateTo(tab, target) // clears savedCopyOnce via loadUrl
     }
 
     private fun urlFromIntent(i: Intent?): String? {
@@ -895,6 +899,11 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
 
     private val errorListener = object : ErrorView.Listener {
         override fun retry() { current?.let { this@BrowserActivity.retry(it) } }
+        override fun openSavedCopy() {
+            val t = current ?: return
+            val url = (t.error as? ErrorScreen.Network)?.failingUrl ?: return
+            navigateTo(t, url, savedCopy = true)
+        }
         override fun backToSafety() {
             val t = current ?: return
             t.error = null
