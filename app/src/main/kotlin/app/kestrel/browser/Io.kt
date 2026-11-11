@@ -19,6 +19,20 @@ object Io {
         ThreadFactory { r -> Thread(r, "kestrel-io").apply { priority = Thread.NORM_PRIORITY - 2; isDaemon = true } },
     ).also { it.allowCoreThreadTimeOut(true) }
 
+    // Java priority 3 is nice 13: Android puts such a thread in the BACKGROUND scheduler group (a sliver of one core). Right for purges, list compiles and thumbnails,
+    // wrong for what the user is waiting on, so that gets its own lane at normal priority (research/HW_SPEED.md H2).
+    private val fastPool = ThreadPoolExecutor(
+        1, 1, 20, TimeUnit.SECONDS, LinkedBlockingQueue(),
+        ThreadFactory { r -> Thread(r, "kestrel-io-fast").apply { isDaemon = true } },
+    ).also { it.allowCoreThreadTimeOut(true) }
+
+    /** Like [exec] but on the interactive lane: URL-bar suggestions, list reads, the launch-time session read. Keep it short; long work belongs on [exec]. */
+    fun fast(block: () -> Unit) {
+        fastPool.execute {
+            try { block() } catch (t: Throwable) { Log.w(TAG, "io task failed", t) }
+        }
+    }
+
     /** Run [block] on the IO thread; exceptions are logged, never crash the app. */
     fun exec(block: () -> Unit) {
         pool.execute {

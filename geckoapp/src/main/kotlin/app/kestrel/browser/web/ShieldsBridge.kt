@@ -28,7 +28,9 @@ class ShieldsBridge(
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
     // So onMessage only hands the message to ONE worker and returns a GeckoResult at once; the worker parses, decides and completes it (research/FREEZE.md 4.2).
-    private val worker = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "kestrel-shield").apply { isDaemon = true; priority = Thread.NORM_PRIORITY - 1 } }
+    // NORMAL priority on purpose: Java priority 4 (NORM_PRIORITY - 1) is nice 10 and Android moves such a thread into the BACKGROUND scheduler group, where it competes with a
+    // fraction of one core while Gecko holds every request until this thread answers (research/HW_SPEED.md H1).
+    private val worker = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "kestrel-shield").apply { isDaemon = true } }
 
     override fun onMessage(nativeApp: String, message: Any, sender: WebExtension.MessageSender): GeckoResult<Any>? {
         // Only OUR extension's background page may ask (content scripts relay through it with runtime.sendMessage; web pages cannot reach native messaging at all).

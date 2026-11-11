@@ -188,7 +188,7 @@ open class BrowserActivity : Activity(), DockListener {
         show(firstTab)
         val launch = urlFromIntent(intent)
         if (intent?.getBooleanExtra(Notifier.EXTRA_OPEN_DOWNLOADS, false) == true) Io.main.post { showDownloads() }
-        Io.exec {
+        Io.fast {
             val text = try { sessionFile().takeIf { it.isFile }?.readText() } catch (e: Exception) { null }
             val session = SessionCodec.decode(text)
             Io.ui { restore(session, savedInstanceState, launch) }
@@ -816,7 +816,7 @@ open class BrowserActivity : Activity(), DockListener {
             else { suggestions.bind(q, entries); suggestions.visibility = View.VISIBLE; positionSuggestions() }
         }
         if (dbRef == null) { showRows(emptyList()); return }
-        Io.exec { val entries = dbRef.suggest(q, 6); Io.ui { showRows(entries) } }
+        Io.fast { val entries = dbRef.suggest(q, 6); Io.ui { showRows(entries) } }
     }
 
     private fun hideSuggestions() { suggestSeq++; suggestions.visibility = View.GONE; home.hideSuggestions() }
@@ -951,7 +951,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     private fun reloadList() {
         val bm = listIsBookmarks
-        Io.exec {
+        Io.fast {
             val entries: List<Entry> = if (bm) db?.bookmarks() ?: emptyList() else db?.history(300) ?: emptyList()
             Io.ui { listPanel?.bind(if (bm) "Bookmarks" else "History", entries, !bm, if (bm) "No bookmarks yet. Use the menu → Add bookmark." else "No history.") }
         }
@@ -1155,8 +1155,11 @@ open class BrowserActivity : Activity(), DockListener {
         if (!tab.isPrivateTab && tab.error == null && tab.url.startsWith("http")) { val u = withoutUserinfo(tab.url); val ti = tab.title; Io.exec { db?.recordVisit(u, ti) } }
         scheduleSave()
         if (tab === current) updateUi()
-        // a moment after the load: the page has painted, nobody is typing -> take the preview the tab grid will show
-        Io.main.postDelayed({ if (tab === current && !tab.loading && !typing() && tabGrid.visibility != View.VISIBLE) captureThumb(tab) }, 2000)
+        // a while after the load: the page has settled, nobody is typing -> take the preview the tab grid will show. Each capture is a GPU read-back + scale + a disk write, so not
+        // for quick successive navigations (one per 15 s at most) and later than the first paint (research/HW_SPEED.md H3).
+        Io.main.postDelayed({
+            if (tab === current && !tab.loading && !typing() && tabGrid.visibility != View.VISIBLE && SystemClock.uptimeMillis() - tab.thumbAt > 15_000) captureThumb(tab)
+        }, 4000)
     }
 
     /** The engine's content process died (or the system killed it). Come back from the URL; a crash loop (3 in 15 s) shows the error screen instead. */
