@@ -132,7 +132,12 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         a.pageFinished(tab)
     }
 
-    override fun onProgressChange(session: GeckoSession, progress: Int) { tab.progress = progress; a.tabChanged(tab) }
+    override fun onProgressChange(session: GeckoSession, progress: Int) {
+        val before = tab.progress
+        tab.progress = progress
+        // the progress line is redrawn in steps of 3 %: a page load fires this many times, and each used to run the whole UI refresh
+        if (progress >= 100 || progress <= 5 || progress < before || progress / 3 != before / 3) a.tabChanged(tab)
+    }
 
     override fun onSessionStateChange(session: GeckoSession, sessionState: GeckoSession.SessionState) { tab.gecko.state = sessionState }
 

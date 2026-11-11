@@ -25,7 +25,7 @@ class PullChip(ctx: Context, private var pal: Pal) : View(ctx) {
     private var armed = false
 
     init {
-        visibility = GONE
+        visibility = INVISIBLE // not GONE: GONE <-> VISIBLE asks the parent to lay out again at the start and end of every pull
         isClickable = false; isFocusable = false
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         val pad = ctx.dpf(6f)
@@ -45,7 +45,7 @@ class PullChip(ctx: Context, private var pal: Pal) : View(ctx) {
         if (visibility != VISIBLE) visibility = VISIBLE
     }
 
-    fun hide() { if (visibility == VISIBLE) { visibility = GONE; translationY = -size.toFloat() } }
+    fun hide() { if (visibility == VISIBLE) { visibility = INVISIBLE; translationY = -size.toFloat() } }
 
     override fun onDraw(c: Canvas) {
         val bloom = pal.accent and 0x00FFFFFF
