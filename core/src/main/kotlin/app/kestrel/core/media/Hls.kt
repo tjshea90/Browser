@@ -66,6 +66,8 @@ object Hls {
         val targetMs: Long,
         val mediaSequence: Long,
         val problem: Problem?,
+        /** What the parts add up to when the plan did not come from an HLS playlist ("mp4" / "webm" for DASH); null = work it out from the parts. */
+        val format: String? = null,
     ) {
         val durationMs: Long = segments.sumOf { it.durationMs }
         val discontinuities: Int = segments.count { it.discontinuity }
@@ -73,6 +75,7 @@ object Hls {
         val exactBytes: Long = if (segments.isNotEmpty() && segments.all { it.len >= 0 }) segments.sumOf { it.len } + (init?.len?.takeIf { it >= 0 } ?: 0) else -1L
         /** What to save it as: "mp4" for fragmented MP4, "aac" / "mp3" for packed audio, else "ts". */
         val container: String get() {
+            format?.let { return it }
             if (init != null) return "mp4"
             val first = segments.firstOrNull()?.url ?: return "ts"
             return when (MediaSniff.extension(first)) { "aac" -> "aac"; "mp3" -> "mp3"; "mp4", "m4s", "m4v", "cmfv" -> "mp4"; "m4a", "cmfa" -> "m4a"; else -> "ts" }
