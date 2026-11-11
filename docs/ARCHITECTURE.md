@@ -106,3 +106,17 @@ the tablet has, cosmetic filtering is best-effort (injection after commit). Not 
 - **Measuring** (Diagnostics): `web/ScrollTest` drives the bundled offline page `assets/scrolltest/` with 32 swipes through the real touch path and reports compositor frames per second, gaps and a
   verdict; `GlInfo` reads the GPU vendor / renderer / driver through an EGL pbuffer; the pref read-back shows what the engine really has; compositor events (first composite, paint reset) are logged.
 - **While the user scrolls** nothing of ours competes for frames: the neon pulse holds still while a finger is down (+1.5 s), the post-load preview capture (a GPU read-back) waits for 3 s without touch.
+
+## Kestrel G: touch path, pull-to-refresh, scroll feel, neon rules (alpha7)
+- **Touch path**: `web/KestrelGeckoView.onTouchEvent` sends every event to the engine through `onTouchEventForDetailResult` (same effect as `GeckoView.onTouchEvent`, plus an answer) and returns true like the
+  stock view. The answer for the touch-DOWN says what the page does with the touch: `scrollableDirections` (bit 1 = can scroll up, bit 4 = can scroll down: 4 at the top of a page, 5 mid-page),
+  `handledResult` (3 = the page's own script handles it) and `overscrollDirections` (3 = overscroll allowed). **Pull-down-to-refresh** starts only when the page cannot scroll up, its script does not handle the
+  touch, overscroll is allowed, and the finger then moves down (mostly vertical, past the touch slop): `PullListener` reports the distance, `BrowserActivity.pullListener` moves `ui/PullChip` (a view over the
+  page; the page itself never moves) at 0.6x the finger, arms at 64 dp of chip travel (haptic tick), and a release while armed reloads (`pullRefresh`: retry on an error page). Enabled by `pullEnabled`
+  (Settings toggle; not on Home, error pages, fullscreen, sheets, the tab grid, during the Scroll test). The decision logic lives in the view, not in `:core`: a pure `PullTracker` with JVM tests is a follow-up.
+- **Scroll feel** (`GeckoEngine.applyScrollFeel`, live `apz.*` prefs; default level 1 = Smoother): Gecko's display-port multipliers are scaled down by viewport pixels / 250 before use, so Firefox's 1.5 is only
+  +16 % of the screen height on this tablet; Smoother paints about twice the screen around the finger (4.0 / 3.0), shifts it toward the scroll direction (`apz.velocity_bias` 1.0), keeps it 3 minutes after scrolling
+  stops (`apz.displayport_expiry_ms`) and waits 300 ms instead of 600 ms for the page's touch handlers. Diagnostics > Compare 3 feels runs the Scroll test at all three levels. Evidence and caveats: `research/SCROLL.md` "R2 update".
+- **Neon**: not gated on the system animation scale; holds still only for the keyboard being up (not "a field has focus"), the first 3 s of a load, a finger on the screen (1.5 s after a swipe, 0.35 s after a tap),
+  battery-saver, app in the background, 2 min idle on a page, and while a full-screen page (Downloads, Settings, History, Diagnostics) covers it (`Neon.covered`: on the emulator the render thread went from 38 % to 3 %).
+  `Neon.status()` is shown in Diagnostics. Details: `docs/DESIGN.md`.
