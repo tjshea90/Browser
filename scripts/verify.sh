@@ -24,6 +24,13 @@ esac
 
 if run "$GRADLE" "${TASKS[@]}"; then ok "gradle ${TASKS[*]}"; else fail "gradle ${TASKS[*]}"; fi
 
+if [ "$MODE" = full ] && command -v node >/dev/null 2>&1 && [ -d web-tests ]; then
+  # injected-script tests in real headless Chromium (Playwright is preinstalled globally in the sandbox)
+  WLOG="$(mktemp)"
+  if (cd web-tests && node --test --test-timeout=60000 >"$WLOG" 2>&1); then ok "web-tests: $(grep -E '^# pass' "$WLOG") in Chromium"; else fail "web-tests failed:"; grep -E '^not ok|^# fail' "$WLOG" | head; fi
+  rm -f "$WLOG"
+fi
+
 if [ "$MODE" = full ]; then
   BT="$(ls -d "${ANDROID_HOME:-/opt/android-sdk}"/build-tools/* 2>/dev/null | sort -V | tail -1)"
   APK="app/build/outputs/apk/release/app-release.apk"

@@ -79,6 +79,7 @@ class BrowserWebViewClient(
 
     override fun onPageCommitVisible(view: WebView, url: String) {
         CosmeticInjector.inject(view, tab)
+        ScriptInjector.inject(view, tab, prefs)
     }
 
     override fun onPageFinished(view: WebView, url: String) {
@@ -88,6 +89,7 @@ class BrowserWebViewClient(
         tab.canGoForward = view.canGoForward()
         if (tab.cacheFirstOnce) { tab.cacheFirstOnce = false; WebViewFactory.configure(view, tab, prefs) }
         CosmeticInjector.verify(view, tab)
+        ScriptInjector.verify(view, tab, prefs)
         host.pageFinished(tab)
     }
 

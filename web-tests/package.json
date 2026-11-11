@@ -1,0 +1,6 @@
+{
+  "name": "kestrel-web-tests",
+  "private": true,
+  "description": "Runs app/src/main/assets/js/shields.js in real (headless) Chromium. Playwright is preinstalled globally in the build sandbox.",
+  "scripts": { "test": "node --test --test-timeout=60000" }
+}
