@@ -123,6 +123,14 @@ Gotchas: (a) never mix branches for one name: a stale USER value from an old `se
 - bfcache probe: page A links to page B; on Back, `pageshow.persisted === true` means the bfcache is alive (decides whether `max_total_viewers` matters). Also log whether a restored (hibernated) tab hits the network (`PerformanceNavigationTiming.transferSize`).
 - Hidden dev entries: `about:support` (GPU decision log, HW/SW codec table), `about:memory`, `about:processes`, `about:networking` (sockets, DNS, h2/h3), `about:checkerboard`, `about:config`. The toolkit chrome pages are in libxul/omni (aboutSupport/aboutMemory/aboutProcesses/aboutNetworking/aboutCheckerboard `.xhtml/.html`) but whether GV registers/renders them is [N]: try on the emulator APK first. Also a Profiler button (`ProfilerController.startProfiler/stop`); the owner uploads a profile manually if wanted.
 
+**What the numbers decide** (so the first report is actionable):
+- No hardware `video/avc` in `MediaCodecList` => H.264 is software too: the codec plan changes (then compare VP9/AV1 software cost). Hardware `video/x-vnd.on2.vp9` present => Gecko flips VP9-MSE on by itself (Bug 1614958); keep it. `video/av01` hardware absent is expected.
+- avc1 720p30 `powerEfficient=false` or drop rate >5% => decode/compositor path problem: check `onFirstComposite`, try the TextureView A/B (FREEZE.md).
+- Median rAF frame >20 ms on the simple transform test => suspect software WebRender or a slow Mali driver: compare the graphics safe mode (`gfx.webrender.software`) and keep whichever is faster.
+- DNS p50 >150 ms or TRR failures => compare TRR off + Android Private DNS. `nextHopProtocol` never `h3` => UDP is filtered, the TCP backup already limits the cost; no change needed.
+- PSS: content process >300 MB or total >900 MB with two tabs => lower caps (surface cache 64 MB, viewers 1) or hibernate earlier; if `processCount=1` saves <40 MB revert to 2 (arbitrary thresholds [E], tune after the first report). `pageshow.persisted` false => drop `max_total_viewers` from the config.
+**Owner test script** (same steps for Kestrel G, Cromite, and each config version): cold start to first page (stopwatch), claude.ai login screen, Google search + first result, a heavy news article (scroll 10 screens), YouTube 480p for 60 s with the stats-for-nerds codec line, then Diagnostics -> Copy report and paste it into the chat.
+
 ## 5. Prioritised change list (effort S/M/L, risk)
 | P | Change | Effort | Risk |
 |---|---|---|---|
