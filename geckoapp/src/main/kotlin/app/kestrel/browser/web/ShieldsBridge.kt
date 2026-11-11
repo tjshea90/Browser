@@ -188,12 +188,12 @@ class ShieldsBridge(
 
     /** What the extension's engine reports about itself (`st`), shown in Diagnostics. */
     class EngineStats(
-        val generation: Int, val checks: Long, val totalUs: Long, val maxUs: Long, val slow: Long, val perRequestAsks: Long, val errors: Int,
+        val generation: Int, val checks: Long, val totalUs: Long, val maxUs: Long, val slow: Long, val perRequestAsks: Long, val perRequestUs: Long, val errors: Int,
         val loadMs: Long, val imageBytes: Int, val transfers: Int, val off: Boolean, val note: String, val at: Long,
     ) {
         companion object {
             fun from(m: JSONObject) = EngineStats(
-                m.optInt("g"), m.optLong("n"), m.optLong("us"), m.optLong("mx"), m.optLong("sl"), m.optLong("lg"), m.optInt("er"),
+                m.optInt("g"), m.optLong("n"), m.optLong("us"), m.optLong("mx"), m.optLong("sl"), m.optLong("lg"), m.optLong("lu"), m.optInt("er"),
                 m.optLong("ld"), m.optInt("by"), m.optInt("pl"), m.optInt("off") != 0, m.optString("w").take(120), System.currentTimeMillis(),
             )
         }
@@ -207,7 +207,11 @@ class ShieldsBridge(
 
         /** One line for Diagnostics: where the blocking decisions are made and how long they take. */
         fun statsLine(inExtension: Boolean): String {
-            if (!inExtension) return "Blocker: compatibility mode - every request asks the app (slower). Tap the Blocker button to go back to fast mode."
+            if (!inExtension) {
+                val c = stats
+                val held = if (c != null && c.perRequestAsks > 0) " ${c.perRequestAsks} requests asked the app one by one, each held ${c.perRequestUs / c.perRequestAsks} us on average." else ""
+                return "Blocker: compatibility mode - every request asks the app (slower). Tap the Blocker button to go back to fast mode.$held"
+            }
             val s = stats ?: return "Blocker: fast mode (decisions inside the page engine). No numbers yet: open a page, then press Update."
             val avg = if (s.checks > 0) s.totalUs / s.checks else 0L
             val state = when {
@@ -215,7 +219,7 @@ class ShieldsBridge(
                 s.generation > 0 && s.imageBytes > 0 -> "list #${s.generation}, ${s.imageBytes / 1024} KB, loaded in ${s.loadMs} ms, ${s.transfers} transfer(s)"
                 else -> "list not loaded yet"
             }
-            return "Blocker: fast mode, $state. ${s.checks} requests judged in the engine (average ${avg} us, slowest ${s.maxUs} us, ${s.slow} over 2 ms), ${s.perRequestAsks} asked the app one by one, ${s.errors} errors. ${s.note}".trim()
+            return "Blocker: fast mode, $state. ${s.checks} requests judged in the engine (average ${avg} us, slowest ${s.maxUs} us, ${s.slow} over 2 ms), ${s.perRequestAsks} asked the app one by one${if (s.perRequestAsks > 0) " (each held ${s.perRequestUs / s.perRequestAsks} us on average)" else ""}, ${s.errors} errors. ${s.note}".trim()
         }
 
         private const val ASSET_URI = "resource://android/assets/kestrel-shields/"
