@@ -115,7 +115,7 @@ object Dash {
                         first = false
                         val d = s.getAttribute("d").toLongOrNull() ?: continue
                         val r = s.getAttribute("r").toIntOrNull() ?: 0
-                        val repeats = if (r >= 0) r else maxOf(0L, ((periodMs * timescale / 1000 - t) / maxOf(d, 1)).toInt() - 1).toInt()
+                        val repeats: Int = if (r >= 0) r else maxOf(0L, (periodMs * timescale / 1000 - t) / maxOf(d, 1L) - 1).toInt() // r=-1: repeat to the end of the period
                         for (i in 0..repeats) {
                             segs.add(Hls.Seg(Hls.resolve(baseUrl, fill(mediaT, id, bandwidth, number, t)), d * 1000 / timescale, -1, -1, -1, number, false))
                             t += d; number++

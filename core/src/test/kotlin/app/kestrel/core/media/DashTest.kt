@@ -14,14 +14,14 @@ class DashTest {
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT20S" minBufferTime="PT2S">
   <Period id="0">
     <AdaptationSet contentType="video" segmentAlignment="true" mimeType="video/mp4">
-      <SegmentTemplate timescale="90000" initialization="vid/$RepresentationID$/init.mp4" media="vid/$RepresentationID$/seg-$Number$.m4s" startNumber="1">
+      <SegmentTemplate timescale="90000" initialization="vid/${'$'}RepresentationID${'$'}/init.mp4" media="vid/${'$'}RepresentationID${'$'}/seg-${'$'}Number${'$'}.m4s" startNumber="1">
         <SegmentTimeline><S t="0" d="360000" r="4"/></SegmentTimeline>
       </SegmentTemplate>
       <Representation id="v720" bandwidth="1500000" width="1280" height="720" codecs="avc1.64001f" frameRate="30"/>
       <Representation id="v360" bandwidth="500000" width="640" height="360" codecs="avc1.4d401e" frameRate="30"/>
     </AdaptationSet>
     <AdaptationSet contentType="audio" lang="en" mimeType="audio/mp4">
-      <SegmentTemplate timescale="44100" initialization="aud/init.mp4" media="aud/seg-$Number%05d$.m4s">
+      <SegmentTemplate timescale="44100" initialization="aud/init.mp4" media="aud/seg-${'$'}Number%05d${'$'}.m4s">
         <SegmentTimeline><S t="0" d="176400" r="4"/></SegmentTimeline>
       </SegmentTemplate>
       <Representation id="a1" bandwidth="96000" codecs="mp4a.40.2" audioSamplingRate="44100"/>
