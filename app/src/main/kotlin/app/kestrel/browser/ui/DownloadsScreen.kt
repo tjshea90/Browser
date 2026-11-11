@@ -80,7 +80,7 @@ class DownloadsScreen(ctx: Context, private var pal: Pal, private val l: Listene
         val done = views.filter { it.state == DlState.COMPLETED }.sortedByDescending { it.updated }
         clear.visibility = if (views.any { it.state == DlState.COMPLETED || it.state == DlState.FAILED }) VISIBLE else GONE
         val sig = (running + done).joinToString("|") { "${it.id}:${it.state}:${it.reason}:${it.actions}" }
-        if (sig == signature) { for (v in running + done) rows[v.id]?.bind(v); return } // same cards: just move the bars
+        if (sig == signature) { for (v in running) rows[v.id]?.bind(v); return } // same cards: just move the bars of the ones that are not finished (a finished row never changes)
         signature = sig
         val keep = scroller.scrollY
         list.removeAllViews(); rows.clear()
@@ -131,9 +131,11 @@ class DownloadsScreen(ctx: Context, private var pal: Pal, private val l: Listene
         fun bind(v: DownloadView) {
             bar.fraction = v.fraction
             bar.indeterminate = v.state == DlState.RUNNING && v.total <= 0
-            status.text = Format.status(v)
+            val st = Format.status(v)
+            if (status.text.toString() != st) status.text = st // setText rebuilds the text layout even for the same words
             status.setTextColor(when (v.state) { DlState.FAILED -> pal.danger; DlState.NEEDS_DECISION, DlState.WAITING_NETWORK -> pal.warn; DlState.COMPLETED -> pal.ok; else -> pal.fg })
-            sub.text = listOfNotNull(v.host?.removePrefix("www."), if (v.total >= 0) Format.bytes(v.total) else null, if (v.priv) "private" else null).joinToString("  ·  ")
+            val line = listOfNotNull(v.host?.removePrefix("www."), if (v.total >= 0) (if (v.estimated) "about " else "") + Format.bytes(v.total) else null, if (v.priv) "private" else null).joinToString("  ·  ")
+            if (sub.text.toString() != line) sub.text = line
         }
     }
 

@@ -27,57 +27,75 @@ object Notifier {
         nm.createNotificationChannel(NotificationChannel(CH_DONE, "Finished downloads", NotificationManager.IMPORTANCE_DEFAULT))
     }
 
+    // PendingIntents are built once and reused: each build is several calls into system services, and the ongoing notification used to rebuild them at every refresh.
+    @Volatile private var openAppPi: PendingIntent? = null
+    private val actionPis = java.util.concurrent.ConcurrentHashMap<String, PendingIntent>()
+
     private fun openApp(ctx: Context): PendingIntent {
+        openAppPi?.let { return it }
         val i = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.apply {
             putExtra(EXTRA_OPEN_DOWNLOADS, true)
             addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
         } ?: Intent()
-        return PendingIntent.getActivity(ctx, 1, i, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        return PendingIntent.getActivity(ctx, 1, i, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE).also { openAppPi = it }
     }
 
     private fun serviceAction(ctx: Context, action: String, code: Int, id: Long = 0L): PendingIntent =
-        PendingIntent.getService(ctx, code, Intent(ctx, DownloadService::class.java).setAction(action).putExtra(DownloadService.EXTRA_ID, id), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        actionPis.getOrPut("$action|$code|$id") { PendingIntent.getService(ctx, code, Intent(ctx, DownloadService::class.java).setAction(action).putExtra(DownloadService.EXTRA_ID, id), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE) }
 
     private fun title(v: DownloadView) = if (v.kind == DEST_APP_PRIVATE) "Downloading the Kestrel update" else v.name
 
-    /** The ongoing notification of the foreground service. */
-    fun progress(ctx: Context, views: List<DownloadView>): Notification {
+    /** What the ongoing notification says. Two equal models need no new post: the service compares them before it builds anything. */
+    data class ProgressModel(val title: String, val text: String, val percent: Int, val action: Int, val id: Long, val canPause: Boolean) {
+        companion object { const val NONE = 0; const val ONE = 1; const val PAUSE_ALL = 2; const val RESUME_ALL = 3; const val INDETERMINATE = -1; const val NO_BAR = -2 }
+    }
+
+    fun progressModel(views: List<DownloadView>): ProgressModel {
         val running = views.filter { it.state == DlState.RUNNING || it.state == DlState.STARTING }
         val waiting = views.filter { it.state == DlState.QUEUED || it.state == DlState.WAITING_NETWORK }
         val paused = views.filter { it.state == DlState.PAUSED_USER || it.state == DlState.PAUSED_SYSTEM }
-        val b = Notification.Builder(ctx, CH_PROGRESS)
-            .setSmallIcon(R.drawable.ic_download)
-            .setOngoing(true).setOnlyAlertOnce(true).setCategory(Notification.CATEGORY_PROGRESS)
-            .setContentIntent(openApp(ctx))
-        when {
+        return when {
             running.isNotEmpty() -> {
                 val priv = running.all { it.priv }
                 val total = running.filter { it.total > 0 }.sumOf { it.total }
                 val done = running.filter { it.total > 0 }.sumOf { it.done }
                 val speed = running.sumOf { it.bytesPerSec }
-                b.setContentTitle(if (priv) "Downloading (private)" else if (running.size == 1) title(running[0]) else "Downloading ${running.size} files")
+                val pct = if (total > 0) (done * 100 / total).toInt() else -1
                 val text = buildString {
-                    if (total > 0) append((done * 100 / total).toInt()).append(" %")
+                    if (total > 0) append(pct).append(" %")
                     if (speed > 0) append(if (isEmpty()) "" else "  ·  ").append(Format.speed(speed))
                     if (waiting.isNotEmpty()) append("  ·  ").append(waiting.size).append(" waiting")
                 }
-                b.setContentText(text.ifEmpty { "Starting…" })
-                if (total > 0) b.setProgress(100, (done * 100 / total).toInt(), false) else b.setProgress(0, 0, true)
-                if (running.size == 1) {
-                    val one = running[0]
-                    if (one.actions.contains(Action.PAUSE)) b.addAction(Notification.Action.Builder(null, "Pause", serviceAction(ctx, DownloadService.ACTION_PAUSE_ID, 5, one.id)).build())
-                    b.addAction(Notification.Action.Builder(null, "Cancel", serviceAction(ctx, DownloadService.ACTION_CANCEL_ID, 6, one.id)).build())
-                } else if (running.any { it.actions.contains(Action.PAUSE) }) b.addAction(Notification.Action.Builder(null, "Pause all", serviceAction(ctx, DownloadService.ACTION_PAUSE_ALL, 2)).build())
+                val title = if (priv) "Downloading (private)" else if (running.size == 1) title(running[0]) else "Downloading ${running.size} files"
+                val one = if (running.size == 1) running[0] else null
+                ProgressModel(title, text.ifEmpty { "Starting…" }, if (total > 0) pct else ProgressModel.INDETERMINATE, if (one != null) ProgressModel.ONE else if (running.any { it.actions.contains(Action.PAUSE) }) ProgressModel.PAUSE_ALL else ProgressModel.NONE,
+                    one?.id ?: 0L, one?.actions?.contains(Action.PAUSE) == true)
             }
-            waiting.isNotEmpty() -> {
-                b.setContentTitle("Downloads waiting")
-                b.setContentText(if (waiting.any { it.state == DlState.WAITING_NETWORK }) "Waiting for the connection…" else "${waiting.size} in line")
+            waiting.isNotEmpty() -> ProgressModel("Downloads waiting", if (waiting.any { it.state == DlState.WAITING_NETWORK }) "Waiting for the connection…" else "${waiting.size} in line", ProgressModel.NO_BAR, ProgressModel.NONE, 0L, false)
+            else -> ProgressModel("Downloads paused", if (paused.isEmpty()) "Nothing to do" else "${paused.size} paused", ProgressModel.NO_BAR, if (paused.isNotEmpty()) ProgressModel.RESUME_ALL else ProgressModel.NONE, 0L, false)
+        }
+    }
+
+    /** The ongoing notification of the foreground service. */
+    fun progress(ctx: Context, views: List<DownloadView>): Notification = progress(ctx, progressModel(views))
+
+    fun progress(ctx: Context, m: ProgressModel): Notification {
+        val b = Notification.Builder(ctx, CH_PROGRESS)
+            .setSmallIcon(R.drawable.ic_download)
+            .setOngoing(true).setOnlyAlertOnce(true).setCategory(Notification.CATEGORY_PROGRESS)
+            .setContentIntent(openApp(ctx))
+            .setContentTitle(m.title).setContentText(m.text)
+        when {
+            m.percent >= 0 -> b.setProgress(100, m.percent, false)
+            m.percent == ProgressModel.INDETERMINATE -> b.setProgress(0, 0, true)
+        }
+        when (m.action) {
+            ProgressModel.ONE -> {
+                if (m.canPause) b.addAction(Notification.Action.Builder(null, "Pause", serviceAction(ctx, DownloadService.ACTION_PAUSE_ID, 5, m.id)).build())
+                b.addAction(Notification.Action.Builder(null, "Cancel", serviceAction(ctx, DownloadService.ACTION_CANCEL_ID, 6, m.id)).build())
             }
-            else -> {
-                b.setContentTitle("Downloads paused")
-                b.setContentText(if (paused.isEmpty()) "Nothing to do" else "${paused.size} paused")
-                if (paused.isNotEmpty()) b.addAction(Notification.Action.Builder(null, "Resume all", serviceAction(ctx, DownloadService.ACTION_RESUME_ALL, 3)).build())
-            }
+            ProgressModel.PAUSE_ALL -> b.addAction(Notification.Action.Builder(null, "Pause all", serviceAction(ctx, DownloadService.ACTION_PAUSE_ALL, 2)).build())
+            ProgressModel.RESUME_ALL -> b.addAction(Notification.Action.Builder(null, "Resume all", serviceAction(ctx, DownloadService.ACTION_RESUME_ALL, 3)).build())
         }
         return b.build()
     }

@@ -180,7 +180,17 @@ object DownloadController {
     /** The downloads the user sees (the Downloads screen, "Delete old installers"): not the app's own update file. */
     fun views(): List<DownloadView> = allViews().filter { it.kind != DEST_APP_PRIVATE }
     /** Everything the engines hold, update downloads included (the service notification, the updater). */
-    fun allViews(): List<DownloadView> = ((engine?.views() ?: emptyList()) + (streams?.views() ?: emptyList())).sortedByDescending { it.created }
+    fun allViews(): List<DownloadView> {
+        // the notification, the Downloads screen and the updater all ask within the same tick: one snapshot (each is a pass over every download under the engine's lock) serves them all
+        val now = android.os.SystemClock.uptimeMillis()
+        val c = viewCache
+        if (c != null && now - viewCacheAt < 150) return c
+        val v = ((engine?.views() ?: emptyList()) + (streams?.views() ?: emptyList())).sortedByDescending { it.created }
+        viewCache = v; viewCacheAt = now
+        return v
+    }
+    @Volatile private var viewCache: List<DownloadView>? = null
+    @Volatile private var viewCacheAt = 0L
     fun view(id: Long): DownloadView? = if (isStream(id)) streams?.view(id) else engine?.view(id)
     fun pause(id: Long) { if (isStream(id)) streams?.pause(id) else engine?.pause(id) }
     fun resume(ctx: Context, id: Long) { init(ctx); if (isStream(id)) streams?.resume(id) else engine?.resume(id); DownloadService.start(ctx) }

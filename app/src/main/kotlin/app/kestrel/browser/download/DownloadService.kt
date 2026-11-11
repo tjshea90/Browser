@@ -8,6 +8,7 @@ import android.content.pm.ServiceInfo
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import android.os.Build
 import android.os.PowerManager
 import android.net.wifi.WifiManager
@@ -39,6 +40,9 @@ class DownloadService : Service() {
     private var idleTicks = 0
     private var wake: PowerManager.WakeLock? = null
     private var wifi: WifiManager.WifiLock? = null
+    private var lastModel: Notifier.ProgressModel? = null
+    private var lastPostAt = 0L
+    private var lastWakeAt = 0L
     private val listener: () -> Unit = { refresh() }
 
     private val tick = object : Runnable {
@@ -76,8 +80,17 @@ class DownloadService : Service() {
         return START_STICKY
     }
 
+    /**
+     * Posts the ongoing notification only when its words changed, and not more than about once a second (once in 3 seconds while a page of the app is on screen: the shade is not visible then).
+     * Every post is a call into the system; this used to run up to 5 times a second with several more calls to rebuild the intents.
+     */
     private fun refresh() {
-        try { getSystemService(NotificationManager::class.java)?.notify(Notifier.ID_PROGRESS, Notifier.progress(this, DownloadController.allViews())) } catch (e: Exception) { /* ignore */ }
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastPostAt < (if (app.kestrel.browser.ProcessLife.uiVisible) 3000 else 1000)) return
+        val model = Notifier.progressModel(DownloadController.allViews())
+        if (model == lastModel) return
+        lastModel = model; lastPostAt = now
+        try { getSystemService(NotificationManager::class.java)?.notify(Notifier.ID_PROGRESS, Notifier.progress(this, model)) } catch (e: Exception) { /* ignore */ }
     }
 
     /**
@@ -87,7 +100,8 @@ class DownloadService : Service() {
     private fun keepAwake(on: Boolean) {
         if (on) {
             if (wake == null) wake = getSystemService(PowerManager::class.java)?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "kestrel:download")?.apply { setReferenceCounted(false) }
-            wake?.acquire(10 * 60 * 1000L)
+            val now = SystemClock.elapsedRealtime()
+            if (wake?.isHeld != true || now - lastWakeAt > 60_000) { wake?.acquire(10 * 60 * 1000L); lastWakeAt = now } // the 10 minute timeout is renewed about once a minute, not at every tick
             if (wifi == null) wifi = try {
                 @Suppress("DEPRECATION") // HIGH_PERF is deprecated from API 29 (the system then treats it as the basic lock); LOW_LATENCY only works with the screen on
                 (applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager)?.createWifiLock(if (Build.VERSION.SDK_INT >= 29) WifiManager.WIFI_MODE_FULL else WifiManager.WIFI_MODE_FULL_HIGH_PERF, "kestrel:download")?.apply { setReferenceCounted(false) }
