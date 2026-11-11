@@ -27,6 +27,8 @@ class ShieldsBridge(
 ) : WebExtension.MessageDelegate {
 
     override fun onMessage(nativeApp: String, message: Any, sender: WebExtension.MessageSender): GeckoResult<Any>? {
+        // Only OUR extension's background page may ask (content scripts relay through it with runtime.sendMessage; web pages cannot reach native messaging at all).
+        if (nativeApp != "kestrel" || sender.webExtension.id != EXTENSION_ID || sender.environmentType != WebExtension.MessageSender.ENV_TYPE_EXTENSION) return null
         val m = parse(message) ?: return null
         return try {
             when (m.optString("k")) {
@@ -97,8 +99,12 @@ class ShieldsBridge(
 
         /** Installs the built-in extension (idempotent) and (re)attaches [bridge]; call from every Activity instance. */
         fun install(ctx: Context, bridge: ShieldsBridge) {
-            GeckoEngine.runtime(ctx).webExtensionController.ensureBuiltIn(ASSET_URI, EXTENSION_ID).accept(
-                { ext -> ext?.setMessageDelegate(bridge, "kestrel") },
+            val controller = GeckoEngine.runtime(ctx).webExtensionController
+            controller.ensureBuiltIn(ASSET_URI, EXTENSION_ID).accept(
+                { ext ->
+                    ext?.setMessageDelegate(bridge, "kestrel")
+                    if (ext != null) controller.setAllowedInPrivateBrowsing(ext, true) // blocking must cover private tabs too (built-ins usually are, this makes it certain)
+                },
                 { e -> Log.w(Io.TAG, "Kestrel Shields extension failed to install", e) },
             )
         }
