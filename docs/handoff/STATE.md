@@ -1,18 +1,16 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** 2026-11-11T00:01:06Z (L1) on `ccr-a57c163e-mtq8js` after 8310637
-- **Summary:** filter updater (conditional GET, safety invariants, JobScheduler) + 8 updater tests; list URLs verified via web-fetch (cookie URL corrected); 48 app tests green
+- **Last checkpoint:** 2026-11-11T00:04:06Z (L2) on `ccr-a57c163e-mtq8js` after 8918599
+- **Summary:** Phases 4-6 done: full browser app + updater + injected JS; verify full PASS (core 117, app 51 Robolectric, 13 Chromium JS tests, lint clean, 2.3MB APK)
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE
 <!-- RESUME:BEGIN -->
-**Phases 0-3 DONE (scaffold, Gradle, full core engine with real EasyList/uBO snapshot). Phase 4 (the Android app in `app/`) is next.**
-`:app` is still the stub `MainActivity`. Everything it needs from `:core` exists and is tested: `FilterSet.check()`, `Omnibox`, `HttpsPolicy`,
-`TrackingParams`, `RedirectUnwrapper`, `UserAgents`, `ShieldSettings/SiteShieldStore/DataSaver`, `SessionCodec`, `Psl`, `FilterSetCodec`.
-Assets already in place: `app/src/main/assets/filters/default.kfs` (4.3 MB) + `psl.txt`.
-Build/verify: `./gradlew :core:test` (114 tests), `bash scripts/verify.sh quick|full`, `bash scripts/build-apk.sh`.
-Start Phase 4 with Next action #1. Update this block + the phase table at every milestone.
+**Phases 0-6 DONE: a complete browser exists and passes `bash scripts/verify.sh full` (core 117 tests + app 51 Robolectric tests + 13 Chromium JS tests + lint + R8 APK ~2.3 MB).**
+**Phase 7 (release) is in progress:** (1) independent security + code reviews were requested; apply their verified findings, (2) refresh README/ARCHITECTURE/STATE,
+(3) `bash scripts/build-apk.sh` -> `dist/kestrel-<version>.apk`, (4) final L3 checkpoint, (5) tell the owner plainly: NEVER RUN ON REAL HARDWARE (no emulator in the sandbox).
+Build/verify: `./gradlew :core:test :app:testDebugUnitTest`, `bash scripts/verify.sh quick|full`, `bash scripts/build-apk.sh`, `cd web-tests && npm test`.
 <!-- RESUME:END -->
 
 ## Phase table
@@ -22,15 +20,13 @@ Start Phase 4 with Next action #1. Update this block + the phase table at every 
 | 1 | Scaffold + ladder checkpoint system + hooks + docs | DONE (autosave hook + secret guard verified live) |
 | 2 | Gradle skeleton: `:core` (JVM), `:app` (Android), `:tools`; builds green | DONE (`scripts/verify.sh full` PASS; R8 release APK 11 KB) |
 | 3 | Core engine + JVM tests (filters, URL/omnibox, HTTPS policy, param stripping, session codec) | DONE (114 tests; see Done) |
-| 4 | Browser app: UI, tabs, WebView hardening, Shields, private window, downloads, settings, data-saver | TODO |
-| 5 | Filter-list pipeline: compile tool, bundled snapshot, conditional-GET updater | TODO |
-| 6 | Injected JS (cosmetic + anti-fingerprint + save-data) + Playwright tests | TODO |
-| 7 | Release: R8 APK, lint, aapt2 checks, independent review, docs, deliver APK in `dist/` | TODO |
+| 4 | Browser app: UI, tabs, WebView hardening, Shields, private window, downloads, settings, data-saver | DONE (51 Robolectric tests, lint clean, never run on a real device) |
+| 5 | Filter-list pipeline: compile tool, bundled snapshot, conditional-GET updater | DONE (8 updater tests; list URLs verified) |
+| 6 | Injected JS (cosmetic + anti-fingerprint + save-data) + Playwright tests | DONE (13 Chromium tests); class/id generic cosmetic hiding deferred |
+| 7 | Release: independent review, fixes, docs, signed APK in `dist/` | IN PROGRESS |
 
 ## IN PROGRESS
-- Phase 4 (app): nothing written yet. Order: (a) manifest+theme+Palette+icons (b) Engine holder (load kfs+psl on bg thread) (c) native NTP + toolbar + omnibox
-  (d) WebView factory/clients + Shields interception (e) TabManager+hibernation+session (f) panels: tabs, shields, menu, find, history/bookmarks, settings
-  (g) downloads, permissions, dialogs, fullscreen video, private process (h) NetworkMonitor + error screens (i) filter updater. Checkpoint after each letter.
+- Phase 7: independent security review + code review (fresh agents, no anchoring); then apply VERIFIED findings only (reproduce first, add a test), refresh docs, build the APK.
 
 ## Done (with evidence)
 - Phase 3 (core, 114 tests green): url/ (UrlParts, NetHosts, Omnibox, HttpsPolicy, TrackingParams, RedirectUnwrapper, UserAgents), filter/ (Hash, RequestType,
@@ -46,16 +42,13 @@ Start Phase 4 with Next action #1. Update this block + the phase table at every 
 - Phase 1: hooks fire automatically (commit 4406689 autosaved + pushed with no manual action); `git ls-remote` shows origin == local HEAD;
   secret-guard refused a decoy `id_rsa_*` file while still saving everything else; all scripts pass `bash -n`; settings.json valid JSON.
 
-## Next actions (ordered; each has an acceptance test)
-1. **App shell (Phase 4a-c)**: real manifest (INTERNET, ACCESS_NETWORK_STATE, location/camera/mic declared-not-granted, VIEW http/https + WEB_SEARCH intent filters,
-   network_security_config allowing cleartext, `configChanges` list, allowBackup=false), `Palette` light/dark, vector icons (verify path data by rendering), launcher icon
-   (original, NOT Brave's lion), programmatic UI: toolbar (back/fwd/reload, shield chip with count, URL pill, tabs count, menu), progress bar, native NTP (search box +
-   top sites, no WebView yet). Accept: assembleRelease + lintRelease green, APK < 1 MB without assets; startup path creates no WebView.
-2. **Engine + WebView (4d)**: `EngineHolder` (bg load of kfs from filesDir else assets else SeedLists; PSL), `WebViewFactory` (hardened settings, UA, cookies),
-   `BrowserWebViewClient.shouldInterceptRequest` (Shields), `shouldOverrideUrlLoading` (HTTPS upgrade, param strip, redirect unwrap, intent: sanitising), error screens.
-3. **Tabs (4e)**: TabManager (max 2 live WebViews on low-RAM), hibernation via saveState, SessionCodec persistence (atomic temp+rename), onTrimMemory, onRenderProcessGone.
-4. **Panels + features (4f-h)**: see ARCHITECTURE.md sections 4,5,7,8. 5. **Updater (Phase 5)** 6. **Injected JS + Playwright (Phase 6)** 7. **Release + review (Phase 7)**.
-   Also pending from earlier: class/id hash-set generic cosmetic hiding (Phase 6), verify updater URLs via the `web-fetch` agent (curl is blocked by a hook).
+## Next actions (ordered)
+1. Apply the review findings that survive verification (each: failing test first -> fix -> green `verify.sh full`).
+2. Docs: README (install/sideload steps, features, limitations), ARCHITECTURE (final), this STATE. Keep the owner-facing honesty: untested on hardware.
+3. `bash scripts/build-apk.sh` -> `dist/kestrel-0.1.0.apk` (+ .sha256); `checkpoint.sh --release 0.1.0 "..."`; send the APK to the owner.
+4. Backlog (not started, in value order): class/id hash-set generic cosmetic hiding (29k generic selectors currently capped at 1200); omnibox network suggestions (setting removed
+   until implemented); document-start script injection via androidx.webkit if the tablet's WebView supports it; blob: downloads; baseline profile for faster cold start;
+   per-site permission memory; reader-free "Load images" per site; scriptlets/redirect resources for YouTube-style ads.
 
 ## Facts (Phase 0)
 - Device (hardware_.txt, kept in `docs/hardware/`): MT8168B, Mali-G52 MC2, Android 10 Go API 29, patch 2021-07-05, kernel 4.14.141,
@@ -76,6 +69,9 @@ Start Phase 4 with Next action #1. Update this block + the phase table at every 
 - Dev signing key will be committed under `signing/dev/` (PUBLIC, for update continuity) — flag this clearly to the user.
 
 ## Known issues / risks
+- **Never executed on real hardware or an emulator.** Everything is verified through Robolectric (JVM), lint, and real Chromium for the JS. Real-WebView quirks WILL exist.
+- Fingerprint/save-data JS is injected at first paint (no document-start API without AndroidX WebKit), so very early inline fingerprinting can run first.
+- Generic cosmetic hiding is capped at 1200 selectors; site-specific rules (22k) are complete.
 - App cannot be executed in the sandbox; first real run will be on the user's tablet. Keep UI code conservative.
 - WebView version on the tablet is unknown (could be very old); app must feature-detect and warn.
 - Updater source URLs are unverified (no sanctioned way to curl here): verify with the `web-fetch` agent before trusting; failures must be non-fatal and visible in Settings.
