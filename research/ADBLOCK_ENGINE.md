@@ -7,7 +7,7 @@ Map to the brief: question 1 = sections 4 and 7; 2 = section 6; 3 = sections 1, 
 
 ## 1. Decision
 
-1. **Decide every request inside the extension, in plain JS over typed arrays (option b). Delete the per-request native message.** [V] Cause of the jank: `WebExtension$Listener` registers `GeckoView:WebExtension:Message|PortMessage|Connect|Disconnect` with `EventDispatcher.registerUiThreadListener`, so each `sendNativeMessage` is served on the Android UI thread while Gecko holds the request.
+1. **Decide every request inside the extension, in plain JS over typed arrays (option b). Delete the per-request native message.** [V] Prime suspect for the jank (mechanism verified, share of the freeze not profiled): `WebExtension$Listener` registers `GeckoView:WebExtension:Message|PortMessage|Connect|Disconnect` with `EventDispatcher.registerUiThreadListener`, so each `sendNativeMessage` is served on the Android UI thread while Gecko holds the request.
    - `ShieldsBridge` then does JSON, pref reads, `Log.d` and, per BLOCKED request, `updateUi()` -> `Toolbar.bind()` (2x `setImageResource`, text, layout). Ad-heavy pages block 100-1,000 requests per load (section 5).
    - research/FREEZE.md reaches the same diagnosis and files this under P2; this report says P0 (about 6.5 days, section 3). Its worker-thread bridge is the stop-gap if D1 slips; delete it when D1 lands.
 2. **One compiler, two readers.** `:core` (parser, builder, canaries, PSL) stays the only list compiler. Add a little-endian, 4-byte-aligned `KFS2` writer so the extension maps sections as `Int32Array`/`Uint32Array` views (zero copy).
