@@ -111,7 +111,7 @@ class UpdatePanel(ctx: Context, private val pal: Pal, private val prefs: Prefs, 
                 headline("Not enough free storage", pal.warn)
                 sub("Free up about ${UpdateLogic.formatSize(s.shortBy)} more, then tap Try again.", pal.fg)
                 sub("Why so much: Android only finishes an install while ${UpdateLogic.formatSize(s.reserveBytes)} (a tenth of this tablet's storage) stays free afterwards, and the update itself takes about ${UpdateLogic.formatSize(s.installedBytes)}. Free now: ${UpdateLogic.formatSize(s.freeNow)}, counting caches Android can clear.")
-                sub(if (s.fileKept) "The update file is already downloaded: nothing is downloaded again." else "The update file has to be downloaded again (${o?.let { UpdateLogic.formatSize(it.size) } ?: ""}).")
+                sub(if (s.fileKept) "The update file is already downloaded: nothing is downloaded again." else "The update file (${o?.let { UpdateLogic.formatSize(it.size) } ?: ""}) still has to be downloaded and takes its room first.")
                 val old = app.kestrel.browser.download.DownloadController.oldInstallers()
                 if (old.isNotEmpty()) {
                     val bytes = old.sumOf { maxOf(it.total, it.done) }

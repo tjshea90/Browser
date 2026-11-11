@@ -305,10 +305,11 @@ object UpdateManager {
     private fun space(ctx: Context, offer: UpdateOffer, apk: File?, pending: Long = 0): Space {
         val apkBytes = if (apk != null && apk.isFile) apk.length() else offer.size.coerceAtLeast(0)
         val libs = nativeLibBytes(ctx, apk)
-        val free = (freeForInstall(ctx) - pending).coerceAtLeast(0)
+        val rawFree = freeForInstall(ctx)
+        val free = (rawFree - pending).coerceAtLeast(0) // the download comes first and takes its room
         val floor = sp(ctx).getLong("floor2", 0L) // Android once refused with this much free space plus 150 MB: ask for at least that much
         val plan = UpdateLogic.storagePlan(apkBytes, libs, free, reserveBytes(ctx))
-        return Space(plan, free, plan.installTakes, (floor - free).coerceAtLeast(0))
+        return Space(plan, rawFree, plan.installTakes, (floor - free).coerceAtLeast(0))
     }
 
     private fun needSpace(ctx: Context, offer: UpdateOffer, sp: Space, fileKept: Boolean) {
