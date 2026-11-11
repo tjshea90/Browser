@@ -224,3 +224,31 @@
 >
 > Still waiting on your three answers: did alpha 3 scroll smoothly, the Scroll test "Result:" lines (Menu → Diagnostics), and a Diagnostics → Copy after the next white screen.
 <!-- sha:4b2628b2e072 -->
+
+## 2026-11-11T18:00:53Z
+> Alpha7 is built, signed by GitHub and published. I could only try it on the Android 10 emulator, not on your tablet.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.2.0-alpha7
+>
+> **Installing it:** in the browser, open Menu → Updates → Check now → Download → Install, or open the link on the tablet and tap the APK. Keep about 800 MB free, because Android needs room to unpack the new version. If you still see the old "insufficient storage" message, tap Check now once. The old updater can't tell you how much to free, but alpha7's can.
+>
+> **Your requests**
+>
+> - **Storage failure:** The Updates sheet now says how many MB to free and why. If Android refuses the install, it asks for 150 MB more than Android said it had. After you free space, "Try again" installs the file it already downloaded. On the emulator, a simulated storage failure showed "Free up about 160.0 MB more, then tap Try again."
+> - **Download progress:** Each download card now reads, for example, "27.4 MB of 115.2 MB · 23 % · 327 KB/s · 4 min left · 2 connections". A failed one shows "56.0 MB of 115.2 MB downloaded". I saw both on a real download.
+> - **Neon:** I found two causes. One, the pulse stopped whenever Android's animation setting was off, and I'm assuming yours is. Two, it froze for good if you dismissed the keyboard with a field still focused. It now ignores the system animation setting, has a brighter ring plus glow, and also circles the address bar. To see it: open a new tab, hide the keyboard, and look at the big field. It holds still only while the keyboard is up, a finger is on the screen, or a full-screen page like Downloads or Settings is open. Diagnostics has a "Neon glow:" line saying why it's paused. On the emulator the brightness changed about 3× over time, with animations off.
+> - **Scrolling and the white gap:** By default Firefox only pre-draws about 60 px beyond the screen on this tablet. That matches the white gap when you scroll back and the delay when you start scrolling after reading. **Smoother** is now the default: it pre-draws about twice the screen around your finger, keeps that for 3 minutes, and waits 300 ms instead of 600 for page touch handlers. It costs a little more memory and CPU per redraw. If it feels worse, set Settings → Appearance → Scroll feel to Standard. On the emulator the first frame after a touch dropped from 208 ms to 115 ms (95 ms with Smoothest), but the emulator is far slower than your tablet, so that says nothing about its real smoothness.
+> - **Pull down to refresh:** Drag a page down from its top edge. A chip follows your finger and fills when it's armed (about 2 cm of drag). Let go to reload; a page that failed to load gets retried. It doesn't fire when the page can still scroll up, and there's a Settings switch. I saw it fire on the emulator, and a pull-down mid-page just scrolled.
+>
+> **I need from you** (none of this is verified on the tablet):
+> 1. Diagnostics → "Compare 3 feels (90 s)", then Copy and paste the result to me.
+> 2. Tell me whether the neon shows now and whether the white gaps are gone.
+>
+> **Still open:**
+> - **Faster page loading (next big job):** moving ad blocking inside the browser, so each request no longer waits on the app.
+> - **Cold-start glitch:** a restored page tab shows the Home screen for a moment while the engine starts.
+> - **Tab grid:** swipe-to-close.
+> - **Settings:** a restyle to match the menu.
+> - **Your decisions:** the private signing key, the licence, the look, and the landscape tab layout.
+> - **Cromite comparison:** the 15-minute side-by-side test is still yours to run.
+<!-- sha:462eaea8001f -->
