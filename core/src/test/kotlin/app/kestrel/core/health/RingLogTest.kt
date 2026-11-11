@@ -1,7 +1,7 @@
 package app.kestrel.core.health
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
+import org.junit.Assert.assertEquals
+import org.junit.Test
 
 class RingLogTest {
     @Test fun keepsTheNewestLinesInOrder() {
