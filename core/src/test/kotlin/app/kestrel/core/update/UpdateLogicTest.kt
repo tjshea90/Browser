@@ -80,4 +80,24 @@ class UpdateLogicTest {
         assertFalse(UpdateLogic.canResume(1000, 206, 0))
         assertFalse(UpdateLogic.canResume(0, 206, 0))
     }
+
+    @Test fun storagePlanForTheGeckoApk() {
+        val mb = 1L shl 20
+        // the real alpha numbers: 92 MB APK, 135 MB of libraries to unpack, 48 MB margin
+        val plan = UpdateLogic.storagePlan(92 * mb, 135 * mb, allocatable = 400 * mb)
+        assertEquals((92 + 92 + 135 + 48) * mb, plan.needKeep)
+        assertEquals((92 + 135 + 48) * mb, plan.needDrop)
+        assertTrue(plan.fitsKeeping); assertFalse(plan.fitsDropping); assertEquals(0L, plan.shortBy)
+        val tight = UpdateLogic.storagePlan(92 * mb, 135 * mb, allocatable = 300 * mb) // enough only without our own copy
+        assertFalse(tight.fitsKeeping); assertTrue(tight.fitsDropping); assertEquals(0L, tight.shortBy)
+        val short = UpdateLogic.storagePlan(92 * mb, 135 * mb, allocatable = 200 * mb)
+        assertFalse(short.fitsKeeping); assertFalse(short.fitsDropping); assertEquals(75 * mb, short.shortBy)
+        assertEquals(80 * mb, UpdateLogic.roundUpTenMb(75 * mb)); assertEquals(0L, UpdateLogic.roundUpTenMb(0)); assertEquals(10 * mb, UpdateLogic.roundUpTenMb(1))
+    }
+
+    @Test fun storagePlanWithoutNativeLibraries() { // the WebView build: a 2 MB app
+        val mb = 1L shl 20
+        val plan = UpdateLogic.storagePlan(2 * mb, 0, allocatable = 60 * mb)
+        assertTrue(plan.fitsKeeping); assertEquals(0L, plan.shortBy)
+    }
 }

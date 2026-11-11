@@ -88,6 +88,29 @@ object UpdateLogic {
         else -> "%.2f GB".format(java.util.Locale.ROOT, bytes / 1073741824.0)
     }
 
+    /**
+     * What Android's installer needs, in bytes of ALLOCATABLE space (= StorageManager.getAllocatableBytes: free space + caches the system may clear - the low-storage
+     * reserve Android keeps for itself, up to 500 MB). Installing an update takes: the installer's own staged copy of the APK, then the installed size (the APK again, plus
+     * the native libraries it unpacks) - the OLD version stays until the new one is complete - plus a margin for the optimised code.
+     * Our own downloaded copy counts against free space too, unless we delete it once the installer has taken its copy ([StoragePlan.fitsDropping]).
+     */
+    class StoragePlan(val needKeep: Long, val needDrop: Long, val allocatable: Long) {
+        /** Starts with our downloaded file kept (so a retry needs no new download). */
+        val fitsKeeping: Boolean get() = allocatable >= needKeep
+        /** Fits only if our own copy is deleted right after the installer has taken its copy. */
+        val fitsDropping: Boolean get() = !fitsKeeping && allocatable >= needDrop
+        /** Bytes that must still be freed (the copy being dropped); 0 = it fits. */
+        val shortBy: Long get() = if (allocatable >= needDrop) 0L else needDrop - allocatable
+    }
+
+    fun storagePlan(apkBytes: Long, nativeLibBytes: Long, allocatable: Long, marginBytes: Long = 48L shl 20): StoragePlan {
+        val installed = apkBytes + nativeLibBytes
+        return StoragePlan(needKeep = apkBytes + installed + marginBytes, needDrop = installed + marginBytes, allocatable = allocatable)
+    }
+
+    /** Round a byte count UP to whole tens of megabytes (what the owner is told to free). */
+    fun roundUpTenMb(bytes: Long): Long { val ten = 10L shl 20; return ((bytes + ten - 1) / ten) * ten }
+
     /** A download may continue from byte [have] only when the server answered 206 for exactly that offset (else the partial file must be restarted). */
     fun canResume(have: Long, status: Int, contentRangeStart: Long?): Boolean = have > 0 && status == 206 && contentRangeStart == have
 }
