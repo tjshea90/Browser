@@ -94,7 +94,7 @@ object Format {
     }
 
     /** "3.1 MB of 8.4 MB" - how much of the file is on the tablet - or "3.1 MB so far" while the total is not known. */
-    fun progress(v: DownloadView): String = if (v.total > 0) bytes(v.done) + " of " + bytes(v.total) else bytes(v.done) + " so far"
+    fun progress(v: DownloadView): String = if (v.total > 0) bytes(v.done) + " of " + (if (v.estimated) "about " else "") + bytes(v.total) else bytes(v.done) + " so far"
 
     /** The one status line under a download's name: how many MB are downloaded of the total, then percent, speed and time left. */
     fun status(v: DownloadView): String = when (v.state) {
@@ -133,6 +133,10 @@ object Format {
         Reason.STALLED -> "The connection stalled"
         Reason.NETWORK -> "The connection failed"
         Reason.BAD_URL -> "This address cannot be downloaded"
+        Reason.LIVE -> "Live streams cannot be saved"
+        Reason.DRM -> "This video is copy-protected (DRM). Kestrel cannot save it."
+        Reason.UNSUPPORTED -> "This stream uses a format Kestrel cannot save yet"
+        Reason.BAD_PLAYLIST -> "The stream's list of parts could not be read"
         else -> "Failed"
     }
 }

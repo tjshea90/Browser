@@ -18,7 +18,9 @@ enum class DlState(val code: Int) {
 /** Why a download is failed / needs a decision (persisted as [code]; HTTP statuses go in `detail`). */
 enum class Reason(val code: Int) {
     NONE(0), HTTP(1), LINK_EXPIRED(2), NO_SPACE(3), STORAGE(4), FS_LIMIT(5), INSECURE_REDIRECT(6), TLS(7), LOCAL_NET(8), DIGEST(9),
-    STALLED(10), FILE_CHANGED(11), NO_RANGE(12), NETWORK(13), BAD_URL(14);
+    STALLED(10), FILE_CHANGED(11), NO_RANGE(12), NETWORK(13), BAD_URL(14),
+    /** Streams (video): a live stream, copy protection (DRM), a format that cannot be saved, a playlist that could not be read. */
+    LIVE(15), DRM(16), UNSUPPORTED(17), BAD_PLAYLIST(18);
 
     companion object { fun of(code: Int): Reason = values().firstOrNull { it.code == code } ?: NONE }
 }
@@ -132,6 +134,8 @@ class DownloadView(
     val actions: List<Action>,
     /** [DEST_PUBLIC] or [DEST_APP_PRIVATE]. */
     val kind: Int = DEST_PUBLIC,
+    /** [total] is a guess (a stream whose size is only known from its bit rate): shown as "about". */
+    val estimated: Boolean = false,
 ) {
     val fraction: Float get() = if (total > 0) (done.toDouble() / total).coerceIn(0.0, 1.0).toFloat() else 0f
 }
