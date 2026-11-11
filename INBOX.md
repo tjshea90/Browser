@@ -101,3 +101,9 @@ Correction: it may not be reloading pictures during the scrolling, but it does s
 ```
 I made 900mb of space on my tablet but this message still shows. On the download manager, include a display of his many mb downloaded progress  for each file in addition to the total file size
 ```
+
+## 2026-11-11T18:00:56Z
+```
+The newer versions never install over the old ones. I always have to uninstall the old one first 
+I don't think free space was the issue because I installed it from github fine
+```
