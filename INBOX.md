@@ -88,3 +88,11 @@ The scrolling up and down on websites is slow and stutters. Sometimes it maybe d
 ```
 Tell me the pros and cons of using the https://github.com/uazo/cromite cromite engine for this browser instead of geckoview
 ```
+
+## 2026-11-11T16:18:33Z
+```
+1) I don't see the neon pulsing animations anywhere.
+2) the scrolling is still stuttering and laggy, and it looks like it reloads pictures after I scroll away from them then back. Sometimes the scrolling is unresponsive for a split second. Figure out how to efficiently use ram/cache/gpu/cpu and methods other browsers use for smooth scrolling and quick loading. Implement it.
+3) make a pull down to refresh page gesture that I can use. 
+Correction: it may not be reloading pictures during the scrolling, but it does stutter. Sometimes when I scroll down then back up there is just white space for a second 
+```
