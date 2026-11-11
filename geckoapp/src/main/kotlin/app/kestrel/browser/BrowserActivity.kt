@@ -990,7 +990,9 @@ open class BrowserActivity : Activity(), DockListener {
 
     private fun clearBrowsingData() {
         GeckoEngine.runtime(this).storageController.clearData(StorageController.ClearFlags.ALL)
-        Io.exec { db?.clearHistory() }
+        val appCtx = applicationContext
+        Io.exec { db?.clearHistory(); ThumbStore.clearAll(appCtx) }
+        for (t in tabs) t.thumb = null // the previews are page contents too
         toast("Browsing data cleared")
     }
 
@@ -998,7 +1000,8 @@ open class BrowserActivity : Activity(), DockListener {
         if (prefs.clearOnExit) {
             GeckoEngine.runtime(this).storageController.clearData(StorageController.ClearFlags.ALL)
             sessionRestored = false // nothing may re-create the tab list after this point
-            Io.exec { db?.clearHistory(); sessionFile().delete() }
+            val appCtx = applicationContext
+            Io.exec { db?.clearHistory(); sessionFile().delete(); ThumbStore.clearAll(appCtx) }
         } else saveSessionNow()
         finishAndRemoveTask()
         // Free the memory right away: this tablet is low-RAM and the user asked to quit. The engine gets a moment to flush its profile first.
