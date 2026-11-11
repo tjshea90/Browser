@@ -41,6 +41,7 @@ internal class RuleParser {
 
     fun parseNetwork(rawLine: String): NetRule? {
         skip = Skip.NONE
+        if (rawLine.length > MAX_LINE) return fail(Skip.BAD_SYNTAX) // lists are third-party input: no megabyte lines
         var s = rawLine.trim()
         if (s.isEmpty()) return fail(Skip.EMPTY)
         var exception = false
@@ -116,6 +117,15 @@ internal class RuleParser {
         if (s.startsWith("*")) { s = s.trimStart('*'); leftHost = false; leftAnchor = false }
         if (s.endsWith("*")) { s = s.trimEnd('*'); rightAnchor = false }
         if (s.isEmpty() && (leftHost || leftAnchor || rightAnchor)) return fail(Skip.BAD_SYNTAX)
+        if (s.length > MAX_PATTERN) return fail(Skip.BAD_SYNTAX)
+        // A poisoned or broken list must not be able to block (or allow) everything: a rule with no usable pattern, or a tiny
+        // unanchored one ("e", "a^"), is only accepted when it is confined to specific sites with domain=.
+        if (include == null && siteFlags == 0 && !leftHost && !leftAnchor) {
+            var literals = 0
+            for (c in s) if (c != '*' && c != '^') literals++
+            if (literals < MIN_LITERALS) return fail(Skip.BAD_SYNTAX)
+        }
+        if (include == null && siteFlags == 0 && s.isEmpty()) return fail(Skip.BAD_SYNTAX) // "||"-less "$script", "@@$image" and friends
 
         // Site-level exceptions: @@||host^$document|$elemhide|$generichide
         if (exception && types == RequestType.DOCUMENT && negTypes == 0) { siteFlags = siteFlags or SITE_DOCUMENT_ALLOW; types = 0 }
@@ -201,6 +211,10 @@ internal class RuleParser {
     private fun fail2(reason: Skip): CosmeticRule? { skip = reason; return null }
 
     companion object {
+        private const val MAX_LINE = 16_384 // legit uBlock lines with long domain= lists reach a few KB
+        private const val MAX_PATTERN = 1_000 // legit URL patterns are < 300 chars; keeps token indexing linear
+        private const val MIN_LITERALS = 3
+
         /** Lower-case hostname characters only (letters, digits, '.', '-'); no empty labels. */
         fun isHostName(s: String): Boolean {
             if (s.isEmpty() || s.length > 253 || s[0] == '.' || s[0] == '-' || s.endsWith(".")) return false

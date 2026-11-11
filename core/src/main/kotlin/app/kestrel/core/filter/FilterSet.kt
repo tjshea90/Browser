@@ -108,6 +108,7 @@ class FilterSet internal constructor(
         @JvmField var important = false
         @JvmField var excepted = false
         @JvmField var category = 0
+        @JvmField var evals = 0 // rule evaluations so far (work accounting, see MAX_GRAM_EVALS)
         private var pageHashes: LongArray? = null
 
         fun pageSuffixHashes(): LongArray {
@@ -201,8 +202,12 @@ class FilterSet internal constructor(
         if (t.count == 0) return
         val url = ctx.url
         val n = url.length
+        // Each DISTINCT token's bucket is scanned once per URL. A crafted URL repeating one hot token ("event/" x 330) used to rescan the
+        // same bucket 330 times (43 ms on x86, several times that on a Cortex-A53). There is deliberately no cap on distinct tokens: a cap
+        // would let an attacker pad the URL with junk tokens so the one that matters is never looked at (the URL itself is capped at MAX_URL).
+        var seen = IntArray(16)
+        var nSeen = 0
         var i = 0
-        var tokens = 0
         while (i < n) {
             val c = url[i]
             if (isAlnum(c)) {
@@ -210,9 +215,15 @@ class FilterSet internal constructor(
                 while (j < n && isAlnum(url[j])) j++
                 val len = j - i
                 if (len in MIN_TOKEN..MAX_TOKEN_LEN) {
-                    scanBucket(t, t.tabKey, t.tabStart, t.tabLen, t.ruleIds, Hash.token32(url, i, j), ctx)
-                    if (ctx.important) return
-                    if (++tokens >= MAX_URL_TOKENS) break
+                    val key = Hash.token32(url, i, j)
+                    var dup = false
+                    for (k in 0 until nSeen) if (seen[k] == key) { dup = true; break }
+                    if (!dup) {
+                        if (nSeen == seen.size) seen = seen.copyOf(nSeen * 2)
+                        seen[nSeen++] = key
+                        scanBucket(t, t.tabKey, t.tabStart, t.tabLen, t.ruleIds, key, ctx)
+                        if (ctx.important) return
+                    }
                 }
                 i = j
             } else {
@@ -220,9 +231,13 @@ class FilterSet internal constructor(
             }
         }
         if (t.gramRuleIds.isNotEmpty() && n >= 4) {
+            // Rules without any usable token are indexed by their rarest 4-gram. Grams repeat freely in ordinary URLs, so instead of a
+            // set this is bounded by work: a crafted URL can only waste MAX_GRAM_EVALS evaluations, and only on these few token-less rules.
+            val start = ctx.evals
             for (g in 0..n - 4) {
                 scanBucket(t, t.gramKey, t.gramStart, t.gramLen, t.gramRuleIds, Hash.gram(url, g), ctx)
                 if (ctx.important) return
+                if (ctx.evals - start > MAX_GRAM_EVALS) break
             }
         }
         for (id in t.noToken) {
@@ -250,6 +265,7 @@ class FilterSet internal constructor(
     }
 
     private fun evalRule(t: PatternTable, id: Int, ctx: Ctx) {
+        ctx.evals++
         val w = t.meta[id]
         if ((w and Bits.TYPES and ctx.typeMask) == 0) return
         val party = (w ushr Bits.PARTY_SHIFT) and 3
@@ -320,10 +336,13 @@ class FilterSet internal constructor(
         private const val CARET = '^'.code
         private const val MIN_TOKEN = 3
         private const val MAX_TOKEN_LEN = 64
-        private const val MAX_URL_TOKENS = 256
+        private const val MAX_GRAM_EVALS = 3000
 
         /** URLs are inspected up to this length: bounds worst-case matching cost against adversarial long URLs. */
         const val MAX_URL = 2048
+        private const val MAX_HOSTPORT = 300
+        private const val MAX_USERINFO = 256
+
 
         internal fun isAlnum(c: Char): Boolean = (c in 'a'..'z') || (c in '0'..'9')
 
@@ -384,16 +403,33 @@ class FilterSet internal constructor(
         }
 
         private fun makeCtx(rawUrl: String, pageHost: String?, typeMask: Int, psl: Psl): Ctx? {
-            var s = if (rawUrl.length > MAX_URL) rawUrl.substring(0, MAX_URL) else rawUrl
-            s = s.lowercase()
             // Only real network schemes are filtered; data:, blob:, about:, javascript:, file: ... never reach the network.
-            var hs = when {
-                s.startsWith("https://") -> 8
-                s.startsWith("http://") -> 7
-                s.startsWith("wss://") -> 6
-                s.startsWith("ws://") -> 5
+            val schemeLen = when {
+                rawUrl.regionMatches(0, "https://", 0, 8, ignoreCase = true) -> 8
+                rawUrl.regionMatches(0, "http://", 0, 7, ignoreCase = true) -> 7
+                rawUrl.regionMatches(0, "wss://", 0, 6, ignoreCase = true) -> 6
+                rawUrl.regionMatches(0, "ws://", 0, 5, ignoreCase = true) -> 5
                 else -> return null
             }
+            var s = rawUrl
+            if (s.length > MAX_URL) {
+                // The cap bounds matching cost, but it must not let the attacker choose WHAT is inspected: Chromium happily loads
+                // "https://<5000 junk chars>@malware.example/", so the authority is located on the full URL and an absurd userinfo is
+                // dropped before truncating (otherwise the real host would fall off the end and the request would pass unfiltered).
+                var authEnd0 = schemeLen
+                while (authEnd0 < s.length) {
+                    val c = s[authEnd0]
+                    if (c == '/' || c == '?' || c == '#') break
+                    authEnd0++
+                }
+                val at0 = s.lastIndexOf('@', authEnd0 - 1)
+                val hostPart = if (at0 >= schemeLen) authEnd0 - (at0 + 1) else authEnd0 - schemeLen
+                if (hostPart > MAX_HOSTPORT) return null // not a valid host:port at all (host <= 253 chars): the network stack rejects it
+                if (at0 >= schemeLen && at0 - schemeLen > MAX_USERINFO) s = s.substring(0, schemeLen) + s.substring(at0 + 1)
+                if (s.length > MAX_URL) s = s.substring(0, MAX_URL)
+            }
+            s = s.lowercase()
+            var hs = schemeLen
             var authEnd = hs
             while (authEnd < s.length) {
                 val c = s[authEnd]

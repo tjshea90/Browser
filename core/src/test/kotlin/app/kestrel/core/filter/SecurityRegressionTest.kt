@@ -61,7 +61,7 @@ class SecurityRegressionTest {
 
     @Test
     fun hugeRuleLinesAreSkippedNotCompiledQuadratically() {
-        val big = "/" + "a/".repeat(200_000) // 400 KB single line
+        val big = "/" + (1..40_000).joinToString("/") { "tok$it" } // ~340 KB single line of DISTINCT tokens (the quadratic shape: 5 s to compile before)
         val t0 = System.nanoTime()
         val f = set("||ads.example^", big, "||tracker.example^")
         val ms = (System.nanoTime() - t0) / 1_000_000
