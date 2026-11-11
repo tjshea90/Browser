@@ -236,6 +236,10 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     private var lastTouchAt = 0L
+    private var downX = 0f
+    private var downY = 0f
+    private var dragged = false
+    private val touchSlop by lazy { android.view.ViewConfiguration.get(this).scaledTouchSlop }
     private val touchRelease = Runnable { Neon.touching(false) }
 
     /**
@@ -247,11 +251,15 @@ open class BrowserActivity : Activity(), DockListener {
             android.view.MotionEvent.ACTION_DOWN -> {
                 Neon.touched(); Neon.touching(true)
                 lastTouchAt = SystemClock.uptimeMillis()
+                downX = ev.x; downY = ev.y; dragged = false
                 Io.main.removeCallbacks(touchRelease)
             }
+            android.view.MotionEvent.ACTION_POINTER_DOWN -> dragged = true // a pinch is a gesture too
+            android.view.MotionEvent.ACTION_MOVE -> if (!dragged && (Math.abs(ev.x - downX) > touchSlop || Math.abs(ev.y - downY) > touchSlop)) dragged = true
             android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
                 lastTouchAt = SystemClock.uptimeMillis()
-                Io.main.removeCallbacks(touchRelease); Io.main.postDelayed(touchRelease, 1500)
+                // a swipe may leave a fling running (hold the glow still for it); a plain tap leaves nothing behind, so the glow comes back almost at once
+                Io.main.removeCallbacks(touchRelease); Io.main.postDelayed(touchRelease, if (dragged) 1500L else 350L)
             }
         }
         return super.dispatchTouchEvent(ev)
@@ -346,6 +354,8 @@ open class BrowserActivity : Activity(), DockListener {
         root.addView(tabGrid, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         sheet = SheetHost(this, pal)
         root.addView(sheet, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        // the neon only settles to a steady glow after a minute without a touch while a PAGE is in front; on Home, in the tab grid and under a sheet it keeps breathing
+        Neon.canRest = { current != null && !homeShown() && tabGrid.visibility != View.VISIBLE && !sheet.isShowing }
         fullscreen = FrameLayout(this).apply { setBackgroundColor(0xFF000000.toInt()); visibility = View.GONE; isClickable = true }
         root.addView(fullscreen, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         setContentView(root)
@@ -1007,6 +1017,8 @@ open class BrowserActivity : Activity(), DockListener {
         out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null }} of ${tabs.size} tabs; current ${current?.url?.take(60) ?: "-"}")
         out.add(GeckoEngine.prefReadback)
         out.add(GlInfo.text)
+        val animScale = try { android.provider.Settings.Global.getFloat(contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) } catch (e: Exception) { 1f }
+        out.add("Neon glow: ${Neon.status()}; system animation scale ${if (animScale == 0f) "off (the glow ignores it)" else "x$animScale"}")
         out.add("Page view: attached=${geckoView.parent != null} session=${geckoView.session != null} windowFocus=${hasWindowFocus()}")
         return out
     }
