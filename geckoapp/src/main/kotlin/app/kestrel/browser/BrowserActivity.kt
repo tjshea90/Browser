@@ -53,6 +53,7 @@ import app.kestrel.browser.ui.Pal
 import app.kestrel.browser.ui.Neon
 import app.kestrel.browser.ui.NeonBar
 import app.kestrel.browser.ui.RestoreOverlay
+import app.kestrel.browser.web.ScrollTest
 import app.kestrel.browser.ui.SettingsListener
 import app.kestrel.browser.ui.SettingsView
 import app.kestrel.browser.ui.ShieldsPanel
@@ -1008,11 +1009,45 @@ open class BrowserActivity : Activity(), DockListener {
 
     private fun showDiagnostics() {
         GeckoEngine.readBackPrefs { diagView?.refresh() }
-        val v = diagView ?: DiagnosticsView(this, pal, ::engineFacts, { refreshScreen("diagnostics") }, { closeDiagnostics() }).also { diagView = it }
+        val v = diagView ?: DiagnosticsView(this, pal, ::engineFacts, { refreshScreen("diagnostics") }, { closeDiagnostics() }, { runScrollTest() }).also { diagView = it }
         if (v.parent == null) root.addView(v, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) else v.refresh()
     }
 
     private fun closeDiagnostics() { diagView?.let { detach(it) } }
+
+    private var scrollTestTab: Tab? = null
+
+    /**
+     * Diagnostics > Scroll test: a temporary tab with the bundled long page ([ScrollTest.URL]); once it has loaded, [ScrollTest] scrolls it and reports the frames the
+     * compositor produced. The tab is closed afterwards, the numbers are shown and logged (Copy/Share on the Diagnostics page includes them).
+     */
+    private fun runScrollTest() {
+        closeDiagnostics()
+        val t = newTabInternal()
+        t.url = ScrollTest.URL; t.pendingLoad = ScrollTest.URL
+        scrollTestTab = t
+        show(t)
+        toast("Scroll test: loading the test page...")
+    }
+
+    private fun startScrollTest(tab: Tab) {
+        val s = tab.session
+        if (s == null || current !== tab || isFinishing || isDestroyed) { doCloseTab(tab); toast("Scroll test could not start"); return }
+        toast("Scroll test running: do not touch the screen")
+        Health.log("scrolltest", "start", memFacts())
+        ScrollTest(s, { memFacts() }) { report ->
+            Health.log("scrolltest", "result", report.lineSequence().take(3).joinToString(" | "))
+            doCloseTab(tab)
+            if (isFinishing || isDestroyed) return@ScrollTest
+            android.app.AlertDialog.Builder(this).setTitle("Scroll test").setMessage(report)
+                .setPositiveButton("OK", null)
+                .setNeutralButton("Copy") { _, _ ->
+                    (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Kestrel scroll test", report))
+                    toast("Copied")
+                }
+                .show()
+        }.start()
+    }
 
     /**
      * What switching apps and coming back does to the page, on demand: re-send the focus and keyboard state (R0), toggle the session's active state (R1),
@@ -1177,6 +1212,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     internal fun pageFinished(tab: Tab) {
+        if (tab === scrollTestTab) { scrollTestTab = null; Io.main.postDelayed({ startScrollTest(tab) }, 2500); return } // the bundled test page: nothing else to do for it
         flushCounters()
         // A failed or blocked load is not a visit (typos and malware URLs would otherwise fill history and the top sites).
         if (!tab.isPrivateTab && tab.error == null && tab.url.startsWith("http")) { val u = withoutUserinfo(tab.url); val ti = tab.title; Io.exec { db?.recordVisit(u, ti) } }
