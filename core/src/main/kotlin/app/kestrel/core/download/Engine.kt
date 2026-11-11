@@ -400,7 +400,7 @@ class Engine(
             seg.live = !ranged
             seg.reqEnd = reqEnd
             synchronized(lock) {
-                rec.finalUrl = resp.finalUrl; rec.finalAt = now; rec.name = name; rec.mime = ctype ?: rec.mime; rec.total = total; rec.ranges = ranges
+                rec.finalUrl = resp.finalUrl; rec.finalAt = now; rec.name = sink.displayName ?: name; rec.mime = ctype ?: rec.mime; rec.total = total; rec.ranges = ranges
                 rec.etag = etag
                 rec.lastMod = if (etag == null && HttpSemantics.isStrongLastModified(lm, date)) lm else null
                 rec.dateHdr = date

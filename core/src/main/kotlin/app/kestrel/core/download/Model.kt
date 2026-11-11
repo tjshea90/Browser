@@ -177,6 +177,8 @@ class SinkException(val reason: Reason, message: String?, cause: Throwable? = nu
 /** The destination file. [pwrite] must be safe to call from several threads at different offsets. */
 interface Sink {
     val uri: String?
+    /** The name the file really got (the provider may have renamed it to avoid a clash); null = as requested. */
+    val displayName: String? get() = null
     @Throws(SinkException::class) fun pwrite(pos: Long, b: ByteArray, off: Int, len: Int)
     @Throws(SinkException::class) fun sync()
     fun length(): Long
