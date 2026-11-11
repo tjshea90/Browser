@@ -275,6 +275,27 @@ class StreamEngineTest {
         assertTrue("neither was handed over", fin.asked.isEmpty())
     }
 
+    @Test(timeout = 60_000) fun aDashRepresentationIsDownloadedFromItsManifest() {
+        val h = H()
+        val init = testBytes(700, 1); val segs = (1..4).map { testBytes(20_000 + it * 100, 40L + it) }
+        h.cdn.files["https://cdn.test/d/vid/init.mp4"] = init
+        segs.forEachIndexed { i, b -> h.cdn.files["https://cdn.test/d/vid/seg-${i + 1}.m4s"] = b }
+        val aInit = testBytes(500, 2); val aSegs = (1..4).map { testBytes(5_000 + it, 80L + it) }
+        h.cdn.files["https://cdn.test/d/aud/init.mp4"] = aInit
+        aSegs.forEachIndexed { i, b -> h.cdn.files["https://cdn.test/d/aud/seg-${i + 1}.m4s"] = b }
+        val mpd = """<MPD type="static" mediaPresentationDuration="PT8S"><Period>
+            <AdaptationSet mimeType="video/mp4"><SegmentTemplate timescale="1000" duration="2000" initialization="vid/init.mp4" media="vid/seg-${'$'}Number${'$'}.m4s"/><Representation id="v1" bandwidth="800000" width="640" height="360" codecs="avc1.42c01e"/></AdaptationSet>
+            <AdaptationSet mimeType="audio/mp4"><SegmentTemplate timescale="1000" duration="2000" initialization="aud/init.mp4" media="aud/seg-${'$'}Number${'$'}.m4s"/><Representation id="a1" bandwidth="96000" codecs="mp4a.40.2"/></AdaptationSet>
+            </Period></MPD>"""
+        h.cdn.files["https://cdn.test/d/manifest.mpd"] = mpd.toByteArray()
+        val v = h.completed(h.engine.enqueue(StreamSource("https://cdn.test/d/manifest.mpd", null, null, "Clip - 360p", repId = "v1")))
+        assertArrayEquals(init + segs.reduce { a, b -> a + b }, h.out(v))
+        assertEquals("Clip - 360p.mp4", h.sinks.sinks[v.destUri]!!.name)
+        val a = h.completed(h.engine.enqueue(StreamSource("https://cdn.test/d/manifest.mpd", null, null, "Clip - sound", repId = "a1", ext = "m4a")))
+        assertArrayEquals(aInit + aSegs.reduce { x, y -> x + y }, h.out(a))
+        assertEquals("Clip - sound.m4a", h.sinks.sinks[a.destUri]!!.name); assertEquals("audio/mp4", a.mime)
+    }
+
     @Test(timeout = 60_000) fun theEstimateTracksTheRealSizeWhileItRuns() {
         val h = H(); h.cdn.chunkDelayMs = 5; h.cdn.chunk = 4096
         val (pl, expected) = plainStream(h, 16, 40_000)
