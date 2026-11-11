@@ -55,6 +55,8 @@ Priority: P0 before the next release | P1 within two releases | P2 backlog. Effo
 | B22 | P2 | Drop CAMERA / RECORD_AUDIO / location declarations if the owner never uses them (an exploited renderer cannot be granted what is not declared) | S | feature loss |
 | B23 | P2 | Re-check `isolatedProcessEnabled` when bug 1565196 closes, Fission "high value" strategy, retire the WebView build once G is trusted | - | - |
 
+Suggested sessions: (1) owner items B7 + GitHub settings (SHA-pin policy, secret scanning + push protection, immutable releases, environment `release`); (2) one code session B8 B9 B10 B16 with an emulator smoke test of the Gecko build (page loads, private tab, download, permission prompts); (3) one CI session B2 B3 B4 B5 B6 B11 B12 B15 on a throw-away tag before touching the real release path; (4) B1 with the emulator gate, then delete the dev key from the release path (keep it for tests only); (5) the P2 items.
+
 ## 4. Exact settings and snippets
 ### 4.0 Gecko settings matrix (defaults from StaticPrefList 160.0.1 + AAR [V])
 | Area | Default in 160 | Decision | Pref / API | Break |
