@@ -442,6 +442,15 @@ var KestrelEngine = (function () {
       return cExcepted ? 2 : (1 | (cCategory << 2));
     }
 
+    /** Runs a few dozen representative checks so the script engine has compiled every path before the first real request (a cold first check is slow on a small CPU). */
+    function warm() {
+      var urls = ['https://ads.example.com/banner/1.gif', 'https://cdn.example.org/a/b/c/d.js?x=1&y=2', 'https://www.google-analytics.com/collect?v=1&tid=UA-1', 'https://static.site.co.uk/img/logo.png',
+        'wss://sock.example/s', 'http://127.0.0.1:8080/x', 'https://a.b.c.d.example.com/' + 'seg/'.repeat(30) + 'file.js', 'https://user@host.example:8443/p/q.html#f'];
+      var types = [T.SCRIPT, T.IMAGE, T.XHR, T.STYLESHEET, T.SUBDOCUMENT, T.OTHER];
+      for (var r = 0; r < 8; r++) for (var u = 0; u < urls.length; u++) check(urls[u], (r & 1) ? 'news.site.co.uk' : 'example.com', types[(r + u) % types.length]);
+    }
+    warm();
+
     return {
       check: check, siteOf: siteOf, isSameSite: isSameSite,
       generation: all[2], bytes: buf.byteLength, hostRules: nHost, hostExceptions: nExc, patternRules: nRules, tokenRules: ruleIds.length, gramRules: gramIds.length, tokenlessRules: noToken.length,

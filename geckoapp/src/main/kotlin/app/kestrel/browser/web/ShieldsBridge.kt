@@ -182,12 +182,12 @@ class ShieldsBridge(
 
     /** What the extension's engine reports about itself (`st`), shown in Diagnostics. */
     class EngineStats(
-        val generation: Int, val checks: Long, val totalUs: Long, val maxUs: Long, val perRequestAsks: Long, val errors: Int,
+        val generation: Int, val checks: Long, val totalUs: Long, val maxUs: Long, val slow: Long, val perRequestAsks: Long, val errors: Int,
         val loadMs: Long, val imageBytes: Int, val transfers: Int, val off: Boolean, val note: String, val at: Long,
     ) {
         companion object {
             fun from(m: JSONObject) = EngineStats(
-                m.optInt("g"), m.optLong("n"), m.optLong("us"), m.optLong("mx"), m.optLong("lg"), m.optInt("er"),
+                m.optInt("g"), m.optLong("n"), m.optLong("us"), m.optLong("mx"), m.optLong("sl"), m.optLong("lg"), m.optInt("er"),
                 m.optLong("ld"), m.optInt("by"), m.optInt("pl"), m.optInt("off") != 0, m.optString("w").take(120), System.currentTimeMillis(),
             )
         }
@@ -209,7 +209,7 @@ class ShieldsBridge(
                 s.generation > 0 && s.imageBytes > 0 -> "list #${s.generation}, ${s.imageBytes / 1024} KB, loaded in ${s.loadMs} ms, ${s.transfers} transfer(s)"
                 else -> "list not loaded yet"
             }
-            return "Blocker: fast mode, $state. ${s.checks} requests judged in the engine (average ${avg} us, slowest ${s.maxUs} us), ${s.perRequestAsks} asked the app one by one, ${s.errors} errors. ${s.note}".trim()
+            return "Blocker: fast mode, $state. ${s.checks} requests judged in the engine (average ${avg} us, slowest ${s.maxUs} us, ${s.slow} over 2 ms), ${s.perRequestAsks} asked the app one by one, ${s.errors} errors. ${s.note}".trim()
         }
 
         private const val ASSET_URI = "resource://android/assets/kestrel-shields/"

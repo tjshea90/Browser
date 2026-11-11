@@ -13,7 +13,7 @@ var engineGen = 0;       // generation of that image (the app's Engine.generatio
 var pulling = false;
 var pullFailures = 0, pullRetryAt = 0;
 var engineOff = false;   // too many errors: back to the per-request path for the rest of the session
-var stats = { checks: 0, us: 0, maxUs: 0, legacy: 0, errors: 0, loadMs: 0, pulls: 0, last: '' };
+var stats = { checks: 0, us: 0, maxUs: 0, slow: 0, legacy: 0, errors: 0, loadMs: 0, pulls: 0, last: '' };
 var MODE_OFF = 0, MODE_ON = 1, MODE_LEGACY = 2;
 
 // ---------------------------------------------------------------- per-page configuration ("cfg"): one question per main-frame navigation
@@ -120,7 +120,7 @@ function markStats() { // lazy timer: nothing is scheduled while no request is b
 function reportStats(force) {
   if (!force && !statsDirty) return;
   statsDirty = false;
-  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), lg: stats.legacy, er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, w: (stats.last + (stats.file ? ' | ' + stats.file : '')).slice(0, 400) }).catch(function () {});
+  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, w: (stats.last + (stats.file ? ' | ' + stats.file : '')).slice(0, 400) }).catch(function () {});
 }
 
 // ---------------------------------------------------------------- the legacy path: one question to the app per request (cached per page; used while no engine is loaded)
@@ -175,7 +175,7 @@ function decide(d, page, host, mode) {
       var t0 = performance.now();
       var v = engine.check(d.url, host, E.typeMask(d.type));
       var us = (performance.now() - t0) * 1000;
-      stats.checks++; stats.us += us; if (us > stats.maxUs) stats.maxUs = us;
+      stats.checks++; stats.us += us; if (us > stats.maxUs) stats.maxUs = us; if (us > 2000) stats.slow++;
       markStats();
       if ((v & 1) !== 0) { countBlock(page, (v >>> 2) & 3); return { cancel: true }; }
       return {};
