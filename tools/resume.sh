@@ -50,21 +50,23 @@ BRIEF="$(
     fi
     [ "$AHEAD" -gt 0 ] && echo "  NOTE  $AHEAD commit(s) not yet pushed - 'git push origin HEAD'."
 
-    # OTHER BRANCHES WITH WORK THIS ONE LACKS. Claude Code gives every session its own branch, so a cut-off session's work can
-    # sit on a branch nobody opens. Name each one and the command that brings it in.
-    ORPHANS=0
-    for RB in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin 2>/dev/null | grep -v -e '^origin$' -e '^origin/HEAD$' -e "^origin/${CURBR}$" | head -12); do
-      N="$(git rev-list --count "HEAD..$RB" 2>/dev/null || echo 0)"
-      [ "$N" -gt 0 ] || continue
-      case "$RB" in origin/dependabot/*) continue ;; esac
-      if ! git merge-base HEAD "$RB" >/dev/null 2>&1; then ORPHANS=$((ORPHANS+1)); continue; fi
-      echo "  !!    ${RB#origin/} has $N commit(s) this branch lacks (last: $(git log -1 --format='%s' "$RB" | cut -c1-70); newest commit $(git log -1 --format=%cr "$RB"))."
-      echo "        Look first:  git log --oneline HEAD..$RB | head   - then:  git merge $RB   (tell the owner if it contradicts this branch)"
-      SIBLING=1
+    # OTHER SESSIONS (many Claude sessions/accounts share this repo). tools/sync.sh merges every other branch that has commits this one lacks:
+    # a cut-off session's WHOLE tip (including the half-finished change its last autosave captured), an active session's last deliberate
+    # checkpoint only. A conflict is aborted and reported (nothing lost).
+    bash tools/sync.sh 2>&1 | cut -c1-260
+    # The parallel lanes: each session keeps its own card in .checkpoints/<branch>.md (newest first, last 3 days, at most 4).
+    ME="$(printf '%s' "$CURBR" | tr -c 'A-Za-z0-9._\n-' '_')"
+    for C in $(ls -t .checkpoints/*.md 2>/dev/null | head -6); do
+      LB="$(basename "$C" .md)"; [ "$LB" = "$ME" ] && continue
+      LW="$(sed -n 's/^\*\*Written:\*\* \([0-9T:Z-]*\).*/\1/p' "$C" | head -1)"
+      LAGE=$(( ( $(date +%s) - $(date -d "${LW:-1970-01-01T00:00:00Z}" +%s 2>/dev/null || echo 0) ) / 60 ))
+      [ "$LAGE" -gt 4320 ] && continue
+      LNX="$(awk '/^## Do this next/{f=1;next} /^## /{f=0} f&&NF{print;exit}' "$C" | cut -c1-150)"
+      echo "  lane $LB ($LAGE min ago): $LNX"
     done
-    [ "$ORPHANS" -gt 0 ] && echo "  note  $ORPHANS old session branch(es) share no history with this one (orphans): ignored."
-    # Another session / another Claude account? Its newest commit is its heartbeat (HANDOFF.md "Taking over").
-    [ -n "${SIBLING:-}" ] && echo "  NOTE  Another session's work is ahead of you: newest commit under ~20 min old = it MAY still be running (do not release or touch its CI runs; ask the owner); older = cut off: TAKE OVER (HANDOFF.md)."
+    # claimed TASKS items: [~] ... {branch time}
+    CL="$(grep -n '^\s*- \[~\]' TASKS.md 2>/dev/null | cut -c1-150)"
+    [ -n "$CL" ] && { echo "  CLAIMED by sessions (a claim whose branch has no commit for 90 min is dead: take it over with tools/claim.sh <ID>):"; printf '%s\n' "$CL" | sed 's/^/    /'; }
 
     LASTAUTO="$(git log -1 --format=%cr --grep='^auto-checkpoint:' 2>/dev/null || true)"
     if [ -n "$LASTAUTO" ]; then
