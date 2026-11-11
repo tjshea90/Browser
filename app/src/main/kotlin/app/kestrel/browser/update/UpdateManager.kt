@@ -1,12 +1,14 @@
 package app.kestrel.browser.update
 
 import android.app.PendingIntent
+import android.app.usage.StorageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInstaller
 import android.os.storage.StorageManager
 import android.os.Build
+import android.provider.Settings
 import app.kestrel.browser.Flavor
 import app.kestrel.browser.Io
 import app.kestrel.core.update.Release

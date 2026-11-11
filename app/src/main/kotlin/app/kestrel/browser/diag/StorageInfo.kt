@@ -1,6 +1,7 @@
 package app.kestrel.browser.diag
 
 import android.content.Context
+import android.app.usage.StorageStatsManager
 import android.os.storage.StorageManager
 import app.kestrel.core.update.UpdateLogic
 import java.io.File
@@ -18,13 +19,13 @@ object StorageInfo {
         text = try {
             val dir = app.filesDir
             val sm = app.getSystemService(StorageManager::class.java)
-            val allocatable = try { sm.getAllocatableBytes(sm.getUuidForPath(dir)) } catch (e: Exception) { -1L }
+            val installerFree = try { app.getSystemService(StorageStatsManager::class.java).getFreeBytes(sm.getUuidForPath(dir)) } catch (e: Exception) { -1L }
             val apk = File(app.applicationInfo.sourceDir).length()
             val libs = try { File(app.applicationInfo.nativeLibraryDir).listFiles()?.sumOf { it.length() } ?: 0L } catch (e: Exception) { 0L }
             val files = size(app.filesDir)
             val cache = size(app.cacheDir)
-            "Storage: ${f(dir.usableSpace)} free of ${f(dir.totalSpace)}; Android's installer may use ${if (allocatable >= 0) f(allocatable) else "?"} (free + clearable caches - its reserve); " +
-                "this app: package ${f(apk)} + unpacked libraries ${f(libs)} + data ${f(files)} + cache ${f(cache)}; an in-place update briefly holds the old and the new install"
+            "Storage: ${f(dir.usableSpace)} free of ${f(dir.totalSpace)}; free + caches Android can clear: ${if (installerFree >= 0) f(installerFree) else "?"}; Android keeps ${f(dir.totalSpace / 10)} free after an install (a tenth); " +
+                "this app: package ${f(apk)} + unpacked libraries ${f(libs)} + data ${f(files)} + cache ${f(cache)}; an install or update needs free >= reserve + package + libraries + about 64 MB"
         } catch (e: Exception) { "Storage: unavailable (${e.javaClass.simpleName})" }
     }
 

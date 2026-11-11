@@ -109,7 +109,7 @@ class UpdatePanel(ctx: Context, private val pal: Pal, private val prefs: Prefs, 
             Phase.NEEDS_SPACE -> {
                 headline("Not enough free storage", pal.warn)
                 sub("Free up about ${UpdateLogic.formatSize(s.shortBy)} more, then tap Try again.", pal.fg)
-                sub("Why so much: Android unpacks the new version (about ${UpdateLogic.formatSize(s.installedBytes)}) while it still keeps the current one, and it never uses the last part of the storage. Free space now: ${UpdateLogic.formatSize(s.freeNow)}.")
+                sub("Why so much: Android only finishes an install while ${UpdateLogic.formatSize(s.reserveBytes)} (a tenth of this tablet's storage) stays free afterwards, and the update itself takes about ${UpdateLogic.formatSize(s.installedBytes)}. Free now: ${UpdateLogic.formatSize(s.freeNow)}, counting caches Android can clear.")
                 sub(if (s.fileKept) "The update file is already downloaded: nothing is downloaded again." else "The update file has to be downloaded again (${o?.let { UpdateLogic.formatSize(it.size) } ?: ""}).")
                 buttons(
                     primary("Try again") { if (s.fileKept) UpdateManager.install(ctx) else actions.download() },
