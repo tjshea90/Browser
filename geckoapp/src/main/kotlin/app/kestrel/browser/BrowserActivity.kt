@@ -57,6 +57,11 @@ import app.kestrel.browser.ui.SettingsView
 import app.kestrel.browser.ui.ShieldsPanel
 import app.kestrel.browser.ui.SuggestionList
 import app.kestrel.browser.ui.TabGrid
+import app.kestrel.browser.ui.DownloadsScreen
+import app.kestrel.browser.download.DownloadController
+import app.kestrel.browser.download.Notifier
+import app.kestrel.core.download.DownloadView
+import app.kestrel.core.download.Source
 import app.kestrel.browser.ui.UpdatePanel
 import app.kestrel.browser.update.UpdateManager
 import app.kestrel.browser.ui.ThumbStore
@@ -171,6 +176,7 @@ open class BrowserActivity : Activity(), DockListener {
             Io.main.post {
                 Health.log("engine", "runtime-create")
                 GeckoEngine.runtime(this)
+                GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
                 GeckoEngine.warmUp(this)
                 ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }))
                 Health.log("engine", "runtime-ready")
@@ -180,6 +186,7 @@ open class BrowserActivity : Activity(), DockListener {
         tabs.add(firstTab)
         show(firstTab)
         val launch = urlFromIntent(intent)
+        if (intent?.getBooleanExtra(Notifier.EXTRA_OPEN_DOWNLOADS, false) == true) Io.main.post { showDownloads() }
         Io.exec {
             val text = try { sessionFile().takeIf { it.isFile }?.readText() } catch (e: Exception) { null }
             val session = SessionCodec.decode(text)
@@ -236,6 +243,7 @@ open class BrowserActivity : Activity(), DockListener {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (intent.getBooleanExtra(Notifier.EXTRA_OPEN_DOWNLOADS, false)) showDownloads()
         urlFromIntent(intent)?.let { openInNewTabOrCurrent(it) }
     }
 
@@ -852,7 +860,7 @@ open class BrowserActivity : Activity(), DockListener {
             }
             M.BOOKMARKS -> showList(true)
             M.HISTORY -> showList(false)
-            M.DOWNLOADS -> try { startActivity(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (e: Exception) { toast("No downloads app found") }
+            M.DOWNLOADS -> showDownloads()
             M.DESKTOP -> t?.let { tab ->
                 tab.desktop = !tab.desktop
                 tab.session?.let { s ->
@@ -1170,6 +1178,7 @@ open class BrowserActivity : Activity(), DockListener {
     /** @return true if the back press did something. */
     private fun handleBack(): Boolean {
         if (sheet.isShowing) { sheet.dismiss(); return true }
+        if (downloadsView?.parent != null) { closeDownloads(); return true }
         if (diagView?.parent != null) { closeDiagnostics(); return true }
         if (settingsView?.parent != null) { closeSettings(); return true }
         if (listPanel?.parent != null) { closeList(); return true }
@@ -1418,10 +1427,59 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     private fun startDownload(url: String, ua: String?, cd: String?, mime: String?, tab: Tab) {
-        val go = { toast(if (Downloads.enqueue(this, url, ua, cd, mime, tab.url)) "Download started" else "Can't download this link") }
-        // The system DownloadManager keeps the file, its address and a notification OUTSIDE the private tab.
-        if (tab.isPrivateTab) askYesNo("Download from a private tab?", "The file, its web address and a notification are kept on this tablet by Android, outside the private tab.", "Download", "Cancel", { ok -> if (ok) go() })
+        val go = {
+            // Referer = the page's ORIGIN only (never the full URL: it can carry tokens / search terms)
+            val headers = HashMap<String, String>()
+            UrlParts.parse(tab.url)?.let { headers["Referer"] = "${it.scheme}://${it.hostForAuthority}/" }
+            DownloadController.enqueue(this, Source(url, tab.url.takeIf { it.isNotEmpty() }, Downloads.fileName(url, cd, mime), mime, headers, fetcher = 1, priv = tab.isPrivateTab, meteredOk = true))
+            askNotificationPermissionOnce()
+            toast("Download started: Menu > Downloads")
+        }
+        if (tab.isPrivateTab) askYesNo("Download from a private tab?", "The file is saved in your Downloads folder and stays there after you close the private tab. Kestrel keeps no record of it.", "Download", "Cancel", { ok -> if (ok) go() })
         else go()
+    }
+
+    private var askedNotifications = false
+    /** Android 13+: the progress notification needs the user's OK once. The downloads run either way (the service is visible in the task manager). */
+    private fun askNotificationPermissionOnce() {
+        if (askedNotifications || Build.VERSION.SDK_INT < 33) return
+        askedNotifications = true
+        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 77)
+    }
+
+    // ---- the Downloads screen
+
+    private var downloadsView: DownloadsScreen? = null
+
+    private fun showDownloads() {
+        if (downloadsView?.parent != null) return
+        hideKeyboard()
+        val v = DownloadsScreen(this, pal, object : DownloadsScreen.Listener {
+            override fun open(v: DownloadView) { openDownload(v) }
+            override fun share(v: DownloadView) { shareDownload(v) }
+            override fun confirm(title: String, message: String, yes: String, then: () -> Unit) { askYesNo(title, message, yes, "Keep", { ok -> if (ok) then() }) }
+            override fun close() { closeDownloads() }
+        })
+        downloadsView = v
+        root.addView(v, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+    }
+
+    private fun closeDownloads() { downloadsView?.let { root.removeView(it) }; downloadsView = null }
+
+    private fun openDownload(v: DownloadView) {
+        val uri = v.destUri ?: run { toast("The file is not available"); return }
+        val go = {
+            try { startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse(uri), v.mime ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }
+            catch (e: Exception) { toast("No app on this tablet can open this file") }
+        }
+        if (Downloads.isRisky(v.name, v.mime)) askYesNo("Open this file?", "${v.name} can install software or run code. Only open it if you trust where it came from.", "Open", "Cancel", { ok -> if (ok) go() })
+        else go()
+    }
+
+    private fun shareDownload(v: DownloadView) {
+        val uri = v.destUri ?: run { toast("The file is not available"); return }
+        val i = Intent(Intent.ACTION_SEND).setType(v.mime ?: "*/*").putExtra(Intent.EXTRA_STREAM, Uri.parse(uri)).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        try { startActivity(Intent.createChooser(i, "Share file")) } catch (e: Exception) { toast("Nothing to share with") }
     }
 
     internal fun externalLaunch(tab: Tab, url: String, userGesture: Boolean): Boolean {
