@@ -9,50 +9,50 @@ https://x.net/aads.example.com/	16	localhost	0
 https://x.net/aads.example.com/	2	other.co.uk	0
 https://ADS.EXAMPLE.COM/	128		1
 https://ADS.EXAMPLE.COM/	2184	example.com	1
-https://tracker.example/	512	b.com	21
-https://tracker.example/	8	city.kobe.jp	21
-https://tracker.example/	64	www.ck	21
-http://sub.tracker.example/	512	1.2.3.4	21
-http://sub.tracker.example/	2	foo.ck	21
+https://tracker.example/	512	b.com	2
+https://tracker.example/	8	city.kobe.jp	2
+https://tracker.example/	64	www.ck	2
+http://sub.tracker.example/	512	1.2.3.4	2
+http://sub.tracker.example/	2	foo.ck	2
 https://x.net/path/tracker.example/?k=v	32	page.example	0
 https://x.net/path/tracker.example/?k=v	1024	user.github.io	0
 https://x.net/atracker.example/	1	foo.ck	0
 https://x.net/atracker.example/	64	news.site.co.uk	0
-https://TRACKER.EXAMPLE/	64	foo.ck	21
-https://TRACKER.EXAMPLE/	128	x.y.kobe.jp	21
-https://first.example/	256	a.b.c.example.org	21
-https://first.example/	16	b.com	21
-https://first.example/	2	example.com	21
-http://sub.first.example/	2184		21
-http://sub.first.example/	2184	other.co.uk	21
+https://TRACKER.EXAMPLE/	64	foo.ck	2
+https://TRACKER.EXAMPLE/	128	x.y.kobe.jp	2
+https://first.example/	256	a.b.c.example.org	2
+https://first.example/	16	b.com	2
+https://first.example/	2	example.com	2
+http://sub.first.example/	2184		2
+http://sub.first.example/	2184	other.co.uk	2
 https://x.net/path/first.example/?k=v	128	other.co.uk	0
 https://x.net/path/first.example/?k=v	2	track.net	0
 https://x.net/afirst.example/	16	track.net	0
 https://x.net/afirst.example/	64	news.site.co.uk	0
-https://FIRST.EXAMPLE/	64	a.com	21
-https://FIRST.EXAMPLE/	8	www.example.com	21
-https://pixel.example/	32	www.example.com	21
-https://pixel.example/	2	localhost	21
-https://pixel.example/	128	a.b.c.example.org	21
-http://sub.pixel.example/	2	localhost	21
+https://FIRST.EXAMPLE/	64	a.com	2
+https://FIRST.EXAMPLE/	8	www.example.com	2
+https://pixel.example/	32	www.example.com	2
+https://pixel.example/	2	localhost	2
+https://pixel.example/	128	a.b.c.example.org	2
+http://sub.pixel.example/	2	localhost	2
 http://sub.pixel.example/	1		0
 https://x.net/path/pixel.example/?k=v	2	news.site.co.uk	0
 https://x.net/path/pixel.example/?k=v	256	b.com	0
 https://x.net/apixel.example/	8	1.2.3.4	0
 https://x.net/apixel.example/	1	localhost	0
-https://PIXEL.EXAMPLE/	2048	localhost	21
-https://PIXEL.EXAMPLE/	16	other.co.uk	21
-https://both.example/	1024	a.com	21
-https://both.example/	2	news.site.co.uk	21
-https://both.example/	256	example.com	21
-http://sub.both.example/	64	example.com	21
-http://sub.both.example/	64	page.example	21
+https://PIXEL.EXAMPLE/	2048	localhost	2
+https://PIXEL.EXAMPLE/	16	other.co.uk	2
+https://both.example/	1024	a.com	2
+https://both.example/	2	news.site.co.uk	2
+https://both.example/	256	example.com	2
+http://sub.both.example/	64	example.com	2
+http://sub.both.example/	64	page.example	2
 https://x.net/path/both.example/?k=v	64	1.2.3.4	0
 https://x.net/path/both.example/?k=v	4		0
 https://x.net/aboth.example/	512	a.b.c.example.org	0
 https://x.net/aboth.example/	16	foo.ck	0
-https://BOTH.EXAMPLE/	32		21
-https://BOTH.EXAMPLE/	2048	example.com	21
+https://BOTH.EXAMPLE/	32		2
+https://BOTH.EXAMPLE/	2048	example.com	2
 https://imp.example/	4	track.net	17
 https://imp.example/	1024	page.example	17
 https://imp.example/	4	page.example	17
@@ -75,38 +75,38 @@ https://x.net/aads.example.com/ok/	2	a.b.c.example.org	0
 https://x.net/aads.example.com/ok/	512	foo.ck	0
 https://ADS.EXAMPLE.COM/OK/	128	page.example	2
 https://ADS.EXAMPLE.COM/OK/	16	city.kobe.jp	2
-https://tracker.example/safe.js	32	other.co.uk	21
-https://tracker.example/safe.js	512		21
-https://tracker.example/safe.js	16	1.2.3.4	21
-http://sub.tracker.example/safe.js	2184		21
-http://sub.tracker.example/safe.js	2	a.b.c.example.org	21
+https://tracker.example/safe.js	32	other.co.uk	2
+https://tracker.example/safe.js	512		2
+https://tracker.example/safe.js	16	1.2.3.4	2
+http://sub.tracker.example/safe.js	2184		2
+http://sub.tracker.example/safe.js	2	a.b.c.example.org	2
 https://x.net/path/tracker.example/safe.js?k=v	256	tracker.example	0
 https://x.net/path/tracker.example/safe.js?k=v	32	other.co.uk	0
 https://x.net/atracker.example/safe.js	256	a.b.c.example.org	0
 https://x.net/atracker.example/safe.js	512	example.com	0
-https://TRACKER.EXAMPLE/SAFE.JS	1024	other.github.io	21
-https://TRACKER.EXAMPLE/SAFE.JS	2	track.net	21
-https://hostonly.example/	4	city.kobe.jp	21
-https://hostonly.example/	256	b.com	21
-https://hostonly.example/	32		21
-http://sub.hostonly.example/	2	other.github.io	21
-http://sub.hostonly.example/	2184	foo.ck	21
+https://TRACKER.EXAMPLE/SAFE.JS	1024	other.github.io	2
+https://TRACKER.EXAMPLE/SAFE.JS	2	track.net	2
+https://hostonly.example/	4	city.kobe.jp	2
+https://hostonly.example/	256	b.com	2
+https://hostonly.example/	32		2
+http://sub.hostonly.example/	2	other.github.io	2
+http://sub.hostonly.example/	2184	foo.ck	2
 https://x.net/path/hostonly.example/?k=v	2048	other.github.io	0
 https://x.net/path/hostonly.example/?k=v	8	tracker.example	0
 https://x.net/ahostonly.example/	32	other.github.io	0
 https://x.net/ahostonly.example/	512	example.com	0
-https://HOSTONLY.EXAMPLE/	64	news.site.co.uk	21
-https://HOSTONLY.EXAMPLE/	512	other.github.io	21
-https://hostonly.example/	2184	a.b.c.example.org	21
-https://hostonly.example/	256	a.b.c.example.org	21
-https://hostonly.example/	64	1.2.3.4	21
-http://sub.hostonly.example/	32	other.github.io	21
-http://sub.hostonly.example/	32	localhost	21
+https://HOSTONLY.EXAMPLE/	64	news.site.co.uk	2
+https://HOSTONLY.EXAMPLE/	512	other.github.io	2
+https://hostonly.example/	2184	a.b.c.example.org	2
+https://hostonly.example/	256	a.b.c.example.org	2
+https://hostonly.example/	64	1.2.3.4	2
+http://sub.hostonly.example/	32	other.github.io	2
+http://sub.hostonly.example/	32	localhost	2
 https://x.net/path/hostonly.example/?k=v	128	www.ck	0
 https://x.net/path/hostonly.example/?k=v	512		0
 https://x.net/ahostonly.example/	16		0
 https://x.net/ahostonly.example/	2184	other.co.uk	0
-https://HOSTONLY.EXAMPLE/	8	other.github.io	21
+https://HOSTONLY.EXAMPLE/	8	other.github.io	2
 https://HOSTONLY.EXAMPLE/	1	page.example	0
 https://ads.example.com//banner/	4	localhost	1
 https://ads.example.com//banner/	32	x.y.kobe.jp	1
@@ -163,16 +163,16 @@ https://x.net/a.gif	4	tracker.example	1
 https://x.net/a.gif	1024	x.y.kobe.jp	1
 https://ADS.EXAMPLE.COM/.GIF	8	foo.ck	1
 https://ADS.EXAMPLE.COM/.GIF	2	tracker.example	1
-https://a.example/pxq	1024	1.2.3.4	21
-https://a.example/pxq	256	a.com	21
-https://a.example/pxq	2048		21
-http://sub.a.example/pxq	16	a.com	21
-http://sub.a.example/pxq	128	x.y.kobe.jp	21
+https://a.example/pxq	1024	1.2.3.4	2
+https://a.example/pxq	256	a.com	2
+https://a.example/pxq	2048		2
+http://sub.a.example/pxq	16	a.com	2
+http://sub.a.example/pxq	128	x.y.kobe.jp	2
 https://x.net/path/a.example/pxq?k=v	2048	x.y.kobe.jp	0
 https://x.net/path/a.example/pxq?k=v	1		0
 https://x.net/aa.example/pxq	1024	user.github.io	0
 https://x.net/aa.example/pxq	4	a.b.c.example.org	0
-https://A.EXAMPLE/PXQ	128	tracker.example	21
+https://A.EXAMPLE/PXQ	128	tracker.example	2
 https://A.EXAMPLE/PXQ	1	track.net	0
 https://ads.example.com//promo.js	1024	foo.ck	1
 https://ads.example.com//promo.js	2048	city.kobe.jp	1
@@ -185,17 +185,17 @@ https://x.net/a/promo.js	2	other.co.uk	0
 https://x.net/a/promo.js	16		0
 https://ADS.EXAMPLE.COM//PROMO.JS	256	www.ck	1
 https://ADS.EXAMPLE.COM//PROMO.JS	1024	www.ck	1
-https://evil.example/	2048	track.net	21
-https://evil.example/	2048	page.example	21
+https://evil.example/	2048	track.net	2
+https://evil.example/	2048	page.example	2
 https://evil.example/	2184	1.2.3.4	17
-http://sub.evil.example/	128	news.site.co.uk	21
-http://sub.evil.example/	64		21
+http://sub.evil.example/	128	news.site.co.uk	2
+http://sub.evil.example/	64		2
 https://x.net/path/evil.example/?k=v	256		0
 https://x.net/path/evil.example/?k=v	2	news.site.co.uk	0
 https://x.net/aevil.example/	128	other.co.uk	0
 https://x.net/aevil.example/	4	example.com	0
-https://EVIL.EXAMPLE/	16	localhost	21
-https://EVIL.EXAMPLE/	1024	1.2.3.4	21
+https://EVIL.EXAMPLE/	16	localhost	2
+https://EVIL.EXAMPLE/	1024	1.2.3.4	2
 https://ads.example.com/zip/	128	city.kobe.jp	1
 https://ads.example.com/zip/	2	other.github.io	1
 https://ads.example.com/zip/	1	other.co.uk	0
@@ -218,17 +218,17 @@ https://x.net/asub.deep.example.co.uk/	1	other.github.io	0
 https://x.net/asub.deep.example.co.uk/	16	city.kobe.jp	0
 https://SUB.DEEP.EXAMPLE.CO.UK/	256	news.site.co.uk	2
 https://SUB.DEEP.EXAMPLE.CO.UK/	2048	other.co.uk	1
-https://x.example/	8	www.ck	21
-https://x.example/	2048	user.github.io	21
-https://x.example/	2		21
-http://sub.x.example/	256	localhost	21
-http://sub.x.example/	2	news.site.co.uk	21
+https://x.example/	8	www.ck	2
+https://x.example/	2048	user.github.io	2
+https://x.example/	2		2
+http://sub.x.example/	256	localhost	2
+http://sub.x.example/	2	news.site.co.uk	2
 https://x.net/path/x.example/?k=v	256		0
 https://x.net/path/x.example/?k=v	4		0
 https://x.net/ax.example/	1024	other.co.uk	0
 https://x.net/ax.example/	128		0
-https://X.EXAMPLE/	4	city.kobe.jp	21
-https://X.EXAMPLE/	1024	other.github.io	21
+https://X.EXAMPLE/	4	city.kobe.jp	2
+https://X.EXAMPLE/	1024	other.github.io	2
 https://ads.example.com//track.php?	128		1
 https://ads.example.com//track.php?	1024	user.github.io	1
 https://ads.example.com//track.php?	1	localhost	0
@@ -251,9 +251,9 @@ https://x.net/a&adslot=	2048	example.com	1
 https://x.net/a&adslot=	32	page.example	1
 https://ADS.EXAMPLE.COM/&ADSLOT=	2184	page.example	1
 https://ADS.EXAMPLE.COM/&ADSLOT=	32	foo.ck	1
-https://foo.js	4	example.com	2
-https://foo.js	32	other.co.uk	2
-https://foo.js	64	www.ck	2
+https://foo.js	4	example.com	1
+https://foo.js	32	other.co.uk	1
+https://foo.js	64	www.ck	1
 http://sub.foo.js	2184		1
 http://sub.foo.js	512		1
 https://x.net/path/foo.js?k=v	1	page.example	0
@@ -261,7 +261,7 @@ https://x.net/path/foo.js?k=v	1		0
 https://x.net/afoo.js	256	news.site.co.uk	1
 https://x.net/afoo.js	1024	a.b.c.example.org	1
 https://FOO.JS	128	user.github.io	1
-https://FOO.JS	2	www.ck	2
+https://FOO.JS	2	www.ck	1
 https://adserver.	64	foo.ck	5
 https://adserver.	2	localhost	5
 https://adserver.	128	www.example.com	5
@@ -295,16 +295,16 @@ https://x.net/a/xxyxz	64		1
 https://x.net/a/xxyxz	64		1
 https://ADS.EXAMPLE.COM//XXYXZ	64		1
 https://ADS.EXAMPLE.COM//XXYXZ	256	example.com	1
-https://cdn.example.org/ads/	16	localhost	5
-https://cdn.example.org/ads/	32	x.y.kobe.jp	5
-https://cdn.example.org/ads/	512	track.net	5
-http://sub.cdn.example.org/ads/	2048	other.github.io	5
-http://sub.cdn.example.org/ads/	2184	other.co.uk	5
+https://cdn.example.org/ads/	16	localhost	1
+https://cdn.example.org/ads/	32	x.y.kobe.jp	1
+https://cdn.example.org/ads/	512	track.net	1
+http://sub.cdn.example.org/ads/	2048	other.github.io	1
+http://sub.cdn.example.org/ads/	2184	other.co.uk	1
 https://x.net/path/cdn.example.org/ads/?k=v	256	city.kobe.jp	5
 https://x.net/path/cdn.example.org/ads/?k=v	512	www.example.com	5
 https://x.net/acdn.example.org/ads/	2048	news.site.co.uk	5
 https://x.net/acdn.example.org/ads/	64	other.github.io	5
-https://CDN.EXAMPLE.ORG/ADS/	4	1.2.3.4	5
+https://CDN.EXAMPLE.ORG/ADS/	4	1.2.3.4	1
 https://CDN.EXAMPLE.ORG/ADS/	256		2
 https://ads.example.com//pixel.gif?	256	track.net	1
 https://ads.example.com//pixel.gif?	4		1
@@ -339,116 +339,116 @@ https://x.net/a/stat/	16	city.kobe.jp	5
 https://x.net/a/stat/	512	a.b.c.example.org	1
 https://ADS.EXAMPLE.COM//STAT/	16	other.github.io	1
 https://ADS.EXAMPLE.COM//STAT/	512	news.site.co.uk	1
-https://ws.example/	2	localhost	21
-https://ws.example/	2184	foo.ck	21
-https://ws.example/	512	x.y.kobe.jp	21
-http://sub.ws.example/	4	localhost	21
-http://sub.ws.example/	2048	example.com	21
+https://ws.example/	2	localhost	2
+https://ws.example/	2184	foo.ck	2
+https://ws.example/	512	x.y.kobe.jp	2
+http://sub.ws.example/	4	localhost	2
+http://sub.ws.example/	2048	example.com	2
 https://x.net/path/ws.example/?k=v	4	example.com	0
 https://x.net/path/ws.example/?k=v	1	user.github.io	0
 https://x.net/aws.example/	16	city.kobe.jp	0
 https://x.net/aws.example/	16	b.com	0
-https://WS.EXAMPLE/	32	foo.ck	21
-https://WS.EXAMPLE/	32	1.2.3.4	21
-https://frame.example/	16	1.2.3.4	21
-https://frame.example/	8	www.example.com	21
-https://frame.example/	256	www.example.com	21
-http://sub.frame.example/	4	user.github.io	21
-http://sub.frame.example/	1024	tracker.example	21
+https://WS.EXAMPLE/	32	foo.ck	2
+https://WS.EXAMPLE/	32	1.2.3.4	2
+https://frame.example/	16	1.2.3.4	2
+https://frame.example/	8	www.example.com	2
+https://frame.example/	256	www.example.com	2
+http://sub.frame.example/	4	user.github.io	2
+http://sub.frame.example/	1024	tracker.example	2
 https://x.net/path/frame.example/?k=v	16	www.ck	0
 https://x.net/path/frame.example/?k=v	1	city.kobe.jp	0
 https://x.net/aframe.example/	2184		0
 https://x.net/aframe.example/	2		0
-https://FRAME.EXAMPLE/	1024	city.kobe.jp	21
-https://FRAME.EXAMPLE/	16		21
-https://font.example/	32	news.site.co.uk	21
-https://font.example/	8	page.example	21
-https://font.example/	8	localhost	21
-http://sub.font.example/	128	localhost	21
-http://sub.font.example/	4	a.b.c.example.org	21
+https://FRAME.EXAMPLE/	1024	city.kobe.jp	2
+https://FRAME.EXAMPLE/	16		2
+https://font.example/	32	news.site.co.uk	2
+https://font.example/	8	page.example	2
+https://font.example/	8	localhost	2
+http://sub.font.example/	128	localhost	2
+http://sub.font.example/	4	a.b.c.example.org	2
 https://x.net/path/font.example/?k=v	1024	city.kobe.jp	0
 https://x.net/path/font.example/?k=v	1024	localhost	0
 https://x.net/afont.example/	256	tracker.example	0
 https://x.net/afont.example/	1024	tracker.example	0
-https://FONT.EXAMPLE/	256	localhost	21
-https://FONT.EXAMPLE/	512	a.com	21
-https://media.example/	2048		21
-https://media.example/	2	a.com	21
-https://media.example/	128		21
-http://sub.media.example/	64	www.ck	21
-http://sub.media.example/	256	track.net	21
+https://FONT.EXAMPLE/	256	localhost	2
+https://FONT.EXAMPLE/	512	a.com	2
+https://media.example/	2048		2
+https://media.example/	2	a.com	2
+https://media.example/	128		2
+http://sub.media.example/	64	www.ck	2
+http://sub.media.example/	256	track.net	2
 https://x.net/path/media.example/?k=v	2184	tracker.example	0
 https://x.net/path/media.example/?k=v	128	x.y.kobe.jp	0
 https://x.net/amedia.example/	256	page.example	0
 https://x.net/amedia.example/	32	other.co.uk	0
-https://MEDIA.EXAMPLE/	2184	www.example.com	21
-https://MEDIA.EXAMPLE/	2048	a.b.c.example.org	21
-https://obj.example/	128	1.2.3.4	21
-https://obj.example/	8	a.b.c.example.org	21
-https://obj.example/	32	a.com	21
-http://sub.obj.example/	32	city.kobe.jp	21
-http://sub.obj.example/	32	track.net	21
+https://MEDIA.EXAMPLE/	2184	www.example.com	2
+https://MEDIA.EXAMPLE/	2048	a.b.c.example.org	2
+https://obj.example/	128	1.2.3.4	2
+https://obj.example/	8	a.b.c.example.org	2
+https://obj.example/	32	a.com	2
+http://sub.obj.example/	32	city.kobe.jp	2
+http://sub.obj.example/	32	track.net	2
 https://x.net/path/obj.example/?k=v	4	city.kobe.jp	0
 https://x.net/path/obj.example/?k=v	64	1.2.3.4	0
 https://x.net/aobj.example/	64		0
 https://x.net/aobj.example/	256		0
-https://OBJ.EXAMPLE/	512	tracker.example	21
-https://OBJ.EXAMPLE/	16		21
-https://other.example/	2184	example.com	21
-https://other.example/	2	foo.ck	21
-https://other.example/	1024	localhost	21
-http://sub.other.example/	2184	x.y.kobe.jp	21
+https://OBJ.EXAMPLE/	512	tracker.example	2
+https://OBJ.EXAMPLE/	16		2
+https://other.example/	2184	example.com	2
+https://other.example/	2	foo.ck	2
+https://other.example/	1024	localhost	2
+http://sub.other.example/	2184	x.y.kobe.jp	2
 http://sub.other.example/	1	www.example.com	0
 https://x.net/path/other.example/?k=v	256	localhost	0
 https://x.net/path/other.example/?k=v	64	city.kobe.jp	0
 https://x.net/aother.example/	1024	other.github.io	0
 https://x.net/aother.example/	2	x.y.kobe.jp	0
-https://OTHER.EXAMPLE/	2	other.github.io	21
-https://OTHER.EXAMPLE/	64	www.example.com	21
-https://style.example/	4	track.net	21
-https://style.example/	4	x.y.kobe.jp	21
-https://style.example/	64	a.com	21
-http://sub.style.example/	128	foo.ck	21
-http://sub.style.example/	512	a.com	21
+https://OTHER.EXAMPLE/	2	other.github.io	2
+https://OTHER.EXAMPLE/	64	www.example.com	2
+https://style.example/	4	track.net	2
+https://style.example/	4	x.y.kobe.jp	2
+https://style.example/	64	a.com	2
+http://sub.style.example/	128	foo.ck	2
+http://sub.style.example/	512	a.com	2
 https://x.net/path/style.example/?k=v	1		0
 https://x.net/path/style.example/?k=v	32	page.example	0
 https://x.net/astyle.example/	256	foo.ck	0
 https://x.net/astyle.example/	1	1.2.3.4	0
-https://STYLE.EXAMPLE/	16	track.net	21
-https://STYLE.EXAMPLE/	16	a.com	21
-https://notimg.example/	2048		21
-https://notimg.example/	128	news.site.co.uk	21
-https://notimg.example/	16	localhost	21
+https://STYLE.EXAMPLE/	16	track.net	2
+https://STYLE.EXAMPLE/	16	a.com	2
+https://notimg.example/	2048		2
+https://notimg.example/	128	news.site.co.uk	2
+https://notimg.example/	16	localhost	2
 http://sub.notimg.example/	1	track.net	0
-http://sub.notimg.example/	1024		21
+http://sub.notimg.example/	1024		2
 https://x.net/path/notimg.example/?k=v	128	www.ck	0
 https://x.net/path/notimg.example/?k=v	2048	localhost	0
 https://x.net/anotimg.example/	512	other.co.uk	0
 https://x.net/anotimg.example/	2048	example.com	0
-https://NOTIMG.EXAMPLE/	64	user.github.io	21
-https://NOTIMG.EXAMPLE/	64	track.net	21
-https://dom.example/	64	page.example	21
-https://dom.example/	256	page.example	21
-https://dom.example/	32	foo.ck	21
+https://NOTIMG.EXAMPLE/	64	user.github.io	2
+https://NOTIMG.EXAMPLE/	64	track.net	2
+https://dom.example/	64	page.example	2
+https://dom.example/	256	page.example	2
+https://dom.example/	32	foo.ck	2
 http://sub.dom.example/	1	other.github.io	0
-http://sub.dom.example/	16	1.2.3.4	21
+http://sub.dom.example/	16	1.2.3.4	2
 https://x.net/path/dom.example/?k=v	8	track.net	0
 https://x.net/path/dom.example/?k=v	512	track.net	0
 https://x.net/adom.example/	2184		0
 https://x.net/adom.example/	1	tracker.example	0
-https://DOM.EXAMPLE/	8	a.com	21
-https://DOM.EXAMPLE/	8		21
-https://excl.example/	8	track.net	21
-https://excl.example/	512	x.y.kobe.jp	21
-https://excl.example/	4	other.co.uk	21
-http://sub.excl.example/	512	other.co.uk	21
-http://sub.excl.example/	4	city.kobe.jp	21
+https://DOM.EXAMPLE/	8	a.com	2
+https://DOM.EXAMPLE/	8		2
+https://excl.example/	8	track.net	2
+https://excl.example/	512	x.y.kobe.jp	2
+https://excl.example/	4	other.co.uk	2
+http://sub.excl.example/	512	other.co.uk	2
+http://sub.excl.example/	4	city.kobe.jp	2
 https://x.net/path/excl.example/?k=v	1	www.ck	0
 https://x.net/path/excl.example/?k=v	2184	localhost	0
 https://x.net/aexcl.example/	512	tracker.example	0
 https://x.net/aexcl.example/	256	b.com	0
-https://EXCL.EXAMPLE/	16	city.kobe.jp	21
-https://EXCL.EXAMPLE/	8	foo.ck	21
+https://EXCL.EXAMPLE/	16	city.kobe.jp	2
+https://EXCL.EXAMPLE/	8	foo.ck	2
 https://ads.example.com//analytics.js	2184		1
 https://ads.example.com//analytics.js	512	news.site.co.uk	1
 https://ads.example.com//analytics.js	64	news.site.co.uk	1
@@ -482,28 +482,28 @@ https://x.net/a/impban/x	128	other.github.io	17
 https://x.net/a/impban/x	16	b.com	17
 https://ADS.EXAMPLE.COM//IMPBAN/X	2	news.site.co.uk	17
 https://ADS.EXAMPLE.COM//IMPBAN/X	64	localhost	17
-https://impath.example/ads/	32	x.y.kobe.jp	21
-https://impath.example/ads/	128	localhost	21
-https://impath.example/ads/	512	www.ck	21
-http://sub.impath.example/ads/	32		21
-http://sub.impath.example/ads/	2184	www.ck	21
+https://impath.example/ads/	32	x.y.kobe.jp	17
+https://impath.example/ads/	128	localhost	17
+https://impath.example/ads/	512	www.ck	17
+http://sub.impath.example/ads/	32		17
+http://sub.impath.example/ads/	2184	www.ck	17
 https://x.net/path/impath.example/ads/?k=v	256	tracker.example	5
 https://x.net/path/impath.example/ads/?k=v	512	www.ck	5
 https://x.net/aimpath.example/ads/	256	foo.ck	5
 https://x.net/aimpath.example/ads/	2184	example.com	5
 https://IMPATH.EXAMPLE/ADS/	1	user.github.io	0
-https://IMPATH.EXAMPLE/ADS/	64	example.com	21
-https://impath.example/	128	city.kobe.jp	21
-https://impath.example/	1024	track.net	21
-https://impath.example/	512	city.kobe.jp	21
-http://sub.impath.example/	16	page.example	21
-http://sub.impath.example/	2048	other.co.uk	21
+https://IMPATH.EXAMPLE/ADS/	64	example.com	17
+https://impath.example/	128	city.kobe.jp	2
+https://impath.example/	1024	track.net	2
+https://impath.example/	512	city.kobe.jp	2
+http://sub.impath.example/	16	page.example	2
+http://sub.impath.example/	2048	other.co.uk	2
 https://x.net/path/impath.example/?k=v	128	www.example.com	0
 https://x.net/path/impath.example/?k=v	128		0
 https://x.net/aimpath.example/	8	page.example	0
 https://x.net/aimpath.example/	1	a.b.c.example.org	0
-https://IMPATH.EXAMPLE/	8	user.github.io	21
-https://IMPATH.EXAMPLE/	32		21
+https://IMPATH.EXAMPLE/	8	user.github.io	2
+https://IMPATH.EXAMPLE/	32		2
 https://https://impanchor.	8	a.com	0
 https://https://impanchor.	1	user.github.io	0
 https://https://impanchor.	32	www.ck	0
@@ -526,28 +526,28 @@ https://x.net/a/AdBanner.	1	a.b.c.example.org	0
 https://x.net/a/AdBanner.	256	example.com	1
 https://ADS.EXAMPLE.COM//ADBANNER.	2184	track.net	1
 https://ADS.EXAMPLE.COM//ADBANNER.	64	other.github.io	1
-https://UPPER.example/	1024	1.2.3.4	21
-https://UPPER.example/	4		21
-https://UPPER.example/	2	user.github.io	21
-http://sub.UPPER.example/	8	other.co.uk	21
-http://sub.UPPER.example/	512		21
+https://UPPER.example/	1024	1.2.3.4	2
+https://UPPER.example/	4		2
+https://UPPER.example/	2	user.github.io	2
+http://sub.UPPER.example/	8	other.co.uk	2
+http://sub.UPPER.example/	512		2
 https://x.net/path/UPPER.example/?k=v	16	other.github.io	0
 https://x.net/path/UPPER.example/?k=v	2184	example.com	0
 https://x.net/aUPPER.example/	2		0
 https://x.net/aUPPER.example/	1024	page.example	0
-https://UPPER.EXAMPLE/	32	b.com	21
-https://UPPER.EXAMPLE/	64	page.example	21
-https://ipv4.example/	32	a.b.c.example.org	21
-https://ipv4.example/	1024	b.com	21
-https://ipv4.example/	128	tracker.example	21
-http://sub.ipv4.example/	1024	example.com	21
-http://sub.ipv4.example/	1024	tracker.example	21
+https://UPPER.EXAMPLE/	32	b.com	2
+https://UPPER.EXAMPLE/	64	page.example	2
+https://ipv4.example/	32	a.b.c.example.org	2
+https://ipv4.example/	1024	b.com	2
+https://ipv4.example/	128	tracker.example	2
+http://sub.ipv4.example/	1024	example.com	2
+http://sub.ipv4.example/	1024	tracker.example	2
 https://x.net/path/ipv4.example/?k=v	2184	b.com	0
 https://x.net/path/ipv4.example/?k=v	2	a.b.c.example.org	0
 https://x.net/aipv4.example/	16	www.ck	0
 https://x.net/aipv4.example/	256	www.example.com	0
-https://IPV4.EXAMPLE/	4	track.net	21
-https://IPV4.EXAMPLE/	32	news.site.co.uk	21
+https://IPV4.EXAMPLE/	4	track.net	2
+https://IPV4.EXAMPLE/	32	news.site.co.uk	2
 https://1.2.3.4/	16	foo.ck	1
 https://1.2.3.4/	512	foo.ck	1
 https://1.2.3.4/	8	example.com	1
@@ -570,8 +570,8 @@ https://x.net/a/	1024		0
 https://x.net/a/	2048	tracker.example	0
 https://ADS.EXAMPLE.COM//	1	b.com	0
 https://ADS.EXAMPLE.COM//	32	example.com	1
-ws://both.example:8080/z/api/foo.js	128	tracker.example	21
-ws://both.example:8080/z/api/foo.js	2048	www.ck	21
+ws://both.example:8080/z/api/foo.js	128	tracker.example	2
+ws://both.example:8080/z/api/foo.js	2048	www.ck	2
 ws://user:pw@www.wikipedia.org/adserver/consent.js/adserver.php?q=beacon&ads=city.kobe.jp	8	news.site.co.uk	5
 ws://user:pw@www.wikipedia.org/adserver/consent.js/adserver.php?q=beacon&ads=city.kobe.jp	256	localhost	5
 ws://files.example.io:8080./z.js#collect	4	example.com	0
@@ -580,58 +580,58 @@ ws://shop.example.co.uk/impban/impban.gif	4	www.example.com	17
 ws://shop.example.co.uk/impban/impban.gif	4		17
 https://video.example.tv/v1.html#impban	256	www.ck	0
 https://video.example.tv/v1.html#impban	16	a.com	0
-http://t.example/pixel/track	8	example.com	21
-http://t.example/pixel/track	2048	other.co.uk	21
+http://t.example/pixel/track	8	example.com	2
+http://t.example/pixel/track	2048	other.co.uk	2
 ws://shop.example.co.uk/q/x	4	city.kobe.jp	0
 ws://shop.example.co.uk/q/x	1		0
 wss://img.site.co.uk	2184	a.com	0
 wss://img.site.co.uk	2048	a.com	0
-wss://xn--bcher-kva.example/beacon/consent.js/stat.html	8	other.github.io	21
-wss://xn--bcher-kva.example/beacon/consent.js/stat.html	16	example.com	21
-https://frame.example/q/banner.js?q=v1&analytics=cdn.example.org	2184	other.co.uk	21
-https://frame.example/q/banner.js?q=v1&analytics=cdn.example.org	8	b.com	21
+wss://xn--bcher-kva.example/beacon/consent.js/stat.html	8	other.github.io	2
+wss://xn--bcher-kva.example/beacon/consent.js/stat.html	16	example.com	2
+https://frame.example/q/banner.js?q=v1&analytics=cdn.example.org	2184	other.co.uk	2
+https://frame.example/q/banner.js?q=v1&analytics=cdn.example.org	8	b.com	2
 wss://track.net/img.php?q=x&adserver=phish.example.org#banner	2184	www.ck	0
 wss://track.net/img.php?q=x&adserver=phish.example.org#banner	1	city.kobe.jp	0
-ws://notimg.example/AdBanner/banner/v1	16	user.github.io	21
+ws://notimg.example/AdBanner/banner/v1	16	user.github.io	2
 ws://notimg.example/AdBanner/banner/v1	1	a.com	0
-https://evil.example:8080	2	a.b.c.example.org	21
-https://evil.example:8080	64	www.ck	21
+https://evil.example:8080	2	a.b.c.example.org	2
+https://evil.example:8080	64	www.ck	2
 ws://www.wikipedia.org/consent.js/adserver/promo.js	64	b.com	5
 ws://www.wikipedia.org/consent.js/adserver/promo.js	32	a.b.c.example.org	5
-https://media.example./ads/track/analytics.php	2	tracker.example	21
-https://media.example./ads/track/analytics.php	128		21
+https://media.example./ads/track/analytics.php	2	tracker.example	2
+https://media.example./ads/track/analytics.php	128		2
 https://video.example.tv/consent.png?q=banner&v1=obj.example	512	a.com	0
 https://video.example.tv/consent.png?q=banner&v1=obj.example	1024		0
 ws://www.wikipedia.org/img.php	4	a.com	0
 ws://www.wikipedia.org/img.php	8	track.net	0
-wss://dom.example/consent.js/impban.png	2184	user.github.io	21
-wss://dom.example/consent.js/impban.png	16		21
+wss://dom.example/consent.js/impban.png	2184	user.github.io	2
+wss://dom.example/consent.js/impban.png	16		2
 ws://www.wikipedia.org/q.png	256	1.2.3.4	5
 ws://www.wikipedia.org/q.png	16	city.kobe.jp	5
-http://style.example/y/analytics/pixel.png	64	foo.ck	21
-http://style.example/y/analytics/pixel.png	64	x.y.kobe.jp	21
+http://style.example/y/analytics/pixel.png	64	foo.ck	2
+http://style.example/y/analytics/pixel.png	64	x.y.kobe.jp	2
 https://img.example.com.au?q=q&analytics=a.example#pixel	128		0
 https://img.example.com.au?q=q&analytics=a.example#pixel	32		0
 http://docs.example.net/y/z.php	256	b.com	0
 http://docs.example.net/y/z.php	2184	x.y.kobe.jp	0
 http://shop.example.co.uk/api/promo/stat	512		2
 http://shop.example.co.uk/api/promo/stat	512	tracker.example	2
-https://ws.example/banner#beacon	256		21
-https://ws.example/banner#beacon	128	city.kobe.jp	21
+https://ws.example/banner#beacon	256		2
+https://ws.example/banner#beacon	128	city.kobe.jp	2
 wss://api.service.dev?q=img&api=both.example	256	user.github.io	0
 wss://api.service.dev?q=img&api=both.example	128	example.com	0
 ws://sub.deep.example.co.uk/consent.js	64	a.b.c.example.org	2
 ws://sub.deep.example.co.uk/consent.js	64	a.com	2
-https://both.example/v1.html?q=beacon&promo=t.example	8	user.github.io	21
-https://both.example/v1.html?q=beacon&promo=t.example	4	foo.ck	21
+https://both.example/v1.html?q=beacon&promo=t.example	8	user.github.io	2
+https://both.example/v1.html?q=beacon&promo=t.example	4	foo.ck	2
 https://x.example/analytics	1	city.kobe.jp	0
-https://x.example/analytics	8	tracker.example	21
-https://excl.example/banner/analytics.gif	4	example.com	21
-https://excl.example/banner/analytics.gif	512	track.net	21
+https://x.example/analytics	8	tracker.example	2
+https://excl.example/banner/analytics.gif	4	example.com	2
+https://excl.example/banner/analytics.gif	512	track.net	2
 ws://www.example.com/banner.png	1024	b.com	0
 ws://www.example.com/banner.png	128	other.github.io	0
 http://www.example.com/api/api/adserver?q=y&y=phish.example.org	2	tracker.example	5
-http://www.example.com/api/api/adserver?q=y&y=phish.example.org	64	www.example.com	5
+http://www.example.com/api/api/adserver?q=y&y=phish.example.org	64	www.example.com	0
 wss://files.example.io	8	tracker.example	0
 wss://files.example.io	256	a.com	0
 ws://user:pw@files.example.io/consent.js/v1/pixel.js	8	city.kobe.jp	13
@@ -640,40 +640,40 @@ http://www.malware.example.net/pixel/collect/api.html	2	track.net	2
 http://www.malware.example.net/pixel/collect/api.html	512	example.com	9
 https://1.2.3.4/adserver/x/collect.html?q=y&banner=a.b.ck	256	other.co.uk	1
 https://1.2.3.4/adserver/x/collect.html?q=y&banner=a.b.ck	2048	city.kobe.jp	1
-ws://news.bbc.co.uk/api/promo/img	16	a.com	2
+ws://news.bbc.co.uk/api/promo/img	16	a.com	0
 ws://news.bbc.co.uk/api/promo/img	2184	news.site.co.uk	2
 https://shop.example.co.uk:8080/collect	512	news.site.co.uk	0
 https://shop.example.co.uk:8080/collect	256	a.b.c.example.org	0
 https://cdn.jsdelivr.net/q#api	4		0
 https://cdn.jsdelivr.net/q#api	256		0
-https://video.example.tv/beacon	2184		5
-https://video.example.tv/beacon	8	x.y.kobe.jp	5
-http://a.b.blogspot.com	2048	page.example	2
-http://a.b.blogspot.com	4	other.co.uk	2
+https://video.example.tv/beacon	2184		0
+https://video.example.tv/beacon	8	x.y.kobe.jp	0
+http://a.b.blogspot.com	2048	page.example	5
+http://a.b.blogspot.com	4	other.co.uk	5
 ws://cdn.example.org/adserver/banner/img?q=consent&adserver=t.example	64	foo.ck	5
 ws://cdn.example.org/adserver/banner/img?q=consent&adserver=t.example	1024	localhost	5
-ws://user:pw@pixel.example/img/v1.png	4	city.kobe.jp	21
-ws://user:pw@pixel.example/img/v1.png	2048	example.com	21
-http://api.service.dev/consent/v1/p.html	8	news.site.co.uk	2
-http://api.service.dev/consent/v1/p.html	1024	page.example	2
+ws://user:pw@pixel.example/img/v1.png	4	city.kobe.jp	2
+ws://user:pw@pixel.example/img/v1.png	2048	example.com	2
+http://api.service.dev/consent/v1/p.html	8	news.site.co.uk	5
+http://api.service.dev/consent/v1/p.html	1024	page.example	5
 https://a.b.track.net:8080/AdBanner/consent	4		5
 https://a.b.track.net:8080/AdBanner/consent	2048	user.github.io	0
 https://static.cdn-example.com:8080/z/promo?q=z&p=x.example	1024	user.github.io	2
 https://static.cdn-example.com:8080/z/promo?q=z&p=x.example	4	other.github.io	2
 http://shop.example.co.uk/foo.html	64	track.net	0
 http://shop.example.co.uk/foo.html	512	www.example.com	0
-ws://cookie-banner.example./p.png?q=promo&consent=page.example	2	a.com	21
+ws://cookie-banner.example./p.png?q=promo&consent=page.example	2	a.com	2
 ws://cookie-banner.example./p.png?q=promo&consent=page.example	1	page.example	0
 http://[::1]/consent.gif	256	example.com	1
 http://[::1]/consent.gif	256	1.2.3.4	1
-http://page.example/img/AdBanner/y#img	2048	example.com	21
-http://page.example/img/AdBanner/y#img	256	b.com	21
+http://page.example/img/AdBanner/y#img	2048	example.com	2
+http://page.example/img/AdBanner/y#img	256	b.com	2
 wss://city.kobe.jp/img/x/ad	2	user.github.io	5
 wss://city.kobe.jp/img/x/ad	2184	track.net	5
 wss://imp.example/pixel/consent	128	1.2.3.4	17
 wss://imp.example/pixel/consent	2048	a.b.c.example.org	17
-http://both.example/consent.html?q=beacon&AdBanner=first.example	256	1.2.3.4	21
-http://both.example/consent.html?q=beacon&AdBanner=first.example	64	x.y.kobe.jp	21
+http://both.example/consent.html?q=beacon&AdBanner=first.example	256	1.2.3.4	2
+http://both.example/consent.html?q=beacon&AdBanner=first.example	64	x.y.kobe.jp	2
 https://img.site.co.uk/impban/v1	512		17
 https://img.site.co.uk/impban/v1	8	user.github.io	17
 https://api.service.dev/ads?q=track&foo=dom.example	2	tracker.example	5
@@ -682,12 +682,12 @@ ws://city.kobe.jp/banner?q=v1&consent=frame.example	1	other.co.uk	0
 ws://city.kobe.jp/banner?q=v1&consent=frame.example	512	a.b.c.example.org	1
 ws://docs.example.net/track/z	128	localhost	5
 ws://docs.example.net/track/z	32	a.com	5
-wss://notimg.example/pixel.php	8	www.ck	21
-wss://notimg.example/pixel.php	256	1.2.3.4	21
+wss://notimg.example/pixel.php	8	www.ck	2
+wss://notimg.example/pixel.php	256	1.2.3.4	2
 ws://a.b.ck/impban/x.gif?q=foo&api=sub.deep.example.co.uk	1024	news.site.co.uk	17
 ws://a.b.ck/impban/x.gif?q=foo&api=sub.deep.example.co.uk	2184	a.b.c.example.org	17
-wss://frame.example/foo.js	1024	b.com	21
-wss://frame.example/foo.js	2048	tracker.example	21
+wss://frame.example/foo.js	1024	b.com	2
+wss://frame.example/foo.js	2048	tracker.example	2
 http://www.example.com/ads/q/consent.js	16	b.com	5
 http://www.example.com/ads/q/consent.js	4	1.2.3.4	5
 ws://img.example.com.au	512	1.2.3.4	0
@@ -700,36 +700,36 @@ http://sub.deep.example.co.uk/beacon.html	2048	b.com	2
 http://sub.deep.example.co.uk/beacon.html	2	b.com	2
 wss://img.site.co.uk/ad/promo/img.php	16		2
 wss://img.site.co.uk/ad/promo/img.php	1		0
-ws://dom.example/q/promo/y.png	2048	a.com	21
-ws://dom.example/q/promo/y.png	1024	foo.ck	21
-https://notimg.example?q=q&api=frame.example#impban	4	b.com	21
-https://notimg.example?q=q&api=frame.example#impban	2184	x.y.kobe.jp	21
+ws://dom.example/q/promo/y.png	2048	a.com	2
+ws://dom.example/q/promo/y.png	1024	foo.ck	2
+https://notimg.example?q=q&api=frame.example#impban	4	b.com	2
+https://notimg.example?q=q&api=frame.example#impban	2184	x.y.kobe.jp	2
 https://1.2.3.4/promo.gif	256	foo.ck	1
 https://1.2.3.4/promo.gif	256	localhost	1
-https://both.example/stat/q.php#stat	1024	track.net	21
-https://both.example/stat/q.php#stat	128	news.site.co.uk	21
+https://both.example/stat/q.php#stat	1024	track.net	2
+https://both.example/stat/q.php#stat	128	news.site.co.uk	2
 wss://a.b.track.net/AdBanner	2048	foo.ck	0
 wss://a.b.track.net/AdBanner	2	www.ck	0
 http://1.2.3.4/analytics.gif	512	tracker.example	1
 http://1.2.3.4/analytics.gif	4	other.github.io	1
-https://both.example/img/collect	8	a.com	21
-https://both.example/img/collect	256	www.ck	21
+https://both.example/img/collect	8	a.com	2
+https://both.example/img/collect	256	www.ck	2
 wss://docs.example.net/q	32	track.net	0
 wss://docs.example.net/q	256		0
 https://first.example	1	www.example.com	0
-https://first.example	64		21
+https://first.example	64		2
 http://a.b.track.net./stat/track?q=ads&collect=first.example	1	a.b.c.example.org	0
-http://a.b.track.net./stat/track?q=ads&collect=first.example	2	example.com	2
-wss://www.example.com/beacon/AdBanner/v1.php	64	localhost	5
-wss://www.example.com/beacon/AdBanner/v1.php	512	foo.ck	5
+http://a.b.track.net./stat/track?q=ads&collect=first.example	2	example.com	5
+wss://www.example.com/beacon/AdBanner/v1.php	64	localhost	0
+wss://www.example.com/beacon/AdBanner/v1.php	512	foo.ck	0
 https://shop.example.co.uk:8080/foo/foo?q=ad&AdBanner=phish.example.org	32	user.github.io	2
 https://shop.example.co.uk:8080/foo/foo?q=ad&AdBanner=phish.example.org	64	www.ck	2
 ws://cdn.jsdelivr.net/adserver/banner/analytics.png	2048	foo.ck	5
 ws://cdn.jsdelivr.net/adserver/banner/analytics.png	1	track.net	0
 ws://intranet:8080	128	b.com	0
 ws://intranet:8080	8	www.example.com	0
-ws://other.example/consent.js	2184	www.ck	21
-ws://other.example/consent.js	256		21
+ws://other.example/consent.js	2184	www.ck	2
+ws://other.example/consent.js	256		2
 https://x.zip/v1/adserver/p.gif	2184	localhost	1
 https://x.zip/v1/adserver/p.gif	2	localhost	1
 https://example.com/AdBanner.js	2048	www.ck	1
@@ -740,54 +740,54 @@ wss://video.example.tv	512	foo.ck	0
 wss://video.example.tv	2048	example.com	0
 wss://intranet/v1/stat/v1.html	256	1.2.3.4	5
 wss://intranet/v1/stat/v1.html	2184	x.y.kobe.jp	5
-ws://xn--bcher-kva.example/consent/beacon/ads.php	256	1.2.3.4	21
-ws://xn--bcher-kva.example/consent/beacon/ads.php	8	example.com	21
+ws://xn--bcher-kva.example/consent/beacon/ads.php	256	1.2.3.4	2
+ws://xn--bcher-kva.example/consent/beacon/ads.php	8	example.com	2
 wss://video.example.tv/AdBanner.php	8	www.example.com	1
 wss://video.example.tv/AdBanner.php	2048	localhost	1
 ws://docs.example.net/foo/promo	2	1.2.3.4	2
 ws://docs.example.net/foo/promo	256	b.com	2
-https://user:pw@x.example/stat/api/consent.gif	512	a.com	21
+https://user:pw@x.example/stat/api/consent.gif	512	a.com	2
 https://user:pw@x.example/stat/api/consent.gif	1	city.kobe.jp	0
 ws://phish.example.org/impban/stat/banner.png	1024		17
 ws://phish.example.org/impban/stat/banner.png	1	page.example	9
 https://x.zip/img.png?q=banner&stat=1.2.3.4	2048	page.example	1
 https://x.zip/img.png?q=banner&stat=1.2.3.4	4	1.2.3.4	1
-https://dom.example?q=adserver&banner=phish.example.org	8	user.github.io	21
-https://dom.example?q=adserver&banner=phish.example.org	8	a.com	21
-ws://UPPER.example/promo/ads	128	a.b.c.example.org	21
-ws://UPPER.example/promo/ads	2048	a.b.c.example.org	21
-https://[::1]/api?q=foo&api=excl.example	256	tracker.example	5
+https://dom.example?q=adserver&banner=phish.example.org	8	user.github.io	2
+https://dom.example?q=adserver&banner=phish.example.org	8	a.com	2
+ws://UPPER.example/promo/ads	128	a.b.c.example.org	2
+ws://UPPER.example/promo/ads	2048	a.b.c.example.org	2
+https://[::1]/api?q=foo&api=excl.example	256	tracker.example	0
 https://[::1]/api?q=foo&api=excl.example	32		5
-wss://other.example/api.js?q=y&q=both.example	2048	a.com	21
-wss://other.example/api.js?q=y&q=both.example	64	other.co.uk	21
-http://page.example/banner.png	4		21
-http://page.example/banner.png	512	other.github.io	21
-wss://pixel.example/ads/consent/beacon	64	foo.ck	21
-wss://pixel.example/ads/consent/beacon	64	localhost	21
+wss://other.example/api.js?q=y&q=both.example	2048	a.com	2
+wss://other.example/api.js?q=y&q=both.example	64	other.co.uk	2
+http://page.example/banner.png	4		2
+http://page.example/banner.png	512	other.github.io	2
+wss://pixel.example/ads/consent/beacon	64	foo.ck	2
+wss://pixel.example/ads/consent/beacon	64	localhost	2
 https://www.wikipedia.org:8080/impban	2048	a.com	5
 https://www.wikipedia.org:8080/impban	4	x.y.kobe.jp	5
 http://api.service.dev/ads.php?q=y&AdBanner=sub.deep.example.co.uk#track	512		5
-http://api.service.dev/ads.php?q=y&AdBanner=sub.deep.example.co.uk#track	8	b.com	2
-http://style.example?q=foo&x=ads.example.com	2	user.github.io	21
-http://style.example?q=foo&x=ads.example.com	64	a.b.c.example.org	21
+http://api.service.dev/ads.php?q=y&AdBanner=sub.deep.example.co.uk#track	8	b.com	5
+http://style.example?q=foo&x=ads.example.com	2	user.github.io	2
+http://style.example?q=foo&x=ads.example.com	64	a.b.c.example.org	2
 http://fonts.gstatic.com/v1/foo	1	a.com	0
 http://fonts.gstatic.com/v1/foo	32	localhost	2
-http://media.example	4	a.com	21
-http://media.example	8	news.site.co.uk	21
-http://first.example/y	2	city.kobe.jp	21
-http://first.example/y	2184		21
+http://media.example	4	a.com	2
+http://media.example	8	news.site.co.uk	2
+http://first.example/y	2	city.kobe.jp	2
+http://first.example/y	2184		2
 ws://fonts.gstatic.com/v1/y/analytics.js	256	tracker.example	1
 ws://fonts.gstatic.com/v1/y/analytics.js	128	city.kobe.jp	1
-ws://xn--bcher-kva.example	1024	example.com	21
-ws://xn--bcher-kva.example	512	x.y.kobe.jp	21
+ws://xn--bcher-kva.example	1024	example.com	2
+ws://xn--bcher-kva.example	512	x.y.kobe.jp	2
 ws://style.example/img/q/foo.php	1	localhost	0
-ws://style.example/img/q/foo.php	2	other.co.uk	21
+ws://style.example/img/q/foo.php	2	other.co.uk	2
 https://img.example.com.au:8080/adserver/ad/analytics#adserver	2184	b.com	5
 https://img.example.com.au:8080/adserver/ad/analytics#adserver	512	a.com	5
 wss://user:pw@static.cdn-example.com?q=api&consent=ads.example.com	1	user.github.io	0
 wss://user:pw@static.cdn-example.com?q=api&consent=ads.example.com	4	other.github.io	0
-ws://first.example:8080/impban/AdBanner/ads	32	page.example	21
-ws://first.example:8080/impban/AdBanner/ads	2	b.com	21
+ws://first.example:8080/impban/AdBanner/ads	32	page.example	17
+ws://first.example:8080/impban/AdBanner/ads	2	b.com	17
 ws://docs.example.net/track.html	2	a.com	0
 ws://docs.example.net/track.html	8	example.com	0
 wss://cdn.jsdelivr.net/consent.php	64	x.y.kobe.jp	0
@@ -802,14 +802,14 @@ https://img.example.com.au./x/y/AdBanner	16		0
 https://img.example.com.au./x/y/AdBanner	2	a.b.c.example.org	0
 http://phish.example.org./pixel	4	a.b.c.example.org	9
 http://phish.example.org./pixel	1	localhost	9
-https://impanchor.example/beacon/foo/pixel	128	localhost	21
-https://impanchor.example/beacon/foo/pixel	2184	tracker.example	21
-ws://first.example/x.html?q=track&ads=impath.example	512		21
-ws://first.example/x.html?q=track&ads=impath.example	16	track.net	21
-https://excl.example/api/foo	64		21
-https://excl.example/api/foo	64	tracker.example	21
-ws://t.example/pixel/track.html	1024	a.b.c.example.org	21
-ws://t.example/pixel/track.html	512	www.example.com	21
+https://impanchor.example/beacon/foo/pixel	128	localhost	2
+https://impanchor.example/beacon/foo/pixel	2184	tracker.example	17
+ws://first.example/x.html?q=track&ads=impath.example	512		2
+ws://first.example/x.html?q=track&ads=impath.example	16	track.net	2
+https://excl.example/api/foo	64		2
+https://excl.example/api/foo	64	tracker.example	2
+ws://t.example/pixel/track.html	1024	a.b.c.example.org	2
+ws://t.example/pixel/track.html	512	www.example.com	2
 https://news.bbc.co.uk/y/impban/foo.gif	1024	other.github.io	17
 https://news.bbc.co.uk/y/impban/foo.gif	2	page.example	17
 https://phish.example.org/consent/impban?q=AdBanner&z=impath.example	1024	www.example.com	9
@@ -817,23 +817,23 @@ https://phish.example.org/consent/impban?q=AdBanner&z=impath.example	2	user.gith
 http://static.cdn-example.com:8080/collect.png?q=img&x=malware.example.net	2	tracker.example	0
 http://static.cdn-example.com:8080/collect.png?q=img&x=malware.example.net	64	www.example.com	0
 ws://frame.example/consent.js/q/ad.png?q=y&foo=sub.deep.example.co.uk#x	2184		21
-ws://frame.example/consent.js/q/ad.png?q=y&foo=sub.deep.example.co.uk#x	256	1.2.3.4	21
-http://bad.example/img/img?q=promo&stat=cdn.example.org	256	city.kobe.jp	21
-http://bad.example/img/img?q=promo&stat=cdn.example.org	2	page.example	21
+ws://frame.example/consent.js/q/ad.png?q=y&foo=sub.deep.example.co.uk#x	256	1.2.3.4	2
+http://bad.example/img/img?q=promo&stat=cdn.example.org	256	city.kobe.jp	2
+http://bad.example/img/img?q=promo&stat=cdn.example.org	2	page.example	2
 https://docs.example.net/consent.js.js	4	other.co.uk	13
 https://docs.example.net/consent.js.js	4	b.com	13
 https://static.cdn-example.com/p/promo/consent.js.js?q=img&img=sub.deep.example.co.uk	2048	a.b.c.example.org	2
 https://static.cdn-example.com/p/promo/consent.js.js?q=img&img=sub.deep.example.co.uk	8	foo.ck	2
 http://docs.example.net/p/analytics.html	1	1.2.3.4	0
 http://docs.example.net/p/analytics.html	2048	other.co.uk	0
-wss://font.example/beacon/q/y?q=stat&track=x.example	2		21
-wss://font.example/beacon/q/y?q=stat&track=x.example	16	news.site.co.uk	21
+wss://font.example/beacon/q/y?q=stat&track=x.example	2		2
+wss://font.example/beacon/q/y?q=stat&track=x.example	16	news.site.co.uk	2
 http://files.example.io:8080	1	other.co.uk	0
 http://files.example.io:8080	2184	other.github.io	0
-https://notimg.example:8080/analytics/api.html	64	www.ck	21
-https://notimg.example:8080/analytics/api.html	2048	tracker.example	21
-https://intranet/x/analytics.html	64	localhost	5
-https://intranet/x/analytics.html	128	foo.ck	5
+https://notimg.example:8080/analytics/api.html	64	www.ck	2
+https://notimg.example:8080/analytics/api.html	2048	tracker.example	2
+https://intranet/x/analytics.html	64	localhost	0
+https://intranet/x/analytics.html	128	foo.ck	0
 http://user:pw@ads.example.com/consent.js/track/v1	4	city.kobe.jp	1
 http://user:pw@ads.example.com/consent.js/track/v1	2184	tracker.example	1
 wss://city.kobe.jp/pixel.js	32	user.github.io	0
@@ -842,8 +842,8 @@ https://track.net:8080/impban/AdBanner/track	16	news.site.co.uk	17
 https://track.net:8080/impban/AdBanner/track	16	a.com	17
 https://user:pw@www.wikipedia.org/consent/impban/pixel	2	user.github.io	17
 https://user:pw@www.wikipedia.org/consent/impban/pixel	2	a.com	17
-http://other.example/banner.js	2048	other.github.io	21
-http://other.example/banner.js	16	city.kobe.jp	21
+http://other.example/banner.js	2048	other.github.io	2
+http://other.example/banner.js	16	city.kobe.jp	2
 http://video.example.tv?q=ad&analytics=news.site.co.uk	2184	a.b.c.example.org	0
 http://video.example.tv?q=ad&analytics=news.site.co.uk	1024	a.com	0
 https://malware.example.net/consent.js.html	2048	other.github.io	9
@@ -856,66 +856,66 @@ ws://fonts.gstatic.com	16		0
 ws://fonts.gstatic.com	2	foo.ck	0
 https://user:pw@news.site.co.uk./p.php#impban	2048	localhost	0
 https://user:pw@news.site.co.uk./p.php#impban	256	b.com	0
-https://pixel.example/y/collect/consent.js.png	128	x.y.kobe.jp	21
-https://pixel.example/y/collect/consent.js.png	2048	localhost	21
+https://pixel.example/y/collect/consent.js.png	128	x.y.kobe.jp	2
+https://pixel.example/y/collect/consent.js.png	2048	localhost	2
 https://api.service.dev/x/analytics/ad?q=impban&beacon=xn--bcher-kva.example	1024	a.com	0
 https://api.service.dev/x/analytics/ad?q=impban&beacon=xn--bcher-kva.example	64	www.ck	0
-https://dom.example?q=track&AdBanner=impanchor.example	2	track.net	21
-https://dom.example?q=track&AdBanner=impanchor.example	16	other.co.uk	21
+https://dom.example?q=track&AdBanner=impanchor.example	2	track.net	2
+https://dom.example?q=track&AdBanner=impanchor.example	16	other.co.uk	2
 wss://sub.deep.example.co.uk/p/consent.js.php?q=adserver&adserver=a.b.blogspot.com	1024	localhost	2
 wss://sub.deep.example.co.uk/p/consent.js.php?q=adserver&adserver=a.b.blogspot.com	4	x.y.kobe.jp	2
-https://a.example/beacon/AdBanner.js?q=y&consent=imp.example	256	other.github.io	21
-https://a.example/beacon/AdBanner.js?q=y&consent=imp.example	256	b.com	21
+https://a.example/beacon/AdBanner.js?q=y&consent=imp.example	256	other.github.io	2
+https://a.example/beacon/AdBanner.js?q=y&consent=imp.example	256	b.com	2
 https://api.service.dev/impban/impban.php?q=adserver&consent.js=ws.example	256	www.ck	17
 https://api.service.dev/impban/impban.php?q=adserver&consent.js=ws.example	1024		17
-wss://hostonly.example/consent?q=x&ad=user.github.io	2	track.net	21
+wss://hostonly.example/consent?q=x&ad=user.github.io	2	track.net	2
 wss://hostonly.example/consent?q=x&ad=user.github.io	1	foo.ck	0
 wss://news.bbc.co.uk./foo.php	2	a.b.c.example.org	0
 wss://news.bbc.co.uk./foo.php	8	user.github.io	0
-https://frame.example/x/collect.png?q=analytics&beacon=localhost	8	x.y.kobe.jp	21
-https://frame.example/x/collect.png?q=analytics&beacon=localhost	2	city.kobe.jp	21
+https://frame.example/x/collect.png?q=analytics&beacon=localhost	8	x.y.kobe.jp	2
+https://frame.example/x/collect.png?q=analytics&beacon=localhost	2	city.kobe.jp	2
 https://docs.example.net/v1/z.php	128	b.com	5
 https://docs.example.net/v1/z.php	128	news.site.co.uk	5
 http://video.example.tv/consent.html	2184		0
 http://video.example.tv/consent.html	2	track.net	0
-wss://user:pw@page.example/pixel.php?q=stat&beacon=sub.deep.example.co.uk	16		21
-wss://user:pw@page.example/pixel.php?q=stat&beacon=sub.deep.example.co.uk	512	www.example.com	21
-ws://t.example/pixel.php	2184	www.example.com	21
-ws://t.example/pixel.php	512		21
+wss://user:pw@page.example/pixel.php?q=stat&beacon=sub.deep.example.co.uk	16		2
+wss://user:pw@page.example/pixel.php?q=stat&beacon=sub.deep.example.co.uk	512	www.example.com	2
+ws://t.example/pixel.php	2184	www.example.com	2
+ws://t.example/pixel.php	512		2
 https://shop.example.co.uk/beacon/y/impban?q=analytics&ads=first.example	256	city.kobe.jp	5
 https://shop.example.co.uk/beacon/y/impban?q=analytics&ads=first.example	1	a.b.c.example.org	0
-https://impanchor.example	2048	foo.ck	21
-https://impanchor.example	16	user.github.io	21
-wss://a.example/track/api.gif?q=img&consent.js=UPPER.example#track	64	a.com	21
-wss://a.example/track/api.gif?q=img&consent.js=UPPER.example#track	2048	www.example.com	21
-https://t.example./z/adserver.js	2	localhost	21
-https://t.example./z/adserver.js	128	www.example.com	21
-ws://a.example/stat.php?q=consent&impban=track.net	2048	example.com	21
-ws://a.example/stat.php?q=consent&impban=track.net	2184		21
+https://impanchor.example	2048	foo.ck	2
+https://impanchor.example	16	user.github.io	2
+wss://a.example/track/api.gif?q=img&consent.js=UPPER.example#track	64	a.com	2
+wss://a.example/track/api.gif?q=img&consent.js=UPPER.example#track	2048	www.example.com	2
+https://t.example./z/adserver.js	2	localhost	2
+https://t.example./z/adserver.js	128	www.example.com	2
+ws://a.example/stat.php?q=consent&impban=track.net	2048	example.com	2
+ws://a.example/stat.php?q=consent&impban=track.net	2184		2
 ws://static.cdn-example.com/impban/collect	2184	localhost	17
 ws://static.cdn-example.com/impban/collect	4	x.y.kobe.jp	17
-http://pixel.example/collect/ad/api.js#p	32	other.github.io	21
-http://pixel.example/collect/ad/api.js#p	2	track.net	21
+http://pixel.example/collect/ad/api.js#p	32	other.github.io	2
+http://pixel.example/collect/ad/api.js#p	2	track.net	2
 http://x.zip/consent.js.png	2	track.net	2
 http://x.zip/consent.js.png	2	www.example.com	2
-http://other.example:8080#analytics	256	tracker.example	21
-http://other.example:8080#analytics	2048	x.y.kobe.jp	21
-https://cookie-banner.example/api.js	512	tracker.example	21
-https://cookie-banner.example/api.js	32	localhost	21
+http://other.example:8080#analytics	256	tracker.example	2
+http://other.example:8080#analytics	2048	x.y.kobe.jp	2
+https://cookie-banner.example/api.js	512	tracker.example	2
+https://cookie-banner.example/api.js	32	localhost	2
 https://api.service.dev	4		0
 https://api.service.dev	2	other.github.io	0
 wss://video.example.tv/p?q=api&v1=a.b.ck	512	foo.ck	0
 wss://video.example.tv/p?q=api&v1=a.b.ck	64	example.com	0
-wss://first.example/p.png?q=v1&z=xn--bcher-kva.example	128	other.github.io	21
-wss://first.example/p.png?q=v1&z=xn--bcher-kva.example	1024	other.co.uk	21
+wss://first.example/p.png?q=v1&z=xn--bcher-kva.example	128	other.github.io	2
+wss://first.example/p.png?q=v1&z=xn--bcher-kva.example	1024	other.co.uk	2
 ws://user.github.io/impban/ad/banner?q=stat&foo=malware.example.net	128	x.y.kobe.jp	17
 ws://user.github.io/impban/ad/banner?q=stat&foo=malware.example.net	8		17
-https://frame.example/beacon/banner.html	2184	localhost	21
-https://frame.example/beacon/banner.html	1024		21
-https://www.wikipedia.org:8080/collect/collect/y.png	2048	user.github.io	5
-https://www.wikipedia.org:8080/collect/collect/y.png	128	www.example.com	5
-wss://t.example/z/beacon	2	b.com	21
-wss://t.example/z/beacon	2048	other.co.uk	21
+https://frame.example/beacon/banner.html	2184	localhost	2
+https://frame.example/beacon/banner.html	1024		2
+https://www.wikipedia.org:8080/collect/collect/y.png	2048	user.github.io	0
+https://www.wikipedia.org:8080/collect/collect/y.png	128	www.example.com	0
+wss://t.example/z/beacon	2	b.com	2
+wss://t.example/z/beacon	2048	other.co.uk	2
 http://static.cdn-example.com/adserver/adserver.html?q=z&analytics=example.com	8	user.github.io	5
 http://static.cdn-example.com/adserver/adserver.html?q=z&analytics=example.com	128	news.site.co.uk	5
 https://files.example.io/foo/p	1024	other.github.io	2
@@ -926,42 +926,42 @@ ws://www.wikipedia.org/collect/consent/y.js	256	example.com	0
 ws://www.wikipedia.org/collect/consent/y.js	2048		5
 wss://cdn.jsdelivr.net/v1.gif?q=promo&pixel=example.com	16	tracker.example	0
 wss://cdn.jsdelivr.net/v1.gif?q=promo&pixel=example.com	4	other.co.uk	0
-ws://ws.example#q	4	page.example	21
-ws://ws.example#q	2184	news.site.co.uk	21
+ws://ws.example#q	4	page.example	2
+ws://ws.example#q	2184	news.site.co.uk	2
 wss://static.cdn-example.com/promo/promo?q=z&p=bad.example	256	www.example.com	2
 wss://static.cdn-example.com/promo/promo?q=z&p=bad.example	1	a.b.c.example.org	0
 https://phish.example.org/y.php	1024	user.github.io	9
 https://phish.example.org/y.php	256	news.site.co.uk	9
 https://www.wikipedia.org/p/foo	4	foo.ck	0
 https://www.wikipedia.org/p/foo	1024	www.example.com	0
-wss://frame.example/v1/v1/stat	64	example.com	21
-wss://frame.example/v1/v1/stat	128	a.b.c.example.org	21
+wss://frame.example/v1/v1/stat	64	example.com	2
+wss://frame.example/v1/v1/stat	128	a.b.c.example.org	2
 ws://x.example:8080.	16	page.example	5
-ws://x.example:8080.	8	foo.ck	5
+ws://x.example:8080.	8	foo.ck	0
 https://fonts.gstatic.com/stat.php?q=p&pixel=[::1]	64	x.y.kobe.jp	0
 https://fonts.gstatic.com/stat.php?q=p&pixel=[::1]	512		0
-http://api.service.dev	4	news.site.co.uk	2
+http://api.service.dev	4	news.site.co.uk	5
 http://api.service.dev	8		5
 https://news.bbc.co.uk/api/consent.js/api?q=promo&foo=t.example	128	www.ck	5
 https://news.bbc.co.uk/api/consent.js/api?q=promo&foo=t.example	1024	b.com	5
-https://foo.beacon.example/api?q=p&banner=localhost	2	other.co.uk	21
+https://foo.beacon.example/api?q=p&banner=localhost	2	other.co.uk	2
 https://foo.beacon.example/api?q=p&banner=localhost	1	track.net	0
-https://news.bbc.co.uk/analytics.png	128	other.co.uk	5
-https://news.bbc.co.uk/analytics.png	2184	example.com	5
-https://page.example/AdBanner.png	2048	localhost	21
-https://page.example/AdBanner.png	16		21
-wss://impath.example?q=banner&beacon=foo.beacon.example	2048	user.github.io	21
-wss://impath.example?q=banner&beacon=foo.beacon.example	32	example.com	21
-https://page.example/beacon/x.php	8		21
-https://page.example/beacon/x.php	512	www.example.com	21
+https://news.bbc.co.uk/analytics.png	128	other.co.uk	0
+https://news.bbc.co.uk/analytics.png	2184	example.com	0
+https://page.example/AdBanner.png	2048	localhost	2
+https://page.example/AdBanner.png	16		2
+wss://impath.example?q=banner&beacon=foo.beacon.example	2048	user.github.io	2
+wss://impath.example?q=banner&beacon=foo.beacon.example	32	example.com	2
+https://page.example/beacon/x.php	8		2
+https://page.example/beacon/x.php	512	www.example.com	2
 ws://docs.example.net/banner.png	64	track.net	0
 ws://docs.example.net/banner.png	32	city.kobe.jp	0
 http://cdn.example.org	256	page.example	5
 http://cdn.example.org	64	user.github.io	5
 http://cdn.jsdelivr.net/analytics/analytics/x.php	8	example.com	0
 http://cdn.jsdelivr.net/analytics/analytics/x.php	4	city.kobe.jp	0
-ws://obj.example:8080/AdBanner/ad/y.png	8	other.github.io	21
-ws://obj.example:8080/AdBanner/ad/y.png	32	other.co.uk	21
+ws://obj.example:8080/AdBanner/ad/y.png	8	other.github.io	2
+ws://obj.example:8080/AdBanner/ad/y.png	32	other.co.uk	2
 https://user:pw@city.kobe.jp/ads/banner/y.png	64	foo.ck	5
 https://user:pw@city.kobe.jp/ads/banner/y.png	32	a.b.c.example.org	5
 https://news.bbc.co.uk/track.php	512	track.net	0
@@ -970,8 +970,8 @@ wss://cdn.jsdelivr.net	256	user.github.io	0
 wss://cdn.jsdelivr.net	8	www.ck	0
 wss://1.2.3.4:8080/banner?q=consent.js&consent.js=font.example	32	track.net	1
 wss://1.2.3.4:8080/banner?q=consent.js&consent.js=font.example	512		2
-wss://cookie-banner.example	64	news.site.co.uk	21
-wss://cookie-banner.example	2048	tracker.example	21
+wss://cookie-banner.example	64	news.site.co.uk	2
+wss://cookie-banner.example	2048	tracker.example	2
 wss://api.service.dev/track/q/consent.js.html	256	other.github.io	13
 wss://api.service.dev/track/q/consent.js.html	4	localhost	13
 https://www.example.com/adserver.html?q=ad&img=dom.example	1024	localhost	1
@@ -980,34 +980,34 @@ https://news.site.co.uk/img.php	512	x.y.kobe.jp	0
 https://news.site.co.uk/img.php	2048	city.kobe.jp	0
 http://static.cdn-example.com/promo.html	8	user.github.io	0
 http://static.cdn-example.com/promo.html	8		0
-https://notimg.example:8080/consent.php?q=y&beacon=obj.example	128	tracker.example	21
-https://notimg.example:8080/consent.php?q=y&beacon=obj.example	256	city.kobe.jp	21
-wss://both.example/beacon/beacon	32	track.net	21
-wss://both.example/beacon/beacon	128	tracker.example	21
+https://notimg.example:8080/consent.php?q=y&beacon=obj.example	128	tracker.example	2
+https://notimg.example:8080/consent.php?q=y&beacon=obj.example	256	city.kobe.jp	2
+wss://both.example/beacon/beacon	32	track.net	2
+wss://both.example/beacon/beacon	128	tracker.example	2
 wss://static.cdn-example.com	2184	x.y.kobe.jp	0
 wss://static.cdn-example.com	2048	foo.ck	0
 wss://shop.example.co.uk./adserver.html?q=impban&ad=pixel.example	16	news.site.co.uk	1
 wss://shop.example.co.uk./adserver.html?q=impban&ad=pixel.example	4	x.y.kobe.jp	1
-ws://cookie-banner.example/pixel.gif	16	page.example	21
-ws://cookie-banner.example/pixel.gif	32	1.2.3.4	21
-https://UPPER.example:8080/track.html?q=pixel&ads=hostonly.example	16		21
-https://UPPER.example:8080/track.html?q=pixel&ads=hostonly.example	1024	tracker.example	21
-https://xn--bcher-kva.example./stat.html	4	user.github.io	21
-https://xn--bcher-kva.example./stat.html	256	b.com	21
-https://t.example/adserver	128	a.com	21
-https://t.example/adserver	128		21
+ws://cookie-banner.example/pixel.gif	16	page.example	2
+ws://cookie-banner.example/pixel.gif	32	1.2.3.4	2
+https://UPPER.example:8080/track.html?q=pixel&ads=hostonly.example	16		2
+https://UPPER.example:8080/track.html?q=pixel&ads=hostonly.example	1024	tracker.example	2
+https://xn--bcher-kva.example./stat.html	4	user.github.io	2
+https://xn--bcher-kva.example./stat.html	256	b.com	2
+https://t.example/adserver	128	a.com	2
+https://t.example/adserver	128		2
 wss://video.example.tv/z.png	2184	user.github.io	0
 wss://video.example.tv/z.png	4	other.co.uk	0
 http://localhost	8	other.github.io	0
 http://localhost	1	news.site.co.uk	0
 https://ads.example.com/AdBanner/AdBanner/banner.html?q=AdBanner&ad=ads.example.com	64	track.net	1
 https://ads.example.com/AdBanner/AdBanner/banner.html?q=AdBanner&ad=ads.example.com	256	tracker.example	1
-ws://news.site.co.uk:8080/consent.js/q	1024	example.com	2
+ws://news.site.co.uk:8080/consent.js/q	1024	example.com	13
 ws://news.site.co.uk:8080/consent.js/q	128	a.b.c.example.org	13
 https://www.wikipedia.org:8080/p	32	city.kobe.jp	0
 https://www.wikipedia.org:8080/p	16	www.example.com	0
-https://news.site.co.uk/AdBanner/stat/x	8	user.github.io	2
-https://news.site.co.uk/AdBanner/stat/x	2	1.2.3.4	2
+https://news.site.co.uk/AdBanner/stat/x	8	user.github.io	5
+https://news.site.co.uk/AdBanner/stat/x	2	1.2.3.4	5
 http://docs.example.net/banner#api	16		1
 http://docs.example.net/banner#api	32	foo.ck	1
 http://img.site.co.uk/AdBanner.gif	2184	foo.ck	1
@@ -1028,24 +1028,24 @@ wss://www.example.com/pixel/promo.php	16	a.com	0
 wss://www.example.com/pixel/promo.php	4	news.site.co.uk	0
 ws://news.bbc.co.uk/foo/img?q=ads&stat=a.example	32	b.com	2
 ws://news.bbc.co.uk/foo/img?q=ads&stat=a.example	256	user.github.io	2
-https://a.example/p.gif?q=y&promo=imp.example	64	other.co.uk	21
-https://a.example/p.gif?q=y&promo=imp.example	2	user.github.io	21
+https://a.example/p.gif?q=y&promo=imp.example	64	other.co.uk	2
+https://a.example/p.gif?q=y&promo=imp.example	2	user.github.io	2
 http://city.kobe.jp:8080/banner/promo.php?q=ads&AdBanner=www.ck	8	www.ck	1
 http://city.kobe.jp:8080/banner/promo.php?q=ads&AdBanner=www.ck	16	example.com	2
-https://tracker.example/api.html	4	example.com	21
-https://tracker.example/api.html	64	x.y.kobe.jp	21
-https://frame.example/analytics/track/stat.gif	32	1.2.3.4	21
-https://frame.example/analytics/track/stat.gif	64	a.com	21
-https://excl.example/ad.js	2184	city.kobe.jp	21
-https://excl.example/ad.js	16	news.site.co.uk	21
+https://tracker.example/api.html	4	example.com	2
+https://tracker.example/api.html	64	x.y.kobe.jp	2
+https://frame.example/analytics/track/stat.gif	32	1.2.3.4	2
+https://frame.example/analytics/track/stat.gif	64	a.com	2
+https://excl.example/ad.js	2184	city.kobe.jp	2
+https://excl.example/ad.js	16	news.site.co.uk	2
 wss://fonts.gstatic.com/beacon/consent.js/beacon.php?q=pixel&foo=city.kobe.jp#ads	1024	www.example.com	2
 wss://fonts.gstatic.com/beacon/consent.js/beacon.php?q=pixel&foo=city.kobe.jp#ads	8	www.ck	2
-https://media.example/promo/consent.js/AdBanner.js	4	www.example.com	21
-https://media.example/promo/consent.js/AdBanner.js	64	a.b.c.example.org	21
+https://media.example/promo/consent.js/AdBanner.js	4	www.example.com	2
+https://media.example/promo/consent.js/AdBanner.js	64	a.b.c.example.org	2
 https://api.service.dev:8080/promo.php	8	www.ck	0
 https://api.service.dev:8080/promo.php	2048	x.y.kobe.jp	0
-wss://both.example/adserver/beacon/beacon	64		21
-wss://both.example/adserver/beacon/beacon	64	a.b.c.example.org	21
+wss://both.example/adserver/beacon/beacon	64		2
+wss://both.example/adserver/beacon/beacon	64	a.b.c.example.org	2
 ws://docs.example.net/y/foo/promo?q=consent.js&x=hostonly.example	2048	other.github.io	2
 ws://docs.example.net/y/foo/promo?q=consent.js&x=hostonly.example	2184	a.com	2
 wss://www.wikipedia.org/AdBanner/x	2184	city.kobe.jp	0
@@ -1059,19 +1059,19 @@ wss://www.wikipedia.org/p.php	2	example.com	0
 ws://shop.example.co.uk/stat/AdBanner/track	2	a.com	5
 ws://shop.example.co.uk/stat/AdBanner/track	16	track.net	2
 ws://style.example	1	example.com	0
-ws://style.example	128	foo.ck	21
+ws://style.example	128	foo.ck	2
 ws://static.cdn-example.com./AdBanner/q	1024	page.example	0
 ws://static.cdn-example.com./AdBanner/q	256	foo.ck	0
 https://docs.example.net:8080/promo/AdBanner.php	16	news.site.co.uk	2
 https://docs.example.net:8080/promo/AdBanner.php	2184	www.ck	2
-wss://ws.example/stat/pixel	4		21
-wss://ws.example/stat/pixel	2184	www.example.com	21
+wss://ws.example/stat/pixel	4		2
+wss://ws.example/stat/pixel	2184	www.example.com	2
 http://img.example.com.au/track/impban	512	track.net	5
 http://img.example.com.au/track/impban	256	other.co.uk	5
 https://video.example.tv/z/y.php?q=ad&ad=both.example	2	other.co.uk	0
 https://video.example.tv/z/y.php?q=ad&ad=both.example	128	a.com	0
-ws://style.example/p/analytics/p	2048	user.github.io	21
-ws://style.example/p/analytics/p	1024	tracker.example	21
+ws://style.example/p/analytics/p	2048	user.github.io	2
+ws://style.example/p/analytics/p	1024	tracker.example	2
 wss://img.example.com.au/pixel.gif?q=banner&z=impath.example	64	tracker.example	1
 wss://img.example.com.au/pixel.gif?q=banner&z=impath.example	256	localhost	1
 http://www.wikipedia.org/foo.gif	256	www.example.com	1
@@ -1082,60 +1082,60 @@ wss://static.cdn-example.com/z/beacon.php	8	b.com	0
 wss://static.cdn-example.com/z/beacon.php	1024	track.net	0
 https://user:pw@video.example.tv/ads/api	8	page.example	5
 https://user:pw@video.example.tv/ads/api	64	www.ck	5
-http://ws.example#analytics	2184	foo.ck	21
-http://ws.example#analytics	32	www.example.com	21
+http://ws.example#analytics	2184	foo.ck	2
+http://ws.example#analytics	32	www.example.com	2
 https://shop.example.co.uk/AdBanner/collect/impban?q=AdBanner&consent=www.ck	256		5
 https://shop.example.co.uk/AdBanner/collect/impban?q=AdBanner&consent=www.ck	512	track.net	5
 wss://track.net./api.php#adserver	1	www.ck	0
 wss://track.net./api.php#adserver	32	example.com	0
-https://first.example/v1	128	track.net	21
-https://first.example/v1	8	tracker.example	21
-ws://page.example/adserver.gif	512	x.y.kobe.jp	21
-ws://page.example/adserver.gif	2	www.ck	21
+https://first.example/v1	128	track.net	2
+https://first.example/v1	8	tracker.example	2
+ws://page.example/adserver.gif	512	x.y.kobe.jp	2
+ws://page.example/adserver.gif	2	www.ck	2
 wss://phish.example.org/beacon	4	www.ck	9
 wss://phish.example.org/beacon	2184	track.net	9
-http://other.example/stat/impban/api.html	16	localhost	21
-http://other.example/stat/impban/api.html	4	www.example.com	21
+http://other.example/stat/impban/api.html	16	localhost	17
+http://other.example/stat/impban/api.html	4	www.example.com	17
 https://fonts.gstatic.com/foo/q.html	2	www.ck	2
 https://fonts.gstatic.com/foo/q.html	1	a.com	0
-https://api.service.dev/api/q.png#z	128		5
-https://api.service.dev/api/q.png#z	1024		5
-https://bad.example:8080/consent.js/track/collect.gif	512	tracker.example	21
-https://bad.example:8080/consent.js/track/collect.gif	2184	a.b.c.example.org	21
-wss://user:pw@www.example.com/AdBanner	4	www.ck	5
+https://api.service.dev/api/q.png#z	128		0
+https://api.service.dev/api/q.png#z	1024		0
+https://bad.example:8080/consent.js/track/collect.gif	512	tracker.example	2
+https://bad.example:8080/consent.js/track/collect.gif	2184	a.b.c.example.org	2
+wss://user:pw@www.example.com/AdBanner	4	www.ck	0
 wss://user:pw@www.example.com/AdBanner	64		0
-ws://ws.example	128	user.github.io	21
-ws://ws.example	1024	example.com	21
+ws://ws.example	128	user.github.io	2
+ws://ws.example	1024	example.com	2
 https://img.example.com.au/ads.js	1	a.com	0
 https://img.example.com.au/ads.js	1024	a.b.c.example.org	0
 wss://intranet.	64		0
 wss://intranet.	16	track.net	0
-https://foo.beacon.example/foo/beacon/impban?q=beacon&consent=both.example	16		21
-https://foo.beacon.example/foo/beacon/impban?q=beacon&consent=both.example	64	a.b.c.example.org	21
-ws://x.example/consent.js.js?q=consent&y=foo.beacon.example	4	user.github.io	21
-ws://x.example/consent.js.js?q=consent&y=foo.beacon.example	4	track.net	21
+https://foo.beacon.example/foo/beacon/impban?q=beacon&consent=both.example	16		2
+https://foo.beacon.example/foo/beacon/impban?q=beacon&consent=both.example	64	a.b.c.example.org	2
+ws://x.example/consent.js.js?q=consent&y=foo.beacon.example	4	user.github.io	2
+ws://x.example/consent.js.js?q=consent&y=foo.beacon.example	4	track.net	2
 https://www.example.com/analytics/x/y.js#track	1024	www.example.com	0
 https://www.example.com/analytics/x/y.js#track	512	other.co.uk	0
-https://other.example/p/consent#foo	256	track.net	21
-https://other.example/p/consent#foo	128	a.b.c.example.org	21
-https://xn--bcher-kva.example/x.js	64	other.co.uk	21
-https://xn--bcher-kva.example/x.js	2184	www.example.com	21
+https://other.example/p/consent#foo	256	track.net	2
+https://other.example/p/consent#foo	128	a.b.c.example.org	2
+https://xn--bcher-kva.example/x.js	64	other.co.uk	2
+https://xn--bcher-kva.example/x.js	2184	www.example.com	2
 https://t.example/banner.png	1	page.example	0
-https://t.example/banner.png	16	localhost	21
+https://t.example/banner.png	16	localhost	2
 ws://impanchor.example/q/q/p.png?q=z&beacon=bad.example	1	example.com	0
-ws://impanchor.example/q/q/p.png?q=z&beacon=bad.example	32	news.site.co.uk	21
-wss://www.example.com/v1?q=x&collect=x.example	2184		0
-wss://www.example.com/v1?q=x&collect=x.example	4	example.com	0
+ws://impanchor.example/q/q/p.png?q=z&beacon=bad.example	32	news.site.co.uk	2
+wss://www.example.com/v1?q=x&collect=x.example	2184		5
+wss://www.example.com/v1?q=x&collect=x.example	4	example.com	5
 wss://dom.example/y.html	1	www.ck	0
-wss://dom.example/y.html	2184	tracker.example	21
+wss://dom.example/y.html	2184	tracker.example	2
 ws://phish.example.org/q/q/p	16	a.com	9
 ws://phish.example.org/q/q/p	128	www.example.com	9
 https://both.example/stat.js	1	www.ck	0
-https://both.example/stat.js	32	user.github.io	21
+https://both.example/stat.js	32	user.github.io	2
 https://a.b.track.net:8080/consent.js/v1/stat?q=beacon&AdBanner=other.example	2184	x.y.kobe.jp	13
 https://a.b.track.net:8080/consent.js/v1/stat?q=beacon&AdBanner=other.example	64	user.github.io	13
 http://docs.example.net/beacon/p/foo.php?q=x&analytics=dom.example	1	page.example	0
-http://docs.example.net/beacon/p/foo.php?q=x&analytics=dom.example	32	a.com	5
+http://docs.example.net/beacon/p/foo.php?q=x&analytics=dom.example	32	a.com	0
 ws://news.bbc.co.uk:8080/y/banner/z.gif	512	b.com	1
 ws://news.bbc.co.uk:8080/y/banner/z.gif	4		1
 ws://user:pw@a.b.track.net./promo/pixel/y.gif	1	other.co.uk	0
@@ -1146,74 +1146,74 @@ http://files.example.io#x	8	www.ck	0
 http://files.example.io#x	64	localhost	0
 wss://img.example.com.au/collect/foo?q=ads&stat=example.com	32		2
 wss://img.example.com.au/collect/foo?q=ads&stat=example.com	2048	user.github.io	0
-https://first.example/y/x.js	256		21
-https://first.example/y/x.js	128	www.ck	21
+https://first.example/y/x.js	256		2
+https://first.example/y/x.js	128	www.ck	2
 ws://phish.example.org/consent.php?q=banner&ads=phish.example.org	128	other.co.uk	9
 ws://phish.example.org/consent.php?q=banner&ads=phish.example.org	4	track.net	9
 http://[::1]/stat/y	2184	www.example.com	5
 http://[::1]/stat/y	2048	example.com	5
 wss://files.example.io/p/x.html	4		0
-wss://files.example.io/p/x.html	2048	other.github.io	0
+wss://files.example.io/p/x.html	2048	other.github.io	5
 wss://shop.example.co.uk:8080/p.php	1024	www.example.com	0
 wss://shop.example.co.uk:8080/p.php	2184	a.b.c.example.org	0
-https://user:pw@city.kobe.jp/beacon/consent.js/y.php	16	foo.ck	5
+https://user:pw@city.kobe.jp/beacon/consent.js/y.php	16	foo.ck	13
 https://user:pw@city.kobe.jp/beacon/consent.js/y.php	1	news.site.co.uk	0
 ws://1.2.3.4/impban.php?q=promo&pixel=a.b.track.net	2184	example.com	1
 ws://1.2.3.4/impban.php?q=promo&pixel=a.b.track.net	128	tracker.example	1
-https://both.example/y/q	128	b.com	21
-https://both.example/y/q	2048	localhost	21
-http://a.b.track.net/api	32	b.com	2
-http://a.b.track.net/api	4	city.kobe.jp	2
+https://both.example/y/q	128	b.com	2
+https://both.example/y/q	2048	localhost	2
+http://a.b.track.net/api	32	b.com	5
+http://a.b.track.net/api	4	city.kobe.jp	5
 https://malware.example.net/ad?q=consent&collect=tracker.example	512	user.github.io	9
 https://malware.example.net/ad?q=consent&collect=tracker.example	512		9
 ws://imp.example./analytics.php?q=consent&pixel=other.example	4	tracker.example	17
 ws://imp.example./analytics.php?q=consent&pixel=other.example	2	example.com	17
-https://notimg.example/AdBanner/pixel	2184	www.example.com	21
-https://notimg.example/AdBanner/pixel	1024	example.com	21
+https://notimg.example/AdBanner/pixel	2184	www.example.com	2
+https://notimg.example/AdBanner/pixel	1024	example.com	2
 https://static.cdn-example.com/x.html?q=foo&analytics=cdn.example.org	128	user.github.io	0
 https://static.cdn-example.com/x.html?q=foo&analytics=cdn.example.org	16	track.net	0
-wss://font.example/AdBanner/stat.png#z	2184	a.com	21
-wss://font.example/AdBanner/stat.png#z	16	1.2.3.4	21
-https://media.example/q/stat/z.png	2048	www.ck	21
-https://media.example/q/stat/z.png	8	www.ck	21
+wss://font.example/AdBanner/stat.png#z	2184	a.com	2
+wss://font.example/AdBanner/stat.png#z	16	1.2.3.4	2
+https://media.example/q/stat/z.png	2048	www.ck	2
+https://media.example/q/stat/z.png	8	www.ck	2
 https://imp.example/consent.js.html	512	www.ck	17
 https://imp.example/consent.js.html	2184		17
 https://news.site.co.uk/ads	2048		0
-https://news.site.co.uk/ads	2048	foo.ck	2
+https://news.site.co.uk/ads	2048	foo.ck	5
 https://x.zip/v1/track	512	foo.ck	1
 https://x.zip/v1/track	8		1
 ws://city.kobe.jp/analytics/AdBanner?q=q&y=page.example	2184	tracker.example	0
 ws://city.kobe.jp/analytics/AdBanner?q=q&y=page.example	2184	user.github.io	0
 https://1.2.3.4/collect/v1.js?q=ad&img=intranet	32	www.example.com	1
 https://1.2.3.4/collect/v1.js?q=ad&img=intranet	4	1.2.3.4	2
-https://user:pw@a.example:8080/ad	128		21
-https://user:pw@a.example:8080/ad	4	news.site.co.uk	21
+https://user:pw@a.example:8080/ad	128		2
+https://user:pw@a.example:8080/ad	4	news.site.co.uk	2
 wss://example.com/pixel/ad/q	1	city.kobe.jp	0
 wss://example.com/pixel/ad/q	1024	other.github.io	0
 http://shop.example.co.uk/track/p/p.png	64	a.b.c.example.org	5
 http://shop.example.co.uk/track/p/p.png	16	example.com	5
 http://docs.example.net:8080/collect/pixel	2048		5
 http://docs.example.net:8080/collect/pixel	2048	foo.ck	0
-ws://first.example/stat.gif?q=AdBanner&banner=img.site.co.uk	2	www.example.com	21
-ws://first.example/stat.gif?q=AdBanner&banner=img.site.co.uk	2184	a.b.c.example.org	21
-ws://x.example	8	page.example	21
-ws://x.example	16	localhost	21
+ws://first.example/stat.gif?q=AdBanner&banner=img.site.co.uk	2	www.example.com	2
+ws://first.example/stat.gif?q=AdBanner&banner=img.site.co.uk	2184	a.b.c.example.org	2
+ws://x.example	8	page.example	2
+ws://x.example	16	localhost	2
 https://static.cdn-example.com/y.png?q=q&y=news.site.co.uk	2048	b.com	0
 https://static.cdn-example.com/y.png?q=q&y=news.site.co.uk	512	user.github.io	0
 ws://first.example	1	other.co.uk	0
-ws://first.example	64		21
+ws://first.example	64		2
 ws://shop.example.co.uk/ad/foo.html?q=img&z=cdn.example.org	16	b.com	0
 ws://shop.example.co.uk/ad/foo.html?q=img&z=cdn.example.org	8		5
 https://user:pw@example.com/foo.php?q=adserver&consent.js=both.example	2184		0
 https://user:pw@example.com/foo.php?q=adserver&consent.js=both.example	512	x.y.kobe.jp	0
 ws://x.zip/beacon/consent.js/z?q=consent.js&collect=tracker.example	4	other.co.uk	1
 ws://x.zip/beacon/consent.js/z?q=consent.js&collect=tracker.example	1024	user.github.io	1
-wss://cookie-banner.example/y/img.png	512	other.github.io	21
-wss://cookie-banner.example/y/img.png	32	foo.ck	21
+wss://cookie-banner.example/y/img.png	512	other.github.io	2
+wss://cookie-banner.example/y/img.png	32	foo.ck	2
 http://www.example.com/stat/track.gif	64	track.net	2
 http://www.example.com/stat/track.gif	2048	example.com	5
-https://xn--bcher-kva.example/q.png	2	tracker.example	21
-https://xn--bcher-kva.example/q.png	1024	a.com	21
+https://xn--bcher-kva.example/q.png	2	tracker.example	2
+https://xn--bcher-kva.example/q.png	1024	a.com	2
 https://impath.example:8080./track/promo.js?q=stat&img=style.example	16	example.com	2
 https://impath.example:8080./track/promo.js?q=stat&img=style.example	256	city.kobe.jp	5
 https://1.2.3.4:8080/pixel.png	512	other.co.uk	1
@@ -1221,19 +1221,19 @@ https://1.2.3.4:8080/pixel.png	2048	page.example	1
 https://[::1]/analytics/p	1	example.com	0
 https://[::1]/analytics/p	8		0
 https://both.example:8080/banner/beacon	1	city.kobe.jp	0
-https://both.example:8080/banner/beacon	512	a.com	21
-https://t.example	2184	other.github.io	21
+https://both.example:8080/banner/beacon	512	a.com	2
+https://t.example	2184	other.github.io	2
 https://t.example	1	other.co.uk	0
 wss://intranet/banner/img/stat	2	page.example	1
 wss://intranet/banner/img/stat	2	1.2.3.4	1
-https://xn--bcher-kva.example:8080/v1/v1/consent	2184	localhost	21
-https://xn--bcher-kva.example:8080/v1/v1/consent	2048	1.2.3.4	21
+https://xn--bcher-kva.example:8080/v1/v1/consent	2184	localhost	2
+https://xn--bcher-kva.example:8080/v1/v1/consent	2048	1.2.3.4	2
 http://user:pw@video.example.tv:8080/x/AdBanner/analytics.js	8		1
 http://user:pw@video.example.tv:8080/x/AdBanner/analytics.js	256	a.b.c.example.org	1
 wss://imp.example/beacon.png	64	other.co.uk	17
 wss://imp.example/beacon.png	2048	www.example.com	17
-wss://UPPER.example/stat/consent.js.php	4	foo.ck	21
-wss://UPPER.example/stat/consent.js.php	2		21
+wss://UPPER.example/stat/consent.js.php	4	foo.ck	2
+wss://UPPER.example/stat/consent.js.php	2		2
 https://static.cdn-example.com./track?q=AdBanner&track=news.site.co.uk	1024		5
 https://static.cdn-example.com./track?q=AdBanner&track=news.site.co.uk	16	1.2.3.4	0
 http://img.example.com.au/promo/track#x	1	a.com	0
@@ -1242,22 +1242,22 @@ https://www.example.com	8	x.y.kobe.jp	0
 https://www.example.com	512	track.net	0
 https://files.example.io/consent/consent.html	1024	www.example.com	0
 https://files.example.io/consent/consent.html	64	tracker.example	0
-http://excl.example/ad/v1/q.png	4	a.b.c.example.org	21
-http://excl.example/ad/v1/q.png	256	user.github.io	21
-ws://x.example/collect/p.gif	512	page.example	21
-ws://x.example/collect/p.gif	32	example.com	21
-http://a.b.ck/track/banner/img.html	64	page.example	2
+http://excl.example/ad/v1/q.png	4	a.b.c.example.org	2
+http://excl.example/ad/v1/q.png	256	user.github.io	2
+ws://x.example/collect/p.gif	512	page.example	2
+ws://x.example/collect/p.gif	32	example.com	2
+http://a.b.ck/track/banner/img.html	64	page.example	5
 http://a.b.ck/track/banner/img.html	2048		5
-http://foo.beacon.example/v1.js#beacon	2048	www.ck	21
-http://foo.beacon.example/v1.js#beacon	1024		21
+http://foo.beacon.example/v1.js#beacon	2048	www.ck	2
+http://foo.beacon.example/v1.js#beacon	1024		2
 http://shop.example.co.uk/ads.gif	2184	x.y.kobe.jp	1
 http://shop.example.co.uk/ads.gif	2	www.example.com	1
 ws://[::1]/consent.js/beacon.html	32	localhost	13
 ws://[::1]/consent.js/beacon.html	1024	other.github.io	2
 https://x.kobe.jp	128	www.example.com	0
 https://x.kobe.jp	128	tracker.example	0
-http://ads.example.com/track.js?q=AdBanner&stat=news.site.co.uk	512	track.net	2
-http://ads.example.com/track.js?q=AdBanner&stat=news.site.co.uk	512	x.y.kobe.jp	2
+http://ads.example.com/track.js?q=AdBanner&stat=news.site.co.uk	512	track.net	1
+http://ads.example.com/track.js?q=AdBanner&stat=news.site.co.uk	512	x.y.kobe.jp	1
 ws://intranet/api.js	128	b.com	0
 ws://intranet/api.js	64	news.site.co.uk	0
 https://shop.example.co.uk./banner.php	8	other.github.io	0
@@ -1266,41 +1266,41 @@ https://video.example.tv/consent.js.gif?q=p&track=evil.example	256	www.example.c
 https://video.example.tv/consent.js.gif?q=p&track=evil.example	32	other.co.uk	13
 ws://api.service.dev/collect.png	32	x.y.kobe.jp	0
 ws://api.service.dev/collect.png	32	user.github.io	0
-wss://cookie-banner.example/AdBanner/impban	256	page.example	21
-wss://cookie-banner.example/AdBanner/impban	512	1.2.3.4	21
+wss://cookie-banner.example/AdBanner/impban	256	page.example	2
+wss://cookie-banner.example/AdBanner/impban	512	1.2.3.4	2
 http://imp.example:8080/impban/analytics/img.js	64	localhost	17
 http://imp.example:8080/impban/analytics/img.js	2		17
-ws://obj.example/z/banner	512	track.net	21
-ws://obj.example/z/banner	4	1.2.3.4	21
+ws://obj.example/z/banner	512	track.net	2
+ws://obj.example/z/banner	4	1.2.3.4	2
 ws://api.service.dev/adserver/y?q=track&ads=[::1]	1	other.co.uk	0
 ws://api.service.dev/adserver/y?q=track&ads=[::1]	2	city.kobe.jp	5
 https://www.example.com	16	news.site.co.uk	0
 https://www.example.com	1024	city.kobe.jp	0
-ws://obj.example/p/foo.js	2048	www.ck	21
-ws://obj.example/p/foo.js	32	a.com	21
+ws://obj.example/p/foo.js	2048	www.ck	2
+ws://obj.example/p/foo.js	32	a.com	2
 ws://www.malware.example.net/track/p/ads.html	1024		9
 ws://www.malware.example.net/track/p/ads.html	2184	tracker.example	9
-ws://bad.example/impban	32	tracker.example	21
-ws://bad.example/impban	2	example.com	21
+ws://bad.example/impban	32	tracker.example	2
+ws://bad.example/impban	2	example.com	2
 https://www.example.com?q=AdBanner&p=cdn.example.org#analytics	128	www.ck	0
 https://www.example.com?q=AdBanner&p=cdn.example.org#analytics	1	other.co.uk	0
 ws://user:pw@www.example.com/foo/foo#ad	128	b.com	2
 ws://user:pw@www.example.com/foo/foo#ad	64	www.ck	2
-wss://img.site.co.uk/api/api	512	localhost	5
-wss://img.site.co.uk/api/api	1024	www.example.com	5
-https://tracker.example/x/ad/beacon.html	16	a.com	21
-https://tracker.example/x/ad/beacon.html	1024	page.example	21
+wss://img.site.co.uk/api/api	512	localhost	0
+wss://img.site.co.uk/api/api	1024	www.example.com	0
+https://tracker.example/x/ad/beacon.html	16	a.com	2
+https://tracker.example/x/ad/beacon.html	1024	page.example	2
 https://fonts.gstatic.com?q=api&consent=a.b.track.net	1024	foo.ck	0
 https://fonts.gstatic.com?q=api&consent=a.b.track.net	8	other.co.uk	0
-wss://cookie-banner.example/analytics/stat?q=beacon&consent.js=malware.example.net	2048	other.github.io	21
-wss://cookie-banner.example/analytics/stat?q=beacon&consent.js=malware.example.net	16		21
+wss://cookie-banner.example/analytics/stat?q=beacon&consent.js=malware.example.net	2048	other.github.io	2
+wss://cookie-banner.example/analytics/stat?q=beacon&consent.js=malware.example.net	16		2
 http://sub.deep.example.co.uk:8080/AdBanner/collect?q=x&adserver=x.kobe.jp	16	page.example	2
 http://sub.deep.example.co.uk:8080/AdBanner/collect?q=x&adserver=x.kobe.jp	4	page.example	2
 https://docs.example.net/v1.php	256	user.github.io	0
 https://docs.example.net/v1.php	1		0
 wss://evil.example/promo/ads	8	example.com	17
-wss://evil.example/promo/ads	256	localhost	21
-http://ads.example.com/p/q.png	128	user.github.io	2
+wss://evil.example/promo/ads	256	localhost	2
+http://ads.example.com/p/q.png	128	user.github.io	1
 http://ads.example.com/p/q.png	16	a.b.c.example.org	1
 https://static.cdn-example.com/consent/AdBanner/q.gif	32	city.kobe.jp	1
 https://static.cdn-example.com/consent/AdBanner/q.gif	64	example.com	1
@@ -1312,20 +1312,20 @@ ws://fonts.gstatic.com/consent.js#z	8	other.co.uk	13
 ws://fonts.gstatic.com/consent.js#z	8	foo.ck	13
 http://malware.example.net/foo/beacon	64	example.com	2
 http://malware.example.net/foo/beacon	128		2
-http://excl.example/AdBanner?q=collect&y=tracker.example	64		21
-http://excl.example/AdBanner?q=collect&y=tracker.example	16	tracker.example	21
+http://excl.example/AdBanner?q=collect&y=tracker.example	64		2
+http://excl.example/AdBanner?q=collect&y=tracker.example	16	tracker.example	2
 https://news.bbc.co.uk/q/adserver/y.html	2048	1.2.3.4	5
 https://news.bbc.co.uk/q/adserver/y.html	1024	city.kobe.jp	5
 https://foo.beacon.example/foo	1	news.site.co.uk	0
-https://foo.beacon.example/foo	8	www.example.com	21
+https://foo.beacon.example/foo	8	www.example.com	2
 https://video.example.tv/ad/consent/img?q=collect&impban=plain.example	16	b.com	0
 https://video.example.tv/ad/consent/img?q=collect&impban=plain.example	2	foo.ck	0
 https://files.example.io:8080/AdBanner/banner/v1.png	8	b.com	1
 https://files.example.io:8080/AdBanner/banner/v1.png	1024	a.b.c.example.org	1
 https://a.b.ck/x/consent.js/ads	512	other.co.uk	13
 https://a.b.ck/x/consent.js/ads	128	track.net	13
-https://notimg.example:8080/img/consent.js/collect	2048	tracker.example	21
-https://notimg.example:8080/img/consent.js/collect	64	user.github.io	21
+https://notimg.example:8080/img/consent.js/collect	2048	tracker.example	2
+https://notimg.example:8080/img/consent.js/collect	64	user.github.io	2
 https://ads.example.com	32	foo.ck	1
 https://ads.example.com	64	a.b.c.example.org	1
 ws://www.wikipedia.org	256	example.com	0
@@ -1340,13 +1340,13 @@ http://localhost?q=banner&banner=www.malware.example.net	1	1.2.3.4	0
 http://localhost?q=banner&banner=www.malware.example.net	512	city.kobe.jp	0
 wss://news.bbc.co.uk/p.html#y	32	www.example.com	0
 wss://news.bbc.co.uk/p.html#y	512	x.y.kobe.jp	0
-https://UPPER.example/promo/p?q=AdBanner&beacon=img.site.co.uk	128	a.com	21
+https://UPPER.example/promo/p?q=AdBanner&beacon=img.site.co.uk	128	a.com	2
 https://UPPER.example/promo/p?q=AdBanner&beacon=img.site.co.uk	1	user.github.io	0
 wss://news.bbc.co.uk/y?q=consent&api=ws.example	32		0
 wss://news.bbc.co.uk/y?q=consent&api=ws.example	32	page.example	0
-ws://excl.example/api/promo/banner.php?q=banner&y=plain.example	4	page.example	21
+ws://excl.example/api/promo/banner.php?q=banner&y=plain.example	4	page.example	2
 ws://excl.example/api/promo/banner.php?q=banner&y=plain.example	1	city.kobe.jp	0
-ws://obj.example/img#y	4		21
+ws://obj.example/img#y	4		2
 ws://obj.example/img#y	1	city.kobe.jp	0
 wss://track.net/track.html	32	other.co.uk	0
 wss://track.net/track.html	128	localhost	0
@@ -1354,11 +1354,11 @@ https://docs.example.net/promo.html	8	x.y.kobe.jp	0
 https://docs.example.net/promo.html	1024	news.site.co.uk	0
 https://news.bbc.co.uk?q=q&foo=cookie-banner.example	64	news.site.co.uk	0
 https://news.bbc.co.uk?q=q&foo=cookie-banner.example	1024		0
-http://foo.beacon.example/collect.png	128	track.net	21
-http://foo.beacon.example/collect.png	2048	x.y.kobe.jp	21
+http://foo.beacon.example/collect.png	128	track.net	2
+http://foo.beacon.example/collect.png	2048	x.y.kobe.jp	2
 https://user:pw@a.example/p/q.php	1	localhost	0
-https://user:pw@a.example/p/q.php	2184	news.site.co.uk	21
-https://media.example/impban/x/img.png	2048	foo.ck	21
+https://user:pw@a.example/p/q.php	2184	news.site.co.uk	2
+https://media.example/impban/x/img.png	2048	foo.ck	17
 https://media.example/impban/x/img.png	1	example.com	0
 https://www.wikipedia.org/impban	2048	tracker.example	5
 https://www.wikipedia.org/impban	1024	www.ck	5
@@ -1370,24 +1370,24 @@ https://www.wikipedia.org/ads	64	www.example.com	5
 https://www.wikipedia.org/ads	32	a.com	5
 https://img.example.com.au:8080/q/consent/beacon.png	16	b.com	0
 https://img.example.com.au:8080/q/consent/beacon.png	4	a.com	0
-wss://UPPER.example/consent.php	8	x.y.kobe.jp	21
-wss://UPPER.example/consent.php	512	foo.ck	21
+wss://UPPER.example/consent.php	8	x.y.kobe.jp	2
+wss://UPPER.example/consent.php	512	foo.ck	2
 https://intranet/adserver?q=adserver&api=notimg.example	2184	page.example	5
 https://intranet/adserver?q=adserver&api=notimg.example	1024	x.y.kobe.jp	5
-ws://x.example/z.png	64	city.kobe.jp	21
-ws://x.example/z.png	32	page.example	21
-wss://a.example/ads	2048	other.co.uk	21
-wss://a.example/ads	2184	example.com	21
+ws://x.example/z.png	64	city.kobe.jp	2
+ws://x.example/z.png	32	page.example	2
+wss://a.example/ads	2048	other.co.uk	2
+wss://a.example/ads	2184	example.com	2
 https://news.bbc.co.uk/consent/analytics	64	other.co.uk	0
 https://news.bbc.co.uk/consent/analytics	128	city.kobe.jp	0
 https://fonts.gstatic.com	2		0
 https://fonts.gstatic.com	64	track.net	0
 wss://localhost/collect/track.gif	8	other.github.io	1
 wss://localhost/collect/track.gif	1	localhost	0
-http://xn--bcher-kva.example/promo/collect.php	2		21
-http://xn--bcher-kva.example/promo/collect.php	2048	page.example	21
-https://media.example	64	news.site.co.uk	21
-https://media.example	256	www.example.com	21
+http://xn--bcher-kva.example/promo/collect.php	2		2
+http://xn--bcher-kva.example/promo/collect.php	2048	page.example	2
+https://media.example	64	news.site.co.uk	2
+https://media.example	256	www.example.com	2
 https://imp.example/v1/pixel/impban?q=banner&ads=[::1]	1	tracker.example	0
 https://imp.example/v1/pixel/impban?q=banner&ads=[::1]	64	www.ck	17
 ws://www.example.com/p/z/impban	2		5
@@ -1404,29 +1404,29 @@ https://user:pw@video.example.tv/p/foo/p.gif	2184	city.kobe.jp	2
 https://user:pw@video.example.tv/p/foo/p.gif	2048	a.com	2
 http://fonts.gstatic.com/pixel.js	1024	page.example	0
 http://fonts.gstatic.com/pixel.js	2	page.example	0
-wss://user:pw@ws.example/v1/y/analytics	2		21
-wss://user:pw@ws.example/v1/y/analytics	32	other.co.uk	21
+wss://user:pw@ws.example/v1/y/analytics	2		2
+wss://user:pw@ws.example/v1/y/analytics	32	other.co.uk	2
 wss://img.example.com.au/api.php?q=img&img=cdn.example.org	2	user.github.io	0
 wss://img.example.com.au/api.php?q=img&img=cdn.example.org	16	www.ck	0
-wss://first.example/api/analytics/y	2	www.example.com	21
-wss://first.example/api/analytics/y	256	a.b.c.example.org	21
-wss://news.site.co.uk:8080/consent.js/adserver#ads	64	a.b.c.example.org	2
-wss://news.site.co.uk:8080/consent.js/adserver#ads	64	page.example	2
+wss://first.example/api/analytics/y	2	www.example.com	2
+wss://first.example/api/analytics/y	256	a.b.c.example.org	2
+wss://news.site.co.uk:8080/consent.js/adserver#ads	64	a.b.c.example.org	5
+wss://news.site.co.uk:8080/consent.js/adserver#ads	64	page.example	5
 https://api.service.dev	1	other.github.io	0
 https://api.service.dev	1	1.2.3.4	0
-wss://font.example/foo/banner.png?q=adserver&consent=plain.example	1024		21
-wss://font.example/foo/banner.png?q=adserver&consent=plain.example	16	city.kobe.jp	21
+wss://font.example/foo/banner.png?q=adserver&consent=plain.example	1024		2
+wss://font.example/foo/banner.png?q=adserver&consent=plain.example	16	city.kobe.jp	2
 http://static.cdn-example.com	8	page.example	0
 http://static.cdn-example.com	1	www.ck	0
 https://user.github.io	2184	b.com	5
-https://user.github.io	16	a.b.c.example.org	5
-https://impanchor.example/api.png#AdBanner	4	www.ck	21
-https://impanchor.example/api.png#AdBanner	8		21
-wss://first.example:8080/q/impban	4	page.example	21
-wss://first.example:8080/q/impban	128	a.com	21
+https://user.github.io	16	a.b.c.example.org	0
+https://impanchor.example/api.png#AdBanner	4	www.ck	2
+https://impanchor.example/api.png#AdBanner	8		17
+wss://first.example:8080/q/impban	4	page.example	2
+wss://first.example:8080/q/impban	128	a.com	2
 https://cdn.jsdelivr.net	64	foo.ck	0
 https://cdn.jsdelivr.net	1024	foo.ck	0
-wss://hostonly.example/beacon.html?q=consent.js&adserver=www.ck	64	x.y.kobe.jp	21
+wss://hostonly.example/beacon.html?q=consent.js&adserver=www.ck	64	x.y.kobe.jp	2
 wss://hostonly.example/beacon.html?q=consent.js&adserver=www.ck	1		0
 ws://user:pw@intranet/collect/y/analytics.gif	2048	other.co.uk	1
 ws://user:pw@intranet/collect/y/analytics.gif	2	www.example.com	1
@@ -1434,20 +1434,20 @@ wss://video.example.tv/y.html	2	1.2.3.4	0
 wss://video.example.tv/y.html	32	1.2.3.4	0
 https://a.b.blogspot.com/consent.js/consent.js.php	2184	city.kobe.jp	13
 https://a.b.blogspot.com/consent.js/consent.js.php	128	a.b.c.example.org	13
-http://a.b.track.net:8080/impban	32	example.com	2
-http://a.b.track.net:8080/impban	64	city.kobe.jp	2
+http://a.b.track.net:8080/impban	32	example.com	5
+http://a.b.track.net:8080/impban	64	city.kobe.jp	5
 wss://docs.example.net./img/collect/collect.html#ad	2048		2
 wss://docs.example.net./img/collect/collect.html#ad	2184	track.net	5
 ws://a.b.ck/ads/ad/ads.png	8	1.2.3.4	5
 ws://a.b.ck/ads/ad/ads.png	32	www.ck	5
-ws://t.example/ads.php?q=q&api=user.github.io	16	1.2.3.4	21
-ws://t.example/ads.php?q=q&api=user.github.io	4	city.kobe.jp	21
+ws://t.example/ads.php?q=q&api=user.github.io	16	1.2.3.4	2
+ws://t.example/ads.php?q=q&api=user.github.io	4	city.kobe.jp	2
 ws://news.bbc.co.uk/AdBanner/AdBanner/img.gif	512	a.com	1
 ws://news.bbc.co.uk/AdBanner/AdBanner/img.gif	1	example.com	0
 wss://video.example.tv/consent.js.png	32	x.y.kobe.jp	2
 wss://video.example.tv/consent.js.png	4	www.example.com	2
 wss://user:pw@excl.example/analytics.php	1	www.example.com	0
-wss://user:pw@excl.example/analytics.php	256	other.github.io	21
+wss://user:pw@excl.example/analytics.php	256	other.github.io	2
 https://x.kobe.jp?q=beacon&consent.js=UPPER.example	1024	www.ck	0
 https://x.kobe.jp?q=beacon&consent.js=UPPER.example	1	a.b.c.example.org	0
 ws://video.example.tv/impban/y.js	2184	tracker.example	17
@@ -1458,36 +1458,36 @@ http://x.kobe.jp/beacon/stat/impban.html	64	tracker.example	5
 http://x.kobe.jp/beacon/stat/impban.html	32	city.kobe.jp	5
 https://example.com/AdBanner/img/ads.png	2	www.example.com	2
 https://example.com/AdBanner/img/ads.png	16	track.net	2
-http://page.example/collect	64	city.kobe.jp	21
-http://page.example/collect	256		21
-ws://UPPER.example/analytics.html?q=collect&x=bad.example	128	a.com	21
-ws://UPPER.example/analytics.html?q=collect&x=bad.example	128	user.github.io	21
+http://page.example/collect	64	city.kobe.jp	2
+http://page.example/collect	256		2
+ws://UPPER.example/analytics.html?q=collect&x=bad.example	128	a.com	2
+ws://UPPER.example/analytics.html?q=collect&x=bad.example	128	user.github.io	2
 ws://www.example.com/banner.png	32	news.site.co.uk	0
 ws://www.example.com/banner.png	2184	b.com	0
-https://intranet:8080/AdBanner/y/p?q=pixel&banner=sub.deep.example.co.uk#pixel	2048	other.github.io	5
+https://intranet:8080/AdBanner/y/p?q=pixel&banner=sub.deep.example.co.uk#pixel	2048	other.github.io	0
 https://intranet:8080/AdBanner/y/p?q=pixel&banner=sub.deep.example.co.uk#pixel	256		5
-https://font.example/x/banner.js	512	example.com	21
-https://font.example/x/banner.js	4	1.2.3.4	21
+https://font.example/x/banner.js	512	example.com	2
+https://font.example/x/banner.js	4	1.2.3.4	2
 https://user:pw@docs.example.net/banner/AdBanner/adserver.html	256	other.co.uk	1
 https://user:pw@docs.example.net/banner/AdBanner/adserver.html	8	b.com	1
 https://user:pw@xn--bcher-kva.example/ads.js	1	1.2.3.4	0
-https://user:pw@xn--bcher-kva.example/ads.js	64		21
+https://user:pw@xn--bcher-kva.example/ads.js	64		2
 http://www.example.com/ad/pixel.gif	8	page.example	2
 http://www.example.com/ad/pixel.gif	64		2
-https://impanchor.example/ad/impban/beacon.png	1024	track.net	21
-https://impanchor.example/ad/impban/beacon.png	32	localhost	21
+https://impanchor.example/ad/impban/beacon.png	1024	track.net	17
+https://impanchor.example/ad/impban/beacon.png	32	localhost	17
 https://video.example.tv:8080/stat/y/ads.png?q=ad&impban=intranet	1	a.com	0
 https://video.example.tv:8080/stat/y/ads.png?q=ad&impban=intranet	1	www.example.com	0
-http://hostonly.example:8080/adserver/ads/consent.js	1024	news.site.co.uk	21
-http://hostonly.example:8080/adserver/ads/consent.js	8		21
+http://hostonly.example:8080/adserver/ads/consent.js	1024	news.site.co.uk	2
+http://hostonly.example:8080/adserver/ads/consent.js	8		2
 http://[::1]/ads/collect.png#pixel	1024	example.com	5
 http://[::1]/ads/collect.png#pixel	1	foo.ck	0
-https://docs.example.net/collect/x/ad?q=img&beacon=frame.example	4	page.example	5
-https://docs.example.net/collect/x/ad?q=img&beacon=frame.example	16	a.b.c.example.org	5
-ws://UPPER.example/pixel/p/foo	32	localhost	21
-ws://UPPER.example/pixel/p/foo	64	page.example	21
-http://excl.example/analytics.png	32	page.example	21
-http://excl.example/analytics.png	2184	city.kobe.jp	21
+https://docs.example.net/collect/x/ad?q=img&beacon=frame.example	4	page.example	0
+https://docs.example.net/collect/x/ad?q=img&beacon=frame.example	16	a.b.c.example.org	0
+ws://UPPER.example/pixel/p/foo	32	localhost	2
+ws://UPPER.example/pixel/p/foo	64	page.example	2
+http://excl.example/analytics.png	32	page.example	2
+http://excl.example/analytics.png	2184	city.kobe.jp	2
 ws://files.example.io/img/x.html?q=beacon&v1=bad.example	16	city.kobe.jp	5
 ws://files.example.io/img/x.html?q=beacon&v1=bad.example	4	1.2.3.4	5
 http://city.kobe.jp/banner.js	32	www.ck	0
@@ -1500,12 +1500,12 @@ wss://www.wikipedia.org:8080/consent.js?q=banner&banner=[::1]	8		13
 wss://www.wikipedia.org:8080/consent.js?q=banner&banner=[::1]	1	track.net	0
 https://api.service.dev/beacon.php	8	www.ck	0
 https://api.service.dev/beacon.php	2	news.site.co.uk	0
-http://xn--bcher-kva.example/ad/promo.html	2	user.github.io	21
-http://xn--bcher-kva.example/ad/promo.html	1024	city.kobe.jp	21
+http://xn--bcher-kva.example/ad/promo.html	2	user.github.io	2
+http://xn--bcher-kva.example/ad/promo.html	1024	city.kobe.jp	2
 http://x.zip/ads/pixel/consent.png	4		2
 http://x.zip/ads/pixel/consent.png	2048	user.github.io	2
-wss://other.example/consent/track	4	example.com	21
-wss://other.example/consent/track	2184	city.kobe.jp	21
+wss://other.example/consent/track	4	example.com	2
+wss://other.example/consent/track	2184	city.kobe.jp	2
 ws://a.b.blogspot.com/banner/foo	64	track.net	2
 ws://a.b.blogspot.com/banner/foo	2184	city.kobe.jp	2
 https://www.example.com/stat/promo.gif?q=q&promo=sub.deep.example.co.uk	2184	www.example.com	5
@@ -1516,46 +1516,46 @@ wss://video.example.tv/p/impban/adserver.js	8	b.com	17
 wss://video.example.tv/p/impban/adserver.js	128	page.example	17
 https://sub.deep.example.co.uk/analytics/p?q=beacon&ad=intranet	128	page.example	2
 https://sub.deep.example.co.uk/analytics/p?q=beacon&ad=intranet	4	x.y.kobe.jp	2
-ws://page.example/foo.png	64		21
-ws://page.example/foo.png	2184		21
+ws://page.example/foo.png	64		2
+ws://page.example/foo.png	2184		2
 http://user:pw@video.example.tv:8080/ads.js	2184	a.b.c.example.org	0
 http://user:pw@video.example.tv:8080/ads.js	512	www.example.com	0
 https://track.net/p.png	16	1.2.3.4	0
 https://track.net/p.png	2048	other.co.uk	0
 http://img.example.com.au/consent.js	2184	www.example.com	13
 http://img.example.com.au/consent.js	1024	www.example.com	13
-wss://xn--bcher-kva.example/img?q=promo&beacon=foo.beacon.example	32	track.net	21
-wss://xn--bcher-kva.example/img?q=promo&beacon=foo.beacon.example	512	user.github.io	21
-https://cdn.jsdelivr.net/consent/ads	2184		2
+wss://xn--bcher-kva.example/img?q=promo&beacon=foo.beacon.example	32	track.net	2
+wss://xn--bcher-kva.example/img?q=promo&beacon=foo.beacon.example	512	user.github.io	2
+https://cdn.jsdelivr.net/consent/ads	2184		0
 https://cdn.jsdelivr.net/consent/ads	128	a.b.c.example.org	5
-https://img.example.com.au/collect/x	2	news.site.co.uk	5
+https://img.example.com.au/collect/x	2	news.site.co.uk	0
 https://img.example.com.au/collect/x	32	localhost	5
 wss://city.kobe.jp?q=foo&stat=frame.example	16	other.github.io	0
-wss://city.kobe.jp?q=foo&stat=frame.example	16	city.kobe.jp	5
-ws://excl.example/beacon/pixel.js	8	news.site.co.uk	21
-ws://excl.example/beacon/pixel.js	128	localhost	21
+wss://city.kobe.jp?q=foo&stat=frame.example	16	city.kobe.jp	0
+ws://excl.example/beacon/pixel.js	8	news.site.co.uk	2
+ws://excl.example/beacon/pixel.js	128	localhost	2
 ws://cdn.jsdelivr.net./img.gif?q=collect&consent=ws.example	64	1.2.3.4	0
 ws://cdn.jsdelivr.net./img.gif?q=collect&consent=ws.example	64	user.github.io	0
 wss://news.bbc.co.uk:8080/z/AdBanner/impban	4	a.b.c.example.org	5
 wss://news.bbc.co.uk:8080/z/AdBanner/impban	512	localhost	5
 https://www.wikipedia.org/ad.php	256	user.github.io	0
 https://www.wikipedia.org/ad.php	64	city.kobe.jp	0
-ws://news.site.co.uk./img/impban	2048	a.com	2
-ws://news.site.co.uk./img/impban	64	example.com	2
+ws://news.site.co.uk./img/impban	2048	a.com	5
+ws://news.site.co.uk./img/impban	64	example.com	5
 http://docs.example.net/z/promo/analytics?q=analytics&analytics=font.example	4	www.ck	2
 http://docs.example.net/z/promo/analytics?q=analytics&analytics=font.example	512	track.net	2
 https://img.example.com.au/x/promo.php?q=banner&q=bad.example	2048		0
-https://img.example.com.au/x/promo.php?q=banner&q=bad.example	256	x.y.kobe.jp	5
+https://img.example.com.au/x/promo.php?q=banner&q=bad.example	256	x.y.kobe.jp	0
 wss://www.example.com:8080/banner.js?q=collect&ad=a.example	64	page.example	0
 wss://www.example.com:8080/banner.js?q=collect&ad=a.example	2184		0
 http://news.site.co.uk/ad#z	1024	example.com	0
 http://news.site.co.uk/ad#z	64	city.kobe.jp	0
-wss://www.ck/v1	2	track.net	0
-wss://www.ck/v1	32	track.net	0
+wss://www.ck/v1	2	track.net	5
+wss://www.ck/v1	32	track.net	5
 wss://www.ck:8080/img/consent	2184	track.net	5
 wss://www.ck:8080/img/consent	32	tracker.example	5
-http://plain.example/collect/analytics.js?q=x&ads=page.example#consent	16	1.2.3.4	21
-http://plain.example/collect/analytics.js?q=x&ads=page.example#consent	16	foo.ck	21
+http://plain.example/collect/analytics.js?q=x&ads=page.example#consent	16	1.2.3.4	2
+http://plain.example/collect/analytics.js?q=x&ads=page.example#consent	16	foo.ck	2
 https://img.example.com.au/stat.js	4	www.example.com	0
 https://img.example.com.au/stat.js	1024	b.com	0
 wss://cdn.example.org/banner.png	2	other.github.io	5
@@ -1582,18 +1582,18 @@ ws://user:pw@ads.example.com/adserver/x/adserver.html#promo	1	b.com	0
 ws://user:pw@ads.example.com/adserver/x/adserver.html#promo	4	foo.ck	1
 http://city.kobe.jp/adserver/y/consent.js	32	www.ck	5
 http://city.kobe.jp/adserver/y/consent.js	32		2
-https://user:pw@other.example/promo/foo.php	16	foo.ck	21
-https://user:pw@other.example/promo/foo.php	1024	foo.ck	21
+https://user:pw@other.example/promo/foo.php	16	foo.ck	2
+https://user:pw@other.example/promo/foo.php	1024	foo.ck	2
 https://plain.example/track/promo/consent.php?q=z&adserver=[::1]	1	localhost	0
-https://plain.example/track/promo/consent.php?q=z&adserver=[::1]	2048	a.b.c.example.org	21
+https://plain.example/track/promo/consent.php?q=z&adserver=[::1]	2048	a.b.c.example.org	2
 wss://www.wikipedia.org/p/ads	4	b.com	5
 wss://www.wikipedia.org/p/ads	2048	1.2.3.4	5
 https://ads.example.com/y.js	16	a.b.c.example.org	1
 https://ads.example.com/y.js	1	a.com	0
 wss://docs.example.net/adserver/pixel.png?q=adserver&pixel=media.example	8	other.github.io	5
 wss://docs.example.net/adserver/pixel.png?q=adserver&pixel=media.example	128	user.github.io	5
-ws://other.example/adserver/pixel	32	user.github.io	21
-ws://other.example/adserver/pixel	256		21
+ws://other.example/adserver/pixel	32	user.github.io	2
+ws://other.example/adserver/pixel	256		2
 wss://docs.example.net?q=promo&adserver=frame.example	256	localhost	0
 wss://docs.example.net?q=promo&adserver=frame.example	4	city.kobe.jp	0
 ws://files.example.io:8080?q=consent.js&track=impanchor.example#beacon	128	1.2.3.4	0
@@ -1601,13 +1601,13 @@ ws://files.example.io:8080?q=consent.js&track=impanchor.example#beacon	1024	www.
 https://user:pw@www.wikipedia.org/consent.js/track/beacon.gif	4	x.y.kobe.jp	13
 https://user:pw@www.wikipedia.org/consent.js/track/beacon.gif	256	tracker.example	13
 ws://[::1]/api/collect	32		5
-ws://[::1]/api/collect	16	page.example	5
+ws://[::1]/api/collect	16	page.example	0
 wss://video.example.tv/consent.js.png?q=AdBanner&v1=plain.example	1024	example.com	13
 wss://video.example.tv/consent.js.png?q=AdBanner&v1=plain.example	2048		13
-wss://user:pw@a.example/img/y.gif	1024	www.example.com	21
-wss://user:pw@a.example/img/y.gif	1024	a.b.c.example.org	21
-wss://tracker.example/foo.php	2048	track.net	21
-wss://tracker.example/foo.php	1024	track.net	21
+wss://user:pw@a.example/img/y.gif	1024	www.example.com	2
+wss://user:pw@a.example/img/y.gif	1024	a.b.c.example.org	2
+wss://tracker.example/foo.php	2048	track.net	2
+wss://tracker.example/foo.php	1024	track.net	2
 wss://files.example.io/track.gif?q=img&collect=imp.example	1024	localhost	0
 wss://files.example.io/track.gif?q=img&collect=imp.example	256	track.net	0
 ws://img.example.com.au/pixel.php	1024		0
@@ -1622,74 +1622,74 @@ ws://docs.example.net:8080/consent.js	2	tracker.example	13
 ws://docs.example.net:8080/consent.js	16		2
 http://city.kobe.jp/banner/z/foo.gif	4	track.net	1
 http://city.kobe.jp/banner/z/foo.gif	32	user.github.io	1
-wss://news.site.co.uk/v1/track.html	256	www.ck	2
-wss://news.site.co.uk/v1/track.html	256	1.2.3.4	2
-wss://t.example/stat	2184	www.example.com	21
+wss://news.site.co.uk/v1/track.html	256	www.ck	5
+wss://news.site.co.uk/v1/track.html	256	1.2.3.4	5
+wss://t.example/stat	2184	www.example.com	2
 wss://t.example/stat	1	news.site.co.uk	0
-https://page.example:8080/consent/x.php?q=x&img=www.ck	2	x.y.kobe.jp	21
-https://page.example:8080/consent/x.php?q=x&img=www.ck	128	other.co.uk	21
+https://page.example:8080/consent/x.php?q=x&img=www.ck	2	x.y.kobe.jp	2
+https://page.example:8080/consent/x.php?q=x&img=www.ck	128	other.co.uk	2
 ws://news.bbc.co.uk/beacon.js	2	example.com	0
 ws://news.bbc.co.uk/beacon.js	4	localhost	0
 wss://shop.example.co.uk/AdBanner/ads.gif	32	example.com	1
 wss://shop.example.co.uk/AdBanner/ads.gif	32	www.ck	1
-https://hostonly.example/img.php	512	www.example.com	21
-https://hostonly.example/img.php	32	user.github.io	21
-ws://frame.example/api/beacon/banner?q=impban&api=[::1]	64	other.github.io	21
-ws://frame.example/api/beacon/banner?q=impban&api=[::1]	1024		21
-https://impanchor.example/promo/z	1024	www.ck	21
-https://impanchor.example/promo/z	8	page.example	21
-wss://page.example	2		21
-wss://page.example	8	city.kobe.jp	21
-http://cookie-banner.example/impban/consent?q=analytics&y=cookie-banner.example	2184	other.github.io	21
-http://cookie-banner.example/impban/consent?q=analytics&y=cookie-banner.example	2048	a.com	21
-https://hostonly.example/track/p	2048	b.com	21
-https://hostonly.example/track/p	128		21
+https://hostonly.example/img.php	512	www.example.com	2
+https://hostonly.example/img.php	32	user.github.io	2
+ws://frame.example/api/beacon/banner?q=impban&api=[::1]	64	other.github.io	2
+ws://frame.example/api/beacon/banner?q=impban&api=[::1]	1024		2
+https://impanchor.example/promo/z	1024	www.ck	2
+https://impanchor.example/promo/z	8	page.example	17
+wss://page.example	2		2
+wss://page.example	8	city.kobe.jp	2
+http://cookie-banner.example/impban/consent?q=analytics&y=cookie-banner.example	2184	other.github.io	17
+http://cookie-banner.example/impban/consent?q=analytics&y=cookie-banner.example	2048	a.com	17
+https://hostonly.example/track/p	2048	b.com	2
+https://hostonly.example/track/p	128		2
 https://img.site.co.uk:8080/promo/ads/ads.js	1024	news.site.co.uk	2
 https://img.site.co.uk:8080/promo/ads/ads.js	512	example.com	2
-https://plain.example/track/p/beacon.html	2048	localhost	21
-https://plain.example/track/p/beacon.html	512	localhost	21
+https://plain.example/track/p/beacon.html	2048	localhost	2
+https://plain.example/track/p/beacon.html	512	localhost	2
 http://x.kobe.jp/foo/consent.js/img.php	2184	tracker.example	2
 http://x.kobe.jp/foo/consent.js/img.php	32	city.kobe.jp	2
-wss://www.example.com:8080/pixel	1024	www.example.com	5
+wss://www.example.com:8080/pixel	1024	www.example.com	0
 wss://www.example.com:8080/pixel	2184	track.net	0
-https://page.example/consent.js.html?q=img&img=foo.beacon.example	64	user.github.io	21
-https://page.example/consent.js.html?q=img&img=foo.beacon.example	1024	other.co.uk	21
+https://page.example/consent.js.html?q=img&img=foo.beacon.example	64	user.github.io	2
+https://page.example/consent.js.html?q=img&img=foo.beacon.example	1024	other.co.uk	2
 https://www.malware.example.net/track/consent.js/ad.php?q=promo&api=plain.example	256	localhost	9
 https://www.malware.example.net/track/consent.js/ad.php?q=promo&api=plain.example	2048	page.example	9
 wss://video.example.tv/v1.php	32	a.b.c.example.org	0
 wss://video.example.tv/v1.php	4	other.co.uk	0
 wss://static.cdn-example.com/analytics	8	www.ck	0
 wss://static.cdn-example.com/analytics	256		0
-https://user:pw@shop.example.co.uk/consent/y/analytics.png	32	b.com	5
-https://user:pw@shop.example.co.uk/consent/y/analytics.png	2	x.y.kobe.jp	5
+https://user:pw@shop.example.co.uk/consent/y/analytics.png	32	b.com	0
+https://user:pw@shop.example.co.uk/consent/y/analytics.png	2	x.y.kobe.jp	0
 http://sub.deep.example.co.uk/analytics/v1	512	page.example	2
 http://sub.deep.example.co.uk/analytics/v1	512	other.github.io	2
 http://track.net/foo/stat/y.gif	512	a.b.c.example.org	2
 http://track.net/foo/stat/y.gif	16	user.github.io	2
 http://city.kobe.jp/analytics	2	1.2.3.4	0
 http://city.kobe.jp/analytics	8	track.net	0
-https://a.example/ads/z/track.png	8	x.y.kobe.jp	21
-https://a.example/ads/z/track.png	256	www.ck	21
+https://a.example/ads/z/track.png	8	x.y.kobe.jp	2
+https://a.example/ads/z/track.png	256	www.ck	2
 https://docs.example.net/foo/foo/pixel	2048		2
 https://docs.example.net/foo/foo/pixel	512	city.kobe.jp	2
 wss://www.example.com/ad	4	user.github.io	0
 wss://www.example.com/ad	4	track.net	0
-ws://track.net/beacon	1024	b.com	5
+ws://track.net/beacon	1024	b.com	0
 ws://track.net/beacon	1		0
-http://x.kobe.jp/p.html?q=y&p=pixel.example	1024	a.com	5
-http://x.kobe.jp/p.html?q=y&p=pixel.example	32	a.b.c.example.org	5
+http://x.kobe.jp/p.html?q=y&p=pixel.example	1024	a.com	0
+http://x.kobe.jp/p.html?q=y&p=pixel.example	32	a.b.c.example.org	0
 ws://1.2.3.4/consent.js	2	x.y.kobe.jp	1
 ws://1.2.3.4/consent.js	128	foo.ck	1
 ws://video.example.tv/track.png	8	foo.ck	0
 ws://video.example.tv/track.png	8		0
-http://ws.example	2048	foo.ck	21
-http://ws.example	64	localhost	21
-https://foo.beacon.example/pixel/ads/pixel.php	2048	user.github.io	21
-https://foo.beacon.example/pixel/ads/pixel.php	1024	page.example	21
+http://ws.example	2048	foo.ck	2
+http://ws.example	64	localhost	2
+https://foo.beacon.example/pixel/ads/pixel.php	2048	user.github.io	2
+https://foo.beacon.example/pixel/ads/pixel.php	1024	page.example	2
 ws://user:pw@phish.example.org/pixel/api	4	page.example	9
 ws://user:pw@phish.example.org/pixel/api	4	a.b.c.example.org	2
-https://font.example/foo.html	4	user.github.io	21
-https://font.example/foo.html	32	user.github.io	21
+https://font.example/foo.html	4	user.github.io	2
+https://font.example/foo.html	32	user.github.io	2
 wss://video.example.tv/collect	512	city.kobe.jp	0
 wss://video.example.tv/collect	128	www.example.com	0
 https://fonts.gstatic.com/q.html	512		0
@@ -1698,8 +1698,8 @@ https://img.example.com.au/consent.js.png?q=collect&consent.js=font.example	2184
 https://img.example.com.au/consent.js.png?q=collect&consent.js=font.example	32	user.github.io	13
 http://www.ck/img/z?q=p&adserver=malware.example.net	2184	1.2.3.4	5
 http://www.ck/img/z?q=p&adserver=malware.example.net	1024	www.ck	2
-https://x.example/banner/img?q=pixel&beacon=first.example	2	a.com	21
-https://x.example/banner/img?q=pixel&beacon=first.example	4	localhost	21
+https://x.example/banner/img?q=pixel&beacon=first.example	2	a.com	2
+https://x.example/banner/img?q=pixel&beacon=first.example	4	localhost	2
 wss://intranet/foo/consent.js/ad.gif?q=analytics&foo=news.site.co.uk	16		2
 wss://intranet/foo/consent.js/ad.gif?q=analytics&foo=news.site.co.uk	1024		2
 https://cdn.example.org/adserver.png	256	localhost	5
@@ -1710,95 +1710,95 @@ https://www.example.com/AdBanner	2184	example.com	0
 https://www.example.com/AdBanner	32		0
 ws://shop.example.co.uk/banner.js	64	track.net	0
 ws://shop.example.co.uk/banner.js	1024	city.kobe.jp	0
-https://www.ck/beacon?q=q&x=a.b.track.net	2184	news.site.co.uk	5
-https://www.ck/beacon?q=q&x=a.b.track.net	64	other.github.io	5
+https://www.ck/beacon?q=q&x=a.b.track.net	2184	news.site.co.uk	0
+https://www.ck/beacon?q=q&x=a.b.track.net	64	other.github.io	0
 wss://video.example.tv/adserver	64	other.co.uk	5
 wss://video.example.tv/adserver	32	1.2.3.4	5
 wss://cdn.jsdelivr.net/ads/analytics.js	256	user.github.io	5
 wss://cdn.jsdelivr.net/ads/analytics.js	16		2
-https://shop.example.co.uk/stat	16	track.net	5
-https://shop.example.co.uk/stat	2	news.site.co.uk	5
-https://first.example./foo/consent.js.html?q=consent&consent=www.ck	2048	track.net	21
-https://first.example./foo/consent.js.html?q=consent&consent=www.ck	64	track.net	21
+https://shop.example.co.uk/stat	16	track.net	0
+https://shop.example.co.uk/stat	2	news.site.co.uk	0
+https://first.example./foo/consent.js.html?q=consent&consent=www.ck	2048	track.net	2
+https://first.example./foo/consent.js.html?q=consent&consent=www.ck	64	track.net	2
 wss://localhost/AdBanner/track/img.js	4	other.co.uk	5
 wss://localhost/AdBanner/track/img.js	256	localhost	5
 http://example.com:8080/banner/track/pixel.js	1	user.github.io	0
-http://example.com:8080/banner/track/pixel.js	64	other.github.io	5
+http://example.com:8080/banner/track/pixel.js	64	other.github.io	1
 ws://www.wikipedia.org/analytics.png?q=AdBanner&track=hostonly.example	128	a.b.c.example.org	0
 ws://www.wikipedia.org/analytics.png?q=AdBanner&track=hostonly.example	8	other.co.uk	0
-https://foo.beacon.example/ads/ads.html#consent	2048	1.2.3.4	21
-https://foo.beacon.example/ads/ads.html#consent	512	other.github.io	21
+https://foo.beacon.example/ads/ads.html#consent	2048	1.2.3.4	2
+https://foo.beacon.example/ads/ads.html#consent	512	other.github.io	2
 http://user:pw@intranet/img/adserver/p?q=beacon&beacon=font.example	16	www.ck	5
 http://user:pw@intranet/img/adserver/p?q=beacon&beacon=font.example	2048	1.2.3.4	5
 http://files.example.io/AdBanner/p#consent.js	16	track.net	0
 http://files.example.io/AdBanner/p#consent.js	64	tracker.example	0
-https://frame.example/foo/banner	8	x.y.kobe.jp	21
-https://frame.example/foo/banner	64		21
+https://frame.example/foo/banner	8	x.y.kobe.jp	2
+https://frame.example/foo/banner	64		2
 https://www.malware.example.net:8080/img/y#impban	1024	foo.ck	9
 https://www.malware.example.net:8080/img/y#impban	2048	b.com	9
-http://first.example/adserver.gif	4	b.com	21
-http://first.example/adserver.gif	2184	other.co.uk	21
+http://first.example/adserver.gif	4	b.com	2
+http://first.example/adserver.gif	2184	other.co.uk	2
 https://api.service.dev/adserver/pixel?q=z&p=img.site.co.uk#consent.js	64	other.github.io	5
 https://api.service.dev/adserver/pixel?q=z&p=img.site.co.uk#consent.js	256	page.example	5
-https://font.example/x/banner/impban.js	1024		21
-https://font.example/x/banner/impban.js	4	b.com	21
+https://font.example/x/banner/impban.js	1024		2
+https://font.example/x/banner/impban.js	4	b.com	2
 wss://fonts.gstatic.com/ads.js?q=adserver&adserver=foo.beacon.example	256	track.net	0
 wss://fonts.gstatic.com/ads.js?q=adserver&adserver=foo.beacon.example	1	foo.ck	0
 wss://evil.example/foo/impban/v1	1	other.co.uk	0
 wss://evil.example/foo/impban/v1	2184	b.com	17
 ws://video.example.tv/x?q=p&pixel=dom.example	1024	other.github.io	0
 ws://video.example.tv/x?q=p&pixel=dom.example	32		0
-http://dom.example./api/AdBanner.html?q=q&p=news.site.co.uk	512	track.net	21
-http://dom.example./api/AdBanner.html?q=q&p=news.site.co.uk	8	city.kobe.jp	21
+http://dom.example./api/AdBanner.html?q=q&p=news.site.co.uk	512	track.net	2
+http://dom.example./api/AdBanner.html?q=q&p=news.site.co.uk	8	city.kobe.jp	2
 ws://user:pw@www.example.com/analytics.php	16	tracker.example	0
 ws://user:pw@www.example.com/analytics.php	2048	city.kobe.jp	0
 wss://ws.example/p/z.php	1	foo.ck	0
-wss://ws.example/p/z.php	1024	city.kobe.jp	21
+wss://ws.example/p/z.php	1024	city.kobe.jp	2
 wss://www.wikipedia.org	1024	a.com	0
 wss://www.wikipedia.org	2	localhost	0
 https://docs.example.net/consent.js/p.png	256	page.example	13
 https://docs.example.net/consent.js/p.png	128	page.example	13
 http://fonts.gstatic.com/v1.gif?q=q&AdBanner=pixel.example	128		0
 http://fonts.gstatic.com/v1.gif?q=q&AdBanner=pixel.example	32	www.ck	0
-https://pixel.example/x/pixel.html	8	track.net	21
+https://pixel.example/x/pixel.html	8	track.net	2
 https://pixel.example/x/pixel.html	1		0
-https://www.example.com/analytics?q=img&x=pixel.example	32	track.net	0
+https://www.example.com/analytics?q=img&x=pixel.example	32	track.net	5
 https://www.example.com/analytics?q=img&x=pixel.example	1	a.b.c.example.org	0
-wss://pixel.example/collect/q.html?q=promo&img=localhost	256	www.ck	21
-wss://pixel.example/collect/q.html?q=promo&img=localhost	2048		21
-https://first.example?q=foo&consent.js=excl.example	2	city.kobe.jp	21
-https://first.example?q=foo&consent.js=excl.example	64	other.github.io	21
-https://plain.example/analytics.js?q=v1&ads=frame.example	2048	example.com	21
-https://plain.example/analytics.js?q=v1&ads=frame.example	512	1.2.3.4	21
+wss://pixel.example/collect/q.html?q=promo&img=localhost	256	www.ck	2
+wss://pixel.example/collect/q.html?q=promo&img=localhost	2048		2
+https://first.example?q=foo&consent.js=excl.example	2	city.kobe.jp	2
+https://first.example?q=foo&consent.js=excl.example	64	other.github.io	2
+https://plain.example/analytics.js?q=v1&ads=frame.example	2048	example.com	2
+https://plain.example/analytics.js?q=v1&ads=frame.example	512	1.2.3.4	2
 https://www.malware.example.net/img.html?q=p&z=ws.example	16		9
 https://www.malware.example.net/img.html?q=p&z=ws.example	1024	tracker.example	9
-https://track.net/x/impban.gif?q=adserver&promo=cdn.example.org	8	x.y.kobe.jp	5
+https://track.net/x/impban.gif?q=adserver&promo=cdn.example.org	8	x.y.kobe.jp	0
 https://track.net/x/impban.gif?q=adserver&promo=cdn.example.org	1024	www.ck	0
-ws://other.example/collect.js	2048	tracker.example	21
-ws://other.example/collect.js	2	b.com	21
+ws://other.example/collect.js	2048	tracker.example	2
+ws://other.example/collect.js	2	b.com	2
 https://news.site.co.uk/impban/img/consent.js?q=api&stat=font.example	1024	www.example.com	17
 https://news.site.co.uk/impban/img/consent.js?q=api&stat=font.example	256	page.example	17
 ws://files.example.io/ads.html	128	page.example	0
 ws://files.example.io/ads.html	2048		0
-http://other.example/x/foo.png	128	x.y.kobe.jp	21
-http://other.example/x/foo.png	512	track.net	21
-wss://UPPER.example/banner.gif?q=beacon&api=www.malware.example.net	2	city.kobe.jp	21
-wss://UPPER.example/banner.gif?q=beacon&api=www.malware.example.net	64	foo.ck	21
-https://cookie-banner.example/track/img	64	user.github.io	21
-https://cookie-banner.example/track/img	2184	a.b.c.example.org	21
-wss://tracker.example:8080/v1.php	128	other.github.io	21
-wss://tracker.example:8080/v1.php	8	other.github.io	21
+http://other.example/x/foo.png	128	x.y.kobe.jp	2
+http://other.example/x/foo.png	512	track.net	2
+wss://UPPER.example/banner.gif?q=beacon&api=www.malware.example.net	2	city.kobe.jp	2
+wss://UPPER.example/banner.gif?q=beacon&api=www.malware.example.net	64	foo.ck	2
+https://cookie-banner.example/track/img	64	user.github.io	2
+https://cookie-banner.example/track/img	2184	a.b.c.example.org	2
+wss://tracker.example:8080/v1.php	128	other.github.io	2
+wss://tracker.example:8080/v1.php	8	other.github.io	2
 wss://img.example.com.au/analytics/q/adserver	512	tracker.example	5
 wss://img.example.com.au/analytics/q/adserver	2	www.example.com	5
-ws://www.example.com/pixel/v1.gif?q=q&promo=x.zip	256	www.example.com	2
+ws://www.example.com/pixel/v1.gif?q=q&promo=x.zip	256	www.example.com	0
 ws://www.example.com/pixel/v1.gif?q=q&promo=x.zip	2	track.net	0
-ws://t.example/x/track?q=v1&consent.js=intranet	128	x.y.kobe.jp	21
-ws://t.example/x/track?q=v1&consent.js=intranet	512	b.com	21
+ws://t.example/x/track?q=v1&consent.js=intranet	128	x.y.kobe.jp	2
+ws://t.example/x/track?q=v1&consent.js=intranet	512	b.com	2
 ws://www.wikipedia.org:8080/api/promo/foo	128	x.y.kobe.jp	2
 ws://www.wikipedia.org:8080/api/promo/foo	256	a.com	2
 https://fonts.gstatic.com/beacon.png?q=img&track=a.example	2	localhost	0
 https://fonts.gstatic.com/beacon.png?q=img&track=a.example	2	www.example.com	0
-ws://news.site.co.uk/adserver.gif?q=banner&AdBanner=evil.example	2	www.ck	2
+ws://news.site.co.uk/adserver.gif?q=banner&AdBanner=evil.example	2	www.ck	1
 ws://news.site.co.uk/adserver.gif?q=banner&AdBanner=evil.example	128	www.example.com	1
 wss://api.service.dev./consent.js/y	2048	news.site.co.uk	13
 wss://api.service.dev./consent.js/y	64	foo.ck	13
@@ -1806,18 +1806,18 @@ ws://docs.example.net/z	2048	b.com	0
 ws://docs.example.net/z	512	other.co.uk	0
 https://imp.example/z/track/z	2184		17
 https://imp.example/z/track/z	2184	other.github.io	17
-ws://tracker.example/v1.js	256	city.kobe.jp	21
-ws://tracker.example/v1.js	2048	localhost	21
+ws://tracker.example/v1.js	256	city.kobe.jp	2
+ws://tracker.example/v1.js	2048	localhost	2
 ws://static.cdn-example.com/p.php?q=z&img=localhost#x	2048		0
 ws://static.cdn-example.com/p.php?q=z&img=localhost#x	2048	1.2.3.4	0
 ws://www.malware.example.net	2184	city.kobe.jp	9
 ws://www.malware.example.net	64	user.github.io	9
 wss://static.cdn-example.com/ad.php	4		0
 wss://static.cdn-example.com/ad.php	1	other.github.io	0
-wss://obj.example/consent.js/collect/banner.php?q=img&v1=excl.example	2048	a.com	21
-wss://obj.example/consent.js/collect/banner.php?q=img&v1=excl.example	8	city.kobe.jp	21
-ws://a.example/q/ad/p.png	2184	news.site.co.uk	21
-ws://a.example/q/ad/p.png	64		21
+wss://obj.example/consent.js/collect/banner.php?q=img&v1=excl.example	2048	a.com	2
+wss://obj.example/consent.js/collect/banner.php?q=img&v1=excl.example	8	city.kobe.jp	2
+ws://a.example/q/ad/p.png	2184	news.site.co.uk	2
+ws://a.example/q/ad/p.png	64		2
 http://shop.example.co.uk	4		0
 http://shop.example.co.uk	4	b.com	0
 http://docs.example.net	1024		0
@@ -1826,52 +1826,52 @@ http://sub.deep.example.co.uk/stat/ad.html?q=promo&promo=sub.deep.example.co.uk	
 http://sub.deep.example.co.uk/stat/ad.html?q=promo&promo=sub.deep.example.co.uk	128	a.com	2
 wss://x.kobe.jp:8080/stat.gif	2048	user.github.io	1
 wss://x.kobe.jp:8080/stat.gif	16	user.github.io	1
-ws://city.kobe.jp:8080/consent/stat?q=banner&consent.js=track.net#pixel	1024	other.github.io	5
+ws://city.kobe.jp:8080/consent/stat?q=banner&consent.js=track.net#pixel	1024	other.github.io	0
 ws://city.kobe.jp:8080/consent/stat?q=banner&consent.js=track.net#pixel	1	other.co.uk	0
-https://notimg.example/y.png#img	16	track.net	21
+https://notimg.example/y.png#img	16	track.net	2
 https://notimg.example/y.png#img	1		0
 ws://fonts.gstatic.com/promo/collect/beacon.php?q=collect&track=dom.example#x	512	other.github.io	2
-ws://fonts.gstatic.com/promo/collect/beacon.php?q=collect&track=dom.example#x	16	www.example.com	0
+ws://fonts.gstatic.com/promo/collect/beacon.php?q=collect&track=dom.example#x	16	www.example.com	2
 https://1.2.3.4/promo?q=v1&pixel=frame.example	1	b.com	0
 https://1.2.3.4/promo?q=v1&pixel=frame.example	32	localhost	2
 http://video.example.tv/stat/analytics	512	other.co.uk	1
 http://video.example.tv/stat/analytics	64	example.com	5
 http://docs.example.net/y/promo/impban.html	8	www.ck	2
 http://docs.example.net/y/promo/impban.html	8		2
-https://shop.example.co.uk/beacon/beacon.png	64	news.site.co.uk	5
-https://shop.example.co.uk/beacon/beacon.png	1024	www.ck	5
+https://shop.example.co.uk/beacon/beacon.png	64	news.site.co.uk	0
+https://shop.example.co.uk/beacon/beacon.png	1024	www.ck	0
 http://shop.example.co.uk:8080/ads	64	a.com	5
 http://shop.example.co.uk:8080/ads	2048	localhost	5
 wss://www.malware.example.net:8080	8		9
 wss://www.malware.example.net:8080	8	news.site.co.uk	9
 http://user:pw@sub.deep.example.co.uk/z/api/impban?q=foo&api=bad.example	16	a.b.c.example.org	2
 http://user:pw@sub.deep.example.co.uk/z/api/impban?q=foo&api=bad.example	32	page.example	2
-https://font.example/stat/collect/ads.js	2184	a.b.c.example.org	21
-https://font.example/stat/collect/ads.js	4	www.example.com	21
-wss://user.github.io/y/adserver.html	16	a.b.c.example.org	5
+https://font.example/stat/collect/ads.js	2184	a.b.c.example.org	2
+https://font.example/stat/collect/ads.js	4	www.example.com	2
+wss://user.github.io/y/adserver.html	16	a.b.c.example.org	1
 wss://user.github.io/y/adserver.html	2	x.y.kobe.jp	5
-wss://user:pw@video.example.tv./collect/collect/api?q=v1&consent.js=first.example	2048	www.ck	5
-wss://user:pw@video.example.tv./collect/collect/api?q=v1&consent.js=first.example	64	foo.ck	5
+wss://user:pw@video.example.tv./collect/collect/api?q=v1&consent.js=first.example	2048	www.ck	0
+wss://user:pw@video.example.tv./collect/collect/api?q=v1&consent.js=first.example	64	foo.ck	0
 wss://www.wikipedia.org/consent/q/adserver	2048	tracker.example	5
 wss://www.wikipedia.org/consent/q/adserver	128	page.example	5
-http://plain.example	512		21
-http://plain.example	2184	track.net	21
+http://plain.example	512		2
+http://plain.example	2184	track.net	2
 ws://example.com/track/adserver.js?q=ad&consent=www.malware.example.net	2	1.2.3.4	5
 ws://example.com/track/adserver.js?q=ad&consent=www.malware.example.net	512	www.example.com	5
-https://first.example/pixel	8	www.example.com	21
-https://first.example/pixel	2048	user.github.io	21
-wss://both.example/q/analytics/x.png	8	a.b.c.example.org	21
-wss://both.example/q/analytics/x.png	32	page.example	21
+https://first.example/pixel	8	www.example.com	2
+https://first.example/pixel	2048	user.github.io	2
+wss://both.example/q/analytics/x.png	8	a.b.c.example.org	2
+wss://both.example/q/analytics/x.png	32	page.example	2
 https://a.b.ck/analytics/consent	2048	user.github.io	0
 https://a.b.ck/analytics/consent	512	city.kobe.jp	0
 wss://news.bbc.co.uk	1		0
 wss://news.bbc.co.uk	64	news.site.co.uk	0
-https://user:pw@media.example/pixel.js#analytics	8	foo.ck	21
-https://user:pw@media.example/pixel.js#analytics	256	www.example.com	21
-https://font.example/v1/banner.html	1024	a.b.c.example.org	21
-https://font.example/v1/banner.html	16	example.com	21
+https://user:pw@media.example/pixel.js#analytics	8	foo.ck	2
+https://user:pw@media.example/pixel.js#analytics	256	www.example.com	2
+https://font.example/v1/banner.html	1024	a.b.c.example.org	2
+https://font.example/v1/banner.html	16	example.com	2
 http://a.b.ck/banner.png	2184		5
-http://a.b.ck/banner.png	128	1.2.3.4	2
+http://a.b.ck/banner.png	128	1.2.3.4	5
 https://www.wikipedia.org/stat.js?q=x&foo=1.2.3.4#z	2184	page.example	0
 https://www.wikipedia.org/stat.js?q=x&foo=1.2.3.4#z	2184	track.net	0
 https://www.example.com/AdBanner.js	1024	tracker.example	1
@@ -1880,10 +1880,10 @@ https://cdn.example.org/v1/q/q	1024	page.example	5
 https://cdn.example.org/v1/q/q	1		0
 https://www.malware.example.net	1024	a.b.c.example.org	9
 https://www.malware.example.net	4	1.2.3.4	9
-https://www.example.com/analytics/banner/stat.gif	32	example.com	1
+https://www.example.com/analytics/banner/stat.gif	32	example.com	5
 https://www.example.com/analytics/banner/stat.gif	128	www.ck	1
-wss://foo.beacon.example/x/banner/pixel	2048	other.github.io	21
-wss://foo.beacon.example/x/banner/pixel	4	a.com	21
+wss://foo.beacon.example/x/banner/pixel	2048	other.github.io	2
+wss://foo.beacon.example/x/banner/pixel	4	a.com	2
 ws://files.example.io/adserver.png	1	page.example	0
 ws://files.example.io/adserver.png	2	www.example.com	1
 http://video.example.tv/api.gif	2	x.y.kobe.jp	1
@@ -1892,19 +1892,19 @@ http://static.cdn-example.com	2184	page.example	0
 http://static.cdn-example.com	2048	a.b.c.example.org	0
 wss://www.ck?q=consent.js&consent=ads.example.com	64		0
 wss://www.ck?q=consent.js&consent=ads.example.com	2	a.b.c.example.org	0
-https://media.example/banner	1024	tracker.example	21
-https://media.example/banner	2184	page.example	21
+https://media.example/banner	1024	tracker.example	2
+https://media.example/banner	2184	page.example	2
 https://phish.example.org/promo.gif	512	b.com	9
 https://phish.example.org/promo.gif	1024	b.com	9
-wss://foo.beacon.example/consent.js	2	example.com	21
-wss://foo.beacon.example/consent.js	2048	tracker.example	21
+wss://foo.beacon.example/consent.js	2	example.com	2
+wss://foo.beacon.example/consent.js	2048	tracker.example	2
 http://shop.example.co.uk	2048	page.example	0
 http://shop.example.co.uk	1024		0
 https://phish.example.org/ads.png?q=consent.js&AdBanner=UPPER.example#z	2	foo.ck	9
 https://phish.example.org/ads.png?q=consent.js&AdBanner=UPPER.example#z	32	other.github.io	9
-https://www.example.com:8080/v1.js	2	foo.ck	0
+https://www.example.com:8080/v1.js	2	foo.ck	5
 https://www.example.com:8080/v1.js	256		0
-wss://fonts.gstatic.com/beacon/analytics/api?q=y&pixel=frame.example	8		5
+wss://fonts.gstatic.com/beacon/analytics/api?q=y&pixel=frame.example	8		0
 wss://fonts.gstatic.com/beacon/analytics/api?q=y&pixel=frame.example	2048	other.github.io	5
 ws://cdn.example.org/adserver?q=z&z=a.b.track.net	128	page.example	5
 ws://cdn.example.org/adserver?q=z&z=a.b.track.net	1024	b.com	5
@@ -1914,10 +1914,10 @@ https://localhost/q	2048	1.2.3.4	0
 https://localhost/q	8		0
 https://files.example.io./ads/z/impban	2	x.y.kobe.jp	5
 https://files.example.io./ads/z/impban	512	a.com	5
-http://ads.example.com/p.js?q=ads&collect=other.example	1024	a.com	2
-http://ads.example.com/p.js?q=ads&collect=other.example	8	track.net	2
-https://hostonly.example	1024	tracker.example	21
-https://hostonly.example	16		21
+http://ads.example.com/p.js?q=ads&collect=other.example	1024	a.com	1
+http://ads.example.com/p.js?q=ads&collect=other.example	8	track.net	1
+https://hostonly.example	1024	tracker.example	2
+https://hostonly.example	16		2
 ws://malware.example.net/banner/track/consent.js	32	track.net	9
 ws://malware.example.net/banner/track/consent.js	16	other.co.uk	2
 http://docs.example.net/p/ads/api.php?q=z&ads=media.example	16		2
@@ -1928,74 +1928,74 @@ https://cdn.jsdelivr.net:8080/v1/pixel.html	32	x.y.kobe.jp	5
 https://cdn.jsdelivr.net:8080/v1/pixel.html	2048	other.github.io	5
 https://files.example.io/stat/ads.html	512	user.github.io	1
 https://files.example.io/stat/ads.html	2184	www.example.com	5
-https://page.example:8080/x.php	256	user.github.io	21
-https://page.example:8080/x.php	8	foo.ck	21
-http://hostonly.example/stat/q/AdBanner	16		21
-http://hostonly.example/stat/q/AdBanner	32		21
-ws://frame.example/stat/api/q	8	news.site.co.uk	21
-ws://frame.example/stat/api/q	2048	foo.ck	21
+https://page.example:8080/x.php	256	user.github.io	2
+https://page.example:8080/x.php	8	foo.ck	2
+http://hostonly.example/stat/q/AdBanner	16		2
+http://hostonly.example/stat/q/AdBanner	32		2
+ws://frame.example/stat/api/q	8	news.site.co.uk	2
+ws://frame.example/stat/api/q	2048	foo.ck	2
 https://x.zip	1	foo.ck	0
 https://x.zip	2048	a.com	1
 https://cdn.jsdelivr.net:8080./banner/z.gif	16	page.example	2
 https://cdn.jsdelivr.net:8080./banner/z.gif	16	x.y.kobe.jp	2
-https://impanchor.example:8080/y/consent.js/img#v1	512	user.github.io	21
-https://impanchor.example:8080/y/consent.js/img#v1	8	foo.ck	21
-wss://first.example/img/y/ad.js	256	x.y.kobe.jp	21
-wss://first.example/img/y/ad.js	2	localhost	21
+https://impanchor.example:8080/y/consent.js/img#v1	512	user.github.io	2
+https://impanchor.example:8080/y/consent.js/img#v1	8	foo.ck	17
+wss://first.example/img/y/ad.js	256	x.y.kobe.jp	2
+wss://first.example/img/y/ad.js	2	localhost	2
 http://www.ck:8080/ad/promo/impban	128	track.net	2
 http://www.ck:8080/ad/promo/impban	2	a.com	2
 https://cdn.jsdelivr.net/consent.js	4	a.b.c.example.org	13
 https://cdn.jsdelivr.net/consent.js	8		2
-http://x.kobe.jp	128	track.net	5
-http://x.kobe.jp	1024	city.kobe.jp	5
+http://x.kobe.jp	128	track.net	0
+http://x.kobe.jp	1024	city.kobe.jp	0
 https://www.wikipedia.org	8	page.example	0
 https://www.wikipedia.org	16	track.net	0
-https://UPPER.example/adserver/analytics/ads	8	user.github.io	21
-https://UPPER.example/adserver/analytics/ads	512	x.y.kobe.jp	21
-https://style.example/api/collect/analytics	16	a.b.c.example.org	21
-https://style.example/api/collect/analytics	16	other.co.uk	21
-ws://user:pw@notimg.example/stat/p/collect	2048	example.com	21
-ws://user:pw@notimg.example/stat/p/collect	256	news.site.co.uk	21
+https://UPPER.example/adserver/analytics/ads	8	user.github.io	2
+https://UPPER.example/adserver/analytics/ads	512	x.y.kobe.jp	2
+https://style.example/api/collect/analytics	16	a.b.c.example.org	2
+https://style.example/api/collect/analytics	16	other.co.uk	2
+ws://user:pw@notimg.example/stat/p/collect	2048	example.com	2
+ws://user:pw@notimg.example/stat/p/collect	256	news.site.co.uk	2
 https://a.b.blogspot.com/ad/collect	8		5
 https://a.b.blogspot.com/ad/collect	4	foo.ck	0
-https://t.example/p/collect	2	news.site.co.uk	21
-https://t.example/p/collect	2048		21
-http://a.b.ck:8080/img	2184	other.co.uk	2
-http://a.b.ck:8080/img	2048	www.ck	2
-wss://example.com/analytics/track.png?q=v1&p=first.example	256	www.example.com	0
+https://t.example/p/collect	2	news.site.co.uk	2
+https://t.example/p/collect	2048		2
+http://a.b.ck:8080/img	2184	other.co.uk	5
+http://a.b.ck:8080/img	2048	www.ck	5
+wss://example.com/analytics/track.png?q=v1&p=first.example	256	www.example.com	5
 wss://example.com/analytics/track.png?q=v1&p=first.example	8		0
 ws://user.github.io/collect/ads/beacon.gif	16	a.com	5
 ws://user.github.io/collect/ads/beacon.gif	8	1.2.3.4	5
-wss://excl.example/pixel/z?q=pixel&adserver=a.b.ck	512	www.ck	21
-wss://excl.example/pixel/z?q=pixel&adserver=a.b.ck	16	www.ck	21
-https://excl.example/analytics/adserver	32	a.b.c.example.org	21
+wss://excl.example/pixel/z?q=pixel&adserver=a.b.ck	512	www.ck	2
+wss://excl.example/pixel/z?q=pixel&adserver=a.b.ck	16	www.ck	2
+https://excl.example/analytics/adserver	32	a.b.c.example.org	2
 https://excl.example/analytics/adserver	1	track.net	0
 ws://www.example.com/collect.js	512	x.y.kobe.jp	0
 ws://www.example.com/collect.js	2184	www.ck	0
-https://other.example/y.png	2048	city.kobe.jp	21
-https://other.example/y.png	2184		21
+https://other.example/y.png	2048	city.kobe.jp	2
+https://other.example/y.png	2184		2
 https://cdn.jsdelivr.net#z	256		0
 https://cdn.jsdelivr.net#z	64	user.github.io	0
 wss://city.kobe.jp	8	www.ck	0
 wss://city.kobe.jp	32	tracker.example	0
-https://user:pw@impanchor.example/banner.php?q=v1&p=localhost	256	www.ck	21
-https://user:pw@impanchor.example/banner.php?q=v1&p=localhost	256	example.com	21
-wss://page.example/promo/collect/pixel#foo	64	example.com	21
-wss://page.example/promo/collect/pixel#foo	64	page.example	21
+https://user:pw@impanchor.example/banner.php?q=v1&p=localhost	256	www.ck	2
+https://user:pw@impanchor.example/banner.php?q=v1&p=localhost	256	example.com	2
+wss://page.example/promo/collect/pixel#foo	64	example.com	2
+wss://page.example/promo/collect/pixel#foo	64	page.example	2
 https://[::1]/v1/p/consent	1	foo.ck	0
 https://[::1]/v1/p/consent	16	b.com	5
-wss://hostonly.example/impban.js?q=z&stat=impath.example	1024	news.site.co.uk	21
-wss://hostonly.example/impban.js?q=z&stat=impath.example	512	example.com	21
+wss://hostonly.example/impban.js?q=z&stat=impath.example	1024	news.site.co.uk	2
+wss://hostonly.example/impban.js?q=z&stat=impath.example	512	example.com	2
 https://www.malware.example.net	128	a.com	9
 https://www.malware.example.net	2184	user.github.io	9
-ws://font.example/y.png	128	foo.ck	21
-ws://font.example/y.png	1024	b.com	21
+ws://font.example/y.png	128	foo.ck	2
+ws://font.example/y.png	1024	b.com	2
 ws://fonts.gstatic.com	16		0
 ws://fonts.gstatic.com	64	a.com	0
-ws://impath.example/consent	2048	a.b.c.example.org	21
-ws://impath.example/consent	32	news.site.co.uk	21
-https://media.example./x.png	2048	other.co.uk	21
-https://media.example./x.png	2	foo.ck	21
+ws://impath.example/consent	2048	a.b.c.example.org	2
+ws://impath.example/consent	32	news.site.co.uk	2
+https://media.example./x.png	2048	other.co.uk	2
+https://media.example./x.png	2	foo.ck	2
 https://news.bbc.co.uk/consent/consent#collect	2048	a.b.c.example.org	0
 https://news.bbc.co.uk/consent/consent#collect	2	a.b.c.example.org	0
 wss://ads.example.com/track/collect/stat	32	foo.ck	1
@@ -2004,34 +2004,34 @@ ws://www.wikipedia.org	1024	user.github.io	0
 ws://www.wikipedia.org	32	foo.ck	0
 http://img.site.co.uk./ads.html	64		0
 http://img.site.co.uk./ads.html	32	localhost	0
-https://cookie-banner.example/impban?q=foo&consent.js=x.example	16		21
-https://cookie-banner.example/impban?q=foo&consent.js=x.example	2	track.net	21
+https://cookie-banner.example/impban?q=foo&consent.js=x.example	16		2
+https://cookie-banner.example/impban?q=foo&consent.js=x.example	2	track.net	2
 http://user:pw@api.service.dev:8080/y/consent.js/beacon	8	other.github.io	2
 http://user:pw@api.service.dev:8080/y/consent.js/beacon	2048		13
-http://ws.example/track/adserver	4	b.com	21
-http://ws.example/track/adserver	128	news.site.co.uk	21
+http://ws.example/track/adserver	4	b.com	2
+http://ws.example/track/adserver	128	news.site.co.uk	2
 https://cdn.jsdelivr.net/consent.js.gif	16	localhost	13
 https://cdn.jsdelivr.net/consent.js.gif	4	localhost	13
 http://user:pw@cdn.jsdelivr.net/ad/img/AdBanner	2		2
 http://user:pw@cdn.jsdelivr.net/ad/img/AdBanner	4	a.com	5
 https://fonts.gstatic.com/analytics/consent?q=consent.js&banner=news.site.co.uk	2048	user.github.io	0
 https://fonts.gstatic.com/analytics/consent?q=consent.js&banner=news.site.co.uk	128	www.ck	0
-https://a.example/p?q=x&beacon=other.example	32	city.kobe.jp	21
-https://a.example/p?q=x&beacon=other.example	16	www.example.com	21
+https://a.example/p?q=x&beacon=other.example	32	city.kobe.jp	2
+https://a.example/p?q=x&beacon=other.example	16	www.example.com	2
 https://1.2.3.4/beacon/api/pixel.gif	4	www.example.com	2
 https://1.2.3.4/beacon/api/pixel.gif	32	foo.ck	2
 https://user.github.io/p/z.png?q=consent&v1=page.example#track	32	1.2.3.4	5
 https://user.github.io/p/z.png?q=consent&v1=page.example#track	2184	www.ck	5
 wss://page.example/stat.png	1		0
-wss://page.example/stat.png	2184	a.b.c.example.org	21
-https://media.example/foo/p	4	other.co.uk	21
-https://media.example/foo/p	8	1.2.3.4	21
+wss://page.example/stat.png	2184	a.b.c.example.org	2
+https://media.example/foo/p	4	other.co.uk	2
+https://media.example/foo/p	8	1.2.3.4	2
 https://static.cdn-example.com/impban/z/impban.php	2048	news.site.co.uk	17
 https://static.cdn-example.com/impban/z/impban.php	256	track.net	17
-https://a.b.blogspot.com/stat	2048	a.com	5
-https://a.b.blogspot.com/stat	4	a.b.c.example.org	5
-wss://impanchor.example/track?q=foo&track=first.example	2	b.com	21
-wss://impanchor.example/track?q=foo&track=first.example	8	a.com	21
+https://a.b.blogspot.com/stat	2048	a.com	0
+https://a.b.blogspot.com/stat	4	a.b.c.example.org	0
+wss://impanchor.example/track?q=foo&track=first.example	2	b.com	2
+wss://impanchor.example/track?q=foo&track=first.example	8	a.com	2
 https://static.cdn-example.com/adserver/impban/api.php	16	www.ck	17
 https://static.cdn-example.com/adserver/impban/api.php	128	a.b.c.example.org	17
 http://news.bbc.co.uk:8080/adserver/foo/api?q=q&promo=www.ck	256	a.b.c.example.org	2
@@ -2042,20 +2042,20 @@ http://shop.example.co.uk/AdBanner/impban/consent.js.gif	256	1.2.3.4	17
 http://shop.example.co.uk/AdBanner/impban/consent.js.gif	8	foo.ck	17
 ws://docs.example.net/z	4	page.example	0
 ws://docs.example.net/z	1	other.co.uk	0
-http://hostonly.example/consent/collect/track	1024		21
-http://hostonly.example/consent/collect/track	1024	www.ck	21
+http://hostonly.example/consent/collect/track	1024		2
+http://hostonly.example/consent/collect/track	1024	www.ck	2
 http://video.example.tv/AdBanner.php	128	www.ck	1
 http://video.example.tv/AdBanner.php	64	tracker.example	1
-http://x.example/track/ad	512	track.net	21
-http://x.example/track/ad	128	b.com	21
+http://x.example/track/ad	512	track.net	2
+http://x.example/track/ad	128	b.com	2
 wss://a.b.track.net/v1/ads	512	localhost	5
 wss://a.b.track.net/v1/ads	2048	x.y.kobe.jp	5
 wss://fonts.gstatic.com/adserver.png	4	tracker.example	1
 wss://fonts.gstatic.com/adserver.png	64	news.site.co.uk	1
-https://www.wikipedia.org/p/beacon/promo	16	other.github.io	2
+https://www.wikipedia.org/p/beacon/promo	16	other.github.io	0
 https://www.wikipedia.org/p/beacon/promo	64		2
-ws://page.example/img.html?q=consent.js&banner=impath.example	2184		21
-ws://page.example/img.html?q=consent.js&banner=impath.example	8	localhost	21
+ws://page.example/img.html?q=consent.js&banner=impath.example	2184		2
+ws://page.example/img.html?q=consent.js&banner=impath.example	8	localhost	2
 wss://example.com/p/ads.js	1024	news.site.co.uk	0
 wss://example.com/p/ads.js	4	x.y.kobe.jp	0
 https://intranet/foo/q/y?q=banner&consent.js=x.zip	1024	city.kobe.jp	2
@@ -2064,30 +2064,30 @@ wss://ads.example.com/p/consent.js?q=q&impban=localhost#v1	64	track.net	1
 wss://ads.example.com/p/consent.js?q=q&impban=localhost#v1	2184	x.y.kobe.jp	1
 wss://www.wikipedia.org/analytics.html	128	b.com	0
 wss://www.wikipedia.org/analytics.html	1024		0
-http://pixel.example?q=banner&collect=hostonly.example	16	user.github.io	21
-http://pixel.example?q=banner&collect=hostonly.example	4	foo.ck	21
+http://pixel.example?q=banner&collect=hostonly.example	16	user.github.io	2
+http://pixel.example?q=banner&collect=hostonly.example	4	foo.ck	2
 https://city.kobe.jp/impban?q=img&x=malware.example.net#beacon	2184	user.github.io	5
 https://city.kobe.jp/impban?q=img&x=malware.example.net#beacon	16	track.net	5
 http://page.example/z/adserver/stat.php?q=consent&analytics=plain.example	1	www.example.com	0
-http://page.example/z/adserver/stat.php?q=consent&analytics=plain.example	8	a.b.c.example.org	21
+http://page.example/z/adserver/stat.php?q=consent&analytics=plain.example	8	a.b.c.example.org	2
 http://cdn.jsdelivr.net/foo/consent.js	1	city.kobe.jp	0
 http://cdn.jsdelivr.net/foo/consent.js	256	user.github.io	2
 https://malware.example.net/collect/promo	2048	tracker.example	2
 https://malware.example.net/collect/promo	2184	other.github.io	2
 https://docs.example.net/analytics.js	2184	x.y.kobe.jp	1
 https://docs.example.net/analytics.js	64	localhost	1
-https://notimg.example/impban/z/pixel.gif?q=AdBanner&adserver=malware.example.net	256	b.com	21
-https://notimg.example/impban/z/pixel.gif?q=AdBanner&adserver=malware.example.net	4	b.com	21
-wss://cookie-banner.example/ads/ads.gif?q=AdBanner&foo=excl.example	16	tracker.example	21
-wss://cookie-banner.example/ads/ads.gif?q=AdBanner&foo=excl.example	8	1.2.3.4	21
-http://static.cdn-example.com/beacon/collect.html?q=img&api=city.kobe.jp	128	page.example	5
-http://static.cdn-example.com/beacon/collect.html?q=img&api=city.kobe.jp	512	user.github.io	5
+https://notimg.example/impban/z/pixel.gif?q=AdBanner&adserver=malware.example.net	256	b.com	17
+https://notimg.example/impban/z/pixel.gif?q=AdBanner&adserver=malware.example.net	4	b.com	17
+wss://cookie-banner.example/ads/ads.gif?q=AdBanner&foo=excl.example	16	tracker.example	2
+wss://cookie-banner.example/ads/ads.gif?q=AdBanner&foo=excl.example	8	1.2.3.4	2
+http://static.cdn-example.com/beacon/collect.html?q=img&api=city.kobe.jp	128	page.example	0
+http://static.cdn-example.com/beacon/collect.html?q=img&api=city.kobe.jp	512	user.github.io	0
 wss://www.ck.	32	other.co.uk	0
 wss://www.ck.	256	other.co.uk	0
 https://1.2.3.4/foo/q/adserver.gif?q=ads&analytics=obj.example	2	other.github.io	2
 https://1.2.3.4/foo/q/adserver.gif?q=ads&analytics=obj.example	1024		2
 ws://first.example/ad/banner/collect.gif	1	a.b.c.example.org	0
-ws://first.example/ad/banner/collect.gif	16	city.kobe.jp	21
+ws://first.example/ad/banner/collect.gif	16	city.kobe.jp	2
 ws://video.example.tv/ad.png?q=p&foo=news.site.co.uk	8	news.site.co.uk	0
 ws://video.example.tv/ad.png?q=p&foo=news.site.co.uk	128	www.example.com	0
 https://api.service.dev/analytics/consent/analytics.php	128	track.net	0
@@ -2096,14 +2096,14 @@ wss://cdn.example.org/collect/v1/consent.png	2184	localhost	2
 wss://cdn.example.org/collect/v1/consent.png	2	www.ck	2
 https://imp.example/api.gif	2	localhost	17
 https://imp.example/api.gif	128	a.b.c.example.org	17
-http://a.example/track/ads/stat?q=pixel&stat=ws.example#track	4		21
-http://a.example/track/ads/stat?q=pixel&stat=ws.example#track	256	www.example.com	21
-http://example.com/v1/consent.js/ads?q=impban&x=a.b.blogspot.com	32	x.y.kobe.jp	5
-http://example.com/v1/consent.js/ads?q=impban&x=a.b.blogspot.com	4	user.github.io	5
-wss://dom.example/beacon/img.gif	2048		21
-wss://dom.example/beacon/img.gif	1024	user.github.io	21
-http://a.example/analytics/api?q=beacon&v1=x.kobe.jp	2	example.com	21
-http://a.example/analytics/api?q=beacon&v1=x.kobe.jp	32	localhost	21
+http://a.example/track/ads/stat?q=pixel&stat=ws.example#track	4		2
+http://a.example/track/ads/stat?q=pixel&stat=ws.example#track	256	www.example.com	2
+http://example.com/v1/consent.js/ads?q=impban&x=a.b.blogspot.com	32	x.y.kobe.jp	13
+http://example.com/v1/consent.js/ads?q=impban&x=a.b.blogspot.com	4	user.github.io	13
+wss://dom.example/beacon/img.gif	2048		2
+wss://dom.example/beacon/img.gif	1024	user.github.io	2
+http://a.example/analytics/api?q=beacon&v1=x.kobe.jp	2	example.com	2
+http://a.example/analytics/api?q=beacon&v1=x.kobe.jp	32	localhost	2
 http://example.com/collect/ads/collect.php?q=x&img=impanchor.example	2048	example.com	2
 http://example.com/collect/ads/collect.php?q=x&img=impanchor.example	4	x.y.kobe.jp	5
 https://user.github.io:8080/ads/banner/collect?q=AdBanner&q=x.example	4	b.com	5
@@ -2112,10 +2112,10 @@ wss://static.cdn-example.com:8080/track.html	2184		0
 wss://static.cdn-example.com:8080/track.html	1	x.y.kobe.jp	0
 wss://files.example.io/ads/x.gif	4	1.2.3.4	5
 wss://files.example.io/ads/x.gif	64	news.site.co.uk	5
-http://api.service.dev.?q=beacon&beacon=intranet	64	www.example.com	2
-http://api.service.dev.?q=beacon&beacon=intranet	32	other.github.io	2
-wss://a.example/stat.php?q=impban&img=xn--bcher-kva.example	1024	track.net	21
-wss://a.example/stat.php?q=impban&img=xn--bcher-kva.example	16	www.example.com	21
+http://api.service.dev.?q=beacon&beacon=intranet	64	www.example.com	5
+http://api.service.dev.?q=beacon&beacon=intranet	32	other.github.io	5
+wss://a.example/stat.php?q=impban&img=xn--bcher-kva.example	1024	track.net	2
+wss://a.example/stat.php?q=impban&img=xn--bcher-kva.example	16	www.example.com	2
 ws://malware.example.net:8080/y/banner	128	localhost	9
 ws://malware.example.net:8080/y/banner	2184	other.github.io	9
 ws://docs.example.net/promo#y	32	localhost	2
@@ -2136,14 +2136,14 @@ ws://user:pw@cdn.jsdelivr.net/stat/v1/q.png?q=analytics&adserver=first.example#t
 ws://user:pw@cdn.jsdelivr.net/stat/v1/q.png?q=analytics&adserver=first.example#track	64	city.kobe.jp	5
 https://www.ck:8080	1	user.github.io	0
 https://www.ck:8080	16	a.com	0
-ws://other.example/collect.png	2	track.net	21
+ws://other.example/collect.png	2	track.net	2
 ws://other.example/collect.png	1	localhost	0
 http://static.cdn-example.com:8080/AdBanner.png	16	www.example.com	2
 http://static.cdn-example.com:8080/AdBanner.png	128	track.net	2
 wss://fonts.gstatic.com/foo/banner/collect	2048	user.github.io	2
 wss://fonts.gstatic.com/foo/banner/collect	512	city.kobe.jp	2
-http://pixel.example?q=foo&x=img.site.co.uk	2	user.github.io	21
-http://pixel.example?q=foo&x=img.site.co.uk	512	tracker.example	21
+http://pixel.example?q=foo&x=img.site.co.uk	2	user.github.io	2
+http://pixel.example?q=foo&x=img.site.co.uk	512	tracker.example	2
 ws://shop.example.co.uk/ad/stat.gif	1024	other.github.io	1
 ws://shop.example.co.uk/ad/stat.gif	16	track.net	1
 wss://track.net/impban/beacon.php?q=beacon&p=frame.example	256	www.ck	17
@@ -2152,24 +2152,24 @@ https://malware.example.net	2048	example.com	9
 https://malware.example.net	8	1.2.3.4	9
 http://fonts.gstatic.com/stat/track.gif?q=api&foo=a.b.blogspot.com	1024		5
 http://fonts.gstatic.com/stat/track.gif?q=api&foo=a.b.blogspot.com	2184		5
-https://example.com/pixel/beacon.html	1024		2
+https://example.com/pixel/beacon.html	1024		0
 https://example.com/pixel/beacon.html	2	foo.ck	0
 https://static.cdn-example.com/z/x.gif	2048		1
 https://static.cdn-example.com/z/x.gif	1024		1
 ws://imp.example:8080/z/v1/impban.php	1		0
 ws://imp.example:8080/z/v1/impban.php	1024	b.com	17
-http://a.b.ck/ads/adserver?q=consent&beacon=both.example	32	x.y.kobe.jp	2
-http://a.b.ck/ads/adserver?q=consent&beacon=both.example	2	page.example	2
+http://a.b.ck/ads/adserver?q=consent&beacon=both.example	32	x.y.kobe.jp	5
+http://a.b.ck/ads/adserver?q=consent&beacon=both.example	2	page.example	5
 http://user:pw@www.wikipedia.org/ad/y/collect.html	128		5
 http://user:pw@www.wikipedia.org/ad/y/collect.html	1024	news.site.co.uk	0
 https://news.bbc.co.uk:8080/pixel.php#p	1024	b.com	0
 https://news.bbc.co.uk:8080/pixel.php#p	512	track.net	0
-http://UPPER.example	256	news.site.co.uk	21
-http://UPPER.example	1024		21
-ws://media.example/ad/collect.png	32	news.site.co.uk	21
-ws://media.example/ad/collect.png	2048		21
-http://news.site.co.uk/analytics/api.gif	2184	user.github.io	2
-http://news.site.co.uk/analytics/api.gif	1024	page.example	2
+http://UPPER.example	256	news.site.co.uk	2
+http://UPPER.example	1024		2
+ws://media.example/ad/collect.png	32	news.site.co.uk	2
+ws://media.example/ad/collect.png	2048		2
+http://news.site.co.uk/analytics/api.gif	2184	user.github.io	1
+http://news.site.co.uk/analytics/api.gif	1024	page.example	1
 data:text/plain,hello	256		0
 data:text/plain,hello	16	a.b.c.example.org	0
 data:text/plain,hello	8	city.kobe.jp	0
@@ -2214,17 +2214,17 @@ https://[2001:db8::1]/banner/1	1024	news.site.co.uk	1
 https://[2001:db8::1]/banner/1	8	foo.ck	1
 https://[2001:db8::1]/banner/1	4	other.co.uk	1
 https://[2001:db8::1]/banner/1	2048	foo.ck	1
-https://ads.example.com./x.js	2048	www.ck	1
+https://ads.example.com./x.js	2048	www.ck	2
 https://ads.example.com./x.js	4		1
-https://ads.example.com./x.js	64	page.example	1
+https://ads.example.com./x.js	64	page.example	2
 https://ads.example.com./x.js	512	example.com	1
 https://ads.example.com..	2048	user.github.io	1
 https://ads.example.com..	1	a.b.c.example.org	0
 https://ads.example.com..	8	a.b.c.example.org	1
 https://ads.example.com..	8	track.net	1
-HTTPS://ADS.EXAMPLE.COM/X.JS	64	other.github.io	1
-HTTPS://ADS.EXAMPLE.COM/X.JS	4	a.com	1
-HTTPS://ADS.EXAMPLE.COM/X.JS	128	foo.ck	1
+HTTPS://ADS.EXAMPLE.COM/X.JS	64	other.github.io	2
+HTTPS://ADS.EXAMPLE.COM/X.JS	4	a.com	2
+HTTPS://ADS.EXAMPLE.COM/X.JS	128	foo.ck	2
 HTTPS://ADS.EXAMPLE.COM/X.JS	1	news.site.co.uk	0
 https://ads.example.com:/x	1	page.example	0
 https://ads.example.com:/x	32		1
@@ -2234,10 +2234,10 @@ https://ads.example.com:99999/x	4	foo.ck	1
 https://ads.example.com:99999/x	1	user.github.io	0
 https://ads.example.com:99999/x	32	www.ck	1
 https://ads.example.com:99999/x	32	user.github.io	1
-https://ads.example.com@evil.example/x	2048	foo.ck	21
-https://ads.example.com@evil.example/x	1024	city.kobe.jp	21
-https://ads.example.com@evil.example/x	4	x.y.kobe.jp	21
-https://ads.example.com@evil.example/x	2048	news.site.co.uk	21
+https://ads.example.com@evil.example/x	2048	foo.ck	2
+https://ads.example.com@evil.example/x	1024	city.kobe.jp	2
+https://ads.example.com@evil.example/x	4	x.y.kobe.jp	2
+https://ads.example.com@evil.example/x	2048	news.site.co.uk	2
 https://evil.example@ads.example.com/x	64	www.ck	1
 https://evil.example@ads.example.com/x	2048	b.com	1
 https://evil.example@ads.example.com/x	64	localhost	1
@@ -2249,6 +2249,6 @@ https://a@b@ads.example.com/x	512	page.example	1
 https://jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj@ads.example.com/x.js	1	example.com	0
 https://ads.example.com/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/banner/1	4	track.net	1
 https://x.net/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/ads/y/img	1024		0
-https://hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh.example/x	32	tracker.example	21
+https://hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh.example/x	32	tracker.example	2
 https://x.net/?event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/pixel.gif	1	news.site.co.uk	0
 https://x.net/qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq/banner/	512	localhost	0
