@@ -7,7 +7,8 @@ object Planner {
 
     /** Bytes to ask for next: a quarter of what is left, between 512 KiB and [maxWindow] - finer toward the end so the last connection's tail is short. */
     fun window(s: Seg, maxWindow: Long): Long {
-        val rem = if (s.end < 0) maxWindow else s.end - s.cursor
+        if (s.end < 0) return maxWindow
+        val rem = s.end - s.cursor
         return minOf(maxOf(rem, 1L), (rem / 4).coerceIn(512L shl 10, maxWindow))
     }
 
