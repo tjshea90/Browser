@@ -313,6 +313,36 @@ class ExtImageTest {
     }
 
     @Test
+    fun theChunkRepliesReassembleToTheImageAndCarryTheHeaderTheExtensionParses() {
+        val img = ExtImage.encode(build(), psl, 9)
+        val id = ExtImage.contentId(build(), psl, 111L)
+        assertTrue("the content id never contains the field separator", !id.contains(':'))
+        val chunk = 1000
+        val parts = ArrayList<String>()
+        var i = 0
+        while (true) { val r = ExtImage.chunkReply(img, i, 9, 42L, id, chunk); if (r.isEmpty()) break; parts.add(r); i++ }
+        assertEquals((img.size + chunk - 1) / chunk, parts.size)
+        val h = parts[0].split(':', limit = 6)
+        assertEquals(listOf("9", img.size.toString(), chunk.toString(), "42", id), h.take(5))
+        val out = java.io.ByteArrayOutputStream()
+        out.write(java.util.Base64.getDecoder().decode(h[5]))
+        for (p in parts.drop(1)) out.write(java.util.Base64.getDecoder().decode(p))
+        assertArrayEquals(img, out.toByteArray())
+        assertEquals("", ExtImage.chunkReply(img, -1, 9, 0L, id, chunk))
+        assertEquals("", ExtImage.chunkReply(img, parts.size, 9, 0L, id, chunk))
+    }
+
+    @Test
+    fun theContentIdChangesWithTheListsAndThePublicSuffixListAndTheBuild() {
+        val fs = build()
+        val a = ExtImage.contentId(fs, psl, 111L)
+        assertEquals(a, ExtImage.contentId(fs, psl, 111L))
+        assertTrue("another app build", a != ExtImage.contentId(fs, psl, 112L))
+        assertTrue("another list", a != ExtImage.contentId(FilterSet.EMPTY, psl, 111L))
+        assertTrue("another Public Suffix List", a != ExtImage.contentId(fs, Psl.FALLBACK, 111L))
+    }
+
+    @Test
     fun anEmptySetEncodes() {
         val img = ExtImage.encode(FilterSet.EMPTY, Psl.FALLBACK, 1)
         assertEquals(ExtImage.checksum(img), ByteBuffer.wrap(img).order(ByteOrder.LITTLE_ENDIAN).getInt(img.size - 4))

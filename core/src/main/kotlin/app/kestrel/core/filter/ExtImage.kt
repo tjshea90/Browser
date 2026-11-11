@@ -113,6 +113,19 @@ object ExtImage {
     }
 
     /**
+     * One reply of the extension's `img` message: base64 of chunk [index]. Chunk 0 is prefixed with `"<generation>:<total bytes>:<chunk bytes>:<encode ms>:<content id>:"`,
+     * the others are bare base64; an index past the end (or a negative one) answers "". The extension assembles the chunks and verifies the trailer checksum.
+     */
+    fun chunkReply(image: ByteArray, index: Int, generation: Int, encodeMs: Long, contentId: String, chunk: Int = CHUNK): String {
+        if (index < 0) return ""
+        val from = index.toLong() * chunk
+        if (from >= image.size) return ""
+        val len = minOf(chunk.toLong(), image.size - from).toInt()
+        val b64 = java.util.Base64.getEncoder().encodeToString(image.copyOfRange(from.toInt(), from.toInt() + len))
+        return if (index == 0) "$generation:${image.size}:$chunk:$encodeMs:$contentId:$b64" else b64
+    }
+
+    /**
      * Identity of the image CONTENT: equal ids mean equal bytes (lists and Public Suffix List unchanged, same layout, same app build [salt]). The extension keeps the last image in its own
      * storage and skips the transfer when the id matches; the generation counter cannot do that because it restarts at 1 in every process.
      */
