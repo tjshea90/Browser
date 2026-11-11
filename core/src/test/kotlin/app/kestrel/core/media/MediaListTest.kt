@@ -63,7 +63,7 @@ class MediaListTest {
         val l = MediaList(max = 5)
         for (i in 1..9) l.add(file("https://c.test/v$i.mp4", 9_000_000))
         assertEquals(5, l.size)
-        assertEquals("v9.mp4", l.usable().map { it.url.substringAfterLast('/') }.first { true }.let { if (it == "v9.mp4") it else "v9.mp4" })
+        assertEquals(listOf("v9.mp4", "v8.mp4", "v7.mp4", "v6.mp4", "v5.mp4"), l.usable().map { it.url.substringAfterLast('/') }) // the oldest went, newest first
     }
 
     @Test fun wordsNextToTheButton() {
