@@ -333,3 +333,33 @@
 >
 > Now wiring the sniffer into the browser: tab state, long-press, menu entry and the quality sheet.
 <!-- sha:2d37a9419a01 -->
+
+## 2026-11-11T21:38:53Z
+> Alpha11 is out. The release is built and signed by GitHub Actions:
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.2.0-alpha11
+>
+> **What it does: Download video.** Play a video for a few seconds, then long-press it (or open Menu → Download video). A sheet lists what the page offers, with each quality's name and size next to it. Tap one to download:
+>
+> - **Direct files** (MP4, WebM, MP3 and similar) show a row like `720p · MP4 · 48 MB · 1:02`. The quality name comes from the player or the page; if neither says, the row just says "Video".
+> - **HLS streams** (the kind most video sites use) show `1080p · HLS · about 210 MB · 12:34`. The size is estimated from the bit rate, so it says "about". This includes streams with standard AES-128 encryption.
+> - Downloads use several connections at once and can be paused and resumed. Files are named like `Page title - 720p.mp4`.
+>
+> **What I checked, and what I didn't.** I tested on the Android 10 emulator with test streams I made with ffmpeg: plain pieces, AES-128-encrypted pieces, and fragmented MP4. Each saved file was identical to the original pieces joined together. Pause stopped all traffic, and resume carried on. I have not tried it on real websites or on your tablet. Some sites will behave differently: expired links, sites that check cookies, and players that hide their stream.
+>
+> **What will not work:**
+> - Copy-protected (DRM) video such as Netflix, Disney+ and Prime.
+> - YouTube.
+> - Live streams.
+> - Sites that offer only DASH, a second streaming format. Kestrel will say so; I'm working on it.
+>
+> **How InShot does it.** I couldn't see inside the InShot app, only its store pages. Apps like it work the same way as this: watch the page's network traffic for video files and playlists, then list them. That is what Kestrel now does.
+>
+> **One limit in alpha11.** Streams made of `.ts` pieces are saved as `.ts`, which plays in VLC or MX Player. I'm testing the automatic conversion to MP4 now. It already works on the emulator for the picture but still has an audio-timing problem I'm fixing.
+>
+> I also fixed a real bug in the download engine. A finished download could be recorded as unfinished after an unlucky moment of timing.
+>
+> Still open: the speed and stutter review (alpha12). Your tablet checks are still waiting too: neon pulse, the three scroll feels, and Settings → Storage.
+>
+> Continuing with the MP4 conversion and the speed review.
+<!-- sha:f4410ccf2f64 -->
