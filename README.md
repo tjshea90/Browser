@@ -119,4 +119,5 @@ Needs JDK 17+, the Android SDK (platform 36, build-tools 36; platform 37.0 for t
 Design and rationale: `docs/ARCHITECTURE.md`, `docs/HARDWARE.md`. Licences of bundled lists: `docs/FILTER-LISTS.md`. This project has no licence chosen yet.
 
 ## For Claude sessions
-Read `CLAUDE.md`, then `docs/handoff/STATE.md`. Work is auto-saved to GitHub by hooks (`scripts/autosave.sh`); protocol in `docs/handoff/PROTOCOL.md`.
+Read `CLAUDE.md`, then `CHECKPOINT.md` ("Do this next"), `TASKS.md` and, with no context at all, `HANDOFF.md`. Work is auto-saved to GitHub by hooks (`tools/autosave.sh`) and checkpointed with `tools/ckpt.sh`;
+the save ladder, the release routine and the rules are in `CLAUDE.md`.
