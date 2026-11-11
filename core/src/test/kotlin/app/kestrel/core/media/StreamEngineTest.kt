@@ -27,10 +27,10 @@ class StreamEngineTest {
 
     private fun cfg(conns: Int = 3, window: Long = 0) = Config(maxActive = 2, maxConnsPerDownload = conns, maxConnsTotal = 6, windowBytes = window, checkpointMs = 40, stallMs = 60_000, backoffBaseMs = 1, backoffCapMs = 4)
 
-    private inner class H(val cdn: FakeCdn = FakeCdn(), val sinks: FakeSinks = FakeSinks(), val store: MemStreamStore = MemStreamStore(), config: Config = cfg()) {
+    private inner class H(val cdn: FakeCdn = FakeCdn(), val sinks: FakeSinks = FakeSinks(), val store: MemStreamStore = MemStreamStore(), config: Config = cfg(), finisher: StreamFinisher? = null) {
         val net = FakeNet()
         val exec = Executors.newSingleThreadExecutor { r -> Thread(r, "test-control").also { it.isDaemon = true } }
-        val engine = StreamEngine({ cdn }, sinks, store, net, exec, Clock.System, config)
+        val engine = StreamEngine({ cdn }, sinks, store, net, exec, Clock.System, config, finisher = finisher)
         init { harnesses.add(this) }
         fun stop() { exec.shutdownNow(); store.cleanup() }
         fun view(id: Long) = engine.view(id)
@@ -40,6 +40,7 @@ class StreamEngineTest {
             throw AssertionError("timeout waiting for $what; last=${view(id)?.state} ${view(id)?.reason} done=${view(id)?.done}/${view(id)?.total}")
         }
         fun completed(id: Long) = await(id, "completion") { it?.state == DlState.COMPLETED }!!
+        fun awaitStoredState(id: Long): DlState { val end = System.currentTimeMillis() + 10_000; while (System.currentTimeMillis() < end) { store.rows[id]?.state?.let { if (it == DlState.COMPLETED) return it }; Thread.sleep(5) }; return store.rows[id]?.state ?: DlState.FAILED }
         fun out(v: DownloadView): ByteArray = sinks.sinks[v.destUri]!!.bytes
         fun enqueue(playlist: String, url: String = "https://cdn.test/v/index.m3u8", stem: String = "My clip", est: Long = -1) =
             engine.enqueue(StreamSource(url, playlist, "https://site.test/watch", stem, estimateBytes = est))
@@ -225,6 +226,53 @@ class StreamEngineTest {
         assertTrue(h.sinks.sinks[uri]!!.discarded || h.sinks.deleted.contains(uri))
         assertNull(h.store.rows[id])
         assertTrue(h.store.stagedFiles(id).isEmpty())
+    }
+
+    /** A finisher that "converts" by making a new output of its own and counting how often it was asked. */
+    private class FakeFinisher(val sinks: FakeSinks, val result: ((StreamFinisher.Joined) -> StreamFinisher.Converted?)? = null) : StreamFinisher {
+        val asked = java.util.concurrent.CopyOnWriteArrayList<StreamFinisher.Joined>()
+        override fun convert(j: StreamFinisher.Joined): StreamFinisher.Converted? {
+            asked.add(j)
+            result?.let { return it(j) }
+            val sink = sinks.create(j.stem + ".mp4", "video/mp4", -1, j.priv)
+            sink.pwrite(0, ByteArray(10), 0, 10)
+            return StreamFinisher.Converted(sink.publish()!!, j.stem + ".mp4", "video/mp4", 10)
+        }
+    }
+
+    @Test(timeout = 60_000) fun aTsStreamIsHandedToTheFinisherAndReplacedByItsResult() {
+        val sinks = FakeSinks(); val fin = FakeFinisher(sinks)
+        val h = H(sinks = sinks, finisher = fin)
+        val (pl, expected) = plainStream(h, 4, 20_000)
+        val v = h.completed(h.enqueue(pl))
+        assertEquals(1, fin.asked.size); assertEquals("ts", fin.asked[0].container); assertEquals(expected.size.toLong(), fin.asked[0].size)
+        assertEquals("My clip.mp4", v.name); assertEquals("video/mp4", v.mime); assertEquals(10L, v.total)
+        assertTrue("the .ts was deleted", sinks.deleted.contains(fin.asked[0].uri))
+        assertEquals(DlState.COMPLETED, h.awaitStoredState(v.id))
+    }
+
+    @Test(timeout = 60_000) fun aRefusingOrFailingFinisherKeepsTheTs() {
+        for (mode in listOf("null", "throws")) {
+            val sinks = FakeSinks()
+            val fin = FakeFinisher(sinks) { if (mode == "throws") throw IllegalStateException("muxer said no") else null }
+            val h = H(sinks = sinks, finisher = fin)
+            val (pl, expected) = plainStream(h, 3, 10_000)
+            val v = h.completed(h.enqueue(pl))
+            assertEquals(1, fin.asked.size)
+            assertEquals("My clip.ts", v.name); assertEquals("video/mp2t", v.mime)
+            assertArrayEquals(expected, h.out(v))
+            assertTrue(sinks.deleted.isEmpty())
+        }
+    }
+
+    @Test(timeout = 60_000) fun fragmentedMp4AndStreamsWithDiscontinuitiesAreNotConverted() {
+        val sinks = FakeSinks(); val fin = FakeFinisher(sinks)
+        val h = H(sinks = sinks, finisher = fin)
+        h.cdn.files["https://cdn.test/v/main.mp4"] = testBytes(3_000, 5)
+        h.completed(h.enqueue("#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXT-X-MAP:URI=\"main.mp4\",BYTERANGE=\"500@0\"\n#EXTINF:6,\n#EXT-X-BYTERANGE:1000@500\nmain.mp4\n#EXT-X-ENDLIST\n"))
+        val (pl, _) = plainStream(h, 3, 5_000, extra = "")
+        h.completed(h.enqueue(pl.replace("#EXTINF:4.0,\ns1.ts", "#EXT-X-DISCONTINUITY\n#EXTINF:4.0,\ns1.ts")))
+        assertTrue("neither was handed over", fin.asked.isEmpty())
     }
 
     @Test(timeout = 60_000) fun theEstimateTracksTheRealSizeWhileItRuns() {
