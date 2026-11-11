@@ -9,9 +9,11 @@ Use the checkpoint and save system from my other repos"
 ## Build + save infrastructure (2026-11-11)
 - [x] Study the owner's save system (Launcher, Portfolio): ladder = capture_inbox / autosave / ckpt / ship / Actions - `tools/test_handoff.sh`
 - [x] Port it: `tools/{ckpt,autosave,push,unpushed,resume,install-hooks,posttool,capture_inbox,capture_outbox,secretscan,toobig,record-release,verify-apk,appinfo}.sh`, `ship.sh`, CHECKPOINT/TASKS/INBOX/OUTBOX/HANDOFF/BRIEF/BUILDLOG - `tools/test_handoff.sh`
-- [ ] `android.yml` builds, signs and releases BOTH APKs on GitHub (no push trigger; tags are created by GitHub) - proven by a green run + a Release with the APK
-- [ ] First GitHub-built releases: `kestrel-v0.1.1` (web) and `kestrel-g-v0.2.0-alpha2` (gecko, same code as alpha1) installed over the delivered ones
-- [ ] Old checkpoint scripts (`scripts/{lib,autosave,checkpoint,resume}.sh`, `docs/handoff/{STATE,PROTOCOL}.md`) removed; nothing references them
+- [x] `android.yml` builds, signs and releases BOTH APKs on GitHub (no push trigger; tags are created by GitHub) - run 42951742468: check, test-jvm, test-js, build-web, build-gecko all green in 4m42s; Releases `kestrel-v0.1.1` and `kestrel-g-v0.2.0-alpha2` carry their APK + sha256
+- [x] First GitHub-built releases published and recorded in BUILDLOG.md (certificate = the pin, so they install over the delivered ones)
+- [ ] OWNER: install `kestrel-g-0.2.0-alpha2.apk` over alpha1 and say whether the update installs in place (proves the certificate path on the real tablet)
+- [x] Old checkpoint files removed (`scripts/{lib,checkpoint}.sh`, `docs/handoff/{STATE,PROTOCOL}.md`); nothing references them
+- [ ] Delete the two compat shims `scripts/autosave.sh` and `scripts/resume.sh` (kept so a session that started before the move, whose hooks still point at them, keeps saving)
 - [ ] Owner decision (optional): create `main` and make it the default branch + `tools/MIRROR_MAIN` = on, so a fresh session always starts from the newest work (today the default branch IS the first session branch; `resume.sh` names any branch with newer commits)
 - [ ] Owner decision (optional): a PRIVATE release key in the repo secrets (`SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`, `SIGNING_KEY_PASSWORD`) instead of the public dev key in `signing/dev/`; the workflow supports it, then `signing/CERT_SHA256` must be re-pinned (v3 signing allows the rotation without uninstalling)
 - [ ] Gecko update routine: bump `geckoVersion` in `geckoapp/build.gradle.kts` about monthly (browser-engine security fixes), ship a new alpha through Actions
