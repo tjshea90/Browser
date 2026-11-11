@@ -111,7 +111,17 @@ class UpdatePanel(ctx: Context, private val pal: Pal, private val prefs: Prefs, 
                 sub("Free up about ${UpdateLogic.formatSize(s.shortBy)} more, then tap Try again.", pal.fg)
                 sub("Why so much: Android only finishes an install while ${UpdateLogic.formatSize(s.reserveBytes)} (a tenth of this tablet's storage) stays free afterwards, and the update itself takes about ${UpdateLogic.formatSize(s.installedBytes)}. Free now: ${UpdateLogic.formatSize(s.freeNow)}, counting caches Android can clear.")
                 sub(if (s.fileKept) "The update file is already downloaded: nothing is downloaded again." else "The update file has to be downloaded again (${o?.let { UpdateLogic.formatSize(it.size) } ?: ""}).")
-                buttons(
+                val old = app.kestrel.browser.download.DownloadController.oldInstallers()
+                if (old.isNotEmpty()) {
+                    val bytes = old.sumOf { maxOf(it.total, it.done) }
+                    sub("Quick room: ${old.size} Kestrel installer ${if (old.size == 1) "file" else "files"} from earlier updates (${UpdateLogic.formatSize(bytes)}) are still in your Downloads.", pal.fg)
+                    buttons(primary("Delete old installers") {
+                        val freed = app.kestrel.browser.download.DownloadController.deleteOldInstallers()
+                        android.widget.Toast.makeText(ctx, "Deleted ${UpdateLogic.formatSize(freed)}", android.widget.Toast.LENGTH_SHORT).show()
+                        Io.main.postDelayed({ UpdateManager.recheckSpace(ctx) }, 800)
+                    }, secondary("Storage settings") { actions.openStorageSettings() })
+                    buttons(secondary("Try again") { if (s.fileKept) UpdateManager.install(ctx) else actions.download() })
+                } else buttons(
                     primary("Try again") { if (s.fileKept) UpdateManager.install(ctx) else actions.download() },
                     secondary("Storage settings") { actions.openStorageSettings() },
                 )

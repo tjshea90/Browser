@@ -83,6 +83,22 @@ object DownloadController {
     fun restart(ctx: Context, id: Long) { init(ctx).restart(id); DownloadService.start(ctx) }
     fun remove(id: Long, deleteFile: Boolean) { engine?.remove(id, deleteFile) }
     fun clearFinished() { engine?.clearFinished() }
+
+    private val installerName = Regex("""^kestrel(-g)?[-_].*\.apk$""", RegexOption.IGNORE_CASE)
+
+    /**
+     * Kestrel's own installers that this app downloaded earlier (one per release from GitHub, about 92 MB each) and that still sit in Downloads: the easiest room to give back
+     * when an update says "not enough storage". Only files the download manager itself knows are listed.
+     */
+    fun oldInstallers(): List<DownloadView> = views().filter { it.state == DlState.COMPLETED && installerName.matches(it.name) }
+
+    /** Delete those files (and their entries); returns how many bytes they held. */
+    fun deleteOldInstallers(): Long {
+        val list = oldInstallers()
+        var bytes = 0L
+        for (v in list) { bytes += maxOf(v.total, v.done); engine?.remove(v.id, true) }
+        return bytes
+    }
     fun pauseAll() { engine?.pauseAll() }
     fun resumeAll(ctx: Context) { init(ctx).resumeAll(); DownloadService.start(ctx) }
     fun tick() { engine?.tick() }
