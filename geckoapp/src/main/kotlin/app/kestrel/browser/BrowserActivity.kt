@@ -326,7 +326,9 @@ open class BrowserActivity : Activity(), ToolbarListener {
     internal fun tabForPage(url: String): Tab? {
         val h = UrlParts.hostOf(url) ?: return null
         current?.takeIf { it.topHost == h }?.let { return it }
-        return tabs.firstOrNull { it.topHost == h }
+        // Called from the Shields worker thread: never iterate the live list (the UI thread may be opening/closing a tab); a stale answer only costs one uncounted block.
+        @Suppress("UNNECESSARY_SAFE_CALL", "SENSELESS_COMPARISON")
+        return try { tabs.toTypedArray().firstOrNull { it != null && it.topHost == h } } catch (e: Exception) { null }
     }
 
     internal fun newTabAndShow(): Tab { val t = newTabInternal(); show(t); focusUrlBar(); return t }
