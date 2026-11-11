@@ -54,3 +54,16 @@ So far I like alpha 3.
 ```
 The goal for this browser is to be as lightweight and fast as possible, snappy. Research the hardware I have  and make sure the browser is well optimized and takes advantage of the ram and cpu and GPU to their full power for maximum speed and snappiness. Research online and consider other engines to use other than Firefox. Consider cromite. Keep the gui except instead of yellow highlights, make them blue. Get design ideas based on the attached grim reaper photo. I love the dark black glossy black look with the neon blue color. Somehow incorporate the visuals and colors of the attached photo into the browser theme. If possible without using too much cpu and ram, add very subtle pulsing blue animation to the gui in logical places such as button edges and places it makes sense to have the animation. Get the animation idea from the pulsating neon colors around the modern smartphone screens when the phone is talking or using Ai. Make the colors of the animated accents look like the contrast between the very dark black and the blue colors in the attached photo
 ```
+
+## 2026-11-11T10:49:29Z
+```
+So far I like alpha 3.
+
+1) make it so when github makes a new release the app itself will see it and I can update the browser inside of the app
+2) move the entire top navigation bar to the bottom, including url bar, refresh, new tab button, etc.
+3) add a home button to the navigation bar. Make the home page a very simple black screen with a large stylized text field in the middle which does a Google search for any words or if I type a url it goes to that url
+4) separate private tabs from regular tabs, make sure there is an indicator for private tabs 
+5) make the tab switching easier and with a good gui like major browsers, with a small thumbnail preview of a live view of every website tab open. 
+6) when I go to downloads, it tries to open my file manager. I want this browser to have a full featured smart and fast download manager with pause and resume and fast features. 
+7) begin work on the other things I already asked for. Show me what Claude can do, make the gui amazing and intuitive. Make the entire app snappy and fast. I want to be impressed 
+```
