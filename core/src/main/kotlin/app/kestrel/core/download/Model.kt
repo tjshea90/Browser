@@ -98,7 +98,12 @@ class Source(
     val priv: Boolean = false,
     val meteredOk: Boolean = false,
     val risk: Int = 0,
+    /** Where the file goes: [DEST_PUBLIC] = the public Downloads folder, [DEST_APP_PRIVATE] = the app's own staging folder (update APKs: not listed, not shown to other apps). */
+    val destKind: Int = DEST_PUBLIC,
 )
+
+const val DEST_PUBLIC = 0
+const val DEST_APP_PRIVATE = 2
 
 /** Buttons a row can show, first = primary. */
 enum class Action { PAUSE, RESUME, CANCEL, RETRY, RESTART, OPEN, SHARE, DELETE }
@@ -122,6 +127,8 @@ class DownloadView(
     val created: Long,
     val updated: Long,
     val actions: List<Action>,
+    /** [DEST_PUBLIC] or [DEST_APP_PRIVATE]. */
+    val kind: Int = DEST_PUBLIC,
 ) {
     val fraction: Float get() = if (total > 0) (done.toDouble() / total).coerceIn(0.0, 1.0).toFloat() else 0f
 }
@@ -189,6 +196,8 @@ interface Sink {
 
 interface SinkFactory {
     @Throws(SinkException::class) fun create(name: String, mime: String?, total: Long, priv: Boolean): Sink
+    /** [kind] = [DEST_PUBLIC] / [DEST_APP_PRIVATE]; factories that know only one place ignore it. */
+    @Throws(SinkException::class) fun create(name: String, mime: String?, total: Long, priv: Boolean, kind: Int): Sink = create(name, mime, total, priv)
     /** Re-open a partial file after a restart; null = it is gone (the download starts again). */
     fun reopen(uri: String, total: Long): Sink?
     /** Delete a finished file (the Delete button). */

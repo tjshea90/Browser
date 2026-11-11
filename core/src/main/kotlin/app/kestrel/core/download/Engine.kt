@@ -183,7 +183,7 @@ class Engine(
 
     private fun doEnqueue(id: Long, s: Source) {
         val r = Rec(id)
-        r.url = s.url; r.pageUrl = s.pageUrl; r.headers = s.headers; r.mime = s.mime; r.fetcher = s.fetcher; r.priv = s.priv; r.meteredOk = s.meteredOk; r.risk = s.risk
+        r.url = s.url; r.pageUrl = s.pageUrl; r.headers = s.headers; r.mime = s.mime; r.fetcher = s.fetcher; r.priv = s.priv; r.meteredOk = s.meteredOk; r.risk = s.risk; r.destKind = s.destKind
         r.name = FileNames.sanitize(s.nameHint ?: FileNames.fromUrl(s.url) ?: "download")
         r.created = clock.now(); r.updated = r.created
         if (!(s.url.startsWith("http://", true) || s.url.startsWith("https://", true))) { r.state = DlState.FAILED; r.reason = Reason.BAD_URL; r.finished = r.created }
@@ -393,7 +393,7 @@ class Engine(
             val lm = resp.header("Last-Modified")?.trim()
             val date = resp.header("Date")?.trim()
             val name = FileNames.choose(resp.header("Content-Disposition"), resp.finalUrl, ctype ?: rec.mime, rec.name)
-            val sink = try { sinks.create(name, ctype ?: rec.mime, total, rec.priv) } catch (e: SinkException) { quiet(resp); fail(job, e.reason, 0); throw Exit() }
+            val sink = try { sinks.create(name, ctype ?: rec.mime, total, rec.priv, rec.destKind) } catch (e: SinkException) { quiet(resp); fail(job, e.reason, 0); throw Exit() }
             val seg = Seg(0, 0, total, 0)
             seg.worker = true
             val reqEnd = if (ranged) (cr?.last ?: -2L) + 1 else -1L
@@ -663,6 +663,6 @@ class Engine(
             DlState.CANCELED -> emptyList()
         }
         val host = try { java.net.URI(r.url).host } catch (e: Exception) { null }
-        return DownloadView(r.id, r.state, r.reason, r.detail, r.name, r.mime, host, r.total, r.done, speed, eta, job.alive, r.priv, r.destUri, r.created, r.updated, actions)
+        return DownloadView(r.id, r.state, r.reason, r.detail, r.name, r.mime, host, r.total, r.done, speed, eta, job.alive, r.priv, r.destUri, r.created, r.updated, actions, r.destKind)
     }
 }
