@@ -83,3 +83,8 @@ The goal for this browser is to be as lightweight and fast as possible, snappy. 
 Tell me the pros and cons of using the https://github.com/uazo/cromite cromite engine for this browser instead of geckoview
 The scrolling up and down on websites is slow and stutters. Sometimes it maybe didn't cache properly and when I scroll up and down sometimes the screen goes white and has to reload. Make sure the browser takes full advantage of the hardware, decoding, and the GPU for anything that can make it faster. Also consider using cromite engine instead of the Firefox engine 
 ```
+
+## 2026-11-11T16:17:31Z
+```
+Tell me the pros and cons of using the https://github.com/uazo/cromite cromite engine for this browser instead of geckoview
+```
