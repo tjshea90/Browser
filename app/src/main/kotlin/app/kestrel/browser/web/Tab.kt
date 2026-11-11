@@ -52,6 +52,9 @@ class Tab(@JvmField val id: Long) {
     val httpOkHosts = HashSet<String>()
     val dangerOkHosts = HashSet<String>()
     var findOpen = false
+    var showHome = false // the Home screen is laid over this tab's page (the Home button); the page's session stays alive underneath
+    var thumb: Bitmap? = null // small snapshot of the page for the tab grid (RGB_565, about 240 px wide); never written to disk for a private tab
+    var thumbAt = 0L // uptime millis of that snapshot
     var dialogCount = 0 // JS alert/confirm/prompt count for this page load (spam guard)
     var dialogsSuppressed = false
 
