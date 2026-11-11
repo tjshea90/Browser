@@ -100,9 +100,10 @@ file upload, camera/microphone/location prompts (asked every time), full-screen 
 - Never run on real hardware (see the notice above).
 
 ## Signing
-The APK is signed with a **public development key** (`signing/dev/`, password `kestrel-dev`), chosen so every build from any machine can update the previous one.
-Anyone could build a look-alike APK with the same key, so install APKs only from your own copy of this repository. To use your own key, create `keystore.properties`
-(gitignored: `storeFile`, `storePassword`, `keyAlias`, `keyPassword`) and rebuild; you will need to uninstall once when switching keys.
+The APKs are signed with a **public development key** (`signing/dev/`, password `kestrel-dev`), chosen so every build from any machine or from GitHub Actions can update the previous one.
+Its certificate is pinned in `signing/CERT_SHA256`, and the release workflow refuses to publish an APK that carries a different one.
+Anyone could build a look-alike APK with the same key, so install APKs only from this repository's Releases page. To use a private key instead, add the repository secrets
+`SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`, `SIGNING_KEY_PASSWORD` and re-pin `signing/CERT_SHA256` (the APKs use v3 signing, which allows a key rotation without uninstalling).
 
 ## Build, test, develop
 ```
