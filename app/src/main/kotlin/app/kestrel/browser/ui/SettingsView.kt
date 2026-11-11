@@ -22,6 +22,8 @@ interface SettingsListener {
     fun filterStatus(): String
     fun dataUsed(): String
     fun aboutLines(): List<Pair<String, String>>
+    /** Settings > Neon glow > Test the pulse: close Settings and make every glow breathe for 10 seconds (Kestrel G). */
+    fun testNeon() {}
 }
 
 /** Settings: plain scrolling rows, no AndroidX preference library. */
@@ -62,7 +64,9 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         button("Reset data counter", null) { l.resetDataCounter(); rebuild() }
 
         section("Appearance")
-        choice("Neon glow", listOf("Off", "Steady", "Subtle pulse (rests when idle)"), prefs.neon) { prefs.neon = it; app.kestrel.browser.ui.Neon.mode = it; app.kestrel.browser.ui.Neon.refresh() }
+        choice("Neon glow", listOf("Off", "Steady", "Subtle pulse"), prefs.neon) { prefs.neon = it; app.kestrel.browser.ui.Neon.mode = it; app.kestrel.browser.ui.Neon.refresh(); rebuild() }
+        info("The glow right now", app.kestrel.browser.ui.Neon.status().replaceFirstChar { it.uppercase() })
+        if (app.kestrel.browser.Flavor.hasPullRefresh) button("Test the pulse (10 s)", "Closes Settings and makes every glow breathe for 10 seconds, whatever else is going on") { l.testNeon() }
         if (app.kestrel.browser.Flavor.hasScrollFeel) {
             choice("Scroll feel", listOf("Standard (Firefox's own)", "Smoother (default): pre-draws about twice the screen around your finger, answers touches sooner", "Smoothest: pre-draws even more (more memory), lower top fling speed"), prefs.scrollFeel) {
                 prefs.scrollFeel = it; l.prefsChanged()

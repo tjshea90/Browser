@@ -246,7 +246,7 @@ open class BrowserActivity : Activity(), DockListener {
     private val touchRelease = Runnable { Neon.touching(false) }
 
     /**
-     * Any touch wakes the neon from its idle rest (see [Neon.IDLE_MS]) and holds it still while a finger is down and for 1.5 s after (a fling): the page's scrolling
+     * Holds the neon still while a finger is down and for 1.5 s after a drag (a fling): the page's scrolling
      * must never share frames with our glow. [lastTouchAt] also keeps the post-load preview capture (a GPU read-back) away from a scroll in progress.
      */
     override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
@@ -1154,6 +1154,10 @@ open class BrowserActivity : Activity(), DockListener {
             Io.exec { UpdateJob.schedule(applicationContext) } // the update schedule may have changed
         }
         override fun clearBrowsingData() { this@BrowserActivity.clearBrowsingData() }
+        override fun testNeon() {
+            closeSettings(); Neon.mode = prefs.neon
+            Io.main.postDelayed({ Neon.test(10_000); toast("Watch the glow around the address bar and above the dock for 10 seconds") }, 300)
+        }
         override fun resetSiteShields() { Shields.clearAll(); toast("Per-site Shields reset") }
         override fun updateFiltersNow() {
             toast("Checking the filter lists…")
