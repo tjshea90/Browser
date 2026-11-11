@@ -11,6 +11,7 @@ import app.kestrel.core.media.MediaCandidate
 import app.kestrel.core.media.MediaKind
 import app.kestrel.core.media.MediaLabels
 import app.kestrel.core.media.MediaSniff
+import app.kestrel.core.media.Mp4Probe
 import app.kestrel.core.media.StreamSource
 import app.kestrel.core.url.UrlParts
 
@@ -28,6 +29,7 @@ class VideoFlow(private val a: BrowserActivity) {
         class Ready(val rows: List<Pair<VideoPanel.Choice, StreamPick>>, val note: String?) : Loaded()
     }
     private val streamInfo = HashMap<String, Loaded>()   // candidate key -> what its playlist turned out to be
+    private val probed = HashSet<String>()              // files whose first bytes were already read to learn their picture size
     private val children = HashSet<String>()            // addresses of the variant / audio playlists of masters we have read: they are not rows of their own
     private var panel: VideoPanel? = null
     private var panelTab: Tab? = null
@@ -70,6 +72,21 @@ class VideoFlow(private val a: BrowserActivity) {
         panel = p; panelTab = tab
         render(p, tab, items)
         a.sheet.show("Download video", p)
+        for (c in items) if (c.kind == MediaKind.FILE && !c.audioOnly && c.knownHeight == 0 && looksMp4(c) && probed.add(c.key)) probe(tab, c, 0L, 256 * 1024, 0)
+    }
+
+    private fun looksMp4(c: MediaCandidate): Boolean = MediaSniff.extension(c.url) in setOf("mp4", "m4v", "mov") || c.mime == "video/mp4" || c.mime == "video/quicktime"
+
+    /** Reads the start of an MP4 (and, when its index sits at the end, that box) to name its picture size and length: a few hundred KB, only when the sheet is open. */
+    private fun probe(tab: Tab, c: MediaCandidate, from: Long, length: Int, depth: Int) {
+        DownloadController.fetchBytes(a, c.url, from, from + length - 1, requestHeaders(tab), 1, tab.isPrivateTab) { bytes ->
+            if (bytes == null || depth > 3) return@fetchBytes
+            when (val r = Mp4Probe.probe(bytes, bytes.size, from)) {
+                is Mp4Probe.Result.Found -> { if (c.height == 0 && r.info.height > 0) { c.width = r.info.width; c.height = r.info.height }; if (c.durationMs == 0L) c.durationMs = r.info.durationMs; refresh(tab) }
+                is Mp4Probe.Result.NeedMore -> if (c.length <= 0 || r.offset < c.length) probe(tab, c, r.offset, r.length.coerceIn(16 * 1024, 4 * 1024 * 1024), depth + 1)
+                Mp4Probe.Result.NotMp4 -> {}
+            }
+        }
     }
 
     private fun render(p: VideoPanel, tab: Tab, items: List<MediaCandidate>) {

@@ -146,6 +146,35 @@ object DownloadController {
         }
     }
 
+    /** A byte range of a file (a media file's first bytes, its `moov` box), at most [to]-[from]+1 bytes, handed to [onDone] on the UI thread; null = it could not be read. */
+    fun fetchBytes(ctx: Context, url: String, from: Long, to: Long, headers: Map<String, String>, kind: Int, priv: Boolean, onDone: (ByteArray?) -> Unit) {
+        init(ctx)
+        Io.exec {
+            var data: ByteArray? = null
+            try {
+                val f = fetchers[kind] ?: fetchers[0]!!
+                val resp = f.open(FetchRequest(url, from, to, null, headers, 15_000, 20_000, priv))
+                try {
+                    if (resp.status == 200 || resp.status == 206) {
+                        val want = (to - from + 1).coerceAtMost(8L * 1024 * 1024).toInt()
+                        val out = java.io.ByteArrayOutputStream()
+                        val buf = ByteArray(16 * 1024)
+                        val body = resp.body
+                        var skip = if (resp.status == 200) from else 0L // a server that ignored Range sent the file from its start
+                        while (body != null && out.size() < want) {
+                            val n = body.read(buf); if (n < 0) break
+                            var off = 0; var len = n
+                            if (skip > 0) { val s = minOf(skip, len.toLong()).toInt(); skip -= s; off += s; len -= s }
+                            if (len > 0) out.write(buf, off, minOf(len, want - out.size()))
+                        }
+                        if (out.size() > 0) data = out.toByteArray()
+                    }
+                } finally { try { resp.abort() } catch (e: Exception) { /* ignore */ }; try { resp.close() } catch (e: Exception) { /* ignore */ } }
+            } catch (e: Exception) { /* null: the caller carries on without it */ }
+            Io.ui { onDone(data) }
+        }
+    }
+
     private fun isStream(id: Long) = streams?.owns(id) == true
 
     /** The downloads the user sees (the Downloads screen, "Delete old installers"): not the app's own update file. */
