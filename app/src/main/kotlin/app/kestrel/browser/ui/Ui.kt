@@ -132,23 +132,33 @@ class ProgressLine(ctx: Context, private val color: Int) : View(ctx) {
 }
 
 /** The "N tabs" button: a chamfered square outline with the count inside (no bitmap assets, themed by color). A private-mode dot sits on its corner. */
-class TabsButton(ctx: Context, private val color: Int) : View(ctx) {
+class TabsButton(ctx: Context, color: Int) : View(ctx) {
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE; strokeWidth = ctx.dpf(2f); strokeJoin = Paint.Join.MITER; this.color = this@TabsButton.color
+        style = Paint.Style.STROKE; strokeWidth = ctx.dpf(2f); strokeJoin = Paint.Join.MITER; this.color = color
     }
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textAlign = Paint.Align.CENTER; textSize = ctx.dpf(13f); typeface = Typeface.DEFAULT_BOLD; this.color = this@TabsButton.color
+        textAlign = Paint.Align.CENTER; textSize = ctx.dpf(13f); typeface = Typeface.DEFAULT_BOLD; this.color = color
     }
+    private val dot = Paint(Paint.ANTI_ALIAS_FLAG)
     private val box = RectF()
     private val outline = android.graphics.Path()
     var count = 1
         set(v) { if (field != v) { field = v; contentDescription = "Tabs, $v open"; invalidate() } }
+    /** True in the private skin: a filled dot marks the button (the number then counts private tabs). */
+    var privateDot = false
+        set(v) { if (field != v) { field = v; invalidate() } }
 
     init {
         background = ripple(color, null, 0f)
         isClickable = true
         isFocusable = true
         contentDescription = "Tabs, 1 open"
+    }
+
+    fun setPalette(fg: Int, accent: Int) {
+        stroke.color = fg; text.color = fg; dot.color = accent
+        background = ripple(fg, null, 0f)
+        invalidate()
     }
 
     override fun onDraw(c: Canvas) {
@@ -160,11 +170,12 @@ class TabsButton(ctx: Context, private val color: Int) : View(ctx) {
         c.drawPath(outline, stroke)
         val label = if (count > 99) ":D" else count.toString()
         c.drawText(label, width / 2f, height / 2f - (text.descent() + text.ascent()) / 2f, text)
+        if (privateDot) c.drawCircle(box.right, box.top, context.dpf(5f), dot)
     }
 }
 
 /** Shield icon + blocked-count for the current page; tapping opens the Shields panel. */
-class ShieldChip(ctx: Context, private val pal: Pal, onClick: () -> Unit) : LinearLayout(ctx) {
+class ShieldChip(ctx: Context, private var pal: Pal, onClick: () -> Unit) : LinearLayout(ctx) {
     private val icon = ImageView(ctx).apply {
         setImageResource(R.drawable.ic_shield)
         layoutParams = LayoutParams(ctx.dp(22), ctx.dp(22))
@@ -184,7 +195,18 @@ class ShieldChip(ctx: Context, private val pal: Pal, onClick: () -> Unit) : Line
         setOnClickListener { onClick() }
     }
 
+    private var lastUp = true
+    private var lastBlocked = 0
+
+    /** Skin change (regular <-> private): repaint with the new palette. */
+    fun setPal(p: Pal) {
+        pal = p
+        background = ripple(p.fg, null, 0f)
+        bind(lastUp, lastBlocked)
+    }
+
     fun bind(shieldsUp: Boolean, blocked: Int) {
+        lastUp = shieldsUp; lastBlocked = blocked
         icon.setColorFilter(if (shieldsUp) pal.accent else pal.muted)
         count.text = if (blocked > 0) (if (blocked > 999) "999+" else blocked.toString()) else ""
         count.setTextColor(if (shieldsUp) pal.fg else pal.muted)
