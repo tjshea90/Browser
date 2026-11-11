@@ -1223,9 +1223,17 @@ open class BrowserActivity : Activity(), DockListener {
      * merely HAS focus with the keyboard hidden is not typing: that state (new tab, keyboard dismissed with the keyboard's own back key) used to freeze the glow for good.
      */
     private fun updateNeonBusy() {
-        val keyboardComing = typing() && SystemClock.uptimeMillis() - focusedAt < 1200
-        Neon.busy(current?.loading == true || kbTopScreen > 0 || keyboardComing)
+        val now = SystemClock.uptimeMillis()
+        val t = current
+        val keyboardComing = typing() && now - focusedAt < 1200
+        // a load keeps the glow still only for its first 3 s (parsing, layout, first paint: the CPU-heavy part); a page that keeps loading for a long time on the hotspot is mostly waiting
+        if (t?.loading != true) loadSeen = null
+        else if (loadSeen !== t) { loadSeen = t; loadSeenAt = now; Io.main.postDelayed({ updateNeonBusy() }, 3100) }
+        val heavyLoad = t?.loading == true && now - loadSeenAt < 3000
+        Neon.busy(heavyLoad || kbTopScreen > 0 || keyboardComing)
     }
+    private var loadSeen: Tab? = null
+    private var loadSeenAt = 0L
 
     internal fun tabChanged(tab: Tab) { if (tab === current) updateUi(); if (tabGrid.visibility == View.VISIBLE) tabGrid.rebind(tabs, current) }
     private val countPosted = java.util.concurrent.atomic.AtomicBoolean(false)

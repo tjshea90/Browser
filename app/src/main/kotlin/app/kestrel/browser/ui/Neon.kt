@@ -33,15 +33,16 @@ import kotlin.math.pow
  * off-screen layer). It is stepped at 10 Hz instead of animated at the display's 60 Hz: a slow breath changes ~1-2 % of alpha per step, which the eye cannot tell
  * from a smooth ramp, and every step costs one tiny frame - six times fewer frames than a RenderThread animation on a tablet whose GPU would otherwise idle.
  * While a glow runs it is cached as a small hardware layer (the strokes are drawn once; a step only re-blends a texture); at rest the layer is dropped.
- * All glows share one clock, so they breathe together. The glows hold still (a steady glow, no frames) while typing or loading, in battery-saver, when the system's animations are off, when the app is not on screen, and
- * after [IDLE_MS] without a touch - so a tablet left on a page lets the screen go quiet and the SoC idle.
+ * All glows share one clock, so they breathe together. The glows hold still (a steady glow, no frames) while the keyboard is up, during the first seconds of a page load, while a finger is on the screen (and
+ * after a swipe, for the fling), in battery-saver, when the app is not on screen, and after [IDLE_MS] without a touch while a page is in front - so a tablet left on a page lets the screen go quiet and the SoC idle.
+ * NOT gated on the system's animation scale (the owner runs with animations off and still wants this).
  */
 object Neon {
     const val OFF = 0
     const val STATIC = 1
     const val PULSE = 2
     /** No touch for this long, with a page in front: the glows settle to a steady glow until the next touch (never on Home, the tab grid or a sheet: see [canRest]). */
-    const val IDLE_MS = 60_000L
+    const val IDLE_MS = 120_000L
 
     /** 0 = no glow at all, 1 = steady glow, 2 = subtle pulse (default). Set from Settings. */
     @JvmField @Volatile var mode = PULSE
@@ -134,7 +135,7 @@ object Neon {
         if (mode == OFF) return "off (Settings)"
         if (mode == STATIC) return "steady (Settings)"
         val why = ArrayList<String>()
-        if (busy) why.add("typing or loading"); if (touching) why.add("finger on screen"); if (away) why.add("app not in front")
+        if (busy) why.add("keyboard up or page just started loading"); if (touching) why.add("finger on screen"); if (away) why.add("app not in front")
         if (resting) why.add("idle rest"); if (powerSave) why.add("battery saver")
         val running = pulsers.count { it.running }
         return if (why.isEmpty()) "pulsing ($running glows running)" else "holding still: " + why.joinToString(", ")
