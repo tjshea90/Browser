@@ -84,6 +84,16 @@ class StreamRec(@JvmField val id: Long) {
     }
 }
 
+/**
+ * Turns the finished file of a stream into a nicer one (MPEG-TS -> MP4). Runs on the job's supervisor thread while the download shows "Finishing"; it may take a while and may refuse
+ * (return null): the stream is then simply kept as it is. The Android layer implements it with MediaExtractor + MediaMuxer.
+ */
+interface StreamFinisher {
+    class Joined(val uri: String, val stem: String, val container: String, val size: Long, val priv: Boolean, val destKind: Int)
+    class Converted(val uri: String, val name: String, val mime: String, val size: Long)
+    fun convert(j: Joined): Converted?
+}
+
 /** Where job records and staged segments live. The Android layer keeps them in the app's own folder; tests use a temp folder. */
 interface StreamStore {
     fun loadAll(): List<StreamRec>
@@ -109,6 +119,7 @@ class StreamEngine(
     private val clock: Clock = Clock.System,
     private val cfg: Config = Config(),
     private val spawner: Spawner = Spawner { name, task -> Thread(task, name).also { it.isDaemon = true; it.start() } },
+    private val finisher: StreamFinisher? = null,
     /** The first id handed out (the Android layer keeps these apart from the single-file engine's). */
     private val idBase: Long = 1_000_000_000L,
 ) {
@@ -472,11 +483,19 @@ class StreamEngine(
         if (synchronized(lock) { rec.next != job.media!!.segments.size }) throw SinkException(Reason.STORAGE, "stream incomplete")
         sink.sync()
         val uri = sink.publish()
+        synchronized(lock) { rec.destUri = uri ?: rec.destUri; job.sink = null }
+        // MPEG-TS plays badly in most apps: when nothing in it needs the timestamps kept as they are, make an MP4 of it (the .ts stays if anything goes wrong)
+        val media = synchronized(lock) { job.media!! }
+        var converted: StreamFinisher.Converted? = null
+        if (finisher != null && uri != null && media.container == "ts" && media.discontinuities == 0 && !job.stop) {
+            converted = try { finisher.convert(StreamFinisher.Joined(uri, rec.nameStem, media.container, job.written, rec.priv, rec.destKind)) } catch (e: Throwable) { null }
+            if (converted != null) try { sinks.delete(uri) } catch (e: Exception) { /* the .ts stays next to the .mp4: harmless */ }
+        }
         synchronized(lock) {
-            rec.destUri = uri ?: rec.destUri; rec.total = job.written; rec.appended = job.written
+            if (converted != null) { rec.destUri = converted.uri; rec.name = converted.name; rec.mime = converted.mime; job.written = converted.size }
+            rec.total = job.written; rec.appended = job.written
             rec.state = DlState.COMPLETED; rec.reason = Reason.NONE; rec.detail = 0; rec.finished = clock.now(); rec.updated = rec.finished
             rec.headers = emptyMap(); rec.playlistText = null
-            job.sink = null
         }
         wipeStaging(job)
         return DlState.COMPLETED
