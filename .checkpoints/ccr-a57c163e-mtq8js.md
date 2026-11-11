@@ -1,15 +1,13 @@
-# CHECKPOINT 220 — read me first, then TASKS.md
+# CHECKPOINT 221 — read me first, then TASKS.md
 
-**Written:** 2026-11-11T04:48:03Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `57a6d62` (this checkpoint is the commit after it)
+**Written:** 2026-11-11T04:49:18Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `85eab84` (this checkpoint is the commit after it)
 
 ## Just done
-gated kestrel-g-v0.2.0-alpha3 (gecko code 102) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
+ship.sh gecko OK; dispatched android.yml app=gecko full_build=true: run 42961586675 on 85eab84, started 04:48Z (alpha3, code 102). Emulator smoke test passed before shipping.
 
 ## Do this next
-TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref ccr-a57c163e-mtq8js, inputs {"app":"gecko","full_build":"true","note":"Alpha 3: fixes for the typing freeze, instant UI with no animations, a Diagnostics screen with a Refresh screen button, tuned and hardened Firefox engine settings; not yet run on the real tablet"}.
-When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.2.0-alpha3), then:  bash tools/record-release.sh kestrel-g-v0.2.0-alpha3 "Alpha 3: fixes for the typing freeze, instant UI with no animations, a Diagnostics screen with a Refresh screen button, tuned and hardened Firefox engine settings; not yet run on the real tablet"
-NEVER ship kestrel-g-v0.2.0-alpha3 twice (check BUILDLOG.md and the Releases first).
+Wait for run 42961586675 (~5 min): actions_list list_workflow_jobs; green -> get_release_by_tag kestrel-g-v0.2.0-alpha3 -> bash tools/record-release.sh kestrel-g-v0.2.0-alpha3 <note> -> tell the owner (what to test: typing, claude.ai, Menu>Diagnostics>Refresh screen). Then B1a: pure-Kotlin download engine in core/ (research/DOWNLOADS.md sections 2-4), tests first.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -18,6 +16,7 @@ NEVER ship kestrel-g-v0.2.0-alpha3 twice (check BUILDLOG.md and the Releases fir
 
 ## Last ten checkpoints
 ```
+  85eab84 ckpt 220: gated kestrel-g-v0.2.0-alpha3 (gecko code 102) and pushed it: handoff self-tes
   57a6d62 ckpt 219: alpha3 candidate: freeze fixes verified on emulator (worker bridge, cosmetics 
   04dab0c ckpt 214: A2/A4 part: gecko-prefs.txt -> YAML config (AV1 off, memory/cache budget, no a
   1739d76 ckpt 209: A3 evidence layer: core RingLog (+tests), app Health (watchdog, frame jank, re
@@ -27,5 +26,4 @@ NEVER ship kestrel-g-v0.2.0-alpha3 twice (check BUILDLOG.md and the Releases fir
   cb69194 ckpt 109: Owner request 2 recorded: INBOX captured by the hook, TASKS.md boxes M1-M4 R1-
   286f09a ckpt 104: GitHub Actions pipeline proven: run 42951742468 built, signed, verified and pu
   ecfd90c ckpt 98: ship.sh gecko OK (local gates green, pushed). Dispatched android.yml app=both f
-  cdbefdf ckpt 97: gated kestrel-g-v0.2.0-alpha2 (gecko code 101) and pushed it: handoff self-test
 ```
