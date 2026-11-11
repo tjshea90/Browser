@@ -66,6 +66,7 @@ import app.kestrel.core.download.DownloadView
 import app.kestrel.core.download.Source
 import app.kestrel.browser.ui.UpdatePanel
 import app.kestrel.browser.update.UpdateManager
+import app.kestrel.browser.update.UpdateNotifier
 import app.kestrel.browser.ui.ThumbStore
 import app.kestrel.browser.ui.BottomDock
 import app.kestrel.browser.ui.DockListener
@@ -206,7 +207,7 @@ open class BrowserActivity : Activity(), DockListener {
             val session = SessionCodec.decode(text)
             Io.ui { restore(session, savedInstanceState, launch) }
         }
-        Io.exec { db?.purge(5000, 90); UpdateJob.schedule(applicationContext) } // after the session read: nothing at launch waits for this
+        Io.exec { db?.purge(5000, 90); UpdateJob.schedule(applicationContext); app.kestrel.browser.update.ReleaseCheckJob.schedule(applicationContext) } // after the session read: nothing at launch waits for this
     }
 
     override fun onStart() {

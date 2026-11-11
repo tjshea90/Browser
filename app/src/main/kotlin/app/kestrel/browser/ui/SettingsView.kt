@@ -78,6 +78,13 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
             prefs.textZoom = listOf(75, 100, 125, 150, 175, 200)[it]
         }
 
+        if (app.kestrel.browser.Flavor.hasPullRefresh) {
+            section("App updates")
+            toggle("Look for updates by itself", "Once a day, also when the app is closed: one tiny request", prefs.autoUpdateCheck) { prefs.autoUpdateCheck = it }
+            toggle("Download updates in the background", "Uses the download service, so it continues with the screen off; about 92 MB per release on your connection", prefs.autoUpdateDownload) { prefs.autoUpdateDownload = it }
+            toggle("Install by itself when Android allows", "Android 12 and newer only; Android 10 always shows its own Install screen, so you get a notification to tap", prefs.autoUpdateInstall) { prefs.autoUpdateInstall = it }
+        }
+
         section("Filter lists")
         info("Status", l.filterStatus())
         button("Update now", "Downloads only what changed (usually a few MB at most)") { l.updateFiltersNow() }
