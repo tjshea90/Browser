@@ -14,8 +14,11 @@ first page load even offline, and refreshes it itself (weekly, conditional GET, 
 | uBlock filters – Unbreak | exceptions (`@@`, `$badfilter`) that keep sites working | uAssets | GPLv3 |
 | Public Suffix List | first/third-party decisions | publicsuffix.org | MPL-2.0 |
 
-**Deliberately excluded**
-- *Peter Lowe's ad-server list*: its licence encourages **noncommercial use only**; ~3 % extra hosts, mostly redundant. Add it yourself if you want it.
+**Licensing stance (owner, 2026-11-11):** this build is for the owner's *personal, non-commercial* use and the owner will obtain any permission a list or product requires, so
+non-commercial-only data (e.g. Peter Lowe's list, CC BY-NC lists) MAY be added. Keep this table accurate and keep attributions if the APK or repo is ever shared.
+
+**Deliberately excluded (a choice of value, no longer of licence)**
+- *Peter Lowe's ad-server list*: licence is non-commercial only (now permitted), but it is ~3 % extra hosts, mostly redundant with EasyList/uBlock; not worth another host to contact.
 - *URLhaus "online" URL list*: 105 000 individual malware URLs (17 MB compiled) — wrong tool for a 128 MB-class device. Domain-level malware
   coverage comes from uBlock *Badware risks*; WebView Safe Browsing (if Google Play Services exist) adds URL-level protection.
 

@@ -1,7 +1,7 @@
 # Kestrel Browser
 
 A very light, fast, private Android browser built for **one specific tablet**: the *Alps 711 / MediaTek MT8168B, Android 10 Go* tablet
-(low RAM, 600×973 at 170 dpi) that reaches the internet **only through a phone hotspot**. It has Brave-style Shields (ad and tracker
+(2 GB RAM, 600×973 at 170 dpi, **no Google Play Store and no Google services**) that reaches the internet **only through a phone hotspot**. It has Brave-style Shields (ad and tracker
 blocking, HTTPS-first, cookie and fingerprint protection, private window) and none of the bloat: no news, no AI, no rewards, no wallet,
 no VPN, no sync, no accounts, no telemetry.
 
@@ -21,8 +21,8 @@ Blink/V8 engine family Brave is built on, shared with the OS so it costs no extr
 2. Open the downloaded file. Android 10 will ask you to allow **Install unknown apps** for the app you opened it from (your file manager or current
    browser): allow it once, go back, tap *Install*.
 3. Optional: *Settings → Apps → Default apps → Browser app → Kestrel*, so links from other apps open here.
-4. Open Kestrel. If the new-tab page shows a yellow "Old web engine" notice, the tablet's *Android System WebView* is out of date: updating it
-   (Play Store, if the tablet has one) improves both site compatibility and security.
+4. Open Kestrel. Open the menu → *Settings* → *About* and read the **Browser engine** line (package name and version): that is the tablet's own web engine,
+   and it decides how many modern websites will display correctly. If the new-tab page shows an "Old web engine" notice, see *Updating the web engine* below.
 
 Updating later: install the newer APK over the old one. It is signed with a *public development key* (see *Signing*), so updates from this repository install over each other.
 
@@ -34,7 +34,7 @@ Updating later: install the newer APK over the old one. It is signed with a *pub
   This matters on a hotspot: your mobile carrier sits in the path and can read or alter cleartext pages.
 - Blocks cross-site cookies; adds small per-session noise to canvas/audio readouts and reports fewer CPU cores (anti-fingerprinting).
 - Strips tracking parameters (`utm_*`, `fbclid`, `gclid`, …) and skips tracking redirectors (Google/Facebook/YouTube/DuckDuckGo link wrappers).
-- Blocks a malware/phishing list at page level, plus Google Safe Browsing when the tablet has Google Play services.
+- Blocks pages on a built-in malware/phishing list (uBlock *Badware risks*) with a warning screen. Google Safe Browsing needs Google services, which this tablet doesn't have, so this list is the only such protection here.
 - Per-site switches for every one of the above, and for JavaScript.
 
 **Made for a metered, flaky hotspot**
@@ -51,16 +51,35 @@ Updating later: install the newer APK over the old one. It is signed with a *pub
 and the recents thumbnail, writes no history/tab list/session, and asks the keyboard not to learn from what you type.
 
 **Also**: tabs, bookmarks, history (capped at 90 days / 5 000 entries), find in page, share, desktop-site toggle, print/save as PDF, downloads through the system downloader,
-file upload, camera/microphone/location prompts (asked every time), full-screen video, dark mode that follows the system, text size, eight search engines (Brave Search by default).
+file upload, camera/microphone/location prompts (asked every time), full-screen video, dark mode that follows the system, text size, eight search engines (**Google by default**).
 
 **Deliberately not here**: news/sponsored tiles, AI assistant, rewards/crypto/wallet, VPN, sync/accounts, Tor, extensions, telemetry of any kind.
 
 ## Privacy: what this app talks to
-- The websites you open, and your search engine when you search (Brave Search by default; change it in Settings).
+- The websites you open, and Google when you search (anything typed into the address bar that is not an address is searched on Google; you can pick another engine in Settings).
 - Once a week (or when you tap *Update now*) the filter-list hosts: `easylist.to`, `ublockorigin.github.io`, `secure.fanboy.co.nz`. No identifiers are sent.
 - Nothing else. No analytics, no crash reporting, no accounts. WebView usage metrics are opted out. Backups are disabled.
 - The tablet's storage is **not encrypted** (per its hardware report), so anything stored in the app, like cookies or history, sits on flash in the clear.
   Set a screen lock; use the private window or *Settings → Clear browsing data when I quit* for sensitive browsing.
+
+## No Google Play on this tablet: what that changes
+- **Installing and updating Kestrel is manual** (sideload the APK from `dist/`; newer builds install over older ones).
+- **Google Safe Browsing does not exist here** (it lives in Google Play services). Kestrel's own malware/phishing list is the only protection against known-bad sites; it refreshes weekly.
+- **The web engine does not update itself.** Kestrel draws pages with the tablet's Android System WebView, and without Google Play nothing keeps that current.
+- **The tablet's list of trusted certificate authorities stops at its last system update** (July 2021). A very new site can show a "connection isn't private" page even though it is fine; if
+  *many* sites say "expired" or "not valid yet", the tablet's date and time are wrong. Do not tap *Proceed (unsafe)* on banking, shopping or login pages.
+- Websites cannot use Google location services; there is no Google sign-in or autofill.
+
+### Updating the web engine
+1. Kestrel → menu → *Settings* → *About* → **Browser engine** shows e.g. `com.android.webview 91.0.4472.88`. A major version of 100 or more is good; below that, many current sites will misbehave.
+2. Android only lets a package act as the system WebView if its **name is on the tablet's allow-list and its signature is one the manufacturer configured**. Chromium's documentation on
+   [WebView providers](https://chromium.googlesource.com/chromium/src/+/bf91c9f15a735cbf40ad57504bd5f5df561fa09b/android_webview/docs/webview-providers.md) describes it: AOSP-style
+   builds use `com.android.webview`, builds with Google services use `com.google.android.webview`.
+   - If *Browser engine* says **`com.google.android.webview`**: install a newer *Android System WebView* APK from a trustworthy mirror such as APKMirror. Pick the **armeabi-v7a (32-bit ARM)** build whose
+     minimum is **Android 10** (recent versions list it). Check the file is signed by Google LLC and matches the checksum on the page, then open it to update in place.
+   - If it says **`com.android.webview`** (typical for a tablet without Google services): the system will not accept Google's build in its place, so the engine can only change with a firmware update.
+     That is a hard limit of the tablet, not of Kestrel; tell the developer the version shown, because the alternative then is to bundle a different engine (GeckoView) in a separate, much larger build.
+3. After changing it, fully close Kestrel and reopen it; the About page shows the new version.
 
 ## Known limits (honest)
 - **Page compatibility and engine security follow the tablet's WebView version**, which is unknown and may be old. The About page and new-tab page show it.

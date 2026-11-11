@@ -72,7 +72,7 @@ Build/verify: `./gradlew :core:test :app:testDebugUnitTest`, `bash scripts/verif
 - Native new-tab page (no WebView at startup); one live WebView (+1 for opener) and hibernation of the rest via saveState.
 - Private window = separate process `:private` with `WebView.setDataDirectorySuffix`, FLAG_SECURE, nothing persisted.
 - Pure-host rules stored as sorted 64-bit hashes; other rules token-indexed; compiled to binary `.kfs`; lists refreshed weekly (conditional GET).
-- Default search: Brave Search; suggestions OFF (data + privacy). HTTPS-first STRICT by default (carrier can tamper with cleartext).
+- Default search: **Google** (owner's requirement; first entry of `Prefs.ENGINES`; every non-address input is searched there); suggestions OFF (data + privacy). HTTPS-first STRICT by default (carrier can tamper with cleartext).
 - Dev signing key will be committed under `signing/dev/` (PUBLIC, for update continuity) — flag this clearly to the user.
 
 ## Known issues / risks

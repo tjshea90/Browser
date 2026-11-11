@@ -2,8 +2,12 @@
 
 ## Mission
 A very light, fast, private Android browser tuned for ONE device (`docs/HARDWARE.md`): MediaTek **MT8168B** tablet
-("Alps 711"), **Android 10 Go (API 29)**, low-RAM (128 MB heap class), 600x973 @170 dpi (~564x916 dp, font scale 1.2),
-32-bit system image, unencrypted storage, and **internet 100% through a phone hotspot (metered, flaky, carrier-routed)**.
+("Alps 711"), **Android 10 Go (API 29)**, **2 GB RAM** (128 MB app heap class, low-RAM flag), 600x973 @170 dpi (~564x916 dp, font scale 1.2),
+32-bit system image, unencrypted storage, **no Google Play Store and no Google services (no Safe Browsing, no WebView auto-updates, never add a GMS dependency)**,
+and **internet 100% through a phone hotspot (metered, flaky, carrier-routed)**.
+Owner decisions: anything typed in the address bar that is not an address is searched on **Google** (default engine = first in `Prefs.ENGINES`); licensed third-party
+products/sources are allowed (personal, non-commercial use; owner obtains permissions) - still record each licence in `docs/FILTER-LISTS.md`;
+owner offered to switch Claude Code plugins on/off - ask if one gets in the way (the `simple-workflow` plugin's Bash guard blocks curl/wget-style network commands).
 Brave-like Shields (ads/trackers, HTTPS upgrade, cookie/fingerprint protection) + security hardening.
 **Explicitly NO** news, AI, rewards, wallet/web3, VPN, sync/accounts, Tor, telemetry, or other bloat.
 
