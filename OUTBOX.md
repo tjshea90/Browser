@@ -82,3 +82,28 @@
 >
 > 💡 The code word is off in this chat. Type `/amcodeword` and I'll start every reply with 'Yes Boss!', so you'll notice if I start losing track.
 <!-- sha:cbcb7440e6d4 -->
+
+## 2026-11-11T06:49:36Z
+> Alpha 4 is built, signed and published by GitHub Actions. I've re-checked your list, and items 1–5 plus part of 7 are done. I'm starting the download manager (item 6) now.
+>
+> **Alpha 4 download (tap on the tablet, it installs over alpha 3):**
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.2.0-alpha4
+>
+> What's in it, matching your numbered list:
+> 1. **In-app updates:** Menu > Updates. It checks GitHub Releases once a day when the app opens, plus a "Check now" button. You then tap Download (it shows the size and asks first because the hotspot is metered). The download can pause and resume. It's checked against the release's checksum and installed through Android's installer. I ran the whole flow on an Android 10 emulator against a local test feed, going from version 102 to 103, but not against the real GitHub API or your hotspot.
+> 2. **Bottom navigation bar:** address bar, reload, back, forward, Home, new tab, tabs and menu are all at the bottom. When you type, it lifts above the keyboard and the page is not resized, which matters for your typing-freeze issue.
+> 3. **Home button and black Home screen:** one large stylized field in the middle. Words search Google and addresses open directly.
+> 4. **Private tabs:** separate from regular tabs, with a violet look, a mask in the address bar, and a violet dot on the tabs button.
+> 5. **Tab switcher:** a card grid with a page preview on every tab, and a Tabs | Private switch at the top.
+> 7. **First pass on the redesign:** the new look (black and yellow, cut corners, no animations), plus a menu and Shields panel that rise from the bottom.
+>
+> **Not done yet (6):** Downloads still opens the old system screen. Building the real download manager now, with pause/resume, parallel segments and its own Downloads screen. It will ship as alpha 5.
+>
+> **Not verified:** all of this was checked on the emulator in portrait and landscape, not on your tablet. Please try it and tell me about any freeze while typing, or anything that feels slow or awkward.
+>
+> **Still waiting on you (defaults apply if you don't answer):**
+> - Private release signing key (SEC-1).
+> - Project licence and the YouTube setting (LIC-1).
+> - Whether landscape should keep the tab strip on top (UI-3).
+<!-- sha:65c2dd8d41b3 -->
