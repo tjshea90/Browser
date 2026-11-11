@@ -78,6 +78,7 @@ t=json.load(open(sys.argv[1]))
 cmds=[h[\"command\"] for ev in t[\"hooks\"].values() for e in ev for h in e[\"hooks\"]]
 assert cmds and all(\"kestrel-checkpoint-hooks\" in c for c in cmds)
 " "$D/tools/session-root-hooks.json"'
+check "the built-in extension's manifest version equals 1.0.<Kestrel G versionCode> (else an updated background.js never reaches existing installs)" 'bash "$D/tools/sync-ext-version.sh" --check'
 check "signing/CERT_SHA256 pins a 64-hex certificate" 'grep -Eq "^[0-9a-f]{64}$" "$D/signing/CERT_SHA256"'
 check "tools/MIRROR_MAIN is on or off" 'grep -Eq "^(on|off)$" "$D/tools/MIRROR_MAIN"'
 check "HANDOFF.md, BRIEF.md, TASKS.md, BUILDLOG.md and CLAUDE.md exist" '[ -f "$D/HANDOFF.md" ] && [ -f "$D/BRIEF.md" ] && [ -f "$D/TASKS.md" ] && [ -f "$D/BUILDLOG.md" ] && [ -f "$D/CLAUDE.md" ]'

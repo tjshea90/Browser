@@ -1,10 +1,11 @@
 {
   "manifest_version": 2,
   "name": "Kestrel Shields",
-  "version": "1.0",
+  "version": "1.0.102",
   "description": "Ad and tracker blocking plus element hiding for Kestrel G, powered by the app's own filter engine (EasyList, EasyPrivacy, uBlock lists).",
   "browser_specific_settings": { "gecko": { "id": "shields@kestrel.local" } },
-  "permissions": ["webRequest", "webRequestBlocking", "<all_urls>", "nativeMessaging", "geckoViewAddons"],
+  "permissions": ["webRequest", "webRequestBlocking", "nativeMessaging", "geckoViewAddons", "http://*/*", "https://*/*", "ws://*/*", "wss://*/*"],
+  "content_security_policy": "script-src 'self'; object-src 'none'",
   "background": { "scripts": ["background.js"] },
   "content_scripts": [
     { "matches": ["http://*/*", "https://*/*"], "js": ["content.js"], "run_at": "document_start", "all_frames": true, "match_about_blank": false }

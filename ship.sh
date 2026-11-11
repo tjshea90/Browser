@@ -34,6 +34,8 @@ if [ -e .git ] && [ -n "$(git status --porcelain 2>/dev/null)" ]; then
 fi
 
 echo "== ship gates ($APP) =="
+# the built-in extension reinstalls only when its manifest version changes: keep it equal to 1.0.<versionCode> (committed with the rest below)
+[ "$APP" = gecko ] && bash tools/sync-ext-version.sh
 
 # ---- the shell tooling self-test (handoff, secret scan, workflow rules) ----
 if [ -f tools/test_handoff.sh ]; then
