@@ -99,11 +99,11 @@ class UpdateLogicTest {
 
     @Test fun storagePlanMatchesWhatTheEmulatorMeasured() {
         val mb = 1L shl 20
-        // Android 10 emulator: 6,094,400 KiB data partition (reserve 624,066,560 B), debug APK 116 MB with 187 MB of libraries and a big dex (about 100 MB of optimised code).
-        // `adb install` (no copy of ours on the disk) passed at 1050 MB free and failed at 1000 MB.
+        // Android 10 emulator: 6,094,400 KiB data partition (reserve 624,066,560 B = 595 MiB), debug APK 116 MiB with 187 MiB of libraries and a big dex (about 100-150 MiB of optimised code).
+        // `adb install` (no copy of ours on the disk) passed at 1050 MiB free and failed at 1000 MiB: with a 120 MiB margin the model puts the line at 1018 MiB.
         val reserve = 624_066_560L
-        val atOneGig = UpdateLogic.storagePlan(116 * mb, 187 * mb, freeBytes = 1000 * mb, reserveBytes = reserve, marginBytes = 100 * mb)
-        val atPass = UpdateLogic.storagePlan(116 * mb, 187 * mb, freeBytes = 1050 * mb, reserveBytes = reserve, marginBytes = 100 * mb)
+        val atOneGig = UpdateLogic.storagePlan(116 * mb, 187 * mb, freeBytes = 1000 * mb, reserveBytes = reserve, marginBytes = 120 * mb)
+        val atPass = UpdateLogic.storagePlan(116 * mb, 187 * mb, freeBytes = 1050 * mb, reserveBytes = reserve, marginBytes = 120 * mb)
         assertFalse(atOneGig.fitsKeeping); assertTrue(atPass.fitsKeeping)
     }
 
