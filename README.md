@@ -88,7 +88,7 @@ file upload, camera/microphone/location prompts (asked every time), full-screen 
    - If *Browser engine* says **`com.google.android.webview`**: install a newer *Android System WebView* APK from a trustworthy mirror such as APKMirror. Pick the **armeabi-v7a (32-bit ARM)** build whose
      minimum is **Android 10** (recent versions list it). Check the file is signed by Google LLC and matches the checksum on the page, then open it to update in place.
    - If it says **`com.android.webview`** (typical for a tablet without Google services): the system will not accept Google's build in its place, so the engine can only change with a firmware update.
-     That is a hard limit of the tablet, not of Kestrel; tell the developer the version shown, because the alternative then is to bundle a different engine (GeckoView) in a separate, much larger build.
+     That is a hard limit of the tablet, not of Kestrel, and it is why **Kestrel G** exists: it bundles Firefox's engine (GeckoView) instead of using the tablet's WebView, so it does not depend on the tablet's engine version at all.
 3. After changing it, fully close Kestrel and reopen it; the About page shows the new version.
 
 ## Known limits (honest)
