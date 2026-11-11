@@ -18,7 +18,8 @@ val geckoVersion = "160.0.20261104181552"
 
 android {
     namespace = "app.kestrel.browser"   // shared sources and resources use app.kestrel.browser.R
-    compileSdk = 36
+    // GeckoView 160 is built against API 37 and its AAR refuses lower; AGP 8.13 only 'recommends' up to 36, hence suppressUnsupportedCompileSdk in gradle.properties.
+    compileSdk { version = release(37) { minorApiLevel = 0 } }
 
     defaultConfig {
         applicationId = "app.kestrel.browser.gecko"  // installs BESIDE the WebView build (app.kestrel.browser)
@@ -61,7 +62,8 @@ android {
     }
 
     packaging {
-        jniLibs { useLegacyPackaging = false } // uncompressed, page-aligned libs: mapped straight from the APK (no second 118 MB copy on disk)
+        // Compressed libs: the APK is ~92 MB instead of ~157 MB to download over the owner's metered hotspot; Android extracts them at install (extra ~135 MB on disk).
+        jniLibs { useLegacyPackaging = true }
         resources {
             excludes += setOf("kotlin/**", "META-INF/*.kotlin_module", "META-INF/*.version", "META-INF/com.android.tools/**", "DebugProbesKt.bin", "META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*")
         }
@@ -82,9 +84,12 @@ kotlin {
 }
 
 configurations.all {
-    // GeckoView declares kotlin-stdlib 2.4.21 but contains no Kotlin; keep our compiler's stdlib.
     exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk7")
     exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk8")
+    resolutionStrategy {
+        // androidx.core 1.19.x (what GeckoView 160 declares) requires AGP 9.1; 1.17.x is API-compatible for GeckoView's use and builds with AGP 8.13.
+        force("androidx.core:core:1.17.0")
+    }
 }
 
 dependencies {
