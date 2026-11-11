@@ -164,7 +164,13 @@ class FetchException(val kind: Kind, message: String?, cause: Throwable? = null)
 }
 
 /** Blocking; called on worker threads. Follows redirects itself (<= 10, never https -> http) and reports the final URL. */
-interface Fetcher { @Throws(FetchException::class) fun open(req: FetchRequest): FetchResponse }
+interface Fetcher {
+    /** > 0: the first request asks for only this many bytes (a Range request) so the reply is bounded; the engine learns the total from Content-Range. 0: plain GET, streamed. */
+    val probeWindow: Long get() = 0L
+    /** > 0: bytes per Range request for this engine (0 = [Config.windowBytes]). Gecko buffers a whole reply in memory, so it asks for smaller windows. */
+    val windowBytes: Long get() = 0L
+    @Throws(FetchException::class) fun open(req: FetchRequest): FetchResponse
+}
 
 class SinkException(val reason: Reason, message: String?, cause: Throwable? = null) : Exception(message, cause)
 
