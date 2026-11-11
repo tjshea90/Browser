@@ -66,8 +66,7 @@ function wantImage(gen) {
       i++;
       if (got < total) return later(0).then(next); // yield between chunks: this thread also serves page loads
       if (got !== total) throw new Error('image length');
-      var next_ = E.create(buf.buffer);
-      engine = next_; engineGen = gen; pullFailures = 0; stats.pulls++; stats.loadMs = Math.round(performance.now() - t0);
+      engine = E.create(buf.buffer); engineGen = gen; pullFailures = 0; stats.pulls++; stats.loadMs = Math.round(performance.now() - t0);
       stats.last = 'image ' + gen + ' ok';
     });
   }
@@ -93,11 +92,14 @@ function flushCounts() {
 }
 
 // ---------------------------------------------------------------- numbers for Diagnostics (at most one small message every 5 s while requests are being checked)
-var statsAt = 0, statsDirty = false;
+var statsDirty = false, statsTimer = 0;
+function markStats() { // lazy timer: nothing is scheduled while no request is being judged (a permanent interval would wake the page on an idle tablet)
+  statsDirty = true;
+  if (!statsTimer) statsTimer = setTimeout(function () { statsTimer = 0; reportStats(false); }, 5000);
+}
 function reportStats(force) {
-  var now = Date.now();
-  if (!force && (!statsDirty || now - statsAt < 5000)) return;
-  statsAt = now; statsDirty = false;
+  if (!force && !statsDirty) return;
+  statsDirty = false;
   send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), lg: stats.legacy, er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, w: stats.last }).catch(function () {});
 }
 
@@ -115,7 +117,7 @@ function legacyCountLater(page) {
   }, 500);
 }
 function legacy(d, page) {
-  stats.legacy++; statsDirty = true;
+  stats.legacy++; markStats();
   var key = d.type + '|' + d.url + '|' + page;
   var hit = verdicts.get(key);
   if (hit !== undefined) {
@@ -154,11 +156,11 @@ function decide(d, page, host, mode) {
       var v = engine.check(d.url, host, E.typeMask(d.type));
       var us = (performance.now() - t0) * 1000;
       stats.checks++; stats.us += us; if (us > stats.maxUs) stats.maxUs = us;
-      statsDirty = true; if (statsAt + 5000 < t0 + performance.timeOrigin) reportStats(false);
+      markStats();
       if ((v & 1) !== 0) { countBlock(page, (v >>> 2) & 3); return { cancel: true }; }
       return {};
     } catch (e) {
-      stats.errors++; stats.last = 'check failed: ' + (e && e.message); statsDirty = true;
+      stats.errors++; stats.last = 'check failed: ' + (e && e.message); markStats();
       if (stats.errors >= 20) { engineOff = true; reportStats(true); }
       return {}; // fail open and loud
     }
