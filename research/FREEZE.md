@@ -97,7 +97,7 @@ Caps: >= 1.5 s between rungs, <= 4 rungs per incident, <= 3 incidents per 5 min,
 - (a) ladder + watchdog logic, and that every rung leaves a painted page (`adb exec-out screencap -p` before / after; a debug flag "pretend no draw" forces the ladder);
 - (b) stall detection (debug broadcast that sleeps the main thread 2.5 s);
 - (c) surface-churn counts per navigation (acceptance: zero GeckoView detaches over 20 navigations after P0 #3);
-- (d) lifecycle: `adb shell input keyevent KEYCODE_HOME`, wait, `adb shell monkey -p app.kestrel.browser.gecko -c android.intent.category.LAUNCHER 1`;
+- (d) lifecycle: `adb shell input keyevent KEYCODE_HOME`, wait, `adb shell monkey -p app.kestrel.browser.gecko -c android.intent.category.LAUNCHER 1` (debug builds add the suffix `.debug`);
 - (e) memory: `adb shell am send-trim-memory app.kestrel.browser.gecko RUNNING_CRITICAL` [S: syntax from the AOSP change]; kill a `:tab` / `:gpu` child (`adb shell kill -9 <pid>`, needs `adb root` on an AOSP image [U]) to exercise `onKill` and GPU-process recovery;
 - (f) hotspot flaps: `adb shell svc wifi disable; sleep 4; adb shell svc wifi enable` (drives `onNetworkChanged -> retry -> attachContent`);
 - (g) `adb shell dumpsys gfxinfo app.kestrel.browser.gecko framestats` (+ `reset`) for jank %, p95 / p99; debug `StrictMode` log; a Perfetto trace (`adb shell perfetto -o /data/misc/perfetto-traces/k.pftrace -t 30s sched freq idle am wm gfx view input binder_driver dalvik res`, then `adb pull`; this category-list form on Android 10 is [U]) read in ui.perfetto.dev.
