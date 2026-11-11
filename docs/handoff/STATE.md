@@ -1,18 +1,21 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** 2026-11-11T00:54:03Z (L1) on `ccr-a57c163e-mtq8js` after 68be041
-- **Summary:** security/correctness fixes #2: redirects classified (C1), https upgrade loop+stale state (C2), address bar shows committed URL + port (S3), long-press allow-list (S13), file chooser content-only (S9), opener survives trim (C3), geolocation FINE+COARSE (C4), immersive flags (C6), history only on success (C7), session restore gate + no credentials in session/history (C8), clear data via throwaway WebView, private wipe/autofill/downloads (S6); core 127 + app tests green
+- **Last checkpoint:** 2026-11-11T01:42:34Z (L1) on `ccr-a57c163e-mtq8js` after 562847e
+- **Summary:** handoff: STATE resume block + review board updated (batches 1-2 done; S7/S8 + release build remain)
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE
 <!-- RESUME:BEGIN -->
-**Phases 0-6 DONE: a complete browser exists and passes `bash scripts/verify.sh full` (core 117 tests + app 51 Robolectric tests + 13 Chromium JS tests + lint + R8 APK ~2.3 MB).**
-**Phase 7 (release) is in progress:** (1) two independent reviews (security a1827fbbb79feb407, correctness a78829a6e36301bae; background subagents, read-only) were launched at 00:04Z —
-if this session was cut off, re-run them (fresh agents, non-anchoring briefs: threat model + lifecycle/threading/updater/navigation) and apply only findings that reproduce (failing test first);
-(2) README + ARCHITECTURE refreshed, CI workflow added (milestone/release/manual only); (3) own finding already fixed + tested: an *unvalidated* Wi-Fi (hotspot failing Android's connectivity check) no longer
-forces stale cache-first loads (`NetworkMonitor.cacheFirst` is OFFLINE-only; "Open saved copy" button; 9 tests in `ConnectivityPolicyTest`, mutation-checked);
-(4) then `bash scripts/verify.sh full` -> `bash scripts/build-apk.sh` -> `dist/kestrel-0.1.0.apk` -> `checkpoint.sh --release 0.1.0` -> send the APK; (5) tell the owner plainly: NEVER RUN ON REAL HARDWARE (no emulator in the sandbox).
+**A complete browser exists and was RUN FOR THE FIRST TIME on an Android 10 x86 emulator (Chromium 74 WebView): it launches, lays out correctly at 600x973@170dpi, loads pages, blocks ads/trackers (shield count works).**
+**Phase 7 (release) is almost done.** Both independent reviews are finished and triaged in `docs/handoff/REVIEW-2026-11-11.md` (board = single source for what is fixed).
+DONE + pushed (core 127 tests, app 80 tests green): S1 intent: crash (reproduced on the emulator: FATAL NumberFormatException), S2 URL-truncation bypass, S3 address bar shows port + committed URL only, S4 poisoned-list guards + canary
+check + retry marker, S5 token-dedupe CPU bound, S6 private-window wipe/autofill/downloads/config-changes, S9, S10, S11, S13, C1 redirect classification, C2 https upgrade loop/stale state, C3, C4, C5, C6, C7, C8, C9 (flush off UI thread, cold-start order).
+Owner facts since first build: Google default search (done), 2 GB RAM, NO Google Play/services (done: wording, SSL hints, README "No Google Play" + "Updating the web engine").
+REMAINING, in order: (1) `bash scripts/verify.sh full` (lint + R8 + 13 Chromium tests + APK audit) -> `bash scripts/build-apk.sh` -> `checkpoint.sh --release 0.1.0 -t "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>" -t "Claude-Session: https://claude.ai/code/session_01UWi8ZytCdyz642NMACyvi9" "..."` -> SendUserFile the APK;
+(2) S7 (hide `__KST_CFG` seed from pages: pass config as IIFE argument; WeakSet instead of `canvas.__kstSkip`; web-tests must stay green) and S8 (downloads: show origin host in the prompt, treat server MIME `application/vnd.android.package-archive` as risky);
+(3) re-test on the emulator (recipe in REVIEW doc; ~5 min boot; the emulator and http.server die when the worker restarts): intent crash page, `10.0.2.2:8000` shows the port, cosmetic hiding of `.adsbygoogle`/`#ad-banner` was NOT observed on Chromium 74 -> investigate;
+(4) final message to the owner: honest about what was and was not run (emulator = Chromium 74 AOSP image, software mode, local pages only; never on the real tablet), ask for the tablet's WebView package+version (About page) and say the simple-workflow plugin's Bash guard is the only plugin that gets in the way.
 Build/verify: `./gradlew :core:test :app:testDebugUnitTest`, `bash scripts/verify.sh quick|full`, `bash scripts/build-apk.sh`, `cd web-tests && npm test`.
 <!-- RESUME:END -->
 
@@ -29,8 +32,8 @@ Build/verify: `./gradlew :core:test :app:testDebugUnitTest`, `bash scripts/verif
 | 7 | Release: independent review, fixes, docs, signed APK in `dist/` | IN PROGRESS |
 
 ## IN PROGRESS
-- Phase 7: waiting for the two review agents' reports (see RESUME HERE); then triage -> failing test -> fix -> `verify.sh full` -> checkpoint -> build APK.
-- Candidate (unconfirmed, from own reading): `BrowserDb` is a new `SQLiteOpenHelper` per Activity instance and never closed (CloseGuard warnings in tests) -> make it a process singleton.
+- Phase 7: release build + remaining S7/S8 (see RESUME HERE).
+- Low-priority candidate: `BrowserDb` is a new `SQLiteOpenHelper` per Activity instance and never closed (CloseGuard warnings in tests) -> make it a process singleton.
 
 ## Done (with evidence)
 - Phase 7 (partial): README rewritten (install, features, privacy, limits, signing), `.github/workflows/android.yml` (runs only on milestone/release commits + manual), ARCHITECTURE §4/§7 corrected.
