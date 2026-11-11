@@ -22,3 +22,4 @@
 - 2026-11-11T01:42:34Z [L1] handoff: STATE resume block + review board updated (batches 1-2 done; S7/S8 + release build remain)
 - 2026-11-11T01:44:17Z [L1] dist: kestrel-0.1.0 APK candidate (verify full PASS: core 127, app 80, 13 Chromium, lint, R8); S7/S8 still to do
 - 2026-11-11T01:48:03Z [L3] Kestrel 0.1.0: Google default search, no-Google-services adaptations, hotspot fixes, 22 review findings fixed (intent crash, filter bypasses, privacy), verify full PASS (core 127, app 81, Chromium 16), first emulator run
+- 2026-11-11T02:01:35Z [L1] STATE: engine decision after the first tablet run (WebView 74 cannot run claude.ai; GeckoView 160 verified downloadable, 89 MB AAR); Gecko flavor plan M1-M4

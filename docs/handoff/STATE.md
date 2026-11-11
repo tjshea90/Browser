@@ -1,8 +1,8 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** 2026-11-11T01:48:03Z (L3) on `ccr-a57c163e-mtq8js` after 6888b3c
-- **Summary:** Kestrel 0.1.0: Google default search, no-Google-services adaptations, hotspot fixes, 22 review findings fixed (intent crash, filter bypasses, privacy), verify full PASS (core 127, app 81, Chromium 16), first emulator run
+- **Last checkpoint:** 2026-11-11T02:01:35Z (L1) on `ccr-a57c163e-mtq8js` after f459875
+- **Summary:** STATE: engine decision after the first tablet run (WebView 74 cannot run claude.ai; GeckoView 160 verified downloadable, 89 MB AAR); Gecko flavor plan M1-M4
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE
@@ -68,6 +68,15 @@ Build/verify: `./gradlew :core:test :app:testDebugUnitTest`, `bash scripts/verif
   add_repo / the web-fetch agent / sdkmanager+gradle instead, and write such text with the Edit tool.
 - BIGGEST UNKNOWN: the tablet's WebView package+version (About page shows it). If it is `com.android.webview` and old (<100) it cannot be updated by sideloading Google's APK
   (provider allow-list + signature) -> fallback plan = a GeckoView-based build (MPL-2.0, ~70 MB, needs maven.mozilla.org access; uBlock Origin XPI could ride along as a built-in WebExtension). Decide only after the owner reports the version.
+
+## Engine decision after first tablet run (2026-11-11, owner screenshots) - authoritative
+- Tablet About page: `com.android.webview 74.0.3729.186`, RAM 1.9 GB, low-RAM true. claude.ai/login shows "This page can't be shown because your browser or device software is out of date" -> Chromium 74 cannot run modern sites; AOSP provider allow-list means it cannot be replaced.
+- Decision: build a GeckoView-based flavor ("Kestrel-G"). Verified from this sandbox: `org.mozilla.geckoview:geckoview-armeabi-v7a:160.0.20261104181552@aar` downloads via Gradle (repo https://maven.mozilla.org/maven2/): AAR 89 MB (libxul.so 118 MB uncompressed, ~155 MB total),
+  minSdk 26, permissions INTERNET/ACCESS_NETWORK_STATE/MODIFY_AUDIO_SETTINGS/WAKE_LOCK. Transitive deps include kotlin-stdlib 2.4.21 (our compiler is 2.3.10 -> force stdlib), androidx.media3-common 1.11.1, guava. Maven Central answered 429 once (retry).
+- APK ~95 MB: do NOT commit it to git (100 MB push limit); deliver with SendUserFile and keep `dist/*gecko*` ignored. Keep the WebView flavor (v0.1.0) as the light fallback.
+- Plan: M1 minimal Gecko browser (our toolbar/NTP/error UI, Google search, HTTPS-only, ETP strict, fingerprint protection, cookie isolation) -> M2 tabs/session/private (GeckoSession private mode)/prompts/permissions/downloads -> M3 our filter engine as a built-in WebExtension via native messaging
+  (webRequest blocking + content-script cosmetic CSS at document_start) -> M4 polish/tests/docs. Smoke test only on the slow x86 emulator (geckoview-x86) - say so honestly.
+- Owner asked which Claude Code plugins to disable: answered in chat (simple-workflow, postman, failing MCP plugins, and ~40 irrelevant plugins that bloat every turn).
 
 ## Facts (Phase 0)
 - Device (hardware_.txt, kept in `docs/hardware/`): MT8168B, Mali-G52 MC2, Android 10 Go API 29, patch 2021-07-05, kernel 4.14.141,
