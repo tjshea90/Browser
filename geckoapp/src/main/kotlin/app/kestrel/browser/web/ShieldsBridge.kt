@@ -26,21 +26,31 @@ class ShieldsBridge(
     private val blockedOnTab: (Tab) -> Unit,
 ) : WebExtension.MessageDelegate {
 
+    // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
+    // So onMessage only hands the message to ONE worker and returns a GeckoResult at once; the worker parses, decides and completes it (research/FREEZE.md 4.2).
+    private val worker = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "kestrel-shield").apply { isDaemon = true; priority = Thread.NORM_PRIORITY - 1 } }
+
     override fun onMessage(nativeApp: String, message: Any, sender: WebExtension.MessageSender): GeckoResult<Any>? {
         // Only OUR extension's background page may ask (content scripts relay through it with runtime.sendMessage; web pages cannot reach native messaging at all).
         if (nativeApp != "kestrel" || sender.webExtension.id != EXTENSION_ID || sender.environmentType != WebExtension.MessageSender.ENV_TYPE_EXTENSION) return null
-        val m = parse(message) ?: return null
-        return try {
-            when (m.optString("k")) {
-                "req" -> GeckoResult.fromValue(if (shouldBlock(m.optString("u"), m.optString("t"), m.optString("p"))) "1" else "0")
-                "cnt" -> { countBlocked(m.optString("p"), Category.PRIVACY_INDEX); GeckoResult.fromValue("") }
-                "css" -> GeckoResult.fromValue(cosmeticCss(m.optString("h")))
-                else -> null
+        val result = GeckoResult<Any>()
+        val raw = message
+        worker.execute {
+            val reply: Any = try {
+                val m = parse(raw)
+                if (m == null) "" else when (m.optString("k")) {
+                    "req" -> if (shouldBlock(m.optString("u"), m.optString("t"), m.optString("p"))) "1" else "0"
+                    "cnt" -> { countBlocked(m.optString("p"), Category.PRIVACY_INDEX); "" }
+                    "css" -> cosmeticCss(m.optString("h"))
+                    else -> ""
+                }
+            } catch (e: Exception) {
+                Log.w(Io.TAG, "shields bridge", e)
+                ""
             }
-        } catch (e: Exception) {
-            Log.w(Io.TAG, "shields bridge", e)
-            GeckoResult.fromValue("")
+            result.complete(reply)
         }
+        return result
     }
 
     /** The extension sends JSON text; tolerate the engine handing it over already parsed. */

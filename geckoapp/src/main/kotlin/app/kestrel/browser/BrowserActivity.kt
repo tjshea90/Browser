@@ -602,8 +602,11 @@ open class BrowserActivity : Activity(), ToolbarListener {
         }
     }
 
+    private val endTypingMode = Runnable { if (!toolbar.urlField.hasFocus()) setUrlTypingMode(false) }
+
     override fun onUrlFocus(focused: Boolean) {
-        setUrlTypingMode(focused)
+        Io.main.removeCallbacks(endTypingMode)
+        if (focused) setUrlTypingMode(true) else Io.main.postDelayed(endTypingMode, 700) // keep adjustNothing while the keyboard is still closing
         if (focused) {
             toolbar.urlField.setText(toolbar.fullUrlForEditing(current))
             toolbar.urlField.selectAll()

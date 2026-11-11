@@ -33,7 +33,7 @@ object Engine {
         started = true
         val app = ctx.applicationContext
         Thread({
-            try { load(app) } catch (t: Throwable) { Log.w(Io.TAG, "engine load failed", t) } finally { latch.countDown() }
+            try { load(app); warmCosmetics() } catch (t: Throwable) { Log.w(Io.TAG, "engine load failed", t) } finally { latch.countDown() }
         }, "kestrel-engine").apply { priority = Thread.NORM_PRIORITY - 2; isDaemon = true }.start()
     }
 
@@ -59,6 +59,11 @@ object Engine {
         sourceDescription = "built-in minimal list"
     }
 
+    /** The element-hiding tables are built lazily on first use (about 2 s on the emulator): do it here, off every UI/request thread, so the first page does not pay for it. */
+    private fun warmCosmetics() {
+        try { current?.cosmeticCss("warmup.invalid") } catch (t: Throwable) { Log.w(Io.TAG, "cosmetic warm-up failed", t) }
+    }
+
     private fun seedSet(): FilterSet = seed ?: SeedLists.build().also { seed = it }
 
     /** The active filter set; blocks the calling (WebView IO) thread for at most [WAIT_MS] during cold start. */
@@ -73,6 +78,7 @@ object Engine {
 
     /** Called by the updater after atomically installing a new file. */
     fun swap(fs: FilterSet, description: String) {
+        try { fs.cosmeticCss("warmup.invalid") } catch (t: Throwable) { /* warm-up only */ }
         current = fs
         sourceDescription = description
     }
