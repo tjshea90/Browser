@@ -1,15 +1,18 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** 2026-11-11T00:15:44Z (L1) on `ccr-a57c163e-mtq8js` after 5e75d12
-- **Summary:** hotspot: unvalidated Wi-Fi no longer forces stale cache-first loads; Open saved copy action; https fallback only suppressed when offline; 9 new tests (mutation-checked); docs+CI trigger limited to milestones
+- **Last checkpoint:** 2026-11-11T00:16:50Z (L1) on `ccr-a57c163e-mtq8js` after c33f05a
+- **Summary:** STATE: phase 7 progress, review agents pending, resume instructions
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE
 <!-- RESUME:BEGIN -->
 **Phases 0-6 DONE: a complete browser exists and passes `bash scripts/verify.sh full` (core 117 tests + app 51 Robolectric tests + 13 Chromium JS tests + lint + R8 APK ~2.3 MB).**
-**Phase 7 (release) is in progress:** (1) independent security + code reviews were requested; apply their verified findings, (2) refresh README/ARCHITECTURE/STATE,
-(3) `bash scripts/build-apk.sh` -> `dist/kestrel-<version>.apk`, (4) final L3 checkpoint, (5) tell the owner plainly: NEVER RUN ON REAL HARDWARE (no emulator in the sandbox).
+**Phase 7 (release) is in progress:** (1) two independent reviews (security a1827fbbb79feb407, correctness a78829a6e36301bae; background subagents, read-only) were launched at 00:04Z —
+if this session was cut off, re-run them (fresh agents, non-anchoring briefs: threat model + lifecycle/threading/updater/navigation) and apply only findings that reproduce (failing test first);
+(2) README + ARCHITECTURE refreshed, CI workflow added (milestone/release/manual only); (3) own finding already fixed + tested: an *unvalidated* Wi-Fi (hotspot failing Android's connectivity check) no longer
+forces stale cache-first loads (`NetworkMonitor.cacheFirst` is OFFLINE-only; "Open saved copy" button; 9 tests in `ConnectivityPolicyTest`, mutation-checked);
+(4) then `bash scripts/verify.sh full` -> `bash scripts/build-apk.sh` -> `dist/kestrel-0.1.0.apk` -> `checkpoint.sh --release 0.1.0` -> send the APK; (5) tell the owner plainly: NEVER RUN ON REAL HARDWARE (no emulator in the sandbox).
 Build/verify: `./gradlew :core:test :app:testDebugUnitTest`, `bash scripts/verify.sh quick|full`, `bash scripts/build-apk.sh`, `cd web-tests && npm test`.
 <!-- RESUME:END -->
 
@@ -26,9 +29,13 @@ Build/verify: `./gradlew :core:test :app:testDebugUnitTest`, `bash scripts/verif
 | 7 | Release: independent review, fixes, docs, signed APK in `dist/` | IN PROGRESS |
 
 ## IN PROGRESS
-- Phase 7: independent security review + code review (fresh agents, no anchoring); then apply VERIFIED findings only (reproduce first, add a test), refresh docs, build the APK.
+- Phase 7: waiting for the two review agents' reports (see RESUME HERE); then triage -> failing test -> fix -> `verify.sh full` -> checkpoint -> build APK.
+- Candidate (unconfirmed, from own reading): `BrowserDb` is a new `SQLiteOpenHelper` per Activity instance and never closed (CloseGuard warnings in tests) -> make it a process singleton.
 
 ## Done (with evidence)
+- Phase 7 (partial): README rewritten (install, features, privacy, limits, signing), `.github/workflows/android.yml` (runs only on milestone/release commits + manual), ARCHITECTURE §4/§7 corrected.
+  Hotspot fix: `NetworkMonitor.State.NO_INTERNET` (= not *validated*, e.g. carrier blocks Google's connectivity check) was switching WebView to `LOAD_CACHE_ELSE_NETWORK` (stale pages, even on reload) and
+  disabling the HTTPS-fallback screen; now only `OFFLINE` (no INTERNET capability) does; NO_INTERNET shows honest wording + "Open saved copy" (`LOAD_CACHE_ONLY`, one navigation). App tests 60/60.
 - Phase 3 (core, 114 tests green): url/ (UrlParts, NetHosts, Omnibox, HttpsPolicy, TrackingParams, RedirectUnwrapper, UserAgents), filter/ (Hash, RequestType,
   Psl, RuleParser, CosmeticSelectors, CosmeticIndex, FilterSet, FilterSetBuilder, FilterSetCodec, SeedLists), shield/ (ShieldSettings, SiteShieldStore, DataSaver),
   session/ (SessionCodec). Evidence: 60k-case differential test vs a regex oracle; 7/7 deliberate matcher mutants killed (script: see JOURNAL);
