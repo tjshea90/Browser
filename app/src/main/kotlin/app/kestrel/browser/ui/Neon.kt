@@ -1,6 +1,5 @@
 package app.kestrel.browser.ui
 
-import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BlurMaskFilter
@@ -41,13 +40,16 @@ object Neon {
     const val OFF = 0
     const val STATIC = 1
     const val PULSE = 2
-    /** No touch for this long: the glows settle to a steady glow until the next touch. */
-    const val IDLE_MS = 25_000L
+    /** No touch for this long, with a page in front: the glows settle to a steady glow until the next touch (never on Home, the tab grid or a sheet: see [canRest]). */
+    const val IDLE_MS = 60_000L
 
     /** 0 = no glow at all, 1 = steady glow, 2 = subtle pulse (default). Set from Settings. */
     @JvmField @Volatile var mode = PULSE
 
-    /** One breath every 4.2 s, stepped every 100 ms (10 Hz). */
+    /** Set by the activity: false while Home / the tab grid / a sheet is in front. There nothing else happens on screen, so the glow keeps breathing. */
+    @JvmField var canRest: () -> Boolean = { true }
+
+    /** One breath every 3.4 s, stepped every 100 ms (10 Hz). */
     private const val TICK_MS = 100L
 
     private class Pulser(val v: GlowView, val lo: Float, val hi: Float, val periodMs: Long) { var running = false }
@@ -80,7 +82,7 @@ object Neon {
         restPosted = false
         val left = IDLE_MS - (SystemClock.uptimeMillis() - lastTouch)
         if (away) return@Runnable
-        if (left > 0) postRestCheck(left) else if (!resting) { resting = true; applyAll() }
+        if (left > 0) postRestCheck(left) else if (!resting) { if (canRest()) { resting = true; applyAll() } else postRestCheck(IDLE_MS) }
     }
 
     /** Make [v] breathe between alpha [lo] and [hi]. Attach once per view; it follows the view's attach/detach/visibility by itself. */
@@ -124,7 +126,19 @@ object Neon {
 
     private fun postRestCheck(delay: Long) { restPosted = true; handler.postDelayed(restCheck, delay) }
     private fun applyAll() { for (p in pulsers.toList()) apply(p, p.v.isShown) }
-    private fun animated(): Boolean = mode == PULSE && !busy && !touching && !away && !resting && !powerSave && ValueAnimator.areAnimatorsEnabled()
+    // NOT gated on the system's animation scale (Developer options): the owner switches system animations off and still asked for this pulse; Settings > Neon glow is the switch.
+    private fun animated(): Boolean = mode == PULSE && !busy && !touching && !away && !resting && !powerSave
+
+    /** One line for Diagnostics / Settings: is the glow breathing, and if not, why. */
+    fun status(): String {
+        if (mode == OFF) return "off (Settings)"
+        if (mode == STATIC) return "steady (Settings)"
+        val why = ArrayList<String>()
+        if (busy) why.add("typing or loading"); if (touching) why.add("finger on screen"); if (away) why.add("app not in front")
+        if (resting) why.add("idle rest"); if (powerSave) why.add("battery saver")
+        val running = pulsers.count { it.running }
+        return if (why.isEmpty()) "pulsing ($running glows running)" else "holding still: " + why.joinToString(", ")
+    }
 
     private fun apply(p: Pulser, visible: Boolean) {
         when {
@@ -159,25 +173,31 @@ class GlowView(ctx: Context) : View(ctx) {
 }
 
 /**
- * The bloom around a chamfered edge: four strokes, wide and faint to narrow and strong, inside the bounds (the shape is inset by [glowPx]).
+ * The neon around a chamfered edge: three bloom strokes, wide and faint to narrow and strong, inside the bounds (the shape is inset by [glowPx]), and - when [coreColor]
+ * is given - a crisp 1.6 dp ring just OUTSIDE the shape (the neon tube itself: when the view's alpha breathes, this is the line the eye follows).
  * Built from plain strokes - no blur, no RenderEffect - so it costs one cheap draw list.
  */
-class NeonGlowDrawable(private val color: Int, private val cutPx: Float, private val corners: Int, private val glowPx: Float) : Drawable() {
+class NeonGlowDrawable(private val color: Int, private val cutPx: Float, private val corners: Int, private val glowPx: Float, private val coreColor: Int = 0, private val coreWidthPx: Float = 0f) : Drawable() {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeJoin = Paint.Join.ROUND }
     private val path = Path()
+    private val corePath = Path()
     private val box = RectF()
+    private val coreBox = RectF()
 
     override fun onBoundsChange(b: Rect) {
         box.set(b.left + glowPx, b.top + glowPx, b.right - glowPx, b.bottom - glowPx)
         ChamferDrawable.path(box, cutPx, corners, path)
+        val d = coreWidthPx * 0.5f
+        coreBox.set(box.left - d, box.top - d, box.right + d, box.bottom + d)
+        ChamferDrawable.path(coreBox, cutPx + d * 0.42f, corners, corePath)
     }
 
     override fun draw(c: Canvas) {
         val rgb = color and 0x00FFFFFF
-        paint.color = (0x0E shl 24) or rgb; paint.strokeWidth = glowPx * 2f; c.drawPath(path, paint)
-        paint.color = (0x1A shl 24) or rgb; paint.strokeWidth = glowPx * 1.35f; c.drawPath(path, paint)
-        paint.color = (0x30 shl 24) or rgb; paint.strokeWidth = glowPx * 0.8f; c.drawPath(path, paint)
-        paint.color = (0x66 shl 24) or rgb; paint.strokeWidth = glowPx * 0.38f; c.drawPath(path, paint)
+        paint.color = (0x18 shl 24) or rgb; paint.strokeWidth = glowPx * 2f; c.drawPath(path, paint)
+        paint.color = (0x2C shl 24) or rgb; paint.strokeWidth = glowPx * 1.3f; c.drawPath(path, paint)
+        paint.color = (0x50 shl 24) or rgb; paint.strokeWidth = glowPx * 0.7f; c.drawPath(path, paint)
+        if (coreColor != 0 && coreWidthPx > 0f) { paint.color = (0xF0 shl 24) or (coreColor and 0x00FFFFFF); paint.strokeWidth = coreWidthPx; c.drawPath(corePath, paint) }
     }
 
     override fun setAlpha(alpha: Int) { paint.alpha = alpha }
@@ -212,7 +232,7 @@ class NeonBar(ctx: Context, private var accent: Int, private var hi: Int) : Fram
         val rgb = accent and 0x00FFFFFF
         halo.background = GradientDrawable().apply {
             orientation = GradientDrawable.Orientation.TOP_BOTTOM
-            setColors(intArrayOf(rgb, rgb or 0x10000000, rgb or 0x3C000000), floatArrayOf(0f, 0.55f, 1f)) // quiet far from the line, brightest at it
+            setColors(intArrayOf(rgb, rgb or 0x24000000, rgb or 0x80000000.toInt()), floatArrayOf(0f, 0.55f, 1f)) // quiet far from the line, brightest at it
         }
     }
 
