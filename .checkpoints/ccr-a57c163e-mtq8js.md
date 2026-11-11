@@ -1,13 +1,13 @@
-# CHECKPOINT 209 — read me first, then TASKS.md
+# CHECKPOINT 214 — read me first, then TASKS.md
 
-**Written:** 2026-11-11T04:19:38Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `d3e0267` (this checkpoint is the commit after it)
+**Written:** 2026-11-11T04:22:08Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `9f08306` (this checkpoint is the commit after it)
 
 ## Just done
-A3 evidence layer: core RingLog (+tests), app Health (watchdog, frame jank, report), DiagnosticsView, KestrelGeckoView timeline hooks, menu items Refresh screen + Diagnostics, onKill/onCrash/trim/focus logged. Both builds compile, core tests green.
+A2/A4 part: gecko-prefs.txt -> YAML config (AV1 off, memory/cache budget, no animations, push/notifications off, WebRTC LAN leak off) + check-gecko-prefs.sh (18/18 names exist in GeckoView 160); GeckoEngine pins (enterprise roots off, LNA, FPP, CT, PQ, fetchpriority), runtime created after first frame + warmUp; bridge sender check; manifest CSP + host perms + version 1.0.<code>; geckoapp 0.2.0-alpha3 (102) in progress.
 
 ## Do this next
-Apply R4 snippets (GeckoEngine pins, bridge sender check, manifest CSP) and R3 prefs when GECKO_SPEED agent finishes; emulator smoke test; ship alpha3 (bump geckoapp versionCode 102 / 0.2.0-alpha3, manifest version via ship).
+Build x86_64 debug (-PgeckoAbi=x86_64), boot AVD kestrel29x64 (scratchpad emu.sh), smoke test: launch, page loads, tabs, typing, Diagnostics screen + Refresh screen, ads blocked; screenshots. Then add check-gecko-prefs.sh to android.yml build-gecko job, ship alpha3.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ Apply R4 snippets (GeckoEngine pins, bridge sender check, manifest CSP) and R3 p
 
 ## Last ten checkpoints
 ```
+  1739d76 ckpt 209: A3 evidence layer: core RingLog (+tests), app Health (watchdog, frame jank, re
   9c46642 ckpt 175: A3 P0 part 1 (Kestrel G): GeckoView attached ONCE (ntp/error as overlays, setS
   21706f6 ckpt 119: A1 part 1: native UI animations off - instant pressed-state overlay instead of
   3cd7e40 ckpt 117: M1-M2 done: tools/sync.sh (auto-merge other sessions), per-branch cards .check
@@ -26,5 +27,5 @@ Apply R4 snippets (GeckoEngine pins, bridge sender check, manifest CSP) and R3 p
   d41eb73 ckpt 94: Ported the owner's save system (Launcher/Portfolio) into Browser: tools/{ckpt,a
 ```
 
-(33 automatic checkpoint(s) since the last deliberate one — the
+(4 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
