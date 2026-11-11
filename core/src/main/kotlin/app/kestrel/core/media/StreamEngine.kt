@@ -1,0 +1,729 @@
+package app.kestrel.core.media
+
+import app.kestrel.core.download.Action
+import app.kestrel.core.download.Clock
+import app.kestrel.core.download.Config
+import app.kestrel.core.download.DEST_PUBLIC
+import app.kestrel.core.download.DlState
+import app.kestrel.core.download.DownloadView
+import app.kestrel.core.download.FetchException
+import app.kestrel.core.download.FetchRequest
+import app.kestrel.core.download.FetchResponse
+import app.kestrel.core.download.Fetcher
+import app.kestrel.core.download.FileNames
+import app.kestrel.core.download.Meter
+import app.kestrel.core.download.NetGate
+import app.kestrel.core.download.Reason
+import app.kestrel.core.download.Sink
+import app.kestrel.core.download.SinkException
+import app.kestrel.core.download.SinkFactory
+import app.kestrel.core.download.Spawner
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.IOException
+import java.util.BitSet
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.locks.ReentrantLock
+import javax.crypto.Cipher
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.SecretKeySpec
+
+/** What the caller hands to [StreamEngine.enqueue]: one HLS media playlist (the quality the user picked) and how to save it. */
+class StreamSource(
+    val playlistUrl: String,
+    /** The playlist text when the caller has just read it (saves a request); null = the engine fetches it. */
+    val playlistText: String?,
+    val pageUrl: String?,
+    /** File name without extension ("Page title - 720p"); the extension comes from the stream's container. */
+    val nameStem: String,
+    val headers: Map<String, String> = emptyMap(),
+    val fetcher: Int = 0,
+    val priv: Boolean = false,
+    val meteredOk: Boolean = false,
+    val destKind: Int = DEST_PUBLIC,
+    /** A size guess for the progress bar before the first segments arrive (bit rate x length), -1 = none. */
+    val estimateBytes: Long = -1,
+)
+
+/** One stream download as stored (everything needed to carry on after the app was killed: the playlist text is kept, so the segment list is the same on resume). */
+class StreamRec(@JvmField val id: Long) {
+    @JvmField var state = DlState.QUEUED
+    @JvmField var reason = Reason.NONE
+    @JvmField var detail = 0
+    @JvmField var url = ""
+    @JvmField var playlistText: String? = null
+    @JvmField var pageUrl: String? = null
+    @JvmField var headers: Map<String, String> = emptyMap()
+    @JvmField var fetcher = 0
+    @JvmField var priv = false
+    @JvmField var meteredOk = false
+    @JvmField var nameStem = ""
+    @JvmField var name = ""
+    @JvmField var mime: String? = null
+    @JvmField var destKind = DEST_PUBLIC
+    @JvmField var destUri: String? = null
+    @JvmField var estimate = -1L
+    /** Bytes of the output written (and flushed) so far, and the index of the next segment to write. */
+    @JvmField var appended = 0L
+    @JvmField var next = 0
+    @JvmField var initDone = false
+    @JvmField var total = -1L
+    @JvmField var created = 0L
+    @JvmField var updated = 0L
+    @JvmField var finished = 0L
+
+    fun snapshot(): StreamRec {
+        val r = StreamRec(id)
+        r.state = state; r.reason = reason; r.detail = detail; r.url = url; r.playlistText = playlistText; r.pageUrl = pageUrl; r.headers = headers; r.fetcher = fetcher; r.priv = priv
+        r.meteredOk = meteredOk; r.nameStem = nameStem; r.name = name; r.mime = mime; r.destKind = destKind; r.destUri = destUri; r.estimate = estimate; r.appended = appended
+        r.next = next; r.initDone = initDone; r.total = total; r.created = created; r.updated = updated; r.finished = finished
+        return r
+    }
+}
+
+/** Where job records and staged segments live. The Android layer keeps them in the app's own folder; tests use a temp folder. */
+interface StreamStore {
+    fun loadAll(): List<StreamRec>
+    fun save(r: StreamRec)
+    fun delete(id: Long)
+    /** The folder for this job's staged segments (created on demand). */
+    fun dir(id: Long): File
+}
+
+/**
+ * Downloads a segmented stream (HLS) into ONE file: several segments are fetched at once into the app's staging folder, then appended to the output strictly in playlist order (decrypting AES-128
+ * on the way), so the final file is the stream, whole. Pause / resume / kill-and-resume work at segment granularity: a finished segment is never fetched twice, a half-fetched one starts over.
+ * Same ports, states and notification path as the single-file [app.kestrel.core.download.Engine] (it shows in the same Downloads list). Design: research/VIDEO_DOWNLOADER.md sections 4 and 7.
+ *
+ * Threads: commands run on [control]; each running job has one supervisor thread (plan, checkpoints, stall watchdog, finish) and up to [Config.maxConnsPerDownload] fetch workers.
+ */
+class StreamEngine(
+    private val fetchers: (Int) -> Fetcher?,
+    private val sinks: SinkFactory,
+    private val store: StreamStore,
+    private val net: NetGate,
+    private val control: Executor,
+    private val clock: Clock = Clock.System,
+    private val cfg: Config = Config(),
+    private val spawner: Spawner = Spawner { name, task -> Thread(task, name).also { it.isDaemon = true; it.start() } },
+    /** The first id handed out (the Android layer keeps these apart from the single-file engine's). */
+    private val idBase: Long = 1_000_000_000L,
+) {
+    interface Listener { fun onChanged(id: Long) }
+
+    private class Stopped : RuntimeException(null, null, false, false)
+    private class Failed(val reason: Reason, val detail: Int = 0) : RuntimeException(null, null, false, false)
+
+    private inner class Job(val rec: StreamRec) {
+        @Volatile var stop = false
+        @Volatile var stopState: DlState? = null
+        @Volatile var failure: Failed? = null
+        var media: Hls.Media? = null
+        val staged = BitSet()
+        val claimed = BitSet()
+        var stagedBytes = 0L
+        var stagedCount = 0
+        val inflight = AtomicLong()
+        var written = 0L
+        var sink: Sink? = null
+        val meter = Meter()
+        var alive = 0
+        val responses = CopyOnWriteArrayList<FetchResponse>()
+        val drain = ReentrantLock()
+        val keys = HashMap<Int, ByteArray>()
+        @Volatile var lastBytesAt = 0L
+        var lastCkpt = 0L
+        var running = false             // a supervisor thread exists for this job
+        var restartAfterStop = false
+    }
+
+    private val lock = Any()
+    private val jobs = LinkedHashMap<Long, Job>()
+    private val nextId = AtomicLong(idBase)
+    private val nextPrivId = AtomicLong(-idBase)
+    private val listeners = CopyOnWriteArrayList<Listener>()
+    private val rnd = java.util.Random()
+
+    fun addListener(l: Listener) { listeners.add(l) }
+    private fun changed(id: Long) { for (l in listeners) try { l.onChanged(id) } catch (e: Exception) { /* a listener must not break the engine */ } }
+
+    fun owns(id: Long): Boolean = id >= idBase || id <= -idBase
+
+    // ================================================================================================ public API
+
+    /** Load what the last run left behind (call once, before anything else). Interrupted jobs come back PAUSED_SYSTEM: never started by themselves. */
+    fun restore() {
+        val recs = store.loadAll()
+        synchronized(lock) {
+            var max = idBase - 1
+            for (r in recs) {
+                if (r.id > max) max = r.id
+                if (r.state == DlState.CANCELED) { store.delete(r.id); continue }
+                if (!r.state.terminal && r.state != DlState.PAUSED_USER) r.state = DlState.PAUSED_SYSTEM
+                jobs[r.id] = Job(r)
+            }
+            nextId.set(max + 1)
+        }
+    }
+
+    fun enqueue(s: StreamSource): Long {
+        val id = if (s.priv) nextPrivId.getAndDecrement() else nextId.getAndIncrement()
+        control.execute {
+            val r = StreamRec(id)
+            r.url = s.playlistUrl; r.playlistText = s.playlistText; r.pageUrl = s.pageUrl; r.headers = s.headers; r.fetcher = s.fetcher; r.priv = s.priv; r.meteredOk = s.meteredOk
+            r.nameStem = FileNames.sanitize(s.nameStem.ifBlank { "video" }); r.name = r.nameStem; r.destKind = s.destKind; r.estimate = s.estimateBytes
+            r.created = clock.now(); r.updated = r.created
+            if (!(s.playlistUrl.startsWith("http://", true) || s.playlistUrl.startsWith("https://", true))) { r.state = DlState.FAILED; r.reason = Reason.BAD_URL; r.finished = r.created }
+            persist(r)
+            synchronized(lock) { jobs[id] = Job(r) }
+            changed(id)
+            startQueued()
+        }
+        return id
+    }
+
+    fun pause(id: Long) = control.execute {
+        val job = get(id) ?: return@execute
+        val st = synchronized(lock) { job.rec.state }
+        when {
+            st == DlState.QUEUED -> { synchronized(lock) { job.rec.state = DlState.PAUSED_USER }; persist(job.rec); changed(id) }
+            st.active || st == DlState.WAITING_NETWORK -> requestStop(job, DlState.PAUSED_USER)
+        }
+    }
+
+    fun resume(id: Long) = control.execute {
+        val job = get(id) ?: return@execute
+        val st = synchronized(lock) { job.rec.state }
+        if (st == DlState.PAUSED_USER || st == DlState.PAUSED_SYSTEM || st == DlState.WAITING_NETWORK || st == DlState.FAILED) requeue(job, wipe = false)
+    }
+
+    /** Start again from nothing (a failed or stale job): staged segments and the partial output go. */
+    fun restart(id: Long) = control.execute { get(id)?.let { requeue(it, wipe = true) } }
+
+    fun cancel(id: Long) = control.execute {
+        val job = get(id) ?: return@execute
+        val st = synchronized(lock) { job.rec.state }
+        if (st.terminal && st != DlState.CANCELED) return@execute
+        if (synchronized(lock) { job.running }) requestStop(job, DlState.CANCELED) else finishCancel(job)
+    }
+
+    fun remove(id: Long, deleteFile: Boolean) = control.execute {
+        val job = get(id) ?: return@execute
+        val rec = job.rec
+        val st = synchronized(lock) { rec.state }
+        if (!st.terminal && st != DlState.PAUSED_USER && st != DlState.PAUSED_SYSTEM) return@execute
+        val uri = synchronized(lock) { rec.destUri }
+        if (uri != null && (deleteFile || st != DlState.COMPLETED)) try { sinks.delete(uri) } catch (e: Exception) { /* already gone */ }
+        wipeStaging(job)
+        synchronized(lock) { jobs.remove(rec.id) }
+        if (!rec.priv) store.delete(rec.id)
+        changed(rec.id)
+    }
+
+    fun clearFinished() = control.execute {
+        for (j in snapshotJobs()) { val st = synchronized(lock) { j.rec.state }; if (st == DlState.COMPLETED || st == DlState.FAILED || st == DlState.CANCELED) { wipeStaging(j); synchronized(lock) { jobs.remove(j.rec.id) }; if (!j.rec.priv) store.delete(j.rec.id); changed(j.rec.id) } }
+    }
+
+    fun pauseAll() = control.execute { for (j in snapshotJobs()) if (synchronized(lock) { j.rec.state.active }) requestStop(j, DlState.PAUSED_USER) }
+    fun resumeAll() = control.execute { for (j in snapshotJobs()) if (synchronized(lock) { j.rec.state.let { it == DlState.PAUSED_USER || it == DlState.PAUSED_SYSTEM || it == DlState.WAITING_NETWORK } }) requeue(j, wipe = false) }
+    fun pauseAllSystem() = control.execute { for (j in snapshotJobs()) if (synchronized(lock) { j.rec.state.active }) requestStop(j, DlState.PAUSED_SYSTEM) }
+
+    /** The network changed ([NetGate.online] has the new value). */
+    fun onNetwork() = control.execute {
+        for (j in snapshotJobs()) {
+            val st = synchronized(lock) { j.rec.state }
+            if (!net.online) { if (st.active) requestStop(j, DlState.WAITING_NETWORK) }
+            else if (st == DlState.WAITING_NETWORK) requeue(j, wipe = false)
+        }
+    }
+
+    fun views(): List<DownloadView> = synchronized(lock) { jobs.values.map { view(it) } }
+    fun view(id: Long): DownloadView? = synchronized(lock) { jobs[id]?.let { view(it) } }
+    fun needsService(): Boolean = synchronized(lock) { jobs.values.any { val s = it.rec.state; s == DlState.QUEUED || s.active || s == DlState.WAITING_NETWORK } }
+    fun counts(): IntArray = synchronized(lock) {
+        var running = 0; var queued = 0; var paused = 0
+        for (j in jobs.values) when (j.rec.state) { DlState.RUNNING, DlState.STARTING, DlState.VERIFYING -> running++; DlState.QUEUED -> queued++; DlState.PAUSED_USER, DlState.PAUSED_SYSTEM, DlState.WAITING_NETWORK -> paused++; else -> {} }
+        intArrayOf(running, queued, paused)
+    }
+
+    // ================================================================================================ control thread
+
+    private fun get(id: Long): Job? = synchronized(lock) { jobs[id] }
+    private fun snapshotJobs(): List<Job> = synchronized(lock) { jobs.values.toList() }
+    private fun persist(r: StreamRec) { if (!r.priv) try { store.save(r.snapshot()) } catch (e: Exception) { /* the next checkpoint retries */ } }
+
+    private fun startQueued() {
+        val go = ArrayList<Job>()
+        synchronized(lock) {
+            var active = jobs.values.count { it.rec.state.active }
+            for (j in jobs.values.sortedBy { it.rec.created }) {
+                if (active >= cfg.maxActive) break
+                if (j.rec.state == DlState.QUEUED && !j.running && j.stopState == null) { j.rec.state = DlState.STARTING; j.running = true; go.add(j); active++ }
+            }
+        }
+        for (j in go) { changed(j.rec.id); spawn(j) }
+    }
+
+    private fun requeue(job: Job, wipe: Boolean) {
+        val busy: Boolean
+        synchronized(lock) {
+            job.rec.reason = Reason.NONE; job.rec.detail = 0
+            busy = job.running
+            if (!busy && wipe) resetProgress(job)
+            job.rec.state = DlState.QUEUED
+            if (busy) { job.restartAfterStop = true; job.stop = true }
+        }
+        if (!busy && wipe) { wipeStaging(job); persist(job.rec) }
+        changed(job.rec.id)
+        if (!busy) startQueued()
+    }
+
+    private fun resetProgress(job: Job) {
+        val r = job.rec
+        try { job.sink?.discard() } catch (e: Exception) { /* ignore */ }
+        if (job.sink == null) r.destUri?.let { try { sinks.delete(it) } catch (e: Exception) { /* ignore */ } }
+        job.sink = null; job.media = null; job.staged.clear(); job.claimed.clear(); job.stagedBytes = 0; job.stagedCount = 0; job.inflight.set(0); job.written = 0; job.keys.clear()
+        r.destUri = null; r.appended = 0; r.next = 0; r.initDone = false; r.total = -1
+    }
+
+    private fun requestStop(job: Job, to: DlState) {
+        synchronized(lock) {
+            if (!job.running) return
+            job.stopState = to; job.stop = true
+            for (resp in job.responses) try { resp.abort() } catch (e: Exception) { /* ignore */ }
+        }
+    }
+
+    private fun finishCancel(job: Job) {
+        val rec = job.rec
+        val uri = synchronized(lock) { rec.destUri }
+        try { job.sink?.discard() } catch (e: Exception) { /* ignore */ }
+        if (job.sink == null && uri != null) try { sinks.delete(uri) } catch (e: Exception) { /* ignore */ }
+        wipeStaging(job)
+        synchronized(lock) { jobs.remove(rec.id) }
+        if (!rec.priv) store.delete(rec.id)
+        changed(rec.id)
+    }
+
+    private fun wipeStaging(job: Job) {
+        try { val d = store.dir(job.rec.id); d.listFiles()?.forEach { it.delete() }; d.delete() } catch (e: Exception) { /* ignore */ }
+    }
+
+    // ================================================================================================ the supervisor (one thread per running job)
+
+    private fun spawn(job: Job) {
+        try { spawner.spawn("stream-${job.rec.id}") { supervise(job) } }
+        catch (e: Throwable) { synchronized(lock) { job.running = false; job.rec.state = DlState.FAILED; job.rec.reason = Reason.STORAGE }; persist(job.rec); changed(job.rec.id) }
+    }
+
+    private fun supervise(job: Job) {
+        val rec = job.rec
+        var outcome: DlState = DlState.RUNNING
+        try {
+            prepare(job)
+            if (job.stop) throw Stopped()
+            synchronized(lock) { rec.state = DlState.RUNNING; job.lastBytesAt = clock.now(); job.lastCkpt = clock.now(); job.meter.reset() }
+            changed(rec.id)
+            val n = synchronized(lock) { job.media!!.segments.size }
+            val workers = ArrayList<Thread>()
+            val want = maxOf(1, minOf(cfg.maxConnsPerDownload, n - rec.next))
+            for (i in 0 until want) { synchronized(lock) { job.alive++ }; workers.add(spawner.spawn("stream-${rec.id}-w$i") { try { worker(job) } finally { synchronized(lock) { job.alive-- } } }) }
+            while (true) {
+                val alive = synchronized(lock) { job.alive }
+                if (alive == 0) break
+                try { Thread.sleep(250) } catch (e: InterruptedException) { /* woken to look again */ }
+                val now = clock.now()
+                if (job.failure == null && !job.stop && now - job.lastBytesAt > cfg.stallMs && alive > 0) { // no bytes for a long time: cut the sockets, the workers retry
+                    job.lastBytesAt = now
+                    for (resp in job.responses) try { resp.abort() } catch (e: Exception) { /* ignore */ }
+                }
+                if (now - job.lastCkpt >= cfg.checkpointMs && !job.stop) checkpoint(job)
+                changed(rec.id)
+            }
+            job.failure?.let { throw it }
+            if (job.stop) throw Stopped()
+            outcome = finish(job)
+        } catch (e: Stopped) {
+            outcome = synchronized(lock) { if (job.restartAfterStop) DlState.QUEUED else job.stopState ?: DlState.PAUSED_SYSTEM }
+        } catch (e: Failed) {
+            outcome = DlState.FAILED
+            synchronized(lock) { rec.reason = e.reason; rec.detail = e.detail }
+        } catch (e: SinkException) {
+            outcome = DlState.FAILED
+            synchronized(lock) { rec.reason = e.reason }
+        } catch (e: Throwable) {
+            outcome = DlState.FAILED
+            synchronized(lock) { rec.reason = Reason.STORAGE }
+        }
+        settle(job, outcome)
+    }
+
+    /** The job's supervisor is done: record where it ended, free what is not needed, and look at the queue. */
+    private fun settle(job: Job, outcome: DlState) {
+        val rec = job.rec
+        // a stopped job keeps its progress: flush the output so the checkpoint is true
+        if (outcome != DlState.COMPLETED && outcome != DlState.CANCELED) try { job.sink?.sync() } catch (e: Exception) { /* the last checkpoint still stands */ }
+        control.execute {
+            synchronized(lock) { job.running = false; job.stop = false; job.stopState = null; job.failure = null }
+            when (outcome) {
+                DlState.CANCELED -> { finishCancel(job); startQueued(); return@execute }
+                DlState.COMPLETED -> {}
+                DlState.QUEUED -> { synchronized(lock) { job.restartAfterStop = false; rec.state = DlState.QUEUED }; if (synchronized(lock) { rec.appended == 0L && !rec.initDone } && false) resetProgress(job) }
+                else -> synchronized(lock) { rec.state = outcome; if (outcome == DlState.FAILED) rec.finished = clock.now() }
+            }
+            synchronized(lock) { rec.updated = clock.now() }
+            persist(rec)
+            changed(rec.id)
+            startQueued()
+        }
+    }
+
+    /** Read the playlist, make the plan, open (or reopen) the output, find what an earlier run already staged, and write the init section. */
+    private fun prepare(job: Job) {
+        val rec = job.rec
+        val fetcher = fetchers(rec.fetcher) ?: fetchers(0) ?: throw Failed(Reason.NETWORK)
+        if (synchronized(lock) { job.media == null }) {
+            var text = synchronized(lock) { rec.playlistText }
+            if (text == null) {
+                if (!net.online) throw Stopped().also { synchronized(lock) { job.stopState = DlState.WAITING_NETWORK } }
+                text = readText(job, fetcher, rec.url)
+            }
+            val pl = Hls.parse(text, rec.url) as? Hls.MediaPlaylist ?: throw Failed(Reason.BAD_PLAYLIST)
+            val media = pl.media
+            when (media.problem) {
+                Hls.Problem.LIVE -> throw Failed(Reason.LIVE)
+                Hls.Problem.DRM -> throw Failed(Reason.DRM)
+                Hls.Problem.SAMPLE_AES, Hls.Problem.UNSUPPORTED -> throw Failed(Reason.UNSUPPORTED)
+                Hls.Problem.EMPTY -> throw Failed(Reason.BAD_PLAYLIST)
+                null -> {}
+            }
+            synchronized(lock) {
+                job.media = media
+                rec.playlistText = text
+                val ext = media.container
+                rec.name = FileNames.sanitize(rec.nameStem + "." + ext)
+                rec.mime = when (ext) { "mp4" -> "video/mp4"; "aac" -> "audio/aac"; "mp3" -> "audio/mpeg"; "m4a" -> "audio/mp4"; else -> "video/mp2t" }
+                if (media.exactBytes >= 0) rec.estimate = media.exactBytes
+            }
+        }
+        val media = synchronized(lock) { job.media!! }
+        // what an earlier run left in the staging folder
+        val dir = store.dir(rec.id)
+        synchronized(lock) {
+            job.staged.clear(); job.claimed.clear(); job.stagedBytes = 0; job.stagedCount = 0
+            for (i in rec.next until media.segments.size) {
+                val f = File(dir, "$i.seg")
+                if (f.isFile) { job.staged.set(i); job.stagedBytes += f.length(); job.stagedCount++ } else File(dir, "$i.part").delete()
+            }
+        }
+        // the output
+        var sink: Sink? = null
+        val uri = synchronized(lock) { rec.destUri }
+        if (uri != null) sink = try { sinks.reopen(uri, -1) } catch (e: Exception) { null }
+        if (sink == null) {
+            synchronized(lock) { rec.appended = 0; rec.next = 0; rec.initDone = false; job.written = 0; rec.destUri = null }
+            // everything staged is still valid; the pointer just starts over
+            synchronized(lock) { job.staged.clear(); job.stagedBytes = 0; job.stagedCount = 0; for (i in 0 until media.segments.size) { val f = File(dir, "$i.seg"); if (f.isFile) { job.staged.set(i); job.stagedBytes += f.length(); job.stagedCount++ } } }
+            sink = sinks.create(rec.name, rec.mime, -1, rec.priv, rec.destKind)
+            synchronized(lock) { rec.destUri = sink.uri; sink.displayName?.let { rec.name = it } }
+        } else synchronized(lock) { job.written = rec.appended }
+        synchronized(lock) { job.sink = sink }
+        persist(rec)
+        // fragmented MP4: the init section comes first
+        val init = media.init
+        if (init != null && !synchronized(lock) { rec.initDone }) {
+            if (!net.online) throw Stopped().also { synchronized(lock) { job.stopState = DlState.WAITING_NETWORK } }
+            val f = File(dir, "init.seg")
+            fetchTo(job, fetcher, init.url, init.from, if (init.len >= 0) init.from + init.len - 1 else -1, f, count = false)
+            FileInputStream(f).use { input ->
+                val buf = ByteArray(64 * 1024)
+                while (true) { val r = input.read(buf); if (r < 0) break; sink.pwrite(synchronized(lock) { job.written }, buf, 0, r); synchronized(lock) { job.written += r } }
+            }
+            f.delete()
+            synchronized(lock) { rec.initDone = true; rec.appended = job.written }
+        }
+    }
+
+    private fun readText(job: Job, fetcher: Fetcher, url: String): String {
+        val resp = open(job, fetcher, FetchRequest(url, -1, -1, null, job.rec.headers, priv = job.rec.priv))
+        try {
+            if (resp.status !in 200..299) throw statusFailure(resp.status)
+            val body = resp.body ?: throw Failed(Reason.BAD_PLAYLIST)
+            val out = java.io.ByteArrayOutputStream()
+            val buf = ByteArray(16 * 1024)
+            while (true) { if (job.stop) throw Stopped(); val r = body.read(buf); if (r < 0) break; out.write(buf, 0, r); if (out.size() > 8 * 1024 * 1024) throw Failed(Reason.BAD_PLAYLIST) }
+            return out.toString("UTF-8")
+        } catch (e: IOException) { if (job.stop) throw Stopped(); throw Failed(Reason.NETWORK) } finally { job.responses.remove(resp); try { resp.close() } catch (e: Exception) { /* ignore */ } }
+    }
+
+    private fun finish(job: Job): DlState {
+        val rec = job.rec
+        synchronized(lock) { rec.state = DlState.VERIFYING }
+        changed(rec.id)
+        val sink = job.sink ?: throw SinkException(Reason.STORAGE, "no file")
+        sink.sync()
+        val uri = sink.publish()
+        synchronized(lock) {
+            rec.destUri = uri ?: rec.destUri; rec.total = job.written; rec.appended = job.written
+            rec.state = DlState.COMPLETED; rec.reason = Reason.NONE; rec.detail = 0; rec.finished = clock.now(); rec.updated = rec.finished
+            rec.headers = emptyMap(); rec.playlistText = null
+            job.sink = null
+        }
+        wipeStaging(job)
+        return DlState.COMPLETED
+    }
+
+    private fun checkpoint(job: Job) {
+        val rec = job.rec
+        try { job.sink?.sync() } catch (e: SinkException) { return } // only what is on disk may be claimed
+        synchronized(lock) { rec.appended = job.written; rec.updated = clock.now(); job.lastCkpt = clock.now() }
+        persist(rec)
+    }
+
+    // ================================================================================================ workers
+
+    private fun worker(job: Job) {
+        val rec = job.rec
+        val fetcher = fetchers(rec.fetcher) ?: fetchers(0) ?: return
+        val media = synchronized(lock) { job.media!! }
+        val dir = store.dir(rec.id)
+        try {
+            while (!job.stop && job.failure == null) {
+                val idx = claim(job, media.segments.size) ?: break
+                try {
+                    val seg = media.segments[idx]
+                    fetchTo(job, fetcher, seg.url, seg.from, if (seg.len >= 0) seg.from + seg.len - 1 else -1, File(dir, "$idx.seg"), count = true)
+                    synchronized(lock) { job.staged.set(idx); job.stagedCount++; job.stagedBytes += File(dir, "$idx.seg").length(); job.claimed.clear(idx) }
+                    drain(job, media)
+                } catch (e: RuntimeException) {
+                    synchronized(lock) { job.claimed.clear(idx) }
+                    throw e
+                }
+            }
+        } catch (e: Stopped) { /* the supervisor knows */
+        } catch (e: Failed) { synchronized(lock) { if (job.failure == null) job.failure = e; job.stop = true; for (r in job.responses) try { r.abort() } catch (x: Exception) { /* ignore */ } }
+        } catch (e: SinkException) { synchronized(lock) { if (job.failure == null) job.failure = Failed(e.reason); job.stop = true }
+        } catch (e: Throwable) { synchronized(lock) { if (job.failure == null) job.failure = Failed(Reason.STORAGE); job.stop = true } }
+    }
+
+    /** The lowest segment nobody has and nobody is fetching: in order, so the output can grow as soon as the first ones are in. */
+    private fun claim(job: Job, n: Int): Int? = synchronized(lock) {
+        var i = job.rec.next
+        while (i < n) { if (!job.staged.get(i) && !job.claimed.get(i)) { job.claimed.set(i); return i }; i++ }
+        null
+    }
+
+    /** Append every staged segment from the output's position onward, in order. One worker does it at a time; the others carry on fetching. */
+    private fun drain(job: Job, media: Hls.Media) {
+        while (true) {
+            if (!job.drain.tryLock()) return
+            try { while (appendNext(job, media)) { /* keep going while the next one is there */ } } finally { job.drain.unlock() }
+            if (!nextReady(job, media)) return // else one arrived between the last look and the unlock
+        }
+    }
+
+    private fun nextReady(job: Job, media: Hls.Media): Boolean = synchronized(lock) { !job.stop && job.rec.next < media.segments.size && job.staged.get(job.rec.next) }
+
+    private fun appendNext(job: Job, media: Hls.Media): Boolean {
+        val rec = job.rec
+        val idx: Int
+        synchronized(lock) { idx = rec.next; if (job.stop || idx >= media.segments.size || !job.staged.get(idx)) return false }
+        val seg = media.segments[idx]
+        val sink = job.sink ?: return false
+        val f = File(store.dir(rec.id), "$idx.seg")
+        val size = f.length()
+        var written = synchronized(lock) { job.written }
+        try {
+            FileInputStream(f).use { input ->
+                val buf = ByteArray(64 * 1024)
+                if (seg.key >= 0) {
+                    val key = keyBytes(job, media, seg.key)
+                    val iv = media.keys[seg.key].iv ?: Hls.sequenceIv(seg.seq)
+                    val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+                    try { cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(iv)) } catch (e: Exception) { throw Failed(Reason.UNSUPPORTED) }
+                    while (true) {
+                        val r = input.read(buf); if (r < 0) break
+                        val out = cipher.update(buf, 0, r) ?: continue
+                        if (out.isNotEmpty()) { sink.pwrite(written, out, 0, out.size); written += out.size }
+                    }
+                    val tail = try { cipher.doFinal() } catch (e: Exception) { throw Failed(Reason.UNSUPPORTED) } // wrong key or damaged segment
+                    if (tail.isNotEmpty()) { sink.pwrite(written, tail, 0, tail.size); written += tail.size }
+                } else {
+                    while (true) { val r = input.read(buf); if (r < 0) break; sink.pwrite(written, buf, 0, r); written += r }
+                }
+            }
+        } catch (e: IOException) { throw SinkException(Reason.STORAGE, "could not read a staged segment", e) }
+        synchronized(lock) {
+            job.written = written; rec.next = idx + 1; rec.appended = written
+            job.stagedBytes -= size; job.staged.clear(idx)
+        }
+        f.delete()
+        return true
+    }
+
+    private fun keyBytes(job: Job, media: Hls.Media, ki: Int): ByteArray {
+        synchronized(lock) { job.keys[ki]?.let { return it } }
+        val fetcher = fetchers(job.rec.fetcher) ?: fetchers(0) ?: throw Failed(Reason.NETWORK)
+        val resp = open(job, fetcher, FetchRequest(media.keys[ki].url, -1, -1, null, job.rec.headers, priv = job.rec.priv))
+        try {
+            if (resp.status !in 200..299) throw statusFailure(resp.status)
+            val b = resp.body?.readBytes() ?: throw Failed(Reason.BAD_PLAYLIST)
+            if (b.size != 16) throw Failed(Reason.UNSUPPORTED) // an AES-128 key is exactly 16 bytes; anything else is a licence server's answer
+            synchronized(lock) { job.keys[ki] = b }
+            return b
+        } catch (e: IOException) { throw Failed(Reason.NETWORK) } finally { job.responses.remove(resp); try { resp.close() } catch (e: Exception) { /* ignore */ } }
+    }
+
+    // ---- one segment: fetched into [dest] (".part" first, renamed when whole), retried with back-off
+
+    private fun fetchTo(job: Job, fetcher: Fetcher, url: String, from: Long, toInclusive: Long, dest: File, count: Boolean) {
+        val part = File(dest.parentFile, dest.name.removeSuffix(".seg") + ".part")
+        var tries = 0
+        while (true) {
+            if (job.stop) throw Stopped()
+            if (!net.online) { synchronized(lock) { if (job.stopState == null) job.stopState = DlState.WAITING_NETWORK; job.stop = true }; throw Stopped() }
+            var counted = 0L
+            try {
+                FileOutputStream(part).use { out -> counted = readInto(job, fetcher, url, from, toInclusive, out, count) }
+                if (!part.renameTo(dest)) throw Failed(Reason.STORAGE)
+                return
+            } catch (e: FetchException) {
+                if (count) job.inflight.addAndGet(-counted)
+                if (job.stop) throw Stopped()
+                when (e.kind) {
+                    FetchException.Kind.TLS -> throw Failed(Reason.TLS)
+                    FetchException.Kind.LOCAL_NET -> throw Failed(Reason.LOCAL_NET)
+                    FetchException.Kind.INSECURE_REDIRECT -> throw Failed(Reason.INSECURE_REDIRECT)
+                    FetchException.Kind.BAD_URL -> throw Failed(Reason.BAD_URL)
+                    else -> {}
+                }
+                if (++tries >= MAX_TRIES) throw Failed(Reason.NETWORK)
+                backoff(job, tries)
+            } catch (e: Retry) {
+                if (count) job.inflight.addAndGet(-counted)
+                if (job.stop) throw Stopped()
+                if (++tries >= MAX_TRIES) throw Failed(if (e.status > 0) Reason.HTTP else Reason.NETWORK, e.status)
+                backoff(job, tries, e.retryAfterMs)
+            } catch (e: IOException) {
+                if (count) job.inflight.addAndGet(-counted)
+                if (job.stop) throw Stopped()
+                if (e is java.io.FileNotFoundException || e.message?.contains("ENOSPC") == true || e.message?.contains("No space") == true) throw Failed(Reason.NO_SPACE)
+                if (++tries >= MAX_TRIES) throw Failed(Reason.NETWORK)
+                backoff(job, tries)
+            }
+        }
+    }
+
+    private class Retry(val status: Int, val retryAfterMs: Long = 0) : RuntimeException(null, null, false, false)
+
+    private fun backoff(job: Job, tries: Int, minMs: Long = 0) {
+        val wait = maxOf(minMs, minOf(cfg.backoffCapMs, cfg.backoffBaseMs shl minOf(tries - 1, 10))) + rnd.nextInt(250)
+        val end = clock.now() + wait
+        while (clock.now() < end) { if (job.stop) throw Stopped(); try { Thread.sleep(minOf(100L, maxOf(1L, end - clock.now()))) } catch (e: InterruptedException) { /* look again */ } }
+    }
+
+    /** Streams one segment (in bounded windows when the fetcher wants them) into [out]; returns the bytes counted toward progress. */
+    private fun readInto(job: Job, fetcher: Fetcher, url: String, from: Long, toInclusive: Long, out: FileOutputStream, count: Boolean): Long {
+        var counted = 0L
+        val window = fetcher.windowBytes
+        val known = from >= 0 && toInclusive >= 0
+        var pos = 0L                                 // bytes of this segment stored so far
+        val end = if (known) toInclusive - from + 1 else -1L
+        while (true) {
+            val windowed = window > 0
+            val reqFrom: Long; val reqTo: Long
+            if (known) { reqFrom = from + pos; reqTo = if (windowed) minOf(toInclusive, from + pos + window - 1) else toInclusive }
+            else if (windowed) { reqFrom = pos; reqTo = pos + window - 1 }
+            else { reqFrom = -1; reqTo = -1 }
+            val resp = open(job, fetcher, FetchRequest(url, reqFrom, reqTo, null, job.rec.headers, priv = job.rec.priv))
+            var got = 0L
+            var total = -1L
+            try {
+                val st = resp.status
+                if (st == 416 && pos > 0) return counted                       // asked past the end: the segment is whole
+                if (st != 200 && st != 206) throw statusFailure(st, resp)
+                if (st == 206) total = totalOf(resp.header("Content-Range"))
+                val body = resp.body ?: throw FetchException(FetchException.Kind.PROTOCOL, "no body")
+                val buf = ByteArray(32 * 1024)
+                var skip = if (st == 200 && reqFrom > 0) reqFrom else 0L   // a server that ignored Range sent everything: drop what is already stored (only for a first request this is 0)
+                while (true) {
+                    if (job.stop) throw Stopped()
+                    val r = body.read(buf)
+                    if (r < 0) break
+                    var off = 0; var len = r
+                    if (skip > 0) { val s = minOf(skip, len.toLong()).toInt(); skip -= s; off += s; len -= s }
+                    if (len > 0) {
+                        out.write(buf, off, len); got += len
+                        if (count) { job.inflight.addAndGet(len.toLong()); counted += len; job.meter.add(len, clock.now()); job.lastBytesAt = clock.now() }
+                    }
+                }
+                if (st == 200) { pos += got; return counted }                  // the whole thing came in one reply
+            } finally { job.responses.remove(resp); try { resp.close() } catch (e: Exception) { /* ignore */ } }
+            pos += got
+            if (!windowed) return counted
+            if (known && pos >= end) return counted
+            if (total >= 0 && pos >= (if (known) end else total)) return counted
+            if (got == 0L || (!known && total < 0 && got < window)) return counted
+        }
+    }
+
+    private fun open(job: Job, fetcher: Fetcher, req: FetchRequest): FetchResponse {
+        val resp = fetcher.open(req)
+        job.responses.add(resp)
+        if (job.stop) { job.responses.remove(resp); try { resp.abort(); resp.close() } catch (e: Exception) { /* ignore */ }; throw Stopped() }
+        return resp
+    }
+
+    private fun statusFailure(status: Int, resp: FetchResponse? = null): RuntimeException = when {
+        status == 401 || status == 403 || status == 410 -> Failed(Reason.LINK_EXPIRED, status)
+        status == 404 || status in 400..499 && status != 408 && status != 429 -> Failed(Reason.HTTP, status)
+        else -> Retry(status, resp?.header("Retry-After")?.trim()?.toLongOrNull()?.times(1000) ?: 0)
+    }
+
+    private fun totalOf(contentRange: String?): Long = contentRange?.substringAfterLast('/')?.trim()?.toLongOrNull() ?: -1L
+
+    // ================================================================================================ views
+
+    private fun view(job: Job): DownloadView {
+        val r = job.rec
+        val now = clock.now()
+        val running = r.state == DlState.RUNNING
+        val media = job.media
+        val n = media?.segments?.size ?: 0
+        val doneBytes = if (r.state == DlState.COMPLETED) r.total else job.written + job.stagedBytes + 0L
+        val inflight = if (r.state.active) job.inflight.get().coerceAtLeast(0) else 0L
+        // the part of the in-flight counter that is already staged or appended is counted twice: the counter only ever counts bytes of segments in progress, so use the larger of the two views
+        val fetched = maxOf(doneBytes, job.inflightTotal())
+        var total: Long
+        var estimated = false
+        when {
+            r.state == DlState.COMPLETED -> total = r.total
+            media != null && media.exactBytes >= 0 -> total = media.exactBytes
+            media != null && n > 0 && (r.next + job.stagedCount) >= 2 -> { total = (fetched.toDouble() / (r.next + job.stagedCount) * n).toLong(); estimated = true }
+            r.estimate > 0 -> { total = r.estimate; estimated = true }
+            else -> total = -1
+        }
+        if (total in 0 until fetched) total = fetched
+        val speed = if (running) job.meter.bytesPerSec(now).toLong() else 0L
+        val eta = if (running && speed > 0 && total > 0) (total - fetched) / speed else -1L
+        val actions: List<Action> = when (r.state) {
+            DlState.QUEUED, DlState.STARTING -> listOf(Action.CANCEL)
+            DlState.RUNNING, DlState.WAITING_NETWORK -> listOf(Action.PAUSE, Action.CANCEL)
+            DlState.PAUSED_USER, DlState.PAUSED_SYSTEM -> listOf(Action.RESUME, Action.CANCEL)
+            DlState.NEEDS_DECISION -> listOf(Action.RESTART, Action.CANCEL)
+            DlState.VERIFYING -> emptyList()
+            DlState.FAILED -> listOf(Action.RETRY, Action.DELETE)
+            DlState.COMPLETED -> listOf(Action.OPEN, Action.SHARE, Action.DELETE)
+            DlState.CANCELED -> emptyList()
+        }
+        val host = try { java.net.URI(r.url).host } catch (e: Exception) { null }
+        return DownloadView(r.id, r.state, r.reason, r.detail, r.name, r.mime, host, total, fetched + (if (inflight > 0 && inflight > doneBytes) 0 else 0), speed, eta, job.alive, r.priv, r.destUri, r.created, r.updated, actions, r.destKind, estimated)
+    }
+
+    private fun Job.inflightTotal(): Long = 0L
+
+    companion object { private const val MAX_TRIES = 6 }
+}
