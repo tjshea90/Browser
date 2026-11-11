@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.Process
 import app.kestrel.browser.Io
+import app.kestrel.browser.ProcessLife
 import app.kestrel.core.download.Clock
 import app.kestrel.core.download.Config
 import app.kestrel.core.download.DlState
@@ -40,7 +41,7 @@ object DownloadController {
     private val lastStates = HashMap<Long, DlState>()
     /** Threads of the download engine (control thread + workers): at background priority while the browser is on screen (scrolling comes first), at normal priority otherwise (full speed with the screen off). */
     private val engineTids = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
-    private fun threadPrio(): Int = if (app.kestrel.browser.ProcessLife.uiVisible) Process.THREAD_PRIORITY_BACKGROUND else Process.THREAD_PRIORITY_DEFAULT
+    private fun threadPrio(): Int = if (ProcessLife.uiVisible) Process.THREAD_PRIORITY_BACKGROUND else Process.THREAD_PRIORITY_DEFAULT
 
     /** The browser came to the front / went away: re-prioritise every engine thread. */
     fun uiVisibilityChanged() {
