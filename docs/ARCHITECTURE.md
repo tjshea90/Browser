@@ -120,3 +120,10 @@ the tablet has, cosmetic filtering is best-effort (injection after commit). Not 
 - **Neon**: not gated on the system animation scale; holds still only for the keyboard being up (not "a field has focus"), the first 3 s of a load, a finger on the screen (1.5 s after a swipe, 0.35 s after a tap),
   battery-saver, app in the background, 2 min idle on a page, and while a full-screen page (Downloads, Settings, History, Diagnostics) covers it (`Neon.covered`: on the emulator the render thread went from 38 % to 3 %).
   `Neon.status()` is shown in Diagnostics. Details: `docs/DESIGN.md`.
+
+## In-app updates and Android's storage rule (alpha8/9, owner report U1)
+Android finishes an install or an update only while **10 % of the data partition stays free afterwards**; the install itself holds the new APK twice (the installer's staged copy and the installed one), unpacks the native libraries (`extractNativeLibs=true`: 131.7 MB for arm32)
+and compiles about 32 MB of optimised code. Measured on the emulator and written up in `research/UPDATE_STORAGE.md`: threshold = reserve + 2 x APK + libraries + 32 MiB (the APK twice: 60 MiB more APK raised the bar by 117 MiB). On a 16 GB-class tablet that is about 1.5 GB free.
+Uninstalling first "fixed" it because the uninstall frees the old install and its data. `core/update/UpdateLogic.storagePlan` holds the formula (unit-tested against the emulator numbers); `UpdateManager.space()` feeds it (`StorageStatsManager.getFreeBytes` = free + caches the system may clear;
+reserve = 10 % of `totalSpace`), the download is refused BEFORE it starts when the install could not fit afterwards, our own downloaded copy is deleted right after the installer took its own when that is what makes it fit, and a refusal Android still gives raises the bar by 150 MB over the free space at that moment ("floor2").
+The Updates sheet shows the numbers and a "Delete old installers" button (`DownloadController.oldInstallers()`: the download manager's own `kestrel-*.apk` files); Diagnostics shows a Storage line (`diag/StorageInfo`).
