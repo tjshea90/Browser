@@ -256,3 +256,42 @@
 ## 2026-11-11T18:02:58Z
 > The owner's report points at the in-place update itself, not at free space. I'm checking whether consecutive releases are signed with the same certificate, which is the usual reason Android refuses an update but accepts a fresh install.
 <!-- sha:61c18391d18e -->
+
+## 2026-11-11T19:15:21Z
+> The cause is Android's install storage rule, not the signing key, and alpha9 now accounts for it. I tested this on the emulator, not on your tablet.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.2.0-alpha9
+>
+> **What I checked and found**
+> - **Signing key:** All seven releases (0.1.1 and alpha2 through alpha7) carry the same certificate, so Android has no reason to refuse an in-place update on that ground.
+> - **The rule:** Android refuses to finish any install, update or fresh, unless 10% of the tablet's storage is still free afterwards. While installing it also holds the new app twice (the download plus the installed copy), and unpacks the Firefox engine. That comes to a tenth of your storage plus about 0.37 GB. If your tablet has about 16 GB of storage, you need roughly 1.5 GB free.
+> - **Why uninstalling first worked:** Deleting the old app and its data freed about a gigabyte at once, so the same APK suddenly fit. Installing from GitHub "fine" was always after that uninstall, so it didn't prove there was enough space.
+> - **How I tested it:** On the emulator the same APK installs with 1010 MB free and fails with 1000 MB. A fresh install fails at the same point, and Android's log says it wants 10% of the disk. Making the APK 60 MB bigger raised the bar by about 120 MB.
+>
+> **What alpha9 changes**
+> - **Updates screen:** Menu → Updates now works out the real number before it downloads anything, so you don't waste hotspot data. It shows something like "Free up about 480 MB more, then tap Try again".
+> - **New button:** "Delete old installers" removes the Kestrel APKs the browser downloaded for earlier updates (92 MB each).
+> - **Diagnostics and release page:** Diagnostics has a Storage line with the real numbers, and the GitHub release page explains the rule.
+> - **Everything from alpha7** (neon, scrolling, pull-to-refresh, download sizes) is in alpha9 too.
+>
+> **What to do now**
+> 1. In Android Settings → Storage, free about 1.5 GB. Start with old Kestrel `.apk` files in Downloads, then unused apps or videos.
+> 2. Install alpha9 from the link over your current version, which keeps your logins, tabs and bookmarks.
+> 3. If Android still says "App not installed", it needs more room; uninstalling first still works as a fallback.
+> 4. For future updates, use Menu → Updates rather than tapping a downloaded file. It deletes its own copy once Android has taken it, which needs about 90 MB less space.
+>
+> **One question:** what do Settings → Storage show for total and free? That tells me whether the 10% figure holds on your tablet. If the real numbers differ, the updater corrects itself by asking for 150 MB more after any refusal.
+>
+> **Still waiting on you from alpha7**
+> - The Diagnostics → "Compare 3 feels" numbers, copied and pasted to me.
+> - Whether the neon glow shows now, and whether the white gaps are gone when you scroll back.
+>
+> **Still open**
+> - Faster page loading by moving ad blocking inside the browser.
+> - The cold-start glitch.
+> - Swipe-to-close in the tab grid.
+> - The Settings restyle.
+> - Your decisions on the private signing key, the licence, the look, and landscape tabs.
+> - The Cromite side-by-side test.
+> - A backup/restore feature, only if updates still fail after alpha9.
+<!-- sha:5bca6ce07171 -->
