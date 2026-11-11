@@ -12,7 +12,7 @@
 # That works, and it is also an unconditional overwrite of the one file a
 # user's own Claude Code settings live in — permissions, env, statusLine,
 # and hooks belonging to OTHER projects in the same container (this account
-# runs at least two other repos, fantasy-football and Portfolio, side by
+# runs other repos, Launcher and Portfolio, side by
 # side with this one). Every session that ran that `cp` would silently
 # delete whatever those repos had written there. Nothing warns, because a
 # clobbered settings file looks exactly like a settings file.
@@ -63,7 +63,7 @@ done
 # hooks there), so do not use it.
 #
 # CLAUDE_HOOK_SETTINGS overrides the target and CLAUDE_REPO_ROOT overrides
-# the root used to LOCATE it — tools/test_resume.sh sets both to temp paths
+# the root used to LOCATE it — tools/test_handoff.sh sets both to temp paths
 # so the tests can never touch the real settings file. Substitution of the
 # placeholder in the template always uses THIS repo's own path ($D), never
 # the container root — see the header above for why.
