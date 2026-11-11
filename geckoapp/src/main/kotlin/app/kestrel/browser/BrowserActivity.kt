@@ -1066,7 +1066,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun showDiagnostics() {
         GeckoEngine.readBackPrefs { diagView?.refresh() }
         Io.exec { GlInfo.read(); Io.ui { diagView?.refresh() } }
-        val v = diagView ?: DiagnosticsView(this, pal, ::engineFacts, { refreshScreen("diagnostics") }, { closeDiagnostics() }, { runScrollTest() }).also { diagView = it }
+        val v = diagView ?: DiagnosticsView(this, pal, ::engineFacts, { refreshScreen("diagnostics") }, { closeDiagnostics() }, { runScrollTest() }, { runScrollTest(compare = true) }).also { diagView = it }
         if (v.parent == null) root.addView(v, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) else v.refresh()
     }
 
@@ -1078,33 +1078,50 @@ open class BrowserActivity : Activity(), DockListener {
      * Diagnostics > Scroll test: a temporary tab with the bundled long page ([ScrollTest.URL]); once it has loaded, [ScrollTest] scrolls it and reports the frames the
      * compositor produced. The tab is closed afterwards, the numbers are shown and logged (Copy/Share on the Diagnostics page includes them).
      */
-    private fun runScrollTest() {
+    private fun runScrollTest(compare: Boolean = false) {
         closeDiagnostics()
+        compareLevels = if (compare) ArrayDeque(listOf(0, 1, 2)) else null
+        compareResults.clear(); compareOriginal = prefs.scrollFeel
         val t = newTabInternal()
         t.url = ScrollTest.URL; t.pendingLoad = ScrollTest.URL
         scrollTestTab = t
         show(t)
-        toast("Scroll test: loading the test page...")
+        toast(if (compare) "Comparing the three scroll feels (about 90 s): loading the test page..." else "Scroll test: loading the test page...")
     }
+
+    /** "Compare 3 feels": the same test run at Standard, Smoother and Smoothest on the same page, one after the other (the prefs are live), then the user's own setting is put back. */
+    private var compareLevels: ArrayDeque<Int>? = null
+    private val compareResults = ArrayList<String>()
+    private var compareOriginal = 0
 
     private fun startScrollTest(tab: Tab) {
         val s = tab.session
-        if (s == null || current !== tab || isFinishing || isDestroyed) { doCloseTab(tab); toast("Scroll test could not start"); return }
-        toast("Scroll test running (about 30 s): do not touch the screen")
-        Health.log("scrolltest", "start", memFacts())
+        if (s == null || current !== tab || isFinishing || isDestroyed) { endCompare(); doCloseTab(tab); toast("Scroll test could not start"); return }
+        val queue = compareLevels
+        val level = queue?.removeFirstOrNull()
+        if (level != null) GeckoEngine.applyScrollFeel(level)
+        toast(if (level == null) "Scroll test running (about 30 s): do not touch the screen" else "Scroll feel ${3 - (queue?.size ?: 0)} of 3: ${GeckoEngine.scrollFeelNames[level]} - do not touch the screen")
+        Health.log("scrolltest", "start", "level=${level ?: "own"} " + memFacts())
         ScrollTest(s, window.decorView, { memFacts() }) { report ->
-            Health.log("scrolltest", "result", report.lineSequence().take(3).joinToString(" | "))
+            Health.log("scrolltest", "result", "level=${level ?: "own"} " + report.lineSequence().take(3).joinToString(" | "))
+            if (level != null) {
+                compareResults.add(GeckoEngine.scrollFeelNames[level] + ":\n  " + report.lineSequence().filter { it.startsWith("Result:") || it.startsWith("Compositor frames:") }.joinToString("\n  "))
+                if (queue != null && queue.isNotEmpty() && !isFinishing && !isDestroyed && current === tab) { Io.main.postDelayed({ startScrollTest(tab) }, 2500); return@ScrollTest }
+            }
+            val text = if (level != null) { endCompare(); compareResults.joinToString("\n\n") + "\n\nSmoother is what Kestrel G starts with. Settings > Appearance > Scroll feel switches it; your own setting is back in place now." } else report
             doCloseTab(tab)
             if (isFinishing || isDestroyed) return@ScrollTest
-            android.app.AlertDialog.Builder(this).setTitle("Scroll test").setMessage(report)
+            android.app.AlertDialog.Builder(this).setTitle(if (level != null) "Scroll feel comparison" else "Scroll test").setMessage(text)
                 .setPositiveButton("OK", null)
                 .setNeutralButton("Copy") { _, _ ->
-                    (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Kestrel scroll test", report))
+                    (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Kestrel scroll test", text))
                     toast("Copied")
                 }
                 .show()
         }.start()
     }
+
+    private fun endCompare() { if (compareLevels != null) { compareLevels = null; GeckoEngine.applyScrollFeel(compareOriginal) } }
 
     /**
      * What switching apps and coming back does to the page, on demand: re-send the focus and keyboard state (R0), toggle the session's active state (R1),

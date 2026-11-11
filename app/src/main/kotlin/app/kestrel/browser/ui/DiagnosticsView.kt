@@ -19,7 +19,7 @@ import app.kestrel.browser.diag.Health
  * "Refresh screen" re-creates the page surface by hand (what switching apps does), Copy/Share put the report on the clipboard or in a message.
  * Nothing leaves the tablet unless the owner shares it.
  */
-class DiagnosticsView(ctx: Context, private val pal: Pal, private val facts: () -> List<String>, private val onRefreshScreen: () -> Unit, private val onClose: () -> Unit, private val onScrollTest: (() -> Unit)? = null) : LinearLayout(ctx) {
+class DiagnosticsView(ctx: Context, private val pal: Pal, private val facts: () -> List<String>, private val onRefreshScreen: () -> Unit, private val onClose: () -> Unit, private val onScrollTest: (() -> Unit)? = null, private val onScrollCompare: (() -> Unit)? = null) : LinearLayout(ctx) {
     private val body = TextView(ctx).apply {
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
         typeface = Typeface.MONOSPACE
@@ -48,6 +48,7 @@ class DiagnosticsView(ctx: Context, private val pal: Pal, private val facts: () 
         if (onScrollTest != null) {
             val row2 = LinearLayout(ctx).apply { orientation = HORIZONTAL; setPadding(ctx.dp(10), 0, ctx.dp(10), ctx.dp(6)) }
             row2.addView(big("Scroll test (30 s)", pal.pill, pal.accent) { onScrollTest.invoke() }, lp(1f))
+            if (onScrollCompare != null) row2.addView(big("Compare 3 feels (90 s)", pal.pill, pal.accent) { onScrollCompare.invoke() }, lp(1f))
             addView(row2, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         }
 

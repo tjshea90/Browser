@@ -119,6 +119,8 @@ object GeckoEngine {
      * live (mirror: always). 0 = the engine's own values on Android; 1 = a bigger pre-drawn margin and a shorter wait; 2 = also a lower top fling speed (research/SCROLL.md B1-B5).
      * Values are strings for the float prefs, exactly as GeckoView's own prefs file writes them.
      */
+    val scrollFeelNames = listOf("Standard (Firefox's own)", "Smoother", "Smoothest")
+
     fun applyScrollFeel(level: Int) {
         val d = org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_DEFAULT
         val (skate, still, wait, vel) = when (level) {
