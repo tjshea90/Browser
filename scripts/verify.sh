@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Verification gate (run before L2/L3 checkpoints).
 #   verify.sh quick   core tests + tools build + app compiles          (~20 s warm)
-#   verify.sh full    core tests + 51 Robolectric app tests + 13 Chromium JS tests + lintRelease + R8 release APK + APK audit (~2 min warm)
+#   verify.sh full    core tests + Robolectric app tests + Chromium JS tests + lintRelease + R8 release APK + APK audit (~2 min warm)
 # APK audit: size budget, minSdk/targetSdk, permission allow-list, signature, no native libs, no AndroidX, not debuggable.
 # Env: KESTREL_APK_BUDGET_KB (default 6000)
 set -u

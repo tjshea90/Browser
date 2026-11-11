@@ -129,7 +129,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
     private var pendingGeo: Pair<String, GeolocationPermissions.Callback>? = null
     private var backCallback: Any? = null
     private var suggestSeq = 0
-    @Volatile private var sessionRestored = false
+    @Volatile internal var sessionRestored = false // false until restore() ran: saving earlier could replace the saved session with a one-tab placeholder
 
     private val netListener: () -> Unit = { onNetworkChanged() }
     private val saveRunnable = Runnable { saveSessionNow() }

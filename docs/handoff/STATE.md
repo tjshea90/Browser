@@ -1,21 +1,20 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** 2026-11-11T01:44:17Z (L1) on `ccr-a57c163e-mtq8js` after c4241aa
-- **Summary:** dist: kestrel-0.1.0 APK candidate (verify full PASS: core 127, app 80, 13 Chromium, lint, R8); S7/S8 still to do
+- **Last checkpoint:** 2026-11-11T01:48:03Z (L3) on `ccr-a57c163e-mtq8js` after 6888b3c
+- **Summary:** Kestrel 0.1.0: Google default search, no-Google-services adaptations, hotspot fixes, 22 review findings fixed (intent crash, filter bypasses, privacy), verify full PASS (core 127, app 81, Chromium 16), first emulator run
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE
 <!-- RESUME:BEGIN -->
-**A complete browser exists and was RUN FOR THE FIRST TIME on an Android 10 x86 emulator (Chromium 74 WebView): it launches, lays out correctly at 600x973@170dpi, loads pages, blocks ads/trackers (shield count works).**
-**Phase 7 (release) is almost done.** Both independent reviews are finished and triaged in `docs/handoff/REVIEW-2026-11-11.md` (board = single source for what is fixed).
-DONE + pushed (core 127 tests, app 80 tests green): S1 intent: crash (reproduced on the emulator: FATAL NumberFormatException), S2 URL-truncation bypass, S3 address bar shows port + committed URL only, S4 poisoned-list guards + canary
-check + retry marker, S5 token-dedupe CPU bound, S6 private-window wipe/autofill/downloads/config-changes, S9, S10, S11, S13, C1 redirect classification, C2 https upgrade loop/stale state, C3, C4, C5, C6, C7, C8, C9 (flush off UI thread, cold-start order).
-Owner facts since first build: Google default search (done), 2 GB RAM, NO Google Play/services (done: wording, SSL hints, README "No Google Play" + "Updating the web engine").
-REMAINING, in order: (1) `bash scripts/verify.sh full` (lint + R8 + 13 Chromium tests + APK audit) -> `bash scripts/build-apk.sh` -> `checkpoint.sh --release 0.1.0 -t "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>" -t "Claude-Session: https://claude.ai/code/session_01UWi8ZytCdyz642NMACyvi9" "..."` -> SendUserFile the APK;
-(2) S7 (hide `__KST_CFG` seed from pages: pass config as IIFE argument; WeakSet instead of `canvas.__kstSkip`; web-tests must stay green) and S8 (downloads: show origin host in the prompt, treat server MIME `application/vnd.android.package-archive` as risky);
-(3) re-test on the emulator (recipe in REVIEW doc; ~5 min boot; the emulator and http.server die when the worker restarts): intent crash page, `10.0.2.2:8000` shows the port, cosmetic hiding of `.adsbygoogle`/`#ad-banner` was NOT observed on Chromium 74 -> investigate;
-(4) final message to the owner: honest about what was and was not run (emulator = Chromium 74 AOSP image, software mode, local pages only; never on the real tablet), ask for the tablet's WebView package+version (About page) and say the simple-workflow plugin's Bash guard is the only plugin that gets in the way.
+**RELEASE 0.1.0 IS BUILT: `dist/kestrel-0.1.0.apk` (+ `.sha256`), `scripts/verify.sh full` PASS (core 127, app 81 Robolectric, 16 Chromium JS tests, lint clean, R8 APK 2.3 MB, APK audit).**
+It was run once on an Android 10 x86 emulator (Chromium 74 WebView, software mode, local pages): launches, lays out at 600x973@170dpi, loads pages, shield count works. NEVER run on the real tablet.
+Both independent reviews are fully triaged and fixed (board: `docs/handoff/REVIEW-2026-11-11.md`; only S12 public signing key is WONTFIX/documented, plus the documented iframe-realm and X-Requested-With limits).
+Owner facts applied: Google default search + non-address -> Google; 2 GB RAM; NO Google Play/services (wording, SSL hints, README "No Google Play" + "Updating the web engine").
+NEXT (after the owner reports back): (1) the tablet's WebView package+version from the About page decides everything: if it is `com.android.webview` < 100 and cannot be updated, plan = GeckoView build (see Owner facts);
+(2) emulator re-test of the final APK (recipe in the REVIEW doc; emulator + http.server die on worker restart): `intent:#Intent;i.x=zz;end` page must NOT crash, `10.0.2.2:8000` must show the port,
+cosmetic hiding of generic `.adsbygoogle`/`#ad-banner` was NOT observed on Chromium 74 -> investigate (generic cap? injection timing?); (3) real-site checks through a proxy (Google Search on Chromium 74);
+(4) low priority: BrowserDb singleton, class/id generic cosmetic hiding, document-start injection via androidx.webkit, "reset filter lists" action.
 Build/verify: `./gradlew :core:test :app:testDebugUnitTest`, `bash scripts/verify.sh quick|full`, `bash scripts/build-apk.sh`, `cd web-tests && npm test`.
 <!-- RESUME:END -->
 
@@ -29,10 +28,10 @@ Build/verify: `./gradlew :core:test :app:testDebugUnitTest`, `bash scripts/verif
 | 4 | Browser app: UI, tabs, WebView hardening, Shields, private window, downloads, settings, data-saver | DONE (51 Robolectric tests, lint clean, never run on a real device) |
 | 5 | Filter-list pipeline: compile tool, bundled snapshot, conditional-GET updater | DONE (8 updater tests; list URLs verified) |
 | 6 | Injected JS (cosmetic + anti-fingerprint + save-data) + Playwright tests | DONE (13 Chromium tests); class/id generic cosmetic hiding deferred |
-| 7 | Release: independent review, fixes, docs, signed APK in `dist/` | IN PROGRESS |
+| 7 | Release: independent review, fixes, docs, signed APK in `dist/` | DONE (0.1.0 built; awaiting first real-tablet feedback) |
 
 ## IN PROGRESS
-- Phase 7: release build + remaining S7/S8 (see RESUME HERE).
+- Nothing in flight. Waiting for the owner's first real-tablet feedback (see RESUME HERE).
 - Low-priority candidate: `BrowserDb` is a new `SQLiteOpenHelper` per Activity instance and never closed (CloseGuard warnings in tests) -> make it a process singleton.
 
 ## Done (with evidence)

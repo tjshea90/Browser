@@ -9,12 +9,13 @@ It is **not Brave** and contains no Brave code or branding. Pages are drawn by t
 Blink/V8 engine family Brave is built on, shared with the OS so it costs no extra RAM); everything Brave-like is implemented in this app.
 
 > ### Please read: what has and has not been verified
-> This app was written and tested **in a build sandbox that has no emulator and no Android device**, so **it has never been run on a real
-> screen**. What *was* verified: the whole app compiles and passes Android Lint (including API-level checks for Android 10); 51 JVM tests
-> drive the real Activity, request interceptor, tab/memory logic, SQLite store and updater on an Android 10 framework (Robolectric);
-> 117 tests cover the filtering engine (including a 60 000-case comparison against an independent oracle); the page script was run in real
-> Chromium. What was **not** verified: real rendering, touch feel, startup time and memory on the tablet, and how *that tablet's* WebView
-> behaves. Expect to find rough edges on first use and please report them. See *Known limits* below.
+> This app was written in a cloud build sandbox with **no Android device**. It was run **once, briefly, on an Android 10 emulator** (an AOSP image whose web engine is the very old
+> Chromium 74, in a very slow software mode, against local test pages): it launched, drew its screens correctly at the tablet's 600×973 size, loaded a page, and blocked the ads and trackers
+> on it. That run also reproduced a real crash (a crafted `intent:` link) that is now fixed. Everything else was verified **without a device**: the whole app compiles and passes Android Lint
+> (including API-level checks for Android 10); 81 JVM tests drive the real Activity, request interceptor, tab/memory logic, SQLite store and updater on an Android 10 framework (Robolectric);
+> 127 tests cover the filtering engine (including a 60 000-case comparison against an independent oracle); the page script has 16 tests in real Chromium. Two independent code reviews
+> (security and correctness) were done and their confirmed findings fixed. What was **not** verified: the real tablet (touch feel, startup time, memory, **which WebView it has**), real
+> websites over a real hotspot, and Google Search on an old engine. Expect rough edges on first use and please report them. See *Known limits* below.
 
 ## Install on the tablet (sideload)
 1. Get `dist/kestrel-0.1.0.apk` from this repository (open the file on GitHub on the tablet and tap *Download*). Optional: check it against `dist/kestrel-0.1.0.apk.sha256`.

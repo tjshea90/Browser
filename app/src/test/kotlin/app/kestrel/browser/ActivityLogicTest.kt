@@ -94,6 +94,8 @@ class ActivityLogicTest {
         a.newTabAndShow()
         go(a, "second.example")
         val file = File(a.filesDir, "session.txt")
+        // saving is deliberately refused until the previous session was restored (it could overwrite it with a one-tab placeholder)
+        assertTrue("restore ran", waitFor { org.robolectric.shadows.ShadowLooper.idleMainLooper(); a.sessionRestored })
         a.saveSessionNow()
         assertTrue("session file written", waitFor { file.isFile && file.readText().contains("second.example") })
         val text = file.readText()
