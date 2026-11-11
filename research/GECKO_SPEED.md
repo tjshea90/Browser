@@ -25,7 +25,8 @@ Defaults: [G] 160 greprefs.js / geckoview-prefs.js, [J] 160 GeckoRuntimeSettings
 | `user.js` in a profile + `-profile` arg | start, user branch | persisted | `-profile` is "a backdoor ... mostly for tests" (Bug 1037504); default profile is `files/mozilla/<salt>.default` [N]; GV-managed names are reset after start; a new profile orphans cookies/permissions; geckodriver uses it | not recommended |
 ```kotlin
 // GeckoEngine.create(), before GeckoRuntime.create(): ~1 KB, skip the write when the content is unchanged
-val cfg = File(ctx.filesDir, "gecko-config.yaml").also { if (it.readTextOrNull() != yaml) it.writeText(yaml) }
+val cfg = File(ctx.filesDir, "gecko-config.yaml")
+if (runCatching { cfg.readText() }.getOrNull() != yaml) cfg.writeText(yaml)
 val settings = GeckoRuntimeSettings.Builder().configFilePath(cfg.path) /* + the existing calls */.build()
 val rt = GeckoRuntime.create(ctx, settings)
 rt.settings.setFetchPriorityEnabled(true)   // [J] GV's Java default is false and overrides the static default (true)
