@@ -14,9 +14,15 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
+import android.view.Gravity
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
+import android.widget.FrameLayout
 import java.nio.ByteBuffer
 import kotlin.math.floor
 import kotlin.math.pow
@@ -25,52 +31,84 @@ import kotlin.math.pow
  * The neon (owner request 4): a very subtle pulsing blue glow in a few logical places - the edge above the dock, the Home field, the selected tab card - like the
  * glow around a phone screen while an assistant talks. Everything else in the app stays instant.
  *
- * Cost design: a pulse is ONLY an alpha animation of a view that holds a static, pre-built glow drawable. [View.animate] on a hardware-accelerated view runs on the
- * RenderThread (RenderNodeAnimator): no per-frame work on the UI thread, no bitmaps re-drawn, no layout. The UI thread wakes twice per period to chain the next half.
- * Pulses stop by themselves while typing or loading, in battery-saver, when the system's animations are off, and when the app is not on screen.
+ * Cost design: a pulse is ONLY an alpha animation of a [GlowView] that holds a static, pre-built glow drawable. [View.animate] on a hardware-accelerated view runs on
+ * the RenderThread (RenderNodeAnimator): no per-frame work on the UI thread, no bitmaps re-drawn, no layout. The UI thread wakes twice per period to chain the next half.
+ * The glows hold still (a steady glow, no frames) while typing or loading, in battery-saver, when the system's animations are off, when the app is not on screen, and
+ * after [IDLE_MS] without a touch - so a tablet left on a page lets the screen go quiet and the SoC idle.
  */
 object Neon {
     const val OFF = 0
     const val STATIC = 1
     const val PULSE = 2
+    /** No touch for this long: the glows settle to a steady glow until the next touch. */
+    const val IDLE_MS = 25_000L
 
     /** 0 = no glow at all, 1 = steady glow, 2 = subtle pulse (default). Set from Settings. */
     @JvmField @Volatile var mode = PULSE
 
-    private class Pulser(val v: View, val lo: Float, val hi: Float, val halfMs: Long) { var running = false }
+    private class Pulser(val v: GlowView, val lo: Float, val hi: Float, val halfMs: Long) { var running = false }
 
     private val pulsers = ArrayList<Pulser>() // UI thread only
     private val ease = AccelerateDecelerateInterpolator()
-    private var held = false // the app is busy (typing / loading) or in the background: hold the glow still
+    private val handler = Handler(Looper.getMainLooper())
+    private var busy = false // typing or loading: the screen is already changing, hold the glow still
+    private var away = true // the app is not on screen
+    private var resting = false // no touch for IDLE_MS
     private var powerSave = false
+    private var lastTouch = 0L
+    private var restPosted = false
+    private val restCheck = Runnable {
+        restPosted = false
+        val left = IDLE_MS - (SystemClock.uptimeMillis() - lastTouch)
+        if (away) return@Runnable
+        if (left > 0) postRestCheck(left) else if (!resting) { resting = true; applyAll() }
+    }
 
-    /** Make [v] breathe between alpha [lo] and [hi]. Attach once per view; it follows the view's attach/detach by itself. */
-    fun pulse(v: View, lo: Float = 0.5f, hi: Float = 1f, periodMs: Long = 4200L) {
+    /** Make [v] breathe between alpha [lo] and [hi]. Attach once per view; it follows the view's attach/detach/visibility by itself. */
+    fun pulse(v: GlowView, lo: Float = 0.5f, hi: Float = 1f, periodMs: Long = 4200L) {
         val p = Pulser(v, lo, hi, periodMs / 2)
         pulsers.add(p)
         v.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(view: View) { apply(p) }
+            override fun onViewAttachedToWindow(view: View) { apply(p, view.isShown) }
             override fun onViewDetachedFromWindow(view: View) { stop(p); pulsers.remove(p) }
         })
-        if (v.isAttachedToWindow) apply(p)
+        if (v.isAttachedToWindow) apply(p, v.isShown)
     }
 
-    /** Hold every glow still (typing, loading, app in the background) or let them breathe again. */
-    fun hold(on: Boolean) { if (held != on) { held = on; refresh() } }
+    /** Typing or loading: hold every glow still (true) or let them breathe again (false). */
+    fun busy(on: Boolean) { if (busy != on) { busy = on; applyAll() } }
 
-    /** Re-read the mode / power state and start or stop every pulse. Call after a settings change and on resume. */
-    fun refresh(ctx: Context? = null) {
+    /** The app came to the front / went away. Re-reads battery-saver. */
+    fun foreground(on: Boolean, ctx: Context? = null) {
         if (ctx != null) powerSave = try { ctx.getSystemService(PowerManager::class.java)?.isPowerSaveMode == true } catch (e: Exception) { false }
-        for (p in pulsers.toList()) apply(p)
+        away = !on
+        handler.removeCallbacks(restCheck); restPosted = false
+        if (on) { lastTouch = SystemClock.uptimeMillis(); resting = false; postRestCheck(IDLE_MS) }
+        applyAll()
     }
 
-    private fun animated(): Boolean = mode == PULSE && !held && !powerSave && ValueAnimator.areAnimatorsEnabled()
+    /** Any touch on the screen (cheap: a clock read; the rest timer is re-armed lazily). */
+    fun touched() {
+        lastTouch = SystemClock.uptimeMillis()
+        if (away) return
+        if (resting) { resting = false; applyAll() }
+        if (!restPosted) postRestCheck(IDLE_MS)
+    }
 
-    private fun apply(p: Pulser) {
+    /** Re-read the mode and start or stop every pulse (after a settings change). */
+    fun refresh() = applyAll()
+
+    internal fun visibility(v: GlowView, visible: Boolean) { for (p in pulsers) if (p.v === v) apply(p, visible) }
+
+    private fun postRestCheck(delay: Long) { restPosted = true; handler.postDelayed(restCheck, delay) }
+    private fun applyAll() { for (p in pulsers.toList()) apply(p, p.v.isShown) }
+    private fun animated(): Boolean = mode == PULSE && !busy && !away && !resting && !powerSave && ValueAnimator.areAnimatorsEnabled()
+
+    private fun apply(p: Pulser, visible: Boolean) {
         when {
             mode == OFF -> { stop(p); p.v.alpha = 0f }
-            animated() && p.v.isShown -> start(p)
-            else -> { stop(p); p.v.alpha = if (mode == OFF) 0f else p.lo + (p.hi - p.lo) * 0.7f } // a steady glow at about 70 % of the peak
+            visible && animated() -> start(p)
+            else -> { stop(p); p.v.alpha = p.lo + (p.hi - p.lo) * 0.7f } // a steady glow at about 70 % of the peak
         }
     }
 
@@ -93,10 +131,14 @@ object Neon {
     }
 }
 
-/** A view that only holds a glow drawable: no overlapping rendering, so alpha is applied without an off-screen layer. */
+/** A view that only holds a glow drawable: no overlapping rendering (alpha is applied without an off-screen layer) and no size of its own (it never makes its parent grow). */
 class GlowView(ctx: Context) : View(ctx) {
     init { isClickable = false; isFocusable = false; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
     override fun hasOverlappingRendering(): Boolean = false
+    override fun onMeasure(w: Int, h: Int) {
+        setMeasuredDimension(if (MeasureSpec.getMode(w) == MeasureSpec.EXACTLY) MeasureSpec.getSize(w) else 0, if (MeasureSpec.getMode(h) == MeasureSpec.EXACTLY) MeasureSpec.getSize(h) else 0)
+    }
+    override fun onVisibilityAggregated(isVisible: Boolean) { super.onVisibilityAggregated(isVisible); Neon.visibility(this, isVisible) }
 }
 
 /**
@@ -128,32 +170,48 @@ class NeonGlowDrawable(private val color: Int, private val cutPx: Float, private
 }
 
 /**
- * The 2 dp line between the page and the dock: load progress in neon blue, and a soft halo that rises above it into the page (drawn above the view's own bounds:
- * its parent must not clip children). The halo is what pulses ([Neon.pulse] on this view).
+ * The 2 dp line between the page and the dock - load progress in neon blue over a faint resting hairline - plus a soft halo that rises above it into the page
+ * (drawn above this view's bounds: the parent must not clip children). Only [halo] pulses ([Neon.pulse]); the line itself never changes alpha.
  */
-class NeonProgress(ctx: Context, private var accent: Int, private var hi: Int) : View(ctx) {
-    private val paint = Paint()
-    private val haloPx = ctx.dpf(16f)
-    private var halo: LinearGradient? = null
+class NeonBar(ctx: Context, private var accent: Int, private var hi: Int) : FrameLayout(ctx) {
+    val halo = GlowView(ctx)
+    private val line = Line(ctx)
+    private val haloPx = ctx.dp(HALO_DP)
+
     var progress = 0
-        set(v) { if (field != v) { field = v; invalidate() } }
+        set(v) { if (field != v) { field = v; line.invalidate() } }
 
-    init { isClickable = false; isFocusable = false; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
+    init {
+        clipChildren = false
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+        addView(halo, LayoutParams(LayoutParams.MATCH_PARENT, haloPx, Gravity.TOP).apply { topMargin = -haloPx })
+        addView(line, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        paintHalo()
+    }
 
-    fun setColors(accent: Int, hi: Int) { this.accent = accent; this.hi = hi; halo = null; invalidate() }
-    override fun hasOverlappingRendering(): Boolean = false
+    fun setColors(accent: Int, hi: Int) { this.accent = accent; this.hi = hi; paintHalo(); line.invalidate() }
 
-    override fun onDraw(c: Canvas) {
-        if (halo == null) halo = LinearGradient(0f, -haloPx, 0f, 0f, accent and 0x00FFFFFF, (accent and 0x00FFFFFF) or 0x3C000000, Shader.TileMode.CLAMP)
-        paint.shader = halo; c.drawRect(0f, -haloPx, width.toFloat(), 0f, paint)
-        paint.shader = null
-        paint.color = (accent and 0x00FFFFFF) or 0x59000000; c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint) // the resting line
-        if (progress in 1..99) {
-            val x = width * progress / 100f
-            paint.color = accent; c.drawRect(0f, 0f, x, height.toFloat(), paint)
-            paint.color = hi; c.drawRect(maxOf(0f, x - context.dpf(26f)), 0f, x, height.toFloat(), paint) // the bright head
+    private fun paintHalo() {
+        val rgb = accent and 0x00FFFFFF
+        halo.background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(rgb, rgb or 0x10000000, rgb or 0x3C000000)).also { it.setColors(intArrayOf(rgb, rgb or 0x10000000, rgb or 0x3C000000), floatArrayOf(0f, 0.55f, 1f)) }
+    }
+
+    private inner class Line(ctx: Context) : View(ctx) {
+        private val paint = Paint()
+        init { isClickable = false; isFocusable = false; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
+        override fun hasOverlappingRendering(): Boolean = false
+        override fun onDraw(c: Canvas) {
+            val w = width.toFloat(); val h = height.toFloat()
+            paint.color = (accent and 0x00FFFFFF) or 0x66000000; c.drawRect(0f, 0f, w, h, paint) // the resting line
+            if (progress in 1..99) {
+                val x = w * progress / 100f
+                paint.color = accent; c.drawRect(0f, 0f, x, h, paint)
+                paint.color = hi; c.drawRect(maxOf(0f, x - context.dpf(26f)), 0f, x, h, paint) // the bright head
+            }
         }
     }
+
+    companion object { const val HALO_DP = 16 }
 }
 
 /**
