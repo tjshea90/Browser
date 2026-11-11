@@ -72,7 +72,7 @@ class VideoFlow(private val a: BrowserActivity) {
         panel = p; panelTab = tab
         render(p, tab, items)
         a.sheet.show("Download video", p)
-        for (c in items) if (c.kind == MediaKind.FILE && !c.audioOnly && c.knownHeight == 0 && looksMp4(c) && probed.add(c.key)) probe(tab, c, 0L, 256 * 1024, 0)
+        for (c in items) if (c.kind == MediaKind.FILE && !c.audioOnly && (c.knownHeight == 0 || c.durationMs == 0L) && looksMp4(c) && probed.add(c.key)) probe(tab, c, 0L, 256 * 1024, 0)
     }
 
     private fun looksMp4(c: MediaCandidate): Boolean = MediaSniff.extension(c.url) in setOf("mp4", "m4v", "mov") || c.mime == "video/mp4" || c.mime == "video/quicktime"
