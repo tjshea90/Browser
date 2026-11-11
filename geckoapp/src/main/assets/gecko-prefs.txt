@@ -1,0 +1,30 @@
+# Gecko preferences applied at EVERY start through a YAML config (GeckoRuntimeSettings.Builder.configFilePath; research/GECKO_SPEED.md section 1).
+# One per line:  name = true|false|integer|"string".   They are default-branch prefs applied before Gecko starts, so "once" prefs (caches, graphics) work.
+# A name that does not exist in the bundled engine is a SILENT no-op: tools/check-gecko-prefs.sh checks every name against the real GeckoView in CI.
+# Bump kestrel.config.version when this list changes: Diagnostics reads it back to prove the file was applied.
+kestrel.config.version = 1
+
+# --- video: no AV1 (software decode on 4x Cortex-A53); sites then choose H.264 -> MediaCodec hardware decode
+media.av1.enabled = false
+# --- hotspot data: smaller read-ahead (GeckoView cannot see Android's metered flag, so copy the "cellular" values), no speculative downloads
+media.cache_readahead_limit = 30
+media.cache_resume_threshold = 10
+media.cache_size = 65536
+network.prefetch-next = false
+# --- memory (2 GB Go tablet): one content process (A/B against 2 with the Diagnostics per-process memory), small page cache, bounded decoded images
+dom.ipc.processCount = 1
+browser.sessionhistory.max_total_viewers = 2
+image.mem.surfacecache.max_size_kb = 98304
+# --- caches: a fixed 512 MB disk cache saves repeat bytes on the hotspot; compile JS bytecode caches after 2 loads instead of 4
+browser.cache.disk.smart_size.enabled = false
+browser.cache.disk.capacity = 512000
+dom.script_loader.bytecode_cache.strategy = 1
+# --- no animations (the app's own UI has none either): sites see prefers-reduced-motion, GIFs play once, keyboard scroll is instant
+ui.prefersReducedMotion = 1
+image.animation_mode = "once"
+general.smoothScroll = false
+# --- security / privacy pins (research/SECURITY.md 4.1): no push or notification machinery, no WebRTC LAN-address leak, never import OS root certificates
+dom.push.enabled = false
+dom.webnotifications.enabled = false
+media.peerconnection.ice.default_address_only = true
+security.certerrors.mitm.auto_enable_enterprise_roots = false
