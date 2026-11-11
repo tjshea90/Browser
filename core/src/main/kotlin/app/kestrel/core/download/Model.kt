@@ -200,4 +200,4 @@ interface NetGate {
 }
 
 /** Starts worker threads (the Android layer lowers their priority). */
-interface Spawner { fun spawn(name: String, task: Runnable): Thread }
+fun interface Spawner { fun spawn(name: String, task: Runnable): Thread }

@@ -84,7 +84,7 @@ object FileNames {
         var i = 0
         while (i < s.length) {
             val c = s[i]
-            if (c == '%' && i + 2 < s.length + 0 && i + 2 <= s.length - 1 + 0) {
+            if (c == '%' && i + 2 < s.length) {
                 val hex = s.substring(i + 1, i + 3)
                 bytes.write(hex.toInt(16)); i += 3
             } else { bytes.write(c.toString().toByteArray(Charsets.UTF_8)); i++ }
