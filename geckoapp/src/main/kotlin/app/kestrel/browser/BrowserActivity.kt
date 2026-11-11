@@ -75,6 +75,8 @@ import app.kestrel.browser.ui.SheetHost
 import app.kestrel.browser.ui.menuGrid
 import app.kestrel.browser.ui.TopSite
 import app.kestrel.browser.ui.dp
+import app.kestrel.browser.ui.dpf
+import app.kestrel.browser.ui.PullChip
 import app.kestrel.browser.web.ErrorScreen
 import app.kestrel.browser.web.ExternalIntents
 import app.kestrel.browser.web.NavPolicy
@@ -1743,5 +1745,7 @@ open class BrowserActivity : Activity(), DockListener {
     companion object {
         private const val REQ_FILE = 1001
         private const val REQ_PERM = 1002
+        private const val PULL_ARM_DP = 64f // chip travel at which letting go reloads (about 107 dp of finger travel)
+        private const val PULL_MAX_DP = 84f
     }
 }
