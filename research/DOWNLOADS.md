@@ -245,3 +245,16 @@ E25 [S] Mathis et al. 1997 (per-flow TCP rate ~ MSS/(RTT*sqrt(loss)): why N flow
 - Android 11-17 behaviour comes from documentation only; no device above API 29 was available.
 - Measure first (Diagnostics page, task A5): (1) 100 MB file from an H1.1-only host and an H3 CDN with 1/2/3/4 connections x3, screen on and off; (2) Gecko executor against a cookie-gated URL: 206 to Range, 412 to If-Match, Content-Encoding, `response.uri`, cancel latency; (3) MediaStore pending `pwrite` x4 threads MB/s, fsync ms per 8 MiB, `kill -9` + reboot survival;
   (4) RSS of the process with a running download, in-process vs `:dl` (WebView build); (5) a few sites on the new Let's Encrypt chain through URLConnection vs Gecko.
+
+## 11. Implementation notes (alpha5, 2026-11-11) - what was built and where it deviates from sections 1-8
+Code: `core/.../download/` (Model, HttpSemantics, FileNames, Planner, Engine; 43 JVM tests incl. an in-memory fake server: pause/resume, parallel ranges, If-Match, changed file, no-range, 429/503, truncation, offline,
+no space, cancel, crash recovery, link refresh, queue, private) · `app/.../download/` (SqliteStore, MediaStoreSinks, UrlConnectionFetcher, DownloadController, DownloadService, Notifier) · `app/.../ui/DownloadsScreen` · `geckoapp/.../net/GeckoFetcher`.
+- **Conditional requests:** every Range request carries `If-Match` (strong ETag) or `If-Unmodified-Since` - also a lone sequential resume (section 4 said If-Range there). A changed file is a 412 WITHOUT a body, so a resume can never silently spend a 400 MB re-download on the hotspot;
+  If-Range would send the whole new file. A 200 to a Range request after progress = NEEDS_DECISION(NO_RANGE).
+- **Probe:** the first request is a bounded Range window when the fetcher asks for it (`Fetcher.probeWindow`; Gecko 4 MiB, because GeckoInputStream's queue has no back-pressure), else a streamed GET (URLConnection). The page's own `onExternalResponse` stream is closed unread (suspended channel = no body bytes) and
+  the manager makes its own request through the same network stack (same cookies); POST-initiated downloads are therefore not supported yet.
+- **Not built yet (alpha5):** digest verification (`Repr-Digest`), file sniffing, speed limit, polite mode (drop to 1 connection while a tab loads), SAF/staged sinks, `onTimeout` handling for Android 15, auto-resume after a restart (interrupted downloads come back PAUSED_SYSTEM and wait for a tap).
+- **Not resumable = no Pause button:** without a strong validator, a known length and range support the row offers Cancel only (a soft pause would hold a socket on a hotspot).
+- **Names:** `FileNames.choose` (Content-Disposition `filename*` > `filename` > URL path > hint, sanitised, <= 255 UTF-8 bytes, extension from the MIME type); MediaProvider renames a clash and the real name is read back.
+- **Control flow:** one ordered control thread (HandlerThread, background priority) + one worker thread per running segment, ONE lock for all state held only for short updates; "paused" is shown at once and the checkpoint (fsync, then SQLite) lands when the last worker is gone.
+- **Verified:** JVM only until the emulator run below; the real tablet has not run it. Everything in section 10 "Not verified" still applies.
