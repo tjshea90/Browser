@@ -145,10 +145,10 @@ class DownloadsScreen(ctx: Context, private var pal: Pal, private val l: Listene
                 Action.RESUME -> DownloadController.resume(ctx, v.id)
                 Action.RETRY -> DownloadController.resume(ctx, v.id)
                 Action.RESTART -> DownloadController.restart(ctx, v.id)
-                Action.CANCEL -> if (v.done > 0) l.confirm("Cancel this download?", "The part already downloaded (${Format.bytes(v.done)}) is deleted.", "Cancel download") { DownloadController.cancel(v.id) } else DownloadController.cancel(v.id)
+                Action.CANCEL -> { val cur = DownloadController.view(v.id) ?: v; if (cur.done > 0) l.confirm("Cancel this download?", "The part already downloaded (${Format.bytes(cur.done)}) is deleted.", "Cancel download") { DownloadController.cancel(v.id) } else DownloadController.cancel(v.id) }
                 Action.OPEN -> l.open(v)
                 Action.SHARE -> l.share(v)
-                Action.DELETE -> l.confirm("Delete this download?", if (v.state == DlState.COMPLETED) "The file ${v.name} is deleted from your tablet." else "The unfinished file is deleted.", "Delete") { DownloadController.remove(v.id, true) }
+                Action.DELETE -> { val cur = DownloadController.view(v.id) ?: v; l.confirm("Delete this download?", if (cur.state == DlState.COMPLETED) "The file ${cur.name} is deleted from your tablet." else "The unfinished file is deleted.", "Delete") { DownloadController.remove(v.id, true) } }
             }
         }
         val danger = a == Action.DELETE || a == Action.CANCEL

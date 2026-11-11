@@ -36,6 +36,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         // Only COMMITTED pages reach the address bar. Engine-internal pages (about:neterror, our blank error backdrop) never do.
         if (url == null || url.startsWith("about:") || url.startsWith("data:")) return
         tab.url = url
+        tab.pendingNav = null
         val host = UrlParts.hostOf(url)
         tab.topHost = host
         tab.mainUrl = url

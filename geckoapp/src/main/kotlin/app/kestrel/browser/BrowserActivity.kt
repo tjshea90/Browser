@@ -572,6 +572,8 @@ open class BrowserActivity : Activity(), DockListener {
     /** [savedCopy]: load from the HTTP cache only (the flag is per navigation, so any other navigation clears it). */
     private fun loadUrl(tab: Tab, url: String, upgradedFrom: String?, savedCopy: Boolean = false) {
         tab.savedCopyOnce = savedCopy
+        tab.prevUrl = tab.url
+        tab.pendingNav = url
         tab.showHome = false
         tab.error = null
         tab.pendingLoad = null
@@ -1417,7 +1419,7 @@ open class BrowserActivity : Activity(), DockListener {
         val big = limit >= 0 && (length < 0 || length >= limit)
         val risky = Downloads.isRisky(name, mime)
         val cleartext = url.startsWith("http://", ignoreCase = true) // on a hotspot the carrier can read or change an unencrypted download
-        if (!big && !risky && !cleartext) { startDownload(url, userAgent, contentDisposition, mime, tab); return }
+        if (!big && !risky && !cleartext) { startDownload(url, userAgent, contentDisposition, mime, tab); leaveDownloadTab(tab); return }
         val size = if (length >= 0) NewTabPage.fmtBytes(length) else "unknown size"
         val msg = buildString {
             append(name).append("\nFrom: ").append(UrlParts.hostOf(url) ?: "unknown site").append("\nSize: ").append(size)
@@ -1425,7 +1427,19 @@ open class BrowserActivity : Activity(), DockListener {
             if (big) append("\n\nYou're on a metered connection (your phone's hotspot). This may use a lot of mobile data.")
             if (risky) append("\n\nThis type of file can install software or run code. Only continue if you trust the site.")
         }
-        askYesNo("Download this file?", msg, "Download", "Cancel", { ok -> if (ok) startDownload(url, userAgent, contentDisposition, mime, tab) })
+        askYesNo("Download this file?", msg, "Download", "Cancel", { ok -> if (ok) startDownload(url, userAgent, contentDisposition, mime, tab); leaveDownloadTab(tab) })
+    }
+
+    /** A tab whose only "page" was the download link has nothing to show: back to the page it came from, to Home, or closed when a page opened it. */
+    private fun leaveDownloadTab(tab: Tab) {
+        if (tab.pendingNav == null || !tabs.contains(tab)) return // a link on a real page: that page is still there
+        tab.pendingNav = null
+        tab.loading = false; tab.progress = 0
+        when {
+            tab.prevUrl.isNotEmpty() -> { tab.url = tab.prevUrl; updateUi() }
+            tab.parentId != 0L && tabs.any { it.id == tab.parentId } -> doCloseTab(tab)
+            else -> showNewTabPage(tab)
+        }
     }
 
     private fun startDownload(url: String, ua: String?, cd: String?, mime: String?, tab: Tab) {
