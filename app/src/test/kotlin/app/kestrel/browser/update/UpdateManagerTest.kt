@@ -7,9 +7,11 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /** The JSON half of the updater (org.json is the framework's): a realistic GitHub Releases answer, including the fields GitHub may send as null. */
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [29])
 class UpdateManagerTest {
     private val sha = "b47fdf4cb02d3a2f5fe0a0761d503a0e81abf636dce81260a81aa5a9b668e8ce"
 
