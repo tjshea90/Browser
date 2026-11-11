@@ -376,7 +376,7 @@ object UpdateManager {
         Thread({
             val apk = File(dir(app), offer.apkName)
             val kept = apk.isFile && sp(app).getString("verified", null) == offer.tag
-            val partLen = File(dir(app), offer.apkName + ".part").length()
+            val partLen = jobId(app).let { id -> if (id == 0L) 0L else (DownloadController.allViews().firstOrNull { it.id == id }?.done ?: 0L) }
             val s = space(app, offer, if (kept) apk else null, pending = if (kept) 0 else (offer.size - partLen).coerceAtLeast(0))
             if (s.shortBy <= 0) set(app, if (kept) Phase.READY else Phase.AVAILABLE, offer, if (kept) offer.size else partLen, offer.size)
             else needSpace(app, offer, s, kept)

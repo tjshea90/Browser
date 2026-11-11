@@ -200,6 +200,7 @@ open class BrowserActivity : Activity(), DockListener {
         show(firstTab)
         val launch = urlFromIntent(intent)
         if (intent?.getBooleanExtra(Notifier.EXTRA_OPEN_DOWNLOADS, false) == true) Io.main.post { showDownloads() }
+        handleUpdateIntent(intent)
         Io.fast {
             val text = try { sessionFile().takeIf { it.isFile }?.readText() } catch (e: Exception) { null }
             val session = SessionCodec.decode(text)
@@ -307,7 +308,20 @@ open class BrowserActivity : Activity(), DockListener {
         super.onNewIntent(intent)
         setIntent(intent)
         if (intent.getBooleanExtra(Notifier.EXTRA_OPEN_DOWNLOADS, false)) showDownloads()
+        handleUpdateIntent(intent)
         urlFromIntent(intent)?.let { openInNewTabOrCurrent(it) }
+    }
+
+    /** A tap on the update notification: open the Updates sheet; "Install" also starts the install (Android then asks for its one confirmation). */
+    private fun handleUpdateIntent(i: Intent?) {
+        if (i?.getBooleanExtra(UpdateNotifier.EXTRA_OPEN_UPDATES, false) != true) return
+        i.removeExtra(UpdateNotifier.EXTRA_OPEN_UPDATES)
+        val install = i.getBooleanExtra(UpdateNotifier.EXTRA_INSTALL_UPDATE, false)
+        i.removeExtra(UpdateNotifier.EXTRA_INSTALL_UPDATE)
+        Io.main.post {
+            showUpdates()
+            if (install && UpdateManager.state.phase == UpdateManager.Phase.READY) UpdateManager.install(this)
+        }
     }
 
     @Suppress("DEPRECATION")

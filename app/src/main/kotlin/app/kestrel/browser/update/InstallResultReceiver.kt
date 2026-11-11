@@ -14,9 +14,13 @@ class InstallResultReceiver : BroadcastReceiver() {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 // The system's "Do you want to update this app?" screen. The user just tapped Install, so this app is in front and may start it.
                 val confirm = if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java) else intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
-                if (confirm != null) try { ctx.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (e: Exception) { UpdateManager.installFailed(ctx, "the installer screen could not be opened") }
+                if (confirm != null) {
+                    // On screen: open it at once. In the background (an automatic install attempt): a screen cannot be started from there on Android 10+, so the notification carries it.
+                    if (app.kestrel.browser.ProcessLife.uiVisible) try { ctx.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (e: Exception) { UpdateManager.installFailed(ctx, "the installer screen could not be opened") }
+                    else UpdateNotifier.confirm(ctx, confirm)
+                }
             }
-            PackageInstaller.STATUS_SUCCESS -> { /* the app is replaced and restarted by Android; UpdateManager.init() tidies the old file on the next start */ }
+            PackageInstaller.STATUS_SUCCESS -> { UpdateNotifier.clear(ctx) /* the app is replaced by Android; UpdateManager.init() tidies the old file on the next start */ }
             PackageInstaller.STATUS_FAILURE_ABORTED -> UpdateManager.installCancelled(ctx)
             PackageInstaller.STATUS_FAILURE_STORAGE -> UpdateManager.installNeedsSpace(ctx)
             PackageInstaller.STATUS_FAILURE_BLOCKED -> UpdateManager.installFailed(ctx, "Android or a security setting on this tablet blocked the installation")
