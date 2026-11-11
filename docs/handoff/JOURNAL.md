@@ -13,3 +13,4 @@
 - 2026-11-10T23:57:18Z [L1] 40 Robolectric app tests + 117 core tests green; fixed: JsEscape doubled slash, PING in ambiguous mask (blocked Stripe etc), live-WebView limit not enforced at creation
 - 2026-11-11T00:01:06Z [L1] filter updater (conditional GET, safety invariants, JobScheduler) + 8 updater tests; list URLs verified via web-fetch (cookie URL corrected); 48 app tests green
 - 2026-11-11T00:04:06Z [L2] Phases 4-6 done: full browser app + updater + injected JS; verify full PASS (core 117, app 51 Robolectric, 13 Chromium JS tests, lint clean, 2.3MB APK)
+- 2026-11-11T00:15:44Z [L1] hotspot: unvalidated Wi-Fi no longer forces stale cache-first loads; Open saved copy action; https fallback only suppressed when offline; 9 new tests (mutation-checked); docs+CI trigger limited to milestones

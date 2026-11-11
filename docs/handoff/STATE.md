@@ -1,8 +1,8 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** 2026-11-11T00:04:06Z (L2) on `ccr-a57c163e-mtq8js` after 8918599
-- **Summary:** Phases 4-6 done: full browser app + updater + injected JS; verify full PASS (core 117, app 51 Robolectric, 13 Chromium JS tests, lint clean, 2.3MB APK)
+- **Last checkpoint:** 2026-11-11T00:15:44Z (L1) on `ccr-a57c163e-mtq8js` after 5e75d12
+- **Summary:** hotspot: unvalidated Wi-Fi no longer forces stale cache-first loads; Open saved copy action; https fallback only suppressed when offline; 9 new tests (mutation-checked); docs+CI trigger limited to milestones
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE

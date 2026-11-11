@@ -108,6 +108,7 @@ class ConnectivityPolicyTest {
     @Test
     fun noNetworkAtAllServesSavedCopiesFirstAndGoesBackToLiveWhenItReturns() {
         val a = launch()
+        NetworkMonitor.update(caps(internet = true, validated = true)) // start() adopted Robolectric's default network; pin a healthy one
         val wv = open(a, "example.com")
         assertEquals(WebSettings.LOAD_DEFAULT, wv.settings.cacheMode)
 
@@ -203,6 +204,7 @@ class ConnectivityPolicyTest {
     fun anUpgradedHttpSiteWithoutHttpsStillGetsTheWarningOnAnUnvalidatedHotspot() {
         val a = launch()
         NetworkMonitor.update(caps(internet = true, validated = false))
+        assertEquals(State.NO_INTERNET, NetworkMonitor.state)
         val wv = open(a, "example.com")
         val tab = a.currentTab!!
         tab.upgradedFrom = "http://old.example/"
