@@ -131,7 +131,7 @@ class PlannerTest {
     /** Every status line says how much of the file is on the tablet (owner request: MB downloaded next to the total). */
     @Test fun statusShowsMegabytesDownloaded() {
         val mb = 1_048_576L
-        assertEquals("7.8 MB of 8.6 MB  ·  90 %  ·  144 KB/s  ·  5 s left", Format.status(view(DlState.RUNNING, total = 8_600_000, done = 7_800_000 - 400_000 + 400_000 /* 7.44 MiB */ + 0, bps = 147_456, eta = 5)).replace("7.4 MB of 8.2 MB", "7.8 MB of 8.6 MB").replace("90 %", "90 %").let { "7.8 MB of 8.6 MB  ·  90 %  ·  144 KB/s  ·  5 s left" })
+        assertEquals("7.8 MB of 8.6 MB  ·  91 %  ·  144 KB/s  ·  5 s left", Format.status(view(DlState.RUNNING, total = 9_000_000, done = 8_200_000, bps = 147_456, eta = 5)))
         assertEquals("3.0 MB of 8.0 MB  ·  37 %  ·  1.0 MB/s  ·  5 s left", Format.status(view(DlState.RUNNING, total = 8 * mb, done = 3 * mb, bps = mb, eta = 5)))
         assertEquals("3.0 MB so far  ·  1.0 MB/s", Format.status(view(DlState.RUNNING, total = -1, done = 3 * mb, bps = mb)))
         assertEquals("Paused  ·  3.0 MB of 8.0 MB  ·  37 %", Format.status(view(DlState.PAUSED_USER, total = 8 * mb, done = 3 * mb)))
