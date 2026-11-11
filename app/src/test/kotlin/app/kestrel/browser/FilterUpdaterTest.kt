@@ -38,6 +38,9 @@ class FilterUpdaterTest {
         ctx = org.robolectric.RuntimeEnvironment.getApplication()
         Engine.start(ctx)
         original = Engine.filters()
+        // Baseline = the tiny built-in seed set, so a 25k-rule download is a sane UPGRADE (against the real ~120k bundled set it would,
+        // correctly, be refused as a suspiciously small download).
+        Engine.swap(app.kestrel.core.filter.SeedLists.build(), "seed")
         File(ctx.filesDir, "filters").let { if (it.exists()) it.deleteRecursively() }
         Prefs.get(ctx).updateUnmeteredOnly = false
     }

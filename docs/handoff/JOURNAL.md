@@ -11,3 +11,4 @@
 - 2026-11-10T23:40:23Z [L1] app: manifest, themes, icons, Prefs, Engine, Shields, Interceptor, WebView factory/clients (compiles clean); JsEscape fix
 - 2026-11-10T23:50:02Z [L1] app UI complete: BrowserActivity (tabs, hibernation, session, navigation, panels, permissions, dialogs, fullscreen, downloads), toolbar, NTP, error screens, settings, shields panel; verify full PASS (lint clean, 2.3MB APK)
 - 2026-11-10T23:57:18Z [L1] 40 Robolectric app tests + 117 core tests green; fixed: JsEscape doubled slash, PING in ambiguous mask (blocked Stripe etc), live-WebView limit not enforced at creation
+- 2026-11-11T00:01:06Z [L1] filter updater (conditional GET, safety invariants, JobScheduler) + 8 updater tests; list URLs verified via web-fetch (cookie URL corrected); 48 app tests green

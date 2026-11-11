@@ -1,8 +1,8 @@
 # STATE — single source of truth for resuming (keep < 150 lines; details live in ARCHITECTURE.md)
 
 <!-- CHECKPOINT:BEGIN -->
-- **Last checkpoint:** 2026-11-10T23:57:18Z (L1) on `ccr-a57c163e-mtq8js` after 5697a1f
-- **Summary:** 40 Robolectric app tests + 117 core tests green; fixed: JsEscape doubled slash, PING in ambiguous mask (blocked Stripe etc), live-WebView limit not enforced at creation
+- **Last checkpoint:** 2026-11-11T00:01:06Z (L1) on `ccr-a57c163e-mtq8js` after 8310637
+- **Summary:** filter updater (conditional GET, safety invariants, JobScheduler) + 8 updater tests; list URLs verified via web-fetch (cookie URL corrected); 48 app tests green
 <!-- CHECKPOINT:END -->
 
 ## RESUME HERE
