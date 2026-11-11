@@ -20,20 +20,27 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import app.kestrel.browser.R
 
-/** Colors for the CERE identity. The private skin is violet end to end (chrome, accent, progress) so it can never be mistaken for a normal tab. */
+/** Colors for the REAPER identity (glossy black + neon blue). The private skin is violet end to end (chrome, accent, progress) so it can never be mistaken for a normal tab. */
 class Pal(ctx: Context, val isPrivate: Boolean = false) {
     val windowBg = ctx.getColor(R.color.window_bg)
-    val chromeBg = if (isPrivate) 0xFF130D21.toInt() else ctx.getColor(R.color.chrome_bg)
+    val chromeBg = if (isPrivate) 0xFF0B0716.toInt() else ctx.getColor(R.color.chrome_bg)
+    /** Glossy surfaces: a little lighter at the top, fading to near black (drawn once as a gradient, no per-frame cost). */
+    val glossTop = if (isPrivate) 0xFF170F2A.toInt() else 0xFF0B1B25.toInt()
+    val glossBottom = if (isPrivate) 0xFF05030B.toInt() else 0xFF010305.toInt()
     val fg = if (isPrivate) 0xFFF2ECFF.toInt() else ctx.getColor(R.color.chrome_fg)
     val muted = if (isPrivate) 0xFFA797C8.toInt() else ctx.getColor(R.color.chrome_fg_muted)
-    val pill = if (isPrivate) 0xFF231939.toInt() else ctx.getColor(R.color.pill_bg)
+    val pill = if (isPrivate) 0xFF1A1230.toInt() else ctx.getColor(R.color.pill_bg)
     val divider = if (isPrivate) 0xFF33264F.toInt() else ctx.getColor(R.color.divider)
-    val accent = if (isPrivate) 0xFFB794FF.toInt() else ctx.getColor(R.color.accent)
+    val accent = if (isPrivate) 0xFFB07CFF.toInt() else ctx.getColor(R.color.accent)
+    /** The ice-white-cyan of the brightest glow: glow cores, the active icon. */
+    val accentHi = if (isPrivate) 0xFFD9C2FF.toInt() else 0xFF36E6F2.toInt()
+    /** Mid blue for hairlines and large quiet fills. */
+    val deep = if (isPrivate) 0xFF5B35B8.toInt() else 0xFF0284B0.toInt()
     val accentOn = if (isPrivate) 0xFF120A22.toInt() else ctx.getColor(R.color.accent_on)
     val danger = ctx.getColor(R.color.danger)
     val warn = ctx.getColor(R.color.warn)
     val ok = ctx.getColor(R.color.ok)
-    val card = if (isPrivate) 0xFF1A1230.toInt() else ctx.getColor(R.color.card_bg)
+    val card = if (isPrivate) 0xFF120B22.toInt() else ctx.getColor(R.color.card_bg)
     val scrim = ctx.getColor(R.color.scrim)
 }
 
@@ -90,7 +97,7 @@ fun pillButton(ctx: Context, text: String, bg: Int, fg: Int, onClick: () -> Unit
         minHeight = ctx.dp(48)
         minimumWidth = ctx.dp(96)
         setPadding(ctx.dp(22), ctx.dp(10), ctx.dp(22), ctx.dp(10))
-        background = chamferSurface(ctx, bg, 9f)
+        background = chamferSurface(ctx, bg, 9f, gloss = true)
         isClickable = true
         isFocusable = true
         setOnClickListener { onClick() }

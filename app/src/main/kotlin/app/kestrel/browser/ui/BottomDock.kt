@@ -178,8 +178,8 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
     }
 
     private fun tint() {
-        setBackgroundColor(pal.chromeBg)
-        hairline.setBackgroundColor(pal.divider)
+        background = GlossDrawable(pal.glossTop, pal.glossBottom, pal.accent, context.dpf(26f), context.dpf(1f))
+        hairline.setBackgroundColor(0)
         for (b in listOf(back, forward, home, newTab, menu)) { b.setColorFilter(pal.fg); b.background = ripple(pal.fg, null, 0f) }
         tabs.setPalette(pal.fg, pal.accent)
         reload.setColorFilter(pal.fg); reload.background = ripple(pal.fg, null, 0f)
@@ -196,7 +196,7 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
 
     private fun paintPill(focused: Boolean) {
         pill.background = ChamferDrawable(pal.pill, context.dpf(10f), ChamferDrawable.TL or ChamferDrawable.BR,
-            if (focused) pal.accent else 0, if (focused) context.dpf(2f) else 0f)
+            if (focused) pal.accent else pal.divider, if (focused) context.dpf(2f) else context.dpf(1f), gloss = true)
     }
 
     /** Everything bind() shows. When nothing changed since the last call the dock is left alone (no setImageResource / setText / relayout on the UI thread). */

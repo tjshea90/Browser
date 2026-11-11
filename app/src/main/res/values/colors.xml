@@ -1,18 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- "CERE" identity (docs/DESIGN.md): ink black, one cere-yellow accent, violet only for private tabs. Dark only: the owner's tablet is used dark. -->
+    <!-- "REAPER" (docs/DESIGN.md): glossy black, one neon blue (hue ~190, from the owner's reaper photo: #0CD8F6 core, #36E6F2 ice, #0284B0 mid, #034A69 deep).
+         Dark only. Violet stays for private tabs (see Pal). -->
     <color name="window_bg">#FF000000</color>
-    <color name="chrome_bg">#FF0D0E10</color>
-    <color name="chrome_fg">#FFF2F3F5</color>
-    <color name="chrome_fg_muted">#FF8D929C</color>
-    <color name="pill_bg">#FF1B1E23</color>
-    <color name="divider">#FF272A31</color>
-    <color name="accent">#FFF6C026</color>
-    <color name="accent_on">#FF15110A</color>
-    <color name="danger">#FFFF6B6B</color>
-    <color name="warn">#FFFFB454</color>
-    <color name="ok">#FF5BD38D</color>
-    <color name="card_bg">#FF15171B</color>
-    <color name="scrim">#B3000000</color>
-    <color name="ic_launcher_background">#FF0D0E10</color>
+    <color name="chrome_bg">#FF04090C</color>
+    <color name="chrome_fg">#FFE6F8FF</color>
+    <color name="chrome_fg_muted">#FF7FA3B3</color>
+    <color name="pill_bg">#FF0A1820</color>
+    <color name="divider">#FF12384A</color>
+    <color name="accent">#FF14D4F8</color>
+    <color name="accent_on">#FF001018</color>
+    <color name="danger">#FFFF5C7A</color>
+    <color name="warn">#FFFFB84D</color>
+    <color name="ok">#FF4DE3A5</color>
+    <color name="card_bg">#FF07121A</color>
+    <color name="scrim">#CC000308</color>
+    <color name="ic_launcher_background">#FF020507</color>
 </resources>

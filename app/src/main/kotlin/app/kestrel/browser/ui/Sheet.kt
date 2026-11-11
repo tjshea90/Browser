@@ -36,7 +36,7 @@ class SheetHost(ctx: Context, private var pal: Pal) : FrameLayout(ctx) {
     fun applyPal(p: Pal) {
         pal = p
         setBackgroundColor(p.scrim)
-        panel.background = ChamferDrawable(p.card, context.dpf(20f), ChamferDrawable.TL, p.divider, context.dpf(1f))
+        panel.background = ChamferDrawable(p.card, context.dpf(20f), ChamferDrawable.TL, p.deep, context.dpf(1f), gloss = true)
     }
 
     /** Show [content] (scrolls if taller than the screen allows) under an optional [title] row with a close button. */
@@ -99,7 +99,7 @@ private fun tile(ctx: Context, pal: Pal, spec: MenuItemSpec, onPick: (Int) -> Un
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(ctx.dp(14), 0, ctx.dp(10), 0)
-        background = chamferSurface(ctx, pal.pill, 9f, strokeColor = if (on) pal.accent else 0, strokeDp = if (on) 1.5f else 0f)
+        background = chamferSurface(ctx, pal.pill, 9f, strokeColor = if (on) pal.accent else pal.divider, strokeDp = if (on) 1.5f else 1f, gloss = true)
         isClickable = true
         isFocusable = true
         setOnClickListener { onPick(spec.id) }

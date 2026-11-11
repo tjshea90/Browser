@@ -221,7 +221,7 @@ class TabGrid(ctx: Context, private var pal: Pal, private val isPrivate: (Tab) -
             val inset = ctx.dp(if (selected) 3 else 1)
             setPadding(inset, inset, inset, inset)
             background = ChamferDrawable(skin.card, ctx.dpf(CUT_DP), ChamferDrawable.TL or ChamferDrawable.BR,
-                if (selected) skin.accent else skin.divider, ctx.dpf(if (selected) 3f else 1f))
+                if (selected) skin.accent else skin.divider, ctx.dpf(if (selected) 3f else 1f), gloss = true)
             isClickable = true
             isFocusable = true
             setOnClickListener { l.select(tab) }

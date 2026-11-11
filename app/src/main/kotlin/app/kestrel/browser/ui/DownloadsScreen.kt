@@ -110,7 +110,7 @@ class DownloadsScreen(ctx: Context, private var pal: Pal, private val l: Listene
         init {
             root.orientation = LinearLayout.VERTICAL
             root.setPadding(ctx.dp(14), ctx.dp(14), ctx.dp(14), ctx.dp(12))
-            root.background = ChamferDrawable(pal.card, ctx.dpf(14f), ChamferDrawable.TL or ChamferDrawable.BR, pal.divider, ctx.dpf(1f))
+            root.background = ChamferDrawable(pal.card, ctx.dpf(14f), ChamferDrawable.TL or ChamferDrawable.BR, pal.divider, ctx.dpf(1f), gloss = true)
             val top = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
             top.addView(ExtTile(ctx, pal, extOf(v.name, v.mime)), LinearLayout.LayoutParams(ctx.dp(48), ctx.dp(48)).apply { marginEnd = ctx.dp(12) })
             val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
