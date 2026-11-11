@@ -201,7 +201,7 @@ open class BrowserActivity : Activity(), DockListener {
         t?.session?.setActive(true)
         refreshNtpIfShown()
         // once a day, when the app comes to the front: one tiny conditional request (an ETag makes "nothing new" free). Never in the background.
-        UpdateManager.maybeAutoCheck(this, prefs.autoUpdateCheck, NetworkMonitor.state == NetworkMonitor.State.ONLINE)
+        UpdateManager.maybeAutoCheck(this, prefs.autoUpdateCheck, NetworkMonitor.state != NetworkMonitor.State.OFFLINE) // NO_INTERNET is only a guess (a hotspot can fail Android's connectivity probe and still work): try
     }
 
     override fun onPause() {
