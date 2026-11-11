@@ -326,6 +326,7 @@ class StreamEngineTest {
         val h = H(sinks = sinks, finisher = fin); h.cdn.chunkDelayMs = 2
         val (url, video, sound) = dashPair(h)
         val id = h.engine.enqueue(pairSource(url))
+        h.await(id, "listed") { it != null }
         assertEquals("one row for the pair", 1, h.engine.views().size)
         val v = h.completed(id)
         assertEquals(1, fin.merges.size)
