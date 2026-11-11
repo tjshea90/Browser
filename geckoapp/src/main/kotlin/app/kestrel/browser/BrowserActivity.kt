@@ -17,6 +17,8 @@ import android.os.Bundle
 import android.os.Process
 import android.os.SystemClock
 import android.provider.Settings
+import android.graphics.Rect
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
@@ -29,6 +31,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import app.kestrel.browser.R
 import app.kestrel.browser.web.KestrelGeckoView
 import app.kestrel.browser.ui.DiagnosticsView
 import app.kestrel.browser.diag.Health
@@ -337,9 +340,23 @@ open class BrowserActivity : Activity(), DockListener {
         return try { tabs.toTypedArray().firstOrNull { it != null && it.topHost == h } } catch (e: Exception) { null }
     }
 
-    internal fun newTabAndShow(): Tab { val t = newTabInternal(); show(t); focusUrlBar(); return t }
+    internal fun newTabAndShow(privateTab: Boolean = false): Tab { val t = newTabInternal(null, privateTab); show(t); focusUrlBar(); return t }
 
-    private fun newPrivateTab() { val t = newTabInternal(null, privateTab = true); show(t); focusUrlBar() }
+    /** Regular <-> private skin: the whole chrome (dock, Home, progress line, system bars) turns violet in private mode, so it can never be mistaken for a normal tab. */
+    private var skinPrivate = false
+    private var skinApplied = false
+    private fun applySkin() {
+        val priv = current?.isPrivateTab == true
+        if (skinApplied && priv == skinPrivate) return
+        skinApplied = true
+        skinPrivate = priv
+        pal = if (priv) palPrivate else palRegular
+        dock.applyPal(pal); home.applyPal(pal); suggestions.setPal(pal); sheet.applyPal(pal); progress.setColor(pal.accent)
+        @Suppress("DEPRECATION") run {
+            window.statusBarColor = if (priv) pal.chromeBg else pal.windowBg
+            window.navigationBarColor = pal.chromeBg
+        }
+    }
 
     private fun openInNewTabOrCurrent(url: String) {
         val cur = current
@@ -350,9 +367,10 @@ open class BrowserActivity : Activity(), DockListener {
 
     private fun show(tab: Tab) {
         val prev = current
-        if (prev != null && prev !== tab) prev.session?.setActive(false)
+        if (prev != null && prev !== tab) { prev.session?.setActive(false); tab.showHome = false } // coming back to a tab shows its page, not the Home overlay
         current = tab
         tab.lastActive = System.currentTimeMillis()
+        applySkin()
         attachContent(tab)
         tab.session?.setActive(true)
         applyPrivacyFlags()
@@ -377,10 +395,11 @@ open class BrowserActivity : Activity(), DockListener {
             val s = ensureSession(tab)
             if (geckoView.session !== s) { geckoView.releaseSession(); geckoView.setSession(s) }
         }
-        if (tab.isNewTab) { if (ntp.visibility != View.VISIBLE) ntp.visibility = View.VISIBLE; refreshNtp() }
-        else if (ntp.visibility != View.GONE) ntp.visibility = View.GONE
+        val homeNow = homeShown(tab)
+        if (homeNow) { if (home.visibility != View.VISIBLE) home.visibility = View.VISIBLE; refreshNtp() }
+        else if (home.visibility != View.GONE) { home.visibility = View.GONE; home.hideSuggestions() }
         val e = tab.error
-        if (e != null) { errorView.show(e); if (errorView.visibility != View.VISIBLE) errorView.visibility = View.VISIBLE }
+        if (e != null && !homeNow) { errorView.show(e); if (errorView.visibility != View.VISIBLE) errorView.visibility = View.VISIBLE }
         else if (errorView.visibility != View.GONE) errorView.visibility = View.GONE
         findBar.visibility = if (tab.findOpen) View.VISIBLE else View.GONE
     }
@@ -488,7 +507,7 @@ open class BrowserActivity : Activity(), DockListener {
         tab.session?.let { s -> if (geckoView.session === s) geckoView.releaseSession(); try { s.close() } catch (e: Exception) { /* ignore */ } }
         tab.session = null
         tab.gecko.state = null
-        tab.url = ""; tab.title = ""; tab.error = null; tab.pendingLoad = null; tab.loading = false; tab.progress = 0
+        tab.url = ""; tab.title = ""; tab.error = null; tab.pendingLoad = null; tab.loading = false; tab.progress = 0; tab.showHome = false
         if (current === tab) { attachContent(tab); updateUi() }
         scheduleSave()
     }
@@ -515,6 +534,7 @@ open class BrowserActivity : Activity(), DockListener {
     /** [savedCopy]: load from the HTTP cache only (the flag is per navigation, so any other navigation clears it). */
     private fun loadUrl(tab: Tab, url: String, upgradedFrom: String?, savedCopy: Boolean = false) {
         tab.savedCopyOnce = savedCopy
+        tab.showHome = false
         tab.error = null
         tab.pendingLoad = null
         tab.gecko.state = null
@@ -569,6 +589,19 @@ open class BrowserActivity : Activity(), DockListener {
     override fun onBack() { if (!handleBack()) moveTaskToBack(true) }
     override fun onForward() { current?.session?.goForward() }
 
+    /** Home button: the black Home screen over the current page (the page stays alive underneath; Back returns to it). Tapped again: start typing. */
+    override fun onHome() {
+        val t = current ?: return
+        if (homeShown(t)) { focusUrlBar(); return }
+        hideKeyboard()
+        t.showHome = true
+        attachContent(t)
+        updateUi()
+    }
+
+    /** The + button opens a tab of the CURRENT kind: private mode stays private until you pick a regular tab in the tab list. */
+    override fun onNewTab() { newTabAndShow(isPrivate) }
+
     override fun onReloadOrStop() {
         val t = current ?: return
         if (t.error != null) { retry(t); return }
@@ -579,7 +612,8 @@ open class BrowserActivity : Activity(), DockListener {
     override fun onShields(anchor: View) {
         val t = current ?: return
         val host = t.topHost ?: UrlParts.hostOf(t.url) ?: return
-        shieldsPanel.show(anchor, host, t, prefs.globalShields())
+        hideKeyboard()
+        shieldsPanel().showIn(sheet, host, t, prefs.globalShields())
     }
 
     private fun onShieldsChanged(host: String) {
