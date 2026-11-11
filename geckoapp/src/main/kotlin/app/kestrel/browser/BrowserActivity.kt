@@ -469,6 +469,9 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     /** The tab showing a page of this URL's host (the filter-engine bridge only knows page URLs): the selected tab first. */
+    /** The tab whose address IS this page (exact, fragment aside); null if none: callers fall back to [tabForPage]. */
+    internal fun tabWithUrl(url: String): Tab? { val u = url.substringBefore('#'); if (u.isEmpty()) return null; return tabs.firstOrNull { it.url.substringBefore('#') == u } }
+
     internal fun tabForPage(url: String): Tab? {
         val h = UrlParts.hostOf(url) ?: return null
         current?.takeIf { it.topHost == h }?.let { return it }

@@ -12,7 +12,7 @@ function topPage(d) {
 }
 
 browser.webRequest.onBeforeRequest.addListener(function (d) {
-  if (d.type === 'main_frame') { sniffed.delete(d.tabId); return {}; } // a new page in this tab: what it loads is news again
+  if (d.type === 'main_frame') { sniffed.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); return {}; } // a new page in this tab: what it loads is news again
   var page = topPage(d);
   if (!page) return {};
   var key = d.type + '|' + d.url + '|' + page;
@@ -48,6 +48,7 @@ var MEDIA_TYPES = ['media', 'xmlhttprequest', 'other', 'object', 'sub_frame', 'm
 var MEDIA_EXT = /\.(mp4|m4v|mov|webm|mkv|avi|wmv|flv|3gp|mpg|mpeg|m4a|mp3|aac|ogg|oga|ogv|opus|wav|flac|m3u8|m3u|mpd)(?:$|[?#])/i;
 var MEDIA_CT = /^(video|audio)\/|mpegurl|dash\+xml|\/mp4|\/ogg|matroska/;
 var SEGMENT = /\.(ts|m4s|cmfv|cmfa|cmft|m4f|mts)(?:$|[?#])/i;
+var tabTop = new Map(); // tabId -> the address of the page the tab is on (an embedded player's request names its own frame, not this)
 var sniffed = new Map(); // tabId -> Set of "url|sizeKnown" already reported for the tab's CURRENT page (a reload or another page reports the same file again)
 var SNIFFED_TABS = 40;
 var SNIFFED_PER_TAB = 300;
@@ -75,7 +76,7 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
   if (seen.has(key)) return;
   if (seen.size >= SNIFFED_PER_TAB) seen.delete(seen.values().next().value);
   seen.add(key);
-  var page = (d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || '');
+  var page = tabTop.get(d.tabId) || ((d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || ''));
   browser.runtime.sendNativeMessage(NATIVE, JSON.stringify({ k: 'media', u: url, c: ct, l: size, p: page, f: d.documentUrl || '' })).catch(function () {});
 }, { urls: ['http://*/*', 'https://*/*'], types: MEDIA_TYPES }, ['responseHeaders']);
 
