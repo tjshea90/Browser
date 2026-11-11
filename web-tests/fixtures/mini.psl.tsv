@@ -1,0 +1,115 @@
+ads.example.com	example.com
+example.com	example.com
+cdn.example.org	example.org
+track.net	track.net
+a.b.track.net	track.net
+news.site.co.uk	site.co.uk
+img.site.co.uk	site.co.uk
+page.example	page.example
+tracker.example	tracker.example
+first.example	first.example
+pixel.example	pixel.example
+both.example	both.example
+imp.example	imp.example
+hostonly.example	hostonly.example
+plain.example	plain.example
+t.example	t.example
+a.example	a.example
+evil.example	evil.example
+x.zip	x.zip
+sub.deep.example.co.uk	example.co.uk
+x.example	x.example
+ws.example	ws.example
+frame.example	frame.example
+font.example	font.example
+media.example	media.example
+obj.example	obj.example
+other.example	other.example
+style.example	style.example
+notimg.example	notimg.example
+dom.example	dom.example
+excl.example	excl.example
+foo.beacon.example	beacon.example
+upper.example	upper.example
+1.2.3.4	1.2.3.4
+[::1]	[::1]
+xn--bcher-kva.example	xn--bcher-kva.example
+www.ck	www.ck
+a.b.ck	a.b.ck
+city.kobe.jp	city.kobe.jp
+x.kobe.jp	null
+user.github.io	user.github.io
+a.b.blogspot.com	b.blogspot.com
+localhost	localhost
+intranet	intranet
+co.uk	null
+x.co.uk	x.co.uk
+a.b.c.co.uk	c.co.uk
+uk	uk
+com	com
+example.com	example.com
+www.example.com	example.com
+a.b.example.org	example.org
+foo.ck	null
+bar.foo.ck	bar.foo.ck
+www.ck	www.ck
+a.www.ck	www.ck
+ck	ck
+kobe.jp	kobe.jp
+a.kobe.jp	null
+b.a.kobe.jp	b.a.kobe.jp
+city.kobe.jp	city.kobe.jp
+www.city.kobe.jp	city.kobe.jp
+jp	jp
+x.jp	x.jp
+github.io	null
+a.github.io	a.github.io
+b.a.github.io	a.github.io
+sch.uk	sch.uk
+x.sch.uk	null
+y.x.sch.uk	y.x.sch.uk
+localhost	localhost
+intranet	intranet
+1.2.3.4	1.2.3.4
+256.1.1.1	1.1
+1.2.3	2.3
+[::1]	[::1]
+::1	::1
+a..b	.b
+x.	x.
+.x	.x
+	null
+blogspot.com	null
+a.blogspot.com	a.blogspot.com
+xn--bcher-kva.example	xn--bcher-kva.example
+co.za	null
+x.co.za	x.co.za
+same	ads.example.com	track.net	0
+same	track.net	media.example	0
+same	img.site.co.uk	x.co.uk	0
+same	first.example	b.a.github.io	0
+same	imp.example	example.com	0
+same	t.example	frame.example	0
+same	x.zip	intranet	0
+same	ws.example	github.io	0
+same	media.example	x.co.za	0
+same	style.example	x.example	0
+same	excl.example	a.b.blogspot.com	0
+same	1.2.3.4	jp	0
+same	www.ck	xn--bcher-kva.example	0
+same	x.kobe.jp	x.zip	0
+same	localhost	x.kobe.jp	0
+same	x.co.uk	city.kobe.jp	0
+same	com	blogspot.com	0
+same	a.b.example.org	a.example	0
+same	www.ck	a.b.ck	0
+same	kobe.jp	a.kobe.jp	0
+same	city.kobe.jp	.x	0
+same	x.jp	plain.example	0
+same	b.a.github.io	xn--bcher-kva.example	0
+same	y.x.sch.uk	ck	0
+same	1.2.3.4	a..b	0
+same	[::1]	imp.example	0
+same	x.	1.2.3.4	0
+same	blogspot.com	www.ck	0
+same	co.za	[::1]	0
