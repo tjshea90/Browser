@@ -80,24 +80,45 @@ object ExtImage {
         require(total < Int.MAX_VALUE) { "image too large" }
 
         val bb = ByteBuffer.allocate(total.toInt()).order(ByteOrder.LITTLE_ENDIAN)
-        bb.putInt(MAGIC); bb.putInt(VERSION); bb.putInt(generation); bb.putInt(SECTIONS)
+        // the trailer is the wrapping sum of every earlier 32-bit word, accumulated while writing (plain array loops: reading the buffer back word by word was most of the encode time on the emulator)
+        var sum = 0
+        fun word(v: Int) { bb.putInt(v); sum += v }
+        word(MAGIC); word(VERSION); word(generation); word(SECTIONS)
         var offset = HEADER_INTS * 4
-        for (id in 0 until SECTIONS) { bb.putInt(offset); bb.putInt(counts[id]); offset += byteLen[id] }
+        for (id in 0 until SECTIONS) { word(offset); word(counts[id]); offset += byteLen[id] }
         for (id in 0 until SECTIONS) {
             when (kinds[id]) {
-                0 -> bb.asIntBuffer().also { it.put(data[id] as IntArray) }.also { bb.position(bb.position() + byteLen[id]) }
-                1 -> bb.asLongBuffer().also { it.put(data[id] as LongArray) }.also { bb.position(bb.position() + byteLen[id]) }
-                else -> { bb.put(data[id] as ByteArray); repeat(byteLen[id] - counts[id]) { bb.put(0) } }
+                0 -> {
+                    val a = data[id] as IntArray
+                    bb.asIntBuffer().put(a); bb.position(bb.position() + byteLen[id])
+                    for (v in a) sum += v
+                }
+                1 -> {
+                    val a = data[id] as LongArray
+                    bb.asLongBuffer().put(a); bb.position(bb.position() + byteLen[id])
+                    for (v in a) sum += v.toInt() + (v ushr 32).toInt() // [lo, hi] words
+                }
+                else -> {
+                    val a = data[id] as ByteArray
+                    bb.put(a)
+                    repeat(byteLen[id] - counts[id]) { bb.put(0) }
+                    var w = 0; var shift = 0
+                    for (v in a) { w = w or ((v.toInt() and 0xFF) shl shift); shift += 8; if (shift == 32) { sum += w; w = 0; shift = 0 } }
+                    if (shift != 0) sum += w // the zero padding completes the last word
+                }
             }
         }
-        // trailer: wrapping sum of every earlier word
-        var sum = 0
-        val words = bb.duplicate().order(ByteOrder.LITTLE_ENDIAN)
-        words.position(0)
-        val n = (bb.position()) / 4
-        for (i in 0 until n) sum += words.getInt(i * 4)
         bb.putInt(sum)
         return bb.array()
+    }
+
+    /**
+     * Identity of the image CONTENT: equal ids mean equal bytes (lists and Public Suffix List unchanged, same layout, same app build [salt]). The extension keeps the last image in its own
+     * storage and skips the transfer when the id matches; the generation counter cannot do that because it restarts at 1 in every process.
+     */
+    fun contentId(fs: FilterSet, psl: Psl, salt: Long): String {
+        val t = psl.tables()
+        return "$VERSION.$salt.${fs.meta.createdAtMillis}.${fs.meta.hostRules}.${fs.meta.hostExceptions}.${fs.meta.patternRules}.${t[0].size}.${t[1].size}.${t[2].size}"
     }
 
     /** The wrapping word sum the trailer must hold; used by tests and by anything that wants to validate an image on the Kotlin side. */

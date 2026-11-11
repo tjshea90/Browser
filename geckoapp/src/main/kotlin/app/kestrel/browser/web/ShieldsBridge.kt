@@ -115,18 +115,24 @@ class ShieldsBridge(
         return true
     }
 
-    /** `cfg`: "<mode>:<generation>". mode 1 = block on pages of this host, 0 = Shields off / site allowed, L = ask per request (lists still loading, or compatibility mode). */
+    /** `cfg`: "<mode>:<generation>:<content id>". mode 1 = block on pages of this host, 0 = Shields off / site allowed, L = ask per request (lists still loading, or compatibility mode). */
     private fun pageConfig(host: String): String {
         val snap = Engine.snapshot() ?: return "L:0" // lists still loading at cold start: the per-request path fails open until they are there
         if (!prefs().engineInExtension) return "L:${snap.generation}"
         if (host.isEmpty()) return "0:${snap.generation}"
         val s = Shields.effective(prefs(), host)
         val on = s.shieldsUp && s.blockAds && !snap.fs.isPageAllowed(host)
-        return (if (on) "1:" else "0:") + snap.generation + ":" + filesPath
+        return (if (on) "1:" else "0:") + snap.generation + ":" + contentId(snap)
     }
 
-    /** Spike D1: the app's files directory, so the extension can try to read a file the app wrote. */
-    @Volatile var filesPath: String = ""
+    /** Set by [install]: the app build, part of the image identity (a new build may ship a new Public Suffix List). */
+    @Volatile var salt: Long = 0L
+    private var idCache: Pair<Int, String>? = null
+    private fun contentId(snap: Engine.Snap): String {
+        val c = idCache
+        if (c != null && c.first == snap.generation) return c.second
+        return ExtImage.contentId(snap.fs, Psl.default, salt).also { idCache = Pair(snap.generation, it) }
+    }
 
     /** `img`: chunk [index] of the KEX1 image of generation [gen] (base64; chunk 0 is prefixed with "<gen>:<total bytes>:<chunk bytes>:"), or "" when that generation is gone. */
     private fun imageChunk(gen: Int, index: Int): String {
@@ -231,8 +237,7 @@ class ShieldsBridge(
 
         /** Installs the built-in extension (idempotent) and (re)attaches [bridge]; call from every Activity instance. */
         fun install(ctx: Context, bridge: ShieldsBridge) {
-            bridge.filesPath = ctx.filesDir.absolutePath
-            Io.exec { try { java.io.File(ctx.filesDir, "shields").also { it.mkdirs() }.let { java.io.File(it, "probe.txt").writeText("kestrel probe") } } catch (e: Exception) { /* spike only */ } }
+            bridge.salt = try { ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode } catch (e: Exception) { 0L }
             val controller = GeckoEngine.runtime(ctx).webExtensionController
             controller.ensureBuiltIn(ASSET_URI, EXTENSION_ID).accept(
                 { ext ->
