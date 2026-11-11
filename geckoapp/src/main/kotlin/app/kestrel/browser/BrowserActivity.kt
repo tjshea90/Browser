@@ -50,7 +50,8 @@ import app.kestrel.browser.ui.ListPanel
 import app.kestrel.browser.ui.MenuItemSpec
 import app.kestrel.browser.ui.NewTabPage
 import app.kestrel.browser.ui.Pal
-import app.kestrel.browser.ui.ProgressLine
+import app.kestrel.browser.ui.Neon
+import app.kestrel.browser.ui.NeonBar
 import app.kestrel.browser.ui.SettingsListener
 import app.kestrel.browser.ui.SettingsView
 import app.kestrel.browser.ui.ShieldsPanel
@@ -116,7 +117,7 @@ open class BrowserActivity : Activity(), DockListener {
     private lateinit var column: LinearLayout
     private lateinit var dock: BottomDock
     private lateinit var sheet: SheetHost
-    private lateinit var progress: ProgressLine
+    private lateinit var progress: NeonBar
     private lateinit var content: FrameLayout
     private lateinit var home: HomeView
     private lateinit var errorView: ErrorView
@@ -198,6 +199,7 @@ open class BrowserActivity : Activity(), DockListener {
     override fun onStart() {
         super.onStart()
         NetworkMonitor.start(this)
+        Neon.foreground(true, this)
     }
 
     override fun onResume() {
@@ -223,6 +225,13 @@ open class BrowserActivity : Activity(), DockListener {
         Health.log("life", "stop"); Health.stopWatchdog(); Health.unwatchFrames(window)
         current?.session?.setActive(false) // stops rendering and throttles the page: saves battery and mobile data
         NetworkMonitor.stop()
+        Neon.foreground(false)
+    }
+
+    /** Any touch wakes the neon from its idle rest (see [Neon.IDLE_MS]). */
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN) Neon.touched()
+        return super.dispatchTouchEvent(ev)
     }
 
     override fun onDestroy() {
@@ -262,9 +271,11 @@ open class BrowserActivity : Activity(), DockListener {
         root = FrameLayout(this)
         root.setBackgroundColor(pal.windowBg)
         root.defaultFocusHighlightEnabled = false // clearUrlFocus() parks the focus on this view: without this the framework tints the WHOLE screen with its focus highlight
-        column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        Neon.mode = prefs.neon
+        column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; clipChildren = false } // the neon halo rises from the progress line into the page area
         dock = BottomDock(this, pal, this)
-        progress = ProgressLine(this, pal.accent).apply { visibility = View.INVISIBLE }
+        progress = NeonBar(this, pal.accent, pal.accentHi)
+        Neon.pulse(progress.halo, 0.45f, 1f, 4200L)
         content = FrameLayout(this)
         geckoView = KestrelGeckoView(this).apply { setAutofillEnabled(false) } // no logins are stored; GeckoView's autofill hooks only add window-focus churn (research/FREEZE.md 4.7)
         // ONE GeckoView, attached once and never removed: detaching it pauses/resumes the compositor through synchronous IPC while the keyboard resizes the window,
@@ -379,7 +390,7 @@ open class BrowserActivity : Activity(), DockListener {
         skinApplied = true
         skinPrivate = priv
         pal = if (priv) palPrivate else palRegular
-        dock.applyPal(pal); home.applyPal(pal); suggestions.setPal(pal); sheet.applyPal(pal); progress.setColor(pal.accent)
+        dock.applyPal(pal); home.applyPal(pal); suggestions.setPal(pal); sheet.applyPal(pal); progress.setColors(pal.accent, pal.accentHi)
         @Suppress("DEPRECATION") run {
             window.statusBarColor = if (priv) pal.chromeBg else pal.windowBg
             window.navigationBarColor = pal.chromeBg
@@ -783,7 +794,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onUrlFocus(focused: Boolean) {
         Io.main.removeCallbacks(typingTick)
-        if (focused) setUrlTypingMode(true) else typingModeSince = SystemClock.uptimeMillis()
+        if (focused) { setUrlTypingMode(true); Neon.busy(true) } else typingModeSince = SystemClock.uptimeMillis()
         Io.main.post(typingTick)
         if (focused) {
             if (!homeShown()) { dock.urlField.setText(dock.fullUrlForEditing(current)); dock.urlField.selectAll() }
@@ -1123,6 +1134,7 @@ open class BrowserActivity : Activity(), DockListener {
         dock.bind(t, tabs.count { it.isPrivateTab == priv }, canBack || (t != null && (!t.isNewTab || t.showHome)), homeShown(t))
         val p = if (t?.loading == true) t.progress else 0
         if (progress.progress != p) progress.progress = p
+        Neon.busy(t?.loading == true || typing()) // the screen is already changing: the neon holds still
     }
 
     internal fun tabChanged(tab: Tab) { if (tab === current) updateUi(); if (tabGrid.visibility == View.VISIBLE) tabGrid.rebind(tabs, current) }
