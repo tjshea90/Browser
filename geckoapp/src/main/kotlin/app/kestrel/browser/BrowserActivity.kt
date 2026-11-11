@@ -1033,9 +1033,9 @@ open class BrowserActivity : Activity(), DockListener {
     private fun startScrollTest(tab: Tab) {
         val s = tab.session
         if (s == null || current !== tab || isFinishing || isDestroyed) { doCloseTab(tab); toast("Scroll test could not start"); return }
-        toast("Scroll test running: do not touch the screen")
+        toast("Scroll test running (about 30 s): do not touch the screen")
         Health.log("scrolltest", "start", memFacts())
-        ScrollTest(s, { memFacts() }) { report ->
+        ScrollTest(s, window.decorView, { memFacts() }) { report ->
             Health.log("scrolltest", "result", report.lineSequence().take(3).joinToString(" | "))
             doCloseTab(tab)
             if (isFinishing || isDestroyed) return@ScrollTest

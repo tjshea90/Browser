@@ -47,7 +47,7 @@ class DiagnosticsView(ctx: Context, private val pal: Pal, private val facts: () 
         addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         if (onScrollTest != null) {
             val row2 = LinearLayout(ctx).apply { orientation = HORIZONTAL; setPadding(ctx.dp(10), 0, ctx.dp(10), ctx.dp(6)) }
-            row2.addView(big("Scroll test (25 s)", pal.pill, pal.accent) { onScrollTest.invoke() }, lp(1f))
+            row2.addView(big("Scroll test (30 s)", pal.pill, pal.accent) { onScrollTest.invoke() }, lp(1f))
             addView(row2, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         }
 
