@@ -832,7 +832,9 @@ open class BrowserActivity : Activity(), DockListener {
             items.add(MenuItemSpec(M.DESKTOP, "Desktop site", t.desktop, R.drawable.ic_desktop))
         }
         if (!isPrivate) { items.add(MenuItemSpec(M.BOOKMARKS, "Bookmarks", null, R.drawable.ic_bookmarks)); items.add(MenuItemSpec(M.HISTORY, "History", null, R.drawable.ic_history)) }
-        items.add(MenuItemSpec(M.DOWNLOADS, "Downloads", null, R.drawable.ic_download))
+        val dl = DownloadController.counts()
+        val dlActive = dl[0] + dl[1]
+        items.add(MenuItemSpec(M.DOWNLOADS, if (dlActive > 0) "Downloads ($dlActive active)" else "Downloads", null, R.drawable.ic_download, accent = dlActive > 0))
         if (t != null && !t.isNewTab) items.add(MenuItemSpec(M.REFRESH, "Refresh screen", null, R.drawable.ic_refresh))
         if (!isPrivate) items.add(MenuItemSpec(M.SETTINGS, "Settings", null, R.drawable.ic_settings))
         items.add(MenuItemSpec(M.DIAG, "Diagnostics", null, R.drawable.ic_pulse))
