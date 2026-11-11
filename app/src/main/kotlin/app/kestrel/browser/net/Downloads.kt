@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Environment
 import android.webkit.CookieManager
 import android.webkit.URLUtil
+import app.kestrel.core.filter.Psl
 import app.kestrel.core.url.UrlParts
 
 /** Hands downloads to the system DownloadManager (it survives our process being killed, shows progress, and resumes). */
@@ -18,7 +19,14 @@ object Downloads {
         return clean.ifEmpty { "download" }
     }
 
-    fun isRisky(name: String): Boolean = name.substringAfterLast('.', "").lowercase() in RISKY
+    /** What the SERVER says the file is: "invoice.pdf" served as an Android package is still an installer. */
+    private val RISKY_MIME = setOf(
+        "application/vnd.android.package-archive", "application/x-apk", "application/java-archive", "application/x-msdownload",
+        "application/x-msdos-program", "application/x-sh", "application/x-shellscript", "application/x-dex",
+    )
+
+    fun isRisky(name: String, mime: String? = null): Boolean =
+        name.substringAfterLast('.', "").lowercase() in RISKY || (mime != null && mime.substringBefore(';').trim().lowercase() in RISKY_MIME)
 
     /** @return true if queued */
     fun enqueue(ctx: Context, url: String, userAgent: String?, contentDisposition: String?, mime: String?, pageUrl: String?): Boolean {
@@ -28,7 +36,11 @@ object Downloads {
         val name = fileName(url, contentDisposition, mime)
         val req = DownloadManager.Request(u).apply {
             if (!mime.isNullOrEmpty()) setMimeType(mime)
-            CookieManager.getInstance().getCookie(url)?.let { addRequestHeader("Cookie", it) }
+            // Cookies only to the page's own site: forwarding them anywhere else would bypass third-party cookie blocking.
+            val dlHost = u.host
+            val pageHost = pageUrl?.let { UrlParts.hostOf(it) }
+            val sameSite = dlHost != null && pageHost != null && try { Psl.default.isSameSite(dlHost, pageHost) } catch (e: Exception) { dlHost == pageHost }
+            if (sameSite) CookieManager.getInstance().getCookie(url)?.let { addRequestHeader("Cookie", it) }
             if (!userAgent.isNullOrEmpty()) addRequestHeader("User-Agent", userAgent)
             // Referer is only the page's ORIGIN (never the full URL: it can carry tokens/search terms)
             pageUrl?.let { p -> UrlParts.parse(p)?.let { addRequestHeader("Referer", "${it.scheme}://${it.hostForAuthority}/") } }

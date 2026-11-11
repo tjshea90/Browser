@@ -10,7 +10,9 @@ let chromium;
 try { ({ chromium } = require('playwright')); } catch (e) { ({ chromium } = require('/usr/local/lib/node_modules_global/playwright')); }
 
 const SCRIPT = fs.readFileSync(path.join(__dirname, '..', 'app', 'src', 'main', 'assets', 'js', 'shields.js'), 'utf8');
-const cfg = (o) => 'var __KST_CFG=' + JSON.stringify(Object.assign({ fp: 1, sd: 1, pn: 1, seed: 12345 }, o || {})) + ';';
+const TOK = 4242;
+const MARK = '__kst' + TOK.toString(36);
+const cfg = (o) => 'var __KST_CFG=' + JSON.stringify(Object.assign({ fp: 1, sd: 1, pn: 1, seed: 12345, tok: TOK }, o || {})) + ';';
 const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
 
 let browser;
@@ -29,7 +31,8 @@ async function open(host, html, inject) {
   page.errors = errors;
   return page;
 }
-const withScript = (o) => cfg(o) + SCRIPT;
+// Same wrapping as ScriptInjector.wrap(): the config is a LOCAL of a wrapper function, never a page global.
+const withScript = (o) => '(function(){' + cfg(o) + '\n' + SCRIPT + '\n})();';
 
 // A typical fingerprinting canvas: text, shapes, emoji.
 const DRAW = `
@@ -162,7 +165,7 @@ test('replaced functions look native and the script is idempotent', async () => 
   const first = await p.evaluate(() => draw().toDataURL());
   await p.evaluate(withScript()); // second injection (onPageFinished does this) must be a no-op, not a double wrap
   assert.equal(await p.evaluate(() => draw().toDataURL()), first);
-  assert.equal(await p.evaluate(() => window.__kst), 1);
+  assert.equal(await p.evaluate((m) => window[m], MARK), 1);
   assert.deepEqual(p.errors, []);
 });
 
@@ -171,5 +174,34 @@ test('the script never throws, even on a hostile page that deleted the APIs it p
   const p = await open('example.test', '', hostile);
   await p.evaluate(withScript());
   assert.deepEqual(p.errors, []);
-  assert.equal(await p.evaluate(() => window.__kst), 1);
+  assert.equal(await p.evaluate((m) => window[m], MARK), 1);
+});
+
+test('the page cannot read the configuration or the session seed', async () => {
+  const p = await open('example.test', '', withScript({ seed: 987654321 }));
+  const r = await p.evaluate(() => {
+    const names = Object.getOwnPropertyNames(window).filter((n) => n.indexOf('__kst') === 0 || n.indexOf('KST') >= 0);
+    let found = false;
+    try { found = JSON.stringify(Object.getOwnPropertyNames(window).map((n) => { try { return String(window[n]); } catch (e) { return ''; } })).indexOf('987654321') >= 0; } catch (e) { /* ignore */ }
+    return { cfg: typeof window.__KST_CFG, names, found };
+  });
+  assert.equal(r.cfg, 'undefined', '__KST_CFG must not be a page global');
+  assert.deepEqual(r.names.filter((n) => n !== MARK), [], 'only the per-page marker may remain on window');
+  assert.equal(r.found, false, 'the seed must not appear in any window property');
+});
+
+test('pre-defining a marker cannot switch the protections off', async () => {
+  const base = await open('example.test', '', DRAW);
+  const original = await base.evaluate(() => draw().toDataURL());
+  const guess = 'window.__kst = 1; window.__kst0 = 1; window.__kst1 = 1;'; // the old fixed name and guesses at the new one
+  const p = await open('example.test', '', DRAW + guess + withScript());
+  assert.notEqual(await p.evaluate(() => draw().toDataURL()), original, 'the script must still have run');
+});
+
+test('a page-set expando on a canvas does not ask for the unmodified readback', async () => {
+  const base = await open('example.test', '', DRAW);
+  const original = await base.evaluate(() => draw().toDataURL());
+  const p = await open('example.test', '', DRAW + withScript());
+  const v = await p.evaluate(() => { const c = draw(); c.__kstSkip = 1; return c.toDataURL(); });
+  assert.notEqual(v, original, 'canvas.__kstSkip = 1 must not bypass farbling');
 });

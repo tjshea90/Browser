@@ -1123,11 +1123,13 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         val name = Downloads.fileName(url, contentDisposition, mime)
         val limit = prefs.dataSaver.confirmDownloadBytes(NetworkMonitor.metered)
         val big = limit >= 0 && (length < 0 || length >= limit)
-        val risky = Downloads.isRisky(name)
-        if (!big && !risky) { startDownload(url, userAgent, contentDisposition, mime, tab); return }
+        val risky = Downloads.isRisky(name, mime)
+        val cleartext = url.startsWith("http://", ignoreCase = true) // on a hotspot the carrier can read or change an unencrypted download
+        if (!big && !risky && !cleartext) { startDownload(url, userAgent, contentDisposition, mime, tab); return }
         val size = if (length >= 0) NewTabPage.fmtBytes(length) else "unknown size"
         val msg = buildString {
-            append(name).append("\nSize: ").append(size)
+            append(name).append("\nFrom: ").append(UrlParts.hostOf(url) ?: "unknown site").append("\nSize: ").append(size)
+            if (cleartext) append("\n\nThis download is not encrypted: your mobile carrier or anyone on the network could read or change the file.")
             if (big) append("\n\nYou're on a metered connection (your phone's hotspot). This may use a lot of mobile data.")
             if (risky) append("\n\nThis type of file can install software or run code. Only continue if you trust the site.")
         }

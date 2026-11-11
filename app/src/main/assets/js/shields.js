@@ -1,6 +1,7 @@
 /*
  * Kestrel page-side protections. Injected by BrowserWebViewClient after the document exists (onPageCommitVisible / onPageFinished),
- * prefixed with:  var __KST_CFG={"fp":1,"sd":1,"pn":1,"seed":<int>};
+ * wrapped by ScriptInjector as  (function(){ var __KST_CFG={"fp":1,"sd":1,"pn":1,"seed":<int>,"tok":<int>}; <this file> })();
+ * so the configuration (above all the session seed that drives the noise) is a LOCAL of the wrapper: a page cannot read it.
  *
  * Deliberately conservative ES5 (the tablet's WebView version is unknown and may be old): no arrow functions, let/const,
  * optional chaining, classes. Every feature is wrapped so that a failure can never break the page. Idempotent.
@@ -13,8 +14,11 @@
 (function () {
   'use strict';
   var cfg = (typeof __KST_CFG !== 'undefined' && __KST_CFG) || {};
-  if (window.__kst) return;
-  try { Object.defineProperty(window, '__kst', { value: 1 }); } catch (e) { window.__kst = 1; }
+  // Idempotence marker. Its name carries a token that is random PER PAGE LOAD and unrelated to the noise seed: a page cannot pre-define it to
+  // make this script bail out, and enumerating window afterwards reveals nothing but that token.
+  var mark = '__kst' + ((cfg.tok >>> 0).toString(36));
+  if (window[mark]) return;
+  try { Object.defineProperty(window, mark, { value: 1 }); } catch (e) { window[mark] = 1; }
 
   /** Make replaced functions/getters look native to toString()-based tamper detection. */
   function nativeLook(fn, name) {
@@ -55,6 +59,9 @@
         }
       };
 
+      // WebGL / bitmaprenderer canvases are remembered in a closure-held WeakSet, not as a property on the element: an expando would be
+      // visible to (and settable by) the page, which could then ask for the unmodified readback.
+      var skip = (typeof WeakSet === 'function') ? new WeakSet() : null;
       var CanvasProto = window.HTMLCanvasElement && HTMLCanvasElement.prototype;
       var Ctx2D = window.CanvasRenderingContext2D && CanvasRenderingContext2D.prototype;
       var MIN_PIXELS = 256, MAX_PIXELS = 4000000;
@@ -63,7 +70,7 @@
         var origGetContext = CanvasProto.getContext;
         CanvasProto.getContext = nativeLook(function (type) {
           var ctx = origGetContext.apply(this, arguments);
-          try { if (ctx && /webgl|bitmaprenderer/i.test(String(type))) this.__kstSkip = 1; } catch (e) { /* ignore */ }
+          try { if (ctx && skip && /webgl|bitmaprenderer/i.test(String(type))) skip.add(this); } catch (e) { /* ignore */ }
           return ctx;
         }, 'getContext');
       }
@@ -82,7 +89,7 @@
 
       // toDataURL / toBlob: read back through a farbled COPY so the visible canvas is never modified.
       var farbledCopy = function (src) {
-        if (src.__kstSkip) return null; // WebGL canvases: copying could return a blank frame
+        if (skip && skip.has(src)) return null; // WebGL canvases: copying could return a blank frame
         var w = src.width, h = src.height;
         if (w * h < MIN_PIXELS || w * h > MAX_PIXELS) return null;
         var c = document.createElement('canvas');

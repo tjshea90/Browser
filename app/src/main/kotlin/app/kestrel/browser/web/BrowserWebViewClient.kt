@@ -82,6 +82,7 @@ class BrowserWebViewClient(
         // starts set tab.url themselves before loading.
         if (tab.url.isEmpty() && url != "about:blank") tab.url = url
         tab.loading = true
+        tab.injectToken = 0 // new page load -> new marker token
         tab.progress = maxOf(tab.progress, 5)
         tab.resetPageCounters()
         tab.dialogCount = 0

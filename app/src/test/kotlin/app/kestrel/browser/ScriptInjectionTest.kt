@@ -40,7 +40,7 @@ class ScriptInjectionTest {
 
     @Test
     fun configIsValidJavaScriptAndCarriesTheSwitches() {
-        assertEquals("var __KST_CFG={\"fp\":1,\"sd\":0,\"pn\":1,\"seed\":-42};", ScriptInjector.config(true, false, true, -42))
+        assertEquals("var __KST_CFG={\"fp\":1,\"sd\":0,\"pn\":1,\"seed\":-42,\"tok\":7};", ScriptInjector.config(true, false, true, -42, 7))
     }
 
     @Test
@@ -51,7 +51,8 @@ class ScriptInjectionTest {
         client.onPageCommitVisible(wv, "https://example.com/")
         val js = shadowOf(wv).lastEvaluatedJavascript
         assertNotNull("nothing was injected", js)
-        assertTrue(js!!.startsWith("var __KST_CFG={"))
+        assertTrue("config must live inside a wrapper function, not leak as a page global", js!!.startsWith("(function(){var __KST_CFG={") && js.trimEnd().endsWith("})();"))
+        assertTrue("a per-page marker token was chosen", a.currentTab!!.injectToken != 0)
         assertTrue("fingerprint protection on by default", js.contains("\"fp\":1"))
         assertTrue("data saver signal on in STANDARD", js.contains("\"sd\":1"))
         assertTrue("the real script follows the config", js.contains("farbleBytes") && js.contains("[native code]"))

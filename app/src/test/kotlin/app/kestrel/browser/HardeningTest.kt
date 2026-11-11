@@ -52,4 +52,15 @@ class HardeningTest {
             assertNull(u, if (u.startsWith("intent")) ExternalIntents.plan(ctx, u)?.takeIf { it.intent.component != null } else ExternalIntents.plan(ctx, u))
         assertTrue(ExternalIntents.plan(ctx, "intent://x#Intent;scheme=https;end") != null)
     }
+
+    // ------------------------------------------------------------------ S8: downloads
+
+    @Test
+    fun aFileIsRiskyByWhatTheServerSaysItIsNotOnlyByItsName() {
+        assertTrue(app.kestrel.browser.net.Downloads.isRisky("setup.apk"))
+        assertTrue("invoice.pdf served as an Android package is an installer", app.kestrel.browser.net.Downloads.isRisky("invoice.pdf", "application/vnd.android.package-archive"))
+        assertTrue(app.kestrel.browser.net.Downloads.isRisky("x.bin", "Application/X-MsDownload; charset=binary"))
+        org.junit.Assert.assertFalse(app.kestrel.browser.net.Downloads.isRisky("report.pdf", "application/pdf"))
+        org.junit.Assert.assertFalse(app.kestrel.browser.net.Downloads.isRisky("photo.jpg", null))
+    }
 }

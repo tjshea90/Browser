@@ -21,8 +21,16 @@ object ScriptInjector {
     private fun source(ctx: Context): String =
         script ?: ctx.assets.open("js/shields.js").bufferedReader().use { it.readText() }.also { script = it }
 
-    internal fun config(fingerprint: Boolean, saveData: Boolean, noPreload: Boolean, seed: Int = sessionSeed): String =
-        "var __KST_CFG={\"fp\":${if (fingerprint) 1 else 0},\"sd\":${if (saveData) 1 else 0},\"pn\":${if (noPreload) 1 else 0},\"seed\":$seed};"
+    private val rng = SecureRandom()
+
+    internal fun config(fingerprint: Boolean, saveData: Boolean, noPreload: Boolean, seed: Int = sessionSeed, token: Int = 0): String =
+        "var __KST_CFG={\"fp\":${if (fingerprint) 1 else 0},\"sd\":${if (saveData) 1 else 0},\"pn\":${if (noPreload) 1 else 0},\"seed\":$seed,\"tok\":$token};"
+
+    /** Name of the idempotence marker the script leaves on window (shields.js builds the same name from the same token). */
+    internal fun markerName(token: Int): String = "__kst" + (token.toLong() and 0xffffffffL).toString(36)
+
+    /** The config is a local variable of a wrapper function, never a global: pages must not be able to read the session seed. */
+    internal fun wrap(config: String, source: String): String = "(function(){" + config + "\n" + source + "\n})();"
 
     fun inject(view: WebView, tab: Tab, prefs: Prefs) {
         val s = tab.shields
@@ -31,11 +39,14 @@ object ScriptInjector {
         val sd = saver.saveDataSignal
         val pn = saver.mediaPreloadNone
         if (!fp && !sd && !pn) return
-        view.evaluateJavascript(config(fp, sd, pn) + source(view.context), null)
+        if (tab.injectToken == 0) tab.injectToken = rng.nextInt() or 1 // fresh for every page load (reset in onPageStarted), never 0
+        view.evaluateJavascript(wrap(config(fp, sd, pn, token = tab.injectToken), source(view.context)), null)
     }
 
-    /** Re-inject only when the page lost it (the script marks window.__kst). */
+    /** Re-inject only when the page lost it (the script marks window[markerName]). */
     fun verify(view: WebView, tab: Tab, prefs: Prefs) {
-        view.evaluateJavascript("!!window.__kst") { r -> if (r == "false") inject(view, tab, prefs) }
+        val token = tab.injectToken
+        if (token == 0) return // nothing was injected for this page (all protections off)
+        view.evaluateJavascript("!!window.${markerName(token)}") { r -> if (r == "false") inject(view, tab, prefs) }
     }
 }
