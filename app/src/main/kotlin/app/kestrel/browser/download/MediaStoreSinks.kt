@@ -94,6 +94,8 @@ class MediaStoreSinks(private val ctx: Context) : SinkFactory {
 
         override fun length(): Long = try { Os.fstat(pfd.fileDescriptor).st_size } catch (e: Exception) { -1L }
 
+        override fun descriptor(): java.io.FileDescriptor? = pfd.fileDescriptor
+
         override fun publish(): String? {
             try { Os.fsync(pfd.fileDescriptor) } catch (e: ErrnoException) { /* the data was synced by the engine already */ }
             try { pfd.close() } catch (e: Exception) { /* ignore */ }

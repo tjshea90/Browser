@@ -196,6 +196,8 @@ interface Sink {
     @Throws(SinkException::class) fun pwrite(pos: Long, b: ByteArray, off: Int, len: Int)
     @Throws(SinkException::class) fun sync()
     fun length(): Long
+    /** The open file itself, for code that needs a descriptor of its own (a media muxer); null where the sink has none. */
+    fun descriptor(): java.io.FileDescriptor? = null
     /** Make the file visible (clear the pending flag); returns its final URI. */
     @Throws(SinkException::class) fun publish(): String?
     fun discard()
