@@ -14,6 +14,10 @@ import org.mozilla.geckoview.GeckoRuntimeSettings
  */
 object GeckoEngine {
     @Volatile private var rt: GeckoRuntime? = null
+    @Volatile private var exec: org.mozilla.geckoview.GeckoWebExecutor? = null
+
+    /** Firefox's network stack for the download manager; null until the engine runs in this process (the activity creates it right after the first frame). */
+    fun executorOrNull(): org.mozilla.geckoview.GeckoWebExecutor? = exec ?: rt?.let { r -> synchronized(this) { exec ?: org.mozilla.geckoview.GeckoWebExecutor(r).also { exec = it } } }
 
     fun runtime(ctx: Context): GeckoRuntime = rt ?: synchronized(this) { rt ?: create(ctx.applicationContext).also { rt = it } }
 
