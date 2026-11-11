@@ -186,6 +186,7 @@ new=$(curl -fsS https://maven.mozilla.org/maven2/org/mozilla/geckoview/geckoview
 - **Mitigations in order:** owner's Private DNS (Quad9), Kestrel G for anything with a login, keep the NTP "outdated engine" banner, retire it eventually (B23).
 
 Malware / phishing sources without Google Play services (owner allows licensed third-party sources for personal use; record each licence in docs/FILTER-LISTS.md):
+
 | Source | Form | Terms [S] | Verdict |
 |---|---|---|---|
 | uBO `badware.min.txt` (already in `FilterSources`) | small ABP list, both builds | GPLv3 | keep |
