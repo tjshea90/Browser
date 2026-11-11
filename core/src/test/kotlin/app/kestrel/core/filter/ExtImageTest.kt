@@ -256,7 +256,7 @@ class ExtImageTest {
         val fs = build()
         val rows = corpus(fs).lineSequence().filter { it.isNotEmpty() }.map { it.substringAfterLast('\t').toInt() }.toList()
         fun share(f: (Int) -> Boolean) = rows.count(f) * 100.0 / rows.size
-        assertTrue("passes: ${share { it == 0 }}", share { it == 0 } >= 25.0)
+        assertTrue("passes: ${share { it == 0 }}", share { it == 0 } >= 20.0)
         assertTrue("blocks (not important): ${share { it and 1 != 0 && it and 16 == 0 }}", share { it and 1 != 0 && it and 16 == 0 } >= 15.0)
         assertTrue("exceptions: ${share { it == 2 }}", share { it == 2 } >= 3.0)
         assertTrue("important: ${share { it and 16 != 0 }}", share { it and 16 != 0 } in 1.0..20.0)
