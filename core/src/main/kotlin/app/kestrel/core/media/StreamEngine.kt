@@ -194,6 +194,11 @@ class StreamEngine(
                 if (!r.state.terminal && r.state != DlState.PAUSED_USER) r.state = DlState.PAUSED_SYSTEM
                 jobs[r.id] = Job(r)
             }
+            // a sound job whose picture job is gone is an ordinary download; a picture job whose sound job is gone has no companion
+            for (j in jobs.values) {
+                if (j.rec.parentId != 0L && !jobs.containsKey(j.rec.parentId)) { j.rec.parentId = 0L; persist(j.rec) }
+                if (j.rec.companionId != 0L && !jobs.containsKey(j.rec.companionId)) { j.rec.companionId = 0L; persist(j.rec) }
+            }
             nextId.set(max + 1)
         }
     }
@@ -272,7 +277,7 @@ class StreamEngine(
     }
 
     fun clearFinished() = control.execute {
-        for (j in snapshotJobs()) { val st = synchronized(lock) { j.rec.state }; if (st == DlState.COMPLETED || st == DlState.FAILED || st == DlState.CANCELED) { wipeStaging(j); synchronized(lock) { jobs.remove(j.rec.id) }; if (!j.rec.priv) store.delete(j.rec.id); changed(j.rec.id) } }
+        for (j in snapshotJobs()) { val st = synchronized(lock) { j.rec.state }; if (j.rec.parentId == 0L && (st == DlState.COMPLETED || st == DlState.FAILED || st == DlState.CANCELED)) { wipeStaging(j); synchronized(lock) { jobs.remove(j.rec.id) }; if (!j.rec.priv) store.delete(j.rec.id); changed(j.rec.id) } }
     }
 
     fun pauseAll() = control.execute { for (j in snapshotJobs()) if (synchronized(lock) { j.rec.state.active }) requestStop(j, DlState.PAUSED_USER) }
@@ -846,7 +851,7 @@ class StreamEngine(
         val host = try { java.net.URI(r.url).host } catch (e: Exception) { null }
         val comp = if (r.companionId != 0L && r.state != DlState.COMPLETED) jobs[r.companionId] else null
         if (comp != null) { // one row for picture + sound: sizes, speed and connections add up
-            val cv = view(comp.also { }.let { it })
+            val cv = view(comp)
             val sumTotal = if (total >= 0 && cv.total >= 0) total + cv.total else -1L
             return DownloadView(r.id, r.state, r.reason, r.detail, r.name, r.mime, host, sumTotal, fetched + cv.done, speed + cv.bytesPerSec,
                 if (running && speed + cv.bytesPerSec > 0 && sumTotal > 0) (sumTotal - fetched - cv.done).coerceAtLeast(0) / (speed + cv.bytesPerSec) else -1L, job.alive + cv.connections, r.priv, r.destUri, r.created, r.updated, actions, r.destKind, estimated || cv.estimated)

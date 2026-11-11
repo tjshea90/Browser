@@ -231,6 +231,15 @@ class StreamEngineTest {
     /** A finisher that "converts" by making a new output of its own and counting how often it was asked. */
     private class FakeFinisher(val sinks: FakeSinks, val result: ((StreamFinisher.Joined) -> StreamFinisher.Converted?)? = null) : StreamFinisher {
         val asked = java.util.concurrent.CopyOnWriteArrayList<StreamFinisher.Joined>()
+        val merges = java.util.concurrent.CopyOnWriteArrayList<StreamFinisher.Merge>()
+        @Volatile var mergeResult: ((StreamFinisher.Merge) -> StreamFinisher.Converted?)? = null
+        override fun merge(m: StreamFinisher.Merge): StreamFinisher.Converted? {
+            merges.add(m)
+            mergeResult?.let { return it(m) }
+            val sink = sinks.create(m.stem + ".mp4", "video/mp4", -1, m.priv)
+            sink.pwrite(0, ByteArray(20), 0, 20)
+            return StreamFinisher.Converted(sink.publish()!!, m.stem + ".mp4", "video/mp4", 20)
+        }
         override fun convert(j: StreamFinisher.Joined): StreamFinisher.Converted? {
             asked.add(j)
             result?.let { return it(j) }
@@ -294,6 +303,87 @@ class StreamEngineTest {
         val a = h.completed(h.engine.enqueue(StreamSource("https://cdn.test/d/manifest.mpd", null, null, "Clip - sound", repId = "a1", ext = "m4a")))
         assertArrayEquals(aInit + aSegs.reduce { x, y -> x + y }, h.out(a))
         assertEquals("Clip - sound.m4a", h.sinks.sinks[a.destUri]!!.name); assertEquals("audio/mp4", a.mime)
+    }
+
+    /** A DASH-like pair: a picture representation and a sound representation of one video, in one manifest. */
+    private fun dashPair(h: H): Triple<String, ByteArray, ByteArray> {
+        val vSegs = (1..4).map { testBytes(30_000, 500L + it) }; val aSegs = (1..4).map { testBytes(6_000, 600L + it) }
+        val vi = testBytes(600, 7); val ai = testBytes(400, 8)
+        h.cdn.files["https://cdn.test/p/v/init.mp4"] = vi; h.cdn.files["https://cdn.test/p/a/init.mp4"] = ai
+        vSegs.forEachIndexed { i, b -> h.cdn.files["https://cdn.test/p/v/s${i + 1}.m4s"] = b }
+        aSegs.forEachIndexed { i, b -> h.cdn.files["https://cdn.test/p/a/s${i + 1}.m4s"] = b }
+        val mpd = "<MPD type=\"static\" mediaPresentationDuration=\"PT8S\"><Period>" +
+            "<AdaptationSet mimeType=\"video/mp4\"><SegmentTemplate timescale=\"1000\" duration=\"2000\" initialization=\"v/init.mp4\" media=\"v/s${'$'}Number${'$'}.m4s\"/><Representation id=\"v\" bandwidth=\"800000\" width=\"640\" height=\"360\" codecs=\"avc1.42c01e\"/></AdaptationSet>" +
+            "<AdaptationSet mimeType=\"audio/mp4\"><SegmentTemplate timescale=\"1000\" duration=\"2000\" initialization=\"a/init.mp4\" media=\"a/s${'$'}Number${'$'}.m4s\"/><Representation id=\"a\" bandwidth=\"96000\" codecs=\"mp4a.40.2\"/></AdaptationSet></Period></MPD>"
+        h.cdn.files["https://cdn.test/p/m.mpd"] = mpd.toByteArray()
+        return Triple("https://cdn.test/p/m.mpd", vi + vSegs.reduce { a, b -> a + b }, ai + aSegs.reduce { a, b -> a + b })
+    }
+
+    private fun pairSource(url: String) = StreamSource(url, null, null, "Clip - 360p", repId = "v", companion = StreamSource(url, null, null, "Clip - sound", repId = "a", ext = "m4a"))
+
+    @Test(timeout = 60_000) fun pictureAndSoundAreDownloadedTogetherAndMergedIntoOneFile() {
+        val sinks = FakeSinks(); val fin = FakeFinisher(sinks)
+        val h = H(sinks = sinks, finisher = fin); h.cdn.chunkDelayMs = 2
+        val (url, video, sound) = dashPair(h)
+        val id = h.engine.enqueue(pairSource(url))
+        assertEquals("one row for the pair", 1, h.engine.views().size)
+        val v = h.completed(id)
+        assertEquals(1, fin.merges.size)
+        val m = fin.merges[0]
+        assertArrayEquals(video, sinks.sinks[m.videoUri]!!.bytes); assertArrayEquals(sound, sinks.sinks[m.audioUri]!!.bytes)   // the merger got both finished files
+        assertEquals("Clip - 360p.mp4", v.name); assertEquals(20L, v.total)
+        assertTrue(sinks.deleted.containsAll(listOf(m.videoUri, m.audioUri)))                                                  // the two parts were removed
+        assertEquals("only the merged file is a download", 1, h.engine.views().size)
+        assertEquals(1, h.store.rows.values.count { it.parentId == 0L && it.id == id }); assertTrue(h.store.rows.size == 1)  // the hidden sound record is gone too
+    }
+
+    @Test(timeout = 60_000) fun aMergeThatIsRefusedKeepsBothFiles() {
+        val sinks = FakeSinks(); val fin = FakeFinisher(sinks).also { it.mergeResult = { null } }
+        val h = H(sinks = sinks, finisher = fin)
+        val (url, video, sound) = dashPair(h)
+        val v = h.completed(h.engine.enqueue(pairSource(url)))
+        assertArrayEquals(video, h.out(v)); assertEquals("Clip - 360p.mp4", v.name)
+        val all = h.engine.views()
+        assertEquals("the sound is now a download of its own", 2, all.size)
+        val a = all.first { it.id != v.id }
+        assertEquals("Clip - sound.m4a", a.name); assertArrayEquals(sound, h.out(a)); assertEquals(DlState.COMPLETED, a.state)
+    }
+
+    @Test(timeout = 60_000) fun aFailingSoundFailsThePictureToo() {
+        val h = H(); val (url, _, _) = dashPair(h)
+        h.cdn.statusFor["https://cdn.test/p/a/s2.m4s"] = 404
+        val v = h.await(h.engine.enqueue(pairSource(url)), "failure") { it?.state == DlState.FAILED }!!
+        assertEquals(Reason.HTTP, v.reason); assertEquals(404, v.detail)
+        assertEquals(1, h.engine.views().size)
+    }
+
+    @Test(timeout = 90_000) fun pauseAndResumeCoverTheWholePair() {
+        val sinks = FakeSinks(); val fin = FakeFinisher(sinks)
+        val h = H(sinks = sinks, finisher = fin); h.cdn.chunkDelayMs = 6; h.cdn.chunk = 2048
+        val (url, _, _) = dashPair(h)
+        val id = h.engine.enqueue(pairSource(url))
+        h.await(id, "progress") { it != null && it.state == DlState.RUNNING && it.done > 20_000 }
+        h.engine.pause(id)
+        h.await(id, "paused") { it?.state == DlState.PAUSED_USER }
+        Thread.sleep(300)
+        val n = h.cdn.requests.size; Thread.sleep(300)
+        assertEquals("both halves stopped", n, h.cdn.requests.size)
+        h.cdn.chunkDelayMs = 0
+        h.engine.resume(id)
+        h.completed(id)
+        assertEquals(1, fin.merges.size)
+    }
+
+    @Test(timeout = 60_000) fun cancelRemovesBothHalves() {
+        val h = H(); h.cdn.chunkDelayMs = 6; h.cdn.chunk = 2048
+        val (url, _, _) = dashPair(h)
+        val id = h.engine.enqueue(pairSource(url))
+        h.await(id, "progress") { it != null && it.state == DlState.RUNNING && it.done > 20_000 }
+        h.engine.cancel(id)
+        h.await(id, "gone") { it == null }
+        val end = System.currentTimeMillis() + 5_000
+        while (h.store.rows.isNotEmpty() && System.currentTimeMillis() < end) Thread.sleep(10)
+        assertTrue("no hidden record left", h.store.rows.isEmpty()); assertTrue(h.engine.views().isEmpty())
     }
 
     @Test(timeout = 60_000) fun theEstimateTracksTheRealSizeWhileItRuns() {
