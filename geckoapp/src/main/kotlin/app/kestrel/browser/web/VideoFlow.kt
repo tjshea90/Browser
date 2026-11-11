@@ -28,6 +28,7 @@ class VideoFlow(private val a: BrowserActivity) {
         class Ready(val rows: List<Pair<VideoPanel.Choice, StreamPick>>, val note: String?) : Loaded()
     }
     private val streamInfo = HashMap<String, Loaded>()   // candidate key -> what its playlist turned out to be
+    private val children = HashSet<String>()            // addresses of the variant / audio playlists of masters we have read: they are not rows of their own
     private var panel: VideoPanel? = null
     private var panelTab: Tab? = null
 
@@ -92,6 +93,7 @@ class VideoFlow(private val a: BrowserActivity) {
         val names = HashMap<String, Int>()
         for (c in items) {
             when {
+                c.kind == MediaKind.HLS && c.key in children -> {}
                 c.kind == MediaKind.HLS -> when (val st = streamInfo[c.key] ?: loadStream(tab, c)) {
                     is Loaded.Loading -> streams.add(VideoPanel.Choice("Stream", "Reading the quality list\u2026", null, enabled = false))
                     is Loaded.Failed -> note = note ?: st.message
@@ -135,6 +137,8 @@ class VideoFlow(private val a: BrowserActivity) {
     /** One variant's playlist tells how long the video is (all variants are equally long); with that, every variant's size is its bit rate times it. */
     private fun loadVariants(tab: Tab, c: MediaCandidate, master: Hls.Master, headers: Map<String, String>) {
         val vs = master.variants
+        for (v in vs) children.add(v.url)
+        for (r in master.renditions) r.url?.let { children.add(it) }
         if (vs.isEmpty()) { streamInfo[c.key] = Loaded.Failed("This stream lists no qualities."); refresh(tab); return }
         val probe = vs.filter { !it.audioOnly }.minByOrNull { it.bandwidth } ?: vs.minByOrNull { it.bandwidth }!!
         DownloadController.fetchText(a, probe.url, headers, 1, tab.isPrivateTab) { text ->
