@@ -11,6 +11,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
+import android.widget.AbsListView
 import android.widget.BaseAdapter
 import android.widget.EditText
 import android.widget.ImageView
@@ -199,17 +200,18 @@ class FindBar(ctx: Context, private val pal: Pal, private val l: Listener) : Lin
     fun setResult(active: Int, total: Int) { count.text = if (total == 0) (if (input.text.isNullOrEmpty()) "" else "0/0") else "${active + 1}/$total"; count.setPadding(0, 0, context.dp(6), 0) }
 }
 
-/** Omnibox dropdown. */
-class SuggestionList(ctx: Context, private val pal: Pal, private val onPick: (String) -> Unit) : ListView(ctx) {
-    private class Row(val primary: String, val secondary: String, val value: String)
+/** Omnibox dropdown: 56 dp rows (icon, title, address). In the bottom dock the best match sits nearest the address bar, so that list is reversed. */
+class SuggestionList(ctx: Context, private var pal: Pal, private val reverse: Boolean = false, private val onPick: (String) -> Unit) : ListView(ctx) {
+    private class Row(val primary: String, val secondary: String, val value: String, val first: Boolean)
 
     private var rows: List<Row> = emptyList()
+    private val rowPx = ctx.dp(56)
 
     init {
-        setBackgroundColor(pal.card)
-        divider = ColorDrawable(pal.divider)
-        dividerHeight = 1
-        elevation = ctx.dpf(8f)
+        selector = ColorDrawable(0)
+        isVerticalScrollBarEnabled = false
+        overScrollMode = OVER_SCROLL_NEVER
+        isFocusable = false
         adapter = object : BaseAdapter() {
             override fun getCount() = rows.size
             override fun getItem(i: Int) = rows[i]
@@ -217,25 +219,46 @@ class SuggestionList(ctx: Context, private val pal: Pal, private val onPick: (St
             override fun getView(i: Int, convert: View?, parent: ViewGroup): View {
                 val r = rows[i]
                 val v = LinearLayout(ctx).apply {
-                    orientation = LinearLayout.VERTICAL
-                    setPadding(ctx.dp(16), ctx.dp(8), ctx.dp(16), ctx.dp(8))
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    minimumHeight = rowPx
+                    setPadding(ctx.dp(16), ctx.dp(6), ctx.dp(16), ctx.dp(6))
                     background = ripple(pal.fg, null, 0f)
+                    layoutParams = AbsListView.LayoutParams(AbsListView.LayoutParams.MATCH_PARENT, rowPx)
                 }
-                v.addView(label(ctx, r.primary, 15f, pal.fg).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END; includeFontPadding = true })
-                if (r.secondary.isNotEmpty()) v.addView(label(ctx, r.secondary, 12f, pal.muted).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END; includeFontPadding = true })
+                v.addView(ImageView(ctx).apply {
+                    setImageResource(if (r.first) R.drawable.ic_search else R.drawable.ic_history)
+                    setColorFilter(if (r.first) pal.accent else pal.muted)
+                }, LinearLayout.LayoutParams(ctx.dp(22), ctx.dp(22)).apply { marginEnd = ctx.dp(14) })
+                val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+                col.addView(label(ctx, r.primary, 16f, pal.fg).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END; includeFontPadding = true })
+                if (r.secondary.isNotEmpty()) col.addView(label(ctx, r.secondary, 12f, pal.muted).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END; includeFontPadding = true })
+                v.addView(col, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
                 return v
             }
         }
         setOnItemClickListener { _, _, i, _ -> onPick(rows[i].value) }
+        setPal(pal)
+    }
+
+    fun setPal(p: Pal) {
+        pal = p
+        setBackgroundColor(p.card)
+        divider = ColorDrawable(p.divider)
+        dividerHeight = 1
+        (adapter as BaseAdapter).notifyDataSetChanged()
     }
 
     fun bind(typed: String, entries: List<Entry>) {
         val out = ArrayList<Row>()
-        out.add(Row(typed, "Search or go to address", typed))
-        for (e in entries) out.add(Row(e.title.ifBlank { e.url }, e.url, e.url))
-        rows = out
+        out.add(Row(typed, "Search or go to address", typed, true))
+        for (e in entries) out.add(Row(e.title.ifBlank { e.url }, e.url, e.url, false))
+        rows = if (reverse) out.reversed() else out
         (adapter as BaseAdapter).notifyDataSetChanged()
+        if (reverse) setSelection(rows.size - 1)
     }
+
+    fun contentHeightPx(): Int = rows.size * rowPx + maxOf(0, rows.size - 1) * dividerHeight
 }
 
 class MenuItemSpec(val id: Int, val text: String, val checked: Boolean? = null)
