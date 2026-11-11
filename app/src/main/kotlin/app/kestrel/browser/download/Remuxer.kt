@@ -57,6 +57,7 @@ class Remuxer(private val ctx: Context, private val sinks: SinkFactory) : Stream
             m.start(); started = true
             var base = -1L
             var written = 0; var videoSamples = 0
+            val aclock = AudioClock()
             while (true) {
                 buf.clear()
                 val size = ex.readSampleData(buf, 0)
@@ -67,7 +68,7 @@ class Remuxer(private val ctx: Context, private val sinks: SinkFactory) : Stream
                 if (target >= 0 && t >= 0) {
                     if (base < 0) base = t
                     val rel = (t - base).coerceAtLeast(0)
-                    if (track == at) written += writeAudio(m, target, buf, size, rel, info)
+                    if (track == at) written += writeAudio(m, target, buf, size, rel, info, aclock)
                     else {
                         info.set(0, size, rel, if (ex.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC != 0) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0)
                         m.writeSampleData(target, buf, info)
@@ -99,10 +100,9 @@ class Remuxer(private val ctx: Context, private val sinks: SinkFactory) : Stream
      * The platform's TS extractor hands over AAC the way it sits in the stream: several ADTS frames (each with its 7-byte header) per sample. An MP4 wants ONE raw frame per sample, so
      * every frame is cut out (header dropped) and given its own time, 1024 samples after the one before. A sample that is not ADTS is written as it is. Returns how many samples were written.
      */
-    private fun writeAudio(m: MediaMuxer, track: Int, buf: ByteBuffer, size: Int, timeUs: Long, info: MediaCodec.BufferInfo): Int {
+    private fun writeAudio(m: MediaMuxer, track: Int, buf: ByteBuffer, size: Int, timeUs: Long, info: MediaCodec.BufferInfo, clock: AudioClock): Int {
         val b = buf.array(); val base = buf.arrayOffset()
         var pos = 0; var n = 0
-        var at = timeUs
         while (pos + 7 <= size) {
             val b0 = b[base + pos].toInt() and 0xFF; val b1 = b[base + pos + 1].toInt() and 0xFF
             if (b0 != 0xFF || (b1 and 0xF0) != 0xF0) break
@@ -110,14 +110,30 @@ class Remuxer(private val ctx: Context, private val sinks: SinkFactory) : Stream
             val len = ((b[base + pos + 3].toInt() and 3) shl 11) or ((b[base + pos + 4].toInt() and 0xFF) shl 3) or ((b[base + pos + 5].toInt() and 0xFF) ushr 5)
             if (len < hdr || pos + len > size) break
             val rate = ADTS_RATES.getOrElse((b[base + pos + 2].toInt() ushr 2) and 0xF) { 44100 }
+            if (n == 0) clock.sync(timeUs, rate)                      // the stream's own time for the first frame of a sample; the rest follow at exactly 1024 samples each
             buf.clear()
-            info.set(pos + hdr, len - hdr, at, 0)
+            info.set(pos + hdr, len - hdr, clock.next(rate), 0)
             m.writeSampleData(track, buf, info)
             pos += len; n++
-            at += 1_000_000L * 1024 / rate
         }
-        if (n == 0) { buf.clear(); info.set(0, size, timeUs, 0); m.writeSampleData(track, buf, info); return 1 }
+        if (n == 0) { buf.clear(); info.set(0, size, maxOf(timeUs, clock.last + 1), 0); m.writeSampleData(track, buf, info); clock.last = maxOf(timeUs, clock.last + 1); return 1 }
         return n
+    }
+
+    /**
+     * The audio timeline of the MP4: AAC frames are exactly 1024 samples apart, so after the first frame every time is computed from a counter, not copied from the stream (whose 90 kHz stamps
+     * round, and the MP4 writer refuses a track whose time ever steps back). A real gap in the stream (more than 50 ms) is kept by moving the start forward.
+     */
+    private class AudioClock {
+        private var start = -1L
+        private var frames = 0L
+        var last = -1L
+        fun sync(streamUs: Long, rate: Int) {
+            if (start < 0) { start = streamUs; return }
+            val expected = start + frames * 1_000_000L * 1024 / rate
+            if (streamUs - expected > 50_000) start += streamUs - expected
+        }
+        fun next(rate: Int): Long { val t = start + frames * 1_000_000L * 1024 / rate; frames++; last = t; return t }
     }
 
     private fun enoughRoom(size: Long): Boolean = try {
