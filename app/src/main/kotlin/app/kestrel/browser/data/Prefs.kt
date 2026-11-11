@@ -53,6 +53,10 @@ class Prefs private constructor(ctx: Context) {
     var updateJobSig: String get() = sp.getString("upd_sig", "") ?: ""; set(v) = put("upd_sig", v)
     /** Look for a new app release (GitHub Releases) once a day, when the app opens. Off = only the "Check now" button. */
     var autoUpdateCheck: Boolean get() = bool("app_upd_auto", true); set(v) = put("app_upd_auto", v)
+    /** Download a new release by itself (in the download service, screen off is fine) as soon as it is found. Owner request 8: on by default. */
+    var autoUpdateDownload: Boolean get() = bool("app_upd_dl", true); set(v) = put("app_upd_dl", v)
+    /** Start the installer by itself when the update is ready and Android allows it without a prompt (API 31+; Android 10 always asks). */
+    var autoUpdateInstall: Boolean get() = bool("app_upd_inst", true); set(v) = put("app_upd_inst", v)
     var lastUpdateNote: String get() = sp.getString("upd_note", "") ?: ""; set(v) = put("upd_note", v)
 
     var blockedTotal: Long get() = sp.getLong("blocked_total", 0L); set(v) = put("blocked_total", v)
