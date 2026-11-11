@@ -12,6 +12,7 @@ import app.kestrel.browser.Io
 import app.kestrel.browser.ProcessLife
 import app.kestrel.core.download.Clock
 import app.kestrel.core.download.Config
+import app.kestrel.core.download.DEST_APP_PRIVATE
 import app.kestrel.core.download.DlState
 import app.kestrel.core.download.DownloadView
 import app.kestrel.core.download.Engine
@@ -19,6 +20,7 @@ import app.kestrel.core.download.Fetcher
 import app.kestrel.core.download.NetGate
 import app.kestrel.core.download.Source
 import app.kestrel.core.download.Spawner
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executor
@@ -67,7 +69,7 @@ object DownloadController {
         val low = app.getSystemService(ActivityManager::class.java)?.isLowRamDevice != false
         val cfg = Config(maxConnsTotal = if (low) 3 else 6, maxConnsPerDownload = if (low) 3 else 4)
         val e = Engine(
-            { fetchers[it] ?: fetchers[0] }, MediaStoreSinks(app), SqliteStore(app), net, control, Clock.System, cfg,
+            { fetchers[it] ?: fetchers[0] }, AppSinks(MediaStoreSinks(app), FileSinks(File(app.filesDir, "updates"))), SqliteStore(app), net, control, Clock.System, cfg,
             Spawner { name, task ->
                 Thread({
                     val tid = Process.myTid(); engineTids.add(tid)
@@ -84,13 +86,16 @@ object DownloadController {
     // ---- commands (all asynchronous; the engine serialises them on its control thread)
 
     /** Queue a download and make sure the foreground service is running. Called from the UI thread; nothing here touches disk or network on it. */
-    fun enqueue(ctx: Context, src: Source) {
+    fun enqueue(ctx: Context, src: Source, onId: ((Long) -> Unit)? = null) {
         val e = init(ctx)
-        handler.post { e.enqueue(src) } // after restore() on the same thread, so new ids never clash with stored ones
+        handler.post { val id = e.enqueue(src); onId?.invoke(id) } // after restore() on the same thread, so new ids never clash with stored ones
         DownloadService.start(ctx)
     }
 
-    fun views(): List<DownloadView> = engine?.views() ?: emptyList()
+    /** The downloads the user sees (the Downloads screen, "Delete old installers"): not the app's own update file. */
+    fun views(): List<DownloadView> = (engine?.views() ?: emptyList()).filter { it.kind != DEST_APP_PRIVATE }
+    /** Everything the engine holds, update downloads included (the service notification, the updater). */
+    fun allViews(): List<DownloadView> = engine?.views() ?: emptyList()
     fun view(id: Long): DownloadView? = engine?.view(id)
     fun pause(id: Long) { engine?.pause(id) }
     fun resume(ctx: Context, id: Long) { init(ctx).resume(id); DownloadService.start(ctx) }
@@ -131,7 +136,8 @@ object DownloadController {
             val now = engine?.views() ?: emptyList()
             for (v in now) {
                 val before = lastStates.put(v.id, v.state)
-                if (before != null && before != v.state && (v.state == DlState.COMPLETED || v.state == DlState.FAILED)) Notifier.finished(app, v)
+                // the update file has its own notifications (UpdateNotifier)
+                if (v.kind != DEST_APP_PRIVATE && before != null && before != v.state && (v.state == DlState.COMPLETED || v.state == DlState.FAILED)) Notifier.finished(app, v)
             }
             lastStates.keys.retainAll(now.map { it.id }.toSet())
             for (l in uiListeners) l()
