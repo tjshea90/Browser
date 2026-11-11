@@ -1,13 +1,13 @@
-# CHECKPOINT 384 — read me first, then TASKS.md
+# CHECKPOINT 392 — read me first, then TASKS.md
 
-**Written:** 2026-11-11T16:28:19Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `1315fca` (this checkpoint is the commit after it)
+**Written:** 2026-11-11T16:46:17Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `7ff59eb` (this checkpoint is the commit after it)
 
 ## Just done
-Owner request 7 recorded (S1 in-app update blocked by INSTALL_FAILED_INSUFFICIENT_STORAGE although 900 MB were freed; S2 'MB downloaded of total' on every download card). These come BEFORE R1-R3 because the owner cannot update to alpha6 at all. Scroll-away/back emulator experiment (R2a) finished in the background: screenshots sb0-sb4 in the scratchpad, not yet read.
+S1+S2 code done: updater storage plan (core UpdateLogic.storagePlan + tests; UpdateManager.space/needSpace/recheckSpace/installNeedsSpace with a rising floor, abandon leftover sessions, drop own APK copy only when needed, mapped installer failures), Updates sheet NEEDS_SPACE screen (numbers, Try again, Storage settings), download cards show 'X MB of Y MB'. Emulator-verified with a filled /data (pre-download check, auto-clear after freeing space, cancel keeps file, simulated STATUS_FAILURE_STORAGE). The 'floor' variant (ask 150 MB more than Android's own refusal) compiled but not yet run.
 
 ## Do this next
-1) read UpdateManager.kt / UpdatePanel.kt / InstallResultReceiver.kt: where the APK is stored, how the failure state is kept, what Check now does after a failure; 2) S1: free-space estimate via StorageManager.getAllocatableBytes + need = apk*2.5; show both numbers; Try again from the downloaded file; delete our APK copy after commit success; human error text for INSUFFICIENT_STORAGE; emulator test by filling /data (adb root) and installing; 3) S2: core/download/Planner.kt Format.status + DownloadsScreen card: 'X MB of Y MB'; update EngineTest/PlannerTest; 4) then R1 neon, R3 pull-to-refresh, R2 scrolling; 5) alpha7 (106) ship; the owner must be told how to get past the storage failure NOW (Settings > Storage, or Kestrel G > Clear cache, then Check now) in the reply
+1) R1 neon (drop areAnimatorsEnabled gate, stronger pulse, more places, Home/tab grid never rest, Diagnostics line); 2) R3 pull-to-refresh; 3) R2 scroll work (emulator evidence first: sb0-sb4 screenshots in scratchpad were never read; extend readBack with candidate prefs; apz wait; speculative connect; priority hint; live-session policy); 4) rebuild debug, re-run the STORAGE broadcast test (expect 'about 150 MB more') + check download card text on a Range-server download; 5) alpha7 (106): ship.sh gecko, dispatch android.yml, record-release; 6) reply to the owner: how to get past the storage failure NOW was already told; tell them the exact number logic + that they need Menu > Updates > Try again
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ Owner request 7 recorded (S1 in-app update blocked by INSTALL_FAILED_INSUFFICIEN
 
 ## Last ten checkpoints
 ```
+  f0bff4b ckpt 384: Owner request 7 recorded (S1 in-app update blocked by INSTALL_FAILED_INSUFFICI
   fcf63d9 ckpt 382: Owner request 6 recorded in TASKS.md (R1 neon not visible, R2 scrolling stutte
   4ac5081 ckpt 376: alpha6 SHIPPED + RECORDED (kestrel-g-v0.2.0-alpha6, gecko code 105, run 430556
   69d37b2 ckpt 372: gated kestrel-g-v0.2.0-alpha6 (gecko code 105) and pushed it: handoff self-tes
@@ -25,8 +26,7 @@ Owner request 7 recorded (S1 in-app update blocked by INSTALL_FAILED_INSUFFICIEN
   e9f12cd ckpt 344: gated kestrel-g-v0.2.0-alpha5 (gecko code 104) and pushed it: handoff self-tes
   b84308a ckpt 342: P3+P4 DONE and verified on the emulator (blue REAPER theme: Home flames/scythe
   bf1ed62 ckpt 316: P3/P4 neon wired and compiling (both modules): Neon engine (RenderThread alpha
-  6438c0a ckpt 306: Owner request 4 recorded (P1-P4: hardware speed research, engine research incl
 ```
 
-(1 automatic checkpoint(s) since the last deliberate one — the
+(7 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
