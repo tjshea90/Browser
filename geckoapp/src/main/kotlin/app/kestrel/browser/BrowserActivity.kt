@@ -146,11 +146,17 @@ open class BrowserActivity : Activity(), ToolbarListener {
         installBackHandling()
         NetworkMonitor.addListener(netListener)
         db = BrowserDb(this)
-        // Start the engine right after the first frame (it takes a moment on this CPU), then attach the ad/tracker blocking extension to the app's filter engine.
-        Io.main.postDelayed({
-            GeckoEngine.runtime(this)
-            ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }))
-        }, 600)
+        // Start the engine right AFTER the first frame (it takes a moment on this CPU; the native UI is already on screen), pre-launch its content process,
+        // then attach the ad/tracker blocking extension to the app's filter engine.
+        android.view.Choreographer.getInstance().postFrameCallback {
+            Io.main.post {
+                Health.log("engine", "runtime-create")
+                GeckoEngine.runtime(this)
+                GeckoEngine.warmUp(this)
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }))
+                Health.log("engine", "runtime-ready")
+            }
+        }
         val firstTab = Tab(nextTabId++)
         tabs.add(firstTab)
         show(firstTab)

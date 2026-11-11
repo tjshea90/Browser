@@ -31,6 +31,8 @@ object GeckoEngine {
             .bounceTrackingProtectionMode(ContentBlocking.BounceTrackingProtectionMode.BOUNCE_TRACKING_PROTECTION_MODE_ENABLED)
             .build()
         val settings = GeckoRuntimeSettings.Builder()
+            // The engine preferences (assets/gecko-prefs.txt: AV1 off, memory/cache budget, no animations, security pins) are applied before Gecko starts.
+            .configFilePath(GeckoPrefs.writeConfig(ctx))
             .contentBlocking(blocking)
             .allowInsecureConnections(GeckoRuntimeSettings.ALLOW_ALL) // HTTPS-first is Kestrel's own NavPolicy (per-site, LAN-aware, own warning screen)
             .globalPrivacyControlEnabled(true)
@@ -44,12 +46,24 @@ object GeckoEngine {
             // Encrypted DNS on a carrier hotspot (carriers can read and rewrite plain DNS). MODE_FIRST = try DoH, fall back to the system resolver.
             .trustedRecursiveResolverMode(GeckoRuntimeSettings.TRR_MODE_FIRST)
             .trustedRecursiveResolverUri("https://mozilla.cloudflare-dns.com/dns-query")
+            .enterpriseRootsEnabled(false)   // Gecko trusts Mozilla's root store, not this tablet's 2021-07 Android store (research/SECURITY.md 4.1)
+            .setLnaEnabled(true).setLnaBlocking(true).setLnaBlockTrackers(true) // Local Network Access: pages cannot probe the LAN / router
+            .translationsOfferPopup(false)   // never fetch translation models over the hotspot
             .automaticFontSizeAdjustment(false)
             .fontSizeFactor(prefs.textZoom / 100f)
             .preferredColorScheme(colorScheme(prefs))
             .build()
-        return GeckoRuntime.create(ctx, settings)
+        return GeckoRuntime.create(ctx, settings).also { r ->
+            r.settings.setFetchPriorityEnabled(true)                      // fetchpriority=high/low on img/script/link is honoured (GeckoView's Java default is false)
+            r.settings.setFingerprintingProtection(true)                  // FPP in normal tabs too (the engine default is private tabs only)
+            r.settings.setFingerprintingProtectionPrivateBrowsing(true)
+            r.settings.setCertificateTransparencyMode(2)                  // enforce (= the engine default, pinned so a future default cannot weaken it)
+            r.settings.setPostQuantumKeyExchangeEnabled(true)             // X25519MLKEM768 for TLS / HTTP-3 (= default, pinned)
+        }
     }
+
+    /** Launch the content process early ("speeds up the first page load"); idempotent. Call on the UI thread right after the runtime exists. */
+    fun warmUp(ctx: Context) { try { runtime(ctx).warmUp() } catch (e: Exception) { /* optional speed-up only */ } }
 
     private fun colorScheme(prefs: Prefs): Int = when (prefs.webDark) {
         1 -> GeckoRuntimeSettings.COLOR_SCHEME_DARK
