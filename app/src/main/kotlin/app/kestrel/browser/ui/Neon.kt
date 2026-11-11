@@ -70,6 +70,7 @@ object Neon {
     }
     private val handler = Handler(Looper.getMainLooper())
     private var busy = false // typing or loading: the screen is already changing, hold the glow still
+    private var touching = false // a finger is on the screen or a fling is still running: never compete with the page's scrolling for frames
     private var away = true // the app is not on screen
     private var resting = false // no touch for IDLE_MS
     private var powerSave = false
@@ -96,6 +97,9 @@ object Neon {
     /** Typing or loading: hold every glow still (true) or let them breathe again (false). */
     fun busy(on: Boolean) { if (busy != on) { busy = on; applyAll() } }
 
+    /** A finger went down (true) / the last one is up and the fling has had time to end (false). The glows hold still while true. */
+    fun touching(on: Boolean) { if (touching != on) { touching = on; applyAll() } }
+
     /** The app came to the front / went away. Re-reads battery-saver. */
     fun foreground(on: Boolean, ctx: Context? = null) {
         if (ctx != null) powerSave = try { ctx.getSystemService(PowerManager::class.java)?.isPowerSaveMode == true } catch (e: Exception) { false }
@@ -120,7 +124,7 @@ object Neon {
 
     private fun postRestCheck(delay: Long) { restPosted = true; handler.postDelayed(restCheck, delay) }
     private fun applyAll() { for (p in pulsers.toList()) apply(p, p.v.isShown) }
-    private fun animated(): Boolean = mode == PULSE && !busy && !away && !resting && !powerSave && ValueAnimator.areAnimatorsEnabled()
+    private fun animated(): Boolean = mode == PULSE && !busy && !touching && !away && !resting && !powerSave && ValueAnimator.areAnimatorsEnabled()
 
     private fun apply(p: Pulser, visible: Boolean) {
         when {

@@ -234,9 +234,25 @@ open class BrowserActivity : Activity(), DockListener {
         Neon.foreground(false)
     }
 
-    /** Any touch wakes the neon from its idle rest (see [Neon.IDLE_MS]). */
+    private var lastTouchAt = 0L
+    private val touchRelease = Runnable { Neon.touching(false) }
+
+    /**
+     * Any touch wakes the neon from its idle rest (see [Neon.IDLE_MS]) and holds it still while a finger is down and for 1.5 s after (a fling): the page's scrolling
+     * must never share frames with our glow. [lastTouchAt] also keeps the post-load preview capture (a GPU read-back) away from a scroll in progress.
+     */
     override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
-        if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN) Neon.touched()
+        when (ev.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> {
+                Neon.touched(); Neon.touching(true)
+                lastTouchAt = SystemClock.uptimeMillis()
+                Io.main.removeCallbacks(touchRelease)
+            }
+            android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                lastTouchAt = SystemClock.uptimeMillis()
+                Io.main.removeCallbacks(touchRelease); Io.main.postDelayed(touchRelease, 1500)
+            }
+        }
         return super.dispatchTouchEvent(ev)
     }
 
@@ -1169,7 +1185,8 @@ open class BrowserActivity : Activity(), DockListener {
         // a while after the load: the page has settled, nobody is typing -> take the preview the tab grid will show. Each capture is a GPU read-back + scale + a disk write, so not
         // for quick successive navigations (one per 15 s at most) and later than the first paint (research/HW_SPEED.md H3).
         Io.main.postDelayed({
-            if (tab === current && !tab.loading && !typing() && tabGrid.visibility != View.VISIBLE && SystemClock.uptimeMillis() - tab.thumbAt > 15_000) captureThumb(tab)
+            val now = SystemClock.uptimeMillis()
+            if (tab === current && !tab.loading && !typing() && tabGrid.visibility != View.VISIBLE && now - tab.thumbAt > 15_000 && now - lastTouchAt > 3_000) captureThumb(tab)
         }, 4000)
     }
 
