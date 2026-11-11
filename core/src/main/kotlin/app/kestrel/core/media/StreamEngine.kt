@@ -377,7 +377,7 @@ class StreamEngine(
             changed(rec.id)
             val n = synchronized(lock) { job.media!!.segments.size }
             val workers = ArrayList<Thread>()
-            val want = maxOf(1, minOf(cfg.maxConnsPerDownload, n - rec.next))
+            val want = maxOf(1, minOf(if (rec.parentId != 0L) minOf(2, cfg.maxConnsPerDownload) else cfg.maxConnsPerDownload, n - rec.next))
             for (i in 0 until want) { synchronized(lock) { job.alive++ }; workers.add(spawner.spawn("stream-${rec.id}-w$i") { try { worker(job) } finally { synchronized(lock) { job.alive-- } } }) }
             while (true) {
                 val alive = synchronized(lock) { job.alive }
@@ -389,6 +389,7 @@ class StreamEngine(
                     for (resp in job.responses) try { resp.abort() } catch (e: Exception) { /* ignore */ }
                 }
                 if (now - job.lastCkpt >= cfg.checkpointMs && !job.stop) checkpoint(job)
+                companionFailure(job)?.let { f -> synchronized(lock) { if (job.failure == null) job.failure = f; job.stop = true; for (r in job.responses) try { r.abort() } catch (e: Exception) { /* ignore */ } } }
                 changed(rec.id)
             }
             job.failure?.let { throw it }
@@ -419,6 +420,11 @@ class StreamEngine(
         if (outcome != DlState.COMPLETED && outcome != DlState.CANCELED) try { job.sink?.sync() } catch (e: Exception) { /* the last checkpoint still stands */ }
         control.execute {
             synchronized(lock) { job.running = false; job.stop = false; job.stopState = null; job.failure = null }
+            if ((outcome == DlState.FAILED || outcome == DlState.CANCELED) && rec.companionId != 0L) {
+                val comp = synchronized(lock) { jobs[rec.companionId] }
+                if (comp != null) { if (synchronized(lock) { comp.running }) requestStop(comp, DlState.CANCELED) else finishCancel(comp) }
+                synchronized(lock) { rec.companionId = 0L }
+            }
             when (outcome) {
                 DlState.CANCELED -> { finishCancel(job); startQueued(); return@execute }
                 DlState.COMPLETED -> {}
@@ -524,12 +530,26 @@ class StreamEngine(
         val sink = job.sink ?: throw SinkException(Reason.STORAGE, "no file")
         if (synchronized(lock) { rec.next != job.media!!.segments.size }) throw SinkException(Reason.STORAGE, "stream incomplete")
         sink.sync()
+        // a picture whose sound is a job of its own waits for it before anything is published
+        val comp: Job? = synchronized(lock) { if (rec.companionId != 0L) jobs[rec.companionId] else null }
+        if (comp != null) awaitCompanion(job, comp)
         val uri = sink.publish()
         synchronized(lock) { rec.destUri = uri ?: rec.destUri; job.sink = null }
-        // MPEG-TS plays badly in most apps: when nothing in it needs the timestamps kept as they are, make an MP4 of it (the .ts stays if anything goes wrong)
         val media = synchronized(lock) { job.media!! }
         var converted: StreamFinisher.Converted? = null
-        if (finisher != null && uri != null && media.container == "ts" && media.discontinuities == 0 && !job.stop) {
+        if (comp != null && finisher != null && uri != null) {
+            // picture + sound -> one MP4 (if the muxer says no, both files stay as they are: the sound is shown as a download of its own)
+            val audioUri = synchronized(lock) { comp.rec.destUri }
+            if (audioUri != null) {
+                converted = try { finisher.merge(StreamFinisher.Merge(uri, audioUri, rec.nameStem, job.written + synchronized(lock) { comp.written }, rec.priv, rec.destKind)) } catch (e: Throwable) { log("merge failed", e); null }
+                if (converted != null) {
+                    try { sinks.delete(uri) } catch (e: Exception) { /* ignore */ }
+                    try { sinks.delete(audioUri) } catch (e: Exception) { /* ignore */ }
+                    dropCompanion(comp)
+                } else synchronized(lock) { comp.rec.parentId = 0L; comp.rec.updated = clock.now() }.also { persist(comp.rec); changed(comp.rec.id) }
+            }
+        } else if (finisher != null && uri != null && media.container == "ts" && media.discontinuities == 0 && !job.stop) {
+            // MPEG-TS plays badly in most apps: when nothing in it needs the timestamps kept as they are, make an MP4 of it (the .ts stays if anything goes wrong)
             converted = try { finisher.convert(StreamFinisher.Joined(uri, rec.nameStem, media.container, job.written, rec.priv, rec.destKind)) } catch (e: Throwable) { null }
             if (converted != null) try { sinks.delete(uri) } catch (e: Exception) { /* the .ts stays next to the .mp4: harmless */ }
         }
@@ -538,9 +558,42 @@ class StreamEngine(
             rec.total = job.written; rec.appended = job.written
             rec.state = DlState.COMPLETED; rec.reason = Reason.NONE; rec.detail = 0; rec.finished = clock.now(); rec.updated = rec.finished
             rec.headers = emptyMap(); rec.playlistText = null
+            if (converted == null && comp != null) rec.companionId = 0L // the sound stays a download of its own
         }
         wipeStaging(job)
         return DlState.COMPLETED
+    }
+
+    /** Wait (in the supervisor's own thread) until the sound job has finished; its failure is this job's failure. */
+    private fun awaitCompanion(job: Job, comp: Job) {
+        while (true) {
+            if (job.stop) throw Stopped()
+            val st = synchronized(lock) { comp.rec.state }
+            when (st) {
+                DlState.COMPLETED -> return
+                DlState.FAILED -> throw Failed(synchronized(lock) { comp.rec.reason }, synchronized(lock) { comp.rec.detail })
+                DlState.CANCELED -> throw Failed(Reason.STORAGE)
+                else -> {}
+            }
+            if (synchronized(lock) { !jobs.containsKey(comp.rec.id) }) throw Failed(Reason.STORAGE)
+            try { Thread.sleep(200) } catch (e: InterruptedException) { /* look again */ }
+        }
+    }
+
+    /** The sound job failed or vanished while the picture still downloads: the picture job fails with the same reason. */
+    private fun companionFailure(job: Job): Failed? {
+        val cid = job.rec.companionId
+        if (cid == 0L) return null
+        val c = synchronized(lock) { jobs[cid] } ?: return null
+        return synchronized(lock) { if (c.rec.state == DlState.FAILED) Failed(c.rec.reason, c.rec.detail) else null }
+    }
+
+    /** The merge made the sound's own file unnecessary: its job and record go. */
+    private fun dropCompanion(comp: Job) {
+        wipeStaging(comp)
+        synchronized(lock) { jobs.remove(comp.rec.id) }
+        if (!comp.rec.priv) store.delete(comp.rec.id)
+        changed(comp.rec.id)
     }
 
     private fun checkpoint(job: Job) {
@@ -791,6 +844,13 @@ class StreamEngine(
             DlState.CANCELED -> emptyList()
         }
         val host = try { java.net.URI(r.url).host } catch (e: Exception) { null }
+        val comp = if (r.companionId != 0L && r.state != DlState.COMPLETED) jobs[r.companionId] else null
+        if (comp != null) { // one row for picture + sound: sizes, speed and connections add up
+            val cv = view(comp.also { }.let { it })
+            val sumTotal = if (total >= 0 && cv.total >= 0) total + cv.total else -1L
+            return DownloadView(r.id, r.state, r.reason, r.detail, r.name, r.mime, host, sumTotal, fetched + cv.done, speed + cv.bytesPerSec,
+                if (running && speed + cv.bytesPerSec > 0 && sumTotal > 0) (sumTotal - fetched - cv.done).coerceAtLeast(0) / (speed + cv.bytesPerSec) else -1L, job.alive + cv.connections, r.priv, r.destUri, r.created, r.updated, actions, r.destKind, estimated || cv.estimated)
+        }
         return DownloadView(r.id, r.state, r.reason, r.detail, r.name, r.mime, host, total, fetched, speed, eta, job.alive, r.priv, r.destUri, r.created, r.updated, actions, r.destKind, estimated)
     }
 
