@@ -63,7 +63,7 @@ class PlannerTest {
 
     /** Random walks: whatever the workers do, the ranges stay disjoint, cover the file and keep cursors inside. */
     @Test fun invariantsHoldUnderRandomWork() {
-        val rnd = java.util.Random(42)
+        val rnd = kotlin.random.Random(42)
         repeat(300) {
             val total = (8 + rnd.nextInt(120)) * MiB
             val segs = mutableListOf(Seg(0, 0, total, 0).also { it.worker = true; it.reqEnd = if (rnd.nextBoolean()) -1 else minOf(total, 8 * MiB) })
@@ -100,7 +100,7 @@ class PlannerTest {
         var now = 0L
         var n = 1
         repeat(40) { now += 1000; n = c.update(now, minOf(n * 1_000_000.0, 3_000_000.0), 6) }
-        assertEquals(4, n.coerceAtMost(4).coerceAtLeast(3).let { if (it == 4) 3 else it }.coerceAtLeast(3)) // 3 (4 only for one evaluation window)
+        assertEquals(3, n) // grew to 4, saw no gain, stepped back to 3 and froze growth
         // a link that does not scale: stays at 1 and stops trying for a while
         val d = HillClimb(cfg)
         var m = 1; now = 0
