@@ -66,9 +66,18 @@ Work order: M (process) and R (research, in parallel) -> A (speed, freeze, secur
 - [ ] D4 Differential tests: the new engine gives the same verdicts as the Kotlin engine on the 60k-case corpus + real-list samples
 
 ## Decisions waiting for the owner (defaults are used until they answer; all switchable later)
-- [ ] OWNER UI-1: toolbar layout. Default: SPLIT in portrait (address row on top, 64 dp action bar at the bottom: Back, Forward, New tab, Tabs, Menu), one row in landscape. Alternative: everything on top.
+- [x] OWNER UI-1 ANSWERED (request 3, item 2): EVERYTHING at the bottom (url bar, refresh, new tab, ...). Old default was: SPLIT in portrait (address row on top, 64 dp action bar at the bottom: Back, Forward, New tab, Tabs, Menu), one row in landscape. Alternative: everything on top.
 - [ ] OWNER UI-2: look. Default: "CERE" (slate neutrals + one cere-yellow accent, flat, chamfered corners; research/UI_BENCHMARK.md section 6). Alternatives: RUFOUS (safer, warm), STOOP (HUD style).
 - [ ] OWNER UI-3: landscape tabs. Default: tab strip on top. Alternative: a 56 dp left tab rail.
 - [ ] OWNER SEC-1: private release key (the public dev key lets anyone sign an update to the owner's app): needs GitHub secrets + a reviewer-gated environment; research/SECURITY.md B1-B3. Needs the owner at github.com.
 - [ ] OWNER LIC-1: project licence (research recommends GPLv3-or-later because the filter lists and uBO scriptlets are GPL) and the default of a labelled YouTube-ads switch (YouTube forbids circumventing its ads).
-- [ ] OWNER TEST-1: alpha3 on the tablet: type for a while (address bar, Claude.ai, forms): does the screen still freeze? If yes: Menu > Diagnostics > Refresh screen, then Copy/Share the report.
+- [~] OWNER TEST-1 (owner 2026-11-11: "So far I like alpha 3." - no freeze reported yet, not explicitly confirmed): alpha3 on the tablet: type for a while (address bar, Claude.ai, forms): does the screen still freeze? If yes: Menu > Diagnostics > Refresh screen, then Copy/Share the report.
+
+## Owner request 3, 2026-11-11 (verbatim in INBOX.md; "So far I like alpha 3.") - work order: UI shell (N2-N5) -> updater (N1) -> alpha4 -> downloads (N6) -> alpha5 -> the rest (N7)
+- [ ] N1 "make it so when github makes a new release the app itself will see it and I can update the browser inside of the app" (checks GitHub Releases at most once a day + "Check now"; shows the new version; downloads with the new download manager; installs through PackageInstaller; sha256 verified; confirm on a metered link)
+- [ ] N2 "move the entire top navigation bar to the bottom, including url bar, refresh, new tab button, etc." (one bottom dock; lifts above the keyboard WITHOUT resizing the page view)
+- [ ] N3 "add a home button to the navigation bar. Make the home page a very simple black screen with a large stylized text field in the middle which does a Google search for any words or if I type a url it goes to that url"
+- [ ] N4 "separate private tabs from regular tabs, make sure there is an indicator for private tabs" (own list/mode in the tab switcher, private skin on the dock + home, never mixed)
+- [ ] N5 "make the tab switching easier and with a good gui like major browsers, with a small thumbnail preview of a live view of every website tab open." (card grid with thumbnails captured from the live page; cached, also on disk)
+- [ ] N6 "when I go to downloads, it tries to open my file manager. I want this browser to have a full featured smart and fast download manager with pause and resume and fast features." (= B1 + B2, own screen, never the file manager)
+- [ ] N7 "begin work on the other things I already asked for. Show me what Claude can do, make the gui amazing and intuitive. Make the entire app snappy and fast. I want to be impressed" (= C1-C4, D1-D4, A leftovers; dark identity, big targets, no animations)
