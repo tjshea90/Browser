@@ -116,24 +116,31 @@ object GeckoEngine {
 
     /**
      * "Scroll feel" (Settings): how far ahead of the finger the engine pre-draws the page and how long it waits for a page's touch handler. These apz.* prefs are
-     * live (mirror: always). 0 = the engine's own values on Android; 1 = a bigger pre-drawn margin and a shorter wait; 2 = also a lower top fling speed (research/SCROLL.md B1-B5).
+     * live (mirror: always). 0 = the engine's own values on Android; 1 = Smoother (the default): a much bigger pre-drawn area that is kept, biased toward the scroll direction, and a shorter wait for the page's
+     * touch handlers; 2 = Smoothest: more of the same and a lower top fling speed (research/SCROLL.md B1-B5 and the R2 update).
      * Values are strings for the float prefs, exactly as GeckoView's own prefs file writes them.
      */
     val scrollFeelNames = listOf("Standard (Firefox's own)", "Smoother", "Smoothest")
 
     fun applyScrollFeel(level: Int) {
         val d = org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_DEFAULT
-        val (skate, still, wait, vel) = when (level) {
-            1 -> listOf("2.5", "2.0", "400", "0.07")
-            2 -> listOf("2.5", "2.0", "400", "0.03")
-            else -> listOf("1.5", "1.5", "600", "0.07")
+        // skate/still = how much of the page is painted around the viewport, bias = how far that window is shifted toward the scroll direction, wait = how long a touch waits for the
+        // page's own touch handlers, expiry = how long after scrolling stops the extra painted area is kept (0 = for ever), vel = the top fling speed.
+        // The painted area is NOT the multiplier: Gecko scales (multiplier - 1) down by viewport pixels / 250 (this tablet: about 2.9 vertically), so Firefox's 1.5 is only
+        // +16 % of the screen height (about 60 px each side) and 4.0 is +96 % (about 370 px each side). research/SCROLL.md "R2 update".
+        val (skate, still, bias, wait, expiry, vel) = when (level) {
+            1 -> listOf("4.0", "3.0", "1.0", "300", "0", "0.07")
+            2 -> listOf("6.0", "4.0", "2.0", "200", "0", "0.04")
+            else -> listOf("1.5", "1.5", "0.0", "600", "15000", "0.07")
         }
         try {
             org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("apz.y_skate_size_multiplier", skate, d)
             org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("apz.y_stationary_size_multiplier", still, d)
+            org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("apz.velocity_bias", bias, d)
             org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("apz.content_response_timeout", wait.toInt(), d)
+            org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("apz.displayport_expiry_ms", expiry.toInt(), d)
             org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("apz.max_velocity_inches_per_ms", vel, d)
-            app.kestrel.browser.diag.Health.log("engine", "scroll-feel", "level=$level skate=$skate still=$still wait=$wait vel=$vel")
+            app.kestrel.browser.diag.Health.log("engine", "scroll-feel", "level=$level skate=$skate still=$still bias=$bias wait=$wait expiry=$expiry vel=$vel")
         } catch (e: Exception) { app.kestrel.browser.diag.Health.log("engine", "scroll-feel-failed", e.toString()) }
     }
 }
