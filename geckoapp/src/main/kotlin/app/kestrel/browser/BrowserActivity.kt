@@ -61,6 +61,7 @@ import app.kestrel.browser.ui.ThumbStore
 import app.kestrel.browser.ui.BottomDock
 import app.kestrel.browser.ui.DockListener
 import app.kestrel.browser.ui.HomeView
+import app.kestrel.browser.ui.KeyboardProbe
 import app.kestrel.browser.ui.SheetHost
 import app.kestrel.browser.ui.menuGrid
 import app.kestrel.browser.ui.TopSite
@@ -210,6 +211,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     override fun onDestroy() {
+        kbProbe.detach()
         NetworkMonitor.removeListener(netListener)
         Io.main.removeCallbacks(saveRunnable)
         for (t in tabs) { try { t.session?.close() } catch (e: Exception) { /* already gone */ }; t.session = null }
@@ -698,12 +700,10 @@ open class BrowserActivity : Activity(), DockListener {
 
     private var typingModeSince = 0L
     private var kbTopScreen = 0 // top edge of the keyboard in screen pixels while it is up, else 0
+    private val kbProbe by lazy { KeyboardProbe(this) }
 
-    /** Keyboard showing? (the visible display frame is shorter than the window while an IME is up, also with adjustNothing) */
-    private fun keyboardUp(): Boolean {
-        val r = Rect(); window.decorView.getWindowVisibleDisplayFrame(r)
-        return window.decorView.height - r.height() > dp(120)
-    }
+    /** Keyboard top edge in screen pixels, 0 = no keyboard (see [KeyboardProbe]: the window itself cannot tell under adjustNothing). */
+    private fun keyboardTop(): Int { kbProbe.attach(root); return kbProbe.topScreen(window) }
 
     /**
      * Follows the keyboard while a field is typed in and until it is gone again (at most 1.5 s after focus is lost): lifts the dock so the address row sits right above
@@ -712,8 +712,9 @@ open class BrowserActivity : Activity(), DockListener {
     private val typingTick = object : Runnable {
         override fun run() {
             val focused = typing()
-            val up = keyboardUp()
-            if (up) { val r = Rect(); window.decorView.getWindowVisibleDisplayFrame(r); applyKeyboard(r.bottom) } else applyKeyboard(0)
+            val top = keyboardTop()
+            val up = top > 0
+            applyKeyboard(top)
             if (focused) { Io.main.postDelayed(this, 100); return }
             if (up && SystemClock.uptimeMillis() - typingModeSince < 1500) { Io.main.postDelayed(this, 80); return }
             applyKeyboard(0)
