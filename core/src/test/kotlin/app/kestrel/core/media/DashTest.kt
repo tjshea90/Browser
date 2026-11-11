@@ -84,6 +84,20 @@ class DashTest {
         assertEquals(Hls.Problem.UNSUPPORTED, Dash.parse(two, url)!!.problem)
     }
 
+    @Test fun aRealManifestFromFfmpeg() {
+        val text = javaClass.getResourceAsStream("/dash/ffmpeg.mpd")!!.readBytes().toString(Charsets.UTF_8)
+        val m = Dash.parse(text, "https://cdn.example.com/dash/manifest.mpd")!!
+        assertNull(m.problem); assertEquals(40_000L, m.durationMs)
+        val v = m.video.single(); val a = m.audio.single()
+        assertEquals(720, v.height); assertEquals("H.264", v.videoCodec); assertTrue(v.mp4Friendly); assertTrue(a.mp4Friendly)
+        val vp = v.media!!; val ap = a.media!!
+        assertEquals("https://cdn.example.com/dash/init-0.m4s", vp.init?.url)
+        assertEquals(20, vp.segments.size); assertEquals("https://cdn.example.com/dash/chunk-0-00001.m4s", vp.segments[0].url); assertEquals("https://cdn.example.com/dash/chunk-0-00020.m4s", vp.segments[19].url)
+        assertEquals("https://cdn.example.com/dash/init-1.m4s", ap.init?.url)
+        assertTrue("audio segments ${ap.segments.size}", ap.segments.size in 19..21)
+        assertEquals("mp4", vp.container)
+    }
+
     @Test fun notAnMpd() {
         assertNull(Dash.parse("<html><body>no</body></html>", url))
         assertNull(Dash.parse("#EXTM3U\n#EXTINF:1,\na.ts", url))
