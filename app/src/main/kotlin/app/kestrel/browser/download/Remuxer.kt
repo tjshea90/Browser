@@ -12,6 +12,8 @@ import android.util.Log
 import app.kestrel.browser.Io
 import app.kestrel.core.download.Sink
 import app.kestrel.core.download.SinkFactory
+import app.kestrel.core.media.Adts
+import app.kestrel.core.media.AudioClock
 import app.kestrel.core.media.StreamFinisher
 import java.nio.ByteBuffer
 
@@ -21,7 +23,6 @@ import java.nio.ByteBuffer
  * (one sample buffer). Needs about as much free room as the stream itself, so it declines when there is not.
  */
 class Remuxer(private val ctx: Context, private val sinks: SinkFactory) : StreamFinisher {
-    private companion object { val ADTS_RATES = intArrayOf(96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350) }
 
     override fun convert(j: StreamFinisher.Joined): StreamFinisher.Converted? {
         if (j.container != "ts" || !enoughRoom(j.size)) return null
@@ -97,43 +98,19 @@ class Remuxer(private val ctx: Context, private val sinks: SinkFactory) : Stream
     }
 
     /**
-     * The platform's TS extractor hands over AAC the way it sits in the stream: several ADTS frames (each with its 7-byte header) per sample. An MP4 wants ONE raw frame per sample, so
-     * every frame is cut out (header dropped) and given its own time, 1024 samples after the one before. A sample that is not ADTS is written as it is. Returns how many samples were written.
+     * The platform's TS extractor hands over AAC the way it sits in the stream: several ADTS frames (each with its header) per sample. An MP4 wants ONE raw frame per sample, so
+     * every frame is cut out and given its own time on the exact 1024-sample grid ([AudioClock]). A sample that is not ADTS is written as it is. Returns how many samples were written.
      */
     private fun writeAudio(m: MediaMuxer, track: Int, buf: ByteBuffer, size: Int, timeUs: Long, info: MediaCodec.BufferInfo, clock: AudioClock): Int {
-        val b = buf.array(); val base = buf.arrayOffset()
-        var pos = 0; var n = 0
-        while (pos + 7 <= size) {
-            val b0 = b[base + pos].toInt() and 0xFF; val b1 = b[base + pos + 1].toInt() and 0xFF
-            if (b0 != 0xFF || (b1 and 0xF0) != 0xF0) break
-            val hdr = if ((b1 and 1) == 1) 7 else 9                       // protection_absent: no CRC
-            val len = ((b[base + pos + 3].toInt() and 3) shl 11) or ((b[base + pos + 4].toInt() and 0xFF) shl 3) or ((b[base + pos + 5].toInt() and 0xFF) ushr 5)
-            if (len < hdr || pos + len > size) break
-            val rate = ADTS_RATES.getOrElse((b[base + pos + 2].toInt() ushr 2) and 0xF) { 44100 }
-            if (n == 0) clock.sync(timeUs, rate)                      // the stream's own time for the first frame of a sample; the rest follow at exactly 1024 samples each
+        val frames = Adts.frames(buf.array(), buf.arrayOffset(), size)
+        if (frames.isEmpty()) { buf.clear(); val t = maxOf(timeUs, clock.last + 1); info.set(0, size, t, 0); m.writeSampleData(track, buf, info); clock.sync(t, 44100); clock.next(44100); return 1 }
+        clock.sync(timeUs, frames[0].sampleRate)
+        for (f in frames) {
             buf.clear()
-            info.set(pos + hdr, len - hdr, clock.next(rate), 0)
+            info.set(f.payloadOffset - buf.arrayOffset(), f.payloadLength, clock.next(f.sampleRate), 0)
             m.writeSampleData(track, buf, info)
-            pos += len; n++
         }
-        if (n == 0) { buf.clear(); info.set(0, size, maxOf(timeUs, clock.last + 1), 0); m.writeSampleData(track, buf, info); clock.last = maxOf(timeUs, clock.last + 1); return 1 }
-        return n
-    }
-
-    /**
-     * The audio timeline of the MP4: AAC frames are exactly 1024 samples apart, so after the first frame every time is computed from a counter, not copied from the stream (whose 90 kHz stamps
-     * round, and the MP4 writer refuses a track whose time ever steps back). A real gap in the stream (more than 50 ms) is kept by moving the start forward.
-     */
-    private class AudioClock {
-        private var start = -1L
-        private var frames = 0L
-        var last = -1L
-        fun sync(streamUs: Long, rate: Int) {
-            if (start < 0) { start = streamUs; return }
-            val expected = start + frames * 1_000_000L * 1024 / rate
-            if (streamUs - expected > 50_000) start += streamUs - expected
-        }
-        fun next(rate: Int): Long { val t = start + frames * 1_000_000L * 1024 / rate; frames++; last = t; return t }
+        return frames.size
     }
 
     private fun enoughRoom(size: Long): Boolean = try {
