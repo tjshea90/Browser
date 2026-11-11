@@ -46,7 +46,6 @@ import app.kestrel.browser.ui.ErrorView
 import app.kestrel.browser.ui.FindBar
 import app.kestrel.browser.ui.ListPanel
 import app.kestrel.browser.ui.MenuItemSpec
-import app.kestrel.browser.ui.MenuPopup
 import app.kestrel.browser.ui.NewTabPage
 import app.kestrel.browser.ui.Pal
 import app.kestrel.browser.ui.ProgressLine
@@ -55,8 +54,11 @@ import app.kestrel.browser.ui.SettingsView
 import app.kestrel.browser.ui.ShieldsPanel
 import app.kestrel.browser.ui.SuggestionList
 import app.kestrel.browser.ui.TabSwitcher
-import app.kestrel.browser.ui.Toolbar
-import app.kestrel.browser.ui.ToolbarListener
+import app.kestrel.browser.ui.BottomDock
+import app.kestrel.browser.ui.DockListener
+import app.kestrel.browser.ui.HomeView
+import app.kestrel.browser.ui.SheetHost
+import app.kestrel.browser.ui.menuGrid
 import app.kestrel.browser.ui.TopSite
 import app.kestrel.browser.ui.dp
 import app.kestrel.browser.web.ErrorScreen
@@ -92,16 +94,20 @@ import java.io.File
  * The browser window: owns the tab list, swaps what is shown (new-tab page / WebView / error screen), and implements everything the
  * per-tab WebView clients need from the UI. [MainActivity] is the normal window; [PrivateActivity] runs in its own process.
  */
-open class BrowserActivity : Activity(), ToolbarListener {
+open class BrowserActivity : Activity(), DockListener {
     /** True while the SELECTED tab is a private tab (private sessions live in the same window; the engine keeps nothing of them). */
     private val isPrivate get() = current?.isPrivateTab == true
     internal lateinit var prefs: Prefs
     private lateinit var pal: Pal
+    private lateinit var palRegular: Pal
+    private lateinit var palPrivate: Pal
     private lateinit var root: FrameLayout
-    private lateinit var toolbar: Toolbar
+    private lateinit var column: LinearLayout
+    private lateinit var dock: BottomDock
+    private lateinit var sheet: SheetHost
     private lateinit var progress: ProgressLine
     private lateinit var content: FrameLayout
-    private lateinit var ntp: NewTabPage
+    private lateinit var home: HomeView
     private lateinit var errorView: ErrorView
     private lateinit var findBar: FindBar
     private lateinit var suggestions: SuggestionList
@@ -118,7 +124,7 @@ open class BrowserActivity : Activity(), ToolbarListener {
     internal val allTabs: List<Tab> get() = tabs
     private var nextTabId = 1L
     private var db: BrowserDb? = null
-    private val shieldsPanel by lazy { ShieldsPanel(this, pal) { host -> onShieldsChanged(host) } }
+    private fun shieldsPanel() = ShieldsPanel(this, pal) { host -> onShieldsChanged(host) } // built per use: it takes the colours of the current (regular or private) skin
 
     private lateinit var geckoView: GeckoView
     private var fullscreenOn = false
@@ -137,9 +143,11 @@ open class BrowserActivity : Activity(), ToolbarListener {
         super.onCreate(savedInstanceState)
         prefs = Prefs.get(this)
         Shields.init(this)
-        pal = Pal(this, isPrivate)
-        @Suppress("DEPRECATION") run { // no-ops on Android 15+ (edge-to-edge); needed for the private window's colored bars on older versions
-            window.statusBarColor = pal.chromeBg
+        palRegular = Pal(this, false)
+        palPrivate = Pal(this, true)
+        pal = palRegular
+        @Suppress("DEPRECATION") run { // no-ops on Android 15+ (edge-to-edge); the bars follow the skin (see applySkin)
+            window.statusBarColor = pal.windowBg
             window.navigationBarColor = pal.chromeBg
         }
         buildUi()
@@ -228,39 +236,35 @@ open class BrowserActivity : Activity(), ToolbarListener {
 
     private fun buildUi() {
         root = FrameLayout(this)
-        // Private window: no autofill service may see what is typed here or offer to save a password for it.
-        if (isPrivate) root.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
         root.setBackgroundColor(pal.windowBg)
-        val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        toolbar = Toolbar(this, pal, this)
+        column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        dock = BottomDock(this, pal, this)
         progress = ProgressLine(this, pal.accent).apply { visibility = View.INVISIBLE }
         content = FrameLayout(this)
         geckoView = KestrelGeckoView(this).apply { setAutofillEnabled(false) } // no logins are stored; GeckoView's autofill hooks only add window-focus churn (research/FREEZE.md 4.7)
         // ONE GeckoView, attached once and never removed: detaching it pauses/resumes the compositor through synchronous IPC while the keyboard resizes the window,
-        // which is the race family behind "the screen stops updating while typing". Tabs swap with setSession; the new-tab page and error screens are opaque overlays above it.
+        // which is the race family behind "the screen stops updating while typing". Tabs swap with setSession; the Home screen and error screens are opaque overlays above it.
         content.addView(geckoView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        column.addView(toolbar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52)))
-        column.addView(progress, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(2)))
+        // The navigation bar is at the BOTTOM (owner request): page on top, a 2 dp load-progress line, then the dock.
         column.addView(content, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        column.addView(progress, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(2)))
+        column.addView(dock, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(column, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
-        ntp = NewTabPage(this, pal, object : NewTabPage.Listener {
-            override fun onSearchTap() { focusUrlBar() }
-            override fun onOpen(url: String) { current?.let { navigateTo(it, url) } }
-        })
+        home = HomeView(this, pal, "KESTREL", this)
         errorView = ErrorView(this, pal, errorListener)
-        content.addView(ntp, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        content.addView(home, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         content.addView(errorView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        ntp.visibility = View.GONE
+        home.visibility = View.GONE
         errorView.visibility = View.GONE
         findBar = FindBar(this, pal, object : FindBar.Listener {
             override fun query(q: String) { findIn(q, false) }
             override fun next(forward: Boolean) { findIn(findBar.input.text.toString(), !forward) }
             override fun close() { closeFind() }
         }).apply { visibility = View.GONE }
-        root.addView(findBar, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dp(48)).apply { topMargin = dp(54) })
-        suggestions = SuggestionList(this, pal) { value -> hideSuggestions(); clearUrlFocus(); current?.let { navigate(it, value) } }.apply { visibility = View.GONE }
-        root.addView(suggestions, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(54) })
+        root.addView(findBar, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dp(52))) // find stays at the TOP: the keyboard never covers it
+        suggestions = SuggestionList(this, pal, reverse = true) { value -> hideSuggestions(); clearUrlFocus(); current?.let { navigate(it, value) } }.apply { visibility = View.GONE }
+        root.addView(suggestions, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
         tabSwitcher = TabSwitcher(this, pal, object : TabSwitcher.Listener {
             override fun select(tab: Tab) { hideTabSwitcher(); show(tab) }
             override fun close(tab: Tab) {
@@ -272,6 +276,8 @@ open class BrowserActivity : Activity(), ToolbarListener {
             override fun dismiss() { hideTabSwitcher() }
         }).apply { visibility = View.GONE }
         root.addView(tabSwitcher, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        sheet = SheetHost(this, pal)
+        root.addView(sheet, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         fullscreen = FrameLayout(this).apply { setBackgroundColor(0xFF000000.toInt()); visibility = View.GONE; isClickable = true }
         root.addView(fullscreen, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         setContentView(root)
@@ -279,7 +285,7 @@ open class BrowserActivity : Activity(), ToolbarListener {
         // Edge-to-edge safe: Android 15+ draws behind the system bars for targetSdk 35+; Android 10 reports zero insets here.
         root.setOnApplyWindowInsetsListener { v, insets ->
             if (Build.VERSION.SDK_INT >= 30) {
-                val i = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout() or WindowInsets.Type.ime())
+                val i = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout() or (if (urlTyping) 0 else WindowInsets.Type.ime()))
                 v.setPadding(i.left, i.top, i.right, i.bottom)
                 WindowInsets.CONSUMED
             } else {
