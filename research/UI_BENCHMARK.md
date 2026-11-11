@@ -43,7 +43,7 @@ PORTRAIT 564x892 (split)                        LANDSCAPE 916x540 (unified)
 ```
 - `ChromeMode.of(widthDp, heightDp)`: SPLIT if width < 600 and height >= 700, else UNIFIED; strip if width >= 840 and tabs >= 2 (or setting); no strip if height < 480 (split screen). Re-evaluate in `onConfigurationChanged`.
 - Chrome = vertical `LinearLayout`: [strip][row][progress][engine view, weight 1][bottom bar]. Siblings, never overlays on the engine view. Landscape field 564 dp (916 - 6x56 - 16); all-top portrait field 388 dp; split portrait field 548 dp.
-- Disabled Back/Forward stay visible in the muted colour (stable geometry). Typing mode sets the bottom bar GONE (not resized). Optional "Hide status bar in landscape" (+24 dp).
+- Disabled Back/Forward stay visible in the muted colour (stable geometry). Typing mode makes the bottom bar INVISIBLE, never GONE (GONE would resize the engine view); the only overlay on the engine view is the opaque typing layer. Optional "Hide status bar in landscape" (+24 dp).
 - No hide-on-scroll in v1: it resizes the engine view (reflow on a slow SoC) and would animate. Vivaldi [V], Samsung [V: it has a "keep bars visible" option] and Firefox [S] hide bars on scroll, so make it a later opt-in.
 
 ## 4. Behaviour specs
