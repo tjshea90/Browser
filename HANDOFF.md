@@ -24,7 +24,7 @@ The single entry point for a new Claude session or account. After this, in order
 3. Dispatch `.github/workflows/android.yml`: `mcp__github__actions_run_trigger` method `run_workflow`, `workflow_id` android.yml, `ref` = the current branch, `inputs` `{"app":"gecko","full_build":"true","note":"..."}`
    (`app` = web | gecko | both; `full_build` false = gates only, about a minute). The run tests, builds, signs, checks the certificate against `signing/CERT_SHA256`, audits the APK
    (`tools/verify-apk.sh`), and creates the GitHub Release `kestrel-v<ver>` / `kestrel-g-v<ver>` with the APK + sha256 attached (the TAG is created by GitHub: a tag push from here is refused with 403).
-4. Wait without spending tokens: a Bash `run_in_background` loop `until [ "$(date -u +%H%M%S)" -ge HHMMSS ]; do sleep 20; done` (a foreground `sleep` is blocked), then `actions_list list_workflow_runs`
+4. A full run of BOTH apps takes about 5 minutes (first run, id 42951742468: check 16 s, test-js 1 min, test-jvm 2 min, build-web 1.5 min, build-gecko 2.5 min). Wait without spending tokens: a Bash `run_in_background` loop `until [ "$(date -u +%H%M%S)" -ge HHMMSS ]; do sleep 20; done` (a foreground `sleep` is blocked), then `actions_list list_workflow_runs`
    (`resource_id` android.yml, `workflow_runs_filter {"event":"workflow_dispatch"}`, `perPage` 1) -> `list_workflow_jobs` -> `get_job_logs` (404 until the job ENDS; `tail_lines` about 60).
 5. Green + the Release shows its APK (`get_release_by_tag`): `bash tools/record-release.sh <tag> "note"`. Then give the owner the Release link as plain tappable text on its own line.
 6. NEVER ship a tag twice (check BUILDLOG.md and the Releases first). Gecko APK is ~92 MB and is never committed.
