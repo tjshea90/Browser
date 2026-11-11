@@ -34,9 +34,11 @@ FLAGS=()
 [ "$(app_prerelease "$APP")" = true ] && FLAGS+=(--prerelease)
 
 if gh release view "$TAG" >/dev/null 2>&1; then
-  # a rebuild of an existing release: replace the files and refresh the text
+  # a rebuild of an existing release (or a Release the owner drafted by hand, which starts this run through its tag): replace the files,
+  # and refresh the text only when a change note was given or the release has no text yet - never overwrite words someone wrote.
   gh release upload "$TAG" "$ASSET" "$ASSET.sha256" --clobber
-  gh release edit "$TAG" --notes-file release-notes.md
+  BODY="$(gh release view "$TAG" --json body -q .body)"
+  if [ -n "${NOTE:-}" ] || [ -z "$BODY" ]; then gh release edit "$TAG" --notes-file release-notes.md; fi
 else
   gh release create "$TAG" "$ASSET" "$ASSET.sha256" --target "${GITHUB_SHA:?}" --title "$TITLE $VN" --notes-file release-notes.md "${FLAGS[@]}"
 fi
