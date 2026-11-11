@@ -1,0 +1,144 @@
+package app.kestrel.core.media
+
+import app.kestrel.core.update.UpdateLogic
+
+/** One thing on the current page that could be saved (what the sniffer saw, plus what the page itself says about it). UI thread only. */
+class MediaCandidate(
+    val url: String,
+    val kind: MediaKind,
+    /** Content type without parameters, "" if unknown. */
+    var mime: String,
+    /** Bytes (the whole file, from Content-Length / Content-Range); -1 = unknown. Always -1 for a playlist. */
+    var length: Long,
+    /** The top-level page when it was seen. */
+    val page: String,
+    /** The document that asked for it (an embedded player's own page), "" if the same as [page]. */
+    val frame: String = "",
+    val seenAt: Long = 0,
+) {
+    var width = 0
+    var height = 0
+    var durationMs = 0L
+    /** What the page calls it ("720p", "HD") when it said so. */
+    var label: String? = null
+
+    val key: String get() = keyOf(url)
+    val audioOnly: Boolean get() = kind == MediaKind.FILE && MediaSniff.isAudio(url, mime)
+
+    /** The picture height we know of: the page's own player, else the page's label, else a hint in the URL; 0 = unknown. */
+    val knownHeight: Int get() = if (height > 0) height else heightOfLabel(label).takeIf { it > 0 } ?: MediaSniff.heightFromUrl(url)
+
+    companion object {
+        fun keyOf(url: String): String = url.substringBefore('#')
+
+        /** "720p" / "HD 720" / "1080" -> 720 / 720 / 1080; 0 if the text names no resolution. */
+        fun heightOfLabel(label: String?): Int {
+            if (label == null) return 0
+            val m = Regex("""(\d{3,4})\s*p?""", RegexOption.IGNORE_CASE).find(label) ?: return 0
+            val h = m.groupValues[1].toIntOrNull() ?: return 0
+            return if (h in 144..4320) h else 0
+        }
+    }
+}
+
+/** What a tab has seen, newest first. The same URL is one entry however many Range requests the player made. */
+class MediaList(private val max: Int = 24) {
+    private val items = ArrayList<MediaCandidate>()
+
+    val size: Int get() = items.size
+    fun isEmpty(): Boolean = items.isEmpty()
+    fun clear() { items.clear() }
+
+    /** @return true if the list changed (a new URL, or a better size for a known one). */
+    fun add(c: MediaCandidate): Boolean {
+        val i = items.indexOfFirst { it.key == c.key }
+        if (i >= 0) {
+            val old = items[i]
+            var changed = false
+            if (old.length < 0 && c.length >= 0) { old.length = c.length; changed = true }
+            if (old.mime.isEmpty() && c.mime.isNotEmpty()) { old.mime = c.mime; changed = true }
+            return changed
+        }
+        items.add(0, c)
+        while (items.size > max) items.removeAt(items.size - 1)
+        return true
+    }
+
+    /** What the page's own `<video>` / `<source>` told us about a URL (picture size, length in time, the label it shows). */
+    fun applyInfo(url: String, width: Int, height: Int, durationMs: Long, label: String?): Boolean {
+        val c = items.firstOrNull { it.key == MediaCandidate.keyOf(url) } ?: return false
+        var changed = false
+        if (width > 0 && c.width != width) { c.width = width; changed = true }
+        if (height > 0 && c.height != height) { c.height = height; changed = true }
+        if (durationMs > 0 && c.durationMs != durationMs) { c.durationMs = durationMs; changed = true }
+        if (!label.isNullOrBlank() && c.label != label) { c.label = label.trim().take(24); changed = true }
+        return changed
+    }
+
+    /**
+     * What is worth offering: playlists and big files first. Tiny files (sounds, tracking clips) and, when the page has a stream, small clips next to it (ads, previews) are left out.
+     */
+    fun usable(): List<MediaCandidate> {
+        val hasStream = items.any { it.kind != MediaKind.FILE }
+        val out = items.filter { c ->
+            when {
+                c.kind != MediaKind.FILE -> true
+                c.length in 0 until MIN_FILE -> false
+                hasStream && c.length in 0 until MIN_WITH_STREAM -> false
+                else -> true
+            }
+        }
+        return out.sortedWith(compareBy<MediaCandidate> { kindRank(it) }.thenByDescending { it.knownHeight }.thenByDescending { it.length })
+    }
+
+    private fun kindRank(c: MediaCandidate): Int = when {
+        c.kind == MediaKind.HLS -> 0
+        c.kind == MediaKind.DASH -> 1
+        c.audioOnly -> 3
+        else -> 2
+    }
+
+    companion object {
+        const val MIN_FILE = 100L * 1024
+        const val MIN_WITH_STREAM = 4L * 1024 * 1024
+    }
+}
+
+/** The words next to a download button. */
+object MediaLabels {
+    /** "1080p", "4K", "Original quality" ... for a picture height (0 = unknown). */
+    fun quality(height: Int): String = when {
+        height >= 2000 -> "4K ($height" + "p)"
+        height >= 1400 -> "1440p"
+        height > 0 -> "$height" + "p"
+        else -> ""
+    }
+
+    /** Size for a row: exact for a file ("48.2 MB"), "about 210 MB" for an estimate, "size unknown". */
+    fun size(bytes: Long, estimate: Boolean = false): String = when {
+        bytes <= 0 -> "size unknown"
+        estimate -> "about " + UpdateLogic.formatSize(bytes)
+        else -> UpdateLogic.formatSize(bytes)
+    }
+
+    /** "0:48", "12:34", "1:02:03" */
+    fun duration(ms: Long): String {
+        if (ms <= 0) return ""
+        val total = (ms + 500) / 1000
+        val h = total / 3600; val m = (total % 3600) / 60; val s = total % 60
+        return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+    }
+
+    /** The format word: "MP4", "WEBM", "MP3", "HLS stream"... */
+    fun format(c: MediaCandidate): String = when (c.kind) {
+        MediaKind.HLS -> "HLS stream"
+        MediaKind.DASH -> "DASH stream"
+        MediaKind.FILE -> MediaSniff.saveExtension(c.url, c.mime).uppercase()
+    }
+
+    /** A readable file name stem for a video: "Page title - 720p", falling back to the host. No extension, nothing a file system dislikes beyond what [app.kestrel.core.download.FileNames.sanitize] cleans. */
+    fun fileStem(pageTitle: String, pageHost: String, qualityLabel: String): String {
+        val base = pageTitle.trim().ifEmpty { pageHost.ifEmpty { "video" } }.replace(Regex("""\s+"""), " ").take(80).trim()
+        return if (qualityLabel.isEmpty()) base else "$base - $qualityLabel"
+    }
+}

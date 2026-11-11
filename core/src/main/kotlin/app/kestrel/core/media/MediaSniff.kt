@@ -22,7 +22,8 @@ object MediaSniff {
         val ct = baseType(contentType)
         val ext = extension(url)
         if (ct.startsWith("text/html") || ct.startsWith("image/") || ct.startsWith("font/") || ct == "application/json" || ct.contains("javascript") || ct == "text/css") return null
-        if (ct in hlsTypes || ext == "m3u8" || ext == "m3u") return if (ct.startsWith("text/") && ct != "text/plain" && ext != "m3u8") null else MediaKind.HLS
+        if (ct in hlsTypes || ext == "m3u8") return MediaKind.HLS
+        if (ext == "m3u" && (ct in genericTypes || ct == "text/plain" || ct.startsWith("audio/"))) return MediaKind.HLS
         if (ct == "application/dash+xml" || ext == "mpd") return MediaKind.DASH
         if (ct in segmentTypes || ext in segmentExts) return null
         if (ct.startsWith("video/") || ct.startsWith("audio/")) return MediaKind.FILE
