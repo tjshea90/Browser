@@ -83,3 +83,14 @@ previous copy kept; every store tolerates truncation. History capped (default 90
 ## 10. Known limitations (be honest in the UI/docs)
 No scriptlets (so no YouTube-ad-style blocking), approximate request-type inference, no DoH inside WebView, no `blob:` downloads in v1, no extensions, engine = whatever WebView
 the tablet has, cosmetic filtering is best-effort (injection after commit). Not yet run on real hardware (no emulator in the build sandbox).
+
+## Kestrel G UI shell and in-app updates (alpha4)
+- **Layout** (`geckoapp/.../BrowserActivity.kt` `buildUi`): `root` FrameLayout -> `column` [`content` (GeckoView + Home + error overlays) / 2 dp progress / `BottomDock`], then overlays: find bar (top), omnibox
+  suggestions (bottom-anchored above the address row), tab grid, bottom sheet host (menu, Shields, Updates), fullscreen video. Design rules: `docs/DESIGN.md`.
+- **Keyboard**: while an address field is focused the window is `adjustNothing` (the page view never resizes). `ui/KeyboardProbe` finds the keyboard's top edge (Android 11+: IME insets; Android 10: a 0-width
+  adjustResize popup window - under adjustNothing the app's own window cannot see the keyboard). `typingTick` polls it and lifts the dock / Home field with `translationY`. Verified on the Android 10 emulator.
+- **Tabs**: regular and private tabs share one list (`tabs`) but never share UI: the dock/Home skin follows the tab in front (`applySkin`), the tab grid has two panes, new tabs from the dock follow the current
+  mode, previews of private tabs stay in RAM (`ui/ThumbStore`). Home over a page = `Tab.showHome`.
+- **Updater**: `core/update/UpdateLogic` (pure: which release, checksum, resume rules; `UpdateLogicTest`) + `app/update/UpdateManager` (Releases API with ETag, resumable download, SHA-256, PackageInstaller session)
+  + `InstallResultReceiver` + `ui/UpdatePanel`. The tag prefix comes from `Flavor.updateTagPrefix`. A debug build can read a local feed: `adb shell setprop debug.kestrel.feed http://10.0.2.2:8000/releases.json`
+  (the whole flow incl. pause/resume and the system installer was run that way on the emulator). Android only installs an APK signed with the installed app's certificate (`signing/CERT_SHA256`).
