@@ -64,7 +64,7 @@ PORTRAIT 564x892 (split)                        LANDSCAPE 916x540 (unified)
 - **Long-press link/image**: bottom sheet (landscape: centred 360 dialog); header letter tile + host + 2-line URL; rows 56: new tab, private window, copy link, share, download (+ image: save, open, copy address, share; no Lens). Chrome's is a popup with favicon + title [V].
 - **Dialogs/errors**: own `Dialog` (never `AlertDialog`): full-width 56 dp stacked buttons, primary yellow, destructive in danger colour. Error pages use the same tokens with a state word ("NO INTERNET", "NOT SECURE", "SAVED COPY AVAILABLE") and a 64 dp Retry.
 - **Settings IA** (8 rows of 64, then a page; landscape = two panes 280 + rest): Privacy & Shields | Search & address bar | Data saver | Appearance (theme, text size, page dark mode, tab bar, toolbar, style) | Downloads | Site settings | Filter lists | About & diagnostics.
-  Brave's root list mixes in Leo, Rewards, News, Playlist, Wallet [S]; ours has none of them.
+  Brave's root list mixes in Leo, Rewards, News and Playlist [S]; ours has none of them.
 - **Private window**: "Hood" chrome (`#1E1530`, lilac marker `#CDB8FF`), permanent word chip "PRIVATE" + hood glyph in the field, NTP explainer, FLAG_SECURE (exists). Never colour alone: Brave's purple theme drew contrast complaints [S].
 
 ## 5. What users expect
