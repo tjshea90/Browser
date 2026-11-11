@@ -50,6 +50,8 @@ class StreamSource(
     val repId: String? = null,
     /** Force the file extension (DASH audio: "m4a"); null = from the stream's container. */
     val ext: String? = null,
+    /** The sound of this picture, downloaded alongside it as a hidden job and merged into one MP4 at the end (DASH keeps them apart). */
+    val companion: StreamSource? = null,
 )
 
 /** One stream download as stored (everything needed to carry on after the app was killed: the playlist text is kept, so the segment list is the same on resume). */
@@ -72,6 +74,9 @@ class StreamRec(@JvmField val id: Long) {
     @JvmField var estimate = -1L
     @JvmField var repId: String? = null
     @JvmField var ext: String? = null
+    /** A picture job names its sound job here; a sound job names its picture job in [parentId] and is not listed. */
+    @JvmField var companionId = 0L
+    @JvmField var parentId = 0L
     /** Bytes of the output written (and flushed) so far, and the index of the next segment to write. */
     @JvmField var appended = 0L
     @JvmField var next = 0
@@ -84,7 +89,7 @@ class StreamRec(@JvmField val id: Long) {
     fun snapshot(): StreamRec {
         val r = StreamRec(id)
         r.state = state; r.reason = reason; r.detail = detail; r.url = url; r.playlistText = playlistText; r.pageUrl = pageUrl; r.headers = headers; r.fetcher = fetcher; r.priv = priv
-        r.meteredOk = meteredOk; r.nameStem = nameStem; r.name = name; r.mime = mime; r.destKind = destKind; r.destUri = destUri; r.estimate = estimate; r.repId = repId; r.ext = ext; r.appended = appended
+        r.meteredOk = meteredOk; r.nameStem = nameStem; r.name = name; r.mime = mime; r.destKind = destKind; r.destUri = destUri; r.estimate = estimate; r.repId = repId; r.ext = ext; r.companionId = companionId; r.parentId = parentId; r.appended = appended
         r.next = next; r.initDone = initDone; r.total = total; r.created = created; r.updated = updated; r.finished = finished
         return r
     }
@@ -97,7 +102,10 @@ class StreamRec(@JvmField val id: Long) {
 interface StreamFinisher {
     class Joined(val uri: String, val stem: String, val container: String, val size: Long, val priv: Boolean, val destKind: Int)
     class Converted(val uri: String, val name: String, val mime: String, val size: Long)
+    /** Two finished files of one video (picture and sound, as DASH keeps them) to be made one MP4. */
+    class Merge(val videoUri: String, val audioUri: String, val stem: String, val size: Long, val priv: Boolean, val destKind: Int)
     fun convert(j: Joined): Converted?
+    fun merge(m: Merge): Converted? = null
 }
 
 /** Where job records and staged segments live. The Android layer keeps them in the app's own folder; tests use a temp folder. */
@@ -192,50 +200,69 @@ class StreamEngine(
 
     fun enqueue(s: StreamSource): Long {
         val id = if (s.priv) nextPrivId.getAndDecrement() else nextId.getAndIncrement()
+        val cid = if (s.companion != null) (if (s.priv) nextPrivId.getAndDecrement() else nextId.getAndIncrement()) else 0L
         control.execute {
-            val r = StreamRec(id)
-            r.url = s.playlistUrl; r.playlistText = s.playlistText; r.pageUrl = s.pageUrl; r.headers = s.headers; r.fetcher = s.fetcher; r.priv = s.priv; r.meteredOk = s.meteredOk
-            r.nameStem = FileNames.sanitize(s.nameStem.ifBlank { "video" }); r.name = r.nameStem; r.destKind = s.destKind; r.estimate = s.estimateBytes; r.repId = s.repId; r.ext = s.ext
-            r.created = clock.now(); r.updated = r.created
-            if (!(s.playlistUrl.startsWith("http://", true) || s.playlistUrl.startsWith("https://", true))) { r.state = DlState.FAILED; r.reason = Reason.BAD_URL; r.finished = r.created }
+            val r = newRec(id, s)
+            r.companionId = cid
             persist(r)
             synchronized(lock) { jobs[id] = Job(r) }
+            val c = s.companion
+            if (c != null) { val cr = newRec(cid, c); cr.parentId = id; persist(cr); synchronized(lock) { jobs[cid] = Job(cr) } }
             changed(id)
             startQueued()
         }
         return id
     }
 
+    private fun newRec(id: Long, s: StreamSource): StreamRec {
+        val r = StreamRec(id)
+        r.url = s.playlistUrl; r.playlistText = s.playlistText; r.pageUrl = s.pageUrl; r.headers = s.headers; r.fetcher = s.fetcher; r.priv = s.priv; r.meteredOk = s.meteredOk
+        r.nameStem = FileNames.sanitize(s.nameStem.ifBlank { "video" }); r.name = r.nameStem; r.destKind = s.destKind; r.estimate = s.estimateBytes; r.repId = s.repId; r.ext = s.ext
+        r.created = clock.now(); r.updated = r.created
+        if (!(s.playlistUrl.startsWith("http://", true) || s.playlistUrl.startsWith("https://", true))) { r.state = DlState.FAILED; r.reason = Reason.BAD_URL; r.finished = r.created }
+        return r
+    }
+
+    /** The job and, when it has one, its hidden sound job: what the user sees as one download. */
+    private fun family(job: Job): List<Job> = synchronized(lock) { listOfNotNull(job, job.rec.companionId.takeIf { it != 0L }?.let { jobs[it] }) }
+
     fun pause(id: Long) = control.execute {
-        val job = get(id) ?: return@execute
-        val st = synchronized(lock) { job.rec.state }
-        when {
-            st == DlState.QUEUED -> { synchronized(lock) { job.rec.state = DlState.PAUSED_USER }; persist(job.rec); changed(id) }
-            st.active || st == DlState.WAITING_NETWORK -> requestStop(job, DlState.PAUSED_USER)
+        for (job in get(id)?.let { family(it) } ?: return@execute) {
+            val st = synchronized(lock) { job.rec.state }
+            when {
+                st == DlState.QUEUED -> { synchronized(lock) { job.rec.state = DlState.PAUSED_USER }; persist(job.rec); changed(job.rec.id) }
+                st.active || st == DlState.WAITING_NETWORK -> requestStop(job, DlState.PAUSED_USER)
+            }
         }
     }
 
     fun resume(id: Long) = control.execute {
-        val job = get(id) ?: return@execute
-        val st = synchronized(lock) { job.rec.state }
-        if (st == DlState.PAUSED_USER || st == DlState.PAUSED_SYSTEM || st == DlState.WAITING_NETWORK || st == DlState.FAILED) requeue(job, wipe = false)
+        for (job in get(id)?.let { family(it) } ?: return@execute) {
+            val st = synchronized(lock) { job.rec.state }
+            if (st == DlState.PAUSED_USER || st == DlState.PAUSED_SYSTEM || st == DlState.WAITING_NETWORK || st == DlState.FAILED) requeue(job, wipe = false)
+        }
     }
 
     /** Start again from nothing (a failed or stale job): staged segments and the partial output go. */
-    fun restart(id: Long) = control.execute { get(id)?.let { requeue(it, wipe = true) } }
+    fun restart(id: Long) = control.execute { for (job in get(id)?.let { family(it) } ?: return@execute) requeue(job, wipe = true) }
 
     fun cancel(id: Long) = control.execute {
-        val job = get(id) ?: return@execute
-        val st = synchronized(lock) { job.rec.state }
-        if (st.terminal && st != DlState.CANCELED) return@execute
-        if (synchronized(lock) { job.running }) requestStop(job, DlState.CANCELED) else finishCancel(job)
+        for (job in get(id)?.let { family(it) } ?: return@execute) {
+            val st = synchronized(lock) { job.rec.state }
+            if (st.terminal && st != DlState.CANCELED) { if (job.rec.parentId != 0L || job.rec.companionId != 0L) finishCancel(job); continue }
+            if (synchronized(lock) { job.running }) requestStop(job, DlState.CANCELED) else finishCancel(job)
+        }
     }
 
     fun remove(id: Long, deleteFile: Boolean) = control.execute {
-        val job = get(id) ?: return@execute
+        val first = get(id) ?: return@execute
+        for (job in family(first).reversed()) removeOne(job, deleteFile)
+    }
+
+    private fun removeOne(job: Job, deleteFile: Boolean) {
         val rec = job.rec
         val st = synchronized(lock) { rec.state }
-        if (!st.terminal && st != DlState.PAUSED_USER && st != DlState.PAUSED_SYSTEM) return@execute
+        if (!st.terminal && st != DlState.PAUSED_USER && st != DlState.PAUSED_SYSTEM) return
         val uri = synchronized(lock) { rec.destUri }
         if (uri != null && (deleteFile || st != DlState.COMPLETED)) try { sinks.delete(uri) } catch (e: Exception) { /* already gone */ }
         wipeStaging(job)
@@ -261,12 +288,12 @@ class StreamEngine(
         }
     }
 
-    fun views(): List<DownloadView> = synchronized(lock) { jobs.values.map { view(it) } }
+    fun views(): List<DownloadView> = synchronized(lock) { jobs.values.filter { it.rec.parentId == 0L }.map { view(it) } }
     fun view(id: Long): DownloadView? = synchronized(lock) { jobs[id]?.let { view(it) } }
     fun needsService(): Boolean = synchronized(lock) { jobs.values.any { val s = it.rec.state; s == DlState.QUEUED || s.active || s == DlState.WAITING_NETWORK } }
     fun counts(): IntArray = synchronized(lock) {
         var running = 0; var queued = 0; var paused = 0
-        for (j in jobs.values) when (j.rec.state) { DlState.RUNNING, DlState.STARTING, DlState.VERIFYING -> running++; DlState.QUEUED -> queued++; DlState.PAUSED_USER, DlState.PAUSED_SYSTEM, DlState.WAITING_NETWORK -> paused++; else -> {} }
+        for (j in jobs.values) if (j.rec.parentId == 0L) when (j.rec.state) { DlState.RUNNING, DlState.STARTING, DlState.VERIFYING -> running++; DlState.QUEUED -> queued++; DlState.PAUSED_USER, DlState.PAUSED_SYSTEM, DlState.WAITING_NETWORK -> paused++; else -> {} }
         intArrayOf(running, queued, paused)
     }
 
