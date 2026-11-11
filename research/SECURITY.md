@@ -224,7 +224,7 @@ apksigner verify -Werr -v --print-certs --min-sdk-version 29 signed.apk   # "Ver
 
 | API | Change that matters [S] | Effect here |
 |---|---|---|
-| 29 (tablet) | background activity starts and background clipboard reads blocked, scoped storage | external launches need a foreground gesture (done); DownloadManager exempt |
+| 29 (tablet) | background activity starts blocked (since Android 10, per the Android 15 page); background clipboard reads blocked and scoped storage [U] | external launches need a foreground gesture (done); DownloadManager exempt |
 | 31 / 33 | `android:exported` mandatory; `EXTRA_IS_SENSITIVE`, POST_NOTIFICATIONS | present; clipboard flag (4.3) |
 | 34 | implicit intents reach only exported components; mutable PendingIntent needs a component; receiver export flags; zip path traversal throws | nothing to change today |
 | 35 / 36 | TLS 1.0/1.1 refused for apps targeting 35; Safer Intents (opt-in `intentMatchingFlags`), Local Network permission (opt-in now, enforced later, WebView inherits), orientation limits ignored from sw600dp | tablet is ~564 dp; add the flag |
