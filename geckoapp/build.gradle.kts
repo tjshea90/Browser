@@ -1,0 +1,96 @@
+import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+// Kestrel G: the same Kestrel UI / data / filter engine as :app, but pages are drawn by Firefox's engine (GeckoView) instead of the tablet's
+// frozen Android System WebView (Chromium 74 on the owner's tablet cannot run current websites). Shared code = ../app/src/main (UI, data,
+// shield, net); everything engine-specific is in this module's src/main. See docs/handoff/STATE.md "Engine decision".
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+}
+
+val keystoreProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
+val geckoVersion = "160.0.20261104181552"
+
+android {
+    namespace = "app.kestrel.browser"   // shared sources and resources use app.kestrel.browser.R
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = "app.kestrel.browser.gecko"  // installs BESIDE the WebView build (app.kestrel.browser)
+        minSdk = 29
+        targetSdk = 36
+        versionCode = 100
+        versionName = "0.2.0-gecko-alpha1"
+        ndk { abiFilters += "armeabi-v7a" } // the tablet's userspace is 32-bit; only this engine build is bundled (~90 MB)
+    }
+
+    signingConfigs {
+        create("kestrel") {
+            storeFile = rootProject.file(keystoreProps.getProperty("storeFile") ?: "signing/dev/kestrel-dev.jks")
+            storePassword = keystoreProps.getProperty("storePassword") ?: "kestrel-dev"
+            keyAlias = keystoreProps.getProperty("keyAlias") ?: "kestrel-dev"
+            keyPassword = keystoreProps.getProperty("keyPassword") ?: "kestrel-dev"
+            enableV2Signing = true
+            enableV3Signing = true
+        }
+    }
+
+    buildTypes {
+        debug { applicationIdSuffix = ".debug"; versionNameSuffix = "-debug" }
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("kestrel")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    sourceSets.getByName("main") {
+        res.srcDir("../app/src/main/res")
+        assets.srcDir("../app/src/main/assets")
+    }
+
+    packaging {
+        jniLibs { useLegacyPackaging = false } // uncompressed, page-aligned libs: mapped straight from the APK (no second 118 MB copy on disk)
+        resources {
+            excludes += setOf("kotlin/**", "META-INF/*.kotlin_module", "META-INF/*.version", "META-INF/com.android.tools/**", "DebugProbesKt.bin", "META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*")
+        }
+    }
+
+    lint {
+        abortOnError = false   // GeckoView brings its own lint noise; the WebView module keeps the strict gate
+        checkReleaseBuilds = false
+    }
+}
+
+kotlin {
+    sourceSets.getByName("main").kotlin.srcDir("../app/src/main/kotlin") // shared UI / data / shield / net (engine-neutral)
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_11)
+        freeCompilerArgs.addAll("-Xno-param-assertions", "-Xno-call-assertions", "-Xno-receiver-assertions")
+    }
+}
+
+configurations.all {
+    // GeckoView declares kotlin-stdlib 2.4.21 but contains no Kotlin; keep our compiler's stdlib.
+    exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk7")
+    exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk8")
+}
+
+dependencies {
+    implementation(project(":core"))
+    implementation("org.mozilla.geckoview:geckoview-armeabi-v7a:$geckoVersion") {
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
+        exclude(group = "com.google.android.gms") // WebAuthn via Google Play services: this tablet has none, and this project never depends on GMS
+    }
+}

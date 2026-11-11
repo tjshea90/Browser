@@ -11,9 +11,14 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Firefox's engine (GeckoView) is published only here.
+        maven {
+            url = uri("https://maven.mozilla.org/maven2/")
+            content { includeGroup("org.mozilla.geckoview") }
+        }
     }
 }
 
 rootProject.name = "Kestrel"
 
-include(":core", ":app", ":tools")
+include(":core", ":app", ":geckoapp", ":tools")
