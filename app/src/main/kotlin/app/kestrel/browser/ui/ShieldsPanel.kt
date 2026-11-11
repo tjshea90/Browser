@@ -30,15 +30,25 @@ class ShieldsPanel(private val ctx: Context, private val pal: Pal, private val o
         Spec(ShieldFlag.SCRIPTS, "Block scripts", "Turns JavaScript off on this site (many pages stop working)") { it.blockScripts },
     )
 
+    /** The panel as a bottom sheet (the Gecko build: the navigation is at the bottom, so this rises from the bottom too). */
+    fun showIn(sheet: SheetHost, host: String, tab: Tab, global: ShieldSettings) {
+        sheet.show("Shields", content(host, tab, global))
+    }
+
+    /** The panel as a drop-down under [anchor] (the WebView build, whose toolbar is at the top). */
     fun show(anchor: View, host: String, tab: Tab, global: ShieldSettings) {
-        val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(ctx.dp(18), ctx.dp(14), ctx.dp(18), ctx.dp(10)) }
+        val col = content(host, tab, global)
         val width = minOf(ctx.dp(340), ctx.resources.displayMetrics.widthPixels - ctx.dp(16))
         val popup = PopupWindow(ScrollView(ctx).apply { addView(col) }, width, ViewGroup.LayoutParams.WRAP_CONTENT, true)
         popup.setBackgroundDrawable(roundedBg(pal.card, ctx.dpf(14f), pal.divider, ctx.dp(1)))
         popup.elevation = ctx.dpf(12f)
         popup.isOutsideTouchable = true
         popup.animationStyle = 0   // no fade: everything must feel instant
+        popup.showAsDropDown(anchor, -(width - anchor.width), 0)
+    }
 
+    private fun content(host: String, tab: Tab, global: ShieldSettings): LinearLayout {
+        val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(ctx.dp(18), ctx.dp(8), ctx.dp(18), ctx.dp(14)) }
         var current = Shields.overrideFor(host) ?: SiteShields(0, 0)
         val effective = { current.applyTo(global) }
         val rows = ArrayList<Pair<Spec, Switch>>()
@@ -78,8 +88,7 @@ class ShieldsPanel(private val ctx: Context, private val pal: Pal, private val o
         }
         refreshDim()
         col.addView(label(ctx, "Changes reload the page. These are this site's settings; defaults are in Settings.", 12f, pal.muted).apply { setPadding(0, ctx.dp(8), 0, 0); includeFontPadding = true })
-
-        popup.showAsDropDown(anchor, -(width - anchor.width), 0)
+        return col
     }
 
     private fun row(title: View, subtitle: String?, sw: Switch): View {

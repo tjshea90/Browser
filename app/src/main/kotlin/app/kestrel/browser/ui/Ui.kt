@@ -121,8 +121,9 @@ fun textButton(ctx: Context, text: String, fg: Int, onClick: () -> Unit): TextVi
     }
 
 /** Thin load-progress bar (2dp) drawn in the accent color. */
-class ProgressLine(ctx: Context, private val color: Int) : View(ctx) {
-    private val paint = Paint().apply { this.color = this@ProgressLine.color }
+class ProgressLine(ctx: Context, color: Int) : View(ctx) {
+    private val paint = Paint().apply { this.color = color }
+    fun setColor(c: Int) { if (paint.color != c) { paint.color = c; invalidate() } }
     var progress = 0
         set(v) { if (field != v) { field = v; visibility = if (v in 1..99) VISIBLE else INVISIBLE; invalidate() } }
 
