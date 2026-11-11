@@ -93,18 +93,22 @@ object Format {
         else -> "${sec / 3600} h ${(sec % 3600) / 60} min left"
     }
 
-    /** The one status line under a download's name. */
+    /** "3.1 MB of 8.4 MB" - how much of the file is on the tablet - or "3.1 MB so far" while the total is not known. */
+    fun progress(v: DownloadView): String = if (v.total > 0) bytes(v.done) + " of " + bytes(v.total) else bytes(v.done) + " so far"
+
+    /** The one status line under a download's name: how many MB are downloaded of the total, then percent, speed and time left. */
     fun status(v: DownloadView): String = when (v.state) {
-        DlState.QUEUED -> "Waiting in line"
-        DlState.STARTING -> "Starting…"
+        DlState.QUEUED -> "Waiting in line" + if (v.done > 0) "  ·  " + progress(v) else ""
+        DlState.STARTING -> "Starting…" + if (v.done > 0) "  ·  " + progress(v) else ""
         DlState.RUNNING -> buildString {
-            if (v.total > 0) append((v.fraction * 100).toInt()).append(" %") else append(bytes(v.done))
+            append(progress(v))
+            if (v.total > 0) append("  ·  ").append((v.fraction * 100).toInt()).append(" %")
             if (v.bytesPerSec > 0) append("  ·  ").append(speed(v.bytesPerSec))
             if (v.etaSec >= 0) append("  ·  ").append(eta(v.etaSec))
             if (v.connections > 1) append("  ·  ").append(v.connections).append(" connections")
         }
-        DlState.PAUSED_USER, DlState.PAUSED_SYSTEM -> "Paused  ·  " + if (v.total > 0) "${(v.fraction * 100).toInt()} %" else bytes(v.done)
-        DlState.WAITING_NETWORK -> "Waiting for the connection…"
+        DlState.PAUSED_USER, DlState.PAUSED_SYSTEM -> "Paused  ·  " + progress(v) + if (v.total > 0) "  ·  ${(v.fraction * 100).toInt()} %" else ""
+        DlState.WAITING_NETWORK -> "Waiting for the connection…" + if (v.done > 0) "  ·  " + progress(v) else ""
         DlState.NEEDS_DECISION -> when (v.reason) {
             Reason.FILE_CHANGED -> "The file changed on the server. Restarting downloads it again (${bytes(v.total)})."
             Reason.NO_RANGE -> "This server cannot continue a partial download. Restarting downloads it again."
@@ -113,7 +117,7 @@ object Format {
         DlState.VERIFYING -> "Finishing…"
         DlState.COMPLETED -> "Done  ·  " + bytes(v.total.takeIf { it >= 0 } ?: v.done)
         DlState.CANCELED -> "Canceled"
-        DlState.FAILED -> failure(v)
+        DlState.FAILED -> failure(v) + if (v.done > 0) "  ·  " + progress(v) + " downloaded" else ""
     }
 
     fun failure(v: DownloadView): String = when (v.reason) {
