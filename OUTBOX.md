@@ -611,3 +611,9 @@
 >
 > **Open on my side:** download queue priorities and checksums, ad-block scriptlets (needs your yes on item 3), the typing lag (needs your numbers), the cold-start glitch, swipe-to-close in the tab grid, and backup/restore.
 <!-- sha:aacdaeab552e -->
+
+## 2026-11-12T05:31:19Z
+> Standing by. The heartbeat reached this session late, and this session is the one that did the work. alpha17 is released and recorded in `BUILDLOG.md`. Everything else is committed and pushed (checkpoint 856), with no uncommitted changes.
+>
+> What remains either waits on you (your Proton Mail numbers, the tablet facts, and the yes/no on the scheduled list job) or is backlog that doesn't justify another 92 MB release yet. I'm leaving the heartbeat in place, since you wrote to me a few minutes ago.
+<!-- sha:dd4f7e3e0d27 -->
