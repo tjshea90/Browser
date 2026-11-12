@@ -74,3 +74,43 @@ class PageProxyTest {
         assertEquals(DataSaver.OFF, prefs.dataSaver)
     }
 }
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [29])
+class VpnProfileTest {
+    private fun caps(vpn: Boolean): android.net.NetworkCapabilities {
+        val c = org.robolectric.shadows.ShadowNetworkCapabilities.newInstance()
+        val sc = org.robolectric.Shadows.shadowOf(c)
+        sc.addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET); sc.addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        sc.addTransportType(if (vpn) android.net.NetworkCapabilities.TRANSPORT_VPN else android.net.NetworkCapabilities.TRANSPORT_WIFI)
+        return c
+    }
+
+    @Test fun aVpnAsTheDefaultNetworkIsSeenAndForgottenAgain() {
+        app.kestrel.browser.net.NetworkMonitor.update(caps(vpn = false)); assertFalse(app.kestrel.browser.net.NetworkMonitor.vpn)
+        var calls = 0
+        val l: () -> Unit = { calls++ }
+        app.kestrel.browser.net.NetworkMonitor.addListener(l)
+        app.kestrel.browser.net.NetworkMonitor.update(caps(vpn = true))
+        assertTrue("Fast Wi-Fi (a VPN) is the active network", app.kestrel.browser.net.NetworkMonitor.vpn); assertEquals("listeners hear about it", 1, calls)
+        app.kestrel.browser.net.NetworkMonitor.update(caps(vpn = true)); assertEquals("no change, no call", 1, calls)
+        app.kestrel.browser.net.NetworkMonitor.update(caps(vpn = false))
+        assertFalse(app.kestrel.browser.net.NetworkMonitor.vpn); assertEquals(2, calls)
+        app.kestrel.browser.net.NetworkMonitor.removeListener(l)
+    }
+
+    @Test fun theCourierRestsWhileTheVpnIsUpWhateverTheSettingsSay() {
+        val ctx = RuntimeEnvironment.getApplication()
+        val p = Prefs.get(ctx)
+        p.phoneMode = PhoneMode.ALWAYS.ordinal; p.pagesViaPhone = true
+        app.kestrel.browser.net.NetworkMonitor.update(caps(vpn = false))
+        assertEquals(PhoneMode.ALWAYS, PhoneBridge.effectiveMode(ctx))
+        app.kestrel.browser.net.NetworkMonitor.update(caps(vpn = true))
+        assertEquals("no second relay on top of the VPN", PhoneMode.OFF, PhoneBridge.effectiveMode(ctx))
+        assertEquals("the owner's own choice is kept", PhoneMode.ALWAYS, PhoneBridge.mode(ctx))
+        assertFalse(PageProxy.wanted(ctx))
+        app.kestrel.browser.net.NetworkMonitor.update(caps(vpn = false))
+        assertEquals(PhoneMode.ALWAYS, PhoneBridge.effectiveMode(ctx))
+        p.phoneMode = PhoneMode.OFF.ordinal; p.pagesViaPhone = false
+    }
+}
