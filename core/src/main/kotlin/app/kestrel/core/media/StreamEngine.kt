@@ -696,6 +696,7 @@ class StreamEngine(
             }
         } catch (e: Stopped) { /* the supervisor knows */
         } catch (e: Failed) { synchronized(lock) { if (job.failure == null) job.failure = e; job.stop = true; for (r in job.responses) try { r.abort() } catch (x: Exception) { /* ignore */ } }
+        } catch (e: MuxBroken) { synchronized(lock) { if (job.failure == null) job.failure = Failed(Reason.UNSUPPORTED, 0, restartRaw = true, why = e.cause?.toString() ?: e.message); job.stop = true; for (r in job.responses) try { r.abort() } catch (x: Exception) { /* ignore */ } }
         } catch (e: SinkException) { synchronized(lock) { if (job.failure == null) job.failure = Failed(e.reason); job.stop = true }
         } catch (e: Throwable) { synchronized(lock) { if (job.failure == null) job.failure = Failed(Reason.STORAGE); job.stop = true } }
     }
