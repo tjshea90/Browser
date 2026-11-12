@@ -506,3 +506,53 @@
 > - **Speed and Proton Mail audit:** I have the engine-tuning research now (written by a background agent, not yet checked against the code), and the audit is next.
 > - **Decision for you:** I'd like a GitHub schedule that rebuilds the ad-block lists daily so the tablet downloads one small file instead of seven. That adds a scheduled workflow, which your rules say needs your OK. Say yes or no.
 <!-- sha:fa6ef4fb01a4 -->
+
+## 2026-11-12T02:58:34Z
+> **Alpha16 is out.** Tap this on the tablet, or use Menu > Updates > Check now:
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha16
+>
+> Everything below was tested on the Android 10 emulator, none of it on your tablet. You sent the same message twice, so here it is part by part.
+>
+> **"Do everything still on the list"**
+> - **Shipped earlier:** the updater fix (alpha14), and the spam-tab/redirect guard, finding videos without pressing play, the Save video button and MP4 conversion (alpha15).
+> - **Daily update dialog (alpha16):** it checks the app, the Firefox engine version and the ad-block lists. Its Update button downloads in the background, then offers Install now.
+> - **Ad-block lists:** they now refresh every day by themselves.
+> - **App download is now off by default:** a 92 MB download over your hotspot is your call. Settings > App updates > "Download updates in the background" turns it on.
+> - **Download manager:**
+>   - A download resumes by itself after the app is killed.
+>   - It waits out a dead hotspot for up to 30 minutes instead of failing.
+>   - An extra connection the server refuses no longer fails the whole download.
+>   - Files of 8 MB or more start with 2 connections at once.
+>   - Resume checks the file on the server is still the same one.
+>   - A web page is never saved as your video or file; it says "The site sent a web page instead of the file."
+> - **Not done:** checksum verification, queue and speed-limit settings, and uBlock-style blocking scripts (about 15 days of work).
+>
+> **"Audit of the app and engine"**
+> It's written up in the repo as `research/AUDIT-2026-11.md`.
+> - There is no code of ours in the typing path. It runs through the keyboard, the engine and the page's own JavaScript.
+> - I made the UI refresh cheaper and moved the daily list refresh out of the first minute of use. I also fixed a race in the download code.
+> - None of that is claimed to speed up Proton Mail.
+>
+> **"Slow Proton Mail, lag when typing"**
+> I can't fix what I can't measure, so alpha16 adds the tools:
+> - Menu > Diagnostics > "Page loads" shows time to first paint and to finished, per site.
+> - Settings > Network lab has switches for encrypted DNS and HTTP/3, which are the likeliest hotspot slowdowns.
+> - "Warm up the top suggestion" opens the connection to the first address-bar suggestion while you type.
+>
+> What I need from you, about 5 minutes:
+> 1. Open mail.proton.me twice and paste the "Page loads" lines here.
+> 2. Switch Encrypted DNS off, restart the browser and repeat.
+> 3. Do the same with HTTP/3 off. Change one switch at a time.
+> 4. Tell me which keyboard app you use, whether an accessibility or autofill service is on, and whether the hotspot is on 5 GHz.
+>
+> **"Modify the Firefox engine"**
+> I had the bundled Firefox 160 checked (about 440 settings). Recompiling it isn't feasible: GitHub's builders can't build Firefox in their time limit, and Mozilla's own build is already optimized, so mine would be slower. Its settings already sit near what this tablet allows. I added one and will tune the rest on your numbers.
+>
+> **Open and waiting on you**
+> - **Your OK:** may I add a GitHub schedule that builds the ad-block lists once a day? The tablet would download one small file instead of seven. Your rules say no scheduled workflows without your OK.
+> - **Your numbers:** the Proton Mail page-load times above.
+> - **Still to do:** checksum verification, queue and speed-limit settings, the blocking upgrade, and the keyboard-resize idea once I have your numbers.
+>
+> The first two alpha16 builds failed (a transient GitHub permission error at the last step, then a test race I fixed). The third is what's published.
+<!-- sha:a4d73dd35a02 -->
