@@ -63,10 +63,14 @@ class CourierServer(
         val ss = server ?: return
         server = null
         try { ss.close() } catch (_: IOException) {}
+        // close() returns while the accepting thread may still be inside accept(); until it has left, the old listening socket can finish a handshake.
+        // Waiting for it makes "stopped" mean "the port is closed".
+        val a = acceptor
+        if (a != null && a !== Thread.currentThread()) try { a.join(3000) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
+        acceptor = null
         watchdog?.shutdownNow(); watchdog = null
         for (c in conns.keys.toList()) closeQuietly(c)
         pool.shutdownNow()
-        acceptor = null
     }
 
     private fun acceptLoop(ss: ServerSocket) {
