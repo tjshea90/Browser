@@ -122,6 +122,43 @@ class VpnProfileTest {
         app.kestrel.browser.net.NetworkMonitor.removeListener(l)
     }
 
+    @Test fun linkMetersOwnTunnelIsRecognisedFromTheLinkAddressesAndForgottenWithTheVpn() {
+        val nm = app.kestrel.browser.net.NetworkMonitor
+        nm.update(caps(vpn = false)); nm.updateLink(listOf("192.168.43.2", "192.168.43.1")); assertFalse(nm.vpn); assertFalse(nm.fastTunnel)
+        var calls = 0
+        val l: () -> Unit = { calls++ }
+        nm.addListener(l)
+        nm.update(caps(vpn = true))
+        assertTrue(nm.vpn); assertFalse("the VPN's own link has not arrived yet: only a VPN so far", nm.fastTunnel); assertEquals(1, calls)
+        nm.updateLink(listOf("10.111.222.2", "10.111.222.53"))
+        assertTrue("its fixed addresses: LinkMeter's tunnel", nm.fastTunnel); assertEquals("listeners hear about the tunnel too", 2, calls)
+        nm.updateLink(listOf("10.111.222.2")); assertEquals("no change, no call", 2, calls)
+        nm.update(caps(vpn = false))
+        assertFalse(nm.vpn); assertFalse("no VPN, no tunnel, whatever the old link said", nm.fastTunnel)
+        nm.updateLink(listOf("192.168.43.2"))
+        nm.update(caps(vpn = true)); nm.updateLink(listOf("10.8.0.2", "10.8.0.1"))
+        assertTrue(nm.vpn); assertFalse("another VPN is not LinkMeter's", nm.fastTunnel)
+        nm.update(null)
+        assertFalse(nm.vpn); assertFalse(nm.fastTunnel)
+        nm.removeListener(l)
+        nm.update(caps(vpn = false)); nm.updateLink(null)
+    }
+
+    @Test fun theTunnelFlagReachesTheEngineProfileAndGoesAgain() {
+        val nm = app.kestrel.browser.net.NetworkMonitor
+        val ctx = RuntimeEnvironment.getApplication()
+        nm.update(caps(vpn = true)); nm.updateLink(listOf("10.111.222.2"))
+        val i = PhoneBridge.profileInput(ctx)
+        assertTrue(i.vpn && i.fastTunnel)
+        val o = app.kestrel.core.net.NetProfile.effective(i)
+        assertTrue("IPv6 is blocked in the tunnel: the engine must not ask for it", o.disableIPv6)
+        assertEquals(app.kestrel.core.net.NetProfile.FAST_PAGE_YIELD_KBPS, o.pageYieldKBps)
+        nm.update(caps(vpn = false)); nm.updateLink(listOf("192.168.43.2"))
+        val back = app.kestrel.core.net.NetProfile.effective(PhoneBridge.profileInput(ctx))
+        assertFalse(back.disableIPv6); assertEquals(app.kestrel.core.net.NetProfile.PAGE_YIELD_KBPS, back.pageYieldKBps); assertFalse(back.fastWifi)
+        nm.updateLink(null)
+    }
+
     @Test fun theCourierRestsWhileTheVpnIsUpWhateverTheSettingsSay() {
         val ctx = RuntimeEnvironment.getApplication()
         val p = Prefs.get(ctx)
