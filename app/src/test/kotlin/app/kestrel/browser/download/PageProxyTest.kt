@@ -49,19 +49,14 @@ class PageProxyTest {
         PhoneBridge.forgetPairing(ctx)
     }
 
-    @Test fun typingThePairingCodeSwitchesTheHelperOnOnlyIfTheOwnerNeverChoseAMode() {
+    @Test fun typingThePairingCodeNeverSwitchesAnythingOn() {
         val p = Prefs.get(ctx)
         PhoneBridge.forgetPairing(ctx)
-        // a fresh install: no choice stored -> pairing means "use my phone"
-        ctx.getSharedPreferences("kestrel", 0).edit().remove("phone_mode").apply()
-        if (!p.hasPhoneModeChoice()) {
-            assertTrue(PhoneBridge.savePairing(ctx, Pairing.format(byteArrayOf(9, 9, 9, 9, 9, 9, 9, 9, 9, 9))))
-            assertEquals(PhoneMode.WHEN_THERE, PhoneBridge.mode(ctx))
-        }
-        // an owner who switched it off keeps it off when they pair again
-        p.phoneMode = PhoneMode.OFF.ordinal
-        assertTrue(PhoneBridge.savePairing(ctx, Pairing.format(byteArrayOf(8, 8, 8, 8, 8, 8, 8, 8, 8, 8))))
-        assertEquals(PhoneMode.OFF, PhoneBridge.mode(ctx))
+        ctx.getSharedPreferences("kestrel", 0).edit().remove("phone_mode").remove("pages_via_phone").commit()
+        assertEquals("OFF by default", PhoneMode.OFF, PhoneBridge.mode(ctx)); assertFalse(p.pagesViaPhone)
+        assertTrue(PhoneBridge.savePairing(ctx, Pairing.format(byteArrayOf(9, 9, 9, 9, 9, 9, 9, 9, 9, 9))))
+        assertEquals("pairing only stores the code", PhoneMode.OFF, PhoneBridge.mode(ctx))
+        assertFalse(PageProxy.wanted(ctx))
         PhoneBridge.forgetPairing(ctx)
     }
 

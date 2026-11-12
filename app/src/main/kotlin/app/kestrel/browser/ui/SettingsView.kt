@@ -75,7 +75,8 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         info("When it applies", "The speed limit changes at once. The other two apply the next time the browser starts.")
 
         app.kestrel.browser.download.PageProxy.refresh()                    // fresh numbers from the phone for the next time this screen is built
-        section("Phone helper (downloads and pages through your phone)")
+        section("Phone helper (Kestrel Courier: off by default, finished work)")
+        info("When you need it", "Not with LinkMeter's Fast Wi-Fi: while a VPN is on, this helper rests by itself (a second relay on top of it only adds a hop). It is for the normal hotspot, where the phone's own connection is faster than the capped hotspot.")
         info("What it does", "Your phone downloads the file over its own connection and sends it to this tablet over the hotspot wifi when it has it. The download looks and works the same here, with live progress. You need the small Kestrel Courier app on the phone, with the hotspot on.")
         choice("Use the phone", listOf("Off", "When the phone is there", "Always: wait for the phone"), prefs.phoneMode) { prefs.phoneMode = it; app.kestrel.browser.download.PhoneBridge.modeChanged(ctx) }
         toggle("Load pages through the phone", "Pages are fetched by the phone with its own connection, which the carrier does not slow down like the hotspot. Needs Kestrel Courier 0.1.0-alpha3 or newer on the phone. If the phone stops answering, pages load directly by themselves.", prefs.pagesViaPhone) { prefs.pagesViaPhone = it; app.kestrel.browser.download.PageProxy.refresh(); rebuild() }
@@ -115,6 +116,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
 
         if (app.kestrel.browser.Flavor.hasNetworkLab) {
             section("Network lab (for slow pages)")
+            info("Right now", app.kestrel.core.net.NetProfile.effective(app.kestrel.browser.download.PhoneBridge.profileInput(ctx)).text + if (app.kestrel.browser.net.NetworkMonitor.vpn) " Your switches below come back when the VPN goes away." else "")
             info("How to use it", "Change ONE switch, load the same site twice, then open Diagnostics > Page loads and compare the times. Keep what is faster.")
             toggle("Encrypted DNS (DNS over HTTPS)", "On: your carrier cannot read or rewrite which sites you look up. Off: the tablet's own DNS, which can be quicker on a hotspot", prefs.dohOn) { prefs.dohOn = it; l.prefsChanged() }
             toggle("Warm up the top suggestion", "While you type in the address bar, the connection to the first suggested site (one you visited before) is opened ahead, which saves about a second on a slow link. A few KB; never in private tabs", prefs.preconnect) { prefs.preconnect = it }

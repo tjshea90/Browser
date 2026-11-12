@@ -1412,7 +1412,14 @@ open class BrowserActivity : Activity(), DockListener {
     /** The Home screen has one data-driven line: what Shields blocked so far. */
     private fun refreshNtp() { home.bindStats(prefs.blockedTotal, NetworkMonitor.metered) }
 
+    private var lastVpn = NetworkMonitor.vpn
+
     private fun onNetworkChanged() {
+        if (NetworkMonitor.vpn != lastVpn) {                          // LinkMeter's Fast Wi-Fi came up or went away: DNS and HTTP/3 follow it (core/net/NetProfile), the Courier rests or returns
+            lastVpn = NetworkMonitor.vpn
+            GeckoEngine.applyNetwork(prefs)
+            PhoneBridge.modeChanged(this)
+        }
         val t = current
         if (NetworkMonitor.state == NetworkMonitor.State.ONLINE && t?.error is ErrorScreen.Network) retry(t) // the hotspot is back: reload by itself
         else if (t?.error != null) errorView.show(t.error!!)
