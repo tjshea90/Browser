@@ -326,19 +326,19 @@ test('css: an answer is cached for a minute, then asked again; frames of one hos
 test('css: while the app\'s lists are still loading nothing is remembered, and a new list generation empties the cache', async () => {
   const gen = { v: 0 };
   const h = harness(cssApp(gen));
-  h.mainFrame(PAGE); await until(() => h.of('cfg').length > 0, 'cfg');
+  h.mainFrame(PAGE); await until(() => h.of('cfg').length >= 1, 'cfg');
   assert.equal(await h.message({ k: 'css', h: 'news.example', top: true }), '', 'the lists are not loaded: the app answers nothing yet');
-  gen.v = 1;
-  assert.equal(await h.message({ k: 'css', h: 'news.example', top: true }), '.ad{display:none!important}', 'the empty answer did not stick to the host');
-  assert.equal(h.of('css').length, 2);
+  assert.equal(await h.message({ k: 'css', h: 'news.example', top: true }), '');
+  assert.equal(h.of('css').length, 2, 'the empty answer was not remembered');
+  gen.v = 1; // the lists finished loading; the extension learns it with the next page configuration
+  h.mainFrame('https://news.example/', { tabId: 2 }); await until(() => h.of('cfg').length >= 2, 'second cfg'); await tick(20);
+  assert.equal(await h.message({ k: 'css', h: 'news.example', top: true }), '.ad{display:none!important}');
   await h.message({ k: 'css', h: 'news.example', top: true });
-  assert.equal(h.of('css').length, 2, 'now remembered');
-  // a new generation arrives with the next page configuration: everything is asked again
-  gen.v = 2;
-  h.clock.now += 100; h.listeners.before({ type: 'main_frame', url: 'https://other.example/', tabId: 2, frameId: 0 });
-  await until(() => h.of('cfg').length >= 2, 'second cfg'); await tick(20);
+  assert.equal(h.of('css').length, 3, 'now remembered');
+  gen.v = 2; // a refresh of the lists: a new generation arrives with the next page configuration
+  h.mainFrame('https://other.example/', { tabId: 3 }); await until(() => h.of('cfg').length >= 3, 'third cfg'); await tick(20);
   await h.message({ k: 'css', h: 'news.example', top: true });
-  assert.equal(h.of('css').length, 3, 'the cache was emptied by the new generation');
+  assert.equal(h.of('css').length, 4, 'the cache was emptied by the new generation');
 });
 
 test('css: a navigation to a page asks for its top-document CSS again, so a Shields switch changed on the page takes effect on the reload', async () => {
