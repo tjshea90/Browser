@@ -1403,7 +1403,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun showDiagnostics() {
         GeckoEngine.readBackPrefs { diagView?.refresh() }
         Io.exec { GlInfo.read(); app.kestrel.browser.diag.StorageInfo.read(this); Io.ui { diagView?.refresh() } }
-        val v = diagView ?: DiagnosticsView(this, pal, ::engineFacts, { refreshScreen("diagnostics") }, { closeDiagnostics() }, { runScrollTest() }, { runScrollTest(compare = true) }, ::blockerLabel, ::toggleBlocker).also { diagView = it }
+        val v = diagView ?: DiagnosticsView(this, pal, ::engineFacts, { refreshScreen("diagnostics") }, { closeDiagnostics() }, { runScrollTest() }, { runScrollTest(compare = true) }, ::blockerLabel, ::toggleBlocker, ::openLab).also { diagView = it }
         if (v.parent == null) root.addView(v, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) else v.refresh()
     }
 
@@ -1419,6 +1419,16 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     private var scrollTestTab: Tab? = null
+
+    /** Diagnostics > Tap lab / Decode lab: a bundled page in a tab of its own (assets/labs/<name>.html); the page shows its own numbers. */
+    private fun openLab(name: String) {
+        if (name != "tap" && name != "decode") return
+        closeDiagnostics()
+        val url = "resource://android/assets/labs/$name.html"
+        val t = newTabInternal()
+        t.url = url; t.pendingLoad = url
+        show(t)
+    }
 
     /**
      * Diagnostics > Scroll test: a temporary tab with the bundled long page ([ScrollTest.URL]); once it has loaded, [ScrollTest] scrolls it and reports the frames the
