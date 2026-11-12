@@ -1,21 +1,22 @@
-# CHECKPOINT 826 — read me first, then TASKS.md
+# CHECKPOINT 833 — read me first, then TASKS.md
 
-**Written:** 2026-11-12T04:16:43Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `83163cd` (this checkpoint is the commit after it)
+**Written:** 2026-11-12T04:42:40Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `3210d67` (this checkpoint is the commit after it)
 
 ## Just done
-X18b DONE: StreamEngine writes TS HLS straight into an MP4 (decideMux probes segment 0, name .mp4 from the first byte, TsToMp4 per job, journal mux.jnl in the staging dir checkpointed under the drain lock + at settle, finish() = moov only, restartRaw fallback on MuxBroken/no picture, note on the row, StreamRec.mux/note persisted, Sink.truncate, Config.directMp4, estimate = avg complete segment * n). 8 new engine tests (StreamEngineMp4Test: straight-to-mp4, AES-128, ad run, non-H264 stays .ts with reason, switch off, writer failure restarts raw, pause+kill+resume identical, journal behind record) + full :core:test :app:testDebugUnitTest :geckoapp:compileDebugKotlin green.
+X15 + X18 DONE and emulator-proven (alpha-debug x86_64, Android 10): dock popup row says MP4; download through the dock icon wrote 'Kestrel HLS test.mp4' from the first byte, no .ts, ffmpeg clean, Diagnostics 'mp4 check ok video=1 audio=1'; app force-stopped mid-download resumed by itself, identical sample data. Docs: docs/ARCHITECTURE.md section, research/MP4_MUX.md, TASKS X15/X18 ticked, X19 follow-ups added. Owner remark logged (remux only, no re-encode = the design). Also this step: note under the Downloads row, Remuxer.verify, decline reasons, estimate = avg complete segment * n.
 
 ## Do this next
-X18c Android + X18d emulator proof: (1) show DownloadView.note under the row in the Downloads screen (app/.../ui, grep DownloadsView/row builder) and in the notification if cheap; (2) Diagnostics 'mp4 check' = after finish MediaExtractor read-back (tracks, duration) logged via Health.log, in Remuxer-adjacent class or DownloadController; (3) 'Make MP4' action for existing .ts rows (Remuxer.convert on a joined .ts: needs StreamFinisher.Joined from a file; room check relaxed to 0.6*size+32MB) ; (4) build debug x86_64 (gradle :geckoapp:assembleDebug -PgeckoAbi=x86_64, see scratchpad build-g*.log), install, serve site/hls/720 via 10.0.2.2:8000 and download through the dock icon: expect file .mp4 from first byte, pull with adb, ffprobe/ffmpeg -f null clean; kill -9 the app mid-download and resume. Then TASKS ticks X15/X18, ARCHITECTURE.md section, alpha17 (versionCode 116) batching X14-X18 + M8-lite. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN.
+(1) X19b: size for a bare HLS media playlist in the popup (VideoFlow.loadStream: probe first segment length, DownloadController has a size probe used for progressive files) - small. (2) Final checks before alpha17: cd web-tests && npm test; ./gradlew :core:test :app:testDebugUnitTest :geckoapp:compileDebugKotlin :app:lintDebug; (3) bump versionCode 116 / 0.3.0-alpha17 (geckoapp/build.gradle.kts, check how ship.sh reads it), write BUILDLOG/RELEASE note text (X14 long-press menu, X16 spoof guard, X17 dock download icon + popup, X18 HLS straight to MP4 + resume, M8-lite Settings>Downloads), bash ship.sh gecko note, dispatch android.yml (mcp__github__actions_run_trigger, ref ccr-a57c163e-mtq8js, app gecko, full_build true), wait with an until loop, bash tools/record-release.sh <tag> only after green, give the owner the Release link on its own line + answer message 11 and the 'remux only' remark. (4) Owner still owes: Proton Page loads numbers, scheduled CI list-build workflow yes/no. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  4f4235e ckpt 826: X18b DONE: StreamEngine writes TS HLS straight into an MP4 (decideMux probes s
   70b4d0b ckpt 804: X18a DONE (core, JVM-tested, ffmpeg-verified): Avc.kt (SPS/NAL), TsDemux.kt (s
   1b3baa2 ckpt 756: X17 dock download icon VERIFIED on emulator after a real redraw (home+relaunch
   51942ec ckpt 744: owner message 11 written into TASKS as X14-X18 in their words (long-press down
@@ -25,8 +26,7 @@ X18c Android + X18d emulator proof: (1) show DownloadView.note under the row in 
   dc57dde ckpt 729: stream engine: a dropped job (merged-away sound of a pair, cancelled, cleared)
   9226e37 ckpt 726: TASKS X4/X5/X12 statuses with evidence; HLS auto-resume test; lintRelease clea
   d41caca ckpt 724: M7 content sanity (web page where a file/video was expected -> BAD_CONTENT, HL
-  61e1894 ckpt 721: M1b validator-less resume: Sink.readable/pread (Os.pread on both Android sinks
 ```
 
-(21 automatic checkpoint(s) since the last deliberate one — the
+(6 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
