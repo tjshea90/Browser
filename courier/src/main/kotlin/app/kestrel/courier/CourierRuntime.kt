@@ -13,6 +13,7 @@ import android.util.Log
 import app.kestrel.core.courier.CourierHost
 import app.kestrel.core.courier.CourierServer
 import app.kestrel.core.courier.JsonRecStore
+import app.kestrel.core.courier.JsonStreamStore
 import app.kestrel.core.courier.PeerGuard
 import app.kestrel.core.courier.Sign
 import app.kestrel.core.courier.Ssrf
@@ -24,6 +25,7 @@ import app.kestrel.core.download.Engine
 import app.kestrel.core.download.NetGate
 import app.kestrel.core.download.Spawner
 import app.kestrel.core.download.UrlConnectionFetcher
+import app.kestrel.core.media.StreamEngine
 import java.io.File
 import java.io.IOException
 
@@ -34,7 +36,7 @@ import java.io.IOException
 object CourierRuntime {
     private const val TAG = "KestrelCourier"
 
-    private class Running(val engine: Engine, val host: CourierHost, val server: CourierServer, val control: HandlerThread, val handler: Handler, val port: Int, val netCallback: ConnectivityManager.NetworkCallback?)
+    private class Running(val engine: Engine, val streams: StreamEngine, val host: CourierHost, val server: CourierServer, val control: HandlerThread, val handler: Handler, val port: Int, val netCallback: ConnectivityManager.NetworkCallback?)
 
     @Volatile private var running: Running? = null
     /** Why the last start failed (the screen shows it), or null. */
@@ -75,11 +77,16 @@ object CourierRuntime {
             Config(maxActive = 3, maxConnsTotal = 8, maxConnsPerDownload = 6),
             Spawner { name, task -> Thread(task, name).also { it.isDaemon = true; it.start() } },
         )
-        engine.restore()
+        // video streams (HLS) are downloaded segment by segment and written straight into an MP4 by our own writer (no Android code needed for H.264 + AAC)
+        val streams = StreamEngine(
+            { fetcher }, sinks, JsonStreamStore(File(dir, "streams")) { Log.w(TAG, it) }, net, { r -> handler.post(r) }, Clock.System, Config(maxActive = 3, maxConnsTotal = 8, maxConnsPerDownload = 6),
+            Spawner { name, task -> Thread(task, name).also { it.isDaemon = true; it.start() } }, null, { m, t -> Log.w(TAG, m, t) },
+        )
+        engine.restore(); streams.restore()
         val resolver: (String) -> List<ByteArray> = if (noGuard) { { _ -> listOf(byteArrayOf(93, 184.toByte(), 216.toByte(), 34)) } } else { { h -> java.net.InetAddress.getAllByName(h).map { it.address } } }
         val host = CourierHost(
             Sign.deriveKey(prefs.secret()), engine, sinks, File(dir, "courier-jobs.json"), fetcher, Clock.System, { freeBytes(staging) }, Build.MODEL ?: "phone",
-            log = { Log.w(TAG, it) }, resolve = resolver,
+            log = { Log.w(TAG, it) }, resolve = resolver, streams = streams,
         )
         host.load()
         val server = CourierServer(prefs.port, null, { remote, local -> PeerGuard.allowed(remote.address, local.address, CourierNet.locals()) }, { req, peer -> host.handle(req, peer) }, log = { Log.w(TAG, it) })
@@ -91,13 +98,13 @@ object CourierRuntime {
         var cb: ConnectivityManager.NetworkCallback? = null
         if (cm != null) {
             cb = object : ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: Network) { engine.onNetwork() }
-                override fun onLost(network: Network) { engine.onNetwork() }
+                override fun onAvailable(network: Network) { engine.onNetwork(); streams.onNetwork() }
+                override fun onLost(network: Network) { engine.onNetwork(); streams.onNetwork() }
             }
             try { cm.registerDefaultNetworkCallback(cb, handler) } catch (e: Exception) { cb = null }
         }
-        handler.post { engine.resumeInterrupted() }                       // what the last run was in the middle of carries on by itself
-        val r = Running(engine, host, server, control, handler, bound, cb)
+        handler.post { engine.resumeInterrupted(); streams.resumeInterrupted() }                       // what the last run was in the middle of carries on by itself
+        val r = Running(engine, streams, host, server, control, handler, bound, cb)
         running = r
         lastError = null
         val tick = object : Runnable {
@@ -119,7 +126,7 @@ object CourierRuntime {
         running = null
         try { ctx.applicationContext.getSystemService(ConnectivityManager::class.java)?.let { cm -> r.netCallback?.let { cm.unregisterNetworkCallback(it) } } } catch (e: Exception) { /* already gone */ }
         r.server.stop()
-        r.engine.pauseAllSystem()                                          // checkpoints every running download; they carry on at the next start
+        r.engine.pauseAllSystem(); r.streams.pauseAllSystem()               // checkpoints every running download; they carry on at the next start
         r.handler.postDelayed({ r.control.quitSafely() }, 1500)
     }
 

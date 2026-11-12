@@ -122,7 +122,8 @@ object DownloadController {
         streams = st
         val pb = PhoneBridge.create(app, object : LocalDownloads {
             override fun enqueue(src: Source): Long = e.enqueue(src)
-            override fun view(id: Long): DownloadView? = e.view(id)
+            override fun enqueueStream(src: StreamSource): Long = st.enqueue(src)
+            override fun view(id: Long): DownloadView? = if (st.owns(id)) st.view(id) else e.view(id)
         }) { uiChanged() }
         phone = pb
         control.execute {
@@ -154,7 +155,9 @@ object DownloadController {
     fun enqueueStream(ctx: Context, src: StreamSource, onId: ((Long) -> Unit)? = null) {
         init(ctx)
         val s = streams ?: return
-        handler.post { val id = s.enqueue(src); onId?.invoke(id) }
+        val pb = phone
+        // the phone may take a video over too (it downloads the segments, writes the MP4 and the tablet copies it); decided on the control thread like a plain download
+        handler.post { val id = pb?.offloadStream(src) ?: s.enqueue(src); onId?.invoke(id) }
         DownloadService.start(ctx)
     }
 
