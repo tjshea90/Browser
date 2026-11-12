@@ -247,7 +247,6 @@ class TsToMp4Test {
     @Test fun aKilledDownloadCarriesOnFromTheLastCheckpoint() {
         val segs = listOf(Seg("a_0.ts"), Seg("a_1.ts"), Seg("a_2.ts"))
         val whole = mux(segs).first
-        val ref = Mp4Reader(whole)
         for (killAfter in 1..2) {
             val out = MemOut(); val journal = MemJournal()
             val first = Run(out, journal, TsToMp4(out, journal, {}, 6000, now))
@@ -268,14 +267,9 @@ class TsToMp4Test {
             val file = out.bytes()
             System.getenv("KESTREL_MUX_DUMP")?.let { File(it, "resume-$killAfter.mp4").writeBytes(file) }
             assertEquals(fin.length, file.size.toLong())
+            assertArrayEquals("a download killed after segment $killAfter ends as the very same file as an uninterrupted one", whole, file)
             val r = Mp4Reader(file)
-            val v = r.track("vide")!!; val a = r.track("soun")!!
-            assertEquals("pictures after a kill at $killAfter", 150, v.samples.size)
-            assertEquals(ref.track("vide")!!.samples.map { it.size }, v.samples.map { it.size })
-            assertEquals(ref.track("soun")!!.samples.map { it.size }, a.samples.map { it.size })
-            // the clock may differ by a few milliseconds where the run was cut (the muxer lays the resumed part after the end of the sound)
-            assertTrue(v.samples.indices.all { Math.abs(v.samples[it].dts - ref.track("vide")!!.samples[it].dts) <= 1500 })
-            checkVideoSamples(r, v); checkAudioSamples(r, a)
+            checkVideoSamples(r, r.track("vide")!!); checkAudioSamples(r, r.track("soun")!!)
             assertDecodes(file)
         }
     }
