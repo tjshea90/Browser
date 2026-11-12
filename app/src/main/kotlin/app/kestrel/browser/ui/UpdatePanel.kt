@@ -36,6 +36,9 @@ class UpdatePanel(ctx: Context, private val pal: Pal, private val prefs: Prefs, 
     private var drawnPhase: Phase? = null
     private var bar: Bar? = null
     private var progressText: TextView? = null
+    private var otherWay = false
+    private var saving = false
+    private var otherWayError: String? = null
 
     init {
         orientation = VERTICAL
@@ -108,26 +111,50 @@ class UpdatePanel(ctx: Context, private val pal: Pal, private val prefs: Prefs, 
                 buttons(primary("Open settings") { actions.openInstallSettings() }, secondary("Install") { UpdateManager.install(ctx) })
             }
             Phase.NEEDS_SPACE -> {
-                headline("Not enough free storage", pal.warn)
-                sub("Free up about ${UpdateLogic.formatSize(s.shortBy)} more, then tap Try again.", pal.fg)
-                sub("Why so much: Android only finishes an install while ${UpdateLogic.formatSize(s.reserveBytes)} (a tenth of this tablet's storage) stays free afterwards, and while it installs the update takes about ${UpdateLogic.formatSize(s.installedBytes)} (the new app is stored twice for a moment, plus its unpacked libraries). Free now: ${UpdateLogic.formatSize(s.freeNow)}, counting caches Android can clear.")
-                sub(if (s.fileKept) "The update file is already downloaded: nothing is downloaded again." else "The update file (${o?.let { UpdateLogic.formatSize(it.size) } ?: ""}) still has to be downloaded and takes its room first.")
-                val old = app.kestrel.browser.download.DownloadController.oldInstallers()
-                if (old.isNotEmpty()) {
-                    val bytes = old.sumOf { maxOf(it.total, it.done) }
-                    sub("Quick room: ${old.size} Kestrel installer ${if (old.size == 1) "file from an earlier update is" else "files from earlier updates are"} still in your Downloads (${UpdateLogic.formatSize(bytes)}).", pal.fg)
-                    buttons(primary("Delete old installers") {
-                        val freed = app.kestrel.browser.download.DownloadController.deleteOldInstallers()
-                        android.widget.Toast.makeText(ctx, "Deleted ${UpdateLogic.formatSize(freed)}", android.widget.Toast.LENGTH_SHORT).show()
-                        // the files go away on the download engine's own thread and Android's free-space figure lags a little: look again twice
-                        Io.main.postDelayed({ UpdateManager.recheckSpace(ctx) }, 1200)
-                        Io.main.postDelayed({ UpdateManager.recheckSpace(ctx) }, 3500)
-                    }, secondary("Storage settings") { actions.openStorageSettings() })
-                    buttons(secondary("Try again") { if (s.fileKept) UpdateManager.install(ctx) else actions.download() })
-                } else buttons(
-                    primary("Try again") { if (s.fileKept) UpdateManager.install(ctx) else actions.download() },
-                    secondary("Storage settings") { actions.openStorageSettings() },
-                )
+                val retry = { if (s.fileKept) UpdateManager.install(ctx) else actions.download() }
+                if (otherWay) {
+                    headline("Install the other way")
+                    sub("1. Tap Save and uninstall. The update (${o?.let { UpdateLogic.formatSize(it.size) } ?: ""}) is copied to your Downloads folder, then Android asks whether to uninstall $name.", pal.fg)
+                    sub("2. Confirm the uninstall.", pal.fg)
+                    sub("3. Open Files, then Downloads, and tap ${o?.apkName ?: "the saved update"}. Allow installing from Files if Android asks.", pal.fg)
+                    sub("Bookmarks, history and settings of this version are not carried over; your downloaded files stay in Downloads.", pal.warn)
+                    otherWayError?.let { sub(it, pal.danger) }
+                    buttons(
+                        primary(if (saving) "Saving…" else "Save and uninstall") {
+                            if (!saving) {
+                                saving = true; otherWayError = null; render()
+                                UpdateManager.saveForManualInstall(ctx) { saved, why ->
+                                    saving = false
+                                    if (saved != null) { android.widget.Toast.makeText(ctx, "Saved to Downloads: $saved", android.widget.Toast.LENGTH_LONG).show(); UpdateManager.uninstallSelf(ctx) }
+                                    else { otherWayError = why; render() }
+                                }
+                            }
+                        },
+                        secondary("Back") { otherWay = false; otherWayError = null; render() },
+                    )
+                } else {
+                    headline("Android would not install it over the old version", pal.warn)
+                    sub("It refused because this tablet is short of free storage for an update in place (it had ${UpdateLogic.formatSize(s.freeNow)} free). Android keeps ${UpdateLogic.formatSize(s.reserveBytes)} free after any install, and while it installs the update takes about ${UpdateLogic.formatSize(s.installedBytes)} on top, because the old version stays until the new one is in place.", pal.fg)
+                    sub("Two ways: make room" + (if (s.shortBy > 0) " (about ${UpdateLogic.formatSize(s.shortBy)} more)" else "") + " and tap Try again, or install the other way: the update is saved to Downloads, $name is uninstalled and you tap the saved file. Uninstalling frees the old version's own storage, which is why that always worked.")
+                    sub(if (s.fileKept) "The update file is already downloaded: nothing is downloaded again." else "The update file (${o?.let { UpdateLogic.formatSize(it.size) } ?: ""}) still has to be downloaded.")
+                    val old = app.kestrel.browser.download.DownloadController.oldInstallers()
+                    if (old.isNotEmpty()) {
+                        val bytes = old.sumOf { maxOf(it.total, it.done) }
+                        sub("Quick room: ${old.size} Kestrel installer ${if (old.size == 1) "file from an earlier update is" else "files from earlier updates are"} still in your Downloads (${UpdateLogic.formatSize(bytes)}).", pal.fg)
+                        buttons(primary("Delete old installers") {
+                            val freed = app.kestrel.browser.download.DownloadController.deleteOldInstallers()
+                            android.widget.Toast.makeText(ctx, "Deleted ${UpdateLogic.formatSize(freed)}", android.widget.Toast.LENGTH_SHORT).show()
+                            // the files go away on the download engine's own thread and Android's free-space figure lags a little: look again twice
+                            Io.main.postDelayed({ UpdateManager.recheckSpace(ctx) }, 1200)
+                            Io.main.postDelayed({ UpdateManager.recheckSpace(ctx) }, 3500)
+                        }, secondary("Storage settings") { actions.openStorageSettings() })
+                        buttons(primary("Try again") { retry() }, secondary("Install the other way") { otherWay = true; render() })
+                    } else buttons(
+                        primary("Try again") { retry() },
+                        secondary("Install the other way") { otherWay = true; render() },
+                    )
+                    buttons(secondary("Storage settings") { actions.openStorageSettings() })
+                }
             }
             Phase.ERROR -> {
                 headline("That did not work", pal.danger)
