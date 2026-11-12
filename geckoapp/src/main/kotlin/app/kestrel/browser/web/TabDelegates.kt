@@ -182,7 +182,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         if (progress >= 100 || progress <= 5 || progress < before || progress / 3 != before / 3) a.tabChanged(tab)
     }
 
-    override fun onSessionStateChange(session: GeckoSession, sessionState: GeckoSession.SessionState) { tab.gecko.state = sessionState }
+    override fun onSessionStateChange(session: GeckoSession, sessionState: GeckoSession.SessionState) { tab.gecko.state = sessionState; a.stateFlushArrived(tab) }
 
     // ------------------------------------------------------------------ content
 

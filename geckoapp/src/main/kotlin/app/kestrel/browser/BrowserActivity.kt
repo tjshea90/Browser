@@ -237,6 +237,7 @@ open class BrowserActivity : Activity(), DockListener {
     override fun onResume() {
         super.onResume()
         Health.log("life", "resume"); Health.startWatchdog(); Health.watchFrames(window)
+        flushStateWanted = false
         app.kestrel.browser.net.WifiBoost.set(this, prefs.labWifiBoost) // Network lab: Wi-Fi kept out of power save while the browser is on screen (EX-7)
         PageProxy.refresh()                                           // pages through the phone: renew the phone's proxy door now (the app was away; the Wi-Fi may have changed)
         val t = current
@@ -264,6 +265,18 @@ open class BrowserActivity : Activity(), DockListener {
         Health.log("life", "pause")
         app.kestrel.browser.net.WifiBoost.set(this, false)
         flushCounters()
+        saveSessionNow()
+        // EX-18 (research/REVIEW-EXTERNAL-1.md 9 row 8): ask the front tab for its newest history + scroll state now (GeckoView 144+). The answer arrives on onSessionStateChange and is written at once,
+        // so the file is current before Android can kill the process while the app is away. Never for a private tab (nothing of it is ever written).
+        current?.takeIf { !it.isPrivateTab }?.session?.let { try { it.flushSessionState(); flushStateWanted = true } catch (e: Throwable) { /* an older engine: the periodic state is all there is */ } }
+    }
+
+    @Volatile private var flushStateWanted = false
+
+    /** The engine's answer to the flush asked for in [onPause]: write the sessions file now (UI thread). */
+    internal fun stateFlushArrived(t: Tab) {
+        if (!flushStateWanted || t !== current) return
+        flushStateWanted = false
         saveSessionNow()
     }
 
