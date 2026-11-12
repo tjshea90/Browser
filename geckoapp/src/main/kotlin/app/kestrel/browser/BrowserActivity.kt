@@ -1656,7 +1656,7 @@ open class BrowserActivity : Activity(), DockListener {
      */
     internal fun onPopupBlocked(pageUrl: String, kind: String, url: String) {
         // attribution by the exact page address first (several tabs can be on the same host), then by host, then the tab in front
-        val tab = (if (pageUrl.isNotEmpty()) tabWithUrl(pageUrl) ?: tabForPage(pageUrl) else null) ?: current ?: return
+        val tab = (if (pageUrl.isNotEmpty()) tabOfTouch(pageUrl, kind) ?: tabWithUrl(pageUrl) ?: tabForPage(pageUrl) else null) ?: current ?: return
         if (kind == "tap") { tab.lastTapAt = SystemClock.uptimeMillis(); tab.lastTapHref = url; return } // a real tap in the page, and the link it was on: the jump guard's evidence
         if (kind == "vmenu") { // a long press on a video or audio element, taken by the page script before the site's own player menu could appear (owner request X14)
             if (tab === current && !isFinishing) video.longPress(tab, url.takeIf { it.startsWith("http", true) }, null) { link -> val t = newTabInternal(tab, tab.isPrivateTab); show(t); navigateTo(t, link) }
