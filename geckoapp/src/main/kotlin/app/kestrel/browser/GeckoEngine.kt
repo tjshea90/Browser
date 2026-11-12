@@ -39,6 +39,7 @@ object GeckoEngine {
             val gecko = org.mozilla.gecko.util.XPCOMEventTarget.mainThread() ?: return false
             gecko.execute { try { org.mozilla.gecko.GeckoThread.speculativeConnect(url) } catch (e: Throwable) { /* only a head start */ } }
             warmCalls++
+            app.kestrel.browser.diag.Health.log("engine", "warm", url.take(80))
             true
         } catch (e: Throwable) { false } // engine not up yet, or an internal class moved in a newer GeckoView
     }
