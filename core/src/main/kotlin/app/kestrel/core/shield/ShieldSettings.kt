@@ -82,6 +82,9 @@ class SiteShieldStore(initial: Map<String, SiteShields> = emptyMap()) {
 
     fun size(): Int = map.size
 
+    /** A copy of every site's choices (Settings > Back up and restore). */
+    fun entries(): Map<String, SiteShields> = LinkedHashMap(map)
+
     fun encode(): String = buildString {
         for ((h, s) in map) append(h).append('\t').append(s.mask).append('\t').append(s.values).append('\n')
     }

@@ -90,6 +90,40 @@ class BrowserDb(ctx: Context) : SQLiteOpenHelper(ctx.applicationContext, "browse
 
     fun removeBookmark(url: String) { writableDatabase.delete("bookmarks", "url = ?", arrayOf(url)) }
 
+    // ---- backup (Settings > Back up and restore): the addresses were checked by BackupCodec
+
+    /** Adds the bookmarks that are not there yet (one that exists keeps its current title). Returns how many were added. */
+    fun importBookmarks(items: List<app.kestrel.core.backup.Mark>): Int {
+        val db = writableDatabase; var n = 0
+        db.beginTransaction()
+        try {
+            val now = System.currentTimeMillis()
+            for (m in items) {
+                val cv = ContentValues().apply { put("url", m.url); put("title", m.title.take(200)); put("added", if (m.added > 0) m.added else now) }
+                if (db.insertWithOnConflict("bookmarks", null, cv, SQLiteDatabase.CONFLICT_IGNORE) != -1L) n++
+            }
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+        return n
+    }
+
+    /** Adds history entries; an entry that exists keeps the larger visit count and the later time. Returns how many were new. */
+    fun importHistory(items: List<app.kestrel.core.backup.Visit>): Int {
+        val db = writableDatabase; var n = 0
+        db.beginTransaction()
+        try {
+            val now = System.currentTimeMillis()
+            for (v in items) {
+                val last = if (v.last in 1..now) v.last else now
+                val cv = ContentValues().apply { put("url", v.url); put("title", v.title.take(200)); put("host", UrlParts.hostOf(v.url) ?: ""); put("visits", v.visits.coerceAtLeast(1)); put("last", last) }
+                if (db.insertWithOnConflict("history", null, cv, SQLiteDatabase.CONFLICT_IGNORE) != -1L) n++
+                else db.execSQL("UPDATE history SET visits = MAX(visits, ?), last = MAX(last, ?) WHERE url = ?", arrayOf<Any>(v.visits.coerceAtLeast(1), last, v.url))
+            }
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+        return n
+    }
+
     private fun query(sql: String, vararg args: String): List<Entry> {
         val out = ArrayList<Entry>()
         readableDatabase.rawQuery(sql, args).use { c -> while (c.moveToNext()) out.add(Entry(c.getString(0), c.getString(1) ?: "", c.getInt(2), c.getLong(3))) }

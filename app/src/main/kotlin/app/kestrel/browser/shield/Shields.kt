@@ -40,6 +40,10 @@ object Shields {
     fun setOverride(host: String, s: SiteShields) {
         val text: String
         synchronized(lock) { store.set(host, s); text = store.encode() }
+        persist(text)
+    }
+
+    private fun persist(text: String) {
         val f = file
         if (f == null || Proc.isPrivate) return // private window: changes live for the session only
         Io.exec {
@@ -47,6 +51,19 @@ object Shields {
             tmp.writeText(text)
             if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
         }
+    }
+
+    /** Settings > Back up and restore: the per-site choices as text ("" when there are none). */
+    fun exportText(): String = synchronized(lock) { store.encode() }
+
+    /** Settings > Back up and restore: the backup's per-site choices are added; for a site both have, the backup wins. Returns how many sites came back. */
+    fun importText(text: String): Int {
+        val incoming = SiteShieldStore.decode(text).entries()
+        if (incoming.isEmpty()) return 0
+        val out: String
+        synchronized(lock) { for ((h, s) in incoming) store.set(h, s); out = store.encode() }
+        persist(out)
+        return incoming.size
     }
 
     fun clearAll() {
