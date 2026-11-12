@@ -16,6 +16,8 @@ class MediaCandidate(
     val frame: String = "",
     val seenAt: Long = 0,
 ) {
+    /** The file name the SERVER gave it (Content-Disposition), "" when it gave none: the best name to offer when saving it. */
+    var sourceName: String = ""
     var width = 0
     var height = 0
     var durationMs = 0L
