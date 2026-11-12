@@ -89,6 +89,15 @@ class CourierHostTest {
         }
         fun call(method: String, target: String, body: String? = null) = raw(method, target, body).let { it.first to (Json.parse(it.second) as Map<*, *>) }
         fun create(cid: String, url: String = "https://files.test/pub/data.bin", extra: String = "") = call("POST", "/v1/jobs", """{"cid":"$cid","url":"$url"$extra}""")
+        /** A signed GET whose body is only counted, not kept. */
+        fun countBytes(target: String): Long {
+            val ts = System.currentTimeMillis() + skew
+            val c = URL(base + target).openConnection() as HttpURLConnection
+            c.setRequestProperty("X-K-Ts", ts.toString()); c.setRequestProperty("X-K-Sig", Sign.sign(key, "GET", target, ts, ByteArray(0)))
+            var n = 0L
+            c.inputStream.use { i -> val b = ByteArray(65536); while (true) { val k = i.read(b); if (k < 0) break; n += k } }
+            return n
+        }
         fun job(id: String): Map<*, *> = ((call("GET", "/v1/jobs?ids=$id").second.list("jobs"))!![0] as Map<*, *>)
         fun await(id: String, what: String, ms: Long = 30_000, p: (Map<*, *>) -> Boolean): Map<*, *> {
             val end = System.currentTimeMillis() + ms
