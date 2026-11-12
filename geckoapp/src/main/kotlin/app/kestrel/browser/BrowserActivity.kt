@@ -62,6 +62,9 @@ import app.kestrel.browser.ui.TabGrid
 import app.kestrel.browser.ui.DownloadsScreen
 import app.kestrel.browser.download.DownloadController
 import app.kestrel.browser.download.Notifier
+import app.kestrel.browser.download.PageProxy
+import app.kestrel.browser.download.PhoneBridge
+import app.kestrel.core.courier.PhoneMode
 import app.kestrel.core.download.DownloadView
 import app.kestrel.core.download.Source
 import app.kestrel.browser.ui.UpdatePanel
