@@ -19,6 +19,7 @@ var MODE_OFF = 0, MODE_ON = 1, MODE_LEGACY = 2;
 // ---------------------------------------------------------------- per-page configuration ("cfg"): one question per main-frame navigation
 var cfgMode = new Map();   // page host -> MODE_*
 var cfgAt = new Map();     // page host -> when the answer arrived
+var cfgFlags = new Map();  // page host -> flags from the app (1 = the pop-up and redirect guard applies)
 var cfgWait = new Map();   // page host -> promise of the answer being fetched
 var CFG_MAX = 300;
 var CFG_TTL = 60000;       // a Shields switch changed in Settings reaches pages that are already open within this time (a switch on the page itself reloads it at once)
@@ -30,9 +31,10 @@ function askCfg(host) {
     var parts = ((typeof r === 'string') ? r : '').split(':'); // "<mode>:<generation>:<content id>"
     if (parts.length < 2) return MODE_OFF; // not an answer from the app: do not cache, never break the page
     var mode = parts[0] === '1' ? MODE_ON : (parts[0] === 'L' ? MODE_LEGACY : MODE_OFF);
-    if (cfgMode.size >= CFG_MAX) { var old = cfgMode.keys().next().value; cfgMode.delete(old); cfgAt.delete(old); }
+    if (cfgMode.size >= CFG_MAX) { var old = cfgMode.keys().next().value; cfgMode.delete(old); cfgAt.delete(old); cfgFlags.delete(old); }
     // generation 0 = the app's lists are still loading: the answer is provisional (the site allow-list is not known yet), so it is asked again in a few seconds instead of after a minute
     cfgMode.set(host, mode); cfgAt.set(host, (parseInt(parts[1], 10) > 0) ? Date.now() : Date.now() - CFG_TTL + 3000);
+    cfgFlags.set(host, parseInt(parts[3], 10) || 0);
     if (mode !== MODE_LEGACY) wantImage(parseInt(parts[1], 10) || 0, parts[2] || '');
     return mode;
   }, function () { cfgWait.delete(host); return MODE_OFF; }); // the app could not answer: fail open

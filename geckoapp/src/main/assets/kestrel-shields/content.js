@@ -40,3 +40,18 @@
     document.addEventListener('loadedmetadata', function (e) { var t = e.target; if (t && (t.tagName === 'VIDEO' || t.tagName === 'AUDIO')) report(t); }, true);
   } catch (e) { /* never break the page */ }
 })();
+
+// Pop-up and redirect guard: guard-main.js runs inside the page and talks to us with events (it cannot reach the extension itself). We tell it whether the guard applies to this site and relay what it
+// blocked and which link was last tapped to the background page.
+(function () {
+  try {
+    var CFG = '__kst_cfg_v1', POP = '__kst_pop_v1', READY = '__kst_ready_v1';
+    var wanted = true;
+    function push() { try { document.dispatchEvent(new CustomEvent(CFG, { detail: wanted ? '1' : '0' })); } catch (e) { /* ignore */ } }
+    document.addEventListener(READY, push, true); // the page-side script may come up after our first answer
+    document.addEventListener(POP, function (e) {
+      try { browser.runtime.sendMessage({ k: 'pop', d: String(e.detail).slice(0, 700), p: location.href }).catch(function () {}); } catch (x) { /* ignore */ }
+    }, true);
+    browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { wanted = !(r && r.on === false); push(); }, function () {});
+  } catch (e) { /* never break the page */ }
+})();
