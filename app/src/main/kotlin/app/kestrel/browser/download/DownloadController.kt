@@ -228,13 +228,13 @@ object DownloadController {
         val pb = phone
         val raw = (engine?.views() ?: emptyList()) + (streams?.views() ?: emptyList())
         // a row of the tablet's own engine that came from a download on the phone says so (and keeps the time the owner started it)
-        val mine = if (pb == null) raw else raw.map { r -> val n = pb.noteFor(r.id); if (n == null) r else withNote(r, n, pb.createdFor(r.id)) }
+        val mine = if (pb == null) raw else raw.map { r -> val n = pb.noteFor(r.id); if (n == null) r else withNote(r, n, pb.createdFor(r.id), pb.originHostFor(r.id)) }
         val v = (mine + (pb?.views() ?: emptyList())).sortedByDescending { it.created }
         viewCache = v; viewCacheAt = now
         return v
     }
-    private fun withNote(v: DownloadView, note: String, created: Long?): DownloadView = DownloadView(
-        v.id, v.state, v.reason, v.detail, v.name, v.mime, v.host, v.total, v.done, v.bytesPerSec, v.etaSec, v.connections, v.priv, v.destUri, created ?: v.created, v.updated, v.actions, v.kind, v.estimated,
+    private fun withNote(v: DownloadView, note: String, created: Long?, host: String?): DownloadView = DownloadView(
+        v.id, v.state, v.reason, v.detail, v.name, v.mime, host ?: v.host, v.total, v.done, v.bytesPerSec, v.etaSec, v.connections, v.priv, v.destUri, created ?: v.created, v.updated, v.actions, v.kind, v.estimated,
         if (v.note.isNullOrEmpty()) note else note + ". " + v.note,
     )
     @Volatile private var viewCache: List<DownloadView>? = null

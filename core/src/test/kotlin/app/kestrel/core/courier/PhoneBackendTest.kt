@@ -106,7 +106,7 @@ class PhoneBackendTest {
         val row = t.row()!!
         assertArrayEquals("the file on the tablet equals the origin's", data, t.bytesOf(row))
         assertEquals("Movie.mp4", t.sinks.sinks[row.destUri]!!.name)
-        assertEquals("Copied from your phone", t.backend.noteFor(row.id)); assertNotNull(t.backend.createdFor(row.id))
+        assertEquals("Copied from your phone", t.backend.noteFor(row.id)); assertNotNull(t.backend.createdFor(row.id)); assertEquals("the row names the site, not the phone", "files.test", t.backend.originHostFor(row.id))
         assertNull("rows of the tablet's own that were not made by the phone have no note", t.backend.noteFor(row.id + 1000))
         assertEquals("the tablet itself never touched the website", 0, t.origin.seen.size)
         await("the phone's copy is deleted") { phone.host.jobCount == 0 }

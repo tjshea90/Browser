@@ -178,6 +178,9 @@ class PhoneBackend(
     /** A note for a row of the tablet's own engine that came from a phone download (copying, or the fallback reason); null for every other row. */
     fun noteFor(engineId: Long): String? = synchronized(lock) { items.values.firstOrNull { it.engineId == engineId && it.phase != Phase.PHONE && it.phase != Phase.CANCELED }?.note }
 
+    /** The site the owner downloaded from (the engine's own row only knows the phone's address). */
+    fun originHostFor(engineId: Long): String? = synchronized(lock) { items.values.firstOrNull { it.engineId == engineId && it.phase != Phase.PHONE && it.phase != Phase.CANCELED }?.let { hostOf(it.src.url) } }
+
     /** When the owner started that download (the engine's own row is younger). */
     fun createdFor(engineId: Long): Long? = synchronized(lock) { items.values.firstOrNull { it.engineId == engineId && it.phase != Phase.PHONE && it.phase != Phase.CANCELED }?.created }
 
