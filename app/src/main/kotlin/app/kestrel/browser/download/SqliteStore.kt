@@ -15,7 +15,7 @@ import org.json.JSONObject
  * downloads.db: its own file (WAL, synchronous=NORMAL) so a download checkpoint never queues behind history writes. Offsets are written only after the
  * engine fsynced the data (research/DOWNLOADS.md 3.4). Private downloads never reach this class.
  */
-class SqliteStore(ctx: Context) : SQLiteOpenHelper(ctx.applicationContext, "downloads.db", null, 2), Store {
+class SqliteStore(ctx: Context) : SQLiteOpenHelper(ctx.applicationContext, "downloads.db", null, 3), Store {
     override fun onConfigure(db: SQLiteDatabase) {
         db.enableWriteAheadLogging()
         try { db.rawQuery("PRAGMA synchronous=NORMAL", null).close() } catch (e: Exception) { /* the default (FULL in WAL on some builds) is only slower */ }
@@ -27,7 +27,7 @@ class SqliteStore(ctx: Context) : SQLiteOpenHelper(ctx.applicationContext, "down
                 "url TEXT NOT NULL, final_url TEXT, final_at INTEGER, page_url TEXT, req_headers TEXT, name TEXT NOT NULL, mime TEXT, dest_kind INTEGER NOT NULL DEFAULT 0, dest_uri TEXT, " +
                 "total INTEGER NOT NULL DEFAULT -1, etag TEXT, last_mod TEXT, date_hdr TEXT, ranges INTEGER NOT NULL DEFAULT -1, fetcher INTEGER NOT NULL DEFAULT 0, risk INTEGER NOT NULL DEFAULT 0, " +
                 "metered_ok INTEGER NOT NULL DEFAULT 0, done INTEGER NOT NULL DEFAULT 0, fails INTEGER NOT NULL DEFAULT 0, conns_peak INTEGER NOT NULL DEFAULT 0, " +
-                "created INTEGER NOT NULL, updated INTEGER NOT NULL, last_progress INTEGER NOT NULL DEFAULT 0, finished INTEGER NOT NULL DEFAULT 0, name_fixed INTEGER NOT NULL DEFAULT 0)"
+                "created INTEGER NOT NULL, updated INTEGER NOT NULL, last_progress INTEGER NOT NULL DEFAULT 0, finished INTEGER NOT NULL DEFAULT 0, name_fixed INTEGER NOT NULL DEFAULT 0, crashes INTEGER NOT NULL DEFAULT 0)"
         )
         db.execSQL("CREATE TABLE segments(dl INTEGER NOT NULL, idx INTEGER NOT NULL, s_start INTEGER NOT NULL, s_end INTEGER NOT NULL, s_cursor INTEGER NOT NULL, PRIMARY KEY(dl, idx))")
         db.execSQL("CREATE INDEX dl_state ON downloads(state, prio)")
@@ -35,6 +35,7 @@ class SqliteStore(ctx: Context) : SQLiteOpenHelper(ctx.applicationContext, "down
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) db.execSQL("ALTER TABLE downloads ADD COLUMN name_fixed INTEGER NOT NULL DEFAULT 0") // version 2: a caller-chosen file name
+        if (oldVersion < 3) db.execSQL("ALTER TABLE downloads ADD COLUMN crashes INTEGER NOT NULL DEFAULT 0") // version 3: restarts in a row that ended the process mid-download (auto-resume cap)
     }
 
     override fun loadAll(): List<Rec> {

@@ -164,9 +164,24 @@ class HillClimb(private val cfg: Config) {
 
     fun reset() { target = 1; baseline = 0.0; pending = false; nextEval = -1; noGrowthUntil = 0 }
 
-    /** @param cap the most connections allowed right now (1 = no splitting). Returns the desired number of connections. */
-    fun update(now: Long, speed: Double, cap: Int): Int {
-        if (nextEval < 0) nextEval = now + cfg.rampMs
+    /**
+     * A connection beyond the first was refused or keeps failing while another one moves bytes (many servers and carriers allow only so many connections per client): never ask for more than
+     * [keep] connections for [forMs]. Growth resumes after that, so a limit that was only a busy moment is not remembered for ever.
+     */
+    fun refused(now: Long, keep: Int, forMs: Long) {
+        target = maxOf(1, minOf(target, keep)); pending = false
+        noGrowthUntil = maxOf(noGrowthUntil, now + forMs)
+    }
+
+    /**
+     * @param cap the most connections allowed right now (1 = no splitting). [total] is the file size when it is known: a big file starts with two connections at once instead of
+     * waiting out the ramp (a file of 30 MB at 2 MB/s is over before the ramp would have reached a third connection). Returns the desired number of connections.
+     */
+    fun update(now: Long, speed: Double, cap: Int, total: Long = -1L): Int {
+        if (nextEval < 0) {
+            nextEval = now + cfg.rampMs
+            if (cfg.fastStart && cap >= 2 && target == 1 && total >= cfg.fastStartMinBytes) { target = 2; baseline = 0.0; pending = true }
+        }
         if (cap <= 1) { target = 1; pending = false; return 1 }
         if (target > cap) target = cap
         if (now < nextEval) return target
@@ -200,4 +215,13 @@ class Config(
     val backoffBaseMs: Long = 1000,
     val backoffCapMs: Long = 60_000,
     val parallel: Boolean = true,
+    /** Files at least this big start with two connections at once (0 = off). */
+    val fastStart: Boolean = true,
+    val fastStartMinBytes: Long = 8L shl 20,
+    /** A refused extra connection keeps the download at one connection fewer for this long. */
+    val refusedNoGrowthMs: Long = 10 * 60_000,
+    /** An outage in the middle of a download: first look again after [outageBaseMs], doubling up to [outageCapMs]; give up (STALLED) after [outageGiveUpMs] without a byte. */
+    val outageBaseMs: Long = 10_000,
+    val outageCapMs: Long = 60_000,
+    val outageGiveUpMs: Long = 30 * 60_000,
 )

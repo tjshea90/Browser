@@ -35,6 +35,8 @@ class Seg(@JvmField val idx: Int, @JvmField var start: Long, @JvmField var end: 
     @JvmField var reqEnd = -1L        // exclusive end of the request in flight; -1 = open-ended reply
     @JvmField var live = false        // the first reply (not a Range request) feeds this segment
     @JvmField var fails = 0           // consecutive failures without progress
+    @JvmField var lastAt = 0L         // when this connection last moved bytes (clock time)
+    @JvmField var failedAt = 0L       // when the current streak of failures began (0 = none)
 
     val done: Boolean get() = end >= 0 && cursor >= end
     fun copy() = Seg(idx, start, end, cursor)
@@ -67,6 +69,7 @@ class Rec(@JvmField val id: Long) {
     @JvmField var done = 0L
     @JvmField var fails = 0
     @JvmField var connsPeak = 0
+    @JvmField var crashes = 0                 // restarts in a row in which the process ended in the middle of this download without a single checkpoint of progress in between (auto-resume stops after 2)
     @JvmField var priv = false                // private tab: never written to the store, generic notification
     @JvmField var created = 0L
     @JvmField var updated = 0L
@@ -84,7 +87,7 @@ class Rec(@JvmField val id: Long) {
         r.state = state; r.reason = reason; r.detail = detail; r.prio = prio; r.url = url; r.finalUrl = finalUrl; r.finalAt = finalAt; r.pageUrl = pageUrl
         r.headers = headers; r.name = name; r.nameFixed = nameFixed; r.mime = mime; r.destKind = destKind; r.destUri = destUri; r.total = total; r.etag = etag; r.lastMod = lastMod
         r.dateHdr = dateHdr; r.ranges = ranges; r.fetcher = fetcher; r.risk = risk; r.meteredOk = meteredOk; r.done = done; r.fails = fails; r.connsPeak = connsPeak
-        r.priv = priv; r.created = created; r.updated = updated; r.lastProgress = lastProgress; r.finished = finished
+        r.priv = priv; r.created = created; r.updated = updated; r.lastProgress = lastProgress; r.finished = finished; r.crashes = crashes
         for (s in segs) r.segs.add(s.copy())
         return r
     }

@@ -55,9 +55,14 @@ class Engine(
         var sinceCkpt = 0L
         var ckptPending = false
         var resumeAt = 0L
+        var autoResume = false       // the last run ended in the middle of this download: carry on by itself ([resumeInterrupted])
+        var outageSince = 0L         // an outage in the middle of the download began at this time (0 = none)
+        var outageProbes = 0
         val mon = ReentrantLock()
         val wake = mon.newCondition()
     }
+
+    private companion object { const val MAX_AUTO_CRASHES = 2 }
 
     private val lock = Any()
     private val jobs = LinkedHashMap<Long, Job>()
@@ -80,10 +85,24 @@ class Engine(
             for (r in recs) {
                 if (r.id > max) max = r.id
                 if (r.state == DlState.CANCELED) { store.delete(r.id); continue }
+                val wanted = r.state == DlState.RUNNING || r.state == DlState.STARTING || r.state == DlState.VERIFYING || r.state == DlState.QUEUED || r.state == DlState.WAITING_NETWORK || r.state == DlState.PAUSED_SYSTEM
+                val unclean = r.state == DlState.RUNNING || r.state == DlState.STARTING || r.state == DlState.VERIFYING // the process ended while it was working
                 if (!r.state.terminal && r.state != DlState.PAUSED_USER && r.state != DlState.NEEDS_DECISION) r.state = DlState.PAUSED_SYSTEM
-                jobs[r.id] = Job(r)
+                if (unclean) r.crashes++
+                jobs[r.id] = Job(r).also { it.autoResume = wanted && r.crashes <= MAX_AUTO_CRASHES }
             }
             nextId.set(max + 1)
+        }
+    }
+
+    /**
+     * After [restore]: the downloads the last run was in the middle of carry on by themselves (Android's DownloadManager and Chrome do too). A download the user paused stays paused, one that
+     * needs a decision stays asking, and one whose restarts keep ending the process before it moves a byte ([MAX_AUTO_CRASHES] in a row) is left for a tap.
+     */
+    fun resumeInterrupted() = control.execute {
+        for (j in snapshotJobs()) {
+            val go = synchronized(lock) { val g = j.autoResume && j.rec.state == DlState.PAUSED_SYSTEM; j.autoResume = false; g }
+            if (go) requeue(j, wipe = false)
         }
     }
 
@@ -268,7 +287,7 @@ class Engine(
             val speed = job.meter.bytesPerSec(now)
             val globalRunning = jobs.values.sumOf { it.alive }
             val cap = Planner.cap(rec, cfg, speed, (cfg.maxConnsTotal - globalRunning).coerceAtLeast(0), job.alive)
-            val target = job.climb.update(now, speed, cap)
+            val target = job.climb.update(now, speed, cap, rec.total)
             var free = target - job.alive
             while (free > 0) {
                 val s = Planner.nextWork(rec.segs, (speed * 3).toLong()) ?: break
@@ -298,7 +317,11 @@ class Engine(
                     if (due) checkpoint(j)
                     changed(j.rec.id)
                 }
-                DlState.WAITING_NETWORK -> if (net.online && synchronized(lock) { now >= j.resumeAt }) requeue(j, wipe = false)
+                DlState.WAITING_NETWORK -> {
+                    val gaveUp = synchronized(lock) { j.outageSince != 0L && now - j.outageSince >= cfg.outageGiveUpMs }
+                    if (gaveUp) fail(j, Reason.STALLED, 0) // half an hour without a byte: the partial file stays, Retry continues it
+                    else if (net.online && synchronized(lock) { now >= j.resumeAt }) requeue(j, wipe = false)
+                }
                 DlState.QUEUED -> anyQueued = true
                 else -> {}
             }
@@ -521,7 +544,9 @@ class Engine(
         var ckpt = false
         val rec = job.rec
         synchronized(lock) {
-            seg.cursor += n; seg.fails = 0; rec.done += n; rec.lastProgress = now
+            seg.cursor += n; seg.fails = 0; seg.failedAt = 0; seg.lastAt = now; rec.done += n; rec.lastProgress = now
+            if (rec.crashes != 0) rec.crashes = 0
+            if (job.outageSince != 0L) { job.outageSince = 0L; job.outageProbes = 0 }
             job.meter.add(n, now); job.lastBytesAt = now; job.sinceCkpt += n
             if (now - job.lastNotify >= 250) { job.lastNotify = now; notify = true }
             if (!job.ckptPending && (now - job.lastCkpt >= cfg.checkpointMs || job.sinceCkpt >= cfg.checkpointBytes)) { job.ckptPending = true; ckpt = true }
@@ -545,12 +570,45 @@ class Engine(
         }
     }
 
-    /** A failure worth retrying: wait with jittered backoff, give up after [Config.maxFails] in a row, hand over to WAITING_NETWORK when the network is gone. */
+    /**
+     * A failure worth retrying: wait with jittered backoff, give up after [Config.maxFails] in a row, hand over to WAITING_NETWORK when the network is gone. Two refinements for a flaky,
+     * capped hotspot link: a connection that keeps failing while ANOTHER one keeps moving bytes is the extra one the server or carrier refuses, so it retires alone and the download carries on
+     * with one connection fewer (it used to fail the whole download); and when the only connection keeps failing in the middle of a download that can continue, the download WAITS and looks again
+     * with growing pauses instead of failing after a minute or two.
+     */
     private fun transient(job: Job, seg: Seg?, attempt: Int, retryAfterMs: Long, status: Int) {
         if (!net.online) { requestStop(job, DlState.WAITING_NETWORK); throw Exit() }
-        val n = if (seg != null) synchronized(lock) { ++seg.fails } else attempt + 1
-        if (n >= cfg.maxFails) { fail(job, if (status != 0) Reason.HTTP else Reason.NETWORK, status); throw Exit() }
+        val now = clock.now()
+        val n = if (seg != null) synchronized(lock) { if (seg.fails == 0) seg.failedAt = now; ++seg.fails } else attempt + 1
+        if (seg != null && n >= 2 && retireExtra(job, seg, now)) throw Exit()
+        if (n >= cfg.maxFails) {
+            if (status == 0 && waitOutOutage(job, now)) throw Exit()
+            fail(job, if (status != 0) Reason.HTTP else Reason.NETWORK, status); throw Exit()
+        }
         sleep(job, Backoff.delayMs(n - 1, cfg.backoffBaseMs, cfg.backoffCapMs, retryAfterMs, rnd))
+    }
+
+    /** True when [seg]'s connection should simply stop: another connection of this job moved bytes at least 2 s AFTER this one began failing (so it is not a dip that hit them all). */
+    private fun retireExtra(job: Job, seg: Seg, now: Long): Boolean = synchronized(lock) {
+        if (job.alive < 2 || job.rec.state != DlState.RUNNING || seg.failedAt == 0L) return false
+        val healthy = job.rec.segs.any { it !== seg && it.worker && it.lastAt > seg.failedAt + 2000 && now - it.lastAt < 8000 }
+        if (!healthy) return false
+        job.climb.refused(now, job.alive - 1, cfg.refusedNoGrowthMs)
+        seg.fails = 0; seg.failedAt = 0
+        true
+    }
+
+    /** The only connection of a started download keeps failing at the transport level: wait and look again later, with growing pauses (the 30-minute give-up is in [doTick]). */
+    private fun waitOutOutage(job: Job, now: Long): Boolean {
+        val rec = job.rec
+        synchronized(lock) {
+            if (!(rec.done > 0 && rec.resumable) || job.alive > 1) return false // a fresh download (a typo in the address, a dead host) fails fast as before
+            if (job.outageSince == 0L) job.outageSince = now
+            job.outageProbes++
+            job.resumeAt = now + Backoff.delayMs(job.outageProbes - 1, cfg.outageBaseMs, cfg.outageCapMs, 0L, rnd)
+        }
+        requestStop(job, DlState.WAITING_NETWORK, Reason.NETWORK)
+        return true
     }
 
     private fun sleep(job: Job, ms: Long) {
