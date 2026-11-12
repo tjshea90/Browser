@@ -82,7 +82,7 @@ object DownloadController {
         }
         val low = app.getSystemService(ActivityManager::class.java)?.isLowRamDevice != false
         val prefs = Prefs.get(app)
-        val cfg = Config(maxActive = prefs.dlActive, maxConnsTotal = if (low) 3 else 6, maxConnsPerDownload = if (prefs.dlConns in 1..3) prefs.dlConns else if (low) 3 else 4)
+        val cfg = Config(maxActive = prefs.dlActive, maxConnsTotal = if (low) 3 else 6, maxConnsPerDownload = if (prefs.dlConns in 1..3) prefs.dlConns else if (low) 3 else 4, directMp4 = !debugRawTs(app))
         val lim = RateLimiter().also { it.bytesPerSec = prefs.dlLimitKBps * 1024L }
         limiter = lim
         val e = Engine(
@@ -115,6 +115,12 @@ object DownloadController {
         streams = st
         control.execute { e.restore(); st.restore(); e.resumeInterrupted(); st.resumeInterrupted(); uiChanged() } // what the last run was in the middle of carries on by itself
         return e
+    }
+
+    /** DEBUG builds only: `adb shell setprop debug.kestrel.rawts 1` makes stream downloads the old way (a joined .ts), so "Make MP4" can be tried on a real .ts row. */
+    private fun debugRawTs(ctx: Context): Boolean {
+        if ((ctx.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) == 0) return false
+        return try { Class.forName("android.os.SystemProperties").getMethod("get", String::class.java).invoke(null, "debug.kestrel.rawts") == "1" } catch (e: Throwable) { false }
     }
 
     // ---- commands (all asynchronous; the engine serialises them on its control thread)

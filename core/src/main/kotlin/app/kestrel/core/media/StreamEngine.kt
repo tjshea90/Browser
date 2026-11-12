@@ -793,7 +793,7 @@ class StreamEngine(
             if (media.discontinuities == 0 || parts.size > 1) {
                 val j = StreamFinisher.Joined(uri, rec.nameStem, media.container, job.written, rec.priv, rec.destKind, parts)
                 converted = try { finisher.convert(j) } catch (e: Throwable) { log("convert failed", e); j.declined = "the conversion failed"; null }
-                if (converted == null) synchronized(lock) { rec.note = "Kept as a .ts file: ${j.declined ?: "it could not be converted to MP4"}." }
+                if (converted == null) synchronized(lock) { if (rec.note == null) rec.note = "Kept as a .ts file: ${j.declined ?: "it could not be converted to MP4"}." }   // the MP4 writer's own reason (set when it looked at the first segment) says more than the platform's
             } else synchronized(lock) { rec.note = "Kept as a .ts file: this download began before the MP4 writer existed and its parts were not recorded." }
             if (converted != null) try { sinks.delete(uri) } catch (e: Exception) { /* the .ts stays next to the .mp4: harmless */ }
         }

@@ -293,6 +293,9 @@ class TsToMp4(
         private const val JUMP_BACK = 90000L
         private const val NONE = Long.MIN_VALUE
 
+        private fun videoName(t: Int) = when (t) { 0x24 -> "H.265 (HEVC)"; 0x01, 0x02 -> "MPEG-2 video"; 0x10 -> "MPEG-4 video"; 0xEA -> "VC-1"; else -> "an unknown video format (stream type 0x${Integer.toHexString(t)})" }
+        private fun audioName(t: Int) = when (t) { 0x81 -> "AC-3"; 0x87 -> "E-AC-3"; 0x03, 0x04 -> "MP3 (MPEG audio)"; 0x11 -> "AAC in LATM"; 0x82, 0x8A -> "DTS"; else -> "an unknown sound format (stream type 0x${Integer.toHexString(t)})" }
+
         /**
          * Looks at the start of a stream's first segment and says why it cannot be written as an MP4 here, or null when it can: H.264 picture with its parameters, and sound that is AAC or absent.
          * Costs one pass over at most the bytes given.
@@ -310,8 +313,8 @@ class TsToMp4(
             d.problem?.let { return "the stream is $it" }
             if (!d.programKnown) return "the first part of the stream has no program table"
             if (d.videoType == 0) return "no picture stream"
-            if (d.videoType != 0x1B) return "the picture is not H.264 (stream type 0x${Integer.toHexString(d.videoType)})"
-            if (d.audioType != 0 && d.audioType != 0x0F) return "the sound is not AAC (stream type 0x${Integer.toHexString(d.audioType)})"
+            if (d.videoType != 0x1B) return "the picture is ${videoName(d.videoType)}, not H.264"
+            if (d.audioType != 0 && d.audioType != 0x0F) return "the sound is ${audioName(d.audioType)}, not AAC"
             if (!sps) return "no keyframe with its parameters in the first part of the stream"
             if (d.audioType == 0x0F && aac == null) return "the AAC sound cannot be read"
             return null
