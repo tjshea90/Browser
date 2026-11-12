@@ -67,7 +67,7 @@ Typing path for reference [V FREEZE.md]: Android IME -> `GeckoEditable` (Java, I
 | bfcache / images / disk cache | `max_total_viewers` 2, `surfacecache.size_factor` 20, 512 MB cache (all set) | keep |
 
 ## 3. B. Pref table (EXISTS / MISSING checked against the bundled 160)
-Apply column: YAML = gecko-prefs.txt + restart. Live switching of the A/B rows is not assumed [N]; the Speed lab should restart the engine.
+Apply = edit gecko-prefs.txt (YAML at start) and restart the engine process. Live switching of the A/B rows via `GeckoPreferenceController` is not assumed [N]; the Speed lab should restart the engine.
 ### 3.1 Change now (gecko-prefs.txt v3)
 | Pref | Value | Does | Expected effect here | Risk | Ev | In 160 |
 |---|---|---|---|---|---|---|
