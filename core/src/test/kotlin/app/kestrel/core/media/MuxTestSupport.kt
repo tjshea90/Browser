@@ -187,12 +187,8 @@ class Mp4Reader(private val d: ByteArray) {
         }
         check(idx == n) { "chunks cover $idx samples, stsz has $n" }
         tk.samples = (0 until n).map { Sample(sampleOff[it], sizes[it], dts[it], dts[it] + cto[it], syncs == null || it in syncs!!) }
-        tk.totalDuration = t
+        tk.sumDurations = t
     }
-
-    private var Track.totalDuration: Long
-        get() = mediaDuration
-        set(@Suppress("UNUSED_PARAMETER") v) {}
 
     fun track(type: String): Track? = tracks.firstOrNull { it.type == type }
     fun sampleBytes(s: Sample): ByteArray = d.copyOfRange(s.offset.toInt(), s.offset.toInt() + s.size)
