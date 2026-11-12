@@ -37,7 +37,7 @@ class CourierActivity : Activity() {
     /** Where the pieces are added while a screen is being built (a scratch container; [body] is only touched when the content really changed). */
     private var target: LinearLayout = body
     private val sig = StringBuilder()
-    private var lastSig = 
+    private var lastSig = ""
     private lateinit var prefs: CourierPrefs
     private var resumed = false
 
