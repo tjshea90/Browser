@@ -83,6 +83,7 @@ check "signing/CERT_SHA256 pins a 64-hex certificate" 'grep -Eq "^[0-9a-f]{64}$"
 check "tools/MIRROR_MAIN is on or off" 'grep -Eq "^(on|off)$" "$D/tools/MIRROR_MAIN"'
 check "HANDOFF.md, BRIEF.md, TASKS.md, BUILDLOG.md and CLAUDE.md exist" '[ -f "$D/HANDOFF.md" ] && [ -f "$D/BRIEF.md" ] && [ -f "$D/TASKS.md" ] && [ -f "$D/BUILDLOG.md" ] && [ -f "$D/CLAUDE.md" ]'
 check "both apps are readable through appinfo.sh (version, tag, asset)" '[ -n "$(bash "$D/tools/appinfo.sh" web tag)" ] && [ -n "$(bash "$D/tools/appinfo.sh" gecko asset)" ] && [ "$(bash "$D/tools/appinfo.sh" of-tag kestrel-g-v1.0)" = gecko ] && [ "$(bash "$D/tools/appinfo.sh" of-tag kestrel-v1.0)" = web ] && ! bash "$D/tools/appinfo.sh" of-tag v1.0'
+check "the Courier (phone app) is wired through appinfo.sh, the workflow and verify-apk.sh" '[ "$(bash "$D/tools/appinfo.sh" courier prefix)" = kestrel-courier-v ] && [ "$(bash "$D/tools/appinfo.sh" of-tag kestrel-courier-v1.0)" = courier ] && [ "$(bash "$D/tools/appinfo.sh" courier dir)" = courier ] && grep -q "build-courier:" "$D/.github/workflows/android.yml" && grep -q "app.kestrel.courier" "$D/tools/verify-apk.sh"'
 check "BUILDLOG.md lines have the format the gates read (| tag | app | code N | time | note)" '! grep -E "^\| " "$D/BUILDLOG.md" | grep -vqE "^\| kestrel(-g|-courier)?-v[^ |]+ \| (web|gecko|courier) \| code [0-9]+ \| "'
 
 # ---------------------------------------------------------------- fixture repo + fake remote
