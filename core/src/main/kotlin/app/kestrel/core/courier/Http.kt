@@ -122,7 +122,7 @@ object HttpParser {
         while (i < s.length) {
             val c = s[i]
             if (c == '%') {
-                if (i + 2 >= s.length + 0 && i + 2 > s.length - 1) throw HttpException(400, "bad percent escape")
+                if (i + 2 >= s.length) throw HttpException(400, "bad percent escape")
                 val hi = Character.digit(s[i + 1], 16); val lo = Character.digit(s[i + 2], 16)
                 if (hi < 0 || lo < 0) throw HttpException(400, "bad percent escape")
                 out.write(hi * 16 + lo); i += 3
