@@ -118,9 +118,9 @@ class TsToMp4Test {
         assertEquals("h264", v["codec_name"]); assertEquals("128", v["width"]); assertEquals("72", v["height"]); assertEquals("150", v["nb_read_frames"])
         val a = Fixtures.ffprobe(file, "audio", "codec_name,sample_rate,channels,nb_read_frames,start_time")
         assertEquals("aac", a["codec_name"]); assertEquals("44100", a["sample_rate"]); assertEquals("1", a["channels"])
-        // lip sync: in the source the picture is shown 23.2 ms after the first sound
-        val skew = v["start_time"]!!.toDouble() - a["start_time"]!!.toDouble()
-        assertEquals(0.0232, skew, 0.004)
+        // lip sync: in the source the picture is shown 23.2 ms after the first sound; the first packets' presentation times must keep that
+        val first = Fixtures.firstPacketTimes(file)
+        assertEquals(0.0232, first[0]!! - first[1]!!, 0.004)
     }
 
     @Test fun stereoStreamWithoutBFramesAndAnEarlierSoundStart() {
