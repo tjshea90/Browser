@@ -145,7 +145,6 @@ Gotchas: (a) never mix branches for one name: a stale USER value from an old `se
 | P0 | Diagnostics page with timeline, codec matrix, PSS, jank (gates every P1 decision) | M | low |
 | P0 | Remove the per-request UI-thread round trip (R5 in-extension engine; FREEZE.md stop-gap) | L | medium |
 | P1 | `setFetchPriorityEnabled(true)`; `setPriorityHint(HIGH)` for the visible tab | S | low |
-> **DECIDED 2026-11-12 (research/REVIEW-EXTERNAL-1.md 3.7, TASKS EX-18):** `setPriorityHint` stays UNUSED. With one content process and `setActive(true)` on the visible tab it changes nothing while a page is in front; revisit only if audio from a covered page (Home overlay, tab grid) is ever cut.
 | P1 | Memory caps: processCount=1 (A/B), surfacecache 96 MB, bfcache 2, disk cache 512 MB fixed | S | low-med (A/B) |
 | P1 | Hotspot media/prefetch prefs + metered-state switch + inaudible-autoplay deny | S/M | low |
 | P1 | Animations: reduced-motion, `image.animation_mode`, smoothScroll (+ app A1) | S | low |
@@ -153,6 +152,8 @@ Gotchas: (a) never mix branches for one name: a stale USER value from an old `se
 | P2 | Idle-traffic audit then cut portal probe / add-on update checks | M | low |
 | P2 | HTTP/3, DoH vs Private DNS, TRR timeout: measure on the hotspot | S | low |
 | P2 | Parallel marking, precache shaders, stylo threads, touch delay, SurfaceControl, graphics safe mode, thumbnails policy | S each | low-med |
+
+> **DECIDED 2026-11-12 (research/REVIEW-EXTERNAL-1.md 3.7, TASKS EX-18):** `setPriorityHint` stays UNUSED. With one content process and `setActive(true)` on the visible tab it changes nothing while a page is in front; revisit only if audio from a covered page (Home overlay, tab grid) is ever cut.
 
 ## 6. Evidence and sources
 - [V] artifacts: `classes.jar` (`GeckoRuntime.init`, `GeckoLoader.setupInitialPrefs`, `DebugConfig.mergeIntoPrefs`, `GeckoRuntimeSettings.<init>`/`commit`, `GeckoThread.getEnvFromExtras`, `GeckoProcessManager.start/preload`, `MemoryController`, `GeckoSystemStateListener`, `ContentBlocking$Settings`), `omni.ja` (`GeckoViewPreferences.sys.mjs`, `GeckoViewStartup.sys.mjs`, `greprefs.js`, `geckoview-prefs.js`, `defaults/settings/blocklists/gfx.json`: one Android rule, Vivante GC7000UL), `libxul.so` strings (pref names, `FEATURE_FAILURE_*` ids matching GfxInfo.cpp, `aboutSupport.xhtml`).
