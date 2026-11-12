@@ -102,7 +102,10 @@ class JobSpec(
     val stream: StreamSpec? = null,
 )
 
-class PhoneStatus(val name: String, val free: Long, val jobs: Int, val running: Int, val queued: Int)
+class PhoneStatus(val name: String, val free: Long, val jobs: Int, val running: Int, val queued: Int, val proxy: ProxyStatus? = null)
+/** What the phone's page-load proxy has done (null in [PhoneStatus] = this phone has none). */
+class ProxyStatus(val port: Int, val armed: Int, val tunnels: Long, val active: Int, val up: Long, val down: Long, val failed: Long, val refused: Long, val connectMs: Long)
+class ProxyArm(val port: Int, val ttlSec: Int)
 class SpeedResult(val bytes: Long, val ms: Long) { val bytesPerSec: Long get() = if (ms <= 0) 0 else bytes * 1000 / ms }
 class ProbeResult(val ok: Boolean, val status: Int, val bytes: Long, val ms: Long, val bps: Long, val error: String?)
 
@@ -151,8 +154,18 @@ class CourierClient(
 
     fun status(): PhoneStatus {
         val j = json("GET", "/v1/status", null)
-        return PhoneStatus(j.str("name") ?: "phone", j.long("free") ?: 0L, j.int("jobs") ?: 0, j.int("running") ?: 0, j.int("queued") ?: 0)
+        val p = j.obj("proxy")?.let { x -> ProxyStatus(x.int("port") ?: 0, x.int("armed") ?: 0, x.long("tunnels") ?: 0L, x.int("active") ?: 0, x.long("up") ?: 0L, x.long("down") ?: 0L, x.long("failed") ?: 0L, x.long("refused") ?: 0L, x.long("connectMs") ?: 0L) }
+        return PhoneStatus(j.str("name") ?: "phone", j.long("free") ?: 0L, j.int("jobs") ?: 0, j.int("running") ?: 0, j.int("queued") ?: 0, p)
     }
+
+    /** Opens the phone's page-load proxy to this tablet for [ttlSec] seconds (the phone caps it at 15 minutes); the answer says which port to use. A phone without a proxy answers 501 (a [CourierException] of kind REFUSED or PROTOCOL). */
+    fun armProxy(ttlSec: Int = 600): ProxyArm {
+        val j = json("POST", "/v1/proxy/arm", Json.write(mapOf("ttl" to ttlSec)).toByteArray(Charsets.UTF_8))
+        return ProxyArm(j.int("port") ?: throw CourierException(CourierException.Kind.PROTOCOL), j.int("ttl") ?: ttlSec)
+    }
+
+    /** Closes the proxy for this tablet at once (the owner switched the phone helper off). */
+    fun disarmProxy() { json("POST", "/v1/proxy/disarm", ByteArray(0)) }
 
     private fun streamMap(s: StreamSpec): LinkedHashMap<String, Any?> {
         val sm = LinkedHashMap<String, Any?>()

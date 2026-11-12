@@ -144,7 +144,12 @@ class CourierHost(
 
     private fun status(): HttpResponse {
         val c = engine.counts(); val sc = streams?.counts() ?: intArrayOf(0, 0, 0)
-        return HttpResponse.json(200, mapOf("app" to APP, "v" to VERSION, "name" to deviceName, "free" to freeBytes(), "jobs" to synchronized(lock) { jobs.size }, "running" to c[0] + sc[0], "queued" to c[1] + sc[1], "t" to clock.now()))
+        val m = linkedMapOf<String, Any?>("app" to APP, "v" to VERSION, "name" to deviceName, "free" to freeBytes(), "jobs" to synchronized(lock) { jobs.size }, "running" to c[0] + sc[0], "queued" to c[1] + sc[1], "t" to clock.now())
+        proxy?.let { pc ->
+            val s = pc.stats()
+            m["proxy"] = mapOf("port" to pc.port, "armed" to pc.gate.armedCount, "tunnels" to s.tunnels, "active" to s.active, "up" to s.up, "down" to s.down, "failed" to s.failed, "refused" to s.refused, "connectMs" to s.avgConnectMs)
+        }
+        return HttpResponse.json(200, m)
     }
 
     /**
