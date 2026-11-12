@@ -174,6 +174,15 @@ class StreamEngineTest {
         assertEquals(3, h.cdn.count("https://cdn.test/v/s2.ts"))
     }
 
+    @Test(timeout = 60_000) fun aWebPageWhereASegmentShouldBeFailsTheJobAndNeverEntersTheVideo() {
+        val h = H()
+        val (pl, _) = plainStream(h, 4, 5_000)
+        h.cdn.files["https://cdn.test/v/s2.ts"] = "<!doctype html><html><body>This link has expired. Please sign in.</body></html>".toByteArray()
+        val f = h.await(h.enqueue(pl), "failure") { it?.state == DlState.FAILED }!!
+        assertEquals(Reason.BAD_CONTENT, f.reason)
+        assertTrue("no output was published", h.sinks.sinks.values.none { it.published })
+    }
+
     @Test(timeout = 60_000) fun serverErrorsAreRetriedButMissingAndForbiddenFailAtOnce() {
         val h = H()
         val (pl, _) = plainStream(h, 3, 5_000)
