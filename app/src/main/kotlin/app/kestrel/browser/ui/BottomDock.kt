@@ -34,6 +34,8 @@ interface DockListener : AddressListener {
     fun onShields(anchor: View)
     fun onNewTab()
     fun onTabs()
+    /** The download icon: open the list of videos the page offers. */
+    fun onDownload()
     fun onMenu(anchor: View)
 }
 
@@ -50,7 +52,7 @@ fun prettyUrl(url: String): String {
 
 /**
  * The whole navigation bar, at the BOTTOM of the screen (owner request): in portrait two 56 dp rows - the address row on top, the six big buttons
- * (back, forward, home, new tab, tabs, menu) below, each about 94 dp wide - and one row on a wide window. While the address is being typed the activity
+ * (back, forward, home, new tab, tabs, download, menu) below, each about 80 dp wide - and one row on a wide window. While the address is being typed the activity
  * lifts the dock so the address row sits right above the keyboard (the button row stays behind the keyboard); the page is never resized.
  * On the Home screen the address row is hidden: Home has its own big field.
  */
@@ -68,6 +70,7 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
     private val home = actionButton(R.drawable.ic_home, "Home") { l.onHome() }
     private val newTab = actionButton(R.drawable.ic_plus, "New tab") { l.onNewTab() }
     private val tabs = TabsButton(ctx, pal.fg).apply { setOnClickListener { l.onTabs() } }
+    private val download = DownloadButton(ctx, pal) { l.onDownload() }
     private val menu = DotImageButton(ctx).apply {
         setImageResource(R.drawable.ic_more); contentDescription = "Menu"; scaleType = ImageView.ScaleType.FIT_CENTER
         setPadding(0, ctx.dp(15), 0, ctx.dp(15))
@@ -147,20 +150,20 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
         wide = wideNow
         urlRow.removeAllViews(); actionRow.removeAllViews()
         // children are re-parented below; remove from any previous parent first
-        for (v in listOf<View>(back, forward, home, newTab, tabs, menu, pillHolder, spacer, urlRow, actionRow)) (v.parent as? android.view.ViewGroup)?.removeView(v)
+        for (v in listOf<View>(back, forward, home, newTab, tabs, download, menu, pillHolder, spacer, urlRow, actionRow)) (v.parent as? android.view.ViewGroup)?.removeView(v)
         while (childCount > 1) removeViewAt(1)
         val rowH = context.dp(ROW_DP)
         if (!wideNow) {
             urlRow.addView(pillHolder, LayoutParams(0, rowH, 1f).apply { marginStart = -context.dp(GLOW_DP); marginEnd = -context.dp(GLOW_DP) })
             addView(urlRow, LayoutParams(LayoutParams.MATCH_PARENT, rowH))
-            for (b in listOf(back, forward, home, newTab, tabs, menu)) actionRow.addView(b, LayoutParams(0, rowH, 1f))
+            for (b in listOf(back, forward, home, newTab, tabs, download, menu)) actionRow.addView(b, LayoutParams(0, rowH, 1f))
             addView(actionRow, LayoutParams(LayoutParams.MATCH_PARENT, rowH))
         } else {
             val w = context.dp(52)
             for (b in listOf(back, forward, home)) actionRow.addView(b, LayoutParams(w, rowH))
             actionRow.addView(pillHolder, LayoutParams(0, rowH, 1f).apply { marginStart = context.dp(6) - context.dp(GLOW_DP); marginEnd = context.dp(6) - context.dp(GLOW_DP) })
             actionRow.addView(spacer, LayoutParams(0, 1, 1f))
-            for (b in listOf(newTab, tabs, menu)) actionRow.addView(b, LayoutParams(w, rowH))
+            for (b in listOf(newTab, tabs, download, menu)) actionRow.addView(b, LayoutParams(w, rowH))
             addView(actionRow, LayoutParams(LayoutParams.MATCH_PARENT, rowH))
         }
         applyVisibility()
@@ -191,6 +194,7 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
         hairline.setBackgroundColor(0)
         for (b in listOf(back, forward, home, newTab, menu)) { b.setColorFilter(pal.fg); b.background = ripple(pal.fg, null, 0f) }
         tabs.setPalette(pal.fg, pal.accent)
+        download.setPal(pal)
         reload.setColorFilter(pal.fg); reload.background = ripple(pal.fg, null, 0f)
         mask.setColorFilter(pal.accent)
         menu.dotColor = pal.accent
@@ -257,6 +261,9 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
     }
 
     fun fullUrlForEditing(tab: Tab?): String = tab?.url ?: ""
+
+    /** The download icon: how many videos / sounds the page in front offers (0 = gray, more = neon blue-teal with a breathing glow). */
+    fun setDownloadCount(n: Int) = download.setCount(n)
 
     /** An accent dot on the menu button: an app update is waiting. */
     fun setMenuDot(on: Boolean) { menu.dot = on }
