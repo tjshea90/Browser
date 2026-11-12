@@ -1167,10 +1167,13 @@ open class BrowserActivity : Activity(), DockListener {
     private fun preconnect(url: String) {
         if (!prefs.preconnect || current?.isPrivateTab == true || !url.startsWith("https://", true)) return
         val host = UrlParts.hostOf(url) ?: return
+        // the origin the page will really use: a suggestion with its own port (a dev server, a router page) is warmed on THAT port, not on 443
+        val port = try { android.net.Uri.parse(url).port } catch (e: Exception) { -1 }
+        val origin = "https://" + host + (if (port > 0 && port != 443) ":$port" else "") + "/"
         val now = SystemClock.uptimeMillis()
-        if (host == warmHost && now - warmAt < 30_000) return
-        warmHost = host; warmAt = now
-        Io.exec { GeckoEngine.speculativeConnect("https://$host/") } // dispatched onto the Gecko thread: the public GeckoWebExecutor call is dropped by GeckoView 160 (EX-2)
+        if (origin == warmHost && now - warmAt < 30_000) return
+        warmHost = origin; warmAt = now
+        Io.exec { GeckoEngine.speculativeConnect(origin) } // dispatched onto the Gecko thread: the public GeckoWebExecutor call is dropped by GeckoView 160 (EX-2)
     }
 
     private fun hideSuggestions() { suggestSeq++; suggestions.visibility = View.GONE; home.hideSuggestions() }
