@@ -17,13 +17,14 @@ after(async () => { await browser.close(); });
 const AD = 'https://ads.example/landing?x=1';
 const TARGET = '<!doctype html><title>opened</title><body>opened</body>';
 
-/** A page at https://movie.example/ with the guard installed before any page script runs. */
+/** A page at https://movie.example/ with the guard installed before any page script runs. [opts.embed]: the HTML served for https://player.example/embed (an embedded player in a cross-origin frame). */
 async function open(body, opts) {
   opts = opts || {};
   const context = await browser.newContext();
   await context.route('https://**/*', (r) => {
     const u = new URL(r.request().url());
     if (u.hostname === 'movie.example' && u.pathname === '/') return r.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><title>movie</title></head><body style="margin:0">${body}</body></html>` });
+    if (u.hostname === 'player.example' && u.pathname === '/embed') return r.fulfill({ contentType: 'text/html', body: `<!doctype html><html><body style="margin:0">${opts.embed || ''}</body></html>` });
     return r.fulfill({ contentType: 'text/html', body: TARGET });
   });
   const page = await context.newPage();
@@ -33,6 +34,8 @@ async function open(body, opts) {
     document.addEventListener('__kst_pop_v1', (e) => window.__notes.push(String(e.detail)), true);
   });
   if (opts.off) await page.addInitScript(() => { document.dispatchEvent(new CustomEvent('__kst_cfg_v1', { detail: '0' })); });
+  // what content.js tells every frame: the guard applies, and the TOP page's host (the frames of an embedded player judge "same site" against it)
+  else await page.addInitScript(() => { document.dispatchEvent(new CustomEvent('__kst_cfg_v1', { detail: '1|movie.example' })); });
   await page.goto('https://movie.example/');
   page.popups = [];
   context.on('page', (p) => page.popups.push(p));
@@ -180,3 +183,33 @@ test('a click a script makes is never reported as a tap', async () => {
   await settle();
   assert.deepEqual(await taps(page), []);
 });
+
+test('an embedded player\'s own ad redirector is not "the same site": the frame\'s window.open to its own host is refused', async () => {
+  const page = await open(`<iframe src="https://player.example/embed" style="width:400px;height:300px;border:0"></iframe>`,
+    { embed: `<div style="width:400px;height:300px" onclick="window.open('https://player.example/ad/redirect?id=1')">play</div>` });
+  await settle(900);
+  await page.mouse.click(100, 100);
+  await settle();
+  assert.equal(page.popups.length, 0);
+  const frame = page.frames().find((f) => f.url().indexOf('player.example') >= 0);
+  assert.deepEqual(await frame.evaluate(() => window.__notes), ['open|https://player.example/ad/redirect?id=1']);
+});
+
+test('the spoof play button: a link to another site, with only an image, laid on the player, does nothing', async () => {
+  const icon = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><circle cx='50' cy='50' r='45' fill='red'/></svg>";
+  const page = await open(`<div style="position:relative;width:400px;height:300px"><video style="width:400px;height:300px;background:#000"></video><a id="spoof" href="${AD}" target="_blank" style="position:absolute;left:150px;top:100px;width:100px;height:100px"><img src="${icon}" width="100" height="100"></a></div>`);
+  await page.mouse.click(200, 150);
+  await settle();
+  assert.equal(page.popups.length, 0);
+  assert.equal(page.url(), 'https://movie.example/');
+  assert.deepEqual(await notes(page), ['overlay|' + AD]);
+});
+
+test('a link with words of its own near the player, and a same-site link on it, still work', async () => {
+  const page = await open(`<div style="position:relative;width:400px;height:300px"><video style="width:400px;height:300px;background:#000"></video></div><a href="https://news.example/story" target="_blank" style="display:block;width:300px;height:60px">Read the story</a>`);
+  const popup = page.waitForEvent('popup', { timeout: 3000 });
+  await page.mouse.click(50, 330);
+  await popup;
+  assert.deepEqual(await notes(page), []);
+});
+

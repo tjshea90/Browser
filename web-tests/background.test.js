@@ -285,9 +285,11 @@ test('guard: every real tap is passed on to the app (the app judges a jump that 
 
 test('guard: the page-side script asks whether it applies and what it blocked is forwarded to the app', async () => {
   const h = await onPage();
-  eq(await h.message({ k: 'guard', h: 'movie.example' }), { on: true });
+  const answer = await h.message({ k: 'guard', h: 'movie.example' });
+  assert.equal(answer.on, true);
+  assert.equal(typeof answer.top, 'string', 'the answer names the TOP page\'s host (an embedded player must judge "same site" against it)');
   const off = await onPage(guardApp(0));
-  eq(await off.message({ k: 'guard', h: 'movie.example' }), { on: false });
+  assert.equal((await off.message({ k: 'guard', h: 'movie.example' })).on, false);
   h.message({ k: 'pop', d: 'open|' + OTHER, p: 'https://frame.example/embed' });
   await tick(10);
   const pop = h.of('pop');
