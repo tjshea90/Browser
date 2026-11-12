@@ -141,9 +141,9 @@ class HomeView(ctx: Context, private var pal: Pal, private val brand: String, pr
     }
 
     /** A faint line under everything: what Shields did (the only "stat" on Home). */
-    fun bindStats(blocked: Long, metered: Boolean) {
+    fun bindStats(blocked: Long, metered: Boolean, fastWifi: Boolean = false) {
         val n = java.text.NumberFormat.getIntegerInstance().format(blocked)
-        stats.text = (if (blocked > 0) "$n ads & trackers blocked" else "Shields are on") + (if (metered) "  ·  metered connection" else "")
+        stats.text = (if (blocked > 0) "$n ads & trackers blocked" else "Shields are on") + (if (metered) "  ·  metered connection" else "") + (if (fastWifi) "  ·  Fast Wi-Fi" else "")
     }
 
     fun bindSuggestions(typed: String, entries: List<Entry>, maxHeightPx: Int) {
