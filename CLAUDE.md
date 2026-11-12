@@ -3,7 +3,7 @@
 ## Mission
 A very light, fast, private Android browser tuned for ONE device (`docs/HARDWARE.md`): MediaTek **MT8168B** tablet ("Alps 711"), **Android 10 Go (API 29)**, **2 GB RAM**
 (128 MB app heap class, low-RAM flag), 600x973 @170 dpi (~564x916 dp, font scale 1.2), 32-bit system image, unencrypted storage, **no Google Play Store and no Google services
-(no Safe Browsing, no WebView auto-updates, never add a GMS dependency)**, and **internet 100% through a phone hotspot (metered, flaky, carrier-routed)**. Apps are written for
+(no Safe Browsing, no WebView auto-updates, never add a GMS dependency)**, and **internet 100% through a phone hotspot (UNMETERED per the owner since 2026-11-12, but the carrier caps the hotspot at 5 Mbit/s, flaky, carrier-routed; the phone's own traffic is not capped: Kestrel Courier on the owner's Android 16 phone loads files, videos and pages with the phone's own connection)**. Apps are written for
 Android 10 but must also run on Android 16 (`Build.VERSION.SDK_INT` branching above API 29).
 Two builds: **Kestrel** (`:app`, system WebView = frozen Chromium 74, light) and **Kestrel G** (`:geckoapp`, bundled Firefox engine, modern sites). Brave-like Shields (ads/trackers, HTTPS upgrade,
 cookie/fingerprint protection) + security hardening. **Explicitly NO** news, AI, rewards, wallet/web3, VPN, sync/accounts, Tor, telemetry, or other bloat.

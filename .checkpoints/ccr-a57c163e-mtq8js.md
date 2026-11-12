@@ -1,23 +1,23 @@
-# CHECKPOINT 1053 — read me first, then TASKS.md
+# CHECKPOINT 1054 — read me first, then TASKS.md
 
-**Written:** 2026-11-12T15:00:38Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `2a514af` (this checkpoint is the commit after it)
+**Written:** 2026-11-12T15:01:44Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `95c9050` (this checkpoint is the commit after it)
 
 ## Just done
-gated kestrel-g-v0.3.0-alpha21 (gecko code 120) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
+Docs: CLAUDE.md + BRIEF.md record the owner's unmetered/5 Mbit/s facts and the LinkMeter port rule; releases Courier alpha3 + Kestrel G alpha21 dispatched (waiting for the runs)
 
 ## Do this next
-TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref ccr-a57c163e-mtq8js, inputs {"app":"gecko","full_build":"true","note":"alpha21: Phone helper. Pages now load through your phone (Settings > Phone helper > Load pages through the phone; needs Kestrel Courier alpha3 on the phone): the phone opens the connections with its own network stack, which your carrier does not slow down like the hotspot, and pages load directly by themselves if the phone stops answering. New Phone helper tile in the main menu: one tap = hotspot only, the phone does nothing. Typing the pairing code switches the helper on. The data saver is now OFF by default (your hotspot is unmetered: no metered connection label, no big-download questions; the levels stay in Settings). Faster Back and fewer white areas: 4 pages kept for an hour (pages that send Cache-Control: no-store cannot be cached by any browser), 64 MB page cache, decoded images kept 3 minutes, images decoded two screens ahead, lazy images start loading earlier. Link test now also measures pages through the phone. With an older Courier the tablet loads pages by itself."}.
-When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha21), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha21 "alpha21: Phone helper. Pages now load through your phone (Settings > Phone helper > Load pages through the phone; needs Kestrel Courier alpha3 on the phone): the phone opens the connections with its own network stack, which your carrier does not slow down like the hotspot, and pages load directly by themselves if the phone stops answering. New Phone helper tile in the main menu: one tap = hotspot only, the phone does nothing. Typing the pairing code switches the helper on. The data saver is now OFF by default (your hotspot is unmetered: no metered connection label, no big-download questions; the levels stay in Settings). Faster Back and fewer white areas: 4 pages kept for an hour (pages that send Cache-Control: no-store cannot be cached by any browser), 64 MB page cache, decoded images kept 3 minutes, images decoded two screens ahead, lazy images start loading earlier. Link test now also measures pages through the phone. With an older Courier the tablet loads pages by itself."
-NEVER ship kestrel-g-v0.3.0-alpha21 twice (check BUILDLOG.md and the Releases first).
+WAIT for both Actions runs (courier then gecko), check mcp__github__get_release_by_tag kestrel-courier-v0.1.0-alpha3 and kestrel-g-v0.3.0-alpha21 (APK + sha256, certificate verified), confirm run conclusion success (mcp__github__actions_list list_workflow_runs perPage 1 status completed), then bash tools/record-release.sh <tag> '<note as passed to ship.sh>' for each, then send the owner the reply (draft in OUTBOX / this session): yes the phone can speed up page loads because the carrier caps the HOTSPOT not the phone; pages through the phone + Phone helper menu tile + unmetered + Back cache/scroll prefs; ad block stays in the engine; LinkMeter port clash fixed; tested on emulator only; 5 GHz advice; re-list open items. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN stays
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M BRIEF.md
+     M CLAUDE.md
 
 ## Last ten checkpoints
 ```
+  95c9050 ckpt 1053: gated kestrel-g-v0.3.0-alpha21 (gecko code 120) and pushed it: handoff self-t
   2a514af ckpt 1052: gated kestrel-courier-v0.1.0-alpha3 (courier code 3) and pushed it: handoff s
   d803d90 ckpt 1051: pre-ship: alpha3: pages through the phone. The phone now loads the tablet's w
   8c64199 ckpt 1048: Z8 proven on the emulator (Android 10, GeckoView 160 + Courier in one emulato
@@ -27,5 +27,4 @@ NEVER ship kestrel-g-v0.3.0-alpha21 twice (check BUILDLOG.md and the Releases fi
   83be731 ckpt 1013: Owner message 13 written into TASKS.md as Z0-Z10 in their words (INBOX has it
   3a332d4 ckpt 1010: Y2 stage 2 SHIPPED and recorded: Kestrel Courier alpha2 (kestrel-courier-v0.1
   4389f39 ckpt 1007: gated kestrel-g-v0.3.0-alpha20 (gecko code 119) and pushed it: handoff self-t
-  d3a8580 ckpt 1005: gated kestrel-g-v0.3.0-alpha20 (gecko code 119) and pushed it: handoff self-t
 ```

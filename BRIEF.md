@@ -43,6 +43,8 @@ form except that system WebView (Brave/Cromite are whole browsers built from Chr
 - Suggestions OFF by default (data + privacy). HTTPS-first STRICT by default. Hotspot rule: only OFFLINE (no INTERNET capability) means cache-first; NO_INTERNET (unvalidated) only changes wording.
 - Signing: the PUBLIC dev key in `signing/dev/` (pinned in `signing/CERT_SHA256`) signs every release, so any session/CI build updates the installed app. A private key may replace it later (see TASKS.md).
 
+- 2026-11-12 (owner, message 13): the hotspot is UNMETERED ("no data saving is necessary, but the option may remain in the settings"): data saver defaults to OFF, nothing acts metered unless a saver level is on, speculative loading and Wi-Fi media buffering are allowed. Their carrier caps the hotspot at 5 Mbit/s (LinkMeter docs); the phone is an Android 16 Samsung with Shizuku, paired with the owner's LinkMeter app (tjshea90/LinkMeter: Fast Wi-Fi VPN relay on phone port 8767, control port 8765: the Courier must never use those). Owner goal: speed and snappiness first, RAM may be used liberally (800 MB to 1 GB free). One switch (main menu "Phone helper") must turn the phone off completely. Ad block: "whatever is logical" -> stays in the engine (research/SPEED2.md).
+
 ## Known issues / risks
 - **First real-tablet result (owner, 2026-11-11): "The new version of the browser loads Claude.ai"** = Kestrel G works on the real tablet (claude.ai is the page the WebView build refused). Nothing else has been reported yet:
   speed, memory, UI feel and the rest are still unmeasured there. The WebView build and the Gecko build were otherwise only run on Android 10 emulators (software mode). Say so honestly.
