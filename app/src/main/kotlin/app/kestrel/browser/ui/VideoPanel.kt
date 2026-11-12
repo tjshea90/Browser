@@ -50,7 +50,7 @@ class VideoPanel(ctx: Context, private val pal: Pal, private val onPick: (Choice
             if (c.enabled) setOnClickListener { onPick(c) }
         }
         val texts = LinearLayout(ctx).apply { orientation = VERTICAL }
-        texts.addView(label(ctx, c.title, 18f, pal.fg, bold = true).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END; includeFontPadding = true })
+        texts.addView(label(ctx, c.title, 16f, pal.fg, bold = true).apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END; includeFontPadding = true }) // the file's name: long titles may use two lines
         if (c.detail.isNotEmpty()) texts.addView(label(ctx, c.detail, 14f, pal.muted).apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END; includeFontPadding = true })
         r.addView(texts, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
         if (c.enabled) r.addView(ImageView(ctx).apply { setImageResource(R.drawable.ic_download); setColorFilter(pal.accent); importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }, LayoutParams(ctx.dp(28), ctx.dp(28)).apply { marginStart = ctx.dp(8) })
