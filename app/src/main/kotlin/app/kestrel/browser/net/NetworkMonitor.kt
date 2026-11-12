@@ -50,13 +50,19 @@ object NetworkMonitor {
     fun addListener(l: () -> Unit) { synchronized(listeners) { listeners.add(l) } }
     fun removeListener(l: () -> Unit) { synchronized(listeners) { listeners.remove(l) } }
 
+    /**
+     * Safe to call from any thread (the Gecko build calls it from the IO lane so the binder calls and the first preferences read stay off the UI thread; start and stop go through the same
+     * lane, so they stay in order). Listeners are always told on the main thread.
+     */
+    @Synchronized
     fun start(ctx: Context) {
         if (callback != null) return
         val c = ctx.applicationContext.getSystemService(ConnectivityManager::class.java) ?: return
         cm = c
         saverOn = app.kestrel.browser.data.Prefs.get(ctx).dataSaver != app.kestrel.core.shield.DataSaver.OFF
         debugVpn = app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.vpn") == "1"        // DEBUG builds only: pretend a VPN is up (the emulator has none)
-        update(c.activeNetwork?.let { c.getNetworkCapabilities(it) })
+        val first = c.activeNetwork?.let { c.getNetworkCapabilities(it) }
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) update(first) else Io.main.post { update(first) }
         val cb = object : ConnectivityManager.NetworkCallback() {
             override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = update(caps)
             override fun onLost(network: Network) = update(null)
@@ -66,6 +72,7 @@ object NetworkMonitor {
         try { c.registerDefaultNetworkCallback(cb, Io.main) } catch (e: Exception) { callback = null }
     }
 
+    @Synchronized
     fun stop() {
         val c = cm ?: return
         callback?.let { try { c.unregisterNetworkCallback(it) } catch (e: Exception) { /* already gone */ } }

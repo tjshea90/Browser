@@ -228,7 +228,8 @@ open class BrowserActivity : Activity(), DockListener {
     override fun onStart() {
         super.onStart()
         ProcessLife.uiVisible = true; DownloadController.uiVisibilityChanged()
-        NetworkMonitor.start(this)
+        val appCtx = applicationContext
+        Io.fast { NetworkMonitor.start(appCtx) } // binder calls and the first preferences read: not on the UI thread (start and stop share this lane, so they stay in order)
         Neon.foreground(true)
     }
 
@@ -267,7 +268,7 @@ open class BrowserActivity : Activity(), DockListener {
         super.onStop()
         Health.log("life", "stop"); Health.stopWatchdog(); Health.unwatchFrames(window)
         current?.session?.setActive(false) // stops rendering and throttles the page: saves battery and mobile data
-        NetworkMonitor.stop()
+        Io.fast { NetworkMonitor.stop() }
         Neon.foreground(false)
         ProcessLife.uiVisible = false; DownloadController.uiVisibilityChanged()
     }
