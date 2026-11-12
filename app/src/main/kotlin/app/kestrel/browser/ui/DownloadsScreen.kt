@@ -146,7 +146,7 @@ class DownloadsScreen(ctx: Context, private var pal: Pal, private val l: Listene
     }
 
     private fun button(ctx: Context, a: Action, primary: Boolean, v: DownloadView): TextView {
-        val text = when (a) { Action.PAUSE -> "Pause"; Action.RESUME -> "Resume"; Action.CANCEL -> "Cancel"; Action.RETRY -> "Retry"; Action.RESTART -> "Restart"; Action.OPEN -> "Open"; Action.SHARE -> "Share"; Action.DELETE -> "Delete" }
+        val text = when (a) { Action.PAUSE -> "Pause"; Action.RESUME -> "Resume"; Action.CANCEL -> "Cancel"; Action.RETRY -> "Retry"; Action.RESTART -> "Restart"; Action.OPEN -> "Open"; Action.SHARE -> "Share"; Action.DELETE -> "Delete"; Action.MAKE_MP4 -> "Make MP4" }
         val click: () -> Unit = {
             when (a) {
                 Action.PAUSE -> DownloadController.pause(v.id)
@@ -156,6 +156,7 @@ class DownloadsScreen(ctx: Context, private var pal: Pal, private val l: Listene
                 Action.CANCEL -> { val cur = DownloadController.view(v.id) ?: v; if (cur.done > 0) l.confirm("Cancel this download?", "The part already downloaded (${Format.bytes(cur.done)}) is deleted.", "Cancel download") { DownloadController.cancel(v.id) } else DownloadController.cancel(v.id) }
                 Action.OPEN -> l.open(v)
                 Action.SHARE -> l.share(v)
+                Action.MAKE_MP4 -> DownloadController.makeMp4(v.id)
                 Action.DELETE -> { val cur = DownloadController.view(v.id) ?: v; l.confirm("Delete this download?", if (cur.state == DlState.COMPLETED) "The file ${cur.name} is deleted from your tablet." else "The unfinished file is deleted.", "Delete") { DownloadController.remove(v.id, true) } }
             }
         }

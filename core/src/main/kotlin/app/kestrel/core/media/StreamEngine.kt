@@ -201,6 +201,7 @@ class StreamEngine(
         @Volatile var muxDirty = false  // the muxer was in the middle of a segment when something failed: its state may not be checkpointed
         var lastMuxCkpt = 0L
         @Volatile var forceRaw = false  // the MP4 writer failed once for this job: do it the old way
+        @Volatile var converting = false // "Make MP4" is working on this finished download (shown as Finishing; the stored record stays COMPLETED)
     }
 
     private val lock = Any()
@@ -303,6 +304,96 @@ class StreamEngine(
             if (st.terminal && st != DlState.CANCELED) { if (job.rec.parentId != 0L || job.rec.companionId != 0L) finishCancel(job); continue }
             if (synchronized(lock) { job.running }) requestStop(job, DlState.CANCELED) else finishCancel(job)
         }
+    }
+
+    /**
+     * "Make MP4" on a finished stream that was kept as a .ts (a download from an older version, or a stream the MP4 writer could not take at the time): the file is read once through the MP4
+     * writer into a new .mp4 and the .ts goes when that worked. The row shows "Finishing" meanwhile; the stored record stays COMPLETED, so a kill in the middle loses nothing.
+     */
+    fun makeMp4(id: Long) = control.execute {
+        val job = get(id) ?: return@execute
+        val rec = job.rec
+        val ok = synchronized(lock) { rec.state == DlState.COMPLETED && !job.converting && !job.running && rec.mux != MUX_MP4 && rec.destUri != null && rec.name.endsWith(".ts", true) && rec.companionId == 0L && rec.parentId == 0L }
+        if (!ok) return@execute
+        synchronized(lock) { job.converting = true }
+        changed(id)
+        try { spawner.spawn("mp4-$id") { convertFinished(job) } }
+        catch (e: Throwable) { synchronized(lock) { job.converting = false }; changed(id) }
+    }
+
+    private fun convertFinished(job: Job) {
+        val rec = job.rec
+        var out: Sink? = null
+        var note: String? = null
+        var swapped = false
+        try {
+            val uri = synchronized(lock) { rec.destUri } ?: return
+            val src = sinks.reopen(uri, -1)
+            if (src == null) { note = "Could not make an MP4: the .ts file is not there any more."; return }
+            val size = src.length()
+            if (size <= 0 || !src.readable) { note = "Could not make an MP4: this file cannot be read back."; return }
+            val head = ByteArray(minOf(size, 384L * 1024).toInt())
+            if (readFully(src, 0, head) < head.size) { note = "Could not make an MP4: the .ts file could not be read."; return }
+            val why = TsToMp4.probe(head, 0, head.size)
+            if (why != null) {                                                   // the MP4 writer cannot take it: the platform converter may (H.265, for one)
+                val f = finisher
+                val j = StreamFinisher.Joined(uri, rec.nameStem, "ts", size, rec.priv, rec.destKind, emptyList())
+                val c = if (f != null) try { f.convert(j) } catch (e: Throwable) { log("convert failed", e); null } else null
+                if (c == null) { note = "Could not make an MP4: ${j.declined ?: why}."; return }
+                swap(job, uri, c.uri, c.name, c.mime, c.size, null); swapped = true
+                return
+            }
+            val name = FileNames.sanitize(rec.nameStem + ".mp4")
+            val o = sinks.create(name, "video/mp4", -1, rec.priv, rec.destKind).also { out = it }
+            val sink = o
+            val adapter = object : MuxOut {
+                override fun write(pos: Long, b: ByteArray, off: Int, len: Int) = sink.pwrite(pos, b, off, len)
+                override fun truncate(len: Long) = sink.truncate(len)
+            }
+            val noJournal = object : MuxJournal { override fun append(block: ByteArray) {}; override fun recover(): List<ByteArray> = emptyList(); override fun reset() {} }
+            val m = TsToMp4(adapter, noJournal, { sink.sync() }, size)
+            m.startFresh()
+            // the runs between #EXT-X-DISCONTINUITY marks, as recorded while it downloaded; their weight is their length in bytes (the playlist is gone)
+            val starts = ArrayList<Long>(); starts.add(0L)
+            for (e in synchronized(lock) { rec.breaks }.split(';')) { val o2 = e.substringAfter(':', "").toLongOrNull() ?: continue; if (o2 > starts.last() && o2 < size) starts.add(o2) }
+            val buf = ByteArray(64 * 1024)
+            for ((k, from) in starts.withIndex()) {
+                val to = if (k + 1 < starts.size) starts[k + 1] else size
+                m.beginSegment(k, k > 0, to - from)
+                var p = from
+                while (p < to) {
+                    val n = src.pread(p, buf, 0, minOf(buf.size.toLong(), to - p).toInt())
+                    if (n <= 0) throw IOException("short read at $p")
+                    m.feed(buf, 0, n); p += n
+                }
+                m.endSegment()
+            }
+            val fin = m.finish()
+            sink.sync()
+            val newUri = sink.publish() ?: throw SinkException(Reason.STORAGE, "no uri")
+            out = null
+            swap(job, uri, newUri, sink.displayName ?: name, "video/mp4", fin.length, fin.warning); swapped = true
+        } catch (e: MuxException) { note = "Could not make an MP4: ${e.message}."
+        } catch (e: SinkException) { note = if (e.reason == Reason.NO_SPACE || e.reason == Reason.STORAGE) "Could not make an MP4: there is not enough free room on the tablet." else "Could not make an MP4." ; log("make mp4: the output failed", e)
+        } catch (e: Throwable) { note = "Could not make an MP4."; log("make mp4 failed", e)
+        } finally {
+            try { out?.discard() } catch (e: Exception) { /* ignore */ }
+            synchronized(lock) { job.converting = false; if (!swapped && note != null) rec.note = note; rec.updated = clock.now() }
+            persist(rec)
+            changed(rec.id)
+        }
+    }
+
+    private fun swap(job: Job, oldUri: String, newUri: String, name: String, mime: String, size: Long, warning: String?) {
+        val rec = job.rec
+        synchronized(lock) { rec.destUri = newUri; rec.name = name; rec.mime = mime; rec.total = size; rec.appended = size; rec.mux = MUX_MP4; rec.breaks = ""; rec.note = warning }
+        try { sinks.delete(oldUri) } catch (e: Exception) { /* the .ts stays next to the .mp4: harmless */ }
+    }
+
+    private fun readFully(sink: Sink, pos: Long, b: ByteArray): Int {
+        var p = 0
+        while (p < b.size) { val n = sink.pread(pos + p, b, p, b.size - p); if (n <= 0) break; p += n }
+        return p
     }
 
     fun remove(id: Long, deleteFile: Boolean) = control.execute {
@@ -1025,14 +1116,15 @@ class StreamEngine(
         if (total in 0 until fetched) total = fetched
         val speed = if (running) job.meter.bytesPerSec(now).toLong() else 0L
         val eta = if (running && speed > 0 && total > 0) (total - fetched).coerceAtLeast(0) / speed else -1L
-        val actions: List<Action> = when (r.state) {
+        val st = if (job.converting) DlState.VERIFYING else r.state
+        val actions: List<Action> = when (st) {
             DlState.QUEUED, DlState.STARTING -> listOf(Action.CANCEL)
             DlState.RUNNING, DlState.WAITING_NETWORK -> listOf(Action.PAUSE, Action.CANCEL)
             DlState.PAUSED_USER, DlState.PAUSED_SYSTEM -> listOf(Action.RESUME, Action.CANCEL)
             DlState.NEEDS_DECISION -> listOf(Action.RESTART, Action.CANCEL)
             DlState.VERIFYING -> emptyList()
             DlState.FAILED -> listOf(Action.RETRY, Action.DELETE)
-            DlState.COMPLETED -> listOf(Action.OPEN, Action.SHARE, Action.DELETE)
+            DlState.COMPLETED -> if (r.mux != MUX_MP4 && r.name.endsWith(".ts", true) && r.destUri != null && r.companionId == 0L && r.parentId == 0L) listOf(Action.OPEN, Action.SHARE, Action.MAKE_MP4, Action.DELETE) else listOf(Action.OPEN, Action.SHARE, Action.DELETE)
             DlState.CANCELED -> emptyList()
         }
         val host = try { java.net.URI(r.url).host } catch (e: Exception) { null }
@@ -1043,7 +1135,7 @@ class StreamEngine(
             return DownloadView(r.id, r.state, r.reason, r.detail, r.name, r.mime, host, sumTotal, fetched + cv.done, speed + cv.bytesPerSec,
                 if (running && speed + cv.bytesPerSec > 0 && sumTotal > 0) (sumTotal - fetched - cv.done).coerceAtLeast(0) / (speed + cv.bytesPerSec) else -1L, job.alive + cv.connections, r.priv, r.destUri, r.created, r.updated, actions, r.destKind, estimated || cv.estimated, r.note)
         }
-        return DownloadView(r.id, r.state, r.reason, r.detail, r.name, r.mime, host, total, fetched, speed, eta, job.alive, r.priv, r.destUri, r.created, r.updated, actions, r.destKind, estimated, r.note)
+        return DownloadView(r.id, st, r.reason, r.detail, r.name, r.mime, host, total, fetched, speed, eta, job.alive, r.priv, r.destUri, r.created, r.updated, actions, r.destKind, estimated, r.note)
     }
 
     companion object {

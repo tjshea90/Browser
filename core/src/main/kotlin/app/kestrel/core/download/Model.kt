@@ -116,7 +116,7 @@ const val DEST_PUBLIC = 0
 const val DEST_APP_PRIVATE = 2
 
 /** Buttons a row can show, first = primary. */
-enum class Action { PAUSE, RESUME, CANCEL, RETRY, RESTART, OPEN, SHARE, DELETE }
+enum class Action { PAUSE, RESUME, CANCEL, RETRY, RESTART, OPEN, SHARE, DELETE, /** A finished stream kept as a .ts: write an MP4 from it now. */ MAKE_MP4 }
 
 /** Immutable snapshot for the UI and the notification (research/DOWNLOADS.md section 5 table). */
 class DownloadView(
