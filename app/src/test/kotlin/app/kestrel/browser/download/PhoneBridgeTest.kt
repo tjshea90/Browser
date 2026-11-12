@@ -67,6 +67,6 @@ class PhoneBridgeTest {
 
     @Test fun diagnosticsHaveAPhoneLine() {
         val l = PhoneBridge.diagLines(ctx)
-        assertEquals(1, l.size); assertTrue(l[0], l[0].startsWith("Phone link: mode=")); assertNotNull(PhoneBridge.FIRST_ID)
+        assertEquals(2, l.size); assertTrue(l[0], l[0].startsWith("Pages: ")); assertTrue(l[1], l[1].startsWith("Phone link: mode=")); assertNotNull(PhoneBridge.FIRST_ID)
     }
 }

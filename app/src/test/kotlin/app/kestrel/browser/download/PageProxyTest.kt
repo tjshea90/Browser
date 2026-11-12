@@ -73,7 +73,9 @@ class PageProxyTest {
     }
 
     @Test fun theDataSaverIsOffByDefaultSoNothingActsMetered() {
-        ctx.getSharedPreferences("kestrel", 0).edit().remove("data_saver").apply()
-        assertEquals(DataSaver.OFF, Prefs.get(ctx).dataSaver)
+        val prefs = Prefs.get(ctx)                                           // a singleton: clear the very file it holds (an earlier test may have set a level)
+        val sp = Prefs::class.java.getDeclaredField("sp").also { it.isAccessible = true }.get(prefs) as android.content.SharedPreferences
+        sp.edit().remove("data_saver").commit()
+        assertEquals(DataSaver.OFF, prefs.dataSaver)
     }
 }
