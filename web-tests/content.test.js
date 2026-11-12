@@ -192,7 +192,7 @@ const appWithoutMarker = () => {
     return Promise.resolve(undefined);
   };
 };
-const appDown = appDown;
+const appDown = () => { window.browser.runtime.sendMessage = () => Promise.reject(new Error('no app')); };
 const gens = (page) => page.evaluate(() => window.__gen);
 const flat = (batches) => [].concat(...batches);
 
