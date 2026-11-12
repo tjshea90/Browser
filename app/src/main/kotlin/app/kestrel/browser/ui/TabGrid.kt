@@ -10,7 +10,10 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.text.TextUtils
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
+import android.view.ViewConfiguration
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -241,7 +244,7 @@ class TabGrid(ctx: Context, private var pal: Pal, private val isPrivate: (Tab) -
         thumb.setBitmap(tab.thumb)
         thumbViews[tab.id] = thumb
         outer.addView(thumb, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (cardW * 1.05f).toInt() - ctx.dp(44)))
-        if (!selected) return outer
+        if (!selected) return outer.also { it.setOnTouchListener(SwipeToClose(ctx, it) { l.close(tab) }) }
         // the selected card glows (and breathes, see Neon): a GlowView behind it, grown past the card by the glow radius
         val g = ctx.dp(GLOW_DP)
         val wrap = FrameLayout(ctx).apply { clipChildren = false }
@@ -249,7 +252,7 @@ class TabGrid(ctx: Context, private var pal: Pal, private val isPrivate: (Tab) -
         wrap.addView(glow, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT).apply { setMargins(-g, -g, -g, -g) })
         wrap.addView(outer, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
         Neon.pulse(glow, 0.35f, 1f, 3400L)
-        return wrap
+        return wrap.also { it.setOnTouchListener(SwipeToClose(ctx, it) { l.close(tab) }) }
     }
 
     companion object {
@@ -293,5 +296,56 @@ class ThumbView(ctx: Context, private val pal: Pal, private val host: String, pr
             c.drawText(if (isNew) "New tab" else host, w / 2f, h / 2f + context.dpf(34f), text)
         }
         c.restore()
+    }
+}
+
+
+/**
+ * Swipe a tab card sideways to close it (promised in three owner replies; the X still works). The card follows the finger (and fades) while it is dragged, which is direct feedback, not
+ * an animation: let go past 40 % of its width, or flick it, and the tab closes in that frame; let go earlier and it is back in place in that frame. A tap still selects the tab and a
+ * vertical drag still scrolls the grid: only a clearly horizontal drag takes over. [dragged] says whether the last touch was a swipe (the tap must not also fire).
+ */
+internal class SwipeToClose(ctx: Context, private val card: View, private val onClose: () -> Unit) : View.OnTouchListener {
+    private val slop = ViewConfiguration.get(ctx).scaledTouchSlop
+    private var downX = 0f
+    private var downY = 0f
+    private var dragging = false
+    private var velocity: VelocityTracker? = null
+
+    override fun onTouch(v: View, e: MotionEvent): Boolean {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = e.rawX; downY = e.rawY; dragging = false
+                velocity?.recycle(); velocity = VelocityTracker.obtain().also { it.addMovement(e) }
+                return false // the plain tap on the card keeps working
+            }
+            MotionEvent.ACTION_MOVE -> {
+                velocity?.addMovement(e)
+                val dx = e.rawX - downX; val dy = e.rawY - downY
+                if (!dragging && Math.abs(dx) > slop * 2 && Math.abs(dx) > Math.abs(dy) * 1.5f) {
+                    dragging = true
+                    v.parent?.requestDisallowInterceptTouchEvent(true) // the grid must not take this drag for a scroll
+                    val cancel = MotionEvent.obtain(e); cancel.action = MotionEvent.ACTION_CANCEL; v.onTouchEvent(cancel); cancel.recycle() // no tap, no pressed state
+                }
+                if (dragging) {
+                    card.translationX = dx
+                    card.alpha = (1f - Math.abs(dx) / (card.width.coerceAtLeast(1) * 0.9f)).coerceIn(0.25f, 1f)
+                    return true
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                val vt = velocity; velocity = null
+                if (!dragging) { vt?.recycle(); return false }
+                dragging = false
+                vt?.addMovement(e); vt?.computeCurrentVelocity(1000)
+                val vx = vt?.xVelocity ?: 0f
+                vt?.recycle()
+                val dx = e.rawX - downX
+                val far = Math.abs(dx) > card.width * 0.4f || (Math.abs(vx) > 1200f && Math.abs(dx) > card.width * 0.15f)
+                if (e.actionMasked == MotionEvent.ACTION_UP && far) onClose() else { card.translationX = 0f; card.alpha = 1f }
+                return true
+            }
+        }
+        return false
     }
 }
