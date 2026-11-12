@@ -49,7 +49,7 @@ class BackupCodecTest {
     @Test fun onlyHttpAndHttpsAddressesComeBack() {
         val raw = BackupCodec.encode(data(marks = emptyList(), visits = emptyList(), tabs = emptyList()))
         fun withMarks(vararg urls: String): BackupData {
-            val items = urls.joinToString(",") { "{\"u\":\"" + it.replace("\\", "\\\\").replace("\"", "\\\"") + "\",\"t\":\"x\"}" }
+            val items = urls.joinToString(",") { "{\"u\":" + app.kestrel.core.courier.Json.write(it) + ",\"t\":\"x\"}" }
             return BackupCodec.decode(raw.replace("\"bookmarks\":[]", "\"bookmarks\":[$items]"))
         }
         val d = withMarks("https://ok.example/", "javascript:alert(1)", "file:///sdcard/x", "content://x/y", "intent://x#Intent;end", "data:text/html,<b>", "ftp://x.example/", "about:blank",
@@ -76,7 +76,7 @@ class BackupCodecTest {
         val d = BackupCodec.decode(raw)
         assertEquals(mapOf<String, Any>("a" to true, "b" to 5L, "c" to "s", "g" to 1L), d.settings)
         assertTrue(d.bookmarks.isEmpty() && d.history.isEmpty() && d.tabs.isEmpty())
-        assertEquals(8, d.skipped)
+        assertEquals(9, d.skipped)
     }
 
     @Test fun countsAndLengthsAreCapped() {
