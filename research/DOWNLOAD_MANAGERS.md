@@ -88,7 +88,7 @@ Tags: [V] verified (S# = URL in section 8, or `file:function` read in this repo)
 Value = how often it bites on a metered, flaky hotspot, 2 GB RAM, 4 slow cores, eMMC, times the cost of the failure (taps, metered MB, bad file) [E]. "Exposure" = what can corrupt or waste data TODAY. "Change risk" = risk of the fix itself.
 | Rank | ID (closes) | Item | Value | Exposure today | Change risk | Hours |
 |---|---|---|---|---|---|---|
-| 1 | M1 (G11, G13, G18) | Resume validation bundle | High; also gives validator-less files a Pause button | silent splice or zero-filled holes; the only item that can hand the user a corrupt file | Medium (resume path) | 10 |
+| 1 | M1 (G11, G13, G18) | Resume validation bundle | High; also gives validator-less files a Pause button | silent splice or zero-filled holes; the main path to a silently corrupt file today | Medium (resume path) | 10 |
 | 2 | M2 (G20, G21, G25) | Outage ladder | High: the hotspot case | none (partial is safe); user must tap Retry | Low | 7 |
 | 3 | M3 (G6, G25) | Refused extra connection | High: servers cap per IP | none; wasted retries, failed job | Low | 6 |
 | 4 | M4 (G22) | Auto-resume after kill | Medium-high on 2 GB | none | Low | 4 |
