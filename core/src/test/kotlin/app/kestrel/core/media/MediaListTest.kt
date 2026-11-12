@@ -79,4 +79,31 @@ class MediaListTest {
         assertEquals("My clip - 720p", MediaLabels.fileStem("  My   clip ", "site.test", "720p"))
         assertEquals("site.test", MediaLabels.fileStem("", "site.test", ""))
     }
+
+    @Test fun usableCountAlwaysAgreesWithTheList() {
+        val l = MediaList()
+        assertEquals(0, l.usableCount())
+        l.add(file("https://c.test/tiny.mp4", 5_000)) // under 100 KB: not offered
+        assertEquals(l.usable().size, l.usableCount())
+        l.add(file("https://c.test/main.mp4", 5_000_000))
+        assertEquals(1, l.usableCount())
+        l.add(file("https://c.test/unknown.mp4", -1))
+        assertEquals(l.usable().size, l.usableCount())
+        assertEquals(2, l.usableCount())
+        l.add(file("https://c.test/unknown.mp4", 9_000_000)) // the size became known: the same entry, a better size
+        assertEquals(l.usable().size, l.usableCount())
+        l.add(hls("https://c.test/master.m3u8")) // a stream arrives: the 5 MB clip stays (under 4 MB would be dropped next to a stream)
+        assertEquals(l.usable().size, l.usableCount())
+        l.add(file("https://c.test/clip.mp4", 3_000_000)) // under 4 MB next to a stream: an ad or preview
+        assertEquals(l.usable().size, l.usableCount())
+        l.clear()
+        assertEquals(0, l.usableCount())
+    }
+
+    @Test fun labelHeightStillParses() {
+        assertEquals(720, MediaCandidate.heightOfLabel("HD 720"))
+        assertEquals(1080, MediaCandidate.heightOfLabel("1080p"))
+        assertEquals(0, MediaCandidate.heightOfLabel("fast"))
+        assertEquals(0, MediaCandidate.heightOfLabel(null))
+    }
 }
