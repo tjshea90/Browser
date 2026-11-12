@@ -6,10 +6,7 @@ import app.kestrel.core.download.Rec
 import app.kestrel.core.download.Seg
 import app.kestrel.core.download.Store
 import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 
 /** [Rec] as a JSON object and back (every persisted field; runtime-only [Seg] fields are not stored). */
 object RecJson {
