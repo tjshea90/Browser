@@ -52,8 +52,9 @@ class Mp4MuxTest {
         val all = (v.samples + a.samples).sortedBy { it.offset }
         assertTrue(all.first().offset >= r.mdatStart); assertTrue(all.last().offset + all.last().size <= r.mdatEnd)
         for (k in 1 until all.size) assertTrue(all[k].offset >= all[k - 1].offset + all[k - 1].size)
-        // sound starts at 0 and the first picture is shown at 7200: the earliest sample is the sound, the picture starts at its decode time 0 -> nothing to shift
-        assertTrue(v.edits.isEmpty()); assertTrue(a.edits.isEmpty())
+        // the sound starts at 0 and the first picture is shown 7200 ticks (80 ms) later: an empty edit of 80 ms, then the media from its first composition time (7200)
+        assertEquals(listOf(-1L to 80L, 7200L to (14400L - 7200L) / 90), v.edits.map { it.mediaTime to it.duration }.let { l -> listOf(l[0].first to l[0].second, l[1].first to l[1].second) })
+        assertTrue(a.edits.isEmpty())
     }
 
     @Test fun anEarlierSoundLeavesTheSkipInTheEditListOfThePicture() {
