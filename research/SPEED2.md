@@ -37,5 +37,41 @@ LinkMeter's Fast Wi-Fi and this proxy are complementary: the VPN covers every ta
 4. **Ad block stays in the engine** (reasoning in section 3). Nothing moves to the phone.
 5. **Back/forward and scrolling**: keep the bfcache and decoded images alive longer (RAM is allowed), start decoding and loading earlier, measure on the emulator what can be measured (bfcache hit on Back, prefs read back); real-tablet numbers stay the owner's to report (Diagnostics > Page loads, Compare 3 feels).
 
-## 5. Done in this round (updated as it happens)
-- Courier API port 8765 -> 8780 (tablet default too); proxy port 8781. Tablet gateway search over all Wi-Fi networks, ignoring a VPN.
+## 5. What was built (this round)
+- **Ports**: Courier API 8780, page proxy 8781 (`CourierPorts`); LinkMeter keeps 8765/8767. The tablet finds the phone through the Wi-Fi network's gateway even while a VPN (LinkMeter's Fast Wi-Fi) is up.
+- **Phone**: `ConnectProxy` + `ProxyGate` + `GuardedDialer` (core, 19 JVM tests incl. a real `HttpsURLConnection` through it), `POST /v1/proxy/arm|disarm`, `status.proxy`; the Courier takes a partial wake lock while any tunnel is open and ticks every 5 s (was 1 s) when idle.
+- **Tablet**: `ProxyLink` (upkeep thread, 8 tests against a real phone host) -> `PageProxy` -> `GeckoEngine.PhoneProxyApplier` (PAC `data:` URL on the default branch). Switches: main-menu tile "Phone helper" (whole helper on/off, one tap), Settings > Phone helper > "Load pages through the phone". Typing the pairing code switches the helper on if the owner never chose a mode. Link test measures pages through the phone and says so.
+- **Unmetered**: data saver default OFF (it was STANDARD: confirm dialogs, preload none, save-data signal); `NetworkMonitor.metered`, `FilterUpdater.isMetered` and the download engine's NetGate only act metered when a saver level is on; the "metered connection" labels are gone by default.
+
+## 6. Results and findings (emulator: Android 10 x86_64 + GeckoView 160, Courier and browser in ONE emulator; nothing here ran on the real devices)
+**6.1 Proxy proof.**
+| Test | Result |
+|---|---|
+| Diagnostics read-back after the helper came on | `network.proxy.type=2`, `failover_timeout=10`, `autoconfig_url=data:application/x-ns-proxy-autoconfig;...` |
+| `https://site.test:8443/` (a name only the phone's proxy can resolve; debug build maps `.test` to the host machine) | Courier log `proxy: tunnel to site.test:8443 open after 36 ms`; the host's TLS server logged `ClientHello SNI=site.test`. The tablet never resolved the name (remote DNS). The page stays blank: the test certificate is self-signed |
+| A dead proxy first in the script (`PROXY 127.0.0.1:9; DIRECT`) | Gecko connected DIRECT to `https://10.0.2.2:8443/` (server saw the connection) |
+| An unarmed tablet: the proxy ACCEPTS then resets (the helper was switched off, a script forced the proxy) | the Courier logged 157 "turned away" and the page still loaded DIRECT: Gecko 160 fails over on a reset too, so a stranger or an expired arming costs one retry, not a broken page |
+| Gecko's own DoH (`mozilla.cloudflare-dns.com:443`) | also rides the proxy (`tunnel to mozilla.cloudflare-dns.com`), harmless |
+Not tested here: any real carrier, hotspot, speed or battery number, Android 16 background limits.
+**6.2 Back/forward cache.** `bfc-a.html -> bfc-b.html -> Back`: page A came back with the same JS stamp and `pageshow.persisted=true` (restored from the bfcache, no reload). The same pages sent with `Cache-Control: no-store` (my first test server did) were reloaded: Gecko does not cache such pages, and sites like webmail and banks send it, so "instant Back" is a property of the page, not of our setting. Defaults read back from the engine: `browser.sessionhistory.contentViewerTimeout` = 360 s (6 minutes!); we set 3600.
+**6.3 Config v4 (gecko-prefs.txt), each read back on the emulator with its type.**
+| Pref | Was | Now | Why |
+|---|---|---|---|
+| `browser.sessionhistory.max_total_viewers` | 2 | 4 | more pages kept alive for Back (RAM allowed) |
+| `browser.sessionhistory.contentViewerTimeout` | 360 | 3600 | a page read for 10 minutes was dropped from the cache |
+| `browser.cache.memory.capacity` (KB) | auto | 65536 | 64 MB of resources kept in RAM for repeat loads |
+| `image.mem.surfacecache.min_expiration_ms` | 60000 | 180000 | decoded images kept 3 minutes: scrolling back shows no blank images |
+| `image.mem.decode_bytes_at_a_time` | 16384 | 65536 | fewer, bigger decode steps on a slow CPU |
+| `layout.framevisibility.numscrollportheights` | 1 (an INT: a string value is silently ignored) | 2 | images two screens ahead are decoded |
+| `dom.lazy-loading.margin.top/bottom` | "600.0" (a float, set as a string) | "1500.0" | lazy images start loading earlier: unmetered now |
+| `gfx.webrender.precache-shaders` | false | true | no shader-compile hitch the first time an effect appears |
+| `media.cache_readahead_limit` / `resume_threshold` | 30 / 10 | 60 / 30 | the Wi-Fi values: the hotspot is unmetered |
+| `network.prefetch-next` | false | true | `link rel=prefetch` allowed |
+| not changed | | | `network.predictor.*` does not exist in GeckoView 160 (checked in libxul) so there is nothing to tune; `network.dns.disablePrefetchFromHTTPS` would resolve every link's host on the tablet even for hosts the proxy serves: left alone |
+`tools/check-gecko-prefs.sh` confirms all 26 names exist in the shipped engine.
+**6.4 Not verified, by design of this sandbox**: that scrolling feels smoother (the display-port feel levels from R2 are unchanged: Standard / Smoother (default) / Smoothest); real page-load times; what the carrier does to the phone's own traffic while the hotspot is on. The owner's answer to the link test ("Pages through the phone: N times faster") settles the last one.
+
+## 7. Advice that needs no code
+- 2.4 GHz Wi-Fi tops out around 30-50 Mbit/s [L]; once the carrier cap is bypassed the tablet's Wi-Fi is the limit. With the phone close to the tablet, 5 GHz is worth a try (LinkMeter's Signal tab shows the signal).
+- LinkMeter's Fast Wi-Fi and the phone proxy are complementary (section 3). If Fast Wi-Fi's VPN is on, the proxy still works (private addresses bypass the VPN).
+
