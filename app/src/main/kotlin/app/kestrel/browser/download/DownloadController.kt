@@ -122,7 +122,7 @@ object DownloadController {
         val prefs = Prefs.get(app)
         val cfg = Config(maxActive = prefs.dlActive, maxConnsTotal = if (low) 3 else 6, maxConnsPerDownload = if (prefs.dlConns in 1..3) prefs.dlConns else if (low) 3 else 4, directMp4 = !debugRawTs(app))
         userKBps = prefs.dlLimitKBps; yieldToPages = prefs.dlYield
-        val lim = RateLimiter().also { it.bytesPerSec = effectiveKBps(userKBps, pageBusy, yieldToPages) * 1024L }
+        val lim = RateLimiter().also { it.bytesPerSec = effectiveKBps(userKBps, pageBusy, yieldToPages, pageKBps) * 1024L }
         limiter = lim
         val e = Engine(
             { fetchers[it] ?: fetchers[0] }, AppSinks(MediaStoreSinks(app), FileSinks(File(app.filesDir, "updates"))), SqliteStore(app), net, control, Clock.System, cfg,
