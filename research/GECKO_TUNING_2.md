@@ -61,7 +61,7 @@ Typing path for reference [V FREEZE.md]: Android IME -> `GeckoEditable` (Java, I
 | Item | Value in 160 | Verdict |
 |---|---|---|
 | Fission | `fission.autostart` default true; the app forces false; with it off, Spectre mitigations stay on and one content process serves every site | keep off (RAM) |
-| Content processes | `dom.ipc.processCount` GV file 8, Builder 2, app 1; `keepProcessesAlive.web` 1; prelaunch spare 1 on Android; `processPrelaunch.lowmem_mb` 4096 (limits preallocation on small-RAM devices) | 1 is right for RAM; A/B 2 for typing |
+| Content processes | `dom.ipc.processCount` greprefs 8, GeckoRuntimeSettings default 2, app 1; `keepProcessesAlive.web` 1; prelaunch spare 1 on Android; `processPrelaunch.lowmem_mb` 4096 (limits preallocation on small-RAM devices) | 1 is right for RAM; A/B 2 for typing |
 | Socket / RDD | not used on Android (section 1) | nothing to disable |
 | GPU / utility | GPU process (crash isolation of the Mali driver), utility (audio decode) | keep; `media.utility-process.enabled=false` would save one process but weakens isolation, no evidence |
 | bfcache / images / disk cache | `max_total_viewers` 2, `surfacecache.size_factor` 20, 512 MB cache (all set) | keep |
