@@ -127,6 +127,7 @@ object DownloadController {
             override fun view(id: Long): DownloadView? = if (st.owns(id)) st.view(id) else e.view(id)
         }) { uiChanged() }
         phone = pb
+        PageProxy.init(app)                                   // pages through the phone: starts its own light thread, only does anything once a phone is paired and the helper is on
         control.execute {
             e.restore(); st.restore(); e.resumeInterrupted(); st.resumeInterrupted()
             pb.restore(); if (PhoneBridge.wanted(app)) pb.start()            // after the engines: the rows from the last run find their downloads again
@@ -313,7 +314,7 @@ object DownloadController {
             override fun onAvailable(network: Network) { changed() }
             override fun onLost(network: Network) { changed() }
             override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) { changed() }
-            private fun changed() { refreshNet(); engine?.onNetwork(); streams?.onNetwork(); phone?.onNetwork() }
+            private fun changed() { refreshNet(); engine?.onNetwork(); streams?.onNetwork(); phone?.onNetwork(); PageProxy.refresh() }
         }
         try { cm.registerDefaultNetworkCallback(cb, handler); netCallback = cb } catch (e: Exception) { /* the engine's own failure handling still works */ }
     }
