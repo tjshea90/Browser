@@ -337,8 +337,7 @@ class CourierHostTest {
         val (_, z, h) = t.raw("GET", "/v1/speedtest?bytes=1000000").let { Triple(it.first, it.second.length, it.third) }
         assertEquals(1_000_000, z); assertEquals("1000000", h["Content-Length"]!!.first())
         assertEquals("a speed test needs the key too", 401, t.raw("GET", "/v1/speedtest?bytes=10", sign = false).first)
-        val big = t.raw("GET", "/v1/speedtest?bytes=999999999999")
-        assertEquals(64 * MiB, big.second.length)
+        assertEquals("the size is capped", 64L * MiB, t.countBytes("/v1/speedtest?bytes=999999999999"))
         val (pc, pj) = t.call("POST", "/v1/probe", """{"url":"https://files.test/pub/data.bin","bytes":100000}""")
         assertEquals(200, pc); assertEquals(true, pj.bool("ok")); assertEquals(100000L, pj.long("bytes")); assertEquals(206L, pj.long("status")); assertNotNull(pj.long("bps"))
         origin.failKind = app.kestrel.core.download.FetchException.Kind.DNS
