@@ -77,8 +77,7 @@ class CourierPartsTest {
         val sinks = StagingSinks(File(root, "s"))
         val s = sinks.create("part.bin", null, 1000, false)
         s.pwrite(0, ByteArray(300) { 7 }, 0, 300); s.sync()
-        val uri = s.uri!!
-        (s as java.io.Closeable?)?.let { }                                                          // (the process dies here: nothing is closed or published)
+        val uri = s.uri!!                                                                           // (the process dies here: nothing is closed or published)
         val again = sinks.reopen(uri, 1000)!!
         val back = ByteArray(300); assertEquals(300, again.pread(0, back, 0, 300)); assertTrue(back.all { it == 7.toByte() })
         again.truncate(200); assertEquals(200L, again.length())
