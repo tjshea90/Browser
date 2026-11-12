@@ -114,7 +114,7 @@ class TsToMp4Test {
         val v = r.track("vide")!!; val a = r.track("soun")!!
         assertEquals(120, v.samples.size); assertEquals(96, v.width); assertEquals(54, v.height)
         assertEquals("no B-frames: shown when decoded", v.samples.map { it.dts }, v.samples.map { it.cts })
-        assertEquals(30 * 3000L / 30, 3000L); assertEquals(120 * 3000L, v.mediaDuration)
+        assertEquals(120 * 3000L, v.mediaDuration)
         assertEquals(189, a.samples.size); assertEquals(48000L, a.timescale); assertEquals(2, a.channels)
         // the sound is 1920 ticks (21 ms) ahead of the first picture: the picture gets an empty edit in front
         assertEquals(2, v.edits.size); assertEquals(-1L, v.edits[0].mediaTime)
