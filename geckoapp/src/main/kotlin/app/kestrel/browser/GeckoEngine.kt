@@ -193,7 +193,7 @@ object GeckoEngine {
         // the owner's switches, unless a VPN (LinkMeter's Fast Wi-Fi) is the active network: then lookups go to the phone's own resolver and HTTP/3 stays off; behind LinkMeter's OWN tunnel there is also no
         // IPv6 (it is blocked there) and downloads give a loading page more room (core/net/NetProfile.kt, research/SPEED4.md)
         val eff = app.kestrel.core.net.NetProfile.effective(app.kestrel.core.net.NetProfile.Input(dohOn = prefs.dohOn, http3On = prefs.http3On, vpn = app.kestrel.browser.net.NetworkMonitor.vpn,
-            helperMode = prefs.phoneMode, pagesViaPhone = prefs.pagesViaPhone, fastTunnel = app.kestrel.browser.net.NetworkMonitor.fastTunnel))
+            helperMode = prefs.phoneMode, pagesViaPhone = prefs.pagesViaPhone, fastTunnel = app.kestrel.browser.net.NetworkMonitor.fastTunnel, keepHelperUnderVpn = prefs.labHelperUnderVpn))
         app.kestrel.browser.download.DownloadController.setPageYieldKBps(eff.pageYieldKBps)
         try {
             org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("network.trr.mode", eff.trrMode, d)

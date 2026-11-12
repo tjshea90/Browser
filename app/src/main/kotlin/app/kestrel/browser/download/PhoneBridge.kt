@@ -52,7 +52,7 @@ object PhoneBridge {
 
     fun profileInput(ctx: Context): NetProfile.Input {
         val p = Prefs.get(ctx)
-        return NetProfile.Input(dohOn = p.dohOn, http3On = p.http3On, vpn = NetworkMonitor.vpn, helperMode = p.phoneMode, pagesViaPhone = p.pagesViaPhone, fastTunnel = NetworkMonitor.fastTunnel)
+        return NetProfile.Input(dohOn = p.dohOn, http3On = p.http3On, vpn = NetworkMonitor.vpn, helperMode = p.phoneMode, pagesViaPhone = p.pagesViaPhone, fastTunnel = NetworkMonitor.fastTunnel, keepHelperUnderVpn = p.labHelperUnderVpn)
     }
 
     /** The backend has work (the owner uses the feature, or rows from an earlier run are still in flight). */

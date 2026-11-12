@@ -9,7 +9,10 @@ package app.kestrel.core.net
  * - DNS over HTTPS is paused: the system resolver goes to the phone's resolver in one hop (a DoH lookup would run through the VPN's userspace TCP engine on the tablet's weak CPU and ask for
  *   IPv6 addresses the VPN blocks);
  * - HTTP/3 is off: no QUIC attempt that is refused and then retried over TCP;
- * - the Courier (the owner's other phone helper) rests: a second relay on top of the VPN only adds a hop, never speed.
+ * - the Courier (the owner's other phone helper) rests, unless the owner's Network lab switch [Input.keepHelperUnderVpn] says otherwise. The assumption behind resting it ("a second relay on top of the
+ *   VPN only adds a hop, never speed") is UNTESTED: the Courier's proxy sits at the phone's private address, which the VPN does not carry, so for the browser it is one relay INSTEAD of the tunnel
+ *   (the tablet kernel's TCP instead of a userspace TCP engine on the weak CPU), not on top of it. The switch exists to measure that (research/REVIEW-EXTERNAL-1.md section 5, EX-5; the three-way
+ *   run of research/SPEED4.md section 5); rest stays the default until the owner's numbers say otherwise.
  * When the VPN is recognisably LinkMeter's own tunnel ([isFastTunnel]: its fixed addresses sit on the VPN interface), two more things hold, because the link behind it is the phone's own connection and
  * not the carrier-capped hotspot (research/SPEED4.md):
  * - the engine never asks for or tries IPv6 (the tunnel blocks it, so every AAAA answer would be a dead end);
@@ -45,6 +48,8 @@ object NetProfile {
         val pagesViaPhone: Boolean = false,
         /** The VPN is LinkMeter's own tunnel ([isFastTunnel]); only meaningful together with [vpn]. */
         val fastTunnel: Boolean = false,
+        /** Network lab (EX-5): keep the owner's Courier choices (downloads and pages through the phone) even while a VPN is the active network. OFF by default. */
+        val keepHelperUnderVpn: Boolean = false,
     )
 
     class Out(
@@ -63,11 +68,13 @@ object NetProfile {
         val pageYieldKBps: Int = PAGE_YIELD_KBPS,
         /** The VPN is LinkMeter's own tunnel (the full Fast Wi-Fi profile). */
         val tunnel: Boolean = false,
+        /** The owner kept the phone helper going under the VPN ([Input.keepHelperUnderVpn]). */
+        val helperKept: Boolean = false,
     ) {
         /** One plain sentence for Settings and Diagnostics. */
         val text: String get() = when {
-            tunnel -> "Fast Wi-Fi profile: LinkMeter's tunnel is the active network, so lookups use the phone's own resolver, HTTP/3 and IPv6 are off, downloads give a loading page more room ($pageYieldKBps KB/s) and the phone helper rests."
-            fastWifi -> "Fast Wi-Fi profile: a VPN is the active network, so lookups use the phone's own resolver, HTTP/3 is off and the phone helper rests."
+            tunnel -> "Fast Wi-Fi profile: LinkMeter's tunnel is the active network, so lookups use the phone's own resolver, HTTP/3 and IPv6 are off, downloads give a loading page more room ($pageYieldKBps KB/s) and the phone helper " + (if (helperKept) "keeps working (your Network lab switch)." else "rests.")
+            fastWifi -> "Fast Wi-Fi profile: a VPN is the active network, so lookups use the phone's own resolver, HTTP/3 is off and the phone helper " + (if (helperKept) "keeps working (your Network lab switch)." else "rests.")
             else -> "Standard profile: your own switches apply."
         }
     }
@@ -76,8 +83,10 @@ object NetProfile {
         val helper = i.helperMode.coerceIn(0, 2)
         if (!i.vpn) return Out(trrMode = if (i.dohOn) 2 else 0, http3 = i.http3On, fastWifi = false, helperMode = helper, pagesViaProxy = helper != 0 && i.pagesViaPhone)
         return Out(
-            trrMode = 0, http3 = false, fastWifi = true, helperMode = 0, pagesViaProxy = false,
+            trrMode = 0, http3 = false, fastWifi = true,
+            helperMode = if (i.keepHelperUnderVpn) helper else 0, pagesViaProxy = i.keepHelperUnderVpn && helper != 0 && i.pagesViaPhone,
             disableIPv6 = i.fastTunnel, pageYieldKBps = if (i.fastTunnel) FAST_PAGE_YIELD_KBPS else PAGE_YIELD_KBPS, tunnel = i.fastTunnel,
+            helperKept = i.keepHelperUnderVpn,
         )
     }
 }
