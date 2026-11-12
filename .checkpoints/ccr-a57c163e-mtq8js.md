@@ -1,13 +1,13 @@
-# CHECKPOINT 1016 — read me first, then TASKS.md
+# CHECKPOINT 1027 — read me first, then TASKS.md
 
-**Written:** 2026-11-12T13:55:26Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `c317b7d` (this checkpoint is the commit after it)
+**Written:** 2026-11-12T14:04:01Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `de5618c` (this checkpoint is the commit after it)
 
 ## Just done
-Z10 done (read LinkMeter): the owner's carrier caps the HOTSPOT at 5 Mbit/s, LinkMeter already has Fast Wi-Fi (VPN + phone relay, port 8767), LinkMeter's phone control port is 8765 = the Courier's default (clash!), PhoneBridge.gateway() breaks under a VPN. research/SPEED2.md written: facts, where the time goes, what the phone can/cannot genuinely speed up (the Z3 answer), decisions (HTTP CONNECT proxy in the Courier for page loads, PAC with DIRECT failover, unmetered, ad block stays in the engine)
+Z8 core done + Courier wiring: Courier API port now 8780 (CourierPorts, off LinkMeter's 8765), PhoneBridge.gateway() ignores a VPN; core ConnectProxy (HTTP CONNECT relay: half-close, limits, private-destination refusal, reset for strangers) + ProxyGate + GuardedDialer, 18 tests incl. a real HttpsURLConnection through it; CourierHost POST /v1/proxy/arm|disarm + status.proxy; CourierClient.armProxy/disarmProxy; ProxyLink (tablet upkeep thread, states Off/Active/Unavailable) with 8 tests against a real phone host; :courier runtime starts the proxy (port api+1) and ticks only every 5 s when idle. Courier + app compile
 
 ## Do this next
-BUILD ORDER (Z2 claimed): (1) Courier API port 8765->8780 + proxy port 8781 in CourierPrefs/PhoneBridge/Prefs defaults + docs; PhoneBridge.gateway(): loop cm.allNetworks (Wi-Fi, not VPN) instead of activeNetwork; (2) core/courier ConnectProxy (pure Kotlin) + JVM tests; CourierHost POST /v1/proxy/arm + status.proxy; CourierClient.armProxy; (3) :courier runtime starts the proxy; (4) tablet ProxyController: PAC via GeckoPreferenceController (network.proxy.type/autoconfig_url/failover_timeout), arm keepalive, reachability gating, Settings switches + menu tile + Diagnostics + LinkTest 4th measure; (5) unmetered default + prefs batch (verify names in libxul, check-gecko-prefs.sh) + bfcache probe on the emulator; (6) emulator proof, ship Courier alpha3 + Kestrel G alpha21, tell the owner. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN stays
+Z8 tablet side: (1) app: ProxyController (engine-neutral) owning a ProxyLink: wanted = Prefs.phoneHelper && Prefs.pagesViaPhone; onState -> post to main thread -> EngineProxy.apply(host,port)/clear(); hook refresh() into PhoneBridge.onNetwork + BrowserActivity.onResume; (2) geckoapp GeckoEngine.setPhoneProxy(host?, port): GeckoPreferenceController.setGeckoPrefs on PREF_BRANCH_DEFAULT: network.proxy.type=2 + network.proxy.autoconfig_url=data:application/x-ns-proxy-autoconfig,<PAC> (PROXY host:port; DIRECT for https/wss only, DIRECT for http, plain names, private ranges) + network.proxy.failover_timeout=10; clear = type 5 + empty url; add the pref names to tools/check-gecko-prefs.sh list; (3) Prefs: phoneHelper (master, default true once paired), pagesViaPhone (default true), downloadsMinMb; Settings section 'Phone helper' + main-menu tile; Diagnostics line (state + phone status.proxy numbers); LinkTest 4th measure; (4) CourierActivity line with proxy stats; (5) emulator proof: HTTPS test server on host 8443 (self-signed: Gecko cert error page proves the CONNECT tunnel) + fallback test with proxy reset. Z1 unmetered + prefs batch after. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN stays
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ BUILD ORDER (Z2 claimed): (1) Courier API port 8765->8780 + proxy port 8781 in C
 
 ## Last ten checkpoints
 ```
+  d886b5f ckpt 1016: Z10 done (read LinkMeter): the owner's carrier caps the HOTSPOT at 5 Mbit/s, 
   83be731 ckpt 1013: Owner message 13 written into TASKS.md as Z0-Z10 in their words (INBOX has it
   3a332d4 ckpt 1010: Y2 stage 2 SHIPPED and recorded: Kestrel Courier alpha2 (kestrel-courier-v0.1
   4389f39 ckpt 1007: gated kestrel-g-v0.3.0-alpha20 (gecko code 119) and pushed it: handoff self-t
@@ -25,8 +26,7 @@ BUILD ORDER (Z2 claimed): (1) Courier API port 8765->8780 + proxy port 8781 in C
   366f38a ckpt 996: Y2h2 code: Remuxer moved to shared-android/kotlin (package app.kestrel.platfor
   eab846d ckpt 989: Y2h stage 2a ticked with emulator evidence (video through the phone: live row,
   325467d ckpt 986: Y2 stage 2 (video streams through the phone) code complete, JVM + build verifi
-  f6958c7 ckpt 976: Y2 stage 1 SHIPPED and recorded: kestrel-courier-v0.1.0-alpha1 (run 4317795327
 ```
 
-(2 automatic checkpoint(s) since the last deliberate one — the
+(10 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
