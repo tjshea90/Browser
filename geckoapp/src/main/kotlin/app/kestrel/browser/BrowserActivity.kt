@@ -1451,6 +1451,38 @@ open class BrowserActivity : Activity(), DockListener {
         Io.main.postDelayed({ try { geckoView.requestNewSurface() } catch (e: Exception) { Health.log("user", "refresh-R2-failed", e.toString()) } }, 150)
     }
 
+    /** Settings > Back up & restore: what only this activity knows (its tabs and dialogs); the flow itself is shared with the other browser (ui/BackupFlow). */
+    private val backupHost = object : app.kestrel.browser.ui.BackupFlow.Host {
+        override fun database() = db
+        override fun isPrivateWindow() = isPrivate
+        override fun tabsForBackup(): List<app.kestrel.core.backup.TabRef> = tabs.filter { !it.isPrivateTab && (it.url.startsWith("http://") || it.url.startsWith("https://")) }.map { app.kestrel.core.backup.TabRef(it.url, it.title) }
+        override fun openTabs(refs: List<app.kestrel.core.backup.TabRef>): Int {
+            // restored tabs wait like the tabs of a closed session: nothing loads until one is opened (no burst of pages over the hotspot)
+            val open = tabs.filter { !it.isPrivateTab }.map { it.url.substringBefore('#') }.toHashSet()
+            var n = 0
+            for (r in refs) {
+                if (!open.add(r.url.substringBefore('#'))) continue
+                val t = Tab(nextTabId++)
+                t.url = r.url; t.title = r.title; t.pendingLoad = r.url
+                tabs.add(t); n++
+            }
+            if (n > 0) { updateUi(); saveSessionNow() }
+            return n
+        }
+        override fun say(message: String) { Toast.makeText(this@BrowserActivity, message, Toast.LENGTH_LONG).show() }
+        override fun ask(title: String, message: String, yes: String, no: String, result: (Boolean) -> Unit) { askYesNo(title, message, yes, no, result) }
+        override fun afterRestore() {
+            for (t in tabs) t.shields = Shields.effective(prefs, t.topHost)
+            GeckoEngine.applyPrefs(applicationContext)
+            Io.exec { UpdateJob.schedule(applicationContext) }
+            settingsView?.rebuild()
+            refreshNtpIfShown()
+            updateUi()
+        }
+        override fun appName(): String = Flavor.title + " " + (try { packageManager.getPackageInfo(packageName, 0).versionName } catch (e: Exception) { "?" })
+    }
+    private val backup by lazy { app.kestrel.browser.ui.BackupFlow(this, backupHost) }
+
     private val settingsListener = object : SettingsListener {
         override fun closeSettings() { this@BrowserActivity.closeSettings() }
         override fun prefsChanged() {
@@ -1464,6 +1496,8 @@ open class BrowserActivity : Activity(), DockListener {
             Io.main.postDelayed({ Neon.test(10_000); toast("Watch the glow around the address bar and above the dock for 10 seconds") }, 300)
         }
         override fun resetSiteShields() { Shields.clearAll(); toast("Per-site Shields reset") }
+        override fun backupNow() { backup.backupNow() }
+        override fun restoreFromFile() { backup.restoreFromFile() }
         override fun updateFiltersNow() {
             toast("Checking the filter lists…")
             // own thread: compiling the lists can take several seconds on this CPU and must not hold up history writes on the IO thread
@@ -1940,6 +1974,7 @@ open class BrowserActivity : Activity(), DockListener {
     @Deprecated("framework callback")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (backup.onResult(requestCode, resultCode, data)) return
         if (requestCode == REQ_FILE) {
             val cb = pendingFilePick
             pendingFilePick = null
