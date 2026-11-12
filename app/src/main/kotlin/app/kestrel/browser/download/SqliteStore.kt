@@ -41,7 +41,7 @@ class SqliteStore(ctx: Context) : SQLiteOpenHelper(ctx.applicationContext, "down
     override fun loadAll(): List<Rec> {
         val db = readableDatabase
         val out = ArrayList<Rec>()
-        db.rawQuery("SELECT id,state,reason,detail,prio,url,final_url,final_at,page_url,req_headers,name,mime,dest_kind,dest_uri,total,etag,last_mod,date_hdr,ranges,fetcher,risk,metered_ok,done,fails,conns_peak,created,updated,last_progress,finished,name_fixed FROM downloads ORDER BY id", null).use { c ->
+        db.rawQuery("SELECT id,state,reason,detail,prio,url,final_url,final_at,page_url,req_headers,name,mime,dest_kind,dest_uri,total,etag,last_mod,date_hdr,ranges,fetcher,risk,metered_ok,done,fails,conns_peak,created,updated,last_progress,finished,name_fixed,crashes FROM downloads ORDER BY id", null).use { c ->
             while (c.moveToNext()) {
                 val r = Rec(c.getLong(0))
                 r.state = DlState.of(c.getInt(1)); r.reason = Reason.of(c.getInt(2)); r.detail = c.getInt(3); r.prio = c.getInt(4)
@@ -49,7 +49,7 @@ class SqliteStore(ctx: Context) : SQLiteOpenHelper(ctx.applicationContext, "down
                 r.headers = parseHeaders(c.getString(9)); r.name = c.getString(10); r.mime = c.getString(11); r.destKind = c.getInt(12); r.destUri = c.getString(13)
                 r.total = c.getLong(14); r.etag = c.getString(15); r.lastMod = c.getString(16); r.dateHdr = c.getString(17); r.ranges = c.getInt(18); r.fetcher = c.getInt(19)
                 r.risk = c.getInt(20); r.meteredOk = c.getInt(21) != 0; r.done = c.getLong(22); r.fails = c.getInt(23); r.connsPeak = c.getInt(24)
-                r.created = c.getLong(25); r.updated = c.getLong(26); r.lastProgress = c.getLong(27); r.finished = c.getLong(28); r.nameFixed = c.getInt(29) != 0
+                r.created = c.getLong(25); r.updated = c.getLong(26); r.lastProgress = c.getLong(27); r.finished = c.getLong(28); r.nameFixed = c.getInt(29) != 0; r.crashes = c.getInt(30)
                 out.add(r)
             }
         }
@@ -72,7 +72,7 @@ class SqliteStore(ctx: Context) : SQLiteOpenHelper(ctx.applicationContext, "down
             v.put("name", r.name); v.put("mime", r.mime); v.put("dest_kind", r.destKind); v.put("dest_uri", r.destUri)
             v.put("total", r.total); v.put("etag", r.etag); v.put("last_mod", r.lastMod); v.put("date_hdr", r.dateHdr); v.put("ranges", r.ranges); v.put("fetcher", r.fetcher)
             v.put("risk", r.risk); v.put("metered_ok", if (r.meteredOk) 1 else 0); v.put("done", r.done); v.put("fails", r.fails); v.put("conns_peak", r.connsPeak)
-            v.put("created", r.created); v.put("updated", r.updated); v.put("last_progress", r.lastProgress); v.put("finished", r.finished); v.put("name_fixed", if (r.nameFixed) 1 else 0)
+            v.put("created", r.created); v.put("updated", r.updated); v.put("last_progress", r.lastProgress); v.put("finished", r.finished); v.put("name_fixed", if (r.nameFixed) 1 else 0); v.put("crashes", r.crashes)
             db.insertWithOnConflict("downloads", null, v, SQLiteDatabase.CONFLICT_REPLACE)
             db.delete("segments", "dl=?", arrayOf(r.id.toString()))
             for (s in r.segs) {
