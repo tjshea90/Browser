@@ -667,7 +667,7 @@ open class BrowserActivity : Activity(), DockListener {
     private val backPictureShow = Runnable {
         val (t, _, pic) = backTarget ?: return@Runnable
         backTarget = null
-        if (t !== current || !t.loading || t.error != null || t.showHome || restoringTab != null) return@Runnable // the engine had it already (cache), or the user moved on
+        if (t !== current || !t.loading || t.error != null || t.showHome || restoringTab != null) { Health.log("tabs", "back-picture-skipped", "loading=${t.loading} cover=${restoringTab != null}"); return@Runnable } // the engine had it already (cache), or the user moved on
         Health.count("back.picture"); Health.log("tabs", "back-picture", "tab=${t.id}")
         showRestoring(t, false, "", pic, 0x33)
     }
@@ -678,22 +678,26 @@ open class BrowserActivity : Activity(), DockListener {
     private fun armBackPicture(t: Tab, delta: Int) {
         Io.main.removeCallbacks(backPictureShow); backTarget = null
         if (t !== current || t.session == null) return
-        val st = t.gecko.state ?: return
+        val st = t.gecko.state
+        if (st == null) { Health.log("tabs", "back-arm", "no state"); return }
         val i = st.currentIndex + delta
-        if (i !in 0 until st.size) return
+        if (i !in 0 until st.size) { Health.log("tabs", "back-arm", "index $i of ${st.size}"); return }
         val url = st[i].uri ?: return
-        val pic = BackPictures.get(t.id, url) ?: return
+        val pic = BackPictures.get(t.id, url)
+        Health.log("tabs", "back-arm", "tab=${t.id} to=${UrlParts.hostOf(url)} picture=${pic != null} pictures=${BackPictures.size()}")
+        if (pic == null) return
         backTarget = Triple(t, url, pic)
         Io.main.postDelayed(backPictureShow, 150) // a cache hit is done by then; a page that has to load shows its picture
     }
 
     /** A navigation of the page in front is about to start (called before the engine loads [toUrl]): take its picture now, the way it is on screen, for a later Back. */
     internal fun leavingPage(tab: Tab, toUrl: String) {
-        if (tab !== current || tab.isNewTab || tab.loading || tab.error != null || tab.showHome || !tab.url.startsWith("http")) return
+        if (tab !== current || tab.isNewTab || tab.loading || tab.error != null || tab.showHome || !tab.url.startsWith("http")) { Health.log("tabs", "leave-skip", "loading=${tab.loading}"); return }
         if (BackPictures.keyOf(toUrl) == BackPictures.keyOf(tab.url)) return // a reload or a #fragment: the same page
         val now = SystemClock.uptimeMillis()
         if (now - lastLeaveShotAt < 1500) return // a chain of redirects or quick taps: one picture is enough
         lastLeaveShotAt = now
+        Health.log("tabs", "leave-shot", "tab=${tab.id} from=${UrlParts.hostOf(tab.url)}")
         captureThumb(tab, forBack = true)
     }
 
@@ -961,6 +965,7 @@ open class BrowserActivity : Activity(), DockListener {
                     val small = if (both != null) both.first else ThumbStore.shrink(full)
                     val picture = both?.second
                     if (picture != null) BackPictures.put(tab.id, leftUrl, picture)
+                    if (forBack) Health.log("tabs", "leave-shot-done", "picture=${picture != null}")
                     if (small != null) {
                         if (!tab.isPrivateTab) ThumbStore.save(appCtx, tab.id, small)
                         Io.ui { tab.thumb = small; tab.thumbAt = SystemClock.uptimeMillis(); ThumbStore.trim(tabs, tab); if (tabGrid.visibility == View.VISIBLE) tabGrid.thumbChanged(tab) }
