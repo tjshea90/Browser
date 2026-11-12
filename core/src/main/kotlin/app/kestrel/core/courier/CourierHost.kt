@@ -41,6 +41,8 @@ class CourierHost(
     private val resolve: (String) -> List<ByteArray> = { InetAddress.getAllByName(it).map { a -> a.address } },
     /** The segment downloader for video streams (HLS, written straight into an MP4); null = this phone only does plain files (a stream job is then refused with 501 and the tablet does it itself). */
     private val streams: StreamEngine? = null,
+    /** The page-load proxy ([ConnectProxy]); null = this phone does not offer one (the tablet then loads pages itself). */
+    private val proxy: ProxyControl? = null,
 ) {
     companion object {
         const val APP = "kestrel-courier"
@@ -127,6 +129,7 @@ class CourierHost(
             }
             "speedtest" -> if (req.method == "GET" && seg.size == 2) speedtest(req) else HttpResponse.error(405, "method")
             "probe" -> if (req.method == "POST" && seg.size == 2) probe(req) else HttpResponse.error(405, "method")
+            "proxy" -> if (req.method == "POST" && seg.size == 3 && (seg[2] == "arm" || seg[2] == "disarm")) armProxy(req, peer, seg[2] == "arm") else HttpResponse.error(if (seg.size == 3) 405 else 404, "not_found")
             else -> HttpResponse.error(404, "not_found")
         }
     }
@@ -142,6 +145,19 @@ class CourierHost(
     private fun status(): HttpResponse {
         val c = engine.counts(); val sc = streams?.counts() ?: intArrayOf(0, 0, 0)
         return HttpResponse.json(200, mapOf("app" to APP, "v" to VERSION, "name" to deviceName, "free" to freeBytes(), "jobs" to synchronized(lock) { jobs.size }, "running" to c[0] + sc[0], "queued" to c[1] + sc[1], "t" to clock.now()))
+    }
+
+    /**
+     * The tablet proves the pairing key (this request is signed) and thereby opens the page-load proxy to its address for a few minutes; it renews that while it browses and closes it
+     * (`disarm`) when the owner switches the helper off. A stranger on the same network cannot use the phone as an open proxy.
+     */
+    private fun armProxy(req: HttpRequest, peer: InetAddress, arm: Boolean): HttpResponse {
+        val pc = proxy ?: return HttpResponse.error(501, "no_proxy")
+        if (!arm) { pc.gate.disarm(peer); return HttpResponse.json(200, mapOf("ok" to true, "t" to clock.now())) }
+        val j = if (req.body.isEmpty()) null else body(req)
+        val ttl = ((j?.long("ttl") ?: 600L) * 1000L).coerceIn(30_000L, ProxyGate.MAX_TTL_MS)
+        pc.gate.arm(peer, ttl)
+        return HttpResponse.json(200, mapOf("ok" to true, "port" to pc.port, "ttl" to ttl / 1000, "t" to clock.now()))
     }
 
     private fun body(req: HttpRequest): Map<*, *>? = try { Json.parse(String(req.body, Charsets.UTF_8)) as? Map<*, *> } catch (e: JsonException) { null }

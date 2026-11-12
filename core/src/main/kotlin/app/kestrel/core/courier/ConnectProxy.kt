@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicLong
 class ProxyGate(private val clock: Clock = Clock.System) {
     private val armed = ConcurrentHashMap<String, Long>()
     fun arm(ip: InetAddress, ttlMs: Long) { armed[key(ip)] = clock.now() + ttlMs.coerceIn(1_000L, MAX_TTL_MS); sweep() }
+    fun disarm(ip: InetAddress) { armed.remove(key(ip)) }
     fun isArmed(ip: InetAddress): Boolean { val k = key(ip); val until = armed[k] ?: return false; if (clock.now() < until) return true; armed.remove(k, until); return false }
     fun disarmAll() = armed.clear()
     val armedCount: Int get() { sweep(); return armed.size }
@@ -25,6 +26,9 @@ class ProxyGate(private val clock: Clock = Clock.System) {
 
     companion object { const val MAX_TTL_MS = 15 * 60_000L }
 }
+
+/** What the phone host needs to know about the proxy: who may use it, where it listens, and what it has done (for `status` and the tablet's Diagnostics). */
+class ProxyControl(val gate: ProxyGate, val port: Int, val stats: () -> ConnectProxy.Stats)
 
 /**
  * An HTTP CONNECT proxy: the page-load path of "pages through the phone" (research/SPEED2.md section 4). The tablet's browser opens a tunnel to host:port through it, the phone opens the real
