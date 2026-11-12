@@ -16,7 +16,6 @@ import app.kestrel.core.courier.FETCHER_LAN
 import app.kestrel.core.courier.LanFetcher
 import app.kestrel.core.courier.LocalDownloads
 import app.kestrel.core.courier.PhoneBackend
-import app.kestrel.core.download.Action
 import app.kestrel.core.download.Clock
 import app.kestrel.core.download.Config
 import app.kestrel.core.download.DEST_APP_PRIVATE

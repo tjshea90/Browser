@@ -139,6 +139,7 @@ object Health {
         } catch (e: Exception) { /* ignore */ }
         engineFacts.forEach { sb.append(it).append('\n') }
         PageTimes.lines().forEach { sb.append(it).append('\n') }
+        try { app.kestrel.browser.download.PhoneBridge.diagLines(ctx).forEach { sb.append(it).append('\n') } } catch (e: Exception) { /* a report must never fail */ }
         val c = counters.entries.sortedBy { it.key }.joinToString("  ") { "${it.key}=${it.value.get()}" }
         sb.append("Counters: ").append(if (c.isEmpty()) "(none yet)" else c).append('\n')
         sb.append("\n-- last ").append(lastEvents).append(" events (").append(ring.totalAdded()).append(" recorded) --\n")

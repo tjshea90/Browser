@@ -74,6 +74,14 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         choice("Connections per download", listOf("Automatic (recommended)", "1", "2", "3"), prefs.dlConns) { prefs.dlConns = it }
         info("When it applies", "The speed limit changes at once. The other two apply the next time the browser starts.")
 
+        section("Download on my phone")
+        info("What it does", "Your phone downloads the file over its own connection and sends it to this tablet over the hotspot wifi when it has it. The download looks and works the same here, with live progress. You need the small Kestrel Courier app on the phone, with the hotspot on.")
+        choice("Use the phone", listOf("Off", "When the phone is there", "Always: wait for the phone"), prefs.phoneMode) { prefs.phoneMode = it; app.kestrel.browser.download.PhoneBridge.modeChanged(ctx) }
+        button("Pair with the phone", if (app.kestrel.browser.download.PhoneBridge.paired(ctx)) "Paired. Tap to type another code or to forget this one." else "Type the code the Courier app shows") { pairDialog() }
+        button("Test the phone link", "Measures the wifi to the phone, the phone's internet and this tablet's internet, and says whether it is worth it (uses about 40 MB)") { linkTest() }
+        info("Phone link", app.kestrel.browser.download.PhoneBridge.statusLine(ctx))
+        info("Good to know", "The phone's data plan pays for these downloads, and the phone works harder (battery, heat). Private tabs, app updates and video streams are always downloaded by the tablet itself. If the phone cannot do a download, the tablet does it and the row says why.")
+
         section("Appearance")
         choice("Neon glow", listOf("Off", "Steady", "Subtle pulse"), prefs.neon) { prefs.neon = it; app.kestrel.browser.ui.Neon.mode = it; app.kestrel.browser.ui.Neon.refresh(); rebuild() }
         info("The glow right now", app.kestrel.browser.ui.Neon.status().replaceFirstChar { it.uppercase() })
@@ -168,6 +176,28 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
     private fun info(title: String, value: String) {
         val (row, _) = rowBase(title, value)
         row.setOnLongClickListener { true }
+    }
+
+    private fun pairDialog() {
+        val bridge = app.kestrel.browser.download.PhoneBridge
+        val input = android.widget.EditText(ctx).apply { hint = "ABCD-EFGH-JKLM-NPQR"; setSingleLine(); inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS; setPadding(ctx.dp(20), ctx.dp(12), ctx.dp(20), ctx.dp(12)) }
+        val b = AlertDialog.Builder(ctx).setTitle("Pairing code").setMessage("Open Kestrel Courier on your phone. It shows 16 letters and numbers. Type them here once.").setView(input)
+            .setPositiveButton("Pair") { _, _ ->
+                if (bridge.savePairing(ctx, input.text.toString())) { rebuild() }
+                else AlertDialog.Builder(ctx).setTitle("That is not a code").setMessage("The code has 16 letters and numbers, like ABCD-EFGH-JKLM-NPQR. The letters I and O and the digits 0 and 1 are never used. Check the phone's screen and try again.").setPositiveButton("OK", null).show()
+            }.setNegativeButton("Cancel", null)
+        if (bridge.paired(ctx)) b.setNeutralButton("Forget the phone") { _, _ -> bridge.forgetPairing(ctx); rebuild() }
+        b.show()
+    }
+
+    private fun linkTest() {
+        val bridge = app.kestrel.browser.download.PhoneBridge
+        val wait = AlertDialog.Builder(ctx).setTitle("Testing the phone link").setMessage("This takes up to half a minute. Please keep the hotspot on.").setCancelable(false).show()
+        bridge.testLink(ctx) { report, error ->
+            wait.dismiss()
+            AlertDialog.Builder(ctx).setTitle(if (report != null) "Phone link" else "No test").setMessage(if (report != null) bridge.describe(report) else error).setPositiveButton("OK", null).show()
+            rebuild()
+        }
     }
 
     private fun confirm(title: String, message: String, ok: () -> Unit) {
