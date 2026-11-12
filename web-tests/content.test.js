@@ -15,7 +15,7 @@ before(async () => { browser = await chromium.launch(); });
 after(async () => { await browser.close(); });
 
 /** A page at https://site.example/ with content.js running against a fake extension API that records every message. */
-async function open(body) {
+async function open(body, pre) {
   const context = await browser.newContext();
   await context.route('https://**/*', (r) => r.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><title>t</title></head><body style="margin:0">${body}</body></html>` }));
   const page = await context.newPage();
@@ -23,6 +23,7 @@ async function open(body) {
     window.__msgs = [];
     window.browser = { runtime: { sendMessage: (m) => { window.__msgs.push(m); return Promise.resolve(undefined); } } };
   });
+  if (pre) await page.addInitScript(pre);
   await page.addInitScript({ content: CONTENT });
   await page.goto('https://site.example/');
   return page;
@@ -60,14 +61,15 @@ test('a bare media element (no source at all) is left alone', async () => {
 
 // ---------------------------------------------------------------- the media scan (AA4 / PERF_JS J4)
 const doms = (page) => page.evaluate(() => window.__msgs.filter((m) => m.k === 'dom').map((m) => m.u));
-const settle = (page) => page.waitForTimeout(900); // the scan runs when the page is idle (requestIdleCallback), a moment after load
+const settle = (page) => page.waitForTimeout(500); // the scan runs when the page is idle (requestIdleCallback), a moment after load
+const quickIdle = () => { window.requestIdleCallback = (f) => setTimeout(f, 30); }; // headless Chromium may wait for the full 3 s timeout of an idle callback: the tests do not
 
 test('scan: media addresses in elements, meta tags, links and inline player configurations are found without anyone pressing play', async () => {
   const page = await open(`
     <video src="https://cdn.example/a.mp4"></video>
     <meta property="og:video" content="https://cdn.example/og.mp4">
     <a href="https://cdn.example/link.webm">x</a><a href="https://cdn.example/page.html">y</a>
-    <script>var cfg = {"hls":"https:\\u002f\\u002fcdn.example\\u002fplay\\u002fmaster.m3u8","dash":"https:\\/\\/cdn.example\\/play\\/manifest.mpd"};</script>`);
+    <script>var cfg = {"hls":"https:\\u002f\\u002fcdn.example\\u002fplay\\u002fmaster.m3u8","dash":"https:\\/\\/cdn.example\\/play\\/manifest.mpd"};</script>`, quickIdle);
   await settle(page);
   const found = (await doms(page)).sort();
   assert.deepEqual(found, ['https://cdn.example/a.mp4', 'https://cdn.example/link.webm', 'https://cdn.example/og.mp4', 'https://cdn.example/play/manifest.mpd', 'https://cdn.example/play/master.m3u8']);
@@ -75,14 +77,14 @@ test('scan: media addresses in elements, meta tags, links and inline player conf
 
 test('scan: a huge inline script is skipped without being read, and the scan carries on with the scripts after it', async () => {
   const filler = 'x'.repeat(250000);
-  const page = await open(`<script>var big = "${filler} https://cdn.example/hidden-in-bundle.mp4";</script><script>var small = "https://cdn.example/real.mp4";</script><script>var nothing = 1 + 2; // no media here at all</script>`);
+  const page = await open(`<script>var big = "${filler} https://cdn.example/hidden-in-bundle.mp4";</script><script>var small = "https://cdn.example/real.mp4";</script><script>var nothing = 1 + 2; // no media here at all</script>`, quickIdle);
   await settle(page);
   assert.deepEqual(await doms(page), ['https://cdn.example/real.mp4']);
 });
 
 test('scan: at most 40 addresses per frame, each reported once even though the scan runs twice', async () => {
   let links = ''; for (let i = 0; i < 60; i++) links += `<a href="https://cdn.example/v${i}.mp4">v</a>`;
-  const page = await open(links);
+  const page = await open(links, quickIdle);
   await settle(page);
   await page.evaluate(() => window.dispatchEvent(new Event('load')));
   await page.waitForTimeout(3000); // the second scan, 2.5 s after load
@@ -92,7 +94,7 @@ test('scan: at most 40 addresses per frame, each reported once even though the s
 });
 
 test('scan: scripts and links that appear after the first scan are found by the second one', async () => {
-  const page = await open(`<a href="https://cdn.example/first.mp4">a</a>`);
+  const page = await open(`<a href="https://cdn.example/first.mp4">a</a>`, quickIdle);
   await settle(page);
   assert.deepEqual(await doms(page), ['https://cdn.example/first.mp4']);
   await page.evaluate(() => {
@@ -100,6 +102,6 @@ test('scan: scripts and links that appear after the first scan are found by the 
     const a = document.createElement('a'); a.href = 'https://cdn.example/late-link.mp4'; document.body.appendChild(a);
     window.dispatchEvent(new Event('load'));
   });
-  await page.waitForTimeout(3300);
+  await page.waitForTimeout(3000);
   assert.deepEqual((await doms(page)).sort(), ['https://cdn.example/first.mp4', 'https://cdn.example/late-link.mp4', 'https://cdn.example/late.m3u8']);
 });
