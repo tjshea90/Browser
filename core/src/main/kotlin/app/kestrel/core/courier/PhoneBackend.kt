@@ -191,7 +191,7 @@ class PhoneBackend(
     fun diag(): PhoneDiag = PhoneDiag(reachableNow, lastHelloAt, rttMs, skewMs, lastError, synchronized(lock) { items.values.count { it.phase == Phase.PHONE } })
 
     /** The network changed (the hotspot came or went): look again now instead of waiting for the next round. */
-    fun onNetwork() { downUntil = 0L; kick() }
+    fun onNetwork() { downUntil = 0L; lastHelloAt = 0L; kick() }                  // a new network: whoever answers there must prove the pairing code again before it gets a URL
 
     private fun remoteOp(id: Long, action: String) {
         val rid = synchronized(lock) { items[id]?.takeIf { it.phase == Phase.PHONE }?.remoteId } ?: return

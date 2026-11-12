@@ -113,7 +113,7 @@ class CourierServer(
                 }
                 c.lastIo = System.currentTimeMillis()
                 val resp = try { handler(req, peer) } catch (e: HttpException) { HttpResponse.error(e.status, e.message ?: "error") }
-                catch (e: Exception) { log("handler failed for ${req.method} ${req.path}: ${e.javaClass.simpleName}"); HttpResponse.error(500, "internal error") }
+                catch (e: Exception) { log("handler failed for ${req.method} /${req.path.split('/').filter { it.isNotEmpty() }.take(2).joinToString("/")}: ${e.javaClass.simpleName}")      // never the rest of the path: it can hold a file token; HttpResponse.error(500, "internal error") }
                 val keep = HttpWriter.write(out, req, resp, req.keepAlive)
                 c.lastIo = System.currentTimeMillis()
                 if (!keep) return
