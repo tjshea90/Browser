@@ -795,3 +795,59 @@
 > - Your keyboard app, accessibility and autofill facts.
 > - A yes or no on a scheduled CI list-build workflow.
 <!-- sha:f780843ede9d -->
+
+## 2026-11-12T19:33:49Z
+> **Kestrel G alpha22 is out.** It also carries the Fast Wi-Fi and Courier changes from your last message.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha22
+>
+> Everything below was checked on the Android 10 emulator only. The emulator has no hardware acceleration, so its speed means nothing. I checked what happens, not how fast. Nothing here has been tried on your tablet or on real Fast Wi-Fi.
+>
+> ## Your four requests
+>
+> **1. Fast Wi-Fi.** The browser now notices when LinkMeter's Fast Wi-Fi is the active connection and switches itself to match:
+> - **Lookups** go through the phone's own resolver instead of the encrypted-DNS route, which would have to squeeze through the tunnel.
+> - **HTTP/3** is off, since Fast Wi-Fi refuses it and the tries would only fail.
+> - **Phone helper** rests.
+>
+> When Fast Wi-Fi ends, your own settings come back exactly as you had them. Menu > Diagnostics has a "Network:" line saying which profile is active.
+>
+> **2. Courier closed.** Every Courier option is off by default. The "Phone helper" tile in the main menu only appears once the phone is paired, and it rests by itself while Fast Wi-Fi is on. No new Courier release was needed, so alpha3 stays as it is.
+>
+> **3. Your past prompts.** An independent reviewer went through all 25 of your messages (102 requests): 63 done, 33 partly done. In the order you stressed them, the open items are:
+> 1. speed, scrolling and Back
+> 2. typing lag in pages
+> 3. ad-blocking depth
+> 4. "mp4 always" leftovers
+> 5. download manager
+> 6. UI polish
+> 7. Back up / Restore
+> 8. security
+>
+> Finished now:
+> - the speed items (alpha22 below)
+> - engine freshness: Firefox's engine 160.0.20261104181552 is still the newest, so there is nothing to update
+> - workflow security: GitHub's token is read-only by default, and links from web pages can only ask other apps for open, write, dial or share
+> - bookkeeping: 18 old task items ticked, and the docs now say daily lists and an unmetered hotspot
+>
+> Already in the code, not in alpha22, coming in the next alpha:
+> - swiping a tab card sideways closes it (promised three times)
+> - a cold start opens straight onto "Opening <site>" instead of flashing Home
+> - the network check no longer runs on the screen thread
+>
+> Next, in order: typing lag, ad-block depth, Back up / Restore, the Settings restyle.
+>
+> **4. Speed, what changed in alpha22:**
+> - **Tabs stay ready by free memory.** Before, only 2 pages stayed alive, so with 3+ tabs every switch reloaded. Now it follows the memory the tablet reports: about 6 tabs at your usual 800 MB–1 GB free. Leaving the app no longer closes your tabs. Settings > Appearance > "Tabs kept ready" lets you force Few or Many.
+> - **Back.** Firefox's own cache now keeps 6 pages for an hour (it was 4), and those Backs are instant. Pages that forbid caching (Proton Mail, banking) can't be kept by any browser and must reload. Kestrel now takes a picture of the page as you leave it and shows it the moment you press Back while the real page reloads. That hides the wait bu
+> [... 2904 characters omitted ...]
+> ny problem, Menu > Diagnostics > Copy.
+> 2. For the Proton Mail slowness: open mail.proton.me twice and paste the "Page loads" lines from Diagnostics. Also tell me your keyboard app and whether an accessibility or autofill service is on.
+> 3. A scheduled GitHub job that compiles the ad-block lists once a day (yes or no). I've asked eight times. If your "do whatever is logical" was meant as yes, say so.
+> 4. The private signing key: only you can create those four secrets. Until then anyone holding the public dev key could sign an update.
+> 5. With Fast Wi-Fi on, read the Diagnostics "Network:" line and tell me what it says.
+> 6. Any site where a `.ts` file still appears, the download icon stays grey, or a spam page opens after play.
+> 7. Optional: project licence, landscape tab layout, Cromite comparison. The full list is in `research/PROMPT_AUDIT.md`.
+>
+> I'm continuing down the list in the background.
+<!-- sha:c815f5a97dc8 -->
