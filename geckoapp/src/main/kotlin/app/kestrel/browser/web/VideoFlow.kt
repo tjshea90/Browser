@@ -165,9 +165,12 @@ class VideoFlow(private val a: BrowserActivity) {
         addAll(rows, ranked.main); addAll(other, ranked.other)
         // two rows that read the same (two files of one quality) get the file's name so they can be told apart
         for (ch in rows) names.merge(ch.title + "|" + ch.detail, 1, Int::plus)
-        fun named(list: List<VideoPanel.Choice>) = list.map { ch -> if ((names[ch.title + "|" + ch.detail] ?: 0) > 1 && ch.tag is MediaCandidate) VideoPanel.Choice(ch.id, ch.title, ch.detail + "  \u00B7  " + shortName(ch.tag.url), ch.stem, ch.ext, ch.tag, ch.enabled, ch.badge) else ch }
+        fun withName(ch: VideoPanel.Choice, c: MediaCandidate) = VideoPanel.Choice(ch.id, ch.title, ch.detail + "  \u00B7  " + shortName(c.url), ch.stem, ch.ext, ch.tag, ch.enabled, ch.badge)
+        fun named(list: List<VideoPanel.Choice>) = list.map { ch -> if ((names[ch.title + "|" + ch.detail] ?: 0) > 1 && ch.tag is MediaCandidate) withName(ch, ch.tag) else ch }
+        // under "Other files" every row reads alike ("Video file, MP4, 300 KB"): the address's file name ("getit.php") is what tells the owner which one it is
+        fun namedOther(list: List<VideoPanel.Choice>) = list.map { ch -> if (ch.tag is MediaCandidate && shortName(ch.tag.url).isNotEmpty()) withName(ch, ch.tag) else ch }
         return VideoPanel.Model(
-            source = tab.displayTitle.takeIf { it.isNotBlank() } ?: host, rows = named(rows), other = other, note = note, busy = busy, extras = panelExtras,
+            source = tab.displayTitle.takeIf { it.isNotBlank() } ?: host, rows = named(rows), other = namedOther(other), note = note, busy = busy, extras = panelExtras,
             sizeText = { ch -> when (val t = ch.tag) { is MediaCandidate -> if (t.length > 0) MediaLabels.size(t.length) else ""; is StreamPick -> if (t.estimate > 0) MediaLabels.size(t.estimate, estimate = true) else ""; else -> "" } },
         )
     }
