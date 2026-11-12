@@ -79,7 +79,7 @@ class DownloadsScreen(ctx: Context, private var pal: Pal, private val l: Listene
         val running = views.filter { it.state != DlState.COMPLETED }.sortedByDescending { it.created }
         val done = views.filter { it.state == DlState.COMPLETED }.sortedByDescending { it.updated }
         clear.visibility = if (views.any { it.state == DlState.COMPLETED || it.state == DlState.FAILED }) VISIBLE else GONE
-        val sig = (running + done).joinToString("|") { "${it.id}:${it.state}:${it.reason}:${it.actions}" }
+        val sig = (running + done).joinToString("|") { "${it.id}:${it.state}:${it.reason}:${it.actions}:${it.note}" }
         if (sig == signature) { for (v in running) rows[v.id]?.bind(v); return } // same cards: just move the bars of the ones that are not finished (a finished row never changes)
         signature = sig
         val keep = scroller.scrollY
@@ -105,6 +105,8 @@ class DownloadsScreen(ctx: Context, private var pal: Pal, private val l: Listene
         private val name = label(ctx, v.name, 16f, pal.fg, bold = true).apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END; includeFontPadding = true }
         private val sub = label(ctx, "", 12f, pal.muted).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END; includeFontPadding = true }
         private val status = label(ctx, "", 14f, pal.fg).apply { includeFontPadding = true }
+        /** One plain sentence about how the file came to be what it is (kept as a .ts and why; a part left out of an MP4). */
+        private val note = label(ctx, "", 13f, pal.warn).apply { includeFontPadding = true; visibility = GONE }
         private val bar = Bar(ctx, pal)
 
         init {
@@ -120,6 +122,7 @@ class DownloadsScreen(ctx: Context, private var pal: Pal, private val l: Listene
             val showBar = v.state != DlState.COMPLETED && v.state != DlState.CANCELED
             if (showBar) root.addView(bar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ctx.dp(8)).apply { topMargin = ctx.dp(12) })
             root.addView(status, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(8) })
+            root.addView(note, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(4) })
             if (v.actions.isNotEmpty()) {
                 val btns = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
                 for ((i, a) in v.actions.withIndex()) btns.addView(button(ctx, a, i == 0, v), LinearLayout.LayoutParams(0, ctx.dp(if (i == 0) 56 else 52), 1f).apply { if (i > 0) marginStart = ctx.dp(8) })
@@ -136,6 +139,9 @@ class DownloadsScreen(ctx: Context, private var pal: Pal, private val l: Listene
             status.setTextColor(when (v.state) { DlState.FAILED -> pal.danger; DlState.NEEDS_DECISION, DlState.WAITING_NETWORK -> pal.warn; DlState.COMPLETED -> pal.ok; else -> pal.fg })
             val line = listOfNotNull(v.host?.removePrefix("www."), if (v.total >= 0) (if (v.estimated) "about " else "") + Format.bytes(v.total) else null, if (v.priv) "private" else null).joinToString("  ·  ")
             if (sub.text.toString() != line) sub.text = line
+            val n = v.note.orEmpty()
+            if (note.text.toString() != n) note.text = n
+            note.visibility = if (n.isEmpty()) GONE else VISIBLE
         }
     }
 
