@@ -76,7 +76,7 @@ class StagingSinks(private val dir: File) : SinkFactory {
     private fun safe(name: String): String {
         var s = name.replace(Regex("[\\\\/:*?\"<>|\\u0000-\\u001f]"), "_").trim().trim('.')
         if (s.isEmpty()) s = "download"
-        if (s.length > 120) { val dot = s.lastIndexOf('.'); s = if (dot in 1..12) s.substring(0, 120 - (s.length - dot)) + s.substring(dot) else s.substring(0, 120) }
+        if (s.length > 120) { val dot = s.lastIndexOf('.'); s = if (dot > 0 && s.length - dot <= 12) s.substring(0, 120 - (s.length - dot)) + s.substring(dot) else s.substring(0, 120) }
         return s
     }
 
