@@ -64,7 +64,7 @@
           }
           if (fresh.length) later();
         });
-        mo.observe(document.documentElement, { childList: true, subtree: true });
+        mo.observe(document, { childList: true, subtree: true }); // the document itself: its root element may not exist yet
       }
     } catch (e) { /* never break the page */ }
   }
