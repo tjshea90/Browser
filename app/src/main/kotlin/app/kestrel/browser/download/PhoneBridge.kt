@@ -100,11 +100,17 @@ object PhoneBridge {
         return null
     }
 
+    private fun debugProp(ctx: Context, name: String): String? {
+        if ((ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) == 0) return null
+        return try { (Class.forName("android.os.SystemProperties").getMethod("get", String::class.java).invoke(null, name) as? String)?.takeIf { it.isNotBlank() } } catch (e: Throwable) { null }
+    }
+
+    /** The file the link test reads: [TEST_URL], or (DEBUG builds only, `setprop debug.kestrel.phone.testurl http://10.0.2.2:8000/big.bin`) the emulator rig's own website. */
+    fun testUrl(ctx: Context): String = debugProp(ctx, "debug.kestrel.phone.testurl") ?: TEST_URL
+
     /** DEBUG builds only: `adb shell setprop debug.kestrel.phone 127.0.0.1:8765` points the link at a phone that is not on the hotspot (the emulator test rig). */
     private fun debugOverride(ctx: Context): Pair<String, Int>? {
-        if ((ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) == 0) return null
-        val v = try { Class.forName("android.os.SystemProperties").getMethod("get", String::class.java).invoke(null, "debug.kestrel.phone") as? String } catch (e: Throwable) { null }
-        if (v.isNullOrBlank()) return null
+        val v = debugProp(ctx, "debug.kestrel.phone") ?: return null
         val i = v.lastIndexOf(':')
         if (i <= 0) return v to 8765
         return v.substring(0, i) to (v.substring(i + 1).toIntOrNull() ?: return null)
@@ -143,7 +149,7 @@ object PhoneBridge {
             var err: String? = null
             try {
                 c.hello()
-                rep = LinkTest.run(c, UrlConnectionFetcher(), TEST_URL)
+                rep = LinkTest.run(c, UrlConnectionFetcher(), testUrl(ctx))
             } catch (e: CourierException) {
                 err = when (e.kind) {
                     CourierException.Kind.UNREACHABLE, CourierException.Kind.TIMEOUT -> "The phone does not answer. Is the hotspot on and the Courier app switched on?"
