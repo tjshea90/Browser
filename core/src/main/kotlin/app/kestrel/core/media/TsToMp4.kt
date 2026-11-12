@@ -22,6 +22,8 @@ class TsToMp4(
     private val totalMs: Long,
     /** The clock for the file's creation time (tests pass a fixed one so two runs give identical bytes). */
     nowMs: () -> Long = { System.currentTimeMillis() },
+    /** False when the run lengths given to [beginSegment] are only relative weights (bytes of a finished .ts whose playlist is gone): the warning then says no seconds. */
+    private val unitsAreMs: Boolean = true,
 ) : TsDemux.Out {
     class Finished(val length: Long, val warning: String?)
 
@@ -122,7 +124,7 @@ class TsToMp4(
         val total = mux.finish()
         journal.reset()
         val warn = when {
-            droppedRuns > 0 -> "$droppedRuns part${if (droppedRuns > 1) "s" else ""} of the stream (about ${(droppedMs + 500) / 1000} s) use a different picture or sound format and were left out."
+            droppedRuns > 0 -> "$droppedRuns part${if (droppedRuns > 1) "s" else ""} of the stream${if (unitsAreMs) " (about ${(droppedMs + 500) / 1000} s)" else ""} use a different picture or sound format and were left out."
             totalMs > 0 && keptMs * 2 < totalMs -> "Only part of the stream could be saved."
             else -> null
         }

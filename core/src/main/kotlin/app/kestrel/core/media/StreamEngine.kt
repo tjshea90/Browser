@@ -351,7 +351,7 @@ class StreamEngine(
                 override fun truncate(len: Long) = sink.truncate(len)
             }
             val noJournal = object : MuxJournal { override fun append(block: ByteArray) {}; override fun recover(): List<ByteArray> = emptyList(); override fun reset() {} }
-            val m = TsToMp4(adapter, noJournal, { sink.sync() }, size)
+            val m = TsToMp4(adapter, noJournal, { sink.sync() }, size, unitsAreMs = false)
             m.startFresh()
             // the runs between #EXT-X-DISCONTINUITY marks, as recorded while it downloaded; their weight is their length in bytes (the playlist is gone)
             val starts = ArrayList<Long>(); starts.add(0L)

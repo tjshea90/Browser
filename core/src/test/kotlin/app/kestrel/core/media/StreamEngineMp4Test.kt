@@ -209,6 +209,7 @@ class StreamEngineMp4Test {
         h.engine.makeMp4(v.id)
         val v2 = h.await(v.id, "the mp4") { it != null && it.state == DlState.COMPLETED && it.name.endsWith(".mp4") }!!
         assertNotNull(v2.note); assertTrue(v2.note!!, v2.note!!.startsWith("1 part"))
+        assertFalse("no seconds are claimed when only byte weights are known: ${v2.note}", v2.note!!.contains(" s)"))
         val r = Mp4Reader(h.out(v2))
         assertEquals(200, r.track("vide")!!.samples.size); assertEquals(128, r.track("vide")!!.width)
     }
