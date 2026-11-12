@@ -159,10 +159,16 @@ object GeckoEngine {
             "dom.speculation_rules.enabled", "dom.speculation_rules.prefetch.dry_run")
         try {
             org.mozilla.geckoview.GeckoPreferenceController.getGeckoPrefs(names).accept({ list ->
-                prefReadback = "Engine prefs: " + (list?.joinToString(", ") { "${it.pref.substringAfterLast('.')}=${it.value.toString().take(40)}(${when (it.type) { org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_BOOL -> "b"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_INT -> "i"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_STRING -> "s"; else -> "?" }})" } ?: "none")
+                prefReadback = "Engine prefs: " + (list?.joinToString(", ") { "${shortPref(it.pref)}=${it.value.toString().take(40)}(${when (it.type) { org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_BOOL -> "b"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_INT -> "i"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_STRING -> "s"; else -> "?" }})" } ?: "none")
                 done()
             }, { e -> prefReadback = "Engine prefs: read failed ($e)"; done() })
         } catch (e: Exception) { prefReadback = "Engine prefs: unavailable ($e)"; done() }
+    }
+
+    /** The last parts of a pref name for the read-back lines: "jxl.enabled", not the ambiguous "enabled". */
+    private fun shortPref(name: String): String {
+        val parts = name.split('.')
+        return if (parts.size >= 2 && parts.last() in setOf("enabled", "size", "delay", "strategy", "capacity", "type", "mode")) parts.takeLast(2).joinToString(".") else parts.last()
     }
 
     /** Launch the content process early ("speeds up the first page load"); idempotent. Call on the UI thread right after the runtime exists. */
