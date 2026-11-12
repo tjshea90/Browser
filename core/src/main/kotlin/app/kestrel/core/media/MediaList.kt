@@ -51,6 +51,8 @@ class MediaList(private val max: Int = 24) {
 
     val size: Int get() = items.size
     fun isEmpty(): Boolean = items.isEmpty()
+    /** The candidate for exactly this address (the #fragment aside), or null. */
+    fun find(url: String): MediaCandidate? = MediaCandidate.keyOf(url).let { k -> items.firstOrNull { it.key == k } }
     fun clear() { items.clear(); version++ }
 
     // The dock's download button asks "how many?" on every refresh of the screen (page progress, title, shield counter...): the sorted list is only rebuilt when the list changed.

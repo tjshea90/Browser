@@ -11,6 +11,8 @@ import app.kestrel.core.media.Hls
 import app.kestrel.core.media.MediaCandidate
 import app.kestrel.core.media.MediaKind
 import app.kestrel.core.media.MediaLabels
+import app.kestrel.core.media.MediaNames
+import app.kestrel.core.media.MediaRank
 import app.kestrel.core.media.MediaSniff
 import app.kestrel.core.media.Mp4Probe
 import app.kestrel.core.media.StreamSource
@@ -35,6 +37,8 @@ class VideoFlow(private val a: BrowserActivity) {
     private val children = HashSet<String>()            // addresses of the variant / audio playlists of masters we have read: they are not rows of their own
     private var panel: VideoPanel? = null
     private var panelTab: Tab? = null
+    private var panelPressed: String? = null
+    private var panelExtras: List<Pair<String, () -> Unit>> = emptyList()
 
     /** Called on the Shields worker thread. */
     fun seen(c: MediaCandidate) = Io.ui {
@@ -52,34 +56,45 @@ class VideoFlow(private val a: BrowserActivity) {
     /** Anything worth offering on this tab's page? (the menu shows its entry only then) */
     fun available(t: Tab?): Boolean = t != null && !t.isNewTab && t.media.usableCount() > 0
 
-    /** The long-press menu of a video or audio element. */
+    /**
+     * A long press on a video or audio element goes straight to the sheet, aimed at THAT file: its own address (when the page gave one) is the exact match, everything else the page loaded
+     * is ranked behind it (MediaRank). "Copy video address" and "Open link" are small buttons under the Download button instead of a menu in front of it.
+     */
     fun longPress(tab: Tab, srcUri: String?, linkUri: String?, onLink: (String) -> Unit) {
-        val labels = ArrayList<String>(); val acts = ArrayList<() -> Unit>()
         val direct = srcUri?.takeIf { it.startsWith("http://", true) || it.startsWith("https://", true) }
         // The element's own address is always worth offering, even when the sniffer has not seen the request (cached, or it ran before the extension was ready).
-        if (direct != null && tab.media.usable().none { it.url == direct }) tab.media.add(MediaCandidate(direct, MediaKind.FILE, "", -1, tab.url, "", System.currentTimeMillis()))
-        labels.add("Download video"); acts.add { show(tab) }
-        if (direct != null) { labels.add("Copy video address"); acts.add { a.copyText(direct) } }
-        if (linkUri != null) { labels.add("Open link in new tab"); acts.add { onLink(linkUri) } }
-        AlertDialog.Builder(a).setTitle((tab.displayTitle).take(80)).setItems(labels.toTypedArray()) { _, i -> acts[i]() }.show()
+        if (direct != null && tab.media.find(direct) == null) tab.media.add(MediaCandidate(direct, MediaKind.FILE, "", -1, tab.url, "", System.currentTimeMillis()))
+        val extras = ArrayList<Pair<String, () -> Unit>>()
+        if (direct != null) extras.add("Copy video address" to { a.copyText(direct) })
+        if (linkUri != null) extras.add("Open link in new tab" to { a.sheet.dismiss(); onLink(linkUri) })
+        show(tab, direct, extras)
     }
 
-    /** The sheet. */
-    fun show(tab: Tab) {
-        val items = tab.media.usable()
-        if (items.isEmpty()) {
+    /** The sheet. [pressedUrl]: the address of the element the owner long-pressed, when known. */
+    fun show(tab: Tab, pressedUrl: String? = null, extras: List<Pair<String, () -> Unit>> = emptyList()) {
+        val ranked = MediaRank.rank(candidates(tab, pressedUrl), pressedUrl)
+        if (ranked.main.isEmpty() && ranked.other.isEmpty()) {
             a.toast("No video found on this page yet. Some sites only show it once you press play: press play, then tap this icon again.")
             return
         }
-        val p = VideoPanel(a, a.pal) { choice -> when (val t = choice.tag) { is MediaCandidate -> pick(tab, t); is StreamPick -> pickStream(tab, t) } }
-        panel = p; panelTab = tab
-        render(p, tab, items)
-        a.sheet.show("Download video", p)
-        for (c in items) {
+        val p = VideoPanel(a, a.pal, object : VideoPanel.Listener {
+            override fun download(choice: VideoPanel.Choice, stem: String) { when (val t = choice.tag) { is MediaCandidate -> pick(tab, t, stem); is StreamPick -> pickStream(tab, t, stem) } }
+        })
+        panel = p; panelTab = tab; panelPressed = pressedUrl; panelExtras = extras
+        render(p, tab)
+        a.sheet.show("Save video", p)
+        for (c in ranked.main + listOfNotNull(ranked.exact)) { // only what is on top is looked into: a few hundred KB each, never the files tucked away
             if (c.kind == MediaKind.FILE && !c.audioOnly && (c.knownHeight == 0 || c.durationMs == 0L) && looksMp4(c) && probed.add(c.key)) probe(tab, c, 0L, 256 * 1024, 0)
             // a file found in the page's own markup has not been requested yet, so nobody has seen its length: one byte asked for gives it back as "Content-Range: bytes 0-0/TOTAL"
             else if (c.kind == MediaKind.FILE && c.length <= 0 && sized.add(c.key)) DownloadController.fetchBytes(a, c.url, 0L, 0L, requestHeaders(tab), 1, tab.isPrivateTab, onTotal = { n -> if (c.length <= 0) { c.length = n; refresh(tab) } }) { }
         }
+    }
+
+    /** What the page loaded that is worth considering, plus the pressed element's own file even when the usual size rules would hide it. */
+    private fun candidates(tab: Tab, pressedUrl: String?): List<MediaCandidate> {
+        val items = ArrayList(tab.media.usable())
+        pressedUrl?.let { u -> tab.media.find(u)?.let { c -> if (items.none { it === c }) items.add(c) } }
+        return items
     }
 
     private fun looksMp4(c: MediaCandidate): Boolean = MediaSniff.extension(c.url) in setOf("mp4", "m4v", "mov") || c.mime == "video/mp4" || c.mime == "video/quicktime"
