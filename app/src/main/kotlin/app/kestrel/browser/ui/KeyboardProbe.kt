@@ -23,6 +23,18 @@ class KeyboardProbe(private val activity: Activity) {
     private var popup: PopupWindow? = null
     private var view: View? = null
 
+    /**
+     * Called on the UI thread each time the probe window is laid out again, which is exactly when the keyboard showed, hid or changed height (Android 10: the probe is adjustResize). It replaces
+     * polling the window manager every 100 ms while the keyboard moves (research/REVIEW-EXTERNAL-1.md 2.3, EX-11). Never fires on Android 11+, which reads the insets directly.
+     */
+    @Volatile var onChange: (() -> Unit)? = null
+
+    /** How many layout events the probe has delivered: more than 0 proves on THIS device that the event path works, so the caller may poll only as a safety net (Diagnostics shows it). */
+    @Volatile var changes = 0
+        private set
+
+    private val layoutListener = android.view.ViewTreeObserver.OnGlobalLayoutListener { changes++; onChange?.invoke() }
+
     /** Call once the window is attached (it retries by itself on the next call if the window token is not ready yet). */
     fun attach(anchor: View) {
         if (Build.VERSION.SDK_INT >= 30 || popup != null) return
@@ -35,11 +47,16 @@ class KeyboardProbe(private val activity: Activity) {
             p.isFocusable = false
             p.setBackgroundDrawable(ColorDrawable(0))
             p.showAtLocation(anchor, Gravity.NO_GRAVITY, 0, 0)
+            v.viewTreeObserver.addOnGlobalLayoutListener(layoutListener)
             popup = p; view = v
         } catch (e: Exception) { popup = null; view = null } // window not ready yet: the next attach() call tries again
     }
 
-    fun detach() { try { popup?.dismiss() } catch (e: Exception) { /* already gone */ }; popup = null; view = null }
+    fun detach() {
+        try { view?.viewTreeObserver?.takeIf { it.isAlive }?.removeOnGlobalLayoutListener(layoutListener) } catch (e: Exception) { /* already gone */ }
+        try { popup?.dismiss() } catch (e: Exception) { /* already gone */ }
+        popup = null; view = null
+    }
 
     /** Top edge of the keyboard in screen pixels; 0 = no keyboard (or unknown). */
     fun topScreen(window: Window): Int {

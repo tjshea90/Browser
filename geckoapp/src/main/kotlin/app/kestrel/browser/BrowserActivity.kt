@@ -1037,7 +1037,15 @@ open class BrowserActivity : Activity(), DockListener {
     private var typingModeSince = 0L
     private var focusedAt = 0L
     private var kbTopScreen = 0 // top edge of the keyboard in screen pixels while it is up, else 0
-    private val kbProbe by lazy { KeyboardProbe(this) }
+    private val kbProbe by lazy { KeyboardProbe(this).also { it.onChange = { onKeyboardMoved() } } }
+
+    /** The keyboard's probe window was laid out again (it showed, hid or changed height): look at once instead of waiting for the next poll (EX-11). Only while an address field has (or just had) the keyboard. */
+    private var kbWatching = false
+    private fun onKeyboardMoved() {
+        if (!kbWatching) return
+        Io.main.removeCallbacks(typingTick)
+        typingTick.run() // re-posts itself
+    }
 
     /** Keyboard top edge in screen pixels, 0 = no keyboard (see [KeyboardProbe]: the window itself cannot tell under adjustNothing). */
     private fun keyboardTop(): Int { kbProbe.attach(root); return kbProbe.topScreen(window) }
@@ -1056,8 +1064,11 @@ open class BrowserActivity : Activity(), DockListener {
             applyKeyboard(top)
             // every look is a call into the window manager on Android 10: 100 ms while the keyboard moves, 300 ms once it has sat still for a second
             if (top == lastKbTop) kbStillTicks++ else { lastKbTop = top; kbStillTicks = 0 }
-            if (focused) { Io.main.postDelayed(this, if (kbStillTicks >= 10) 300L else 100L); return }
-            if (up && SystemClock.uptimeMillis() - typingModeSince < 1500) { Io.main.postDelayed(this, 80); return }
+            // once the probe has delivered an event on this device the poll is only a safety net (EX-11); until then (and on Android 11+, which has no probe window) the old cadence stays
+            val proven = kbProbe.changes > 0
+            if (focused) { Io.main.postDelayed(this, if (proven) 1000L else if (kbStillTicks >= 10) 300L else 100L); return }
+            if (up && SystemClock.uptimeMillis() - typingModeSince < 1500) { Io.main.postDelayed(this, if (proven) 250L else 80L); return }
+            kbWatching = false
             applyKeyboard(0)
             setUrlTypingMode(false)
         }
@@ -1097,7 +1108,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onUrlFocus(focused: Boolean) {
         Io.main.removeCallbacks(typingTick)
-        if (focused) { setUrlTypingMode(true); focusedAt = SystemClock.uptimeMillis(); updateNeonBusy() } else typingModeSince = SystemClock.uptimeMillis()
+        if (focused) { kbWatching = true; setUrlTypingMode(true); focusedAt = SystemClock.uptimeMillis(); updateNeonBusy() } else typingModeSince = SystemClock.uptimeMillis()
         Io.main.post(typingTick)
         if (focused) {
             if (!homeShown()) { dock.urlField.setText(dock.fullUrlForEditing(current)); dock.urlField.selectAll() }
@@ -1357,6 +1368,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null }} of ${tabs.size} tabs (the memory budget keeps up to ${liveBudget()} ready, MemAvailable ${Health.memAvailableMb()} MB, setting ${listOf("automatic", "few", "many")[prefs.tabsKept]}); current ${current?.url?.take(60) ?: "-"}")
         out.add("Network: ${GeckoEngine.networkProfile} (VPN active: ${NetworkMonitor.vpn}, LinkMeter tunnel recognised: ${NetworkMonitor.fastTunnel}, downloads yield to a loading page at ${DownloadController.pageYieldKBps} KB/s)")
         out.add(app.kestrel.browser.download.DownloadService.wifiLockLine())
+        out.add("Keyboard: ${kbProbe.changes} layout event(s) from the probe window this run (more than 0 = the dock follows the keyboard by event, polling only as a safety net)")
         out.add("Warm-ups: ${GeckoEngine.warmCalls} connection head start(s) handed to the engine on its own thread this run (Settings > Network lab > Warm up the top suggestion)")
         out.add(GeckoEngine.prefReadback)
         out.add(GeckoEngine.prefReadback2)
