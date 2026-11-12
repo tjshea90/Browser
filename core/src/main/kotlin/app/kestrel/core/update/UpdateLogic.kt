@@ -47,6 +47,44 @@ object UpdateLogic {
     private val CODE = Regex("""\(versionCode\s+(\d+)\)""")
     private val SHA = Regex("""APK SHA-256:\s*`?([0-9a-fA-F]{64})`?""")
 
+    private val REF = Regex(""""ref"\s*:\s*"refs/tags/([^"]+)"""")
+
+    /** The tag names in a `git/matching-refs/tags/<prefix>` answer, in whatever order GitHub sent them. */
+    fun tagsFromRefs(json: String): List<String> = REF.findAll(json).map { it.groupValues[1] }.toList()
+
+    /**
+     * Natural order of release tags: runs of digits compare as NUMBERS, everything else as text ("...alpha10" is newer than "...alpha9"; plain text order gets this wrong, and so does GitHub's own
+     * release list, which for this repository is sorted by tag name: alpha9, alpha8, ... alpha2, alpha13, alpha12, alpha11, alpha10).
+     */
+    fun compareTags(a: String, b: String): Int {
+        var i = 0
+        var j = 0
+        while (i < a.length && j < b.length) {
+            val da = a[i].isDigit()
+            val db = b[j].isDigit()
+            if (da && db) {
+                var ie = i; while (ie < a.length && a[ie].isDigit()) ie++
+                var je = j; while (je < b.length && b[je].isDigit()) je++
+                val na = a.substring(i, ie).trimStart('0')
+                val nb = b.substring(j, je).trimStart('0')
+                if (na.length != nb.length) return na.length - nb.length
+                val c = na.compareTo(nb)
+                if (c != 0) return c
+                i = ie; j = je
+            } else {
+                if (da != db) return if (da) -1 else 1
+                val c = a[i].compareTo(b[j])
+                if (c != 0) return c
+                i++; j++
+            }
+        }
+        return (a.length - i) - (b.length - j)
+    }
+
+    /** The [count] newest tags that start with [prefix], newest first, out of tags given in ANY order. */
+    fun newestTags(tags: Collection<String>, prefix: String, count: Int): List<String> =
+        tags.filter { it.startsWith(prefix) }.sortedWith { x, y -> compareTags(y, x) }.take(count)
+
     fun versionCode(body: String): Long? = CODE.find(body)?.groupValues?.get(1)?.toLongOrNull()
 
     /** The checksum of the APK: the body line we wrote ourselves first, GitHub's per-asset digest as the fallback. Lower case, or null. */
