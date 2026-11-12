@@ -26,6 +26,11 @@ object NetworkMonitor {
     /** The network is metered AND the owner switched a data saver level on: only then does "metered" change what the app does (the owner's hotspot is unmetered, whatever Android's flag says). */
     @Volatile var metered = false
         private set
+
+    /** A VPN is the active network (LinkMeter's Fast Wi-Fi on the tablet): the engine then runs the Fast Wi-Fi profile ([app.kestrel.core.net.NetProfile], research/SPEED3.md). */
+    @Volatile var vpn = false
+        private set
+    private var debugVpn = false
     @Volatile private var rawMetered = true // Android's own flag: assume metered until the network says otherwise (a hotspot almost always is)
     @Volatile private var saverOn = false
 
@@ -50,6 +55,7 @@ object NetworkMonitor {
         val c = ctx.applicationContext.getSystemService(ConnectivityManager::class.java) ?: return
         cm = c
         saverOn = app.kestrel.browser.data.Prefs.get(ctx).dataSaver != app.kestrel.core.shield.DataSaver.OFF
+        debugVpn = app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.vpn") == "1"        // DEBUG builds only: pretend a VPN is up (the emulator has none)
         update(c.activeNetwork?.let { c.getNetworkCapabilities(it) })
         val cb = object : ConnectivityManager.NetworkCallback() {
             override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = update(caps)
@@ -76,9 +82,11 @@ object NetworkMonitor {
         val newState = classify(caps)
         rawMetered = caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
         val newMetered = rawMetered && saverOn
-        if (newState == state && newMetered == metered) return
+        val newVpn = debugVpn || (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN))
+        if (newState == state && newMetered == metered && newVpn == vpn) return
         state = newState
         metered = newMetered
+        vpn = newVpn
         val copy = synchronized(listeners) { ArrayList(listeners) }
         for (l in copy) l()
     }

@@ -36,24 +36,33 @@ object PhoneBridge {
     private var clientKey = ""
 
     fun create(app: Context, local: LocalDownloads, onChange: () -> Unit): PhoneBackend {
-        val b = PhoneBackend({ clientFor(app) }, local, File(app.filesDir, "phone-jobs.json"), FIRST_ID, { mode(app) }, onChange, log = { Health.log("phone", it.take(140)) })
+        val b = PhoneBackend({ clientFor(app) }, local, File(app.filesDir, "phone-jobs.json"), FIRST_ID, { effectiveMode(app) }, onChange, log = { Health.log("phone", it.take(140)) })
         backend = b
         return b
     }
 
     fun backend(): PhoneBackend? = backend
 
+    /** The owner's own choice (Settings). OFF by default: the Courier is closed work (research/PHONE_OFFLOAD.md section 17) and the owner uses LinkMeter's Fast Wi-Fi instead. */
     fun mode(ctx: Context): PhoneMode = PhoneMode.values()[Prefs.get(ctx).phoneMode.coerceIn(0, 2)]
 
+    /** What really applies now: OFF while a VPN is the active network (LinkMeter's Fast Wi-Fi already uses the phone's own connection: a second relay would only add a hop). */
+    fun effectiveMode(ctx: Context): PhoneMode = PhoneMode.values()[NetProfile.effective(profileInput(ctx)).helperMode]
+
+    fun profileInput(ctx: Context): NetProfile.Input {
+        val p = Prefs.get(ctx)
+        return NetProfile.Input(dohOn = p.dohOn, http3On = p.http3On, vpn = NetworkMonitor.vpn, helperMode = p.phoneMode, pagesViaPhone = p.pagesViaPhone)
+    }
+
     /** The backend has work (the owner uses the feature, or rows from an earlier run are still in flight). */
-    fun wanted(ctx: Context): Boolean = mode(ctx) != PhoneMode.OFF || backend?.needsService() == true
+    fun wanted(ctx: Context): Boolean = effectiveMode(ctx) != PhoneMode.OFF || backend?.needsService() == true
 
     /** Settings changed the mode: make sure the backend thread runs and looks at the network again. */
     fun modeChanged(ctx: Context) {
         DownloadController.init(ctx)
         PageProxy.refresh()
         val b = backend ?: return
-        if (mode(ctx) != PhoneMode.OFF) b.start()
+        if (effectiveMode(ctx) != PhoneMode.OFF) b.start()
         b.onNetwork()
     }
 
@@ -70,11 +79,9 @@ object PhoneBridge {
     /** Stores a code the owner typed; false = it is not a valid code. */
     fun savePairing(ctx: Context, text: String): Boolean {
         val secret = Pairing.parse(text) ?: return false
-        val p = Prefs.get(ctx)
-        p.phoneCode = Pairing.format(secret)
-        if (!p.hasPhoneModeChoice()) p.phoneMode = PhoneMode.WHEN_THERE.ordinal         // typing the code is the owner saying "use my phone": no second switch to find
+        Prefs.get(ctx).phoneCode = Pairing.format(secret)                       // pairing only stores the code: the owner switches the helper on themselves (it is OFF by default)
         synchronized(this) { client = null; clientKey = "" }
-        modeChanged(ctx)
+        backend?.onNetwork()
         return true
     }
 
@@ -123,10 +130,7 @@ object PhoneBridge {
     }
 
     /** DEBUG builds only: a system property set with `adb shell setprop` (the emulator test rig); null in a release build. */
-    fun debugProp(ctx: Context, name: String): String? {
-        if ((ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) == 0) return null
-        return try { (Class.forName("android.os.SystemProperties").getMethod("get", String::class.java).invoke(null, name) as? String)?.takeIf { it.isNotBlank() } } catch (e: Throwable) { null }
-    }
+    fun debugProp(ctx: Context, name: String): String? = app.kestrel.browser.diag.DebugProps.get(ctx, name)
 
     /** The file the link test reads: [TEST_URL], or (DEBUG builds only, `setprop debug.kestrel.phone.testurl http://10.0.2.2:8000/big.bin`) the emulator rig's own website. */
     fun testUrl(ctx: Context): String = debugProp(ctx, "debug.kestrel.phone.testurl") ?: TEST_URL

@@ -5,7 +5,8 @@ import android.os.Handler
 import android.os.Looper
 import app.kestrel.browser.data.Prefs
 import app.kestrel.browser.diag.Health
-import app.kestrel.core.courier.PhoneMode
+import app.kestrel.browser.net.NetworkMonitor
+import app.kestrel.core.net.NetProfile
 import app.kestrel.core.courier.ProxyLink
 import java.net.URLEncoder
 
@@ -34,7 +35,7 @@ object PageProxy {
     }
 
     /** The owner wants pages to go through the phone: the helper is on, this switch is on, and a phone is paired. */
-    fun wanted(ctx: Context): Boolean = PhoneBridge.mode(ctx) != PhoneMode.OFF && Prefs.get(ctx).pagesViaPhone && PhoneBridge.paired(ctx)
+    fun wanted(ctx: Context): Boolean = NetProfile.effective(PhoneBridge.profileInput(ctx)).pagesViaProxy && PhoneBridge.paired(ctx)
 
     /** The switch changed, the network changed or the app came back to the front: look again now. */
     fun refresh() { link?.refresh() }
@@ -48,7 +49,7 @@ object PageProxy {
     fun line(ctx: Context): String = when (val s = state) {
         is ProxyLink.State.Active -> "Pages load through the phone (${s.host}:${s.port})." + (link?.phoneStats?.let { p -> " The phone has opened ${p.tunnels} connections for them (${mb(p.up + p.down)})" + (if (p.refused > 0) ", turned away ${p.refused}" else "") + "." } ?: "")
         is ProxyLink.State.Unavailable -> if (wanted(ctx)) "Pages load directly for now: ${s.why}." else "Pages load directly."
-        ProxyLink.State.Off -> if (wanted(ctx)) "Pages: looking for the phone." else "Pages load directly (switched off)."
+        ProxyLink.State.Off -> if (wanted(ctx)) "Pages: looking for the phone." else if (NetworkMonitor.vpn && Prefs.get(ctx).pagesViaPhone) "Pages load directly: a VPN (Fast Wi-Fi) is on, so the phone helper rests." else "Pages load directly (switched off)."
     }
 
     private fun mb(b: Long): String = if (b < 1_000_000L) "${b / 1000} KB" else String.format(java.util.Locale.US, "%.1f MB", b / 1_000_000.0)
