@@ -17,6 +17,8 @@ import app.kestrel.core.download.Format
 import app.kestrel.core.download.DlState
 import app.kestrel.core.download.DEST_APP_PRIVATE
 import app.kestrel.browser.download.DownloadController
+import app.kestrel.browser.download.MediaStoreSinks
+import app.kestrel.core.download.Sink
 import app.kestrel.browser.data.Prefs
 import app.kestrel.browser.ProcessLife
 import app.kestrel.core.update.Release
@@ -541,9 +543,9 @@ object UpdateManager {
         val apk = offer?.let { File(dir(app), it.apkName) }
         if (offer == null || apk == null || !apk.isFile) { done(null, "The update file is not downloaded yet: tap Try again first."); return }
         Thread({
-            var sink: app.kestrel.core.download.Sink? = null
+            var sink: Sink? = null
             try {
-                val s = app.kestrel.browser.download.MediaStoreSinks(app).create(offer.apkName, "application/vnd.android.package-archive", apk.length(), false)
+                val s = MediaStoreSinks(app).create(offer.apkName, "application/vnd.android.package-archive", apk.length(), false)
                 sink = s
                 apk.inputStream().use { input -> val buf = ByteArray(256 * 1024); var pos = 0L; while (true) { val n = input.read(buf); if (n < 0) break; s.pwrite(pos, buf, 0, n); pos += n } }
                 s.sync(); s.publish(); sink = null
