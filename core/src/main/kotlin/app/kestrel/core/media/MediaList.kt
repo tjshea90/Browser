@@ -32,9 +32,11 @@ class MediaCandidate(
         fun keyOf(url: String): String = url.substringBefore('#')
 
         /** "720p" / "HD 720" / "1080" -> 720 / 720 / 1080; 0 if the text names no resolution. */
+        private val LABEL_HEIGHT = Regex("""(\d{3,4})\s*p?""", RegexOption.IGNORE_CASE) // compiled once: the sort below asks for it on every refresh of the download button
+
         fun heightOfLabel(label: String?): Int {
             if (label == null) return 0
-            val m = Regex("""(\d{3,4})\s*p?""", RegexOption.IGNORE_CASE).find(label) ?: return 0
+            val m = LABEL_HEIGHT.find(label) ?: return 0
             val h = m.groupValues[1].toIntOrNull() ?: return 0
             return if (h in 144..4320) h else 0
         }
@@ -47,7 +49,16 @@ class MediaList(private val max: Int = 24) {
 
     val size: Int get() = items.size
     fun isEmpty(): Boolean = items.isEmpty()
-    fun clear() { items.clear() }
+    fun clear() { items.clear(); version++ }
+
+    // The dock's download button asks "how many?" on every refresh of the screen (page progress, title, shield counter...): the sorted list is only rebuilt when the list changed.
+    private var version = 0
+    private var countVersion = -1
+    private var countCache = 0
+    fun usableCount(): Int {
+        if (countVersion != version) { countCache = usableUnsorted().size; countVersion = version }
+        return countCache
+    }
 
     /** @return true if the list changed (a new URL, or a better size for a known one). */
     fun add(c: MediaCandidate): Boolean {
@@ -57,10 +68,12 @@ class MediaList(private val max: Int = 24) {
             var changed = false
             if (old.length < 0 && c.length >= 0) { old.length = c.length; changed = true }
             if (old.mime.isEmpty() && c.mime.isNotEmpty()) { old.mime = c.mime; changed = true }
+            if (changed) version++
             return changed
         }
         items.add(0, c)
         while (items.size > max) items.removeAt(items.size - 1)
+        version++
         return true
     }
 
@@ -72,15 +85,18 @@ class MediaList(private val max: Int = 24) {
         if (height > 0 && c.height != height) { c.height = height; changed = true }
         if (durationMs > 0 && c.durationMs != durationMs) { c.durationMs = durationMs; changed = true }
         if (!label.isNullOrBlank() && c.label != label) { c.label = label.trim().take(24); changed = true }
+        if (changed) version++
         return changed
     }
 
     /**
      * What is worth offering: playlists and big files first. Tiny files (sounds, tracking clips) and, when the page has a stream, small clips next to it (ads, previews) are left out.
      */
-    fun usable(): List<MediaCandidate> {
+    fun usable(): List<MediaCandidate> = usableUnsorted().sortedWith(compareBy<MediaCandidate> { kindRank(it) }.thenByDescending { it.knownHeight }.thenByDescending { it.length })
+
+    private fun usableUnsorted(): List<MediaCandidate> {
         val hasStream = items.any { it.kind != MediaKind.FILE }
-        val out = items.filter { c ->
+        return items.filter { c ->
             when {
                 c.kind != MediaKind.FILE -> true
                 c.length in 0 until MIN_FILE -> false
@@ -88,7 +104,6 @@ class MediaList(private val max: Int = 24) {
                 else -> true
             }
         }
-        return out.sortedWith(compareBy<MediaCandidate> { kindRank(it) }.thenByDescending { it.knownHeight }.thenByDescending { it.length })
     }
 
     private fun kindRank(c: MediaCandidate): Int = when {

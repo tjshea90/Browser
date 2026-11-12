@@ -1529,7 +1529,7 @@ open class BrowserActivity : Activity(), DockListener {
      */
     internal fun refreshDownloadButton() {
         val t = current
-        val n = if (t == null || t.isNewTab || t.media.isEmpty()) 0 else t.media.usable().size
+        val n = if (t == null || t.isNewTab || t.media.isEmpty()) 0 else t.media.usableCount()
         dock.setDownloadCount(n)
     }
 

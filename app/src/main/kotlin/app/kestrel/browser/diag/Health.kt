@@ -31,8 +31,12 @@ object Health {
     const val STALL_MS = 2000L
 
     fun log(layer: String, event: String, detail: String = "") {
-        val t = (SystemClock.elapsedRealtime() - startedAt) / 1000.0
-        ring.add(String.format(Locale.US, "+%.3fs %s %s%s", t, layer, event, if (detail.isEmpty()) "" else " $detail"))
+        val ms = SystemClock.elapsedRealtime() - startedAt // "+12.345s ...": built by hand, String.format costs about 50-100 us on this CPU and this runs for every touch that may start a pull
+        val sb = StringBuilder(48 + detail.length).append('+').append(ms / 1000).append('.')
+        val frac = (ms % 1000).toInt(); if (frac < 100) sb.append('0'); if (frac < 10) sb.append('0'); sb.append(frac)
+        sb.append("s ").append(layer).append(' ').append(event)
+        if (detail.isNotEmpty()) sb.append(' ').append(detail)
+        ring.add(sb.toString())
     }
 
     fun count(name: String): Int = counters.getOrPut(name) { AtomicInteger() }.incrementAndGet()

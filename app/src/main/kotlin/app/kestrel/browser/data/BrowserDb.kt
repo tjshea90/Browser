@@ -14,6 +14,12 @@ class Entry(val url: String, val title: String, val visits: Int = 0, val last: L
  */
 class BrowserDb(ctx: Context) : SQLiteOpenHelper(ctx.applicationContext, "browser.db", null, 1) {
 
+    override fun onConfigure(db: SQLiteDatabase) {
+        // write-ahead log: a visit being recorded after every page no longer makes the address bar's suggestions wait for the disk (two fsyncs less per write, readers never block)
+        db.enableWriteAheadLogging()
+        db.execSQL("PRAGMA synchronous=NORMAL")
+    }
+
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE history(url TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '', host TEXT NOT NULL DEFAULT '', visits INTEGER NOT NULL DEFAULT 1, last INTEGER NOT NULL)")
         db.execSQL("CREATE INDEX history_last ON history(last DESC)")

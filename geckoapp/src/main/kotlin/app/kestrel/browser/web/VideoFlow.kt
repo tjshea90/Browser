@@ -50,7 +50,7 @@ class VideoFlow(private val a: BrowserActivity) {
     }
 
     /** Anything worth offering on this tab's page? (the menu shows its entry only then) */
-    fun available(t: Tab?): Boolean = t != null && !t.isNewTab && t.media.usable().isNotEmpty()
+    fun available(t: Tab?): Boolean = t != null && !t.isNewTab && t.media.usableCount() > 0
 
     /** The long-press menu of a video or audio element. */
     fun longPress(tab: Tab, srcUri: String?, linkUri: String?, onLink: (String) -> Unit) {
