@@ -105,3 +105,67 @@ test('scan: scripts and links that appear after the first scan are found by the 
   await page.waitForTimeout(3000);
   assert.deepEqual((await doms(page)).sort(), ['https://cdn.example/first.mp4', 'https://cdn.example/late-link.mp4', 'https://cdn.example/late.m3u8']);
 });
+
+// ---------------------------------------------------------------- a tapped field is not left behind the keyboard (AA3-2 / research/TYPING.md)
+// Firefox shrinks only the visual viewport when the keyboard opens: the test replaces window.visualViewport with a fake whose height it can change, then fires its resize event.
+const fakeKeyboard = () => {
+  const listeners = [];
+  const vv = { height: 700, offsetTop: 0, addEventListener: (t, f) => { if (t === 'resize') listeners.push(f); }, removeEventListener() {} };
+  Object.defineProperty(window, 'visualViewport', { value: vv, configurable: true });
+  window.__keyboard = (h) => { vv.height = h; listeners.forEach((f) => f()); };
+};
+const field = (top, tag = 'input') => `<div style="height:${top}px"></div><${tag} id="f" style="height:30px;display:block">${tag === 'textarea' ? '</textarea>' : ''}<div style="height:3000px"></div>`;
+
+test('keyboard: a text field that the keyboard would cover is scrolled into the visible area', async () => {
+  const page = await open(field(500), fakeKeyboard);
+  await page.focus('#f');
+  assert.equal(await page.evaluate(() => scrollY), 0, 'the field is on screen before the keyboard opens');
+  await page.evaluate(() => window.__keyboard(300));
+  await page.waitForTimeout(400);
+  assert.ok(await page.evaluate(() => scrollY) > 100, 'the page scrolled to bring the field up');
+});
+
+test('keyboard: the keyboard opens in two steps, the field is placed by the final size', async () => {
+  const page = await open(field(500, 'textarea'), fakeKeyboard);
+  await page.focus('#f');
+  await page.evaluate(() => { window.__keyboard(375); setTimeout(() => window.__keyboard(335), 40); });
+  await page.waitForTimeout(500);
+  assert.ok(await page.evaluate(() => scrollY) > 100);
+});
+
+test('keyboard: a field that is still inside the visible area is not moved', async () => {
+  const page = await open(field(100), fakeKeyboard);
+  await page.focus('#f');
+  await page.evaluate(() => window.__keyboard(300));
+  await page.waitForTimeout(400);
+  assert.equal(await page.evaluate(() => scrollY), 0);
+});
+
+test('keyboard: a small change of the visible area (a toolbar) is not a keyboard, and nothing but text fields is moved', async () => {
+  const small = await open(field(500), fakeKeyboard);
+  await small.focus('#f');
+  await small.evaluate(() => window.__keyboard(660));
+  await small.waitForTimeout(400);
+  assert.equal(await small.evaluate(() => scrollY), 0, 'only 40 px: not a keyboard');
+  const btn = await open(`<div style="height:500px"></div><button id="f" style="height:30px;display:block">go</button><div style="height:3000px"></div>`, fakeKeyboard);
+  await btn.focus('#f');
+  await btn.evaluate(() => window.__keyboard(300));
+  await btn.waitForTimeout(400);
+  assert.equal(await btn.evaluate(() => scrollY), 0, 'a button has no keyboard to make room for');
+  const box = await open(`<div style="height:500px"></div><input id="f" type="checkbox"><div style="height:3000px"></div>`, fakeKeyboard);
+  await box.focus('#f');
+  await box.evaluate(() => window.__keyboard(300));
+  await box.waitForTimeout(400);
+  assert.equal(await box.evaluate(() => scrollY), 0, 'a checkbox does not open the keyboard either');
+});
+
+test('keyboard: an editable region (contenteditable) is moved like a field, and a page without visualViewport is left alone', async () => {
+  const page = await open(`<div style="height:500px"></div><div id="f" contenteditable="true" style="height:30px">x</div><div style="height:3000px"></div>`, fakeKeyboard);
+  await page.focus('#f');
+  await page.evaluate(() => window.__keyboard(300));
+  await page.waitForTimeout(400);
+  assert.ok(await page.evaluate(() => scrollY) > 100);
+  const none = await open(field(500), () => { Object.defineProperty(window, 'visualViewport', { value: undefined, configurable: true }); });
+  assert.equal(await none.evaluate(() => scrollY), 0);
+  assert.deepEqual(await none.evaluate(() => window.__msgs.filter((m) => m.k === 'pop')), [], 'no error, nothing reported');
+});
