@@ -1390,7 +1390,7 @@ open class BrowserActivity : Activity(), DockListener {
         tab.pendingLifetime.addAndGet(1)
         shieldCountChanged(tab)
         Health.count("guard.$kind")
-        if (tab !== current || tab.isPrivateTab && false) return
+        if (tab !== current) return
         val host = UrlParts.hostOf(url) ?: url.take(40)
         val what = if (kind == "redirect") "Stopped a jump to $host" else "Blocked a pop-up ($host)"
         val canOpen = url.startsWith("http://") || url.startsWith("https://")
