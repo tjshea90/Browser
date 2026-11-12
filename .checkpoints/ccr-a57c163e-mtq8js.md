@@ -1,15 +1,13 @@
-# CHECKPOINT 1125 — read me first, then TASKS.md
+# CHECKPOINT 1126 — read me first, then TASKS.md
 
-**Written:** 2026-11-12T17:43:15Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `4ccab88` (this checkpoint is the commit after it)
+**Written:** 2026-11-12T17:43:57Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `df466e6` (this checkpoint is the commit after it)
 
 ## Just done
-gated kestrel-g-v0.3.0-alpha22 (gecko code 121) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
+alpha22 first run (#69) FAILED in test-jvm: ConnectProxyTest.statsCountTunnelsAndBytes raced the relay counters (passed locally, failed on the CI runner); fixed the test (wait up to 5 s for the counters), core suite 549/549 twice with --rerun-tasks; re-shipped the same version 121 (no tag was created by the failed run) and re-dispatched: second full gecko run queued (this is also the first publish under the new per-job permissions)
 
 ## Do this next
-TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref ccr-a57c163e-mtq8js, inputs {"app":"gecko","full_build":"true","note":"alpha22 speed: tabs stay ready by free memory (Settings > Tabs kept ready), a tab comes back with its Back stack and scroll position after the app was closed, Back shows the page's picture while a page that cannot be cached loads again, a preview covers a tab that loads again, opening a link no longer loads the old tab too, downloads step aside while a page loads, faster history database, fixes and lighter page scripts in the ad blocker, stricter handling of intent: links"}.
-When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha22), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha22 "alpha22 speed: tabs stay ready by free memory (Settings > Tabs kept ready), a tab comes back with its Back stack and scroll position after the app was closed, Back shows the page's picture while a page that cannot be cached loads again, a preview covers a tab that loads again, opening a link no longer loads the old tab too, downloads step aside while a page loads, faster history database, fixes and lighter page scripts in the ad blocker, stricter handling of intent: links"
-NEVER ship kestrel-g-v0.3.0-alpha22 twice (check BUILDLOG.md and the Releases first).
+WAIT for the second alpha22 run (list_workflow_runs output is 75 KB: parse the saved file with python3 -I; newest id after 43271063952 / 43270755926); poll mcp__github__actions_get get_workflow_run; when success: get_release_by_tag kestrel-g-v0.3.0-alpha22, bash tools/record-release.sh, answer owner message 14. If build-gecko fails on permissions (contents write per job), the cause is the new workflow hardening: fix permissions in .github/workflows/android.yml and re-dispatch. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -18,6 +16,7 @@ NEVER ship kestrel-g-v0.3.0-alpha22 twice (check BUILDLOG.md and the Releases fi
 
 ## Last ten checkpoints
 ```
+  df466e6 ckpt 1125: gated kestrel-g-v0.3.0-alpha22 (gecko code 121) and pushed it: handoff self-t
   e283585 ckpt 1123: AA3-8 engine check (Mozilla Maven <latest> = ours 160.0.20261104181552), AA3-
   b39b8fd ckpt 1118: alpha22 shipped to GitHub: ship.sh gates green, pushed; workflow run 43270755
   4f54c04 ckpt 1117: gated kestrel-g-v0.3.0-alpha22 (gecko code 121) and pushed it: handoff self-t
@@ -27,8 +26,4 @@ NEVER ship kestrel-g-v0.3.0-alpha22 twice (check BUILDLOG.md and the Releases fi
   7ceb366 ckpt 1075: AA3 audit done by an independent read-only agent: research/PROMPT_AUDIT.md (2
   9c34e86 ckpt 1072: AA1 proven on the emulator (simulated VPN: Network line, trr=0, http3 off, ti
   a0a56be ckpt 1069: AA2 + AA1 core done: Courier closed in the browser (every option OFF by defau
-  ac00a1f ckpt 1061: Owner message 14 written into TASKS.md as AA1-AA4 in their words (INBOX has i
 ```
-
-(1 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
