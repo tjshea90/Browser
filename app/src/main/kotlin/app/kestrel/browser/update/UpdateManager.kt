@@ -75,7 +75,8 @@ object UpdateManager {
     private var ready = false
 
     private const val DAY_MS = 24L * 3600 * 1000
-    private const val API = "https://api.github.com/repos/tjshea90/Browser"
+    /** The GitHub API base of this repository; a test points it at a local server. */
+    @Volatile internal var apiBase = "https://api.github.com/repos/tjshea90/Browser"
     const val ACTION_RESULT = "app.kestrel.browser.update.RESULT"
 
     fun addListener(l: () -> Unit) { listeners.add(l) }
@@ -189,15 +190,15 @@ object UpdateManager {
         if (override != null) return parseReleases(getCached(app, override) ?: "[]")
         val prefix = Flavor.updateTagPrefix
         val tags = try {
-            UpdateLogic.newestTags(UpdateLogic.tagsFromRefs(getCached(app, "$API/git/matching-refs/tags/$prefix") ?: "[]"), prefix, 4)
+            UpdateLogic.newestTags(UpdateLogic.tagsFromRefs(getCached(app, "$apiBase/git/matching-refs/tags/$prefix") ?: "[]"), prefix, 4)
         } catch (e: RateLimited) { throw e } catch (e: HttpError) { emptyList() }
         val out = ArrayList<Release>()
         for (t in tags) {
-            val body = getCached(app, "$API/releases/tags/$t") ?: continue
+            val body = getCached(app, "$apiBase/releases/tags/$t") ?: continue
             out.addAll(parseReleases("[$body]"))
         }
         if (out.isNotEmpty()) return out
-        return parseReleases(getCached(app, "$API/releases?per_page=100") ?: "[]")
+        return parseReleases(getCached(app, "$apiBase/releases?per_page=100") ?: "[]")
     }
 
     fun check(ctx: Context, manual: Boolean) {
