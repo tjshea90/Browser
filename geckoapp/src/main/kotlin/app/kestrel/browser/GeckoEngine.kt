@@ -119,7 +119,7 @@ object GeckoEngine {
             "browser.cache.memory.capacity", "image.mem.decode_bytes_at_a_time", "layout.framevisibility.numscrollportheights", "layout.framevisibility.numscrollportwidths",
             "dom.lazy-loading.margin.top", "dom.lazy-loading.margin.bottom", "gfx.webrender.precache-shaders", "network.proxy.type", "network.proxy.failover_timeout", "network.proxy.autoconfig_url",
             // the Fast Wi-Fi profile (a VPN is the active network) and the back/forward cache blockers (research/SPEED3.md): their engine defaults are read here before any is changed
-            "network.trr.mode", "network.http.http3.enable", "docshell.shistory.bfcache.allow_unload_listeners", "docshell.shistory.bfcache.require_no_opener",
+            "network.trr.mode", "network.http.http3.enable", "network.dns.disableIPv6", "docshell.shistory.bfcache.allow_unload_listeners", "docshell.shistory.bfcache.require_no_opener",
             "docshell.shistory.bfcache.ship_allow_beforeunload_listeners", "browser.sessionhistory.max_entries", "network.dnsCacheExpiration", "network.dnsCacheEntries",
             "javascript.options.mem.gc_parallel_marking", "dom.script_loader.bytecode_cache.strategy")
         try {
