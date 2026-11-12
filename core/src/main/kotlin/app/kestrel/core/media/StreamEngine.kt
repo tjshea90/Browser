@@ -534,23 +534,24 @@ class StreamEngine(
             synchronized(lock) {
                 job.media = media
                 rec.playlistText = text
-                val ext = rec.ext ?: media.container
-                rec.name = FileNames.sanitize((if (rec.companionId != 0L) rec.nameStem + " (picture)" else rec.nameStem) + "." + ext) // the picture half of a pair is a stepping stone: the merged file gets the clean name
-                rec.mime = when (ext) { "mp4" -> "video/mp4"; "webm" -> "video/webm"; "aac" -> "audio/aac"; "mp3" -> "audio/mpeg"; "m4a" -> "audio/mp4"; else -> "video/mp2t" }
                 if (media.exactBytes >= 0) rec.estimate = media.exactBytes
             }
         }
         val media = synchronized(lock) { job.media!! }
         val dir = store.dir(rec.id)
+        if (media.container == "ts" && rec.ext == null) decideMux(job, media, fetcher, dir)
+        applyName(rec, media)
         // the output
         var sink: Sink? = null
         val uri = synchronized(lock) { rec.destUri }
         if (uri != null) sink = try { sinks.reopen(uri, -1) } catch (e: Exception) { null }
+        var reopened = false
         if (sink == null) {
             synchronized(lock) { rec.appended = 0; rec.next = 0; rec.breaks = ""; rec.initDone = false; job.written = 0; rec.destUri = null } // the output is gone: the pointer starts over (staged segments are still good)
             sink = sinks.create(rec.name, rec.mime, -1, rec.priv, rec.destKind)
             synchronized(lock) { rec.destUri = sink.uri; sink.displayName?.let { rec.name = it } }
-        } else synchronized(lock) { job.written = rec.appended }
+        } else { reopened = true; synchronized(lock) { job.written = rec.appended } }
+        if (synchronized(lock) { rec.mux } == MUX_MP4) startMux(job, media, sink, dir, reopened)
         scanStaged(job, media, dir) // what an earlier run left in the staging folder
         synchronized(lock) { job.sink = sink }
         persist(rec)
@@ -568,6 +569,61 @@ class StreamEngine(
             synchronized(lock) { rec.initDone = true; rec.appended = job.written }
         }
         synchronized(lock) { job.base = job.written + job.stagedBytes; job.inflight.set(0) }
+    }
+
+    private fun applyName(rec: StreamRec, media: Hls.Media) {
+        synchronized(lock) {
+            val ext = rec.ext ?: (if (rec.mux == MUX_MP4 && media.container == "ts") "mp4" else media.container)
+            rec.name = FileNames.sanitize((if (rec.companionId != 0L) rec.nameStem + " (picture)" else rec.nameStem) + "." + ext) // the picture half of a pair is a stepping stone: the merged file gets the clean name
+            rec.mime = when (ext) { "mp4" -> "video/mp4"; "webm" -> "video/webm"; "aac" -> "audio/aac"; "mp3" -> "audio/mpeg"; "m4a" -> "audio/mp4"; else -> "video/mp2t" }
+        }
+    }
+
+    /**
+     * A transport-stream video is written straight into an MP4 while it downloads when its first segment holds H.264 (and AAC sound or none): no .ts file, no second copy, no wait at the end.
+     * Anything else (or a download that already began the old way) keeps the joined-.ts path and says why in the row's note.
+     */
+    private fun decideMux(job: Job, media: Hls.Media, fetcher: Fetcher, dir: File) {
+        val rec = job.rec
+        if (synchronized(lock) { rec.mux != MUX_UNDECIDED || job.forceRaw }) { if (job.forceRaw) synchronized(lock) { rec.mux = MUX_RAW }; return }
+        if (!cfg.directMp4 || synchronized(lock) { rec.next > 0 || rec.destUri != null }) { synchronized(lock) { rec.mux = MUX_RAW }; return }   // a download from an older version, or the switch is off
+        val seg = media.segments[0]
+        val f = File(dir, "0.seg")
+        if (!f.isFile) {
+            if (!net.online) throw Stopped().also { synchronized(lock) { job.stopState = DlState.WAITING_NETWORK } }
+            fetchTo(job, fetcher, seg.url, seg.from, if (seg.len >= 0) seg.from + seg.len - 1 else -1, f, count = true)
+        }
+        val why: String? = try {
+            val n = minOf(f.length(), 384L * 1024).toInt().let { if (seg.key >= 0) it and 15.inv() else it }
+            val buf = ByteArray(n)
+            FileInputStream(f).use { input -> var p = 0; while (p < n) { val r = input.read(buf, p, n - p); if (r < 0) break; p += r } }
+            val plain = if (seg.key >= 0) {
+                val c = Cipher.getInstance("AES/CBC/NoPadding")
+                try { c.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes(job, media, seg.key), "AES"), IvParameterSpec(media.keys[seg.key].iv ?: Hls.sequenceIv(seg.seq))) } catch (e: Exception) { throw Failed(Reason.UNSUPPORTED) }
+                c.update(buf, 0, n)
+            } else buf
+            TsToMp4.probe(plain, 0, plain.size)
+        } catch (e: IOException) { "the first part of the stream could not be read back" }
+        synchronized(lock) {
+            if (why == null) { rec.mux = MUX_MP4; rec.note = null }
+            else { rec.mux = MUX_RAW; rec.note = "Kept as a .ts file because $why." }
+        }
+        if (why != null) log("stream ${rec.id}: raw .ts: $why", null)
+        persist(rec)
+    }
+
+    /** MP4 mode: the muxer over the output, its journal next to the staged segments; a restarted job is brought back to its last checkpoint. */
+    private fun startMux(job: Job, media: Hls.Media, sink: Sink, dir: File, reopened: Boolean) {
+        val rec = job.rec
+        val out = object : MuxOut {
+            override fun write(pos: Long, b: ByteArray, off: Int, len: Int) = sink.pwrite(pos, b, off, len)
+            override fun truncate(len: Long) = sink.truncate(len)
+        }
+        val m = TsToMp4(out, FileMuxJournal(File(dir, "mux.jnl")), { sink.sync() }, media.durationMs)
+        val next = if (reopened) m.recover() else null
+        if (next == null) { m.startFresh(); synchronized(lock) { rec.next = 0; rec.appended = m.position; job.written = m.position; rec.breaks = "" } }
+        else synchronized(lock) { rec.next = next; rec.appended = m.position; job.written = m.position }  // the journal knows better than the saved record: it is written first
+        job.mux = m; job.muxDirty = false; job.lastMuxCkpt = clock.now()
     }
 
     private fun scanStaged(job: Job, media: Hls.Media, dir: File) = synchronized(lock) {
