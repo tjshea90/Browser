@@ -300,7 +300,7 @@ class StreamEngine(
     }
 
     fun clearFinished() = control.execute {
-        for (j in snapshotJobs()) { val st = synchronized(lock) { j.rec.state }; if (j.rec.parentId == 0L && (st == DlState.COMPLETED || st == DlState.FAILED || st == DlState.CANCELED)) { wipeStaging(j); synchronized(lock) { jobs.remove(j.rec.id) }; if (!j.rec.priv) store.delete(j.rec.id); changed(j.rec.id) } }
+        for (j in snapshotJobs()) { val st = synchronized(lock) { j.rec.state }; if (j.rec.parentId == 0L && (st == DlState.COMPLETED || st == DlState.FAILED || st == DlState.CANCELED)) { wipeStaging(j); dropJob(j.rec.id); if (!j.rec.priv) store.delete(j.rec.id); changed(j.rec.id) } }
     }
 
     fun pauseAll() = control.execute { for (j in snapshotJobs()) if (synchronized(lock) { j.rec.state.active }) requestStop(j, DlState.PAUSED_USER) }
