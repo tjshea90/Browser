@@ -138,7 +138,7 @@ class TsToMp4Test {
         val r = Mp4Reader(file)
         val v = r.track("vide")!!; val a = r.track("soun")!!
         assertEquals(200, v.samples.size); assertEquals(128, v.width)
-        assertEquals(344, a.samples.size)
+        assertEquals(2 * (84 + 86), a.samples.size)
         // the second run follows the first on one clock: no big gap, no overlap
         val deltas = v.samples.zipWithNext { x, y -> y.dts - x.dts }
         assertTrue("largest step ${deltas.max()}", deltas.max() <= 3600 + 6000)
