@@ -575,3 +575,39 @@
 >
 > I set a wake-up every 4 hours that only does small safe work and otherwise just says it's standing by, to save your usage. It deletes itself if you're quiet for a day.
 <!-- sha:a9d5921e1f1f -->
+
+## 2026-11-12T05:30:56Z
+> alpha17 is out and built. Install it over your current Kestrel G:
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha17
+>
+> **Your points from the last message**
+> 1. **Long-press on a video:** it now opens Kestrel's own menu ("Download video", "Copy video address") instead of the site's player menu. Links and images on a page with a video also get "Download video from this page".
+> 2. **`.ts` instead of mp4:** HLS streams are now written straight into an `.mp4` while they download, so the row says `.mp4` from the first second and no `.ts` file ever exists.
+>    - **You were right about the remux:** nothing is re-encoded. The picture and sound bytes are copied unchanged into an MP4 wrapper, so it is fast and loses no quality.
+>    - **Interrupted downloads:** if the download is killed half way, it carries on from where it stopped.
+>    - **Not yet wrapped:** H.265 video and AC-3/MP3 sound stay as `.ts`, and the row says why.
+>    - **Size in the list:** a stream's list entry now shows an estimated size, e.g. "about 6.0 MB".
+> 3. **Fake play button that opens spam:** a tap on a hidden link laid over a player is blocked ("Blocked a pop-up", with Open / Dismiss). Real links with words still open. Fakes come in many shapes, so tell me if one gets through.
+> 4. **Download icon in the nav bar:** it is gray when the page has no video, and a pulsing neon blue when it has one. Tap it for the list with name, resolution, type, size and length, then pick one. The floating button is gone.
+>
+> Settings > Downloads (speed limit, downloads at once, connections) is also in this release.
+>
+> **How sure I am:** I tested all of this on an Android 10 emulator, not on your tablet or on real video sites.
+> - A 40-second 720p stream downloaded to an mp4 that decodes cleanly.
+> - I killed the app half way through and the download finished by itself, with the same file.
+> - Android's own video reader opens the result.
+> - Real streams vary. If one still ends as `.ts`, send me the line under the row.
+>
+> **Already in the code, shipping with the next release:**
+> - A "Make MP4" button for `.ts` files you already have.
+> - A fix for the icon staying gray when the same page is open in two tabs.
+> - Spotting ad inserts that no one marked in a stream.
+>
+> **Still waiting on you:**
+> 1. The Proton Mail "Page loads" numbers from Diagnostics, taken twice. Then repeat with encrypted DNS off, then HTTP/3 off.
+> 2. Which keyboard app you use, whether an accessibility or autofill service is on, and whether the hotspot is 5 GHz or 2.4 GHz.
+> 3. Yes or no: may I add a scheduled GitHub job that rebuilds the ad-block lists once a day?
+>
+> **Open on my side:** download queue priorities and checksums, ad-block scriptlets (needs your yes on item 3), the typing lag (needs your numbers), the cold-start glitch, swipe-to-close in the tab grid, and backup/restore.
+<!-- sha:aacdaeab552e -->
