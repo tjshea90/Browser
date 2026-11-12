@@ -96,6 +96,14 @@ class Prefs private constructor(ctx: Context) {
     var dataBaselineBoot: Long get() = sp.getLong("data_base_boot", 0L); set(v) = put("data_base_boot", v)
     var dataAccumulated: Long get() = sp.getLong("data_acc", 0L); set(v) = put("data_acc", v)
 
+    /** Settings > Back up and restore: the choices that were really made, and taking a backup's choices back (only the keys BackupManager allows, each checked). */
+    fun backupSnapshot(): Map<String, Any> = BackupManager.settingsSnapshot(sp)
+    fun restoreBackup(m: Map<String, Any>): Int {
+        val n = BackupManager.applySettings(sp, m)
+        app.kestrel.browser.net.NetworkMonitor.setSaver(dataSaver != DataSaver.OFF) // the one choice that is also held in memory
+        return n
+    }
+
     fun globalShields() = ShieldSettings(
         shieldsUp = true, blockAds = shieldAds, cosmetic = shieldCosmetic, https = httpsMode,
         blockThirdPartyCookies = shieldCookies, blockFingerprinting = shieldFingerprint, blockScripts = false,
