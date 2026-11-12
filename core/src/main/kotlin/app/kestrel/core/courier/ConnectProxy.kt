@@ -84,7 +84,7 @@ class ConnectProxy(
 
     private fun acceptLoop(s: ServerSocket) {
         while (!stopping) {
-            val c = try { s.accept() } catch (e: IOException) { if (stopping || s.isClosed) return else continue }
+            val c = try { s.accept() } catch (e: IOException) { if (stopping || s.isClosed) return; try { Thread.sleep(50) } catch (_: InterruptedException) { return }; continue }
             accepted.incrementAndGet()
             try { pool.execute { handle(c) } } catch (e: Exception) { closeQuietly(c) }
         }
