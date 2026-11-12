@@ -35,6 +35,10 @@ class DownloadService : Service() {
             catch (e: Exception) { /* a background start can be refused on Android 12+: the downloads stay queued until the app is opened */ }
         }
 
+        /** The mode of the downloads' Wi-Fi lock. HIGH_PERF, never WIFI_MODE_FULL (documented as having no effect from API 29): pinned by DownloadServiceWifiLockTest. */
+        @Suppress("DEPRECATION")
+        const val WIFI_LOCK_MODE = WifiManager.WIFI_MODE_FULL_HIGH_PERF
+
         /** Diagnostics (EX-1): is the Wi-Fi lock of a moving download held right now, and how many times was it taken since the process started. */
         @Volatile var wifiLockHeld = false
         @Volatile var wifiLockTakes = 0
@@ -110,11 +114,10 @@ class DownloadService : Service() {
             val now = SystemClock.elapsedRealtime()
             if (wake?.isHeld != true || now - lastWakeAt > 60_000) { wake?.acquire(10 * 60 * 1000L); lastWakeAt = now } // the 10 minute timeout is renewed about once a minute, not at every tick
             if (wifi == null) wifi = try {
-                // WIFI_MODE_FULL_HIGH_PERF on every API level: it is deprecated only from API 34 (where the system turns it into the low-latency lock by itself). The mode this code used
+                // HIGH_PERF on every API level ([WIFI_LOCK_MODE]): it is deprecated only from API 34 (where the system turns it into the low-latency lock by itself). The mode this code used
                 // from API 29 on, WIFI_MODE_FULL, is documented as "non-functional and will have no impact", so on the Android 10 tablet Wi-Fi power save stayed on with the screen off
                 // (research/REVIEW-EXTERNAL-1.md 2.1, EX-1).
-                @Suppress("DEPRECATION")
-                (applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager)?.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "kestrel:download")?.apply { setReferenceCounted(false) }
+                (applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager)?.createWifiLock(WIFI_LOCK_MODE, "kestrel:download")?.apply { setReferenceCounted(false) }
             } catch (e: Exception) { null }
             if (wifi?.isHeld == false) try { wifi?.acquire(); wifiLockTakes++ } catch (e: Exception) { /* no Wi-Fi service */ }
             wifiLockHeld = wifi?.isHeld == true
