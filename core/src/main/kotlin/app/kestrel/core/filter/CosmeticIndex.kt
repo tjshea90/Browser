@@ -106,7 +106,9 @@ internal class CosmeticIndex(
         val t = tokens()
         var keyed = 0; var biggest = 0
         for (v in t.byKey.values) { keyed += v.size; if (v.size > biggest) biggest = v.size }
-        return "generic=" + t.lo.size + " keyed=" + keyed + " keys=" + t.byKey.size + " loose=" + t.loose.size + " biggestBucket=" + biggest
+        var looseUniversal = 0; var looseTag = 0
+        for (k in t.loose) { val c = genericPool[t.lo[k]].toInt().toChar(); if (c == '[' || c == '*' || c == ':') looseUniversal++ else looseTag++ }
+        return "generic=" + t.lo.size + " keyed=" + keyed + " keys=" + t.byKey.size + " loose=" + t.loose.size + " (universal-bucket " + looseUniversal + ", tag-led " + looseTag + ") biggestBucket=" + biggest
     }
 
     private fun looseCss(limit: Int, exc: Set<String>): String {
