@@ -303,6 +303,7 @@ object UpdateManager {
         val app = ctx.applicationContext
         hookEngine(app)
         set(app, Phase.DOWNLOADING, offer, 0, offer.size)
+        UpdateNotifier.clear(app) // the "update is available - tap to download it" notice has been answered
         Thread({
             try {
                 // Before spending the hotspot's data: will Android's installer find room for this update once the file is here? (the same numbers its own check uses)
