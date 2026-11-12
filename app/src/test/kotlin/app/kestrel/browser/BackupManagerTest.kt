@@ -14,6 +14,7 @@ import app.kestrel.core.shield.SiteShields
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -38,6 +39,13 @@ class BackupManagerTest {
         db.clearHistory()
         for (b in db.bookmarks()) db.removeBookmark(b.url)
         Shields.init(ctx)
+        Shields.clearAll()
+    }
+
+    /** Prefs and the site store are process-wide singletons: leave them as the other test classes expect to find them (Google as the search engine, every Shields switch on, nothing saved). */
+    @After fun leaveNothingBehind() {
+        sp().edit().clear().commit()
+        db.clearHistory(); for (b in db.bookmarks()) db.removeBookmark(b.url)
         Shields.clearAll()
     }
 

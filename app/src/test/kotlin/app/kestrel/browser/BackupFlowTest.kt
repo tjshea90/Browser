@@ -15,6 +15,7 @@ import app.kestrel.core.backup.Visit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -57,6 +58,13 @@ class BackupFlowTest {
         Shields.init(ctx); Shields.clearAll()
         activity = Robolectric.buildActivity(Activity::class.java).create().get()
         said.clear(); asked = null; answer = true; openedTabs = emptyList(); afterRestore = 0; privateWindow = false
+    }
+
+    /** Prefs and the site store are process-wide singletons: leave them as the other test classes expect to find them (Google as the search engine, every Shields switch on, nothing saved). */
+    @After fun leaveNothingBehind() {
+        (Prefs::class.java.getDeclaredField("sp").also { it.isAccessible = true }.get(Prefs.get(ctx)) as android.content.SharedPreferences).edit().clear().commit()
+        db.clearHistory(); for (b in db.bookmarks()) db.removeBookmark(b.url)
+        Shields.clearAll()
     }
 
     private fun file(text: String): Intent {
