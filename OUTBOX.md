@@ -617,3 +617,51 @@
 >
 > What remains either waits on you (your Proton Mail numbers, the tablet facts, and the yes/no on the scheduled list job) or is backlog that doesn't justify another 92 MB release yet. I'm leaving the heartbeat in place, since you wrote to me a few minutes ago.
 <!-- sha:dd4f7e3e0d27 -->
+
+## 2026-11-12T06:06:54Z
+> **Alpha18 is out.** It is built, signed and checked by GitHub, and the certificate matches your installed version. The only testing so far was on the emulator, not your tablet.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha18
+>
+> **Y1: update no matter what (done)**
+> - The updater no longer stops on its own "free 2 GB" estimate. It always downloads the update and hands it to Android, and Android decides.
+> - If Android still refuses, the sheet says why in plain words and offers three buttons:
+>   - **Try again**.
+>   - **Storage settings**.
+>   - **Install the other way**: it saves the update into Downloads and opens Android's uninstall screen. That is the uninstall-and-reinstall you did by hand. Bookmarks, history and settings are not carried over, and the sheet says so.
+> - I can't make Android accept an update it has no room for. When your uninstall worked, the old app's space was freed first. That is why the two cases differ.
+> - **Update by hand once:** alpha17 on your tablet still has the old gate. Open the link above on the tablet and tap the APK. From alpha18 on, the in-app update tries every time.
+> - On the emulator, with less free space than Android wants, the update downloaded and Android's own "install an update?" screen came up. The refusal sheet was also checked there.
+>
+> Also in alpha18:
+> - A **Make MP4** button on finished `.ts` downloads.
+> - Ads spliced into a stream without any marker are spotted and left out.
+> - The download icon now works when the same page is open in two tabs.
+>
+> **Y2: phone does the downloading (possible, but it needs a small app on the phone)**
+> - The tablet can't make the phone download anything on its own, so there would be a second tiny app on the phone, "Kestrel Courier" (about 1–2 MB).
+> - You pair it once by typing a code shown on the phone.
+> - With the setting on, the tablet hands the download to the phone. The phone fetches it and turns videos into MP4. The tablet shows the same download row with live progress and the same Pause, Resume and Cancel buttons, then copies the finished file over wifi.
+> - If the phone isn't reachable, the tablet downloads it itself and the row says why.
+> - **It only helps if the slowness is on the hotspot path** (for example the carrier slowing tethered data), or if the tablet's processor is the limit. If the tablet's wifi radio is the limit, the finished file still has to cross that same radio, so the gain would be small.
+> - So I'm adding a **Test the phone link** button. It measures three speeds for the same file: tablet to phone, the phone's internet, and the tablet's internet. It then tells you in one sentence whether it's worth it.
+> - Data the phone downloads counts on the phone's plan, which may be a different bucket from your hotspot allowance. The phone also works harder (battery, heat).
+> - I'll build it in three stages:
+>   1. The Courier app, pairing, the speed test and plain file downloads.
+>   2. Videos (HLS, DASH, MP4 remux) done on the phone.
+>   3. Polish: overlapping the copy with the download, notifications on both devices, and so on.
+> - The full design is in `research/PHONE_OFFLOAD.md`.
+>
+> I'm starting stage 1 now on the assumption that your phone is an Android phone and that installing the Courier on it is fine. Tell me if either is wrong and I'll stop.
+>
+> **Questions for you (Y2):**
+> 1. Is your phone an Android 16 phone, not an iPhone?
+> 2. Is installing a second small app on the phone OK?
+> 3. When you say the phone is faster, what do you see? A rough MB/s, or minutes for the same file on each, would be enough.
+> 4. Should it handle everything, or only videos and big files?
+>
+> **Still waiting on you:**
+> - The Proton Mail "Page loads" numbers.
+> - Your keyboard app, accessibility and autofill details, and whether the tablet does 5 GHz wifi.
+> - A yes or no on a scheduled build of the ad-block lists. It would use GitHub minutes automatically, so I won't add it without your OK.
+<!-- sha:24065bf7921c -->
