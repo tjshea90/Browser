@@ -31,6 +31,7 @@ import app.kestrel.core.download.Spawner
 import app.kestrel.core.media.StreamEngine
 import app.kestrel.core.media.StreamSource
 import app.kestrel.platform.Remuxer
+import app.kestrel.core.shield.DataSaver
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
@@ -329,6 +330,6 @@ object DownloadController {
         val cm = app.getSystemService(ConnectivityManager::class.java) ?: return
         val caps = cm.activeNetwork?.let { cm.getNetworkCapabilities(it) }
         netOnline = caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) // "validated" is only a guess on a hotspot: online unless there is no network at all
-        netMetered = cm.isActiveNetworkMetered && Prefs.get(app).dataSaver != app.kestrel.core.shield.DataSaver.OFF   // the owner's hotspot is unmetered: the engine only acts metered when the saver is on
+        netMetered = cm.isActiveNetworkMetered && Prefs.get(app).dataSaver != DataSaver.OFF   // the owner's hotspot is unmetered: the engine only acts metered when the saver is on
     }
 }
