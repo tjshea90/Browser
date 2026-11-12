@@ -362,8 +362,9 @@ open class BrowserActivity : Activity(), DockListener {
         super.onTrimMemory(level)
         lastTrim = level; lastTrimAt = SystemClock.elapsedRealtime()
         Health.log("mem", "trim", "level=$level ${memFacts()}"); Health.count("mem.trim"); Health.count("mem.trim.$level")
-        // 10/15 = RUNNING_LOW/CRITICAL (we are visible); 20 = UI_HIDDEN (user left); 60+ = we are a prime kill candidate.
-        if (level >= 10) { for (t in tabs.toList()) if (t !== current && !hasLiveChild(t)) hibernate(t) } // a popup's opener must survive (window.opener)
+        // 10/15 = RUNNING_LOW/CRITICAL (we are visible); 20 = UI_HIDDEN (the user left: a quick app switch is not a memory fact); 40+ = background; 60+ = we are a prime kill candidate.
+        // LiveBudget.afterTrim decides how many tabs stay live from the level AND the memory the kernel reports as available (it used to close every other tab at any level >= 10).
+        if (level >= 10) enforceLiveLimit(LiveBudget.afterTrim(level, Health.memAvailableMb(), liveBudget())) // a popup's opener must survive (window.opener): enforceLiveLimit skips those
         if (level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE && !window.decorView.hasWindowFocus()) current?.let { hibernate(it) }
     }
 
@@ -626,15 +627,26 @@ open class BrowserActivity : Activity(), DockListener {
         Neon.covered(listOf<View?>(downloadsView, diagView, settingsView, listPanel).any { it != null && it.parent === root })
     }
 
-    /** Low-RAM policy: at most 2 live engine sessions (4 on bigger devices); the least recently used others are hibernated. */
-    private fun enforceLiveLimit() {
-        val low = getSystemService(ActivityManager::class.java)?.isLowRamDevice != false
-        val max = if (low) 2 else 4
+    /**
+     * How many tabs keep a live engine session right now: follows the memory the kernel reports as available (2 to 8; core LiveBudget, tests in LiveBudgetTest) unless the
+     * owner fixed a number in Settings > Tabs kept ready. The old rule was "2 on a low-RAM device", which made every third tab a reload.
+     */
+    private fun liveBudget(): Int {
+        val am = getSystemService(ActivityManager::class.java)
+        val mi = ActivityManager.MemoryInfo()
+        try { am?.getMemoryInfo(mi) } catch (e: Exception) { /* keep the zeros */ }
+        val avail = Health.memAvailableMb().let { if (it >= 0) it else if (mi.availMem > 0) (mi.availMem shr 20).toInt() else -1 }
+        return LiveBudget.limit(avail, am?.isLowRamDevice != false, mi.lowMemory, prefs.tabsKeptCount)
+    }
+
+    /** Keep at most [max] live engine sessions: the least recently used others are hibernated (the tab in front and any tab with a live pop-up child never are). */
+    private fun enforceLiveLimit(max: Int = liveBudget()) {
         val live = tabs.filter { it.session != null }.sortedBy { it.lastActive }
         var count = live.size
         for (t in live) {
             if (count <= max) break
             if (t === current || hasLiveChild(t)) continue
+            Health.count("tabs.hibernate"); Health.log("tabs", "hibernate", "tab=${t.id} live=$count max=$max avail=${Health.memAvailableMb()}MB")
             hibernate(t)
             count--
         }
@@ -646,7 +658,11 @@ open class BrowserActivity : Activity(), DockListener {
         if (geckoView.session === s) geckoView.releaseSession()
         try { s.close() } catch (e: Exception) { /* already gone */ }
         tab.session = null
-        if (tab.isPrivateTab) { tab.gecko.state = null; return } // a private tab is not kept anywhere: it comes back blank rather than leaving history in memory
+        if (tab.isPrivateTab) { // a private tab keeps no history: its back stack and form data are dropped. The address stays (it is on screen and in the tab grid anyway) so the tab loads it again instead of coming back blank behind a full address bar
+            tab.gecko.state = null
+            if (tab.url.isNotEmpty()) tab.pendingLoad = tab.url
+            return
+        }
         if (tab.gecko.state == null && tab.url.isNotEmpty()) tab.pendingLoad = tab.url
     }
 
