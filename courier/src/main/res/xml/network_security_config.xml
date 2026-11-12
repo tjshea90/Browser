@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  A browser must be able to load http:// pages (LAN devices, old sites). Safety does not come from forbidding cleartext here but from
-  the HTTPS-first policy in code (upgrade + warning screen), which is stricter than any static config could be.
-  Only system CAs are trusted (user-installed CAs are NOT), which is the Android default for apps targeting API 24+.
+  The tablet asks this app to download whatever the owner chose to download, and some of those links are plain http://. Cleartext is therefore allowed;
+  what the app will fetch is limited in code instead (no addresses on private networks, see Ssrf). Only system CAs are trusted.
 -->
 <network-security-config xmlns:tools="http://schemas.android.com/tools">
     <base-config cleartextTrafficPermitted="true" tools:ignore="InsecureBaseConfiguration">
