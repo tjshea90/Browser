@@ -75,7 +75,7 @@ object UpdateManager {
     private var ready = false
 
     private const val DAY_MS = 24L * 3600 * 1000
-    private const val FEED = "https://api.github.com/repos/tjshea90/Browser/releases?per_page=8"
+    private const val API = "https://api.github.com/repos/tjshea90/Browser"
     const val ACTION_RESULT = "app.kestrel.browser.update.RESULT"
 
     fun addListener(l: () -> Unit) { listeners.add(l) }
@@ -126,15 +126,12 @@ object UpdateManager {
         check(ctx, manual = false)
     }
 
-    private fun feedUrl(ctx: Context): String {
-        // DEBUG builds only: `adb shell setprop debug.kestrel.feed http://10.0.2.2:8000/releases.json` points the check at a local test feed.
-        if ((ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
-            try {
-                val v = Class.forName("android.os.SystemProperties").getMethod("get", String::class.java).invoke(null, "debug.kestrel.feed") as? String
-                if (!v.isNullOrBlank()) return v
-            } catch (e: Throwable) { /* no override */ }
-        }
-        return FEED
+    /** DEBUG builds only: `adb shell setprop debug.kestrel.feed http://10.0.2.2:8000/releases.json` points the check at a local test feed (a releases LIST). */
+    private fun debugFeed(ctx: Context): String? {
+        if ((ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) == 0) return null
+        return try {
+            (Class.forName("android.os.SystemProperties").getMethod("get", String::class.java).invoke(null, "debug.kestrel.feed") as? String)?.takeIf { it.isNotBlank() }
+        } catch (e: Throwable) { null }
     }
 
     private fun open(url: String): HttpURLConnection = (URL(url).openConnection() as HttpURLConnection).apply {
@@ -142,6 +139,65 @@ object UpdateManager {
         readTimeout = 30_000
         instanceFollowRedirects = true
         setRequestProperty("User-Agent", "Kestrel-updater/1") // GitHub requires one; it names the app, nothing about the user or device
+    }
+
+    private class RateLimited : IOException("rate limited")
+    private class HttpError(val code: Int) : IOException("HTTP $code")
+
+    /**
+     * GET with the ETag we stored last time: a 304 answers from the stored body, so "nothing new" costs headers only on the metered link (and a 304 is not counted against GitHub's request limit).
+     * null = 404 (a tag that has no release). Only a few small bodies are kept (the tag list and the newest releases).
+     */
+    private fun getCached(app: Context, url: String): String? {
+        val s = sp(app)
+        val key = java.security.MessageDigest.getInstance("SHA-1").digest(url.toByteArray()).joinToString("") { "%02x".format(it) }.take(12)
+        val etag = s.getString("e.$key", null)
+        val old = s.getString("b.$key", null)
+        val c = open(url)
+        c.setRequestProperty("Accept", "application/vnd.github+json")
+        if (etag != null && old != null) c.setRequestProperty("If-None-Match", etag)
+        try {
+            when (val code = c.responseCode) {
+                304 -> return old
+                200 -> {
+                    val text = c.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
+                    val tag = c.getHeaderField("ETag")
+                    if (tag != null && text.length < 300_000) {
+                        val keys = (s.getString("cache_keys", "") ?: "").split(',').filter { it.isNotEmpty() && it != key }.toMutableList()
+                        keys.add(key)
+                        val ed = s.edit().putString("e.$key", tag).putString("b.$key", text)
+                        while (keys.size > 12) { val drop = keys.removeAt(0); ed.remove("e.$drop").remove("b.$drop") }
+                        ed.putString("cache_keys", keys.joinToString(",")).apply()
+                    }
+                    return text
+                }
+                404 -> return null
+                403, 429 -> throw RateLimited()
+                else -> throw HttpError(code)
+            }
+        } finally { c.disconnect() }
+    }
+
+    /**
+     * The releases that can be the newest one of THIS app. GitHub's release list is NOT in date or version order (for this repository it is sorted by tag NAME: alpha9, alpha8, ... alpha2, alpha13,
+     * alpha12, alpha11, alpha10), and this used to read only its first 8 entries - so from alpha10 on the newest release was never in them and every version said "up to date" (owner report X1).
+     * Now: the tag list (small, ETag-cached), the newest few tags in natural version order, one conditional request per tag; if the tag list is unavailable, the whole list (100 per page).
+     * Which release is offered is still decided by [UpdateLogic.choose] from the versionCode each release states, not by any order.
+     */
+    private fun fetchReleases(app: Context): List<Release> {
+        val override = debugFeed(app)
+        if (override != null) return parseReleases(getCached(app, override) ?: "[]")
+        val prefix = Flavor.updateTagPrefix
+        val tags = try {
+            UpdateLogic.newestTags(UpdateLogic.tagsFromRefs(getCached(app, "$API/git/matching-refs/tags/$prefix") ?: "[]"), prefix, 4)
+        } catch (e: RateLimited) { throw e } catch (e: HttpError) { emptyList() }
+        val out = ArrayList<Release>()
+        for (t in tags) {
+            val body = getCached(app, "$API/releases/tags/$t") ?: continue
+            out.addAll(parseReleases("[$body]"))
+        }
+        if (out.isNotEmpty()) return out
+        return parseReleases(getCached(app, "$API/releases?per_page=100") ?: "[]")
     }
 
     fun check(ctx: Context, manual: Boolean) {
@@ -153,26 +209,10 @@ object UpdateManager {
             try {
                 val s = sp(app)
                 val installed = installedCode(app)
-                val url = feedUrl(app)
-                val c = open(url)
-                c.setRequestProperty("Accept", "application/vnd.github+json")
-                val etag = s.getString("etag", null)
-                if (etag != null && s.getString("etag_url", null) == url) c.setRequestProperty("If-None-Match", etag)
-                val code = c.responseCode
                 val now = System.currentTimeMillis()
-                var offer = s.getString("offer", null)?.let { offerFromJson(it) }
-                when (code) {
-                    304 -> { /* nothing new since the last answer: keep the stored offer */ }
-                    200 -> {
-                        val text = c.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
-                        offer = UpdateLogic.choose(parseReleases(text), Flavor.updateTagPrefix, installed)
-                        s.edit().putString("etag", c.getHeaderField("ETag")).putString("etag_url", url).putString("offer", offer?.let { offerToJson(it) }).apply()
-                    }
-                    403, 429 -> { fail(app, "GitHub is limiting requests right now. Try again in a while."); return@Thread }
-                    else -> { fail(app, "GitHub answered $code."); return@Thread }
-                }
-                c.disconnect()
-                s.edit().putLong("checked", now).apply()
+                // recomputed from the releases against the code installed NOW (a stored answer goes stale when the app was updated or replaced by hand since)
+                val offer = UpdateLogic.choose(fetchReleases(app), Flavor.updateTagPrefix, installed)
+                s.edit().putString("offer", offer?.let { offerToJson(it) }).putLong("checked", now).apply()
                 if (offer != null && offer.versionCode > installed) {
                     // a NEWER release than the file we hold (or are downloading): forget the old one
                     val heldTag = s.getString("job_tag", null)
@@ -188,6 +228,10 @@ object UpdateManager {
                         !manual -> UpdateNotifier.available(app, offer)
                     }
                 } else set(app, Phase.UP_TO_DATE, null, checkedAt = now)
+            } catch (e: RateLimited) {
+                fail(app, "GitHub is limiting requests right now. Try again in a while.")
+            } catch (e: HttpError) {
+                fail(app, "GitHub answered ${e.code}.")
             } catch (e: SSLException) {
                 fail(app, "Could not verify GitHub's security certificate. This tablet's certificate list may be too old. Open the release page in the browser instead.")
             } catch (e: IOException) {
