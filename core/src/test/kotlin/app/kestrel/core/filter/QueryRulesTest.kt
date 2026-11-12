@@ -49,8 +49,9 @@ class QueryRulesTest {
     @Test fun whatCannotBeAppliedToANavigationIsLeftOutAndSaysWhy() {
         assertEquals(Skip.REGEX, parse("||reddit.com^\$doc,removeparam=/web_only=/").skip)
         assertEquals(Skip.REGEX, parse("\$removeparam=/^utm_/").skip)
-        assertEquals(Skip.ENTITY_DOMAIN, parse("\$removeparam=clid,domain=adguard-vpn.*|adguardvpn-help.*").skip)
-        assertEquals(Skip.ENTITY_DOMAIN, parse("||www.amazon.*/page/\$doc,removeparam=lp_context_asin").skip)
+        assertEquals("a wildcard anywhere but the end", Skip.ENTITY_DOMAIN, parse("\$removeparam=clid,domain=a.*.example").skip)
+        assertEquals(Skip.ENTITY_DOMAIN, parse("||www.*.example^\$removeparam=x").skip)
+        assertEquals(Skip.ENTITY_DOMAIN, parse("||ww*.example.com^\$removeparam=x").skip)
         for (l in listOf("||alia-cloudflare.com/launcher/\$removeparam=url,xhr", "||popin.cc/popin_discovery/\$script,removeparam=info", "||edge.curalate.com/v1/img/\$image,removeparam=spatialTags", "||connatix.com^\$3p,removeparam=cid"))
             assertEquals(l, Skip.UNSUPPORTED_OPTION, parse(l).skip)
         assertEquals("a document AND an image rule is still a document rule", true, parse("||search.naver.com/p/crd/rd\$removeparam=px,document,image").rule != null)
@@ -145,6 +146,30 @@ class QueryRulesTest {
     @Test fun aBareHostRuleDropsTheWholeQuery() {
         assertEquals("https://777casino.top/x#f", strip("https://777casino.top/x?a=1&b=2#f", "||777casino.top^\$removeparam"))
         assertNull(strip("https://other.example/x?a=1", "||777casino.top^\$removeparam"))
+    }
+
+    @Test fun entityHostsMeanTheSiteUnderAnyPublicSuffix() {
+        val rules = arrayOf("||aliexpress.\$removeparam=spm", "||notebooklm.google.*\$removeparam=icid", "||bbc.*^\$removeparam=at_bbc_team", "||www.amazon.*/page/\$doc,removeparam=lp_context_asin")
+        assertEquals("https://www.aliexpress.com/item/1", strip("https://www.aliexpress.com/item/1?spm=a1", *rules))
+        assertEquals("https://aliexpress.co.uk/", strip("https://aliexpress.co.uk/?spm=a1", *rules))
+        assertEquals("https://deep.sub.aliexpress.de/", strip("https://deep.sub.aliexpress.de/?spm=a1", *rules))
+        assertEquals("a two-label entity", "https://notebooklm.google.com/", strip("https://notebooklm.google.com/?icid=1", *rules))
+        assertEquals("https://www.bbc.co.uk/news", strip("https://www.bbc.co.uk/news?at_bbc_team=x", *rules))
+        assertEquals("entity with a path", "https://www.amazon.de/page/x", strip("https://www.amazon.de/page/x?lp_context_asin=B0", *rules))
+        assertNull("the path rule does not reach other paths", strip("https://www.amazon.de/dp/x?lp_context_asin=B0", *rules))
+        assertNull("the same label deeper in somebody else's name", strip("https://aliexpress.evil.com/?spm=1", *rules))
+        assertNull("a longer label that only ends the same way", strip("https://notaliexpress.com/?spm=1", *rules))
+        assertNull(strip("https://example.com/?spm=1&icid=1&at_bbc_team=1", *rules))
+        assertNull("a public suffix on its own", strip("https://co.uk/?spm=1", *rules))
+    }
+
+    @Test fun entityDomainsOfAGenericRuleConfineItToThoseSites() {
+        val rule = "\$removeparam=clid,domain=adguard-vpn.*|~help.adguard-vpn.*"
+        assertEquals("https://adguard-vpn.com/", strip("https://adguard-vpn.com/?clid=1", rule))
+        assertEquals("https://x.adguard-vpn.org/", strip("https://x.adguard-vpn.org/?clid=1", rule))
+        assertNull(strip("https://help.adguard-vpn.com/?clid=1", rule))
+        assertNull(strip("https://other.com/?clid=1", rule))
+        assertEquals("https://example.com/?x=1", strip("https://example.com/?amp;utm_medium=m&x=1", "||example.com^\$removeparam=amp;utm_medium"))
     }
 
     @Test fun badfilterSwitchesARuleOff() {
