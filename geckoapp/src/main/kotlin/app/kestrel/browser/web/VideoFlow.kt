@@ -39,14 +39,14 @@ class VideoFlow(private val a: BrowserActivity) {
     /** Called on the Shields worker thread. */
     fun seen(c: MediaCandidate) = Io.ui {
         val t = a.tabWithUrl(c.page) ?: a.tabForPage(c.page) ?: a.current ?: return@ui // the tab on exactly that page first; the same host or the selected tab only as a fallback
-        if (t.media.add(c)) a.refreshVideoChip()
+        if (t.media.add(c)) a.refreshDownloadButton()
     }
 
     /** Called on the Shields worker thread. */
     fun info(page: String, url: String, width: Int, height: Int, durationMs: Long, label: String?) = Io.ui {
         val t = (if (page.isNotEmpty()) a.tabWithUrl(page) ?: a.tabForPage(page) else null) ?: a.current ?: return@ui
         t.media.applyInfo(url, width, height, durationMs, label)
-        a.refreshVideoChip()
+        a.refreshDownloadButton()
     }
 
     /** Anything worth offering on this tab's page? (the menu shows its entry only then) */
