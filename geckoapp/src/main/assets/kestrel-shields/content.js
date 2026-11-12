@@ -62,7 +62,8 @@
   try {
     var EXT = /\.(m3u8|mpd|mp4|webm|mkv|m4v|mov|mp3|m4a|aac|ogg|opus|flac)(?:$|[?#])/i;
     var FIND = /https?:\/\/[^\s"'<>()\\]+?\.(?:m3u8|mpd|mp4|webm|mkv|m4v|mov|mp3|m4a|aac|ogg|opus|flac)(?:\?[^\s"'<>()\\]*)?/gi;
-    var sent = {}, n = 0;
+    var HINT = /\.(?:m3u8|mpd|mp4|webm|mkv|m4v|mov|mp3|m4a|aac|ogg|opus|flac)/i; // a script that names no media file at all is not run through the three replaces and FIND below
+    var sent = {}, n = 0, scriptsDone = 0, linksDone = 0; // the scan at load only looks at what appeared since the first one
     function report(u) {
       if (!u || n >= 40) return;
       try { u = new URL(u.replace(/&amp;/g, '&'), location.href).href; } catch (e) { return; }
@@ -76,18 +77,23 @@
         for (i = 0; i < list.length; i++) { e = list[i]; report(e.currentSrc || e.src || e.getAttribute('src')); }
         var metas = document.querySelectorAll('meta[property^="og:video"], meta[property^="og:audio"], meta[name="twitter:player:stream"], link[rel="preload"][as="video"]');
         for (i = 0; i < metas.length; i++) report(metas[i].getAttribute('content') || metas[i].getAttribute('href'));
-        var anchors = document.querySelectorAll('a[href]');
-        for (i = 0; i < anchors.length && i < 600; i++) if (EXT.test(anchors[i].href)) report(anchors[i].href);
+        var links = document.links; // a live collection: no list of a few thousand anchors is built just to read the first 600
+        for (i = linksDone; i < links.length && i < 600; i++) if (EXT.test(links[i].href)) report(links[i].href);
+        linksDone = Math.min(links.length, 600);
         var scripts = document.scripts, budget = 300000;
-        for (i = 0; i < scripts.length && budget > 0 && n < 40; i++) {
-          if (scripts[i].src) continue;
-          var t = scripts[i].textContent;
-          if (!t || t.length > 200000) continue; // a framework bundle, not a player configuration
+        for (i = scriptsDone; i < scripts.length && budget > 0 && n < 40; i++) {
+          var s = scripts[i];
+          if (s.src) continue;
+          var tn = s.firstChild; // the size is read off the text node BEFORE any text is copied: a framework bundle or a state blob of a megabyte or two is never turned into a string
+          if (!tn || s.childNodes.length !== 1 || tn.nodeType !== 3 || tn.length > 200000) continue;
+          var t = tn.data;
           budget -= t.length;
+          if (!HINT.test(t)) continue;
           t = t.replace(/\\u002f/gi, '/').replace(/\\u0026/gi, '&').replace(/\\\//g, '/');
           var m; FIND.lastIndex = 0;
           while ((m = FIND.exec(t)) !== null && n < 40) report(m[0]);
         }
+        scriptsDone = i;
       } catch (x) { /* never break the page */ }
     }
     function later() { if (window.requestIdleCallback) requestIdleCallback(scan, { timeout: 3000 }); else setTimeout(scan, 1500); }
