@@ -322,9 +322,10 @@ class CourierHostTest {
         p.host.tick()
         assertEquals("still there after a minute", "COMPLETED", t.job(id).str("state"))
         p.clock.ms = 25L * 3600_000
+        t.skew = p.clock.ms                                                                                   // the tablet's clock follows the phone's (as it does after a hello)
         p.host.tick()
         assertEquals("GONE", t.job(id).str("state")); assertEquals(404, t.fetch(url).first)
-        assertTrue(File(p.dir, "staging").listFiles()!!.isEmpty())
+        awaitEmpty(File(p.dir, "staging"))
     }
 
     @Test fun statusSpeedtestAndProbe() {
