@@ -208,7 +208,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   if (m.k === 'pop') {
     var d = String(m.d || ''), c = d.indexOf('|'), kind = c > 0 ? d.slice(0, c) : d, url = c > 0 ? d.slice(c + 1) : '';
     var page = (tabId >= 0 && tabTop.get(tabId)) || m.p || '';
-    if (kind === 'tap') { send({ k: 'pop', d: d, p: page }).catch(function () {}); return undefined; } // every real tap: the app needs it to judge a jump that follows
+    if (kind === 'tap' || kind === 'vmenu') { send({ k: 'pop', d: d, p: page }).catch(function () {}); return undefined; } // every real tap (the app judges a jump that follows) and a long press on a video (the app shows its menu): neither is a block
     guardBlocked++;
     send({ k: 'pop', d: d, p: page }).catch(function () {});
     markStats();

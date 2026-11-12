@@ -95,3 +95,28 @@
     window.addEventListener('load', function () { setTimeout(later, 2500); });
   } catch (e) { /* never break the page */ }
 })();
+
+// Long press on a video (owner requests X8/X14: "I long pressed a video and it still didn't show download"): a site's own player draws its OWN menu on a long press, so the browser's menu - and with
+// it the way to the download list - never appears. The long press is taken here, in the capture phase, before the page's players see it, when a real video or audio element sits under the finger
+// (even beneath a transparent layer); the app then shows its menu (Download video, Copy video address). Only elements that have a source are taken, so a bare element does not lose the browser's menu.
+(function () {
+  try {
+    window.addEventListener('contextmenu', function (e) {
+      try {
+        if (!e.isTrusted) return;
+        var els = document.elementsFromPoint ? document.elementsFromPoint(e.clientX, e.clientY) : [e.target];
+        var media = null;
+        for (var i = 0; i < els.length && i < 16; i++) {
+          var n = els[i].tagName;
+          if (n === 'VIDEO' || n === 'AUDIO') { media = els[i]; break; }
+        }
+        if (!media) return;
+        var src = media.currentSrc || media.src || '';
+        if (!src && !(media.querySelector && media.querySelector('source'))) return;
+        e.preventDefault(); e.stopImmediatePropagation();
+        browser.runtime.sendMessage({ k: 'pop', d: 'vmenu|' + (src.indexOf('http') === 0 ? src : ''), p: location.href }).catch(function () {});
+      } catch (x) { /* never break the page */ }
+    }, true);
+  } catch (e) { /* never break the page */ }
+})();
+

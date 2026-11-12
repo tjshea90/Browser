@@ -1480,6 +1480,10 @@ open class BrowserActivity : Activity(), DockListener {
         // attribution by the exact page address first (several tabs can be on the same host), then by host, then the tab in front
         val tab = (if (pageUrl.isNotEmpty()) tabWithUrl(pageUrl) ?: tabForPage(pageUrl) else null) ?: current ?: return
         if (kind == "tap") { tab.lastTapAt = SystemClock.uptimeMillis(); tab.lastTapHref = url; return } // a real tap in the page, and the link it was on: the jump guard's evidence
+        if (kind == "vmenu") { // a long press on a video or audio element, taken by the page script before the site's own player menu could appear (owner request X14)
+            if (tab === current && !isFinishing) video.longPress(tab, url.takeIf { it.startsWith("http", true) }, null) { link -> val t = newTabInternal(tab, tab.isPrivateTab); show(t); navigateTo(t, link) }
+            return
+        }
         tab.blocked.addAndGet(app.kestrel.core.filter.Category.ANNOYANCE, 1)
         tab.pendingLifetime.addAndGet(1)
         shieldCountChanged(tab)
@@ -1972,6 +1976,7 @@ open class BrowserActivity : Activity(), DockListener {
         labels.add("Copy link address"); acts.add { copy(url) }
         labels.add("Share link"); acts.add { share(url) }
         if (imageUrl != null && NavPolicy.isWebUrl(imageUrl)) { labels.add("Download image"); acts.add { startDownload(imageUrl, null, null, null, tab) } }
+        if (video.available(tab)) { labels.add("Download video from this page"); acts.add { video.show(tab) } }
         AlertDialog.Builder(this).setTitle(url.take(80)).setItems(labels.toTypedArray()) { _, i -> acts[i]() }.show()
     }
 
@@ -1983,6 +1988,7 @@ open class BrowserActivity : Activity(), DockListener {
             labels.add("Download image"); acts.add { startDownload(url, null, null, null, tab) }
         }
         labels.add("Copy image address"); acts.add { copy(url) } // a data: image can only be copied, never opened or downloaded from here
+        if (video.available(tab)) { labels.add("Download video from this page"); acts.add { video.show(tab) } }
         AlertDialog.Builder(this).setTitle(url.take(80)).setItems(labels.toTypedArray()) { _, i -> acts[i]() }.show()
     }
 
