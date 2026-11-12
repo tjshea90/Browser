@@ -472,8 +472,13 @@ class StreamEngine(
     /** The job's supervisor is done: record where it ended, free what is not needed, and look at the queue. */
     private fun settle(job: Job, outcome: DlState) {
         val rec = job.rec
-        // a stopped job keeps its progress: flush the output so the checkpoint is true
-        if (outcome != DlState.COMPLETED && outcome != DlState.CANCELED) try { job.sink?.sync() } catch (e: Exception) { /* the last checkpoint still stands */ }
+        // a stopped job keeps its progress: flush the output so the checkpoint is true (and, for an MP4 being written, the journal too, unless the muxer was cut off in the middle of a segment: then the last checkpoint stands)
+        if (outcome != DlState.COMPLETED && outcome != DlState.CANCELED) {
+            val m = job.mux
+            if (m != null && !job.muxDirty && outcome != DlState.QUEUED) try { job.drain.lock(); try { m.checkpoint(synchronized(lock) { rec.next }) } finally { job.drain.unlock() } } catch (e: Exception) { /* the last checkpoint still stands */ }
+            else try { job.sink?.sync() } catch (e: Exception) { /* the last checkpoint still stands */ }
+        }
+        if (outcome != DlState.COMPLETED) job.mux = null                    // a new muxer is rebuilt from the journal when the job runs again
         control.execute {
             synchronized(lock) { job.running = false; job.stop = false; job.stopState = null; job.failure = null }
             if ((outcome == DlState.FAILED || outcome == DlState.CANCELED) && rec.companionId != 0L) {
