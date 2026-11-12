@@ -1,4 +1,4 @@
-package app.kestrel.browser.download
+package app.kestrel.platform
 
 import android.content.Context
 import android.media.MediaCodec
@@ -9,13 +9,12 @@ import android.net.Uri
 import android.os.Environment
 import android.os.StatFs
 import android.util.Log
-import app.kestrel.browser.Io
-import app.kestrel.browser.diag.Health
 import app.kestrel.core.download.Sink
 import app.kestrel.core.download.SinkFactory
 import app.kestrel.core.media.Adts
 import app.kestrel.core.media.AudioClock
 import app.kestrel.core.media.StreamFinisher
+import java.io.File
 import java.nio.ByteBuffer
 
 /**
@@ -23,11 +22,21 @@ import java.nio.ByteBuffer
  * can hold and what the muxer can write; anything else, any doubt and any exception keep the .ts exactly as it was. The samples are copied unchanged (no re-encoding): fast, lossless, little heap
  * (one sample buffer). Needs about as much free room as the stream itself, so it declines when there is not.
  */
-class Remuxer(private val ctx: Context, private val sinks: SinkFactory) : StreamFinisher {
+class Remuxer(
+    private val ctx: Context,
+    private val sinks: SinkFactory,
+    /** Who is short of room in a decline sentence: "tablet" or "phone" (the Courier shares this class). */
+    private val device: String = "tablet",
+    private val tag: String = "Kestrel",
+    /** The folder whose free space has to hold the MP4 next to the stream (the tablet: the Downloads folder; the phone: the Courier's own folder). */
+    private val roomDir: () -> File = { Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) },
+    /** Where the converter writes down what it did (layer, event, detail): the tablet's Diagnostics screen, the phone's log. */
+    private val note: (String, String, String) -> Unit = { _, _, _ -> },
+) : StreamFinisher {
 
     override fun convert(j: StreamFinisher.Joined): StreamFinisher.Converted? {
         if (j.container != "ts") return null
-        if (!enoughRoom(j.size)) { j.declined = "there is not enough free room on the tablet (about ${(roomNeeded(j.size) shr 20) + 1} MB more are needed)"; return declined(j.declined!!) }
+        if (!enoughRoom(j.size)) { j.declined = "there is not enough free room on the $device (about ${(roomNeeded(j.size) shr 20) + 1} MB more are needed)"; return declined(j.declined!!) }
         val r = if (j.parts.size > 1) convertParts(j) else convertWhole(j)
         if (r == null && j.declined == null) j.declined = lastDecline ?: "Android's video converter could not read this stream"
         return r
@@ -46,16 +55,16 @@ class Remuxer(private val ctx: Context, private val sinks: SinkFactory) : Stream
                 if (mime.startsWith("video/")) video++ else if (mime.startsWith("audio/")) audio++
                 if (f.containsKey(MediaFormat.KEY_DURATION)) durationUs = maxOf(durationUs, f.getLong(MediaFormat.KEY_DURATION))
             }
-            if (video == 0) { Health.log("mp4", "check failed", "no picture track"); return "no picture track" }
+            if (video == 0) { note("mp4", "check failed", "no picture track"); return "no picture track" }
             ex.selectTrack(0)
             val buf = ByteBuffer.allocate(4 shl 20)
             val first = ex.readSampleData(buf, 0)
             if (durationUs > 2_000_000) ex.seekTo(durationUs / 2, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
             val mid = ex.sampleTime
-            Health.log("mp4", "check ok", "video=$video audio=$audio ${durationUs / 1000} ms first=$first midAt=${mid / 1000} ms")
+            note("mp4", "check ok", "video=$video audio=$audio ${durationUs / 1000} ms first=$first midAt=${mid / 1000} ms")
             if (first <= 0) "no first sample" else null
         } catch (e: Throwable) {
-            Health.log("mp4", "check failed", e.toString().take(160))
+            note("mp4", "check failed", e.toString().take(160))
             e.javaClass.simpleName
         } finally { try { ex.release() } catch (e: Exception) { /* ignore */ } }
     }
@@ -77,7 +86,7 @@ class Remuxer(private val ctx: Context, private val sinks: SinkFactory) : Stream
     }
 
     private fun declined(why: String): StreamFinisher.Converted? {
-        Log.w(Io.TAG, "remux declined: $why"); Health.log("remux", "declined", why)
+        Log.w(tag, "remux declined: $why"); note("remux", "declined", why)
         lastDecline = why
         return null
     }
@@ -173,11 +182,11 @@ class Remuxer(private val ctx: Context, private val sinks: SinkFactory) : Stream
             val len = sink.length()
             val uri = sink.publish() ?: throw IllegalStateException("no uri")
             out = null
-            Log.i(Io.TAG, "remux ok (${keep.size} of ${j.parts.size} runs): ${j.size} -> $len bytes, $written samples")
-            Health.log("remux", "ok", "${keep.size} of ${j.parts.size} runs, $written samples, ${cursor / 1000} ms")
+            Log.i(tag, "remux ok (${keep.size} of ${j.parts.size} runs): ${j.size} -> $len bytes, $written samples")
+            note("remux", "ok", "${keep.size} of ${j.parts.size} runs, $written samples, ${cursor / 1000} ms")
             return StreamFinisher.Converted(uri, sink.displayName ?: name, "video/mp4", len)
         } catch (e: Throwable) {
-            Log.w(Io.TAG, "remux of runs failed, keeping the .ts", e); Health.log("remux", "failed", e.toString().take(160))
+            Log.w(tag, "remux of runs failed, keeping the .ts", e); note("remux", "failed", e.toString().take(160))
             return null
         } finally {
             try { if (started) muxer?.stop() } catch (e: Exception) { /* a muxer that never got a sample throws here */ }
@@ -241,11 +250,11 @@ class Remuxer(private val ctx: Context, private val sinks: SinkFactory) : Stream
             val len = sink.length()
             val uri = sink.publish() ?: throw IllegalStateException("no uri")
             out = null
-            Log.i(Io.TAG, "remux ok: ${j.size} -> $len bytes, $written samples")
-            Health.log("remux", "ok", "$written samples")
+            Log.i(tag, "remux ok: ${j.size} -> $len bytes, $written samples")
+            note("remux", "ok", "$written samples")
             return StreamFinisher.Converted(uri, sink.displayName ?: name, "video/mp4", len)
         } catch (e: Throwable) {
-            Log.w(Io.TAG, "remux failed, keeping the .ts", e); Health.log("remux", "failed", e.toString().take(160))
+            Log.w(tag, "remux failed, keeping the .ts", e); note("remux", "failed", e.toString().take(160))
             return null
         } finally {
             try { if (started) muxer?.stop() } catch (e: Exception) { /* a muxer that never got a sample throws here */ }
@@ -310,10 +319,10 @@ class Remuxer(private val ctx: Context, private val sinks: SinkFactory) : Stream
             val len = sink.length()
             val uri = sink.publish() ?: throw IllegalStateException("no uri")
             out = null
-            Log.i(Io.TAG, "merge ok: ${m.size} -> $len bytes")
+            Log.i(tag, "merge ok: ${m.size} -> $len bytes")
             return StreamFinisher.Converted(uri, sink.displayName ?: name, "video/mp4", len)
         } catch (e: Throwable) {
-            Log.w(Io.TAG, "merge failed, keeping the two files", e)
+            Log.w(tag, "merge failed, keeping the two files", e)
             return null
         } finally {
             try { if (started) muxer?.stop() } catch (e: Exception) { /* ignore */ }
@@ -347,7 +356,6 @@ class Remuxer(private val ctx: Context, private val sinks: SinkFactory) : Stream
     private fun roomNeeded(size: Long): Long = size / 20 * 19 + (24L shl 20)
 
     private fun enoughRoom(size: Long): Boolean = try {
-        val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        StatFs(dir.absolutePath).availableBytes > roomNeeded(size)
+        StatFs(roomDir().absolutePath).availableBytes > roomNeeded(size)
     } catch (e: Exception) { false }
 }
