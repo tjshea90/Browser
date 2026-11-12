@@ -100,6 +100,8 @@ class Mp4Mux(private val out: MuxOut, private val nowMs: () -> Long = { System.c
     /** End of the sound track in 90 kHz ticks (0 without sound). */
     val audioEnd90k: Long get() = if (sampleRate > 0 && audioCount > 0) aEndTick * 90000L / sampleRate else 0L
     val hasAudioConfig: Boolean get() = asc != null && sampleRate > 0
+    /** Where the next sound frame would start, in sample-rate ticks. */
+    val audioEndTick: Long get() = aEndTick
 
     /** Writes the file header; a muxer rebuilt by [replay] must not (the header is in the file already). */
     fun start() {
