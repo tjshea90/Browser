@@ -59,3 +59,31 @@ class PeerGuardTest {
         assertEquals(true, PeerGuard.allowed(ip("172.20.10.2"), listOf(local("172.20.10.1", 28, "bridge100"))))
     }
 }
+
+class PeerGuardLocalTest {
+    private fun ip(s: String): ByteArray = java.net.InetAddress.getByName(s).address
+    private fun local(s: String, prefix: Int, name: String) = LocalAddr(ip(s), prefix, name)
+
+    @org.junit.Test fun theAddressTheTabletConnectedToDecides() {
+        val ap = listOf(local("192.168.43.1", 24, "ap0"), local("10.123.45.67", 8, "rmnet_data0"))
+        fun ok(peer: String, to: String, l: List<LocalAddr> = ap) = PeerGuard.allowed(ip(peer), ip(to), l)
+        org.junit.Assert.assertTrue("the tablet on the hotspot", ok("192.168.43.77", "192.168.43.1"))
+        org.junit.Assert.assertTrue("this phone itself", ok("127.0.0.1", "127.0.0.1"))
+        org.junit.Assert.assertFalse("another /24", ok("192.168.44.77", "192.168.43.1"))
+        org.junit.Assert.assertFalse("came in on the cellular address", ok("10.99.1.1", "10.123.45.67"))
+        org.junit.Assert.assertFalse("a public address on either side", ok("8.8.8.8", "192.168.43.1"))
+        org.junit.Assert.assertFalse(ok("192.168.43.77", "100.64.1.2"))
+        org.junit.Assert.assertFalse(ok("192.168.43.77", "8.8.4.4"))
+        org.junit.Assert.assertFalse("mixed families", ok("fe80::2", "192.168.43.1"))
+    }
+
+    @org.junit.Test fun whenAndroidHidesTheInterfacesTheSocketsOwnAddressIsTrustedWithinTheSameSubnet() {
+        val none = emptyList<LocalAddr>()
+        org.junit.Assert.assertTrue(PeerGuard.allowed(ip("192.168.43.77"), ip("192.168.43.1"), none))
+        org.junit.Assert.assertTrue(PeerGuard.allowed(ip("172.20.10.2"), ip("172.20.10.1"), none))
+        org.junit.Assert.assertFalse(PeerGuard.allowed(ip("192.168.44.77"), ip("192.168.43.1"), none))
+        org.junit.Assert.assertFalse(PeerGuard.allowed(ip("10.0.0.5"), ip("10.0.1.5"), none))
+        org.junit.Assert.assertTrue(PeerGuard.allowed(ip("fe80::2"), ip("fe80::1"), none))
+        org.junit.Assert.assertFalse(PeerGuard.allowed(ip("fe80:0:0:1::2"), ip("fe80::1"), none))
+    }
+}

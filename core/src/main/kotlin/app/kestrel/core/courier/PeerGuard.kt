@@ -55,6 +55,20 @@ object PeerGuard {
 
     fun cellular(ifName: String): Boolean = CELLULAR_PREFIXES.any { ifName.startsWith(it) }
 
+    /**
+     * The rule the server applies to a connection: [peer] is who connected, [local] is the address of THIS phone they connected to (the hotspot address, when it is the tablet).
+     * The list of interfaces is used when Android lets the app read it; when it does not (Android 11 and newer limit it) the address the tablet connected to is trusted if it is private,
+     * and the tablet must share its /24 (IPv6 /64).
+     */
+    fun allowed(peer: ByteArray, local: ByteArray, locals: List<LocalAddr>): Boolean {
+        val p = normalize(peer); val l = normalize(local)
+        if (isLoopback(p)) return true
+        if (!isPrivate(p) || !isPrivate(l) || p.size != l.size) return false
+        val own = locals.firstOrNull { normalize(it.address).contentEquals(l) }
+        if (own != null) return !cellular(own.ifName) && sameSubnet(p, l, if (own.address.size != l.size) own.prefix - 96 else own.prefix)
+        return sameSubnet(p, l, if (p.size == 4) 24 else 64)
+    }
+
     fun allowed(peer: ByteArray, locals: List<LocalAddr>): Boolean {
         val p = normalize(peer)
         if (isLoopback(p)) return true

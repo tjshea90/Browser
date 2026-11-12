@@ -54,7 +54,7 @@ class Phone(
     @Volatile var free = 100L * 1024 * 1024 * 1024
     @Volatile var dns: List<ByteArray> = listOf(byteArrayOf(93.toByte(), 184.toByte(), 216.toByte(), 34))
     val host = CourierHost(hostKey, engine, sinks, File(dir, "courier-jobs.json"), spy, clock, { free }, "Test phone", resolve = { dns })
-    val server = CourierServer(0, InetAddress.getByName("127.0.0.1"), { it.isLoopbackAddress }, { r, p -> host.handle(r, p) })
+    val server = CourierServer(0, InetAddress.getByName("127.0.0.1"), { r, _ -> r.isLoopbackAddress }, { r, p -> host.handle(r, p) })
     @Volatile var ticking = true
     val port: Int
     val base: String

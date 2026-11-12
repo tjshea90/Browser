@@ -23,7 +23,8 @@ import java.util.concurrent.atomic.AtomicInteger
 class CourierServer(
     private val port: Int,
     private val bindAddress: InetAddress? = null,
-    private val peerAllowed: (InetAddress) -> Boolean,
+    /** (who connected, which local address they connected to): a connection this refuses is closed before a byte is read. */
+    private val peerAllowed: (InetAddress, InetAddress) -> Boolean,
     private val handler: (HttpRequest, InetAddress) -> HttpResponse,
     private val maxConns: Int = 16,
     private val idleMs: Int = 30_000,
@@ -77,7 +78,7 @@ class CourierServer(
         while (!ss.isClosed) {
             val s = try { ss.accept() } catch (e: IOException) { if (ss.isClosed) return else { log("accept failed: ${e.message}"); continue } }
             try {
-                if (!peerAllowed(s.inetAddress)) { closeQuietly(s); continue }          // dropped unread
+                if (!peerAllowed(s.inetAddress, s.localAddress)) { closeQuietly(s); continue }          // dropped unread
                 if (active.get() >= maxConns) { busy(s); continue }
                 s.tcpNoDelay = true
                 s.soTimeout = idleMs

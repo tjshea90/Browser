@@ -41,7 +41,7 @@ class ServerTest {
         else -> HttpResponse.error(404, "not found")
     }
 
-    private fun start(maxConns: Int = 16, idleMs: Int = 5_000, stallMs: Long = 60_000, sweepMs: Long = 5_000, allowed: (InetAddress) -> Boolean = { it.isLoopbackAddress }): CourierServer {
+    private fun start(maxConns: Int = 16, idleMs: Int = 5_000, stallMs: Long = 60_000, sweepMs: Long = 5_000, allowed: (InetAddress, InetAddress) -> Boolean = { r, _ -> r.isLoopbackAddress }): CourierServer {
         val s = CourierServer(0, InetAddress.getByName("127.0.0.1"), allowed, { req, _ -> route(req) }, maxConns, idleMs, stallMs, sweepMs)
         s.start(); servers.add(s); return s
     }
@@ -141,7 +141,7 @@ class ServerTest {
     }
 
     @Test fun refusedPeersAreDroppedUnread() {
-        val s = connect(start(allowed = { false }))
+        val s = connect(start(allowed = { _, _ -> false }))
         try { send(s, "GET /echo HTTP/1.1\r\n\r\n") } catch (_: IOException) {}
         assertTrue("no answer at all", closedByPeer(s))
     }
