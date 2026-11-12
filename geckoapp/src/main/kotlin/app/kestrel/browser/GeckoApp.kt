@@ -10,6 +10,7 @@ class GeckoApp : Application() {
         Flavor.updateTagPrefix = "kestrel-g-v"
         Flavor.title = "Kestrel G"
         Flavor.hasScrollFeel = true
+        Flavor.hasEmbedWait = true
         Flavor.hasTabBudget = true
         Flavor.hasPullRefresh = true
         Flavor.hasPopupGuard = true

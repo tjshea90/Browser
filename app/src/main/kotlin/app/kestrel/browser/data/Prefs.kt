@@ -32,6 +32,8 @@ class Prefs private constructor(ctx: Context) {
     var blockPopups: Boolean get() = bool("block_popups", true); set(v) = put("block_popups", v)
     var shieldCookies: Boolean get() = bool("sh_cookies", true); set(v) = put("sh_cookies", v)
     var shieldFingerprint: Boolean get() = bool("sh_fp", true); set(v) = put("sh_fp", v)
+    /** Kestrel G: video and social players wait for a tap (EX-10). */
+    var shieldEmbeds: Boolean get() = bool("sh_embeds", true); set(v) = put("sh_embeds", v)
 
     /** OFF by default: the owner's hotspot is unmetered ("no data saving is necessary"); the levels stay as an option. Only a level above OFF makes the app treat a metered network as metered. */
     var dataSaver: DataSaver
@@ -124,7 +126,7 @@ class Prefs private constructor(ctx: Context) {
 
     fun globalShields() = ShieldSettings(
         shieldsUp = true, blockAds = shieldAds, cosmetic = shieldCosmetic, https = httpsMode,
-        blockThirdPartyCookies = shieldCookies, blockFingerprinting = shieldFingerprint, blockScripts = false,
+        blockThirdPartyCookies = shieldCookies, blockFingerprinting = shieldFingerprint, blockScripts = false, waitEmbeds = shieldEmbeds,
     )
 
     companion object {

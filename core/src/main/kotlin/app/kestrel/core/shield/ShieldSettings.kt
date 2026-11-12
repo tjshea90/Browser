@@ -14,6 +14,8 @@ data class ShieldSettings(
     val blockFingerprinting: Boolean = true,
     /** JavaScript off for this site. */
     val blockScripts: Boolean = false,
+    /** Kestrel G (EX-10): video and social players embedded in the page (YouTube, Vimeo, Facebook...) wait until they are tapped, so their scripts never run for a page you only read. */
+    val waitEmbeds: Boolean = true,
 )
 
 /** Individual switches a user can override per site. */
@@ -25,6 +27,7 @@ object ShieldFlag {
     const val COOKIES = 16
     const val FINGERPRINT = 32
     const val SCRIPTS = 64
+    const val EMBEDS = 128
 }
 
 /** A site's explicit choices: bit set in [mask] = overridden; its value is the matching bit in [values]. */
@@ -40,6 +43,7 @@ data class SiteShields(val mask: Int, val values: Int) {
             blockThirdPartyCookies = on(ShieldFlag.COOKIES, g.blockThirdPartyCookies),
             blockFingerprinting = on(ShieldFlag.FINGERPRINT, g.blockFingerprinting),
             blockScripts = on(ShieldFlag.SCRIPTS, g.blockScripts),
+            waitEmbeds = on(ShieldFlag.EMBEDS, g.waitEmbeds),
         )
     }
 
@@ -59,7 +63,7 @@ data class SiteShields(val mask: Int, val values: Int) {
 fun ShieldSettings.effective(): ShieldSettings =
     if (shieldsUp) this else ShieldSettings(
         shieldsUp = false, blockAds = false, cosmetic = false, https = this.https,
-        blockThirdPartyCookies = false, blockFingerprinting = false, blockScripts = false,
+        blockThirdPartyCookies = false, blockFingerprinting = false, blockScripts = false, waitEmbeds = false,
     )
 
 /**

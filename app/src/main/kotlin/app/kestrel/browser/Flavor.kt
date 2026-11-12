@@ -20,6 +20,9 @@ object Flavor {
     /** The engine view reports pull-down gestures (Gecko build only): Settings shows the "Pull down to refresh" row. */
     @JvmField var hasPullRefresh = false
 
+    /** Video and social embeds can wait for a tap (Gecko build only: the built-in extension does it): Shields and Settings show the "Embeds wait for a tap" switch. */
+    @JvmField var hasEmbedWait = false
+
     /** The pop-up and forced-redirect guard runs in the Gecko extension only (Gecko build): Settings shows its switch. */
     @JvmField var hasPopupGuard = false
 

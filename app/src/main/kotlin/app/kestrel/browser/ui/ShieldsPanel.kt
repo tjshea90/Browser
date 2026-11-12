@@ -21,12 +21,13 @@ class ShieldsPanel(private val ctx: Context, private val pal: Pal, private val o
 
     private class Spec(val flag: Int, val title: String, val subtitle: String, val globalValue: (ShieldSettings) -> Boolean)
 
-    private val specs = listOf(
+    private val specs = listOfNotNull(
         Spec(ShieldFlag.ADS, "Block ads & trackers", "Stops known ad and tracking requests (saves data too)") { it.blockAds },
         Spec(ShieldFlag.COSMETIC, "Hide ad spaces & cookie banners", "Removes leftover empty ad boxes") { it.cosmetic },
         Spec(ShieldFlag.HTTPS, "Upgrade to HTTPS", "Prefers encrypted connections; warns before using plain HTTP") { it.https != HttpsPolicy.Mode.OFF },
         Spec(ShieldFlag.COOKIES, "Block cross-site cookies", "Stops sites from following you through embedded content") { it.blockThirdPartyCookies },
         Spec(ShieldFlag.FINGERPRINT, "Block fingerprinting", "Adds noise to canvas/audio readouts used to identify this device") { it.blockFingerprinting },
+        if (app.kestrel.browser.Flavor.hasEmbedWait) Spec(ShieldFlag.EMBEDS, "Embeds wait for a tap", "Video and social players load when you tap them: the page opens faster and nothing in them runs unseen") { it.waitEmbeds } else null,
         Spec(ShieldFlag.SCRIPTS, "Block scripts", "Turns JavaScript off on this site (many pages stop working)") { it.blockScripts },
     )
 
@@ -80,6 +81,7 @@ class ShieldsPanel(private val ctx: Context, private val pal: Pal, private val o
                 ShieldFlag.HTTPS -> effective().https != HttpsPolicy.Mode.OFF
                 ShieldFlag.COOKIES -> effective().blockThirdPartyCookies
                 ShieldFlag.FINGERPRINT -> effective().blockFingerprinting
+                ShieldFlag.EMBEDS -> effective().waitEmbeds
                 else -> effective().blockScripts
             }
             sw.setOnCheckedChangeListener { _, checked -> commit(s.flag, checked, s.globalValue(global)) }
