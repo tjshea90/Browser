@@ -46,7 +46,7 @@ class CourierPartsTest {
         val s = sinks.create("merged.mp4", "video/mp4", -1, false)
         val fd = s.descriptor()
         assertNotNull("the platform muxer needs a descriptor to write the converted MP4 into", fd)
-        java.io.FileOutputStream(fd!!).use { it.write(byteArrayOf(9, 8, 7, 6)) }                 // what a muxer does through its own duplicate of the descriptor
+        java.io.FileOutputStream(fd!!).write(byteArrayOf(9, 8, 7, 6))                              // what a muxer does through its own duplicate of the descriptor (never closing ours)
         s.sync()
         assertEquals(4L, s.length())
         val f = sinks.fileOf(s.publish())!!
