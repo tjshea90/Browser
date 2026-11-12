@@ -294,7 +294,7 @@ class StreamEngine(
         val uri = synchronized(lock) { rec.destUri }
         if (uri != null && (deleteFile || st != DlState.COMPLETED)) try { sinks.delete(uri) } catch (e: Exception) { /* already gone */ }
         wipeStaging(job)
-        synchronized(lock) { jobs.remove(rec.id) }
+        dropJob(rec.id)
         if (!rec.priv) store.delete(rec.id)
         changed(rec.id)
     }
@@ -329,7 +329,16 @@ class StreamEngine(
 
     private fun get(id: Long): Job? = synchronized(lock) { jobs[id] }
     private fun snapshotJobs(): List<Job> = synchronized(lock) { jobs.values.toList() }
-    private fun persist(r: StreamRec) { if (!r.priv) try { store.save(r.snapshot()) } catch (e: Exception) { /* the next checkpoint retries */ } }
+    /** Ids of jobs that were removed on purpose (a pair's merged-away sound, a cancelled or cleared download): a late checkpoint of such a job must not write its row back. Ids are never reused. */
+    private val dropped = HashSet<Long>()
+
+    private fun persist(r: StreamRec) {
+        if (r.priv) return
+        if (synchronized(lock) { r.id in dropped }) return
+        try { store.save(r.snapshot()) } catch (e: Exception) { /* the next checkpoint retries */ }
+    }
+
+    private fun dropJob(id: Long) { synchronized(lock) { jobs.remove(id); dropped.add(id) } }
 
     private fun startQueued() {
         val go = ArrayList<Job>()
@@ -379,7 +388,7 @@ class StreamEngine(
         try { job.sink?.discard() } catch (e: Exception) { /* ignore */ }
         if (job.sink == null && uri != null) try { sinks.delete(uri) } catch (e: Exception) { /* ignore */ }
         wipeStaging(job)
-        synchronized(lock) { jobs.remove(rec.id) }
+        dropJob(rec.id)
         if (!rec.priv) store.delete(rec.id)
         changed(rec.id)
     }
@@ -623,7 +632,7 @@ class StreamEngine(
     /** The merge made the sound's own file unnecessary: its job and record go. */
     private fun dropCompanion(comp: Job) {
         wipeStaging(comp)
-        synchronized(lock) { jobs.remove(comp.rec.id) }
+        dropJob(comp.rec.id)
         if (!comp.rec.priv) store.delete(comp.rec.id)
         changed(comp.rec.id)
     }
