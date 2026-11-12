@@ -16,6 +16,7 @@
   } catch (e) { return; }
 
   var on = true;                 // the guard applies until the content script says it does not
+  var topHost = '';              // the site of the TOP page (told by the content script): inside an embedded player "the same site" means the same site as THAT page, not merely as the player's own host
   var TAP_MS = 1500;             // how long after a real tap a window may open
   var tap = { t: 0, href: '' };
   var realOpen = window.open;
@@ -38,7 +39,7 @@
   }
   function sameSite(a, b) { return !!a && !!b && registrable(a) === registrable(b); }
   // The page's own address for "same site": inside an iframe that is the iframe's host, so an embedded player may open ITS OWN pages only; the embedding page is checked the same way.
-  function pageHost() { return location.hostname.toLowerCase(); }
+  function pageHost() { return topHost || location.hostname.toLowerCase(); }
 
   function anchorOf(el) {
     try { for (var n = el; n && n !== document; n = n.parentNode) if (n.tagName === 'A' && n.href) return n; } catch (e) { /* ignore */ }
@@ -50,15 +51,34 @@
   }
   function fresh() { return Date.now() - tap.t < TAP_MS; }
 
-  // A transparent link laid over the page (or the video) to catch the tap meant for "play".
+  // A link laid over the page (or the video) to catch the tap meant for "play": invisible, empty, or - the spoof play button - a visible image or icon of another site sitting on the player.
+  function crossSiteLink(a) { try { return !sameSite(hostOf(a.href), pageHost()); } catch (e) { return false; } }
+  function overPlayer(r) {
+    try {
+      var list = document.querySelectorAll('video, iframe, canvas, [class*="player" i], [id*="player" i]');
+      for (var i = 0; i < list.length && i < 12; i++) {
+        var m = list[i].getBoundingClientRect();
+        if (m.width < 120 || m.height < 80) continue;
+        var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        if (cx >= m.left && cx <= m.right && cy >= m.top && cy <= m.bottom) return true;
+      }
+    } catch (e) { /* ignore */ }
+    return false;
+  }
   function isOverlay(a) {
     try {
       var r = a.getBoundingClientRect();
-      if (r.width * r.height < 0.35 * innerWidth * innerHeight) return false;
       var cs = getComputedStyle(a);
-      if (parseFloat(cs.opacity) < 0.05 || cs.visibility === 'hidden') return true;
-      var empty = !(a.textContent || '').trim() && !a.querySelector('img,svg,video,canvas,picture,button,input');
-      return empty && (cs.position === 'fixed' || cs.position === 'absolute');
+      var big = r.width * r.height >= 0.35 * innerWidth * innerHeight;
+      if (big) {
+        if (parseFloat(cs.opacity) < 0.05 || cs.visibility === 'hidden') return true;
+        var empty = !(a.textContent || '').trim() && !a.querySelector('img,svg,video,canvas,picture,button,input');
+        if (empty && (cs.position === 'fixed' || cs.position === 'absolute')) return true;
+        if (crossSiteLink(a)) return true;                // a link to another site that fills the screen is an advertisement layer, whatever it shows
+      }
+      // the spoof play button: a link to ANOTHER site with no words of its own (an image, an icon) whose centre sits on a player
+      if (crossSiteLink(a) && !(a.textContent || '').trim() && overPlayer(r)) return true;
+      return false;
     } catch (e) { return false; }
   }
 
@@ -132,6 +152,13 @@
   } catch (e) { /* ignore */ }
 
   // ---- the content script tells us whether the guard applies here
-  document.addEventListener(CFG_EVENT, function (e) { try { on = String(e.detail).charAt(0) === '1'; } catch (x) { /* ignore */ } }, true);
+  document.addEventListener(CFG_EVENT, function (e) {
+    try {
+      var d = String(e.detail);
+      on = d.charAt(0) === '1';
+      var bar = d.indexOf('|');
+      if (bar > 0) topHost = d.slice(bar + 1).toLowerCase();
+    } catch (x) { /* ignore */ }
+  }, true);
   try { document.dispatchEvent(new CustomEvent(READY_EVENT)); } catch (e) { /* ignore */ }
 })();

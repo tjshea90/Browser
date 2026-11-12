@@ -46,13 +46,13 @@
 (function () {
   try {
     var CFG = '__kst_cfg_v1', POP = '__kst_pop_v1', READY = '__kst_ready_v1';
-    var wanted = true;
-    function push() { try { document.dispatchEvent(new CustomEvent(CFG, { detail: wanted ? '1' : '0' })); } catch (e) { /* ignore */ } }
+    var wanted = true, topHost = '';
+    function push() { try { document.dispatchEvent(new CustomEvent(CFG, { detail: wanted ? '1|' + topHost : '0' })); } catch (e) { /* ignore */ } }
     document.addEventListener(READY, push, true); // the page-side script may come up after our first answer
     document.addEventListener(POP, function (e) {
       try { browser.runtime.sendMessage({ k: 'pop', d: String(e.detail).slice(0, 700), p: location.href }).catch(function () {}); } catch (x) { /* ignore */ }
     }, true);
-    browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { wanted = !(r && r.on === false); push(); }, function () {});
+    browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { wanted = !(r && r.on === false); topHost = (r && r.top) ? String(r.top) : ''; push(); }, function () {});
   } catch (e) { /* never break the page */ }
 })();
 

@@ -188,17 +188,17 @@ function legacy(d, page) {
 var guardState = 'page guard: starting';
 var guardBlocked = 0;
 function trimMap(m, max) { while (m.size > max) m.delete(m.keys().next().value); }
-function guardAnswer(host) {
+function guardAnswer(host, topHost) {
   var f = cfgFlags.get(host);
-  if (f !== undefined) return Promise.resolve({ on: (f & 1) !== 0 });
-  return askCfg(host).then(function () { return { on: ((cfgFlags.get(host) || 0) & 1) !== 0 }; });
+  if (f !== undefined) return Promise.resolve({ on: (f & 1) !== 0, top: topHost || host });
+  return askCfg(host).then(function () { return { on: ((cfgFlags.get(host) || 0) & 1) !== 0, top: topHost || host }; });
 }
 browser.runtime.onMessage.addListener(function (m, sender) {
   if (!m) return undefined;
   var tabId = (sender && sender.tab) ? sender.tab.id : -1;
   if (m.k === 'guard') {
     var top = tabId >= 0 ? tabTop.get(tabId) : null;
-    return guardAnswer((top && pageHost(top)) || m.h);
+    return guardAnswer((top && pageHost(top)) || m.h, (top && pageHost(top)) || '');
   }
   if (m.k === 'dom') { // a media address found in the page itself (content.js): handed to the app like a sniffed one, marked so the app can drop ad networks
     var dp = (tabId >= 0 && tabTop.get(tabId)) || m.p || '';
