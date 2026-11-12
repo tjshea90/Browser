@@ -206,8 +206,11 @@ class ShieldsBridge(
         val s = Shields.effective(prefs(), host)
         if (!s.shieldsUp || !s.blockAds || !s.cosmetic) return ""
         // D2: the generic selectors that name a class or an id are not sent up front; the page sends its classes and ids ([genericCss]) when this CSS starts with the marker
-        return fs.cosmeticCss(host, includeGeneric = top, tokenMode = true)
+        val css = fs.cosmeticCss(host, includeGeneric = top, tokenMode = true)
+        if (cssLogged < 40) { cssLogged++; app.kestrel.browser.diag.Health.log("cosmetic", "css", "$host top=$top len=${css.length} tokens=${css.startsWith(app.kestrel.core.filter.CosmeticIndex.TOKEN_MARKER)}") }
+        return css
     }
+    private var cssLogged = 0
 
     /** D2: CSS for the generic selectors that can match a page holding these classes and ids (".class" / "#id"; at most [MAX_TOKENS] are looked at), under the same Shields switches as [cosmeticCss]. */
     private fun genericCss(host: String, tokens: org.json.JSONArray?): String {
