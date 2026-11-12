@@ -1,5 +1,6 @@
 package app.kestrel.browser.download
 
+import app.kestrel.core.net.NetProfile
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
