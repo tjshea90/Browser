@@ -1504,6 +1504,8 @@ open class BrowserActivity : Activity(), DockListener {
         override fun prefsChanged() {
             for (t in tabs) t.shields = Shields.effective(prefs, t.topHost)
             GeckoEngine.applyPrefs(applicationContext)
+            app.kestrel.browser.net.WifiBoost.set(this@BrowserActivity, prefs.labWifiBoost) // the Network lab switch takes effect at once (the browser is on screen: this is its Settings)
+            app.kestrel.browser.download.PageProxy.refresh()                                // "Keep the phone helper under Fast Wi-Fi" may have changed what applies
             Io.exec { UpdateJob.schedule(applicationContext) } // the update schedule may have changed
         }
         override fun clearBrowsingData() { this@BrowserActivity.clearBrowsingData() }
