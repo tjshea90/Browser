@@ -29,7 +29,7 @@ class CourierHostTest {
 
     @After fun cleanUp() { cleanups.reversed().forEach { try { it() } catch (_: Exception) {} }; root.deleteRecursively() }
 
-    private fun phone(origin: FakeServer, hostKey: ByteArray = key, dir: File = File(root, "phone"), clock: Skew = Skew()) = phone(origin, root, cleanups, hostKey, dir, clock)
+    private fun phone(origin: FakeServer, hostKey: ByteArray = key, dir: File = File(root, "phone"), clock: Skew = Skew()) = Phone(origin, root, cleanups, hostKey, dir, clock)
 
     private inner class Tablet(val base: String, val key: ByteArray = this@CourierHostTest.key) {
         var skew = 0L
