@@ -80,7 +80,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         button("Pair with the phone", if (app.kestrel.browser.download.PhoneBridge.paired(ctx)) "Paired. Tap to type another code or to forget this one." else "Type the code the Courier app shows") { pairDialog() }
         button("Test the phone link", "Measures the wifi to the phone, the phone's internet and this tablet's internet, and says whether it is worth it (uses about 40 MB)") { linkTest() }
         info("Phone link", app.kestrel.browser.download.PhoneBridge.statusLine(ctx))
-        info("Good to know", "The phone's data plan pays for these downloads, and the phone works harder (battery, heat). Private tabs, app updates and videos whose picture and sound come separately are downloaded by the tablet itself. If the phone cannot do a download, the tablet does it and the row says why.")
+        info("Good to know", "The phone's data plan pays for these downloads, and the phone works harder (battery, heat). Private tabs and app updates are always downloaded by the tablet itself. If the phone cannot do a download (or a video it cannot convert), the tablet does it and the row says why.")
 
         section("Appearance")
         choice("Neon glow", listOf("Off", "Steady", "Subtle pulse"), prefs.neon) { prefs.neon = it; app.kestrel.browser.ui.Neon.mode = it; app.kestrel.browser.ui.Neon.refresh(); rebuild() }
