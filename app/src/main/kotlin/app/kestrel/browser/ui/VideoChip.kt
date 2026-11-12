@@ -32,13 +32,22 @@ class VideoChip(ctx: Context) : LinearLayout(ctx) {
         contentDescription = "Save video"
     }
 
+    private var shownPal: Pal? = null
+    private var shownCount = -1
+
+    /** Called on every UI refresh while a page has media: nothing is rebuilt when the colours and the count are what is already on screen. */
     fun show(pal: Pal, count: Int) {
-        background = roundedBg(pal.card, context.dpf(24f), pal.accent, context.dp(2))
-        icon.setColorFilter(pal.accent)
-        text.setTextColor(pal.accent); text.text = if (count > 1) "Save video ($count)" else "Save video"
-        cross.setTextColor(pal.muted)
+        if (visibility == View.VISIBLE && pal === shownPal && count == shownCount) return
+        if (pal !== shownPal) {
+            background = roundedBg(pal.card, context.dpf(24f), pal.accent, context.dp(2))
+            icon.setColorFilter(pal.accent)
+            text.setTextColor(pal.accent)
+            cross.setTextColor(pal.muted)
+            shownPal = pal
+        }
+        if (count != shownCount) { text.text = if (count > 1) "Save video ($count)" else "Save video"; shownCount = count }
         visibility = View.VISIBLE
     }
 
-    fun hide() { visibility = View.GONE }
+    fun hide() { if (visibility != View.GONE) visibility = View.GONE }
 }

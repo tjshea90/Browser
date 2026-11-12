@@ -1417,8 +1417,10 @@ open class BrowserActivity : Activity(), DockListener {
     /** Shows the "Save video" chip while the page in front has something to save; hidden on Home, error screens, full screen, the tab grid and open sheets, and after the user closed it for this page. */
     internal fun refreshVideoChip() {
         val t = current
-        val show = t != null && !t.videoChipHidden && !homeShown(t) && t.error == null && !fullscreenOn && tabGrid.visibility != View.VISIBLE && !sheet.isShowing && video.available(t)
-        if (show) videoChip.show(pal, t!!.media.usable().size) else videoChip.hide()
+        // runs on every UI refresh: the cheap checks first, and a page that has seen no media never builds a list
+        if (t == null || t.media.isEmpty() || t.videoChipHidden || homeShown(t) || t.error != null || fullscreenOn || tabGrid.visibility == View.VISIBLE || sheet.isShowing) { videoChip.hide(); return }
+        val n = t.media.usable().size
+        if (n > 0 && !t.isNewTab) videoChip.show(pal, n) else videoChip.hide()
     }
 
     /**

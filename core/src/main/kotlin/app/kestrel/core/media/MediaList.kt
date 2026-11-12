@@ -78,6 +78,9 @@ class MediaList(private val max: Int = 24) {
     /**
      * What is worth offering: playlists and big files first. Tiny files (sounds, tracking clips) and, when the page has a stream, small clips next to it (ads, previews) are left out.
      */
+    /** True when nothing at all was seen (the common case: the chip check on every UI refresh stops here without building a list). */
+    fun isEmpty(): Boolean = items.isEmpty()
+
     fun usable(): List<MediaCandidate> {
         val hasStream = items.any { it.kind != MediaKind.FILE }
         val out = items.filter { c ->
