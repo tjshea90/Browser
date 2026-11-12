@@ -214,7 +214,7 @@ class CourierHostTest {
 
     @Test(timeout = 60_000) fun theRowButtonsReachThePhone() {
         val data = testBytes(4 * MiB)
-        val origin = FakeServer(data).also { it.chunkDelayMs = 4; it.chunk = 32 * 1024 }
+        val origin = FakeServer(data).also { it.chunkDelayMs = 10; it.chunk = 16 * 1024 }
         val p = Phone(origin)
         val t = Tablet(p.base)
         val id = t.create(cid(4)).second.str("id")!!
