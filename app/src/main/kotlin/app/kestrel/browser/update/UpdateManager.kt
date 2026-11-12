@@ -129,10 +129,15 @@ object UpdateManager {
     }
 
     /** DEBUG builds only: `adb shell setprop debug.kestrel.feed http://10.0.2.2:8000/releases.json` points the check at a local test feed (a releases LIST). */
-    private fun debugFeed(ctx: Context): String? {
+    private fun debugFeed(ctx: Context): String? = debugProp(ctx, "debug.kestrel.feed")
+
+    /** DEBUG builds only: `adb shell setprop debug.kestrel.engine http://10.0.2.2:8000/maven-metadata.xml` points the engine look at a local file. */
+    private fun debugEngineFeed(ctx: Context): String? = debugProp(ctx, "debug.kestrel.engine")
+
+    private fun debugProp(ctx: Context, name: String): String? {
         if ((ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) == 0) return null
         return try {
-            (Class.forName("android.os.SystemProperties").getMethod("get", String::class.java).invoke(null, "debug.kestrel.feed") as? String)?.takeIf { it.isNotBlank() }
+            (Class.forName("android.os.SystemProperties").getMethod("get", String::class.java).invoke(null, name) as? String)?.takeIf { it.isNotBlank() }
         } catch (e: Throwable) { null }
     }
 
@@ -256,8 +261,9 @@ object UpdateManager {
 
     /** One conditional request to Mozilla's Maven metadata (a 304 costs headers only). */
     private fun checkEngine(app: Context) {
-        val url = Flavor.engineMetaUrl
-        if (url.isEmpty() || !(url.startsWith("https://") || url.startsWith("http://127.0.0.1"))) return // loopback only so the tests can use a local server
+        val debugUrl = debugEngineFeed(app)
+        val url = debugUrl ?: Flavor.engineMetaUrl
+        if (url.isEmpty() || !(debugUrl != null || url.startsWith("https://") || url.startsWith("http://127.0.0.1"))) return // loopback only so the tests can use a local server
         val s = sp(app)
         val c = open(url)
         val etag = s.getString("engine_etag", null)
