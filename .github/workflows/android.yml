@@ -142,7 +142,8 @@ jobs:
   # ------------------------------------------------------------------ the injected WebView scripts in real headless Chromium
   test-js:
     needs: check
-    if: needs.check.outputs.full == 'true' && needs.check.outputs.web == 'true'
+    # runs for BOTH apps: the Gecko app's extension engine (engine.js parity with the Kotlin engine) and its pop-up guard (guard-main.js) are tested here and nowhere else
+    if: needs.check.outputs.full == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -211,7 +212,7 @@ jobs:
 
   # ------------------------------------------------------------------ Kestrel G (Firefox engine)
   build-gecko:
-    needs: [check, test-jvm]
+    needs: [check, test-jvm, test-js]
     if: needs.check.outputs.full == 'true' && needs.check.outputs.gecko == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
