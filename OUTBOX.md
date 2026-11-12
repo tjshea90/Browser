@@ -897,3 +897,29 @@
 >
 > **Next, in order:** typing lag, ad-block depth, Back up / Restore, then the Settings restyle. I already have a lead on typing: Firefox 160 has a setting that makes the keyboard shrink only the visible area instead of re-laying out the whole page. I'm testing it now.
 <!-- sha:5811858b1cdd -->
+
+## 2026-11-12T22:49:46Z
+> Kestrel G alpha24 is built, signed and published. I tested it on the Android 10 emulator and with the unit tests, but not on your real tablet.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha24
+>
+> To install, open that page on the tablet and tap `kestrel-g-0.3.0-alpha24.apk`. It installs over the current Kestrel G because the signing certificate is the same. If Android says "not enough storage", free some room first. An install needs about a tenth of the tablet's storage free afterwards.
+>
+> **What's new**
+> 1. **Back up & restore** (Menu > Settings > Back up & restore). "Back up now" writes one file, `Kestrel backup <date>.json`, into your Downloads folder with no picker and no permission prompt. It holds your bookmarks, history, settings, per-site Shields choices and open tabs. The file survives uninstalling Kestrel. "Restore" opens the file picker. It shows what the file contains and asks before changing anything. Bookmarks, history and tabs are added to yours, and your settings and per-site Shields choices are replaced by the backup's. The phone pairing code is deliberately left out, so you pair again after a restore. On the emulator I backed up, wiped the app, and restored. The settings, per-site Shields, bookmarks, history and tabs all came back.
+> 2. **Much deeper ad hiding.** All 29,204 generic hiding rules from the lists now work; only the first 1,200 did before. Each one applies only on pages that actually contain a matching class or id, so pages aren't slowed. I also fixed two bugs in how the hiding rules were written that would have stopped some of them working. I checked this on test pages built with real names from the lists, including an element added late and an exception rule. I haven't seen it on real websites.
+> 3. **Keyboard fix.** Tapping a text field in the lower half of the screen now scrolls it above the keyboard instead of leaving it hidden until you type. On the emulator the field moved from 406 px to 146 px, inside the 335 px of screen the keyboard leaves visible.
+>
+> **Still open: the typing lag.** The keyboard fix removes one cause, but the lag in Proton Mail and the Google search box needs numbers from your tablet. Type 20 characters in each and tell me roughly how long they take to appear. Also tell me which keyboard app you use and whether any accessibility or autofill service is on.
+>
+> **Next for alpha25.** The Firefox engine now answers ad-blocking requests on its own worker thread, so hiding rules arrive sooner after a cold start. I'm also adding list-driven stripping of tracking parameters from links you open, such as `?si=` on YouTube share links. The core part passes its 21 unit tests and the rest isn't connected yet. After that come the remaining ad-blocking items, "mp4 always", the download-manager queue and UI polish.
+>
+> **What I need from you**
+> - Open Diagnostics with Fast Wi-Fi on. The Network line should say "LinkMeter tunnel recognised: true" and show 1000 KB/s.
+> - Tell me how tabs, Back and scrolling feel.
+> - Send the Proton Mail numbers and the keyboard and accessibility facts above.
+> - Yes or no on a scheduled GitHub job that rebuilds the ad lists automatically.
+> - The private signing key (four repo secrets), if you want releases signed with your own key.
+> - Report any video-site problems: `.ts` files, a grey download icon, spam after pressing play.
+> - Optional: the licence choice, landscape tabs, and the Cromite comparison.
+<!-- sha:15de348e3486 -->
