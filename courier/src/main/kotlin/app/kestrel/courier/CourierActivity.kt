@@ -146,6 +146,14 @@ class CourierActivity : Activity() {
             for (v in list.take(20)) addView(row(v))
         }
 
+        CourierRuntime.proxyStats()?.let { st ->
+            card {
+                addView(text("Pages for the tablet", 12f, ACCENT, bold = true))
+                addView(text(if (st.tunnels == 0L && st.active == 0) "Nothing yet. With \"Load pages through the phone\" on, the tablet's pages are fetched here, over this phone's own connection."
+                    else "${st.active} open now  ·  ${st.tunnels} opened  ·  ${bytes(st.up + st.down)} carried" + (if (st.failed > 0) "  ·  ${st.failed} could not connect" else ""), 14f, MUTED).apply { setPadding(0, dp(4), 0, 0) })
+            }
+        }
+
         val free = try { StatFs(filesDir.path).availableBytes } catch (e: Exception) { 0L }
         val ver = try { packageManager.getPackageInfo(packageName, 0).versionName } catch (e: Exception) { "?" }
         target.addView(text("Free space on this phone: ${bytes(free)}   ·   Courier $ver", 12f, MUTED).apply { setPadding(dp(4), dp(8), 0, 0) })

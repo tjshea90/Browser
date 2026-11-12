@@ -60,6 +60,9 @@ object CourierRuntime {
     fun busy(): Boolean = running?.host?.needsService() == true
     fun jobCount(): Int = running?.host?.jobCount ?: 0
 
+    /** What the page-load proxy has done since this run started; null = no proxy (not running, or its port was busy). */
+    fun proxyStats(): ConnectProxy.Stats? = running?.proxy?.stats()
+
     @Synchronized fun start(ctx: Context): Boolean {
         if (running != null) return true
         val app = ctx.applicationContext
