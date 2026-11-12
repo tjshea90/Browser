@@ -10,6 +10,23 @@ object Adts {
     /** One frame inside a sample: where its raw payload starts, how long it is, and the sample rate its header names. */
     class Frame(val payloadOffset: Int, val payloadLength: Int, val sampleRate: Int)
 
+    /** What the first ADTS header says about the stream, in the form an MP4 wants: the 2-byte AudioSpecificConfig, the sample rate and the channel count. */
+    class Config(val asc: ByteArray, val sampleRate: Int, val channels: Int)
+
+    /** The [Config] named by the ADTS header at `b[offset]`, or null when there is no header, the rate is explicit (index 15), or the channel layout is not a plain 1..7 one. */
+    fun config(b: ByteArray, offset: Int, size: Int): Config? {
+        if (size < 7) return null
+        val b0 = b[offset].toInt() and 0xFF; val b1 = b[offset + 1].toInt() and 0xFF
+        if (b0 != 0xFF || (b1 and 0xF0) != 0xF0) return null
+        val b2 = b[offset + 2].toInt() and 0xFF; val b3 = b[offset + 3].toInt() and 0xFF
+        val aot = ((b2 shr 6) and 3) + 1                           // the header holds the profile (object type - 1)
+        val rateIndex = (b2 shr 2) and 0xF
+        val chan = ((b2 and 1) shl 2) or (b3 shr 6)
+        if (rateIndex >= RATES.size || chan == 0) return null
+        val asc = byteArrayOf(((aot shl 3) or (rateIndex shr 1)).toByte(), (((rateIndex and 1) shl 7) or (chan shl 3)).toByte())
+        return Config(asc, RATES[rateIndex], if (chan == 7) 8 else chan)
+    }
+
     /** The ADTS frames in `b[offset until offset+size]` (offsets are into [b]); empty when the data does not start with an ADTS header (it is raw AAC already). */
     fun frames(b: ByteArray, offset: Int, size: Int): List<Frame> {
         val out = ArrayList<Frame>()
