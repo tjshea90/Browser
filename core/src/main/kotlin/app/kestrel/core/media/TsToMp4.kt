@@ -50,10 +50,11 @@ class TsToMp4(
     private var rRate = 0
     private var rChannels = 0
     private var audioIgnored = false
-    private var hasOrigin = false
-    private var origin = 0L
-    private var runStart = 0L
-    private var lastInDts = 0L
+    /** The clock: a stream time t lands on the muxer's timeline at t + [delta] (90 kHz). Valid once the run's first picture has been placed; saved in the journal so a resume carries on seamlessly. */
+    private var deltaValid = false
+    private var delta = 0L
+    private var runStart = 0L                         // where this run's first picture goes (the end of what is kept), used to derive [delta]
+    private var lastInDts = NONE
 
     private class PendV(val b: ByteArray, val dts: Long, val pts: Long, val sync: Boolean)
     private class PendA(val b: ByteArray, val sizes: IntArray, val n: Int, val pts: Long)
@@ -133,6 +134,7 @@ class TsToMp4(
         val k = mainKey?.toByteArray(Charsets.UTF_8)
         b.varint(if (k == null) 0L else k.size + 1L); if (k != null) b.put(k)
         b.varint(keptMs); b.varint(droppedRuns.toLong()); b.varint(droppedMs); b.u8(if (skipping) 1 else 0)
+        b.u8(if (deltaValid) 1 else 0); b.zigzag(delta)
     }
 
     private fun readState(r: Reader): Int {
@@ -140,6 +142,7 @@ class TsToMp4(
         val kl = r.varint().toInt()
         mainKey = if (kl == 0) null else String(r.bytes(kl - 1), Charsets.UTF_8)
         keptMs = r.varint(); droppedRuns = r.varint().toInt(); droppedMs = r.varint(); skipping = r.u8() == 1
+        deltaValid = r.u8() == 1; delta = r.zigzag()
         return next
     }
 
@@ -150,10 +153,9 @@ class TsToMp4(
         resolved = false
         videoStarted = false
         rSps = null; rSpsInfo = null; rPps.clear(); rAsc = null; rRate = 0; rChannels = 0; audioIgnored = false
-        hasOrigin = false
+        lastInDts = NONE
         pendV.clear(); pendA.clear(); pendBytes = 0
-        if (!resumed) skipping = false
-        mux.closeChunk()
+        if (!resumed) { skipping = false; deltaValid = false; mux.closeChunk() }   // a resumed segment continues the run: same clock, same open chunk
     }
 
     private fun audioAbsent() = demux.programKnown && demux.audioType == 0
@@ -177,13 +179,13 @@ class TsToMp4(
             pendV.clear(); pendA.clear(); pendBytes = 0
             return
         }
-        if (replace) { mux.rollback(INIT); droppedRuns++; droppedMs += keptMs; keptMs = 0 }
+        if (replace) { mux.rollback(INIT); droppedRuns++; droppedMs += keptMs; keptMs = 0; deltaValid = false }
         if (first || replace) {
             mux.setVideo(info.width, info.height, Avc.avcC(sps, info, rPps))
             if (hasSound) mux.setAudio(rAsc!!, rRate, rChannels)
             mainKey = key
             runStart = 0
-        } else runStart = endOfTimeline()
+        } else if (!deltaValid) runStart = endOfTimeline()
         keptMs += curRunMs
         for (p in pendV) emitVideo(p.b, p.b.size, p.dts, p.pts, p.sync)
         for (p in pendA) emitAudio(p.b, p.sizes, p.n, p.pts)
@@ -226,14 +228,14 @@ class TsToMp4(
     }
 
     private fun emitVideo(b: ByteArray, n: Int, dts: Long, pts: Long, sync: Boolean) {
-        if (!hasOrigin) { origin = dts; hasOrigin = true; lastInDts = dts }
-        else {
+        if (!deltaValid) { delta = runStart - dts; deltaValid = true }
+        else if (lastInDts != NONE) {
             val jump = dts - lastInDts
-            if (jump > JUMP_FORWARD || jump < -JUMP_BACK) { origin = dts; runStart = endOfTimeline() }   // the stream's clock restarted without a tag: start a new run on the muxer's timeline
-            lastInDts = dts
+            if (jump > JUMP_FORWARD || jump < -JUMP_BACK) delta = endOfTimeline() - dts      // the stream's clock restarted without a tag: a new run on the muxer's timeline
         }
-        var md = dts - origin + runStart
-        val mp = pts - origin + runStart
+        lastInDts = dts
+        var md = dts + delta
+        val mp = pts + delta
         if (mux.videoCount > 0 && md <= mux.lastVideoDts) md = mux.lastVideoDts + 1
         mux.addVideo(b, 0, n, md, (mp - md).coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt(), sync)
     }
@@ -257,8 +259,8 @@ class TsToMp4(
     private fun emitAudio(b: ByteArray, sizes: IntArray, n: Int, pts: Long, total: Int = b.size) {
         val rate = mux.sampleRate
         var tick: Long
-        if (pts < 0) tick = if (mux.audioCount > 0) mux.audioEndTick else ((lastInDts - origin + runStart).coerceAtLeast(0L) * rate + 45000) / 90000
-        else tick = ((pts - origin + runStart) * rate + (if (pts >= origin - runStart) 45000 else -45000)) / 90000
+        if (pts < 0) tick = if (mux.audioCount > 0) mux.audioEndTick else (mux.lastVideoDts * rate + 45000) / 90000
+        else { val t = pts + delta; tick = (t * rate + (if (t >= 0) 45000 else -45000)) / 90000 }
         if (mux.audioCount > 0 && Math.abs(tick - mux.audioEndTick) > 5L * rate) tick = mux.audioEndTick     // a jump the picture track did not make: keep the sound on its own grid
         mux.addAudio(b, 0, total, sizes, n, tick)
     }
@@ -270,6 +272,7 @@ class TsToMp4(
         private const val MAX_PENDING = 8 shl 20
         private const val JUMP_FORWARD = 10 * 90000L
         private const val JUMP_BACK = 90000L
+        private const val NONE = Long.MIN_VALUE
 
         /**
          * Looks at the start of a stream's first segment and says why it cannot be written as an MP4 here, or null when it can: H.264 picture with its parameters, and sound that is AAC or absent.
