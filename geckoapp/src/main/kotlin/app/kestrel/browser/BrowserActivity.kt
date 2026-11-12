@@ -675,7 +675,7 @@ open class BrowserActivity : Activity(), DockListener {
         val stillThere = BackPictures.keyOf(t.url) == BackPictures.keyOf(b.fromUrl)
         if (t !== current || t.error != null || t.showHome || restoringTab != null || !stillThere) { Health.log("tabs", "back-picture-skipped", "same-page=$stillThere cover=${restoringTab != null}"); return@Runnable }
         Health.count("back.picture"); Health.log("tabs", "back-picture", "tab=${t.id}")
-        showRestoring(t, false, "", b.picture, 0x33, 6_000)
+        showRestoring(t, false, "", b.picture, 0x33) // stays until the page paints, its load ends or an error replaces it (20 s at most): taking it away earlier would show the page the owner just left again
     }
 
     internal fun goBack(t: Tab) { armBackPicture(t, -1); t.session?.goBack() }
