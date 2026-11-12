@@ -20,10 +20,12 @@ class TsToMp4(
     private val syncOut: () -> Unit,
     /** The whole playlist's playing time (for the "part of the stream was left out" warning). */
     private val totalMs: Long,
+    /** The clock for the file's creation time (tests pass a fixed one so two runs give identical bytes). */
+    nowMs: () -> Long = { System.currentTimeMillis() },
 ) : TsDemux.Out {
     class Finished(val length: Long, val warning: String?)
 
-    private val mux = Mp4Mux(out)
+    private val mux = Mp4Mux(out, nowMs)
     private val demux = TsDemux(this)
 
     /** Bytes written to the output so far (the MP4 body; the `moov` follows at [finish]). */
