@@ -323,15 +323,18 @@ class Mp4Mux(private val out: MuxOut, private val nowMs: () -> Long = { System.c
 
     private fun matrix(m: Bytes) { m.u32(0x00010000); m.u32(0); m.u32(0); m.u32(0); m.u32(0x00010000); m.u32(0); m.u32(0); m.u32(0); m.u32(0x40000000) }
 
-    /** `edts`/`elst`: an empty edit of [lead] ticks (90 kHz) when the track starts after the earliest sample, then the media from [skip] on; written only when needed. */
-    private fun edits(m: Bytes, lead: Long, skip: Long, mainMs: Long) {
+    /**
+     * `edts`/`elst` in the form ffmpeg writes: an empty edit of [lead] ticks (90 kHz) while the track is silent / still (it starts after the earliest sample of the file), then the media from
+     * [mediaTime] (the composition time of the first picture shown: the B-frame delay) for [mainMs] milliseconds. Omitted when both are zero.
+     */
+    private fun edits(m: Bytes, lead: Long, mediaTime: Long, mainMs: Long) {
         val leadMs = ms(lead, 90000L)
-        if (leadMs == 0L && skip == 0L) return
+        if (leadMs == 0L && mediaTime == 0L) return
         m.box("edts") {
             m.fullBox("elst", 0, 0) {
                 m.u32(if (leadMs > 0) 2 else 1)
                 if (leadMs > 0) { m.u32(leadMs); m.u32(-1); m.u16(1); m.u16(0) }
-                m.u32(mainMs); m.u32(skip); m.u16(1); m.u16(0)
+                m.u32(mainMs); m.u32(mediaTime); m.u16(1); m.u16(0)
             }
         }
     }
