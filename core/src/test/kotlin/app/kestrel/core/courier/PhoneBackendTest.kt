@@ -340,14 +340,14 @@ class PhoneBackendTest {
     }
 
     @Test(timeout = 180_000) fun aPhoneThatIsKilledInTheMiddleOfAVideoFinishesItAfterTheRestart() {
-        val pcdn = FakeCdn().also { it.chunkDelayMs = 25; it.chunk = 4 * 1024 }
+        val pcdn = FakeCdn().also { it.chunkDelayMs = 60; it.chunk = 4 * 1024 }
         val phone1 = Phone(FakeServer(testBytes(10)), root, cleanups, cdn = pcdn)
         val playlist = tsPlaylist(pcdn)
         val t = Tablet(FakeServer(testBytes(10)), tabletCdn = FakeCdn())
         t.to(phone1); t.startBackend()
         val lid = t.backend.offloadStream(clip(playlist))!!
-        await("the phone is working on it") { t.backend.view(lid)?.state == DlState.RUNNING }
-        Thread.sleep(1500)                                                                      // a few segments are in, the rest is not
+        await("the phone has the job") { t.backend.view(lid)?.note?.startsWith("On your phone") == true }
+        Thread.sleep(2500)                                                                      // part of the video is in, not all of it
         phone1.stop()                                                                           // the app is killed
         await("the tablet notices") { t.backend.view(lid)?.state == DlState.WAITING_NETWORK }
         val phone2 = Phone(FakeServer(testBytes(10)), root, cleanups, dir = phone1.dir, cdn = pcdn)      // and starts again on the same folders
