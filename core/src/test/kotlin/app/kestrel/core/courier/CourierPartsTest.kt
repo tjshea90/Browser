@@ -196,7 +196,7 @@ class CourierPartsTest {
 
     @Test fun theFetcherAsksTheGuardBeforeEveryConnection() {
         val asked = ArrayList<String>()
-        val f = UrlConnectionFetcher { u -> asked.add(u.host); if (u.host == "inner.test") throw FetchException(FetchException.Kind.LOCAL_NET, "no") }
+        val f = UrlConnectionFetcher(guard = { u -> asked.add(u.host); if (u.host == "inner.test") throw FetchException(FetchException.Kind.LOCAL_NET, "no") })
         try { f.open(FetchRequest("http://inner.test/x", -1, -1, null, emptyMap())); fail("the guard must stop the request") } catch (e: FetchException) { assertEquals(FetchException.Kind.LOCAL_NET, e.kind) }
         assertEquals(listOf("inner.test"), asked)
         // the real guard on literals (no DNS needed): loopback, private and IPv6 literals are refused, in the form a URL spells them
