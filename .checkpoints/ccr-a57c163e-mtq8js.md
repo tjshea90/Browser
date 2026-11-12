@@ -1,22 +1,22 @@
-# CHECKPOINT 1054 — read me first, then TASKS.md
+# CHECKPOINT 1057 — read me first, then TASKS.md
 
-**Written:** 2026-11-12T15:01:44Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `95c9050` (this checkpoint is the commit after it)
+**Written:** 2026-11-12T15:08:45Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `e7cf7a2` (this checkpoint is the commit after it)
 
 ## Just done
-Docs: CLAUDE.md + BRIEF.md record the owner's unmetered/5 Mbit/s facts and the LinkMeter port rule; releases Courier alpha3 + Kestrel G alpha21 dispatched (waiting for the runs)
+Owner message 13 ANSWERED and SHIPPED: Kestrel Courier alpha3 (kestrel-courier-v0.1.0-alpha3, 259 KB) + Kestrel G alpha21 (kestrel-g-v0.3.0-alpha21, 92.8 MB), both runs green, certificate verified, both in BUILDLOG.md. Pages through the phone (CONNECT proxy), Phone helper menu tile, unmetered default, config v4 caches/Back/scroll prefs, LinkMeter port clash + VPN gateway fix; Z0-Z10 ticked in TASKS with evidence (Z5/Z7 are the owner's to judge)
 
 ## Do this next
-WAIT for both Actions runs (courier then gecko), check mcp__github__get_release_by_tag kestrel-courier-v0.1.0-alpha3 and kestrel-g-v0.3.0-alpha21 (APK + sha256, certificate verified), confirm run conclusion success (mcp__github__actions_list list_workflow_runs perPage 1 status completed), then bash tools/record-release.sh <tag> '<note as passed to ship.sh>' for each, then send the owner the reply (draft in OUTBOX / this session): yes the phone can speed up page loads because the carrier caps the HOTSPOT not the phone; pages through the phone + Phone helper menu tile + unmetered + Back cache/scroll prefs; ad block stays in the engine; LinkMeter port clash fixed; tested on emulator only; 5 GHz advice; re-list open items. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN stays
+STANDING BY for the owner: (1) the real pair test and the sentence 'Pages through the phone: N times faster' from Settings > Phone helper > Test the phone link (it decides whether the phone helps pages; if it says no difference, the carrier does not cap the phone's own traffic differently or the cap is not the limit); (2) their feel of scrolling / white areas / Back (Settings > Scroll feel levels, Diagnostics > Compare 3 feels); (3) Proton Mail 'Page loads' numbers; (4) keyboard app / accessibility / autofill / 5 GHz facts; (5) yes/no on a scheduled CI list workflow. If the owner reports trouble with the phone proxy start at research/SPEED2.md sections 4-6, Courier log: adb logcat -s KestrelCourier (debug builds log every tunnel), tablet Diagnostics 'Pages:' line. Optional owner-free ideas, ONE step per wake: preconnect to a link's host on touchstart (extension content script -> GeckoWebExecutor.speculativeConnect), tablet-side 'no-store' page snapshot for instant Back (only if the owner asks), Y2i stage 3. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN: delete when the owner has been silent 24 h and nothing safe is left
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M BRIEF.md
-     M CLAUDE.md
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  5c2891c ckpt 1054: Docs: CLAUDE.md + BRIEF.md record the owner's unmetered/5 Mbit/s facts and th
   95c9050 ckpt 1053: gated kestrel-g-v0.3.0-alpha21 (gecko code 120) and pushed it: handoff self-t
   2a514af ckpt 1052: gated kestrel-courier-v0.1.0-alpha3 (courier code 3) and pushed it: handoff s
   d803d90 ckpt 1051: pre-ship: alpha3: pages through the phone. The phone now loads the tablet's w
@@ -26,5 +26,4 @@ WAIT for both Actions runs (courier then gecko), check mcp__github__get_release_
   d886b5f ckpt 1016: Z10 done (read LinkMeter): the owner's carrier caps the HOTSPOT at 5 Mbit/s, 
   83be731 ckpt 1013: Owner message 13 written into TASKS.md as Z0-Z10 in their words (INBOX has it
   3a332d4 ckpt 1010: Y2 stage 2 SHIPPED and recorded: Kestrel Courier alpha2 (kestrel-courier-v0.1
-  4389f39 ckpt 1007: gated kestrel-g-v0.3.0-alpha20 (gecko code 119) and pushed it: handoff self-t
 ```
