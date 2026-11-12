@@ -28,6 +28,8 @@ class Prefs private constructor(ctx: Context) {
         set(v) = put("https", v.name)
     var shieldAds: Boolean get() = bool("sh_ads", true); set(v) = put("sh_ads", v)
     var shieldCosmetic: Boolean get() = bool("sh_cos", true); set(v) = put("sh_cos", v)
+    /** Kestrel G: refuse windows and tab redirects the user did not ask for (movie-site spam). A site with Shields off is exempt. */
+    var blockPopups: Boolean get() = bool("block_popups", true); set(v) = put("block_popups", v)
     var shieldCookies: Boolean get() = bool("sh_cookies", true); set(v) = put("sh_cookies", v)
     var shieldFingerprint: Boolean get() = bool("sh_fp", true); set(v) = put("sh_fp", v)
 

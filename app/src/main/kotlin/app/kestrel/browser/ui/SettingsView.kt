@@ -52,6 +52,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         choice("HTTPS", listOf("Off", "Upgrade when possible", "Strict: warn before plain HTTP"), prefs.httpsMode.ordinal) { prefs.httpsMode = HttpsPolicy.Mode.values()[it] }
         toggle("Block ads & trackers", "Network blocking with EasyList, EasyPrivacy and uBlock lists", prefs.shieldAds) { prefs.shieldAds = it }
         toggle("Hide ad spaces & cookie banners", null, prefs.shieldCosmetic) { prefs.shieldCosmetic = it }
+        if (app.kestrel.browser.Flavor.hasPopupGuard) toggle("Block pop-ups & forced redirects", "Refuses new tabs and page jumps you did not ask for, such as the ad tab a video site opens when you press play. A notice offers to open one anyway", prefs.blockPopups) { prefs.blockPopups = it }
         toggle("Block cross-site cookies", null, prefs.shieldCookies) { prefs.shieldCookies = it }
         toggle("Block fingerprinting", null, prefs.shieldFingerprint) { prefs.shieldFingerprint = it }
         toggle("Clear browsing data when the app is closed", "Cookies, cache, history and saved site settings, the next time it opens after you swipe it away", prefs.clearOnExit) { prefs.clearOnExit = it }
