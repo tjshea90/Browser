@@ -184,3 +184,8 @@ I especially want Claude to review and optimize as much as possible this browser
 2) if I long press a video to download, it brings up multiple files to download. A couple files are usually small files from php web addresses that are obviously not the video I long pressed. Make an automatic filtering system that tries to find the exact video I long pressed for download and ignores small strange files. For the download options, include available formats/resolutions, file sizes, the name of the file given by the source, and an option to rename the file before download. Make the gui intuitive and well organized and easy to find features and functions
 3) do any optimizations available for better speed and handling of the fast wifi feature on the linkmeter app from the linkmeter. I will be using the fast wifi feature often, but the browser must also work without it. If I have the fast wifi feature in linkmeter turned on, make sure the browser is well optimized to connect with it and that websites and downloads behave properly and load as quickly as possible
 ```
+
+## 2026-11-12T22:59:18Z
+```
+@"/root/.claude/uploads/30a5aa00-41c9-5bd3-87d1-b10052a52d84/4a3bede6-REVIEW-EXTERNAL-1.md" The attached file is a claude fable review of the browser.  Save it to the repo as research/REVIEW-EXTERNAL-1.md and follow section 0.
+```
