@@ -35,6 +35,7 @@ function askCfg(host) {
     // generation 0 = the app's lists are still loading: the answer is provisional (the site allow-list is not known yet), so it is asked again in a few seconds instead of after a minute
     cfgMode.set(host, mode); cfgAt.set(host, (parseInt(parts[1], 10) > 0) ? Date.now() : Date.now() - CFG_TTL + 3000);
     cfgFlags.set(host, parseInt(parts[3], 10) || 0);
+    noteGeneration(parseInt(parts[1], 10) || 0);
     if (mode !== MODE_LEGACY) wantImage(parseInt(parts[1], 10) || 0, parts[2] || '');
     return mode;
   }, function () { cfgWait.delete(host); return MODE_OFF; }); // the app could not answer: fail open
@@ -258,10 +259,10 @@ function decide(d, page, host, mode) {
 
 browser.webRequest.onBeforeRequest.addListener(function (d) {
   if (d.type === 'main_frame') {
-    sniffed.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again
+    sniffed.delete(d.tabId); tabTop.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again (delete first: Map keeps the old position of a key, and the OLDEST position is what is dropped)
     verdicts.clear(); // legacy verdicts are only worth keeping while ONE page loads
     var h = pageHost(d.url);
-    if (h) { cfgMode.delete(h); cfgAt.delete(h); askCfg(h); } // a Shields switch may have changed: ask again. Not awaited - the answer beats the document's first bytes over a hotspot
+    if (h) { cfgMode.delete(h); cfgAt.delete(h); cssCache.delete('t|' + h); askCfg(h); } // a Shields switch may have changed: ask again. Not awaited - the answer beats the document's first bytes over a hotspot
     return {};
   }
   var page = topPage(d);
@@ -275,18 +276,34 @@ browser.webRequest.onBeforeRequest.addListener(function (d) {
 }, { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] }, ['blocking']);
 
 // ---------------------------------------------------------------- element hiding: still asked of the app, once per frame, answered from a cache for repeat visits
-var cssCache = new Map();
+// The answer depends on the lists (their generation), on the site's Shields switches and on whether the lists are loaded at all, so a cached answer is only used while all of that is unchanged:
+//  - it lives CSS_TTL (like the per-page configuration), and the top document's entry is dropped at every navigation (a Shields switch on the page reloads it: the reload must ask again);
+//  - nothing is cached while the app's lists are still loading (generation 0: the app answers "" then, and "" must not stick to the host for the rest of the session);
+//  - a new list generation empties the cache;
+//  - frames of one host that start together share one question (cssWait), instead of one native message each.
+var cssCache = new Map(), cssWait = new Map();
+var CSS_TTL = 60000, CSS_MAX = 200;
+var cssGen = 0; // the app's list generation as of the last page configuration (0 = not loaded yet)
+function noteGeneration(g) { g = g > 0 ? g : 0; if (g !== cssGen) { cssGen = g; cssCache.clear(); } }
 browser.runtime.onMessage.addListener(function (m) {
   if (!m || m.k !== 'css' || !m.h) return undefined;
   var key = (m.top ? 't|' : 'f|') + m.h; // the top document and an iframe of the same host get different CSS
-  var cached = cssCache.get(key);
-  if (cached !== undefined) return Promise.resolve(cached);
-  return send({ k: 'css', h: m.h, top: !!m.top }).then(function (r) {
+  var hit = cssCache.get(key);
+  if (hit !== undefined && Date.now() - hit.at < CSS_TTL) return Promise.resolve(hit.css);
+  var w = cssWait.get(key);
+  if (w) return w;
+  w = send({ k: 'css', h: m.h, top: !!m.top }).then(function (r) {
+    cssWait.delete(key);
     var css = (typeof r === 'string') ? r : '';
-    if (cssCache.size >= 200) cssCache.delete(cssCache.keys().next().value);
-    cssCache.set(key, css);
+    if (cssGen > 0) {
+      cssCache.delete(key);
+      if (cssCache.size >= CSS_MAX) cssCache.delete(cssCache.keys().next().value);
+      cssCache.set(key, { css: css, at: Date.now() });
+    }
     return css;
-  }, function () { return ''; });
+  }, function () { cssWait.delete(key); return ''; });
+  cssWait.set(key, w);
+  return w;
 });
 
 // ---- video / audio sniffer: tells the app which media files and playlists a page loads, so a long press can offer "Download video".
@@ -295,6 +312,19 @@ var MEDIA_TYPES = ['media', 'xmlhttprequest', 'other', 'object', 'sub_frame', 'm
 var MEDIA_EXT = /\.(mp4|m4v|mov|webm|mkv|avi|wmv|flv|3gp|mpg|mpeg|m4a|mp3|aac|ogg|oga|ogv|opus|wav|flac|m3u8|m3u|mpd)(?:$|[?#])/i;
 var MEDIA_CT = /^(video|audio)\/|mpegurl|dash\+xml|\/mp4|\/ogg|matroska/;
 var SEGMENT = /\.(ts|m4s|cmfv|cmfa|cmft|m4f|mts)(?:$|[?#])/i;
+var PLAYLIST = /mpegurl|dash\+xml|\.(?:m3u8|m3u|mpd)(?:$|[?#])/i; // playlists are small by nature; only plain files are judged by their size
+var MIN_FILE_BYTES = 102400; // the app never offers a plain file under 100 KB (core MediaList.MIN_FILE): not worth a message to it
+// Sites that fetch a video in pieces by putting the byte range in the QUERY make every piece a new address: those parameters do not make a different file.
+var PIECE_PARAMS = /^(range|bytestart|byteend|start|end|sq|seg|segment|rn|rbuf|offset|byte_range|bytes)$/i;
+function dedupeKey(url, sized) {
+  var q = url.indexOf('?');
+  if (q < 0) return url + '|' + sized;
+  var rest = url.slice(q + 1), hash = rest.indexOf('#');
+  if (hash >= 0) rest = rest.slice(0, hash);
+  var parts = rest.split('&'), keep = [];
+  for (var i = 0; i < parts.length; i++) { var eq = parts[i].indexOf('='); if (!PIECE_PARAMS.test(eq < 0 ? parts[i] : parts[i].slice(0, eq))) keep.push(parts[i]); }
+  return url.slice(0, q) + (keep.length ? '?' + keep.join('&') : '') + '|' + sized;
+}
 var tabTop = new Map(); // tabId -> the address of the page the tab is on (an embedded player's request names its own frame, not this)
 var sniffed = new Map(); // tabId -> Set of "url|sizeKnown" already reported for the tab's CURRENT page (a reload or another page reports the same file again)
 var SNIFFED_TABS = 40;
@@ -306,6 +336,8 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
   if (SEGMENT.test(url)) return;
   var ct = '', len = -1, total = -1, h = d.responseHeaders || [];
   for (var i = 0; i < h.length; i++) {
+    var nl = h[i].name.length;
+    if (nl !== 12 && nl !== 13 && nl !== 14) continue; // content-type (12), content-range (13), content-length (14): most header names are never lower-cased
     var n = h[i].name.toLowerCase();
     if (n === 'content-type') ct = (h[i].value || '').toLowerCase();
     else if (n === 'content-length') len = parseInt(h[i].value, 10);
@@ -314,7 +346,8 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
   if (!MEDIA_CT.test(ct) && !MEDIA_EXT.test(url)) return;
   if (ct.indexOf('video/mp2t') === 0 || ct.indexOf('iso.segment') > 0) return;
   var size = total >= 0 ? total : (d.statusCode === 200 && len >= 0 ? len : -1);
-  var key = url + '|' + (size >= 0 ? 1 : 0);
+  if (size >= 0 && size < MIN_FILE_BYTES && !PLAYLIST.test(ct) && !PLAYLIST.test(url)) return;
+  var key = dedupeKey(url, size >= 0 ? 1 : 0);
   var seen = sniffed.get(d.tabId);
   if (!seen) {
     if (sniffed.size >= SNIFFED_TABS) sniffed.delete(sniffed.keys().next().value);

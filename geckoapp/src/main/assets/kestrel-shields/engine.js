@@ -207,19 +207,24 @@ var KestrelEngine = (function () {
     var cBlocked = false, cImportant = false, cExcepted = false, cCategory = 0, cEvals = 0, cPageHashes = null;
     var seen = new Int32Array(64), nSeen = 0;
 
+    var lastHashHost = null, lastHashes = null; // every request of a page names the same page host: its suffix hashes are computed once, not once per request
     function pageHashes() {
       var a = cPageHashes;
       if (a === null) {
-        a = [];
         var h = cPageHost;
-        if (h) {
-          var start = 0;
-          for (;;) {
-            h64(h, start, h.length); a.push(hHi, hLo);
-            var dot = h.indexOf('.', start);
-            if (dot < 0) break;
-            start = dot + 1;
+        if (h && h === lastHashHost) a = lastHashes;
+        else {
+          a = [];
+          if (h) {
+            var start = 0;
+            for (;;) {
+              h64(h, start, h.length); a.push(hHi, hLo);
+              var dot = h.indexOf('.', start);
+              if (dot < 0) break;
+              start = dot + 1;
+            }
           }
+          if (h) { lastHashHost = h; lastHashes = a; }
         }
         cPageHashes = a;
       }

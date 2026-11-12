@@ -138,8 +138,9 @@
   }
   window.addEventListener('click', onClick, true);
   window.addEventListener('auxclick', onClick, true);
-  window.addEventListener('touchend', function (e) { if (e.isTrusted) onTap(e); }, true);
-  window.addEventListener('pointerup', function (e) { if (e.isTrusted) onTap(e); }, true);
+  // these two only record the tap and never cancel it: passive, so the engine never has to wait for them before it scrolls or zooms
+  window.addEventListener('touchend', function (e) { if (e.isTrusted) onTap(e); }, { capture: true, passive: true });
+  window.addEventListener('pointerup', function (e) { if (e.isTrusted) onTap(e); }, { capture: true, passive: true });
 
   // ---- forms that open a window
   try {
