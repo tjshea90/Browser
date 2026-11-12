@@ -26,6 +26,13 @@ Builds on SPEED2.md, GECKO_SPEED.md, GECKO_TUNING_2.md, SCROLL.md, HW_SPEED.md. 
 The owner's own switches are never rewritten: the effective values are applied on the default branch and the same inputs without the VPN give the standard values back. Diagnostics has a "Network:" line, Settings > Network lab says what is in force. **Emulator proof**: see section 5.
 **Not verified [N]:** anything on the real tablet with the real Fast Wi-Fi (speed, battery, whether DoH-off is faster than DoH through the relay on the owner's carrier). The Network lab switches stay available for the owner's A/B (Diagnostics > Page loads).
 
+## 2.1 Emulator proof of the Fast Wi-Fi profile ([V], Android 10 x86_64 + GeckoView 160; the VPN is SIMULATED with `setprop debug.kestrel.vpn 1`, a debug-build-only switch, because the emulator has no VPN; the real detection is `TRANSPORT_VPN` on the default network and is covered by a Robolectric test)
+- Diagnostics: `Network: Fast Wi-Fi profile: a VPN is the active network, so lookups use the phone's own resolver, HTTP/3 is off and the phone helper rests. (VPN active: true)`.
+- Engine read-back: `network.trr.mode=0` (the owner's DoH switch was ON = 2 before), `network.http.http3.enable=false`, `network.proxy.type=5` (no proxy: the Courier's PAC is not applied).
+- Main menu: the Phone helper tile reads "Phone helper: resting (Fast Wi-Fi)"; the Home screen no longer says "metered connection" (unmetered default, alpha21).
+- Engine defaults read back on the emulator (160): `docshell.shistory.bfcache.allow_unload_listeners` = TRUE already (pages with an `unload` handler ARE eligible on Android), `require_no_opener` true, `ship_allow_beforeunload_listeners` true, `browser.sessionhistory.max_entries` 50, `network.dnsCacheExpiration` 60 s, `network.dnsCacheEntries` 3200, `javascript.options.mem.gc_parallel_marking` false, `dom.script_loader.bytecode_cache.strategy` 1 (ours).
+- GeckoView 160 has NO preference that lets a `Cache-Control: no-store` page into the back/forward cache (searched libxul: the blocker list is UNLOAD_LISTENER, BEFOREUNLOAD_LISTENER, REQUEST, ACTIVE_GET_USER_MEDIA, ACTIVE_PEER_CONNECTION, ACTIVE_LOCK, ACTIVE_WEBTRANSPORT, CONTAINS_EME/MSE_CONTENT, PAGE_LOADING, HAS_USED_VR, ...; no setting relaxes no-store). So a page that sends it is reloaded on Back by design; only an app-level snapshot can mask that (section 4).
+
 ## 3. Courier: closed
 See PHONE_OFFLOAD.md section 17. Everything off by default, tile only when paired, rests under a VPN.
 
