@@ -79,7 +79,11 @@ class CourierHostTest {
         var skew = 0L
         private var lastTs = 0L
         /** Strictly increasing, like the real client: two identical requests in one millisecond must not get one signature (the phone treats that as a replay). */
-        @Synchronized fun nextTs(): Long { val t = maxOf(System.currentTimeMillis() + skew, lastTs + 1); lastTs = t; return t }
+        @Synchronized fun nextTs(): Long {
+            val now = System.currentTimeMillis() + skew
+            val t = if (now > lastTs) now else if (lastTs - now < 1000) lastTs + 1 else now      // a big step back (the clock was corrected) is honoured
+            lastTs = t; return t
+        }
         fun raw(method: String, target: String, body: String? = null, sign: Boolean = true, signWith: ByteArray = key, ts: Long = nextTs()): Triple<Int, String, Map<String, List<String>>> {
             val c = URL(base + target).openConnection() as HttpURLConnection
             c.requestMethod = method; c.connectTimeout = 5000; c.readTimeout = 15_000
