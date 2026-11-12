@@ -65,7 +65,7 @@ class Phone(
     val dnsFor = java.util.concurrent.ConcurrentHashMap<String, List<ByteArray>>()
     val streamStore = JsonStreamStore(File(dir, "streams"))
     val streams: StreamEngine? = cdn?.let { c -> StreamEngine({ c }, sinks, streamStore, FakeNet(), exec, clock, courierTestConfig(), finisher = finisherOf?.invoke(sinks)) }
-    val host = CourierHost(hostKey, engine, sinks, File(dir, "courier-jobs.json"), spy, clock, { free }, "Test phone", resolve = { h -> dnsFor[h] ?: dns }, streams = streams)
+    val host = CourierHost(hostKey, engine, sinks, File(dir, "courier-jobs.json"), spy, clock, { free }, "Test phone", resolve = { h -> dnsFor[h] ?: if (h.firstOrNull()?.isDigit() == true && h.contains('.')) listOf(InetAddress.getByName(h).address) else dns }, streams = streams)
     val server = CourierServer(0, InetAddress.getByName("127.0.0.1"), { r, _ -> r.isLoopbackAddress }, { r, p -> host.handle(r, p) })
     @Volatile var ticking = true
     val port: Int
