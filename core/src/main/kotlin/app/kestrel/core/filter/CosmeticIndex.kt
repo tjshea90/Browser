@@ -163,6 +163,10 @@ internal class CosmeticIndex(
     companion object {
         const val DEFAULT_GENERIC_LIMIT = 1200
         private const val GENERIC_CHUNK = 10
+        /** The first thing in the CSS of a page that should send its classes and ids (a CSS comment: harmless to a browser that does not know it). */
+        const val TOKEN_MARKER = "/*kg*/"
+        /** The most generic selectors injected for one batch of tokens. */
+        const val TOKEN_BATCH_MAX = 500
 
         val EMPTY = CosmeticIndex(LongArray(0), IntArray(1), ByteArray(0), LongArray(0), IntArray(1), ByteArray(0), ByteArray(0), 0, ByteArray(0))
 
