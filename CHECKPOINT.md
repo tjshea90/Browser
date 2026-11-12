@@ -1,15 +1,13 @@
-# CHECKPOINT 608 — read me first, then TASKS.md
+# CHECKPOINT 609 — read me first, then TASKS.md
 
-**Written:** 2026-11-12T00:18:38Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `9d84b52` (this checkpoint is the commit after it)
+**Written:** 2026-11-12T00:19:08Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `3ed1b75` (this checkpoint is the commit after it)
 
 ## Just done
-gated kestrel-g-v0.3.0-alpha14 (gecko code 113) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
+alpha14 DISPATCHED: run 43126355049 (android.yml, head 3ed1b75, started 00:18:45Z, expect green about 00:25Z). DO NOT dispatch again.
 
 ## Do this next
-TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref ccr-a57c163e-mtq8js, inputs {"app":"gecko","full_build":"true","note":"alpha14: the update screen no longer says "up to date" when a newer version exists. Cause: GitHub lists the releases by NAME (alpha9 comes before alpha10), and the app only looked at the first eight, so it never saw alpha10 or anything newer. The app now asks for the newest versions directly and cannot be fooled by the order. This release is numbered 0.3.0 on purpose: that sorts to the top of the list, so even the old broken check in alpha9-alpha13 can see it - open Menu > Updates and tap Check now."}.
-When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha14), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha14 "alpha14: the update screen no longer says "up to date" when a newer version exists. Cause: GitHub lists the releases by NAME (alpha9 comes before alpha10), and the app only looked at the first eight, so it never saw alpha10 or anything newer. The app now asks for the newest versions directly and cannot be fooled by the order. This release is numbered 0.3.0 on purpose: that sorts to the top of the list, so even the old broken check in alpha9-alpha13 can see it - open Menu > Updates and tap Check now."
-NEVER ship kestrel-g-v0.3.0-alpha14 twice (check BUILDLOG.md and the Releases first).
+WAIT for run 43126355049 (mcp__github__actions_list list_workflow_jobs 43126355049; all jobs completed and build-gecko success = green). If green: (1) mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha14 shows the APK; (2) VERIFY THE RESCUE: mcp__github__list_releases perPage 8 page 1 must contain kestrel-g-v0.3.0-alpha14 (the old updaters read only the first 8); (3) bash tools/record-release.sh kestrel-g-v0.3.0-alpha14 "$(cat /tmp/claude-0/-home-user-Browser/30a5aa00-41c9-5bd3-87d1-b10052a52d84/scratchpad/note14.txt)"; (4) ckpt; (5) tell the owner (release link on its own line, the cause in plain words, what to do: Menu > Updates > Check now; if it still says up to date install the APK by hand once). Meanwhile develop X6/X7 (popup/redirect guard + DOM media scan) and X8/X10/X9.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -18,6 +16,7 @@ NEVER ship kestrel-g-v0.3.0-alpha14 twice (check BUILDLOG.md and the Releases fi
 
 ## Last ten checkpoints
 ```
+  3ed1b75 ckpt 608: gated kestrel-g-v0.3.0-alpha14 (gecko code 113) and pushed it: handoff self-te
   b646b31 ckpt 606: X1 DONE in code and tests: updater root cause found (GitHub lists releases by 
   6400e12 ckpt 600: owner request 9 written into TASKS.md as X1-X10 in the owner's words (INBOX ha
   f1f1d48 ckpt 597: alpha13 SHIPPED and recorded (run 43123971432 green, BUILDLOG written): https:
@@ -27,8 +26,4 @@ NEVER ship kestrel-g-v0.3.0-alpha14 twice (check BUILDLOG.md and the Releases fi
   4316802 ckpt 571: D1 steps 1+2 DONE and verified: core/.../filter/ExtImage.kt (KEX1 little-endia
   6e451c7 ckpt 555: alpha12 SHIPPED and recorded (run 43111148506 green, BUILDLOG written): https:
   66aa048 ckpt 551: alpha12 DISPATCHED on GitHub Actions: run 43111148506 (android.yml, head 77eac
-  77eac10 ckpt 550: gated kestrel-g-v0.2.0-alpha12 (gecko code 111) and pushed it: handoff self-te
 ```
-
-(1 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
