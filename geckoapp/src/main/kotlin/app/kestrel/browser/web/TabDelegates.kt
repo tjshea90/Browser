@@ -153,6 +153,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
 
     override fun onPageStart(session: GeckoSession, url: String) {
         lastStartUrl = url
+        if (a.isCurrentTab(tab)) app.kestrel.browser.download.DownloadController.pageLoading(true) // downloads step aside while this page loads
         app.kestrel.browser.diag.PageTimes.start(tab, url, tab.isPrivateTab)
         tab.loading = true
         tab.progress = maxOf(tab.progress, 5)
@@ -170,6 +171,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         tab.loading = false
         tab.progress = 100
         tab.savedCopyOnce = false
+        if (a.isCurrentTab(tab)) app.kestrel.browser.download.DownloadController.pageLoading(false)
         a.pageFinished(tab, !lastStartUrl.startsWith("about:"))
     }
 

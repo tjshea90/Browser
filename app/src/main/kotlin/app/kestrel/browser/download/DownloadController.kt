@@ -48,7 +48,31 @@ object DownloadController {
     @Volatile private var limiter: RateLimiter? = null
 
     /** Settings: KB/s over all downloads together, 0 = no limit. Takes effect at once, also for downloads in progress. */
-    fun setSpeedLimit(kbps: Int) { limiter?.bytesPerSec = kbps.coerceAtLeast(0) * 1024L }
+    fun setSpeedLimit(kbps: Int) { userKBps = kbps.coerceAtLeast(0); applyLimit() }
+
+    // While the page the owner is looking at loads, downloads step aside: 2-3 download connections took about half of a slow link from a page that opens 10-20 of its own (research/PERF_KOTLIN.md K7).
+    // The limiter gets the lower of the owner's limit and PAGE_KBPS while a page loads; it ends 1.5 s after the page finished and, whatever happens, after 30 s (a stuck load must not slow downloads for ever).
+    @Volatile private var userKBps = 0
+    @Volatile private var yieldToPages = true
+    @Volatile private var pageBusy = false
+    const val PAGE_KBPS = 150
+    private val pageIdle = Runnable { pageBusy = false; applyLimit() }
+
+    fun setYieldToPages(on: Boolean) { yieldToPages = on; applyLimit() }
+
+    /** The page in front started ([on] = true) or finished loading. */
+    fun pageLoading(on: Boolean) {
+        if (!::handler.isInitialized) return
+        handler.removeCallbacks(pageIdle)
+        if (on) { pageBusy = true; handler.postDelayed(pageIdle, 30_000) } else handler.postDelayed(pageIdle, 1500)
+        applyLimit()
+    }
+
+    /** What the limiter is set to right now, in KB/s (0 = no limit). Pure: the one place the two rules meet. */
+    fun effectiveKBps(userKBps: Int, pageBusy: Boolean, yieldToPages: Boolean): Int =
+        if (pageBusy && yieldToPages) (if (userKBps <= 0) PAGE_KBPS else minOf(userKBps, PAGE_KBPS)) else userKBps.coerceAtLeast(0)
+
+    private fun applyLimit() { limiter?.bytesPerSec = effectiveKBps(userKBps, pageBusy, yieldToPages) * 1024L }
     /** The second engine: segmented streams (HLS) into one file. Same list, same notifications; its ids live above 1e9 ([StreamEngine.owns]). */
     private var streams: StreamEngine? = null
     private var streamStore: StreamStoreFiles? = null
@@ -92,7 +116,8 @@ object DownloadController {
         val low = app.getSystemService(ActivityManager::class.java)?.isLowRamDevice != false
         val prefs = Prefs.get(app)
         val cfg = Config(maxActive = prefs.dlActive, maxConnsTotal = if (low) 3 else 6, maxConnsPerDownload = if (prefs.dlConns in 1..3) prefs.dlConns else if (low) 3 else 4, directMp4 = !debugRawTs(app))
-        val lim = RateLimiter().also { it.bytesPerSec = prefs.dlLimitKBps * 1024L }
+        userKBps = prefs.dlLimitKBps; yieldToPages = prefs.dlYield
+        val lim = RateLimiter().also { it.bytesPerSec = effectiveKBps(userKBps, pageBusy, yieldToPages) * 1024L }
         limiter = lim
         val e = Engine(
             { fetchers[it] ?: fetchers[0] }, AppSinks(MediaStoreSinks(app), FileSinks(File(app.filesDir, "updates"))), SqliteStore(app), net, control, Clock.System, cfg,
