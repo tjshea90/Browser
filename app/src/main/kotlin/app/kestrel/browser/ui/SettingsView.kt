@@ -64,6 +64,16 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         info("Data used by this browser", l.dataUsed())
         button("Reset data counter", null) { l.resetDataCounter(); rebuild() }
 
+        section("Downloads")
+        val limits = listOf(0, 2048, 1024, 500, 250)
+        choice("Speed limit (all downloads together)", listOf("No limit", "2 MB/s", "1 MB/s", "500 KB/s", "250 KB/s"), limits.indexOf(prefs.dlLimitKBps).let { if (it < 0) 0 else it }) {
+            prefs.dlLimitKBps = limits[it]; app.kestrel.browser.download.DownloadController.setSpeedLimit(limits[it])
+        }
+        info("Why a limit", "A phone hotspot has one radio: a big download that takes all of it makes browsing crawl. A limit leaves room for the page you are reading; it also saves data when a download is not urgent.")
+        choice("Downloads at the same time", listOf("1", "2 (default)", "3"), prefs.dlActive - 1) { prefs.dlActive = it + 1 }
+        choice("Connections per download", listOf("Automatic (recommended)", "1", "2", "3"), prefs.dlConns) { prefs.dlConns = it }
+        info("When it applies", "The speed limit changes at once. The other two apply the next time the browser starts.")
+
         section("Appearance")
         choice("Neon glow", listOf("Off", "Steady", "Subtle pulse"), prefs.neon) { prefs.neon = it; app.kestrel.browser.ui.Neon.mode = it; app.kestrel.browser.ui.Neon.refresh(); rebuild() }
         info("The glow right now", app.kestrel.browser.ui.Neon.status().replaceFirstChar { it.uppercase() })

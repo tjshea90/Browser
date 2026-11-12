@@ -19,6 +19,7 @@ import app.kestrel.core.download.Engine
 import app.kestrel.core.download.FetchRequest
 import app.kestrel.core.download.Fetcher
 import app.kestrel.core.download.NetGate
+import app.kestrel.core.download.RateLimiter
 import app.kestrel.core.download.Source
 import app.kestrel.core.download.Spawner
 import app.kestrel.core.media.StreamEngine
@@ -90,6 +91,7 @@ object DownloadController {
                     try { Process.setThreadPriority(threadPrio()); task.run() } finally { engineTids.remove(tid) }
                 }, name).also { it.isDaemon = true; it.start() }
             },
+            limiter = lim,
         )
         e.addListener(object : Engine.Listener { override fun onChanged(id: Long) { uiChanged() } })
         engine = e
@@ -105,6 +107,7 @@ object DownloadController {
             },
             Remuxer(app, streamSinks),
             { msg, t -> android.util.Log.w(Io.TAG, msg, t) },
+            limiter = lim,
         )
         st.addListener(object : StreamEngine.Listener { override fun onChanged(id: Long) { uiChanged() } })
         streams = st
