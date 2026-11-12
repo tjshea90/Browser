@@ -6,6 +6,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- In-app updates: the user taps Install on a release this app downloaded from GitHub; Android still asks "Install unknown apps" once and confirms each update. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <!-- Download manager: a foreground service of type dataSync keeps big downloads alive while another app is in front. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />

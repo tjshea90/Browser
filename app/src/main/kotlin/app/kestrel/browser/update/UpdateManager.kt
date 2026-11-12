@@ -112,7 +112,7 @@ object UpdateManager {
             val isReady = f.isFile && f.length() == offer.size && s.getString("verified", null) == offer.tag
             set(ctx, if (isReady) Phase.READY else Phase.AVAILABLE, offer, if (isReady) offer.size else 0, offer.size, checkedAt = checked)
         } else {
-            if (offer != null) { cleanup(ctx); s.edit().remove("floor").apply() } // the update was installed: drop the leftover APK and what we learned about this tablet's storage
+            if (offer != null) { cleanup(ctx); s.edit().remove("floor").remove("floor2").remove("refused_free").apply() } // the update was installed: drop the leftover APK and what we learned about this tablet's storage
             set(ctx, if (checked > 0) Phase.UP_TO_DATE else Phase.IDLE, null, checkedAt = checked)
         }
     }
@@ -463,7 +463,10 @@ object UpdateManager {
             val kept = apk.isFile && sp(app).getString("verified", null) == offer.tag
             val partLen = jobId(app).let { id -> if (id == 0L) 0L else (DownloadController.allViews().firstOrNull { it.id == id }?.done ?: 0L) }
             val s = space(app, offer, if (kept) apk else null, pending = if (kept) 0 else (offer.size - partLen).coerceAtLeast(0))
-            if (s.shortBy <= 0) set(app, if (kept) Phase.READY else Phase.AVAILABLE, offer, if (kept) offer.size else partLen, offer.size)
+            // Android itself refused at some amount of free space: the refusal stands until the free space has really grown since (the user made room), whatever our estimate says.
+            val refusedAt = sp(app).getLong("refused_free", -1L)
+            val grown = refusedAt < 0 || s.free > refusedAt + (100L shl 20)
+            if (grown) { sp(app).edit().remove("refused_free").apply(); set(app, if (kept) Phase.READY else Phase.AVAILABLE, offer, if (kept) offer.size else partLen, offer.size) }
             else needSpace(app, offer, s, kept)
         }, "kestrel-update-space").apply { isDaemon = true }.start()
     }
@@ -520,11 +523,43 @@ object UpdateManager {
         Thread({
             val now = freeForInstall(app)
             Health.log("update", "refused", "Android said INSUFFICIENT_STORAGE with ${now shr 20} MB free")
+            sp(app).edit().putLong("refused_free", now).apply()
             val apk = File(dir(app), offer.apkName)
             val kept = apk.isFile
             val s0 = space(app, offer, if (kept) apk else null, pending = if (kept) 0 else offer.size)
             needSpace(app, offer, s0, kept)
         }, "kestrel-update-space").apply { isDaemon = true }.start()
+    }
+
+    /**
+     * The other way (alpha18), for when Android will not install over the old version: the verified update is copied to the PUBLIC Downloads folder (it survives an uninstall), and the
+     * caller then asks Android to uninstall this app ([uninstallSelf]); the owner taps the saved file afterwards. [done] runs on the main thread: (saved name, null) or (null, why not).
+     */
+    fun saveForManualInstall(ctx: Context, done: (String?, String?) -> Unit) {
+        val offer = state.offer
+        val app = ctx.applicationContext
+        val apk = offer?.let { File(dir(app), it.apkName) }
+        if (offer == null || apk == null || !apk.isFile) { done(null, "The update file is not downloaded yet: tap Try again first."); return }
+        Thread({
+            var sink: app.kestrel.core.download.Sink? = null
+            try {
+                val s = app.kestrel.browser.download.MediaStoreSinks(app).create(offer.apkName, "application/vnd.android.package-archive", apk.length(), false)
+                sink = s
+                apk.inputStream().use { input -> val buf = ByteArray(256 * 1024); var pos = 0L; while (true) { val n = input.read(buf); if (n < 0) break; s.pwrite(pos, buf, 0, n); pos += n } }
+                s.sync(); s.publish(); sink = null
+                Io.main.post { done(s.displayName ?: offer.apkName, null) }
+            } catch (e: Exception) {
+                try { sink?.discard() } catch (x: Exception) { /* ignore */ }
+                Io.main.post { done(null, "Could not save the update to Downloads (${e.message?.take(60) ?: e.javaClass.simpleName}).") }
+            }
+        }, "kestrel-update-save").apply { isDaemon = true }.start()
+    }
+
+    /** Opens Android's own "Uninstall this app?" screen for this app (the user confirms there). */
+    fun uninstallSelf(ctx: Context) {
+        val app = ctx.applicationContext
+        try { app.startActivity(Intent(Intent.ACTION_DELETE, android.net.Uri.parse("package:" + app.packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        catch (e: Exception) { fail(app, "Android would not open its uninstall screen. Open Settings, Apps, ${Flavor.title}, and tap Uninstall yourself; the update is saved in Downloads.") }
     }
 
     /** From [InstallResultReceiver]: Android reported how the installation went. */
