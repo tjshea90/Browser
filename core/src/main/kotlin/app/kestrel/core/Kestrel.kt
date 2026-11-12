@@ -5,5 +5,5 @@ object Kestrel {
     const val NAME = "Kestrel"
 
     /** Version of the compiled filter-set binary format (see filter/FilterSetCodec). */
-    const val FILTER_FORMAT_VERSION = 2
+    const val FILTER_FORMAT_VERSION = 3
 }

@@ -10,18 +10,23 @@ import java.util.zip.CRC32
  * Binary `.kfs` format for a compiled [FilterSet]. Loading is a handful of bulk array copies (no parsing), so a cold start
  * on the tablet costs milliseconds, not the seconds that re-parsing 150k list lines would.
  *
- * Layout: magic "KFS1" | version | createdAt | list names | counters | arrays... | CRC32 (8 bytes) of everything before it.
+ * Layout: magic "KFS1" | version | createdAt | list names | counters | arrays... | (version 3: the `$removeparam` rules) | CRC32 (8 bytes) of everything before it.
  * [read] verifies the CRC AND the structural invariants the matcher relies on, so a damaged file can never produce an
  * out-of-bounds read later on a WebView thread — it fails here, and the caller falls back to the previous/bundled set.
  */
 object FilterSetCodec {
     private const val MAGIC = 0x4B465331 // "KFS1"
 
-    fun write(fs: FilterSet): ByteArray {
+    /** @param version the format to write; only the current one is ever used outside tests (an older one lets the tests prove old files still load) */
+    internal fun write(fs: FilterSet, version: Int): ByteArray = writeVersion(fs, version)
+
+    fun write(fs: FilterSet): ByteArray = writeVersion(fs, Kestrel.FILTER_FORMAT_VERSION)
+
+    private fun writeVersion(fs: FilterSet, version: Int): ByteArray {
         val bos = ByteArrayOutputStream(1 shl 20)
         val d = DataOutputStream(bos)
         d.writeInt(MAGIC)
-        d.writeInt(Kestrel.FILTER_FORMAT_VERSION)
+        d.writeInt(version)
         d.writeLong(fs.meta.createdAtMillis)
         d.writeInt(fs.meta.lists.size)
         for (n in fs.meta.lists) d.writeUTF(n)
@@ -41,6 +46,7 @@ object FilterSetCodec {
         longs(d, c.siteHash); ints(d, c.siteOff); bytes(d, c.sitePool)
         longs(d, c.excHash); ints(d, c.excOff); bytes(d, c.excPool)
         bytes(d, c.genericPool); d.writeInt(c.genericCount); bytes(d, c.genericExcPool)
+        if (version >= 3) bytes(d, fs.query.pool())
         d.flush()
 
         val body = bos.toByteArray()
@@ -59,7 +65,8 @@ object FilterSetCodec {
 
         val b = ByteBuffer.wrap(data, 0, data.size - 8)
         require(b.int == MAGIC) { "bad magic" }
-        require(b.int == Kestrel.FILTER_FORMAT_VERSION) { "unsupported format version" }
+        val version = b.int
+        require(version == 2 || version == Kestrel.FILTER_FORMAT_VERSION) { "unsupported format version" } // 2: written before $removeparam rules, still loads (no query rules)
         val created = b.long
         val nLists = b.int
         require(nLists in 0..1000) { "bad list count" }
@@ -80,9 +87,10 @@ object FilterSetCodec {
         val cos = CosmeticIndex(
             rLongs(b), rInts(b), rBytes(b), rLongs(b), rInts(b), rBytes(b), rBytes(b), b.int, rBytes(b),
         )
+        val query = if (version >= 3) QueryRules.fromPool(rBytes(b)) else QueryRules.EMPTY
         validate(hosts, excs, siteHash, siteFlags, pat, cos)
         val meta = FilterMeta(created, names, hosts.hashes.size, excs.hashes.size, pat.count, siteHash.size, cosmeticSite, cos.genericCount)
-        return FilterSet(hosts, excs, siteHash, siteFlags, pat, cos, meta)
+        return FilterSet(hosts, excs, siteHash, siteFlags, pat, cos, meta, query)
     }
 
     // ------------------------------------------------------------------ validation

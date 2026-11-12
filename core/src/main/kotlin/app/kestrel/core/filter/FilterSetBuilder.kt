@@ -14,12 +14,13 @@ class BuildReport {
     @JvmField var cosmeticSite = 0
     @JvmField var cosmeticGeneric = 0
     @JvmField var cosmeticExceptions = 0
+    @JvmField var queryRules = 0
     @JvmField val skipped = IntArray(Skip.values().size)
 
     fun skippedCount(s: Skip): Int = skipped[s.ordinal]
     override fun toString(): String = buildString {
         append("lines=$lines host=$hostRules hostExc=$hostExceptions pattern=$patternRules site=$siteRules badfilter=$badfilters ")
-        append("cosSite=$cosmeticSite cosGeneric=$cosmeticGeneric cosExc=$cosmeticExceptions skipped{")
+        append("cosSite=$cosmeticSite cosGeneric=$cosmeticGeneric cosExc=$cosmeticExceptions query=$queryRules skipped{")
         for (s in Skip.values()) if (s != Skip.NONE && skipped[s.ordinal] > 0) append("$s=${skipped[s.ordinal]} ")
         append("}")
     }
@@ -49,6 +50,9 @@ class FilterSetBuilder {
     private val cosGeneric = LinkedHashSet<String>()
     private val cosGenericExc = LinkedHashSet<String>()
 
+    private val queryRules = ArrayList<QueryRule>()
+    private val queryBad = HashSet<Long>()
+
     // ------------------------------------------------------------------ input
 
     /** Adblock Plus / uBlock Origin / Brave syntax. */
@@ -70,6 +74,7 @@ class FilterSetBuilder {
         val c0 = line[0]
         if (c0 == '!' || (c0 == '[' && line.startsWith("[Adblock", ignoreCase = true))) return
         if (RuleParser.looksCosmetic(line)) { addCosmetic(line); return }
+        if (QueryRuleParser.looks(line)) { addQuery(line); return }
 
         val r = parser.parseNetwork(line)
         if (r == null) { report.skipped[parser.skip.ordinal]++; return }
@@ -131,6 +136,16 @@ class FilterSetBuilder {
         }
     }
 
+    /** `$removeparam` (AA3-3b): kept in its own table, applied to top-level navigations only ([QueryRules]). */
+    private fun addQuery(line: String) {
+        val res = QueryRuleParser.parse(line)
+        val rule = res.rule
+        if (rule == null) { report.skipped[res.skip.ordinal]++; return }
+        if (rule.badfilter) { queryBad.add(rule.key); report.badfilters++; return }
+        if (queryRules.size >= QueryRules.MAX_RULES) { report.skipped[Skip.BAD_SYNTAX.ordinal]++; return }
+        queryRules.add(rule)
+    }
+
     private fun copyWithTypes(r: NetRule, types: Int) = NetRule(
         r.pattern, r.exception, r.leftHost, r.leftAnchor, r.rightAnchor, types, r.party, r.important, r.include, r.exclude,
         r.badfilter, r.siteFlags, r.key,
@@ -158,11 +173,13 @@ class FilterSetBuilder {
         val live = pending.filter { it.r.key !in badKeys }
         val patterns = compilePatterns(live)
         val cos = compileCosmetic()
+        val query = QueryRules.compile(queryRules.filter { it.key !in queryBad })
+        report.queryRules = query.count
         val meta = FilterMeta(
             createdAtMillis, listNames.toList(), hosts.hashes.size, excs.hashes.size, patterns.count, siteKeys.size,
             report.cosmeticSite, cos.genericCount,
         )
-        return FilterSet(hosts, excs, siteKeys, siteFlagArr, patterns, cos, meta)
+        return FilterSet(hosts, excs, siteKeys, siteFlagArr, patterns, cos, meta, query)
     }
 
     private fun sortedTable(hash: LongArray, flags: IntArray, key: LongArray, n: Int): HostTable {

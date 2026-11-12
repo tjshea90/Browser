@@ -94,6 +94,8 @@ class FilterSet internal constructor(
     internal val patterns: PatternTable,
     internal val cosmetic: CosmeticIndex,
     @JvmField val meta: FilterMeta,
+    /** `$removeparam` rules for top-level navigations (empty in files written before format 3). */
+    internal val query: QueryRules = QueryRules.EMPTY,
 ) {
     private class Ctx(
         @JvmField val url: String,
@@ -165,6 +167,14 @@ class FilterSet internal constructor(
 
     /** Builds the lazily made cosmetic tables now (start-up warm-up), so the first page does not wait for them. */
     fun warmCosmetic() { cosmetic.warm() }
+
+    /** The address of a top-level navigation without the parameters the lists' `$removeparam` rules name, or null when nothing changes ([QueryRules.strip]). */
+    fun stripQuery(url: String): String? = query.strip(url)
+
+    /** Builds the lookup table of the `$removeparam` rules now (off the UI thread). */
+    fun warmQuery() { query.warm() }
+
+    val queryRuleCount: Int get() = query.count
 
     /** Tests and Diagnostics: a line of numbers about the generic token index. */
     fun cosmeticDebugStats(): String = cosmetic.debugStats()
