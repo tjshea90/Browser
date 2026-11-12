@@ -63,8 +63,7 @@ class Prefs private constructor(ctx: Context) {
     fun hasPhoneModeChoice(): Boolean = sp.contains("phone_mode")
     /** Pages through the phone (research/SPEED2.md): while the phone helper is on, https page loads use the Courier's proxy on the phone (its own connection, not the capped hotspot). */
     var pagesViaPhone: Boolean get() = sp.getBoolean("pages_via_phone", true); set(v) = put("pages_via_phone", v)
-    /** Save data: the old "metered connection" behaviour (small read-ahead, no speculative loading). The owner's hotspot is unmetered, so this is OFF unless they switch it on. */
-    var dataSaver: Boolean get() = sp.getBoolean("data_saver", false); set(v) = put("data_saver", v)
+
     /** Kestrel G: the blocking engine runs inside the Gecko extension (fast). Off = compatibility mode, every request asks the app (the older, slower path). Diagnostics has the switch. */
     var engineInExtension: Boolean get() = bool("eng_ext", true); set(v) = put("eng_ext", v)
     var pullRefresh: Boolean get() = bool("pull_refresh", true); set(v) = put("pull_refresh", v)
