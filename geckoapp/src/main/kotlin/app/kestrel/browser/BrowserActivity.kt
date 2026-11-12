@@ -1037,8 +1037,11 @@ open class BrowserActivity : Activity(), DockListener {
         val dlActive = dl[0] + dl[1]
         items.add(MenuItemSpec(M.DOWNLOADS, if (dlActive > 0) "Downloads ($dlActive active)" else "Downloads", null, R.drawable.ic_download, accent = dlActive > 0))
         // the one switch for "hotspot only, the phone does nothing" (saves the phone's battery); before a phone is paired it leads to the pairing screen
-        val helperPaired = PhoneBridge.paired(this); val helperOn = helperPaired && PhoneBridge.mode(this) != PhoneMode.OFF
-        items.add(MenuItemSpec(M.PHONE, if (!helperPaired) "Phone helper: set up" else if (helperOn) "Phone helper: on" else "Phone helper: off", if (helperPaired) helperOn else null, R.drawable.ic_phone))
+        // closed feature (research/PHONE_OFFLOAD.md section 17): the tile only appears once a phone has been paired; before that Settings is the one place that mentions it
+        if (PhoneBridge.paired(this)) {
+            val helperOn = PhoneBridge.mode(this) != PhoneMode.OFF
+            items.add(MenuItemSpec(M.PHONE, if (helperOn && NetworkMonitor.vpn) "Phone helper: resting (Fast Wi-Fi)" else if (helperOn) "Phone helper: on" else "Phone helper: off", helperOn, R.drawable.ic_phone))
+        }
         if (t != null && !t.isNewTab) items.add(MenuItemSpec(M.REFRESH, "Refresh screen", null, R.drawable.ic_refresh))
         if (!isPrivate) items.add(MenuItemSpec(M.SETTINGS, "Settings", null, R.drawable.ic_settings))
         items.add(MenuItemSpec(M.DIAG, "Diagnostics", null, R.drawable.ic_pulse))
@@ -1210,6 +1213,7 @@ open class BrowserActivity : Activity(), DockListener {
         val out = ArrayList<String>()
         val ver = try { Class.forName("org.mozilla.geckoview.BuildConfig").getField("MOZ_APP_VERSION").get(null) } catch (e: Exception) { "?" }
         out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null }} of ${tabs.size} tabs; current ${current?.url?.take(60) ?: "-"}")
+        out.add("Network: ${GeckoEngine.networkProfile} (VPN active: ${NetworkMonitor.vpn})")
         out.add(GeckoEngine.prefReadback)
         out.add(GeckoEngine.prefReadback2)
         out.add(GlInfo.text)

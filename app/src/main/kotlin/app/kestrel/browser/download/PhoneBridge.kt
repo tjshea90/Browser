@@ -1,12 +1,12 @@
 package app.kestrel.browser.download
 
 import android.content.Context
-import android.content.pm.ApplicationInfo
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import app.kestrel.browser.Io
 import app.kestrel.browser.data.Prefs
 import app.kestrel.browser.diag.Health
+import app.kestrel.browser.net.NetworkMonitor
 import app.kestrel.core.courier.CourierClient
 import app.kestrel.core.courier.CourierException
 import app.kestrel.core.courier.LinkReport
@@ -16,6 +16,7 @@ import app.kestrel.core.courier.Pairing
 import app.kestrel.core.courier.PhoneBackend
 import app.kestrel.core.courier.PhoneMode
 import app.kestrel.core.courier.Sign
+import app.kestrel.core.net.NetProfile
 import java.io.File
 import java.net.Inet4Address
 import java.util.Locale

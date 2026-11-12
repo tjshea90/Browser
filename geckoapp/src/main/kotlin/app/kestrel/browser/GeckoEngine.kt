@@ -151,12 +151,19 @@ object GeckoEngine {
      */
     fun applyNetwork(prefs: Prefs) {
         val d = org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_DEFAULT
+        // the owner's switches, unless a VPN (LinkMeter's Fast Wi-Fi) is the active network: then lookups go to the phone's own resolver and HTTP/3 stays off (core/net/NetProfile.kt)
+        val eff = app.kestrel.core.net.NetProfile.effective(app.kestrel.core.net.NetProfile.Input(dohOn = prefs.dohOn, http3On = prefs.http3On, vpn = app.kestrel.browser.net.NetworkMonitor.vpn,
+            helperMode = prefs.phoneMode, pagesViaPhone = prefs.pagesViaPhone))
         try {
-            org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("network.trr.mode", if (prefs.dohOn) 2 else 0, d)
-            org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("network.http.http3.enable", prefs.http3On, d)
-            app.kestrel.browser.diag.Health.log("engine", "network-lab", "doh=${prefs.dohOn} http3=${prefs.http3On}")
+            org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("network.trr.mode", eff.trrMode, d)
+            org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("network.http.http3.enable", eff.http3, d)
+            networkProfile = eff.text
+            app.kestrel.browser.diag.Health.log("engine", "network-profile", "${if (eff.fastWifi) "fast-wifi" else "standard"} trr=${eff.trrMode} http3=${eff.http3}")
         } catch (e: Exception) { app.kestrel.browser.diag.Health.log("engine", "network-lab-failed", e.toString()) }
     }
+
+    /** The profile now in force, in words (Diagnostics and Settings). */
+    @Volatile var networkProfile: String = "Standard profile: your own switches apply."
 
     /**
      * "Scroll feel" (Settings): how far ahead of the finger the engine pre-draws the page and how long it waits for a page's touch handler. These apz.* prefs are
