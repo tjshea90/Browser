@@ -495,6 +495,27 @@ class EngineTest {
         assertArrayEquals(page, h.sink(b).bytes)
     }
 
+    @Test(timeout = 60_000) fun aSpeedLimitSlowsTheDownloadDownAndNeverCorruptsIt() {
+        val data = testBytes(4 * MiB, 34)
+        val s = FakeServer(data)
+        val limiter = RateLimiter().also { it.bytesPerSec = 1L * MiB }           // 4 MiB at 1 MiB/s: about 4 s (3.8 s with the burst)
+        val exec = Executors.newSingleThreadExecutor { r -> Thread(r, "test-control").also { it.isDaemon = true } }
+        val sinks = FakeSinks(); val store = FakeStore()
+        val engine = Engine({ s }, sinks, store, FakeNet(), exec, Clock.System, cfg(), limiter = limiter)
+        val h = H(s, cfg(), sinks, store)                                          // (the harness's own engine stays idle; this test drives its own)
+        val ticker = Thread { while (true) { engine.tick(); try { Thread.sleep(20) } catch (e: InterruptedException) { return@Thread } } }.also { it.isDaemon = true; it.start() }
+        val t0 = System.currentTimeMillis()
+        val id = engine.enqueue(Source("https://files.test/pub/limited.bin"))
+        val end = t0 + 30_000
+        while (engine.view(id)?.state != DlState.COMPLETED && System.currentTimeMillis() < end) Thread.sleep(20)
+        val took = System.currentTimeMillis() - t0
+        ticker.interrupt(); exec.shutdownNow()
+        assertEquals(DlState.COMPLETED, engine.view(id)?.state)
+        assertTrue("limited to about 1 MiB/s: took $took ms", took >= 2_500)
+        assertArrayEquals(data, sinks.sinks[engine.view(id)!!.destUri]!!.bytes)
+        h.stop()
+    }
+
     @Test(timeout = 60_000) fun downloadsQueueWhenAllSlotsAreBusy() {
         val s = FakeServer(testBytes(2 * MiB, 16)).also { it.chunkDelayMs = 1 }
         val h = H(s, cfg(maxActive = 1)); val a = h.enqueue("https://files.test/a.bin"); val b = h.enqueue("https://files.test/b.bin")

@@ -13,6 +13,7 @@ import app.kestrel.core.download.Fetcher
 import app.kestrel.core.download.FileNames
 import app.kestrel.core.download.Meter
 import app.kestrel.core.download.NetGate
+import app.kestrel.core.download.RateLimiter
 import app.kestrel.core.download.Reason
 import app.kestrel.core.download.Sink
 import app.kestrel.core.download.SinkException
@@ -148,6 +149,8 @@ class StreamEngine(
     private val log: (String, Throwable?) -> Unit = { _, _ -> },
     /** The first id handed out (the Android layer keeps these apart from the single-file engine's). */
     private val idBase: Long = 1_000_000_000L,
+    /** The one speed limit of the whole app (shared with the single-file engine); 0 = none. */
+    private val limiter: RateLimiter = RateLimiter(clock),
 ) {
     interface Listener { fun onChanged(id: Long) }
 
@@ -823,6 +826,8 @@ class StreamEngine(
                     if (job.stop) throw Stopped()
                     val r = body.read(buf)
                     if (r < 0) break
+                    limiter.acquire(r) { job.stop }                // Settings > Downloads > Speed limit
+                    if (job.stop) throw Stopped()
                     var off = 0; var len = r
                     if (skip > 0) { val s = minOf(skip, len.toLong()).toInt(); skip -= s; off += s; len -= s }
                     if (len > limit) len = limit.toInt()
