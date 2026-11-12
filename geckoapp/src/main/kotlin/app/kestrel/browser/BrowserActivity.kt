@@ -1229,7 +1229,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun engineFacts(): List<String> {
         val out = ArrayList<String>()
         val ver = try { Class.forName("org.mozilla.geckoview.BuildConfig").getField("MOZ_APP_VERSION").get(null) } catch (e: Exception) { "?" }
-        out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null }} of ${tabs.size} tabs; current ${current?.url?.take(60) ?: "-"}")
+        out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null }} of ${tabs.size} tabs (the memory budget keeps up to ${liveBudget()} ready, MemAvailable ${Health.memAvailableMb()} MB, setting ${listOf("automatic", "few", "many")[prefs.tabsKept]}); current ${current?.url?.take(60) ?: "-"}")
         out.add("Network: ${GeckoEngine.networkProfile} (VPN active: ${NetworkMonitor.vpn})")
         out.add(GeckoEngine.prefReadback)
         out.add(GeckoEngine.prefReadback2)
