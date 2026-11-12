@@ -2,7 +2,7 @@
 # One per line:  name = true|false|integer|"string".   They are default-branch prefs applied before Gecko starts, so "once" prefs (caches, graphics) work.
 # A name that does not exist in the bundled engine is a SILENT no-op: tools/check-gecko-prefs.sh checks every name against the real GeckoView in CI.
 # Bump kestrel.config.version when this list changes: Diagnostics reads it back to prove the file was applied.
-kestrel.config.version = 2
+kestrel.config.version = 3
 
 # --- video: no AV1 (software decode on 4x Cortex-A53); sites then choose H.264 -> MediaCodec hardware decode
 media.av1.enabled = false
@@ -31,3 +31,5 @@ dom.push.enabled = false
 dom.webnotifications.enabled = false
 media.peerconnection.ice.default_address_only = true
 security.certerrors.mitm.auto_enable_enterprise_roots = false
+# --- hygiene (research/GECKO_TUNING_2.md 3.1): the Translations actor is registered in every http/https frame; the app never offers translation (no models over the hotspot)
+browser.translations.enable = false

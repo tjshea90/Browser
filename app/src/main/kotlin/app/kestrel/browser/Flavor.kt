@@ -23,4 +23,7 @@ object Flavor {
     /** The browser engine bundled in this build ("160.0", empty on the WebView build, whose engine is the system's) and where Mozilla lists the newest one; the daily look tells the owner when a newer one exists. */
     @JvmField var engineVersion = ""
     @JvmField var engineMetaUrl = ""
+
+    /** The engine's network switches (DNS over HTTPS, HTTP/3) can be changed live (Gecko build): Settings shows the "Network lab" rows. */
+    @JvmField var hasNetworkLab = false
 }

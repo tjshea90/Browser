@@ -92,6 +92,13 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         choice("Ad-blocking lists: update", listOf("Every day (recommended)", "Every week", "Only when I tap Update"), prefs.updatePolicy) { prefs.updatePolicy = it }
         toggle("Only on unmetered networks", "A hotspot counts as metered, so leave this off if you want updates over it", prefs.updateUnmeteredOnly) { prefs.updateUnmeteredOnly = it }
 
+        if (app.kestrel.browser.Flavor.hasNetworkLab) {
+            section("Network lab (for slow pages)")
+            info("How to use it", "Change ONE switch, load the same site twice, then open Diagnostics > Page loads and compare the times. Keep what is faster.")
+            toggle("Encrypted DNS (DNS over HTTPS)", "On: your carrier cannot read or rewrite which sites you look up. Off: the tablet's own DNS, which can be quicker on a hotspot", prefs.dohOn) { prefs.dohOn = it; l.prefsChanged() }
+            toggle("HTTP/3 (QUIC)", "Off can help when the hotspot's carrier slows down UDP traffic; sites then use HTTP/2", prefs.http3On) { prefs.http3On = it; l.prefsChanged() }
+        }
+
         section("Secure DNS")
         if (app.kestrel.browser.Flavor.secureDnsBuiltIn) info("Encrypted DNS", "This browser encrypts its DNS lookups itself (DNS over HTTPS through Cloudflare, so the mobile carrier cannot read or tamper with them) and quietly falls back to the tablet's normal DNS if that service cannot be reached.")
         else info("Private DNS", "This browser cannot encrypt DNS lookups by itself. For that, set it for the whole tablet: Settings → Network & internet → Advanced → Private DNS (for example dns.quad9.net or dns.adguard-dns.eu).")

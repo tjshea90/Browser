@@ -48,7 +48,7 @@ object GeckoEngine {
             .fissionEnabled(false)           // no per-site process isolation: too much RAM for this device
             .lowMemoryDetection(true)
             // Encrypted DNS on a carrier hotspot (carriers can read and rewrite plain DNS). MODE_FIRST = try DoH, fall back to the system resolver.
-            .trustedRecursiveResolverMode(GeckoRuntimeSettings.TRR_MODE_FIRST)
+            .trustedRecursiveResolverMode(if (prefs.dohOn) GeckoRuntimeSettings.TRR_MODE_FIRST else GeckoRuntimeSettings.TRR_MODE_DISABLED)
             .trustedRecursiveResolverUri("https://mozilla.cloudflare-dns.com/dns-query")
             .enterpriseRootsEnabled(false)   // Gecko trusts Mozilla's root store, not this tablet's 2021-07 Android store (research/SECURITY.md 4.1)
             .setLnaEnabled(true).setLnaBlocking(true).setLnaBlockTrackers(true) // Local Network Access: pages cannot probe the LAN / router
@@ -64,6 +64,7 @@ object GeckoEngine {
             r.settings.setCertificateTransparencyMode(2)                  // enforce (= the engine default, pinned so a future default cannot weaken it)
             r.settings.setPostQuantumKeyExchangeEnabled(true)             // X25519MLKEM768 for TLS / HTTP-3 (= default, pinned)
             applyScrollFeel(prefs.scrollFeel)                             // live apz.* prefs of the "Scroll feel" setting
+            applyNetwork(prefs)
         }
     }
 
@@ -112,6 +113,20 @@ object GeckoEngine {
         r.settings.fontSizeFactor = prefs.textZoom / 100f
         r.settings.preferredColorScheme = colorScheme(prefs)
         applyScrollFeel(prefs.scrollFeel)
+        applyNetwork(prefs)
+    }
+
+    /**
+     * "Network lab" (Settings): DNS over HTTPS (network.trr.mode 2 = DoH first with a fall back to the system resolver, 0 = off) and HTTP/3. Both are observed prefs, so the next lookup / connection follows.
+     * They exist because the hotspot's behaviour decides which is faster (research/GECKO_TUNING_2.md 2.3 and 3.2); Diagnostics > Page loads shows what each choice costs on the real tablet.
+     */
+    fun applyNetwork(prefs: Prefs) {
+        val d = org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_DEFAULT
+        try {
+            org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("network.trr.mode", if (prefs.dohOn) 2 else 0, d)
+            org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("network.http.http3.enable", prefs.http3On, d)
+            app.kestrel.browser.diag.Health.log("engine", "network-lab", "doh=${prefs.dohOn} http3=${prefs.http3On}")
+        } catch (e: Exception) { app.kestrel.browser.diag.Health.log("engine", "network-lab-failed", e.toString()) }
     }
 
     /**
