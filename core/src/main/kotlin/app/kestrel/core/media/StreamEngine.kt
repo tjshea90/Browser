@@ -454,9 +454,15 @@ class StreamEngine(
         } catch (e: Stopped) {
             outcome = synchronized(lock) { if (job.restartAfterStop) DlState.QUEUED else job.stopState ?: DlState.PAUSED_SYSTEM }
         } catch (e: Failed) {
-            outcome = DlState.FAILED
-            synchronized(lock) { rec.reason = e.reason; rec.detail = e.detail }
-            log("stream ${rec.id} failed: ${e.reason} ${e.detail}", null)
+            if (e.restartRaw) {                                                 // the MP4 writer gave up: start this download over the old way, nothing is lost but the time
+                outcome = DlState.QUEUED
+                synchronized(lock) { job.forceRaw = true; job.restartAfterStop = true; job.wipeAfterStop = true }
+                log("stream ${rec.id}: the MP4 writer failed (${e.why}), starting over as a .ts", null)
+            } else {
+                outcome = DlState.FAILED
+                synchronized(lock) { rec.reason = e.reason; rec.detail = e.detail }
+                log("stream ${rec.id} failed: ${e.reason} ${e.detail}", null)
+            }
         } catch (e: SinkException) {
             outcome = DlState.FAILED
             synchronized(lock) { rec.reason = e.reason }
