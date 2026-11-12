@@ -15,7 +15,8 @@ EXISTS/MISSING method (stricter than tools/check-gecko-prefs.sh, which accepts a
 7. A/B `dom.ipc.processCount` 1 (now) vs 2 with per-process PSS and typing p95; never kill the content process needlessly (JitHints live in it). Risk: +RAM.
 8. A/B JS, only if the profile shows GeckoMain GC/JS-bound: `javascript.options.mem.gc_parallel_marking` true; `javascript.options.baselinejit.offthread_compilation_strategy` 2 vs 0. Risk: low.
 9. DO hygiene: `browser.translations.enable=false` (unused Translations actor is registered in every http/https frame in 160); keep gecko-prefs.txt v2 otherwise. Risk: low; gain unmeasured.
-10. DO NOT rebuild Gecko. The only no-compile engine change worth a Gradle step is trimming omni.ja (-9.1 MB deflated, about -9 % of the 92 MB APK), for update size only; bump the BuildID or clear the startup cache when you do. Never: eager delazification below 2 GB, Spectre mitigations off (Fission is off), JIT thresholds, navigation cache, beta/nightly AAR in production.
+10. DO NOT rebuild Gecko (4 vCPU / 14 GB runner, 6 h cap, Mozilla's own build is PGO; a non-PGO build would be slower). The only no-compile engine change worth a Gradle step is trimming omni.ja (-9.1 MB deflated, about -10 % of the 92 MB APK), for update size only; bump the BuildID or clear the startup cache when you do.
+11. Rejected on evidence: eager delazification below 2 GB, Spectre mitigations off (Fission is off), JIT thresholds, the script navigation cache (Nightly-only, broke Discord), beta/nightly AAR in production, copied "Fastfox" lists (most names are MISSING in 160).
 
 ## 1. New verified facts about GeckoView 160 (they close open items in GECKO_SPEED / HW_SPEED)
 | Fact | Tag, source |
