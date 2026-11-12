@@ -22,4 +22,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Kestrel"
 
-include(":core", ":app", ":geckoapp", ":tools")
+include(":core", ":app", ":geckoapp", ":courier", ":tools")

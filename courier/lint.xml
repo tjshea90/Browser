@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!-- Every view is built in code (no XML inflation), so the "tools constructor" requirement does not apply. -->
+    <issue id="ViewConstructor" severity="ignore" />
+    <!-- The app is installed from GitHub Releases, never from Google Play, and without the exemption the phone would stop listening with the screen off. -->
+    <issue id="BatteryLife" severity="ignore" />
+</lint>
