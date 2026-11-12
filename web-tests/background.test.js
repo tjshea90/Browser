@@ -61,6 +61,7 @@ function harness(app, opts) {
     indexedDB: fakeIdb(opts.idb || new Map()),
     browser: {
       runtime: {
+        getURL: (p) => 'moz-extension://test-id/' + p,
         sendNativeMessage: (app_, text) => { const m = JSON.parse(text); raws.push(text); sent.push(m); return Promise.resolve(app(m)); },
         onMessage: { addListener: (f) => { (listeners.message = listeners.message || []).push(f); } },
       },
@@ -77,7 +78,7 @@ function harness(app, opts) {
     sent, raws, ctx, listeners, clock,
     mainFrame: (url, extra) => listeners.before(Object.assign({ type: 'main_frame', url, tabId: 1, frameId: 0 }, extra || {})),
     /** a message from a content script (the first listener that answers wins, like the browser) */
-    message: (m, tabId) => { for (const f of listeners.message || []) { const r = f(m, { tab: tabId === undefined ? { id: 1 } : (tabId < 0 ? undefined : { id: tabId }) }); if (r !== undefined) return r; } return undefined; },
+    message: (m, tabId, senderUrl) => { for (const f of listeners.message || []) { const r = f(m, { tab: tabId === undefined ? { id: 1 } : (tabId < 0 ? undefined : { id: tabId }), url: senderUrl }); if (r !== undefined) return r; } return undefined; },
     req,
     flushTimers: async () => { const t = timers.splice(0); t.forEach((f) => f()); await tick(); },
     of: (k) => sent.filter((m) => m.k === k),
@@ -424,4 +425,82 @@ test('sniffer: the file name the server gives (Content-Disposition) travels with
   assert.equal(m.length, 2);
   assert.equal(m[0].n, 'attachment; filename="My Holiday 2026.mp4"');
   assert.equal(m[1].n, '', 'no header, no name');
+});
+
+// ---------------------------------------------------------------- embeds wait for a tap (EX-10, research/REVIEW-EXTERNAL-1.md 4.3)
+const EMBED_PAGE = 'https://blog.example/post';
+const YT = 'https://www.youtube.com/embed/abc123?rel=0';
+const EMBED_UI = 'moz-extension://test-id/embed.html';
+/** cfg answers carry the page's flags as a bit field: 1 = pop-up guard, 2 = embeds wait for a tap */
+const embedApp = (flags) => standardApp({ cfg: `1:1:${ID}:${flags}` });
+const sub = (h, url, tabId, page) => h.listeners.before({ type: 'sub_frame', url, tabId: tabId === undefined ? 1 : tabId, frameId: 7, documentUrl: page || EMBED_PAGE, frameAncestors: [{ url: page || EMBED_PAGE, frameId: 0 }] });
+
+test('embeds: a third-party player frame is answered with the tap-to-load page, carrying the address in the fragment', async () => {
+  const h = harness(embedApp(2));
+  h.mainFrame(EMBED_PAGE);
+  const r = await sub(h, YT);
+  assert.equal(r.redirectUrl, EMBED_UI + '#' + encodeURIComponent(YT));
+  assert.equal(decodeURIComponent(r.redirectUrl.split('#')[1]), YT);
+});
+
+test('embeds: every listed player is caught, an ordinary third-party frame and the page\'s own frames are not', async () => {
+  const h = harness(embedApp(3));
+  h.mainFrame(EMBED_PAGE);
+  for (const u of ['https://www.youtube-nocookie.com/embed/x', 'https://player.vimeo.com/video/123?h=a', 'https://www.dailymotion.com/embed/video/x7', 'https://geo.dailymotion.com/player/xyz.html?video=1',
+    'https://www.facebook.com/plugins/video.php?href=a', 'https://www.instagram.com/p/Cabc/embed/', 'https://www.tiktok.com/embed/v2/123', 'https://open.spotify.com/embed/track/1',
+    'https://w.soundcloud.com/player/?url=x', 'https://disqus.com/embed/comments/?base=default', 'https://www.google.com/maps/embed?pb=!1m18', 'http://kestrel-embed-test.invalid/embed/x']) {
+    const r = await sub(h, u);
+    assert.ok(r.redirectUrl && r.redirectUrl.startsWith(EMBED_UI + '#'), 'should wait for a tap: ' + u);
+  }
+  for (const u of ['https://ads.example/frame.html', 'https://www.youtube.com/watch?v=abc', 'https://www.youtube.com/', 'https://notyoutube.com/embed/x', 'https://youtube.com.evil.example/embed/x', 'https://player.vimeo.com/']) {
+    eq(await sub(h, u), {}, 'not an embed: ' + u);
+  }
+  eq(await sub(h, 'https://www.youtube.com/embed/x', 1, 'https://www.youtube.com/watch?v=1'), {}, 'YouTube\'s own page frames its own player: not an embed');
+  eq(await sub(h, 'https://www.youtube.com/embed/x', 1, 'https://music.youtube.com/'), {}, 'a subdomain of the same site');
+});
+
+test('embeds: only sub_frame requests are looked at, and only when the page\'s flags say so (Shields down, the Settings switch or the site\'s own override)', async () => {
+  const on = harness(embedApp(2)); on.mainFrame(EMBED_PAGE);
+  eq(await on.req('script', 'https://www.youtube.com/embed/x.js', EMBED_PAGE), {}, 'a script is not a frame');
+  eq(await on.req('image', 'https://www.youtube.com/embed/x.png', EMBED_PAGE), {});
+  for (const flags of [0, 1]) {
+    const h = harness(embedApp(flags)); h.mainFrame(EMBED_PAGE);
+    eq(await sub(h, YT), {}, 'flags=' + flags + ': the embed loads at once');
+  }
+});
+
+test('embeds: the owner\'s tap lets that one address through for that tab for 30 seconds, then it waits again', async () => {
+  const h = harness(embedApp(2));
+  h.mainFrame(EMBED_PAGE);
+  assert.ok((await sub(h, YT)).redirectUrl);
+  assert.equal(await h.message({ k: 'embed-allow', u: YT }, 1, EMBED_UI + '#' + encodeURIComponent(YT)), true);
+  eq(await sub(h, YT), {}, 'the tapped player loads');
+  eq(await sub(h, YT + '#t=5'), {}, 'a fragment does not make it another address');
+  assert.ok((await sub(h, YT, 2)).redirectUrl, 'another tab still waits');
+  assert.ok((await sub(h, 'https://www.youtube.com/embed/other')).redirectUrl, 'another player in the same tab still waits');
+  h.clock.now += 31000;
+  assert.ok((await sub(h, YT)).redirectUrl, 'after 30 s the allowance is gone');
+});
+
+test('embeds: only the extension\'s own placeholder page can allow an address, and only a web address', async () => {
+  const h = harness(embedApp(2));
+  h.mainFrame(EMBED_PAGE);
+  assert.equal(await h.message({ k: 'embed-allow', u: YT }, 1, 'https://evil.example/page'), undefined, 'a web page cannot');
+  assert.equal(await h.message({ k: 'embed-allow', u: YT }, 1, undefined), undefined, 'a content script (no extension page url) cannot');
+  assert.equal(await h.message({ k: 'embed-allow', u: 'javascript:alert(1)' }, 1, EMBED_UI + '#x'), undefined, 'not a web address');
+  assert.equal(await h.message({ k: 'embed-allow', u: 'moz-extension://test-id/embed.html' }, 1, EMBED_UI), undefined);
+  assert.ok((await sub(h, YT)).redirectUrl, 'nothing was allowed by those');
+});
+
+test('embeds: a frame that waits is counted as one thing held back for the page, and the first frame of a page is gated even before the engine is loaded', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const h = harness((m) => (m.k === 'img' ? gate.then(() => chunkReply(m.g, m.i, 2048, ID)) : embedApp(2)(m)));
+  h.mainFrame(EMBED_PAGE);
+  const r = await sub(h, YT); // no engine yet: the page configuration decides
+  assert.ok(r.redirectUrl && r.redirectUrl.startsWith(EMBED_UI + '#'));
+  await h.flushTimers();
+  const cnt = h.of('cnt');
+  assert.ok(cnt.length >= 1 && cnt[0].c && cnt[0].c[3] === 1, 'one annoyance-category count: ' + JSON.stringify(cnt));
+  release();
 });
