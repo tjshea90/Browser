@@ -20,11 +20,12 @@ class BrowserDb(ctx: Context) : SQLiteOpenHelper(ctx.applicationContext, "browse
         try { db.rawQuery("PRAGMA synchronous=NORMAL", null).close() } catch (e: Exception) { /* the default only costs a little speed */ }
     }
 
+    // IF NOT EXISTS: in write-ahead mode two helper instances opening the file at the same moment can both see version 0 and both run this (the second must find the tables there)
     override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("CREATE TABLE history(url TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '', host TEXT NOT NULL DEFAULT '', visits INTEGER NOT NULL DEFAULT 1, last INTEGER NOT NULL)")
-        db.execSQL("CREATE INDEX history_last ON history(last DESC)")
-        db.execSQL("CREATE INDEX history_host ON history(host)")
-        db.execSQL("CREATE TABLE bookmarks(url TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '', added INTEGER NOT NULL)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS history(url TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '', host TEXT NOT NULL DEFAULT '', visits INTEGER NOT NULL DEFAULT 1, last INTEGER NOT NULL)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS history_last ON history(last DESC)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS history_host ON history(host)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS bookmarks(url TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '', added INTEGER NOT NULL)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {}
