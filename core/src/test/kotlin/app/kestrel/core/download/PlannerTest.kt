@@ -139,7 +139,7 @@ class PlannerTest {
         c.refused(now, 2, 600_000)                                                   // the server refused the third and fourth
         assertEquals(2, c.target)
         repeat(300) { now += 1000; n = c.update(now, 2_000_000.0, 4); assertTrue("held at 2 for 10 minutes, was $n at $now", n <= 2) }
-        repeat(60) { now += 1000; n = c.update(now, n * 1_000_000.0, 4) }
+        repeat(400) { now += 1000; n = c.update(now, n * 1_000_000.0, 4) }         // 700 s in all: past the 10-minute hold
         assertTrue("growth resumed after the hold: $n", n >= 3)
     }
 
