@@ -20,7 +20,9 @@ enum class Reason(val code: Int) {
     NONE(0), HTTP(1), LINK_EXPIRED(2), NO_SPACE(3), STORAGE(4), FS_LIMIT(5), INSECURE_REDIRECT(6), TLS(7), LOCAL_NET(8), DIGEST(9),
     STALLED(10), FILE_CHANGED(11), NO_RANGE(12), NETWORK(13), BAD_URL(14),
     /** Streams (video): a live stream, copy protection (DRM), a format that cannot be saved, a playlist that could not be read. */
-    LIVE(15), DRM(16), UNSUPPORTED(17), BAD_PLAYLIST(18);
+    LIVE(15), DRM(16), UNSUPPORTED(17), BAD_PLAYLIST(18),
+    /** The site sent a web page where the file should be (an expired link, a sign-in wall, a portal page). */
+    BAD_CONTENT(19);
 
     companion object { fun of(code: Int): Reason = values().firstOrNull { it.code == code } ?: NONE }
 }

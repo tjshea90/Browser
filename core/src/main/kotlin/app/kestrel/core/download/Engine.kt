@@ -57,6 +57,8 @@ class Engine(
         var ckptPending = false
         var resumeAt = 0L
         var autoResume = false       // the last run ended in the middle of this download: carry on by itself ([resumeInterrupted])
+        var expectBinary = false     // the caller / the file name says this is not a web page: a web page in its place is an error ([ContentSniff])
+        var sniffed = false
         var outageSince = 0L         // an outage in the middle of the download began at this time (0 = none)
         var outageProbes = 0
         val mon = ReentrantLock()
@@ -416,6 +418,9 @@ class Engine(
             val etag = resp.header("ETag")?.trim()?.takeIf { HttpSemantics.isStrongEtag(it) }
             val lm = resp.header("Last-Modified")?.trim()
             val date = resp.header("Date")?.trim()
+            val wantsBinary = ContentSniff.expectsBinary(rec.name, rec.mime) || ContentSniff.expectsBinary(rec.url, null)
+            if (wantsBinary && ContentSniff.isHtmlType(ctype)) { quiet(resp); fail(job, Reason.BAD_CONTENT, 0); throw Exit() } // an honest "text/html" where a video or file was expected: nothing is created
+            synchronized(lock) { job.expectBinary = wantsBinary; job.sniffed = false }
             val name = if (rec.nameFixed) FileNames.withExtensionFor(ctype ?: rec.mime, rec.name) else FileNames.choose(resp.header("Content-Disposition"), resp.finalUrl, ctype ?: rec.mime, rec.name)
             val sink = try { sinks.create(name, ctype ?: rec.mime, total, rec.priv, rec.destKind) } catch (e: SinkException) { quiet(resp); fail(job, e.reason, 0); throw Exit() }
             val seg = Seg(0, 0, total, 0)
@@ -563,6 +568,10 @@ class Engine(
                 return
             }
             if (n == 0) continue
+            if (cursor == 0L && !job.sniffed) { // the very first bytes of the file: a server that sends a web page as "application/octet-stream" is still caught
+                job.sniffed = true
+                if (job.expectBinary && ContentSniff.looksLikeHtml(buf, 0, n)) { fail(job, Reason.BAD_CONTENT, 0); throw Exit() }
+            }
             sink.pwrite(cursor, buf, 0, n)
             onBytes(job, seg, n)
         }
@@ -687,6 +696,7 @@ class Engine(
             startQueued()
             return
         }
+        if (st == DlState.FAILED && reason == Reason.BAD_CONTENT) synchronized(lock) { wipePartial(job) } // nothing worth keeping: the "file" is a web page
         val again: Boolean
         synchronized(lock) {
             rec.state = st; rec.reason = reason; rec.detail = detail

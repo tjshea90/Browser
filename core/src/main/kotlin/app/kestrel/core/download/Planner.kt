@@ -137,6 +137,7 @@ object Format {
         Reason.DRM -> "This video is copy-protected (DRM). Kestrel cannot save it."
         Reason.UNSUPPORTED -> "This stream uses a format Kestrel cannot save yet"
         Reason.BAD_PLAYLIST -> "The stream's list of parts could not be read"
+        Reason.BAD_CONTENT -> "The site sent a web page instead of the file. The link may have expired, or the site wants you signed in."
         else -> "Failed"
     }
 }

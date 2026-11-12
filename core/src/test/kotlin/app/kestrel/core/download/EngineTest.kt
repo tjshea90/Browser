@@ -468,6 +468,33 @@ class EngineTest {
         h2.completed(k.id)   // only a checksum could tell (research/DOWNLOAD_MANAGERS.md M6); the tail comparison cannot see this
     }
 
+    private val page = "<!DOCTYPE html><html><head><title>Sign in</title></head><body>Your link expired.</body></html>".toByteArray()
+
+    @Test(timeout = 60_000) fun aWebPageWhereAVideoWasExpectedCreatesNoFileAndFailsWithAClearReason() {
+        val s = FakeServer(page).also { it.contentType = "text/html; charset=utf-8" }
+        val h = H(s)
+        val f = h.await(h.enqueue("https://cdn.test/v/movie.mp4"), "failure") { it?.state == DlState.FAILED }!!
+        assertEquals(Reason.BAD_CONTENT, f.reason)
+        assertTrue("no file was created for a web page", h.sinks.sinks.isEmpty())
+    }
+
+    @Test(timeout = 60_000) fun aWebPageSentAsOctetStreamIsCaughtOnTheFirstBytesAndThePartialIsRemoved() {
+        val s = FakeServer(page).also { it.contentType = "application/octet-stream" }
+        val h = H(s)
+        val f = h.await(h.enqueue("https://cdn.test/files/archive.zip"), "failure") { it?.state == DlState.FAILED }!!
+        assertEquals(Reason.BAD_CONTENT, f.reason)
+        h.await(f.id, "the empty file is gone") { h.sinks.sinks.values.all { sink -> sink.discarded } }
+    }
+
+    @Test(timeout = 60_000) fun anHtmlFileAndALinkWithNoExpectationAreDownloadedAsTheyAre() {
+        val s = FakeServer(page).also { it.contentType = "text/html" }
+        val h = H(s)
+        val a = h.completed(h.enqueue("https://site.test/docs/page.html"))
+        assertArrayEquals(page, h.sink(a).bytes)
+        val b = h.completed(h.enqueue("https://site.test/get?id=9"))
+        assertArrayEquals(page, h.sink(b).bytes)
+    }
+
     @Test(timeout = 60_000) fun downloadsQueueWhenAllSlotsAreBusy() {
         val s = FakeServer(testBytes(2 * MiB, 16)).also { it.chunkDelayMs = 1 }
         val h = H(s, cfg(maxActive = 1)); val a = h.enqueue("https://files.test/a.bin"); val b = h.enqueue("https://files.test/b.bin")

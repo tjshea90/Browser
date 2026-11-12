@@ -742,6 +742,8 @@ class StreamEngine(
             val ctr = LongArray(1)
             try {
                 FileOutputStream(part).use { out -> readInto(job, fetcher, url, from, toInclusive, out, count, ctr) }
+                // a web page where a video part should be (an expired or blocked link that answers 200): never let its text into the video
+                if (looksLikeHtmlFile(part)) { part.delete(); if (count) job.inflight.addAndGet(-ctr[0]); throw Failed(Reason.BAD_CONTENT) }
                 if (!part.renameTo(dest)) throw Failed(Reason.STORAGE)
                 return
             } catch (e: FetchException) {
@@ -770,6 +772,10 @@ class StreamEngine(
             }
         }
     }
+
+    private fun looksLikeHtmlFile(f: File): Boolean = try {
+        FileInputStream(f).use { i -> val b = ByteArray(512); val n = i.read(b); n > 0 && app.kestrel.core.download.ContentSniff.looksLikeHtml(b, 0, n) }
+    } catch (e: IOException) { false }
 
     private class Retry(val status: Int, val retryAfterMs: Long = 0) : RuntimeException(null, null, false, false)
 
