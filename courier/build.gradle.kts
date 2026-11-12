@@ -22,8 +22,8 @@ android {
         applicationId = "app.kestrel.courier"
         minSdk = 29            // the same floor as the browser, so the emulator rig (Android 10) runs both; the owner's phone runs Android 16
         targetSdk = 36         // below 37 on purpose: Android 17's local-network permission is enforced only from there (research/PHONE_OFFLOAD.md 6.1)
-        versionCode = 2
-        versionName = "0.1.0-alpha2"
+        versionCode = 3
+        versionName = "0.1.0-alpha3"
     }
 
     signingConfigs {
