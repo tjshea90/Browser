@@ -1,15 +1,74 @@
 'use strict';
 // Element hiding at document_start: ask for the CSS that hides ad containers on this host and inject it before the page paints them.
+// D2: when that CSS starts with the marker, the generic selectors that name a class or an id were NOT sent (there are ~29,000 of them): this top document tells the app which classes and ids it holds,
+// in small batches (the page at load, then what gets added), and injects only the selectors that can match (research/ADBLOCK_ENGINE.md, core/filter/CosmeticTokens.kt).
 (function () {
+  function inject(css, tag) {
+    var st = document.createElement('style');
+    st.setAttribute('data-kestrel', tag);
+    st.textContent = css;
+    (document.head || document.documentElement).appendChild(st);
+  }
+  function startTokens(host) {
+    try {
+      var seen = Object.create(null), fresh = [], timer = 0, batches = 0, sent = 0, off = false;
+      var MAX_BATCHES = 60, MAX_SENT = 8000, BATCH = 300, DELAY = 350; // a page that keeps inventing names (generated ids) stops being asked
+      function note(t) {
+        if (t.length > 81 || seen[t]) return;
+        seen[t] = 1; fresh.push(t);
+      }
+      function addEl(el) {
+        var id = el.id;
+        if (id && typeof id === 'string') note('#' + id.toLowerCase());
+        var cls = el.getAttribute ? el.getAttribute('class') : null; // not className: on an SVG element that is an object
+        if (cls) {
+          var parts = cls.split(/\s+/);
+          for (var i = 0; i < parts.length; i++) if (parts[i]) note('.' + parts[i].toLowerCase());
+        }
+      }
+      function scan(root) {
+        var list = root.querySelectorAll('[id],[class]');
+        for (var i = 0; i < list.length && i < 6000; i++) addEl(list[i]);
+      }
+      function flush() {
+        timer = 0;
+        if (off || fresh.length === 0) return;
+        var batch = fresh.splice(0, BATCH);
+        batches++; sent += batch.length;
+        if (batches >= MAX_BATCHES || sent >= MAX_SENT) off = true;
+        browser.runtime.sendMessage({ k: 'gen', h: host, t: batch }).then(function (css) { if (css) inject(css, 'g'); }, function () {});
+        if (fresh.length && !off) timer = setTimeout(flush, DELAY);
+      }
+      function later() { if (!timer && !off) timer = setTimeout(flush, DELAY); }
+      function first() { scan(document); later(); }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', first); else first();
+      window.addEventListener('load', first);
+      if (window.MutationObserver) {
+        var mo = new MutationObserver(function (recs) {
+          if (off) { mo.disconnect(); return; }
+          for (var r = 0; r < recs.length && r < 200; r++) {
+            var added = recs[r].addedNodes;
+            for (var k = 0; k < added.length && k < 50; k++) {
+              var n = added[k];
+              if (n.nodeType !== 1) continue;
+              addEl(n);
+              if (n.firstElementChild) { var sub = n.querySelectorAll('[id],[class]'); for (var m = 0; m < sub.length && m < 300; m++) addEl(sub[m]); }
+            }
+          }
+          if (fresh.length) later();
+        });
+        mo.observe(document.documentElement, { childList: true, subtree: true });
+      }
+    } catch (e) { /* never break the page */ }
+  }
   try {
     var host = location.hostname;
     if (!host) return;
-    browser.runtime.sendMessage({ k: 'css', h: host, top: window.top === window }).then(function (css) {
+    var top = window.top === window;
+    browser.runtime.sendMessage({ k: 'css', h: host, top: top }).then(function (css) {
       if (!css) return;
-      var st = document.createElement('style');
-      st.setAttribute('data-kestrel', '1');
-      st.textContent = css;
-      (document.head || document.documentElement).appendChild(st);
+      inject(css, '1');
+      if (top && css.indexOf('/*kg*/') === 0) startTokens(host);
     }, function () {});
   } catch (e) { /* never break the page */ }
 })();

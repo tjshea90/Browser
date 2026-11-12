@@ -306,6 +306,14 @@ browser.runtime.onMessage.addListener(function (m) {
   return w;
 });
 
+// D2: the top document of a page whose CSS starts with the marker sends the classes and ids it holds, in small batches, and gets back only the generic selectors that can match them. Not cached
+// (every batch is different); the app answers from an index in memory and the page's own Shields switches decide there.
+browser.runtime.onMessage.addListener(function (m) {
+  if (!m || m.k !== 'gen' || !m.h || !m.t || !m.t.length) return undefined;
+  var t = m.t.length > 400 ? m.t.slice(0, 400) : m.t;
+  return send({ k: 'gen', h: m.h, t: t }).then(function (r) { return (typeof r === 'string') ? r : ''; }, function () { return ''; });
+});
+
 // ---- video / audio sniffer: tells the app which media files and playlists a page loads, so a long press can offer "Download video".
 // Passive: nothing is fetched here and nothing is blocked. One native message per NEW candidate (a player's flurry of Range requests for the same file is one).
 var MEDIA_TYPES = ['media', 'xmlhttprequest', 'other', 'object', 'sub_frame', 'main_frame'];
