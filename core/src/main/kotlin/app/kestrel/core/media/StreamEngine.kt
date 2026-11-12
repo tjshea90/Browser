@@ -789,7 +789,7 @@ class StreamEngine(
                     try { sinks.delete(uri) } catch (e: Exception) { /* ignore */ }
                     try { sinks.delete(audioUri) } catch (e: Exception) { /* ignore */ }
                     dropCompanion(comp)
-                } else synchronized(lock) { comp.rec.parentId = 0L; comp.rec.updated = clock.now() }.also { persist(comp.rec); changed(comp.rec.id) }
+                } else if (keepApartOnMergeFailure) synchronized(lock) { comp.rec.parentId = 0L; comp.rec.updated = clock.now() }.also { persist(comp.rec); changed(comp.rec.id) }
             }
         } else if (finisher != null && uri != null && media.container == "ts" && !job.stop && mux == null && synchronized(lock) { rec.mux } != MUX_MP4) {
             // MPEG-TS plays badly in most apps: make an MP4 of it (the .ts stays if anything goes wrong). Runs between discontinuities are handed over as parts; a stream that has
