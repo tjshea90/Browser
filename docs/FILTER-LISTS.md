@@ -1,7 +1,7 @@
 # Filter lists: sources, licences, how the bundled snapshot is made
 
 The browser ships a compiled snapshot (`app/src/main/assets/filters/default.kfs`, ~4 MB) so it is protected on the very
-first page load even offline, and refreshes it itself (weekly, conditional GET, HTTPS only — see ARCHITECTURE.md section 7).
+first page load even offline, and refreshes it itself (daily since alpha16, conditional GET, HTTPS only — see ARCHITECTURE.md section 7).
 
 | List | Category | Upstream | Licence |
 |---|---|---|---|

@@ -123,7 +123,7 @@ class TabGrid(ctx: Context, private var pal: Pal, private val isPrivate: (Tab) -
     private fun paintChrome() {
         val ctx = context
         val regular = Pal(ctx, false); val priv = Pal(ctx, true)
-        // each segment wears its OWN skin: regular = yellow, private = violet
+        // each segment wears its OWN skin: regular = the regular accent (neon blue since alpha5), private = violet
         fun style(v: TextView, on: Boolean, skin: Pal) {
             v.background = if (on) chamferSurface(ctx, skin.accent, 10f) else chamferSurface(ctx, regular.pill, 10f, strokeColor = skin.divider, strokeDp = 1f)
             v.setTextColor(if (on) skin.accentOn else regular.muted)

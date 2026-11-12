@@ -7,8 +7,8 @@ last session stopped, TASKS.md = the job list, this file = decisions that do not
 MediaTek MT8168B "Alps 711" tablet, Mali-G52 MC2, **Android 10 Go (API 29)**, security patch 2021-07-05, kernel 4.14.141, **2 GB RAM (reports 1.9 GB), low_ram=true,
 heap class 128 MB**, 600x973 @170 dpi (~564x916 dp), font scale 1.2, 32-bit userspace (`sys_mssi_t_32_ago`), unencrypted, single user.
 **No Google Play Store, no Google services**: no Safe Browsing, no WebView auto-update, manual APK installs, NEVER add a GMS dependency.
-**Internet is 100% through a phone hotspot** (metered, flaky, carrier-routed): HTTPS-first, data-frugal, no background network except the weekly
-conditional filter-list refresh, never reload background tabs at startup, prefer cache when OFFLINE.
+**Internet is 100% through a phone hotspot** (UNMETERED per the owner since 2026-11-12, but the carrier caps it at about 5 Mbit/s; flaky, carrier-routed; LinkMeter's Fast Wi-Fi can lift the cap): HTTPS-first, no background network except the daily
+conditional filter-list refresh and the daily release check, never reload background tabs at startup, prefer cache when OFFLINE.
 
 ## Owner facts (authoritative)
 - Anything typed in the address bar that is not an address is searched on **Google** (default engine = first entry of `Prefs.ENGINES`).
@@ -36,7 +36,7 @@ form except that system WebView (Brave/Cromite are whole browsers built from Chr
 ## Decisions (short; rationale in ARCHITECTURE.md)
 - Native new-tab page (no engine at startup); one live engine view (+1 for an opener); other tabs hibernated through the engine's saved state.
 - Private window: WebView build = separate process `:private` with `WebView.setDataDirectorySuffix`, FLAG_SECURE, nothing persisted; Gecko build = `usePrivateMode` sessions.
-- Filter lists: pure-host rules as sorted 64-bit hashes, other rules token-indexed, compiled to the binary `.kfs`; refreshed weekly (conditional GET); canaries refuse a poisoned list.
+- Filter lists: pure-host rules as sorted 64-bit hashes, other rules token-indexed, compiled to the binary `.kfs`; refreshed daily (conditional GET); canaries refuse a poisoned list.
 - Gecko: strict ETP, first-party-isolation cookies, query-param stripping, bounce-tracking protection, GPC, DoH (TRR first, Cloudflare), fission and the extensions process off, low-memory detection.
   Our filter engine runs as the built-in WebExtension `assets/kestrel-shields` (native messaging: **plain strings both ways**, structured replies fail with "Invalid event data").
   Gecko child processes instantiate Application: only the UI process loads the filter engine (`GeckoApp` checks `getProcessName()`).
