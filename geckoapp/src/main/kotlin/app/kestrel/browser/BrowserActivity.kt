@@ -164,6 +164,7 @@ open class BrowserActivity : Activity(), DockListener {
     private val netListener: () -> Unit = { onNetworkChanged() }
     private val updateListener: () -> Unit = { if (::dock.isInitialized) dock.setMenuDot(UpdateManager.pending()); Io.main.post { maybeShowUpdateNotice() } }
     private var updateNoticeShowing = false
+    private var updateFromDialog = false
     private val saveRunnable = Runnable { saveSessionNow() }
 
     // ================================================================== lifecycle
@@ -1067,6 +1068,9 @@ open class BrowserActivity : Activity(), DockListener {
     private fun maybeShowUpdateNotice() {
         if (isFinishing || isDestroyed || updateNoticeShowing || !prefs.autoUpdateCheck) return
         val st = UpdateManager.state
+        // the owner pressed Update / Install in the dialog and it ran into something (no room, Android's "allow from this source", an error): the Updates sheet explains it and offers the way on
+        if (updateFromDialog && (st.phase == UpdateManager.Phase.NEEDS_SPACE || st.phase == UpdateManager.Phase.NEEDS_PERMISSION || st.phase == UpdateManager.Phase.ERROR)) { updateFromDialog = false; if (!sheet.isShowing) showUpdates(); return }
+        if (updateFromDialog && (st.phase == UpdateManager.Phase.INSTALLING || st.phase == UpdateManager.Phase.READY)) updateFromDialog = false
         val o = st.offer
         val news = when {
             o != null && st.phase == UpdateManager.Phase.AVAILABLE -> app.kestrel.core.update.UpdatePlan.AppNews(o.tag, o.versionName, app.kestrel.core.update.UpdateLogic.formatSize(o.size), false)
@@ -1081,10 +1085,10 @@ open class BrowserActivity : Activity(), DockListener {
         val b = AlertDialog.Builder(this).setTitle(notice.title).setMessage(notice.lines.joinToString("\n\n"))
         when (notice.action) {
             app.kestrel.core.update.UpdatePlan.Action.DOWNLOAD -> b
-                .setPositiveButton("Update") { _, _ -> UpdateManager.download(this); toast("Downloading in the background. You get a notification when it is ready to install.") }
+                .setPositiveButton("Update") { _, _ -> updateFromDialog = true; UpdateManager.download(this); toast("Downloading in the background. You get a notification when it is ready to install.") }
                 .setNegativeButton("Later", null).setNeutralButton("Details") { _, _ -> showUpdates() }
             app.kestrel.core.update.UpdatePlan.Action.INSTALL -> b
-                .setPositiveButton("Install now") { _, _ -> UpdateManager.install(this) }.setNegativeButton("Later", null)
+                .setPositiveButton("Install now") { _, _ -> updateFromDialog = true; UpdateManager.install(this) }.setNegativeButton("Later", null)
             app.kestrel.core.update.UpdatePlan.Action.NONE -> b.setPositiveButton("OK", null)
         }
         b.setOnDismissListener { updateNoticeShowing = false }.show()
