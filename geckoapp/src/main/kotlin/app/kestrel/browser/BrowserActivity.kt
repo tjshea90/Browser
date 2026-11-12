@@ -603,7 +603,7 @@ open class BrowserActivity : Activity(), DockListener {
         return s
     }
 
-    private fun ensureSession(tab: Tab): GeckoSession {
+    private fun ensureSession(tab: Tab, cover: Boolean = true): GeckoSession {
         tab.session?.let { return it }
         val s = createSession(tab)
         s.open(GeckoEngine.runtime(this))
@@ -625,8 +625,18 @@ open class BrowserActivity : Activity(), DockListener {
                 s.loadUri(pending)
             }
         }
+        if (cover && (state != null || pending != null)) coverRevive(tab)
         enforceLiveLimit()
         return s
+    }
+
+    /**
+     * A tab's page is being loaded again (revived after it was hibernated, or restored at start): until the engine paints, the empty page area shows the tab's last preview
+     * (dimmed, with the host) instead of the previous tab's leftover frame or a blank panel. It goes away at the first paint, when the load ends, or after 20 s.
+     */
+    private fun coverRevive(tab: Tab) {
+        if (tab !== current || restoringTab === tab || tab.showHome || tab.error != null || !tab.url.startsWith("http")) return
+        showRestoring(tab, false, "Opening " + (UrlParts.hostOf(tab.url) ?: "page"))
     }
 
     /** Parse a tab's saved engine state (tabstate/<id>.json from the last run); null = unusable, the tab then loads its address as before. */
@@ -776,7 +786,7 @@ open class BrowserActivity : Activity(), DockListener {
         tab.shields = Shields.effective(prefs, host)
         tab.resetPageCounters()
         tab.media.clear()
-        val s = ensureSession(tab)
+        val s = ensureSession(tab, cover = false) // the address typed now replaces whatever the tab held: no preview of the old page
         if (current === tab) attachContent(tab)
         s.loadUri(url)
         updateUi()
@@ -1619,12 +1629,14 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     internal fun errorChanged(tab: Tab) {
+        if (tab === restoringTab && tab.error != null) hideRestoring() // the error screen replaces the preview
         if (tab === current) { attachContent(tab); updateUi() }
     }
 
     internal fun pageFinished(tab: Tab) {
         if (tab === scrollTestTab) { scrollTestTab = null; Io.main.postDelayed({ startScrollTest(tab) }, 2500); return } // the bundled test page: nothing else to do for it
         flushCounters()
+        if (tab === restoringTab) hideRestoring() // the load ended (a page that never reported its first paint must not keep the preview up)
         // A failed or blocked load is not a visit (typos and malware URLs would otherwise fill history and the top sites).
         if (!tab.isPrivateTab && tab.error == null && tab.url.startsWith("http")) { val u = withoutUserinfo(tab.url); val ti = tab.title; Io.exec { db?.recordVisit(u, ti) } }
         scheduleSave()
@@ -1671,16 +1683,22 @@ open class BrowserActivity : Activity(), DockListener {
         Health.count(if (withState) "gecko.recover.state" else "gecko.recover.url")
         if (tab === current) {
             if (tab.crashCount >= 3) { tab.error = ErrorScreen.Crashed(url); tab.pendingLoad = null; hideRestoring() }
+            else if (!ProcessLife.uiVisible) {
+                // The app is in the background: Android took the memory back, and starting a new engine process now (150 MB or more) would only take it from the app the user is in. onResume
+                // brings the page back (it already revives a current tab that has no session), behind the same preview.
+                Health.count("gecko.reviveDeferred"); Health.log("tabs", "revive-deferred", "tab=${tab.id}")
+                return
+            }
             else if (url.startsWith("http")) showRestoring(tab, crashed)
             attachContent(tab)
             updateUi()
         }
     }
 
-    private fun showRestoring(tab: Tab, crashed: Boolean) {
+    private fun showRestoring(tab: Tab, crashed: Boolean, message: String? = null) {
         restoringTab = tab
         val thumb = tab.thumb
-        restoreOverlay.show(thumb, if (crashed) "The page stopped - bringing it back" else "Page freed to save memory - bringing it back")
+        restoreOverlay.show(thumb, message ?: if (crashed) "The page stopped - bringing it back" else "Page freed to save memory - bringing it back")
         Io.main.removeCallbacks(restoreTimeout)
         Io.main.postDelayed(restoreTimeout, 20_000) // never stay up for ever (a page that never paints, a dead connection)
     }
