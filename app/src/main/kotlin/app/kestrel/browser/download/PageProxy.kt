@@ -46,10 +46,12 @@ object PageProxy {
 
     /** One plain line for Settings and Diagnostics. */
     fun line(ctx: Context): String = when (val s = state) {
-        is ProxyLink.State.Active -> "Pages load through the phone (${s.host}:${s.port})."
+        is ProxyLink.State.Active -> "Pages load through the phone (${s.host}:${s.port})." + (link?.phoneStats?.let { p -> " The phone has opened ${p.tunnels} connections for them (${mb(p.up + p.down)})" + (if (p.refused > 0) ", turned away ${p.refused}" else "") + "." } ?: "")
         is ProxyLink.State.Unavailable -> if (wanted(ctx)) "Pages load directly for now: ${s.why}." else "Pages load directly."
         ProxyLink.State.Off -> if (wanted(ctx)) "Pages: looking for the phone." else "Pages load directly (switched off)."
     }
+
+    private fun mb(b: Long): String = if (b < 1_000_000L) "${b / 1000} KB" else String.format(java.util.Locale.US, "%.1f MB", b / 1_000_000.0)
 
     private fun apply(s: ProxyLink.State) { applied = s; applyNow() }
 

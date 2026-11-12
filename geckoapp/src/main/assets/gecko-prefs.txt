@@ -16,16 +16,17 @@ network.prefetch-next = true
 # send "low memory" and Gecko then flush ALL decoded images + WebRender's caches (research/SCROLL.md Q1/Q2). size_factor 20 = about 95 MB. (max_size_kb is ignored on a 32-bit
 # engine: SurfaceCache forces it to 1 GB, so the old line `image.mem.surfacecache.max_size_kb = 98304` did nothing.)
 dom.ipc.processCount = 1
-# --- instant Back: the bfcache keeps the last 4 pages alive (was 2; the engine's own value for this much RAM would be 5). The owner allows liberal RAM for speed; a low-memory event still drops them all.
+# --- instant Back: the bfcache keeps the last 4 pages alive (was 2; the engine's own value for this much RAM would be 5), for up to an hour (the engine's default is 6 minutes). The owner allows liberal RAM for speed; a low-memory event still drops them all.
 browser.sessionhistory.max_total_viewers = 4
+browser.sessionhistory.contentViewerTimeout = 3600
 # --- RAM-liberal caches (the owner usually has 800 MB to 1 GB free): 64 MB of page resources kept in memory for repeat loads, decoded images kept 3 minutes instead of 1, bigger decode steps
 browser.cache.memory.capacity = 65536
 image.mem.surfacecache.min_expiration_ms = 180000
 image.mem.decode_bytes_at_a_time = 65536
 # --- no white areas while scrolling: decode images two screens ahead (default 1), start lazy-loaded images 1500 px before they scroll into view (default 600), compile all shaders at start (no first-use hitch)
-layout.framevisibility.numscrollportheights = "2.0"
-dom.lazy-loading.margin.top = 1500
-dom.lazy-loading.margin.bottom = 1500
+layout.framevisibility.numscrollportheights = 2
+dom.lazy-loading.margin.top = "1500.0"
+dom.lazy-loading.margin.bottom = "1500.0"
 gfx.webrender.precache-shaders = true
 image.mem.surfacecache.size_factor = 20
 # --- caches: a fixed 512 MB disk cache saves repeat bytes on the hotspot; compile JS bytecode caches after 2 loads instead of 4

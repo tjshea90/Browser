@@ -104,7 +104,7 @@ object CourierRuntime {
         val systemResolve: (String) -> List<ByteArray> = { h -> if (noGuard && h.endsWith(".test")) listOf(byteArrayOf(10, 0, 2, 2)) else java.net.InetAddress.getAllByName(h).map { it.address } }
         val proxy = ConnectProxy(
             proxyPort, null, { remote, local -> gate.isArmed(remote) && PeerGuard.allowed(remote.address, local.address, CourierNet.locals()) },
-            if (noGuard) GuardedDialer(systemResolve, { false }) else GuardedDialer(systemResolve), log = { Log.w(TAG, it) },
+            if (noGuard) GuardedDialer(systemResolve, { false }) else GuardedDialer(systemResolve), log = { Log.i(TAG, it) }, verbose = debug,
         )
         val proxyBound = try { proxy.start() } catch (e: IOException) { Log.w(TAG, "page proxy: port $proxyPort is busy, pages are not offered"); 0 }
         val proxyControl = if (proxyBound != 0) ProxyControl(gate, proxyBound) { proxy.stats() } else null

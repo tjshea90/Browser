@@ -35,6 +35,9 @@ class ProxyLink(
 
     @Volatile var state: State = State.Off
         private set
+    /** What the phone's proxy has done so far (fetched with every renewal); null until the first answer or when the phone has no proxy. */
+    @Volatile var phoneStats: ProxyStatus? = null
+        private set
     @Volatile private var running = false
     private val wake = Semaphore(0)
     private var thread: Thread? = null
@@ -78,7 +81,11 @@ class ProxyLink(
             val a = c.armProxy(armTtlSec)
             val host = try { URL(c.baseUrl).host } catch (e: Exception) { "" }
             if (host.isEmpty() || a.port !in 1..65535) { set(State.Unavailable("the phone gave an unusable address")); nextRetry() }
-            else { armedBefore = true; fails = 0; set(State.Active(host, a.port)); rearmEveryMs }
+            else {
+                armedBefore = true; fails = 0
+                try { phoneStats = c.status().proxy } catch (e: Exception) { /* keep the last numbers */ }
+                set(State.Active(host, a.port)); rearmEveryMs
+            }
         } catch (e: CourierException) {
             when (e.kind) {
                 CourierException.Kind.UNREACHABLE, CourierException.Kind.TIMEOUT -> set(State.Unavailable("the phone does not answer"))

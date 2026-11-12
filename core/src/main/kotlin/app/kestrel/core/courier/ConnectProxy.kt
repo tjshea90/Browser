@@ -49,6 +49,8 @@ class ConnectProxy(
     private val connectTimeoutMs: Int = 9_000,
     private val clock: Clock = Clock.System,
     private val log: (String) -> Unit = {},
+    /** DEBUG builds of the phone app: one log line per refused peer and per tunnel (host names are private: never on in a release). */
+    private val verbose: Boolean = false,
 ) {
     /** Opens the real connection. Throws [Blocked] for a destination the proxy must not reach, [UnknownHostException] / other [IOException] otherwise. */
     interface Dialer { @Throws(IOException::class) fun dial(host: String, port: Int, timeoutMs: Int): Socket }
@@ -100,7 +102,7 @@ class ConnectProxy(
         active.incrementAndGet()
         try {
             val remote = client.inetAddress; val local = client.localAddress
-            if (remote == null || local == null || !peerAllowed(remote, local)) { refused.incrementAndGet(); reset(client); return }
+            if (remote == null || local == null || !peerAllowed(remote, local)) { refused.incrementAndGet(); if (verbose) log("proxy: turned away ${remote?.hostAddress}"); reset(client); return }
             client.tcpNoDelay = true
             client.soTimeout = headTimeoutMs
             val head = readHead(client) ?: return
@@ -118,6 +120,7 @@ class ConnectProxy(
             } catch (e: SocketTimeoutException) { failed.incrementAndGet(); reply(client, 504, "Gateway Timeout"); return
             } catch (e: IOException) { failed.incrementAndGet(); reply(client, 502, "Bad Gateway"); return }
             connectMsTotal.addAndGet(clock.now() - t0); connectCount.incrementAndGet(); tunnels.incrementAndGet()
+            if (verbose) log("proxy: tunnel to ${dest.first}:${dest.second} open after ${clock.now() - t0} ms")
             open.add(upstream)
             upstream.tcpNoDelay = true
             client.getOutputStream().write("HTTP/1.1 200 Connection Established\r\nProxy-Agent: kestrel-courier\r\n\r\n".toByteArray(Charsets.ISO_8859_1))

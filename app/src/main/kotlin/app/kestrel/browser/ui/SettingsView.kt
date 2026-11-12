@@ -74,6 +74,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         choice("Connections per download", listOf("Automatic (recommended)", "1", "2", "3"), prefs.dlConns) { prefs.dlConns = it }
         info("When it applies", "The speed limit changes at once. The other two apply the next time the browser starts.")
 
+        app.kestrel.browser.download.PageProxy.refresh()                    // fresh numbers from the phone for the next time this screen is built
         section("Phone helper (downloads and pages through your phone)")
         info("What it does", "Your phone downloads the file over its own connection and sends it to this tablet over the hotspot wifi when it has it. The download looks and works the same here, with live progress. You need the small Kestrel Courier app on the phone, with the hotspot on.")
         choice("Use the phone", listOf("Off", "When the phone is there", "Always: wait for the phone"), prefs.phoneMode) { prefs.phoneMode = it; app.kestrel.browser.download.PhoneBridge.modeChanged(ctx) }
