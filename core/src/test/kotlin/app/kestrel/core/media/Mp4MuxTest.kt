@@ -67,9 +67,9 @@ class Mp4MuxTest {
         m.finish()
         val r = Mp4Reader(out.bytes())
         val v = r.track("vide")!!; val a = r.track("soun")!!
-        assertEquals(1, v.edits.size)
-        assertEquals("the picture's media is entered 5115 ticks in, so it is shown 2085 ticks after the sound", 5115L, v.edits[0].mediaTime)
-        assertEquals("the edit runs to the end of the last picture SHOWN: (3600 + 7200 + 3600) - 5115 ticks", 103L, v.edits[0].duration)
+        assertEquals(2, v.edits.size)
+        assertEquals("an empty edit while only the sound plays: 7200 - 5115 ticks = 23 ms", -1L to 23L, v.edits[0].mediaTime to v.edits[0].duration)
+        assertEquals("then the media from the first picture shown (7200) to the end of the last (14400)", 7200L to 80L, v.edits[1].mediaTime to v.edits[1].duration)
         assertTrue(a.edits.isEmpty())
     }
 
