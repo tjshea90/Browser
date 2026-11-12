@@ -1510,7 +1510,7 @@ open class BrowserActivity : Activity(), DockListener {
         override fun filterStatus(): String {
             val fs = Engine.peek()
             val rules = fs?.meta?.let { it.totalNetwork } ?: 0
-            return "${Engine.sourceDescription}: ${"%,d".format(rules)} network rules" +
+            return "${Engine.sourceDescription}: ${"%,d".format(rules)} network rules" + (fs?.queryRuleCount?.takeIf { it > 0 }?.let { ", ${"%,d".format(it)} address-cleaning rules" } ?: "") +
                 (if (prefs.lastUpdateMs > 0) "\nLast successful check: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(prefs.lastUpdateMs))}" else "") +
                 (if (prefs.lastUpdateNote.isNotEmpty()) "\n${prefs.lastUpdateNote}" else "")
         }
