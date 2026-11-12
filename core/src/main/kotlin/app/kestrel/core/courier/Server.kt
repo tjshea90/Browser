@@ -28,6 +28,7 @@ class CourierServer(
     private val maxConns: Int = 16,
     private val idleMs: Int = 30_000,
     private val stallMs: Long = 60_000,
+    private val sweepMs: Long = 5_000,
     private val log: (String) -> Unit = {},
 ) {
     private class Conn(val socket: Socket) { @Volatile var lastIo = System.currentTimeMillis() }
