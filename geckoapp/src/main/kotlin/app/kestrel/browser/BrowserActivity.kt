@@ -520,6 +520,13 @@ open class BrowserActivity : Activity(), DockListener {
     /** The tab whose address IS this page (exact, fragment aside); null if none: callers fall back to [tabForPage]. */
     internal fun tabWithUrl(url: String): Tab? { val u = url.substringBefore('#'); if (u.isEmpty()) return null; return tabs.firstOrNull { it.url.substringBefore('#') == u } }
 
+    /**
+     * A real touch (a tap, a long press on a video) can only come from the tab in front. When another tab holds the same address (the same page open twice, or a restored tab plus the same link opened
+     * again) [tabWithUrl] would name the FIRST one in the list, and the long press on the page the owner is looking at was dropped as "not the current tab": no Save video sheet at all.
+     */
+    private fun tabOfTouch(pageUrl: String, kind: String): Tab? =
+        if (kind == "tap" || kind == "vmenu") current?.takeIf { it.url.substringBefore('#') == pageUrl.substringBefore('#') } else null
+
     internal fun tabForPage(url: String): Tab? {
         val h = UrlParts.hostOf(url) ?: return null
         current?.takeIf { it.topHost == h }?.let { return it }
