@@ -62,9 +62,32 @@ class PageProxyTest {
 
     @Test fun theMenuSwitchTogglesTheWholeHelper() {
         val p = Prefs.get(ctx)
-        p.phoneMode = PhoneMode.OFF.ordinal
-        assertTrue(PhoneBridge.toggleHelper(ctx)); assertEquals(PhoneMode.WHEN_THERE, PhoneBridge.mode(ctx))
-        assertFalse(PhoneBridge.toggleHelper(ctx)); assertEquals(PhoneMode.OFF, PhoneBridge.mode(ctx))
+        p.phoneMode = PhoneMode.OFF.ordinal; p.pagesViaPhone = false
+        assertTrue(PhoneBridge.toggleHelper(ctx)); assertEquals(PhoneMode.WHEN_THERE, PhoneBridge.mode(ctx)); assertTrue("everything comes on, pages included", p.pagesViaPhone)
+        assertFalse(PhoneBridge.toggleHelper(ctx)); assertEquals(PhoneMode.OFF, PhoneBridge.mode(ctx)); assertFalse("and everything goes off, pages included", p.pagesViaPhone)
+    }
+
+    @Test fun oneSwitchTurnsEveryFeatureOffAndOn() {
+        val p = Prefs.get(ctx)
+        PhoneBridge.setMaster(ctx, true)
+        assertTrue(PhoneBridge.masterOn(ctx)); assertTrue(PhoneBridge.pagesOn(ctx)); assertEquals(PhoneMode.WHEN_THERE, PhoneBridge.mode(ctx))
+        p.phoneMode = PhoneMode.ALWAYS.ordinal
+        PhoneBridge.setMaster(ctx, true)
+        assertEquals("a stronger choice the owner made is kept when the switch is pressed on again", PhoneMode.ALWAYS, PhoneBridge.mode(ctx))
+        PhoneBridge.setMaster(ctx, false)
+        assertFalse(PhoneBridge.masterOn(ctx)); assertFalse(PhoneBridge.pagesOn(ctx)); assertFalse("Settings must not show pages on under an off helper", p.pagesViaPhone)
+        assertEquals(PhoneMode.OFF, PhoneBridge.mode(ctx))
+    }
+
+    @Test fun aStalePagesChoiceUnderAnOffHelperNeverShowsOrActs() {
+        val p = Prefs.get(ctx)
+        PhoneBridge.forgetPairing(ctx)
+        PhoneBridge.savePairing(ctx, Pairing.format(byteArrayOf(5, 5, 5, 5, 5, 5, 5, 5, 5, 5)))
+        p.phoneMode = PhoneMode.OFF.ordinal; p.pagesViaPhone = true // what an older build left behind after the menu switch was turned off
+        assertFalse(PhoneBridge.pagesOn(ctx)); assertFalse(PageProxy.wanted(ctx))
+        assertTrue(PhoneBridge.toggleHelper(ctx)); assertTrue(PageProxy.wanted(ctx))
+        assertFalse(PhoneBridge.toggleHelper(ctx)); assertFalse(PageProxy.wanted(ctx)); assertFalse(p.pagesViaPhone)
+        PhoneBridge.forgetPairing(ctx)
     }
 
     @Test fun theDataSaverIsOffByDefaultSoNothingActsMetered() {

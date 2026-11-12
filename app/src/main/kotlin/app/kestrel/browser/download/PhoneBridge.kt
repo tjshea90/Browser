@@ -67,13 +67,26 @@ object PhoneBridge {
         b.onNetwork()
     }
 
-    /** The main menu's one-tap switch: the whole phone helper (downloads AND pages) off, or on again as "when the phone is there". */
-    fun toggleHelper(ctx: Context): Boolean {
+    /** The one switch (the main menu's tile and the first row of Settings > Phone helper): is the phone helper on at all? */
+    fun masterOn(ctx: Context): Boolean = mode(ctx) != PhoneMode.OFF
+
+    /** "Load pages through the phone" as the owner sees it: only ever on under an ON master (a stale stored choice never shows in Settings and never acts under an OFF master). */
+    fun pagesOn(ctx: Context): Boolean = masterOn(ctx) && Prefs.get(ctx).pagesViaPhone
+
+    /**
+     * THE switch for everything the phone does for this tablet. OFF: downloads, videos AND pages all go straight through the hotspot, and the sub-choices are cleared too, so no row in
+     * Settings can still read "on" under an off helper (the owner turned it off in the menu and found "Load pages through the phone" still switched on). ON: all of it comes on: downloads
+     * and videos when the phone answers (a stronger choice the owner made, "always wait for the phone", is kept) and pages. The fine choices can be changed afterwards in Settings.
+     */
+    fun setMaster(ctx: Context, on: Boolean) {
         val p = Prefs.get(ctx)
-        p.phoneMode = if (mode(ctx) == PhoneMode.OFF) PhoneMode.WHEN_THERE.ordinal else PhoneMode.OFF.ordinal
+        if (on) { if (p.phoneMode == PhoneMode.OFF.ordinal) p.phoneMode = PhoneMode.WHEN_THERE.ordinal; p.pagesViaPhone = true }
+        else { p.phoneMode = PhoneMode.OFF.ordinal; p.pagesViaPhone = false }
         modeChanged(ctx)
-        return mode(ctx) != PhoneMode.OFF
     }
+
+    /** The main menu's one-tap switch. @return true = the helper is on now. */
+    fun toggleHelper(ctx: Context): Boolean { setMaster(ctx, !masterOn(ctx)); return masterOn(ctx) }
 
     fun paired(ctx: Context): Boolean = Pairing.parse(Prefs.get(ctx).phoneCode) != null
 

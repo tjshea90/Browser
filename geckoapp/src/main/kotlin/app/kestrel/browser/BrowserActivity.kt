@@ -1204,7 +1204,7 @@ open class BrowserActivity : Activity(), DockListener {
             M.BOOKMARKS -> showList(true)
             M.HISTORY -> showList(false)
             M.DOWNLOADS -> showDownloads()
-            M.PHONE -> if (!PhoneBridge.paired(this)) showSettings() else toast(if (PhoneBridge.toggleHelper(this)) "Phone helper on: downloads and pages use your phone" else "Phone helper off: hotspot only, the phone does nothing")
+            M.PHONE -> if (!PhoneBridge.paired(this)) showSettings() else toast(if (PhoneBridge.toggleHelper(this)) "Phone helper on: downloads, videos and pages use your phone" else "Phone helper off: everything, pages included, goes straight through the hotspot")
             M.DESKTOP -> t?.let { tab ->
                 tab.desktop = !tab.desktop
                 tab.session?.let { s ->

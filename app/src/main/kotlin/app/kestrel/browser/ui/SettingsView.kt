@@ -79,9 +79,16 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         section("Phone helper (Kestrel Courier: off by default, finished work)")
         info("When you need it", "Not with LinkMeter's Fast Wi-Fi: while a VPN is on, this helper rests by itself (a second relay on top of it only adds a hop). It is for the normal hotspot, where the phone's own connection is faster than the capped hotspot.")
         info("What it does", "Your phone downloads the file over its own connection and sends it to this tablet over the hotspot wifi when it has it. The download looks and works the same here, with live progress. You need the small Kestrel Courier app on the phone, with the hotspot on.")
-        choice("Use the phone", listOf("Off", "When the phone is there", "Always: wait for the phone"), prefs.phoneMode) { prefs.phoneMode = it; app.kestrel.browser.download.PhoneBridge.modeChanged(ctx) }
-        toggle("Load pages through the phone", "Pages are fetched by the phone with its own connection, which the carrier does not slow down like the hotspot. Needs Kestrel Courier 0.1.0-alpha3 or newer on the phone. If the phone stops answering, pages load directly by themselves.", prefs.pagesViaPhone) { prefs.pagesViaPhone = it; app.kestrel.browser.download.PageProxy.refresh(); rebuild() }
-        info("Pages", app.kestrel.browser.download.PageProxy.line(ctx))
+        // ONE switch for everything (the main menu has the same one): off = downloads, videos and pages all go through the hotspot only; on = all of it. The fine choices exist only while it is on.
+        toggle("Phone helper", "One switch for everything the phone does for this tablet: downloads, videos and pages. Off: nothing goes through the phone. The main menu has the same switch once a phone is paired.", app.kestrel.browser.download.PhoneBridge.masterOn(ctx)) { on ->
+            if (on && !app.kestrel.browser.download.PhoneBridge.paired(ctx)) { rebuild(); pairDialog(thenOn = true) } // it cannot be on without a phone: pair first, then it comes on
+            else { app.kestrel.browser.download.PhoneBridge.setMaster(ctx, on); rebuild() }
+        }
+        if (app.kestrel.browser.download.PhoneBridge.masterOn(ctx)) {
+            choice("Downloads and videos", listOf("When the phone is there", "Always: wait for the phone"), (prefs.phoneMode - 1).coerceIn(0, 1)) { prefs.phoneMode = it + 1; app.kestrel.browser.download.PhoneBridge.modeChanged(ctx) }
+            toggle("Load pages through the phone", "Pages are fetched by the phone with its own connection, which the carrier does not slow down like the hotspot. Needs Kestrel Courier 0.1.0-alpha3 or newer on the phone. If the phone stops answering, pages load directly by themselves.", prefs.pagesViaPhone) { prefs.pagesViaPhone = it; app.kestrel.browser.download.PageProxy.refresh(); rebuild() }
+            info("Pages", app.kestrel.browser.download.PageProxy.line(ctx))
+        }
         button("Pair with the phone", if (app.kestrel.browser.download.PhoneBridge.paired(ctx)) "Paired. Tap to type another code or to forget this one." else "Type the code the Courier app shows") { pairDialog() }
         button("Test the phone link", "Measures the wifi to the phone, the phone's internet and this tablet's internet, and says whether it is worth it (uses about 40 MB)") { linkTest() }
         info("Phone link", app.kestrel.browser.download.PhoneBridge.statusLine(ctx))
@@ -189,12 +196,12 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         row.setOnLongClickListener { true }
     }
 
-    private fun pairDialog() {
+    private fun pairDialog(thenOn: Boolean = false) {
         val bridge = app.kestrel.browser.download.PhoneBridge
         val input = android.widget.EditText(ctx).apply { hint = "ABCD-EFGH-JKLM-NPQR"; setSingleLine(); inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS; setPadding(ctx.dp(20), ctx.dp(12), ctx.dp(20), ctx.dp(12)) }
         val b = AlertDialog.Builder(ctx).setTitle("Pairing code").setMessage("Open Kestrel Courier on your phone. It shows 16 letters and numbers. Type them here once.").setView(input)
             .setPositiveButton("Pair") { _, _ ->
-                if (bridge.savePairing(ctx, input.text.toString())) { rebuild() }
+                if (bridge.savePairing(ctx, input.text.toString())) { if (thenOn) bridge.setMaster(ctx, true); rebuild() }
                 else AlertDialog.Builder(ctx).setTitle("That is not a code").setMessage("The code has 16 letters and numbers, like ABCD-EFGH-JKLM-NPQR. The letters I and O and the digits 0 and 1 are never used. Check the phone's screen and try again.").setPositiveButton("OK", null).show()
             }.setNegativeButton("Cancel", null)
         if (bridge.paired(ctx)) b.setNeutralButton("Forget the phone") { _, _ -> bridge.forgetPairing(ctx); rebuild() }
