@@ -218,7 +218,8 @@ open class BrowserActivity : Activity(), DockListener {
             // each regular tab's saved engine state (Back stack + scroll position) is read here, off the UI thread; it is parsed only when the tab is opened
             val states = HashMap<Long, String>()
             if (session != null && TabStateStore.useEngine(applicationContext, Flavor.engineVersion)) for (r in session.tabs) TabStateStore.read(applicationContext, r.id)?.let { states[r.id] = it }
-            Io.ui { restore(session, savedInstanceState, launch, states) }
+            val selThumb = if (launch == null && session != null) ThumbStore.load(applicationContext, session.selectedId) else null // the preview that covers the page area while the saved page loads
+            Io.ui { restore(session, savedInstanceState, launch, states, selThumb) }
         }
         Io.exec { db?.purge(5000, 90); UpdateJob.schedule(applicationContext); app.kestrel.browser.update.ReleaseCheckJob.schedule(applicationContext) } // after the session read: nothing at launch waits for this
     }
@@ -465,7 +466,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     // ================================================================== tabs
 
-    private fun restore(session: Session?, saved: Bundle?, launch: String?, states: Map<Long, String> = emptyMap()) {
+    private fun restore(session: Session?, saved: Bundle?, launch: String?, states: Map<Long, String> = emptyMap(), selThumb: android.graphics.Bitmap? = null) {
         sessionRestored = true // from now on saving cannot clobber the saved session
         if (session != null && session.tabs.isNotEmpty()) {
             // Replace the placeholder tab. Nothing is loaded here except the selected tab (lazy: no network at startup).
@@ -486,7 +487,7 @@ open class BrowserActivity : Activity(), DockListener {
             val sel = tabs.firstOrNull { it.id == session.selectedId } ?: tabs.last()
             // Started by a link from another app: the link's page is what the owner wants NOW. Loading the saved page as well would compete with it for the slow link and the one content process
             // (the saved tab stays in the grid and loads when it is opened). The placeholder tab is gone, so nothing may still point at it.
-            if (launch == null) show(sel) else current = null
+            if (launch == null) { if (sel.thumb == null) sel.thumb = selThumb; show(sel) } else current = null
         }
         if (launch != null) openInNewTabOrCurrent(launch)
     }
