@@ -50,13 +50,16 @@ class ShieldsBridge(
     // Element-hiding CSS is slow the first time a host is seen (the generic selector set is built once, about 2 s on the emulator): it must not hold up the verdicts queued behind it.
     private val cosmeticThread = android.os.HandlerThread("kestrel-cosmetic", android.os.Process.THREAD_PRIORITY_DEFAULT).also { it.start() }
     private val cosmeticHandler = android.os.Handler(cosmeticThread.looper)
+    // The engine image (D1) goes to the extension in chunks right after a cold start and the first build of it takes a while: on its own thread the first `css` answer of the first page
+    // (and the `gen` batches after it) never queue behind those chunks (AA3-3b; seen on the emulator as a delayed first hiding after a cold start).
+    private val imageThread = android.os.HandlerThread("kestrel-image", android.os.Process.THREAD_PRIORITY_DEFAULT).also { it.start() }
+    private val imageHandler = android.os.Handler(imageThread.looper)
 
     override fun onMessage(nativeApp: String, message: Any, sender: WebExtension.MessageSender): GeckoResult<Any>? {
         // Only OUR extension's background page may ask (content scripts relay through it with runtime.sendMessage; web pages cannot reach native messaging at all).
         if (nativeApp != "kestrel" || sender.webExtension.id != EXTENSION_ID || sender.environmentType != WebExtension.MessageSender.ENV_TYPE_EXTENSION) return null
         val raw = message
-        val slow = (raw is String && (raw.startsWith("{\"k\":\"css\"") || raw.startsWith("{\"k\":\"gen\"") || raw.startsWith("{\"k\":\"img\""))) // slow work: its own thread, never behind the page's verdicts
-        val handler = if (slow) cosmeticHandler else workerHandler
+        val handler = handlerFor(raw)
         val result = GeckoResult<Any>(handler)
         handler.post {
             val reply: Any = try {
