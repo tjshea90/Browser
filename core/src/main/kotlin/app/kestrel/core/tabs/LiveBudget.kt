@@ -44,7 +44,7 @@ object LiveBudget {
     fun afterTrim(level: Int, availMb: Int, budget: Int): Int = when {
         level >= 60 -> 1                                                           // TRIM_MEMORY_MODERATE and up: this process is a prime candidate to be killed
         level >= 40 -> if (availMb in 0 until 600) FLOOR.coerceAtMost(budget) else budget // TRIM_MEMORY_BACKGROUND
-        level >= 15 -> if (availMb in 0 until 350) FLOOR.coerceAtMost(budget) else budget // TRIM_MEMORY_RUNNING_CRITICAL (the engine also flushes its own caches here)
+        level in 15..19 -> if (availMb in 0 until 350) FLOOR.coerceAtMost(budget) else budget // TRIM_MEMORY_RUNNING_CRITICAL (the engine also flushes its own caches here)
         else -> budget
     }
 }
