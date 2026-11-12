@@ -652,6 +652,13 @@ class StreamEngine(
         changed(rec.id)
         val sink = job.sink ?: throw SinkException(Reason.STORAGE, "no file")
         if (synchronized(lock) { rec.next != job.media!!.segments.size }) throw SinkException(Reason.STORAGE, "stream incomplete")
+        val mux = job.mux
+        if (mux != null) {                                                      // the MP4 is already in the file: only its index (the moov) is left to write
+            try { val fin = mux.finish(); synchronized(lock) { job.written = fin.length; rec.note = fin.warning } }
+            catch (e: MuxException) { job.muxDirty = true; throw Failed(Reason.UNSUPPORTED, 0, restartRaw = true, why = e.message) }
+            catch (e: RuntimeException) { job.muxDirty = true; throw Failed(Reason.UNSUPPORTED, 0, restartRaw = true, why = e.toString()) }
+            job.mux = null
+        }
         sink.sync()
         // a picture whose sound is a job of its own waits for it before anything is published
         val comp: Job? = synchronized(lock) { if (rec.companionId != 0L) jobs[rec.companionId] else null }
@@ -671,7 +678,7 @@ class StreamEngine(
                     dropCompanion(comp)
                 } else synchronized(lock) { comp.rec.parentId = 0L; comp.rec.updated = clock.now() }.also { persist(comp.rec); changed(comp.rec.id) }
             }
-        } else if (finisher != null && uri != null && media.container == "ts" && !job.stop) {
+        } else if (finisher != null && uri != null && media.container == "ts" && !job.stop && mux == null && synchronized(lock) { rec.mux } != MUX_MP4) {
             // MPEG-TS plays badly in most apps: make an MP4 of it (the .ts stays if anything goes wrong). Runs between discontinuities are handed over as parts; a stream that has
             // discontinuities but whose runs were not recorded (a download started by an older version) is left as it is, because its times cannot be laid end to end.
             val parts = partsOf(rec.breaks, media.segments, job.written)
@@ -1014,9 +1021,9 @@ class StreamEngine(
             val cv = view(comp)
             val sumTotal = if (total >= 0 && cv.total >= 0) total + cv.total else -1L
             return DownloadView(r.id, r.state, r.reason, r.detail, r.name, r.mime, host, sumTotal, fetched + cv.done, speed + cv.bytesPerSec,
-                if (running && speed + cv.bytesPerSec > 0 && sumTotal > 0) (sumTotal - fetched - cv.done).coerceAtLeast(0) / (speed + cv.bytesPerSec) else -1L, job.alive + cv.connections, r.priv, r.destUri, r.created, r.updated, actions, r.destKind, estimated || cv.estimated)
+                if (running && speed + cv.bytesPerSec > 0 && sumTotal > 0) (sumTotal - fetched - cv.done).coerceAtLeast(0) / (speed + cv.bytesPerSec) else -1L, job.alive + cv.connections, r.priv, r.destUri, r.created, r.updated, actions, r.destKind, estimated || cv.estimated, r.note)
         }
-        return DownloadView(r.id, r.state, r.reason, r.detail, r.name, r.mime, host, total, fetched, speed, eta, job.alive, r.priv, r.destUri, r.created, r.updated, actions, r.destKind, estimated)
+        return DownloadView(r.id, r.state, r.reason, r.detail, r.name, r.mime, host, total, fetched, speed, eta, job.alive, r.priv, r.destUri, r.created, r.updated, actions, r.destKind, estimated, r.note)
     }
 
     companion object {
