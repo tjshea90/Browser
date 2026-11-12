@@ -119,12 +119,17 @@ interface StreamFinisher {
      */
     class Part(val offset: Long, val length: Long, val durationMs: Long)
     /** [parts] has more than one entry only when the playlist marked discontinuities; empty = the file is one run. */
-    class Joined(val uri: String, val stem: String, val container: String, val size: Long, val priv: Boolean, val destKind: Int, val parts: List<Part> = emptyList())
+    class Joined(val uri: String, val stem: String, val container: String, val size: Long, val priv: Boolean, val destKind: Int, val parts: List<Part> = emptyList()) {
+        /** Set by the finisher when it returns null: one plain phrase for why the stream stays a .ts ("there is not enough free room"). */
+        @Volatile var declined: String? = null
+    }
     class Converted(val uri: String, val name: String, val mime: String, val size: Long)
     /** Two finished files of one video (picture and sound, as DASH keeps them) to be made one MP4. */
     class Merge(val videoUri: String, val audioUri: String, val stem: String, val size: Long, val priv: Boolean, val destKind: Int)
     fun convert(j: Joined): Converted?
     fun merge(m: Merge): Converted? = null
+    /** Reads a finished MP4 back with the platform's own parser; null = it opened fine (or this finisher cannot check), else a short description of what it could not do. */
+    fun verify(uri: String): String? = null
 }
 
 /** Where job records and staged segments live. The Android layer keeps them in the app's own folder; tests use a temp folder. */
@@ -673,6 +678,10 @@ class StreamEngine(
         if (comp != null) awaitCompanion(job, comp)
         val uri = sink.publish()
         synchronized(lock) { rec.destUri = uri ?: rec.destUri; job.sink = null }
+        if (mux != null && comp == null && finisher != null && uri != null) {                // the MP4 was written by our own code: ask Android's parser whether it opens it (recorded in Diagnostics; the row says so when it does not)
+            val problem = try { finisher.verify(uri) } catch (e: Throwable) { null }
+            if (problem != null) synchronized(lock) { rec.note = listOfNotNull(rec.note, "Android's own video reader could not open the finished file ($problem); other players may still play it.").joinToString(" ") }
+        }
         val media = synchronized(lock) { job.media!! }
         var converted: StreamFinisher.Converted? = null
         if (comp != null && finisher != null && uri != null) {
@@ -691,8 +700,10 @@ class StreamEngine(
             // discontinuities but whose runs were not recorded (a download started by an older version) is left as it is, because its times cannot be laid end to end.
             val parts = partsOf(rec.breaks, media.segments, job.written)
             if (media.discontinuities == 0 || parts.size > 1) {
-                converted = try { finisher.convert(StreamFinisher.Joined(uri, rec.nameStem, media.container, job.written, rec.priv, rec.destKind, parts)) } catch (e: Throwable) { log("convert failed", e); null }
-            }
+                val j = StreamFinisher.Joined(uri, rec.nameStem, media.container, job.written, rec.priv, rec.destKind, parts)
+                converted = try { finisher.convert(j) } catch (e: Throwable) { log("convert failed", e); j.declined = "the conversion failed"; null }
+                if (converted == null) synchronized(lock) { rec.note = "Kept as a .ts file: ${j.declined ?: "it could not be converted to MP4"}." }
+            } else synchronized(lock) { rec.note = "Kept as a .ts file: this download began before the MP4 writer existed and its parts were not recorded." }
             if (converted != null) try { sinks.delete(uri) } catch (e: Exception) { /* the .ts stays next to the .mp4: harmless */ }
         }
         synchronized(lock) {

@@ -27,8 +27,37 @@ class Remuxer(private val ctx: Context, private val sinks: SinkFactory) : Stream
 
     override fun convert(j: StreamFinisher.Joined): StreamFinisher.Converted? {
         if (j.container != "ts") return null
-        if (!enoughRoom(j.size)) return declined("not enough free room (${j.size shr 20} MB needed besides the stream)")
-        return if (j.parts.size > 1) convertParts(j) else convertWhole(j)
+        if (!enoughRoom(j.size)) { j.declined = "there is not enough free room on the tablet (about ${(roomNeeded(j.size) shr 20) + 1} MB more are needed)"; return declined(j.declined!!) }
+        val r = if (j.parts.size > 1) convertParts(j) else convertWhole(j)
+        if (r == null && j.declined == null) j.declined = lastDecline ?: "Android's video converter could not read this stream"
+        return r
+    }
+
+    @Volatile private var lastDecline: String? = null
+
+    /** Reads the finished MP4 with MediaExtractor (what Android's own players use): tracks, length, the first sample and a seek to the middle. Logged to Diagnostics either way. */
+    override fun verify(uri: String): String? {
+        val ex = MediaExtractor()
+        return try {
+            ex.setDataSource(ctx, Uri.parse(uri), null)
+            var video = 0; var audio = 0; var durationUs = 0L
+            for (i in 0 until ex.trackCount) {
+                val f = ex.getTrackFormat(i); val mime = f.getString(MediaFormat.KEY_MIME) ?: continue
+                if (mime.startsWith("video/")) video++ else if (mime.startsWith("audio/")) audio++
+                if (f.containsKey(MediaFormat.KEY_DURATION)) durationUs = maxOf(durationUs, f.getLong(MediaFormat.KEY_DURATION))
+            }
+            if (video == 0) { Health.log("mp4", "check failed", "no picture track"); return "no picture track" }
+            ex.selectTrack(0)
+            val buf = ByteBuffer.allocate(4 shl 20)
+            val first = ex.readSampleData(buf, 0)
+            if (durationUs > 2_000_000) ex.seekTo(durationUs / 2, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+            val mid = ex.sampleTime
+            Health.log("mp4", "check ok", "video=$video audio=$audio ${durationUs / 1000} ms first=$first midAt=${mid / 1000} ms")
+            if (first <= 0) "no first sample" else null
+        } catch (e: Throwable) {
+            Health.log("mp4", "check failed", e.toString().take(160))
+            e.javaClass.simpleName
+        } finally { try { ex.release() } catch (e: Exception) { /* ignore */ } }
     }
 
     /** Which track of an extractor is the picture and which the sound the MP4 can hold; anything else (timed metadata, subtitles) is not part of the result. */
@@ -49,6 +78,7 @@ class Remuxer(private val ctx: Context, private val sinks: SinkFactory) : Stream
 
     private fun declined(why: String): StreamFinisher.Converted? {
         Log.w(Io.TAG, "remux declined: $why"); Health.log("remux", "declined", why)
+        lastDecline = why
         return null
     }
 
@@ -313,8 +343,11 @@ class Remuxer(private val ctx: Context, private val sinks: SinkFactory) : Stream
         return frames.size
     }
 
+    /** The MP4 is about 95 % of the stream (the transport stream's own overhead is left out); the .ts stays until the MP4 is whole. */
+    private fun roomNeeded(size: Long): Long = size / 20 * 19 + (24L shl 20)
+
     private fun enoughRoom(size: Long): Boolean = try {
         val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        StatFs(dir.absolutePath).availableBytes > size + (64L shl 20)
+        StatFs(dir.absolutePath).availableBytes > roomNeeded(size)
     } catch (e: Exception) { false }
 }

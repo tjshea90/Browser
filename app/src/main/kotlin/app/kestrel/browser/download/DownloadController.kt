@@ -107,7 +107,7 @@ object DownloadController {
                 }, name).also { it.isDaemon = true; it.start() }
             },
             Remuxer(app, streamSinks),
-            { msg, t -> android.util.Log.w(Io.TAG, msg, t) },
+            { msg, t -> android.util.Log.w(Io.TAG, msg, t); app.kestrel.browser.diag.Health.log("stream", msg.take(140)) },
             limiter = lim,
         )
         st.addListener(object : StreamEngine.Listener { override fun onChanged(id: Long) { uiChanged() } })
