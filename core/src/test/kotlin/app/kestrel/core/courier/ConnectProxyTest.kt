@@ -268,6 +268,20 @@ class ConnectProxyTest {
         s.getOutputStream().write("pong".toByteArray()); assertEquals("pong", String(readFully(s.getInputStream(), 4)))
     }
 
+    @Test fun theActivityCallbackReportsHowManyTunnelsAreOpen() {
+        val site = Site(); val seen = CopyOnWriteArrayList<Int>()
+        val p = ConnectProxy(0, loop, { _, _ -> true }, GuardedDialer({ listOf(loop.address) }, { false }), onActive = { seen.add(it) })
+        val port = p.start(); cleanups.add { p.stop() }
+        val s = Socket(loop, port); s.soTimeout = 10_000; cleanups.add { s.close() }
+        s.getOutputStream().write("CONNECT x.example:${site.port} HTTP/1.1\r\n\r\n".toByteArray())
+        assertEquals(200, readHeadOf(s.getInputStream()).first)
+        assertTrue("the first tunnel was announced as 1: $seen", seen.contains(1))
+        s.close()
+        val end = System.currentTimeMillis() + 5000
+        while (!seen.contains(0) && System.currentTimeMillis() < end) Thread.sleep(20)
+        assertTrue("and the last one closing as 0: $seen", seen.last() == 0)
+    }
+
     @Test fun statsCountTunnelsAndBytes() {
         val site = Site(); val pr = start()
         val (s, _, _) = tunnel(pr, "stats.example", site.port)
