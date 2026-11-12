@@ -851,3 +851,49 @@
 >
 > I'm continuing down the list in the background.
 <!-- sha:c815f5a97dc8 -->
+
+## 2026-11-12T21:11:02Z
+> **Kestrel G alpha23 is out.** The first part of your message repeats your last four requests; those were answered with alpha22, and their open items are listed at the bottom.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha23
+>
+> Everything below was checked on the Android 10 emulator only. Its speed means nothing, so I checked what happens, not how fast. Nothing here has been tried on your tablet or on a real LinkMeter connection.
+>
+> ## Your three new requests
+>
+> **1. One switch for the Phone helper.**
+> - The menu tile and Settings now control the same switch.
+> - **Off:** downloads, videos and pages through the phone are all off. Settings no longer shows anything switched on under an off helper, which was the "Load pages through the phone" you found still on.
+> - **On:** all of it turns on. A stronger choice you made earlier ("always wait for the phone") is kept.
+> - It stays off by default.
+>
+> **2. Long-press video: the new "Save video" sheet.**
+> - **Exact video first:** the file under your finger is preselected and marked **THIS VIDEO**.
+> - **Small or odd files:** the little .php files, previews and trackers sit under a closed group, "Other files on this page (3)". Each row there shows its file name (dl.php, getit.php, track.php) so you can tell them apart.
+> - **How it decides:** it compares each file's size against the pressed one, and keeps other qualities of the same video in the main list. Tracker-looking addresses are tucked away.
+> - **Name:** the NAME card shows the name the site gives the file (from its download header), otherwise the page title, with a **RENAME** button to edit it before saving.
+> - **Formats:** one row per quality, such as 1080p, 720p or 360p, with the file type, size and length. A big **Download** button shows the size of the chosen row.
+> - **Tested on a page I built** with three qualities and three .php-style files:
+>   - the .php files stayed hidden
+>   - a .php file whose server name is "Summer Trip 2026.mp4" showed that name
+>   - I typed "My Holiday Clip", picked 720p and pressed Download; **My Holiday Clip.mp4** (1.8 MB) appeared in Downloads
+> - **Bug found and fixed on the way:** a long press was ignored when two tabs held the same page.
+>
+> **3. Fast Wi-Fi.**
+> - **Browser side:** it already switched to the phone's own lookups and turned HTTP/3 off. Now, when it recognises LinkMeter's own tunnel, it also:
+>   - turns IPv6 off, because the tunnel blocks it and those lookups only dead-end
+>   - lets downloads give a loading page about 1 MB/s instead of 150 KB/s. The 150 KB/s was set for the capped hotspot and would slow a big download for nothing on a link this much faster
+> - **Other VPNs and no VPN:** another VPN keeps the careful values, and with no VPN nothing changes.
+> - **On screen:** Home says "Fast Wi-Fi", and Menu > Diagnostics > "Network:" says whether LinkMeter's tunnel was recognised.
+> - **LinkMeter side:** I read its tunnel and relay code and found no defect: no-delay sockets, 256 KB windows, sensible limits. I chan
+> [... 850 characters omitted ...]
+> arlier may keep the slow path.
+> 2. How tabs, Back and scrolling feel now (Menu > Diagnostics > Copy for any problem).
+> 3. For the Proton Mail slowness: the "Page loads" lines from Diagnostics after opening mail.proton.me twice, plus your keyboard app and whether an accessibility or autofill service is on.
+> 4. A yes or no on a scheduled GitHub job that compiles the ad-block lists daily.
+> 5. The private signing key. Only you can create those four secrets.
+> 6. Any site where a .ts file still appears, the download icon stays grey, or a spam page opens after play.
+> 7. Optional: project licence, landscape tab layout, Cromite comparison.
+>
+> **Next, in order:** typing lag, ad-block depth, Back up / Restore, then the Settings restyle. I already have a lead on typing: Firefox 160 has a setting that makes the keyboard shrink only the visible area instead of re-laying out the whole page. I'm testing it now.
+<!-- sha:5811858b1cdd -->
