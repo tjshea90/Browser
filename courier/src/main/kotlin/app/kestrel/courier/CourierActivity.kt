@@ -149,8 +149,9 @@ class CourierActivity : Activity() {
         CourierRuntime.proxyStats()?.let { st ->
             card {
                 addView(text("Pages for the tablet", 12f, ACCENT, bold = true))
-                addView(text(if (st.tunnels == 0L && st.active == 0) "Nothing yet. With \"Load pages through the phone\" on, the tablet's pages are fetched here, over this phone's own connection."
-                    else "${st.active} open now  ·  ${st.tunnels} opened  ·  ${bytes(st.up + st.down)} carried" + (if (st.failed > 0) "  ·  ${st.failed} could not connect" else ""), 14f, MUTED).apply { setPadding(0, dp(4), 0, 0) })
+                addView(text((if (st.tunnels == 0L && st.active == 0) "Nothing yet. With \"Load pages through the phone\" on, the tablet's pages are fetched here, over this phone's own connection."
+                    else "${st.active} open now  ·  ${st.tunnels} opened  ·  ${bytes(st.up + st.down)} carried" + (if (st.failed > 0) "  ·  ${st.failed} could not connect" else "")) +
+                    (if (st.refused > 0) "\n${st.refused} turned away (a device that is not switched on for pages)" else ""), 14f, MUTED).apply { setPadding(0, dp(4), 0, 0) })
             }
         }
 
