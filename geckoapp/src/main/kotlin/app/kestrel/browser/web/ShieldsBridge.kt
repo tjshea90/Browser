@@ -55,7 +55,7 @@ class ShieldsBridge(
         // Only OUR extension's background page may ask (content scripts relay through it with runtime.sendMessage; web pages cannot reach native messaging at all).
         if (nativeApp != "kestrel" || sender.webExtension.id != EXTENSION_ID || sender.environmentType != WebExtension.MessageSender.ENV_TYPE_EXTENSION) return null
         val raw = message
-        val slow = (raw is String && (raw.startsWith("{\"k\":\"css\"") || raw.startsWith("{\"k\":\"img\""))) // slow work: its own thread, never behind the page's verdicts
+        val slow = (raw is String && (raw.startsWith("{\"k\":\"css\"") || raw.startsWith("{\"k\":\"gen\"") || raw.startsWith("{\"k\":\"img\""))) // slow work: its own thread, never behind the page's verdicts
         val handler = if (slow) cosmeticHandler else workerHandler
         val result = GeckoResult<Any>(handler)
         handler.post {
@@ -69,6 +69,7 @@ class ShieldsBridge(
                     "st" -> { stats = EngineStats.from(m); "" }
                     "pop" -> { onPop(m); "" }
                     "css" -> cosmeticCss(m.optString("h"), m.optBoolean("top", true))
+                    "gen" -> genericCss(m.optString("h"), m.optJSONArray("t"))
                     "media" -> { onMedia(m); "" }
                     "vid" -> { onVid(m); "" }
                     else -> ""
@@ -204,7 +205,20 @@ class ShieldsBridge(
         val fs = Engine.peek() ?: return ""
         val s = Shields.effective(prefs(), host)
         if (!s.shieldsUp || !s.blockAds || !s.cosmetic) return ""
-        return fs.cosmeticCss(host, includeGeneric = top)
+        // D2: the generic selectors that name a class or an id are not sent up front; the page sends its classes and ids ([genericCss]) when this CSS starts with the marker
+        return fs.cosmeticCss(host, includeGeneric = top, tokenMode = true)
+    }
+
+    /** D2: CSS for the generic selectors that can match a page holding these classes and ids (".class" / "#id"; at most [MAX_TOKENS] are looked at), under the same Shields switches as [cosmeticCss]. */
+    private fun genericCss(host: String, tokens: org.json.JSONArray?): String {
+        if (host.isEmpty() || tokens == null || tokens.length() == 0) return ""
+        val fs = Engine.peek() ?: return ""
+        val s = Shields.effective(prefs(), host)
+        if (!s.shieldsUp || !s.blockAds || !s.cosmetic) return ""
+        val n = minOf(tokens.length(), MAX_TOKENS)
+        val list = ArrayList<String>(n)
+        for (i in 0 until n) list.add(tokens.optString(i, ""))
+        return fs.genericCssForTokens(host, list)
     }
 
     /** What the extension's engine reports about itself (`st`), shown in Diagnostics. */
