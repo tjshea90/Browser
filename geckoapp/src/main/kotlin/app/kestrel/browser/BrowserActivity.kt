@@ -1144,7 +1144,7 @@ open class BrowserActivity : Activity(), DockListener {
         val now = SystemClock.uptimeMillis()
         if (host == warmHost && now - warmAt < 30_000) return
         warmHost = host; warmAt = now
-        Io.exec { try { GeckoEngine.executorOrNull()?.speculativeConnect("https://$host/") } catch (e: Throwable) { /* only a head start */ } }
+        Io.exec { GeckoEngine.speculativeConnect("https://$host/") } // dispatched onto the Gecko thread: the public GeckoWebExecutor call is dropped by GeckoView 160 (EX-2)
     }
 
     private fun hideSuggestions() { suggestSeq++; suggestions.visibility = View.GONE; home.hideSuggestions() }

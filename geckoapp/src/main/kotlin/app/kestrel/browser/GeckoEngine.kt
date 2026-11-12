@@ -20,6 +20,26 @@ object GeckoEngine {
     /** Firefox's network stack for the download manager; null until the engine runs in this process (the activity creates it right after the first frame). */
     fun executorOrNull(): org.mozilla.geckoview.GeckoWebExecutor? = exec ?: rt?.let { r -> synchronized(this) { exec ?: org.mozilla.geckoview.GeckoWebExecutor(r).also { exec = it } } }
 
+    /**
+     * Opens the connection (DNS, TCP, TLS) to [url]'s origin in Firefox's own network stack. GeckoView 160's public call, GeckoWebExecutor.speculativeConnect, does nothing once the engine
+     * runs: its native side (widget/android/nsAppShell.cpp) returns at once unless it is called ON Gecko's main thread, and the Java wrapper calls it on the caller's thread. So the call is
+     * dispatched there (research/REVIEW-EXTERNAL-1.md 2.2, EX-2). Both classes are GeckoView internals (org.mozilla.gecko): a newer GeckoView that moves them fails to compile here, which is the
+     * signal; the monthly engine check (HANDOFF.md section 2 step 0) must confirm that "speculativeConnect still compiles and still connects" (Diagnostics counts the calls). A head start only:
+     * every failure is swallowed. Gecko itself skips it behind a proxy (the Courier PAC), by design.
+     * @return true when the call was handed to the engine
+     */
+    fun speculativeConnect(url: String): Boolean {
+        if (rt == null) return false
+        return try {
+            val gecko = org.mozilla.gecko.util.XPCOMEventTarget.mainThread() ?: return false
+            gecko.execute { try { org.mozilla.gecko.GeckoThread.speculativeConnect(url) } catch (e: Throwable) { /* only a head start */ } }
+            warmCalls++
+            true
+        } catch (e: Throwable) { false } // engine not up yet, or an internal class moved in a newer GeckoView
+    }
+    @Volatile var warmCalls = 0
+        private set
+
     fun runtime(ctx: Context): GeckoRuntime = rt ?: synchronized(this) { rt ?: create(ctx.applicationContext).also { rt = it } }
 
     private fun create(ctx: Context): GeckoRuntime {
@@ -56,6 +76,8 @@ object GeckoEngine {
             .setLnaEnabled(true).setLnaBlocking(true).setLnaBlockTrackers(true) // Local Network Access: pages cannot probe the LAN / router
             .translationsOfferPopup(false)   // never fetch translation models over the hotspot
             .automaticFontSizeAdjustment(false)
+            .doubleTapZoomingEnabled(prefs.doubleTapZoom) // off: a tap reaches the page at finger-up instead of ~300 ms after touch-down on wide pages (EX-3)
+            .inputAutoZoomEnabled(prefs.inputAutoZoom)    // the engine's own default (on); Settings can turn the animated zoom-to-field off (EX-8)
             .fontSizeFactor(prefs.textZoom / 100f)
             .preferredColorScheme(colorScheme(prefs))
             .build()
@@ -149,6 +171,8 @@ object GeckoEngine {
         val prefs = Prefs.get(ctx)
         r.settings.fontSizeFactor = prefs.textZoom / 100f
         r.settings.preferredColorScheme = colorScheme(prefs)
+        r.settings.setDoubleTapZoomingEnabled(prefs.doubleTapZoom)
+        r.settings.setInputAutoZoomEnabled(prefs.inputAutoZoom)
         applyScrollFeel(prefs.scrollFeel)
         applyNetwork(prefs)
     }

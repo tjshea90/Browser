@@ -72,6 +72,10 @@ class Prefs private constructor(ctx: Context) {
     /** Kestrel G: the blocking engine runs inside the Gecko extension (fast). Off = compatibility mode, every request asks the app (the older, slower path). Diagnostics has the switch. */
     var engineInExtension: Boolean get() = bool("eng_ext", true); set(v) = put("eng_ext", v)
     var pullRefresh: Boolean get() = bool("pull_refresh", true); set(v) = put("pull_refresh", v)
+    /** Kestrel G: double-tap to zoom a page. OFF by default: while it is allowed, Firefox holds every tap on a page wider than the screen (Desktop site, no viewport tag) for about a quarter of a second to see whether a second tap follows (research/REVIEW-EXTERNAL-1.md 3.1, EX-3). Pinch zoom is separate and always works. */
+    var doubleTapZoom: Boolean get() = bool("tap_zoom", false); set(v) = put("tap_zoom", v)
+    /** Kestrel G: zoom the page to a text box that gets focus (the engine's default, so ON). OFF removes an animated zoom + repaint at the moment typing starts (EX-8, an A/B for the typing lag). */
+    var inputAutoZoom: Boolean get() = bool("input_zoom", true); set(v) = put("input_zoom", v)
     var searchSuggestions: Boolean get() = bool("suggest", false); set(v) = put("suggest", v) // off: each keystroke would cost data + privacy
     var clearOnExit: Boolean get() = bool("clear_exit", false); set(v) = put("clear_exit", v)
 

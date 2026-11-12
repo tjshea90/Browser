@@ -2,10 +2,12 @@
 # One per line:  name = true|false|integer|"string".   They are default-branch prefs applied before Gecko starts, so "once" prefs (caches, graphics) work.
 # A name that does not exist in the bundled engine is a SILENT no-op: tools/check-gecko-prefs.sh checks every name against the real GeckoView in CI.
 # Bump kestrel.config.version when this list changes: Diagnostics reads it back to prove the file was applied.
-kestrel.config.version = 5
+kestrel.config.version = 6
 
 # --- video: no AV1 (software decode on 4x Cortex-A53); sites then choose H.264 -> MediaCodec hardware decode
 media.av1.enabled = false
+# --- images (research/REVIEW-EXTERNAL-1.md 3.2, EX-4): do not advertise JPEG XL in the image Accept header (Firefox 160 sends image/jxl and ships a Rust decoder); CDNs then answer WebP/AVIF/JPEG, which cost less CPU per pixel on 4x Cortex-A53
+image.jxl.enabled = false
 # --- the owner's hotspot is UNMETERED (2026-11-12: "No data saving is necessary"): the Wi-Fi values for media buffering again and speculative loading (link rel=prefetch) back on
 media.cache_readahead_limit = 60
 media.cache_resume_threshold = 30

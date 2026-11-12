@@ -111,6 +111,10 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
                 prefs.tabsKept = it; l.prefsChanged()
             }
         }
+        if (app.kestrel.browser.Flavor.hasScrollFeel) {
+            toggle("Double-tap to zoom", "Off (default): a tap opens a link at once. On: double-tap a page to zoom in, but on pages wider than the screen (Desktop site) every tap then waits about a quarter of a second. Pinching always works.", prefs.doubleTapZoom) { prefs.doubleTapZoom = it; l.prefsChanged() }
+            toggle("Zoom to the text box you tap", "On (default): the page zooms to a text box when you tap it. Turn it off if typing starts slowly: small boxes then stay small until you pinch.", prefs.inputAutoZoom) { prefs.inputAutoZoom = it; l.prefsChanged() }
+        }
         if (app.kestrel.browser.Flavor.hasPullRefresh) toggle("Pull down to refresh", "Drag a page down from its top edge to reload it", prefs.pullRefresh) { prefs.pullRefresh = it }
         choice("Dark pages", listOf("Automatic", "Always", "Never"), prefs.webDark) { prefs.webDark = it }
         choice("Text size", listOf("75%", "100%", "125%", "150%", "175%", "200%"), listOf(75, 100, 125, 150, 175, 200).indexOfFirst { it >= prefs.textZoom }.let { if (it < 0) 1 else it }) {
