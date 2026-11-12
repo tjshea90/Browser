@@ -97,6 +97,8 @@ class ProbeResult(val ok: Boolean, val status: Int, val bytes: Long, val ms: Lon
 class CourierClient(
     private val key: ByteArray,
     private val transport: CourierTransport,
+    /** `http://host:port`: where the finished file's address (`/v1/f/...`) is reached. */
+    val baseUrl: String = "",
     private val clock: Clock = Clock.System,
     private val rng: SecureRandom = SecureRandom(),
 ) {
@@ -105,7 +107,7 @@ class CourierClient(
         private set
     private var lastTs = 0L
 
-    constructor(host: String, port: Int, key: ByteArray) : this(key, SocketTransport(host, port))
+    constructor(host: String, port: Int, key: ByteArray) : this(key, SocketTransport(host, port), "http://$host:$port")
 
     @Synchronized private fun nextTs(): Long {
         val now = clock.now() + skewMs
