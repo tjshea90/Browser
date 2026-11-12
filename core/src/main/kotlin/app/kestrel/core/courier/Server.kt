@@ -53,7 +53,7 @@ class CourierServer(
         server = ss
         pool = Executors.newCachedThreadPool(named("courier-conn"))
         val wd = Executors.newSingleThreadScheduledExecutor(named("courier-watch"))
-        wd.scheduleWithFixedDelay({ sweep() }, 5, 5, TimeUnit.SECONDS)
+        wd.scheduleWithFixedDelay({ sweep() }, sweepMs, sweepMs, TimeUnit.MILLISECONDS)
         watchdog = wd
         acceptor = Thread({ acceptLoop(ss) }, "courier-accept").also { it.isDaemon = true; it.start() }
         return ss.localPort
