@@ -29,11 +29,14 @@
 
   function hostOf(u) { try { return new URL(u, location.href).hostname.toLowerCase(); } catch (e) { return ''; } }
   function absolute(u) { try { return new URL(u, location.href).href; } catch (e) { return ''; } }
-  function sameSite(a, b) {
-    a = (a || '').replace(/^www\./, ''); b = (b || '').replace(/^www\./, '');
-    if (!a || !b) return false;
-    return a === b || a.slice(-(b.length + 1)) === '.' + b || b.slice(-(a.length + 1)) === '.' + a;
+  // registrable domain without a Public Suffix List: the last two labels, or three under a two-letter country code with a generic second level (example.co.uk)
+  function registrable(h) {
+    var p = (h || '').toLowerCase().split('.');
+    if (p.length <= 2) return p.join('.');
+    var cc = p[p.length - 1].length === 2, generic = /^(co|com|org|net|gov|edu|ac|ne|or|go)$/.test(p[p.length - 2]);
+    return p.slice(-(cc && generic ? 3 : 2)).join('.');
   }
+  function sameSite(a, b) { return !!a && !!b && registrable(a) === registrable(b); }
   // The page's own address for "same site": inside an iframe that is the iframe's host, so an embedded player may open ITS OWN pages only; the embedding page is checked the same way.
   function pageHost() { return location.hostname.toLowerCase(); }
 
