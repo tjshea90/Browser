@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.Process
 import app.kestrel.browser.Io
+import app.kestrel.browser.diag.Health
 import app.kestrel.browser.data.Prefs
 import app.kestrel.browser.ProcessLife
 import app.kestrel.core.download.Clock
@@ -107,7 +108,7 @@ object DownloadController {
                 }, name).also { it.isDaemon = true; it.start() }
             },
             Remuxer(app, streamSinks),
-            { msg, t -> android.util.Log.w(Io.TAG, msg, t); app.kestrel.browser.diag.Health.log("stream", msg.take(140)) },
+            { msg, t -> android.util.Log.w(Io.TAG, msg, t); Health.log("stream", msg.take(140)) },
             limiter = lim,
         )
         st.addListener(object : StreamEngine.Listener { override fun onChanged(id: Long) { uiChanged() } })
