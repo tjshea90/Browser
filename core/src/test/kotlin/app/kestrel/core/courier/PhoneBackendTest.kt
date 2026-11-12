@@ -334,8 +334,12 @@ class PhoneBackendTest {
     /** Stands in for the phone's platform converter: makes ONE file of the picture and the sound so the test can see what was merged, and counts how often it was asked. */
     private class MergeFake(private val sinks: SinkFactory) : StreamFinisher {
         val merged = java.util.concurrent.atomic.AtomicInteger()
+        val asked = java.util.concurrent.atomic.AtomicInteger()
+        @Volatile var fails = false
         override fun convert(j: StreamFinisher.Joined): StreamFinisher.Converted? = null
         override fun merge(m: StreamFinisher.Merge): StreamFinisher.Converted? {
+            asked.incrementAndGet()
+            if (fails) return null
             val v = File(java.net.URI(m.videoUri)).readBytes(); val a = File(java.net.URI(m.audioUri)).readBytes()
             val out = "MERGED|".toByteArray() + v + a
             val sink = sinks.create(m.stem + ".mp4", "video/mp4", -1, m.priv, m.destKind)
@@ -371,6 +375,26 @@ class PhoneBackendTest {
         assertTrue("picture and sound both came from the phone's connection", pcdn.requests.any { it.contains("/a/s0.ts") } && pcdn.requests.any { it.contains("/v/s0.ts") })
         await("the phone's copy is gone") { phone.host.jobCount == 0 }
         assertEquals("Copied from your phone", t.backend.noteFor(row.id))
+    }
+
+    @Test(timeout = 120_000) fun pictureAndSoundThatThePhoneCannotMergeAreDownloadedByTheTabletAndLeaveNothingOnThePhone() {
+        val pcdn = FakeCdn().also { it.chunkDelayMs = 3 }
+        var fin: MergeFake? = null
+        val phone = Phone(FakeServer(testBytes(10)), root, cleanups, cdn = pcdn, finisherOf = { s -> MergeFake(s).also { it.fails = true; fin = it } })
+        val tcdn = FakeCdn()
+        val pic = clip(tsPlaylist(pcdn)); tsPlaylist(tcdn); soundPlaylist(pcdn)
+        val t = Tablet(FakeServer(testBytes(10)), tabletCdn = tcdn)
+        t.to(phone); t.startBackend()
+        t.backend.offloadStream(StreamSource(pic.playlistUrl, pic.playlistText, pic.pageUrl, pic.nameStem, pic.headers, pic.fetcher, meteredOk = true, companion = soundPlaylist(tcdn)))!!
+        await("the tablet downloads it itself after the phone gave up") { t.streamEngine!!.views().any { it.state == DlState.COMPLETED } }
+        assertEquals("the phone's converter was asked and said no", 1, fin!!.asked.get())
+        val note = t.backend.noteFor(t.streamEngine!!.views().first().id)!!
+        assertTrue(note, note.startsWith("Downloading here: your phone could not convert this video"))
+        assertTrue("the tablet fetched the picture itself", tcdn.requests.any { it.contains("/v/s0.ts") })
+        await("the phone forgot the job") { phone.host.jobCount == 0 }
+        await("no picture without sound, no stray sound file, no stream record is left on the phone") {
+            File(phone.dir, "staging").walkTopDown().none { it.isFile } && File(phone.dir, "streams").listFiles { f -> f.name.endsWith(".json") }.orEmpty().isEmpty()
+        }
     }
 
     @Test fun aSoundThatIsNotAWebAddressKeepsTheWholeVideoOnTheTablet() {

@@ -379,6 +379,7 @@ class PhoneBackend(
         Reason.BAD_CONTENT -> "the website sent a page instead of the file"
         Reason.NETWORK, Reason.STALLED -> "your phone lost its connection"
         Reason.TLS -> "your phone could not make a secure connection"
+        Reason.UNSUPPORTED -> "your phone could not convert this video"
         else -> "your phone could not download it"
     }
 

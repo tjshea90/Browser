@@ -41,6 +41,18 @@ class CourierPartsTest {
         assertTrue(sinks.delete(done)); assertFalse(f.exists()); assertFalse("the folder goes with it", f.parentFile.exists())
     }
 
+    @Test fun aStagedFileHandsItsDescriptorToTheMediaMuxer() {
+        val sinks = StagingSinks(File(root, "s"))
+        val s = sinks.create("merged.mp4", "video/mp4", -1, false)
+        val fd = s.descriptor()
+        assertNotNull("the platform muxer needs a descriptor to write the converted MP4 into", fd)
+        java.io.FileOutputStream(fd!!).use { it.write(byteArrayOf(9, 8, 7, 6)) }                 // what a muxer does through its own duplicate of the descriptor
+        s.sync()
+        assertEquals(4L, s.length())
+        val f = sinks.fileOf(s.publish())!!
+        assertArrayEquals(byteArrayOf(9, 8, 7, 6), f.readBytes())
+    }
+
     @Test fun twoFilesWithOneNameNeverShareAFile() {
         val sinks = StagingSinks(File(root, "s"))
         val a = sinks.create("video.mp4", null, 10, false); val b = sinks.create("video.mp4", null, 10, false)
