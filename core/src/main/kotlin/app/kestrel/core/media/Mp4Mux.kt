@@ -259,24 +259,24 @@ class Mp4Mux(private val out: MuxOut, private val nowMs: () -> Long = { System.c
         val hasAudio = audioCount > 0 && asc != null && sampleRate > 0
         val vFirst = vDts[0]
         val vMediaDur = vDts[videoCount - 1] - vFirst + lastVideoDuration()
-        val vPts0 = vFirst + vCts[0]
-        val aFirst90 = if (hasAudio) aFirstTick * 90000L / sampleRate else Long.MAX_VALUE
-        val aMediaDur = if (hasAudio) aEndTick - aFirstTick else 0L
-        val p0 = minOf(vPts0, aFirst90)
-        val vDelta = vFirst - p0                                                // > 0: the picture starts later than the earliest sample, < 0: skip into the media
-        val vLead = maxOf(vDelta, 0L); val vSkip = maxOf(-vDelta, 0L)
-        // the edit must run to the END of the last picture SHOWN (B-frames are shown after they are decoded), or a player cuts the last frames off
-        var vCtEnd = 0L
+        // Composition span of the pictures on the media timeline (0 = the first sample's decode time): B-frames are SHOWN after they are decoded, so the first picture shown is not at 0 and the last
+        // one ends after the last decode time. The edit list must start at the first shown picture and end after the last, or a player cuts frames off.
+        var vMinCt = Long.MAX_VALUE; var vCtEnd = 0L
         for (i in 0 until videoCount) {
             val dur = if (i < videoCount - 1) vDts[i + 1] - vDts[i] else lastVideoDuration().toLong()
-            val end = vDts[i] - vFirst + vCts[i] + dur
-            if (end > vCtEnd) vCtEnd = end
+            val ct = vDts[i] - vFirst + vCts[i]
+            if (ct < vMinCt) vMinCt = ct
+            if (ct + dur > vCtEnd) vCtEnd = ct + dur
         }
-        val vEditDur = ms(maxOf(vCtEnd, vMediaDur) - vSkip, 90000L)
-        val vTrackDur = ms(vLead, 90000L) + vEditDur
-        val aLead = if (hasAudio) aFirst90 - p0 else 0L
+        val aFirst90 = if (hasAudio) aFirstTick * 90000L / sampleRate else Long.MAX_VALUE
+        val aMediaDur = if (hasAudio) aEndTick - aFirstTick else 0L
+        val p0 = minOf(vFirst + vMinCt, aFirst90)                                // presentation zero: the earliest thing that is shown or heard
+        val vStart = vFirst + vMinCt - p0                                         // how long after zero the first picture is shown (90 kHz ticks)
+        val vEditDur = ms(vCtEnd - vMinCt, 90000L)
+        val vTrackDur = ms(vStart, 90000L) + vEditDur
+        val aStart = if (hasAudio) aFirst90 - p0 else 0L
         val aEditDur = if (hasAudio) ms(aMediaDur, sampleRate.toLong()) else 0L
-        val aTrackDur = if (hasAudio) ms(aLead, 90000L) + aEditDur else 0L
+        val aTrackDur = if (hasAudio) ms(aStart, 90000L) + aEditDur else 0L
         val movieDur = maxOf(vTrackDur, aTrackDur)
         val created = nowMs() / 1000 + 2082844800L
 
