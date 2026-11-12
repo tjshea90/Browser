@@ -135,7 +135,7 @@ open class BrowserActivity : Activity(), DockListener {
     private lateinit var noticeBar: app.kestrel.browser.ui.NoticeBar // "Blocked a pop-up ... Open", over the bottom of the page
     private lateinit var restoreOverlay: RestoreOverlay // over the page view while a page whose engine process died comes back (last preview instead of white)
     private var restoringTab: Tab? = null
-    private val restoreTimeout = Runnable { hideRestoring() }
+    private val restoreTimeout = Runnable { hideRestoring("timeout") }
     private var lastTrim = 0           // the newest onTrimMemory level and when it came: logged with every process death (the evidence for "why did the page reload")
     private var lastTrimAt = 0L
     private lateinit var findBar: FindBar
@@ -541,7 +541,7 @@ open class BrowserActivity : Activity(), DockListener {
         val prev = current
         if (prev != null && prev !== tab) { prev.session?.setActive(false); tab.showHome = false } // coming back to a tab shows its page, not the Home overlay
         current = tab
-        if (restoringTab != null && restoringTab !== tab) hideRestoring() // another tab came to the front: the overlay belonged to the one that died
+        if (restoringTab != null && restoringTab !== tab) hideRestoring("other-tab") // another tab came to the front: the overlay belonged to the one that died
         tab.lastActive = System.currentTimeMillis()
         applySkin()
         attachContent(tab)
@@ -721,7 +721,7 @@ open class BrowserActivity : Activity(), DockListener {
         val idx = tabs.indexOf(tab)
         if (idx < 0) return
         tabs.removeAt(idx)
-        if (tab === restoringTab) hideRestoring()
+        if (tab === restoringTab) hideRestoring("closed")
         tab.thumb = null
         val appCtx = applicationContext
         Io.exec { ThumbStore.delete(appCtx, tab.id); TabStateStore.delete(appCtx, tab.id) }
@@ -1631,14 +1631,14 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     internal fun errorChanged(tab: Tab) {
-        if (tab === restoringTab && tab.error != null) hideRestoring() // the error screen replaces the preview
+        if (tab === restoringTab && tab.error != null) hideRestoring("error") // the error screen replaces the preview
         if (tab === current) { attachContent(tab); updateUi() }
     }
 
-    internal fun pageFinished(tab: Tab) {
+    internal fun pageFinished(tab: Tab, real: Boolean = true) {
         if (tab === scrollTestTab) { scrollTestTab = null; Io.main.postDelayed({ startScrollTest(tab) }, 2500); return } // the bundled test page: nothing else to do for it
         flushCounters()
-        if (tab === restoringTab) hideRestoring() // the load ended (a page that never reported its first paint must not keep the preview up)
+        if (real && tab === restoringTab) hideRestoring("page-stop") // the load ended (a page that never reported its first paint must not keep the preview up)
         // A failed or blocked load is not a visit (typos and malware URLs would otherwise fill history and the top sites).
         if (!tab.isPrivateTab && tab.error == null && tab.url.startsWith("http")) { val u = withoutUserinfo(tab.url); val ti = tab.title; Io.exec { db?.recordVisit(u, ti) } }
         scheduleSave()
@@ -1684,7 +1684,7 @@ open class BrowserActivity : Activity(), DockListener {
         Health.log("gecko", if (crashed) "recover-after-crash" else "recover-after-kill", "n=${tab.crashCount} state=$withState current=${tab === current} ${memFacts()} ${url.take(60)}")
         Health.count(if (withState) "gecko.recover.state" else "gecko.recover.url")
         if (tab === current) {
-            if (tab.crashCount >= 3) { tab.error = ErrorScreen.Crashed(url); tab.pendingLoad = null; hideRestoring() }
+            if (tab.crashCount >= 3) { tab.error = ErrorScreen.Crashed(url); tab.pendingLoad = null; hideRestoring("crash-loop") }
             else if (!ProcessLife.uiVisible) {
                 // The app is in the background: Android took the memory back, and starting a new engine process now (150 MB or more) would only take it from the app the user is in. onResume
                 // brings the page back (it already revives a current tab that has no session), behind the same preview.
@@ -1698,6 +1698,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     private fun showRestoring(tab: Tab, crashed: Boolean, message: String? = null) {
+        Health.log("tabs", "cover-show", "tab=${tab.id} thumb=${tab.thumb != null}")
         restoringTab = tab
         val thumb = tab.thumb
         restoreOverlay.show(thumb, message ?: if (crashed) "The page stopped - bringing it back" else "Page freed to save memory - bringing it back")
@@ -1705,14 +1706,15 @@ open class BrowserActivity : Activity(), DockListener {
         Io.main.postDelayed(restoreTimeout, 20_000) // never stay up for ever (a page that never paints, a dead connection)
     }
 
-    private fun hideRestoring() {
+    private fun hideRestoring(why: String = "") {
+        if (restoringTab != null) Health.log("tabs", "cover-hide", "tab=${restoringTab?.id} why=$why")
         Io.main.removeCallbacks(restoreTimeout)
         restoringTab = null
         restoreOverlay.hide()
     }
 
     /** The engine painted real content for [tab] (called from ContentDelegate.onFirstContentfulPaint). */
-    internal fun firstPaint(tab: Tab) { if (tab === restoringTab) hideRestoring() }
+    internal fun firstPaint(tab: Tab) { if (tab === restoringTab) hideRestoring("first-paint") }
 
     // ================================================================== back handling (works on Android 10 and on 16's predictive back)
 

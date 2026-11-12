@@ -149,7 +149,10 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
 
     // ------------------------------------------------------------------ progress
 
+    private var lastStartUrl = "" // the address of the load that started last: a new session first loads about:blank, and that load ending is not "the page is ready"
+
     override fun onPageStart(session: GeckoSession, url: String) {
+        lastStartUrl = url
         app.kestrel.browser.diag.PageTimes.start(tab, url, tab.isPrivateTab)
         tab.loading = true
         tab.progress = maxOf(tab.progress, 5)
@@ -167,7 +170,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         tab.loading = false
         tab.progress = 100
         tab.savedCopyOnce = false
-        a.pageFinished(tab)
+        a.pageFinished(tab, !lastStartUrl.startsWith("about:"))
     }
 
     override fun onProgressChange(session: GeckoSession, progress: Int) {
