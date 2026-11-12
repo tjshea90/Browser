@@ -198,6 +198,7 @@ class TsToMp4(
     // ================================================================================================ picture
 
     override fun video(es: ByteArray, len: Int, pts: Long, dts: Long) {
+        if (resolved || skipping) peekFormatChange(es, len)
         if (skipping) return
         val capturing = !videoStarted
         val s = sample
@@ -225,6 +226,22 @@ class TsToMp4(
             if (pendBytes > MAX_PENDING) { audioIgnored = true }             // the sound never showed up: go on without it
             if (keyComplete()) resolve()
         }
+    }
+
+    /**
+     * A new picture size / profile announced by an SPS in the middle of a run is a splice nobody tagged (live-to-VOD streams, careless advertising servers): it starts a run of its own, judged
+     * like a tagged one of unknown length (kept only when it is the main format again, left out otherwise). Looks at the first 2 KB of the access unit only (parameter sets come before the slices).
+     */
+    private fun peekFormatChange(es: ByteArray, len: Int) {
+        val known = rSpsInfo ?: return
+        val w = minOf(len, 2048)
+        var found: ByteArray? = null
+        Avc.forEachNal(es, 0, w) { a, e -> if (found == null && (es[a].toInt() and 0x1F) == Avc.NAL_SPS && e < w - 4) found = es.copyOfRange(a, e) }
+        val sps = found ?: return
+        if (java.util.Arrays.equals(sps, rSps)) return
+        val info = Avc.parseSps(sps, 0, sps.size) ?: return
+        if (info.width == known.width && info.height == known.height && info.profile == known.profile && info.chromaFormat == known.chromaFormat && info.bitDepthLuma == known.bitDepthLuma) return
+        startRun(0L, resumed = false)
     }
 
     private fun emitVideo(b: ByteArray, n: Int, dts: Long, pts: Long, sync: Boolean) {

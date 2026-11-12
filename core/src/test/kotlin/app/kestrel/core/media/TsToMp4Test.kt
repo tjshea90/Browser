@@ -162,6 +162,21 @@ class TsToMp4Test {
         assertDecodes(file)
     }
 
+    @Test fun anUnmarkedSpliceOfAnotherFormatIsLeftOutAndTheFilmCarriesOn() {
+        // no #EXT-X-DISCONTINUITY anywhere: the advertisement is recognised by its other picture size, and the film is recognised again when it returns
+        val segs = listOf(Seg("a_0.ts"), Seg("a_1.ts"), Seg("ad_0.ts"), Seg("a_0.ts"), Seg("a_1.ts"))
+        val (file, res) = mux(segs)
+        assertNotNull(res.first.warning)
+        val r = Mp4Reader(file)
+        val v = r.track("vide")!!
+        assertEquals(128, v.width); assertEquals(200, v.samples.size)
+        assertEquals(344 - 4, r.track("soun")!!.samples.size)
+        val deltas = v.samples.zipWithNext { x, y -> y.dts - x.dts }
+        assertTrue("largest step ${deltas.max()}", deltas.max() <= 3600 + 6000)
+        checkVideoSamples(r, v); checkAudioSamples(r, r.track("soun")!!)
+        assertDecodes(file)
+    }
+
     @Test fun aLongerDifferentRunReplacesAnAdvertisementBeforeTheFilm() {
         val segs = listOf(Seg("ad_0.ts"), Seg("a_0.ts", disc = true), Seg("a_1.ts"), Seg("a_2.ts"))
         val (file, res) = mux(segs)
