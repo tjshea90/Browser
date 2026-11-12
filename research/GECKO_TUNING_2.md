@@ -28,7 +28,7 @@ EXISTS/MISSING method (stricter than tools/check-gecko-prefs.sh, which accepts a
 | omni.ja is already Mozilla's optimized jar: 4-byte preload size (1,859,033), central directory FIRST, entries in startup-access order, 4086 files, 47.7 MB raw / 14.5 MB deflated. No baseline profile in the AAR. No hunspell in libxul; GV sets `layout.spellcheckDefault` 0, so no inline spellcheck cost. | [V S1, S14] |
 | Android-specific defaults: `security.OCSP.enabled` 2 (EV only, so no OCSP round trip for DV certs), `security.pki.crlite_channel` "compat", `gfx.webrender.enable-low-priority-pool` false, `enable-subpixel-aa` false, `batched-upload-threshold` 262144, `program-binary-disk` true, `javascript.options.gc_on_memory_pressure` off, `network.http.active_tab_priority` false, `largeKeepaliveFactor` 10. | [V S2] |
 | Spectre JIT mitigations: `index_masking`, `object_mitigations`, `string_mitigations`, `value_masking` all true; `disable_for_isolated_content` true but only helps Fission-isolated processes (shipped in 119 for Fission only). Fenix on Android runs with the mitigations on too. | [V S2, S10] |
-| Happy Eyeballs v2, `retry_with_another_half_open`, `http3.retry_different_ip_family` are Nightly / early-beta only; the script "navigation cache" is `@IS_NIGHTLY_BUILD@` (off in release). | [V S2] |
+| The Rust Happy Eyeballs (`network.http.happy_eyeballs_enabled`) is Nightly-only; `retry_with_another_half_open` and `http3.retry_different_ip_family` are early-beta-or-earlier only; the script "navigation cache" is `@IS_NIGHTLY_BUILD@`. All off in release. | [V S2] |
 
 ## 2. A. Typing lag and heavy single-page apps
 ### 2.1 Proton Mail: what is known and what is not
