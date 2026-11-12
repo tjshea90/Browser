@@ -225,6 +225,7 @@ open class BrowserActivity : Activity(), DockListener {
     override fun onResume() {
         super.onResume()
         Health.log("life", "resume"); Health.startWatchdog(); Health.watchFrames(window)
+        PageProxy.refresh()                                           // pages through the phone: renew the phone's proxy door now (the app was away; the Wi-Fi may have changed)
         val t = current
         if (t != null && !t.isNewTab && t.session == null) attachContent(t) // hibernated while we were in the background: bring it back
         t?.session?.setActive(true)
@@ -1012,7 +1013,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     // ---- menu
     private object M { const val REFRESH = 14; const val DIAG = 15; const val NEW = 1; const val PRIVATE = 2; const val FIND = 3; const val SHARE = 4; const val BOOKMARK = 5; const val BOOKMARKS = 6; const val HISTORY = 7
-        const val DOWNLOADS = 8; const val UPDATE = 17; const val VIDEO = 18; const val DESKTOP = 9; const val IMAGES = 10; const val PRINT = 11; const val SETTINGS = 12; const val CLOSE_ALL = 16 }
+        const val DOWNLOADS = 8; const val UPDATE = 17; const val VIDEO = 18; const val DESKTOP = 9; const val IMAGES = 10; const val PRINT = 11; const val SETTINGS = 12; const val CLOSE_ALL = 16; const val PHONE = 19 }
 
     override fun onMenu(anchor: View) {
         val t = current
@@ -1032,6 +1033,9 @@ open class BrowserActivity : Activity(), DockListener {
         val dl = DownloadController.counts()
         val dlActive = dl[0] + dl[1]
         items.add(MenuItemSpec(M.DOWNLOADS, if (dlActive > 0) "Downloads ($dlActive active)" else "Downloads", null, R.drawable.ic_download, accent = dlActive > 0))
+        // the one switch for "hotspot only, the phone does nothing" (saves the phone's battery); before a phone is paired it leads to the pairing screen
+        val helperPaired = PhoneBridge.paired(this); val helperOn = helperPaired && PhoneBridge.mode(this) != PhoneMode.OFF
+        items.add(MenuItemSpec(M.PHONE, if (!helperPaired) "Phone helper: set up" else if (helperOn) "Phone helper: on" else "Phone helper: off", if (helperPaired) helperOn else null, R.drawable.ic_phone))
         if (t != null && !t.isNewTab) items.add(MenuItemSpec(M.REFRESH, "Refresh screen", null, R.drawable.ic_refresh))
         if (!isPrivate) items.add(MenuItemSpec(M.SETTINGS, "Settings", null, R.drawable.ic_settings))
         items.add(MenuItemSpec(M.DIAG, "Diagnostics", null, R.drawable.ic_pulse))
@@ -1059,6 +1063,7 @@ open class BrowserActivity : Activity(), DockListener {
             M.BOOKMARKS -> showList(true)
             M.HISTORY -> showList(false)
             M.DOWNLOADS -> showDownloads()
+            M.PHONE -> if (!PhoneBridge.paired(this)) showSettings() else toast(if (PhoneBridge.toggleHelper(this)) "Phone helper on: downloads and pages use your phone" else "Phone helper off: hotspot only, the phone does nothing")
             M.DESKTOP -> t?.let { tab ->
                 tab.desktop = !tab.desktop
                 tab.session?.let { s ->
