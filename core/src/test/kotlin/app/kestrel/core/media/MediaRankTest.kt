@@ -32,6 +32,14 @@ class MediaRankTest {
         assertEquals(1, r.other.size)
     }
 
+    @Test fun lowerQualitiesOfTheSameVideoStayEvenWhenTheyAreMuchSmaller() {
+        val r = MediaRank.rank(listOf(
+            file("https://cdn.example/v/clip_1080p.mp4", 150 * MB, h = 1080), file("https://cdn.example/v/clip_360p.mp4", 12 * MB, h = 360), // 8 % of the big one: a quality, not a clip
+            file("https://site.example/track.php?id=3", 300 * 1024), file("https://cdn.example/v/clip_preview.mp4", 2 * MB)))
+        assertEquals(listOf("https://cdn.example/v/clip_1080p.mp4", "https://cdn.example/v/clip_360p.mp4"), urls(r.main))
+        assertEquals(2, r.other.size)
+    }
+
     @Test fun aScriptEndpointThatIsReallyBigIsStillTheVideo() {
         val r = MediaRank.rank(listOf(file("https://site.example/get_file.php?id=7&token=abc", 60 * MB), file("https://site.example/track.php?x", 200 * 1024)))
         assertEquals(1, r.main.size); assertTrue(r.main[0].url.contains("get_file.php")); assertEquals(1, r.other.size)

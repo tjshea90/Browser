@@ -65,13 +65,16 @@ object MediaRank {
 
     private fun byRank(all: List<MediaCandidate>): Result {
         val files = all.filter { it.kind == MediaKind.FILE && !it.audioOnly }
-        val biggest = files.maxOfOrNull { it.length } ?: -1L
+        val ref = files.filter { it.length > 0 }.maxByOrNull { it.length }
+        val biggest = ref?.length ?: -1L
         val topFrame = files.filter { it.frame.isEmpty() }.maxOfOrNull { it.length } ?: -1L
         val hasVideo = all.any { it.kind != MediaKind.FILE || !it.audioOnly }
         val main = ArrayList<MediaCandidate>(); val other = ArrayList<MediaCandidate>()
         for (c in all) {
             if (c.kind != MediaKind.FILE) { main.add(c); continue }
-            if (junk(c, biggest, topFrame, hasVideo)) other.add(c) else main.add(c)
+            // a lower quality of the biggest file is small by nature (a 360p is a tenth of a 1080p): never junk because of its size
+            if (ref != null && c !== ref && sameVideo(ref, c)) main.add(c)
+            else if (junk(c, biggest, topFrame, hasVideo)) other.add(c) else main.add(c)
         }
         // nothing but small files: the biggest one is still the best guess, never an empty sheet
         if (main.none { it.kind != MediaKind.FILE || !it.audioOnly } && other.isNotEmpty()) {
