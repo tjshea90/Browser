@@ -218,8 +218,11 @@ class ShieldsBridge(
         val n = minOf(tokens.length(), MAX_TOKENS)
         val list = ArrayList<String>(n)
         for (i in 0 until n) list.add(tokens.optString(i, ""))
-        return fs.genericCssForTokens(host, list)
+        val css = fs.genericCssForTokens(host, list)
+        if (genLogged < 40) { genLogged++; app.kestrel.browser.diag.Health.log("cosmetic", "gen", "$host tokens=$n css=${css.length}") } // the first batches of a session, for Diagnostics
+        return css
     }
+    private var genLogged = 0
 
     /** What the extension's engine reports about itself (`st`), shown in Diagnostics. */
     class EngineStats(
