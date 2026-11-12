@@ -96,9 +96,18 @@ object DownloadController {
     @Volatile private var netMetered = true
     private var netCallback: ConnectivityManager.NetworkCallback? = null
     private val lastStates = HashMap<Long, DlState>()
-    /** Threads of the download engine (control thread + workers): at background priority while the browser is on screen (scrolling comes first), at normal priority otherwise (full speed with the screen off). */
+    /**
+     * Threads of the download engine (control thread + workers): nice 9 while the browser is on screen, normal priority otherwise (full speed with the screen off).
+     * Nice 9, not 10: Android moves every thread at nice 10 or more into its BACKGROUND scheduling group (a small share of few cores; research/HW_SPEED.md H1), where a download at Fast Wi-Fi speed
+     * (3-5 MB/s through TLS and three workers) crawls. At nice 9 the thread stays in the foreground group but has about an eighth of the weight of a normal one, so it still yields to the UI
+     * and to Gecko and only takes cores they leave idle; the rate limit while a page loads stays the real protection (research/REVIEW-EXTERNAL-1.md 6.2, EX-9).
+     */
     private val engineTids = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
-    private fun threadPrio(): Int = if (ProcessLife.uiVisible) Process.THREAD_PRIORITY_BACKGROUND else Process.THREAD_PRIORITY_DEFAULT
+    private fun threadPrio(): Int = priorityFor(ProcessLife.uiVisible)
+
+    /** The priority of a download thread (nice value) for a browser that is on screen or not; public for its test. */
+    fun priorityFor(uiVisible: Boolean): Int =
+        if (uiVisible) Process.THREAD_PRIORITY_BACKGROUND + Process.THREAD_PRIORITY_MORE_FAVORABLE else Process.THREAD_PRIORITY_DEFAULT
 
     /** The browser came to the front / went away: re-prioritise every engine thread. */
     fun uiVisibilityChanged() {
