@@ -15,17 +15,27 @@ object ThumbStore {
     const val WIDTH = 240
     private const val MAX_IN_MEMORY = 20
 
-    /** Scale a full-size capture down to a preview (call off the UI thread). The capture is recycled. */
-    fun shrink(full: Bitmap): Bitmap? = try {
-        if (full.width <= 0 || full.height <= 0) null else {
-            val h = (full.height.toLong() * WIDTH / full.width).toInt().coerceAtLeast(1)
-            val scaled = Bitmap.createScaledBitmap(full, WIDTH, h, true)
+    /** Width of the picture BackPictures keeps (the tab-grid preview is [WIDTH]). */
+    const val BACK_WIDTH = 480
+
+    private fun scaleTo(src: Bitmap, width: Int): Bitmap? = try {
+        if (src.width <= 0 || src.height <= 0) null else {
+            val h = (src.height.toLong() * width / src.width).toInt().coerceAtLeast(1)
+            val scaled = Bitmap.createScaledBitmap(src, width, h, true)
             val out = scaled.copy(Bitmap.Config.RGB_565, false) ?: scaled
             if (out !== scaled) scaled.recycle()
-            if (full !== scaled && !full.isRecycled) full.recycle()
             out
         }
     } catch (e: Throwable) { null }
+
+    /** Scale a full-size capture down to a preview (call off the UI thread). The capture is recycled. */
+    fun shrink(full: Bitmap): Bitmap? = try { scaleTo(full, WIDTH) } finally { if (!full.isRecycled) full.recycle() }
+
+    /** One capture, two sizes (call off the UI thread; the capture is recycled): the grid preview and the [BACK_WIDTH] picture for Back. The small one is made from the big one. */
+    fun shrinkWithPicture(full: Bitmap): Pair<Bitmap?, Bitmap?> {
+        val big = try { scaleTo(full, BACK_WIDTH) } finally { if (!full.isRecycled) full.recycle() }
+        return Pair(if (big != null) scaleTo(big, WIDTH) else null, big)
+    }
 
     private fun dir(ctx: Context) = File(ctx.cacheDir, "thumbs")
 

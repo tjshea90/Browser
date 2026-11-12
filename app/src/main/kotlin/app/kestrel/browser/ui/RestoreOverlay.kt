@@ -20,6 +20,7 @@ class RestoreOverlay(ctx: Context, private var pal: Pal) : View(ctx) {
     private var text = ""
     private val picture = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
     private val dim = Paint().apply { color = 0xB3000000.toInt() }
+    private var dimAlpha = 0xB3
     private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; typeface = Typeface.DEFAULT_BOLD; textSize = ctx.dpf(15f) }
     private val chip = Paint(Paint.ANTI_ALIAS_FLAG)
     private val chipEdge = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = ctx.dpf(1.5f) }
@@ -38,8 +39,10 @@ class RestoreOverlay(ctx: Context, private var pal: Pal) : View(ctx) {
     fun setPal(p: Pal) { pal = p; invalidate() }
 
     /** Show [preview] (may be null: then a plain dark panel) with [message] on a chip in the middle. */
-    fun show(preview: Bitmap?, message: String) {
+    fun show(preview: Bitmap?, message: String, dimAlpha: Int = 0xB3) {
         bmp = preview
+        this.dimAlpha = dimAlpha
+        dim.color = dimAlpha shl 24
         text = message
         contentDescription = message
         visibility = VISIBLE
