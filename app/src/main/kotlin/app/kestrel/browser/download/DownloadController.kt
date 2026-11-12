@@ -100,7 +100,7 @@ object DownloadController {
         )
         st.addListener(object : StreamEngine.Listener { override fun onChanged(id: Long) { uiChanged() } })
         streams = st
-        control.execute { e.restore(); st.restore(); uiChanged() }
+        control.execute { e.restore(); st.restore(); e.resumeInterrupted(); st.resumeInterrupted(); uiChanged() } // what the last run was in the middle of carries on by itself
         return e
     }
 

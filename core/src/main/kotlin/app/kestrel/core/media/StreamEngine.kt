@@ -82,6 +82,8 @@ class StreamRec(@JvmField val id: Long) {
     @JvmField var next = 0
     /** Where each run after a #EXT-X-DISCONTINUITY starts in the output, as "segment index:byte offset;" pairs (only for what has been written): the remuxer needs them to lay the times end to end. */
     @JvmField var breaks = ""
+    /** Restarts in a row in which the process ended in the middle of this download before any segment was written (auto-resume stops after 2). */
+    @JvmField var crashes = 0
     @JvmField var initDone = false
     @JvmField var total = -1L
     @JvmField var created = 0L
@@ -92,7 +94,7 @@ class StreamRec(@JvmField val id: Long) {
         val r = StreamRec(id)
         r.state = state; r.reason = reason; r.detail = detail; r.url = url; r.playlistText = playlistText; r.pageUrl = pageUrl; r.headers = headers; r.fetcher = fetcher; r.priv = priv
         r.meteredOk = meteredOk; r.nameStem = nameStem; r.name = name; r.mime = mime; r.destKind = destKind; r.destUri = destUri; r.estimate = estimate; r.repId = repId; r.ext = ext; r.companionId = companionId; r.parentId = parentId; r.appended = appended
-        r.next = next; r.breaks = breaks; r.initDone = initDone; r.total = total; r.created = created; r.updated = updated; r.finished = finished
+        r.next = next; r.breaks = breaks; r.crashes = crashes; r.initDone = initDone; r.total = total; r.created = created; r.updated = updated; r.finished = finished
         return r
     }
 }
@@ -153,6 +155,7 @@ class StreamEngine(
     private class Failed(val reason: Reason, val detail: Int = 0) : RuntimeException(null, null, false, false)
 
     private inner class Job(val rec: StreamRec) {
+        @Volatile var autoResume = false   // the last run ended in the middle of this download: carry on by itself ([resumeInterrupted])
         @Volatile var stop = false
         @Volatile var stopState: DlState? = null
         @Volatile var failure: Failed? = null
@@ -199,8 +202,11 @@ class StreamEngine(
             for (r in recs) {
                 if (r.id > max) max = r.id
                 if (r.state == DlState.CANCELED) { store.delete(r.id); continue }
+                val wanted = r.state == DlState.QUEUED || r.state.active || r.state == DlState.WAITING_NETWORK || r.state == DlState.PAUSED_SYSTEM
+                val unclean = r.state.active // the process ended while it was working
                 if (!r.state.terminal && r.state != DlState.PAUSED_USER) r.state = DlState.PAUSED_SYSTEM
-                jobs[r.id] = Job(r)
+                if (unclean) r.crashes++
+                jobs[r.id] = Job(r).also { it.autoResume = wanted && r.crashes <= 2 }
             }
             // a sound job whose picture job is gone is an ordinary download; a picture job whose sound job is gone has no companion
             for (j in jobs.values) {
@@ -208,6 +214,15 @@ class StreamEngine(
                 if (j.rec.companionId != 0L && !jobs.containsKey(j.rec.companionId)) { j.rec.companionId = 0L; persist(j.rec) }
             }
             nextId.set(max + 1)
+        }
+    }
+
+    /** After [restore]: stream downloads the last run was in the middle of carry on by themselves; paused ones stay paused; a download whose restarts keep ending the process before a segment is written is left for a tap. */
+    fun resumeInterrupted() = control.execute {
+        val ids = synchronized(lock) { jobs.values.filter { it.autoResume && it.rec.state == DlState.PAUSED_SYSTEM }.map { it.rec.id } }
+        for (id in ids) {
+            synchronized(lock) { jobs[id]?.autoResume = false }
+            for (job in get(id)?.let { family(it) } ?: continue) if (synchronized(lock) { job.rec.state } == DlState.PAUSED_SYSTEM) requeue(job, wipe = false)
         }
     }
 
@@ -695,7 +710,7 @@ class StreamEngine(
             }
         } catch (e: IOException) { throw SinkException(Reason.STORAGE, "could not read a staged segment", e) }
         synchronized(lock) {
-            job.written = written; rec.next = idx + 1; rec.appended = written
+            job.written = written; rec.next = idx + 1; rec.appended = written; rec.crashes = 0
             if (seg.discontinuity && idx > 0) rec.breaks += "$idx:$startedAt;"
             job.stagedBytes -= size; job.stagedCount--; job.staged.clear(idx)
         }
