@@ -58,7 +58,10 @@ class Prefs private constructor(ctx: Context) {
     /** Look for a new app release (GitHub Releases) once a day, when the app opens. Off = only the "Check now" button. */
     var autoUpdateCheck: Boolean get() = bool("app_upd_auto", true); set(v) = put("app_upd_auto", v)
     /** Download a new release by itself (in the download service, screen off is fine) as soon as it is found. Owner request 8: on by default. */
-    var autoUpdateDownload: Boolean get() = bool("app_upd_dl", true); set(v) = put("app_upd_dl", v)
+    /** Off by default (owner request X2: a dialog with an Update button first; a 92 MB download over the hotspot is the owner's call). Switch on in Settings for fully automatic downloads. */
+    var autoUpdateDownload: Boolean get() = bool("app_upd_dl", false); set(v) = put("app_upd_dl", v)
+    /** Which set of update news the dialog showed last (see UpdatePlan.Notice.key): the same news is not shown twice. */
+    var updateNoticeKey: String get() = sp.getString("upd_notice_key", "") ?: ""; set(v) = put("upd_notice_key", v)
     /** Start the installer by itself when the update is ready and Android allows it without a prompt (API 31+; Android 10 always asks). */
     var autoUpdateInstall: Boolean get() = bool("app_upd_inst", true); set(v) = put("app_upd_inst", v)
     var lastUpdateNote: String get() = sp.getString("upd_note", "") ?: ""; set(v) = put("upd_note", v)

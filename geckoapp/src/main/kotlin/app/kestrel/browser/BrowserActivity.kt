@@ -162,7 +162,8 @@ open class BrowserActivity : Activity(), DockListener {
     @Volatile internal var sessionRestored = false // false until restore() ran: saving earlier could replace the saved session with a one-tab placeholder
 
     private val netListener: () -> Unit = { onNetworkChanged() }
-    private val updateListener: () -> Unit = { if (::dock.isInitialized) dock.setMenuDot(UpdateManager.pending()) }
+    private val updateListener: () -> Unit = { if (::dock.isInitialized) dock.setMenuDot(UpdateManager.pending()); Io.main.post { maybeShowUpdateNotice() } }
+    private var updateNoticeShowing = false
     private val saveRunnable = Runnable { saveSessionNow() }
 
     // ================================================================== lifecycle
@@ -230,6 +231,7 @@ open class BrowserActivity : Activity(), DockListener {
         refreshNtpIfShown()
         // once a day, when the app comes to the front: one tiny conditional request (an ETag makes "nothing new" free). Never in the background.
         UpdateManager.maybeAutoCheck(this, prefs.autoUpdateCheck, NetworkMonitor.state != NetworkMonitor.State.OFFLINE) // NO_INTERNET is only a guess (a hotspot can fail Android's connectivity probe and still work): try
+        Io.main.postDelayed({ maybeShowUpdateNotice() }, 2500) // news the background look found while the app was closed
     }
 
     override fun onPause() {
@@ -1045,6 +1047,46 @@ open class BrowserActivity : Activity(), DockListener {
             M.SETTINGS -> showSettings()
             M.CLOSE_ALL -> { for (x in tabs.toList()) { x.session?.let { s -> if (geckoView.session === s) geckoView.releaseSession(); try { s.close() } catch (e: Exception) { /* ignore */ } }; x.session = null }; tabs.clear(); current = null; show(newTabInternal()) }
         }
+    }
+
+    /**
+     * The daily look's news as a dialog (owner request X2): a new app version, a newer browser engine from Mozilla, and a line about the ad-blocking lists, with an Update button that downloads
+     * in the background and, once the file is checked, an Install button. Shown once per set of news ([app.kestrel.core.update.UpdatePlan]); never while typing or over a sheet.
+     */
+    private fun maybeShowUpdateNotice() {
+        if (isFinishing || isDestroyed || updateNoticeShowing || !prefs.autoUpdateCheck) return
+        val st = UpdateManager.state
+        val o = st.offer
+        val news = when {
+            o != null && st.phase == UpdateManager.Phase.AVAILABLE -> app.kestrel.core.update.UpdatePlan.AppNews(o.tag, o.versionName, app.kestrel.core.update.UpdateLogic.formatSize(o.size), false)
+            o != null && st.phase == UpdateManager.Phase.READY -> app.kestrel.core.update.UpdatePlan.AppNews(o.tag, o.versionName, app.kestrel.core.update.UpdateLogic.formatSize(o.size), true)
+            else -> null
+        }
+        if (st.phase != UpdateManager.Phase.AVAILABLE && st.phase != UpdateManager.Phase.READY && st.phase != UpdateManager.Phase.UP_TO_DATE && st.phase != UpdateManager.Phase.IDLE) return
+        if (urlTyping || sheet.isShowing || tabGrid.visibility == View.VISIBLE || fullscreenOn) { Io.main.postDelayed({ maybeShowUpdateNotice() }, 20_000); return }
+        val notice = app.kestrel.core.update.UpdatePlan.build(Flavor.title, UpdateManager.installedName(this), news, Flavor.engineVersion, UpdateManager.engineNewest(this), updateListsLine(), prefs.updateNoticeKey.ifEmpty { null }) ?: return
+        prefs.updateNoticeKey = notice.key
+        updateNoticeShowing = true
+        val b = AlertDialog.Builder(this).setTitle(notice.title).setMessage(notice.lines.joinToString("\n\n"))
+        when (notice.action) {
+            app.kestrel.core.update.UpdatePlan.Action.DOWNLOAD -> b
+                .setPositiveButton("Update") { _, _ -> UpdateManager.download(this); toast("Downloading in the background. You get a notification when it is ready to install.") }
+                .setNegativeButton("Later", null).setNeutralButton("Details") { _, _ -> showUpdates() }
+            app.kestrel.core.update.UpdatePlan.Action.INSTALL -> b
+                .setPositiveButton("Install now") { _, _ -> UpdateManager.install(this) }.setNegativeButton("Later", null)
+            app.kestrel.core.update.UpdatePlan.Action.NONE -> b.setPositiveButton("OK", null)
+        }
+        b.setOnDismissListener { updateNoticeShowing = false }.show()
+    }
+
+    /** "Ad-blocking lists: refreshed 3 h ago (99,120 rules)." when the lists were looked at within the last day and a half; otherwise null. */
+    private fun updateListsLine(): String? {
+        val t = prefs.lastUpdateMs
+        if (t == 0L || System.currentTimeMillis() - t > 36L * 3600 * 1000) return null
+        val rules = Engine.peek()?.meta?.totalNetwork ?: return null
+        val m = (System.currentTimeMillis() - t) / 60_000
+        val ago = when { m < 1 -> "just now"; m < 60 -> "$m min ago"; else -> "${m / 60} h ago" }
+        return "Ad-blocking lists: refreshed $ago (${"%,d".format(rules)} rules)."
     }
 
     /** The Updates sheet (GitHub Releases): check, download (asks first on a metered link), install through Android's installer. */
