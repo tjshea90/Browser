@@ -236,6 +236,8 @@ class ShieldsBridge(
 
     companion object {
         const val EXTENSION_ID = "shields@kestrel.local"
+        /** The most classes / ids of one batch the app looks at (the page script sends at most this many per message). */
+        const val MAX_TOKENS = 400
 
         /** The latest numbers from the extension's engine (null until it has judged a request or finished a transfer). */
         @Volatile var stats: EngineStats? = null
