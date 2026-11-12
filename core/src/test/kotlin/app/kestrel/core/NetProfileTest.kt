@@ -36,6 +36,28 @@ class NetProfileTest {
         assertEquals("the owner's choice is untouched: the same input without the VPN gives the Courier back", 2, NetProfile.effective(on).helperMode)
     }
 
+    @Test fun theNetworkLabSwitchKeepsTheCourierGoingUnderAVpnAndChangesNothingElse() {
+        val rest = Input(dohOn = true, http3On = true, vpn = true, helperMode = 2, pagesViaPhone = true, fastTunnel = true)
+        val keep = Input(dohOn = true, http3On = true, vpn = true, helperMode = 2, pagesViaPhone = true, fastTunnel = true, keepHelperUnderVpn = true)
+        val r = NetProfile.effective(rest); val k = NetProfile.effective(keep)
+        assertEquals(0, r.helperMode); assertFalse(r.pagesViaProxy); assertFalse(r.helperKept)
+        assertEquals("the switch keeps the owner's helper mode", 2, k.helperMode); assertTrue("and pages through the phone", k.pagesViaProxy); assertTrue(k.helperKept)
+        // everything else of the Fast Wi-Fi profile is the same either way
+        assertEquals(r.trrMode, k.trrMode); assertEquals(r.http3, k.http3); assertEquals(r.disableIPv6, k.disableIPv6); assertEquals(r.pageYieldKBps, k.pageYieldKBps); assertEquals(r.tunnel, k.tunnel)
+        assertTrue(k.text, k.text.contains("keeps working")); assertTrue(r.text, r.text.contains("rests"))
+    }
+
+    @Test fun theSwitchStillNeedsTheOwnersHelperChoicesAndMeansNothingWithoutAVpn() {
+        val off = Input(dohOn = true, http3On = true, vpn = true, helperMode = 0, pagesViaPhone = true, keepHelperUnderVpn = true)
+        assertEquals("the helper is off in the owner's own settings", 0, NetProfile.effective(off).helperMode); assertFalse(NetProfile.effective(off).pagesViaProxy)
+        val downloadsOnly = Input(dohOn = true, http3On = true, vpn = true, helperMode = 1, pagesViaPhone = false, keepHelperUnderVpn = true)
+        assertEquals(1, NetProfile.effective(downloadsOnly).helperMode); assertFalse("pages need their own switch", NetProfile.effective(downloadsOnly).pagesViaProxy)
+        val plain = NetProfile.effective(Input(dohOn = true, http3On = true, vpn = false, helperMode = 2, pagesViaPhone = true, keepHelperUnderVpn = true))
+        assertFalse("no VPN: the standard profile, nothing 'kept'", plain.helperKept); assertEquals(2, plain.helperMode)
+        val clamped = NetProfile.effective(Input(true, true, true, helperMode = 9, keepHelperUnderVpn = true))
+        assertEquals(2, clamped.helperMode)
+    }
+
     @Test fun theCourierIsOffByDefaultAndPagesNeedTheHelperOn() {
         val d = Input(dohOn = true, http3On = true, vpn = false)
         assertEquals(0, NetProfile.effective(d).helperMode); assertFalse(NetProfile.effective(d).pagesViaProxy)
