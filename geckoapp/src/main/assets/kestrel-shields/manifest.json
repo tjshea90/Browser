@@ -7,6 +7,7 @@
   "permissions": ["webRequest", "webRequestBlocking", "nativeMessaging", "geckoViewAddons", "http://*/*", "https://*/*", "ws://*/*", "wss://*/*"],
   "content_security_policy": "script-src 'self'; object-src 'none'",
   "background": { "scripts": ["engine.js", "background.js"] },
+  "web_accessible_resources": ["embed.html", "embed.js"],
   "content_scripts": [
     { "matches": ["http://*/*", "https://*/*"], "js": ["content.js"], "run_at": "document_start", "all_frames": true, "match_about_blank": false }
   ]

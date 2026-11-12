@@ -237,7 +237,54 @@ function topPage(d) {
   if (d.frameAncestors && d.frameAncestors.length) return d.frameAncestors[d.frameAncestors.length - 1].url;
   return d.documentUrl || d.originUrl || '';
 }
+// ---------------------------------------------------------------- embeds wait for a tap (EX-10)
+// Video and social players inside a page are the heaviest things left once ads and trackers are gone: their scripts run on the single content-process main thread whether or not the page is ever
+// played. A THIRD-PARTY frame of a listed player is answered with a tap-to-load box (embed.html); the tap lets that address through once for that tab. Per site and globally switchable in the app
+// (flag bit 2 of the page configuration).
+var EMBED_RULES = [ // [host suffix, a path part that must appear]; kestrel-embed-test.invalid never resolves: the emulator proof of this feature
+  ['youtube.com', '/embed/'], ['youtube-nocookie.com', '/embed/'], ['player.vimeo.com', '/video/'], ['dailymotion.com', '/embed/'], ['dailymotion.com', '/player'],
+  ['facebook.com', '/plugins/'], ['instagram.com', '/embed'], ['tiktok.com', '/embed'], ['open.spotify.com', '/embed'], ['w.soundcloud.com', '/player'],
+  ['disqus.com', '/embed/'], ['google.com', '/maps/embed'], ['kestrel-embed-test.invalid', '/embed/']
+];
+var embedAllowed = new Map(); // "<tab>|<address>" -> until when the owner's tap lets it through
+var EMBED_ALLOW_MS = 30000;
+function embedListed(rh, url) {
+  var s = url.indexOf('://'); if (s < 0) return false;
+  var p = url.indexOf('/', s + 3), q = url.indexOf('?', s + 3);
+  var path = p < 0 ? '/' : url.slice(p, (q >= 0 && q < p) ? q : (q > p ? q : url.length));
+  for (var i = 0; i < EMBED_RULES.length; i++) {
+    var r = EMBED_RULES[i];
+    if ((rh === r[0] || (rh.length > r[0].length && rh.slice(-r[0].length - 1) === '.' + r[0])) && path.indexOf(r[1]) >= 0) return true;
+  }
+  return false;
+}
+function sameSiteEnough(a, b) { // the page and its frame: the engine's public-suffix logic once it is loaded, else "one is the other or a subdomain of it"
+  if (engine !== null) { try { return engine.isSameSite(a, b); } catch (e) { /* fall through */ } }
+  return a === b || a.slice(-b.length - 1) === '.' + b || b.slice(-a.length - 1) === '.' + a;
+}
+function embedGate(d, page, host) {
+  if (d.type !== 'sub_frame' || (cfgFlags.get(host) & 2) === 0) return null;
+  var url = d.url, rh = E.hostOf(url);
+  if (!rh || !embedListed(rh, url) || sameSiteEnough(host, rh)) return null; // a frame of the page's own site is its own player page, not an embed
+  var key = d.tabId + '|' + url.replace(/#.*$/, '');
+  var until = embedAllowed.get(key);
+  if (until !== undefined && until > Date.now()) return null; // the owner tapped it a moment ago
+  countBlock(page, 3);
+  return { redirectUrl: browser.runtime.getURL('embed.html') + '#' + encodeURIComponent(url) };
+}
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'embed-allow') return undefined;
+  var u = String(m.u || '');
+  // only OUR placeholder page may ask, and only for a web address
+  if (!/^https?:\/\//i.test(u) || !sender || !sender.url || sender.url.indexOf(browser.runtime.getURL('embed.html')) !== 0) return undefined;
+  embedAllowed.set((sender.tab ? sender.tab.id : -1) + '|' + u.replace(/#.*$/, ''), Date.now() + EMBED_ALLOW_MS);
+  trimMap(embedAllowed, 100);
+  return Promise.resolve(true);
+});
+
 function decide(d, page, host, mode) {
+  var gate = embedGate(d, page, host);
+  if (gate !== null) return gate;
   if (mode === MODE_OFF) return {};
   if (mode === MODE_ON && engine !== null && !engineOff) {
     try {

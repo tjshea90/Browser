@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<!-- Shown INSIDE a page's frame in place of a video / social player until the owner taps it (EX-10, research/REVIEW-EXTERNAL-1.md 4.3). background.js redirects the frame here;
+     embed.js asks the background script to let that one address through once, then loads it. -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tap to load</title>
+<style>
+  html,body{height:100%;margin:0;background:#0b0b0b;color:#eaeaea;font:14px/1.35 sans-serif}
+  body{display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent;overflow:hidden}
+  .box{padding:8px;max-width:92%}
+  .play{width:56px;height:56px;margin:0 auto 10px;background:#f6c026;clip-path:polygon(18% 12%,18% 88%,88% 50%)}
+  #t{font-weight:bold;font-size:16px}
+  #h{opacity:.7;font-size:12px;margin-top:4px;word-break:break-all}
+</style></head>
+<body><div class="box"><div class="play"></div><div id="t">Tap to load</div><div id="h"></div></div>
+<script src="embed.js"></script></body></html>
