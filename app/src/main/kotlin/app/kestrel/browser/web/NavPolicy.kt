@@ -1,6 +1,7 @@
 package app.kestrel.browser.web
 
 import app.kestrel.browser.data.Prefs
+import app.kestrel.browser.shield.Engine
 import app.kestrel.browser.shield.Shields
 import app.kestrel.core.url.HttpsPolicy
 import app.kestrel.core.url.TrackingParams
@@ -17,7 +18,11 @@ object NavPolicy {
         val host = UrlParts.hostOf(url)
         val s = Shields.effective(prefs, host)
         var u = url
-        if (s.shieldsUp && s.blockAds) TrackingParams.strip(u)?.let { u = it }
+        if (s.shieldsUp && s.blockAds) {
+            TrackingParams.strip(u)?.let { u = it }
+            // the lists' $removeparam rules (AA3-3b: site-specific tracking parameters such as YouTube's si=); the lists are loaded a moment after start, until then only the built-in names go
+            Engine.peek()?.stripQuery(u)?.let { u = it }
+        }
         var from: String? = null
         if (s.https != HttpsPolicy.Mode.OFF && host != null && tab?.httpOkHosts?.contains(host) != true) {
             HttpsPolicy.upgradeOf(u)?.let { from = u; u = it }

@@ -66,7 +66,7 @@ object Engine {
 
     /** The element-hiding tables are built lazily on first use (about 2 s on the emulator): do it here, off every UI/request thread, so the first page does not pay for it. */
     private fun warmCosmetics() {
-        try { snap?.fs?.let { it.cosmeticCss("warmup.invalid"); it.warmCosmetic() } } catch (t: Throwable) { Log.w(Io.TAG, "cosmetic warm-up failed", t) }
+        try { snap?.fs?.let { it.cosmeticCss("warmup.invalid"); it.warmCosmetic(); it.warmQuery() } } catch (t: Throwable) { Log.w(Io.TAG, "cosmetic warm-up failed", t) }
     }
 
     private fun seedSet(): FilterSet = seed ?: SeedLists.build().also { seed = it }
@@ -86,7 +86,7 @@ object Engine {
 
     /** Called by the updater after atomically installing a new file. */
     fun swap(fs: FilterSet, description: String) {
-        try { fs.cosmeticCss("warmup.invalid"); fs.warmCosmetic() } catch (t: Throwable) { /* warm-up only */ }
+        try { fs.cosmeticCss("warmup.invalid"); fs.warmCosmetic(); fs.warmQuery() } catch (t: Throwable) { /* warm-up only */ }
         publish(fs)
         sourceDescription = description
     }
