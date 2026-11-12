@@ -86,7 +86,7 @@ Apply column: YAML = gecko-prefs.txt + restart. Live switching of the A/B rows i
 | `dom.ipc.processCount` | 1 -> 2 | second content process | smoother typing if one process starves, +RAM | RAM | [E] | EXISTS (ALREADY SET 1) |
 | `layout.css.stylo-threads` | -1 (3) -> 2 | fewer style workers leave a core for the main thread | none known [N] | slower restyle on big DOM | [N] | EXISTS (-1) |
 | `privacy.fingerprintingProtection` | true (app) -> false | cost of FPP in normal tabs | unknown | privacy | [N] | EXISTS (false; pbmode true) |
-| `javascript.options.mem.nursery.max_kb` | 65536 (GV) -> 16384 | lower peak RSS, more minor GCs | RAM spike control [N] | more GC | [N] | EXISTS |
+| `javascript.options.mem.nursery.max_kb` | 65536 (greprefs) -> 16384 | lower peak RSS, more minor GCs | RAM spike control [N] | more GC | [N] | EXISTS |
 | `accessibility.force_disabled` | 0 -> 1 | never start the a11y engine; diagnostic only | tells whether a service is the cause | breaks screen readers | [N S6] | EXISTS (0) |
 
 ### 3.3 ALREADY SET (gecko-prefs.txt v2) and whether the value should change
