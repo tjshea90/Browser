@@ -2,21 +2,31 @@
 # One per line:  name = true|false|integer|"string".   They are default-branch prefs applied before Gecko starts, so "once" prefs (caches, graphics) work.
 # A name that does not exist in the bundled engine is a SILENT no-op: tools/check-gecko-prefs.sh checks every name against the real GeckoView in CI.
 # Bump kestrel.config.version when this list changes: Diagnostics reads it back to prove the file was applied.
-kestrel.config.version = 3
+kestrel.config.version = 4
 
 # --- video: no AV1 (software decode on 4x Cortex-A53); sites then choose H.264 -> MediaCodec hardware decode
 media.av1.enabled = false
-# --- hotspot data: smaller read-ahead (GeckoView cannot see Android's metered flag, so copy the "cellular" values), no speculative downloads
-media.cache_readahead_limit = 30
-media.cache_resume_threshold = 10
+# --- the owner's hotspot is UNMETERED (2026-11-12: "No data saving is necessary"): the Wi-Fi values for media buffering again and speculative loading (link rel=prefetch) back on
+media.cache_readahead_limit = 60
+media.cache_resume_threshold = 30
 media.cache_size = 65536
-network.prefetch-next = false
+network.prefetch-next = true
 # --- memory (2 GB Go tablet): one content process (A/B against 2 with the Diagnostics per-process memory), small page cache, bounded decoded images.
 # The decoded-image cache is RAM / size_factor (default 4 = about 475 MB on this tablet!): every image drawn in the last ~2 minutes stays decoded, which is what makes Android
 # send "low memory" and Gecko then flush ALL decoded images + WebRender's caches (research/SCROLL.md Q1/Q2). size_factor 20 = about 95 MB. (max_size_kb is ignored on a 32-bit
 # engine: SurfaceCache forces it to 1 GB, so the old line `image.mem.surfacecache.max_size_kb = 98304` did nothing.)
 dom.ipc.processCount = 1
-browser.sessionhistory.max_total_viewers = 2
+# --- instant Back: the bfcache keeps the last 4 pages alive (was 2; the engine's own value for this much RAM would be 5). The owner allows liberal RAM for speed; a low-memory event still drops them all.
+browser.sessionhistory.max_total_viewers = 4
+# --- RAM-liberal caches (the owner usually has 800 MB to 1 GB free): 64 MB of page resources kept in memory for repeat loads, decoded images kept 3 minutes instead of 1, bigger decode steps
+browser.cache.memory.capacity = 65536
+image.mem.surfacecache.min_expiration_ms = 180000
+image.mem.decode_bytes_at_a_time = 65536
+# --- no white areas while scrolling: decode images two screens ahead (default 1), start lazy-loaded images 1500 px before they scroll into view (default 600), compile all shaders at start (no first-use hitch)
+layout.framevisibility.numscrollportheights = "2.0"
+dom.lazy-loading.margin.top = 1500
+dom.lazy-loading.margin.bottom = 1500
+gfx.webrender.precache-shaders = true
 image.mem.surfacecache.size_factor = 20
 # --- caches: a fixed 512 MB disk cache saves repeat bytes on the hotspot; compile JS bytecode caches after 2 loads instead of 4
 browser.cache.disk.smart_size.enabled = false

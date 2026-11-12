@@ -78,7 +78,8 @@ object GeckoEngine {
     private object PhoneProxyApplier : app.kestrel.browser.download.PageProxy.Applier {
         // DEBUG builds only: `setprop debug.kestrel.pac <PAC data: URL>` replaces the generated script (the emulator test rig checks the fallback to DIRECT with it)
         override fun apply(host: String, port: Int) = set(appCtx?.let { app.kestrel.browser.download.PhoneBridge.debugProp(it, "debug.kestrel.pac") } ?: app.kestrel.browser.download.PageProxy.pacUrl(host, port), 2)
-        override fun clear() = set("", 5)
+        // DEBUG builds only: `setprop debug.kestrel.pac.off <PAC data: URL>` keeps a proxy script in force even while the helper is off (tests what the engine does when the phone refuses it)
+        override fun clear() { val dbg = appCtx?.let { app.kestrel.browser.download.PhoneBridge.debugProp(it, "debug.kestrel.pac.off") }; if (dbg != null) set(dbg, 2) else set("", 5) }
         private fun set(url: String, type: Int) {
             val d = org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_DEFAULT
             try {
@@ -112,10 +113,14 @@ object GeckoEngine {
         val names = listOf("kestrel.config.version", "media.av1.enabled", "dom.ipc.processCount", "ui.prefersReducedMotion", "network.prefetch-next",
             "image.mem.surfacecache.size_factor", "image.mem.surfacecache.discard_factor", "image.mem.surfacecache.min_expiration_ms", "browser.cache.disk.capacity", "dom.push.enabled",
             "apz.y_skate_size_multiplier", "apz.y_stationary_size_multiplier", "apz.content_response_timeout", "apz.max_velocity_inches_per_ms",
-            "javascript.options.gc_on_memory_pressure", "layers.gpu-process.enabled", "gfx.webrender.software")
+            "javascript.options.gc_on_memory_pressure", "layers.gpu-process.enabled", "gfx.webrender.software",
+            // the speed batch of config v4 (research/SPEED2.md section 6): name=value(type) so a wrong type shows up as an unchanged default
+            "media.cache_readahead_limit", "media.cache_resume_threshold", "browser.sessionhistory.max_total_viewers", "browser.sessionhistory.contentViewerTimeout",
+            "browser.cache.memory.capacity", "image.mem.decode_bytes_at_a_time", "layout.framevisibility.numscrollportheights", "layout.framevisibility.numscrollportwidths",
+            "dom.lazy-loading.margin.top", "dom.lazy-loading.margin.bottom", "gfx.webrender.precache-shaders", "network.proxy.type", "network.proxy.failover_timeout", "network.proxy.autoconfig_url")
         try {
             org.mozilla.geckoview.GeckoPreferenceController.getGeckoPrefs(names).accept({ list ->
-                prefReadback = "Engine prefs: " + (list?.joinToString(", ") { "${it.pref.substringAfterLast('.')}=${it.value}" } ?: "none")
+                prefReadback = "Engine prefs: " + (list?.joinToString(", ") { "${it.pref.substringAfterLast('.')}=${it.value.toString().take(40)}(${when (it.type) { org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_BOOL -> "b"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_INT -> "i"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_STRING -> "s"; else -> "?" }})" } ?: "none")
                 done()
             }, { e -> prefReadback = "Engine prefs: read failed ($e)"; done() })
         } catch (e: Exception) { prefReadback = "Engine prefs: unavailable ($e)"; done() }
