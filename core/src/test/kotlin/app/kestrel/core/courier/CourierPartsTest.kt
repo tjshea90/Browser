@@ -83,7 +83,7 @@ class CourierPartsTest {
         again.truncate(200); assertEquals(200L, again.length())
         again.truncate(500); assertEquals("truncate never grows a file", 200L, again.length())
         assertNull(sinks.reopen(File(File(root, "s"), "nope/none.part").toURI().toString(), 1))
-        again.discard(); assertFalse(File(uri.removePrefix("file:").let { java.net.URI(uri).path }).exists())
+        again.discard(); assertFalse(File(java.net.URI(uri).path).exists())
     }
 
     @Test fun folderSweepRemovesOnlyStrays() {
