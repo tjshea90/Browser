@@ -117,7 +117,11 @@ object GeckoEngine {
             // the speed batch of config v4 (research/SPEED2.md section 6): name=value(type) so a wrong type shows up as an unchanged default
             "media.cache_readahead_limit", "media.cache_resume_threshold", "browser.sessionhistory.max_total_viewers", "browser.sessionhistory.contentViewerTimeout",
             "browser.cache.memory.capacity", "image.mem.decode_bytes_at_a_time", "layout.framevisibility.numscrollportheights", "layout.framevisibility.numscrollportwidths",
-            "dom.lazy-loading.margin.top", "dom.lazy-loading.margin.bottom", "gfx.webrender.precache-shaders", "network.proxy.type", "network.proxy.failover_timeout", "network.proxy.autoconfig_url")
+            "dom.lazy-loading.margin.top", "dom.lazy-loading.margin.bottom", "gfx.webrender.precache-shaders", "network.proxy.type", "network.proxy.failover_timeout", "network.proxy.autoconfig_url",
+            // the Fast Wi-Fi profile (a VPN is the active network) and the back/forward cache blockers (research/SPEED3.md): their engine defaults are read here before any is changed
+            "network.trr.mode", "network.http.http3.enable", "docshell.shistory.bfcache.allow_unload_listeners", "docshell.shistory.bfcache.require_no_opener",
+            "docshell.shistory.bfcache.ship_allow_beforeunload_listeners", "browser.sessionhistory.max_entries", "network.dnsCacheExpiration", "network.dnsCacheEntries",
+            "javascript.options.mem.gc_parallel_marking", "dom.script_loader.bytecode_cache.strategy")
         try {
             org.mozilla.geckoview.GeckoPreferenceController.getGeckoPrefs(names).accept({ list ->
                 prefReadback = "Engine prefs: " + (list?.joinToString(", ") { "${it.pref.substringAfterLast('.')}=${it.value.toString().take(40)}(${when (it.type) { org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_BOOL -> "b"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_INT -> "i"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_STRING -> "s"; else -> "?" }})" } ?: "none")
