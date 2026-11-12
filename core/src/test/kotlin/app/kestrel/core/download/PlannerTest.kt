@@ -112,6 +112,37 @@ class PlannerTest {
         repeat(10) { now += 1000; assertEquals(1, e.update(now, 1_000_000.0, 1)) }
     }
 
+    @Test fun aBigFileStartsWithTwoConnectionsAndSmallOnesDoNot() {
+        val cfg = Config(rampMs = 1500, evalMs = 4000, fastStartMinBytes = 8L shl 20)
+        val big = HillClimb(cfg)
+        assertEquals("a 50 MB file wants two at once, before the ramp", 2, big.update(0, 0.0, 3, 50L shl 20))
+        val small = HillClimb(cfg)
+        assertEquals(1, small.update(0, 0.0, 3, 5L shl 20))
+        val unknown = HillClimb(cfg)
+        assertEquals(1, unknown.update(0, 0.0, 3, -1L))
+        val capped = HillClimb(cfg)
+        assertEquals("one allowed: one", 1, capped.update(0, 0.0, 1, 50L shl 20))
+        val off = HillClimb(Config(fastStart = false, fastStartMinBytes = 8L shl 20))
+        assertEquals(1, off.update(0, 0.0, 3, 50L shl 20))
+        // and it carries on climbing from two when the link has room
+        var now = 0L; var n = big.update(0, 0.0, 3, 50L shl 20)
+        repeat(30) { now += 1000; n = big.update(now, n * 1_000_000.0, 3, 50L shl 20) }
+        assertEquals(3, n)
+    }
+
+    @Test fun aRefusedConnectionHoldsTheCountDownForAWhileAndThenGrowthResumes() {
+        val cfg = Config(rampMs = 1000, evalMs = 1000, noGrowthMs = 30_000, fastStart = false)
+        val c = HillClimb(cfg)
+        var now = 0L; var n = 1
+        repeat(10) { now += 1000; n = c.update(now, n * 1_000_000.0, 4) }
+        assertEquals(4, n)
+        c.refused(now, 2, 600_000)                                                   // the server refused the third and fourth
+        assertEquals(2, c.target)
+        repeat(300) { now += 1000; n = c.update(now, 2_000_000.0, 4); assertTrue("held at 2 for 10 minutes, was $n at $now", n <= 2) }
+        repeat(60) { now += 1000; n = c.update(now, n * 1_000_000.0, 4) }
+        assertTrue("growth resumed after the hold: $n", n >= 3)
+    }
+
     @Test fun meterAndText() {
         val m = Meter()
         for (s in 0 until 5) { m.add(1_000_000, s * 1000L + 10); m.add(0, s * 1000L + 990) }
