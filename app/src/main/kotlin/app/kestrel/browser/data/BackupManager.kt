@@ -1,6 +1,5 @@
 package app.kestrel.browser.data
 
-import android.content.Context
 import android.content.SharedPreferences
 import app.kestrel.browser.shield.Shields
 import app.kestrel.core.backup.BackupData
@@ -110,6 +109,4 @@ object BackupManager {
         val f = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
         return "Kestrel backup " + f.format(java.util.Date(now)) + ".json"
     }
-
-    @Suppress("unused") private fun keep(c: Context) = c // the activity passes its context to the flow; nothing here needs one
 }
