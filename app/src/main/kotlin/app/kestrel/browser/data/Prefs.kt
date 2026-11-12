@@ -54,6 +54,11 @@ class Prefs private constructor(ctx: Context) {
     var dlLimitKBps: Int get() = sp.getInt("dl_limit_kbps", 0); set(v) = put("dl_limit_kbps", v.coerceAtLeast(0))
     var dlActive: Int get() = sp.getInt("dl_active", 2).coerceIn(1, 3); set(v) = put("dl_active", v.coerceIn(1, 3))
     var dlConns: Int get() = sp.getInt("dl_conns", 0).coerceIn(0, 3); set(v) = put("dl_conns", v.coerceIn(0, 3))
+    /** Download on my phone (Settings > Downloads, research/PHONE_OFFLOAD.md): 0 off, 1 use the phone when it answers, 2 always wait for it. */
+    var phoneMode: Int get() = sp.getInt("phone_mode", 0).coerceIn(0, 2); set(v) = put("phone_mode", v.coerceIn(0, 2))
+    /** The pairing code the Courier app on the phone shows (16 characters, typed once); empty = not paired. It is the key to the phone link: private to this app (no backup). */
+    var phoneCode: String get() = sp.getString("phone_code", "") ?: ""; set(v) = put("phone_code", v)
+    var phonePort: Int get() = sp.getInt("phone_port", 8765).coerceIn(1024, 65535); set(v) = put("phone_port", v.coerceIn(1024, 65535))
     /** Kestrel G: the blocking engine runs inside the Gecko extension (fast). Off = compatibility mode, every request asks the app (the older, slower path). Diagnostics has the switch. */
     var engineInExtension: Boolean get() = bool("eng_ext", true); set(v) = put("eng_ext", v)
     var pullRefresh: Boolean get() = bool("pull_refresh", true); set(v) = put("pull_refresh", v)

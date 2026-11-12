@@ -137,7 +137,7 @@ class PhoneBackend(
     fun pause(id: Long) = remoteOp(id, "pause")
     fun resume(id: Long) = remoteOp(id, "resume")
 
-    /** "Restart" on a row of the phone: download it on the tablet instead when the phone is away or gave up, otherwise start it again on the phone. */
+    /** "Download here" / "Restart" on a row of the phone: download it on the tablet instead when the phone is away or gave up, otherwise start it again on the phone. */
     fun restart(id: Long) {
         val p = synchronized(lock) { items[id] } ?: return
         val away = synchronized(lock) { p.unreachableSince > 0 || p.remoteId == null }
@@ -175,6 +175,9 @@ class PhoneBackend(
     fun reachable(): Boolean = reachableNow
 
     fun diag(): PhoneDiag = PhoneDiag(reachableNow, lastHelloAt, rttMs, skewMs, lastError, synchronized(lock) { items.values.count { it.phase == Phase.PHONE } })
+
+    /** The network changed (the hotspot came or went): look again now instead of waiting for the next round. */
+    fun onNetwork() { downUntil = 0L; kick() }
 
     private fun remoteOp(id: Long, action: String) {
         val rid = synchronized(lock) { items[id]?.takeIf { it.phase == Phase.PHONE }?.remoteId } ?: return
@@ -355,7 +358,7 @@ class PhoneBackend(
         else {
             for (a in r?.actions ?: emptyList()) when (a) { "PAUSE" -> acts.add(Action.PAUSE); "RESUME" -> acts.add(Action.RESUME); "RETRY" -> acts.add(Action.RETRY) }
             acts.add(Action.CANCEL)
-            if (away && now - p.unreachableSince >= OFFER_LOCAL_AFTER_MS) acts.add(Action.RESTART)                          // "download it here instead"
+            if (away && now - p.unreachableSince >= OFFER_LOCAL_AFTER_MS) acts.add(Action.DOWNLOAD_HERE)
         }
         val name = p.src.nameHint ?: r?.file?.takeIf { it.isNotEmpty() } ?: r?.name?.takeIf { it.isNotEmpty() } ?: lastSegment(p.src.url)
         return DownloadView(
