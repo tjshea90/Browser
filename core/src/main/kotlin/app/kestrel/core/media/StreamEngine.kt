@@ -389,7 +389,8 @@ class StreamEngine(
         try { job.sink?.discard() } catch (e: Exception) { /* ignore */ }
         if (job.sink == null) r.destUri?.let { try { sinks.delete(it) } catch (e: Exception) { /* ignore */ } }
         job.sink = null; job.media = null; job.staged.clear(); job.claimed.clear(); job.stagedBytes = 0; job.stagedCount = 0; job.inflight.set(0); job.written = 0; job.keys.clear()
-        r.destUri = null; r.appended = 0; r.next = 0; r.breaks = ""; r.initDone = false; r.total = -1
+        job.mux = null; job.muxDirty = false
+        r.destUri = null; r.appended = 0; r.next = 0; r.breaks = ""; r.initDone = false; r.total = -1; r.mux = MUX_UNDECIDED; r.note = null
     }
 
     private fun requestStop(job: Job, to: DlState) {
