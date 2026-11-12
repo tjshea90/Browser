@@ -45,7 +45,7 @@ object Avc {
         var i = off
         var start = -1
         while (i + 2 < end) {
-            if (b[i + 2].toInt() > 1) { i += 3; continue }                 // no start code can begin at i, i+1 or i+2
+            if ((b[i + 2].toInt() and 0xFF) > 1) { i += 3; continue }      // no start code can begin at i, i+1 or i+2
             if (b[i].toInt() == 0 && b[i + 1].toInt() == 0 && b[i + 2].toInt() == 1) {
                 if (start >= 0) f(start, trimZeros(b, start, i))
                 start = i + 3
