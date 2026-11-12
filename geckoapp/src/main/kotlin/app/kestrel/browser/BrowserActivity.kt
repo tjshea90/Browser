@@ -238,6 +238,7 @@ open class BrowserActivity : Activity(), DockListener {
         super.onResume()
         Health.log("life", "resume"); Health.startWatchdog(); Health.watchFrames(window)
         flushStateWanted = false
+        warmFrontOrigin()
         app.kestrel.browser.net.WifiBoost.set(this, prefs.labWifiBoost) // Network lab: Wi-Fi kept out of power save while the browser is on screen (EX-7)
         PageProxy.refresh()                                           // pages through the phone: renew the phone's proxy door now (the app was away; the Wi-Fi may have changed)
         val t = current
@@ -264,6 +265,7 @@ open class BrowserActivity : Activity(), DockListener {
         super.onPause()
         Health.log("life", "pause")
         app.kestrel.browser.net.WifiBoost.set(this, false)
+        pausedAt = SystemClock.uptimeMillis()
         flushCounters()
         saveSessionNow()
         // EX-18 (research/REVIEW-EXTERNAL-1.md 9 row 8): ask the front tab for its newest history + scroll state now (GeckoView 144+). The answer arrives on onSessionStateChange and is written at once,
@@ -1159,6 +1161,18 @@ open class BrowserActivity : Activity(), DockListener {
 
     private var warmHost = ""
     private var warmAt = 0L
+    private var pausedAt = 0L
+
+    /**
+     * EX-15 (research/REVIEW-EXTERNAL-1.md 4.2): Gecko closes its idle connections when the app goes to the background, so the first tap after coming back to a page starts with cold connections
+     * (DNS, TCP, TLS: 2-3 round trips). After more than a few seconds away, the origin of the page in front is warmed again. Same rules as the typed suggestion: the "Warm up" switch, https only, never a
+     * private tab, once per origin per 30 s.
+     */
+    private fun warmFrontOrigin() {
+        val t = current ?: return
+        if (pausedAt == 0L || SystemClock.uptimeMillis() - pausedAt < 5_000 || t.isNewTab) return
+        preconnect(t.url)
+    }
 
     /**
      * Opens the connection (DNS, TCP, TLS) to the site the top suggestion names while the owner is still typing, so the page's first bytes do not wait for the handshakes (about 1-3 round trips,
