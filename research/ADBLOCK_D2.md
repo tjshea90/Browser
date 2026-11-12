@@ -20,13 +20,18 @@ A generic selector can only match on a page that HAS an element with the class o
 - Real examples: `.ad-unit-wrapper`, `#siteAdHeader`, `.advert__leaderboard`, `#google_ads`, `.Ad-Container:not(.adsbygoogle)`, `ins.adsbygoogle[data-ad-client]` are each returned only for a page that holds that name.
 
 ## 4. Tests
-- `CosmeticTokensTest` (20): which tokens a selector requires (brackets / parentheses / quotes / lists / case / length), hostile page tokens never reach the CSS, only matching selectors returned, rarest-token filing, exceptions and `$generichide` / `$elemhide` on the lazy path, marker only when it matters, the old non-token path unchanged (the WebView build), binary round trip, cap per batch, empty set.
+- `CosmeticCssShapeTest` (4, see section 5), `CosmeticTokensTest` (20): which tokens a selector requires (brackets / parentheses / quotes / lists / case / length), hostile page tokens never reach the CSS, only matching selectors returned, rarest-token filing, exceptions and `$generichide` / `$elemhide` on the lazy path, marker only when it matters, the old non-token path unchanged (the WebView build), binary round trip, cap per batch, empty set.
 - `RealCosmeticTokenIndexTest`: the numbers above on the real list.
 - `web-tests/content.test.js` +6 (87 in all): names sent lower-cased and once, applied CSS hides only the matching element, no marker = no messages, late nodes are sent, batches of at most 300, an iframe asks nothing, an app that cannot answer never breaks the page. Found on the way: `inject` and the observer ran before the page's root element existed when the answer came back at once (a cached answer): the CSS would have been lost; both now wait for it.
 - Emulator: see section 5.
 
-## 5. Emulator probe (`d2.html`, a page with the real selectors above, kept in the scratchpad) [V when filled in below]
-RESULT: (filled in after the run)
+## 5. Emulator probe (`d2.html`: boxes carrying real names from the list, kept in the scratchpad) [V]
+Android 10 x86_64 emulator, Kestrel G debug build, GeckoView 160, the page reports `getComputedStyle().display` of each box every 3 s and dumps the injected `<style data-kestrel>` elements:
+- Hidden: `.ad-unit-wrapper`, `#siteAdHeader`, `.advert__leaderboard`, `#google_ads`, `.Ad-Container` (class names with capitals work: the key is lower-cased, the CSS is not), `ins.adsbygoogle[data-ad-client]`, and a `.ad-unit-wrapper` box added to the page 2 s after load (the `MutationObserver` path).
+- Stays: `.Ad-Container.adsbygoogle` (the real selector is `.Ad-Container:not(.adsbygoogle)`), a box with an unlisted class, a plain box.
+- Styles injected: the up-front one (17,304 bytes, starts with `/*kg*/`) and ONE lazy batch of 274 bytes for the page's 9 distinct names. Health timeline (Diagnostics): `cosmetic css 10.0.2.2 top=true len=17304 tokens=true`, then `cosmetic gen 10.0.2.2 tokens=9 css=274`.
+- **Two bugs found by this probe, both in `CosmeticSelectors.toCss` (older than D2, never hit while only `#id` selectors were injected) and fixed** (`CosmeticCssShapeTest`, 4 tests incl. a 300-round random well-formedness check; mutation-checked: 3 of them fail without the fix): a selector that needs its own rule (it contains parentheses: `:not(...)`, `:is(...)`, `:has(...)`) written in the middle of an open group (a) fused with the group's last selector into one compound selector that matches nothing (`#google_ads.Ad-Container:not(...)`), and (b) left the NEXT group starting with a comma, which makes the browser drop that whole rule (`,ins.adsbygoogle[...]{...}`). Site-specific rules were written one per rule and never hit this.
+- Timing note: after a cold start the first `css` answer can take 20 s or more on the emulator because the engine image transfer (`img` chunks) shares the cosmetic worker thread with it; the first page of a session then gets its hiding late. Pre-existing, only seen on the slow emulator; a separate thread for `img` would remove it if the tablet shows it.
 
 ## 6. Not done here (AA3-3 remainder, in the order of value)
 1. Procedural cosmetics (`:has-text()`, `:upward()`), 1,730 `:has(` site rules need a recent engine (Firefox 160 has `:has`), scriptlets (YouTube-style ad skipping), `$removeparam`, `redirect=` neutering, D3: unchanged, each needs the same kind of measured step.
