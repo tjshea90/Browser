@@ -164,7 +164,7 @@ class VideoFlow(private val a: BrowserActivity) {
             val pl = text?.let { Hls.parse(it, c.url) }
             when (pl) {
                 null -> { streamInfo[c.key] = Loaded.Failed("The stream's list could not be read (the site may have refused it)."); refresh(tab) }
-                is Hls.MediaPlaylist -> { streamInfo[c.key] = ready(tab, c, null, pl.media, text, null); refresh(tab) }
+                is Hls.MediaPlaylist -> { streamInfo[c.key] = ready(tab, c, null, pl.media, text, null); refresh(tab); sizeBareStream(tab, c, pl.media, text) }
                 is Hls.MasterPlaylist -> loadVariants(tab, c, pl.master, headers)
             }
         }
@@ -185,7 +185,27 @@ class VideoFlow(private val a: BrowserActivity) {
         }
     }
 
-    private fun ready(tab: Tab, c: MediaCandidate, master: Hls.Master?, media: Hls.Media, mediaText: String?, probe: Hls.Variant?): Loaded {
+    /**
+     * A playlist that is not part of a master has no bit rate to size it by. Ask the server how long two of its segments are (a one-byte Range request each: only the headers matter) and
+     * multiply the average by the number of segments: good enough for "about 6 MB". The list is redrawn when the answers are in.
+     */
+    private fun sizeBareStream(tab: Tab, c: MediaCandidate, media: Hls.Media, text: String) {
+        val n = media.segments.size
+        if (media.exactBytes >= 0 || n == 0 || media.segments[0].len >= 0) return
+        val picks = if (n >= 3) listOf(0, n / 2) else listOf(0)
+        val got = ArrayList<Long>()
+        for (i in picks) DownloadController.fetchBytes(a, media.segments[i].url, 0L, 0L, requestHeaders(tab), 1, tab.isPrivateTab, onTotal = { len ->
+            got.add(len)
+            if (got.size == picks.size) {
+                val factor = if (media.container == "ts") 0.95 else 1.0               // the MP4 made of a transport stream is a little smaller than the stream
+                val guess = (got.average() * n * factor).toLong()
+                val cur = streamInfo[c.key]
+                if (cur is Loaded.Ready) { streamInfo[c.key] = ready(tab, c, null, media, text, null, guess); refresh(tab) }
+            }
+        }) { }
+    }
+
+    private fun ready(tab: Tab, c: MediaCandidate, master: Hls.Master?, media: Hls.Media, mediaText: String?, probe: Hls.Variant?, sizeGuess: Long = -1L): Loaded {
         when (media.problem) {
             Hls.Problem.LIVE -> return Loaded.Failed("This is a live stream. Live streams cannot be saved.")
             Hls.Problem.DRM -> return Loaded.Failed("This video is copy-protected (DRM). Kestrel cannot save it.")
@@ -197,10 +217,10 @@ class VideoFlow(private val a: BrowserActivity) {
         val rows = ArrayList<Pair<VideoPanel.Choice, StreamPick>>()
         if (master == null) {
             val audio = media.container == "aac" || media.container == "mp3" || media.container == "m4a"
-            val est = media.exactBytes
+            val est = if (media.exactBytes >= 0) media.exactBytes else sizeGuess
             val pick = StreamPick(if (audio) "audio" else "", c.url, mediaText, est, null, audio, media.container)
             val ext = if (audio) media.container else "mp4"          // a video stream is saved as one MP4 file
-            rows.add(VideoPanel.Choice(stemFor(tab, pick.label) + "." + ext, rowDetail(if (audio) "Audio only" else "", ext.uppercase(), MediaLabels.size(est), dur), pick) to pick)
+            rows.add(VideoPanel.Choice(stemFor(tab, pick.label) + "." + ext, rowDetail(if (audio) "Audio only" else "", ext.uppercase(), MediaLabels.size(est, estimate = media.exactBytes < 0 && est > 0), dur), pick) to pick)
             return Loaded.Ready(rows, null)
         }
         val seen = HashSet<String>()
