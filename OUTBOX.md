@@ -665,3 +665,52 @@
 > - Your keyboard app, accessibility and autofill details, and whether the tablet does 5 GHz wifi.
 > - A yes or no on a scheduled build of the ad-block lists. It would use GitHub minutes automatically, so I won't add it without your OK.
 <!-- sha:24065bf7921c -->
+
+## 2026-11-12T07:59:42Z
+> The phone downloads are ready to try. The two APKs below are built and signed by GitHub. I tested them on the Android 10 emulator, not on your real phone and tablet.
+>
+> **1. Kestrel Courier 0.1.0-alpha1 — install this on your phone** (about 150 KB)
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-courier-v0.1.0-alpha1
+>
+> **2. Kestrel G 0.3.0-alpha19 — install this on your tablet**
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha19
+>
+> **How to set it up**
+> 1. On the phone, open the first link, tap the APK and allow installing from your browser if Android asks.
+> 2. Open Kestrel Courier. Switch on **Ready for the tablet**. Tap **Allow it to run with the screen off**, and allow its notification if asked.
+> 3. Turn on the phone's hotspot and join it with the tablet.
+> 4. On the tablet, install alpha19. Alpha18 will also offer it as an update inside the app. Then open Menu > Settings and scroll to **Download on my phone**.
+> 5. Tap **Pair with the phone** and type the 16-character code the Courier shows. This is done once.
+> 6. Set **Use the phone** to "When the phone is there".
+> 7. Tap **Test the phone link**. It measures the wifi between the two, the phone's internet and the tablet's internet. Then it says in one sentence whether the phone is worth using. That answers your question about whether the phone is really faster.
+>
+> **What happens when you download a file**
+> - Your phone downloads it over its own connection.
+> - The tablet's Downloads row shows it live ("On your phone", percent, speed, Pause and Cancel buttons).
+> - When the phone has the whole file, the tablet copies it over the wifi, and the phone then deletes its copy.
+> - If the phone isn't there or can't do a download, the tablet downloads it by itself and the row says why.
+>
+> **What I checked**
+> - Both apps in one emulator: a 12 MB file went through the phone and the copy on the tablet matched the original byte for byte.
+> - With the Courier off, the tablet downloaded by itself and showed the note.
+> - Over 120 automated tests cover the rest of the logic.
+>
+> **What is not done yet**
+> - Videos (HLS and DASH streams, and making them MP4) are still downloaded by the tablet itself. Doing that on the phone is the next stage. The design is written and the file downloads are the foundation for it.
+> - Private tabs and app updates always stay on the tablet.
+> - I could not test your real phone's rules (Android 16 background limits, battery saver) or the real hotspot speeds. The Diagnostics screen has a new "Phone link" line to send me if something doesn't work.
+>
+> **Questions for you (the Y2 ones)**
+> 1. Is your phone an Android 16 phone, not an iPhone?
+> 2. What do you see when you say the phone is faster, in MB/s or in minutes for the same file? The link test will give me real numbers if you send them.
+> 3. Should it handle everything, or only big files and videos? Right now it takes every file the tablet itself would download.
+>
+> **Still waiting on you**
+> - The Proton Mail "Page loads" numbers.
+> - Your keyboard app, accessibility and autofill details, and whether the tablet does 5 GHz wifi.
+> - A yes or no on a scheduled build of the ad-block lists. It would use GitHub minutes automatically, so I won't add it without your OK.
+>
+> Next I'm making the phone more patient on its first answer, since the emulator showed a slow first reply makes the tablet give up early, and checking what happens when Android kills the Courier in the middle of a download.
+<!-- sha:d05cefc2c207 -->

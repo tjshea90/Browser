@@ -97,10 +97,10 @@ class CourierClientTest {
     @Test fun refusedConnectionsAndSlowPhonesHaveTheirOwnKinds() {
         val dead = ServerSocket(0).use { it.localPort }                                          // a port nobody listens on
         try { CourierClient("127.0.0.1", dead, TEST_KEY).hello(); fail() } catch (e: CourierException) { assertEquals(CourierException.Kind.UNREACHABLE, e.kind) }
-        val port = rawServer { s -> drainRequest(s); Thread.sleep(4000) }                           // accepts, never answers
+        val port = rawServer { s -> drainRequest(s); Thread.sleep(9000) }                           // accepts, never answers
         val t0 = System.currentTimeMillis()
         try { CourierClient("127.0.0.1", port, TEST_KEY).hello(); fail() } catch (e: CourierException) { assertEquals(CourierException.Kind.TIMEOUT, e.kind) }
-        assertTrue("gave up after about the read timeout", System.currentTimeMillis() - t0 in 1000..3900)
+        assertTrue("gave up after about the read timeout", System.currentTimeMillis() - t0 in 3000..8500)
         val junk = rawServer { s -> drainRequest(s); s.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello".toByteArray()) }
         try { CourierClient("127.0.0.1", junk, TEST_KEY).hello(); fail() } catch (e: CourierException) { assertTrue(e.kind == CourierException.Kind.PROTOCOL || e.kind == CourierException.Kind.IMPOSTOR) }
     }

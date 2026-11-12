@@ -122,7 +122,7 @@ class CourierClient(
         val b = ByteArray(16); rng.nextBytes(b)
         val c = Sign.b64(b)
         val t0 = clock.now()
-        val r = guard { transport.open("GET", "/v1/hello?c=$c", emptyMap(), null, 700, 1500) }
+        val r = guard { transport.open("GET", "/v1/hello?c=$c", emptyMap(), null, 700, 5000) }          // a phone that was asleep answers its first request slowly: wait for it (a closed port still answers at once)
         val t1 = clock.now()
         r.use {
             val j = parse(it)
