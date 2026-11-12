@@ -99,15 +99,32 @@ object NetworkMonitor {
         else -> State.ONLINE
     }
 
+    /** Every address a network's link carries (its own and its DNS servers) as text, for [app.kestrel.core.net.NetProfile.isFastTunnel]; null when the link is unknown. */
+    private fun addressesOf(lp: LinkProperties?): List<String?>? =
+        lp?.let { l -> l.linkAddresses.map { it.address?.hostAddress } + l.dnsServers.map { it.hostAddress } }
+
     internal fun update(caps: NetworkCapabilities?) {
-        val newState = classify(caps)
+        vpnTransport = caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+        if (caps == null) tunnelAddr = false          // the network is gone, and with it what its link said
         rawMetered = caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+        publish(classify(caps))
+    }
+
+    /** The default network's link (its addresses) arrived or changed; null = unknown. Comes after [update] for the same network, so [fastTunnel] may turn on a moment after [vpn]. */
+    internal fun updateLink(addresses: Iterable<String?>?) {
+        tunnelAddr = addresses != null && app.kestrel.core.net.NetProfile.isFastTunnel(addresses)
+        publish(state)
+    }
+
+    private fun publish(newState: State) {
         val newMetered = rawMetered && saverOn
-        val newVpn = debugVpn || (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN))
-        if (newState == state && newMetered == metered && newVpn == vpn) return
+        val newVpn = debugVpn || vpnTransport
+        val newTunnel = newVpn && (debugTunnel || tunnelAddr)
+        if (newState == state && newMetered == metered && newVpn == vpn && newTunnel == fastTunnel) return
         state = newState
         metered = newMetered
         vpn = newVpn
+        fastTunnel = newTunnel
         val copy = synchronized(listeners) { ArrayList(listeners) }
         for (l in copy) l()
     }
