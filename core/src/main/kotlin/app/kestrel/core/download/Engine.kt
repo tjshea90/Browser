@@ -23,6 +23,8 @@ class Engine(
     private val clock: Clock = Clock.System,
     private val cfg: Config = Config(),
     private val spawner: Spawner = Spawner { name, task -> Thread(task, name).also { it.isDaemon = true; it.start() } },
+    /** One limit for every download of the app (shared with the stream engine); 0 = none. */
+    val limiter: RateLimiter = RateLimiter(clock),
 ) {
     interface Listener { fun onChanged(id: Long) }
 
@@ -568,6 +570,8 @@ class Engine(
                 return
             }
             if (n == 0) continue
+            limiter.acquire(n) { job.stop }                                                 // Settings > Downloads > Speed limit
+            if (job.stop) { o.resp.abort(); throw Stopped() }
             if (cursor == 0L && !job.sniffed) { // the very first bytes of the file: a server that sends a web page as "application/octet-stream" is still caught
                 job.sniffed = true
                 if (job.expectBinary && ContentSniff.looksLikeHtml(buf, 0, n)) { fail(job, Reason.BAD_CONTENT, 0); throw Exit() }
