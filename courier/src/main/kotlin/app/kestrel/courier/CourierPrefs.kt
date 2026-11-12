@@ -30,6 +30,6 @@ class CourierPrefs(ctx: Context) {
         set(v) { sp.edit().putBoolean("ready", v).apply() }
 
     var port: Int
-        get() = sp.getInt("port", 8765).coerceIn(1024, 65535)
+        get() = sp.getInt("port", app.kestrel.core.courier.CourierPorts.API).coerceIn(1024, 65535)
         set(v) { sp.edit().putInt("port", v.coerceIn(1024, 65535)).apply() }
 }

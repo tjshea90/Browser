@@ -90,14 +90,24 @@ object PhoneBridge {
         }
     }
 
+    @Suppress("DEPRECATION")
     fun gateway(ctx: Context): String? {
         val cm = ctx.getSystemService(ConnectivityManager::class.java) ?: return null
-        val net = cm.activeNetwork ?: return null
-        val caps = cm.getNetworkCapabilities(net) ?: return null
-        if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) && !caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) return null
-        val lp = cm.getLinkProperties(net) ?: return null
-        for (r in lp.routes) { val g = r.gateway; if (r.isDefaultRoute && g is Inet4Address && !g.isAnyLocalAddress) return g.hostAddress }
-        return null
+        // The phone is the default gateway of the WI-FI network. Not `activeNetwork`: while a VPN is up (LinkMeter's Fast Wi-Fi) that is the VPN, which has no gateway at all, and the
+        // phone would be "not found" exactly when the owner uses the VPN. The VPN leaves private addresses alone, so the tablet reaches the phone straight over the Wi-Fi.
+        val active = cm.activeNetwork
+        var other: String? = null
+        for (net in cm.allNetworks) {
+            val caps = cm.getNetworkCapabilities(net) ?: continue
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) continue
+            if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) && !caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) continue
+            val lp = cm.getLinkProperties(net) ?: continue
+            for (r in lp.routes) {
+                val g = r.gateway
+                if (r.isDefaultRoute && g is Inet4Address && !g.isAnyLocalAddress) { if (net == active) return g.hostAddress; if (other == null) other = g.hostAddress }
+            }
+        }
+        return other
     }
 
     private fun debugProp(ctx: Context, name: String): String? {
@@ -108,11 +118,11 @@ object PhoneBridge {
     /** The file the link test reads: [TEST_URL], or (DEBUG builds only, `setprop debug.kestrel.phone.testurl http://10.0.2.2:8000/big.bin`) the emulator rig's own website. */
     fun testUrl(ctx: Context): String = debugProp(ctx, "debug.kestrel.phone.testurl") ?: TEST_URL
 
-    /** DEBUG builds only: `adb shell setprop debug.kestrel.phone 127.0.0.1:8765` points the link at a phone that is not on the hotspot (the emulator test rig). */
+    /** DEBUG builds only: `adb shell setprop debug.kestrel.phone 127.0.0.1:8780` points the link at a phone that is not on the hotspot (the emulator test rig). */
     private fun debugOverride(ctx: Context): Pair<String, Int>? {
         val v = debugProp(ctx, "debug.kestrel.phone") ?: return null
         val i = v.lastIndexOf(':')
-        if (i <= 0) return v to 8765
+        if (i <= 0) return v to app.kestrel.core.courier.CourierPorts.API
         return v.substring(0, i) to (v.substring(i + 1).toIntOrNull() ?: return null)
     }
 
