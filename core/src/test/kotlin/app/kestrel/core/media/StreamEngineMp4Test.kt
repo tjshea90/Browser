@@ -41,6 +41,7 @@ class StreamEngineMp4Test {
             throw AssertionError("timeout waiting for $what; last=${view(id)?.state} ${view(id)?.reason} done=${view(id)?.done}/${view(id)?.total}")
         }
         fun completed(id: Long) = await(id, "completion") { it?.state == DlState.COMPLETED }!!
+        fun eventually(what: String, cond: () -> Boolean) { val end = System.currentTimeMillis() + 10_000; while (System.currentTimeMillis() < end) { if (cond()) return; Thread.sleep(5) }; throw AssertionError("timeout waiting for $what") }
         fun out(v: DownloadView): ByteArray = sinks.sinks[v.destUri]!!.bytes
         fun enqueue(playlist: String, stem: String = "My clip") = engine.enqueue(StreamSource("https://cdn.test/v/index.m3u8", playlist, "https://site.test/watch", stem))
     }
