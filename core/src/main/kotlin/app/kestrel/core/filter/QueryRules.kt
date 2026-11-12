@@ -53,7 +53,7 @@ class QueryRules internal constructor(private val pool: ByteArray, val count: In
         val queryEnd = if (hash >= 0) hash else url.length
         if (q + 1 >= queryEnd) return null
 
-        val verdict = Verdict2()
+        val verdict = Outcome()
         collect(host, path, verdict)
         if (verdict.allowAll) return null
         if (!verdict.removeAll && verdict.names.isEmpty()) return null
@@ -84,14 +84,14 @@ class QueryRules internal constructor(private val pool: ByteArray, val count: In
         return sb.toString()
     }
 
-    private class Verdict2 {
+    private class Outcome {
         @JvmField var removeAll = false
         @JvmField var allowAll = false
         @JvmField val names = HashSet<String>(8)
         @JvmField val kept = HashSet<String>(4)
     }
 
-    private fun collect(host: String, path: String, v: Verdict2) {
+    private fun collect(host: String, path: String, v: Outcome) {
         var lowerPath: String? = null
         fun scan(rules: Array<QueryRule>?) {
             if (rules == null) return
