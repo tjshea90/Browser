@@ -10,9 +10,28 @@ package app.kestrel.core.net
  *   IPv6 addresses the VPN blocks);
  * - HTTP/3 is off: no QUIC attempt that is refused and then retried over TCP;
  * - the Courier (the owner's other phone helper) rests: a second relay on top of the VPN only adds a hop, never speed.
+ * When the VPN is recognisably LinkMeter's own tunnel ([isFastTunnel]: its fixed addresses sit on the VPN interface), two more things hold, because the link behind it is the phone's own connection and
+ * not the carrier-capped hotspot (research/SPEED4.md):
+ * - the engine never asks for or tries IPv6 (the tunnel blocks it, so every AAAA answer would be a dead end);
+ * - downloads leave a loading page [FAST_PAGE_YIELD_KBPS] instead of [PAGE_YIELD_KBPS]: 150 KB/s was set for a 5 Mbit/s hotspot and would crawl a big download for nothing on a link ten times faster.
+ * Any other VPN keeps the careful values: nothing is known about its speed.
  * The owner's own switches are never changed: they apply again the moment the VPN goes away.
  */
 object NetProfile {
+    /** While a page loads, downloads are held to this many KB/s on the owner's normal hotspot (about a quarter of its 5 Mbit/s). */
+    const val PAGE_YIELD_KBPS = 150
+    /** The same, behind LinkMeter's tunnel: the phone's own connection leaves room for both, so a page still gets most of the Wi-Fi (about 3 to 5 MB/s on the tablet's single-stream 2.4 GHz radio). */
+    const val FAST_PAGE_YIELD_KBPS = 1000
+
+    /** LinkMeter's tunnel interface lives on this fixed private network (its FastProto.VPN_ADDR 10.111.222.2 and VPN_DNS 10.111.222.53). */
+    const val TUNNEL_PREFIX = "10.111.222."
+
+    /**
+     * Is a network with these addresses (its own and its DNS servers, as text like "10.111.222.2") LinkMeter's Fast Wi-Fi tunnel? Only the tunnel interface carries these private addresses, so any
+     * other VPN, Wi-Fi or mobile network never matches. If LinkMeter ever changes them this reads false and every value stays on the careful side.
+     */
+    fun isFastTunnel(addresses: Iterable<String?>): Boolean = addresses.any { it != null && it.startsWith(TUNNEL_PREFIX) && it.length > TUNNEL_PREFIX.length }
+
     class Input(
         /** The owner's "Encrypted DNS (DNS over HTTPS)" switch. */
         val dohOn: Boolean,
@@ -24,6 +43,8 @@ object NetProfile {
         val helperMode: Int = 0,
         /** The owner's "Load pages through the phone" switch (OFF by default). */
         val pagesViaPhone: Boolean = false,
+        /** The VPN is LinkMeter's own tunnel ([isFastTunnel]); only meaningful together with [vpn]. */
+        val fastTunnel: Boolean = false,
     )
 
     class Out(
@@ -36,15 +57,27 @@ object NetProfile {
         val helperMode: Int,
         /** Pages go through the Courier's proxy (never together with a VPN). */
         val pagesViaProxy: Boolean,
+        /** `network.dns.disableIPv6`: no AAAA lookups and no IPv6 connection attempts (true only behind LinkMeter's tunnel, which blocks IPv6). */
+        val disableIPv6: Boolean = false,
+        /** KB/s the downloads are held to while the page in front loads. */
+        val pageYieldKBps: Int = PAGE_YIELD_KBPS,
+        /** The VPN is LinkMeter's own tunnel (the full Fast Wi-Fi profile). */
+        val tunnel: Boolean = false,
     ) {
         /** One plain sentence for Settings and Diagnostics. */
-        val text: String get() = if (fastWifi) "Fast Wi-Fi profile: a VPN is the active network, so lookups use the phone's own resolver, HTTP/3 is off and the phone helper rests."
-        else "Standard profile: your own switches apply."
+        val text: String get() = when {
+            tunnel -> "Fast Wi-Fi profile: LinkMeter's tunnel is the active network, so lookups use the phone's own resolver, HTTP/3 and IPv6 are off, downloads give a loading page more room ($pageYieldKBps KB/s) and the phone helper rests."
+            fastWifi -> "Fast Wi-Fi profile: a VPN is the active network, so lookups use the phone's own resolver, HTTP/3 is off and the phone helper rests."
+            else -> "Standard profile: your own switches apply."
+        }
     }
 
     fun effective(i: Input): Out {
         val helper = i.helperMode.coerceIn(0, 2)
-        return if (i.vpn) Out(trrMode = 0, http3 = false, fastWifi = true, helperMode = 0, pagesViaProxy = false)
-        else Out(trrMode = if (i.dohOn) 2 else 0, http3 = i.http3On, fastWifi = false, helperMode = helper, pagesViaProxy = helper != 0 && i.pagesViaPhone)
+        if (!i.vpn) return Out(trrMode = if (i.dohOn) 2 else 0, http3 = i.http3On, fastWifi = false, helperMode = helper, pagesViaProxy = helper != 0 && i.pagesViaPhone)
+        return Out(
+            trrMode = 0, http3 = false, fastWifi = true, helperMode = 0, pagesViaProxy = false,
+            disableIPv6 = i.fastTunnel, pageYieldKBps = if (i.fastTunnel) FAST_PAGE_YIELD_KBPS else PAGE_YIELD_KBPS, tunnel = i.fastTunnel,
+        )
     }
 }
