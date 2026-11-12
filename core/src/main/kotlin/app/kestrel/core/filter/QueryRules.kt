@@ -9,7 +9,8 @@ package app.kestrel.core.filter
  *  - a bare `||host^$removeparam` (drop the whole query of that site)
  *  - exceptions `@@||host^$removeparam=name` and `@@||host^$removeparam` (the site keeps every parameter)
  *  - `doc` / `document`, `badfilter`, `important`, `1p`
- * Left out on purpose: regular-expression values (ReDoS), entity domains (`site.*`), rules for sub-resources (`xhr`, `script`, `image`...: nothing here is a top-level navigation),
+ * Entity hosts (`||bbc.*^`, the shorthand `||bbc.`, `domain=site.*`) mean the site under any public suffix and are compared with the host minus its suffix ([Psl]).
+ * Left out on purpose: regular-expression values (ReDoS), rules for sub-resources (`xhr`, `script`, `image`...: nothing here is a top-level navigation),
  * `3p`, wildcards inside a path, and every other option. A generic rule may never name a parameter that sites need to work (see [PROTECTED]) and a bare rule needs a host.
  *
  * Names are matched exactly (parameter names are case-sensitive); hosts and path prefixes are lower case like the rest of the engine.
@@ -93,6 +94,7 @@ class QueryRules internal constructor(private val pool: ByteArray, val count: In
 
     private fun collect(host: String, path: String, v: Outcome) {
         var lowerPath: String? = null
+        val base = entityBase(host) // "a.b.bbc" for a.b.bbc.co.uk: what entity rules ("bbc.*") are compared with
         fun scan(rules: Array<QueryRule>?) {
             if (rules == null) return
             for (r in rules) {
@@ -100,8 +102,8 @@ class QueryRules internal constructor(private val pool: ByteArray, val count: In
                     val lp = lowerPath ?: path.lowercase().also { lowerPath = it }
                     if (!lp.startsWith(r.path)) continue
                 }
-                if (r.only.isNotEmpty() && !insideAny(host, r.only)) continue
-                if (r.except.isNotEmpty() && insideAny(host, r.except)) continue
+                if (r.only.isNotEmpty() && !insideAny(host, base, r.only)) continue
+                if (r.except.isNotEmpty() && insideAny(host, base, r.except)) continue
                 when (r.kind) {
                     QueryRule.REMOVE -> v.names.add(r.name)
                     QueryRule.REMOVE_ALL -> v.removeAll = true
@@ -120,6 +122,25 @@ class QueryRules internal constructor(private val pool: ByteArray, val count: In
             if (rest.indexOf('.') < 0) break // never a bare "com"
             h = rest
         }
+        if (base != null) {
+            h = base
+            while (true) {
+                scan(index["$h.*"])
+                val dot = h.indexOf('.')
+                if (dot < 0) break
+                h = h.substring(dot + 1)
+            }
+        }
+    }
+
+    /** The host without its public suffix ("a.b.bbc.co.uk" -> "a.b.bbc"), or null for an address and a host that is itself a suffix. */
+    private fun entityBase(host: String): String? {
+        val site = Psl.default.siteOf(host) ?: return null
+        val dot = site.indexOf('.')
+        if (dot < 0) return null // single label or IP literal
+        val suffixLen = site.length - dot // ".co.uk"
+        if (suffixLen >= host.length) return null
+        return host.substring(0, host.length - suffixLen)
     }
 
     companion object {
@@ -138,9 +159,14 @@ class QueryRules internal constructor(private val pool: ByteArray, val count: In
             "client_id", "response_type", "scope", "nonce", "page", "lang", "locale", "session", "sessionid", "sid", "key", "t", "list", "tab", "view", "type", "name", "file",
         )
 
-        /** True when [host] is [dom] or a subdomain of it. */
-        internal fun insideAny(host: String, doms: Array<String>): Boolean {
-            for (d in doms) if (host == d || (host.length > d.length && host.endsWith(d) && host[host.length - d.length - 1] == '.')) return true
+        /** True when [host] is one of [doms] or a subdomain of it; an entry "site.*" stands for the site under any public suffix and is compared with [base] (the host without its suffix). */
+        internal fun insideAny(host: String, base: String?, doms: Array<String>): Boolean {
+            for (d in doms) {
+                if (d.endsWith(".*")) {
+                    val core = d.substring(0, d.length - 2)
+                    if (base != null && (base == core || (base.length > core.length && base.endsWith(core) && base[base.length - core.length - 1] == '.'))) return true
+                } else if (host == d || (host.length > d.length && host.endsWith(d) && host[host.length - d.length - 1] == '.')) return true
+            }
             return false
         }
 
@@ -287,8 +313,11 @@ internal object QueryRuleParser {
                         if (dom.isEmpty()) continue
                         var ex = false
                         if (dom.startsWith("~")) { ex = true; dom = dom.substring(1) }
-                        if (dom.indexOf('*') >= 0) return FAIL_ENTITY
-                        if (!RuleParser.isHostName(dom)) return FAIL_SYNTAX
+                        if (dom.endsWith(".*")) {
+                            val core = dom.substring(0, dom.length - 2)
+                            if (!RuleParser.isHostName(core)) return FAIL_SYNTAX
+                        } else if (dom.indexOf('*') >= 0) return FAIL_ENTITY
+                        else if (!RuleParser.isHostName(dom)) return FAIL_SYNTAX
                         (if (ex) except else only).add(dom)
                         if (only.size + except.size > MAX_DOMAINS) return FAIL_SYNTAX
                     }
@@ -315,9 +344,13 @@ internal object QueryRuleParser {
             var hostPart = if (slash >= 0) body.substring(0, slash) else body
             val rest = if (slash >= 0) body.substring(slash) else ""
             if (hostPart.endsWith("^")) { hostPart = hostPart.substring(0, hostPart.length - 1); if (rest.isNotEmpty()) return FAIL_OPTION }
-            if (hostPart.indexOf('*') >= 0) return FAIL_ENTITY // www.amazon.*
-            if (!RuleParser.isHostName(hostPart) || hostPart.indexOf('.') < 0) return FAIL_SYNTAX
-            host = hostPart
+            // "||www.amazon.*" and the shorthand "||bbc." both mean the site under any public suffix; stored as "bbc.*"
+            var entity = false
+            if (hostPart.endsWith(".*")) { entity = true; hostPart = hostPart.substring(0, hostPart.length - 2) }
+            else if (hostPart.endsWith(".") && hostPart.length > 1) { entity = true; hostPart = hostPart.substring(0, hostPart.length - 1) }
+            if (hostPart.indexOf('*') >= 0) return FAIL_ENTITY
+            if (!RuleParser.isHostName(hostPart) || (!entity && hostPart.indexOf('.') < 0)) return FAIL_SYNTAX
+            host = if (entity) "$hostPart.*" else hostPart
             if (rest.isNotEmpty()) {
                 if (rest.length > 200) return FAIL_SYNTAX
                 for (c in rest) if (c == '*' || c == '^' || c == '|' || c == '?' || c == '$' || c.code <= 32 || c.code > 126) return FAIL_OPTION
@@ -340,7 +373,7 @@ internal object QueryRuleParser {
     private fun goodName(n: String): Boolean {
         if (n.isEmpty() || n.length > 64) return false
         for (c in n) {
-            val ok = (c in 'a'..'z') || (c in 'A'..'Z') || (c in '0'..'9') || c == '_' || c == '-' || c == '.' || c == '~' || c == '%' || c == ':' || c == '[' || c == ']'
+            val ok = (c in 'a'..'z') || (c in 'A'..'Z') || (c in '0'..'9') || c == '_' || c == '-' || c == '.' || c == '~' || c == '%' || c == ':' || c == '[' || c == ']' || c == ';'
             if (!ok) return false
         }
         return true
