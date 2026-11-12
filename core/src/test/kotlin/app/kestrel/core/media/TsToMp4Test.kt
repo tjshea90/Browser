@@ -44,8 +44,6 @@ class TsToMp4Test {
     }
 
     private fun checkVideoSamples(r: Mp4Reader, v: Mp4Reader.Track) {
-        val file = r.sampleBytes(Mp4Reader.Sample(0, 0, 0, 0, true))                                    // (no-op: keeps the reader API in use)
-        assertEquals(0, file.size)
         assertTrue("the first picture is a keyframe", v.samples.first().sync)
         for ((i, s) in v.samples.withIndex()) {
             val b = r.sampleBytes(s)
