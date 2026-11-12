@@ -52,6 +52,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
     override fun onLoadRequest(session: GeckoSession, request: NavigationDelegate.LoadRequest): GeckoResult<AllowOrDeny>? {
         val url = request.uri
         val lower = url.lowercase()
+        if ((lower.startsWith("http://") || lower.startsWith("https://")) && request.target == NavigationDelegate.TARGET_WINDOW_NEW && a.refusePopup(tab, url, request.hasUserGesture)) return GeckoResult.fromValue(deny)
         if (lower.startsWith("http://") || lower.startsWith("https://")) {
             val host = UrlParts.hostOf(url)
             val s = Shields.effective(a.prefs, host)

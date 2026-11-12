@@ -127,6 +127,7 @@ open class BrowserActivity : Activity(), DockListener {
     private lateinit var home: HomeView
     private lateinit var errorView: ErrorView
     private lateinit var pullChip: PullChip // the pull-down-to-refresh indicator, over the page
+    private lateinit var noticeBar: app.kestrel.browser.ui.NoticeBar // "Blocked a pop-up ... Open", over the bottom of the page
     private lateinit var restoreOverlay: RestoreOverlay // over the page view while a page whose engine process died comes back (last preview instead of white)
     private var restoringTab: Tab? = null
     private val restoreTimeout = Runnable { hideRestoring() }
@@ -194,7 +195,7 @@ open class BrowserActivity : Activity(), DockListener {
                 GeckoEngine.runtime(this)
                 GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
                 GeckoEngine.warmUp(this)
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l -> video.info(p, u, w, h, d, l) }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l -> video.info(p, u, w, h, d, l) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }))
                 Health.log("engine", "runtime-ready")
             }
         }
@@ -368,6 +369,8 @@ open class BrowserActivity : Activity(), DockListener {
         content.addView(restoreOverlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) // above the page, below Home / error screens
         pullChip = PullChip(this, pal)
         content.addView(pullChip, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
+        noticeBar = app.kestrel.browser.ui.NoticeBar(this)
+        content.addView(noticeBar, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(12); leftMargin = dp(12); rightMargin = dp(12) })
         geckoView.pull = pullListener
         geckoView.pullEnabled = {
             val t = current
@@ -1376,6 +1379,39 @@ open class BrowserActivity : Activity(), DockListener {
         if (tab === current && countPosted.compareAndSet(false, true)) Io.main.postDelayed({ countPosted.set(false); updateUi() }, 250)
     }
     internal fun toast(message: String) { Toast.makeText(this, message, Toast.LENGTH_SHORT).show() }
+
+    /**
+     * The pop-up and redirect guard refused something ([kind]: "open" a window, "click" a script's click on a link, "overlay" an invisible link, "form" a form that wanted a new window, "redirect" a jump of this
+     * tab to another site). Counted with the page's blocked requests, and a notice offers to open it anyway (the guard cannot know every window the user really wanted). UI thread.
+     */
+    internal fun onPopupBlocked(pageUrl: String, kind: String, url: String) {
+        val tab = (if (pageUrl.isNotEmpty()) tabForPage(pageUrl) else null) ?: current ?: return
+        tab.blocked.addAndGet(app.kestrel.core.filter.Category.ANNOYANCE, 1)
+        tab.pendingLifetime.addAndGet(1)
+        shieldCountChanged(tab)
+        Health.count("guard.$kind")
+        if (tab !== current || tab.isPrivateTab && false) return
+        val host = UrlParts.hostOf(url) ?: url.take(40)
+        val what = if (kind == "redirect") "Stopped a jump to $host" else "Blocked a pop-up ($host)"
+        val canOpen = url.startsWith("http://") || url.startsWith("https://")
+        noticeBar.show(pal, what, if (canOpen) "Open" else null, 7000L) {
+            if (kind == "redirect") loadInTab(tab, url) else { val t = newTabInternal(tab, tab.isPrivateTab); show(t); navigate(t, url) }
+        }
+    }
+
+    /**
+     * A page asks for a NEW window (a link with target=_blank, window.open): true = refuse it. The page-side guard (guard-main.js) already refuses what a script opens without a real tap on that very link; this
+     * is the second wall for what reaches the engine anyway: a window with no tap behind it (the engine's own blocker lets one open for several seconds after any tap) or one that a `$popup` rule names.
+     */
+    internal fun refusePopup(tab: Tab, uri: String, hasUserGesture: Boolean): Boolean {
+        if (!prefs.blockPopups) return false
+        val host = tab.topHost
+        if (!Shields.effective(prefs, host).shieldsUp) return false
+        if (!hasUserGesture || SystemClock.uptimeMillis() - lastTouchAt > 2500) { onPopupBlocked(tab.url, "open", uri); return true }
+        val fs = Engine.peek()
+        if (fs != null && Verdict.isBlocked(fs.check(uri, host, RequestType.POPUP))) { onPopupBlocked(tab.url, "open", uri); return true }
+        return false
+    }
 
     internal fun errorChanged(tab: Tab) {
         if (tab === current) { attachContent(tab); updateUi() }

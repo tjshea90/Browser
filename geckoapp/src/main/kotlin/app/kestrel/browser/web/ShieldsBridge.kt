@@ -31,12 +31,12 @@ class ShieldsBridge(
     private val prefs: () -> Prefs,
     private val tabForPage: (String) -> Tab?,
     private val blockedOnTab: (Tab) -> Unit,
-    /** The pop-up and redirect guard refused something: page address, kind ("open", "click", "overlay", "form", "redirect"), the address it wanted (called on the worker thread). */
-    private val popupBlocked: (String, String, String) -> Unit = { _, _, _ -> },
     /** A video / audio file / playlist was loaded by a page (called on the worker thread: the receiver posts to the UI thread). */
     private val mediaSeen: (MediaCandidate) -> Unit = {},
     /** The page's own player told us about a file: page URL, file URL, picture width and height, length in ms, the label next to its <source>. */
     private val mediaInfo: (String, String, Int, Int, Long, String?) -> Unit = { _, _, _, _, _, _ -> },
+    /** The pop-up and redirect guard refused something: page address, kind ("open", "click", "overlay", "form", "redirect"), the address it wanted (called on the worker thread). */
+    private val popupBlocked: (String, String, String) -> Unit = { _, _, _ -> },
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
