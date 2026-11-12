@@ -1006,7 +1006,8 @@ class StreamEngine(
         when {
             r.state == DlState.COMPLETED -> total = r.total
             media != null && media.exactBytes >= 0 -> total = media.exactBytes
-            media != null && n > 0 && have >= 2 -> { total = (fetched.toDouble() / have * n).toLong(); estimated = true }
+            // the average size of the segments that are COMPLETE (appended or staged) times the number of segments: bytes of half-fetched segments would make the guess jump up and down
+            media != null && n > 0 && have >= 2 -> { total = ((job.written + job.stagedBytes).toDouble() / have * n).toLong(); estimated = true }
             r.estimate > 0 -> { total = r.estimate; estimated = true }
             else -> total = -1
         }
