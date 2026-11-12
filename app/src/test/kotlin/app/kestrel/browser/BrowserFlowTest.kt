@@ -83,10 +83,25 @@ class BrowserFlowTest {
         assertTrue("startup must not create a WebView (cold-start cost)", webViews(a).isEmpty())
     }
 
+    /**
+     * The new tab page's sites, stats and notices are read on a background thread and posted back to the main looper (`refreshNtp`: Io.exec then Io.ui), so they are NOT there after the first
+     * looper pass of [launch]: a loaded CI machine hit exactly that gap once (the alpha23 build, run 43305054932). Wait for the text instead of assuming it is already shown.
+     */
+    private fun awaitText(a: Activity, needle: String, ms: Long = 8000): List<String> {
+        val end = System.currentTimeMillis() + ms
+        var t = texts(a.window.decorView)
+        while (t.none { it.contains(needle) } && System.currentTimeMillis() < end) {
+            Thread.sleep(20)
+            org.robolectric.shadows.ShadowLooper.idleMainLooper()
+            t = texts(a.window.decorView)
+        }
+        return t
+    }
+
     @Test
     fun newTabPageWarnsWhenNoWebViewIsInstalled() {
         // Robolectric has no WebView provider package: the notice path must render rather than crash.
-        val t = texts(launch().window.decorView)
+        val t = awaitText(launch(), "No web engine found")
         assertTrue(t.toString(), t.any { it.contains("No web engine found") })
     }
 
