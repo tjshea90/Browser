@@ -1,21 +1,22 @@
-# CHECKPOINT 729 — read me first, then TASKS.md
+# CHECKPOINT 732 — read me first, then TASKS.md
 
-**Written:** 2026-11-12T02:46:36Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `976f724` (this checkpoint is the commit after it)
+**Written:** 2026-11-12T02:57:01Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `b483361` (this checkpoint is the commit after it)
 
 ## Just done
-stream engine: a dropped job (merged-away sound of a pair, cancelled, cleared) is never written back by a late checkpoint (CI flake pictureAndSoundAreDownloadedTogetherAndMergedIntoOneFile: the hidden sound row came back); stream tests 10x green incl. under CPU load. Emulator: 12 MB download through the real Gecko fetcher completes, sha256 equals the original. CI run 43142630457 failed only on that flake (test-js green, 57 tests)
+alpha16 SHIPPED + RECORDED (run 43143728373 green; the two earlier runs failed on a transient 403 at Publish the Release and a CI-only stream-engine race that is now fixed). Heartbeat trigger trig_01LLoVKsjuTUaDn61UGP1pBN (every 2 h at :17) created. Owner repeated message 10 at 02:56Z (X13 in TASKS).
 
 ## Do this next
-re-dispatch android.yml at HEAD (note: alpha16 list in /tmp/ship16.log + extras), then watch for the tag; if Publish the Release 403 repeats, it is persistent (not the note, not the commit): ask the owner to check repo Settings > Actions > General > Workflow permissions and Settings > Rules
+1) REPLY TO THE OWNER (Release link on its own line: https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha16): what alpha16 contains, answer the repeated message (everything on the list: done/open; audit doc research/AUDIT-2026-11.md; Proton Mail + typing: needs their numbers, steps in section 3; modifying Firefox: no, why), open questions (scheduled CI list build OK?). 2) then work on: X3 rest (M5 rest, M6 digest, M8 queue/limiter UI, M9, M10, T0), X5 scriptlets plan, page-resize idea only with numbers, alpha17. 3) delete heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN when everything is shipped (use delete_trigger)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  dc57dde ckpt 729: stream engine: a dropped job (merged-away sound of a pair, cancelled, cleared)
   9226e37 ckpt 726: TASKS X4/X5/X12 statuses with evidence; HLS auto-resume test; lintRelease clea
   d41caca ckpt 724: M7 content sanity (web page where a file/video was expected -> BAD_CONTENT, HL
   61e1894 ckpt 721: M1b validator-less resume: Sink.readable/pread (Os.pread on both Android sinks
@@ -25,8 +26,7 @@ re-dispatch android.yml at HEAD (note: alpha16 list in /tmp/ship16.log + extras)
   21a22c2 ckpt 711: gated kestrel-g-v0.3.0-alpha16 (gecko code 115) and pushed it: handoff self-te
   7d6778a ckpt 710: pre-ship: alpha16: daily update dialog (app, engine, ad-block lists) with Upda
   6ab16b5 ckpt 709: X3 first batch done+tested: auto-resume after kill (both engines, SQLite v3 cr
-  2d7afd4 ckpt 700: X2 verified on emulator (dialog found/ready/install flow); X12 first pieces co
 ```
 
-(2 automatic checkpoint(s) since the last deliberate one — the
+(1 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
