@@ -64,7 +64,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         button("Reset per-site Shields", "Forget the choices you made in the Shields panel") { confirm("Reset per-site Shields?", "Every site goes back to the defaults above.") { l.resetSiteShields() } }
 
         section("Data saver (off: this hotspot is unmetered)")
-        choice("Level", listOf("Off (recommended: no data limit)", "Standard: confirm big downloads, no autoplay", "Strict: no images until tapped, no web fonts"), prefs.dataSaver.ordinal) { prefs.dataSaver = DataSaver.values()[it] }
+        choice("Level", listOf("Off (recommended: no data limit)", "Standard: confirm big downloads, no autoplay", "Strict: no images until tapped, no web fonts"), prefs.dataSaver.ordinal) { prefs.dataSaver = DataSaver.values()[it]; l.prefsChanged() }
         info("Data used by this browser", l.dataUsed())
         button("Reset data counter", null) { l.resetDataCounter(); rebuild() }
 
