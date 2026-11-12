@@ -96,6 +96,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
             section("Network lab (for slow pages)")
             info("How to use it", "Change ONE switch, load the same site twice, then open Diagnostics > Page loads and compare the times. Keep what is faster.")
             toggle("Encrypted DNS (DNS over HTTPS)", "On: your carrier cannot read or rewrite which sites you look up. Off: the tablet's own DNS, which can be quicker on a hotspot", prefs.dohOn) { prefs.dohOn = it; l.prefsChanged() }
+            toggle("Warm up the top suggestion", "While you type in the address bar, the connection to the first suggested site (one you visited before) is opened ahead, which saves about a second on a slow link. A few KB; never in private tabs", prefs.preconnect) { prefs.preconnect = it }
             toggle("HTTP/3 (QUIC)", "Off can help when the hotspot's carrier slows down UDP traffic; sites then use HTTP/2", prefs.http3On) { prefs.http3On = it; l.prefsChanged() }
         }
 

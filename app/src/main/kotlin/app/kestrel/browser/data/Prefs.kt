@@ -47,6 +47,8 @@ class Prefs private constructor(ctx: Context) {
     /** Network experiments (Kestrel G, Settings > Network lab): encrypted DNS through Cloudflare (on = private; off = the system resolver, which can be quicker on a hotspot) and HTTP/3 over UDP. Both on by default. */
     var dohOn: Boolean get() = bool("net_doh", true); set(v) = put("net_doh", v)
     var http3On: Boolean get() = bool("net_h3", true); set(v) = put("net_h3", v)
+    /** Warm up the connection (DNS, TCP, TLS) to the site the top address-bar suggestion names, so its first bytes do not wait for the handshakes when the owner presses Go. History and bookmarks only, never in a private tab. */
+    var preconnect: Boolean get() = bool("net_preconnect", true); set(v) = put("net_preconnect", v)
     /** Kestrel G: the blocking engine runs inside the Gecko extension (fast). Off = compatibility mode, every request asks the app (the older, slower path). Diagnostics has the switch. */
     var engineInExtension: Boolean get() = bool("eng_ext", true); set(v) = put("eng_ext", v)
     var pullRefresh: Boolean get() = bool("pull_refresh", true); set(v) = put("pull_refresh", v)

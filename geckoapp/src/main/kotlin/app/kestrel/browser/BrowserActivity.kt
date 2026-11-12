@@ -983,11 +983,28 @@ open class BrowserActivity : Activity(), DockListener {
         val dbRef = db
         fun showRows(entries: List<Entry>) {
             if (seq != suggestSeq || !typing()) return
+            entries.firstOrNull()?.let { preconnect(it.url) }
             if (toHome) home.bindSuggestions(q, entries, home.suggestionRoom(homeKeyboardTop()))
             else { suggestions.bind(q, entries); suggestions.visibility = View.VISIBLE; positionSuggestions() }
         }
         if (dbRef == null) { showRows(emptyList()); return }
         Io.fast { val entries = dbRef.suggest(q, 6); Io.ui { showRows(entries) } }
+    }
+
+    private var warmHost = ""
+    private var warmAt = 0L
+
+    /**
+     * Opens the connection (DNS, TCP, TLS) to the site the top suggestion names while the owner is still typing, so the page's first bytes do not wait for the handshakes (about 1-3 round trips,
+     * a second or more on a hotspot). Sites from history and bookmarks only, https only, never from a private tab, once per host per 30 s; Settings > Network lab can switch it off.
+     */
+    private fun preconnect(url: String) {
+        if (!prefs.preconnect || current?.isPrivateTab == true || !url.startsWith("https://", true)) return
+        val host = UrlParts.hostOf(url) ?: return
+        val now = SystemClock.uptimeMillis()
+        if (host == warmHost && now - warmAt < 30_000) return
+        warmHost = host; warmAt = now
+        Io.exec { try { GeckoEngine.executorOrNull()?.speculativeConnect("https://$host/") } catch (e: Throwable) { /* only a head start */ } }
     }
 
     private fun hideSuggestions() { suggestSeq++; suggestions.visibility = View.GONE; home.hideSuggestions() }
