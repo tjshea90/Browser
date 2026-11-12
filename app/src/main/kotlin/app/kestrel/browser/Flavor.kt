@@ -14,6 +14,9 @@ object Flavor {
     /** The engine has the "Scroll feel" prefs (Gecko build only): Settings shows the row. */
     @JvmField var hasScrollFeel = false
 
+    /** The engine keeps tabs live by a memory budget (Gecko build): Settings shows the "Tabs kept ready" row. */
+    @JvmField var hasTabBudget = false
+
     /** The engine view reports pull-down gestures (Gecko build only): Settings shows the "Pull down to refresh" row. */
     @JvmField var hasPullRefresh = false
 

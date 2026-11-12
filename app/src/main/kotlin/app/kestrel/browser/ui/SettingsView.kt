@@ -95,6 +95,11 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
                 prefs.scrollFeel = it; l.prefsChanged()
             }
         }
+        if (app.kestrel.browser.Flavor.hasTabBudget) {
+            choice("Tabs kept ready", listOf("Automatic (default): as many as the free memory allows (2 to 8), so switching tabs and Back stay instant", "Few (2): least memory; the others load again when you open them", "Many (6): more tabs stay ready; Android may then close the browser sooner when memory runs out"), prefs.tabsKept) {
+                prefs.tabsKept = it; l.prefsChanged()
+            }
+        }
         if (app.kestrel.browser.Flavor.hasPullRefresh) toggle("Pull down to refresh", "Drag a page down from its top edge to reload it", prefs.pullRefresh) { prefs.pullRefresh = it }
         choice("Dark pages", listOf("Automatic", "Always", "Never"), prefs.webDark) { prefs.webDark = it }
         choice("Text size", listOf("75%", "100%", "125%", "150%", "175%", "200%"), listOf(75, 100, 125, 150, 175, 200).indexOfFirst { it >= prefs.textZoom }.let { if (it < 0) 1 else it }) {

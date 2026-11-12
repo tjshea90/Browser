@@ -114,6 +114,10 @@ object Health {
     private fun meminfo(key: String): String? =
         try { File("/proc/meminfo").useLines { ls -> ls.firstOrNull { it.startsWith("$key:") }?.substringAfter(':')?.trim() } } catch (e: Exception) { null }
 
+    /** `MemAvailable` from /proc/meminfo in MB (what the kernel says a new allocation can get without swapping: free memory plus the page cache that can be given back), or -1 when it cannot be read. About 0.2 ms. */
+    fun memAvailableMb(): Int =
+        try { (meminfo("MemAvailable")?.substringBefore(' ')?.trim()?.toLongOrNull()?.let { it / 1024 } ?: -1L).toInt() } catch (e: Exception) { -1 }
+
     /** Plain-text report for the Diagnostics screen. [engineFacts] are lines only the engine module knows (version, sessions, ...). */
     fun report(ctx: Context, engineFacts: List<String> = emptyList(), lastEvents: Int = 150): String {
         val sb = StringBuilder()

@@ -45,6 +45,10 @@ class Prefs private constructor(ctx: Context) {
     var neon: Int get() = sp.getInt("neon", 2); set(v) = put("neon", v.coerceIn(0, 2))
     /** Gecko build: how far ahead of the finger the page is pre-drawn. 0 = the engine's own values, 1 = wider margin + shorter touch wait, 2 = also slower top fling speed. */
     var scrollFeel: Int get() = sp.getInt("scroll_feel", 1); set(v) = put("scroll_feel", v.coerceIn(0, 2))
+    /** Gecko build: how many tabs keep their page loaded in memory (Back and switching stay instant): 0 = automatic (follows the free memory), 1 = few (2), 2 = many (6). */
+    var tabsKept: Int get() = sp.getInt("tabs_kept", 0); set(v) = put("tabs_kept", v.coerceIn(0, 2))
+    /** [tabsKept] as the number LiveBudget wants: 0 = automatic. */
+    val tabsKeptCount: Int get() = when (tabsKept) { 1 -> 2; 2 -> 6; else -> 0 }
     /** Network experiments (Kestrel G, Settings > Network lab): encrypted DNS through Cloudflare (on = private; off = the system resolver, which can be quicker on a hotspot) and HTTP/3 over UDP. Both on by default. */
     var dohOn: Boolean get() = bool("net_doh", true); set(v) = put("net_doh", v)
     var http3On: Boolean get() = bool("net_h3", true); set(v) = put("net_h3", v)
