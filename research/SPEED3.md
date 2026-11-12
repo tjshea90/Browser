@@ -38,3 +38,17 @@ See PHONE_OFFLOAD.md section 17. Everything off by default, tile only when paire
 
 ## 4. Review plan (AA3/AA4): three independent read-only reviews, then fixes
 Prompt audit -> research/PROMPT_AUDIT.md; Kotlin performance review and extension-JS performance review -> findings below as they are confirmed.
+
+## 5. The three reviews are in (read-only agents; every cost is an estimate, nothing was measured)
+- `research/PROMPT_AUDIT.md` (all 25 owner messages), `research/PERF_KOTLIN.md` (K1-K13) and `research/PERF_JS.md` (J1-J11, B1-B5) are the full reports with file:line evidence. Verdict of the Kotlin review: the app's own UI code is lean; what the owner feels as reloads, blank pages and a slow Back is POLICY in `BrowserActivity` (2 live tabs, every trim >= 10 closes the rest, only the URL survives a swipe-away).
+- Verdict of the JS review: nothing high; the cost is multiplication (per frame, per XHR, per media URL). One real bug (B1: `cssCache` never invalidated, caches the empty answer).
+
+## 6. AA4 speed batch (alpha22): order of work, with the box each item ticks
+Done items get their evidence written next to them (test name or emulator observation) in 6.1 below.
+1. K1 (tab memory policy): live-session budget from MemAvailable (floor 2), trim handling that does not purge on a quick app switch, private tab keeps its URL when hibernated, bfcache viewers 6 (gecko-prefs v5).
+2. K2 (back stack and scroll survive a swipe-away / process kill): SessionState JSON on disk per regular tab (formdata stripped), restored at start.
+3. K3 (uiMode|locale|layoutDirection in configChanges, ShieldsBridge threads quit), K4 (do not start the engine again while hidden), K6 (link launch does not load the restored tab too).
+4. K5 (cover the page while a tab revives / cold start) and the Back picture for pages the engine must reload (no-store).
+5. Cheap ones: K10 (MediaList usable count), K11 (Health.log without String.format), K12 (browser.db WAL), K9 (thumbnail lanes), K8 (init after first frame), K7 (adaptive download cap while a page loads).
+6. Extension JS: B1 (css cache), J5.1 (in-flight css), J4.1-4.3 (scan), J7 (passive), B2 (tabTop LRU), J3.1 (small media), J9 (pageHashes memo), counters, then J1.1 / J2a.
+7. Not now: J11 (needs a 10-minute check on the tablet: the scrolltest page), J8, J6, B3/B4, K13.
