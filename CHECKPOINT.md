@@ -1,25 +1,24 @@
-# CHECKPOINT 1123 — read me first, then TASKS.md
+# CHECKPOINT 1125 — read me first, then TASKS.md
 
-**Written:** 2026-11-12T17:38:03Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `40ea83f` (this checkpoint is the commit after it)
+**Written:** 2026-11-12T17:43:15Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `4ccab88` (this checkpoint is the commit after it)
 
 ## Just done
-AA3-8 engine check (Mozilla Maven <latest> = ours 160.0.20261104181552), AA3-9 partly (workflow read-only default + write on the 3 publish jobs + persist-credentials false, gate run #70 green; ExternalIntents action allow-list + test), AA3-10 bookkeeping (18 boxes ticked with BUILDLOG evidence, stale weekly/metered wording fixed)
+gated kestrel-g-v0.3.0-alpha22 (gecko code 121) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
 
 ## Do this next
-WAIT for run 43270755926 (alpha22 full gecko build): mcp__github__actions_get get_workflow_run; when success: get_release_by_tag kestrel-g-v0.3.0-alpha22, bash tools/record-release.sh kestrel-g-v0.3.0-alpha22 '<note from CHECKPOINT/ship log>', answer owner message 14 (Release link on its own line). Then AA3-2 (NetworkMonitor.start off UI thread, keyboard A/B switch, Typing lab), AA3-7 Backup/Restore, AA3-6 UI polish, AA3-3 D2 cosmetic index, AA3-4, AA3-5. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN
+TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref ccr-a57c163e-mtq8js, inputs {"app":"gecko","full_build":"true","note":"alpha22 speed: tabs stay ready by free memory (Settings > Tabs kept ready), a tab comes back with its Back stack and scroll position after the app was closed, Back shows the page's picture while a page that cannot be cached loads again, a preview covers a tab that loads again, opening a link no longer loads the old tab too, downloads step aside while a page loads, faster history database, fixes and lighter page scripts in the ad blocker, stricter handling of intent: links"}.
+When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha22), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha22 "alpha22 speed: tabs stay ready by free memory (Settings > Tabs kept ready), a tab comes back with its Back stack and scroll position after the app was closed, Back shows the page's picture while a page that cannot be cached loads again, a preview covers a tab that loads again, opening a link no longer loads the old tab too, downloads step aside while a page loads, faster history database, fixes and lighter page scripts in the ad blocker, stricter handling of intent: links"
+NEVER ship kestrel-g-v0.3.0-alpha22 twice (check BUILDLOG.md and the Releases first).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M BRIEF.md
-     M CLAUDE.md
-     M TASKS.md
-     M app/src/main/kotlin/app/kestrel/browser/ui/TabGrid.kt
-     M docs/FILTER-LISTS.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  e283585 ckpt 1123: AA3-8 engine check (Mozilla Maven <latest> = ours 160.0.20261104181552), AA3-
   b39b8fd ckpt 1118: alpha22 shipped to GitHub: ship.sh gates green, pushed; workflow run 43270755
   4f54c04 ckpt 1117: gated kestrel-g-v0.3.0-alpha22 (gecko code 121) and pushed it: handoff self-t
   5c226ea ckpt 1103: AA4: K1 K2 K5 K6 verified on the emulator (evidence in research/SPEED3.md 6.1
@@ -29,8 +28,7 @@ WAIT for run 43270755926 (alpha22 full gecko build): mcp__github__actions_get ge
   9c34e86 ckpt 1072: AA1 proven on the emulator (simulated VPN: Network line, trr=0, http3 off, ti
   a0a56be ckpt 1069: AA2 + AA1 core done: Courier closed in the browser (every option OFF by defau
   ac00a1f ckpt 1061: Owner message 14 written into TASKS.md as AA1-AA4 in their words (INBOX has i
-  d75864a ckpt 1057: Owner message 13 ANSWERED and SHIPPED: Kestrel Courier alpha3 (kestrel-courie
 ```
 
-(4 automatic checkpoint(s) since the last deliberate one — the
+(1 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
