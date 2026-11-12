@@ -44,3 +44,16 @@ Checkpoint (every few seconds as today): `sink.sync()`, then the journal gets th
 
 ## 7. Milestones
 M-A core writer + tests; M-B engine integration + tests; M-C Android (Sink.truncate, Diagnostics check, "Make MP4" for existing `.ts`, decline reasons in the row); M-D emulator verification; ship with alpha17.
+
+## 8. Results (2026-11-12)
+- JVM: 106 media tests + 8 engine tests (`StreamEngineMp4Test`). Fixtures in `core/src/test/resources/mux/` (a_0..2 = 128x72 B-frames, mono 44.1 kHz; n_0..1 = 96x54 no B-frames, stereo 48 kHz; ad_0 = 64x36, 22.05 kHz).
+- Stress corpus (`tools/mux-corpus.sh <dir>`, then `KESTREL_CORPUS=<dir> ./gradlew :core:test --tests '*CorpusTest' -i`; needs ffmpeg, not run by CI): 14 H.264/AAC variants (no AUD, baseline, B-pyramid, High10, multi-slice, interlaced, 5.1 sound, 322x182, 29.97 fps, 1080p, 4 s GOP, two sound tracks, video only) all give an MP4 that `ffmpeg -f null` decodes with no message and whose frame counts equal the source's; H.265, AC-3, MP3 and MPEG-2 are refused by `TsToMp4.probe` with a reason. Host throughput 22-390 MB/s (cold JIT first), so the A53 will not be the bottleneck on a hotspot.
+- Emulator (Android 10 x86_64, debug build): see TASKS X18d. `Remuxer.verify` (MediaExtractor read-back) logs `mp4 check ok video=1 audio=1 40031 ms first=17694 midAt=18080 ms`.
+- Edit list lesson: the first version sized the `elst` by the decode-time extent and ffprobe counted 148 of 150 frames (players drop pictures shown after the edit ends); fixed to run to the end of the last picture SHOWN, and `assertEditsCover` checks it without ffmpeg.
+
+## 9. Not done / ideas
+- H.265 (`hvcC`), AC-3/E-AC-3 (`dac3`/`dec3`), MP3 (`esds` 0x6B) in the writer.
+- fMP4 (CMAF) HLS and DASH are joined as fragmented MP4 (muxed) or merged by the platform (separate sound): a progressive MP4 would scrub better in ExoPlayer (no `sidx`). A defragmenter would parse `moof`/`trun` and reuse the init's sample-entry boxes verbatim.
+- A parameter-set change INSIDE a run without a discontinuity tag (an unmarked splice) is not detected: the picture would be written with the first run's `avcC`. Detecting a new SPS/PPS in an IDR access unit and treating it like an implicit run start is a small change.
+- Several access units in one PES (rare encoders) are written as one sample.
+- Skip FETCHING the segments of a left-out advertisement run.
