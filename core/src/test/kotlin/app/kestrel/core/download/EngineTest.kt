@@ -292,6 +292,120 @@ class EngineTest {
         assertTrue(s2.servedBytes.get() < data.size)                                  // it did NOT start over
     }
 
+    @Test(timeout = 60_000) fun aKilledProcessCarriesOnByItselfAfterResumeInterrupted() {
+        val data = testBytes(8 * MiB, 21)
+        val s1 = FakeServer(data).also { it.chunkDelayMs = 2 }
+        val h1 = H(s1); val id = h1.enqueue()
+        h1.await(id, "a checkpoint with progress") { v -> v != null && v.done > 2L * MiB && (h1.store.rows[id]?.done ?: 0) > 1L * MiB }
+        val rows = h1.store.rows[id]!!.snapshot()
+        val durable = h1.sinks.sinks.values.first().durable.copyOf()
+        h1.net.online = false; h1.engine.onNetwork(); h1.stop()
+        val sinks2 = FakeSinks(); val uri = rows.destUri!!
+        sinks2.sinks[uri] = FakeSink("data.bin", data.size.toLong(), uri).also { it.bytes = durable.copyOf(data.size); it.durable = durable }
+        val store2 = FakeStore().also { it.rows[id] = rows }
+        val s2 = FakeServer(data)
+        val h2 = H(s2, sinks = sinks2, store = store2)
+        h2.engine.restore()
+        assertEquals(DlState.PAUSED_SYSTEM, h2.view(id)!!.state)
+        h2.engine.resumeInterrupted()                                                 // nobody taps Resume
+        val v = h2.completed(id)
+        assertArrayEquals(data, sinks2.sinks[v.destUri]!!.bytes)
+        assertTrue("it did not start over", s2.servedBytes.get() < data.size)
+        assertEquals("a finished download carries no crash count", 0, h2.awaitRow(id, "completed row") { it?.state == DlState.COMPLETED }!!.crashes)
+    }
+
+    @Test(timeout = 60_000) fun onlyDownloadsTheLastRunWasWorkingOnCarryOnByThemselves() {
+        val store = FakeStore()
+        fun row(id: Long, st: DlState, crashes: Int = 0) { store.rows[id] = Rec(id).also { it.state = st; it.url = "https://files.test/pub/f$id.bin"; it.crashes = crashes } }
+        row(1, DlState.RUNNING)                  // killed while working: carries on
+        row(2, DlState.PAUSED_USER)              // the owner paused it: stays paused
+        row(3, DlState.RUNNING, crashes = 2)     // the third restart in a row without a single byte of progress: left for a tap
+        row(4, DlState.NEEDS_DECISION)           // asks, stays asking
+        val h = H(FakeServer(testBytes(200_000, 22)), store = store)
+        h.engine.restore()
+        assertEquals(3, h.view(3)!!.let { store.rows[3L]!!.crashes.let { _ -> 3 } }) // (the stored row is untouched until a checkpoint)
+        h.engine.resumeInterrupted()
+        h.completed(1)
+        Thread.sleep(150)
+        assertEquals(DlState.PAUSED_USER, h.view(2)!!.state)
+        assertEquals(DlState.PAUSED_SYSTEM, h.view(3)!!.state)
+        assertEquals(DlState.NEEDS_DECISION, h.view(4)!!.state)
+    }
+
+    @Test(timeout = 60_000) fun aRefusedExtraConnectionRetiresAloneAndTheDownloadStillCompletes() {
+        val data = testBytes(10 * MiB, 23)
+        val s = FakeServer(data).also { it.chunkDelayMs = 2; it.connLimit = 1 }      // the server allows ONE connection at a time and answers 503 to the second
+        val c = Config(maxActive = 2, parallel = true, maxConnsPerDownload = 3, maxConnsTotal = 6, windowBytes = 1L shl 20, minGrowRemaining = 1L shl 20, minGrowEtaSec = 0,
+            rampMs = 0, evalMs = 25, growGain = 0.0, checkpointMs = 40, checkpointBytes = 1L shl 20, stallMs = 60_000, backoffBaseMs = 15, backoffCapMs = 40, refusedEvidenceMs = 10, refusedFreshMs = 5_000)
+        val h = H(s, c); val id = h.enqueue()
+        val v = h.completed(id)                                                       // it used to FAIL with the server's 503 once the extra connection ran out of retries
+        assertArrayEquals(data, h.sink(v).bytes)
+        assertTrue("the server really refused the extra connection", s.refused.get() > 0)
+        assertTrue("the refusals stopped: it did not keep asking for the extra connection ${s.refused.get()}", s.refused.get() < 60)
+    }
+
+    @Test(timeout = 60_000) fun aDipThatHitsEveryConnectionDoesNotCostTheParallelism() {
+        val data = testBytes(10 * MiB, 24)
+        val s = FakeServer(data).also { it.chunkDelayMs = 2 }
+        val c = Config(maxActive = 2, parallel = true, maxConnsPerDownload = 3, maxConnsTotal = 6, windowBytes = 1L shl 20, minGrowRemaining = 1L shl 20, minGrowEtaSec = 0,
+            rampMs = 0, evalMs = 25, growGain = 0.0, checkpointMs = 40, checkpointBytes = 1L shl 20, stallMs = 60_000, backoffBaseMs = 5, backoffCapMs = 10, refusedEvidenceMs = 200)
+        val h = H(s, c); val id = h.enqueue()
+        h.await(id, "two connections at work") { it != null && it.connections >= 2 && it.done > 2L * MiB }
+        s.failNext = 6                                                                // a blip: the next requests of every connection fail together
+        val v = h.completed(id)
+        assertArrayEquals(data, h.sink(v).bytes)
+    }
+
+    @Test(timeout = 60_000) fun anOutageInTheMiddleWaitsAndCarriesOnInsteadOfFailing() {
+        val data = testBytes(8 * MiB, 25)
+        val s = FakeServer(data).also { it.chunkDelayMs = 2 }
+        val c = Config(maxActive = 2, parallel = false, windowBytes = 1L shl 20, checkpointMs = 40, checkpointBytes = 1L shl 20, stallMs = 60_000, backoffBaseMs = 1, backoffCapMs = 4, maxFails = 3,
+            outageBaseMs = 40, outageCapMs = 80, outageGiveUpMs = 60_000)
+        val h = H(s, c); val id = h.enqueue()
+        h.await(id, "progress") { it != null && it.state == DlState.RUNNING && it.done > 2L * MiB }
+        s.down = true                                                                 // the upstream dies; the tablet still sees Wi-Fi (net.online stays true)
+        h.await(id, "waiting, not failed") { it?.state == DlState.WAITING_NETWORK }
+        Thread.sleep(250)
+        assertEquals("still waiting", DlState.WAITING_NETWORK, h.view(id)!!.state)
+        s.down = false
+        val v = h.completed(id)
+        assertArrayEquals(data, h.sink(v).bytes)
+    }
+
+    @Test(timeout = 60_000) fun aLongOutageEndsAsStalledWithThePartialKeptAndRetryContinues() {
+        val data = testBytes(8 * MiB, 26)
+        val s = FakeServer(data).also { it.chunkDelayMs = 2 }
+        val c = Config(maxActive = 2, parallel = false, windowBytes = 1L shl 20, checkpointMs = 40, checkpointBytes = 1L shl 20, stallMs = 60_000, backoffBaseMs = 1, backoffCapMs = 4, maxFails = 3,
+            outageBaseMs = 30, outageCapMs = 60, outageGiveUpMs = 300)
+        val h = H(s, c); val id = h.enqueue()
+        h.await(id, "progress") { it != null && it.state == DlState.RUNNING && it.done > 2L * MiB }
+        s.down = true
+        val f = h.await(id, "stalled") { it?.state == DlState.FAILED }!!
+        assertEquals(Reason.STALLED, f.reason)
+        assertTrue("the partial file stays", f.done > 0)
+        s.down = false
+        h.engine.resume(id)                                                           // Retry
+        assertArrayEquals(data, h.sink(h.completed(id)).bytes)
+    }
+
+    @Test(timeout = 60_000) fun aFreshDownloadWhoseHostIsDeadStillFailsFast() {
+        val s = FakeServer(testBytes(MiB, 27)).also { it.down = true }
+        val c = Config(maxActive = 2, backoffBaseMs = 1, backoffCapMs = 4, maxFails = 3, outageBaseMs = 40, outageGiveUpMs = 60_000)
+        val h = H(s, c)
+        val f = h.await(h.enqueue(), "failure") { it?.state == DlState.FAILED }!!
+        assertEquals(Reason.NETWORK, f.reason)                                        // a typo in the address must not wait for half an hour
+    }
+
+    @Test(timeout = 60_000) fun aBigFileStartsWithTwoConnectionsAtOnce() {
+        val data = testBytes(12 * MiB, 28)
+        val s = FakeServer(data).also { it.chunkDelayMs = 3 }
+        val slowRamp = Config(maxActive = 2, parallel = true, maxConnsPerDownload = 3, maxConnsTotal = 6, windowBytes = 1L shl 20, minGrowRemaining = 1L shl 20, minGrowEtaSec = 0,
+            rampMs = 5_000, evalMs = 5_000, growGain = 0.0, checkpointMs = 40, checkpointBytes = 1L shl 20, stallMs = 60_000, backoffBaseMs = 1, backoffCapMs = 4, fastStartMinBytes = 8L shl 20)
+        val h = H(s, slowRamp); val id = h.enqueue()
+        h.await(id, "two connections within the first moments", ms = 5_000) { it != null && it.connections >= 2 }
+        assertArrayEquals(data, h.sink(h.completed(id)).bytes)
+    }
+
     @Test(timeout = 60_000) fun downloadsQueueWhenAllSlotsAreBusy() {
         val s = FakeServer(testBytes(2 * MiB, 16)).also { it.chunkDelayMs = 1 }
         val h = H(s, cfg(maxActive = 1)); val a = h.enqueue("https://files.test/a.bin"); val b = h.enqueue("https://files.test/b.bin")

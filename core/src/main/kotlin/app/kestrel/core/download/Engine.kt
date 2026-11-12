@@ -591,7 +591,7 @@ class Engine(
     /** True when [seg]'s connection should simply stop: another connection of this job moved bytes at least 2 s AFTER this one began failing (so it is not a dip that hit them all). */
     private fun retireExtra(job: Job, seg: Seg, now: Long): Boolean = synchronized(lock) {
         if (job.alive < 2 || job.rec.state != DlState.RUNNING || seg.failedAt == 0L) return false
-        val healthy = job.rec.segs.any { it !== seg && it.worker && it.lastAt > seg.failedAt + 2000 && now - it.lastAt < 8000 }
+        val healthy = job.rec.segs.any { it !== seg && it.worker && it.lastAt > seg.failedAt + cfg.refusedEvidenceMs && now - it.lastAt < cfg.refusedFreshMs }
         if (!healthy) return false
         job.climb.refused(now, job.alive - 1, cfg.refusedNoGrowthMs)
         seg.fails = 0; seg.failedAt = 0

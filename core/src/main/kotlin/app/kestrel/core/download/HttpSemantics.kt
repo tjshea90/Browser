@@ -224,4 +224,7 @@ class Config(
     val outageBaseMs: Long = 10_000,
     val outageCapMs: Long = 60_000,
     val outageGiveUpMs: Long = 30 * 60_000,
+    /** A connection counts as "the extra one the server refuses" only when another connection moved bytes this long AFTER it began failing (a dip that hits them all is not a refusal), and recently. */
+    val refusedEvidenceMs: Long = 2000,
+    val refusedFreshMs: Long = 8000,
 )

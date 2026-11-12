@@ -31,6 +31,10 @@ class FakeServer(@Volatile var data: ByteArray) : Fetcher {
     @Volatile var blockUrl: String? = null        // requests to this exact URL get a 403 (an expired signed link)
     @Volatile var redirectTo: String? = null
     @Volatile var failKind: FetchException.Kind? = null
+    @Volatile var connLimit = 0                   // > 0: a request that arrives while this many replies are open is refused with [overLimitStatus] (a server that caps connections per client)
+    @Volatile var overLimitStatus = 503
+    @Volatile var down = false                    // every request throws a timeout (the hotspot's upstream is dead while Wi-Fi stays up)
+    val refused = AtomicInteger()
     @Volatile override var probeWindow = 0L
     @Volatile override var windowBytes = 0L
     val seen = CopyOnWriteArrayList<Seen>()
@@ -43,6 +47,8 @@ class FakeServer(@Volatile var data: ByteArray) : Fetcher {
         val cond = when (val c = req.cond) { is Cond.IfMatch -> "If-Match: ${c.etag}"; is Cond.IfUnmodifiedSince -> "If-Unmodified-Since: ${c.date}"; null -> null }
         seen.add(Seen(req.url, req.from, req.toInclusive, cond))
         failKind?.let { throw FetchException(it, "fake failure") }
+        if (down) throw FetchException(FetchException.Kind.TIMEOUT, "fake outage")
+        if (connLimit > 0 && concurrent.get() >= connLimit) { refused.incrementAndGet(); return Resp(overLimitStatus, req.url, mapOf("Retry-After" to "0"), ByteArray(0), 0, 0) }
         if (failNext > 0) { failNext--; throw FetchException(FetchException.Kind.RESET, "fake reset") }
         val d = data
         val finalUrl = redirectTo ?: req.url
