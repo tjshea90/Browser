@@ -25,6 +25,8 @@ object MediaRank {
 
     private val SCRIPT_EXTS = setOf("php", "php3", "php4", "php5", "asp", "aspx", "jsp", "jspx", "cgi", "pl", "do", "action")
     private val HINT_WORDS = Regex("""(?i)(?:^|[/._\-=&?])(track|tracking|tracker|pixel|beacon|analytics|telemetry|metrics?|adserv\w*|advert\w*|ads?|banner|preroll|pre-roll|sponsor\w*|promo|teaser|preview|thumb\w*|sprite|ping|stat|stats)(?:$|[/._\-=&?])""")
+    private val RES_TOKEN = Regex("""(?i)[_\-. ]?(?<![0-9a-z])\(?\d{3,4}p?\)?(?![0-9a-z])""")      // "_1080p", "-480", " (720p)"
+    private val QUALITY_WORD = Regex("""(?i)[_\-. ](hd|sd|fhd|uhd|high|low|medium|mobile)(?![0-9a-z])""")
     private val PIECE_PARAMS = setOf("range", "bytestart", "byteend", "start", "end", "sq", "seg", "segment", "rn", "rbuf", "offset", "byte_range", "bytes")
 
     fun rank(items: List<MediaCandidate>, pressedUrl: String? = null): Result {
@@ -137,6 +139,6 @@ object MediaRank {
     /** "movie_1080p.mp4" and "movie_720p.mp4" -> "movie" (a resolution token and the extension removed). */
     internal fun stemWithoutResolution(url: String): String {
         val name = url.substringBefore('?').substringBefore('#').substringAfterLast('/').substringBeforeLast('.')
-        return name.replace(Regex("""(?i)[_\-. ]?\(?\b\d{3,4}p?\b\)?"""), "").replace(Regex("""(?i)[_\-. ](hd|sd|fhd|uhd|high|low|medium|mobile)\b"""), "").trim('_', '-', '.', ' ')
+        return name.replace(RES_TOKEN, "").replace(QUALITY_WORD, "").trim('_', '-', '.', ' ')
     }
 }
