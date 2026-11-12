@@ -31,6 +31,8 @@ class ShieldsBridge(
     private val prefs: () -> Prefs,
     private val tabForPage: (String) -> Tab?,
     private val blockedOnTab: (Tab) -> Unit,
+    /** The pop-up and redirect guard refused something: page address, kind ("open", "click", "overlay", "form", "redirect"), the address it wanted (called on the worker thread). */
+    private val popupBlocked: (String, String, String) -> Unit = { _, _, _ -> },
     /** A video / audio file / playlist was loaded by a page (called on the worker thread: the receiver posts to the UI thread). */
     private val mediaSeen: (MediaCandidate) -> Unit = {},
     /** The page's own player told us about a file: page URL, file URL, picture width and height, length in ms, the label next to its <source>. */
@@ -65,6 +67,7 @@ class ShieldsBridge(
                     "img" -> imageChunk(m.optInt("g"), m.optInt("i", -1))
                     "cnt" -> { counts(m); "" }
                     "st" -> { stats = EngineStats.from(m); "" }
+                    "pop" -> { onPop(m); "" }
                     "css" -> cosmeticCss(m.optString("h"), m.optBoolean("top", true))
                     "media" -> { onMedia(m); "" }
                     "vid" -> { onVid(m); "" }
@@ -77,6 +80,15 @@ class ShieldsBridge(
             result.complete(reply)
         }
         return result
+    }
+
+    /** The guard in the page (or the redirect check in the extension) refused something: "<kind>|<address>". */
+    private fun onPop(m: JSONObject) {
+        val d = m.optString("d")
+        val c = d.indexOf('|')
+        val kind = if (c > 0) d.substring(0, c) else d
+        val url = if (c > 0) d.substring(c + 1) else ""
+        popupBlocked(m.optString("p"), kind, url)
     }
 
     /** A response the extension's sniffer thinks is media: judged again here (the rules live in :core and are tested), then handed on. */
@@ -116,18 +128,19 @@ class ShieldsBridge(
     }
 
     /**
-     * `cfg`: "<mode>:<generation>:<content id>". mode 1 = block on pages of this host, 0 = Shields off / site allowed, L = ask per request (compatibility mode).
+     * `cfg`: "<mode>:<generation>:<content id>:<flags>" (flags: 1 = the pop-up and redirect guard applies to this site). mode 1 = block on pages of this host, 0 = Shields off / site allowed, L = ask per request (compatibility mode).
      * While the lists are still loading (cold start) the answer is provisional - generation 0, no id, the site allow-list unknown - so the extension can already judge requests with the
      * copy it saved last time and asks again within seconds; before this, those first requests went unfiltered.
      */
     private fun pageConfig(host: String): String {
         val snap = Engine.snapshot()
         val gen = snap?.generation ?: 0
-        if (!prefs().engineInExtension) return "L:$gen:"
-        if (host.isEmpty()) return "0:$gen:"
+        if (host.isEmpty()) return (if (prefs().engineInExtension) "0:" else "L:") + gen + "::0"
         val s = Shields.effective(prefs(), host)
+        val guard = if (prefs().blockPopups && s.shieldsUp) 1 else 0 // the pop-up and redirect guard follows the Shields master switch and its own setting
+        if (!prefs().engineInExtension) return "L:$gen::$guard"
         val on = s.shieldsUp && s.blockAds && snap?.fs?.isPageAllowed(host) != true
-        return (if (on) "1:" else "0:") + gen + ":" + (if (snap != null) contentId(snap) else "")
+        return (if (on) "1:" else "0:") + gen + ":" + (if (snap != null) contentId(snap) else "") + ":" + guard
     }
 
     /** Set by [install]: the app build, part of the image identity (a new build may ship a new Public Suffix List). */

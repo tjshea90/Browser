@@ -11,6 +11,7 @@ class GeckoApp : Application() {
         Flavor.title = "Kestrel G"
         Flavor.hasScrollFeel = true
         Flavor.hasPullRefresh = true
+        Flavor.hasPopupGuard = true
         // Every Firefox child process (content, GPU, socket...) creates this Application too: only the UI process may load the 4 MB filter set.
         if (getProcessName() == packageName) { app.kestrel.browser.download.DownloadController.setFetcher(1, app.kestrel.browser.net.GeckoFetcher(app.kestrel.browser.download.UrlConnectionFetcher())) }
         if (getProcessName() == packageName) ProcessLife.init(this)
