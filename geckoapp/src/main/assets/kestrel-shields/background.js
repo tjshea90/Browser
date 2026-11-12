@@ -200,6 +200,11 @@ browser.runtime.onMessage.addListener(function (m, sender) {
     var top = tabId >= 0 ? tabTop.get(tabId) : null;
     return guardAnswer((top && pageHost(top)) || m.h);
   }
+  if (m.k === 'dom') { // a media address found in the page itself (content.js): handed to the app like a sniffed one, marked so the app can drop ad networks
+    var dp = (tabId >= 0 && tabTop.get(tabId)) || m.p || '';
+    send({ k: 'media', u: String(m.u || ''), c: '', l: -1, p: dp, f: m.p !== dp ? (m.p || '') : '', s: 'dom' }).catch(function () {});
+    return undefined;
+  }
   if (m.k === 'pop') {
     var d = String(m.d || ''), c = d.indexOf('|'), kind = c > 0 ? d.slice(0, c) : d, url = c > 0 ? d.slice(c + 1) : '';
     var page = (tabId >= 0 && tabTop.get(tabId)) || m.p || '';

@@ -97,6 +97,11 @@ class ShieldsBridge(
         val ct = m.optString("c")
         val kind = MediaSniff.classify(url, ct, 200) ?: return
         val page = m.optString("p")
+        // an address found in the page's own markup (not loaded yet): ad networks are dropped here, the same lists that block their requests
+        if (m.optString("s") == "dom") {
+            val fs = Engine.peek()
+            if (fs != null && Verdict.isBlocked(fs.check(url, UrlParts.hostOf(page), RequestType.MEDIA))) return
+        }
         val len = if (kind == app.kestrel.core.media.MediaKind.FILE) m.optLong("l", -1L) else -1L
         mediaSeen(MediaCandidate(url, kind, MediaSniff.baseType(ct), len, page, m.optString("f").takeIf { it != page } ?: "", System.currentTimeMillis()))
     }

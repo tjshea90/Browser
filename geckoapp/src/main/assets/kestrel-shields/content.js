@@ -55,3 +55,43 @@
     browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { wanted = !(r && r.on === false); push(); }, function () {});
   } catch (e) { /* never break the page */ }
 })();
+
+// Media addresses that sit in the page itself (owner request X7: "I need to press play ... I want to download the video cleanly"): <video> / <source> elements, og:video tags, links to media files and the
+// player configuration inside inline scripts and JSON. Found without playing anything, so the download list exists before the page's play button (and the spam behind it) is touched.
+(function () {
+  try {
+    var EXT = /\.(m3u8|mpd|mp4|webm|mkv|m4v|mov|mp3|m4a|aac|ogg|opus|flac)(?:$|[?#])/i;
+    var FIND = /https?:\/\/[^\s"'<>()\\]+?\.(?:m3u8|mpd|mp4|webm|mkv|m4v|mov|mp3|m4a|aac|ogg|opus|flac)(?:\?[^\s"'<>()\\]*)?/gi;
+    var sent = {}, n = 0;
+    function report(u) {
+      if (!u || n >= 40) return;
+      try { u = new URL(u.replace(/&amp;/g, '&'), location.href).href; } catch (e) { return; }
+      if (u.indexOf('http') !== 0 || sent[u] || !EXT.test(u)) return;
+      sent[u] = 1; n++;
+      browser.runtime.sendMessage({ k: 'dom', u: u, p: location.href }).catch(function () {});
+    }
+    function scan() {
+      try {
+        var i, e, list = document.querySelectorAll('video, audio, source[src]');
+        for (i = 0; i < list.length; i++) { e = list[i]; report(e.currentSrc || e.src || e.getAttribute('src')); }
+        var metas = document.querySelectorAll('meta[property^="og:video"], meta[property^="og:audio"], meta[name="twitter:player:stream"], link[rel="preload"][as="video"]');
+        for (i = 0; i < metas.length; i++) report(metas[i].getAttribute('content') || metas[i].getAttribute('href'));
+        var anchors = document.querySelectorAll('a[href]');
+        for (i = 0; i < anchors.length && i < 600; i++) if (EXT.test(anchors[i].href)) report(anchors[i].href);
+        var scripts = document.scripts, budget = 300000;
+        for (i = 0; i < scripts.length && budget > 0 && n < 40; i++) {
+          if (scripts[i].src) continue;
+          var t = scripts[i].textContent;
+          if (!t || t.length > 200000) continue; // a framework bundle, not a player configuration
+          budget -= t.length;
+          t = t.replace(/\\u002f/gi, '/').replace(/\\u0026/gi, '&').replace(/\\\//g, '/');
+          var m; FIND.lastIndex = 0;
+          while ((m = FIND.exec(t)) !== null && n < 40) report(m[0]);
+        }
+      } catch (x) { /* never break the page */ }
+    }
+    function later() { if (window.requestIdleCallback) requestIdleCallback(scan, { timeout: 3000 }); else setTimeout(scan, 1500); }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', later); else later();
+    window.addEventListener('load', function () { setTimeout(later, 2500); });
+  } catch (e) { /* never break the page */ }
+})();
