@@ -257,7 +257,7 @@ object UpdateManager {
     /** One conditional request to Mozilla's Maven metadata (a 304 costs headers only). */
     private fun checkEngine(app: Context) {
         val url = Flavor.engineMetaUrl
-        if (url.isEmpty() || !url.startsWith("https://")) return
+        if (url.isEmpty() || !(url.startsWith("https://") || url.startsWith("http://127.0.0.1"))) return // loopback only so the tests can use a local server
         val s = sp(app)
         val c = open(url)
         val etag = s.getString("engine_etag", null)

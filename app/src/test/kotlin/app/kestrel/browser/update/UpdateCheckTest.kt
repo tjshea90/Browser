@@ -70,6 +70,7 @@ class UpdateCheckTest {
                     "[" + tagsInGithubOrder.filter { t -> t.startsWith(prefix) }.joinToString(",") { t -> """{"ref":"refs/tags/$t","node_id":"n","url":"u","object":{"sha":"s","type":"commit","url":"u"}}""" } + "]"
                 }
                 path.startsWith("/releases/tags/") -> path.removePrefix("/releases/tags/").takeIf { t -> t in tagsInGithubOrder }?.let { t -> releaseJson(t) }
+                path == "/maven-metadata.xml" -> "<metadata><versioning><release>161.0.20261110090000</release><versions><version>160.0.20261104181552</version><version>161.0.20261110090000</version></versions></versioning></metadata>"
                 path == "/releases" -> "[" + tagsInGithubOrder.take(8).joinToString(",") { t -> releaseJson(t) } + "]" // GitHub's order, and the old 8 entries
                 else -> null
             }
@@ -115,6 +116,31 @@ class UpdateCheckTest {
             Thread.sleep(20)
         }
         throw AssertionError("the check did not finish: ${UpdateManager.state.phase}")
+    }
+
+    @Test fun theEngineWatchLearnsTheNewestFirefoxAndCostsOnlyHeadersTheSecondTime() {
+        Flavor.engineVersion = "160.0"; Flavor.engineMetaUrl = "http://127.0.0.1:${server.localPort}/maven-metadata.xml"
+        try {
+            val c = ctx(108L)
+            assertNull(UpdateManager.engineNewest(c))
+            checkNow(c)
+            assertEquals("161.0.20261110090000", UpdateManager.engineNewest(c))
+            assertTrue(UpdateManager.engineIsNewer(c))
+            val nm = notModified.get()
+            checkNow(c)
+            assertTrue("the second look asked Mozilla conditionally and got a 304", notModified.get() > nm && paths.count { it == "/maven-metadata.xml" } == 2)
+            assertEquals("161.0.20261110090000", UpdateManager.engineNewest(c))
+            Flavor.engineVersion = "161.0"
+            assertTrue("the same release is not news", !UpdateManager.engineIsNewer(c))
+        } finally { Flavor.engineVersion = ""; Flavor.engineMetaUrl = "" }
+    }
+
+    @Test fun anEngineLookThatFailsNeverFailsTheAppCheck() {
+        Flavor.engineVersion = "160.0"; Flavor.engineMetaUrl = "http://127.0.0.1:1/maven-metadata.xml" // nothing listens there
+        try {
+            val s = checkNow(ctx(108L))
+            assertEquals(UpdateManager.Phase.AVAILABLE, s.phase)
+        } finally { Flavor.engineVersion = ""; Flavor.engineMetaUrl = "" }
     }
 
     @Test fun findsAlpha13FromAnOlderVersionEvenThoughGithubListsItTenth() {
