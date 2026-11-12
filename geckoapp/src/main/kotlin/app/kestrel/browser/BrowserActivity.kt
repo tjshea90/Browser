@@ -1428,7 +1428,8 @@ open class BrowserActivity : Activity(), DockListener {
         if (!prefs.blockPopups) return false
         val host = tab.topHost
         if (!Shields.effective(prefs, host).shieldsUp) return false
-        if (!hasUserGesture || SystemClock.uptimeMillis() - lastTouchAt > 2500) { onPopupBlocked(tab.url, "open", uri); return true }
+        // (the engine's own "user gesture" flag is false for a window.open inside a tap on some pages, so the app's own record of the last finger touch decides)
+        if (SystemClock.uptimeMillis() - lastTouchAt > 2500) { onPopupBlocked(tab.url, "open", uri); return true }
         val fs = Engine.peek()
         if (fs != null && Verdict.isBlocked(fs.check(uri, host, RequestType.POPUP))) { onPopupBlocked(tab.url, "open", uri); return true }
         return false
