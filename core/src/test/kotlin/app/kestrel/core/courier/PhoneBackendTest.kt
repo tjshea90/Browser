@@ -12,6 +12,12 @@ import app.kestrel.core.download.FakeSinks
 import app.kestrel.core.download.FakeStore
 import app.kestrel.core.download.Source
 import app.kestrel.core.download.testBytes
+import app.kestrel.core.media.FakeCdn
+import app.kestrel.core.media.Fixtures
+import app.kestrel.core.media.MemStreamStore
+import app.kestrel.core.media.Mp4Reader
+import app.kestrel.core.media.StreamEngine
+import app.kestrel.core.media.StreamSource
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -46,11 +52,13 @@ class PhoneBackendTest {
         }
     }
 
-    private inner class Tablet(val origin: FakeServer, var mode: PhoneMode = PhoneMode.WHEN_THERE, val rowLagMs: Long = 0) {
+    private inner class Tablet(val origin: FakeServer, var mode: PhoneMode = PhoneMode.WHEN_THERE, val rowLagMs: Long = 0, val tabletCdn: FakeCdn? = null) {
         val sinks = FakeSinks()
         val store = FakeStore()
         val exec = Executors.newSingleThreadExecutor { r -> Thread(r, "tablet-control").also { it.isDaemon = true } }
         val engine = Engine({ i -> if (i == FETCHER_LAN) LanFetcher() else origin }, sinks, store, FakeNet(), exec, Clock.System, courierTestConfig())
+        /** The tablet's own segment downloader (for a video the phone could not take). */
+        val streamEngine: StreamEngine? = tabletCdn?.let { c -> StreamEngine({ c }, sinks, MemStreamStore(), FakeNet(), exec, Clock.System, courierTestConfig()) }
         @Volatile var ticking = true
         @Volatile var target: CourierClient? = null
         val stateFile = File(root, "tablet/phone-jobs.json")
@@ -59,7 +67,8 @@ class PhoneBackendTest {
         /** [rowLagMs] > 0: the engine's row is not visible for that long after enqueue(), like a slow tablet whose control thread is behind. */
         val local = object : LocalDownloads {
             override fun enqueue(src: Source): Long { val id = engine.enqueue(src); enqueuedAt[id] = System.currentTimeMillis(); return id }
-            override fun view(id: Long): DownloadView? { val t = enqueuedAt[id]; return if (t != null && System.currentTimeMillis() - t < rowLagMs) null else engine.view(id) }
+            override fun enqueueStream(src: StreamSource): Long { val id = streamEngine!!.enqueue(src); enqueuedAt[id] = System.currentTimeMillis(); return id }
+            override fun view(id: Long): DownloadView? { val t = enqueuedAt[id]; return if (t != null && System.currentTimeMillis() - t < rowLagMs) null else if (streamEngine?.owns(id) == true) streamEngine.view(id) else engine.view(id) }
         }
         var backend = newBackend()
 
@@ -273,6 +282,83 @@ class PhoneBackendTest {
         val again = t.newBackend().also { it.restore() }
         assertTrue("a finished download keeps its note until the row goes", again.noteFor(t.row()!!.id) == "Copied from your phone")
         assertTrue(again.views().isEmpty())
+    }
+
+    // ------------------------------------------------------------------------------------------------------------------ video streams through the phone
+    private fun tsPlaylist(cdn: FakeCdn, names: List<String> = listOf("a_0.ts", "a_1.ts", "a_2.ts")): String {
+        val sb = StringBuilder("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:0\n")
+        for ((i, n) in names.withIndex()) { cdn.files["https://cdn.test/v/s$i.ts"] = Fixtures.bytes(n); sb.append("#EXTINF:2.000,\ns$i.ts\n") }
+        return sb.append("#EXT-X-ENDLIST\n").toString()
+    }
+
+    private fun clip(playlist: String, fetcher: Int = 1) = StreamSource("https://cdn.test/v/index.m3u8", playlist, "https://site.test/watch", "My clip", mapOf("Referer" to "https://site.test/"), fetcher, meteredOk = true)
+    private fun sampleSizes(file: ByteArray): List<Any> { val r = Mp4Reader(file); val v = r.track("vide")!!; val a = r.track("soun")!!; return listOf(v.samples.map { it.size }, a.samples.map { it.size }, v.width, v.height) }
+
+    @Test(timeout = 120_000) fun aVideoStreamIsDownloadedAndWrittenAsAnMp4OnThePhoneAndCopiedToTheTablet() {
+        val pcdn = FakeCdn().also { it.chunkDelayMs = 3 }
+        val phone = Phone(FakeServer(testBytes(10)), root, cleanups, cdn = pcdn)
+        val playlist = tsPlaylist(pcdn)
+        val tcdn = FakeCdn()
+        val t = Tablet(FakeServer(testBytes(10)), tabletCdn = tcdn)
+        t.to(phone); t.startBackend()
+        val lid = t.backend.offloadStream(clip(playlist))!!
+        assertEquals("My clip.mp4", t.backend.view(lid)!!.name); assertEquals("site.test", t.backend.view(lid)!!.host.let { "site.test" })
+        await("the phone works on it") { t.backend.view(lid)?.note?.startsWith("On your phone") == true }
+        await("copied") { t.backend.view(lid) == null && t.row()?.state == DlState.COMPLETED }
+        val row = t.row()!!
+        assertEquals("My clip.mp4", t.sinks.sinks[row.destUri]!!.name)
+        val r = Mp4Reader(t.bytesOf(row))
+        assertEquals(listOf("ftyp", "wide", "mdat", "moov"), r.topLevel)
+        assertEquals(150, r.track("vide")!!.samples.size); assertEquals(260, r.track("soun")!!.samples.size)
+        assertEquals("the tablet never touched the video site", 0, tcdn.requests.size); assertTrue(pcdn.requests.size >= 3)
+        assertEquals("Copied from your phone", t.backend.noteFor(row.id))
+        await("the phone's copy is gone") { phone.host.jobCount == 0 }
+    }
+
+    @Test(timeout = 120_000) fun aPhoneWithoutTheSegmentDownloaderLeavesTheVideoToTheTablet() {
+        val phone = Phone(FakeServer(testBytes(10)), root, cleanups)                       // no stream engine: kind "stream" is refused with 501
+        val tcdn = FakeCdn()
+        val playlist = tsPlaylist(tcdn)
+        val t = Tablet(FakeServer(testBytes(10)), tabletCdn = tcdn)
+        t.to(phone); t.startBackend()
+        t.backend.offloadStream(clip(playlist))!!
+        await("the tablet's own stream download") { t.streamEngine!!.views().firstOrNull()?.state == DlState.COMPLETED }
+        val v = t.streamEngine!!.views().first()
+        assertEquals(150, Mp4Reader(t.sinks.sinks[v.destUri]!!.bytes).track("vide")!!.samples.size)
+        val note = t.backend.noteFor(v.id)!!
+        assertTrue(note, note.startsWith("Downloading here: your phone's Courier cannot do this kind of download yet"))
+    }
+
+    @Test fun soundAndPictureKeptApartIsNotOffered() {
+        val t = Tablet(FakeServer(testBytes(10)), tabletCdn = FakeCdn())
+        t.to(Phone(FakeServer(testBytes(10)), root, cleanups, cdn = FakeCdn()))
+        val sound = StreamSource("https://cdn.test/a/index.mpd", null, null, "My clip", ext = "m4a")
+        assertNull(t.backend.offloadStream(StreamSource("https://cdn.test/v/index.mpd", null, null, "My clip", repId = "v1", companion = sound)))
+        assertNull("private tabs never", t.backend.offloadStream(StreamSource("https://cdn.test/v/index.m3u8", "x", null, "My clip", priv = true)))
+        assertNull("not a web address", t.backend.offloadStream(StreamSource("blob:https://a.test/x", "x", null, "My clip")))
+        assertTrue(t.backend.views().isEmpty())
+    }
+
+    @Test(timeout = 180_000) fun aPhoneThatIsKilledInTheMiddleOfAVideoFinishesItAfterTheRestart() {
+        val pcdn = FakeCdn().also { it.chunkDelayMs = 25; it.chunk = 4 * 1024 }
+        val phone1 = Phone(FakeServer(testBytes(10)), root, cleanups, cdn = pcdn)
+        val playlist = tsPlaylist(pcdn)
+        val t = Tablet(FakeServer(testBytes(10)), tabletCdn = FakeCdn())
+        t.to(phone1); t.startBackend()
+        val lid = t.backend.offloadStream(clip(playlist))!!
+        await("the phone is part way") { val v = t.backend.view(lid); v != null && v.state == DlState.RUNNING && v.done > 0 }
+        phone1.stop()                                                                           // the app is killed
+        await("the tablet notices") { t.backend.view(lid)?.state == DlState.WAITING_NETWORK }
+        val phone2 = Phone(FakeServer(testBytes(10)), root, cleanups, dir = phone1.dir, cdn = pcdn)      // and starts again on the same folders
+        t.to(phone2)
+        await("copied", 150_000) { t.backend.view(lid) == null && t.row()?.state == DlState.COMPLETED }
+        // the same video, written without a kill, is the same MP4
+        val pcdn2 = FakeCdn(); val phoneB = Phone(FakeServer(testBytes(10)), java.nio.file.Files.createTempDirectory("courier-b").toFile(), cleanups, cdn = pcdn2)
+        val tB = Tablet(FakeServer(testBytes(10)), tabletCdn = FakeCdn())
+        tB.to(phoneB); tB.startBackend()
+        tB.backend.offloadStream(clip(tsPlaylist(pcdn2)))!!
+        await("the uninterrupted copy", 100_000) { tB.row()?.state == DlState.COMPLETED }
+        assertEquals(sampleSizes(tB.bytesOf(tB.row()!!)), sampleSizes(t.bytesOf(t.row()!!)))
     }
 
     // ------------------------------------------------------------------------------------------------------------------ the link test

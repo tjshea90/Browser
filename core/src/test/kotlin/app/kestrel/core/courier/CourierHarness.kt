@@ -8,6 +8,8 @@ import app.kestrel.core.download.FakeServer
 import app.kestrel.core.download.FetchRequest
 import app.kestrel.core.download.FetchResponse
 import app.kestrel.core.download.Fetcher
+import app.kestrel.core.media.FakeCdn
+import app.kestrel.core.media.StreamEngine
 import java.io.File
 import java.net.InetAddress
 import java.util.concurrent.CopyOnWriteArrayList
@@ -45,6 +47,8 @@ class Phone(
     hostKey: ByteArray = TEST_KEY,
     val dir: File = File(root, "phone"),
     val clock: Skew = Skew(),
+    /** The fake video CDN: when given, the phone also has the segment downloader (video streams); null = plain files only. */
+    val cdn: FakeCdn? = null,
 ) {
     val spy = Spy(origin)
     val sinks = StagingSinks(File(dir, "staging"))
@@ -53,14 +57,16 @@ class Phone(
     val engine = Engine({ spy }, sinks, store, FakeNet(), exec, clock, courierTestConfig())
     @Volatile var free = 100L * 1024 * 1024 * 1024
     @Volatile var dns: List<ByteArray> = listOf(byteArrayOf(93.toByte(), 184.toByte(), 216.toByte(), 34))
-    val host = CourierHost(hostKey, engine, sinks, File(dir, "courier-jobs.json"), spy, clock, { free }, "Test phone", resolve = { dns })
+    val streamStore = JsonStreamStore(File(dir, "streams"))
+    val streams: StreamEngine? = cdn?.let { c -> StreamEngine({ c }, sinks, streamStore, FakeNet(), exec, clock, courierTestConfig()) }
+    val host = CourierHost(hostKey, engine, sinks, File(dir, "courier-jobs.json"), spy, clock, { free }, "Test phone", resolve = { dns }, streams = streams)
     val server = CourierServer(0, InetAddress.getByName("127.0.0.1"), { r, _ -> r.isLoopbackAddress }, { r, p -> host.handle(r, p) })
     @Volatile var ticking = true
     val port: Int
     val base: String
 
     init {
-        engine.restore(); host.load(); engine.resumeInterrupted()
+        engine.restore(); streams?.restore(); host.load(); engine.resumeInterrupted(); streams?.resumeInterrupted()
         Thread { while (ticking) { engine.tick(); try { Thread.sleep(20) } catch (e: InterruptedException) { return@Thread } } }.also { it.isDaemon = true; it.start() }
         port = server.start()
         base = "http://127.0.0.1:$port"
