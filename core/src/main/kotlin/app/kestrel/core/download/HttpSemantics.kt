@@ -227,4 +227,6 @@ class Config(
     /** A connection counts as "the extra one the server refuses" only when another connection moved bytes this long AFTER it began failing (a dip that hits them all is not a refusal), and recently. */
     val refusedEvidenceMs: Long = 2000,
     val refusedFreshMs: Long = 8000,
+    /** Transport-stream videos (HLS) with H.264 + AAC are written straight into an MP4 while they download; false = always join them as .ts first (the old way). */
+    val directMp4: Boolean = true,
 )
