@@ -7,6 +7,7 @@ import app.kestrel.browser.Io
 import app.kestrel.browser.data.Prefs
 import app.kestrel.browser.shield.Engine
 import app.kestrel.browser.shield.Shields
+import app.kestrel.core.filter.BridgeLane
 import app.kestrel.core.filter.ExtImage
 import app.kestrel.core.filter.Psl
 import app.kestrel.core.filter.RequestType
