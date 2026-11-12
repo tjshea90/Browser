@@ -432,6 +432,7 @@ class StreamEngine(
             synchronized(lock) { rec.state = DlState.RUNNING; job.lastBytesAt = clock.now(); job.lastCkpt = clock.now(); job.meter.reset() }
             changed(rec.id)
             val n = synchronized(lock) { job.media!!.segments.size }
+            drain(job, synchronized(lock) { job.media!! })                       // segments already staged (the first one was fetched to look at it; an earlier run left others) are appended before anything else: a stream whose segments are ALL staged has no worker that would do it
             val workers = ArrayList<Thread>()
             val want = maxOf(1, minOf(if (rec.parentId != 0L) minOf(2, cfg.maxConnsPerDownload) else cfg.maxConnsPerDownload, n - rec.next))
             for (i in 0 until want) { synchronized(lock) { job.alive++ }; workers.add(spawner.spawn("stream-${rec.id}-w$i") { try { worker(job) } finally { synchronized(lock) { job.alive-- } } }) }
@@ -463,6 +464,10 @@ class StreamEngine(
                 synchronized(lock) { rec.reason = e.reason; rec.detail = e.detail }
                 log("stream ${rec.id} failed: ${e.reason} ${e.detail}", null)
             }
+        } catch (e: MuxBroken) {
+            outcome = DlState.QUEUED
+            synchronized(lock) { job.forceRaw = true; job.restartAfterStop = true; job.wipeAfterStop = true }
+            log("stream ${rec.id}: the MP4 writer failed, starting over as a .ts", e)
         } catch (e: SinkException) {
             outcome = DlState.FAILED
             synchronized(lock) { rec.reason = e.reason }

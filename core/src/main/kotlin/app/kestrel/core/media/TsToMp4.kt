@@ -287,7 +287,7 @@ class TsToMp4(
                 }
                 override fun audio(es: ByteArray, len: Int, pts: Long) { if (aac == null) aac = Adts.config(es, 0, len) }
             })
-            d.feed(b, off, len); d.endSegment()
+            try { d.feed(b, off, len); d.endSegment() } catch (e: RuntimeException) { return "the first part of the stream could not be read" }
             d.problem?.let { return "the stream is $it" }
             if (!d.programKnown) return "the first part of the stream has no program table"
             if (d.videoType == 0) return "no picture stream"

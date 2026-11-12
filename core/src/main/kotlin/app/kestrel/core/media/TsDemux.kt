@@ -94,7 +94,7 @@ class TsDemux(private val out: Out) {
         val cc = b3 and 0xF
         var off = p + 4
         if (afc and 2 != 0) { off += 1 + (b[off].toInt() and 0xFF); if (off > p + 188) return }
-        if (afc and 1 == 0) return                                           // no payload
+        if (afc and 1 == 0 || off >= p + 188) return                         // no payload
         val last = lastCc[pid]
         if (last == cc) return                                               // a duplicate (allowed once by the standard)
         val lost = last >= 0 && cc != ((last + 1) and 0xF)
