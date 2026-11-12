@@ -40,6 +40,8 @@ class StreamEngineTest {
             throw AssertionError("timeout waiting for $what; last=${view(id)?.state} ${view(id)?.reason} done=${view(id)?.done}/${view(id)?.total}")
         }
         fun completed(id: Long) = await(id, "completion") { it?.state == DlState.COMPLETED }!!
+        /** The view reports COMPLETED a moment before the engine's last store writes land: assertions about the store wait for them. */
+        fun eventually(what: String, cond: () -> Boolean) { val end = System.currentTimeMillis() + 10_000; while (System.currentTimeMillis() < end) { if (cond()) return; Thread.sleep(5) }; throw AssertionError("timeout waiting for $what") }
         fun awaitStoredState(id: Long): DlState { val end = System.currentTimeMillis() + 10_000; while (System.currentTimeMillis() < end) { store.rows[id]?.state?.let { if (it == DlState.COMPLETED) return it }; Thread.sleep(5) }; return store.rows[id]?.state ?: DlState.FAILED }
         fun out(v: DownloadView): ByteArray = sinks.sinks[v.destUri]!!.bytes
         fun enqueue(playlist: String, url: String = "https://cdn.test/v/index.m3u8", stem: String = "My clip", est: Long = -1) =
@@ -66,8 +68,8 @@ class StreamEngineTest {
         assertTrue("several segments were in flight at once", h.cdn.maxConcurrent.get() >= 2)
         assertEquals(expected.size.toLong(), v.total); assertFalse(v.estimated)
         assertTrue(h.sinks.sinks[v.destUri]!!.published)
-        assertTrue("staging is cleaned up", h.store.stagedFiles(id).isEmpty())
-        assertEquals(DlState.COMPLETED, h.store.rows[id]!!.state)
+        h.eventually("staging is cleaned up") { h.store.stagedFiles(id).isEmpty() }
+        h.eventually("the row is stored as completed") { h.store.rows[id]?.state == DlState.COMPLETED }
     }
 
     @Test(timeout = 60_000) fun aes128SegmentsAreDecrypted() {
@@ -335,7 +337,7 @@ class StreamEngineTest {
         assertEquals("Clip - 360p.mp4", v.name); assertEquals(20L, v.total)
         assertTrue(sinks.deleted.containsAll(listOf(m.videoUri, m.audioUri)))                                                  // the two parts were removed
         assertEquals("only the merged file is a download", 1, h.engine.views().size)
-        assertEquals(1, h.store.rows.values.count { it.parentId == 0L && it.id == id }); assertTrue(h.store.rows.size == 1)  // the hidden sound record is gone too
+        h.eventually("the hidden sound record is gone too") { h.store.rows.size == 1 && h.store.rows.values.count { it.parentId == 0L && it.id == id } == 1 }
     }
 
     @Test(timeout = 60_000) fun aMergeThatIsRefusedKeepsBothFiles() {
