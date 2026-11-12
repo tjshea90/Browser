@@ -2,6 +2,7 @@ package app.kestrel.browser.net
 
 import android.content.Context
 import android.net.ConnectivityManager
+import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
 import app.kestrel.browser.Io
