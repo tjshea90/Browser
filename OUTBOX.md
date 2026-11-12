@@ -714,3 +714,39 @@
 >
 > Next I'm making the phone more patient on its first answer, since the emulator showed a slow first reply makes the tablet give up early, and checking what happens when Android kills the Courier in the middle of a download.
 <!-- sha:d05cefc2c207 -->
+
+## 2026-11-12T09:37:23Z
+> Videos now go through your phone too. I tested it on the emulator, not on your real phone and tablet (details below).
+>
+> **How to try it:**
+> 1. **On the phone:** install Courier alpha2 over alpha1 (same signing key) and leave "Ready for the tablet" on.
+> 2. **On the tablet:** update to Kestrel G alpha20. Your pairing and the "Download on my phone" setting stay as they are.
+> 3. **Download a video:** open a page with a video, tap the download icon, pick the video, then open Menu > Downloads.
+> 4. **What you should see:** the row says "On your phone" with live progress, speed, Pause and Cancel. The finished MP4 then lands on the tablet.
+>
+> **What the phone does:**
+> - It downloads HLS videos and videos whose picture and sound come apart, and it merges them with its own converter.
+> - If the phone can't do a video or isn't reachable, the tablet downloads it itself and the row says why.
+> - With an old Courier the tablet just downloads by itself.
+> - Private tabs and app updates always stay on the tablet.
+>
+> **What I tested:**
+> - On the emulator, with both apps running together, a video went through the phone and the MP4 came out identical in content to what the tablet makes on its own.
+> - It survived Pause/Resume and the Courier being killed mid-video, and the fallback worked.
+> - Testing caught a bug where the phone would have handed over a video without its sound. That's fixed.
+> - Not checked: your real hotspot, real speeds, Android 16, and H.265 videos on your phone. Tap "Test the phone link" in Settings (about 40 MB) to see whether the phone is actually faster.
+> - If the phone's data plan is the limit, the same plan pays for these downloads.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-courier-v0.1.0-alpha2
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha20
+>
+> **Still open, waiting on you:**
+> - Is the phone an Android 16 phone?
+> - When you say the phone is faster, what do you see (MB/s, or minutes for the same file)?
+> - Should it handle everything, or only big files and videos?
+> - Your real pair test of the two apps.
+> - The Proton Mail "Page loads" numbers.
+> - Your keyboard app, accessibility, autofill and 5 GHz facts.
+> - A yes or no on a scheduled CI list-build workflow.
+<!-- sha:8a11c0553a4e -->
