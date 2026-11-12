@@ -20,7 +20,7 @@
 </main>
 <script>
 (function () {
-  var FORMATS = [['JPEG', 'lab.jpg'], ['WebP', 'lab.webp'], ['AVIF', 'lab.avif'], ['JPEG XL', 'lab.jxl']];
+  var FORMATS = [['JPEG', 'lab.jpg', 126180], ['WebP', 'lab.webp', 141900], ['AVIF', 'lab.avif', 43913], ['JPEG XL', 'lab.jxl', 77538]]; // file sizes in bytes (this folder's files)
   var out = document.getElementById('out'), env = document.getElementById('env'), run = document.getElementById('run');
   env.textContent = 'cores: ' + (navigator.hardwareConcurrency || '?') + ', pixel ratio ' + window.devicePixelRatio + ', ' + navigator.userAgent.replace(/^Mozilla\/5.0 /, '');
   function once(file, n) {
@@ -31,13 +31,13 @@
       else { img.onload = function () { resolve(performance.now() - t0); }; img.onerror = function () { resolve(-1); }; }
     });
   }
-  function size(file) { return fetch(file).then(function (r) { return r.blob(); }).then(function (b) { return b.size; }, function () { return -1; }); }
   function median(a) { a = a.slice().sort(function (x, y) { return x - y; }); return a[Math.floor(a.length / 2)]; }
   run.addEventListener('click', function () {
     run.disabled = true; out.textContent = 'running...';
     var rows = [], p = Promise.resolve();
     FORMATS.forEach(function (f) {
-      p = p.then(function () { return size(f[1]); }).then(function (bytes) {
+      p = p.then(function () {
+        var bytes = f[2];
         var times = [], q = Promise.resolve();
         for (var i = 0; i < 5; i++) (function (i) { q = q.then(function () { return once(f[1], i); }).then(function (ms) { times.push(ms); }); })(i);
         return q.then(function () { rows.push({ name: f[0], bytes: bytes, ms: median(times.filter(function (t) { return t >= 0; })), failed: times.every(function (t) { return t < 0; }) }); });
