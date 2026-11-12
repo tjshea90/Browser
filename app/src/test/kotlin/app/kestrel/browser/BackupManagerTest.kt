@@ -100,7 +100,7 @@ class BackupManagerTest {
         val last = db.history(10).single().last
         BackupManager.restore(db, prefs, old)
         assertTrue("the later time stays", db.history(10).single().last >= last)
-        assertEquals("the larger count wins", 9, db.history(10).single().visits)
+        assertEquals("the larger count wins: 9 from the file, 10 after one more visit", 10, db.history(10).single().visits)
     }
 
     @Test fun aFileCanNeverSetAnythingOutsideTheListOrOutOfRange() {
