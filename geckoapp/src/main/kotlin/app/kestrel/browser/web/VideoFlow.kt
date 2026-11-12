@@ -126,6 +126,10 @@ class VideoFlow(private val a: BrowserActivity) {
     /** One line under the format (owner request X17): file type, size, length - whatever is known, in that order. */
     private fun rowDetail(vararg parts: String): String = parts.filter { it.isNotEmpty() && it != "size unknown" }.joinToString("  \u00B7  ")
 
+    /** A row for one quality of a stream. [key] keeps it the same row when the sheet is drawn again. */
+    private fun streamChoice(tab: Tab, c: MediaCandidate, pick: StreamPick, title: String, detail: String, ext: String): VideoPanel.Choice =
+        VideoPanel.Choice("s|" + c.key + "|" + (pick.repId ?: pick.url) + "|" + pick.label, title, detail, stemFor(tab, pick.label), ext, pick)
+
     /** What the sheet shows: the ranked files (the long-pressed one first), the streams' quality lists as they arrive, and the small or odd files tucked under "Other files". */
     private fun model(tab: Tab): VideoPanel.Model {
         val ranked = MediaRank.rank(candidates(tab, panelPressed), panelPressed)
@@ -241,7 +245,7 @@ class VideoFlow(private val a: BrowserActivity) {
             val est = if (media.exactBytes >= 0) media.exactBytes else sizeGuess
             val pick = StreamPick(if (audio) "audio" else "", c.url, mediaText, est, null, audio, media.container)
             val ext = if (audio) media.container else "mp4"          // a video stream is saved as one MP4 file
-            rows.add(VideoPanel.Choice(stemFor(tab, pick.label) + "." + ext, rowDetail(if (audio) "Audio only" else "", ext.uppercase(), MediaLabels.size(est, estimate = media.exactBytes < 0 && est > 0), dur), pick) to pick)
+            rows.add(streamChoice(tab, c, pick, if (audio) "Audio only" else "Video", rowDetail(ext.uppercase(), MediaLabels.size(est, estimate = media.exactBytes < 0 && est > 0), dur), ext) to pick)
             return Loaded.Ready(rows, null)
         }
         val seen = HashSet<String>()
@@ -253,8 +257,8 @@ class VideoFlow(private val a: BrowserActivity) {
             val title = if (v.audioOnly) "Audio only" else v.label
             val pick = StreamPick(if (v.audioOnly) "audio" else v.label, v.url, text, est, sepAudio?.url, v.audioOnly, media.container)
             val ext = if (v.audioOnly) media.container else "mp4"
-            val detail = rowDetail(if (v.audioOnly) "Audio only" else v.label, ext.uppercase(), MediaLabels.size(est, estimate = true), dur)
-            rows.add(VideoPanel.Choice(stemFor(tab, pick.label) + "." + ext, detail, pick) to pick)
+            val detail = rowDetail(ext.uppercase(), MediaLabels.size(est, estimate = true), dur)
+            rows.add(streamChoice(tab, c, pick, title, detail, ext) to pick)
         }
         return Loaded.Ready(rows, null)
     }
@@ -289,26 +293,25 @@ class VideoFlow(private val a: BrowserActivity) {
             if (!seen.add("${v.height}|${v.bandwidth / 100_000}")) continue
             val est = (v.bytesPerSecond + (sound?.bytesPerSecond ?: 0L)) * (man.durationMs / 1000)
             val pick = StreamPick(v.label, c.url, text, est, null, false, "mp4", repId = v.id, audioRepId = sound?.id)
-            rows.add(VideoPanel.Choice(stemFor(tab, v.label) + ".mp4", rowDetail(v.label, "MP4", MediaLabels.size(est, estimate = true), dur), pick) to pick)
+            rows.add(streamChoice(tab, c, pick, v.label, rowDetail("MP4", MediaLabels.size(est, estimate = true), dur), "mp4") to pick)
         }
         for (au in man.audio.filter { it.mp4Friendly && it.media != null }.take(2)) {
             val est = au.bytesPerSecond * (man.durationMs / 1000)
             val pick = StreamPick("audio", c.url, text, est, null, true, "m4a", repId = au.id, ext = "m4a")
-            rows.add(VideoPanel.Choice(stemFor(tab, "audio") + ".m4a", rowDetail("Audio only", "M4A", MediaLabels.size(est, estimate = true), dur), pick) to pick)
+            rows.add(streamChoice(tab, c, pick, "Audio only", rowDetail("M4A", MediaLabels.size(est, estimate = true), dur), "m4a") to pick)
         }
         if (rows.isEmpty()) return Loaded.Failed("This stream's qualities use a format (WebM / VP9) that Kestrel cannot save yet.")
         return Loaded.Ready(rows, if (skipped > 0) "Some qualities use a format (WebM / VP9) that Kestrel cannot save yet." else null)
     }
 
-    private fun pickStream(tab: Tab, p: StreamPick) {
+    private fun pickStream(tab: Tab, p: StreamPick, stem: String) {
         a.sheet.dismiss()
         val host = UrlParts.hostOf(tab.url) ?: ""
-        val stem = MediaLabels.fileStem(tab.title, host, p.label)
         val size = MediaLabels.size(p.estimate, estimate = true)
         val go = {
             val h = requestHeaders(tab)
             val page = tab.url.takeIf { it.isNotEmpty() }
-            val soundStem = MediaLabels.fileStem(tab.title, host, "sound")
+            val soundStem = "$stem (sound)"
             // the sound of a picture that comes separately is downloaded alongside and merged into one MP4 when both are in (if the merge is refused, both files stay)
             val companion = when {
                 p.audioRepId != null -> StreamSource(p.url, p.text, page, soundStem, h, fetcher = 1, priv = tab.isPrivateTab, meteredOk = true, repId = p.audioRepId, ext = "m4a")
@@ -334,10 +337,8 @@ class VideoFlow(private val a: BrowserActivity) {
     /** "MP4 - 48.2 MB - 1:02" */
     private fun detail(c: MediaCandidate): String = listOf(MediaLabels.format(c), MediaLabels.size(c.length), MediaLabels.duration(c.durationMs)).filter { it.isNotEmpty() }.joinToString("  ·  ")
 
-    private fun pick(tab: Tab, c: MediaCandidate) {
+    private fun pick(tab: Tab, c: MediaCandidate, stem: String) {
         a.sheet.dismiss()
-        val q = MediaLabels.quality(c.knownHeight)
-        val stem = MediaLabels.fileStem(tab.title, UrlParts.hostOf(tab.url) ?: "", if (c.audioOnly) "audio" else q)
         val name = stem + "." + MediaSniff.saveExtension(c.url, c.mime)
         a.download(tab, c.url, null, null, c.mime.ifEmpty { null }, c.length, nameOverride = name)
     }
