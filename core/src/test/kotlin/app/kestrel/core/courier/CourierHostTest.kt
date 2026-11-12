@@ -362,6 +362,6 @@ class CourierHostTest {
         assertEquals(405, t.raw("PUT", "/v1/jobs", "{}").first)
         assertEquals(405, t.raw("DELETE", "/v1/status").first)
         assertEquals(404, t.raw("GET", "/v1/jobs/a/b/c/d").first)
-        assertNull((Json.parse(t.raw("GET", "/v1/jobs").second) as Map<*, *>)["nothing"])
+        assertEquals("a list without ids lists everything (nothing yet)", emptyList<Any?>(), (Json.parse(t.raw("GET", "/v1/jobs").second) as Map<*, *>).list("jobs"))
     }
 }
