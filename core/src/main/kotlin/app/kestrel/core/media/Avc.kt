@@ -135,7 +135,6 @@ object Avc {
         val rd = BitReader(r, r.size)
         rd.ue()                                                               // first_mb_in_slice
         rd.ue()                                                               // slice_type
-            .let { it }
     } catch (e: IllegalStateException) { -1 }
 
     /** True when the SEI NAL at `b[off until off+len]` carries a recovery-point message (payload type 6). */
