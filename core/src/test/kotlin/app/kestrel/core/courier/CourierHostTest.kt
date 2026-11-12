@@ -1,13 +1,6 @@
 package app.kestrel.core.courier
 
-import app.kestrel.core.download.Clock
-import app.kestrel.core.download.Config
-import app.kestrel.core.download.Engine
-import app.kestrel.core.download.FakeNet
 import app.kestrel.core.download.FakeServer
-import app.kestrel.core.download.FetchRequest
-import app.kestrel.core.download.FetchResponse
-import app.kestrel.core.download.Fetcher
 import app.kestrel.core.download.testBytes
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
@@ -20,11 +13,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.net.HttpURLConnection
-import java.net.InetAddress
 import java.net.URL
 import java.nio.file.Files
-import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.Executors
 
 /**
  * The phone side end to end: a real [CourierServer] on loopback, the real [CourierHost], the real download [Engine] with real files in a temp folder; only the origin
@@ -33,47 +23,13 @@ import java.util.concurrent.Executors
 class CourierHostTest {
     private val MiB = 1 shl 20
     private val secret = byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
-    private val key = Sign.deriveKey(secret)
+    private val key = TEST_KEY
     private val root: File = Files.createTempDirectory("courier-host").toFile()
     private val cleanups = ArrayList<() -> Unit>()
 
     @After fun cleanUp() { cleanups.reversed().forEach { try { it() } catch (_: Exception) {} }; root.deleteRecursively() }
 
-    private fun cfg() = Config(
-        maxActive = 2, parallel = false, maxConnsPerDownload = 3, maxConnsTotal = 6, windowBytes = 1L shl 20, minGrowRemaining = 1L shl 20, minGrowEtaSec = 0,
-        rampMs = 0, evalMs = 25, growGain = 0.0, checkpointMs = 40, checkpointBytes = 1L shl 20, stallMs = 60_000, backoffBaseMs = 1, backoffCapMs = 4,
-    )
-
-    /** Records the headers the engine sends to the origin. */
-    private class Spy(val inner: FakeServer) : Fetcher {
-        val headers = CopyOnWriteArrayList<Map<String, String>>()
-        override val probeWindow: Long get() = inner.probeWindow
-        override val windowBytes: Long get() = inner.windowBytes
-        override fun open(req: FetchRequest): FetchResponse { headers.add(req.headers); return inner.open(req) }
-    }
-
-    private class Skew : Clock { @Volatile var ms = 0L; override fun now() = System.currentTimeMillis() + ms }
-
-    private inner class Phone(val origin: FakeServer, hostKey: ByteArray = key, val dir: File = File(root, "phone"), val clock: Skew = Skew()) {
-        val spy = Spy(origin)
-        val sinks = StagingSinks(File(dir, "staging"))
-        val store = JsonRecStore(File(dir, "downloads.json"))
-        val exec = Executors.newSingleThreadExecutor { r -> Thread(r, "phone-control").also { it.isDaemon = true } }
-        val engine = Engine({ spy }, sinks, store, FakeNet(), exec, clock, cfg())
-        @Volatile var free = 100L * 1024 * MiB
-        @Volatile var dns: List<ByteArray> = listOf(byteArrayOf(93.toByte(), 184.toByte(), 216.toByte(), 34))
-        val host = CourierHost(hostKey, engine, sinks, File(dir, "courier-jobs.json"), spy, clock, { free }, "Test phone", resolve = { dns })
-        val server = CourierServer(0, InetAddress.getByName("127.0.0.1"), { it.isLoopbackAddress }, { r, p -> host.handle(r, p) })
-        @Volatile var ticking = true
-        val base: String
-        init {
-            engine.restore(); host.load()
-            Thread { while (ticking) { engine.tick(); try { Thread.sleep(20) } catch (e: InterruptedException) { return@Thread } } }.also { it.isDaemon = true; it.start() }
-            base = "http://127.0.0.1:${server.start()}"
-            cleanups.add { stop() }
-        }
-        fun stop() { ticking = false; server.stop(); exec.shutdownNow() }
-    }
+    private fun phone(origin: FakeServer, hostKey: ByteArray = key, dir: File = File(root, "phone"), clock: Skew = Skew()) = phone(origin, root, cleanups, hostKey, dir, clock)
 
     private inner class Tablet(val base: String, val key: ByteArray = this@CourierHostTest.key) {
         var skew = 0L
@@ -125,7 +81,7 @@ class CourierHostTest {
 
     // ------------------------------------------------------------------------------------------------------------------ auth
     @Test fun helloProvesThePhoneKnowsTheKey() {
-        val p = Phone(FakeServer(testBytes(1000)))
+        val p = phone(FakeServer(testBytes(1000)))
         val t = Tablet(p.base)
         val c = Sign.b64(ByteArray(16) { it.toByte() })
         val (code, body, _) = t.raw("GET", "/v1/hello?c=$c", sign = false)
@@ -140,7 +96,7 @@ class CourierHostTest {
     }
 
     @Test fun unsignedAndWronglySignedRequestsAreRefusedAndGuessingIsSlowed() {
-        val p = Phone(FakeServer(testBytes(1000)))
+        val p = phone(FakeServer(testBytes(1000)))
         val t = Tablet(p.base)
         assertEquals(401, t.raw("GET", "/v1/status", sign = false).first)
         assertEquals(401, t.raw("GET", "/v1/status", signWith = Sign.deriveKey(ByteArray(10))).first)
@@ -156,7 +112,7 @@ class CourierHostTest {
     }
 
     @Test fun aWrongClockIsReportedNotPunished() {
-        val p = Phone(FakeServer(testBytes(1000)))
+        val p = phone(FakeServer(testBytes(1000)))
         val t = Tablet(p.base)
         t.skew = 5 * 60_000
         for (i in 1..8) {
@@ -170,7 +126,7 @@ class CourierHostTest {
     }
 
     @Test fun aSignedRequestCannotBePlayedTwice() {
-        val p = Phone(FakeServer(testBytes(1000)))
+        val p = phone(FakeServer(testBytes(1000)))
         val t = Tablet(p.base)
         val ts = System.currentTimeMillis()
         assertEquals(200, t.raw("GET", "/v1/status", ts = ts).first)
@@ -180,7 +136,7 @@ class CourierHostTest {
     // ------------------------------------------------------------------------------------------------------------------ jobs
     @Test(timeout = 90_000) fun aDownloadRunsOnThePhoneAndTheTabletCollectsTheFile() {
         val data = testBytes(3 * MiB + 123)
-        val p = Phone(FakeServer(data))
+        val p = phone(FakeServer(data))
         val t = Tablet(p.base)
         val (code, j) = t.create(cid(1), extra = ""","name":"My Video.mp4","nameFixed":true,"size":${data.size}""")
         assertEquals(201, code)
@@ -219,7 +175,7 @@ class CourierHostTest {
 
     @Test(timeout = 60_000) fun theSameRequestTwiceIsTheSameJob() {
         val origin = FakeServer(testBytes(MiB))
-        val p = Phone(origin)
+        val p = phone(origin)
         val t = Tablet(p.base)
         val a = t.create(cid(2)); val b = t.create(cid(2))
         assertEquals(201, a.first); assertEquals(200, b.first); assertEquals(a.second.str("id"), b.second.str("id"))
@@ -231,7 +187,7 @@ class CourierHostTest {
     @Test(timeout = 60_000) fun theRowButtonsReachThePhone() {
         val data = testBytes(4 * MiB)
         val origin = FakeServer(data).also { it.chunkDelayMs = 10; it.chunk = 16 * 1024 }
-        val p = Phone(origin)
+        val p = phone(origin)
         val t = Tablet(p.base)
         val id = t.create(cid(4)).second.str("id")!!
         val running = t.await(id, "progress") { it.str("state") == "RUNNING" && (it.long("done") ?: 0) > 0 }
@@ -257,7 +213,7 @@ class CourierHostTest {
 
     @Test fun badRequestsAreRefusedBeforeAnythingStarts() {
         val origin = FakeServer(testBytes(1000))
-        val p = Phone(origin)
+        val p = phone(origin)
         val t = Tablet(p.base)
         assertEquals(400, t.raw("POST", "/v1/jobs", "not json").first)
         assertEquals(400, t.raw("POST", "/v1/jobs", "[1]").first)
@@ -273,7 +229,7 @@ class CourierHostTest {
 
     @Test fun addressesOnPrivateNetworksAreRefused() {
         val origin = FakeServer(testBytes(1000))
-        val p = Phone(origin)
+        val p = phone(origin)
         val t = Tablet(p.base)
         for (ip in listOf(byteArrayOf(127, 0, 0, 1), byteArrayOf(192.toByte(), 168.toByte(), 43, 1), byteArrayOf(10, 0, 0, 5), byteArrayOf(100, 64, 0, 1))) {
             p.dns = listOf(ip)
@@ -286,7 +242,7 @@ class CourierHostTest {
     }
 
     @Test fun aFullPhoneSaysSoUpFront() {
-        val p = Phone(FakeServer(testBytes(1000)))
+        val p = phone(FakeServer(testBytes(1000)))
         val t = Tablet(p.base)
         p.free = 10L * MiB
         val (c, j) = t.create(cid(10))
@@ -298,7 +254,7 @@ class CourierHostTest {
 
     @Test(timeout = 60_000) fun onlyHarmlessHeadersReachTheOrigin() {
         val origin = FakeServer(testBytes(MiB))
-        val p = Phone(origin)
+        val p = phone(origin)
         val t = Tablet(p.base)
         val id = t.create(cid(13), extra = ""","headers":{"Referer":"https://site.test/page","User-Agent":"Tablet/1.0","Cookie":"a=b","Authorization":"Bearer x","Host":"evil.test","X-Evil":"1","accept":"*/*","Origin":"https://site.test","Cookie2":"x","Accept-Language":"en"}""").second.str("id")!!
         t.finished(id)
@@ -317,12 +273,12 @@ class CourierHostTest {
     // ------------------------------------------------------------------------------------------------------------------ restart and upkeep
     @Test(timeout = 90_000) fun aRestartedPhoneStillKnowsItsFinishedJobs() {
         val data = testBytes(2 * MiB)
-        val p1 = Phone(FakeServer(data))
+        val p1 = phone(FakeServer(data))
         val t1 = Tablet(p1.base)
         val id = t1.create(cid(20), extra = ""","name":"keep.bin"""").second.str("id")!!
         val before = t1.finished(id)
         p1.stop()
-        val p2 = Phone(FakeServer(data), dir = p1.dir)                           // the app was killed and started again on the same folders
+        val p2 = phone(FakeServer(data), dir = p1.dir)                           // the app was killed and started again on the same folders
         val t2 = Tablet(p2.base)
         val after = t2.job(id)
         assertEquals("COMPLETED", after.str("state")); assertEquals(before.str("fileUrl"), after.str("fileUrl"))
@@ -331,7 +287,7 @@ class CourierHostTest {
     }
 
     @Test(timeout = 90_000) fun finishedJobsNobodyCollectedAreRemovedAfterADay() {
-        val p = Phone(FakeServer(testBytes(MiB)))
+        val p = phone(FakeServer(testBytes(MiB)))
         val t = Tablet(p.base)
         val id = t.create(cid(21)).second.str("id")!!
         val url = t.finished(id).str("fileUrl")!!
@@ -346,7 +302,7 @@ class CourierHostTest {
 
     @Test fun statusSpeedtestAndProbe() {
         val origin = FakeServer(testBytes(2 * MiB))
-        val p = Phone(origin)
+        val p = phone(origin)
         val t = Tablet(p.base)
         val (c, s) = t.call("GET", "/v1/status")
         assertEquals(200, c); assertEquals("Test phone", s.str("name")); assertEquals(p.free, s.long("free")); assertEquals(0L, s.long("jobs"))
@@ -361,7 +317,7 @@ class CourierHostTest {
     }
 
     @Test fun unknownRoutesAndMethods() {
-        val p = Phone(FakeServer(testBytes(1000)))
+        val p = phone(FakeServer(testBytes(1000)))
         val t = Tablet(p.base)
         assertEquals(404, t.raw("GET", "/").first)
         assertEquals(404, t.raw("GET", "/v2/status").first)
