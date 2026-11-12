@@ -51,9 +51,18 @@ object PhoneBridge {
     /** Settings changed the mode: make sure the backend thread runs and looks at the network again. */
     fun modeChanged(ctx: Context) {
         DownloadController.init(ctx)
+        PageProxy.refresh()
         val b = backend ?: return
         if (mode(ctx) != PhoneMode.OFF) b.start()
         b.onNetwork()
+    }
+
+    /** The main menu's one-tap switch: the whole phone helper (downloads AND pages) off, or on again as "when the phone is there". */
+    fun toggleHelper(ctx: Context): Boolean {
+        val p = Prefs.get(ctx)
+        p.phoneMode = if (mode(ctx) == PhoneMode.OFF) PhoneMode.WHEN_THERE.ordinal else PhoneMode.OFF.ordinal
+        modeChanged(ctx)
+        return mode(ctx) != PhoneMode.OFF
     }
 
     fun paired(ctx: Context): Boolean = Pairing.parse(Prefs.get(ctx).phoneCode) != null
@@ -61,15 +70,18 @@ object PhoneBridge {
     /** Stores a code the owner typed; false = it is not a valid code. */
     fun savePairing(ctx: Context, text: String): Boolean {
         val secret = Pairing.parse(text) ?: return false
-        Prefs.get(ctx).phoneCode = Pairing.format(secret)
+        val p = Prefs.get(ctx)
+        p.phoneCode = Pairing.format(secret)
+        if (!p.hasPhoneModeChoice()) p.phoneMode = PhoneMode.WHEN_THERE.ordinal         // typing the code is the owner saying "use my phone": no second switch to find
         synchronized(this) { client = null; clientKey = "" }
-        backend?.onNetwork()
+        modeChanged(ctx)
         return true
     }
 
     fun forgetPairing(ctx: Context) {
         Prefs.get(ctx).phoneCode = ""
         synchronized(this) { client = null; clientKey = "" }
+        PageProxy.refresh()
     }
 
     /** The phone's address: a debug override, else the default gateway of the Wi-Fi the tablet is on (which is the phone when the tablet is on its hotspot). */
@@ -145,6 +157,7 @@ object PhoneBridge {
         val d = backend?.diag()
         val addr = address(ctx)
         return listOf(
+            "Pages: ${PageProxy.line(ctx)}",
             "Phone link: mode=${mode(ctx).name.lowercase()}, paired=${prefs.phoneCode.isNotEmpty()}, address=${addr?.let { "${it.first}:${it.second}" } ?: "none"}" +
                 (if (d != null) ", reachable=${d.reachable}, rtt=${d.rttMs} ms, clock offset=${d.skewMs} ms, last error=${d.lastError ?: "none"}, rows on the phone=${d.activeJobs}" else ", backend not started"),
         )
@@ -159,7 +172,13 @@ object PhoneBridge {
             var err: String? = null
             try {
                 c.hello()
-                rep = LinkTest.run(c, UrlConnectionFetcher(), testUrl(ctx))
+                // the same file once more THROUGH the phone's page-load proxy (what pages would get); an older Courier has none and simply is not measured
+                val via: UrlConnectionFetcher? = try {
+                    val a = c.armProxy(120)
+                    val host = java.net.URL(c.baseUrl).host
+                    UrlConnectionFetcher(null, java.net.Proxy(java.net.Proxy.Type.HTTP, java.net.InetSocketAddress(host, a.port)))
+                } catch (e: Exception) { null }
+                rep = LinkTest.run(c, UrlConnectionFetcher(), testUrl(ctx), viaPhone = via)
             } catch (e: CourierException) {
                 err = when (e.kind) {
                     CourierException.Kind.UNREACHABLE, CourierException.Kind.TIMEOUT -> "The phone does not answer. Is the hotspot on and the Courier app switched on?"

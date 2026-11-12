@@ -59,6 +59,12 @@ class Prefs private constructor(ctx: Context) {
     /** The pairing code the Courier app on the phone shows (16 characters, typed once); empty = not paired. It is the key to the phone link: private to this app (no backup). */
     var phoneCode: String get() = sp.getString("phone_code", "") ?: ""; set(v) = put("phone_code", v)
     var phonePort: Int get() = sp.getInt("phone_port", app.kestrel.core.courier.CourierPorts.API).coerceIn(1024, 65535); set(v) = put("phone_port", v.coerceIn(1024, 65535))
+    /** The owner chose a phone mode at least once (typing the pairing code switches the helper on only if they never did). */
+    fun hasPhoneModeChoice(): Boolean = sp.contains("phone_mode")
+    /** Pages through the phone (research/SPEED2.md): while the phone helper is on, https page loads use the Courier's proxy on the phone (its own connection, not the capped hotspot). */
+    var pagesViaPhone: Boolean get() = sp.getBoolean("pages_via_phone", true); set(v) = put("pages_via_phone", v)
+    /** Save data: the old "metered connection" behaviour (small read-ahead, no speculative loading). The owner's hotspot is unmetered, so this is OFF unless they switch it on. */
+    var dataSaver: Boolean get() = sp.getBoolean("data_saver", false); set(v) = put("data_saver", v)
     /** Kestrel G: the blocking engine runs inside the Gecko extension (fast). Off = compatibility mode, every request asks the app (the older, slower path). Diagnostics has the switch. */
     var engineInExtension: Boolean get() = bool("eng_ext", true); set(v) = put("eng_ext", v)
     var pullRefresh: Boolean get() = bool("pull_refresh", true); set(v) = put("pull_refresh", v)
