@@ -86,6 +86,13 @@ class ShieldsBridge(
         return result
     }
 
+    /** Which thread answers a message: the engine image chunks, the slow element-hiding work and the page's quick verdicts each have their own, so none waits behind another. */
+    private fun handlerFor(raw: Any): android.os.Handler = when (laneOf(raw)) {
+        LANE_IMAGE -> imageHandler
+        LANE_COSMETIC -> cosmeticHandler
+        else -> workerHandler
+    }
+
     /** The guard in the page (or the redirect check in the extension) refused something: "<kind>|<address>". */
     private fun onPop(m: JSONObject) {
         val d = m.optString("d")
