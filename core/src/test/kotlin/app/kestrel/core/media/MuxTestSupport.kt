@@ -70,6 +70,7 @@ class Mp4Reader(private val d: ByteArray) {
         var codecConfig: ByteArray = ByteArray(0)
         var hasStss = false
         var chunkCount = 0
+        var sumDurations = 0L
     }
 
     val tracks = ArrayList<Track>()
