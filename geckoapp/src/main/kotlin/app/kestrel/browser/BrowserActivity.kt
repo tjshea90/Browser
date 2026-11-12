@@ -88,6 +88,7 @@ import app.kestrel.browser.web.Tab
 import app.kestrel.core.session.Session
 import app.kestrel.core.session.SessionCodec
 import app.kestrel.core.session.TabRecord
+import app.kestrel.core.tabs.LiveBudget
 import app.kestrel.core.url.Nav
 import app.kestrel.core.url.Omnibox
 import app.kestrel.core.url.UrlParts
