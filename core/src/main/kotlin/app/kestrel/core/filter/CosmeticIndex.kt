@@ -19,12 +19,20 @@ internal class CosmeticIndex(
 
     @Volatile private var genericCssCache: String? = null
 
-    fun cssFor(host: String, includeGeneric: Boolean, genericLimit: Int): String {
+    /**
+     * @param tokenMode D2 (the Firefox build's extension): the generic selectors that name a class or an id are NOT part of this CSS; the page sends the classes and ids it has ([genericCssForTokens])
+     * and only the selectors that can match are injected. This CSS then carries the site's own rules, the generic selectors that name neither (attribute selectors, tags: at most [genericLimit]), and
+     * the [TOKEN_MARKER] that tells the page script to start sending tokens.
+     */
+    fun cssFor(host: String, includeGeneric: Boolean, genericLimit: Int, tokenMode: Boolean = false): String {
         val domainExc = domainExceptions(host)
         val sb = StringBuilder()
         val site = group(host, siteHash, siteOff, sitePool)
+        if (tokenMode && includeGeneric && genericCount > 0 && tokens().byKey.isNotEmpty()) sb.append(TOKEN_MARKER)
         sb.append(CosmeticSelectors.toCss(if (domainExc.isEmpty()) site else site.filter { it !in domainExc }, 1))
-        if (includeGeneric && genericCount > 0) {
+        if (includeGeneric && genericCount > 0 && tokenMode) {
+            sb.append(looseCss(genericLimit, globalExceptions() + domainExc))
+        } else if (includeGeneric && genericCount > 0) {
             if (domainExc.isEmpty() && genericLimit == DEFAULT_GENERIC_LIMIT) {
                 var c = genericCssCache
                 if (c == null) { c = buildGeneric(genericLimit, globalExceptions()); genericCssCache = c }
