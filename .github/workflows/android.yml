@@ -1,9 +1,10 @@
 # Build, sign and release the Kestrel APKs on GitHub's runners (the owner's rule across all his repos: "GitHub actions should do all the
 # app compiling and apk making. Claude codes the app, GitHub makes the apk.").
 #
-# TWO APPS, one workflow:   web   = Kestrel   (:app, system WebView, ~2 MB, tag kestrel-v<version>)
-#                           gecko = Kestrel G (:geckoapp, Firefox engine, ~92 MB, tag kestrel-g-v<version>)
-# Dispatch with  app = gecko | web | both  and  full_build = true.  full_build = false is a ~1 minute check that the gates still pass.
+# THREE APPS, one workflow: web     = Kestrel   (:app, system WebView, ~2 MB, tag kestrel-v<version>)
+#                           gecko   = Kestrel G (:geckoapp, Firefox engine, ~92 MB, tag kestrel-g-v<version>)
+#                           courier = Kestrel Courier (:courier, the small app for the owner's PHONE, ~2 MB, tag kestrel-courier-v<version>)
+# Dispatch with  app = gecko | web | courier | both (web + gecko)  and  full_build = true.  full_build = false is a ~1 minute check that the gates still pass.
 # Claude dispatches it through the GitHub API (mcp__github__actions_run_trigger, run_workflow) after `bash ship.sh <app> "note"`.
 #
 # MINUTES ARE THE SCARCE RESOURCE (tools/test_handoff.sh fails if either rule is undone):
@@ -22,13 +23,13 @@ name: Build APK
 
 on:
   push:
-    tags: ['kestrel-v*', 'kestrel-g-v*']
+    tags: ['kestrel-v*', 'kestrel-g-v*', 'kestrel-courier-v*']
   workflow_dispatch:
     inputs:
       app:
-        description: 'Which app: gecko = Kestrel G (Firefox engine), web = Kestrel (system WebView), or both'
+        description: 'Which app: gecko = Kestrel G (Firefox engine), web = Kestrel (system WebView), courier = Kestrel Courier (the phone app), or both (web + gecko)'
         type: choice
-        options: [gecko, web, both]
+        options: [gecko, web, courier, both]
         default: gecko
       full_build:
         description: 'Test, build, sign and publish (several minutes of Actions time). Leave OFF for a ~1 min check of the gates.'
@@ -56,6 +57,7 @@ jobs:
     outputs:
       web: ${{ steps.plan.outputs.web }}
       gecko: ${{ steps.plan.outputs.gecko }}
+      courier: ${{ steps.plan.outputs.courier }}
       full: ${{ steps.plan.outputs.full }}
     steps:
       - uses: actions/checkout@v5
@@ -68,19 +70,19 @@ jobs:
           FULL: ${{ inputs.full_build }}
           REF_NAME: ${{ github.ref_name }}
         run: |
-          web=false; gecko=false; full=false
+          web=false; gecko=false; courier=false; full=false
           if [ "$EVENT" = "push" ]; then
             full=true
-            case "$REF_NAME" in kestrel-g-v*) gecko=true ;; kestrel-v*) web=true ;; esac
+            case "$REF_NAME" in kestrel-g-v*) gecko=true ;; kestrel-courier-v*) courier=true ;; kestrel-v*) web=true ;; esac
           else
             [ "$FULL" = "true" ] && full=true
-            case "$APP" in web) web=true ;; gecko) gecko=true ;; both) web=true; gecko=true ;; esac
+            case "$APP" in web) web=true ;; gecko) gecko=true ;; courier) courier=true ;; both) web=true; gecko=true ;; esac
           fi
-          { echo "web=$web"; echo "gecko=$gecko"; echo "full=$full"; } >> "$GITHUB_OUTPUT"
+          { echo "web=$web"; echo "gecko=$gecko"; echo "courier=$courier"; echo "full=$full"; } >> "$GITHUB_OUTPUT"
           if [ "$full" = true ]; then
-            echo "FULL BUILD of: web=$web gecko=$gecko (tests, APK, signature check, publish)." >> "$GITHUB_STEP_SUMMARY"
+            echo "FULL BUILD of: web=$web gecko=$gecko courier=$courier (tests, APK, signature check, publish)." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "GATES ONLY for: web=$web gecko=$gecko. Re-run with **full_build** ticked, or create a Release tag, to build." >> "$GITHUB_STEP_SUMMARY"
+            echo "GATES ONLY for: web=$web gecko=$gecko courier=$courier. Re-run with **full_build** ticked, or create a Release tag, to build." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Gate - shell tooling self-test (save ladder, secret scan, workflow rules)
@@ -112,10 +114,11 @@ jobs:
         env:
           WEB: ${{ steps.plan.outputs.web }}
           GECKO: ${{ steps.plan.outputs.gecko }}
+          COURIER: ${{ steps.plan.outputs.courier }}
         run: |
           . tools/appinfo.sh
-          for app in web gecko; do
-            case "$app" in web) on="$WEB" ;; gecko) on="$GECKO" ;; esac
+          for app in web gecko courier; do
+            case "$app" in web) on="$WEB" ;; gecko) on="$GECKO" ;; courier) on="$COURIER" ;; esac
             [ "$on" = true ] || continue
             VC="$(app_vcode "$app")"; PREV="$(app_last_code "$app")"
             echo "$app: $(app_title "$app") $(app_vname "$app") versionCode $VC, highest shipped $PREV"
@@ -138,12 +141,15 @@ jobs:
       - uses: ./.github/actions/setup-build
       - name: Core + filter-list tool + app unit tests, lint
         run: ./gradlew :core:test :tools:build :app:testDebugUnitTest :app:lintRelease --console=plain
+      - name: Courier unit tests + lint (only when the Courier is being built)
+        if: needs.check.outputs.courier == 'true'
+        run: ./gradlew :courier:testDebugUnitTest :courier:lintRelease --console=plain
 
   # ------------------------------------------------------------------ the injected WebView scripts in real headless Chromium
   test-js:
     needs: check
-    # runs for BOTH apps: the Gecko app's extension engine (engine.js parity with the Kotlin engine) and its pop-up guard (guard-main.js) are tested here and nowhere else
-    if: needs.check.outputs.full == 'true'
+    # runs for the browser apps (not the Courier): the Gecko app's extension engine (engine.js parity with the Kotlin engine) and its pop-up guard (guard-main.js) are tested here and nowhere else
+    if: needs.check.outputs.full == 'true' && (needs.check.outputs.web == 'true' || needs.check.outputs.gecko == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -258,6 +264,58 @@ jobs:
         with:
           name: unpublished-gecko-apk
           path: geckoapp/build/outputs/apk/release/geckoapp-release.apk
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Remove the signing material from the workspace
+        if: always()
+        run: rm -f keystore.properties "$RUNNER_TEMP/release.jks"
+
+  # ------------------------------------------------------------------ Kestrel Courier (the phone app)
+  build-courier:
+    needs: [check, test-jvm]
+    if: needs.check.outputs.full == 'true' && needs.check.outputs.courier == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: release-courier
+      cancel-in-progress: false
+    env:
+      APP: courier
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-build
+
+      - name: Private signing key (only when the repo secret exists)
+        env:
+          KS_B64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          STORE_PW: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          KEY_PW: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            printf '%s' "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            { echo "storeFile=$RUNNER_TEMP/release.jks"; echo "storePassword=$STORE_PW"; echo "keyAlias=$KEY_ALIAS"; echo "keyPassword=$KEY_PW"; } > keystore.properties
+          fi
+
+      - name: Build the release APK (R8, signed)
+        run: ./gradlew :courier:assembleRelease --console=plain
+
+      - name: Verify the APK itself (certificate pin, package, version, no GMS, size)
+        run: bash tools/verify-apk.sh "$APP"
+
+      - name: Publish the Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTE: ${{ inputs.note }}
+        run: bash .github/scripts/publish-release.sh "$APP"
+
+      - name: Keep the APK for inspection (failed runs only)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unpublished-courier-apk
+          path: courier/build/outputs/apk/release/courier-release.apk
           retention-days: 7
           if-no-files-found: ignore
 
