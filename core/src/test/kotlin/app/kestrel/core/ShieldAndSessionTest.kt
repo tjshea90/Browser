@@ -39,6 +39,20 @@ class ShieldAndSessionTest {
     }
 
     @Test
+    fun embedsWaitForATapByDefaultAndEachSiteCanOverrideIt() {
+        assertTrue("on by default: video and social players wait for a tap (EX-10)", global.waitEmbeds)
+        val off = SiteShields(0, 0).with(ShieldFlag.EMBEDS, false).applyTo(global)
+        assertFalse(off.waitEmbeds)
+        assertTrue("nothing else changes", off.blockAds && off.cosmetic && off.shieldsUp)
+        assertTrue(SiteShields(0, 0).with(ShieldFlag.EMBEDS, true).applyTo(ShieldSettings(waitEmbeds = false)).waitEmbeds)
+        assertFalse("the global switch off keeps them loading by themselves", SiteShields(0, 0).applyTo(ShieldSettings(waitEmbeds = false)).waitEmbeds)
+        assertFalse("Shields down is the plain browser: embeds load", SiteShields(0, 0).with(ShieldFlag.SHIELDS, false).applyTo(global).effective().waitEmbeds)
+        assertEquals("a flag of its own, no clash with the others", 128, ShieldFlag.EMBEDS)
+        val st = SiteShieldStore(); st.set("blog.example", SiteShields(0, 0).with(ShieldFlag.EMBEDS, false))
+        assertFalse(SiteShieldStore.decode(st.encode())["blog.example"]!!.applyTo(global).waitEmbeds)
+    }
+
+    @Test
     fun httpsOverrideRespectsGlobalMode() {
         assertEquals(HttpsPolicy.Mode.OFF, SiteShields(0, 0).with(ShieldFlag.HTTPS, false).applyTo(global).https)
         assertEquals(HttpsPolicy.Mode.STRICT, SiteShields(0, 0).with(ShieldFlag.HTTPS, true).applyTo(global).https)
