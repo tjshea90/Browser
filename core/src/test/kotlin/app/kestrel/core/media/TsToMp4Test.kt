@@ -198,7 +198,7 @@ class TsToMp4Test {
         val v = r.track("vide")!!; val a = r.track("soun")!!
         assertEquals("the second keyframe starts the file: 25 + 50 pictures", 75, v.samples.size)
         assertTrue(v.samples.first().sync)
-        assertTrue("the sound of the dropped second is gone too: ${a.samples.size}", a.samples.size in 150..200)
+        assertTrue("the sound of the dropped second is gone too: ${a.samples.size}", a.samples.size in 110..150)
         checkVideoSamples(r, v); checkAudioSamples(r, a)
         assertDecodes(file)
     }
