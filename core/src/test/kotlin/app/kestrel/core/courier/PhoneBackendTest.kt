@@ -264,7 +264,7 @@ class PhoneBackendTest {
         assertTrue(v(20, 10, 2).startsWith("Worth it"))
         assertTrue(v(5, 10, 2).startsWith("Partly worth it"))
         assertTrue(v(2, 10, 2).startsWith("Not worth it for speed"))
-        assertTrue(v(20, 3, 2).startsWith("No big gain"))
+        assertTrue(v(20, 5, 4).startsWith("No big gain"))
         assertTrue(v(20, 10, 0).contains("phone is the better choice"))
         assertTrue(v(0, 10, 2).contains("could not be measured"))
         assertTrue(LinkTest.verdict(20 * mb, 0, 2 * mb).contains("could not run"))
