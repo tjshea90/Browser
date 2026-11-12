@@ -313,8 +313,8 @@ class StreamEngine(
     fun makeMp4(id: Long) = control.execute {
         val job = get(id) ?: return@execute
         val rec = job.rec
-        val ok = synchronized(lock) { rec.state == DlState.COMPLETED && !job.converting && !job.running && rec.mux != MUX_MP4 && rec.destUri != null && rec.name.endsWith(".ts", true) && rec.companionId == 0L && rec.parentId == 0L }
-        if (!ok) return@execute
+        val ok = synchronized(lock) { rec.state == DlState.COMPLETED && !job.converting && rec.mux != MUX_MP4 && rec.destUri != null && rec.name.endsWith(".ts", true) && rec.companionId == 0L && rec.parentId == 0L }
+        if (!ok) return@execute                                                    // (a download that has just completed may still be in its last bookkeeping step: that does not matter, the state says it is finished)
         synchronized(lock) { job.converting = true }
         changed(id)
         try { spawner.spawn("mp4-$id") { convertFinished(job) } }
