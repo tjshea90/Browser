@@ -64,6 +64,18 @@ class TsToMp4Test {
         // decode order: strictly rising decode times; every picture's composition time is not before its decode time
         for (k in 1 until v.samples.size) assertTrue("dts must rise at $k", v.samples[k].dts > v.samples[k - 1].dts)
         assertTrue(v.samples.all { it.cts >= it.dts })
+        assertEditsCover(v)
+    }
+
+    /** What a player shows is what the edit list covers: every picture's composition span must lie inside it (an edit that ends early makes players drop the last B-frames). */
+    private fun assertEditsCover(t: Mp4Reader.Track) {
+        if (t.edits.isEmpty()) return
+        val last = t.samples.size - 1
+        var end = 0L
+        for ((i, s) in t.samples.withIndex()) { val dur = if (i < last) t.samples[i + 1].dts - s.dts else (if (last > 0) s.dts - t.samples[i - 1].dts else 3000L); end = maxOf(end, s.cts + dur) }
+        val main = t.edits.last()
+        val covered = main.mediaTime + main.duration * t.timescale / 1000
+        assertTrue("edit list ends at $covered ticks, the last picture is shown until $end", covered + t.timescale / 1000 >= end)
     }
 
     private fun checkAudioSamples(r: Mp4Reader, a: Mp4Reader.Track) {
