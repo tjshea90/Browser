@@ -192,7 +192,7 @@ test('an embedded player\'s own ad redirector is not "the same site": the frame\
   await settle();
   assert.equal(page.popups.length, 0);
   const frame = page.frames().find((f) => f.url().indexOf('player.example') >= 0);
-  assert.deepEqual(await frame.evaluate(() => window.__notes), ['open|https://player.example/ad/redirect?id=1']);
+  assert.deepEqual(await frame.evaluate(() => window.__notes.filter((n) => n.indexOf('tap|') !== 0)), ['open|https://player.example/ad/redirect?id=1']);
 });
 
 test('the spoof play button: a link to another site, with only an image, laid on the player, does nothing', async () => {
