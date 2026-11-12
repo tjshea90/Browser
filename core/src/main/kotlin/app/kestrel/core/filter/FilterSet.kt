@@ -145,12 +145,26 @@ class FilterSet internal constructor(
      * CSS that hides ad containers on [pageHost] (site-specific rules + a capped generic set), or "".
      * Honors `$elemhide` / `$generichide` / `$document` exceptions and `#@#` cosmetic exceptions.
      */
-    fun cosmeticCss(pageHost: String, includeGeneric: Boolean = true, genericLimit: Int = CosmeticIndex.DEFAULT_GENERIC_LIMIT): String {
+    fun cosmeticCss(pageHost: String, includeGeneric: Boolean = true, genericLimit: Int = CosmeticIndex.DEFAULT_GENERIC_LIMIT, tokenMode: Boolean = false): String {
         if (cosmetic.isEmpty) return ""
         val flags = siteFlagsFor(pageHost)
         if ((flags and (SITE_ELEMHIDE or SITE_DOCUMENT_ALLOW)) != 0) return ""
-        return cosmetic.cssFor(pageHost, includeGeneric && (flags and SITE_GENERICHIDE) == 0, genericLimit)
+        return cosmetic.cssFor(pageHost, includeGeneric && (flags and SITE_GENERICHIDE) == 0, genericLimit, tokenMode)
     }
+
+    /**
+     * D2 (the Firefox build): CSS for the GENERIC selectors that can match a page holding these classes and ids (".class" / "#id", any case), without the ones a `#@#` rule excepts for [pageHost]; ""
+     * when generic hiding is off for the page. Used with [cosmeticCss] in token mode, whose CSS starts with [CosmeticIndex.TOKEN_MARKER] when the page should send its tokens.
+     */
+    fun genericCssForTokens(pageHost: String, tokens: Collection<String>, max: Int = CosmeticIndex.TOKEN_BATCH_MAX): String {
+        if (cosmetic.isEmpty) return ""
+        val flags = siteFlagsFor(pageHost)
+        if ((flags and (SITE_ELEMHIDE or SITE_DOCUMENT_ALLOW or SITE_GENERICHIDE)) != 0) return ""
+        return cosmetic.genericCssForTokens(pageHost, tokens, max)
+    }
+
+    /** Builds the lazily made cosmetic tables now (start-up warm-up), so the first page does not wait for them. */
+    fun warmCosmetic() { cosmetic.warm() }
 
     // ------------------------------------------------------------------ internals
 
