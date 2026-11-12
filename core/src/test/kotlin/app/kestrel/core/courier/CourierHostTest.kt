@@ -128,9 +128,12 @@ class CourierHostTest {
         val t = Tablet(p.base)
         assertEquals(401, t.raw("GET", "/v1/status", sign = false).first)
         assertEquals(401, t.raw("GET", "/v1/status", signWith = Sign.deriveKey(ByteArray(10))).first)
-        assertEquals(401, t.raw("GET", "/v1/jobs").let { if (it.first == 200) 200 else it.first }.let { 401 })              // (a signed list works: see below)
-        assertEquals(200, t.raw("GET", "/v1/status").first)
-        for (i in 1..3) assertEquals(401, t.raw("GET", "/v1/status", sign = false).first)
+        assertEquals("a good request in between", 200, t.raw("GET", "/v1/status").first)                  // and it wipes the count of bad ones
+        for (i in 1..2) assertEquals(401, t.raw("GET", "/v1/status", sign = false).first)
+        assertEquals(401, t.raw("GET", "/v1/status", signWith = Sign.deriveKey(ByteArray(10))).first)
+        assertEquals(401, t.raw("GET", "/v1/status", sign = false).first)
+        assertEquals(200, t.raw("GET", "/v1/status").first)                                                  // four bad ones so far: still open
+        for (i in 1..5) t.raw("GET", "/v1/status", sign = false)
         val blocked = t.raw("GET", "/v1/status")
         assertEquals("five bad requests in a row block the address for a minute, even for a good one", 429, blocked.first)
         assertEquals("60", blocked.third["Retry-After"]?.firstOrNull())
