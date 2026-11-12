@@ -195,4 +195,35 @@ class CourierPartsTest {
         try { UrlConnectionFetcher(Ssrf.guard()).open(FetchRequest("ftp://example.org/x", -1, -1, null, emptyMap())); fail() } catch (e: FetchException) { assertEquals(FetchException.Kind.BAD_URL, e.kind) }
         assertNotNull(Ssrf.guard())
     }
+
+    // ------------------------------------------------------------------------------------------------------------------ stream records as files
+    private fun streamRec(): app.kestrel.core.media.StreamRec {
+        val r = app.kestrel.core.media.StreamRec(1_000_000_007)
+        r.state = DlState.PAUSED_SYSTEM; r.reason = Reason.NETWORK; r.detail = 5; r.url = "https://cdn.test/v/index.m3u8?t=\u00e9"; r.playlistText = "#EXTM3U\n#EXTINF:2,\ns0.ts\n#EXT-X-ENDLIST\n"; r.pageUrl = "https://site.test/watch"
+        r.headers = linkedMapOf("Referer" to "https://site.test/"); r.fetcher = 1; r.meteredOk = true; r.nameStem = "My clip - 720p"; r.name = "My clip - 720p.mp4"; r.mime = "video/mp4"; r.destKind = 2; r.destUri = "file:/x/y.part"
+        r.estimate = 123456789L; r.repId = "v1"; r.ext = "mp4"; r.companionId = 5; r.parentId = 6; r.appended = 987654321L; r.next = 42; r.breaks = "10:100;20:200;"; r.crashes = 1; r.mux = 1; r.note = "1 part was left out"
+        r.initDone = true; r.total = 2_000_000_000L; r.created = 1; r.updated = 2; r.finished = 3
+        return r
+    }
+
+    @Test fun aStreamRecordSurvivesTheFilesAndAKilledWrite() {
+        val dir = File(root, "streams")
+        val st = JsonStreamStore(dir)
+        assertTrue(st.loadAll().isEmpty())
+        val r = streamRec()
+        st.save(r)
+        val back = JsonStreamStore(dir).loadAll().single()
+        assertEquals(r.id, back.id); assertEquals(r.state, back.state); assertEquals(r.reason, back.reason); assertEquals(r.url, back.url); assertEquals(r.playlistText, back.playlistText); assertEquals(r.headers, back.headers)
+        assertEquals(r.nameStem, back.nameStem); assertEquals(r.name, back.name); assertEquals(r.destUri, back.destUri); assertEquals(r.estimate, back.estimate); assertEquals(r.repId, back.repId); assertEquals(r.ext, back.ext)
+        assertEquals(r.companionId, back.companionId); assertEquals(r.parentId, back.parentId); assertEquals(r.appended, back.appended); assertEquals(r.next, back.next); assertEquals(r.breaks, back.breaks)
+        assertEquals(r.crashes, back.crashes); assertEquals(r.mux, back.mux); assertEquals(r.note, back.note); assertEquals(r.initDone, back.initDone); assertEquals(r.total, back.total)
+        assertEquals(r.pageUrl, back.pageUrl); assertEquals(r.fetcher, back.fetcher); assertEquals(r.meteredOk, back.meteredOk); assertEquals(r.mime, back.mime); assertEquals(r.destKind, back.destKind)
+        r.next = 43; st.save(r)                                                               // a second save leaves a .bak
+        File(dir, "${r.id}.json").writeText("{\"id\":10000000")                              // the process died halfway through the next write
+        assertEquals("the previous complete record is used", 42, JsonStreamStore(dir).loadAll().single().next)
+        st.dir(r.id).let { File(it, "seg0.bin").writeText("x") }
+        st.delete(r.id)
+        assertTrue(JsonStreamStore(dir).loadAll().isEmpty()); assertFalse(File(dir, "${r.id}.d").exists()); assertFalse(File(dir, "${r.id}.m3u8").exists())
+    }
 }
+
