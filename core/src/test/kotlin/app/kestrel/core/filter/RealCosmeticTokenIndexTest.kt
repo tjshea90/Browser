@@ -21,8 +21,10 @@ class RealCosmeticTokenIndexTest {
         val t0 = System.nanoTime()
         fs.warmCosmetic()
         val buildMs = (System.nanoTime() - t0) / 1_000_000
-        val stats = fs.cosmetic.debugStats()
+        val stats = fs.cosmeticDebugStats()
         println("D2 stats: " + stats + " buildMs=" + buildMs)
+        println("D2 sample keys: " + fs.cosmeticDebugKeys(2500).joinToString(" "))
+        println("D2 well-known: " + listOf(".adsbygoogle", "#adbanner", ".ad-banner", ".ad-container", "#google_ads", ".sponsored", ".advert").joinToString(" ") { k -> k + "=" + fs.genericCssForTokens("a.example", listOf(k)).length })
         // the up-front CSS in token mode versus the old 1,200-selector CSS
         val old = fs.cosmeticCss("news.example", tokenMode = false)
         val up = fs.cosmeticCss("news.example", tokenMode = true)

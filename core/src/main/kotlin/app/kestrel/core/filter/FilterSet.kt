@@ -169,6 +169,9 @@ class FilterSet internal constructor(
     /** Tests and Diagnostics: a line of numbers about the generic token index. */
     fun cosmeticDebugStats(): String = cosmetic.debugStats()
 
+    /** Tests: every [step]-th key of the generic token index (real class / id names to build a page from). */
+    fun cosmeticDebugKeys(step: Int): List<String> = cosmetic.debugKeys(step)
+
     // ------------------------------------------------------------------ internals
 
     private fun siteFlagsFor(host: String): Int {
