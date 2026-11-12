@@ -4,6 +4,7 @@ import app.kestrel.browser.diag.Health
 import app.kestrel.browser.BrowserActivity
 import app.kestrel.browser.shield.Shields
 import app.kestrel.core.filter.Category
+import app.kestrel.core.guard.JumpGuard
 import app.kestrel.core.url.RedirectUnwrapper
 import app.kestrel.core.url.UrlParts
 import org.mozilla.geckoview.AllowOrDeny
@@ -50,9 +51,43 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
     override fun onCanGoForward(session: GeckoSession, canGoForward: Boolean) { tab.canGoForward = canGoForward; a.tabChanged(tab) }
 
     override fun onLoadRequest(session: GeckoSession, request: NavigationDelegate.LoadRequest): GeckoResult<AllowOrDeny>? {
+        val lower = request.uri.lowercase()
+        val web = lower.startsWith("http://") || lower.startsWith("https://")
+        // Pop-up and forced-redirect guard. A window nobody tapped for, or a tab jump to another site right after a tap that was not on a link to it, is refused BEFORE it starts
+        // (nothing of the page's state is disturbed). The tap report comes through the extension and can arrive a moment after this request: the jump then waits for it, at most JumpGuard.WAIT_MS.
+        if (web && request.target == NavigationDelegate.TARGET_WINDOW_NEW && a.refusePopup(tab, request.uri, request.hasUserGesture)) return GeckoResult.fromValue(deny)
+        if (web && request.target == NavigationDelegate.TARGET_WINDOW_CURRENT && !request.isDirectNavigation && !request.isRedirect) {
+            when (a.judgeJump(tab, request.uri)) {
+                JumpGuard.Verdict.STOP -> { a.onPopupBlocked(tab.url, "redirect", request.uri); return GeckoResult.fromValue(deny) }
+                JumpGuard.Verdict.WAIT -> return waitForTap(session, request)
+                JumpGuard.Verdict.ALLOW -> {}
+            }
+        }
+        return decideLoad(session, request)
+    }
+
+    /** Holds a navigation until the tap report that explains it has arrived (or [JumpGuard.WAIT_MS] passed), then applies the normal rules. */
+    private fun waitForTap(session: GeckoSession, request: NavigationDelegate.LoadRequest): GeckoResult<AllowOrDeny> {
+        val result = GeckoResult<AllowOrDeny>()
+        val started = android.os.SystemClock.uptimeMillis()
+        val poll = object : Runnable {
+            override fun run() {
+                val v = a.judgeJump(tab, request.uri)
+                val timedOut = android.os.SystemClock.uptimeMillis() - started >= JumpGuard.WAIT_MS
+                when {
+                    v == JumpGuard.Verdict.STOP -> { a.onPopupBlocked(tab.url, "redirect", request.uri); result.complete(deny) }
+                    v == JumpGuard.Verdict.WAIT && !timedOut -> app.kestrel.browser.Io.main.postDelayed(this, 15)
+                    else -> decideLoad(session, request).accept({ r -> result.complete(r) }, { result.complete(allow) }) // no evidence either way: the jump goes ahead
+                }
+            }
+        }
+        app.kestrel.browser.Io.main.postDelayed(poll, 15)
+        return result
+    }
+
+    private fun decideLoad(session: GeckoSession, request: NavigationDelegate.LoadRequest): GeckoResult<AllowOrDeny> {
         val url = request.uri
         val lower = url.lowercase()
-        if ((lower.startsWith("http://") || lower.startsWith("https://")) && request.target == NavigationDelegate.TARGET_WINDOW_NEW && a.refusePopup(tab, url, request.hasUserGesture)) return GeckoResult.fromValue(deny)
         if (lower.startsWith("http://") || lower.startsWith("https://")) {
             val host = UrlParts.hostOf(url)
             val s = Shields.effective(a.prefs, host)

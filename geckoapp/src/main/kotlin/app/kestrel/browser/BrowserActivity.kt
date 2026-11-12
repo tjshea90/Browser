@@ -1385,7 +1385,9 @@ open class BrowserActivity : Activity(), DockListener {
      * tab to another site). Counted with the page's blocked requests, and a notice offers to open it anyway (the guard cannot know every window the user really wanted). UI thread.
      */
     internal fun onPopupBlocked(pageUrl: String, kind: String, url: String) {
-        val tab = (if (pageUrl.isNotEmpty()) tabForPage(pageUrl) else null) ?: current ?: return
+        // attribution by the exact page address first (several tabs can be on the same host), then by host, then the tab in front
+        val tab = (if (pageUrl.isNotEmpty()) tabWithUrl(pageUrl) ?: tabForPage(pageUrl) else null) ?: current ?: return
+        if (kind == "tap") { tab.lastTapAt = SystemClock.uptimeMillis(); tab.lastTapHref = url; return } // a real tap in the page, and the link it was on: the jump guard's evidence
         tab.blocked.addAndGet(app.kestrel.core.filter.Category.ANNOYANCE, 1)
         tab.pendingLifetime.addAndGet(1)
         shieldCountChanged(tab)
@@ -1397,6 +1399,25 @@ open class BrowserActivity : Activity(), DockListener {
         noticeBar.show(pal, what, if (canOpen) "Open" else null, 7000L) {
             if (kind == "redirect") loadInTab(tab, url) else { val t = newTabInternal(tab, tab.isPrivateTab); show(t); navigate(t, url) }
         }
+    }
+
+    /**
+     * Should a page that is about to send THIS tab to [uri] be stopped? See [app.kestrel.core.guard.JumpGuard]: only a jump to another site right after a real tap that was not on a link to it.
+     * Called on the UI thread from onLoadRequest, before the navigation starts.
+     */
+    internal fun judgeJump(tab: Tab, uri: String): app.kestrel.core.guard.JumpGuard.Verdict {
+        val from = tab.topHost
+        val to = UrlParts.hostOf(uri)
+        if (!prefs.blockPopups || from == null || to == null || !Shields.effective(prefs, from).shieldsUp) return app.kestrel.core.guard.JumpGuard.Verdict.ALLOW
+        val now = SystemClock.uptimeMillis()
+        return app.kestrel.core.guard.JumpGuard.decide(
+            crossSite = !app.kestrel.core.filter.Psl.default.isSameSite(from, to),
+            touchAgeMs = now - lastTouchAt,
+            tapArrived = tab.lastTapAt >= lastTouchAt - 50,
+            tapAgeMs = now - tab.lastTapAt,
+            tapHref = tab.lastTapHref,
+            uri = uri,
+        )
     }
 
     /**
