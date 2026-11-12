@@ -67,6 +67,10 @@ object GeckoEngine {
             r.settings.setPostQuantumKeyExchangeEnabled(true)             // X25519MLKEM768 for TLS / HTTP-3 (= default, pinned)
             applyScrollFeel(prefs.scrollFeel)                             // live apz.* prefs of the "Scroll feel" setting
             applyNetwork(prefs)
+            // DEBUG builds only (the emulator rig, research/TYPING.md): `setprop debug.kestrel.iwvisual 0` makes the keyboard resize the page's LAYOUT, `1` only the visible area (read back in Diagnostics)
+            app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.iwvisual")?.let { v ->
+                if (v == "0" || v == "1") try { org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("dom.interactive_widget_default_resizes_visual", v == "1", org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_DEFAULT) } catch (e: Exception) { /* debug only */ }
+            }
             app.kestrel.browser.download.PageProxy.setApplier(PhoneProxyApplier)   // pages through the phone: the current state (proxy or direct) is applied now and on every change
         }
     }
