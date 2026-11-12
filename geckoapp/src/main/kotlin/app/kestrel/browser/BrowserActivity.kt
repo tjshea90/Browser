@@ -692,7 +692,8 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** A navigation of the page in front is about to start (called before the engine loads [toUrl]): take its picture now, the way it is on screen, for a later Back. */
     internal fun leavingPage(tab: Tab, toUrl: String) {
-        if (tab !== current || tab.isNewTab || tab.loading || tab.error != null || tab.showHome || !tab.url.startsWith("http")) { Health.log("tabs", "leave-skip", "loading=${tab.loading}"); return }
+        // Not required: that the page has finished loading. What is on screen when the user leaves is what Back should show (a page that is still loading, or keeps loading for ever, is the common case on a slow link).
+        if (tab !== current || tab.isNewTab || tab.error != null || tab.showHome || !tab.url.startsWith("http")) { Health.log("tabs", "leave-skip", "loading=${tab.loading}"); return }
         if (BackPictures.keyOf(toUrl) == BackPictures.keyOf(tab.url)) return // a reload or a #fragment: the same page
         val now = SystemClock.uptimeMillis()
         if (now - lastLeaveShotAt < 1500) return // a chain of redirects or quick taps: one picture is enough
