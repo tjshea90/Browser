@@ -130,3 +130,9 @@ Do everything still on the list and then do an audit of the app and engine. It w
 ```
 Do everything still on the list and then do an audit of the app and engine. It was very slow loading Proton mail and lagged when I was typing. Do your best effort at making the browser well coded and extremely efficient and optimized for my hardware. Consider looking at the Firefox engine it is using and modifying it for maximum speed on this hardware 
 ```
+
+## 2026-11-12T03:04:40Z
+```
+Also I long pressed a video and it still didn't show download even though I could download it from the regular menu. And the steam only showed a .ts file but on video Downloader app I could choose mp4 for the same video. It also redirected me to a spam page, I think it is a spoof play button that redirects, but after I press play several times it finally plays the video 
+I like the save video button, but instead of floating over the webpage, put it in the navigation bar as a download icon. When there is no video to download, it is a gray button. When there are videos, it turns neon blueal and pulses like the other animations. When I press it, a pop up menu shows up with the available videos and their names and file sizes and resolutions and file types and I can select one to download. Also, I just tried to download a video save I think it said hls format but it said .ts in the download manager. I want these to be mp4 downloads always
+```
