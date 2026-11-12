@@ -21,7 +21,7 @@ class DebugTmpTest {
         val end = System.currentTimeMillis() + 20000
         var last = -1L
         while (System.currentTimeMillis() < end) {
-            val v = engine.view(id) ?: break
+            val v = engine.view(id) ?: run { Thread.sleep(10); continue }
             if (v.state != DlState.QUEUED) println("T ${v.state} done=${v.done} total=${v.total} est=${v.estimated} ratio=${v.total.toDouble() / 640000}")
             last = v.done
             if (v.state == DlState.COMPLETED) break
