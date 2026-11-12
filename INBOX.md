@@ -163,3 +163,12 @@ My phone is Android 16, I don't mind installing an app, it has shizuku already r
 ```
 My mobile hotspot is always unmetered. No data saving is necessary, but the option may remain in the settings. My download speeds range from around 8mbit/s in the day to around 150mbit/s at night on the phone, although probably much less on the tablet due to the wifi hotspot bottleneck and slow tablet hardware. My main goal for this browser is speed and snappiness. Make it as fast as possible. It may use ram liberally as long as the extra ram use can speed up browsing or page loading. The tablet has 2gb ram with usually around 800mb-1gb free on average. It runs Android 10 go. Would it be possible and logical to offload any processing/downloading to the phone, which has better software, while using the tablet browser. Think about if the phone hardware can be used in any way while it is supplying internet over the hotspot to the tablet to make browsing on the tablet faster. Regardless, optimize this app for speed considering the tablet hardware. Smooth the scrolling. Keep pages cached so if I press the back button it loads immediately. Improve the caching logic to make scrolling faster and smoother while on web pages and preventing white unloaded or slow loading areas of web pages while scrolling. 
 ```
+
+## 2026-11-12T15:35:36Z
+```
+I will be using linkmeter fast wifi setting to get better hotspot speed. Optimize the browser to take advantage of this fast wifi feature and make sure websites and services load correctly and as fast as possible. Finish and Close work on the kestrel courier method at the next logical opportunity and keep it turned off in the browser by default because I will use the fast wifi setting in linkmeter more than the courier. 
+
+After you close the courier work, review my past prompts for any unfinished work and finish it. Do not ignore my prompts, work on each one of them, including past prompts not responded to yet. 
+
+I especially want Claude to review and optimize as much as possible this browser app for speed and smooth scrolling and fast webpage loading and caching where logical so the back button doesn't have to reload the last site, and current site on the screen is fast and smooth. Take advantage of the ram and hardware of the tablet I am using. Make this browser fast, well coded, and optimized for my hardware
+```
