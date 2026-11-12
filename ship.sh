@@ -3,6 +3,7 @@
 #
 #   bash ship.sh gecko "what changed this release"     # Kestrel G (Firefox GeckoView), the modern-engine build
 #   bash ship.sh web   "what changed this release"     # Kestrel (system WebView), the light fallback
+#   bash ship.sh courier "what changed this release"   # Kestrel Courier, the small app for the owner's PHONE (downloads for the tablet)
 #   bash ship.sh --local gecko "what changed"          # FALLBACK ONLY: build it here instead (Actions down / out of minutes)
 #
 # WHY GITHUB BUILDS IT
@@ -23,7 +24,7 @@ LOCAL=0
 if [ "${1:-}" = "--local" ]; then LOCAL=1; shift; fi
 APP="${1:-}"; NOTE="${2:-}"
 if ! app_valid "$APP" || [ -z "$NOTE" ]; then
-  echo "usage: bash ship.sh [--local] <web|gecko> \"one-line change note\""; exit 1
+  echo "usage: bash ship.sh [--local] <web|gecko|courier> \"one-line change note\""; exit 1
 fi
 
 # COMMIT BEFORE BUILDING. A build against a dirty tree proves nothing about what is committed, and leaves the tree looking like the
@@ -65,6 +66,7 @@ echo "  OK    $(app_title "$APP") $VNAME (code $VCODE) - higher than every previ
 echo "  ..    running the unit suites (cold Gradle can take minutes)"
 TASKS=(:core:test :app:testDebugUnitTest)
 [ "$APP" = gecko ] && TASKS+=(:geckoapp:compileDebugKotlin)
+[ "$APP" = courier ] && TASKS+=(:courier:testDebugUnitTest :courier:lintDebug)
 if ! ./gradlew "${TASKS[@]}" --console=plain > .git/ship-test.log 2>&1; then
   echo "  FAIL  the suites are red. Not shipping this."
   grep -E 'FAILED|error:|e: ' .git/ship-test.log | head -20 | sed 's/^/          /'

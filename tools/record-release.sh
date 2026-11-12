@@ -13,15 +13,16 @@
 #
 #   bash tools/record-release.sh kestrel-g-v0.2.0-gecko-alpha1 "what changed"
 #   bash tools/record-release.sh kestrel-v0.1.1 "what changed"
+#   bash tools/record-release.sh kestrel-courier-v0.1.0-alpha1 "what changed"
 set -uo pipefail
 D="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; cd "$D" || exit 1
 . tools/appinfo.sh
 
 TAG="${1:-}"; NOTE="${2:-}"
 if [ -z "$TAG" ] || [ -z "$NOTE" ]; then
-  echo "usage: bash tools/record-release.sh <kestrel-v0.1.1 | kestrel-g-v0.2.0-gecko-alpha1> \"what changed this release\""; exit 1
+  echo "usage: bash tools/record-release.sh <kestrel-v0.1.1 | kestrel-g-v0.2.0-gecko-alpha1 | kestrel-courier-v0.1.0-alpha1> \"what changed this release\""; exit 1
 fi
-APP="$(app_of_tag "$TAG")" || { echo "  FAIL  '$TAG' is not a Kestrel tag (kestrel-v<version> or kestrel-g-v<version>)"; exit 1; }
+APP="$(app_of_tag "$TAG")" || { echo "  FAIL  '$TAG' is not a Kestrel tag (kestrel-v<version>, kestrel-g-v<version> or kestrel-courier-v<version>)"; exit 1; }
 VNAME="${TAG#$(app_prefix "$APP")}"
 GV="$(app_vname "$APP")"; VCODE="$(app_vcode "$APP")"
 [ -n "$VCODE" ] || { echo "  FAIL  could not read versionCode from $(app_gradle "$APP")"; exit 1; }
