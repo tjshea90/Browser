@@ -189,9 +189,17 @@ internal class RuleParser {
             line.startsWith("#@#", i) -> { exception = true; selStart = i + 3 }
             else -> return fail2(Skip.COSMETIC_UNSUPPORTED) // #?# #$# #%# #@?# ...
         }
-        val selector = line.substring(selStart).trim()
+        var selector = line.substring(selStart).trim()
         if (selector.startsWith("+js(") || selector.startsWith("^") || selector.isEmpty()) return fail2(Skip.COSMETIC_UNSUPPORTED)
-        if (!CosmeticSelectors.accept(selector)) return fail2(if (CosmeticSelectors.isProcedural(selector)) Skip.COSMETIC_UNSUPPORTED else Skip.COSMETIC_UNSAFE)
+        var styled = false
+        val st = CosmeticSelectors.splitStyle(selector)
+        if (st != null) { // `site##selector:style(declarations)`: a restyling rule for a site (never an exception, never generic: checked below)
+            if (exception) return fail2(Skip.COSMETIC_UNSUPPORTED)
+            val decls = CosmeticSelectors.acceptDeclarations(st.second) ?: return fail2(Skip.COSMETIC_UNSAFE)
+            if (!CosmeticSelectors.accept(st.first)) return fail2(if (CosmeticSelectors.isProcedural(st.first)) Skip.COSMETIC_UNSUPPORTED else Skip.COSMETIC_UNSAFE)
+            selector = st.first + CosmeticSelectors.STYLE_SEP + decls
+            styled = true
+        } else if (!CosmeticSelectors.accept(selector)) return fail2(if (CosmeticSelectors.isProcedural(selector)) Skip.COSMETIC_UNSUPPORTED else Skip.COSMETIC_UNSAFE)
 
         val domains = ArrayList<String>()
         if (i > 0) {
@@ -205,6 +213,7 @@ internal class RuleParser {
             }
             if (domains.isEmpty()) return fail2(Skip.BAD_SYNTAX)
         }
+        if (styled && domains.isEmpty()) return fail2(Skip.COSMETIC_UNSUPPORTED) // a restyling rule for every site is too broad to take from a list
         return CosmeticRule(domains, selector, exception)
     }
 
