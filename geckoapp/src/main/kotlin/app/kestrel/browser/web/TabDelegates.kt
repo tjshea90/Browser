@@ -154,6 +154,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         tab.progress = maxOf(tab.progress, 5)
         tab.resetPageCounters()
         tab.media.clear() // a new page: what the old one played is no longer on offer
+        tab.videoChipHidden = false
         tab.dialogCount = 0
         tab.dialogsSuppressed = false
         // A new real navigation clears a previous error screen (but not the blank backdrop we load behind one).

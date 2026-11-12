@@ -128,6 +128,7 @@ open class BrowserActivity : Activity(), DockListener {
     private lateinit var errorView: ErrorView
     private lateinit var pullChip: PullChip // the pull-down-to-refresh indicator, over the page
     private lateinit var noticeBar: app.kestrel.browser.ui.NoticeBar // "Blocked a pop-up ... Open", over the bottom of the page
+    private lateinit var videoChip: app.kestrel.browser.ui.VideoChip // "Save video": the way to the download list while the page has something to save
     private lateinit var restoreOverlay: RestoreOverlay // over the page view while a page whose engine process died comes back (last preview instead of white)
     private var restoringTab: Tab? = null
     private val restoreTimeout = Runnable { hideRestoring() }
@@ -371,6 +372,11 @@ open class BrowserActivity : Activity(), DockListener {
         content.addView(pullChip, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         noticeBar = app.kestrel.browser.ui.NoticeBar(this)
         content.addView(noticeBar, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(12); leftMargin = dp(12); rightMargin = dp(12) })
+        videoChip = app.kestrel.browser.ui.VideoChip(this).apply {
+            onOpen = { current?.let { t -> video.show(t) } }
+            onHide = { current?.let { t -> t.videoChipHidden = true }; refreshVideoChip() }
+        }
+        content.addView(videoChip, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, dp(48), Gravity.BOTTOM or Gravity.END).apply { bottomMargin = dp(84); rightMargin = dp(12) })
         geckoView.pull = pullListener
         geckoView.pullEnabled = {
             val t = current
@@ -1348,6 +1354,14 @@ open class BrowserActivity : Activity(), DockListener {
         val p = if (t?.loading == true) t.progress else 0
         if (progress.progress != p) progress.progress = p
         updateNeonBusy()
+        refreshVideoChip()
+    }
+
+    /** Shows the "Save video" chip while the page in front has something to save; hidden on Home, error screens, full screen, the tab grid and open sheets, and after the user closed it for this page. */
+    internal fun refreshVideoChip() {
+        val t = current
+        val show = t != null && !t.videoChipHidden && !homeShown(t) && t.error == null && !fullscreenOn && tabGrid.visibility != View.VISIBLE && !sheet.isShowing && video.available(t)
+        if (show) videoChip.show(pal, t!!.media.usable().size) else videoChip.hide()
     }
 
     /**
