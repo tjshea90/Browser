@@ -46,7 +46,7 @@ class PhoneBackendTest {
         }
     }
 
-    private inner class Tablet(val origin: FakeServer, var mode: PhoneMode = PhoneMode.WHEN_THERE) {
+    private inner class Tablet(val origin: FakeServer, var mode: PhoneMode = PhoneMode.WHEN_THERE, val rowLagMs: Long = 0) {
         val sinks = FakeSinks()
         val store = FakeStore()
         val exec = Executors.newSingleThreadExecutor { r -> Thread(r, "tablet-control").also { it.isDaemon = true } }
@@ -55,9 +55,11 @@ class PhoneBackendTest {
         @Volatile var target: CourierClient? = null
         val stateFile = File(root, "tablet/phone-jobs.json")
         val changes = java.util.concurrent.atomic.AtomicInteger()
+        private val enqueuedAt = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+        /** [rowLagMs] > 0: the engine's row is not visible for that long after enqueue(), like a slow tablet whose control thread is behind. */
         val local = object : LocalDownloads {
-            override fun enqueue(src: Source): Long = engine.enqueue(src)
-            override fun view(id: Long): DownloadView? = engine.view(id)
+            override fun enqueue(src: Source): Long { val id = engine.enqueue(src); enqueuedAt[id] = System.currentTimeMillis(); return id }
+            override fun view(id: Long): DownloadView? { val t = enqueuedAt[id]; return if (t != null && System.currentTimeMillis() - t < rowLagMs) null else engine.view(id) }
         }
         var backend = newBackend()
 
@@ -115,6 +117,22 @@ class PhoneBackendTest {
     }
 
     private val DEST_PUBLIC_KIND = app.kestrel.core.download.DEST_PUBLIC
+
+    @Test(timeout = 120_000) fun aSlowTabletEngineDoesNotMakeThePhoneDeleteTheFileBeforeItIsCopied() {
+        val data = testBytes(2 * MiB + 3)
+        val phone = slowPhone(data)
+        val t = Tablet(FakeServer(testBytes(10)), rowLagMs = 3500)                       // the row shows up 3.5 s after the hand-over: more than three rounds of the backend
+        t.to(phone); t.startBackend()
+        val lid = t.backend.offload(src())!!
+        await("the hand-over") { t.backend.view(lid)?.note == "Copied from your phone" }
+        val bridge = t.backend.view(lid)!!
+        assertEquals("one row at the hand-over, not none", DlState.RUNNING, bridge.state); assertEquals("Movie.mp4", bridge.name)
+        assertEquals("and never two at once", 1, (t.backend.views().size + (if (t.engine.views().isNotEmpty() && t.local.view(t.engine.views()[0].id) != null) 1 else 0)))
+        await("copied", 60_000) { t.row()?.state == DlState.COMPLETED }
+        assertArrayEquals("the file arrived whole (the phone kept it until then)", data, t.bytesOf(t.row()!!))
+        await("then the phone's copy is deleted") { phone.host.jobCount == 0 }
+        assertEquals("Copied from your phone", t.backend.noteFor(t.row()!!.id))
+    }
 
     // ------------------------------------------------------------------------------------------------------------------ falling back to the tablet
     @Test(timeout = 90_000) fun aPhoneThatIsNotThereMeansTheTabletDownloadsByItself() {

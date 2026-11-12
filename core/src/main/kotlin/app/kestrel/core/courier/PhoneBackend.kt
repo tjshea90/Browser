@@ -59,6 +59,8 @@ class PhoneBackend(
         const val HELLO_EVERY_MS = 60_000L
         const val OFFER_LOCAL_AFTER_MS = 60_000L
         const val RETRY_MS = 3_000L
+        /** The tablet's engine registers a new download a moment after enqueue() returns its id (on a slow tablet, noticeably later): until then a missing row is not "the owner removed it". */
+        const val ROW_GRACE_MS = 20_000L
         /** Headers worth replaying on the phone (the phone filters again). */
         private val REPLAY = setOf("user-agent", "referer", "origin", "cookie", "accept", "accept-language")
     }
@@ -77,6 +79,8 @@ class PhoneBackend(
         var updated = created
         var nextTryAt = 0L
         var nextDelAt = 0L
+        /** The tablet's engine row for [engineId] has been seen at least once. */
+        var sawRow = false
     }
 
     private val lock = Any()
@@ -128,11 +132,18 @@ class PhoneBackend(
         return p.lid
     }
 
-    fun owns(id: Long): Boolean = synchronized(lock) { items[id]?.let { !it.hidden && (it.phase == Phase.PHONE || it.phase == Phase.CANCELED) } == true }
+    fun owns(id: Long): Boolean = synchronized(lock) { items[id]?.let { visible(it, clock.now()) } == true }
 
-    fun views(): List<DownloadView> = synchronized(lock) { items.values.filter { !it.hidden && (it.phase == Phase.PHONE || it.phase == Phase.CANCELED) }.map { view(it) } }
+    fun views(): List<DownloadView> = synchronized(lock) { val now = clock.now(); items.values.filter { visible(it, now) }.map { view(it) } }
 
-    fun view(id: Long): DownloadView? = synchronized(lock) { items[id]?.takeIf { !it.hidden && (it.phase == Phase.PHONE || it.phase == Phase.CANCELED) }?.let { view(it) } }
+    fun view(id: Long): DownloadView? = synchronized(lock) { items[id]?.takeIf { visible(it, clock.now()) }?.let { view(it) } }
+
+    /** Which records are a row of their own: the placeholder while the phone works (and when canceled), and for a moment after the hand-over until the tablet's engine row appears (no gap, no double row). */
+    private fun visible(p: P, now: Long): Boolean = !p.hidden && when (p.phase) {
+        Phase.PHONE, Phase.CANCELED -> true
+        Phase.PULL, Phase.LOCAL -> !p.sawRow && now - p.updated < ROW_GRACE_MS && local.view(p.engineId) == null
+        Phase.DONE -> false
+    }
 
     fun pause(id: Long) = remoteOp(id, "pause")
     fun resume(id: Long) = remoteOp(id, "resume")
@@ -203,7 +214,10 @@ class PhoneBackend(
         for (p in work) {
             val phase = synchronized(lock) { p.phase }
             if (phase == Phase.PULL) checkPull(p)
-            else if ((phase == Phase.LOCAL || phase == Phase.DONE) && local.view(p.engineId) == null && !synchronized(lock) { p.delRemote }) forget(p)
+            else if (phase == Phase.LOCAL || phase == Phase.DONE) {
+                if (local.view(p.engineId) != null) p.sawRow = true
+                else if (rowGone(p) && !synchronized(lock) { p.delRemote }) forget(p)
+            }
         }
         for (p in work) if (synchronized(lock) { p.delRemote }) tryDelete(p)
         for (p in work) if (synchronized(lock) { p.hidden && !p.delRemote }) forget(p)
@@ -282,11 +296,15 @@ class PhoneBackend(
         synchronized(lock) { p.phase = Phase.PULL; p.engineId = id; p.note = "Copied from your phone"; p.updated = clock.now(); save() }
     }
 
+    /** The engine row is missing and was either seen before (the owner removed it) or has had time enough to appear. */
+    private fun rowGone(p: P): Boolean = synchronized(lock) { p.sawRow || clock.now() - p.updated > ROW_GRACE_MS }
+
     private fun checkPull(p: P) {
         val v = local.view(p.engineId)
+        if (v != null) p.sawRow = true
         val retry = v != null && v.state == DlState.FAILED && ((v.reason == Reason.HTTP && (v.detail == 404 || v.detail == 410)) || v.reason == Reason.LINK_EXPIRED)
         if (retry) { fallback(p, "your phone no longer has the file"); return }
-        if (v == null || v.state == DlState.COMPLETED) synchronized(lock) { p.phase = Phase.DONE; p.delRemote = p.remoteId != null; p.updated = clock.now(); save() }
+        if ((v == null && rowGone(p)) || v?.state == DlState.COMPLETED) synchronized(lock) { p.phase = Phase.DONE; p.delRemote = p.remoteId != null; p.updated = clock.now(); save() }
     }
 
     private fun tryDelete(p: P) {
@@ -334,6 +352,12 @@ class PhoneBackend(
     // ---------------------------------------------------------------------------------------------------------------- the row
     private fun view(p: P): DownloadView {
         val now = clock.now()
+        if (p.phase == Phase.PULL || p.phase == Phase.LOCAL) {                      // the hand-over moment: the engine row is about to appear
+            val name = p.src.nameHint ?: p.last?.file?.takeIf { it.isNotEmpty() } ?: lastSegment(p.src.url)
+            val total = p.last?.total ?: -1L
+            return DownloadView(p.lid, if (p.phase == Phase.PULL) DlState.RUNNING else DlState.STARTING, Reason.NONE, 0, name, p.src.mime, hostOf(p.src.url), total, if (p.phase == Phase.PULL) maxOf(total, 0L) else 0L,
+                0L, -1L, 0, false, null, p.created, p.updated, emptyList(), DEST_PUBLIC, false, p.note)
+        }
         val r = p.last
         val away = p.unreachableSince > 0 && p.phase == Phase.PHONE
         var state: DlState
