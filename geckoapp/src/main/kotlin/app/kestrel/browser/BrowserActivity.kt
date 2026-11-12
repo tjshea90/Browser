@@ -898,7 +898,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (cur != null) captureThumb(cur)
         val appCtx = applicationContext
         val missing = tabs.filter { it.thumb == null && !it.isPrivateTab && !it.isNewTab }
-        if (missing.isNotEmpty()) Io.exec { for (t in missing) { val b = ThumbStore.load(appCtx, t.id); if (b != null) Io.ui { if (t.thumb == null) { t.thumb = b; t.thumbAt = SystemClock.uptimeMillis(); tabGrid.thumbChanged(t) } } } }
+        if (missing.isNotEmpty()) Io.fast { for (t in missing) { val b = ThumbStore.load(appCtx, t.id); if (b != null) Io.ui { if (t.thumb == null) { t.thumb = b; t.thumbAt = SystemClock.uptimeMillis(); tabGrid.thumbChanged(t) } } } }
     }
 
     private fun hideTabGrid() { tabGrid.visibility = View.GONE; applyPrivacyFlags() }
@@ -912,7 +912,8 @@ open class BrowserActivity : Activity(), DockListener {
         val appCtx = applicationContext
         try {
             geckoView.capturePixels().accept({ full ->
-                if (full != null) Io.exec {
+                val lane: (() -> Unit) -> Unit = if (tabGrid.visibility == View.VISIBLE) Io::fast else Io::exec // the grid is open: the user is waiting for this preview
+                if (full != null) lane {
                     val small = ThumbStore.shrink(full)
                     if (small != null) {
                         if (!tab.isPrivateTab) ThumbStore.save(appCtx, tab.id, small)
