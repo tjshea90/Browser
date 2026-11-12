@@ -92,6 +92,7 @@ class FileSinks(private val dir: File) : SinkFactory {
         override fun sync() { try { Os.fsync(raf.fd) } catch (e: ErrnoException) { throw SinkException(Reason.STORAGE, "sync failed (${e.errno})", e) } }
 
         override fun length(): Long = try { Os.fstat(raf.fd).st_size } catch (e: Exception) { -1L }
+        override fun truncate(len: Long) { try { Os.ftruncate(raf.fd, len) } catch (e: ErrnoException) { /* stale bytes at the end are harmless to the engine, the muxer only wants them gone */ } }
 
         override fun publish(): String? {
             try { Os.fsync(raf.fd) } catch (e: ErrnoException) { /* synced by the engine already */ }
