@@ -77,7 +77,10 @@ class CourierHostTest {
 
     private inner class Tablet(val base: String, val key: ByteArray = this@CourierHostTest.key) {
         var skew = 0L
-        fun raw(method: String, target: String, body: String? = null, sign: Boolean = true, signWith: ByteArray = key, ts: Long = System.currentTimeMillis() + skew): Triple<Int, String, Map<String, List<String>>> {
+        private var lastTs = 0L
+        /** Strictly increasing, like the real client: two identical requests in one millisecond must not get one signature (the phone treats that as a replay). */
+        @Synchronized fun nextTs(): Long { val t = maxOf(System.currentTimeMillis() + skew, lastTs + 1); lastTs = t; return t }
+        fun raw(method: String, target: String, body: String? = null, sign: Boolean = true, signWith: ByteArray = key, ts: Long = nextTs()): Triple<Int, String, Map<String, List<String>>> {
             val c = URL(base + target).openConnection() as HttpURLConnection
             c.requestMethod = method; c.connectTimeout = 5000; c.readTimeout = 15_000
             val bytes = body?.toByteArray() ?: ByteArray(0)
@@ -91,7 +94,7 @@ class CourierHostTest {
         fun create(cid: String, url: String = "https://files.test/pub/data.bin", extra: String = "") = call("POST", "/v1/jobs", """{"cid":"$cid","url":"$url"$extra}""")
         /** A signed GET whose body is only counted, not kept. */
         fun countBytes(target: String): Long {
-            val ts = System.currentTimeMillis() + skew
+            val ts = nextTs()
             val c = URL(base + target).openConnection() as HttpURLConnection
             c.setRequestProperty("X-K-Ts", ts.toString()); c.setRequestProperty("X-K-Sig", Sign.sign(key, "GET", target, ts, ByteArray(0)))
             var n = 0L
