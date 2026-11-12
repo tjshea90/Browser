@@ -750,3 +750,48 @@
 > - Your keyboard app, accessibility, autofill and 5 GHz facts.
 > - A yes or no on a scheduled CI list-build workflow.
 <!-- sha:8a11c0553a4e -->
+
+## 2026-11-12T15:35:32Z
+> Yes, the phone can speed up page loading, but only in one way. I built it, and I tested it on the emulator only, not on your real phone and tablet.
+>
+> Your LinkMeter notes say the carrier caps the **hotspot** at 5 Mbit/s, while the phone's own traffic isn't capped. So the phone helps when it opens the connections itself, not when it does "processing". It already did that for files and videos. Now it does it for web pages too.
+>
+> **What's new (Courier alpha3 on the phone, Kestrel G alpha21 on the tablet):**
+> - **Pages through the phone.** The tablet's https pages go through a small proxy in the Courier, and the phone makes the real connections. The phone sees site names, never page contents. If the phone stops answering, pages load directly by themselves.
+> - **One switch for hotspot only.** There's a new "Phone helper" tile in the main menu. Off means the tablet stops using the phone and the phone's proxy closes. The Courier's notification has "Turn off" if you want it fully stopped.
+> - **Unmetered.** The data saver is now off by default, so there's no "metered connection" label and no big-download questions. The levels are still in Settings.
+> - **Back and scrolling.**
+>   - **Back:** 4 pages are kept for an hour (it was 2 pages for 6 minutes).
+>   - **Memory:** 64 MB page cache, and decoded images kept 3 minutes.
+>   - **Loading ahead:** images decoded two screens ahead, and lazy images start loading earlier.
+>   - **One limit no setting can lift:** pages that send `Cache-Control: no-store` (webmail, banks) are never kept by any browser, so Back reloads those.
+> - **Two clashes with LinkMeter fixed.** The Courier used LinkMeter's port 8765 (now 8780). The tablet also lost the phone while LinkMeter's VPN was on, which is fixed in code but untested with the VPN.
+>
+> **What the phone can't speed up:**
+> - **Rendering, JavaScript and image decoding** stay on the tablet. Streaming a rendered page would make scrolling wait on the wifi.
+> - **Prefetching or transcoding https** would need a fake certificate on the tablet.
+> - **Ad block** stays in the browser. It needs to see the page, and at the proxy only the site name of https traffic is visible.
+>
+> **Wifi note:** 2.4 GHz tops out around 30–50 Mbit/s, so at night (150 Mbit/s) the wifi is the limit. With the phone close to the tablet, try 5 GHz.
+>
+> **What I tested:**
+> - **Emulator:** a page loaded through the proxy from a name only the phone could resolve. Loading fell back to direct when the proxy was dead or refused the tablet. Back restored a page from the cache.
+> - **Not tested:**
+>   - your real hotspot
+>   - real speeds and battery
+>   - Android 16 background limits
+>   - how scrolling feels
+>
+> To see whether it's worth it: install both, then Settings > Phone helper > Test the phone link. The last sentence says whether pages through the phone are faster, about the same, or slower. If not faster, switch it off from the menu. With an older Courier, the tablet just loads pages itself.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-courier-v0.1.0-alpha3
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha21
+>
+> **Still open, waiting on you:**
+> - Your real pair test, and that "Pages through the phone" sentence.
+> - How scrolling, white areas and Back feel now.
+> - The Proton Mail "Page loads" numbers.
+> - Your keyboard app, accessibility and autofill facts.
+> - A yes or no on a scheduled CI list-build workflow.
+<!-- sha:f780843ede9d -->
