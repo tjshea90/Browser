@@ -1,13 +1,13 @@
-# CHECKPOINT 756 — read me first, then TASKS.md
+# CHECKPOINT 804 — read me first, then TASKS.md
 
-**Written:** 2026-11-12T03:30:51Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `3c2f8cc` (this checkpoint is the commit after it)
+**Written:** 2026-11-12T04:06:37Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `c9aeb6b` (this checkpoint is the commit after it)
 
 ## Just done
-X17 dock download icon VERIFIED on emulator after a real redraw (home+relaunch): brightest px 54,230,242 = accentHi, chamfered neon frame visible; earlier gray screenshots were the emulator's stale frames (dump said 'Download video: 5 found'). X14 content.js contextmenu capture + vmenu plumbing and X16 guard top-host/overlay are written + unit/Playwright tested (64 web tests) but not yet emulator-verified.
+X18a DONE (core, JVM-tested, ffmpeg-verified): Avc.kt (SPS/NAL), TsDemux.kt (streaming PAT/PMT/PES), Mp4Mux.kt (progressive MP4: stts/ctts/stss/stsc/stco|co64/stsz, ffmpeg-style elst, journal+replay, rollback, wide/mdat 64-bit), MuxJournal.kt (CRC blocks), TsToMp4.kt (runs, ad drop/replace, implicit clock restart, persisted clock offset, probe). Fixtures core/src/test/resources/mux/*.ts; tests TsDemuxTest, Mp4MuxTest, TsToMp4Test (kill+resume gives byte-identical file; ffmpeg -f null decode clean; ffprobe frames 150/150 + lip sync 23ms). Design: research/MP4_MUX.md.
 
 ## Do this next
-On emulator (debug build build-g10 installed, video.html at http://10.0.2.2:8000): 1) tap dock download icon (428-514,862-922) and check the popup rows show name, size, resolution, type; 2) long-press the video -> app 'Download video' menu (X14); 3) spoof.html red fake play link must be blocked with an overlay notice (X16); then tick X14/X16/X17 in TASKS.md with that evidence, then X18/X15 (HLS always mp4: .mp4 name from the start, surface decline reason, Make MP4 for existing .ts, own TS->MP4 writer), then ship alpha17 (versionCode 116) batching X14-X18 + M8-lite. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN.
+X18b engine integration in core/.../media/StreamEngine.kt: (1) StreamRec.mux Int (0 undecided,1 mp4,2 raw) + StreamStoreFiles json field; (2) Sink.truncate default no-op in core Model.kt + Os.ftruncate in app FileSinks/MediaStoreSinks; (3) prepare(): for container ts probe segment 0 (decrypt prefix if AES) with TsToMp4.probe -> mode; MP4 mode: name stem.mp4 mime video/mp4, TsToMp4(MuxOut over sink.pwrite, FileMuxJournal(dir/mux.jnl), sink::sync, media.durationMs), recover() or startFresh(); (4) appendNext(): beginSegment(idx, seg.discontinuity, runMs)/feed decrypted bytes/endSegment, job.written=mux.position; (5) checkpoint(): under job.drain lock call mux.checkpoint(rec.next); (6) finish(): mux.finish(), no Remuxer, warning to row; (7) mux exception -> restart job raw. Then StreamEngineTest with fixtures (plain, AES-128, disc/ad, kill+resume), then app wiring (X18c), emulator proof (X18d). Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ On emulator (debug build build-g10 installed, video.html at http://10.0.2.2:8000
 
 ## Last ten checkpoints
 ```
+  1b3baa2 ckpt 756: X17 dock download icon VERIFIED on emulator after a real redraw (home+relaunch
   51942ec ckpt 744: owner message 11 written into TASKS as X14-X18 in their words (long-press down
   e8ca3f6 ckpt 741: M8-lite: Settings > Downloads (speed limit 2 MB/s..250 KB/s applied at once, d
   06945e0 ckpt 733: Owner told (alpha16 reply: Release link, repeated message 10 answered part by 
@@ -25,8 +26,7 @@ On emulator (debug build build-g10 installed, video.html at http://10.0.2.2:8000
   d41caca ckpt 724: M7 content sanity (web page where a file/video was expected -> BAD_CONTENT, HL
   61e1894 ckpt 721: M1b validator-less resume: Sink.readable/pread (Os.pread on both Android sinks
   f17fcb1 ckpt 719: web guard tests fixed (tap reports) + 2 new; CI test-js now gates the Gecko bu
-  b1d2872 ckpt 715: Last-Modified splice guard (EngineTest), research/AUDIT-2026-11.md written, do
 ```
 
-(11 automatic checkpoint(s) since the last deliberate one — the
+(47 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
