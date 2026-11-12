@@ -74,10 +74,10 @@ object DownloadController {
     }
 
     /** What the limiter is set to right now, in KB/s (0 = no limit). Pure: the one place the two rules meet. */
-    fun effectiveKBps(userKBps: Int, pageBusy: Boolean, yieldToPages: Boolean): Int =
-        if (pageBusy && yieldToPages) (if (userKBps <= 0) PAGE_KBPS else minOf(userKBps, PAGE_KBPS)) else userKBps.coerceAtLeast(0)
+    fun effectiveKBps(userKBps: Int, pageBusy: Boolean, yieldToPages: Boolean, pageKBps: Int = PAGE_KBPS): Int =
+        if (pageBusy && yieldToPages) (if (userKBps <= 0) pageKBps else minOf(userKBps, pageKBps)) else userKBps.coerceAtLeast(0)
 
-    private fun applyLimit() { limiter?.bytesPerSec = effectiveKBps(userKBps, pageBusy, yieldToPages) * 1024L }
+    private fun applyLimit() { limiter?.bytesPerSec = effectiveKBps(userKBps, pageBusy, yieldToPages, pageKBps) * 1024L }
     /** The second engine: segmented streams (HLS) into one file. Same list, same notifications; its ids live above 1e9 ([StreamEngine.owns]). */
     private var streams: StreamEngine? = null
     private var streamStore: StreamStoreFiles? = null
