@@ -1,8 +1,9 @@
 package app.kestrel.core
 
 import app.kestrel.core.tabs.LiveBudget
-import kotlin.test.Test
-import kotlin.test.assertEquals
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
 
 class LiveBudgetTest {
     @Test fun moreFreeMemoryKeepsMoreTabsLive() {
@@ -20,7 +21,7 @@ class LiveBudgetTest {
     @Test fun neverBelowTheFloorAndNeverAboveTheCap() {
         for (mb in listOf(0, 1, 100, 400, 800, 2000, 100000)) {
             val n = LiveBudget.limit(mb, true, false)
-            assert(n in LiveBudget.FLOOR..LiveBudget.MAX) { "limit($mb) = $n" }
+            assertTrue("limit($mb) = $n", n in LiveBudget.FLOOR..LiveBudget.MAX)
         }
     }
 
@@ -64,6 +65,6 @@ class LiveBudgetTest {
     @Test fun trimNeverRaisesTheBudget() {
         assertEquals(2, LiveBudget.afterTrim(15, 100, 2))
         for (level in listOf(5, 10, 15, 20, 40, 60, 80)) for (mb in listOf(-1, 100, 400, 900)) for (b in 2..8)
-            assert(LiveBudget.afterTrim(level, mb, b) <= b) { "afterTrim($level,$mb,$b)" }
+            assertTrue("afterTrim($level,$mb,$b)", LiveBudget.afterTrim(level, mb, b) <= b)
     }
 }
