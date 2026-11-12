@@ -1357,6 +1357,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null }} of ${tabs.size} tabs (the memory budget keeps up to ${liveBudget()} ready, MemAvailable ${Health.memAvailableMb()} MB, setting ${listOf("automatic", "few", "many")[prefs.tabsKept]}); current ${current?.url?.take(60) ?: "-"}")
         out.add("Network: ${GeckoEngine.networkProfile} (VPN active: ${NetworkMonitor.vpn}, LinkMeter tunnel recognised: ${NetworkMonitor.fastTunnel}, downloads yield to a loading page at ${DownloadController.pageYieldKBps} KB/s)")
         out.add(app.kestrel.browser.download.DownloadService.wifiLockLine())
+        out.add("Warm-ups: ${GeckoEngine.warmCalls} connection head start(s) handed to the engine on its own thread this run (Settings > Network lab > Warm up the top suggestion)")
         out.add(GeckoEngine.prefReadback)
         out.add(GeckoEngine.prefReadback2)
         out.add(GlInfo.text)

@@ -147,7 +147,9 @@ object GeckoEngine {
             // the Fast Wi-Fi profile (a VPN is the active network) and the back/forward cache blockers (research/SPEED3.md): their engine defaults are read here before any is changed
             "network.trr.mode", "network.http.http3.enable", "network.dns.disableIPv6", "dom.interactive_widget_default_resizes_visual", "docshell.shistory.bfcache.allow_unload_listeners", "docshell.shistory.bfcache.require_no_opener",
             "docshell.shistory.bfcache.ship_allow_beforeunload_listeners", "browser.sessionhistory.max_entries", "network.dnsCacheExpiration", "network.dnsCacheEntries",
-            "javascript.options.mem.gc_parallel_marking", "dom.script_loader.bytecode_cache.strategy")
+            "javascript.options.mem.gc_parallel_marking", "dom.script_loader.bytecode_cache.strategy",
+            // the external review's rows (research/REVIEW-EXTERNAL-1.md): JPEG XL off in the image Accept header, double-tap zoom and zoom-to-field as the app set them
+            "image.jxl.enabled", "apz.allow_double_tap_zooming", "formhelper.autozoom")
         try {
             org.mozilla.geckoview.GeckoPreferenceController.getGeckoPrefs(names).accept({ list ->
                 prefReadback = "Engine prefs: " + (list?.joinToString(", ") { "${it.pref.substringAfterLast('.')}=${it.value.toString().take(40)}(${when (it.type) { org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_BOOL -> "b"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_INT -> "i"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_STRING -> "s"; else -> "?" }})" } ?: "none")
