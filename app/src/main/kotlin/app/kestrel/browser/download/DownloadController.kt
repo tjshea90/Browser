@@ -30,6 +30,7 @@ import app.kestrel.core.download.Source
 import app.kestrel.core.download.Spawner
 import app.kestrel.core.media.StreamEngine
 import app.kestrel.core.media.StreamSource
+import app.kestrel.core.net.NetProfile
 import app.kestrel.platform.Remuxer
 import app.kestrel.core.shield.DataSaver
 import java.io.File
