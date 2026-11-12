@@ -258,9 +258,14 @@ function embedListed(rh, url) {
   }
   return false;
 }
-function sameSiteEnough(a, b) { // the page and its frame: the engine's public-suffix logic once it is loaded, else "one is the other or a subdomain of it"
+function roughSite(h) { // before the engine (and its public-suffix list) is loaded: the last two labels, three for "co.uk" shapes
+  var p = h.split('.'), n = p.length;
+  if (n <= 2) return h;
+  return (p[n - 1].length === 2 && p[n - 2].length <= 3) ? p.slice(-3).join('.') : p.slice(-2).join('.');
+}
+function sameSiteEnough(a, b) { // the page and its frame: the engine's public-suffix logic once it is loaded, else the rough guess above
   if (engine !== null) { try { return engine.isSameSite(a, b); } catch (e) { /* fall through */ } }
-  return a === b || a.slice(-b.length - 1) === '.' + b || b.slice(-a.length - 1) === '.' + a;
+  return roughSite(a) === roughSite(b);
 }
 function embedGate(d, page, host) {
   if (d.type !== 'sub_frame' || (cfgFlags.get(host) & 2) === 0) return null;
