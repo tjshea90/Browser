@@ -90,6 +90,7 @@ import app.kestrel.core.session.SessionCodec
 import app.kestrel.core.session.TabRecord
 import app.kestrel.core.tabs.LiveBudget
 import app.kestrel.browser.data.TabStateStore
+import app.kestrel.browser.ui.BackPictures
 import app.kestrel.core.url.Nav
 import app.kestrel.core.url.Omnibox
 import app.kestrel.core.url.UrlParts
@@ -657,6 +658,44 @@ open class BrowserActivity : Activity(), DockListener {
         return st
     }
 
+    // ---------------------------------------------------------------- Back / Forward pictures (research/SPEED3.md 6.2)
+    // Most Back presses are answered by the engine's own back/forward cache and are instant. A page that forbids caching (webmail, banking, anything with Cache-Control: no-store) or one the
+    // cache no longer holds is LOADED again; until it paints, a recent picture of it covers the page area. The picture is taken at the moment the page is left (as the owner last saw it).
+    private var lastLeaveShotAt = 0L
+    private var backTarget: Triple<Tab, String, android.graphics.Bitmap>? = null
+    private val backPictureShow = Runnable {
+        val (t, _, pic) = backTarget ?: return@Runnable
+        backTarget = null
+        if (t !== current || !t.loading || t.error != null || t.showHome || restoringTab != null) return@Runnable // the engine had it already (cache), or the user moved on
+        Health.count("back.picture"); Health.log("tabs", "back-picture", "tab=${t.id}")
+        showRestoring(t, false, "", pic, 0x33)
+    }
+
+    internal fun goBack(t: Tab) { armBackPicture(t, -1); t.session?.goBack() }
+    internal fun goForward(t: Tab) { armBackPicture(t, +1); t.session?.goForward() }
+
+    private fun armBackPicture(t: Tab, delta: Int) {
+        Io.main.removeCallbacks(backPictureShow); backTarget = null
+        if (t !== current || t.session == null) return
+        val st = t.gecko.state ?: return
+        val i = st.currentIndex + delta
+        if (i !in 0 until st.size) return
+        val url = st[i].uri ?: return
+        val pic = BackPictures.get(t.id, url) ?: return
+        backTarget = Triple(t, url, pic)
+        Io.main.postDelayed(backPictureShow, 150) // a cache hit is done by then; a page that has to load shows its picture
+    }
+
+    /** A navigation of the page in front is about to start (called before the engine loads [toUrl]): take its picture now, the way it is on screen, for a later Back. */
+    internal fun leavingPage(tab: Tab, toUrl: String) {
+        if (tab !== current || tab.isNewTab || tab.loading || tab.error != null || tab.showHome || !tab.url.startsWith("http")) return
+        if (BackPictures.keyOf(toUrl) == BackPictures.keyOf(tab.url)) return // a reload or a #fragment: the same page
+        val now = SystemClock.uptimeMillis()
+        if (now - lastLeaveShotAt < 1500) return // a chain of redirects or quick taps: one picture is enough
+        lastLeaveShotAt = now
+        captureThumb(tab, forBack = true)
+    }
+
     private fun hasLiveChild(t: Tab) = tabs.any { it.parentId == t.id && it.session != null }
 
     private fun detach(v: View) { (v.parent as? ViewGroup)?.removeView(v) }
@@ -824,7 +863,7 @@ open class BrowserActivity : Activity(), DockListener {
     // ================================================================== toolbar callbacks
 
     override fun onBack() { if (!handleBack()) moveTaskToBack(true) }
-    override fun onForward() { current?.session?.goForward() }
+    override fun onForward() { current?.let { goForward(it) } }
 
     /** Home button: the black Home screen over the current page (the page stays alive underneath; Back returns to it). Tapped again: start typing. */
     override fun onHome() {
@@ -907,7 +946,7 @@ open class BrowserActivity : Activity(), DockListener {
      * Snapshot the page in front for the tab grid: a GPU read-back (not a screenshot, so it also works under FLAG_SECURE), scaled down on the IO thread.
      * Only for a page that is really on screen - not the Home screen, an error screen or a page that is still loading.
      */
-    private fun captureThumb(tab: Tab) {
+    private fun captureThumb(tab: Tab, forBack: Boolean = false) {
         if (tab !== current || homeShown(tab) || tab.error != null || tab.session == null || geckoView.session !== tab.session) return
         val appCtx = applicationContext
         try {
@@ -1697,11 +1736,11 @@ open class BrowserActivity : Activity(), DockListener {
         }
     }
 
-    private fun showRestoring(tab: Tab, crashed: Boolean, message: String? = null) {
-        Health.log("tabs", "cover-show", "tab=${tab.id} thumb=${tab.thumb != null}")
+    private fun showRestoring(tab: Tab, crashed: Boolean, message: String? = null, picture: android.graphics.Bitmap? = null, dim: Int = 0xB3) {
+        Health.log("tabs", "cover-show", "tab=${tab.id} thumb=${tab.thumb != null} picture=${picture != null}")
         restoringTab = tab
-        val thumb = tab.thumb
-        restoreOverlay.show(thumb, message ?: if (crashed) "The page stopped - bringing it back" else "Page freed to save memory - bringing it back")
+        val thumb = picture ?: tab.thumb
+        restoreOverlay.show(thumb, message ?: if (crashed) "The page stopped - bringing it back" else "Page freed to save memory - bringing it back", dim)
         Io.main.removeCallbacks(restoreTimeout)
         Io.main.postDelayed(restoreTimeout, 20_000) // never stay up for ever (a page that never paints, a dead connection)
     }
@@ -1745,10 +1784,10 @@ open class BrowserActivity : Activity(), DockListener {
         if (t.showHome && !t.isNewTab) { t.showHome = false; attachContent(t); updateUi(); return true } // Home laid over a page: Back returns to the page
         if (t.error != null) {
             t.error = null
-            if (t.canGoBack && t.session != null) { attachContent(t); t.session?.goBack() } else if (t.parentId != 0L && tabs.any { it.id == t.parentId }) doCloseTab(t) else showNewTabPage(t)
+            if (t.canGoBack && t.session != null) { attachContent(t); goBack(t) } else if (t.parentId != 0L && tabs.any { it.id == t.parentId }) doCloseTab(t) else showNewTabPage(t)
             return true
         }
-        if (t.canGoBack && t.session != null) { t.session?.goBack(); return true }
+        if (t.canGoBack && t.session != null) { goBack(t); return true }
         if (t.parentId != 0L && tabs.any { it.id == t.parentId }) { doCloseTab(t); return true }
         if (!t.isNewTab) { showNewTabPage(t); return true }
         return false
@@ -1766,7 +1805,7 @@ open class BrowserActivity : Activity(), DockListener {
         override fun backToSafety() {
             val t = current ?: return
             t.error = null
-            if (t.canGoBack && t.session != null) { attachContent(t); t.session?.goBack() } else showNewTabPage(t)
+            if (t.canGoBack && t.session != null) { attachContent(t); goBack(t) } else showNewTabPage(t)
         }
         override fun proceedUnsafeSsl(host: String) { current?.let { it.sslBypassHosts.add(host); this@BrowserActivity.retry(it) } }
         override fun continueHttp(httpUrl: String, host: String) { current?.let { it.httpOkHosts.add(host); it.error = null; loadUrl(it, httpUrl, null) } }
