@@ -10,6 +10,7 @@ Evidence tags as in the review: [V-EMU] seen on the Android 10 x86_64 emulator (
 
 ## What the emulator showed
 - [V-EMU] EX-4 / EX-3 / EX-8: Diagnostics read-back `jxl.enabled=false(b)`, `allow_double_tap_zooming=false(b)`, `autozoom=true(b)`, config version 6.
+- [V-EMU] EX-3 MEASURED with the Tap lab page (viewport width=1200, `adb shell input tap`, six taps one second apart): "Double-tap to zoom" OFF (the new default) -> click 5-45 ms after the finger lifts, median 18 ms; ON -> 234, 235, 130, 270, 253 ms (and one 1065 ms while the page was still settling), median 253 ms. The tap delay of the review exists in this engine and the setting removes it. (Emulator timing is noisy; the tablet's own run is one tap on Diagnostics > Tap lab.)
 - [V-EMU] EX-11: the keyboard probe window delivers layout events on Android 10: 2 at start-up, 6 after one typing session (show + hide). The event path works; the poll is only a safety net once an event has arrived.
 - [V-EMU] EX-2 PROVEN, with Gecko's own log (debug-only `setprop debug.kestrel.moz_log "nsHttp:5,..."`, written to files/gecko-moz.log.moz_log) and a host-side TLS listener (scratchpad tlslog.py):
   - Old path (the public `GeckoWebExecutor.speculativeConnect` called from an app thread, `debug.kestrel.warmpath old`): typing a bookmarked host leaves NO trace in the engine log and the listener sees nothing. The review's claim holds.
