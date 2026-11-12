@@ -30,6 +30,11 @@ object GeckoEngine {
      */
     fun speculativeConnect(url: String): Boolean {
         if (rt == null) return false
+        // DEBUG builds only (the emulator proof of EX-2): `setprop debug.kestrel.warmpath old` calls the public GeckoWebExecutor method on this thread, the way the app did before, to show that GeckoView 160 drops it
+        val ctx = appCtx
+        if (ctx != null && app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.warmpath") == "old") {
+            return try { executorOrNull()?.speculativeConnect(url); warmCalls++; true } catch (e: Throwable) { false }
+        }
         return try {
             val gecko = org.mozilla.gecko.util.XPCOMEventTarget.mainThread() ?: return false
             gecko.execute { try { org.mozilla.gecko.GeckoThread.speculativeConnect(url) } catch (e: Throwable) { /* only a head start */ } }
