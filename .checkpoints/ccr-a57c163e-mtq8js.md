@@ -1,7 +1,7 @@
-# CHECKPOINT 1005 — read me first, then TASKS.md
+# CHECKPOINT 1007 — read me first, then TASKS.md
 
-**Written:** 2026-11-12T09:26:34Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `5047bd2` (this checkpoint is the commit after it)
+**Written:** 2026-11-12T09:28:10Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `b01309f` (this checkpoint is the commit after it)
 
 ## Just done
 gated kestrel-g-v0.3.0-alpha20 (gecko code 119) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
@@ -18,6 +18,7 @@ NEVER ship kestrel-g-v0.3.0-alpha20 twice (check BUILDLOG.md and the Releases fi
 
 ## Last ten checkpoints
 ```
+  d3a8580 ckpt 1005: gated kestrel-g-v0.3.0-alpha20 (gecko code 119) and pushed it: handoff self-t
   5047bd2 ckpt 1004: gated kestrel-courier-v0.1.0-alpha2 (courier code 2) and pushed it: handoff s
   1b67245 ckpt 1003: Y2h2 verified end to end and documented; full gates green (core 506 tests, ap
   366f38a ckpt 996: Y2h2 code: Remuxer moved to shared-android/kotlin (package app.kestrel.platfor
@@ -27,5 +28,7 @@ NEVER ship kestrel-g-v0.3.0-alpha20 twice (check BUILDLOG.md and the Releases fi
   6dbba44 ckpt 973: gated kestrel-g-v0.3.0-alpha19 (gecko code 118) and pushed it: handoff self-te
   cebfa82 ckpt 969: gated kestrel-courier-v0.1.0-alpha1 (courier code 1) and pushed it: handoff se
   919c2a3 ckpt 968: pre-ship: first Courier release: the small app for your PHONE. It downloads fi
-  1df58a2 ckpt 967: pre-ship: first Courier release: the small app for your PHONE. It downloads fi
 ```
+
+(1 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
