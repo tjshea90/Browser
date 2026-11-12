@@ -84,6 +84,7 @@ object CourierRuntime {
             { fetcher }, sinks, JsonStreamStore(File(dir, "streams")) { Log.w(TAG, it) }, net, { r -> handler.post(r) }, Clock.System, Config(maxActive = 3, maxConnsTotal = 8, maxConnsPerDownload = 6),
             Spawner { name, task -> Thread(task, name).also { it.isDaemon = true; it.start() } },
             Remuxer(app, sinks, device = "phone", tag = TAG, roomDir = { dir }, note = { a, b, c -> Log.i(TAG, "$a: $b $c") }), { m, t -> Log.w(TAG, m, t) },
+            keepApartOnMergeFailure = false,         // the phone never hands over a picture without its sound: the job fails and the tablet does it itself
         )
         engine.restore(); streams.restore()
         val resolver: (String) -> List<ByteArray> = if (noGuard) { { _ -> listOf(byteArrayOf(93, 184.toByte(), 216.toByte(), 34)) } } else { { h -> java.net.InetAddress.getAllByName(h).map { it.address } } }

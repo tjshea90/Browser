@@ -164,6 +164,11 @@ class StreamEngine(
     private val idBase: Long = 1_000_000_000L,
     /** The one speed limit of the whole app (shared with the single-file engine); 0 = none. */
     private val limiter: RateLimiter = RateLimiter(clock),
+    /**
+     * What happens when picture and sound (DASH) cannot be made one MP4: true (the browser) = both stay as two downloads the owner can see; false (the phone app, which works for a tablet and has
+     * no row of its own for the sound) = everything is thrown away and the job fails, so the tablet does the download itself instead of receiving a picture without its sound.
+     */
+    private val keepApartOnMergeFailure: Boolean = true,
 ) {
     interface Listener { fun onChanged(id: Long) }
 
@@ -796,6 +801,11 @@ class StreamEngine(
                 if (converted == null) synchronized(lock) { if (rec.note == null) rec.note = "Kept as a .ts file: ${j.declined ?: "it could not be converted to MP4"}." }   // the MP4 writer's own reason (set when it looked at the first segment) says more than the platform's
             } else synchronized(lock) { rec.note = "Kept as a .ts file: this download began before the MP4 writer existed and its parts were not recorded." }
             if (converted != null) try { sinks.delete(uri) } catch (e: Exception) { /* the .ts stays next to the .mp4: harmless */ }
+        }
+        if (comp != null && converted == null && !keepApartOnMergeFailure) {
+            if (uri != null) try { sinks.delete(uri) } catch (e: Exception) { /* ignore */ }
+            synchronized(lock) { rec.destUri = null }
+            throw Failed(Reason.UNSUPPORTED, why = "picture and sound could not be made one file")           // the sound job goes with it (settle)
         }
         synchronized(lock) {
             if (converted != null) { rec.destUri = converted.uri; rec.name = converted.name; rec.mime = converted.mime; job.written = converted.size }

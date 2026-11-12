@@ -109,6 +109,8 @@ class StagingSinks(private val dir: File) : SinkFactory {
 
         override fun sync() { try { ch.force(false) } catch (e: IOException) { throw map(e, "sync failed") } }
         override fun length(): Long = try { ch.size() } catch (e: IOException) { -1L }
+        /** The open read-write file: the platform's MediaMuxer writes the converted MP4 straight into it (the muxer duplicates the descriptor, it never closes ours). */
+        override fun descriptor(): java.io.FileDescriptor? = try { raf.fd } catch (e: IOException) { null }
         override fun truncate(len: Long) { try { if (len < ch.size()) ch.truncate(len) } catch (e: IOException) { /* stale bytes at the end are harmless to the engine */ } }
 
         override fun publish(): String? {

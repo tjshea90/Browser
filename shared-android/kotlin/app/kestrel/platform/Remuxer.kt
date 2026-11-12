@@ -213,7 +213,7 @@ class Remuxer(
             if (af != null && !af.containsKey("csd-0")) return declined("AAC without its configuration") // cannot be put in an MP4
             val name = j.stem + ".mp4"
             val sink = sinks.create(name, "video/mp4", -1, j.priv, j.destKind).also { out = it }
-            val fd = sink.descriptor() ?: run { sink.discard(); return null }
+            val fd = sink.descriptor() ?: run { sink.discard(); return declined("no file descriptor for the result") }
             val m = MediaMuxer(fd, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4).also { muxer = it }
             val vOut = m.addTrack(vf)
             val aOut = if (af != null) m.addTrack(af) else -1
@@ -269,7 +269,7 @@ class Remuxer(
      * refuses returns null (the two files then stay as downloads of their own).
      */
     override fun merge(m: StreamFinisher.Merge): StreamFinisher.Converted? {
-        if (!enoughRoom(m.size)) return null
+        if (!enoughRoom(m.size)) return declined("there is not enough free room on the $device to merge picture and sound")
         val vx = MediaExtractor(); val ax = MediaExtractor()
         var out: Sink? = null
         var muxer: MediaMuxer? = null
@@ -280,12 +280,12 @@ class Remuxer(
             var vt = -1; var at = -1
             for (i in 0 until vx.trackCount) if (vt < 0 && vx.getTrackFormat(i).getString(MediaFormat.KEY_MIME).let { it == "video/avc" || it == "video/hevc" }) vt = i
             for (i in 0 until ax.trackCount) if (at < 0 && ax.getTrackFormat(i).getString(MediaFormat.KEY_MIME) == "audio/mp4a-latm") at = i
-            if (vt < 0 || at < 0) return null
+            if (vt < 0 || at < 0) return declined("merge: picture track $vt, sound track $at (an H.264 / H.265 picture and an AAC sound are needed)")
             val vf = vx.getTrackFormat(vt); val af = ax.getTrackFormat(at)
-            if (!af.containsKey("csd-0")) return null
+            if (!af.containsKey("csd-0")) return declined("merge: the AAC sound has no configuration")
             val name = m.stem + ".mp4"
             val sink = sinks.create(name, "video/mp4", -1, m.priv, m.destKind).also { out = it }
-            val fd = sink.descriptor() ?: run { sink.discard(); return null }
+            val fd = sink.descriptor() ?: run { sink.discard(); return declined("merge: no file descriptor for the result") }
             val mux = MediaMuxer(fd, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4).also { muxer = it }
             val vOut = mux.addTrack(vf); val aOut = mux.addTrack(af)
             vx.selectTrack(vt); ax.selectTrack(at)
@@ -319,10 +319,10 @@ class Remuxer(
             val len = sink.length()
             val uri = sink.publish() ?: throw IllegalStateException("no uri")
             out = null
-            Log.i(tag, "merge ok: ${m.size} -> $len bytes")
+            Log.i(tag, "merge ok: ${m.size} -> $len bytes"); note("merge", "ok", "${m.size} -> $len bytes")
             return StreamFinisher.Converted(uri, sink.displayName ?: name, "video/mp4", len)
         } catch (e: Throwable) {
-            Log.w(tag, "merge failed, keeping the two files", e)
+            Log.w(tag, "merge failed, keeping the two files", e); note("merge", "failed", e.toString().take(160))
             return null
         } finally {
             try { if (started) muxer?.stop() } catch (e: Exception) { /* ignore */ }
