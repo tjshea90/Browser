@@ -126,3 +126,39 @@
   } catch (e) { /* never break the page */ }
 })();
 
+// A field tapped in the lower half of the screen stayed hidden behind the keyboard until the first letter was typed (research/TYPING.md): Firefox shrinks only the VISIBLE area when the keyboard opens (the page's
+// layout keeps its size, so nothing is laid out again, which is why typing stays cheap) and scrolls to the caret when a key is typed, not when the field is tapped. When the visible area shrinks while a text field
+// has the focus and the field is no longer inside it, bring the field into view. Costs one listener per page and does nothing unless the keyboard opened.
+(function () {
+  try {
+    var vv = window.visualViewport;
+    if (!vv || !window.addEventListener) return;
+    var last = vv.height, timer = 0;
+    function editable(a) {
+      if (!a || a === document.body || a === document.documentElement) return false;
+      var t = a.tagName;
+      if (t === 'TEXTAREA' || t === 'SELECT') return true;
+      if (t === 'INPUT') {
+        var ty = (a.type || '').toLowerCase();
+        return !(ty === 'checkbox' || ty === 'radio' || ty === 'button' || ty === 'submit' || ty === 'reset' || ty === 'image' || ty === 'file' || ty === 'range' || ty === 'color');
+      }
+      return !!a.isContentEditable;
+    }
+    function reveal() {
+      timer = 0;
+      var a = document.activeElement;
+      if (!editable(a)) return;
+      var r = a.getBoundingClientRect();
+      if (r.top >= vv.offsetTop && r.bottom <= vv.offsetTop + vv.height) return; // already inside the visible area
+      a.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+    }
+    vv.addEventListener('resize', function () {
+      var h = vv.height, shrank = h < last - 60;
+      last = h;
+      if (!shrank) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(reveal, 120); // the keyboard opens in two steps (its suggestion strip comes second): look at the final size
+    });
+  } catch (e) { /* never break the page */ }
+})();
+
