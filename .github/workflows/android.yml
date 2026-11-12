@@ -40,8 +40,10 @@ on:
         type: string
         default: ''
 
+# Read-only by default. Only the three build jobs below publish a Release (`gh release create`), and only they get `contents: write`, so the cheap gate jobs and the test jobs
+# (which run the repository's own scripts) never hold a token that can write.
 permissions:
-  contents: write
+  contents: read
 
 # A second dispatch for the same ref and app WAITS instead of cancelling a run that may be in the middle of publishing.
 # (The build jobs below also hold a repo-wide lock per app, so two Claude sessions on different branches can never publish the same tag at once.)
@@ -61,6 +63,8 @@ jobs:
       full: ${{ steps.plan.outputs.full }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false # the token is not left in .git/config for later steps
 
       - name: Decide how much of this run costs money
         id: plan
@@ -138,6 +142,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false # the token is not left in .git/config for later steps
       - uses: ./.github/actions/setup-build
       - name: Core + filter-list tool + app unit tests, lint
         run: ./gradlew :core:test :tools:build :app:testDebugUnitTest :app:lintRelease --console=plain
@@ -154,6 +160,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false # the token is not left in .git/config for later steps
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -169,6 +177,8 @@ jobs:
     needs: [check, test-jvm, test-js]
     if: needs.check.outputs.full == 'true' && needs.check.outputs.web == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # publishes the Release
     timeout-minutes: 30
     concurrency:
       group: release-web
@@ -177,6 +187,8 @@ jobs:
       APP: web
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false # the token is not left in .git/config for later steps
       - uses: ./.github/actions/setup-build
 
       - name: Private signing key (only when the repo secret exists)
@@ -221,6 +233,8 @@ jobs:
     needs: [check, test-jvm, test-js]
     if: needs.check.outputs.full == 'true' && needs.check.outputs.gecko == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # publishes the Release
     timeout-minutes: 45
     concurrency:
       group: release-gecko
@@ -229,6 +243,8 @@ jobs:
       APP: gecko
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false # the token is not left in .git/config for later steps
       - uses: ./.github/actions/setup-build
 
       - name: Private signing key (only when the repo secret exists)
@@ -276,6 +292,8 @@ jobs:
     needs: [check, test-jvm]
     if: needs.check.outputs.full == 'true' && needs.check.outputs.courier == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # publishes the Release
     timeout-minutes: 30
     concurrency:
       group: release-courier
@@ -284,6 +302,8 @@ jobs:
       APP: courier
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false # the token is not left in .git/config for later steps
       - uses: ./.github/actions/setup-build
 
       - name: Private signing key (only when the repo secret exists)
