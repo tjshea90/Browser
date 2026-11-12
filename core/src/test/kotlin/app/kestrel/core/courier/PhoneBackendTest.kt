@@ -340,7 +340,7 @@ class PhoneBackendTest {
     }
 
     @Test(timeout = 180_000) fun aPhoneThatIsKilledInTheMiddleOfAVideoFinishesItAfterTheRestart() {
-        val pcdn = FakeCdn().also { it.chunkDelayMs = 60; it.chunk = 4 * 1024 }
+        val pcdn = FakeCdn().also { it.chunkDelayMs = 150; it.chunk = 4 * 1024 }
         val phone1 = Phone(FakeServer(testBytes(10)), root, cleanups, cdn = pcdn)
         val playlist = tsPlaylist(pcdn)
         val t = Tablet(FakeServer(testBytes(10)), tabletCdn = FakeCdn())
