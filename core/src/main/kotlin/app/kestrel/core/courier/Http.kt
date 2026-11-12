@@ -229,7 +229,9 @@ sealed class RangeSpec {
             }
             if (!a.all { it in '0'..'9' } || a.length > 18) return Ignore
             val from = a.toLong()
-            val to = if (b.isEmpty()) length - 1 else { if (!b.all { it in '0'..'9' } || b.length > 18) return Ignore; b.toLong() }
+            if (b.isEmpty()) return if (from >= length) Unsatisfiable else Part(from, length - 1)     // open-ended: "from here to the end"
+            if (!b.all { it in '0'..'9' } || b.length > 18) return Ignore
+            val to = b.toLong()
             if (to < from) return Ignore
             if (from >= length) return Unsatisfiable
             return Part(from, minOf(to, length - 1))
