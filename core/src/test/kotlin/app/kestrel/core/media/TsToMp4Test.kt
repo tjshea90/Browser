@@ -266,6 +266,7 @@ class TsToMp4Test {
             val fin = second.m.finish()
             assertNull(fin.warning)
             val file = out.bytes()
+            System.getenv("KESTREL_MUX_DUMP")?.let { File(it, "resume-$killAfter.mp4").writeBytes(file) }
             assertEquals(fin.length, file.size.toLong())
             val r = Mp4Reader(file)
             val v = r.track("vide")!!; val a = r.track("soun")!!
