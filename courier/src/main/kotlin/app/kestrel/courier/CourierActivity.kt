@@ -11,7 +11,6 @@ import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -35,6 +34,10 @@ import java.util.Locale
 class CourierActivity : Activity() {
     private val ui = Handler(Looper.getMainLooper())
     private val body = LinearLayout(this)
+    /** Where the pieces are added while a screen is being built (a scratch container; [body] is only touched when the content really changed). */
+    private var target: LinearLayout = body
+    private val sig = StringBuilder()
+    private var lastSig = 
     private lateinit var prefs: CourierPrefs
     private var resumed = false
 
@@ -79,9 +82,19 @@ class CourierActivity : Activity() {
 
     // ------------------------------------------------------------------------------------------------------------------ drawing
     private fun render() {
+        val scratch = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        target = scratch; sig.setLength(0)
+        try { build() } finally { target = body }
+        val now = sig.toString()
+        if (now == lastSig) return                                          // nothing changed: leave the views (and a selected code) alone
+        lastSig = now
         body.removeAllViews()
-        body.addView(text("Kestrel Courier", 24f, FG, bold = true).apply { setPadding(dp(4), dp(16), 0, dp(2)) })
-        body.addView(text("Downloads for your tablet's Kestrel browser, over your hotspot.", 14f, MUTED).apply { setPadding(dp(4), 0, 0, dp(12)) })
+        while (scratch.childCount > 0) { val c = scratch.getChildAt(0); val lp = c.layoutParams; scratch.removeViewAt(0); body.addView(c, lp) }
+    }
+
+    private fun build() {
+        target.addView(text("Kestrel Courier", 24f, FG, bold = true).apply { setPadding(dp(4), dp(16), 0, dp(2)) })
+        target.addView(text("Downloads for your tablet's Kestrel browser, over your hotspot.", 14f, MUTED).apply { setPadding(dp(4), 0, 0, dp(12)) })
 
         val on = CourierRuntime.isRunning
         card {
@@ -95,7 +108,8 @@ class CourierActivity : Activity() {
             addView(text(line, 14f, if (CourierRuntime.lastError != null) DANGER else MUTED).apply { setPadding(0, dp(4), 0, dp(8)) })
             val row = LinearLayout(this@CourierActivity).apply { gravity = Gravity.CENTER_VERTICAL; minimumHeight = dp(52) }
             row.addView(text("Ready for the tablet", 16f, FG), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            val sw = Switch(this@CourierActivity).apply { isChecked = on || prefs.ready && !on && false }
+            sig.append(if (on) "<on>" else "<off>")
+            val sw = Switch(this@CourierActivity).apply { isChecked = on }
             sw.setOnCheckedChangeListener { _, checked -> if (checked) turnOn() else CourierService.stop(this@CourierActivity); ui.postDelayed({ render() }, 300) }
             row.addView(sw)
             addView(row)
@@ -133,7 +147,7 @@ class CourierActivity : Activity() {
 
         val free = try { StatFs(filesDir.path).availableBytes } catch (e: Exception) { 0L }
         val ver = try { packageManager.getPackageInfo(packageName, 0).versionName } catch (e: Exception) { "?" }
-        body.addView(text("Free space on this phone: ${bytes(free)}   ·   Courier $ver", 12f, MUTED).apply { setPadding(dp(4), dp(8), 0, 0) })
+        target.addView(text("Free space on this phone: ${bytes(free)}   ·   Courier $ver", 12f, MUTED).apply { setPadding(dp(4), dp(8), 0, 0) })
     }
 
     private fun turnOn() {
@@ -155,6 +169,7 @@ class CourierActivity : Activity() {
             else -> "Starting"
         }
         r.addView(text(status, 13f, if (v.state == DlState.FAILED) DANGER else MUTED))
+        if (v.total > 0 && !v.state.terminal) sig.append("#").append(v.done * 1000 / v.total)
         if (v.total > 0 && !v.state.terminal) r.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 1000; progress = (v.done * 1000 / v.total).toInt() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(8)).apply { topMargin = dp(4) })
         if (!v.state.terminal) r.addView(button("Cancel") { CourierRuntime.cancel(v.id); render() }.apply { minHeight = dp(40); minimumHeight = dp(40) })
         return r
@@ -168,14 +183,16 @@ class CourierActivity : Activity() {
             background = GradientDrawable().apply { setColor(CARD); cornerRadius = dp(12).toFloat(); setStroke(dp(1), 0xFF12384A.toInt()) }
         }
         c.block()
-        body.addView(c, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) })
+        target.addView(c, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) })
     }
 
     private fun text(s: String, sp: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
+        sig.append(s).append('|')
         text = s; textSize = sp; setTextColor(color); if (bold) typeface = Typeface.DEFAULT_BOLD; includeFontPadding = true
     }
 
     private fun button(label: String, click: () -> Unit) = Button(this).apply {
+        sig.append('[').append(label).append(']')
         text = label; isAllCaps = false; textSize = 14f; setTextColor(ON_ACCENT); minimumHeight = dp(48); minHeight = dp(48)
         background = GradientDrawable().apply { setColor(ACCENT); cornerRadius = dp(10).toFloat() }
         setOnClickListener { click() }
