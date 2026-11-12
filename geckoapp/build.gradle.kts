@@ -79,6 +79,7 @@ android {
 
 kotlin {
     sourceSets.getByName("main").kotlin.srcDir("../app/src/main/kotlin") // shared UI / data / shield / net (engine-neutral)
+    sourceSets.getByName("main").kotlin.srcDir("../shared-android/kotlin") // code the phone app (:courier) shares: the platform video converter
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_11)
         freeCompilerArgs.addAll("-Xno-param-assertions", "-Xno-call-assertions", "-Xno-receiver-assertions")

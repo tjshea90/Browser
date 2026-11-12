@@ -69,6 +69,7 @@ android {
 }
 
 kotlin {
+    sourceSets.getByName("main").kotlin.srcDir("../shared-android/kotlin") // the same platform video converter as the tablet apps (picture + sound merge, H.265 ...)
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_11)
         freeCompilerArgs.addAll("-Xno-param-assertions", "-Xno-call-assertions", "-Xno-receiver-assertions")

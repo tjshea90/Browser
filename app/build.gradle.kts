@@ -84,6 +84,7 @@ android {
 kotlin {
     // Engine-specific (WebView) code lives in src/webview; src/main is shared with the :geckoapp module.
     sourceSets.getByName("main").kotlin.srcDir("src/webview/kotlin")
+    sourceSets.getByName("main").kotlin.srcDir("../shared-android/kotlin") // code the phone app (:courier) shares: the platform video converter
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_11)
         freeCompilerArgs.addAll(

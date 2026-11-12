@@ -26,6 +26,7 @@ import app.kestrel.core.download.NetGate
 import app.kestrel.core.download.Spawner
 import app.kestrel.core.download.UrlConnectionFetcher
 import app.kestrel.core.media.StreamEngine
+import app.kestrel.platform.Remuxer
 import java.io.File
 import java.io.IOException
 
@@ -77,10 +78,12 @@ object CourierRuntime {
             Config(maxActive = 3, maxConnsTotal = 8, maxConnsPerDownload = 6),
             Spawner { name, task -> Thread(task, name).also { it.isDaemon = true; it.start() } },
         )
-        // video streams (HLS) are downloaded segment by segment and written straight into an MP4 by our own writer (no Android code needed for H.264 + AAC)
+        // video streams are downloaded segment by segment and written straight into an MP4 by our own writer; what that cannot take (H.265, picture and sound kept apart in DASH) goes through the platform's own
+        // converter, the same class the tablet uses (this phone's is newer and faster)
         val streams = StreamEngine(
             { fetcher }, sinks, JsonStreamStore(File(dir, "streams")) { Log.w(TAG, it) }, net, { r -> handler.post(r) }, Clock.System, Config(maxActive = 3, maxConnsTotal = 8, maxConnsPerDownload = 6),
-            Spawner { name, task -> Thread(task, name).also { it.isDaemon = true; it.start() } }, null, { m, t -> Log.w(TAG, m, t) },
+            Spawner { name, task -> Thread(task, name).also { it.isDaemon = true; it.start() } },
+            Remuxer(app, sinks, device = "phone", tag = TAG, roomDir = { dir }, note = { a, b, c -> Log.i(TAG, "$a: $b $c") }), { m, t -> Log.w(TAG, m, t) },
         )
         engine.restore(); streams.restore()
         val resolver: (String) -> List<ByteArray> = if (noGuard) { { _ -> listOf(byteArrayOf(93, 184.toByte(), 216.toByte(), 34)) } } else { { h -> java.net.InetAddress.getAllByName(h).map { it.address } } }

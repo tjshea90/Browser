@@ -30,6 +30,7 @@ import app.kestrel.core.download.Source
 import app.kestrel.core.download.Spawner
 import app.kestrel.core.media.StreamEngine
 import app.kestrel.core.media.StreamSource
+import app.kestrel.platform.Remuxer
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
@@ -114,7 +115,7 @@ object DownloadController {
                     try { Process.setThreadPriority(threadPrio()); task.run() } finally { engineTids.remove(tid) }
                 }, name).also { it.isDaemon = true; it.start() }
             },
-            Remuxer(app, streamSinks),
+            Remuxer(app, streamSinks, note = { a, b, c -> Health.log(a, b, c) }),
             { msg, t -> android.util.Log.w(Io.TAG, msg, t); Health.log("stream", msg.take(140)) },
             limiter = lim,
         )
