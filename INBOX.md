@@ -120,3 +120,8 @@ Make the app check once per day if there are any new versions of itself, of the 
 The in app updater for the last couple versions says the app is up to date even when a new version was released 
 I long pressed a video to download but instead it gave me the options if its own player, with no download button. I successfully started the download using the bottom menu, but it was downloading a .ts file, which I've never heard of. Is it possible to force download mp4 or mkv? Can it force a download button in addition to a videos own player menu 
 ```
+
+## 2026-11-12T00:37:05Z
+```
+Do everything still on the list and then do an audit of the app and engine. It was very slow loading Proton mail and lagged when I was typing. Do your best effort at making the browser well coded and extremely efficient and optimized for my hardware. Consider looking at the Firefox engine it is using and modifying it for maximum speed on this hardware 
+```
