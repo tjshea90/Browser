@@ -1568,7 +1568,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun refreshNtpIfShown() { if (homeShown()) refreshNtp() }
 
     /** The Home screen has one data-driven line: what Shields blocked so far. */
-    private fun refreshNtp() { home.bindStats(prefs.blockedTotal, NetworkMonitor.metered) }
+    private fun refreshNtp() { home.bindStats(prefs.blockedTotal, NetworkMonitor.metered, NetworkMonitor.vpn) }
 
     private var lastVpn = NetworkMonitor.vpn
     private var lastTunnel = NetworkMonitor.fastTunnel
