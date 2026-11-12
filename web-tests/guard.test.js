@@ -39,7 +39,9 @@ async function open(body, opts) {
   return page;
 }
 const settle = (ms) => new Promise((r) => setTimeout(r, ms || 600));
-const notes = (page) => page.evaluate(() => window.__notes);
+// what the guard REFUSED (the 'tap|...' reports of real taps are checked on their own below)
+const notes = (page) => page.evaluate(() => window.__notes.filter((n) => n.indexOf('tap|') !== 0));
+const taps = (page) => page.evaluate(() => window.__notes.filter((n) => n.indexOf('tap|') === 0));
 
 test('a tap on the player layer that calls window.open for an ad opens nothing and is reported', async () => {
   const page = await open(`<div id="layer" style="position:fixed;inset:0;background:#123" onclick="window.open('${AD}','_blank')"></div>`);
@@ -161,4 +163,20 @@ test('the guard does not break an ordinary page: links, buttons and forms in the
   await page.click('#same');
   await page.waitForLoadState();
   assert.equal(new URL(page.url()).hostname, 'movie.example');
+});
+
+test('every real tap is reported, with the link it landed on, so the app can tell the owner\'s jump from a script\'s', async () => {
+  const page = await open(`<div style="width:300px;height:80px">nothing here</div><a href="https://news.example/story" target="_blank" style="display:block;width:300px;height:80px">story</a>`);
+  await page.mouse.click(50, 40);                                   // on the plain block
+  const popup = page.waitForEvent('popup', { timeout: 3000 });
+  await page.mouse.click(50, 120);                                  // on the link
+  await popup;
+  assert.deepEqual(await taps(page), ['tap|', 'tap|https://news.example/story']);
+  assert.deepEqual(await notes(page), []);
+});
+
+test('a click a script makes is never reported as a tap', async () => {
+  const page = await open(`<div id="d" style="width:300px;height:300px"></div><script>setTimeout(function(){ document.getElementById('d').click(); }, 50);</script>`);
+  await settle();
+  assert.deepEqual(await taps(page), []);
 });
