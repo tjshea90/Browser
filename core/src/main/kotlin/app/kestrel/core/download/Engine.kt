@@ -476,6 +476,10 @@ class Engine(
         val c = HttpSemantics.classify(resp.status, cursor, total, etag, now, resp::header)
         when (c.verdict) {
             HttpSemantics.Verdict.OK_206 -> {
+                // A server that ignores If-Unmodified-Since still states the date of what it sends: when the file is held by its Last-Modified and the reply names another date, the bytes
+                // belong to a different file and must not be spliced onto the partial one (the owner decides: Restart or Cancel).
+                val replyLm = resp.header("Last-Modified")?.trim()
+                if (lm != null && replyLm != null && replyLm != lm) { quiet(resp); needDecision(job, Reason.FILE_CHANGED); throw Exit() }
                 synchronized(lock) { rec.ranges = 1; if (job.useOriginal) { job.useOriginal = false; rec.finalUrl = resp.finalUrl; rec.finalAt = now } }
                 return Opened(resp, reqEnd)
             }

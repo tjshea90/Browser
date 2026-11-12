@@ -406,6 +406,18 @@ class EngineTest {
         assertArrayEquals(data, h.sink(h.completed(id)).bytes)
     }
 
+    @Test(timeout = 60_000) fun aFileHeldByItsDateAskedForADifferentDateIsNeverSplicedEvenWhenTheServerIgnoresIfUnmodifiedSince() {
+        val data = testBytes(8 * MiB, 29)
+        val s = FakeServer(data).also { it.etag = null; it.lastModified = "Wed, 01 Jan 2025 00:00:00 GMT"; it.chunkDelayMs = 2; it.probeWindow = 1L shl 20 }
+        val h = H(s); val id = h.enqueue()
+        h.pauseAt(id, 0.3)
+        s.lastModified = "Thu, 02 Jan 2025 00:00:00 GMT"; s.data = testBytes(8 * MiB, 30)  // replaced on the server; this fake, like some real ones, does not honour If-Unmodified-Since
+        h.engine.resume(id)
+        val v = h.await(id, "the owner is asked") { it?.state == DlState.NEEDS_DECISION }!!
+        assertEquals(Reason.FILE_CHANGED, v.reason)
+        assertTrue("the partial file is kept", v.done > 0)
+    }
+
     @Test(timeout = 60_000) fun downloadsQueueWhenAllSlotsAreBusy() {
         val s = FakeServer(testBytes(2 * MiB, 16)).also { it.chunkDelayMs = 1 }
         val h = H(s, cfg(maxActive = 1)); val a = h.enqueue("https://files.test/a.bin"); val b = h.enqueue("https://files.test/b.bin")
