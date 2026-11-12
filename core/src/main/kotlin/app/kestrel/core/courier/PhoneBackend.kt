@@ -7,6 +7,7 @@ import app.kestrel.core.download.DlState
 import app.kestrel.core.download.DownloadView
 import app.kestrel.core.download.Reason
 import app.kestrel.core.download.Source
+import app.kestrel.core.media.StreamSource
 import java.io.File
 import java.io.IOException
 import java.net.URL
@@ -27,6 +28,9 @@ enum class PhoneMode {
 interface LocalDownloads {
     /** Starts a download on the tablet itself and returns its id in the tablet's engine. */
     fun enqueue(src: Source): Long
+    /** Starts a video stream download on the tablet itself (the segment downloader) and returns its id there. */
+    fun enqueueStream(src: StreamSource): Long = throw UnsupportedOperationException("this tablet has no stream engine")
+    /** The row of either engine. */
     fun view(id: Long): DownloadView?
 }
 
@@ -67,7 +71,7 @@ class PhoneBackend(
 
     private enum class Phase { PHONE, PULL, LOCAL, CANCELED, DONE }
 
-    private class P(val lid: Long, val cid: String, val src: Source, val created: Long) {
+    private class P(val lid: Long, val cid: String, val src: Source, val created: Long, val stream: StreamSource? = null) {
         var phase = Phase.PHONE
         var remoteId: String? = null
         var engineId = 0L
@@ -124,6 +128,27 @@ class PhoneBackend(
             if (mode == PhoneMode.WHEN_THERE && clock.now() < downUntil) return null                  // known to be away a moment ago: no flash of a row that would fall back
             val lid = nextLid++
             p = P(lid, newCid(), src, clock.now())
+            p.note = "Asking your phone"
+            items[lid] = p
+            save()
+        }
+        kick(); onChange()
+        return p.lid
+    }
+
+    /** Like [offload] for a video stream the owner picked a quality of: the phone downloads the segments, writes the MP4 and the tablet copies it. Null = the caller downloads it on the tablet. */
+    fun offloadStream(src: StreamSource): Long? {
+        val mode = modeOf()
+        if (mode == PhoneMode.OFF || src.priv || src.destKind != DEST_PUBLIC || src.companion != null) return null              // picture + sound kept apart needs the platform merge: not on the phone yet
+        val u = try { URL(src.playlistUrl) } catch (e: Exception) { return null }
+        if (u.protocol != "http" && u.protocol != "https") return null
+        if (clientFor() == null) return null
+        val shown = Source(src.playlistUrl, src.pageUrl, src.nameStem + (src.ext?.let { ".$it" } ?: ".mp4"), "video/mp4", src.headers, src.fetcher, false, true, 0, DEST_PUBLIC, true)
+        val p: P
+        synchronized(lock) {
+            if (mode == PhoneMode.WHEN_THERE && clock.now() < downUntil) return null
+            val lid = nextLid++
+            p = P(lid, newCid(), shown, clock.now(), src)
             p.note = "Asking your phone"
             items[lid] = p
             save()
@@ -245,7 +270,10 @@ class PhoneBackend(
         if (c == null) { if (mode == PhoneMode.ALWAYS) waiting(p, "Waiting for your phone") else fallback(p, "no phone is paired"); return }
         try {
             ensureHello(c)
-            val spec = JobSpec(p.cid, p.src.url, p.src.nameHint, p.src.nameFixed, p.src.mime, -1L, p.src.headers.filter { it.key.lowercase() in REPLAY })
+            val hdr = p.src.headers.filter { it.key.lowercase() in REPLAY }
+            val st = p.stream
+            val spec = if (st != null) JobSpec(p.cid, st.playlistUrl, null, false, null, -1L, hdr, "stream", StreamSpec(st.playlistUrl, st.playlistText, st.pageUrl, st.nameStem, st.estimateBytes, st.repId, st.ext))
+            else JobSpec(p.cid, p.src.url, p.src.nameHint, p.src.nameFixed, p.src.mime, -1L, hdr)
             val r = c.create(spec)
             synchronized(lock) { p.remoteId = r.id; p.last = r; p.unreachableSince = 0; p.note = null; p.updated = clock.now(); save() }
             reachableNow = true
@@ -293,7 +321,7 @@ class PhoneBackend(
     private fun startPull(p: P, r: RemoteJob, c: CourierClient) {
         val path = r.fileUrl
         if (path == null) { fallback(p, "your phone could not hand over the file"); return }
-        val name = if (p.src.nameFixed && p.src.nameHint != null) p.src.nameHint else (r.file ?: p.src.nameHint ?: r.name)
+        val name = if (p.stream == null && p.src.nameFixed && p.src.nameHint != null) p.src.nameHint else (r.file ?: p.src.nameHint ?: r.name)       // a video: the phone's own name (it knows whether it could write an MP4)
         val src = Source(c.baseUrl + path, p.src.pageUrl, name, r.mime ?: p.src.mime, emptyMap(), FETCHER_LAN, false, true, 0, DEST_PUBLIC, true)
         val id = local.enqueue(src)
         synchronized(lock) { p.phase = Phase.PULL; p.engineId = id; p.note = "Copied from your phone"; p.updated = clock.now(); save() }
@@ -326,7 +354,7 @@ class PhoneBackend(
     /** The tablet downloads it itself, with the request the owner made. */
     private fun fallback(p: P, why: String) {
         if (synchronized(lock) { p.phase != Phase.PHONE && p.phase != Phase.PULL }) return
-        val id = local.enqueue(p.src)
+        val id = p.stream?.let { local.enqueueStream(it) } ?: local.enqueue(p.src)
         synchronized(lock) { p.phase = Phase.LOCAL; p.engineId = id; p.note = "Downloading here: $why"; p.delRemote = p.remoteId != null; p.last = null; p.updated = clock.now(); save() }
         onChange()
     }
@@ -405,6 +433,7 @@ class PhoneBackend(
             linkedMapOf<String, Any?>(
                 "lid" to p.lid, "cid" to p.cid, "phase" to p.phase.name, "remoteId" to p.remoteId, "engineId" to p.engineId, "created" to p.created, "updated" to p.updated,
                 "note" to p.note, "hidden" to p.hidden, "del" to p.delRemote,
+                "stream" to p.stream?.let { st -> linkedMapOf<String, Any?>("playlistUrl" to st.playlistUrl, "pageUrl" to st.pageUrl, "nameStem" to st.nameStem, "headers" to LinkedHashMap<String, Any?>(st.headers), "fetcher" to st.fetcher, "estimate" to st.estimateBytes, "repId" to st.repId, "ext" to st.ext) },
                 "src" to linkedMapOf<String, Any?>(
                     "url" to p.src.url, "pageUrl" to p.src.pageUrl, "nameHint" to p.src.nameHint, "mime" to p.src.mime, "headers" to LinkedHashMap<String, Any?>(p.src.headers),
                     "fetcher" to p.src.fetcher, "nameFixed" to p.src.nameFixed, "meteredOk" to p.src.meteredOk,
@@ -427,7 +456,13 @@ class PhoneBackend(
                     val h = LinkedHashMap<String, String>()
                     s.obj("headers")?.forEach { (k, v) -> if (k is String && v is String) h[k] = v }
                     val src = Source(s.str("url") ?: continue, s.str("pageUrl"), s.str("nameHint"), s.str("mime"), h, s.int("fetcher") ?: 0, false, s.bool("meteredOk") ?: false, 0, DEST_PUBLIC, s.bool("nameFixed") ?: false)
-                    val p = P(m.long("lid") ?: continue, m.str("cid") ?: continue, src, m.long("created") ?: 0L)
+                    val stream = m.obj("stream")?.let { st ->
+                        val sh = LinkedHashMap<String, String>()
+                        st.obj("headers")?.forEach { (k, v) -> if (k is String && v is String) sh[k] = v }
+                        // the playlist text is not kept on disk (it can be big): after a restart the engine fetches it again
+                        StreamSource(st.str("playlistUrl") ?: return@let null, null, st.str("pageUrl"), st.str("nameStem") ?: "video", sh, st.int("fetcher") ?: 0, false, true, DEST_PUBLIC, st.long("estimate") ?: -1L, st.str("repId"), st.str("ext"), null)
+                    }
+                    val p = P(m.long("lid") ?: continue, m.str("cid") ?: continue, src, m.long("created") ?: 0L, stream)
                     p.phase = try { Phase.valueOf(m.str("phase") ?: "PHONE") } catch (e: IllegalArgumentException) { Phase.PHONE }
                     p.remoteId = m.str("remoteId"); p.engineId = m.long("engineId") ?: 0L; p.updated = m.long("updated") ?: p.created
                     p.note = m.str("note"); p.hidden = m.bool("hidden") ?: false; p.delRemote = m.bool("del") ?: false

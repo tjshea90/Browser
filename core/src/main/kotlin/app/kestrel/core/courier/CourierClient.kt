@@ -73,6 +73,19 @@ class RemoteJob(
     }
 }
 
+/** A video stream (an HLS playlist the owner picked a quality of): exactly what the phone's segment downloader needs (research/PHONE_OFFLOAD.md section 15). */
+class StreamSpec(
+    val playlistUrl: String,
+    /** The playlist text the tablet already read (saves the phone a request; null = the phone fetches it). */
+    val playlistText: String?,
+    val pageUrl: String?,
+    /** File name without extension: the phone adds the right one (.mp4 when it can write one). */
+    val nameStem: String,
+    val estimateBytes: Long = -1L,
+    val repId: String? = null,
+    val ext: String? = null,
+)
+
 /** What the tablet asks the phone to download. */
 class JobSpec(
     val cid: String,
@@ -83,6 +96,8 @@ class JobSpec(
     val size: Long = -1L,
     val headers: Map<String, String> = emptyMap(),
     val kind: String = "file",
+    /** Set for a video stream; then [kind] is sent as "stream" and [url] only names the playlist for display. */
+    val stream: StreamSpec? = null,
 )
 
 class PhoneStatus(val name: String, val free: Long, val jobs: Int, val running: Int, val queued: Int)
@@ -139,7 +154,14 @@ class CourierClient(
 
     fun create(spec: JobSpec): RemoteJob {
         val m = LinkedHashMap<String, Any?>()
-        m["cid"] = spec.cid; m["kind"] = spec.kind; m["url"] = spec.url
+        m["cid"] = spec.cid; m["kind"] = if (spec.stream != null) "stream" else spec.kind; m["url"] = spec.url
+        spec.stream?.let { s ->
+            val sm = LinkedHashMap<String, Any?>()
+            sm["playlistUrl"] = s.playlistUrl; s.playlistText?.let { sm["playlistText"] = it }; s.pageUrl?.let { sm["pageUrl"] = it }; sm["nameStem"] = s.nameStem
+            if (s.estimateBytes > 0) sm["estimateBytes"] = s.estimateBytes
+            s.repId?.let { sm["repId"] = it }; s.ext?.let { sm["ext"] = it }
+            m["stream"] = sm
+        }
         spec.name?.let { m["name"] = it }
         if (spec.nameFixed) m["nameFixed"] = true
         spec.mime?.let { m["mime"] = it }
