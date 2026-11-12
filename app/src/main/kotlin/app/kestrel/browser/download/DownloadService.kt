@@ -34,6 +34,13 @@ class DownloadService : Service() {
             try { ctx.startForegroundService(Intent(ctx, DownloadService::class.java)) }
             catch (e: Exception) { /* a background start can be refused on Android 12+: the downloads stay queued until the app is opened */ }
         }
+
+        /** Diagnostics (EX-1): is the Wi-Fi lock of a moving download held right now, and how many times was it taken since the process started. */
+        @Volatile var wifiLockHeld = false
+        @Volatile var wifiLockTakes = 0
+        fun wifiLockLine(): String =
+            "Wi-Fi lock: " + (if (Build.VERSION.SDK_INT >= 34) "HIGH_PERF (the system turns it into LOW_LATENCY: only with the screen on)" else "HIGH_PERF (radio kept out of power save, also with the screen off)") +
+                ", held now=$wifiLockHeld, taken $wifiLockTakes time(s) by downloads"
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -103,13 +110,18 @@ class DownloadService : Service() {
             val now = SystemClock.elapsedRealtime()
             if (wake?.isHeld != true || now - lastWakeAt > 60_000) { wake?.acquire(10 * 60 * 1000L); lastWakeAt = now } // the 10 minute timeout is renewed about once a minute, not at every tick
             if (wifi == null) wifi = try {
-                @Suppress("DEPRECATION") // HIGH_PERF is deprecated from API 29 (the system then treats it as the basic lock); LOW_LATENCY only works with the screen on
-                (applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager)?.createWifiLock(if (Build.VERSION.SDK_INT >= 29) WifiManager.WIFI_MODE_FULL else WifiManager.WIFI_MODE_FULL_HIGH_PERF, "kestrel:download")?.apply { setReferenceCounted(false) }
+                // WIFI_MODE_FULL_HIGH_PERF on every API level: it is deprecated only from API 34 (where the system turns it into the low-latency lock by itself). The mode this code used
+                // from API 29 on, WIFI_MODE_FULL, is documented as "non-functional and will have no impact", so on the Android 10 tablet Wi-Fi power save stayed on with the screen off
+                // (research/REVIEW-EXTERNAL-1.md 2.1, EX-1).
+                @Suppress("DEPRECATION")
+                (applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager)?.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "kestrel:download")?.apply { setReferenceCounted(false) }
             } catch (e: Exception) { null }
-            if (wifi?.isHeld == false) try { wifi?.acquire() } catch (e: Exception) { /* no Wi-Fi service */ }
+            if (wifi?.isHeld == false) try { wifi?.acquire(); wifiLockTakes++ } catch (e: Exception) { /* no Wi-Fi service */ }
+            wifiLockHeld = wifi?.isHeld == true
         } else {
             if (wake?.isHeld == true) wake?.release()
             if (wifi?.isHeld == true) try { wifi?.release() } catch (e: Exception) { /* ignore */ }
+            wifiLockHeld = false
         }
     }
 
@@ -119,6 +131,7 @@ class DownloadService : Service() {
         DownloadController.stopNetWatch()
         if (wake?.isHeld == true) wake?.release()
         if (wifi?.isHeld == true) try { wifi?.release() } catch (e: Exception) { /* ignore */ }
+        wifiLockHeld = false
         super.onDestroy()
     }
 
