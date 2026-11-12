@@ -105,8 +105,9 @@ class TsToMp4Test {
         assertEquals(260, a.samples.size); assertEquals(44100L, a.timescale); assertEquals(1, a.channels)
         assertTrue(a.samples.zipWithNext { x, y -> y.dts - x.dts }.all { it == 1024L })
         checkVideoSamples(r, v); checkAudioSamples(r, a)
-        // the sound began 2090 ticks (23 ms) before the first picture is shown: the picture's edit enters its media 5110 ticks in (decode 126000 -> sound at 131110)
-        assertEquals(1, v.edits.size); assertEquals(5110L, v.edits[0].mediaTime); assertTrue(a.edits.isEmpty())
+        // the sound begins 2090 ticks (23 ms) before the first picture is shown: an empty edit of 23 ms, then the media from the first composition time 7200 for 6 s (what ffmpeg writes for this stream)
+        assertEquals(2, v.edits.size); assertEquals(-1L to 23L, v.edits[0].mediaTime to v.edits[0].duration); assertEquals(7200L to 6000L, v.edits[1].mediaTime to v.edits[1].duration)
+        assertTrue(a.edits.isEmpty())
         assertDecodes(file)
     }
 
