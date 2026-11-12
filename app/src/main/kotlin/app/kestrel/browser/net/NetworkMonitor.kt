@@ -23,8 +23,20 @@ object NetworkMonitor {
 
     /** Serve pages from the HTTP cache (even stale) first: true only when there is no network with INTERNET capability at all. */
     val cacheFirst: Boolean get() = state == State.OFFLINE
-    @Volatile var metered = true // assume metered until the network says otherwise: a hotspot almost always is
+    /** The network is metered AND the owner switched a data saver level on: only then does "metered" change what the app does (the owner's hotspot is unmetered, whatever Android's flag says). */
+    @Volatile var metered = false
         private set
+    @Volatile private var rawMetered = true // Android's own flag: assume metered until the network says otherwise (a hotspot almost always is)
+    @Volatile private var saverOn = false
+
+    fun setSaver(on: Boolean) {
+        saverOn = on
+        val m = rawMetered && on
+        if (m == metered) return
+        metered = m
+        val copy = synchronized(listeners) { ArrayList(listeners) }
+        for (l in copy) l()
+    }
 
     private val listeners = ArrayList<() -> Unit>()
     private var cm: ConnectivityManager? = null
@@ -37,6 +49,7 @@ object NetworkMonitor {
         if (callback != null) return
         val c = ctx.applicationContext.getSystemService(ConnectivityManager::class.java) ?: return
         cm = c
+        saverOn = app.kestrel.browser.data.Prefs.get(ctx).dataSaver != app.kestrel.core.shield.DataSaver.OFF
         update(c.activeNetwork?.let { c.getNetworkCapabilities(it) })
         val cb = object : ConnectivityManager.NetworkCallback() {
             override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = update(caps)
@@ -61,7 +74,8 @@ object NetworkMonitor {
 
     internal fun update(caps: NetworkCapabilities?) {
         val newState = classify(caps)
-        val newMetered = caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+        rawMetered = caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+        val newMetered = rawMetered && saverOn
         if (newState == state && newMetered == metered) return
         state = newState
         metered = newMetered

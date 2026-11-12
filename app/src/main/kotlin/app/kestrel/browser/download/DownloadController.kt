@@ -329,6 +329,6 @@ object DownloadController {
         val cm = app.getSystemService(ConnectivityManager::class.java) ?: return
         val caps = cm.activeNetwork?.let { cm.getNetworkCapabilities(it) }
         netOnline = caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) // "validated" is only a guess on a hotspot: online unless there is no network at all
-        netMetered = cm.isActiveNetworkMetered
+        netMetered = cm.isActiveNetworkMetered && Prefs.get(app).dataSaver != app.kestrel.core.shield.DataSaver.OFF   // the owner's hotspot is unmetered: the engine only acts metered when the saver is on
     }
 }

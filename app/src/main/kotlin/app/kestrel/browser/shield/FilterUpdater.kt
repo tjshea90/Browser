@@ -115,6 +115,7 @@ object FilterUpdater {
     }
 
     fun isMetered(ctx: Context): Boolean {
+        if (app.kestrel.browser.data.Prefs.get(ctx).dataSaver == app.kestrel.core.shield.DataSaver.OFF) return false          // the owner's hotspot is unmetered: no saver, no metered rules
         val cm = ctx.getSystemService(ConnectivityManager::class.java) ?: return true
         val caps = cm.getNetworkCapabilities(cm.activeNetwork ?: return true) ?: return true
         return !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)

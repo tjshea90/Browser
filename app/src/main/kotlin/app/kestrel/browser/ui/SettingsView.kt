@@ -59,8 +59,8 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         button("Clear browsing data now", "Cookies, cache, history, site permissions") { confirm("Clear all browsing data?", "Cookies, cache, history and saved logins will be deleted. Bookmarks are kept.") { l.clearBrowsingData() } }
         button("Reset per-site Shields", "Forget the choices you made in the Shields panel") { confirm("Reset per-site Shields?", "Every site goes back to the defaults above.") { l.resetSiteShields() } }
 
-        section("Data saver (this tablet uses a phone hotspot)")
-        choice("Level", listOf("Off", "Standard (recommended)", "Strict: no images until tapped, no web fonts"), prefs.dataSaver.ordinal) { prefs.dataSaver = DataSaver.values()[it] }
+        section("Data saver (off: this hotspot is unmetered)")
+        choice("Level", listOf("Off (recommended: no data limit)", "Standard: confirm big downloads, no autoplay", "Strict: no images until tapped, no web fonts"), prefs.dataSaver.ordinal) { prefs.dataSaver = DataSaver.values()[it] }
         info("Data used by this browser", l.dataUsed())
         button("Reset data counter", null) { l.resetDataCounter(); rebuild() }
 
@@ -74,9 +74,11 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         choice("Connections per download", listOf("Automatic (recommended)", "1", "2", "3"), prefs.dlConns) { prefs.dlConns = it }
         info("When it applies", "The speed limit changes at once. The other two apply the next time the browser starts.")
 
-        section("Download on my phone")
+        section("Phone helper (downloads and pages through your phone)")
         info("What it does", "Your phone downloads the file over its own connection and sends it to this tablet over the hotspot wifi when it has it. The download looks and works the same here, with live progress. You need the small Kestrel Courier app on the phone, with the hotspot on.")
         choice("Use the phone", listOf("Off", "When the phone is there", "Always: wait for the phone"), prefs.phoneMode) { prefs.phoneMode = it; app.kestrel.browser.download.PhoneBridge.modeChanged(ctx) }
+        toggle("Load pages through the phone", "Pages are fetched by the phone with its own connection, which the carrier does not slow down like the hotspot. Needs Kestrel Courier 0.1.0-alpha3 or newer on the phone. If the phone stops answering, pages load directly by themselves.", prefs.pagesViaPhone) { prefs.pagesViaPhone = it; app.kestrel.browser.download.PageProxy.refresh(); rebuild() }
+        info("Pages", app.kestrel.browser.download.PageProxy.line(ctx))
         button("Pair with the phone", if (app.kestrel.browser.download.PhoneBridge.paired(ctx)) "Paired. Tap to type another code or to forget this one." else "Type the code the Courier app shows") { pairDialog() }
         button("Test the phone link", "Measures the wifi to the phone, the phone's internet and this tablet's internet, and says whether it is worth it (uses about 40 MB)") { linkTest() }
         info("Phone link", app.kestrel.browser.download.PhoneBridge.statusLine(ctx))

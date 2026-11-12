@@ -33,9 +33,10 @@ class Prefs private constructor(ctx: Context) {
     var shieldCookies: Boolean get() = bool("sh_cookies", true); set(v) = put("sh_cookies", v)
     var shieldFingerprint: Boolean get() = bool("sh_fp", true); set(v) = put("sh_fp", v)
 
+    /** OFF by default: the owner's hotspot is unmetered ("no data saving is necessary"); the levels stay as an option. Only a level above OFF makes the app treat a metered network as metered. */
     var dataSaver: DataSaver
-        get() = DataSaver.parse(sp.getString("data_saver", "STANDARD"))
-        set(v) = put("data_saver", v.name)
+        get() = DataSaver.parse(sp.getString("data_saver", "OFF"))
+        set(v) { put("data_saver", v.name); app.kestrel.browser.net.NetworkMonitor.setSaver(v != DataSaver.OFF) }
 
     /** 0 = follow page / system, 1 = force dark pages, 2 = never. */
     var webDark: Int get() = sp.getInt("web_dark", 0); set(v) = put("web_dark", v)
