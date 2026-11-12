@@ -197,12 +197,11 @@ const gens = (page) => page.evaluate(() => window.__gen);
 const flat = (batches) => [].concat(...batches);
 
 test('tokens: with the marker the page sends its classes and ids (lower case, once each) and the selectors that come back are applied', async () => {
-  const page = await open(`<div id="Top" class="Ad-Banner x">hi</div><span class="plain  other">s</span><p id="">p</p>`, appWithMarker);
+  const page = await open(`<div id="Top" class="Ad-Banner x">hi</div><div class="ad-banner real">r</div><span class="plain  other">s</span><p id="">p</p>`, appWithMarker);
   await page.waitForTimeout(1200);
   const sent = flat(await gens(page)).sort();
-  assert.deepEqual(sent, ['#top', '.ad-banner', '.other', '.plain', '.x']);
-  const display = await page.evaluate(() => getComputedStyle(document.querySelector('.ad-banner')).display);
-  assert.equal(display, 'none', 'the generic selector that matched was injected');
+  assert.deepEqual(sent, ['#top', '.ad-banner', '.other', '.plain', '.real', '.x'], 'names are lower-cased and sent once');
+  assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.real')).display), 'none', 'the generic selector that matched was injected');
   assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.plain')).display), 'inline');
   assert.ok(await page.evaluate(() => !!document.querySelector('style[data-kestrel="g"]')));
   const csss = await page.evaluate(() => window.__msgs.filter((m) => m.k === 'css'));
