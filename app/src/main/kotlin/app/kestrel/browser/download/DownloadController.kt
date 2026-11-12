@@ -109,6 +109,13 @@ object DownloadController {
     fun priorityFor(uiVisible: Boolean): Int =
         if (uiVisible) Process.THREAD_PRIORITY_BACKGROUND + Process.THREAD_PRIORITY_MORE_FAVORABLE else Process.THREAD_PRIORITY_DEFAULT
 
+    /** Diagnostics (EX-13): how long a connection sits idle between two windows of a download. */
+    fun windowGapLine(): String {
+        val g = engine?.windowGaps() ?: return "Download windows: no download has run yet this run"
+        if (g[0] == 0L) return "Download windows: no window boundary seen yet this run (a download needs more than one window)"
+        return "Download windows: ${g[0]} boundaries, the connection idles ${g[1] / g[0]} ms on average and ${g[2]} ms at most between two windows (each costs one request round trip; research/REVIEW-EXTERNAL-1.md 6.3)"
+    }
+
     /** The browser came to the front / went away: re-prioritise every engine thread. */
     fun uiVisibilityChanged() {
         val p = threadPrio()

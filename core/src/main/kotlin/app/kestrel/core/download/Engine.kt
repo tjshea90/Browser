@@ -444,8 +444,20 @@ class Engine(
         }
     }
 
+    // ---- EX-13 (research/REVIEW-EXTERNAL-1.md 6.3): the idle time between two windows of one connection, from the last byte of window N to the response of window N+1. Each boundary costs one request
+    // round trip; the owner's Fast Wi-Fi run shows in Diagnostics whether it is large enough (7-9 % at 30 Mbit/s by the review's arithmetic) to pay for pre-opening the next window.
+    private val gapLock = Any()
+    private var gapCount = 0L
+    private var gapTotalMs = 0L
+    private var gapMaxMs = 0L
+    private fun recordGap(ms: Long) { synchronized(gapLock) { gapCount++; gapTotalMs += ms; if (ms > gapMaxMs) gapMaxMs = ms } }
+
+    /** Boundaries between windows seen since the engine was created: [count, total ms, longest ms]. */
+    fun windowGaps(): LongArray = synchronized(gapLock) { longArrayOf(gapCount, gapTotalMs, gapMaxMs) }
+
     private fun segmentLoop(job: Job, w: Worker, seg: Seg, first0: Opened?) {
         var first = first0
+        var windowEndedAt = -1L // when the previous window of this connection was read to its end; -1 = no clean boundary (first window, or an error in between)
         while (true) {
             checkStop(job)
             val cursor: Long
@@ -458,7 +470,8 @@ class Engine(
                 if (synchronized(lock) { job.alive > job.climb.target && !seg.live && job.rec.state == DlState.RUNNING }) return // fewer connections wanted: leave the segment for later
                 val win = (fetchers(job.rec.fetcher)?.windowBytes ?: 0L).takeIf { it > 0 } ?: cfg.windowBytes
                 val reqEnd = if (end >= 0) minOf(end, cursor + Planner.window(seg, win)) else -1L
-                try { opened = openWindow(job, w, seg, cursor, reqEnd) } catch (r: Retry) { continue }
+                try { opened = openWindow(job, w, seg, cursor, reqEnd) } catch (r: Retry) { windowEndedAt = -1L; continue }
+                if (windowEndedAt >= 0) { recordGap(maxOf(0L, clock.now() - windowEndedAt)); windowEndedAt = -1L }
             }
             synchronized(lock) { seg.reqEnd = opened.reqEnd }
             w.resp = opened.resp
@@ -466,7 +479,8 @@ class Engine(
                 if (opened.vLen > 0 && !sameTail(job, opened)) { quiet(opened.resp); needDecision(job, Reason.FILE_CHANGED); throw Exit() }
                 pump(job, seg, opened)
             }
-            catch (e: IOException) { quiet(opened.resp); transient(job, seg, 0, 0, 0); continue }
+            catch (e: IOException) { quiet(opened.resp); transient(job, seg, 0, 0, 0); windowEndedAt = -1L; continue }
+            windowEndedAt = clock.now()
             quiet(opened.resp)
         }
         onSegmentDone(job)

@@ -372,6 +372,18 @@ class EngineTest {
         assertArrayEquals(data, h.sink(v).bytes)
     }
 
+    @Test(timeout = 60_000) fun theIdleTimeBetweenWindowsIsMeasuredForDiagnostics() {
+        val data = testBytes(6 * MiB, 3)
+        val s = FakeServer(data).also { it.probeWindow = 1L shl 20 } // windowed replies, like Firefox's fetcher: the engine asks again after each window
+        val h = H(s, cfg(window = 1L shl 20)); val id = h.enqueue()
+        val v = h.completed(id)
+        assertArrayEquals(data, h.sink(v).bytes)
+        val g = h.engine.windowGaps()
+        assertTrue("at least four boundaries in a 6-window download, got ${g[0]}", g[0] >= 4)
+        assertTrue("an in-memory server answers at once: the average gap is small (${g[1]} ms over ${g[0]})", g[1] / g[0] < 500)
+        assertTrue(g[2] >= 0 && g[2] <= g[1])
+    }
+
     @Test(timeout = 60_000) fun aLongOutageEndsAsStalledWithThePartialKeptAndRetryContinues() {
         val data = testBytes(8 * MiB, 26)
         val s = FakeServer(data).also { it.chunkDelayMs = 2; it.probeWindow = 1L shl 20 } // windowed replies, like Firefox's fetcher: the engine asks again after each window
