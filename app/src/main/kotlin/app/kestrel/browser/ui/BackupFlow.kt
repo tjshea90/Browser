@@ -103,7 +103,7 @@ class BackupFlow(private val a: Activity, private val host: Host) {
     }
 
     private fun confirm(d: BackupData) {
-        val left = if (d.skipped > 0) " (${d.skipped} unusable entries are left out)" else ""
+        val left = if (d.skipped > 0) " (${d.skipped} duplicate or unusable entries are left out)" else ""
         host.ask(
             "Restore this backup?",
             "It holds " + BackupManager.describe(d) + left + ".\n\nBookmarks, history and open tabs are added to yours. Your settings and per-site Shields choices are replaced by the backup's.",
