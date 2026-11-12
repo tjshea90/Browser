@@ -28,12 +28,18 @@ object GeckoPrefs {
     /** Writes filesDir/gecko-config.yaml (if the content differs) and returns its path. */
     fun writeConfig(ctx: Context): String {
         val text = try { ctx.assets.open("gecko-prefs.txt").bufferedReader().use { it.readText() } } catch (e: Exception) { "" }
-        val yaml = yaml(text)
+        var yaml = yaml(text)
+        // DEBUG builds only (the emulator rig): `setprop debug.kestrel.moz_log "nsHttp:5,nsSocketTransport:5"` and restart makes Gecko log those modules to files/gecko-moz.log
+        // (adb: run-as <package> cat files/gecko-moz.log). The value is restricted to module:level pairs so nothing else can ride into the engine's environment.
+        app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.moz_log")?.takeIf { LOG_SPEC.matches(it) }?.let {
+            yaml += "env:\n  MOZ_LOG: \"$it\"\n  MOZ_LOG_FILE: \"" + File(ctx.filesDir, "gecko-moz.log").path + "\"\n"
+        }
         val f = File(ctx.filesDir, "gecko-config.yaml")
         if (runCatching { f.readText() }.getOrNull() != yaml) f.writeText(yaml)
         return f.path
     }
 
+    private val LOG_SPEC = Regex("([A-Za-z0-9_]+:[0-9],?){1,12}")
     private val NAME = Regex("[A-Za-z0-9_.-]+")
     private val INT = Regex("-?[0-9]+")
 }
