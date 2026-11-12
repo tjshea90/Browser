@@ -54,6 +54,8 @@ class CourierHost(
 
     private class CJob(val id: String, val cid: String, val engineId: Long, val kind: String, val name: String, val nameFixed: Boolean, val mime: String?, val created: Long) {
         @Volatile var token: String? = null
+        /** The tablet asked to cancel it. The engine forgets a canceled job at once, so the host remembers (and says CANCELED) until the tablet deletes it. */
+        @Volatile var canceled = false
     }
 
     private val lock = Any()
@@ -75,6 +77,7 @@ class CourierHost(
                         val m = x as? Map<*, *> ?: continue
                         val j = CJob(m.str("id") ?: continue, m.str("cid") ?: continue, m.long("engineId") ?: continue, m.str("kind") ?: "file", m.str("name") ?: "", m.bool("nameFixed") ?: false, m.str("mime"), m.long("created") ?: 0L)
                         j.token = m.str("token")
+                        j.canceled = m.bool("canceled") ?: false
                         add(j)
                     }
                     break
@@ -87,7 +90,7 @@ class CourierHost(
 
     private fun save() {
         val list = jobs.values.map { j ->
-            linkedMapOf<String, Any?>("id" to j.id, "cid" to j.cid, "engineId" to j.engineId, "kind" to j.kind, "name" to j.name, "nameFixed" to j.nameFixed, "mime" to j.mime, "created" to j.created, "token" to j.token)
+            linkedMapOf<String, Any?>("id" to j.id, "cid" to j.cid, "engineId" to j.engineId, "kind" to j.kind, "name" to j.name, "nameFixed" to j.nameFixed, "mime" to j.mime, "created" to j.created, "token" to j.token, "canceled" to j.canceled)
         }
         try { AtomicFiles.write(tableFile, Json.write(mapOf("v" to 1, "jobs" to list))) } catch (e: IOException) { log("job table write failed: ${e.message}") }
     }
@@ -183,8 +186,8 @@ class CourierHost(
         when (action) {
             "pause" -> engine.pause(j.engineId)
             "resume" -> engine.resume(j.engineId)
-            "cancel" -> engine.cancel(j.engineId)
-            "restart" -> engine.restart(j.engineId)
+            "cancel" -> { synchronized(lock) { j.canceled = true; save() }; engine.cancel(j.engineId) }
+            "restart" -> { synchronized(lock) { if (j.canceled) { j.canceled = false; save() } }; engine.restart(j.engineId) }
             else -> return HttpResponse.error(404, "action")
         }
         return HttpResponse.json(202, mapOf("ok" to true))
@@ -291,7 +294,7 @@ class CourierHost(
         val v = engine.view(j.engineId)
         if (v == null) {
             // right after enqueue the engine has not registered the job yet; much later it means the record is gone
-            m["state"] = if (clock.now() - j.created < 15_000) "QUEUED" else "GONE"
+            m["state"] = if (j.canceled) "CANCELED" else if (clock.now() - j.created < 15_000) "QUEUED" else "GONE"
             m["reason"] = "NONE"; m["name"] = j.name; m["total"] = -1L; m["done"] = 0L; m["bps"] = 0L; m["eta"] = -1L; m["conns"] = 0; m["actions"] = emptyList<String>()
             return m
         }

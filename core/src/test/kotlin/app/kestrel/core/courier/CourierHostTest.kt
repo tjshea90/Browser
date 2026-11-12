@@ -280,8 +280,8 @@ class CourierHostTest {
         p1.stop()
         val p2 = phone(FakeServer(data), dir = p1.dir)                           // the app was killed and started again on the same folders
         val t2 = Tablet(p2.base)
-        val after = t2.job(id)
-        assertEquals("COMPLETED", after.str("state")); assertEquals(before.str("fileUrl"), after.str("fileUrl"))
+        val after = t2.finished(id)                                                  // (if the kill came before the engine wrote its last record, the job carries on by itself and finishes again)
+        assertEquals(before.str("fileUrl"), after.str("fileUrl"))
         assertArrayEquals(data, t2.fetch(after.str("fileUrl")!!).second)
         assertEquals("a repeated create after the restart is the same job", id, t2.create(cid(20)).second.str("id"))
     }

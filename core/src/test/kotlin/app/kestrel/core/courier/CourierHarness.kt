@@ -60,7 +60,7 @@ class Phone(
     val base: String
 
     init {
-        engine.restore(); host.load()
+        engine.restore(); host.load(); engine.resumeInterrupted()
         Thread { while (ticking) { engine.tick(); try { Thread.sleep(20) } catch (e: InterruptedException) { return@Thread } } }.also { it.isDaemon = true; it.start() }
         port = server.start()
         base = "http://127.0.0.1:$port"
