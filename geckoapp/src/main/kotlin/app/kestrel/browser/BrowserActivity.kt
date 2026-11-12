@@ -372,6 +372,7 @@ open class BrowserActivity : Activity(), DockListener {
         Health.log("mem", "trim", "level=$level ${memFacts()}"); Health.count("mem.trim"); Health.count("mem.trim.$level")
         // 10/15 = RUNNING_LOW/CRITICAL (we are visible); 20 = UI_HIDDEN (the user left: a quick app switch is not a memory fact); 40+ = background; 60+ = we are a prime kill candidate.
         // LiveBudget.afterTrim decides how many tabs stay live from the level AND the memory the kernel reports as available (it used to close every other tab at any level >= 10).
+        if (level >= 15) BackPictures.clear() // the system wants memory: the pictures are the first thing to give back
         if (level >= 10) enforceLiveLimit(LiveBudget.afterTrim(level, Health.memAvailableMb(), liveBudget())) // a popup's opener must survive (window.opener): enforceLiveLimit skips those
         if (level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE && !window.decorView.hasWindowFocus()) current?.let { hibernate(it) }
     }
@@ -732,6 +733,7 @@ open class BrowserActivity : Activity(), DockListener {
     /** Free a tab's engine session but keep what is needed to bring it back (session state with its history, or at least its URL). */
     private fun hibernate(tab: Tab) {
         val s = tab.session ?: return
+        BackPictures.dropTab(tab.id)
         if (geckoView.session === s) geckoView.releaseSession()
         try { s.close() } catch (e: Exception) { /* already gone */ }
         tab.session = null
@@ -763,6 +765,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (tab === restoringTab) hideRestoring("closed")
         tab.thumb = null
         val appCtx = applicationContext
+        BackPictures.dropTab(tab.id)
         Io.exec { ThumbStore.delete(appCtx, tab.id); TabStateStore.delete(appCtx, tab.id) }
         tab.session?.let { s -> if (geckoView.session === s) geckoView.releaseSession(); try { s.close() } catch (e: Exception) { /* ignore */ } }
         tab.session = null
@@ -949,11 +952,15 @@ open class BrowserActivity : Activity(), DockListener {
     private fun captureThumb(tab: Tab, forBack: Boolean = false) {
         if (tab !== current || homeShown(tab) || tab.error != null || tab.session == null || geckoView.session !== tab.session) return
         val appCtx = applicationContext
+        val leftUrl = tab.url // the address the picture belongs to (the tab may already show another one when the capture arrives)
         try {
             geckoView.capturePixels().accept({ full ->
                 val lane: (() -> Unit) -> Unit = if (tabGrid.visibility == View.VISIBLE) Io::fast else Io::exec // the grid is open: the user is waiting for this preview
                 if (full != null) lane {
-                    val small = ThumbStore.shrink(full)
+                    val both = if (forBack) ThumbStore.shrinkWithPicture(full) else null // one capture, two sizes
+                    val small = if (both != null) both.first else ThumbStore.shrink(full)
+                    val picture = both?.second
+                    if (picture != null) BackPictures.put(tab.id, leftUrl, picture)
                     if (small != null) {
                         if (!tab.isPrivateTab) ThumbStore.save(appCtx, tab.id, small)
                         Io.ui { tab.thumb = small; tab.thumbAt = SystemClock.uptimeMillis(); ThumbStore.trim(tabs, tab); if (tabGrid.visibility == View.VISIBLE) tabGrid.thumbChanged(tab) }
@@ -1462,6 +1469,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun clearBrowsingData() {
         GeckoEngine.runtime(this).storageController.clearData(StorageController.ClearFlags.ALL)
         val appCtx = applicationContext
+        BackPictures.clear()
         for (t in tabs) { t.gecko.stateJson = null; t.gecko.stateWritten = null; t.gecko.stateWrittenUrl = null } // the saved Back stacks are browsing data too
         Io.exec { db?.clearHistory(); ThumbStore.clearAll(appCtx); TabStateStore.wipe(appCtx) }
         for (t in tabs) t.thumb = null // the previews are page contents too

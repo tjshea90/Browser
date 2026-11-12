@@ -104,7 +104,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
                 return GeckoResult.fromValue(deny)
             }
             if (request.target == NavigationDelegate.TARGET_WINDOW_CURRENT && a.dangerousDocument(tab, url)) return GeckoResult.fromValue(deny)
-            if (request.target == NavigationDelegate.TARGET_WINDOW_CURRENT) a.noteMainFrame(tab, url)
+            if (request.target == NavigationDelegate.TARGET_WINDOW_CURRENT) { a.leavingPage(tab, url); a.noteMainFrame(tab, url) }
             return GeckoResult.fromValue(allow)
         }
         // about:, blob:, data:, javascript:, view-source: and the engine's own schemes are the engine's business; everything else (mailto:,
