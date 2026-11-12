@@ -187,7 +187,7 @@ class Mp4Reader(private val d: ByteArray) {
             for (k in 0 until per) { if (idx >= n) break; sampleOff[idx] = o; o += sizes[idx]; idx++ }
         }
         check(idx == n) { "chunks cover $idx samples, stsz has $n" }
-        tk.samples = (0 until n).map { Sample(sampleOff[it], sizes[it], dts[it], dts[it] + cto[it], syncs == null || it in syncs!!) }
+        tk.samples = (0 until n).map { Sample(sampleOff[it], sizes[it], dts[it], dts[it] + cto[it], syncs == null || it in syncs) }
         tk.sumDurations = t
     }
 
