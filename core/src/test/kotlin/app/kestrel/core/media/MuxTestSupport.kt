@@ -42,6 +42,20 @@ object Fixtures {
         } finally { f.delete() }
     }
 
+    /** The presentation time (seconds) of the first packet of every stream, by stream index: what a player shows first, edit lists applied. */
+    fun firstPacketTimes(mp4: ByteArray): Map<Int, Double> {
+        val f = File.createTempFile("mux", ".mp4")
+        try {
+            f.writeBytes(mp4)
+            val p = ProcessBuilder("ffprobe", "-v", "error", "-show_entries", "packet=stream_index,pts_time", "-of", "csv=p=0", f.absolutePath).redirectErrorStream(true).start()
+            val out = p.inputStream.readBytes().toString(Charsets.UTF_8)
+            p.waitFor()
+            val m = LinkedHashMap<Int, Double>()
+            for (l in out.lines()) { val c = l.split(','); if (c.size >= 2 && c[0].toIntOrNull() != null && c[1].toDoubleOrNull() != null && c[0].toInt() !in m) m[c[0].toInt()] = c[1].toDouble() }
+            return m
+        } finally { f.delete() }
+    }
+
     /** `ffprobe` fields of the first stream of [type] ("video" / "audio") as key=value lines. */
     fun ffprobe(mp4: ByteArray, type: String, entries: String): Map<String, String> {
         val f = File.createTempFile("mux", ".mp4")
