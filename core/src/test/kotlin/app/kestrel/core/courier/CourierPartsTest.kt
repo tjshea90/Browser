@@ -156,7 +156,7 @@ class CourierPartsTest {
         assertTrue(File(root, "d/downloads.json.bak").isFile)
         file.writeText("{\"v\":1,\"downloads\":[{\"id\":4")                                         // the process died halfway through a write of the main file
         val back = JsonRecStore(file).loadAll()
-        assertEquals("the previous complete version is used", 1, back.size); assertEquals(4_500_000_000L, back[0].done.let { if (it == 7L) 4_500_000_000L else it })
+        assertEquals("the previous complete version is used", 1, back.size); assertEquals(4_500_000_000L, back[0].done)
         file.delete()                                                                              // died between the two renames
         assertEquals(1, JsonRecStore(file).loadAll().size)
         File(root, "d/downloads.json.bak").writeText("garbage"); file.writeText("also garbage")
