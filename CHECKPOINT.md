@@ -1,13 +1,13 @@
-# CHECKPOINT 945 — read me first, then TASKS.md
+# CHECKPOINT 957 — read me first, then TASKS.md
 
-**Written:** 2026-11-12T06:58:14Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `35343b2` (this checkpoint is the commit after it)
+**Written:** 2026-11-12T07:27:14Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `7ae4d2a` (this checkpoint is the commit after it)
 
 ## Just done
-Y2d DONE incl. Android glue: PhoneBridge (pairing code, gateway discovery, debug.kestrel.phone override, status/diag/test-link texts), DownloadController offload+routing+merged rows+notes, Settings 'Download on my phone' section (mode, pair, test link), Diagnostics line, Action.DOWNLOAD_HERE; app tests 97 + lint + both compiles green
+Y2e BUILT (not yet shipped): module :courier (CourierRuntime/Service/Activity/Prefs/Net/BootReceiver, resources, manifest specialUse FGS), debug APK 3.4 MB; Courier screen verified on the emulator (shows code, switch starts the foreground service, 'ready on port 8765', host hello over adb forward = 200 + 401 for unsigned); tablet Settings rows verified on the emulator (pair with code, mode, status line); FOUND+FIXED the hand-over race in PhoneBackend (row grace; test mutation-checked); PeerGuard now also judges by the address the tablet connected to; design note section 14 has the rig recipe
 
 ## Do this next
-Y2e: new Gradle module :courier (Android application, package app.kestrel.courier, applicationId app.kestrel.courier, minSdk 29 targetSdk 36, depends on :core only; copy the signing/versionCode conventions from geckoapp/build.gradle.kts and settings.gradle.kts include) with CourierService (foreground, specialUse), CourierActivity (one screen: status line, pairing code big with Show again/New code, Ready switch, battery-exemption button, live job list, free space), notification, AndroidNetGate, interface lister for PeerGuard, wake lock while jobs run, engine wiring exactly like core/src/test/.../CourierHarness.kt Phone (Engine+StagingSinks+JsonRecStore+UrlConnectionFetcher(Ssrf.guard())+CourierHost+CourierServer, engine.restore(); host.load(); engine.resumeInterrupted(); host.tick() each minute); then Y2j emulator proof with BOTH apps in one emulator (setprop debug.kestrel.phone 127.0.0.1:8765, local media server on 10.0.2.2:8000 needs the SSRF guard off in a debug-only switch because the origin is a private address); then Y2g CI plumbing. Design = research/PHONE_OFFLOAD.md 4.2, 6.1. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN stays.
+Y2j: finish the emulator proof: type 'http://10.0.2.2:8004/big.bin' into the tablet browser address field IN CHUNKS (adb input text drops characters; verify with a UI dump of the EditText), confirm the Download dialog, then sample Menu > Downloads: expect the row 'On your phone ...' with live progress, then 'Copied from your phone', then COMPLETED; check the file arrived (adb shell ls /sdcard/Download) and sha256 equals site/big.bin; then test: pause/resume/cancel from the row, kill the Courier mid-download (am force-stop) and restart it, 'Test the phone link' with debug.kestrel.phone.testurl; then Y2g CI plumbing (appinfo.sh, ship.sh courier, record-release.sh, verify-apk.sh, android.yml input, test_handoff.sh) and a first Courier release + Kestrel G alpha19. Emulator state right now: both apps installed, Courier ready, tablet paired + mode When-the-phone-is-there, site servers on 8000/8004 running on the host. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN stays.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ Y2e: new Gradle module :courier (Android application, package app.kestrel.courie
 
 ## Last ten checkpoints
 ```
+  b6b44e0 ckpt 945: Y2d DONE incl. Android glue: PhoneBridge (pairing code, gateway discovery, deb
   46aaf8d ckpt 938: Y2d steps 1+2 DONE (pure core): SocketHttp, LanFetcher, CourierClient, PhoneBa
   b33092b ckpt 930: Y2d step 1 DONE: SocketHttp (cleartext-safe socket HTTP client), LanFetcher (p
   a042f23 ckpt 923: Y2c DONE (phone-side host logic + staging files + JSON store + SSRF guard; fet
@@ -25,8 +26,7 @@ Y2e: new Gradle module :courier (Android application, package app.kestrel.courie
   9932748 ckpt 868: pre-ship: alpha18: the updater now always tries to install (it no longer stops
   879b10f ckpt 867: Y1 DONE (updater always tries: no storage gate in download()/install(), floor2
   ceaa63c ckpt 860: owner message 12 written into TASKS (Y1 updater must always try, Y2 phone offl
-  eadd5fc ckpt 856: post-alpha17 in the tree (NOT shipped): Make MP4 for finished .ts rows (Stream
 ```
 
-(6 automatic checkpoint(s) since the last deliberate one — the
+(11 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
