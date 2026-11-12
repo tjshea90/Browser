@@ -11,6 +11,7 @@ import android.os.Build
 import android.provider.Settings
 import app.kestrel.browser.Flavor
 import app.kestrel.browser.Io
+import app.kestrel.browser.diag.Health
 import app.kestrel.core.download.Source
 import app.kestrel.core.download.Format
 import app.kestrel.core.download.DlState
@@ -310,8 +311,9 @@ object UpdateManager {
                 val old = jobId(app)
                 val oldView = if (old != 0L) DownloadController.allViews().firstOrNull { it.id == old } else null
                 val reuse = oldView != null && oldView.name == offer.apkName && oldView.state != DlState.FAILED && oldView.state != DlState.CANCELED && oldView.state != DlState.COMPLETED
-                val sp0 = space(app, offer, null, pending = if (reuse) (offer.size - (oldView?.done ?: 0)).coerceAtLeast(0) else offer.size)
-                if (sp0.shortBy > 0) { needSpace(app, offer, sp0, fileKept = false); if (auto) UpdateNotifier.needsSpace(app, UpdateLogic.roundUpTenMb(sp0.shortBy)); return@Thread }
+                // The owner's rule: TRY, whatever the numbers say (alpha18). Android is the only judge of whether an update fits: its refusal, if it comes, is explained after the fact. The figures
+                // below only go to Diagnostics, as a hint for later.
+                try { val sp0 = space(app, offer, null, pending = if (reuse) (offer.size - (oldView?.done ?: 0)).coerceAtLeast(0) else offer.size); Health.log("update", "download", "free=${sp0.free shr 20} MB, Android's rule asks about ${(sp0.free + sp0.plan.shortBy) shr 20} MB for an update in place; trying anyway") } catch (e: Exception) { /* a hint only */ }
                 if (reuse) { DownloadController.resume(app, old); return@Thread } // paused or interrupted: continue where it stopped
                 if (old != 0L) DownloadController.remove(old, true) // a finished / failed / cancelled one: forget it
                 val src = Source(
@@ -441,9 +443,8 @@ object UpdateManager {
         val libs = nativeLibBytes(ctx, apk)
         val rawFree = freeForInstall(ctx)
         val free = (rawFree - pending).coerceAtLeast(0) // the download comes first and takes its room
-        val floor = sp(ctx).getLong("floor2", 0L) // Android once refused with this much free space plus 150 MB: ask for at least that much
         val plan = UpdateLogic.storagePlan(apkBytes, libs, free, reserveBytes(ctx))
-        return Space(plan, rawFree, plan.installTakes, (floor - free).coerceAtLeast(0))
+        return Space(plan, rawFree, plan.installTakes, 0L) // (a floor learned from earlier refusals used to inflate the figure: gone, the number is only what Android's rule says)
     }
 
     private fun needSpace(ctx: Context, offer: UpdateOffer, sp: Space, fileKept: Boolean) {
@@ -480,9 +481,10 @@ object UpdateManager {
             val pi = app.packageManager.packageInstaller
             try {
                 // Will the installer find room? (staged copy + unpacked new version while the old one stays + its reserve). Too little: say how much, keep the file, start nothing.
+                // No gate (alpha18): the installer is asked whatever our estimate says. Our own copy is only deleted early when the estimate says it fits that way; otherwise it stays for a retry.
                 val sp0 = space(app, offer, apk)
-                if (sp0.shortBy > 0) { needSpace(app, offer, sp0, fileKept = true); return@Thread }
-                val dropOwnCopy = sp0.plan.fitsDropping // only enough room if our own copy goes once the installer has its own
+                Health.log("update", "install", "free=${sp0.free shr 20} MB, Android's rule asks about ${(sp0.free + sp0.plan.shortBy) shr 20} MB; asking the installer anyway")
+                val dropOwnCopy = sp0.plan.fitsDropping && sp0.plan.shortBy <= 0 // only enough room if our own copy goes once the installer has its own
                 // Sessions left over from earlier tries each still hold a full staged copy of the APK: give that space back first.
                 for (old in pi.mySessions) try { pi.abandonSession(old.sessionId) } catch (e: Exception) { /* already gone */ }
                 val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
@@ -517,7 +519,7 @@ object UpdateManager {
         val app = ctx.applicationContext
         Thread({
             val now = freeForInstall(app)
-            sp(app).edit().putLong("floor2", maxOf(sp(app).getLong("floor2", 0L), now) + (150L shl 20)).apply()
+            Health.log("update", "refused", "Android said INSUFFICIENT_STORAGE with ${now shr 20} MB free")
             val apk = File(dir(app), offer.apkName)
             val kept = apk.isFile
             val s0 = space(app, offer, if (kept) apk else null, pending = if (kept) 0 else offer.size)
