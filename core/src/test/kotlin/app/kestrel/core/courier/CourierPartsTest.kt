@@ -92,7 +92,8 @@ class CourierPartsTest {
         val young = File(dir, "cafe").also { it.mkdirs() }
         stray.setLastModified(1_000); keep.sync()
         sinks.sweep(setOf(keep.uri!!), 60_000, 10_000_000)
-        assertFalse(stray.exists()); assertTrue(young.exists().not() || young.lastModified() > 0); assertTrue(File(sinks.fileOf(keep.uri)!!.path).exists())
+        assertFalse("an old folder nobody refers to is removed", stray.exists()); assertTrue("a young one may still be in the middle of being created", young.exists())
+        assertTrue("a folder in use is kept", sinks.fileOf(keep.uri)!!.exists())
     }
 
     // ------------------------------------------------------------------------------------------------------------------ the engine's records as a file
