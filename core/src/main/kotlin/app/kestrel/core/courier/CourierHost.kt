@@ -10,6 +10,8 @@ import app.kestrel.core.download.FetchException
 import app.kestrel.core.download.FetchRequest
 import app.kestrel.core.download.Fetcher
 import app.kestrel.core.download.Source
+import app.kestrel.core.media.StreamEngine
+import app.kestrel.core.media.StreamSource
 import java.io.File
 import java.io.IOException
 import java.io.OutputStream
@@ -37,6 +39,8 @@ class CourierHost(
     private val rng: SecureRandom = SecureRandom(),
     private val log: (String) -> Unit = {},
     private val resolve: (String) -> List<ByteArray> = { InetAddress.getAllByName(it).map { a -> a.address } },
+    /** The segment downloader for video streams (HLS, written straight into an MP4); null = this phone only does plain files (a stream job is then refused with 501 and the tablet does it itself). */
+    private val streams: StreamEngine? = null,
 ) {
     companion object {
         const val APP = "kestrel-courier"
@@ -47,6 +51,8 @@ class CourierHost(
         const val DONE_KEEP_MS = 24L * 3600_000
         const val FAILED_KEEP_MS = 7L * 24 * 3600_000
         const val MAX_SPEEDTEST = 64L shl 20
+        /** The playlist text the tablet already read (saves the phone a request, and works for playlists only the tablet's cookies can open); longer ones are fetched by the phone. */
+        const val MAX_PLAYLIST_CHARS = 1_500_000
         private val FORWARDED = setOf("user-agent", "referer", "origin", "cookie", "accept", "accept-language")
         /** What a row on the tablet may offer while the phone is still working; Open / Share / Delete are the tablet's own once the file is there. */
         private val PHONE_ACTIONS = setOf(Action.PAUSE, Action.RESUME, Action.CANCEL, Action.RETRY, Action.RESTART)
@@ -134,8 +140,8 @@ class CourierHost(
     }
 
     private fun status(): HttpResponse {
-        val c = engine.counts()
-        return HttpResponse.json(200, mapOf("app" to APP, "v" to VERSION, "name" to deviceName, "free" to freeBytes(), "jobs" to synchronized(lock) { jobs.size }, "running" to c[0], "queued" to c[1], "t" to clock.now()))
+        val c = engine.counts(); val sc = streams?.counts() ?: intArrayOf(0, 0, 0)
+        return HttpResponse.json(200, mapOf("app" to APP, "v" to VERSION, "name" to deviceName, "free" to freeBytes(), "jobs" to synchronized(lock) { jobs.size }, "running" to c[0] + sc[0], "queued" to c[1] + sc[1], "t" to clock.now()))
     }
 
     private fun body(req: HttpRequest): Map<*, *>? = try { Json.parse(String(req.body, Charsets.UTF_8)) as? Map<*, *> } catch (e: JsonException) { null }
@@ -145,8 +151,10 @@ class CourierHost(
         val cid = j.str("cid")
         if (cid == null || cid.length !in 8..64 || !cid.all { it.isLetterOrDigit() || it == '-' || it == '_' }) return HttpResponse.error(400, "cid")
         val kind = j.str("kind") ?: "file"
-        if (kind != "file") return HttpResponse.error(501, "kind")
-        val url = j.str("url") ?: return HttpResponse.error(400, "url")
+        if (kind != "file" && !(kind == "stream" && streams != null)) return HttpResponse.error(501, "kind")
+        val st: Map<*, *>? = if (kind == "stream") (j.obj("stream") ?: return HttpResponse.error(400, "stream")) else null
+        if (st != null && st.obj("companion") != null) return HttpResponse.error(501, "companion")                 // picture + sound kept apart (DASH): needs the platform merge, not on the phone yet
+        val url = (if (st != null) st.str("playlistUrl") else j.str("url")) ?: return HttpResponse.error(400, "url")
         val u = try { if (url.length > 8192) null else URL(url) } catch (e: Exception) { null } ?: return HttpResponse.error(400, "url")
         if (u.protocol != "http" && u.protocol != "https") return HttpResponse.error(400, "url")
         synchronized(lock) { byCid[cid]?.let { return HttpResponse.json(200, wire(it)) } }               // the same request again: the same job
@@ -163,9 +171,15 @@ class CourierHost(
         synchronized(lock) {
             byCid[cid]?.let { return HttpResponse.json(200, wire(it)) }
             if (jobs.size >= MAX_JOBS) return HttpResponse.error(429, "too_many_jobs")
-            val src = Source(url, null, name, j.str("mime"), headers, 0, priv = false, meteredOk = true, risk = 0, destKind = DEST_APP_PRIVATE, nameFixed = j.bool("nameFixed") ?: false)
-            val eid = engine.enqueue(src)
-            job = CJob(newId(), cid, eid, kind, name ?: "", j.bool("nameFixed") ?: false, j.str("mime"), clock.now())
+            val eid: Long
+            if (st != null) {
+                val text = st.str("playlistText")?.takeIf { it.length <= MAX_PLAYLIST_CHARS }
+                val stem = (st.str("nameStem") ?: "").take(200).ifBlank { "video" }
+                eid = streams!!.enqueue(StreamSource(url, text, st.str("pageUrl")?.takeIf { it.length <= 8192 }, stem, headers, 0, false, true, DEST_APP_PRIVATE, st.long("estimateBytes") ?: -1L, st.str("repId")?.take(200), st.str("ext")?.take(16), null))
+            } else {
+                eid = engine.enqueue(Source(url, null, name, j.str("mime"), headers, 0, priv = false, meteredOk = true, risk = 0, destKind = DEST_APP_PRIVATE, nameFixed = j.bool("nameFixed") ?: false))
+            }
+            job = CJob(newId(), cid, eid, kind, if (st != null) "" else (name ?: ""), j.bool("nameFixed") ?: false, j.str("mime"), clock.now())
             add(job); save()
         }
         return HttpResponse.json(201, wire(job))
@@ -183,11 +197,12 @@ class CourierHost(
 
     private fun act(id: String, action: String): HttpResponse {
         val j = synchronized(lock) { jobs[id] } ?: return HttpResponse.error(404, "no_job")
+        val stream = j.kind == "stream"
         when (action) {
-            "pause" -> engine.pause(j.engineId)
-            "resume" -> engine.resume(j.engineId)
-            "cancel" -> { synchronized(lock) { j.canceled = true; save() }; engine.cancel(j.engineId) }
-            "restart" -> { synchronized(lock) { if (j.canceled) { j.canceled = false; save() } }; engine.restart(j.engineId) }
+            "pause" -> if (stream) streams?.pause(j.engineId) else engine.pause(j.engineId)
+            "resume" -> if (stream) streams?.resume(j.engineId) else engine.resume(j.engineId)
+            "cancel" -> { synchronized(lock) { j.canceled = true; save() }; if (stream) streams?.cancel(j.engineId) else engine.cancel(j.engineId) }
+            "restart" -> { synchronized(lock) { if (j.canceled) { j.canceled = false; save() } }; if (stream) streams?.restart(j.engineId) else engine.restart(j.engineId) }
             else -> return HttpResponse.error(404, "action")
         }
         return HttpResponse.json(202, mapOf("ok" to true))
@@ -199,8 +214,11 @@ class CourierHost(
         return HttpResponse.json(200, mapOf("ok" to true))
     }
 
+    /** The job's state in whichever engine holds it (video streams live in the segment downloader, everything else in the single-file engine). */
+    private fun viewOf(j: CJob): DownloadView? = if (j.kind == "stream") streams?.view(j.engineId) else engine.view(j.engineId)
+
     private fun drop(j: CJob) {
-        engine.remove(j.engineId, true)
+        if (j.kind == "stream") streams?.remove(j.engineId, true) else engine.remove(j.engineId, true)
         synchronized(lock) { jobs.remove(j.id); byCid.remove(j.cid); j.token?.let { byToken.remove(it) }; save() }
     }
 
@@ -250,7 +268,7 @@ class CourierHost(
         if (throttle.blocked(ip, now)) return HttpResponse(429, mapOf("Retry-After" to "60"), close = true)
         val j = if (seg.size >= 3) synchronized(lock) { byToken[seg[2]] } else null
         if (j == null) { throttle.failed(ip, now); return HttpResponse.error(404, "not_found") }
-        val v = engine.view(j.engineId)
+        val v = viewOf(j)
         val f = if (v != null && v.state == DlState.COMPLETED) sinks.fileOf(v.destUri) else null
         if (f == null || !f.isFile) return HttpResponse.error(404, "not_ready")
         val tag = "\"" + java.lang.Long.toHexString(f.length()) + "-" + java.lang.Long.toHexString(f.lastModified()) + "\""
@@ -272,7 +290,7 @@ class CourierHost(
         val doomed = ArrayList<CJob>()
         synchronized(lock) {
             for (j in jobs.values) {
-                val v = engine.view(j.engineId)
+                val v = viewOf(j)
                 if (v == null) { if (now - j.created > 60_000) doomed.add(j); continue }
                 val age = now - maxOf(v.updated, j.created)
                 if (v.state == DlState.COMPLETED && age > DONE_KEEP_MS) doomed.add(j)
@@ -286,19 +304,19 @@ class CourierHost(
     fun cancelLocal(engineId: Long) {
         val j = synchronized(lock) { jobs.values.firstOrNull { it.engineId == engineId } }
         if (j != null) synchronized(lock) { j.canceled = true; save() }
-        engine.cancel(engineId)
+        if (j?.kind == "stream") streams?.cancel(engineId) else engine.cancel(engineId)
     }
 
     /** The phone's own list (name, state, progress) for its screen. */
-    fun summaries(): List<DownloadView> = synchronized(lock) { jobs.values.mapNotNull { engine.view(it.engineId) } }
+    fun summaries(): List<DownloadView> = synchronized(lock) { jobs.values.mapNotNull { viewOf(it) } }
     val jobCount: Int get() = synchronized(lock) { jobs.size }
-    fun needsService(): Boolean = engine.needsService()
+    fun needsService(): Boolean = engine.needsService() || streams?.needsService() == true
 
     // ---------------------------------------------------------------------------------------------------------------- wire form
     private fun wire(j: CJob): Map<String, Any?> {
         val m = LinkedHashMap<String, Any?>()
         m["id"] = j.id; m["cid"] = j.cid; m["kind"] = j.kind; m["created"] = j.created
-        val v = engine.view(j.engineId)
+        val v = viewOf(j)
         if (v == null) {
             // right after enqueue the engine has not registered the job yet; much later it means the record is gone
             m["state"] = if (j.canceled) "CANCELED" else if (clock.now() - j.created < 15_000) "QUEUED" else "GONE"

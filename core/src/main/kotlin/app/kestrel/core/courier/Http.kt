@@ -37,7 +37,7 @@ object HttpParser {
     const val MAX_LINE = 8192
     const val MAX_HEAD = 16 * 1024
     const val MAX_HEADERS = 64
-    const val MAX_BODY = 256 * 1024
+    const val MAX_BODY = 2 * 1024 * 1024
     const val MAX_QUERY_PAIRS = 32
     private val METHODS = setOf("GET", "HEAD", "POST", "DELETE", "PUT", "OPTIONS")
     private val EMPTY = ByteArray(0)
