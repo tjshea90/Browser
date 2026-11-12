@@ -65,6 +65,27 @@ object GeckoEngine {
             r.settings.setPostQuantumKeyExchangeEnabled(true)             // X25519MLKEM768 for TLS / HTTP-3 (= default, pinned)
             applyScrollFeel(prefs.scrollFeel)                             // live apz.* prefs of the "Scroll feel" setting
             applyNetwork(prefs)
+            app.kestrel.browser.download.PageProxy.setApplier(PhoneProxyApplier)   // pages through the phone: the current state (proxy or direct) is applied now and on every change
+        }
+    }
+
+    /**
+     * "Pages through the phone": a PAC file (a data: URL) that sends https and wss to the Courier's proxy on the phone with DIRECT as the fallback, set live on the default branch (never
+     * persisted, so every start begins direct until the phone is confirmed). The failover timeout is short so a phone that comes back is used again within seconds.
+     */
+    private object PhoneProxyApplier : app.kestrel.browser.download.PageProxy.Applier {
+        override fun apply(host: String, port: Int) = set(app.kestrel.browser.download.PageProxy.pacUrl(host, port), 2)
+        override fun clear() = set("", 5)
+        private fun set(url: String, type: Int) {
+            val d = org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_DEFAULT
+            try {
+                org.mozilla.geckoview.GeckoPreferenceController.setGeckoPrefs(listOf(
+                    org.mozilla.geckoview.GeckoPreferenceController.SetGeckoPreference.setStringPref("network.proxy.autoconfig_url", url, d),
+                    org.mozilla.geckoview.GeckoPreferenceController.SetGeckoPreference.setIntPref("network.proxy.failover_timeout", 10, d),
+                    org.mozilla.geckoview.GeckoPreferenceController.SetGeckoPreference.setIntPref("network.proxy.type", type, d),
+                ))
+                app.kestrel.browser.diag.Health.log("engine", "phone-proxy", if (type == 2) "pages through the phone" else "pages direct")
+            } catch (e: Exception) { app.kestrel.browser.diag.Health.log("engine", "phone-proxy-failed", e.toString().take(140)) }
         }
     }
 
