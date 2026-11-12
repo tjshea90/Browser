@@ -103,7 +103,9 @@ class ShieldsBridge(
             if (fs != null && Verdict.isBlocked(fs.check(url, UrlParts.hostOf(page), RequestType.MEDIA))) return
         }
         val len = if (kind == app.kestrel.core.media.MediaKind.FILE) m.optLong("l", -1L) else -1L
-        mediaSeen(MediaCandidate(url, kind, MediaSniff.baseType(ct), len, page, m.optString("f").takeIf { it != page } ?: "", System.currentTimeMillis()))
+        val cand = MediaCandidate(url, kind, MediaSniff.baseType(ct), len, page, m.optString("f").takeIf { it != page } ?: "", System.currentTimeMillis())
+        cand.sourceName = app.kestrel.core.download.FileNames.fromContentDisposition(m.optString("n").takeIf { it.isNotBlank() })?.let { app.kestrel.core.download.FileNames.sanitize(it) } ?: "" // the name the server gave it
+        mediaSeen(cand)
     }
 
     private fun onVid(m: JSONObject) {

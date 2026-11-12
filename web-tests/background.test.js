@@ -401,3 +401,16 @@ test('a tab that keeps being used keeps its page address in the extension while 
   const a = await h.message({ k: 'guard', h: 'frame.test' }, 1);
   assert.equal(a.top, 'example.com', 'tab 1 was not forgotten (the oldest-INSERTED tab was dropped before)');
 });
+
+test('sniffer: the file name the server gives (Content-Disposition) travels with the candidate', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  h.listeners.headers({ statusCode: 200, url: 'https://cdn.example/dl.php?id=9', tabId: 1, documentUrl: PAGE, responseHeaders: [
+    { name: 'Content-Type', value: 'video/mp4' }, { name: 'Content-Length', value: '9000000' }, { name: 'Content-Disposition', value: 'attachment; filename="My Holiday 2026.mp4"' }, { name: 'Server', value: 'x' }] });
+  h.listeners.headers({ statusCode: 200, url: 'https://cdn.example/plain.mp4', tabId: 1, documentUrl: PAGE, responseHeaders: [{ name: 'Content-Type', value: 'video/mp4' }, { name: 'Content-Length', value: '9000000' }] });
+  await tick(10);
+  const m = h.of('media');
+  assert.equal(m.length, 2);
+  assert.equal(m[0].n, 'attachment; filename="My Holiday 2026.mp4"');
+  assert.equal(m[1].n, '', 'no header, no name');
+});

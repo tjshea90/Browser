@@ -334,13 +334,14 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
   if (d.statusCode !== 200 && d.statusCode !== 206) return;
   var url = d.url;
   if (SEGMENT.test(url)) return;
-  var ct = '', len = -1, total = -1, h = d.responseHeaders || [];
+  var ct = '', len = -1, total = -1, cd = '', h = d.responseHeaders || [];
   for (var i = 0; i < h.length; i++) {
     var nl = h[i].name.length;
-    if (nl !== 12 && nl !== 13 && nl !== 14) continue; // content-type (12), content-range (13), content-length (14): most header names are never lower-cased
+    if (nl !== 12 && nl !== 13 && nl !== 14 && nl !== 19) continue; // content-type (12), content-range (13), content-length (14), content-disposition (19): most header names are never lower-cased
     var n = h[i].name.toLowerCase();
     if (n === 'content-type') ct = (h[i].value || '').toLowerCase();
     else if (n === 'content-length') len = parseInt(h[i].value, 10);
+    else if (n === 'content-disposition') cd = String(h[i].value || '').slice(0, 300); // the file name the server gave (the sheet offers it as the name)
     else if (n === 'content-range') { var m = /\/(\d+)\s*$/.exec(h[i].value || ''); if (m) total = parseInt(m[1], 10); }
   }
   if (!MEDIA_CT.test(ct) && !MEDIA_EXT.test(url)) return;
@@ -357,7 +358,7 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
   if (seen.size >= SNIFFED_PER_TAB) seen.delete(seen.values().next().value);
   seen.add(key);
   var page = tabTop.get(d.tabId) || ((d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || ''));
-  send({ k: 'media', u: url, c: ct, l: size, p: page, f: d.documentUrl || '' }).catch(function () {});
+  send({ k: 'media', u: url, c: ct, l: size, p: page, f: d.documentUrl || '', n: cd }).catch(function () {});
 }, { urls: ['http://*/*', 'https://*/*'], types: MEDIA_TYPES }, ['responseHeaders']);
 
 // What the page's own <video> says about the file it plays (picture size, length, the label next to a <source>): relayed by content.js.
