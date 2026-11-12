@@ -146,3 +146,9 @@ Start building the next step
 ```
 Most videos don't need any converting. They are just remuxed into the mp4 container with audio
 ```
+
+## 2026-11-12T05:31:21Z
+```
+Also, the update feature says I need to free 2gb storage, but I uninstalled the app and installed the new one fine without making the 2gb storage. Make the update feature try to update no matter what
+The tablet is always connected via hotspot to my phone. The phone itself downloads faster than the tablet over wifi. Is it possible to make an option in the settings to have the phone itself download files/videos with the status for the download in the browser app on the tablet while everything looks and functions the same but the phone downloads (and remuxes/converts videos when needed using the phone hardware which is better than the tablet) and simply sends the completed download to the tablet when finished by wifi? If this is possible, I want everything on the tablet to look and function the same, only outsourcing the work to the phone but the tablet can still read and display the live download status
+```
