@@ -290,7 +290,7 @@ class Mp4Mux(private val out: MuxOut, private val nowMs: () -> Long = { System.c
                     m.u32(created); m.u32(created); m.u32(1); m.u32(0); m.u32(vTrackDur)
                     m.zeros(8); m.u16(0); m.u16(0); m.u16(0); m.u16(0); matrix(m); m.u32(width.toLong() shl 16); m.u32(height.toLong() shl 16)
                 }
-                edits(m, vLead, vSkip, vEditDur)
+                edits(m, vStart, vMinCt, vEditDur)
                 m.box("mdia") {
                     m.fullBox("mdhd", 0, 0) { m.u32(created); m.u32(created); m.u32(90000); m.u32(vMediaDur); m.u16(0x55C4); m.u16(0) }
                     handler(m, "vide", "VideoHandler")
