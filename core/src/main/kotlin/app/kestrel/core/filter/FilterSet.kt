@@ -166,6 +166,9 @@ class FilterSet internal constructor(
     /** Builds the lazily made cosmetic tables now (start-up warm-up), so the first page does not wait for them. */
     fun warmCosmetic() { cosmetic.warm() }
 
+    /** Tests and Diagnostics: a line of numbers about the generic token index. */
+    fun cosmeticDebugStats(): String = cosmetic.debugStats()
+
     // ------------------------------------------------------------------ internals
 
     private fun siteFlagsFor(host: String): Int {

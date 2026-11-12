@@ -106,6 +106,9 @@ internal class CosmeticIndex(
     /** Builds the token index now (start-up warm-up), so the first page does not wait for it. */
     fun warm() { if (genericCount > 0) tokens() }
 
+    /** Every [step]-th key of the index (tests: real keys to build a page from). */
+    fun debugKeys(step: Int): List<String> { val t = tokens(); return t.byKey.keys.sorted().filterIndexed { i, _ -> i % step == 0 } }
+
     /** One line of numbers about the token index (tests and Diagnostics): how many generic selectors, how many are filed under a token, the biggest bucket. */
     fun debugStats(): String {
         if (genericCount == 0) return "generic=0"
