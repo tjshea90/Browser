@@ -77,7 +77,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
                 when {
                     v == JumpGuard.Verdict.STOP -> { a.onPopupBlocked(tab.url, "redirect", request.uri); result.complete(deny) }
                     v == JumpGuard.Verdict.WAIT && !timedOut -> app.kestrel.browser.Io.main.postDelayed(this, 15)
-                    else -> decideLoad(session, request).accept({ r -> result.complete(r) }, { result.complete(allow) }) // no evidence either way: the jump goes ahead
+                    else -> decideLoad(session, request).accept({ r -> result.complete(r) }, { _ -> result.complete(allow) }) // no evidence either way: the jump goes ahead
                 }
             }
         }
