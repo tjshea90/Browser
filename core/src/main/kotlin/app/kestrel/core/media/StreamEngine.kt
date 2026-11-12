@@ -80,6 +80,8 @@ class StreamRec(@JvmField val id: Long) {
     /** Bytes of the output written (and flushed) so far, and the index of the next segment to write. */
     @JvmField var appended = 0L
     @JvmField var next = 0
+    /** Where each run after a #EXT-X-DISCONTINUITY starts in the output, as "segment index:byte offset;" pairs (only for what has been written): the remuxer needs them to lay the times end to end. */
+    @JvmField var breaks = ""
     @JvmField var initDone = false
     @JvmField var total = -1L
     @JvmField var created = 0L
@@ -90,7 +92,7 @@ class StreamRec(@JvmField val id: Long) {
         val r = StreamRec(id)
         r.state = state; r.reason = reason; r.detail = detail; r.url = url; r.playlistText = playlistText; r.pageUrl = pageUrl; r.headers = headers; r.fetcher = fetcher; r.priv = priv
         r.meteredOk = meteredOk; r.nameStem = nameStem; r.name = name; r.mime = mime; r.destKind = destKind; r.destUri = destUri; r.estimate = estimate; r.repId = repId; r.ext = ext; r.companionId = companionId; r.parentId = parentId; r.appended = appended
-        r.next = next; r.initDone = initDone; r.total = total; r.created = created; r.updated = updated; r.finished = finished
+        r.next = next; r.breaks = breaks; r.initDone = initDone; r.total = total; r.created = created; r.updated = updated; r.finished = finished
         return r
     }
 }
@@ -100,7 +102,13 @@ class StreamRec(@JvmField val id: Long) {
  * (return null): the stream is then simply kept as it is. The Android layer implements it with MediaExtractor + MediaMuxer.
  */
 interface StreamFinisher {
-    class Joined(val uri: String, val stem: String, val container: String, val size: Long, val priv: Boolean, val destKind: Int)
+    /**
+     * One run of the joined file between two #EXT-X-DISCONTINUITY marks: the bytes [offset, offset + length) and the length the playlist gave it. A discontinuity means the time stamps start over
+     * (a new encoder run: spliced-in advertising, a re-joined movie), so each part is read on its own and the times are laid end to end.
+     */
+    class Part(val offset: Long, val length: Long, val durationMs: Long)
+    /** [parts] has more than one entry only when the playlist marked discontinuities; empty = the file is one run. */
+    class Joined(val uri: String, val stem: String, val container: String, val size: Long, val priv: Boolean, val destKind: Int, val parts: List<Part> = emptyList())
     class Converted(val uri: String, val name: String, val mime: String, val size: Long)
     /** Two finished files of one video (picture and sound, as DASH keeps them) to be made one MP4. */
     class Merge(val videoUri: String, val audioUri: String, val stem: String, val size: Long, val priv: Boolean, val destKind: Int)
@@ -339,7 +347,7 @@ class StreamEngine(
         try { job.sink?.discard() } catch (e: Exception) { /* ignore */ }
         if (job.sink == null) r.destUri?.let { try { sinks.delete(it) } catch (e: Exception) { /* ignore */ } }
         job.sink = null; job.media = null; job.staged.clear(); job.claimed.clear(); job.stagedBytes = 0; job.stagedCount = 0; job.inflight.set(0); job.written = 0; job.keys.clear()
-        r.destUri = null; r.appended = 0; r.next = 0; r.initDone = false; r.total = -1
+        r.destUri = null; r.appended = 0; r.next = 0; r.breaks = ""; r.initDone = false; r.total = -1
     }
 
     private fun requestStop(job: Job, to: DlState) {
@@ -485,7 +493,7 @@ class StreamEngine(
         val uri = synchronized(lock) { rec.destUri }
         if (uri != null) sink = try { sinks.reopen(uri, -1) } catch (e: Exception) { null }
         if (sink == null) {
-            synchronized(lock) { rec.appended = 0; rec.next = 0; rec.initDone = false; job.written = 0; rec.destUri = null } // the output is gone: the pointer starts over (staged segments are still good)
+            synchronized(lock) { rec.appended = 0; rec.next = 0; rec.breaks = ""; rec.initDone = false; job.written = 0; rec.destUri = null } // the output is gone: the pointer starts over (staged segments are still good)
             sink = sinks.create(rec.name, rec.mime, -1, rec.priv, rec.destKind)
             synchronized(lock) { rec.destUri = sink.uri; sink.displayName?.let { rec.name = it } }
         } else synchronized(lock) { job.written = rec.appended }
@@ -553,9 +561,13 @@ class StreamEngine(
                     dropCompanion(comp)
                 } else synchronized(lock) { comp.rec.parentId = 0L; comp.rec.updated = clock.now() }.also { persist(comp.rec); changed(comp.rec.id) }
             }
-        } else if (finisher != null && uri != null && media.container == "ts" && media.discontinuities == 0 && !job.stop) {
-            // MPEG-TS plays badly in most apps: when nothing in it needs the timestamps kept as they are, make an MP4 of it (the .ts stays if anything goes wrong)
-            converted = try { finisher.convert(StreamFinisher.Joined(uri, rec.nameStem, media.container, job.written, rec.priv, rec.destKind)) } catch (e: Throwable) { null }
+        } else if (finisher != null && uri != null && media.container == "ts" && !job.stop) {
+            // MPEG-TS plays badly in most apps: make an MP4 of it (the .ts stays if anything goes wrong). Runs between discontinuities are handed over as parts; a stream that has
+            // discontinuities but whose runs were not recorded (a download started by an older version) is left as it is, because its times cannot be laid end to end.
+            val parts = partsOf(rec.breaks, media.segments, job.written)
+            if (media.discontinuities == 0 || parts.size > 1) {
+                converted = try { finisher.convert(StreamFinisher.Joined(uri, rec.nameStem, media.container, job.written, rec.priv, rec.destKind, parts)) } catch (e: Throwable) { log("convert failed", e); null }
+            }
             if (converted != null) try { sinks.delete(uri) } catch (e: Exception) { /* the .ts stays next to the .mp4: harmless */ }
         }
         synchronized(lock) {
@@ -661,6 +673,7 @@ class StreamEngine(
         val f = File(store.dir(rec.id), "$idx.seg")
         val size = f.length()
         var written = synchronized(lock) { job.written }
+        val startedAt = written
         try {
             FileInputStream(f).use { input ->
                 val buf = ByteArray(64 * 1024)
@@ -683,6 +696,7 @@ class StreamEngine(
         } catch (e: IOException) { throw SinkException(Reason.STORAGE, "could not read a staged segment", e) }
         synchronized(lock) {
             job.written = written; rec.next = idx + 1; rec.appended = written
+            if (seg.discontinuity && idx > 0) rec.breaks += "$idx:$startedAt;"
             job.stagedBytes -= size; job.stagedCount--; job.staged.clear(idx)
         }
         f.delete()
