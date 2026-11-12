@@ -1,23 +1,22 @@
-# CHECKPOINT 973 — read me first, then TASKS.md
+# CHECKPOINT 976 — read me first, then TASKS.md
 
-**Written:** 2026-11-12T07:54:08Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `26d9139` (this checkpoint is the commit after it)
+**Written:** 2026-11-12T08:11:37Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `f7ca092` (this checkpoint is the commit after it)
 
 ## Just done
-gated kestrel-g-v0.3.0-alpha19 (gecko code 118) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
+Y2 stage 1 SHIPPED and recorded: kestrel-courier-v0.1.0-alpha1 (run 43177953278, 152666-byte APK) + kestrel-g-v0.3.0-alpha19 (run 43178702258); owner told with both links + setup steps + honest limits; emulator kill/restart of the Courier proven (sha256 equal); first hello waits 5 s (courier JVM tests green)
 
 ## Do this next
-TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref ccr-a57c163e-mtq8js, inputs {"app":"gecko","full_build":"true","note":"alpha19: Download on my phone. New Settings > Download on my phone (off by default; needs the small Kestrel Courier app on your phone, see its Release): your phone downloads the file over its own connection and sends it to the tablet over the hotspot wifi, with live progress in the same Downloads row (Pause, Resume, Cancel work). Test the phone link measures the wifi to the phone, the phone's internet and the tablet's internet and says whether it is worth it. When the phone is not there, or cannot do a download, the tablet downloads it by itself and the row says why. Private tabs, app updates and video streams are still downloaded by the tablet itself for now."}.
-When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha19), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha19 "alpha19: Download on my phone. New Settings > Download on my phone (off by default; needs the small Kestrel Courier app on your phone, see its Release): your phone downloads the file over its own connection and sends it to the tablet over the hotspot wifi, with live progress in the same Downloads row (Pause, Resume, Cancel work). Test the phone link measures the wifi to the phone, the phone's internet and the tablet's internet and says whether it is worth it. When the phone is not there, or cannot do a download, the tablet downloads it by itself and the row says why. Private tabs, app updates and video streams are still downloaded by the tablet itself for now."
-NEVER ship kestrel-g-v0.3.0-alpha19 twice (check BUILDLOG.md and the Releases first).
+Y2 stage 2 (research/PHONE_OFFLOAD.md section 15): start with the JVM-testable core: (1) JsonStreamStore (StreamStore port; read core/.../media/StreamEngine.kt StreamRec + app/.../download/StreamStoreFiles.kt for what persists), (2) CourierHost kind 'stream' (ctor param streams: StreamEngine?, create -> streams.enqueue(StreamSource), wire() from streams.view, actions/delete/janitor/summaries by kind), (3) CourierClient JobSpec stream fields + PhoneBackend.offloadStream + LocalDownloads.enqueueStream fallback, (4) tests with a fake HLS origin (see StreamEngineMp4Test for the fake), (5) :courier wiring (StreamEngine + JsonStreamStore, finisher = null first, Remuxer port later), (6) DownloadController.enqueueStream tries the phone first; then emulator proof with hls.html on the local server, then ship alpha20 + courier alpha2. Wait for the owner's numbers/answers (Y2a, Y2k) in INBOX. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN stays (delete after 24 h of owner silence or when nothing is open).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M research/PHONE_OFFLOAD.md
 
 ## Last ten checkpoints
 ```
+  6dbba44 ckpt 973: gated kestrel-g-v0.3.0-alpha19 (gecko code 118) and pushed it: handoff self-te
   cebfa82 ckpt 969: gated kestrel-courier-v0.1.0-alpha1 (courier code 1) and pushed it: handoff se
   919c2a3 ckpt 968: pre-ship: first Courier release: the small app for your PHONE. It downloads fi
   1df58a2 ckpt 967: pre-ship: first Courier release: the small app for your PHONE. It downloads fi
@@ -27,8 +26,7 @@ NEVER ship kestrel-g-v0.3.0-alpha19 twice (check BUILDLOG.md and the Releases fi
   46aaf8d ckpt 938: Y2d steps 1+2 DONE (pure core): SocketHttp, LanFetcher, CourierClient, PhoneBa
   b33092b ckpt 930: Y2d step 1 DONE: SocketHttp (cleartext-safe socket HTTP client), LanFetcher (p
   a042f23 ckpt 923: Y2c DONE (phone-side host logic + staging files + JSON store + SSRF guard; fet
-  e084b8b ckpt 892: Y2b DONE: core/courier package (Json, Sign+Pairing+ReplayGuard+AuthThrottle, H
 ```
 
-(2 automatic checkpoint(s) since the last deliberate one — the
+(1 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
