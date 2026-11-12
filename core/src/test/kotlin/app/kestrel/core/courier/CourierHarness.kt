@@ -53,7 +53,12 @@ class Phone(
     val cdn: FakeCdn? = null,
     /** The phone's platform converter (picture + sound merge, H.265 ...): a fake in the JVM tests; null = none (the engine's own MP4 writer only). */
     finisherOf: ((SinkFactory) -> StreamFinisher)? = null,
+    /** True = the phone also runs the page-load proxy on loopback (armed per tablet through `POST /v1/proxy/arm`); it dials any destination, like a phone on a good network. */
+    withProxy: Boolean = false,
 ) {
+    val proxyGate = ProxyGate(clock)
+    val proxyServer: ConnectProxy? = if (withProxy) ConnectProxy(0, InetAddress.getByName("127.0.0.1"), { r, _ -> proxyGate.isArmed(r) }, GuardedDialer({ h -> listOf(InetAddress.getByName(h).address) }, { false }), clock = clock) else null
+    val proxyPort: Int = proxyServer?.start() ?: 0
     val spy = Spy(origin)
     val sinks = StagingSinks(File(dir, "staging"))
     val store = JsonRecStore(File(dir, "downloads.json"))
@@ -65,7 +70,8 @@ class Phone(
     val dnsFor = java.util.concurrent.ConcurrentHashMap<String, List<ByteArray>>()
     val streamStore = JsonStreamStore(File(dir, "streams"))
     val streams: StreamEngine? = cdn?.let { c -> StreamEngine({ c }, sinks, streamStore, FakeNet(), exec, clock, courierTestConfig(), finisher = finisherOf?.invoke(sinks), keepApartOnMergeFailure = false) }
-    val host = CourierHost(hostKey, engine, sinks, File(dir, "courier-jobs.json"), spy, clock, { free }, "Test phone", resolve = { h -> dnsFor[h] ?: if (h.firstOrNull()?.isDigit() == true && h.contains('.')) listOf(InetAddress.getByName(h).address) else dns }, streams = streams)
+    val host = CourierHost(hostKey, engine, sinks, File(dir, "courier-jobs.json"), spy, clock, { free }, "Test phone", resolve = { h -> dnsFor[h] ?: if (h.firstOrNull()?.isDigit() == true && h.contains('.')) listOf(InetAddress.getByName(h).address) else dns }, streams = streams,
+        proxy = proxyServer?.let { ps -> ProxyControl(proxyGate, proxyPort) { ps.stats() } })
     val server = CourierServer(0, InetAddress.getByName("127.0.0.1"), { r, _ -> r.isLoopbackAddress }, { r, p -> host.handle(r, p) })
     @Volatile var ticking = true
     val port: Int
@@ -79,5 +85,5 @@ class Phone(
         cleanups.add { stop() }
     }
 
-    fun stop() { ticking = false; server.stop(); exec.shutdownNow() }
+    fun stop() { ticking = false; server.stop(); proxyServer?.stop(); exec.shutdownNow() }
 }
