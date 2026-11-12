@@ -10,11 +10,16 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.StatFs
 import android.util.Log
+import app.kestrel.core.courier.ConnectProxy
 import app.kestrel.core.courier.CourierHost
+import app.kestrel.core.courier.CourierPorts
 import app.kestrel.core.courier.CourierServer
 import app.kestrel.core.courier.JsonRecStore
 import app.kestrel.core.courier.JsonStreamStore
 import app.kestrel.core.courier.PeerGuard
+import app.kestrel.core.courier.GuardedDialer
+import app.kestrel.core.courier.ProxyControl
+import app.kestrel.core.courier.ProxyGate
 import app.kestrel.core.courier.Sign
 import app.kestrel.core.courier.Ssrf
 import app.kestrel.core.courier.StagingSinks
@@ -37,7 +42,7 @@ import java.io.IOException
 object CourierRuntime {
     private const val TAG = "KestrelCourier"
 
-    private class Running(val engine: Engine, val streams: StreamEngine, val host: CourierHost, val server: CourierServer, val control: HandlerThread, val handler: Handler, val port: Int, val netCallback: ConnectivityManager.NetworkCallback?)
+    private class Running(val engine: Engine, val streams: StreamEngine, val proxy: ConnectProxy?, val host: CourierHost, val server: CourierServer, val control: HandlerThread, val handler: Handler, val port: Int, val netCallback: ConnectivityManager.NetworkCallback?)
 
     @Volatile private var running: Running? = null
     /** Why the last start failed (the screen shows it), or null. */
@@ -88,14 +93,26 @@ object CourierRuntime {
         )
         engine.restore(); streams.restore()
         val resolver: (String) -> List<ByteArray> = if (noGuard) { { _ -> listOf(byteArrayOf(93, 184.toByte(), 216.toByte(), 34)) } } else { { h -> java.net.InetAddress.getAllByName(h).map { it.address } } }
+        // PAGE LOADS for the tablet (research/SPEED2.md): an HTTP CONNECT proxy. The tablet's browser tunnels its https traffic through it and the phone opens the real connection with its OWN
+        // network stack, which the carrier does not cap like tethered traffic. It listens only for a tablet that proved the pairing key in the last minutes ("armed") on a private non-cellular net.
+        val gate = ProxyGate()
+        val proxyPort = CourierPorts.proxyFor(prefs.port)
+        val systemResolve: (String) -> List<ByteArray> = { h -> java.net.InetAddress.getAllByName(h).map { it.address } }
+        val proxy = ConnectProxy(
+            proxyPort, null, { remote, local -> gate.isArmed(remote) && PeerGuard.allowed(remote.address, local.address, CourierNet.locals()) },
+            if (noGuard) GuardedDialer(systemResolve, { false }) else GuardedDialer(systemResolve), log = { Log.w(TAG, it) },
+        )
+        val proxyBound = try { proxy.start() } catch (e: IOException) { Log.w(TAG, "page proxy: port $proxyPort is busy, pages are not offered"); 0 }
+        val proxyControl = if (proxyBound != 0) ProxyControl(gate, proxyBound) { proxy.stats() } else null
         val host = CourierHost(
             Sign.deriveKey(prefs.secret()), engine, sinks, File(dir, "courier-jobs.json"), fetcher, Clock.System, { freeBytes(staging) }, Build.MODEL ?: "phone",
-            log = { Log.w(TAG, it) }, resolve = resolver, streams = streams,
+            log = { Log.w(TAG, it) }, resolve = resolver, streams = streams, proxy = proxyControl,
         )
         host.load()
         val server = CourierServer(prefs.port, null, { remote, local -> PeerGuard.allowed(remote.address, local.address, CourierNet.locals()) }, { req, peer -> host.handle(req, peer) }, log = { Log.w(TAG, it) })
         val bound = try { server.start() } catch (e: IOException) {
             lastError = "Port ${prefs.port} is already used by another app."
+            proxy.stop()
             control.quitSafely()
             return false
         }
@@ -108,7 +125,7 @@ object CourierRuntime {
             try { cm.registerDefaultNetworkCallback(cb, handler) } catch (e: Exception) { cb = null }
         }
         handler.post { engine.resumeInterrupted(); streams.resumeInterrupted() }                       // what the last run was in the middle of carries on by itself
-        val r = Running(engine, streams, host, server, control, handler, bound, cb)
+        val r = Running(engine, streams, if (proxyControl != null) proxy else null, host, server, control, handler, bound, cb)
         running = r
         lastError = null
         val tick = object : Runnable {
@@ -117,7 +134,7 @@ object CourierRuntime {
                 if (running !== r) return
                 engine.tick()
                 if (++n % 60 == 0) host.tick()
-                handler.postDelayed(this, 1000)
+                handler.postDelayed(this, if (host.needsService()) 1000L else 5000L)        // nothing running: wake rarely (battery)
             }
         }
         handler.postDelayed(tick, 1000)
@@ -129,7 +146,7 @@ object CourierRuntime {
         val r = running ?: return
         running = null
         try { ctx.applicationContext.getSystemService(ConnectivityManager::class.java)?.let { cm -> r.netCallback?.let { cm.unregisterNetworkCallback(it) } } } catch (e: Exception) { /* already gone */ }
-        r.server.stop()
+        r.server.stop(); r.proxy?.stop()
         r.engine.pauseAllSystem(); r.streams.pauseAllSystem()               // checkpoints every running download; they carry on at the next start
         r.handler.postDelayed({ r.control.quitSafely() }, 1500)
     }
