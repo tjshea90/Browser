@@ -7,7 +7,14 @@
     var st = document.createElement('style');
     st.setAttribute('data-kestrel', tag);
     st.textContent = css;
-    (document.head || document.documentElement).appendChild(st);
+    var into = document.head || document.documentElement;
+    if (into) { into.appendChild(st); return; }
+    // document_start can run before the page's first element exists (an answer from the cache comes back at once): wait for it instead of losing the CSS
+    var mo = new MutationObserver(function () {
+      var p = document.head || document.documentElement;
+      if (p) { mo.disconnect(); p.appendChild(st); }
+    });
+    mo.observe(document, { childList: true });
   }
   function startTokens(host) {
     try {
