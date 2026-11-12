@@ -1,21 +1,22 @@
-# CHECKPOINT 1077 — read me first, then TASKS.md
+# CHECKPOINT 1101 — read me first, then TASKS.md
 
-**Written:** 2026-11-12T16:12:31Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `938dd44` (this checkpoint is the commit after it)
+**Written:** 2026-11-12T16:30:37Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `129874a` (this checkpoint is the commit after it)
 
 ## Just done
-Reviews saved: research/PERF_KOTLIN.md, research/PERF_JS.md, research/PROMPT_AUDIT.md (corrected copy, no placeholder); AA4 claimed; SPEED3.md section 6 holds the ordered plan of the speed batch
+AA4 speed batch code step: K1 LiveBudget (core, 9 tests) + RAM-adaptive live tabs + trim policy + private tab keeps URL + gecko-prefs v5 viewers 6 + Settings 'Tabs kept ready'; K2 TabStateStore (6 Robolectric tests) saves each tab's Back stack/scroll as sanitized JSON (formdata stripped) and restores it at start; K3 configChanges uiMode|locale|layoutDirection; K4 no engine restart while hidden; K5 preview cover while a tab revives/cold start; K6 link launch no longer loads the saved tab too; K9/K10/K11/K12 cheap fixes; JS: B1 css cache lifetime+generation+nav invalidation, J5.1 in-flight dedupe, B2 tabTop LRU, J3 small files/range-piece dedupe, J2a header prefilter, J4 content scan, J7 passive, J9 pageHashes memo; web-tests 75/75, JVM :core :app all green, compile of geckoapp ok
 
 ## Do this next
-AA4 batch step 1 = K1 in geckoapp/.../BrowserActivity.kt: enforceLiveLimit (line ~630) budget from /proc/meminfo MemAvailable via Health.meminfo (table in research/PERF_KOTLIN.md K1), onTrimMemory (~361) no unconditional purge at >=10, private hibernate keeps pendingLoad=url, gecko-prefs.txt v5 max_total_viewers 6; add a pure LiveBudget object in :core with JVM tests; then K2 (session state files), K3/K4/K6, K5, cheap ones, JS (B1 first), ship alpha22 (versionCode 121), reply to owner message 14. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN
+Build the debug APK (./gradlew :geckoapp:assembleDebug -PgeckoAbi=x86_64) and verify on the emulator: (1) Diagnostics 'Engine:' line shows budget + MemAvailable; open 4 tabs and confirm live sessions follow it; (2) open a long page, scroll, open a link, force-stop, relaunch: Back stack and scroll restored (logcat/Health: tabstate.restored) and tabstate/<id>.json has no formdata; (3) am send-trim-memory ... RUNNING_CRITICAL/UI_HIDDEN; (4) cmd uimode night yes keeps sessions. Then Back picture for no-store pages (BackPicture in BrowserActivity), K7 adaptive download cap, K8 init after first frame, then bump versionCode 121 / 0.3.0-alpha22, tools/sync-ext-version.sh, ship.sh gecko, dispatch android.yml, record-release, answer owner message 14. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M research/SPEED3.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  6fc25a2 ckpt 1077: Reviews saved: research/PERF_KOTLIN.md, research/PERF_JS.md, research/PROMPT_
   7ceb366 ckpt 1075: AA3 audit done by an independent read-only agent: research/PROMPT_AUDIT.md (2
   9c34e86 ckpt 1072: AA1 proven on the emulator (simulated VPN: Network line, trr=0, http3 off, ti
   a0a56be ckpt 1069: AA2 + AA1 core done: Courier closed in the browser (every option OFF by defau
@@ -25,8 +26,7 @@ AA4 batch step 1 = K1 in geckoapp/.../BrowserActivity.kt: enforceLiveLimit (line
   95c9050 ckpt 1053: gated kestrel-g-v0.3.0-alpha21 (gecko code 120) and pushed it: handoff self-t
   2a514af ckpt 1052: gated kestrel-courier-v0.1.0-alpha3 (courier code 3) and pushed it: handoff s
   d803d90 ckpt 1051: pre-ship: alpha3: pages through the phone. The phone now loads the tablet's w
-  8c64199 ckpt 1048: Z8 proven on the emulator (Android 10, GeckoView 160 + Courier in one emulato
 ```
 
-(1 automatic checkpoint(s) since the last deliberate one — the
+(23 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
