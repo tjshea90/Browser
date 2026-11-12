@@ -74,14 +74,18 @@ test('window.open of the very link that was tapped is allowed (sites that open l
   assert.deepEqual(await notes(page), []);
 });
 
-test('a sign-in window and a page of the same site, each from a real tap, are allowed', async () => {
-  const page = await open(`<button id="g" style="width:200px;height:60px" onclick="window.open('https://accounts.google.com/o/oauth2/auth?x=1')">Sign in</button>
-    <button id="c" style="position:absolute;top:100px;width:200px;height:60px" onclick="window.open('/chat')">Chat</button>`);
-  let popup = page.waitForEvent('popup', { timeout: 3000 });
+test('a sign-in window from a real tap is allowed', async () => {
+  const page = await open(`<button id="g" style="width:200px;height:60px" onclick="window.open('https://accounts.google.com/o/oauth2/auth?x=1')">Sign in</button>`);
+  const popup = page.waitForEvent('popup', { timeout: 3000 });
   await page.mouse.click(50, 30);
   await popup;
-  popup = page.waitForEvent('popup', { timeout: 3000 });
-  await page.mouse.click(50, 130);
+  assert.deepEqual(await notes(page), []);
+});
+
+test('a page of the same site from a real tap is allowed', async () => {
+  const page = await open(`<button id="c" style="width:200px;height:60px" onclick="window.open('/chat')">Chat</button>`);
+  const popup = page.waitForEvent('popup', { timeout: 3000 });
+  await page.mouse.click(50, 30);
   await popup;
   assert.deepEqual(await notes(page), []);
 });
