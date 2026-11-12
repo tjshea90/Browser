@@ -46,6 +46,8 @@ object CourierRuntime {
 
     /** The downloads the phone holds right now, newest first (for the screen). */
     fun views(): List<DownloadView> = running?.host?.summaries()?.sortedByDescending { it.created } ?: emptyList()
+    /** The Cancel button on the phone's own list: the tablet is told the job was stopped on the phone. */
+    fun cancel(engineId: Long) { running?.host?.cancelLocal(engineId) }
     /** True while a download is moving: the service keeps the CPU awake then. */
     fun busy(): Boolean = running?.host?.needsService() == true
     fun jobCount(): Int = running?.host?.jobCount ?: 0
@@ -74,10 +76,10 @@ object CourierRuntime {
             Spawner { name, task -> Thread(task, name).also { it.isDaemon = true; it.start() } },
         )
         engine.restore()
+        val resolver: (String) -> List<ByteArray> = if (noGuard) { { _ -> listOf(byteArrayOf(93, 184.toByte(), 216.toByte(), 34)) } } else { { h -> java.net.InetAddress.getAllByName(h).map { it.address } } }
         val host = CourierHost(
             Sign.deriveKey(prefs.secret()), engine, sinks, File(dir, "courier-jobs.json"), fetcher, Clock.System, { freeBytes(staging) }, Build.MODEL ?: "phone",
-            log = { Log.w(TAG, it) },
-            resolve = if (noGuard) { _ -> listOf(byteArrayOf(93, 184.toByte(), 216.toByte(), 34)) } else { h -> java.net.InetAddress.getAllByName(h).map { it.address } },
+            log = { Log.w(TAG, it) }, resolve = resolver,
         )
         host.load()
         val server = CourierServer(prefs.port, null, { remote, local -> PeerGuard.allowed(remote.address, local.address, CourierNet.locals()) }, { req, peer -> host.handle(req, peer) }, log = { Log.w(TAG, it) })

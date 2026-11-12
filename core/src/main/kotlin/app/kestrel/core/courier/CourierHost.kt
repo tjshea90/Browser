@@ -282,6 +282,13 @@ class CourierHost(
         for (j in doomed) drop(j)
     }
 
+    /** Cancel from the phone's own screen: the same as the tablet's cancel, so the tablet hears "stopped on the phone" instead of the job simply vanishing. */
+    fun cancelLocal(engineId: Long) {
+        val j = synchronized(lock) { jobs.values.firstOrNull { it.engineId == engineId } }
+        if (j != null) synchronized(lock) { j.canceled = true; save() }
+        engine.cancel(engineId)
+    }
+
     /** The phone's own list (name, state, progress) for its screen. */
     fun summaries(): List<DownloadView> = synchronized(lock) { jobs.values.mapNotNull { engine.view(it.engineId) } }
     val jobCount: Int get() = synchronized(lock) { jobs.size }
