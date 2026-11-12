@@ -50,12 +50,10 @@ class PageProxyTest {
     }
 
     @Test fun typingThePairingCodeSwitchesTheHelperOnOnlyIfTheOwnerNeverChoseAMode() {
-        val sp = ctx.getSharedPreferences(ctx.packageName + "_preferences", 0)
         val p = Prefs.get(ctx)
         PhoneBridge.forgetPairing(ctx)
-        val all = ctx.getSharedPreferences("kestrel", 0)
         // a fresh install: no choice stored -> pairing means "use my phone"
-        for (name in listOf("kestrel", ctx.packageName + "_preferences")) ctx.getSharedPreferences(name, 0).edit().remove("phone_mode").apply()
+        ctx.getSharedPreferences("kestrel", 0).edit().remove("phone_mode").apply()
         if (!p.hasPhoneModeChoice()) {
             assertTrue(PhoneBridge.savePairing(ctx, Pairing.format(byteArrayOf(9, 9, 9, 9, 9, 9, 9, 9, 9, 9))))
             assertEquals(PhoneMode.WHEN_THERE, PhoneBridge.mode(ctx))
@@ -75,8 +73,7 @@ class PageProxyTest {
     }
 
     @Test fun theDataSaverIsOffByDefaultSoNothingActsMetered() {
-        val sp = ctx.getSharedPreferences("kestrel", 0)
-        for (name in listOf("kestrel", ctx.packageName + "_preferences")) ctx.getSharedPreferences(name, 0).edit().remove("data_saver").apply()
+        ctx.getSharedPreferences("kestrel", 0).edit().remove("data_saver").apply()
         assertEquals(DataSaver.OFF, Prefs.get(ctx).dataSaver)
     }
 }
