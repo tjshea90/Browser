@@ -112,4 +112,66 @@ class UpdateLogicTest {
         val plan = UpdateLogic.storagePlan(2 * mb, 0, freeBytes = 400 * mb, reserveBytes = 300 * mb)
         assertTrue(plan.fitsKeeping); assertEquals(0L, plan.shortBy)
     }
+
+    // ------------------------------------------------------------------ owner report X1: "Alpha9 says it is up to date"
+    // GitHub's list of this repository's releases is sorted by tag NAME, descending - not by date and not by version. This is the order it really answered with (2026-11-12), 13 releases:
+    private val githubOrder = listOf(
+        "kestrel-v0.1.1", "kestrel-g-v0.2.0-alpha9", "kestrel-g-v0.2.0-alpha8", "kestrel-g-v0.2.0-alpha7", "kestrel-g-v0.2.0-alpha6", "kestrel-g-v0.2.0-alpha5", "kestrel-g-v0.2.0-alpha4",
+        "kestrel-g-v0.2.0-alpha3", "kestrel-g-v0.2.0-alpha2", "kestrel-g-v0.2.0-alpha13", "kestrel-g-v0.2.0-alpha12", "kestrel-g-v0.2.0-alpha11", "kestrel-g-v0.2.0-alpha10",
+    )
+    private fun codeOf(tag: String): Int = when {
+        tag == "kestrel-v0.1.1" -> 2
+        tag.startsWith("kestrel-g-v0.2.0-alpha") -> 99 + tag.removePrefix("kestrel-g-v0.2.0-alpha").toInt() // alpha2 = 101 ... alpha13 = 112 (the real codes)
+        else -> 113
+    }
+    private fun releasesIn(order: List<String>) = order.map { rel(it, codeOf(it)) }
+
+    @Test fun theOldUpdaterReadOnlyTheFirstEightEntriesAndSoNeverSawAlpha10OrLater() {
+        val firstEight = releasesIn(githubOrder).take(8)
+        assertEquals(listOf("kestrel-v0.1.1", "kestrel-g-v0.2.0-alpha9", "kestrel-g-v0.2.0-alpha8", "kestrel-g-v0.2.0-alpha7", "kestrel-g-v0.2.0-alpha6", "kestrel-g-v0.2.0-alpha5", "kestrel-g-v0.2.0-alpha4", "kestrel-g-v0.2.0-alpha3"), firstEight.map { it.tag })
+        // an installed alpha9 (code 108), or alpha11 (110), or alpha13 (112): "up to date" although alpha13 exists - the reported bug
+        assertNull(UpdateLogic.choose(firstEight, "kestrel-g-v", 108))
+        assertNull(UpdateLogic.choose(firstEight, "kestrel-g-v", 110))
+        assertNull(UpdateLogic.choose(firstEight, "kestrel-g-v", 112))
+    }
+
+    @Test fun naturalTagOrderPutsAlpha10AboveAlpha9AndTheNewestFirstWhateverOrderGithubUses() {
+        assertTrue(UpdateLogic.compareTags("kestrel-g-v0.2.0-alpha10", "kestrel-g-v0.2.0-alpha9") > 0)
+        assertTrue(UpdateLogic.compareTags("kestrel-g-v0.2.0-alpha13", "kestrel-g-v0.2.0-alpha2") > 0)
+        assertTrue(UpdateLogic.compareTags("kestrel-g-v0.3.0-alpha14", "kestrel-g-v0.2.0-alpha13") > 0)
+        assertTrue(UpdateLogic.compareTags("kestrel-g-v0.2.0-alpha09", "kestrel-g-v0.2.0-alpha9") == 0)
+        assertEquals(0, UpdateLogic.compareTags("kestrel-g-v0.2.0-alpha13", "kestrel-g-v0.2.0-alpha13"))
+        for (shuffled in listOf(githubOrder, githubOrder.reversed(), githubOrder.sorted(), githubOrder.shuffled(java.util.Random(5)))) {
+            assertEquals(
+                listOf("kestrel-g-v0.2.0-alpha13", "kestrel-g-v0.2.0-alpha12", "kestrel-g-v0.2.0-alpha11", "kestrel-g-v0.2.0-alpha10"),
+                UpdateLogic.newestTags(shuffled, "kestrel-g-v", 4),
+            )
+        }
+        assertEquals(listOf("kestrel-v0.1.1"), UpdateLogic.newestTags(githubOrder, "kestrel-v", 4)) // the other app's tags are not mixed in
+    }
+
+    @Test fun theNewReadingFindsTheNewestReleaseForEveryInstalledVersion() {
+        val tags = UpdateLogic.newestTags(githubOrder, "kestrel-g-v", 4)
+        val fetched = releasesIn(tags)
+        for (installed in listOf(101L, 108L, 109L, 110L, 111L)) assertEquals("installed $installed", "kestrel-g-v0.2.0-alpha13", UpdateLogic.choose(fetched, "kestrel-g-v", installed)!!.tag)
+        assertNull(UpdateLogic.choose(fetched, "kestrel-g-v", 112))
+    }
+
+    @Test fun readsTheTagNamesOfAMatchingRefsAnswer() {
+        val json = """[{"ref":"refs/tags/kestrel-g-v0.2.0-alpha9","node_id":"x","url":"u","object":{"sha":"a","type":"commit","url":"u"}},
+            {"ref":"refs/tags/kestrel-g-v0.2.0-alpha10","node_id":"y","url":"u","object":{"sha":"b","type":"commit","url":"u"}}]"""
+        assertEquals(listOf("kestrel-g-v0.2.0-alpha9", "kestrel-g-v0.2.0-alpha10"), UpdateLogic.tagsFromRefs(json))
+        assertEquals(emptyList<String>(), UpdateLogic.tagsFromRefs("[]"))
+        assertEquals(emptyList<String>(), UpdateLogic.tagsFromRefs("""{"message":"Not Found"}"""))
+    }
+
+    @Test fun aReleaseNamedZeroPointThreeSortsInsideTheOldEightEntryWindowSoInstalledAlpha9To13CanStillSeeIt() {
+        // the rescue for versions that have the bug: GitHub lists by tag name, "0.3.0" sorts above every "0.2.0-alphaN"
+        val withNew = (githubOrder + "kestrel-g-v0.3.0-alpha14").sortedDescending()
+        val window = releasesIn(withNew).take(8)
+        assertTrue(window.any { it.tag == "kestrel-g-v0.3.0-alpha14" })
+        for (installed in listOf(108L, 110L, 112L)) assertEquals("kestrel-g-v0.3.0-alpha14", UpdateLogic.choose(window, "kestrel-g-v", installed)!!.tag)
+        // and the following build keeps sorting above it (the digits stay equally long until alpha99)
+        assertTrue(("kestrel-g-v0.3.0-alpha15") > ("kestrel-g-v0.3.0-alpha14"))
+    }
 }
