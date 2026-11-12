@@ -24,6 +24,9 @@ interface SettingsListener {
     fun aboutLines(): List<Pair<String, String>>
     /** Settings > Neon glow > Test the pulse: close Settings and make every glow breathe for 10 seconds (Kestrel G). */
     fun testNeon() {}
+    /** Settings > Back up & restore (owner AA3-7): write the backup file now / pick a backup file to bring back. */
+    fun backupNow() {}
+    fun restoreFromFile() {}
 }
 
 /** Settings: plain scrolling rows, no AndroidX preference library. */
@@ -139,6 +142,11 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         section("Secure DNS")
         if (app.kestrel.browser.Flavor.secureDnsBuiltIn) info("Encrypted DNS", "This browser encrypts its DNS lookups itself (DNS over HTTPS through Cloudflare, so the mobile carrier cannot read or tamper with them) and quietly falls back to the tablet's normal DNS if that service cannot be reached.")
         else info("Private DNS", "This browser cannot encrypt DNS lookups by itself. For that, set it for the whole tablet: Settings → Network & internet → Advanced → Private DNS (for example dns.quad9.net or dns.adguard-dns.eu).")
+
+        section("Back up & restore")
+        info("What it keeps", "Bookmarks, history, your settings, the per-site Shields choices and your open tabs. Not cookies, logins or private tabs.")
+        button("Back up now", "Saves one file in Downloads. Do this before you uninstall Kestrel; Downloads is not erased with the app") { l.backupNow() }
+        button("Restore from a backup file", "Pick the file in Downloads. Bookmarks, history and tabs are added; settings are replaced") { l.restoreFromFile() }
 
         section("About")
         for ((k, v) in l.aboutLines()) info(k, v)
