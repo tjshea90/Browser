@@ -1,13 +1,13 @@
-# CHECKPOINT 1288 — read me first, then TASKS.md
+# CHECKPOINT 1306 — read me first, then TASKS.md
 
-**Written:** 2026-11-12T23:06:46Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `e61dae8` (this checkpoint is the commit after it)
+**Written:** 2026-11-12T23:19:37Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `6134384` (this checkpoint is the commit after it)
 
 ## Just done
-EX-2/3/4/8/9/11 code done (compile green, unit tests for EX-9; emulator proofs pending): GeckoEngine.speculativeConnect dispatches GeckoThread.speculativeConnect on the Gecko thread (XPCOMEventTarget.mainThread) + Diagnostics 'Warm-ups'; Prefs.doubleTapZoom (default off, tap_zoom) + inputAutoZoom (default on, input_zoom) as builder settings, live in applyPrefs and Settings > Appearance (Gecko only), in the backup allow-list; gecko-prefs.txt image.jxl.enabled=false + config version 6 + read-back names; DownloadController nice 9 while the UI is visible (DownloadThreadPriorityTest); KeyboardProbe.onChange from a global-layout listener + typingTick safety-net cadence once the probe delivered an event + Diagnostics 'Keyboard: N layout event(s)'
+More of the EX ladder coded (compiles; unit tests green: NetProfile 12, BackupManager 10, Engine 41): EX-5 NetProfile.keepHelperUnderVpn + Network lab switch; EX-6/12/16 lab prefs (Prefs lab_*, GeckoEngine.applyLab, Settings rows in the Network lab section); EX-7 WifiBoost (net/WifiBoost.kt, held while the browser is on screen, onResume/onPause/prefsChanged); EX-13 Engine.windowGaps + Diagnostics line (test); EX-14/EX-3 Decode lab + Tap lab pages (assets/labs/*, Diagnostics buttons, checked in headless Chromium); EX-18 flushSessionState in onPause + stateFlushArrived, doc corrections (GECKO_SPEED, GECKO_TUNING_2, PERF_JS J11, setPriorityHint decision); preconnect warms the suggestion's own port. Emulator proof of EX-2: first run printed NO connection for the new path (investigating: private address 10.0.2.2 / LNA / dispatch)
 
 ## Do this next
-Build ONE x86_64 debug APK (./gradlew :geckoapp:assembleDebug -PgeckoAbi=x86_64, background + poll) and prove on the emulator: EX-1 dumpsys wifi shows a HIGH_PERF lock while a download moves; EX-2 a host-side TLS ClientHello logger on port 8443 sees one connection when the top suggestion (seed a bookmark https://10.0.2.2:8443/) appears; EX-3 Tap lab page (viewport width=1200) touchend->click gap before/after; EX-4 Diagnostics read-back image.jxl.enabled=false; EX-11 Diagnostics 'Keyboard: N layout events' > 0 after focusing the address field. Then EX-5/6/7/12/16 as switches (Speed lab), EX-10 click-to-load, EX-13/14/15/18. Scratch scripts: /tmp/claude-0/-home-user-Browser/30a5aa00-41c9-5bd3-87d1-b10052a52d84/scratchpad (emu.sh, kb*.sh show the install/drive pattern)
+1) Finish the EX-2 emulator proof: wait for ex2.log (scratchpad ex2.sh: host listener tlslog.py on 8443, bookmark https://10.0.2.2:8443/ seeded); if both paths show nothing, sanity-check that a normal navigation to https://10.0.2.2:8443/ reaches the listener, then try Gecko logging (MOZ_LOG) or another target; 2) reinstall the latest debug APK (labs) and prove EX-1 (dumpsys wifi lock while a download moves), EX-3 (Tap lab gap with adb input tap, default off vs switch on), EX-11 (Keyboard events counter after focusing the address field), EX-14 Decode lab numbers; 3) remaining ladder: EX-10 click-to-load embeds, EX-15 warm triggers (after EX-2 works), EX-17 tell owner, then run full suites, bump to code 124/alpha25, ship
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ Build ONE x86_64 debug APK (./gradlew :geckoapp:assembleDebug -PgeckoAbi=x86_64,
 
 ## Last ten checkpoints
 ```
+  edaf04d ckpt 1288: EX-2/3/4/8/9/11 code done (compile green, unit tests for EX-9; emulator proof
   8a4f7fd ckpt 1283: EX-1 code done: DownloadService Wi-Fi lock = WIFI_MODE_FULL_HIGH_PERF on ever
   eb2eddd ckpt 1280: Owner message 16 handled per section 0: research/REVIEW-EXTERNAL-1.md saved (
   884b8ab ckpt 1263: alpha24 SHIPPED and recorded (tag kestrel-g-v0.3.0-alpha24, run 43321730068 g
@@ -25,8 +26,7 @@ Build ONE x86_64 debug APK (./gradlew :geckoapp:assembleDebug -PgeckoAbi=x86_64,
   6b43626 ckpt 1246: alpha24 content finished and tested: keyboard-reveal fix (content.js), D2 laz
   2e3e341 ckpt 1238: AA3-7 Back up/Restore, part 1 done and tested: core BackupCodec (strict untru
   b630671 ckpt 1227: AA3-3 D2 DONE and verified: all ~29,204 generic cosmetic rules now apply (was
-  15b71c1 ckpt 1196: AA3-2 typing/keyboard: closed the 'keyboard resizes the page' hypothesis on G
 ```
 
-(4 automatic checkpoint(s) since the last deliberate one — the
+(17 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
