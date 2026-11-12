@@ -57,7 +57,7 @@ internal class CosmeticIndex(
     // ------------------------------------------------------------------ D2: the generic selectors by the class / id they need
 
     /** The generic selectors as lines of [genericPool] ([lo]..[hi]), filed under the rarest class/id each one requires; [loose] = those that name no class or id at all (or are selector lists). */
-    private class TokenIndex(val lo: IntArray, val hi: IntArray, val byKey: HashMap<String, IntArray>, val loose: IntArray)
+    private class TokenIndex(val lo: IntArray, val hi: IntArray, val byKey: HashMap<String, IntArray>, val loose: IntArray, val looseTag: IntArray)
     @Volatile private var tokenIndex: TokenIndex? = null
     @Volatile private var looseCssCache: String? = null
 
@@ -81,17 +81,23 @@ internal class CosmeticIndex(
                 for (key in ks) freq[key] = (freq[key] ?: 0) + 1
             }
             val lists = HashMap<String, ArrayList<Int>>(freq.size)
-            val loose = ArrayList<Int>()
+            val loose = ArrayList<Int>(); val looseTag = ArrayList<Int>()
             for (k in 0 until n) {
                 val ks = keys[k]!!
-                if (ks.isEmpty()) { loose.add(k); continue }
+                if (ks.isEmpty()) {
+                    loose.add(k)
+                    // led by a tag name (`a[href^=...]`, `ins[...]`): the browser tests only elements of that tag. Led by `[` / `*` / `:` it would be tested against EVERY element of EVERY page: not injected up front
+                    val c = pool[los[k]].toInt().toChar()
+                    if (c != '[' && c != '*' && c != ':') looseTag.add(k)
+                    continue
+                }
                 var best = ks[0]; var bestN = freq[best] ?: Int.MAX_VALUE
                 for (j in 1 until ks.size) { val c = freq[ks[j]] ?: Int.MAX_VALUE; if (c < bestN) { best = ks[j]; bestN = c } }
                 lists.getOrPut(best) { ArrayList(2) }.add(k)
             }
             val byKey = HashMap<String, IntArray>(lists.size * 2)
             for ((key, l) in lists) byKey[key] = l.toIntArray()
-            val t = TokenIndex(los.toIntArray(), his.toIntArray(), byKey, loose.toIntArray())
+            val t = TokenIndex(los.toIntArray(), his.toIntArray(), byKey, loose.toIntArray(), looseTag.toIntArray())
             tokenIndex = t
             return t
         }
@@ -106,17 +112,15 @@ internal class CosmeticIndex(
         val t = tokens()
         var keyed = 0; var biggest = 0
         for (v in t.byKey.values) { keyed += v.size; if (v.size > biggest) biggest = v.size }
-        var looseUniversal = 0; var looseTag = 0
-        for (k in t.loose) { val c = genericPool[t.lo[k]].toInt().toChar(); if (c == '[' || c == '*' || c == ':') looseUniversal++ else looseTag++ }
-        return "generic=" + t.lo.size + " keyed=" + keyed + " keys=" + t.byKey.size + " loose=" + t.loose.size + " (universal-bucket " + looseUniversal + ", tag-led " + looseTag + ") biggestBucket=" + biggest
+        return "generic=" + t.lo.size + " keyed=" + keyed + " keys=" + t.byKey.size + " loose=" + t.loose.size + " (tag-led, injected up front: " + t.looseTag.size + ") biggestBucket=" + biggest
     }
 
     private fun looseCss(limit: Int, exc: Set<String>): String {
         val cached = looseCssCache
         if (cached != null && exc.isEmpty() && limit == DEFAULT_GENERIC_LIMIT) return cached
         val t = tokens()
-        val picked = ArrayList<String>(minOf(limit, t.loose.size))
-        for (k in t.loose) {
+        val picked = ArrayList<String>(minOf(limit, t.looseTag.size))
+        for (k in t.looseTag) {
             if (picked.size >= limit) break
             val sel = String(genericPool, t.lo[k], t.hi[k] - t.lo[k], Charsets.UTF_8)
             if (sel !in exc) picked.add(sel)
