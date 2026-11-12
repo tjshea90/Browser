@@ -2,6 +2,7 @@ package app.kestrel.core.media
 
 import app.kestrel.core.download.Clock
 import app.kestrel.core.download.Config
+import app.kestrel.core.download.Action
 import app.kestrel.core.download.DlState
 import app.kestrel.core.download.DownloadView
 import app.kestrel.core.download.FakeNet
@@ -179,5 +180,53 @@ class StreamEngineMp4Test {
         val v = h2.completed(id)
         assertEquals("segments the journal had not seen are fetched and written again", summary(whole), summary(h2.out(v)))
         assertFalse(h2.out(v).isEmpty())
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------- "Make MP4" on a finished .ts
+
+    @Test(timeout = 60_000) fun aFinishedTsCanBeMadeAnMp4AndTheTsGoes() {
+        val h = H(config = cfg(directMp4 = false))                                        // the old way: a joined .ts, as the alpha14-16 downloads on the tablet
+        val v = h.completed(h.enqueue(tsStream(h, plain)))
+        assertEquals("My clip.ts", v.name); assertTrue(v.actions.contains(Action.MAKE_MP4))
+        h.engine.makeMp4(v.id)
+        val v2 = h.await(v.id, "the mp4") { it != null && it.state == DlState.COMPLETED && it.name.endsWith(".mp4") }!!
+        assertEquals("My clip.mp4", v2.name); assertEquals("video/mp4", v2.mime)
+        assertFalse(v2.actions.contains(Action.MAKE_MP4)); assertNull(v2.note)
+        assertTrue("the .ts is deleted", h.sinks.deleted.contains(v.destUri))
+        val file = h.out(v2)
+        assertEquals(file.size.toLong(), v2.total)
+        val r = Mp4Reader(file)
+        assertEquals(150, r.track("vide")!!.samples.size); assertEquals(260, r.track("soun")!!.samples.size)
+        if (Fixtures.ffmpeg) assertEquals("", Fixtures.ffmpegDecode(file))
+        h.eventually("the record is stored as the mp4") { h.store.rows[v.id]?.name == "My clip.mp4" && h.store.rows[v.id]?.mux == MUX_MP4 }
+    }
+
+    @Test(timeout = 60_000) fun makeMp4UsesTheRecordedRunsAndLeavesAnAdvertisementOut() {
+        val h = H(config = cfg(directMp4 = false))
+        val v = h.completed(h.enqueue(tsStream(h, listOf("a_0.ts", "a_1.ts", "ad_0.ts", "a_0.ts", "a_1.ts"), disc = setOf(2, 3))))
+        assertEquals("My clip.ts", v.name)
+        h.engine.makeMp4(v.id)
+        val v2 = h.await(v.id, "the mp4") { it != null && it.state == DlState.COMPLETED && it.name.endsWith(".mp4") }!!
+        assertNotNull(v2.note); assertTrue(v2.note!!, v2.note!!.startsWith("1 part"))
+        val r = Mp4Reader(h.out(v2))
+        assertEquals(200, r.track("vide")!!.samples.size); assertEquals(128, r.track("vide")!!.width)
+    }
+
+    @Test(timeout = 60_000) fun makeMp4OfSomethingItCannotWrapSaysWhyAndKeepsTheTs() {
+        val h = H()
+        val junk = ByteArray(30_000) { (it * 13 + 7).toByte() }
+        for (i in 0 until 2) h.cdn.files["https://cdn.test/v/s$i.ts"] = junk
+        val v = h.completed(h.enqueue("#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXTINF:2,\ns0.ts\n#EXTINF:2,\ns1.ts\n#EXT-X-ENDLIST\n"))
+        assertTrue(v.actions.contains(Action.MAKE_MP4))
+        h.engine.makeMp4(v.id)
+        val v2 = h.await(v.id, "the note") { it != null && it.state == DlState.COMPLETED && it.note?.startsWith("Could not make an MP4") == true }!!
+        assertEquals("My clip.ts", v2.name); assertTrue(v2.actions.contains(Action.MAKE_MP4))
+        assertFalse("nothing was deleted", h.sinks.deleted.contains(v.destUri))
+    }
+
+    @Test(timeout = 60_000) fun anMp4RowDoesNotOfferMakeMp4() {
+        val h = H()
+        val v = h.completed(h.enqueue(tsStream(h, plain)))
+        assertEquals("My clip.mp4", v.name); assertFalse(v.actions.contains(Action.MAKE_MP4))
     }
 }
