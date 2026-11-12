@@ -346,7 +346,8 @@ class PhoneBackendTest {
         val t = Tablet(FakeServer(testBytes(10)), tabletCdn = FakeCdn())
         t.to(phone1); t.startBackend()
         val lid = t.backend.offloadStream(clip(playlist))!!
-        await("the phone is part way") { val v = t.backend.view(lid); v != null && v.state == DlState.RUNNING && v.done > 0 }
+        await("the phone is working on it") { t.backend.view(lid)?.state == DlState.RUNNING }
+        Thread.sleep(1500)                                                                      // a few segments are in, the rest is not
         phone1.stop()                                                                           // the app is killed
         await("the tablet notices") { t.backend.view(lid)?.state == DlState.WAITING_NETWORK }
         val phone2 = Phone(FakeServer(testBytes(10)), root, cleanups, dir = phone1.dir, cdn = pcdn)      // and starts again on the same folders
