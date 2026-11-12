@@ -156,7 +156,7 @@ class DownloadsScreen(ctx: Context, private var pal: Pal, private val l: Listene
                 Action.CANCEL -> { val cur = DownloadController.view(v.id) ?: v; if (cur.done > 0) l.confirm("Cancel this download?", "The part already downloaded (${Format.bytes(cur.done)}) is deleted.", "Cancel download") { DownloadController.cancel(v.id) } else DownloadController.cancel(v.id) }
                 Action.OPEN -> l.open(v)
                 Action.SHARE -> l.share(v)
-                Action.MAKE_MP4 -> DownloadController.makeMp4(v.id)
+                Action.MAKE_MP4 -> DownloadController.makeMp4(ctx, v.id)
                 Action.DELETE -> { val cur = DownloadController.view(v.id) ?: v; l.confirm("Delete this download?", if (cur.state == DlState.COMPLETED) "The file ${cur.name} is deleted from your tablet." else "The unfinished file is deleted.", "Delete") { DownloadController.remove(v.id, true) } }
             }
         }

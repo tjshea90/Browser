@@ -432,10 +432,10 @@ class StreamEngine(
 
     fun views(): List<DownloadView> = synchronized(lock) { jobs.values.filter { it.rec.parentId == 0L }.map { view(it) } }
     fun view(id: Long): DownloadView? = synchronized(lock) { jobs[id]?.let { view(it) } }
-    fun needsService(): Boolean = synchronized(lock) { jobs.values.any { val s = it.rec.state; s == DlState.QUEUED || s.active || s == DlState.WAITING_NETWORK } }
+    fun needsService(): Boolean = synchronized(lock) { jobs.values.any { val s = it.rec.state; s == DlState.QUEUED || s.active || s == DlState.WAITING_NETWORK || it.converting } }
     fun counts(): IntArray = synchronized(lock) {
         var running = 0; var queued = 0; var paused = 0
-        for (j in jobs.values) if (j.rec.parentId == 0L) when (j.rec.state) { DlState.RUNNING, DlState.STARTING, DlState.VERIFYING -> running++; DlState.QUEUED -> queued++; DlState.PAUSED_USER, DlState.PAUSED_SYSTEM, DlState.WAITING_NETWORK -> paused++; else -> {} }
+        for (j in jobs.values) if (j.rec.parentId == 0L) when (if (j.converting) DlState.VERIFYING else j.rec.state) { DlState.RUNNING, DlState.STARTING, DlState.VERIFYING -> running++; DlState.QUEUED -> queued++; DlState.PAUSED_USER, DlState.PAUSED_SYSTEM, DlState.WAITING_NETWORK -> paused++; else -> {} }
         intArrayOf(running, queued, paused)
     }
 

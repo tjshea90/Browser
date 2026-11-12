@@ -214,7 +214,7 @@ object DownloadController {
     fun restart(ctx: Context, id: Long) { init(ctx); if (isStream(id)) streams?.restart(id) else engine?.restart(id); DownloadService.start(ctx) }
     fun remove(id: Long, deleteFile: Boolean) { if (isStream(id)) streams?.remove(id, deleteFile) else engine?.remove(id, deleteFile) }
     /** "Make MP4" on a finished stream that was kept as a .ts. */
-    fun makeMp4(id: Long) { if (isStream(id)) streams?.makeMp4(id) }
+    fun makeMp4(ctx: Context, id: Long) { init(ctx); if (isStream(id)) streams?.makeMp4(id); DownloadService.start(ctx) }   // the service keeps the process alive while the file is converted
     fun clearFinished() { engine?.clearFinished(); streams?.clearFinished() }
 
     private val installerName = Regex("""^kestrel(-g)?[-_].*\.apk$""", RegexOption.IGNORE_CASE)
