@@ -31,6 +31,7 @@ class CourierService : Service() {
         enterForeground(text())
         CourierPrefs(this).ready = true
         CourierRuntime.start(this)
+        CourierRuntime.onProxyActivity = { ui.removeCallbacks(refresh); ui.post(refresh) }       // the first page tunnel takes the wake lock now
         ui.removeCallbacks(refresh)
         ui.post(refresh)
         return START_STICKY
@@ -72,6 +73,7 @@ class CourierService : Service() {
     }
 
     override fun onDestroy() {
+        CourierRuntime.onProxyActivity = null
         ui.removeCallbacks(refresh)
         wake?.let { if (it.isHeld) it.release() }
         CourierRuntime.stop(this)

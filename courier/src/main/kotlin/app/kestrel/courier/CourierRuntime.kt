@@ -56,8 +56,11 @@ object CourierRuntime {
     fun views(): List<DownloadView> = running?.host?.summaries()?.sortedByDescending { it.created } ?: emptyList()
     /** The Cancel button on the phone's own list: the tablet is told the job was stopped on the phone. */
     fun cancel(engineId: Long) { running?.host?.cancelLocal(engineId) }
-    /** True while a download is moving: the service keeps the CPU awake then. */
-    fun busy(): Boolean = running?.host?.needsService() == true
+    /** True while a download is moving or a page is loading through the proxy: the service keeps the CPU awake then (a phone with its screen off would otherwise suspend in the middle of a tunnel). */
+    fun busy(): Boolean = running?.let { it.host.needsService() || (it.proxy?.stats()?.active ?: 0) > 0 } == true
+
+    /** Set by the service: called when the first tunnel opens, so the wake lock is taken at once, not at the next two-second look. */
+    @Volatile var onProxyActivity: (() -> Unit)? = null
     fun jobCount(): Int = running?.host?.jobCount ?: 0
 
     /** What the page-load proxy has done since this run started; null = no proxy (not running, or its port was busy). */
@@ -104,7 +107,7 @@ object CourierRuntime {
         val systemResolve: (String) -> List<ByteArray> = { h -> if (noGuard && h.endsWith(".test")) listOf(byteArrayOf(10, 0, 2, 2)) else java.net.InetAddress.getAllByName(h).map { it.address } }
         val proxy = ConnectProxy(
             proxyPort, null, { remote, local -> gate.isArmed(remote) && PeerGuard.allowed(remote.address, local.address, CourierNet.locals()) },
-            if (noGuard) GuardedDialer(systemResolve, { false }) else GuardedDialer(systemResolve), log = { Log.i(TAG, it) }, verbose = debug,
+            if (noGuard) GuardedDialer(systemResolve, { false }) else GuardedDialer(systemResolve), log = { Log.i(TAG, it) }, verbose = debug, onActive = { n -> if (n == 1) onProxyActivity?.invoke() },
         )
         val proxyBound = try { proxy.start() } catch (e: IOException) { Log.w(TAG, "page proxy: port $proxyPort is busy, pages are not offered"); 0 }
         val proxyControl = if (proxyBound != 0) ProxyControl(gate, proxyBound) { proxy.stats() } else null
