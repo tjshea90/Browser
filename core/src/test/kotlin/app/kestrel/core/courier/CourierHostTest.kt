@@ -190,8 +190,15 @@ class CourierHostTest {
         assertEquals(200, t.raw("DELETE", "/v1/jobs/$id").first)
         assertEquals("GONE", t.job(id).str("state"))
         assertEquals(404, t.fetch(fileUrl).first)
-        assertTrue("the phone's staging folder is empty again", File(p.dir, "staging").listFiles()!!.isEmpty())
+        awaitEmpty(File(p.dir, "staging"))
         assertEquals("deleting twice is fine", 200, t.raw("DELETE", "/v1/jobs/$id").first)
+    }
+
+    /** The engine removes files on its own thread a moment after the answer went out. */
+    private fun awaitEmpty(dir: File) {
+        val end = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < end) { if ((dir.listFiles() ?: emptyArray()).isEmpty()) return; Thread.sleep(10) }
+        throw AssertionError("the staging folder was not emptied: ${dir.walkTopDown().toList()}")
     }
 
     @Test(timeout = 60_000) fun theSameRequestTwiceIsTheSameJob() {
