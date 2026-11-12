@@ -126,6 +126,22 @@ class BackupManagerTest {
         assertEquals(Prefs.ENGINES[0].id, prefs.searchId); assertTrue(prefs.shieldAds)
     }
 
+    @Test fun theSwitchesOfTheExternalReviewDefaultToSafeValuesAndSurviveABackup() {
+        // an untouched install: every experiment off, the zoom-to-field as the engine has it, double-tap zoom off
+        assertFalse(prefs.labDnsPrefetch); assertFalse(prefs.labBuffer); assertFalse(prefs.labFontDelay); assertEquals(0, prefs.labSpec)
+        assertFalse(prefs.labWifiBoost); assertFalse(prefs.labHelperUnderVpn); assertFalse(prefs.doubleTapZoom); assertTrue(prefs.inputAutoZoom)
+        prefs.labDnsPrefetch = true; prefs.labSpec = 2; prefs.doubleTapZoom = true; prefs.inputAutoZoom = false; prefs.labHelperUnderVpn = true; prefs.labWifiBoost = true
+        val d = BackupManager.build(db, prefs, emptyList(), "x")
+        assertEquals(true, d.settings["lab_dns"]); assertEquals(2L, d.settings["lab_spec"]); assertEquals(true, d.settings["tap_zoom"]); assertEquals(false, d.settings["input_zoom"])
+        assertEquals(true, d.settings["lab_helper_vpn"]); assertEquals(true, d.settings["lab_wifi"])
+        val text = BackupCodec.encode(d)
+        sp().edit().clear().commit()
+        BackupManager.restore(db, prefs, BackupCodec.decode(text))
+        assertTrue(prefs.labDnsPrefetch); assertEquals(2, prefs.labSpec); assertTrue(prefs.doubleTapZoom); assertFalse(prefs.inputAutoZoom); assertTrue(prefs.labHelperUnderVpn); assertTrue(prefs.labWifiBoost)
+        prefs.labSpec = 7
+        assertEquals("out of range values are clamped", 2, prefs.labSpec)
+    }
+
     @Test fun theDescriptionIsPlainAndGetsTheGrammarRight() {
         assertEquals("1 bookmark, 1 history entry, 1 setting and 1 open tab", BackupManager.describe(1, 1, 1, 0, 1))
         assertEquals("0 bookmarks, 3,400 history entries, 18 settings, 5 site choices and 6 open tabs", BackupManager.describe(0, 3400, 18, 5, 6))
