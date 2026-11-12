@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.Process
 import app.kestrel.browser.Io
+import app.kestrel.browser.data.Prefs
 import app.kestrel.browser.ProcessLife
 import app.kestrel.core.download.Clock
 import app.kestrel.core.download.Config
@@ -79,7 +80,7 @@ object DownloadController {
             override val metered: Boolean get() = netMetered
         }
         val low = app.getSystemService(ActivityManager::class.java)?.isLowRamDevice != false
-        val prefs = app.kestrel.browser.data.Prefs.get(app)
+        val prefs = Prefs.get(app)
         val cfg = Config(maxActive = prefs.dlActive, maxConnsTotal = if (low) 3 else 6, maxConnsPerDownload = if (prefs.dlConns in 1..3) prefs.dlConns else if (low) 3 else 4)
         val lim = RateLimiter().also { it.bytesPerSec = prefs.dlLimitKBps * 1024L }
         limiter = lim
