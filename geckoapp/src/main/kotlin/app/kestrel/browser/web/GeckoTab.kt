@@ -7,6 +7,9 @@ class GeckoTabData {
     var session: GeckoSession? = null
     var state: GeckoSession.SessionState? = null // updated by ProgressDelegate.onSessionStateChange; used to bring a hibernated tab back
     var privateTab = false
+    var stateJson: String? = null // the saved state read from tabstate/<id>.json at start; parsed only when the tab is opened (a tab nobody opens costs nothing)
+    var stateWritten: GeckoSession.SessionState? = null // the state object whose text is in tabstate/<id>.json now (the same object is not written twice)
+    var stateWrittenUrl: String? = null // the address the tab showed when that file was written: a different address with no newer state = the file is out of date
     var delegates: TabDelegates? = null
 }
 

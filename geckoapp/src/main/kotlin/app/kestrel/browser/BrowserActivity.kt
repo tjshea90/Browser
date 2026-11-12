@@ -89,6 +89,7 @@ import app.kestrel.core.session.Session
 import app.kestrel.core.session.SessionCodec
 import app.kestrel.core.session.TabRecord
 import app.kestrel.core.tabs.LiveBudget
+import app.kestrel.browser.data.TabStateStore
 import app.kestrel.core.url.Nav
 import app.kestrel.core.url.Omnibox
 import app.kestrel.core.url.UrlParts
@@ -214,7 +215,10 @@ open class BrowserActivity : Activity(), DockListener {
         Io.fast {
             val text = try { sessionFile().takeIf { it.isFile }?.readText() } catch (e: Exception) { null }
             val session = SessionCodec.decode(text)
-            Io.ui { restore(session, savedInstanceState, launch) }
+            // each regular tab's saved engine state (Back stack + scroll position) is read here, off the UI thread; it is parsed only when the tab is opened
+            val states = HashMap<Long, String>()
+            if (session != null && TabStateStore.useEngine(applicationContext, Flavor.engineVersion)) for (r in session.tabs) TabStateStore.read(applicationContext, r.id)?.let { states[r.id] = it }
+            Io.ui { restore(session, savedInstanceState, launch, states) }
         }
         Io.exec { db?.purge(5000, 90); UpdateJob.schedule(applicationContext); app.kestrel.browser.update.ReleaseCheckJob.schedule(applicationContext) } // after the session read: nothing at launch waits for this
     }
@@ -317,6 +321,7 @@ open class BrowserActivity : Activity(), DockListener {
         sessionRestored = false
         val appCtx = applicationContext
         File(filesDir, "session.txt").delete()
+        TabStateStore.wipe(this)
         Io.exec { try { BrowserDb(appCtx).clearHistory() } catch (e: Exception) { /* ignore */ }; ThumbStore.clearAll(appCtx) }
         Io.main.post { try { GeckoEngine.runtime(this).storageController.clearData(StorageController.ClearFlags.ALL) } catch (e: Exception) { /* engine not ready: next time */ } }
     }
@@ -460,7 +465,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     // ================================================================== tabs
 
-    private fun restore(session: Session?, saved: Bundle?, launch: String?) {
+    private fun restore(session: Session?, saved: Bundle?, launch: String?, states: Map<Long, String> = emptyMap()) {
         sessionRestored = true // from now on saving cannot clobber the saved session
         if (session != null && session.tabs.isNotEmpty()) {
             // Replace the placeholder tab. Nothing is loaded here except the selected tab (lazy: no network at startup).
@@ -474,11 +479,14 @@ open class BrowserActivity : Activity(), DockListener {
                 t.desktop = r.desktopSite
                 t.lastActive = r.lastActiveMillis
                 if (t.url.isNotEmpty()) t.pendingLoad = t.url
+                states[r.id]?.let { t.gecko.stateJson = it; t.gecko.stateWrittenUrl = t.url }
                 tabs.add(t)
                 nextTabId = maxOf(nextTabId, r.id + 1)
             }
             val sel = tabs.firstOrNull { it.id == session.selectedId } ?: tabs.last()
-            show(sel)
+            // Started by a link from another app: the link's page is what the owner wants NOW. Loading the saved page as well would compete with it for the slow link and the one content process
+            // (the saved tab stays in the grid and loads when it is opened). The placeholder tab is gone, so nothing may still point at it.
+            if (launch == null) show(sel) else current = null
         }
         if (launch != null) openInNewTabOrCurrent(launch)
     }
@@ -600,14 +608,15 @@ open class BrowserActivity : Activity(), DockListener {
         val s = createSession(tab)
         s.open(GeckoEngine.runtime(this))
         tab.session = s
-        val state = tab.gecko.state
+        var state = tab.gecko.state
+        if (state == null) tab.gecko.stateJson?.let { state = stateFromDisk(tab, it) } // a tab that was saved by the last run: its Back stack and scroll position come back
         val pending = tab.pendingLoad
         when {
             state != null -> {
                 tab.gecko.state = null
                 tab.pendingLoad = null
                 tab.shields = Shields.effective(prefs, UrlParts.hostOf(tab.url))
-                s.restoreState(state) // brings back the tab's whole history, not just its last page
+                s.restoreState(state!!) // brings back the tab's whole history, not just its last page
             }
             pending != null -> {
                 tab.pendingLoad = null
@@ -618,6 +627,23 @@ open class BrowserActivity : Activity(), DockListener {
         }
         enforceLiveLimit()
         return s
+    }
+
+    /** Parse a tab's saved engine state (tabstate/<id>.json from the last run); null = unusable, the tab then loads its address as before. */
+    private fun stateFromDisk(tab: Tab, json: String): GeckoSession.SessionState? {
+        tab.gecko.stateJson = null
+        val st = try { GeckoSession.SessionState.fromString(json) } catch (e: Throwable) { null }
+        if (st == null) { Health.count("tabstate.unreadable"); return null }
+        // only a state whose current page is the page the tab says it shows (session.txt and the state file are written together, but a cut-off can leave them apart)
+        val i = st.currentIndex
+        val uri = if (i in 0 until st.size) st[i].uri else null
+        if (uri == null || withoutUserinfo(uri).substringBefore('#') != withoutUserinfo(tab.url).substringBefore('#')) {
+            Health.count("tabstate.mismatch"); Health.log("tabs", "state-mismatch", "tab=${tab.id}")
+            return null
+        }
+        Health.count("tabstate.restored"); Health.log("tabs", "state-restored", "tab=${tab.id} entries=${st.size} index=$i")
+        tab.gecko.stateWritten = st
+        return st
     }
 
     private fun hasLiveChild(t: Tab) = tabs.any { it.parentId == t.id && it.session != null }
@@ -687,7 +713,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (tab === restoringTab) hideRestoring()
         tab.thumb = null
         val appCtx = applicationContext
-        Io.exec { ThumbStore.delete(appCtx, tab.id) }
+        Io.exec { ThumbStore.delete(appCtx, tab.id); TabStateStore.delete(appCtx, tab.id) }
         tab.session?.let { s -> if (geckoView.session === s) geckoView.releaseSession(); try { s.close() } catch (e: Exception) { /* ignore */ } }
         tab.session = null
         if (current === tab) {
@@ -698,6 +724,9 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     private fun showNewTabPage(tab: Tab) {
+        tab.gecko.stateJson = null; tab.gecko.stateWritten = null; tab.gecko.stateWrittenUrl = null
+        val appCtx = applicationContext; val tid = tab.id
+        Io.exec { TabStateStore.delete(appCtx, tid) }
         tab.session?.let { s -> if (geckoView.session === s) geckoView.releaseSession(); try { s.close() } catch (e: Exception) { /* ignore */ } }
         tab.session = null
         tab.gecko.state = null
@@ -1382,7 +1411,8 @@ open class BrowserActivity : Activity(), DockListener {
     private fun clearBrowsingData() {
         GeckoEngine.runtime(this).storageController.clearData(StorageController.ClearFlags.ALL)
         val appCtx = applicationContext
-        Io.exec { db?.clearHistory(); ThumbStore.clearAll(appCtx) }
+        for (t in tabs) { t.gecko.stateJson = null; t.gecko.stateWritten = null; t.gecko.stateWrittenUrl = null } // the saved Back stacks are browsing data too
+        Io.exec { db?.clearHistory(); ThumbStore.clearAll(appCtx); TabStateStore.wipe(appCtx) }
         for (t in tabs) t.thumb = null // the previews are page contents too
         toast("Browsing data cleared")
     }
@@ -1411,10 +1441,31 @@ open class BrowserActivity : Activity(), DockListener {
         val records = keep.map { TabRecord(it.id, withoutUserinfo(it.url).ifEmpty { "about:blank" }, it.title, it.lastActive, it.parentId, it.desktop) }
         val text = SessionCodec.encode(Session(records, sel))
         val f = sessionFile()
+        // The engine's own state of each tab (history + scroll position) goes next to the addresses, so a swipe-away or a process kill restores more than the last address.
+        // toString() runs here on the UI thread (the state objects belong to it; about 1-3 ms for a typical tab) and only for states that changed since they were last written.
+        val appCtx = applicationContext
+        val writes = ArrayList<Pair<Long, String>>(); val stale = ArrayList<Long>(); val keepIds = HashSet<Long>()
+        for (t in keep) {
+            keepIds.add(t.id)
+            val g = t.gecko; val st = g.state
+            if (st != null) {
+                if (st !== g.stateWritten) {
+                    val raw = try { st.toString() } catch (e: Throwable) { null }
+                    if (raw != null) writes.add(t.id to raw)
+                    g.stateWritten = st; g.stateWrittenUrl = t.url
+                }
+            } else if (g.stateWritten != null && g.stateWrittenUrl != t.url) { stale.add(t.id); g.stateWritten = null } // it shows another page now and the engine has not sent a newer state yet
+        }
         Io.exec {
             val tmp = File(f.parentFile, "session.tmp")
             tmp.writeText(text)
             if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+            for ((id, raw) in writes) {
+                val clean = TabStateStore.sanitize(raw)
+                if (clean != null) TabStateStore.write(appCtx, id, clean, Flavor.engineVersion) else TabStateStore.delete(appCtx, id)
+            }
+            for (id in stale) TabStateStore.delete(appCtx, id)
+            TabStateStore.retain(appCtx, keepIds)
         }
     }
 
