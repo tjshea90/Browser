@@ -286,8 +286,11 @@ class ConnectProxyTest {
         val site = Site(); val pr = start()
         val (s, _, _) = tunnel(pr, "stats.example", site.port)
         s.getOutputStream().write(ByteArray(1000)); readFully(s.getInputStream(), 1000)
-        val st = pr.proxy.stats()
-        assertEquals(1L, st.tunnels); assertEquals(1, st.active); assertTrue(st.up >= 1000 && st.down >= 1000)
+        // the relay adds the bytes to its counters just AFTER it has forwarded them, so the client can already hold the echo while the counters still read less (this failed once on a slow CI runner): wait for them
+        val end = System.currentTimeMillis() + 5000
+        var st = pr.proxy.stats()
+        while ((st.up < 1000 || st.down < 1000) && System.currentTimeMillis() < end) { Thread.sleep(20); st = pr.proxy.stats() }
+        assertEquals(1L, st.tunnels); assertEquals(1, st.active); assertTrue("up=${st.up} down=${st.down}", st.up >= 1000 && st.down >= 1000)
     }
 
     @Test fun stoppingTheProxyEndsEveryTunnelAndTheListener() {
