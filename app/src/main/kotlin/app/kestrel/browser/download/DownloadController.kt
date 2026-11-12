@@ -55,10 +55,15 @@ object DownloadController {
     @Volatile private var userKBps = 0
     @Volatile private var yieldToPages = true
     @Volatile private var pageBusy = false
-    const val PAGE_KBPS = 150
+    /** The rate on the owner's normal (carrier-capped) hotspot; behind LinkMeter's tunnel the network profile asks for more ([setPageYieldKBps], core/net/NetProfile.kt). */
+    const val PAGE_KBPS = app.kestrel.core.net.NetProfile.PAGE_YIELD_KBPS
+    @Volatile private var pageKBps = PAGE_KBPS
     private val pageIdle = Runnable { pageBusy = false; applyLimit() }
 
     fun setYieldToPages(on: Boolean) { yieldToPages = on; applyLimit() }
+
+    /** The profile for the network in force says how much a loading page needs from the link (150 KB/s on the capped hotspot, more behind LinkMeter's tunnel). Takes effect at once. */
+    fun setPageYieldKBps(kbps: Int) { pageKBps = kbps.coerceIn(50, 4000); applyLimit() }
 
     /** The page in front started ([on] = true) or finished loading. */
     fun pageLoading(on: Boolean) {
