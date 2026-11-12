@@ -89,7 +89,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         section("Filter lists")
         info("Status", l.filterStatus())
         button("Update now", "Downloads only what changed (usually a few MB at most)") { l.updateFiltersNow() }
-        choice("Update schedule", listOf("Weekly", "Monthly", "Only when I tap Update"), prefs.updatePolicy) { prefs.updatePolicy = it }
+        choice("Ad-blocking lists: update", listOf("Every day (recommended)", "Every week", "Only when I tap Update"), prefs.updatePolicy) { prefs.updatePolicy = it }
         toggle("Only on unmetered networks", "A hotspot counts as metered, so leave this off if you want updates over it", prefs.updateUnmeteredOnly) { prefs.updateUnmeteredOnly = it }
 
         section("Secure DNS")

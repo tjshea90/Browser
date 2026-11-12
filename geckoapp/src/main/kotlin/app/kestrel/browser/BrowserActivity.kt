@@ -232,6 +232,17 @@ open class BrowserActivity : Activity(), DockListener {
         // once a day, when the app comes to the front: one tiny conditional request (an ETag makes "nothing new" free). Never in the background.
         UpdateManager.maybeAutoCheck(this, prefs.autoUpdateCheck, NetworkMonitor.state != NetworkMonitor.State.OFFLINE) // NO_INTERNET is only a guess (a hotspot can fail Android's connectivity probe and still work): try
         Io.main.postDelayed({ maybeShowUpdateNotice() }, 2500) // news the background look found while the app was closed
+        Io.main.postDelayed({ maybeRefreshLists() }, 90_000)   // well after start-up: the page the owner opened first comes first
+    }
+
+    private var listRefreshStarted = false
+
+    /** The ad-blocking lists are refreshed every day by a scheduled job; when Android has not run it (a tablet that sleeps most of the day gets its jobs deferred) the app does it itself, once, a minute and a half after it came to the front. */
+    private fun maybeRefreshLists() {
+        if (isFinishing || isDestroyed || listRefreshStarted || prefs.updatePolicy == 2) return
+        if (System.currentTimeMillis() - prefs.lastUpdateMs < 30L * 3600 * 1000 || NetworkMonitor.state == NetworkMonitor.State.OFFLINE) return
+        listRefreshStarted = true
+        Thread({ FilterUpdater.run(applicationContext, manual = false) }, "kestrel-lists").apply { priority = Thread.MIN_PRIORITY; isDaemon = true }.start()
     }
 
     override fun onPause() {

@@ -32,7 +32,7 @@ class UpdateJob : JobService() {
             val js = ctx.getSystemService(JobScheduler::class.java) ?: return
             val prefs = Prefs.get(ctx)
             if (prefs.updatePolicy == 2) { js.cancel(JOB_ID); return }
-            val period = if (prefs.updatePolicy == 1) 30 * DAY else 7 * DAY
+            val period = if (prefs.updatePolicy == 1) 7 * DAY else DAY // 0 = every day (owner request X2/X5), 1 = every week, 2 = only by hand
             val network = if (prefs.updateUnmeteredOnly) JobInfo.NETWORK_TYPE_UNMETERED else JobInfo.NETWORK_TYPE_ANY
             val sig = "$period/$network"
             if (js.getPendingJob(JOB_ID) != null && prefs.updateJobSig == sig) return // already scheduled with this policy
