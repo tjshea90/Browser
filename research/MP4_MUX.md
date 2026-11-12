@@ -54,6 +54,6 @@ M-A core writer + tests; M-B engine integration + tests; M-C Android (Sink.trunc
 ## 9. Not done / ideas
 - H.265 (`hvcC`), AC-3/E-AC-3 (`dac3`/`dec3`), MP3 (`esds` 0x6B) in the writer.
 - fMP4 (CMAF) HLS and DASH are joined as fragmented MP4 (muxed) or merged by the platform (separate sound): a progressive MP4 would scrub better in ExoPlayer (no `sidx`). A defragmenter would parse `moof`/`trun` and reuse the init's sample-entry boxes verbatim.
-- A parameter-set change INSIDE a run without a discontinuity tag (an unmarked splice) is not detected: the picture would be written with the first run's `avcC`. Detecting a new SPS/PPS in an IDR access unit and treating it like an implicit run start is a small change.
+- (done after alpha17) A new picture size / profile announced by an SPS inside a run without a discontinuity tag starts an implicit run (`TsToMp4.peekFormatChange`): left out unless it is the main format again.
 - Several access units in one PES (rare encoders) are written as one sample.
 - Skip FETCHING the segments of a left-out advertisement run.
