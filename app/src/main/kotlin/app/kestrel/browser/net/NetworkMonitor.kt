@@ -30,7 +30,16 @@ object NetworkMonitor {
     /** A VPN is the active network (LinkMeter's Fast Wi-Fi on the tablet): the engine then runs the Fast Wi-Fi profile ([app.kestrel.core.net.NetProfile], research/SPEED3.md). */
     @Volatile var vpn = false
         private set
+    /**
+     * The VPN is LinkMeter's own Fast Wi-Fi tunnel, not just any VPN: its fixed private addresses sit on the VPN interface ([app.kestrel.core.net.NetProfile.isFastTunnel]). Then the link behind it is the
+     * phone's own connection and the profile goes further (no IPv6, a bigger page rate for downloads: research/SPEED4.md). Always false without [vpn].
+     */
+    @Volatile var fastTunnel = false
+        private set
     private var debugVpn = false
+    private var debugTunnel = false
+    private var vpnTransport = false                 // the default network has TRANSPORT_VPN
+    private var tunnelAddr = false                   // and its link carries LinkMeter's tunnel addresses (arrives in a second callback)
     @Volatile private var rawMetered = true // Android's own flag: assume metered until the network says otherwise (a hotspot almost always is)
     @Volatile private var saverOn = false
 
