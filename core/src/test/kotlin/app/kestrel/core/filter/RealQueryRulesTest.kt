@@ -85,7 +85,7 @@ class RealQueryRulesTest {
                 val t = line.trim()
                 if (t.isEmpty() || t.startsWith("!") || RuleParser.looksCosmetic(t) || !QueryRuleParser.looks(t)) continue
                 val r = QueryRuleParser.parse(t)
-                if (r.rule == null) { skipped.merge(r.skip, 1, Int::plus); val l = sample.getOrPut(r.skip) { ArrayList() }; if (l.size < 3) l.add(t.take(110)) }
+                if (r.rule == null) { skipped.merge(r.skip, 1, Int::plus); val l = sample.getOrPut(r.skip) { ArrayList() }; if (l.size < 40) l.add(t.take(110)) }
             }
         }
         println("QUERY left out: $skipped")
