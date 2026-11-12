@@ -155,14 +155,17 @@ object GeckoEngine {
      */
     fun applyNetwork(prefs: Prefs) {
         val d = org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_DEFAULT
-        // the owner's switches, unless a VPN (LinkMeter's Fast Wi-Fi) is the active network: then lookups go to the phone's own resolver and HTTP/3 stays off (core/net/NetProfile.kt)
+        // the owner's switches, unless a VPN (LinkMeter's Fast Wi-Fi) is the active network: then lookups go to the phone's own resolver and HTTP/3 stays off; behind LinkMeter's OWN tunnel there is also no
+        // IPv6 (it is blocked there) and downloads give a loading page more room (core/net/NetProfile.kt, research/SPEED4.md)
         val eff = app.kestrel.core.net.NetProfile.effective(app.kestrel.core.net.NetProfile.Input(dohOn = prefs.dohOn, http3On = prefs.http3On, vpn = app.kestrel.browser.net.NetworkMonitor.vpn,
-            helperMode = prefs.phoneMode, pagesViaPhone = prefs.pagesViaPhone))
+            helperMode = prefs.phoneMode, pagesViaPhone = prefs.pagesViaPhone, fastTunnel = app.kestrel.browser.net.NetworkMonitor.fastTunnel))
+        app.kestrel.browser.download.DownloadController.setPageYieldKBps(eff.pageYieldKBps)
         try {
             org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("network.trr.mode", eff.trrMode, d)
             org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("network.http.http3.enable", eff.http3, d)
+            org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("network.dns.disableIPv6", eff.disableIPv6, d)
             networkProfile = eff.text
-            app.kestrel.browser.diag.Health.log("engine", "network-profile", "${if (eff.fastWifi) "fast-wifi" else "standard"} trr=${eff.trrMode} http3=${eff.http3}")
+            app.kestrel.browser.diag.Health.log("engine", "network-profile", "${if (eff.tunnel) "fast-wifi-tunnel" else if (eff.fastWifi) "fast-wifi" else "standard"} trr=${eff.trrMode} http3=${eff.http3} noIPv6=${eff.disableIPv6} pageYield=${eff.pageYieldKBps}")
         } catch (e: Exception) { app.kestrel.browser.diag.Health.log("engine", "network-lab-failed", e.toString()) }
     }
 
