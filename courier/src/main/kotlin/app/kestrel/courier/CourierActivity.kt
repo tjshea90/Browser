@@ -33,9 +33,9 @@ import java.util.Locale
 /** The one screen: is the phone ready, which code to type on the tablet, may it run with the screen off, and what it is downloading right now. */
 class CourierActivity : Activity() {
     private val ui = Handler(Looper.getMainLooper())
-    private val body = LinearLayout(this)
+    private lateinit var body: LinearLayout          // (views can only be made once the activity has its context: in onCreate)
     /** Where the pieces are added while a screen is being built (a scratch container; [body] is only touched when the content really changed). */
-    private var target: LinearLayout = body
+    private lateinit var target: LinearLayout
     private val sig = StringBuilder()
     private var lastSig = ""
     private lateinit var prefs: CourierPrefs
@@ -56,6 +56,7 @@ class CourierActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = CourierPrefs(this)
+        body = LinearLayout(this); target = body
         window.statusBarColor = BG
         window.navigationBarColor = BG
         body.orientation = LinearLayout.VERTICAL
