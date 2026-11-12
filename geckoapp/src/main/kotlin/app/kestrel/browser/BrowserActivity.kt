@@ -1571,10 +1571,11 @@ open class BrowserActivity : Activity(), DockListener {
     private fun refreshNtp() { home.bindStats(prefs.blockedTotal, NetworkMonitor.metered) }
 
     private var lastVpn = NetworkMonitor.vpn
+    private var lastTunnel = NetworkMonitor.fastTunnel
 
     private fun onNetworkChanged() {
-        if (NetworkMonitor.vpn != lastVpn) {                          // LinkMeter's Fast Wi-Fi came up or went away: DNS and HTTP/3 follow it (core/net/NetProfile), the Courier rests or returns
-            lastVpn = NetworkMonitor.vpn
+        if (NetworkMonitor.vpn != lastVpn || NetworkMonitor.fastTunnel != lastTunnel) {   // LinkMeter's Fast Wi-Fi came up or went away (its own tunnel is recognised a moment after the VPN itself): DNS, HTTP/3, IPv6 and the download page rate follow it (core/net/NetProfile), the Courier rests or returns
+            lastVpn = NetworkMonitor.vpn; lastTunnel = NetworkMonitor.fastTunnel
             GeckoEngine.applyNetwork(prefs)
             PhoneBridge.modeChanged(this)
         }
