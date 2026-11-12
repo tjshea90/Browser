@@ -168,7 +168,7 @@ Prefs in effect (`GeckoPreferenceController.getGeckoPrefs`) for every name in se
 
 ## 7. Sources
 - S1 Local, Gradle cache: org.mozilla.geckoview:geckoview-armeabi-v7a:160.0.20261104181552 (libxul.so strings + `readelf -A -S`, omni.ja `unzip -v` + pref files + JS, classes.jar `javap`), the repo's built release APK (x86_64 variant, `unzip -v`), repo files geckoapp/src/main/assets/gecko-prefs.txt, GeckoEngine.kt, BrowserActivity.kt.
-- S2 https://raw.githubusercontent.com/mozilla-firefox/firefox/FIREFOX_160_0_RELEASE/modules/libpref/init/StaticPrefList.yaml (windows 50k-600k chars).
+- S2 https://raw.githubusercontent.com/mozilla-firefox/firefox/FIREFOX_160_0_RELEASE/modules/libpref/init/StaticPrefList.yaml (read in 100 kB windows from offset 50k to the end, 648,245 chars).
 - S3 https://maven.mozilla.org/maven2/org/mozilla/geckoview/geckoview-armeabi-v7a/maven-metadata.xml ; .../geckoview-beta-armeabi-v7a/maven-metadata.xml ; .../geckoview-nightly-armeabi-v7a/maven-metadata.xml
 - S4 https://blog.mozilla.org/futurereleases/2025/09/15/raising-the-minimum-android-version-for-firefox/
 - S5 https://bugzilla.mozilla.org/show_bug.cgi?id=1995911 , =1933696 , =1909993 , =1939678 (read); =1916381 (snippet)
