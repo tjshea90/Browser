@@ -10,6 +10,8 @@ import app.kestrel.core.download.FakeNet
 import app.kestrel.core.download.FakeServer
 import app.kestrel.core.download.FakeSinks
 import app.kestrel.core.download.FakeStore
+import app.kestrel.core.download.SinkFactory
+import app.kestrel.core.media.StreamFinisher
 import app.kestrel.core.download.Source
 import app.kestrel.core.download.testBytes
 import app.kestrel.core.media.FakeCdn
@@ -329,11 +331,58 @@ class PhoneBackendTest {
         assertTrue(note, note.startsWith("Downloading here: your phone's Courier cannot do this kind of download yet"))
     }
 
-    @Test fun soundAndPictureKeptApartIsNotOffered() {
+    /** Stands in for the phone's platform converter: makes ONE file of the picture and the sound so the test can see what was merged, and counts how often it was asked. */
+    private class MergeFake(private val sinks: SinkFactory) : StreamFinisher {
+        val merged = java.util.concurrent.atomic.AtomicInteger()
+        override fun convert(j: StreamFinisher.Joined): StreamFinisher.Converted? = null
+        override fun merge(m: StreamFinisher.Merge): StreamFinisher.Converted? {
+            val v = File(java.net.URI(m.videoUri)).readBytes(); val a = File(java.net.URI(m.audioUri)).readBytes()
+            val out = "MERGED|".toByteArray() + v + a
+            val sink = sinks.create(m.stem + ".mp4", "video/mp4", -1, m.priv, m.destKind)
+            sink.pwrite(0, out, 0, out.size); sink.sync()
+            val uri = sink.publish() ?: return null
+            merged.incrementAndGet()
+            return StreamFinisher.Converted(uri, sink.displayName ?: (m.stem + ".mp4"), "video/mp4", out.size.toLong())
+        }
+    }
+
+    private fun soundPlaylist(cdn: FakeCdn): StreamSource {
+        val sb = StringBuilder("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:0\n")
+        for (i in 0..1) { cdn.files["https://cdn.test/a/s$i.ts"] = Fixtures.bytes("a_$i.ts"); sb.append("#EXTINF:2.000,\ns$i.ts\n") }
+        return StreamSource("https://cdn.test/a/index.m3u8", sb.append("#EXT-X-ENDLIST\n").toString(), "https://site.test/watch", "My clip", mapOf("Referer" to "https://site.test/"), 1, meteredOk = true, ext = "m4a")
+    }
+
+    @Test(timeout = 120_000) fun pictureAndSoundKeptApartAreBothDownloadedAndMergedOnThePhoneAndCopiedToTheTablet() {
+        val pcdn = FakeCdn().also { it.chunkDelayMs = 3 }
+        var fin: MergeFake? = null
+        val phone = Phone(FakeServer(testBytes(10)), root, cleanups, cdn = pcdn, finisherOf = { s -> MergeFake(s).also { fin = it } })
+        val picture = clip(tsPlaylist(pcdn))
+        val tcdn = FakeCdn()
+        val t = Tablet(FakeServer(testBytes(10)), tabletCdn = tcdn)
+        t.to(phone); t.startBackend()
+        val lid = t.backend.offloadStream(StreamSource(picture.playlistUrl, picture.playlistText, picture.pageUrl, picture.nameStem, picture.headers, picture.fetcher, meteredOk = true, companion = soundPlaylist(pcdn)))!!
+        await("the phone works on it") { t.backend.view(lid)?.note?.startsWith("On your phone") == true }
+        await("copied") { t.backend.view(lid) == null && t.row()?.state == DlState.COMPLETED }
+        val row = t.row()!!
+        assertEquals("one row, one file: the merged one", "My clip.mp4", t.sinks.sinks[row.destUri]!!.name)
+        assertEquals("MERGED|", String(t.bytesOf(row).copyOfRange(0, 7)))
+        assertEquals("the phone's converter was asked once", 1, fin!!.merged.get())
+        assertEquals("the tablet never touched the video site", 0, tcdn.requests.size)
+        assertTrue("picture and sound both came from the phone's connection", pcdn.requests.any { it.contains("/a/s0.ts") } && pcdn.requests.any { it.contains("/v/s0.ts") })
+        await("the phone's copy is gone") { phone.host.jobCount == 0 }
+        assertEquals("Copied from your phone", t.backend.noteFor(row.id))
+    }
+
+    @Test fun aSoundThatIsNotAWebAddressKeepsTheWholeVideoOnTheTablet() {
         val t = Tablet(FakeServer(testBytes(10)), tabletCdn = FakeCdn())
         t.to(Phone(FakeServer(testBytes(10)), root, cleanups, cdn = FakeCdn()))
-        val sound = StreamSource("https://cdn.test/a/index.mpd", null, null, "My clip", ext = "m4a")
-        assertNull(t.backend.offloadStream(StreamSource("https://cdn.test/v/index.mpd", null, null, "My clip", repId = "v1", companion = sound)))
+        val bad = StreamSource("blob:https://a.test/x", null, null, "My clip", ext = "m4a")
+        assertNull(t.backend.offloadStream(StreamSource("https://cdn.test/v/index.mpd", null, null, "My clip", repId = "v1", companion = bad)))
+    }
+
+    @Test fun otherKindsOfStreamsAreNeverOffered() {
+        val t = Tablet(FakeServer(testBytes(10)), tabletCdn = FakeCdn())
+        t.to(Phone(FakeServer(testBytes(10)), root, cleanups, cdn = FakeCdn()))
         assertNull("private tabs never", t.backend.offloadStream(StreamSource("https://cdn.test/v/index.m3u8", "x", null, "My clip", priv = true)))
         assertNull("not a web address", t.backend.offloadStream(StreamSource("blob:https://a.test/x", "x", null, "My clip")))
         assertTrue(t.backend.views().isEmpty())

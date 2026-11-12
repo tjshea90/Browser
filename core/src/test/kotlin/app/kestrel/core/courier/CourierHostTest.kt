@@ -241,6 +241,18 @@ class CourierHostTest {
         assertEquals(0, origin.seen.size)
     }
 
+    @Test fun aSoundAtAPrivateAddressIsRefusedLikeThePicture() {
+        val p = Phone(FakeServer(testBytes(1000)), root, cleanups, cdn = app.kestrel.core.media.FakeCdn())
+        val t = Tablet(p.base)
+        val stream = ""","kind":"stream","stream":{"playlistUrl":"https://cdn.example/v/index.m3u8","nameStem":"Clip","companion":{"playlistUrl":"URL","nameStem":"Clip","ext":"m4a"}}"""
+        p.dns = listOf(byteArrayOf(93, 184.toByte(), 216.toByte(), 34))
+        assertEquals("a sound on a local address", 403, t.create(cid(11), "https://cdn.example/v/index.m3u8", stream.replace("URL", "http://192.168.43.1/a.m3u8")).first)
+        assertEquals("a sound that is not a web address", 400, t.create(cid(12), "https://cdn.example/v/index.m3u8", stream.replace("URL", "ftp://a.test/a.m3u8")).first)
+        assertEquals("a sound without an address", 400, t.create(cid(13), "https://cdn.example/v/index.m3u8", ""","kind":"stream","stream":{"playlistUrl":"https://cdn.example/v/index.m3u8","companion":{"nameStem":"x"}}""").first)
+        assertEquals("both public: accepted", 201, t.create(cid(14), "https://cdn.example/v/index.m3u8", stream.replace("URL", "https://cdn.example/a/index.m3u8")).first)
+        assertEquals(1, p.host.jobCount)
+    }
+
     @Test fun aFullPhoneSaysSoUpFront() {
         val p = phone(FakeServer(testBytes(1000)))
         val t = Tablet(p.base)

@@ -8,6 +8,8 @@ import app.kestrel.core.download.FakeServer
 import app.kestrel.core.download.FetchRequest
 import app.kestrel.core.download.FetchResponse
 import app.kestrel.core.download.Fetcher
+import app.kestrel.core.download.SinkFactory
+import app.kestrel.core.media.StreamFinisher
 import app.kestrel.core.media.FakeCdn
 import app.kestrel.core.media.StreamEngine
 import java.io.File
@@ -49,6 +51,8 @@ class Phone(
     val clock: Skew = Skew(),
     /** The fake video CDN: when given, the phone also has the segment downloader (video streams); null = plain files only. */
     val cdn: FakeCdn? = null,
+    /** The phone's platform converter (picture + sound merge, H.265 ...): a fake in the JVM tests; null = none (the engine's own MP4 writer only). */
+    finisherOf: ((SinkFactory) -> StreamFinisher)? = null,
 ) {
     val spy = Spy(origin)
     val sinks = StagingSinks(File(dir, "staging"))
@@ -58,7 +62,7 @@ class Phone(
     @Volatile var free = 100L * 1024 * 1024 * 1024
     @Volatile var dns: List<ByteArray> = listOf(byteArrayOf(93.toByte(), 184.toByte(), 216.toByte(), 34))
     val streamStore = JsonStreamStore(File(dir, "streams"))
-    val streams: StreamEngine? = cdn?.let { c -> StreamEngine({ c }, sinks, streamStore, FakeNet(), exec, clock, courierTestConfig()) }
+    val streams: StreamEngine? = cdn?.let { c -> StreamEngine({ c }, sinks, streamStore, FakeNet(), exec, clock, courierTestConfig(), finisher = finisherOf?.invoke(sinks)) }
     val host = CourierHost(hostKey, engine, sinks, File(dir, "courier-jobs.json"), spy, clock, { free }, "Test phone", resolve = { dns }, streams = streams)
     val server = CourierServer(0, InetAddress.getByName("127.0.0.1"), { r, _ -> r.isLoopbackAddress }, { r, p -> host.handle(r, p) })
     @Volatile var ticking = true
