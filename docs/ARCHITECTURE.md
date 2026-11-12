@@ -158,3 +158,9 @@ Download notification posts only on changed words (at most once a second, once i
 - Verification: `ExtImageTest` (core) writes `web-tests/fixtures/mini.*` from the real Kotlin engine (2,200+ requests, hash/PSL/host vectors) and fails if they are stale; `web-tests/engine.test.js` requires 100 % equal verdicts (and a mutation harness showed all 10 injected
   bugs are caught); `web-tests/background.test.js` plays the app's side of the protocol against the real `background.js` (legacy path, per-page config, chunked transfer, saved copy, fail-open, batching). Diagnostics shows the engine's own numbers and has the Blocker switch.
 - `file://` access from the extension is refused by Gecko ("Content at moz-extension://... may not load or link to file://...") even with a matching host permission: the chunked transfer plus the saved copy is the transport.
+
+## The updater and GitHub's release order (alpha14, owner report X1)
+GitHub's release LIST for this repository comes back sorted by tag NAME (alpha9 ... alpha2, alpha13 ... alpha10), not by date or version. The old check read the first 8 entries, which stopped at alpha9, so from alpha10 on every version
+said "up to date". `UpdateManager.fetchReleases` no longer trusts any order: it reads the tag list (`git/matching-refs/tags/<prefix>`), sorts the tags in natural version order (`UpdateLogic.compareTags`, digit runs as numbers), fetches the newest four
+releases one by one with ETags (a 304 costs headers only), and `UpdateLogic.choose` still decides from the versionCode each release states. Versions that have the old window (alpha9-13) can only see a new release whose tag sorts into their first eight, so the
+release after alpha13 is named `0.3.0-alpha14` (`kestrel-g-v0.3.0-...` sorts above every `kestrel-g-v0.2.0-...`). Keep version names increasing in plain text order as well until nobody runs alpha9-13 any more.
