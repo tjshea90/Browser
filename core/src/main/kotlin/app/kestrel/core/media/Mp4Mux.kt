@@ -265,7 +265,14 @@ class Mp4Mux(private val out: MuxOut, private val nowMs: () -> Long = { System.c
         val p0 = minOf(vPts0, aFirst90)
         val vDelta = vFirst - p0                                                // > 0: the picture starts later than the earliest sample, < 0: skip into the media
         val vLead = maxOf(vDelta, 0L); val vSkip = maxOf(-vDelta, 0L)
-        val vEditDur = ms(vMediaDur - vSkip, 90000L)
+        // the edit must run to the END of the last picture SHOWN (B-frames are shown after they are decoded), or a player cuts the last frames off
+        var vCtEnd = 0L
+        for (i in 0 until videoCount) {
+            val dur = if (i < videoCount - 1) vDts[i + 1] - vDts[i] else lastVideoDuration().toLong()
+            val end = vDts[i] - vFirst + vCts[i] + dur
+            if (end > vCtEnd) vCtEnd = end
+        }
+        val vEditDur = ms(maxOf(vCtEnd, vMediaDur) - vSkip, 90000L)
         val vTrackDur = ms(vLead, 90000L) + vEditDur
         val aLead = if (hasAudio) aFirst90 - p0 else 0L
         val aEditDur = if (hasAudio) ms(aMediaDur, sampleRate.toLong()) else 0L
