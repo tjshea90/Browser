@@ -116,7 +116,7 @@ class UpdatePanel(ctx: Context, private val pal: Pal, private val prefs: Prefs, 
                     headline("Install the other way")
                     sub("1. Tap Save and uninstall. The update (${o?.let { UpdateLogic.formatSize(it.size) } ?: ""}) is copied to your Downloads folder, then Android asks whether to uninstall $name.", pal.fg)
                     sub("2. Confirm the uninstall.", pal.fg)
-                    sub("3. Open Files, then Downloads, and tap ${o?.apkName ?: "the saved update"}. Allow installing from Files if Android asks.", pal.fg)
+                    sub("3. Open Files, then Downloads, and tap the saved update (named like ${o?.apkName ?: "kestrel-g"}). Allow installing from Files if Android asks.", pal.fg)
                     sub("Bookmarks, history and settings of this version are not carried over; your downloaded files stay in Downloads.", pal.warn)
                     otherWayError?.let { sub(it, pal.danger) }
                     buttons(
