@@ -768,9 +768,19 @@ class StreamEngine(
     private fun drain(job: Job, media: Hls.Media) {
         while (true) {
             if (!job.drain.tryLock()) return
-            try { while (appendNext(job, media)) { /* keep going while the next one is there */ } } finally { job.drain.unlock() }
+            try { while (appendNext(job, media)) { /* keep going while the next one is there */ }; muxCheckpointIfDue(job) } finally { job.drain.unlock() }
             if (!nextReady(job, media)) return // else one arrived between the last look and the unlock
         }
+    }
+
+    /** MP4 mode: every few seconds (between two segments, under the drain lock) the output is synced and the journal gets a block, so a killed download carries on from here. */
+    private fun muxCheckpointIfDue(job: Job) {
+        val m = job.mux ?: return
+        val now = clock.now()
+        if (job.muxDirty || now - job.lastMuxCkpt < cfg.checkpointMs) return
+        job.lastMuxCkpt = now
+        try { m.checkpoint(synchronized(lock) { job.rec.next }) }
+        catch (e: IOException) { throw SinkException(Reason.STORAGE, "the MP4 journal could not be written", e) }
     }
 
     private fun nextReady(job: Job, media: Hls.Media): Boolean = synchronized(lock) { !job.stop && job.rec.next < media.segments.size && job.staged.get(job.rec.next) }
@@ -781,11 +791,15 @@ class StreamEngine(
         synchronized(lock) { idx = rec.next; if (job.stop || idx >= media.segments.size || !job.staged.get(idx)) return false }
         val seg = media.segments[idx]
         val sink = job.sink ?: return false
+        val mux = job.mux
         val f = File(store.dir(rec.id), "$idx.seg")
         val size = f.length()
         var written = synchronized(lock) { job.written }
         val startedAt = written
+        // where the (decrypted) bytes go: into the output as they are, or through the MP4 writer
+        val emit: (ByteArray, Int, Int) -> Unit = if (mux != null) { b, o, n -> mux.feed(b, o, n) } else { b, o, n -> sink.pwrite(written, b, o, n); written += n }
         try {
+            mux?.beginSegment(idx, seg.discontinuity, runMs(media, idx))
             FileInputStream(f).use { input ->
                 val buf = ByteArray(64 * 1024)
                 if (seg.key >= 0) {
@@ -796,22 +810,35 @@ class StreamEngine(
                     while (true) {
                         val r = input.read(buf); if (r < 0) break
                         val out = cipher.update(buf, 0, r) ?: continue
-                        if (out.isNotEmpty()) { sink.pwrite(written, out, 0, out.size); written += out.size }
+                        if (out.isNotEmpty()) emit(out, 0, out.size)
                     }
                     val tail = try { cipher.doFinal() } catch (e: Exception) { throw Failed(Reason.UNSUPPORTED) } // wrong key or damaged segment
-                    if (tail.isNotEmpty()) { sink.pwrite(written, tail, 0, tail.size); written += tail.size }
+                    if (tail.isNotEmpty()) emit(tail, 0, tail.size)
                 } else {
-                    while (true) { val r = input.read(buf); if (r < 0) break; sink.pwrite(written, buf, 0, r); written += r }
+                    while (true) { val r = input.read(buf); if (r < 0) break; emit(buf, 0, r) }
                 }
             }
-        } catch (e: IOException) { throw SinkException(Reason.STORAGE, "could not read a staged segment", e) }
+            if (mux != null) { mux.endSegment(); written = mux.position }
+        } catch (e: IOException) { if (mux != null) job.muxDirty = true; throw SinkException(Reason.STORAGE, "could not read a staged segment", e) }
+        catch (e: SinkException) { if (mux != null) job.muxDirty = true; throw e }
+        catch (e: Failed) { if (mux != null) job.muxDirty = true; throw e }
+        catch (e: Stopped) { if (mux != null) job.muxDirty = true; throw e }
+        catch (e: RuntimeException) { if (mux != null) { job.muxDirty = true; throw MuxBroken("the MP4 writer failed in segment $idx", e) }; throw e }
         synchronized(lock) {
             job.written = written; rec.next = idx + 1; rec.appended = written; rec.crashes = 0
-            if (seg.discontinuity && idx > 0) rec.breaks += "$idx:$startedAt;"
+            if (mux == null && seg.discontinuity && idx > 0) rec.breaks += "$idx:$startedAt;"
             job.stagedBytes -= size; job.stagedCount--; job.staged.clear(idx)
         }
         f.delete()
         return true
+    }
+
+    /** The playing time of the run that segment [idx] begins (it runs up to the next #EXT-X-DISCONTINUITY); 0 for a segment inside a run. */
+    private fun runMs(media: Hls.Media, idx: Int): Long {
+        if (idx != 0 && !media.segments[idx].discontinuity) return 0L
+        var t = 0L; var i = idx
+        do { t += media.segments[i].durationMs; i++ } while (i < media.segments.size && !media.segments[i].discontinuity)
+        return t
     }
 
     private fun keyBytes(job: Job, media: Hls.Media, ki: Int): ByteArray {
