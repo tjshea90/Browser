@@ -163,6 +163,37 @@ class StreamEngineTest {
         assertArrayEquals(expected, h2.out(v))
     }
 
+    @Test(timeout = 90_000) fun aStreamTheLastRunWasWorkingOnCarriesOnByItselfAfterResumeInterruptedAndAPausedOneDoesNot() {
+        val cdn = FakeCdn().also { it.chunkDelayMs = 4; it.chunk = 2048 }
+        val sinks = FakeSinks(); val store = MemStreamStore()
+        val h1 = H(cdn, sinks, store)
+        val (pl, expected) = plainStream(h1, 10, 30_000)
+        val id = h1.enqueue(pl)
+        h1.await(id, "progress") { it != null && it.state == DlState.RUNNING && it.done > 100_000 }
+        h1.engine.pauseAllSystem()
+        h1.await(id, "stopped") { it?.state == DlState.PAUSED_SYSTEM }
+        h1.exec.shutdownNow()
+        cdn.chunkDelayMs = 0
+        val h2 = H(cdn, sinks, store)
+        h2.engine.restore(); h2.engine.resumeInterrupted()
+        assertArrayEquals(expected, h2.out(h2.completed(id)))                          // nobody tapped Resume
+
+        // a stream the owner paused himself stays paused
+        val cdn2 = FakeCdn().also { it.chunkDelayMs = 4; it.chunk = 2048 }
+        val store2 = MemStreamStore(); val sinks2 = FakeSinks()
+        val h3 = H(cdn2, sinks2, store2)
+        val (pl2, _) = plainStream(h3, 10, 30_000)
+        val id2 = h3.enqueue(pl2)
+        h3.await(id2, "progress") { it != null && it.state == DlState.RUNNING && it.done > 100_000 }
+        h3.engine.pause(id2)
+        h3.await(id2, "paused") { it?.state == DlState.PAUSED_USER }
+        h3.exec.shutdownNow()
+        val h4 = H(cdn2, sinks2, store2)
+        h4.engine.restore(); h4.engine.resumeInterrupted()
+        Thread.sleep(300)
+        assertEquals(DlState.PAUSED_USER, h4.view(id2)!!.state)
+    }
+
     @Test(timeout = 60_000) fun transientFailuresAreRetried() {
         val h = H()
         val (pl, expected) = plainStream(h, 4, 20_000)
