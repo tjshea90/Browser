@@ -73,6 +73,9 @@ class MediaStoreSinks(private val ctx: Context) : SinkFactory {
         override val uri: String? = u.toString()
         override val displayName: String? = shownName
 
+        override val readable: Boolean get() = true
+        override fun pread(pos: Long, b: ByteArray, off: Int, len: Int): Int = try { Os.pread(pfd.fileDescriptor, b, off, len, pos) } catch (e: ErrnoException) { -1 }
+
         override fun pwrite(pos: Long, b: ByteArray, off: Int, len: Int) {
             var done = 0
             try {

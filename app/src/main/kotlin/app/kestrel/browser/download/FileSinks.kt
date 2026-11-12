@@ -69,6 +69,9 @@ class FileSinks(private val dir: File) : SinkFactory {
         override val uri: String? = part.toURI().toString()
         override val displayName: String? = final.name
 
+        override val readable: Boolean get() = true
+        override fun pread(pos: Long, b: ByteArray, off: Int, len: Int): Int = try { Os.pread(raf.fd, b, off, len, pos) } catch (e: ErrnoException) { -1 }
+
         override fun pwrite(pos: Long, b: ByteArray, off: Int, len: Int) {
             var done = 0
             try {

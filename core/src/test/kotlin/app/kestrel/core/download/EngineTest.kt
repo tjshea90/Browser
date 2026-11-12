@@ -418,6 +418,56 @@ class EngineTest {
         assertTrue("the partial file is kept", v.done > 0)
     }
 
+    /** A download with NO validator at all (no ETag, no Last-Modified), killed in the middle; returns the pieces to restart it with. */
+    private class Killed(val data: ByteArray, val rows: Rec, val durable: ByteArray, val cursor: Long, val id: Long)
+    private fun killedWithoutValidator(seed: Long): Killed {
+        val data = testBytes(8 * MiB, seed)
+        val s1 = FakeServer(data).also { it.etag = null; it.lastModified = null; it.chunkDelayMs = 2 }
+        val h1 = H(s1); val id = h1.enqueue()
+        h1.await(id, "a checkpoint with progress") { v -> v != null && v.done > 3L * MiB && (h1.store.rows[id]?.done ?: 0) > 2L * MiB }
+        val rows = h1.store.rows[id]!!.snapshot()
+        val durable = h1.sinks.sinks.values.first().durable.copyOf()
+        h1.net.online = false; h1.engine.onNetwork(); h1.stop()
+        return Killed(data, rows, durable, rows.segs.maxOf { it.cursor }, id)
+    }
+
+    private fun restartWith(k: Killed, server: FakeServer): Pair<H, FakeSinks> {
+        val sinks2 = FakeSinks(); val uri = k.rows.destUri!!
+        sinks2.sinks[uri] = FakeSink("data.bin", k.data.size.toLong(), uri).also { it.bytes = k.durable.copyOf(k.data.size); it.durable = k.durable }
+        val h2 = H(server, sinks = sinks2, store = FakeStore().also { it.rows[k.id] = k.rows })
+        h2.engine.restore(); h2.engine.resumeInterrupted()
+        return h2 to sinks2
+    }
+
+    @Test(timeout = 60_000) fun aDownloadWithNoValidatorAsksAgainForTheLastBytesBeforeTheCursorAndStillCompletes() {
+        val k = killedWithoutValidator(31)
+        val s2 = FakeServer(k.data).also { it.etag = null; it.lastModified = null }
+        val (h2, sinks2) = restartWith(k, s2)
+        val v = h2.completed(k.id)
+        assertArrayEquals(k.data, sinks2.sinks[v.destUri]!!.bytes)
+        val firstRange = s2.seen.first { it.from >= 0 }
+        assertEquals("the request starts 4 KiB before the cursor", k.cursor - 4096, firstRange.from)
+    }
+
+    @Test(timeout = 60_000) fun aChangeInTheLastBytesBeforeTheCursorIsCaughtAndNothingIsSpliced() {
+        val k = killedWithoutValidator(32)
+        val changed = k.data.copyOf().also { it[(k.cursor - 100).toInt()] = (it[(k.cursor - 100).toInt()] + 1).toByte() }   // the file was replaced on the server; same length, no validator to say so
+        val s2 = FakeServer(changed).also { it.etag = null; it.lastModified = null }
+        val (h2, sinks2) = restartWith(k, s2)
+        val v = h2.await(k.id, "the owner is asked") { it?.state == DlState.NEEDS_DECISION }!!
+        assertEquals(Reason.FILE_CHANGED, v.reason)
+        assertTrue("the partial file is kept", v.done > 0)
+        assertTrue("nothing from the new file reached the old one: the bytes after the cursor are still unwritten", sinks2.sinks[v.destUri]!!.bytes.let { b -> (k.cursor.toInt() until (k.cursor + 4096).toInt()).all { b[it].toInt() == 0 || b[it] == k.durable.getOrElse(it) { 0 } } })
+    }
+
+    @Test(timeout = 60_000) fun aChangeFarBeyondTheCursorWithEqualLengthIsTheDocumentedResidualRisk() {
+        val k = killedWithoutValidator(33)
+        val changed = k.data.copyOf().also { it[(k.cursor + 100_000).toInt()] = (it[(k.cursor + 100_000).toInt()] + 1).toByte() }
+        val s2 = FakeServer(changed).also { it.etag = null; it.lastModified = null }
+        val (h2, _) = restartWith(k, s2)
+        h2.completed(k.id)   // only a checksum could tell (research/DOWNLOAD_MANAGERS.md M6); the tail comparison cannot see this
+    }
+
     @Test(timeout = 60_000) fun downloadsQueueWhenAllSlotsAreBusy() {
         val s = FakeServer(testBytes(2 * MiB, 16)).also { it.chunkDelayMs = 1 }
         val h = H(s, cfg(maxActive = 1)); val a = h.enqueue("https://files.test/a.bin"); val b = h.enqueue("https://files.test/b.bin")

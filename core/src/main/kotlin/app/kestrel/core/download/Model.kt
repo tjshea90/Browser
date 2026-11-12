@@ -199,6 +199,10 @@ interface Sink {
     @Throws(SinkException::class) fun pwrite(pos: Long, b: ByteArray, off: Int, len: Int)
     @Throws(SinkException::class) fun sync()
     fun length(): Long
+    /** True when [pread] works: the engine can then compare the last bytes before a resume point with what the server sends again. */
+    val readable: Boolean get() = false
+    /** Reads up to [len] bytes at [pos] (what was written earlier); returns how many, or -1 when this sink cannot read. */
+    fun pread(pos: Long, b: ByteArray, off: Int, len: Int): Int = -1
     /** The open file itself, for code that needs a descriptor of its own (a media muxer); null where the sink has none. */
     fun descriptor(): java.io.FileDescriptor? = null
     /** Make the file visible (clear the pending flag); returns its final URI. */

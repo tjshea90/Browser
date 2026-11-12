@@ -30,7 +30,8 @@ class Engine(
     private class Exit : RuntimeException(null, null, false, false)      // this worker is done; the job's state was already set
     private class Retry : RuntimeException(null, null, false, false)     // try the request again (already waited)
 
-    private class Opened(val resp: FetchResponse, val reqEnd: Long)
+    /** [vFrom]/[vLen]: the reply starts [vLen] bytes BEFORE the resume point so the engine can compare them with what the file already holds (a file the server gave no validator for). */
+    private class Opened(val resp: FetchResponse, val reqEnd: Long, val vFrom: Long = -1, val vLen: Int = 0)
 
     private class Worker { @Volatile var resp: FetchResponse? = null; var seg: Seg? = null }
 
@@ -62,7 +63,7 @@ class Engine(
         val wake = mon.newCondition()
     }
 
-    private companion object { const val MAX_AUTO_CRASHES = 2 }
+    private companion object { const val MAX_AUTO_CRASHES = 2; const val VERIFY_BYTES = 4096 }
 
     private val lock = Any()
     private val jobs = LinkedHashMap<Long, Job>()
@@ -454,7 +455,10 @@ class Engine(
             }
             synchronized(lock) { seg.reqEnd = opened.reqEnd }
             w.resp = opened.resp
-            try { pump(job, seg, opened) }
+            try {
+                if (opened.vLen > 0 && !sameTail(job, opened)) { quiet(opened.resp); needDecision(job, Reason.FILE_CHANGED); throw Exit() }
+                pump(job, seg, opened)
+            }
             catch (e: IOException) { quiet(opened.resp); transient(job, seg, 0, 0, 0); continue }
             quiet(opened.resp)
         }
@@ -467,13 +471,17 @@ class Engine(
         val url: String; val etag: String?; val lm: String?; val total: Long
         synchronized(lock) { url = if (job.useOriginal) rec.url else (rec.finalUrl ?: rec.url); etag = rec.etag; lm = rec.lastMod; total = rec.total }
         val cond = etag?.let { Cond.IfMatch(it) } ?: lm?.let { Cond.IfUnmodifiedSince(it) }
+        // No validator at all (no strong ETag, no usable Last-Modified): nothing proves the server still holds the same file, so the request starts up to 4 KiB BEFORE the cursor and the bytes
+        // that come back are compared with what is already in the file (Chrome on Android does the same). A mismatch asks the owner instead of splicing two different files.
+        val verifyLen = if (cond == null && cursor > 0 && job.sink?.readable == true) minOf(cursor, VERIFY_BYTES.toLong()).toInt() else 0
+        val reqFrom = cursor - verifyLen
         val resp = try {
-            fetcherFor(job).open(FetchRequest(url, cursor, if (reqEnd >= 0) reqEnd - 1 else -1, cond, headersFor(rec), priv = rec.priv))
+            fetcherFor(job).open(FetchRequest(url, reqFrom, if (reqEnd >= 0) reqEnd - 1 else -1, cond, headersFor(rec), priv = rec.priv))
         } catch (e: FetchException) { fetchFailure(job, e); transient(job, seg, 0, 0, 0); throw Retry() }
         w.resp = resp
         if (job.stop) { quiet(resp); throw Stopped() }
         val now = clock.now()
-        val c = HttpSemantics.classify(resp.status, cursor, total, etag, now, resp::header)
+        val c = HttpSemantics.classify(resp.status, reqFrom, total, etag, now, resp::header)
         when (c.verdict) {
             HttpSemantics.Verdict.OK_206 -> {
                 // A server that ignores If-Unmodified-Since still states the date of what it sends: when the file is held by its Last-Modified and the reply names another date, the bytes
@@ -481,7 +489,7 @@ class Engine(
                 val replyLm = resp.header("Last-Modified")?.trim()
                 if (lm != null && replyLm != null && replyLm != lm) { quiet(resp); needDecision(job, Reason.FILE_CHANGED); throw Exit() }
                 synchronized(lock) { rec.ranges = 1; if (job.useOriginal) { job.useOriginal = false; rec.finalUrl = resp.finalUrl; rec.finalAt = now } }
-                return Opened(resp, reqEnd)
+                return Opened(resp, reqEnd, reqFrom, verifyLen)
             }
             HttpSemantics.Verdict.FULL_200 -> return fullReply(job, seg, resp)
             HttpSemantics.Verdict.CHANGED -> { quiet(resp); needDecision(job, Reason.FILE_CHANGED); throw Exit() }
@@ -499,6 +507,24 @@ class Engine(
             HttpSemantics.Verdict.RETRY -> { quiet(resp); transient(job, seg, 0, c.retryAfterMs, resp.status); throw Retry() }
             HttpSemantics.Verdict.FATAL_HTTP -> { quiet(resp); fail(job, Reason.HTTP, resp.status); throw Exit() }
         }
+    }
+
+    /** Reads the [Opened.vLen] bytes the server sent before the resume point and compares them with the same bytes in the file. A network error is an IOException (retried); a difference is false. */
+    private fun sameTail(job: Job, o: Opened): Boolean {
+        val body = o.resp.body ?: throw IOException("empty reply")
+        val sink = job.sink ?: throw IOException("no file")
+        val theirs = ByteArray(o.vLen)
+        var got = 0
+        while (got < o.vLen) {
+            if (job.stop) { o.resp.abort(); throw Stopped() }
+            val n = try { body.read(theirs, got, o.vLen - got) } catch (e: IOException) { if (job.stop) throw Stopped(); throw e }
+            if (n < 0) return false // the file got shorter than what we already hold
+            got += n
+        }
+        val ours = ByteArray(o.vLen)
+        var have = 0
+        while (have < o.vLen) { val n = sink.pread(o.vFrom + have, ours, have, o.vLen - have); if (n <= 0) return true; have += n } // a sink that cannot read: no verdict, carry on as before
+        return theirs.contentEquals(ours)
     }
 
     /** A plain 200 to a Range request: this server does not do ranges. */
