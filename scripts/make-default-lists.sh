@@ -23,6 +23,7 @@ abp:ads:$U/thirdparties/easylist/easylist.txt \
 abp:privacy:$U/thirdparties/easylist/easyprivacy.txt \
 abp:ads:$U/filters/filters.txt \
 abp:privacy:$U/filters/privacy.txt \
+abp:privacy:$U/filters/privacy-removeparam.txt \
 abp:malware:$U/filters/badware.txt \
 abp:ads:$U/filters/unbreak.txt \
 abp:annoyance:$U/thirdparties/easylist/easylist-cookies.txt" 2>&1 | grep -v '^Picked up' | cut -c1-220 | tail -14

@@ -27,6 +27,8 @@ object FilterSources {
         ListSource("easyprivacy", "https://easylist.to/easylist/easyprivacy.txt", Category.PRIVACY),
         ListSource("ubo-filters", UBO + "filters.min.txt", Category.ADS),
         ListSource("ubo-privacy", UBO + "privacy.min.txt", Category.PRIVACY),
+        // AdGuard/uBO "URL Tracking Protection": $removeparam rules for top-level navigations (AA3-3b), ~177 KB, no minified edition exists
+        ListSource("ubo-removeparam", UBO + "privacy-removeparam.txt", Category.PRIVACY),
         ListSource("ubo-badware", UBO + "badware.min.txt", Category.MALWARE),
         ListSource("ubo-unbreak", UBO + "unbreak.min.txt", Category.ADS),
         ListSource("easylist-cookies", "https://secure.fanboy.co.nz/fanboy-cookiemonster.txt", Category.ANNOYANCE),
