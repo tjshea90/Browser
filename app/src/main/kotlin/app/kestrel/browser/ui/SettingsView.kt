@@ -69,7 +69,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         choice("Speed limit (all downloads together)", listOf("No limit", "2 MB/s", "1 MB/s", "500 KB/s", "250 KB/s"), limits.indexOf(prefs.dlLimitKBps).let { if (it < 0) 0 else it }) {
             prefs.dlLimitKBps = limits[it]; app.kestrel.browser.download.DownloadController.setSpeedLimit(limits[it])
         }
-        toggle("Slow downloads while a page loads", "Downloads drop to about 150 KB/s while the page you are looking at is loading, then speed up again: pages open faster during a big download", prefs.dlYield) { prefs.dlYield = it; app.kestrel.browser.download.DownloadController.setYieldToPages(it) }
+        toggle("Slow downloads while a page loads", "Downloads drop to about 150 KB/s while the page you are looking at is loading (about 1 MB/s while LinkMeter's Fast Wi-Fi is on, which has room for both), then speed up again: pages open faster during a big download", prefs.dlYield) { prefs.dlYield = it; app.kestrel.browser.download.DownloadController.setYieldToPages(it) }
         info("Why a limit", "A phone hotspot has one radio: a big download that takes all of it makes browsing crawl. A limit leaves room for the page you are reading; it also saves data when a download is not urgent.")
         choice("Downloads at the same time", listOf("1", "2 (default)", "3"), prefs.dlActive - 1) { prefs.dlActive = it + 1 }
         choice("Connections per download", listOf("Automatic (recommended)", "1", "2", "3"), prefs.dlConns) { prefs.dlConns = it }
