@@ -144,7 +144,7 @@ class TsDemuxTest {
         var i = 0
         while (i < hevc.size) {
             val pid = ((hevc[i + 1].toInt() and 0x1F) shl 8) or (hevc[i + 2].toInt() and 0xFF)
-            if (pid == 4096 && (hevc[i + 1].toInt() and 0x40) != 0) { for (k in i + 4 until i + 188) if (hevc[k].toInt() == 0x1B && hevc[k + 1].toInt() == 0xE1.toByte().toInt()) { hevc[k] = 0x24; break }; break }
+            if (pid == 4096 && (hevc[i + 1].toInt() and 0x40) != 0) { for (k in i + 4 until i + 188) if (hevc[k].toInt() == 0x1B && hevc[k + 1].toInt() == 0xE1.toByte().toInt()) { hevc[k] = 0x24; break } }   // every repeat of the PMT
             i += 188
         }
         val why = TsToMp4.probe(hevc, 0, hevc.size)
