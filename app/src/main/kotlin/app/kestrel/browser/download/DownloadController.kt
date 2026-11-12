@@ -12,6 +12,11 @@ import app.kestrel.browser.Io
 import app.kestrel.browser.diag.Health
 import app.kestrel.browser.data.Prefs
 import app.kestrel.browser.ProcessLife
+import app.kestrel.core.courier.FETCHER_LAN
+import app.kestrel.core.courier.LanFetcher
+import app.kestrel.core.courier.LocalDownloads
+import app.kestrel.core.courier.PhoneBackend
+import app.kestrel.core.download.Action
 import app.kestrel.core.download.Clock
 import app.kestrel.core.download.Config
 import app.kestrel.core.download.DEST_APP_PRIVATE
@@ -46,6 +51,8 @@ object DownloadController {
     /** The second engine: segmented streams (HLS) into one file. Same list, same notifications; its ids live above 1e9 ([StreamEngine.owns]). */
     private var streams: StreamEngine? = null
     private var streamStore: StreamStoreFiles? = null
+    /** Downloads the phone does for the tablet (Settings > Downloads > Download on my phone). Its rows live between the two engines' ids. */
+    @Volatile private var phone: PhoneBackend? = null
     private lateinit var app: Context
     private lateinit var handler: Handler
     private val fetchers = ConcurrentHashMap<Int, Fetcher>()
@@ -75,6 +82,7 @@ object DownloadController {
         handler = Handler(ht.looper)
         val control = Executor { r -> handler.post(r) }
         fetchers.putIfAbsent(0, UrlConnectionFetcher())
+        fetchers.putIfAbsent(FETCHER_LAN, LanFetcher())            // the finished file on the phone, over the hotspot's own network
         refreshNet()
         val net = object : NetGate {
             override val online: Boolean get() = netOnline
@@ -113,7 +121,16 @@ object DownloadController {
         )
         st.addListener(object : StreamEngine.Listener { override fun onChanged(id: Long) { uiChanged() } })
         streams = st
-        control.execute { e.restore(); st.restore(); e.resumeInterrupted(); st.resumeInterrupted(); uiChanged() } // what the last run was in the middle of carries on by itself
+        val pb = PhoneBridge.create(app, object : LocalDownloads {
+            override fun enqueue(src: Source): Long = e.enqueue(src)
+            override fun view(id: Long): DownloadView? = e.view(id)
+        }) { uiChanged() }
+        phone = pb
+        control.execute {
+            e.restore(); st.restore(); e.resumeInterrupted(); st.resumeInterrupted()
+            pb.restore(); if (PhoneBridge.wanted(app)) pb.start()            // after the engines: the rows from the last run find their downloads again
+            uiChanged()
+        } // what the last run was in the middle of carries on by itself
         return e
     }
 
@@ -128,7 +145,9 @@ object DownloadController {
     /** Queue a download and make sure the foreground service is running. Called from the UI thread; nothing here touches disk or network on it. */
     fun enqueue(ctx: Context, src: Source, onId: ((Long) -> Unit)? = null) {
         val e = init(ctx)
-        handler.post { val id = e.enqueue(src); onId?.invoke(id) } // after restore() on the same thread, so new ids never clash with stored ones
+        val pb = phone
+        // after restore() on the same thread, so new ids never clash with stored ones; the phone may take the download over (Settings > Download on my phone)
+        handler.post { val id = pb?.offload(src) ?: e.enqueue(src); onId?.invoke(id) }
         DownloadService.start(ctx)
     }
 
@@ -207,21 +226,30 @@ object DownloadController {
         val now = android.os.SystemClock.uptimeMillis()
         val c = viewCache
         if (c != null && now - viewCacheAt < 150) return c
-        val v = ((engine?.views() ?: emptyList()) + (streams?.views() ?: emptyList())).sortedByDescending { it.created }
+        val pb = phone
+        val raw = (engine?.views() ?: emptyList()) + (streams?.views() ?: emptyList())
+        // a row of the tablet's own engine that came from a download on the phone says so (and keeps the time the owner started it)
+        val mine = if (pb == null) raw else raw.map { r -> val n = pb.noteFor(r.id); if (n == null) r else withNote(r, n, pb.createdFor(r.id)) }
+        val v = (mine + (pb?.views() ?: emptyList())).sortedByDescending { it.created }
         viewCache = v; viewCacheAt = now
         return v
     }
+    private fun withNote(v: DownloadView, note: String, created: Long?): DownloadView = DownloadView(
+        v.id, v.state, v.reason, v.detail, v.name, v.mime, v.host, v.total, v.done, v.bytesPerSec, v.etaSec, v.connections, v.priv, v.destUri, created ?: v.created, v.updated, v.actions, v.kind, v.estimated,
+        if (v.note.isNullOrEmpty()) note else note + ". " + v.note,
+    )
     @Volatile private var viewCache: List<DownloadView>? = null
     @Volatile private var viewCacheAt = 0L
-    fun view(id: Long): DownloadView? = if (isStream(id)) streams?.view(id) else engine?.view(id)
-    fun pause(id: Long) { if (isStream(id)) streams?.pause(id) else engine?.pause(id) }
-    fun resume(ctx: Context, id: Long) { init(ctx); if (isStream(id)) streams?.resume(id) else engine?.resume(id); DownloadService.start(ctx) }
-    fun cancel(id: Long) { if (isStream(id)) streams?.cancel(id) else engine?.cancel(id) }
-    fun restart(ctx: Context, id: Long) { init(ctx); if (isStream(id)) streams?.restart(id) else engine?.restart(id); DownloadService.start(ctx) }
-    fun remove(id: Long, deleteFile: Boolean) { if (isStream(id)) streams?.remove(id, deleteFile) else engine?.remove(id, deleteFile) }
+    private fun isPhone(id: Long) = phone?.owns(id) == true
+    fun view(id: Long): DownloadView? = if (isPhone(id)) phone?.view(id) else if (isStream(id)) streams?.view(id) else engine?.view(id)
+    fun pause(id: Long) { if (isPhone(id)) phone?.pause(id) else if (isStream(id)) streams?.pause(id) else engine?.pause(id) }
+    fun resume(ctx: Context, id: Long) { init(ctx); if (isPhone(id)) phone?.resume(id) else if (isStream(id)) streams?.resume(id) else engine?.resume(id); DownloadService.start(ctx) }
+    fun cancel(id: Long) { if (isPhone(id)) phone?.cancel(id) else if (isStream(id)) streams?.cancel(id) else engine?.cancel(id) }
+    fun restart(ctx: Context, id: Long) { init(ctx); if (isPhone(id)) phone?.restart(id) else if (isStream(id)) streams?.restart(id) else engine?.restart(id); DownloadService.start(ctx) }
+    fun remove(id: Long, deleteFile: Boolean) { if (isPhone(id)) phone?.remove(id) else if (isStream(id)) streams?.remove(id, deleteFile) else engine?.remove(id, deleteFile) }
     /** "Make MP4" on a finished stream that was kept as a .ts. */
     fun makeMp4(ctx: Context, id: Long) { init(ctx); if (isStream(id)) streams?.makeMp4(id); DownloadService.start(ctx) }   // the service keeps the process alive while the file is converted
-    fun clearFinished() { engine?.clearFinished(); streams?.clearFinished() }
+    fun clearFinished() { engine?.clearFinished(); streams?.clearFinished(); phone?.clearFinished() }
 
     private val installerName = Regex("""^kestrel(-g)?[-_].*\.apk$""", RegexOption.IGNORE_CASE)
 
@@ -241,8 +269,18 @@ object DownloadController {
     fun pauseAll() { engine?.pauseAll(); streams?.pauseAll() }
     fun resumeAll(ctx: Context) { init(ctx).resumeAll(); streams?.resumeAll(); DownloadService.start(ctx) }
     fun tick() { engine?.tick() }
-    fun needsService(): Boolean = (engine?.needsService() ?: false) || (streams?.needsService() ?: false)
-    fun counts(): IntArray { val a = engine?.counts() ?: intArrayOf(0, 0, 0); val b = streams?.counts() ?: intArrayOf(0, 0, 0); return intArrayOf(a[0] + b[0], a[1] + b[1], a[2] + b[2]) }
+    fun needsService(): Boolean = (engine?.needsService() ?: false) || (streams?.needsService() ?: false) || (phone?.needsService() ?: false)
+    fun counts(): IntArray {
+        val a = engine?.counts() ?: intArrayOf(0, 0, 0); val b = streams?.counts() ?: intArrayOf(0, 0, 0)
+        var running = 0; var queued = 0; var paused = 0
+        for (v in phone?.views() ?: emptyList()) when (v.state) {
+            DlState.QUEUED -> queued++
+            DlState.PAUSED_USER, DlState.PAUSED_SYSTEM, DlState.NEEDS_DECISION -> paused++
+            DlState.CANCELED -> {}
+            else -> running++                                    // asking, running, waiting for the phone: the tablet is on it
+        }
+        return intArrayOf(a[0] + b[0] + running, a[1] + b[1] + queued, a[2] + b[2] + paused)
+    }
 
     fun addListener(l: () -> Unit) { uiListeners.add(l) }
     fun removeListener(l: () -> Unit) { uiListeners.remove(l) }
@@ -272,7 +310,7 @@ object DownloadController {
             override fun onAvailable(network: Network) { changed() }
             override fun onLost(network: Network) { changed() }
             override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) { changed() }
-            private fun changed() { refreshNet(); engine?.onNetwork(); streams?.onNetwork() }
+            private fun changed() { refreshNet(); engine?.onNetwork(); streams?.onNetwork(); phone?.onNetwork() }
         }
         try { cm.registerDefaultNetworkCallback(cb, handler); netCallback = cb } catch (e: Exception) { /* the engine's own failure handling still works */ }
     }
