@@ -19,6 +19,7 @@ The single entry point for a new Claude session or account. After this, in order
 4. Fast local checks: `./gradlew :core:test :app:testDebugUnitTest` (JVM, no emulator), `bash tools/test_handoff.sh` (the save/release tooling), `cd web-tests && npm test` (Chromium JS tests).
 
 ## 2. Release routine (GitHub Actions builds, Claude never builds a release here)
+0. Engine freshness, about monthly: read `<latest>` in https://maven.mozilla.org/maven2/org/mozilla/geckoview/geckoview-armeabi-v7a/maven-metadata.xml (the in-app daily check says the same under Menu > Updates). If it is newer than `geckoVersion` in `geckoapp/build.gradle.kts`: bump it, run `bash tools/check-gecko-prefs.sh` (every pref name in `gecko-prefs.txt` must still exist) and `./gradlew :geckoapp:compileDebugKotlin`, and ship an alpha. Checked 2026-11-12: `160.0.20261104181552` (ours) is the newest.
 1. Bump `versionCode` (strictly higher than the last line for that app in `BUILDLOG.md`) and `versionName` in `app/build.gradle.kts` or `geckoapp/build.gradle.kts`; `bash tools/ckpt.sh`.
 2. `bash ship.sh <web|gecko> "what changed"`: runs the cheap local gates (handoff self-test, versionCode, unit suites), pushes, and writes the dispatch recipe into CHECKPOINT.md.
 3. Dispatch `.github/workflows/android.yml`: `mcp__github__actions_run_trigger` method `run_workflow`, `workflow_id` android.yml, `ref` = the current branch, `inputs` `{"app":"gecko","full_build":"true","note":"..."}`
