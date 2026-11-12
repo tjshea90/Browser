@@ -60,13 +60,12 @@ class JsonRecStore(private val file: File, private val log: (String) -> Unit = {
 
     @Synchronized override fun loadAll(): List<Rec> {
         recs.clear()
-        for (f in listOf(file, bak())) {
-            if (!f.isFile) continue
+        for (text in AtomicFiles.candidates(file)) {
             try {
-                val root = Json.parse(String(Files.readAllBytes(f.toPath()), Charsets.UTF_8)) as? Map<*, *> ?: continue
+                val root = Json.parse(text) as? Map<*, *> ?: continue
                 for (x in root.list("downloads") ?: emptyList<Any?>()) { val r = (x as? Map<*, *>)?.let { RecJson.decode(it) } ?: continue; recs[r.id] = r }
                 break
-            } catch (e: Exception) { log("store file ${f.name} unreadable: ${e.javaClass.simpleName}"); recs.clear() }
+            } catch (e: Exception) { log("store file ${file.name} unreadable: ${e.javaClass.simpleName}"); recs.clear() }
         }
         return recs.values.map { it.snapshot() }
     }
@@ -75,16 +74,8 @@ class JsonRecStore(private val file: File, private val log: (String) -> Unit = {
     @Synchronized override fun save(r: Rec) { recs[r.id] = r.snapshot(); flush() }
     @Synchronized override fun delete(id: Long) { if (recs.remove(id) != null) flush() }
 
-    private fun bak() = File(file.parentFile, file.name + ".bak")
-
     private fun flush() {
-        try {
-            file.parentFile?.mkdirs()
-            val text = Json.write(mapOf("v" to 1, "downloads" to recs.values.map { RecJson.encode(it) }))
-            val tmp = File(file.parentFile, file.name + ".tmp")
-            FileOutputStream(tmp).use { o -> o.write(text.toByteArray(Charsets.UTF_8)); o.fd.sync() }
-            if (file.isFile) Files.move(file.toPath(), bak().toPath(), StandardCopyOption.REPLACE_EXISTING)
-            Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
-        } catch (e: IOException) { log("store write failed: ${e.message}") }
+        try { AtomicFiles.write(file, Json.write(mapOf("v" to 1, "downloads" to recs.values.map { RecJson.encode(it) }))) }
+        catch (e: IOException) { log("store write failed: ${e.message}") }
     }
 }
