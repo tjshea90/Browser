@@ -117,7 +117,8 @@ class TsDemuxTest {
             })
             val data = Fixtures.bytes(name); d.feed(data, 0, data.size); d.endSegment()
             assertTrue(g.vPts.isNotEmpty())
-            return assertNotNull(out).let { out!! }
+            assertNotNull(out)
+            return out!!
         }
         val a = sps("a_0.ts"); assertEquals(128, a.width); assertEquals(72, a.height); assertEquals(100, a.profile); assertEquals(1, a.chromaFormat); assertEquals(8, a.bitDepthLuma)
         val n = sps("n_0.ts"); assertEquals(96, n.width); assertEquals(54, n.height)
