@@ -30,7 +30,10 @@ class TabStateStoreTest {
         assertFalse(out!!.contains("formdata"))
         assertFalse(out.contains("secret"))
         assertFalse(out.contains("hello"))
-        assertTrue("the history and the scroll position stay", out.contains("https://b.example/x") && out.contains("421"))
+        val back = org.json.JSONObject(out) // org.json writes "/" as "\/": compare the parsed values, not the text
+        assertEquals("0,421", back.getString("scroll"))
+        assertEquals("https://b.example/x", back.getJSONObject("history").getJSONArray("entries").getJSONObject(1).getString("url"))
+        assertEquals(2, back.getJSONObject("history").getInt("index"))
     }
 
     @Test fun notJsonTooBigOrEmptyIsNotKept() {
