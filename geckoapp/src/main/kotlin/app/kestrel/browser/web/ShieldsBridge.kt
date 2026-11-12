@@ -87,9 +87,9 @@ class ShieldsBridge(
     }
 
     /** Which thread answers a message: the engine image chunks, the slow element-hiding work and the page's quick verdicts each have their own, so none waits behind another. */
-    private fun handlerFor(raw: Any): android.os.Handler = when (laneOf(raw)) {
-        LANE_IMAGE -> imageHandler
-        LANE_COSMETIC -> cosmeticHandler
+    private fun handlerFor(raw: Any): android.os.Handler = when (BridgeLane.of(raw)) {
+        BridgeLane.IMAGE -> imageHandler
+        BridgeLane.COSMETIC -> cosmeticHandler
         else -> workerHandler
     }
 
