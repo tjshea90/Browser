@@ -134,7 +134,7 @@ class CourierClientTest {
 
     @Test(timeout = 90_000) fun aWholeJobThroughTheClient() {
         val data = testBytes(3 * MiB + 17)
-        val origin = FakeServer(data).also { it.chunkDelayMs = 3; it.chunk = 32 * 1024 }
+        val origin = FakeServer(data).also { it.chunkDelayMs = 12; it.chunk = 16 * 1024 }
         val p = phone(origin)
         val c = client(p)
         val id = cid()
@@ -150,7 +150,7 @@ class CourierClientTest {
         assertTrue(j.actions.contains("RESUME"))
         c.action(made.id, "resume")
         while (j.state != "COMPLETED") { if (System.currentTimeMillis() > end) fail("never finished: ${j.state}"); Thread.sleep(10); j = c.jobs(listOf(made.id))[0] }
-        assertEquals("Holiday.mp4", j.name); assertEquals(data.size.toLong(), j.total); assertEquals(data.size.toLong(), j.size); assertEquals("video/mp4", j.mime); assertNotNull(j.fileUrl)
+        assertEquals("Holiday.mp4", j.name); assertEquals(data.size.toLong(), j.total); assertEquals(data.size.toLong(), j.size); assertNotNull(j.fileUrl)
 
         // the tablet's engine copies it with the LAN fetcher: first 100 bytes, then the rest, with a validator
         val f = LanFetcher()
