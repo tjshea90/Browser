@@ -14,6 +14,7 @@ import org.mozilla.geckoview.GeckoRuntimeSettings
  */
 object GeckoEngine {
     @Volatile private var rt: GeckoRuntime? = null
+    @Volatile private var appCtx: Context? = null
     @Volatile private var exec: org.mozilla.geckoview.GeckoWebExecutor? = null
 
     /** Firefox's network stack for the download manager; null until the engine runs in this process (the activity creates it right after the first frame). */
@@ -22,6 +23,7 @@ object GeckoEngine {
     fun runtime(ctx: Context): GeckoRuntime = rt ?: synchronized(this) { rt ?: create(ctx.applicationContext).also { rt = it } }
 
     private fun create(ctx: Context): GeckoRuntime {
+        appCtx = ctx
         val prefs = Prefs.get(ctx)
         val blocking = ContentBlocking.Settings.Builder()
             .antiTracking(ContentBlocking.AntiTracking.STRICT)
@@ -74,7 +76,8 @@ object GeckoEngine {
      * persisted, so every start begins direct until the phone is confirmed). The failover timeout is short so a phone that comes back is used again within seconds.
      */
     private object PhoneProxyApplier : app.kestrel.browser.download.PageProxy.Applier {
-        override fun apply(host: String, port: Int) = set(app.kestrel.browser.download.PageProxy.pacUrl(host, port), 2)
+        // DEBUG builds only: `setprop debug.kestrel.pac <PAC data: URL>` replaces the generated script (the emulator test rig checks the fallback to DIRECT with it)
+        override fun apply(host: String, port: Int) = set(appCtx?.let { app.kestrel.browser.download.PhoneBridge.debugProp(it, "debug.kestrel.pac") } ?: app.kestrel.browser.download.PageProxy.pacUrl(host, port), 2)
         override fun clear() = set("", 5)
         private fun set(url: String, type: Int) {
             val d = org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_DEFAULT

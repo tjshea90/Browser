@@ -122,7 +122,8 @@ object PhoneBridge {
         return other
     }
 
-    private fun debugProp(ctx: Context, name: String): String? {
+    /** DEBUG builds only: a system property set with `adb shell setprop` (the emulator test rig); null in a release build. */
+    fun debugProp(ctx: Context, name: String): String? {
         if ((ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) == 0) return null
         return try { (Class.forName("android.os.SystemProperties").getMethod("get", String::class.java).invoke(null, name) as? String)?.takeIf { it.isNotBlank() } } catch (e: Throwable) { null }
     }

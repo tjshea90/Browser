@@ -100,7 +100,8 @@ object CourierRuntime {
         // network stack, which the carrier does not cap like tethered traffic. It listens only for a tablet that proved the pairing key in the last minutes ("armed") on a private non-cellular net.
         val gate = ProxyGate()
         val proxyPort = CourierPorts.proxyFor(prefs.port)
-        val systemResolve: (String) -> List<ByteArray> = { h -> java.net.InetAddress.getAllByName(h).map { it.address } }
+        // DEBUG builds only (the emulator rig): a host name ending in ".test" is the machine the emulator runs on (10.0.2.2), so a page at https://site.test:8443 can be loaded through the proxy
+        val systemResolve: (String) -> List<ByteArray> = { h -> if (noGuard && h.endsWith(".test")) listOf(byteArrayOf(10, 0, 2, 2)) else java.net.InetAddress.getAllByName(h).map { it.address } }
         val proxy = ConnectProxy(
             proxyPort, null, { remote, local -> gate.isArmed(remote) && PeerGuard.allowed(remote.address, local.address, CourierNet.locals()) },
             if (noGuard) GuardedDialer(systemResolve, { false }) else GuardedDialer(systemResolve), log = { Log.w(TAG, it) },
