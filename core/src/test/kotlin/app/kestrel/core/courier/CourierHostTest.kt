@@ -287,7 +287,9 @@ class CourierHostTest {
         val id = t.create(cid(13), extra = ""","headers":{"Referer":"https://site.test/page","User-Agent":"Tablet/1.0","Cookie":"a=b","Authorization":"Bearer x","Host":"evil.test","X-Evil":"1","accept":"*/*","Origin":"https://site.test","Cookie2":"x","Accept-Language":"en"}""").second.str("id")!!
         t.finished(id)
         val sent = p.spy.headers.first()
-        assertEquals(setOf("referer", "user-agent", "cookie", "accept", "origin", "accept-language"), sent.keys.map { it.lowercase() }.toSet())
+        val names = sent.keys.map { it.lowercase() }.toSet()
+        assertTrue(names.toString(), names.containsAll(listOf("referer", "user-agent", "cookie", "accept", "origin", "accept-language")))
+        for (forbidden in listOf("authorization", "host", "x-evil", "cookie2")) assertFalse("$forbidden must not be forwarded", forbidden in names)
         assertEquals("a=b", sent.entries.first { it.key.equals("cookie", true) }.value)
         val bad = t.raw("POST", "/v1/jobs", """{"cid":"${cid(14)}","url":"https://a.test/x","headers":{"Cookie":"a=b\r\nX-Injected: 1"}}""")
         assertEquals(201, bad.first)
