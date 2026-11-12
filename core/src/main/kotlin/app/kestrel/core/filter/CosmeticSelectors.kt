@@ -71,6 +71,9 @@ internal object CosmeticSelectors {
         var inGroup = 0
         for (sel in selectors) {
             if (chunk <= 1 || needsIsolation(sel)) {
+                // an isolated selector between two grouped ones: close the open group FIRST. (It used to be written straight after the group's last selector, which fused the two into one compound
+                // selector that matches nothing, and left the NEXT group starting with a comma, which makes the browser drop that whole rule.)
+                if (inGroup > 0) { sb.append("{display:none!important}\n"); inGroup = 0 }
                 sb.append(sel).append("{display:none!important}\n")
             } else {
                 if (inGroup > 0) sb.append(',')
