@@ -51,6 +51,22 @@ class DefaultListsRegressionTest {
         assertTrue("real lists failed to block: $missed", missed.isEmpty())
     }
 
+    /** AA3-3b: the bundled snapshot carries the lists' `$removeparam` rules, and they leave every address a page needs alone. */
+    @Test
+    fun theSnapshotStripsKnownTrackingParametersFromNavigationsAndNothingElse() {
+        assertTrue("query rules in the snapshot: ${fs.queryRuleCount}", fs.queryRuleCount in 1800..6000)
+        assertEquals("https://example.com/p?a=1", fs.stripQuery("https://example.com/p?gclid=Cj0&a=1&fbclid=IwAR&msclkid=9"))
+        assertEquals("https://youtu.be/abc", fs.stripQuery("https://youtu.be/abc?is=ZZ"))
+        val needed = listOf(
+            "https://www.google.com/search?q=hello&hl=en", "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL1&t=30", "https://duckduckgo.com/?q=hello",
+            "https://en.wikipedia.org/w/index.php?title=Web_browser&action=edit", "https://github.com/search?q=kestrel&type=repositories", "https://www.amazon.com/s?k=cables",
+            "https://www.reddit.com/r/android/comments/abc/title/?sort=new", "https://mail.proton.me/u/0/inbox?page=2", "https://accounts.google.com/o/oauth2/v2/auth?client_id=1&state=2&response_type=code",
+            "https://www.bbc.co.uk/search?q=news&page=2", "https://news.ycombinator.com/item?id=1", "https://www.nytimes.com/search?query=a&sort=best",
+        )
+        val changed = needed.filter { fs.stripQuery(it) != null }
+        assertTrue("addresses a page needs were changed: $changed", changed.isEmpty())
+    }
+
     @Test
     fun neverBlocksPagesOrEssentialInfrastructure() {
         val doc = RequestType.DOCUMENT
