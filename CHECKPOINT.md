@@ -1,21 +1,22 @@
-# CHECKPOINT 1010 — read me first, then TASKS.md
+# CHECKPOINT 1013 — read me first, then TASKS.md
 
-**Written:** 2026-11-12T09:37:00Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `dcaf2fc` (this checkpoint is the commit after it)
+**Written:** 2026-11-12T09:42:47Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `ca67779` (this checkpoint is the commit after it)
 
 ## Just done
-Y2 stage 2 SHIPPED and recorded: Kestrel Courier alpha2 (kestrel-courier-v0.1.0-alpha2, APK 249 KB) + Kestrel G alpha20 (kestrel-g-v0.3.0-alpha20, 92.8 MB), both Actions runs green, certificate verified on the artifacts, both lines in BUILDLOG.md. Videos (HLS, and DASH picture+sound) now go through the phone, the phone converts with the same Remuxer class; emulator-proven incl. pause/resume, Courier killed mid-video, fallback with note, and a merge byte-identical (mdat) to the tablet's own. The Settings sentence was corrected and the first alpha20 run cancelled before publishing so the shipped text is true
+Owner message 13 written into TASKS.md as Z0-Z10 in their words (INBOX has it verbatim): unmetered hotspot, speed and snappiness first (scrolling, instant Back, caching, no white areas while scrolling), an honest answer on what the phone can speed up, one switch for hotspot-only, ad block 'whatever is logical', Shizuku/linkmeter. No code yet
 
 ## Do this next
-STANDING BY for the owner: (1) the real phone + tablet pair test (TASKS Y2k) and their answers to Y2a (Android 16 phone? speeds? everything or only big files?), (2) Proton Mail 'Page loads' numbers, (3) keyboard app / accessibility / autofill / 5 GHz facts, (4) a yes/no on a scheduled CI list-build workflow. Nothing owner-free is urgent. If the owner reports a problem on the phone path read research/PHONE_OFFLOAD.md sections 14, 15.1, 15.2 first; Courier log = adb logcat -s KestrelCourier, tablet = Diagnostics > Phone link. Optional owner-free work, ONE step per wake: Y2i stage 3 (carry the phone's 'kept as .ts' reason onto the tablet row, overlap copy, notifications), U1c backup/restore, M6/M10/T0. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN: delete it when the owner has been silent 24 h and nothing safe is left
+Z10 first (cheap): mcp__claude-code-remote__list_repos query linkmeter -> add_repo (read) -> read how it uses Shizuku + what it measures; then Z2: write research/SPEED2.md (read geckoapp/src/main/assets gecko-prefs.txt + app Prefs/GeckoRuntime setup, verify candidate pref names exist in the GeckoView libxul strings under the scratchpad aar folder, web-check semantics), then implement tablet-side speed (Z1 unmetered default, Z5-Z7 scrolling/bfcache/caches) and the Z8 toggle in the menu; claim Z2 with bash tools/claim.sh Z2 first. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN stays
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  3a332d4 ckpt 1010: Y2 stage 2 SHIPPED and recorded: Kestrel Courier alpha2 (kestrel-courier-v0.1
   4389f39 ckpt 1007: gated kestrel-g-v0.3.0-alpha20 (gecko code 119) and pushed it: handoff self-t
   d3a8580 ckpt 1005: gated kestrel-g-v0.3.0-alpha20 (gecko code 119) and pushed it: handoff self-t
   5047bd2 ckpt 1004: gated kestrel-courier-v0.1.0-alpha2 (courier code 2) and pushed it: handoff s
@@ -25,5 +26,7 @@ STANDING BY for the owner: (1) the real phone + tablet pair test (TASKS Y2k) and
   325467d ckpt 986: Y2 stage 2 (video streams through the phone) code complete, JVM + build verifi
   f6958c7 ckpt 976: Y2 stage 1 SHIPPED and recorded: kestrel-courier-v0.1.0-alpha1 (run 4317795327
   6dbba44 ckpt 973: gated kestrel-g-v0.3.0-alpha19 (gecko code 118) and pushed it: handoff self-te
-  cebfa82 ckpt 969: gated kestrel-courier-v0.1.0-alpha1 (courier code 1) and pushed it: handoff se
 ```
+
+(2 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
