@@ -101,7 +101,7 @@ class ServerTest {
         val srv = start()
         val a = connect(srv); send(a, "NONSENSE\r\n\r\n")
         assertEquals(400, readReply(a.getInputStream()).status); assertTrue(closedByPeer(a))
-        val b = connect(srv); send(b, "POST /echo HTTP/1.1\r\nContent-Length: 999999\r\n\r\n")
+        val b = connect(srv); send(b, "POST /echo HTTP/1.1\r\nContent-Length: ${HttpParser.MAX_BODY + 1}\r\n\r\n")        // one byte over the limit (2 MB: a long HLS playlist has to fit)
         assertEquals(413, readReply(b.getInputStream()).status); assertTrue(closedByPeer(b))
         val c = connect(srv); send(c, "GET /echo HTTP/1.1\r\nX: " + "a".repeat(20_000) + "\r\n\r\n")
         assertEquals(431, readReply(c.getInputStream()).status); assertTrue(closedByPeer(c))
