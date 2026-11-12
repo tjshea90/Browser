@@ -1,21 +1,24 @@
-# CHECKPOINT 1103 — read me first, then TASKS.md
+# CHECKPOINT 1117 — read me first, then TASKS.md
 
-**Written:** 2026-11-12T16:59:28Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `141bbfc` (this checkpoint is the commit after it)
+**Written:** 2026-11-12T17:33:41Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `0c8e3bb` (this checkpoint is the commit after it)
 
 ## Just done
-AA4: K1 K2 K5 K6 verified on the emulator (evidence in research/SPEED3.md 6.1): 5 live tabs of 26 at 1.4 GB free, trims 15/20/40 close nothing, trim 60 keeps only the current tab; page B + scroll + Back stack survived force-stop (tabstate json has no formdata); cover preview 'Opening host' shows on cold start and revive; link launch no longer loads the saved tab. Added cover-show/hide timeline lines and the about:blank page-stop guard
+gated kestrel-g-v0.3.0-alpha22 (gecko code 121) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
 
 ## Do this next
-Next in the speed batch: (1) Back picture for pages the engine must reload (no-store): BackPicture map url->480px RGB_565 in BrowserActivity, fed by captureThumb, shown via RestoreOverlay 150 ms after goBack/goForward when the tab is still loading, hidden by firstPaint/page-stop/timeout; (2) K7 adaptive download cap while a page loads (DownloadController.pageLoading); (3) K8 init after the first frame; (4) Settings row 'Tabs kept ready' visual check; (5) bump versionCode 121 / 0.3.0-alpha22, tools/sync-ext-version.sh, ship.sh gecko, dispatch android.yml, record-release.sh; (6) answer owner message 14 incl. the 4 relayed questions; then AA3-2.. in order. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN
+TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref ccr-a57c163e-mtq8js, inputs {"app":"gecko","full_build":"true","note":"alpha22 speed: tabs stay ready by free memory (Settings > Tabs kept ready), a tab comes back with its Back stack and scroll position after the app was closed, Back shows the page's picture while a page that cannot be cached loads again, a preview covers a tab that loads again, opening a link no longer loads the old tab too, downloads step aside while a page loads, faster history database, fixes and lighter page scripts in the ad blocker"}.
+When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha22), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha22 "alpha22 speed: tabs stay ready by free memory (Settings > Tabs kept ready), a tab comes back with its Back stack and scroll position after the app was closed, Back shows the page's picture while a page that cannot be cached loads again, a preview covers a tab that loads again, opening a link no longer loads the old tab too, downloads step aside while a page loads, faster history database, fixes and lighter page scripts in the ad blocker"
+NEVER ship kestrel-g-v0.3.0-alpha22 twice (check BUILDLOG.md and the Releases first).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M research/SPEED3.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  5c226ea ckpt 1103: AA4: K1 K2 K5 K6 verified on the emulator (evidence in research/SPEED3.md 6.1
   084b5ba ckpt 1101: AA4 speed batch code step: K1 LiveBudget (core, 9 tests) + RAM-adaptive live 
   6fc25a2 ckpt 1077: Reviews saved: research/PERF_KOTLIN.md, research/PERF_JS.md, research/PROMPT_
   7ceb366 ckpt 1075: AA3 audit done by an independent read-only agent: research/PROMPT_AUDIT.md (2
@@ -25,8 +28,7 @@ Next in the speed batch: (1) Back picture for pages the engine must reload (no-s
   d75864a ckpt 1057: Owner message 13 ANSWERED and SHIPPED: Kestrel Courier alpha3 (kestrel-courie
   5c2891c ckpt 1054: Docs: CLAUDE.md + BRIEF.md record the owner's unmetered/5 Mbit/s facts and th
   95c9050 ckpt 1053: gated kestrel-g-v0.3.0-alpha21 (gecko code 120) and pushed it: handoff self-t
-  2a514af ckpt 1052: gated kestrel-courier-v0.1.0-alpha3 (courier code 3) and pushed it: handoff s
 ```
 
-(1 automatic checkpoint(s) since the last deliberate one — the
+(13 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
