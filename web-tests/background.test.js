@@ -51,7 +51,7 @@ function fakeIdb(store) {
 /** @param app (message) => reply string (may be async). @param opts { idb: Map } */
 function harness(app, opts) {
   opts = opts || {};
-  const sent = [], timers = [], listeners = {}, clock = { now: 1700000000000 };
+  const sent = [], raws = [], timers = [], listeners = {}, clock = { now: 1700000000000 };
   const ctx = {
     console, Promise, Map, Set, Uint8Array, ArrayBuffer, Int32Array, Math, Date: { now: () => clock.now }, JSON, parseInt, Object, Error, RegExp, String, Array,
     performance: { now: () => Number(process.hrtime.bigint()) / 1e6 },
@@ -61,7 +61,7 @@ function harness(app, opts) {
     indexedDB: fakeIdb(opts.idb || new Map()),
     browser: {
       runtime: {
-        sendNativeMessage: (app_, text) => { const m = JSON.parse(text); sent.push(m); return Promise.resolve(app(m)); },
+        sendNativeMessage: (app_, text) => { const m = JSON.parse(text); raws.push(text); sent.push(m); return Promise.resolve(app(m)); },
         onMessage: { addListener: (f) => { (listeners.message = listeners.message || []).push(f); } },
       },
       webRequest: {
@@ -74,7 +74,7 @@ function harness(app, opts) {
   vm.runInContext(SRC, ctx);
   const req = (type, url, page) => listeners.before({ type, url, tabId: 1, frameId: 0, documentUrl: page, frameAncestors: [{ url: page, frameId: 0 }] });
   return {
-    sent, ctx, listeners, clock,
+    sent, raws, ctx, listeners, clock,
     mainFrame: (url, extra) => listeners.before(Object.assign({ type: 'main_frame', url, tabId: 1, frameId: 0 }, extra || {})),
     /** a message from a content script (the first listener that answers wins, like the browser) */
     message: (m, tabId) => { for (const f of listeners.message || []) { const r = f(m, { tab: tabId === undefined ? { id: 1 } : (tabId < 0 ? undefined : { id: tabId }) }); if (r !== undefined) return r; } return undefined; },
@@ -350,6 +350,17 @@ test('css: a navigation to a page asks for its top-document CSS again, so a Shie
   h.mainFrame(PAGE);
   assert.equal(await h.message({ k: 'css', h: 'example.com', top: true }), '', 'the stale positive answer is gone');
   assert.equal(h.of('css').length, 2);
+});
+
+test('every native message starts with its kind: the app picks the worker thread from the first bytes (core BridgeLane, AA3-3b)', async () => {
+  const gen = { v: 1 };
+  const h = harness(cssApp(gen));
+  h.mainFrame(PAGE); await until(() => h.of('img').length >= 3, 'the image transfer');
+  await h.message({ k: 'css', h: 'example.com', top: true });
+  await h.message({ k: 'gen', h: 'example.com', t: ['banner', 'ad-box'] });
+  const kinds = new Set(h.sent.map((m) => m.k));
+  for (const k of ['cfg', 'img', 'css', 'gen']) assert.ok(kinds.has(k), 'this test produced a ' + k + ' message');
+  for (const text of h.raws) assert.ok(text.startsWith('{"k":"' + JSON.parse(text).k + '"'), 'the kind comes first: ' + text.slice(0, 40));
 });
 
 // ---------------------------------------------------------------- the media sniffer (AA4 / PERF_JS J3, J2a)
