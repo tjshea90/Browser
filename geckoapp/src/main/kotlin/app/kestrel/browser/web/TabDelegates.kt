@@ -150,6 +150,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
     // ------------------------------------------------------------------ progress
 
     override fun onPageStart(session: GeckoSession, url: String) {
+        app.kestrel.browser.diag.PageTimes.start(tab, url, tab.isPrivateTab)
         tab.loading = true
         tab.progress = maxOf(tab.progress, 5)
         tab.resetPageCounters()
@@ -163,6 +164,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
     }
 
     override fun onPageStop(session: GeckoSession, success: Boolean) {
+        app.kestrel.browser.diag.PageTimes.stop(tab, (0 until 4).sumOf { tab.blocked.get(it) })
         tab.loading = false
         tab.progress = 100
         tab.savedCopyOnce = false
@@ -187,7 +189,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
     override fun onCrash(session: GeckoSession) { Health.log("gecko", "onCrash", tab.url.take(80)); Health.count("gecko.crash"); a.sessionGone(tab, true) }
     override fun onFirstComposite(session: GeckoSession) { if (a.isCurrentTab(tab)) { Health.log("gecko", "first-composite", a.sinceTrim()); Health.count("gecko.firstComposite") } } // a repeat without a navigation = the compositor restarted
     override fun onPaintStatusReset(session: GeckoSession) { if (a.isCurrentTab(tab)) { Health.log("gecko", "paint-reset", a.sinceTrim()); Health.count("gecko.paintReset") } }
-    override fun onFirstContentfulPaint(session: GeckoSession) { a.firstPaint(tab) } // a page that is coming back after its process died: take the preview down
+    override fun onFirstContentfulPaint(session: GeckoSession) { app.kestrel.browser.diag.PageTimes.paint(tab); a.firstPaint(tab) } // a page that is coming back after its process died: take the preview down
     override fun onKill(session: GeckoSession) { Health.log("gecko", "onKill", tab.url.take(80)); Health.count("gecko.kill"); a.sessionGone(tab, false) }
 
     override fun onExternalResponse(session: GeckoSession, response: WebResponse) {
