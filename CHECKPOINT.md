@@ -1,13 +1,13 @@
-# CHECKPOINT 892 — read me first, then TASKS.md
+# CHECKPOINT 923 — read me first, then TASKS.md
 
-**Written:** 2026-11-12T06:16:40Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `a5fc4a1` (this checkpoint is the commit after it)
+**Written:** 2026-11-12T06:32:14Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `a0f7177` (this checkpoint is the commit after it)
 
 ## Just done
-Y2b DONE: core/courier package (Json, Sign+Pairing+ReplayGuard+AuthThrottle, Http parser/writer/Range, PeerGuard, CourierServer) with 58 JVM tests green (HttpTest 18, JsonTest 9, PeerGuardTest 6, ServerTest 13 incl. real loopback server, SignTest 12); Y2b ticked in TASKS
+Y2c DONE (phone-side host logic + staging files + JSON store + SSRF guard; fetcher moved to :core; 86 courier JVM tests green x5; all 468 core tests green; app+geckoapp compile green)
 
 ## Do this next
-Y2c: read Engine public API (core/.../download/Engine.kt), app FileSinks.kt/UrlConnectionFetcher.kt/SqliteStore.kt/StreamStoreFiles.kt and DownloadController.init to decide what is pure-JVM and movable into :core; then write core/.../courier/ JvmFileSinks (SinkFactory), JsonRecStore (Store), host logic CourierHost (routes /v1/hello, /v1/jobs, /v1/jobs/<id>/<action>, /v1/f/<token>/<name>, /v1/speedtest, /v1/probe; HMAC auth; cid idempotency; SSRF guard; janitor) + CourierHostTest over loopback with FakeServer-style origin; design in research/PHONE_OFFLOAD.md sections 4.1, 5, 6.2; ckpt after each file
+Y2d step 1: write core/src/main/kotlin/app/kestrel/core/courier/CourierClient.kt (tablet side HTTP client over java.net: hello with proof check + skew, signed calls with the rule ts = now+skew, +1 when equal or slightly behind the previous ts, status/create/jobs/action/delete/speedtest/probe, RemoteJob parsed from the wire JSON) + CourierClientTest against the real CourierHost (reuse the Phone harness from CourierHostTest: extract it to a shared test file CourierHarness.kt); step 2: PhoneBackend core (logical rows, mirror phone state into DownloadView with note, pause/resume/cancel pass-through, pull via local Engine with the capability URL, fallback to local on refuse/fail, tablet-side persistence phone-jobs.json); step 3: Android glue (gateway discovery, Settings, DownloadController routing, Diagnostics 'phone link'); design = research/PHONE_OFFLOAD.md sections 4.3, 7, 8. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN stays.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ Y2c: read Engine public API (core/.../download/Engine.kt), app FileSinks.kt/UrlC
 
 ## Last ten checkpoints
 ```
+  e084b8b ckpt 892: Y2b DONE: core/courier package (Json, Sign+Pairing+ReplayGuard+AuthThrottle, H
   89585c0 ckpt 874: alpha18 SHIPPED and recorded (kestrel-g-v0.3.0-alpha18, run 43164931160 green,
   1569d02 ckpt 869: gated kestrel-g-v0.3.0-alpha18 (gecko code 117) and pushed it: handoff self-te
   9932748 ckpt 868: pre-ship: alpha18: the updater now always tries to install (it no longer stops
@@ -25,8 +26,7 @@ Y2c: read Engine public API (core/.../download/Engine.kt), app FileSinks.kt/UrlC
   0948a0d ckpt 843: post-dispatch hardening (NOT in alpha17): TsToMp4.peekFormatChange (unmarked s
   376dc8d ckpt 837: alpha17 DISPATCHED: android.yml run 43157262742 (run_number 60) on ccr-a57c163
   2726199 ckpt 836: gated kestrel-g-v0.3.0-alpha17 (gecko code 116) and pushed it: handoff self-te
-  7f4771d ckpt 835: pre-ship: alpha17: the download button is now an icon in the bottom bar (gray 
 ```
 
-(17 automatic checkpoint(s) since the last deliberate one — the
+(30 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
