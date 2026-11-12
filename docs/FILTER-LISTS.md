@@ -30,6 +30,9 @@ licences, separate from this project's code, whose licence the owner has not cho
 Of ~226 000 lines: 99 318 pure-host rules + 20 927 pattern rules + 885 site-level exceptions + 22 768 site-specific and 29 204 generic
 cosmetic rules compiled. Skipped on purpose: regex rules (597, ReDoS risk), procedural cosmetics/scriptlets (14 942, need page-world
 scripting), `redirect=`/`csp=`/`replace=`/`removeparam=`/`cname`/`denyallow` options (2 845), entity domains `site.*` (1 463).
+`$removeparam` (AA3-3b, alpha25): plain parameter names are applied to the address of every top-level navigation (host rules, `||host/path` rules, generic rules, `domain=` / `to=` lists, `site.*` entity hosts, `@@` exceptions, `$badfilter`):
+2 441 of the 2 990 rules of the uBO Privacy list and the AdGuard/uBO "URL Tracking Protection" list (`privacy-removeparam.txt`, added to the sources). Left out: regular-expression values (49), rules for sub-resources only
+or with wildcards in the path or the query part (297). A generic rule can never name a parameter that sites need (`q`, `id`, `v`, `code`, `state`, `token`...). Measured on the real lists: 27 us per address, 61 KB in the snapshot.
 `$popup` (3 032 rules) IS supported: the first URL of a window opened by a page is checked with type `POPUP`.
 
 ## Regenerating the snapshot
