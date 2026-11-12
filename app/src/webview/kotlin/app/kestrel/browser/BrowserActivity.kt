@@ -708,6 +708,37 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
 
     private fun closeSettings() { settingsView?.let { detach(it) } }
 
+    /** Settings > Back up & restore: what only this activity knows (its tabs and dialogs); the flow itself is shared with the other browser (ui/BackupFlow). */
+    private val backupHost = object : app.kestrel.browser.ui.BackupFlow.Host {
+        override fun database() = db
+        override fun isPrivateWindow() = isPrivate
+        override fun tabsForBackup(): List<app.kestrel.core.backup.TabRef> = tabs.filter { it.url.startsWith("http://") || it.url.startsWith("https://") }.map { app.kestrel.core.backup.TabRef(it.url, it.title) }
+        override fun openTabs(refs: List<app.kestrel.core.backup.TabRef>): Int {
+            // restored tabs wait like the tabs of a closed session: nothing loads until one is opened (no burst of pages over the hotspot)
+            val open = tabs.map { it.url.substringBefore('#') }.toHashSet()
+            var n = 0
+            for (r in refs) {
+                if (!open.add(r.url.substringBefore('#'))) continue
+                val t = Tab(nextTabId++)
+                t.url = r.url; t.title = r.title; t.pendingLoad = r.url
+                tabs.add(t); n++
+            }
+            if (n > 0) { updateUi(); saveSessionNow() }
+            return n
+        }
+        override fun say(message: String) { Toast.makeText(this@BrowserActivity, message, Toast.LENGTH_LONG).show() }
+        override fun ask(title: String, message: String, yes: String, no: String, result: (Boolean) -> Unit) { askYesNo(title, message, yes, no, result) }
+        override fun afterRestore() {
+            for (t in tabs) { t.shields = Shields.effective(prefs, t.topHost); t.webView?.let { WebViewFactory.configure(it, t, prefs) } }
+            Io.exec { UpdateJob.schedule(applicationContext) }
+            settingsView?.rebuild()
+            refreshNtpIfShown()
+            updateUi()
+        }
+        override fun appName(): String = "Kestrel " + (try { packageManager.getPackageInfo(packageName, 0).versionName } catch (e: Exception) { "?" })
+    }
+    private val backup by lazy { app.kestrel.browser.ui.BackupFlow(this, backupHost) }
+
     private val settingsListener = object : SettingsListener {
         override fun closeSettings() { this@BrowserActivity.closeSettings() }
         override fun prefsChanged() {
@@ -716,6 +747,8 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         }
         override fun clearBrowsingData() { this@BrowserActivity.clearBrowsingData() }
         override fun resetSiteShields() { Shields.clearAll(); toast("Per-site Shields reset") }
+        override fun backupNow() { backup.backupNow() }
+        override fun restoreFromFile() { backup.restoreFromFile() }
         override fun updateFiltersNow() {
             toast("Checking the filter lists…")
             // own thread: compiling the lists can take several seconds on this CPU and must not hold up history writes on the IO thread
@@ -1008,6 +1041,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
     @Deprecated("framework callback")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (backup.onResult(requestCode, resultCode, data)) return
         if (requestCode == REQ_FILE) {
             // Only content:// results are acceptable. The picker is another app: a rogue one could answer with file:///data/data/<this app>/...
             // and the page would then upload the browser's own private files.
