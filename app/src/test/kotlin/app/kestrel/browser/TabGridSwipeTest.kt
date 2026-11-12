@@ -20,7 +20,7 @@ import org.robolectric.annotation.Config
 
 /** Swipe a card sideways to close a tab (promised to the owner three times); taps and vertical drags are unchanged. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29])
+@Config(sdk = [29], qualifiers = "w600dp-h900dp-mdpi")
 class TabGridSwipeTest {
     private val ctx: Context get() = RuntimeEnvironment.getApplication()
     private val closed = ArrayList<Long>()
@@ -39,24 +39,20 @@ class TabGridSwipeTest {
 
     @Before fun build() {
         tabs = (1L..3L).map { id -> Tab(id).also { it.url = "https://site$id.example/"; it.title = "Site $id" } }
-        grid = TabGrid(ctx, Pal(ctx, false), { false }, listener)
-        grid.measure(View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(900, View.MeasureSpec.EXACTLY))
-        grid.layout(0, 0, 600, 900)
+        // attached to a real (Robolectric) window: a tap's click is posted to the view's handler, which only runs once the view is attached
+        val activity = org.robolectric.Robolectric.buildActivity(android.app.Activity::class.java).create().start().resume().visible().get()
+        grid = TabGrid(activity, Pal(activity, false), { false }, listener)
+        activity.setContentView(grid, FrameLayout.LayoutParams(600, 900))
+        shadowOf(android.os.Looper.getMainLooper()).idle()
         grid.open(tabs, tabs[0])
         shadowOf(android.os.Looper.getMainLooper()).idle()
-        grid.measure(View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(900, View.MeasureSpec.EXACTLY))
-        grid.layout(0, 0, 600, 900)
     }
 
     private fun card(title: String): View {
         val found = ArrayList<View>(); grid.findViewsWithText(found, title, View.FIND_VIEWS_WITH_CONTENT_DESCRIPTION)
         assertTrue("card '$title' exists", found.isNotEmpty())
-        var v = found[0]
-        while (v.parent !== null && (v.parent as? View)?.onTouchEventHasListener() != true) { v = v.parent as View; if (v.parent is android.widget.LinearLayout && (v.parent as View).parent is android.widget.LinearLayout) break }
         return found[0]
     }
-
-    private fun View.onTouchEventHasListener() = false
 
     private fun drag(v: View, dx: Float, dy: Float, steps: Int = 8) {
         val t0 = SystemClock.uptimeMillis()
@@ -97,6 +93,7 @@ class TabGridSwipeTest {
         val t0 = SystemClock.uptimeMillis()
         c.dispatchTouchEvent(MotionEvent.obtain(t0, t0, MotionEvent.ACTION_DOWN, 100f, 100f, 0))
         c.dispatchTouchEvent(MotionEvent.obtain(t0, t0 + 40, MotionEvent.ACTION_UP, 100f, 100f, 0))
+        shadowOf(android.os.Looper.getMainLooper()).idle()
         assertEquals(listOf(3L), selected)
         assertTrue(closed.isEmpty())
     }
