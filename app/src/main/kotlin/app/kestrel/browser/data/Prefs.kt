@@ -49,6 +49,11 @@ class Prefs private constructor(ctx: Context) {
     var http3On: Boolean get() = bool("net_h3", true); set(v) = put("net_h3", v)
     /** Warm up the connection (DNS, TCP, TLS) to the site the top address-bar suggestion names, so its first bytes do not wait for the handshakes when the owner presses Go. History and bookmarks only, never in a private tab. */
     var preconnect: Boolean get() = bool("net_preconnect", true); set(v) = put("net_preconnect", v)
+
+    /** Downloads (Settings > Downloads): one speed limit for all of them in KB/s (0 = none), how many run at once (1-3, default 2) and connections per download (0 = automatic, else 1-3). The last two apply the next time the browser starts. */
+    var dlLimitKBps: Int get() = sp.getInt("dl_limit_kbps", 0); set(v) = put("dl_limit_kbps", v.coerceAtLeast(0))
+    var dlActive: Int get() = sp.getInt("dl_active", 2).coerceIn(1, 3); set(v) = put("dl_active", v.coerceIn(1, 3))
+    var dlConns: Int get() = sp.getInt("dl_conns", 0).coerceIn(0, 3); set(v) = put("dl_conns", v.coerceIn(0, 3))
     /** Kestrel G: the blocking engine runs inside the Gecko extension (fast). Off = compatibility mode, every request asks the app (the older, slower path). Diagnostics has the switch. */
     var engineInExtension: Boolean get() = bool("eng_ext", true); set(v) = put("eng_ext", v)
     var pullRefresh: Boolean get() = bool("pull_refresh", true); set(v) = put("pull_refresh", v)

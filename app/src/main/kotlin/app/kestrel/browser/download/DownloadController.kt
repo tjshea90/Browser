@@ -35,6 +35,11 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 object DownloadController {
     private var engine: Engine? = null
+    /** The one speed limit of every download (Settings > Downloads); shared by both engines. */
+    @Volatile private var limiter: RateLimiter? = null
+
+    /** Settings: KB/s over all downloads together, 0 = no limit. Takes effect at once, also for downloads in progress. */
+    fun setSpeedLimit(kbps: Int) { limiter?.bytesPerSec = kbps.coerceAtLeast(0) * 1024L }
     /** The second engine: segmented streams (HLS) into one file. Same list, same notifications; its ids live above 1e9 ([StreamEngine.owns]). */
     private var streams: StreamEngine? = null
     private var streamStore: StreamStoreFiles? = null
@@ -73,7 +78,10 @@ object DownloadController {
             override val metered: Boolean get() = netMetered
         }
         val low = app.getSystemService(ActivityManager::class.java)?.isLowRamDevice != false
-        val cfg = Config(maxConnsTotal = if (low) 3 else 6, maxConnsPerDownload = if (low) 3 else 4)
+        val prefs = app.kestrel.browser.data.Prefs.get(app)
+        val cfg = Config(maxActive = prefs.dlActive, maxConnsTotal = if (low) 3 else 6, maxConnsPerDownload = if (prefs.dlConns in 1..3) prefs.dlConns else if (low) 3 else 4)
+        val lim = RateLimiter().also { it.bytesPerSec = prefs.dlLimitKBps * 1024L }
+        limiter = lim
         val e = Engine(
             { fetchers[it] ?: fetchers[0] }, AppSinks(MediaStoreSinks(app), FileSinks(File(app.filesDir, "updates"))), SqliteStore(app), net, control, Clock.System, cfg,
             Spawner { name, task ->
