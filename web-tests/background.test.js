@@ -271,44 +271,16 @@ async function onPage(app) {
 }
 const nav = (h, url, extra) => h.mainFrame(url, Object.assign({ method: 'GET', originUrl: PAGE, requestId: 'r' + Math.random() }, extra || {}));
 
-test('guard: a tap that was not on a link, then a jump of the tab to another site, is cancelled and reported', async () => {
+test('guard: every real tap is passed on to the app (the app judges a jump that follows it) and the extension itself never cancels a navigation', async () => {
   const h = await onPage();
   h.message({ k: 'pop', d: 'tap|', p: PAGE });
-  eq(nav(h, OTHER), { cancel: true });
-  await tick(10);
-  const pop = h.of('pop');
-  assert.equal(pop.length, 1);
-  assert.equal(pop[0].d, 'redirect|' + OTHER);
-  assert.equal(pop[0].p, PAGE);
-});
-
-test('guard: tapping a link and going to that very link is never judged', async () => {
-  const h = await onPage();
   h.message({ k: 'pop', d: 'tap|' + OTHER, p: PAGE });
-  eq(nav(h, OTHER), {});
-  assert.equal(h.of('pop').length, 0);
-});
-
-test('guard: a jump with no recent tap, a POST, a typed address, a same-site page and an old tap are all left alone', async () => {
-  const h = await onPage();
-  eq(nav(h, OTHER), {}, 'no tap at all');
-  h.message({ k: 'pop', d: 'tap|', p: PAGE });
-  eq(nav(h, OTHER, { method: 'POST' }), {}, 'form posts (sign-in, search, payment)');
-  eq(h.mainFrame(OTHER, { method: 'GET', requestId: 'typed' }), {}, 'no originating page: typed, bookmark, Back, the app\'s own buttons');
-  eq(nav(h, 'https://cdn.example.com/x'), {}, 'same site (another subdomain of example.com)');
-  h.clock.now += 2600;
-  eq(nav(h, OTHER), {}, 'the tap is older than 2.5 seconds');
-  assert.equal(h.of('pop').length, 0);
-});
-
-test('guard: a redirect hop of a navigation that was already judged is not judged again, and a site with the guard off is exempt', async () => {
-  const h = await onPage();
-  h.message({ k: 'pop', d: 'tap|https://short.example/abc', p: PAGE });
-  eq(nav(h, 'https://short.example/abc', { requestId: 'chain' }), {});
-  eq(nav(h, OTHER, { requestId: 'chain' }), {}, 'the hop to the landing page shares the request id');
-  const off = await onPage(guardApp(0));
-  off.message({ k: 'pop', d: 'tap|', p: PAGE });
-  eq(nav(off, OTHER), {}, 'flags say the guard does not apply (Shields off for this site, or the setting is off)');
+  await tick(10);
+  const taps = h.of('pop').filter((m) => m.d.startsWith('tap|'));
+  assert.deepEqual(taps.map((m) => m.d), ['tap|', 'tap|' + OTHER]);
+  assert.ok(taps.every((m) => m.p === PAGE));
+  eq(nav(h, OTHER), {}, 'the decision is the app\'s, made before the navigation starts');
+  assert.equal(h.of('pop').filter((m) => !m.d.startsWith('tap|')).length, 0, 'a tap is not a blocked pop-up');
 });
 
 test('guard: the page-side script asks whether it applies and what it blocked is forwarded to the app', async () => {
