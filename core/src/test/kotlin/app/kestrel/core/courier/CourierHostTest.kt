@@ -246,7 +246,9 @@ class CourierHostTest {
         val t = Tablet(p.base)
         val stream = ""","kind":"stream","stream":{"playlistUrl":"https://cdn.example/v/index.m3u8","nameStem":"Clip","companion":{"playlistUrl":"URL","nameStem":"Clip","ext":"m4a"}}"""
         p.dns = listOf(byteArrayOf(93, 184.toByte(), 216.toByte(), 34))
-        assertEquals("a sound on a local address", 403, t.create(cid(11), "https://cdn.example/v/index.m3u8", stream.replace("URL", "http://192.168.43.1/a.m3u8")).first)
+        p.dnsFor["sound.example"] = listOf(byteArrayOf(192.toByte(), 168.toByte(), 43, 1))
+        assertEquals("a sound whose name points at the local network", 403, t.create(cid(11), "https://cdn.example/v/index.m3u8", stream.replace("URL", "https://sound.example/a.m3u8")).first)
+        assertEquals("a sound at a local address", 403, t.create(cid(15), "https://cdn.example/v/index.m3u8", stream.replace("URL", "http://127.0.0.1/a.m3u8")).first)
         assertEquals("a sound that is not a web address", 400, t.create(cid(12), "https://cdn.example/v/index.m3u8", stream.replace("URL", "ftp://a.test/a.m3u8")).first)
         assertEquals("a sound without an address", 400, t.create(cid(13), "https://cdn.example/v/index.m3u8", ""","kind":"stream","stream":{"playlistUrl":"https://cdn.example/v/index.m3u8","companion":{"nameStem":"x"}}""").first)
         assertEquals("both public: accepted", 201, t.create(cid(14), "https://cdn.example/v/index.m3u8", stream.replace("URL", "https://cdn.example/a/index.m3u8")).first)
