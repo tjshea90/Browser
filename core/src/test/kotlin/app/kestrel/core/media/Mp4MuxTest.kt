@@ -20,7 +20,7 @@ class Mp4MuxTest {
         val out = MemOut()
         val m = newMux(out)
         m.setVideo(64, 36, avcC); m.setAudio(asc, 44100, 2)
-        // IPBB-like decode order: dts 0,1,2,3 frames; composition offsets 2,2,0,0 frames; one keyframe
+        // decode order I P B B: composition offsets 2,2,0,0 frames; one keyframe
         val frame = 3600L
         m.addVideo(fill(100, 1), 0, 100, 0, (2 * frame).toInt(), true)
         m.addVideo(fill(50, 2), 0, 50, frame, (2 * frame).toInt(), false)
@@ -52,26 +52,24 @@ class Mp4MuxTest {
         val all = (v.samples + a.samples).sortedBy { it.offset }
         assertTrue(all.first().offset >= r.mdatStart); assertTrue(all.last().offset + all.last().size <= r.mdatEnd)
         for (k in 1 until all.size) assertTrue(all[k].offset >= all[k - 1].offset + all[k - 1].size)
-        // the picture starts at its decode time 0 but is shown 2 frames later; sound starts at 0 -> the presentation zero is the sound: the picture skips 0 ticks? (vPts0 = 7200 > aFirst = 0)
-        assertEquals(1, v.edits.size == 0 .let { 1 }.let { v.edits.size.coerceAtLeast(0) }.let { if (v.edits.isEmpty()) 1 else v.edits.size })
+        // sound starts at 0 and the first picture is shown at 7200: the earliest sample is the sound, the picture starts at its decode time 0 -> nothing to shift
+        assertTrue(v.edits.isEmpty()); assertTrue(a.edits.isEmpty())
     }
 
     @Test fun anEarlierSoundLeavesTheSkipInTheEditListOfThePicture() {
         val out = MemOut()
         val m = newMux(out)
         m.setVideo(64, 36, avcC); m.setAudio(asc, 48000, 2)
-        // picture: dts 0, shown at 7200 (B-frame delay); sound starts 5110 ticks (90 kHz) after the picture's decode time = 2336 sample ticks of 48 kHz... use 2728 ticks (= 5115 at 90k)
-        m.addVideo(fill(10, 1), 0, 10, 0, 7200, true)
+        m.addVideo(fill(10, 1), 0, 10, 0, 7200, true)                      // decode time 0, shown at 7200
         m.addVideo(fill(10, 1), 0, 10, 3600, 7200, false)
-        m.addAudio(fill(10, 5), 0, 10, intArrayOf(10), 1, 2728)
+        m.addAudio(fill(10, 5), 0, 10, intArrayOf(10), 1, 2728)           // the sound starts at 5115 (90 kHz ticks): earlier than the first picture is shown
         m.finish()
         val r = Mp4Reader(out.bytes())
         val v = r.track("vide")!!; val a = r.track("soun")!!
-        val aFirst90 = 2728L * 90000 / 48000
-        val p0 = minOf(7200L, aFirst90)
-        assertEquals("the picture skips what comes before the earliest sample", listOf(Mp4Reader.Edit(((2 * 3600L - (0 - (0 - p0).coerceAtMost(0)) - p0 + 500) / 1).let { v.edits[0].duration }, p0 - 0).mediaTime), listOf(v.edits[0].mediaTime))
         assertEquals(1, v.edits.size)
-        assertEquals(0L, a.edits.size.toLong())
+        assertEquals("the picture's media is entered 5115 ticks in, so it is shown 2085 ticks after the sound", 5115L, v.edits[0].mediaTime)
+        assertEquals(23L, v.edits[0].duration)                             // (7200 - 5115) ticks = 23 ms
+        assertTrue(a.edits.isEmpty())
     }
 
     @Test fun aLaterPictureGetsAnEmptyEditInFront() {
@@ -81,12 +79,10 @@ class Mp4MuxTest {
         m.addAudio(fill(10, 5), 0, 10, intArrayOf(10), 1, -2000)             // the sound starts BEFORE the picture's decode time 0
         m.addVideo(fill(10, 1), 0, 10, 0, 0, true)
         m.finish()
-        val r = Mp4Reader(out.bytes())
-        val v = r.track("vide")!!
+        val v = Mp4Reader(out.bytes()).track("vide")!!
         assertEquals(2, v.edits.size)
         assertEquals(-1L, v.edits[0].mediaTime)
-        val leadMs = (2000L * 90000 / 44100 * 1000 + 45000) / 90000
-        assertEquals(leadMs, v.edits[0].duration)
+        assertEquals((2000L * 90000 / 44100 * 1000 + 45000) / 90000, v.edits[0].duration)
         assertEquals(0L, v.edits[1].mediaTime)
     }
 
@@ -101,8 +97,10 @@ class Mp4MuxTest {
         m.addVideo(fill(10, 1), 0, 10, 7200, 0, false)
         m.finish()
         val r = Mp4Reader(out.bytes())
-        assertEquals(2, r.track("vide")!!.chunkCount); assertEquals(1, r.track("soun")!!.chunkCount)
-        assertEquals(listOf(48L, 58L, 70L), listOf(r.track("vide")!!.samples[0].offset, r.track("soun")!!.samples[0].offset, r.track("vide")!!.samples[1].offset))
+        val v = r.track("vide")!!; val a = r.track("soun")!!
+        assertEquals(2, v.chunkCount); assertEquals(1, a.chunkCount)
+        assertEquals(listOf(48L, 66L, 76L), v.samples.map { it.offset })
+        assertEquals(listOf(58L, 62L), a.samples.map { it.offset })
     }
 
     @Test fun aGapInTheSoundLengthensTheFrameBeforeIt() {
@@ -111,11 +109,13 @@ class Mp4MuxTest {
         m.setVideo(64, 36, avcC); m.setAudio(asc, 44100, 2)
         m.addVideo(fill(10, 1), 0, 10, 0, 0, true)
         m.addAudio(fill(8, 7), 0, 8, intArrayOf(4, 4), 2, 0)
-        m.addAudio(fill(4, 7), 0, 4, intArrayOf(4), 1, 2048 + 4410)       // 100 ms after the end: a real gap
-        m.addAudio(fill(4, 7), 0, 4, intArrayOf(4), 1, 3072 + 4410 + 5)    // 5 ticks off the grid: ignored (below 50 ms)
+        m.addAudio(fill(4, 7), 0, 4, intArrayOf(4), 1, 2048 + 4410L)       // 100 ms after the end: a real gap
+        m.addAudio(fill(4, 7), 0, 4, intArrayOf(4), 1, 3072 + 4410 + 5L)   // 5 ticks off the grid: ignored (far below 50 ms)
         m.finish()
         val a = Mp4Reader(out.bytes()).track("soun")!!
-        assertEquals(listOf(1024L, 1024L + 4410, 1024L, 1024L), a.samples.zipWithNext { x, y -> y.dts - x.dts } + listOf(1024L).let { emptyList<Long>() }.let { listOf(1024L, 1024L + 4410, 1024L, 1024L) }.take(0).let { a.samples.zipWithNext { x, y -> y.dts - x.dts }.let { d -> listOf(1024L, 1024L + 4410, 1024L, 1024L).take(d.size) } })
+        assertEquals(4, a.samples.size)
+        assertEquals(listOf(1024L, 1024L + 4410L, 1024L), a.samples.zipWithNext { x, y -> y.dts - x.dts })
+        assertEquals(2048L + 4410L + 2048L, a.mediaDuration)
     }
 
     @Test fun rollbackCutsTablesAndPositionBackAndTheFileStaysValid() {
@@ -145,20 +145,22 @@ class Mp4MuxTest {
         var dts = 0L; var tick = 0L
         fun some(n: Int, base: Int) {
             for (i in 0 until n) {
-                m.addVideo(fill(20 + (i * 7) % 13, base + i), 0, 20 + (i * 7) % 13, dts, if (i % 3 == 0) 7200 else 0, i % 5 == 0); dts += 3600
+                val len = 20 + (i * 7) % 13
+                m.addVideo(fill(len, base + i), 0, len, dts, if (i % 3 == 0) 7200 else 0, i % 5 == 0); dts += 3600
                 if (i % 2 == 0) { m.addAudio(fill(9, 3), 0, 9, intArrayOf(4, 5), 2, tick); tick += 2048 }
             }
         }
         some(11, 0); journal.add(m.drainJournal())
         val mark = m.mark()
+        val dtsAtMark = dts; val tickAtMark = tick
         some(7, 50); journal.add(m.drainJournal())
         m.rollback(mark)
-        dts = m.lastVideoDts + 3600; tick = 11 * 0L + (m.audioEndTick)
+        dts = dtsAtMark; tick = tickAtMark
         some(9, 100); journal.add(m.drainJournal())
         m.finish()
-        // a fresh muxer replays the journal; the sample bytes are already "in the file"
+        // a fresh muxer replays the journal; the sample bytes are already in the file
         val b = MemOut()
-        System.arraycopy(a.data, 0, b.data, 0, a.size.coerceAtMost(b.data.size)); b.size = a.size
+        b.write(0, a.data, 0, a.size)
         val m2 = Mp4Mux(b, fixedNow)
         for (j in journal) m2.replay(j)
         assertEquals(m.videoCount, m2.videoCount); assertEquals(m.audioCount, m2.audioCount); assertEquals(m.pos, m2.pos)
@@ -173,20 +175,21 @@ class Mp4MuxTest {
         }
         val spy = Spy()
         val m = Mp4Mux(spy, fixedNow); m.start()
-        m.setVideo(64, 36, avcC)
+        m.setVideo(64, 36, avcC); m.setAudio(asc, 44100, 2)
         val big = ByteArray(64 shl 20)
         for (i in 0 until 70) m.addVideo(big, 0, big.size, i * 3600L, 0, i == 0)           // 4.4 GB of "video"
+        m.addAudio(ByteArray(8), 0, 8, intArrayOf(8), 1, 0)                                 // its chunk starts beyond 4 GB
         val total = m.finish()
         assertTrue(total > 0xFFFFFFFFL)
         val header = spy.small.last { it.first == 32L }.second
         assertArrayEquals(byteArrayOf(0, 0, 0, 1, 'm'.code.toByte(), 'd'.code.toByte(), 'a'.code.toByte(), 't'.code.toByte()), header.copyOfRange(0, 8))
         val size = header.copyOfRange(8, 16).fold(0L) { acc, x -> (acc shl 8) or (x.toLong() and 0xFF) }
-        assertEquals("the box covers the payload up to where the moov begins", 48L + 70L * (64 shl 20) - 32L, size)
+        assertEquals("the box covers the payload up to where the moov begins", 48L + 70L * (64 shl 20) + 8L - 32L, size)
         val moov = spy.small.last { it.second.size > 100 }.second
         assertTrue(String(moov, Charsets.ISO_8859_1).contains("co64"))
     }
 
-    @Test fun anyNumberOfSamplesKeepsTheTablesConsistent() {
+    @Test fun manySamplesKeepTheTablesConsistent() {
         val out = MemOut()
         val m = newMux(out)
         m.setVideo(64, 36, avcC); m.setAudio(asc, 44100, 1)
@@ -199,6 +202,6 @@ class Mp4MuxTest {
         val v = r.track("vide")!!
         assertEquals(5000, v.samples.size); assertEquals(100, v.samples.count { it.sync })
         assertEquals(5000 * 3600L, v.mediaDuration)
-        assertEquals(3334 * 2, r.track("soun")!!.samples.size)
+        assertEquals(3334, r.track("soun")!!.samples.size)
     }
 }
