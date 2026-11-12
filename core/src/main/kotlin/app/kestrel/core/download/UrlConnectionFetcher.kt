@@ -16,7 +16,7 @@ import javax.net.ssl.SSLException
  * Pure JDK, so it lives in :core and the phone app (Kestrel Courier) uses the very same class. [guard] is asked before EVERY connection, redirect hops included,
  * and may throw [FetchException] (the courier refuses targets on private networks: research/PHONE_OFFLOAD.md section 6.2).
  */
-class UrlConnectionFetcher(private val guard: ((URL) -> Unit)? = null) : Fetcher {
+class UrlConnectionFetcher(private val guard: ((URL) -> Unit)? = null, private val proxy: java.net.Proxy? = null) : Fetcher {
     override fun open(req: FetchRequest): FetchResponse {
         var url = req.url
         val firstHost = try { URL(url).host } catch (e: Exception) { throw FetchException(FetchException.Kind.BAD_URL, "bad address") }
@@ -25,7 +25,7 @@ class UrlConnectionFetcher(private val guard: ((URL) -> Unit)? = null) : Fetcher
             val u = try { URL(url) } catch (e: Exception) { throw FetchException(FetchException.Kind.BAD_URL, "bad address") }
             if (u.protocol != "http" && u.protocol != "https") throw FetchException(FetchException.Kind.BAD_URL, "not a web address")
             guard?.invoke(u)
-            val c = u.openConnection() as HttpURLConnection
+            val c = (if (proxy != null) u.openConnection(proxy) else u.openConnection()) as HttpURLConnection
             try {
                 c.instanceFollowRedirects = false
                 c.connectTimeout = req.connectMs
