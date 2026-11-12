@@ -85,13 +85,13 @@ object Json {
             }
         }
 
+        /** [depth] = how many arrays/objects enclose this value; at most [maxDepth] containers may nest. */
         fun value(depth: Int): Any? {
-            if (depth > maxDepth) fail("nested too deeply")
             if (pos >= s.length) fail("unexpected end")
             val c = s[pos]
             return when {
-                c == '{' -> obj(depth)
-                c == '[' -> arr(depth)
+                c == '{' -> { if (depth >= maxDepth) fail("nested too deeply"); obj(depth) }
+                c == '[' -> { if (depth >= maxDepth) fail("nested too deeply"); arr(depth) }
                 c == '"' -> str()
                 c == 't' -> lit("true", true)
                 c == 'f' -> lit("false", false)
