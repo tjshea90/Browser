@@ -46,6 +46,23 @@ object GeckoEngine {
     @Volatile var warmCalls = 0
         private set
 
+    /** `https://host[:port]/` of an https address, the origin a warm-up should open (a suggestion with its own port is warmed on THAT port); null for anything else. */
+    fun warmOrigin(url: String): String? {
+        if (!url.startsWith("https://", true)) return null
+        val host = app.kestrel.core.url.UrlParts.hostOf(url) ?: return null
+        val port = try { android.net.Uri.parse(url).port } catch (e: Exception) { -1 }
+        return "https://" + host + (if (port > 0 && port != 443) ":$port" else "") + "/"
+    }
+
+    /**
+     * Before the engine's profile is ready GeckoView QUEUES a speculative connect and runs it on the Gecko thread itself, so it needs no dispatch (research/REVIEW-EXTERNAL-1.md 2.2 B): called while
+     * the app starts, it lets DNS, TCP and TLS to the page that is about to load (a link that launched the app, the page that was in front) overlap with the content process starting. After the
+     * profile is ready the engine drops a call made from any other thread, so this is harmless later. Only for pages that load anyway: it opens nothing the owner did not ask for.
+     */
+    fun warmAtStart(origin: String) {
+        try { org.mozilla.gecko.GeckoThread.speculativeConnect(origin); warmCalls++; app.kestrel.browser.diag.Health.log("engine", "warm-start", origin.take(80)) } catch (e: Throwable) { /* only a head start */ }
+    }
+
     fun runtime(ctx: Context): GeckoRuntime = rt ?: synchronized(this) { rt ?: create(ctx.applicationContext).also { rt = it } }
 
     private fun create(ctx: Context): GeckoRuntime {

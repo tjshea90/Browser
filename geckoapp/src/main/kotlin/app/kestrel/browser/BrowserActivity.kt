@@ -211,12 +211,16 @@ open class BrowserActivity : Activity(), DockListener {
         tabs.add(firstTab)
         show(firstTab)
         val launch = urlFromIntent(intent)
+        if (prefs.preconnect && launch != null) GeckoEngine.warmOrigin(launch)?.let { GeckoEngine.warmAtStart(it) } // the link that launched the app: its handshakes overlap with the engine starting (EX-2 B)
         if (launch == null) earlyCover() // closed on a page, now starting without a link: "Opening <host>" from the first frame, not the Home screen for a moment
         if (intent?.getBooleanExtra(Notifier.EXTRA_OPEN_DOWNLOADS, false) == true) Io.main.post { showDownloads() }
         handleUpdateIntent(intent)
         Io.fast {
             val text = try { sessionFile().takeIf { it.isFile }?.readText() } catch (e: Exception) { null }
             val session = SessionCodec.decode(text)
+            if (prefs.preconnect && launch == null && session != null) { // the page that was in front loads at once: warm its origin while the engine starts (EX-2 B)
+                session.tabs.firstOrNull { it.id == session.selectedId }?.url?.let { u -> GeckoEngine.warmOrigin(u)?.let { GeckoEngine.warmAtStart(it) } }
+            }
             // each regular tab's saved engine state (Back stack + scroll position) is read here, off the UI thread; it is parsed only when the tab is opened
             val states = HashMap<Long, String>()
             if (session != null && TabStateStore.useEngine(applicationContext, Flavor.engineVersion)) for (r in session.tabs) TabStateStore.read(applicationContext, r.id)?.let { states[r.id] = it }
@@ -1180,10 +1184,7 @@ open class BrowserActivity : Activity(), DockListener {
      */
     private fun preconnect(url: String) {
         if (!prefs.preconnect || current?.isPrivateTab == true || !url.startsWith("https://", true)) return
-        val host = UrlParts.hostOf(url) ?: return
-        // the origin the page will really use: a suggestion with its own port (a dev server, a router page) is warmed on THAT port, not on 443
-        val port = try { android.net.Uri.parse(url).port } catch (e: Exception) { -1 }
-        val origin = "https://" + host + (if (port > 0 && port != 443) ":$port" else "") + "/"
+        val origin = GeckoEngine.warmOrigin(url) ?: return // the origin the page will really use: a suggestion with its own port is warmed on THAT port, not on 443
         val now = SystemClock.uptimeMillis()
         if (origin == warmHost && now - warmAt < 30_000) return
         warmHost = origin; warmAt = now
