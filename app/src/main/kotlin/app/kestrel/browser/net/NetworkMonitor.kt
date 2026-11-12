@@ -69,11 +69,16 @@ object NetworkMonitor {
         val c = ctx.applicationContext.getSystemService(ConnectivityManager::class.java) ?: return
         cm = c
         saverOn = app.kestrel.browser.data.Prefs.get(ctx).dataSaver != app.kestrel.core.shield.DataSaver.OFF
-        debugVpn = app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.vpn") == "1"        // DEBUG builds only: pretend a VPN is up (the emulator has none)
-        val first = c.activeNetwork?.let { c.getNetworkCapabilities(it) }
-        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) update(first) else Io.main.post { update(first) }
+        val dv = app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.vpn")        // DEBUG builds only: pretend a VPN is up (the emulator has none); "2" = LinkMeter's own tunnel
+        debugVpn = dv == "1" || dv == "2"; debugTunnel = dv == "2"
+        val active = c.activeNetwork
+        val first = active?.let { c.getNetworkCapabilities(it) }
+        val firstLink = addressesOf(active?.let { c.getLinkProperties(it) })
+        val begin = { update(first); updateLink(firstLink) }
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) begin() else Io.main.post { begin() }
         val cb = object : ConnectivityManager.NetworkCallback() {
             override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = update(caps)
+            override fun onLinkPropertiesChanged(network: Network, lp: LinkProperties) = updateLink(addressesOf(lp))
             override fun onLost(network: Network) = update(null)
             override fun onUnavailable() = update(null)
         }
