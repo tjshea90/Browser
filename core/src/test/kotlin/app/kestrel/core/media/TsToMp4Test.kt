@@ -34,6 +34,8 @@ class TsToMp4Test {
         r.m.startFresh()
         for (i in segs.indices) feedSegment(r, segs, i, piece)
         val fin = r.m.finish()
+        // KESTREL_MUX_DUMP=<dir> keeps every file the tests make, for ffprobe / a player
+        System.getenv("KESTREL_MUX_DUMP")?.let { File(it, "mux-" + segs.joinToString("-") { s -> s.name.removeSuffix(".ts") + (if (s.disc) "d" else "") } + ".mp4").writeBytes(r.out.bytes()) }
         return r.out.bytes() to (fin to r)
     }
 
