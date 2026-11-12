@@ -20,6 +20,7 @@ import app.kestrel.browser.data.Prefs
 import app.kestrel.browser.ProcessLife
 import app.kestrel.core.update.Release
 import app.kestrel.core.update.ReleaseAsset
+import app.kestrel.core.update.EngineWatch
 import app.kestrel.core.update.UpdateLogic
 import app.kestrel.core.update.UpdateOffer
 import org.json.JSONArray
@@ -211,6 +212,8 @@ object UpdateManager {
                 val s = sp(app)
                 val installed = installedCode(app)
                 val now = System.currentTimeMillis()
+                // the browser engine's newest version: information only, so a failure here never fails the check
+                try { checkEngine(app) } catch (e: Exception) { /* offline or Mozilla's server is slow: the stored answer stays */ }
                 // recomputed from the releases against the code installed NOW (a stored answer goes stale when the app was updated or replaced by hand since)
                 val offer = UpdateLogic.choose(fetchReleases(app), Flavor.updateTagPrefix, installed)
                 s.edit().putString("offer", offer?.let { offerToJson(it) }).putLong("checked", now).apply()
@@ -241,6 +244,35 @@ object UpdateManager {
                 fail(app, "The update check failed (${e.javaClass.simpleName}).")
             }
         }, "kestrel-update-check").apply { priority = Thread.MIN_PRIORITY; isDaemon = true }.start()
+    }
+
+    // ------------------------------------------------------------------------------------------- the browser engine (Kestrel G): what Mozilla has published
+
+    /** The newest engine version found by the last look ("161.0.20261110090000"), null before the first one. */
+    fun engineNewest(ctx: Context): String? = sp(ctx).getString("engine_newest", null)
+
+    /** True when Mozilla has published a newer engine than the one in this app (Kestrel G only). */
+    fun engineIsNewer(ctx: Context): Boolean = EngineWatch.isNewer(Flavor.engineVersion, engineNewest(ctx))
+
+    /** One conditional request to Mozilla's Maven metadata (a 304 costs headers only). */
+    private fun checkEngine(app: Context) {
+        val url = Flavor.engineMetaUrl
+        if (url.isEmpty() || !url.startsWith("https://")) return
+        val s = sp(app)
+        val c = open(url)
+        val etag = s.getString("engine_etag", null)
+        if (etag != null && s.getString("engine_newest", null) != null) c.setRequestProperty("If-None-Match", etag)
+        try {
+            when (c.responseCode) {
+                304 -> {}
+                200 -> {
+                    val text = c.inputStream.use { input -> val out = java.io.ByteArrayOutputStream(); val buf = ByteArray(16 * 1024); var n: Int; var total = 0; while (input.read(buf).also { n = it } >= 0 && total < 2_000_000) { out.write(buf, 0, n); total += n }; out.toString("UTF-8") }
+                    val newest = EngineWatch.newest(text)
+                    if (newest != null) s.edit().putString("engine_newest", newest).putString("engine_etag", c.getHeaderField("ETag")).apply()
+                }
+                else -> {}
+            }
+        } finally { c.disconnect() }
     }
 
     private fun fail(ctx: Context, message: String) {
