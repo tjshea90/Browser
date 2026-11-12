@@ -438,3 +438,35 @@
 >   - UI-2: the look.
 >   - UI-3: landscape tabs.
 <!-- sha:b8a3739fe815 -->
+
+## 2026-11-12T00:32:05Z
+> **alpha14 is out, and it fixes the "up to date" bug.**
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha14
+>
+> **Why it said "up to date":** GitHub hands back this repo's releases in an odd order, not newest first. The app only read the first eight, and those stopped at alpha9, so it never saw alpha10 or anything newer. That is why every version from alpha9 up looked current.
+>
+> **What I changed**
+> - **The check:** the app now asks for the newest versions directly and works out the order itself. The new check can't be fooled by GitHub's order.
+> - **Older versions:** I numbered this release 0.3.0 on purpose. I checked that GitHub now lists it first, which is inside the first eight entries that the old broken check reads.
+>
+> **What you do:** in alpha9–alpha13, open Menu > Updates and tap Check now. It should offer alpha14. If it still says "up to date", download the APK from the link above once, and every later update works.
+>
+> **Tested:** the real GitHub release order is reproduced in tests. The old check misses alpha13 for every installed version, and the new one finds it. An end-to-end test against a fake GitHub server also passes, including the cheap "nothing new" case. alpha14 itself was built and signed by GitHub.
+>
+> **Not verified:** I haven't installed alpha14 on the tablet or seen the update offer on a real device.
+>
+> **Now building, from your message**
+> - **The pop-up and redirect guard** for movie sites: it blocks new tabs and page jumps you didn't ask for, and shows a "Blocked a pop-up – Open" notice in case you wanted one. It's written and passes 15 browser-behaviour tests, but I haven't run it in the app's engine yet.
+> - **A Download video button** that shows whenever a page has video, plus a long-press option that works even on custom players.
+> - **MP4 instead of `.ts`.**
+> - **Finding the video without pressing play.**
+>
+> **Still open from your message:**
+> - The daily check for app, engine and ad-block updates, with an Update dialog.
+> - The download manager upgrade and research.
+> - Faster startup, page loads and scrolling.
+> - The ad-blocking technology assessment, plus auto-updating lists.
+>
+> MKV needs a muxer Android doesn't include, and MP4 plays everywhere, so I'll explain that rather than force it.
+<!-- sha:7790820b3774 -->
