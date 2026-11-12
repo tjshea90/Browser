@@ -75,7 +75,9 @@ function harness(app, opts) {
   const req = (type, url, page) => listeners.before({ type, url, tabId: 1, frameId: 0, documentUrl: page, frameAncestors: [{ url: page, frameId: 0 }] });
   return {
     sent, ctx, listeners, clock,
-    mainFrame: (url) => listeners.before({ type: 'main_frame', url, tabId: 1, frameId: 0 }),
+    mainFrame: (url, extra) => listeners.before(Object.assign({ type: 'main_frame', url, tabId: 1, frameId: 0 }, extra || {})),
+    /** a message from a content script (the first listener that answers wins, like the browser) */
+    message: (m, tabId) => { for (const f of listeners.message || []) { const r = f(m, { tab: tabId === undefined ? { id: 1 } : (tabId < 0 ? undefined : { id: tabId }) }); if (r !== undefined) return r; } return undefined; },
     req,
     flushTimers: async () => { const t = timers.splice(0); t.forEach((f) => f()); await tick(); },
     of: (k) => sent.filter((m) => m.k === k),
@@ -254,4 +256,70 @@ test('documents and unknown pages are left alone', async () => {
   const h = harness(standardApp());
   eq(h.mainFrame(PAGE), {});
   eq(h.listeners.before({ type: 'script', url: AD, tabId: -1 }), {}, 'no page to judge against');
+});
+
+// ---------------------------------------------------------------- the pop-up and forced-redirect guard (background half)
+const GUARD_CFG = `1:1:${ID}:1`;
+const OTHER = 'https://ad-landing.example/promo';
+const guardApp = (flags) => (m) => (m.k === 'cfg' ? `1:1:${ID}:${flags === undefined ? 1 : flags}` : standardApp()(m));
+async function onPage(app) {
+  const h = harness(app || guardApp());
+  h.mainFrame(PAGE);
+  await until(() => h.of('cfg').length >= 1, 'cfg');
+  await tick(10);
+  return h;
+}
+const nav = (h, url, extra) => h.mainFrame(url, Object.assign({ method: 'GET', originUrl: PAGE, requestId: 'r' + Math.random() }, extra || {}));
+
+test('guard: a tap that was not on a link, then a jump of the tab to another site, is cancelled and reported', async () => {
+  const h = await onPage();
+  h.message({ k: 'pop', d: 'tap|', p: PAGE });
+  eq(nav(h, OTHER), { cancel: true });
+  await tick(10);
+  const pop = h.of('pop');
+  assert.equal(pop.length, 1);
+  assert.equal(pop[0].d, 'redirect|' + OTHER);
+  assert.equal(pop[0].p, PAGE);
+});
+
+test('guard: tapping a link and going to that very link is never judged', async () => {
+  const h = await onPage();
+  h.message({ k: 'pop', d: 'tap|' + OTHER, p: PAGE });
+  eq(nav(h, OTHER), {});
+  assert.equal(h.of('pop').length, 0);
+});
+
+test('guard: a jump with no recent tap, a POST, a typed address, a same-site page and an old tap are all left alone', async () => {
+  const h = await onPage();
+  eq(nav(h, OTHER), {}, 'no tap at all');
+  h.message({ k: 'pop', d: 'tap|', p: PAGE });
+  eq(nav(h, OTHER, { method: 'POST' }), {}, 'form posts (sign-in, search, payment)');
+  eq(h.mainFrame(OTHER, { method: 'GET', requestId: 'typed' }), {}, 'no originating page: typed, bookmark, Back, the app\'s own buttons');
+  eq(nav(h, 'https://cdn.example.com/x'), {}, 'same site (another subdomain of example.com)');
+  h.clock.now += 2600;
+  eq(nav(h, OTHER), {}, 'the tap is older than 2.5 seconds');
+  assert.equal(h.of('pop').length, 0);
+});
+
+test('guard: a redirect hop of a navigation that was already judged is not judged again, and a site with the guard off is exempt', async () => {
+  const h = await onPage();
+  h.message({ k: 'pop', d: 'tap|https://short.example/abc', p: PAGE });
+  eq(nav(h, 'https://short.example/abc', { requestId: 'chain' }), {});
+  eq(nav(h, OTHER, { requestId: 'chain' }), {}, 'the hop to the landing page shares the request id');
+  const off = await onPage(guardApp(0));
+  off.message({ k: 'pop', d: 'tap|', p: PAGE });
+  eq(nav(off, OTHER), {}, 'flags say the guard does not apply (Shields off for this site, or the setting is off)');
+});
+
+test('guard: the page-side script asks whether it applies and what it blocked is forwarded to the app', async () => {
+  const h = await onPage();
+  eq(await h.message({ k: 'guard', h: 'movie.example' }), { on: true });
+  const off = await onPage(guardApp(0));
+  eq(await off.message({ k: 'guard', h: 'movie.example' }), { on: false });
+  h.message({ k: 'pop', d: 'open|' + OTHER, p: 'https://frame.example/embed' });
+  await tick(10);
+  const pop = h.of('pop');
+  assert.equal(pop.length, 1);
+  assert.equal(pop[0].d, 'open|' + OTHER);
+  assert.equal(pop[0].p, PAGE, 'attributed to the tab\'s page, not to the embedded player frame');
 });
