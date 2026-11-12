@@ -1,0 +1,110 @@
+# PHONE_OFFLOAD - Y2 "let the phone do the downloading" (owner message 12), design 2026-11-12
+
+Owner (message 12, Y2): "The tablet is always connected via hotspot to my phone. The phone itself downloads faster than the tablet over wifi. Is it possible to make an option in the settings to have the phone itself download files/videos with the status for the download in the browser app on the tablet while everything looks and functions the same but the phone downloads (and remuxes/converts videos when needed using the phone hardware which is better than the tablet) and simply sends the completed download to the tablet when finished by wifi? If this is possible, I want everything on the tablet to look and function the same, only outsourcing the work to the phone but the tablet can still read and display the live download status"
+
+Evidence tags: [V] verified in this session, [E] estimate / reasoning, [N] needs the real phone + tablet pair (cannot be checked in this sandbox), [W] read on a web page on 2026-11-12 (link given).
+
+## 1. Answer
+YES, it is possible, with one hard requirement: **a small companion app on the phone** ("Kestrel Courier"). A browser on the tablet cannot make another device download anything, and Android has no built-in "download this for my tablet" service. Everything else (status in the normal rows, pause/resume/cancel, remux on the phone, file arrives by wifi) is ordinary engineering on top of the engines we already have, because `:core` (Engine, StreamEngine, TsToMp4) is pure Kotlin with no Android imports and runs the same on a phone.
+Assumption to confirm with the owner: the phone is an **Android** phone (their notes say "Android 16"). An iPhone would need an iOS app, which this project cannot build.
+
+## 2. When it speeds things up and when it does not (be honest with the owner)
+The file takes the path: Internet -> phone (cellular) -> phone's wifi hotspot -> tablet radio. Offloading changes WHO talks to the internet, not the last hop.
+| Bottleneck | Offload helps? | Why |
+|---|---|---|
+| A. Carrier slows or caps TETHERED traffic (hotspot data bucket, throttled after a cap) while the phone's own traffic is full speed | **Yes, a lot** | The phone fetches as its own traffic; the tablet then copies the finished file over the LAN, which the carrier never sees [E] |
+| B. The tablet's wifi radio is slow (cheap MT8168B tablets usually have 2.4 GHz 1x1 n only, about 10-25 MB/s... often much less at range) [E] | **Little** | The finished file still crosses the same radio once; total time about equals file size / LAN speed. Gains only from less TLS work and fewer retries on a flaky link |
+| C. The tablet's CPU/TLS/muxing is the limit (2 GB RAM, A53) | **Yes** | The phone does TLS, segment fetching and the MP4 writing |
+| D. The site is slow for everybody | No | Same server |
+So the feature must **measure instead of promise**: Settings > "Test the phone link" (Y2c) reports three numbers for the SAME file: tablet<->phone LAN speed, phone's internet speed, tablet's internet speed, and says in one sentence whether offloading is worth it. Also tell the owner: bytes the phone downloads are counted on the phone's plan (maybe a different bucket than "hotspot data"), and the phone works harder (battery, heat).
+
+## 3. Shape of the system
+```
+ Tablet: Kestrel G                      Phone: Kestrel Courier (foreground service)
+ +-----------------------+   LAN wifi   +--------------------------------------------+
+ | Downloads UI (same)   |  (hotspot)   | CourierServer (HTTP/1.1, HMAC auth)        |
+ | DownloadController    |<------------>| jobs: Engine / StreamEngine / TsToMp4      |
+ |  - local engines      |  status poll | Fetcher = UrlConnection (cellular)         |
+ |  - PhoneBackend (new) |  + file pull | Sink = app-private staging file            |
+ +-----------------------+              +--------------------------------------------+
+```
+Life of one download: (1) tablet user taps Download; `DownloadController` sees "Download on my phone" is on and the phone answers `/v1/hello`; (2) tablet POSTs the job (URL, headers, name, kind) to the phone; (3) phone downloads (parallel Range segments / HLS->MP4) into its private staging folder, exposing live progress; (4) tablet polls status about once a second while visible and mirrors it into a normal `DownloadView` row (same bar, speed, ETA, buttons; the note line says "On your phone"); (5) when the phone is COMPLETED it hands out a capability URL; the tablet's own single-file Engine pulls the finished file (Range, resumable, same pause/resume) into public Downloads exactly like any other download; (6) tablet confirms receipt, phone deletes its copy.
+No new engine on the tablet is needed for the copy: it is an ordinary download whose URL happens to be on the phone.
+
+## 4. Components
+### 4.1 `:core` (pure Kotlin, JVM-tested) - new package `app.kestrel.core.courier`
+- `CourierProtocol`: constants, JSON-lite encode/decode for the few message types (no library; `:core` has none, `org.json` is not on the JVM test classpath), request signing and verification, replay window.
+- `CourierHttp`: tiny HTTP/1.1 request parser and response writer (keep-alive, `Content-Length`, `Range`/`206`/`416`, `If-Range` not needed because the file is immutable once COMPLETED) over `InputStream`/`OutputStream`, so the whole server logic is testable over loopback sockets on the JVM.
+- `CourierHost` (phone side logic): job table, `Engine` + `StreamEngine` ownership, path routing, capability tokens, SSRF guard, free-space check.
+- `PhoneLink` (tablet side logic): discovery, hello/proof check, signed calls, status mirror (`RemoteJobs` -> `DownloadView`), fallback decisions. Both sides talk through small ports (`Transport`, `Clock`, `Rng`) so no Android is needed to test them.
+### 4.2 `:courier` (new Android application module, package `app.kestrel.courier`, applicationId `app.kestrel.courier`)
+- Dependencies: `:core` + kotlin-stdlib only (same rules as the other apps). No Compose/AppCompat. Framework Views, one screen.
+- `CourierService` (foreground service, type `specialUse`, see 6.1) owns a `ServerSocket`, a small thread pool, the engines, a partial wake lock while jobs run, and a high-performance `WifiLock` is NOT needed (the phone is the access point).
+- Android ports: `UrlConnectionFetcher` (the tablet already has one in `:app`; copy or move into a shared Android library `:androidcommon` so both apps use one file), `FileSinks` (private staging folder, `Context.getExternalFilesDir` or `filesDir`; never the phone's public Downloads), a store (`SqliteStore`/`StreamStoreFiles` equivalents), `NetGate` from `ConnectivityManager`.
+- UI (one screen): state line ("Ready for the tablet on 192.168.x.y:8765" / "Turn on the hotspot"), the pairing code (shown big, "Show again", "New code"), the on/off switch, "Allow it to run with the screen off" (battery exemption button), live list of jobs with progress and a Cancel button, free space.
+### 4.3 Tablet side (`:app` shared tree, so both Kestrel and Kestrel G get it; Gecko build is the one in use)
+- `phone/PhoneLink` glue, `phone/PhoneBackend` registered in `DownloadController` next to `engine` and `streams` (the controller already routes by `isStream(id)`; add `isRemote(id)` with its own id range), `ui/PhoneSettings` (Settings > Downloads > "Download on my phone", "Pair with phone", "Test the phone link").
+- Row look: unchanged. `DownloadView.note` carries "On your phone" / "Copying from your phone" / "Phone not reachable: downloading here".
+
+## 5. Protocol v1 (all bodies JSON, UTF-8; default port 8765, changeable)
+| Call | Auth | Purpose |
+|---|---|---|
+| `GET /v1/hello?c=<b64 16 random bytes>` | none | Phone answers `{app:"kestrel-courier", v:1, t:<ms>, name, free:<bytes>, proof:<b64 HMAC(K, "hello"+c+t)>}`. The tablet checks `proof`, so a stranger that happens to listen on that port (or an impostor on another wifi) never gets URLs or cookies. `t` gives the clock skew used for signing |
+| `POST /v1/jobs` | HMAC | `{cid, kind:"file"\|"stream", url, name, nameFixed, mime, headers:{Referer,User-Agent,Cookie,...}, size?, audioUrl?, opts:{parallel?, limitBps?}}` -> `{id, state}`. `cid` is a client-chosen unique id: the same `cid` returns the same job (a lost response does not create a duplicate) |
+| `GET /v1/jobs?ids=a,b,c` | HMAC | bulk status: for each `{id, state, reason, detail, name, mime, total, done, bps, eta, conns, estimated, note, size?, file?}`. `file` is the capability path once COMPLETED |
+| `POST /v1/jobs/<id>/pause`, `/resume`, `/cancel`, `/restart`, `/make-mp4` | HMAC | pass-through of the row buttons |
+| `GET /v1/f/<token>/<name>` | token | the finished file, `Range` supported (206/416); token is 128 random bits, valid for that job only, so the tablet's plain Engine/Fetcher can pull it with no signing code |
+| `DELETE /v1/jobs/<id>` | HMAC | tablet has the file: free the phone's copy (otherwise a janitor removes finished jobs after 24 h and failed ones after 7 days) |
+| `GET /v1/speedtest?bytes=N` | HMAC | N zero bytes (max 64 MB) for the LAN speed test |
+| `POST /v1/probe` | HMAC | phone fetches the first N MB of a URL (Range) and reports its own internet speed, for "Test the phone link" |
+Signing: `X-K-Ts` (ms, tablet clock + skew from hello), `X-K-Sig = b64(HMAC-SHA256(K, METHOD "\n" path+query "\n" ts "\n" hex(sha256(body))))`, window +-60 s, constant-time compare, one failed-auth counter per remote IP with back-off (5 fails -> 1 min block). `K` = the pairing secret (6.2).
+
+## 6. Security and Android specifics
+### 6.1 Phone (Android 16) facts
+- Foreground service: `dataSync` is limited to **6 hours per 24 h** for apps targeting Android 15+ (timer resets when the app comes to the foreground) and cannot be started from `BOOT_COMPLETED` [W: developer.android.com/develop/background-work/services/fgs/timeout]. A listener that may sit idle for days is not a data sync, so the Courier uses `specialUse` with a manifest property explaining it (sideloaded, no Play review). Re-check at implementation time that `specialUse` has no timeout.
+- Starting a foreground service from the background is blocked on Android 12+, so the Courier cannot wake itself when the hotspot turns on. The owner turns "Ready" on in the Courier once (and after a phone reboot); a Quick Settings tile (click is an allowed start) is a cheap way to make that one tap, Y2e.
+- Doze: with the screen off the system can cut network for the app. The Courier asks for the battery-optimisation exemption once (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, fine for sideloaded apps) and holds a partial wake lock only while a job runs. [N] cannot be tested here.
+- **Local-network protection**: opt-in on Android 16, enforced only for apps targeting SDK 37+; apps targeting lower SDKs that hold INTERNET get `ACCESS_LOCAL_NETWORK` implicitly; traffic TO and FROM local addresses needs it, TCP blocks show up as timeouts [W: developer.android.com/privacy-and-security/local-network-permission]. The Courier targets SDK 36 like our other apps, so nothing to do now; when it moves to 37, add the permission and ask at first run (until then a "hello never answers" report on a newer phone means look here first).
+- **Developer verification** (sideloaded apps from unverified developers): user-facing protections start 2026-09-30 in Brazil, Indonesia, Singapore and Thailand, global later (2027) [W: developer.android.com/developer-verification/guides and press]. The Courier would be signed by the project's public dev key, an unverified developer. If the owner's phone refuses it: install through ADB (exempt) or Android's "advanced flow"; the lasting fix is a free "limited distribution" registration in the Android Developer Console, which is the owner's to do (identity). Not a blocker today; mention it only if the install is refused.
+### 6.2 Pairing and trust
+- One shared secret, typed once. The Courier generates 80 random bits and shows them as `ABCD-EFGH-JKLM-NPQR` (Base32 without look-alikes). The owner types it into the tablet (Settings > Pair with phone). `K = HKDF(secret)`; nothing travels at pairing time, so an eavesdropper on the hotspot learns nothing, and there is no 6-digit code to brute-force offline. "New code" on the phone forgets every tablet.
+- Every request except `hello` is HMAC-signed; `hello` itself proves the phone knows `K` (6.2 above) so the tablet never sends URLs or cookies to an impostor. The file link is a capability URL (unguessable, per job).
+- The server accepts only peers whose address is on a subnet of one of the phone's own non-cellular interfaces (hotspot) or loopback; anything else is dropped before parsing. Public IPv6 on the cellular interface is therefore never served.
+- **SSRF guard**: the phone refuses to fetch URLs whose host resolves to a loopback/private/link-local address (a page must not be able to aim the phone at the owner's router or at the phone's own hotspot interface), and refuses non-http(s).
+- Cookies and Referer leave the tablet only for jobs the owner started and live on the phone only until the job ends (record scrubbed on COMPLETED/FAILED/CANCELED, same as `Rec.headers` today). Private-tab downloads are **never** offloaded in v1 (the phone would hold the URL and file).
+- Logs on the phone never contain URLs' query strings or headers.
+
+## 7. Discovery and fallback on the tablet
+- Where is the phone? When the tablet is on the phone's hotspot, the phone is the **default gateway** (`LinkProperties` default route, or `WifiManager.dhcpInfo.gateway` on API 29, works through 36). Try `http://<gateway>:8765/v1/hello` with a 700 ms timeout, cache the answer for 30 s and on network change. Debug override: `debug.kestrel.phone=host:port` (emulator: `10.0.2.2:18765`, or `127.0.0.1:8765` when both apps share one emulator).
+- Modes in Settings: **Off** (default) / **When the phone is there** (offload when `hello` answers, otherwise download here) / **Always** (wait for the phone, never use the tablet's own connection).
+- Eligible: http(s) file downloads and video streams (HLS, DASH, progressive). NOT offloaded: `blob:`/`data:` URLs, POST downloads, private tabs, anything whose headers cannot be replayed, the update APK (stage 3 may add it).
+- Falls back to the tablet (row note says why, in one sentence): phone not answering at start; the phone's fetch gets 401/403/404/410 or a page instead of the file (expired or IP-bound link); phone short of space; auth refused. Phone lost mid-job: the row waits like WAITING_NETWORK (the hotspot being gone means the tablet has no internet either); when the phone is back, status continues; after 10 minutes the row offers "Download here instead" (never silently restarting a half-hour job). While pulling the finished file the tablet's own Engine resumes exactly like any download.
+- Idempotency: the tablet stores `cid` and the phone's job id in its record, so an app restart re-attaches instead of starting a second download.
+
+## 8. Persistence and kill safety (both ends follow the project's save ladder)
+- Phone: the job table is persisted at every state change and checkpoint; `Engine` and `StreamEngine` already resume from their own records and the MP4 journal after a kill (alpha17). The service restarts jobs when it is switched on again.
+- Tablet: `Rec`/`StreamRec` get `remote` (phone job id + `cid`) so a killed app re-attaches; phase 2 (pull) is an ordinary `Rec` with the capability URL. Nothing here needs a new on-disk format beyond two fields.
+
+## 9. What the phone does better (and what it does not)
+- Network: its own full-speed connection (case A), TLS and many parallel segment fetches (case C), and no double hop for retries.
+- Remux: the MP4 writer is pure Kotlin and cheap on any CPU (22-390 MB/s on a host, see MP4_MUX.md), so most videos need no "conversion"; the real phone advantage is the newer platform `MediaExtractor`/`MediaMuxer` and codecs. Stage 2 runs the existing platform `Remuxer` on the phone for the streams our own writer declines (H.265, MP3 sound; AC-3 stays raw because the platform muxer does not write it).
+- Not magic: a 2.4 GHz tablet radio still limits the last hop (section 2).
+
+## 10. Stages (each ends in a release the owner can try)
+- **Stage 1 (Courier 0.1.0 + Kestrel G alpha19)**: `:core` courier package with tests; `:courier` app (pairing code, on/off, battery exemption, job list); tablet Settings (switch, mode, pair, test the link); plain file jobs end to end: post, live status in the normal row, pull, fallback, delete. Third APK in CI (section 11).
+- **Stage 2**: streams through the phone (HLS/DASH/progressive with the MP4 writer, audio+video merge, "Make MP4" with the phone's platform converter, `nameFixed` names), status mapping for every stream state, the `estimated` flag, notes.
+- **Stage 3**: overlap (the tablet pulls the stable prefix of the growing file while the phone still downloads; needs the MP4 header patch at the end), Quick Settings tile on the phone, notifications on both sides, update APK via the phone, second tablet, optional QR pairing.
+
+## 11. Third APK in CI (plumbing to touch)
+`tools/appinfo.sh` (module, applicationId, version file, tag prefix `kestrel-courier-v`, asset name), `ship.sh <web|gecko|courier>`, `tools/record-release.sh`, `tools/verify-apk.sh` (pinned certificate for the Courier too: same `signing/CERT_SHA256`), `.github/workflows/android.yml` (input `app` gets `courier`; `both` stays web+gecko), `docs/` release notes, `tools/test_handoff.sh` expectations. Watch out: the tablet updater lists releases and filters by `Flavor.updateTagPrefix`; a new tag family must not push Kestrel G releases out of the first page (X1 lesson: GitHub lists releases by tag name). Courier APK is small (no Gecko, about 1-2 MB), so releases are cheap for the owner's hotspot... and the phone is not on the hotspot, it is the hotspot.
+
+## 12. Verification plan (what can and cannot be proven here)
+1. JVM: signature accept/reject/replay/skew, HTTP parser fuzz (partial reads, bad headers, huge lines), Range 206/416, token scope, SSRF guard, subnet guard, job idempotency (same `cid`), status mapping, fallback decisions (fake transport that fails in each way), and a loopback end to end: real `Engine` on both sides against `FakeServer` (plain file, kill + resume of the pull, phone restart mid-job, 403 from the origin -> fallback).
+2. Emulator (Android 10 x86_64, one instance): install Courier + Kestrel G in the SAME emulator, `setprop debug.kestrel.phone 127.0.0.1:8765`, use the local media server (`:8000`/`:8004` throttled) as the origin: pair, download a file and an HLS stream through the real foreground service and real sockets, read the row live, pull, compare SHA-256, kill the Courier mid-job and resume.
+3. NOT verifiable here [N]: the real hotspot network (gateway discovery, AP interface selection, subnet guard on the phone's AP interface name), Android 16 behaviour (foreground service start, Doze with the screen off, local-network protection), carrier behaviour, throughput numbers, install on a phone that enforces developer verification. The Diagnostics screen of both apps gets a "phone link" section (last hello, skew, last error, bytes moved, speeds) so the owner's first run gives us real data.
+
+## 13. Open questions for the owner
+1. Is the phone an Android phone (Android 16)? (an iPhone cannot run the Courier)
+2. Is installing a second small app on the phone OK? (about 1-2 MB, from the same GitHub Releases page)
+3. What do you see when you say the phone is faster: a rough MB/s or minutes for the same file on both? (decides whether the tablet radio or the hotspot path is the limit, section 2)
+4. Should "Download on my phone" cover everything, or only videos and files over a size you choose?
