@@ -297,3 +297,107 @@ test('guard: the page-side script asks whether it applies and what it blocked is
   assert.equal(pop[0].d, 'open|' + OTHER);
   assert.equal(pop[0].p, PAGE, 'attributed to the tab\'s page, not to the embedded player frame');
 });
+
+// ---------------------------------------------------------------- element-hiding CSS: cache lifetime (AA4 / PERF_JS B1, J5.1)
+const cssApp = (gen, extra) => {
+  extra = extra || {};
+  return (m) => {
+    if (m.k === 'cfg') return `1:${gen.v}:${gen.v > 0 ? ID : ''}:1`;
+    if (m.k === 'css') return extra.css ? extra.css(m) : (gen.v > 0 ? '.ad{display:none!important}' : '');
+    if (m.k === 'img') return chunkReply(m.g, m.i, 2048, ID);
+    return '';
+  };
+};
+
+test('css: an answer is cached for a minute, then asked again; frames of one host that start together share one question', async () => {
+  const gen = { v: 1 };
+  const h = harness(cssApp(gen));
+  h.mainFrame(PAGE); await until(() => h.of('cfg').length > 0, 'cfg');
+  const [a, b] = await Promise.all([h.message({ k: 'css', h: 'ads.example', top: false }), h.message({ k: 'css', h: 'ads.example', top: false })]);
+  assert.equal(a, '.ad{display:none!important}'); assert.equal(b, a);
+  assert.equal(h.of('css').length, 1, 'two frames started together: one native question');
+  await h.message({ k: 'css', h: 'ads.example', top: false });
+  assert.equal(h.of('css').length, 1, 'a repeat inside the minute is served from the cache');
+  h.clock.now += 61000;
+  await h.message({ k: 'css', h: 'ads.example', top: false });
+  assert.equal(h.of('css').length, 2, 'older than a minute: asked again (a Settings switch reaches open pages)');
+});
+
+test('css: while the app\'s lists are still loading nothing is remembered, and a new list generation empties the cache', async () => {
+  const gen = { v: 0 };
+  const h = harness(cssApp(gen));
+  h.mainFrame(PAGE); await until(() => h.of('cfg').length > 0, 'cfg');
+  assert.equal(await h.message({ k: 'css', h: 'news.example', top: true }), '', 'the lists are not loaded: the app answers nothing yet');
+  gen.v = 1;
+  assert.equal(await h.message({ k: 'css', h: 'news.example', top: true }), '.ad{display:none!important}', 'the empty answer did not stick to the host');
+  assert.equal(h.of('css').length, 2);
+  await h.message({ k: 'css', h: 'news.example', top: true });
+  assert.equal(h.of('css').length, 2, 'now remembered');
+  // a new generation arrives with the next page configuration: everything is asked again
+  gen.v = 2;
+  h.clock.now += 100; h.listeners.before({ type: 'main_frame', url: 'https://other.example/', tabId: 2, frameId: 0 });
+  await until(() => h.of('cfg').length >= 2, 'second cfg'); await tick(20);
+  await h.message({ k: 'css', h: 'news.example', top: true });
+  assert.equal(h.of('css').length, 3, 'the cache was emptied by the new generation');
+});
+
+test('css: a navigation to a page asks for its top-document CSS again, so a Shields switch changed on the page takes effect on the reload', async () => {
+  const gen = { v: 1 }; let on = true;
+  const h = harness(cssApp(gen, { css: () => (on ? '.ad{display:none!important}' : '') }));
+  h.mainFrame(PAGE); await until(() => h.of('cfg').length > 0, 'cfg');
+  assert.equal(await h.message({ k: 'css', h: 'example.com', top: true }), '.ad{display:none!important}');
+  on = false; // the owner turned element hiding off for this site and the page reloads
+  h.mainFrame(PAGE);
+  assert.equal(await h.message({ k: 'css', h: 'example.com', top: true }), '', 'the stale positive answer is gone');
+  assert.equal(h.of('css').length, 2);
+});
+
+// ---------------------------------------------------------------- the media sniffer (AA4 / PERF_JS J3, J2a)
+const hdr = (url, ct, len, extra) => ({ statusCode: 200, url, tabId: 1, documentUrl: PAGE, responseHeaders: [{ name: 'Server', value: 'x' }, { name: 'Content-Type', value: ct }, { name: 'Content-Length', value: String(len) }, { name: 'Cache-Control', value: 'no-store' }], ...(extra || {}) });
+
+test('sniffer: a plain file under 100 KB is not worth a message, a small playlist is', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  h.listeners.headers(hdr('https://cdn.example/click.mp4', 'video/mp4', 5000));
+  h.listeners.headers(hdr('https://cdn.example/master.m3u8', 'application/vnd.apple.mpegurl', 300));
+  h.listeners.headers(hdr('https://cdn.example/manifest.mpd', 'application/dash+xml', 800));
+  h.listeners.headers(hdr('https://cdn.example/movie.mp4', 'video/mp4', 5_000_000));
+  h.listeners.headers(hdr('https://cdn.example/unknown.mp4', 'video/mp4', -1, { responseHeaders: [{ name: 'Content-Type', value: 'video/mp4' }] }));
+  await tick(10);
+  assert.deepEqual(h.of('media').map((m) => m.u), ['https://cdn.example/master.m3u8', 'https://cdn.example/manifest.mpd', 'https://cdn.example/movie.mp4', 'https://cdn.example/unknown.mp4']);
+});
+
+test('sniffer: pieces of one file fetched by byte range in the query are one candidate, a different file is another', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  for (let i = 0; i < 30; i++) h.listeners.headers(hdr(`https://cdn.example/v/clip.mp4?id=7&bytestart=${i * 1000000}&byteend=${i * 1000000 + 999999}`, 'video/mp4', 1_000_000));
+  for (let i = 0; i < 10; i++) h.listeners.headers(hdr(`https://cdn.example/v/clip.mp4?id=7&range=${i}-${i + 1}&rn=${i}`, 'video/mp4', 1_000_000));
+  h.listeners.headers(hdr('https://cdn.example/v/clip.mp4?id=8&bytestart=0&byteend=999999', 'video/mp4', 1_000_000)); // another id: another file
+  h.listeners.headers(hdr('https://cdn.example/v/other.mp4?bytestart=5', 'video/mp4', 1_000_000));
+  await tick(10);
+  const m = h.of('media');
+  assert.equal(m.length, 3, 'id=7 once, id=8 once, other.mp4 once');
+  assert.ok(m[0].u.includes('bytestart=0&byteend=999999') && m[0].u.includes('id=7'), 'the first sighting is the one reported');
+});
+
+test('sniffer: headers that matter are still read when they come after many that do not', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  const many = []; for (let i = 0; i < 30; i++) many.push({ name: 'X-Header-Number-' + i, value: 'v' });
+  h.listeners.headers({ statusCode: 206, url: 'https://cdn.example/part.mp4', tabId: 1, documentUrl: PAGE, responseHeaders: many.concat([{ name: 'content-type', value: 'video/mp4' }, { name: 'Content-Range', value: 'bytes 0-99/7000000' }, { name: 'Content-Length', value: '100' }]) });
+  await tick(10);
+  const m = h.of('media');
+  assert.equal(m.length, 1); assert.equal(m[0].l, 7000000, 'the total from Content-Range, not the 100 bytes of this piece'); assert.equal(m[0].c, 'video/mp4');
+});
+
+// ---------------------------------------------------------------- tab bookkeeping (AA4 / PERF_JS B2)
+test('a tab that keeps being used keeps its page address in the extension while many other tabs come and go', async () => {
+  const h = harness(standardApp());
+  h.mainFrame('https://example.com/start', { tabId: 1 });
+  for (let t = 2; t <= 70; t++) {
+    h.mainFrame('https://tab' + t + '.test/', { tabId: t });
+    if (t === 30) h.mainFrame('https://example.com/again', { tabId: 1 }); // the long-lived tab navigates again: it is the newest now
+  }
+  const a = await h.message({ k: 'guard', h: 'frame.test' }, 1);
+  assert.equal(a.top, 'example.com', 'tab 1 was not forgotten (the oldest-INSERTED tab was dropped before)');
+});
