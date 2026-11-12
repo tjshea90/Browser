@@ -183,37 +183,11 @@ function legacy(d, page) {
 }
 
 // ---------------------------------------------------------------- pop-up and forced-redirect guard
-// guard-main.js (registered below, runs inside every page and frame) refuses windows the user did not ask for. Here: a page that sends the TAB to another site right after a tap that was not on a link to it
-// (the transparent "play" layer of a movie site) is cancelled. A redirect needs a recent real tap AND that tap not being on a link to that very address; typing, bookmarks, Back/Forward and the app's own
-// buttons have no originating page and are never judged, POSTs (sign-in, search, payments) are never judged, and a redirect hop of an already judged navigation is not judged again.
+// guard-main.js (registered below, runs inside every page and frame) refuses windows the user did not ask for, and reports every real tap with the link it was on. The app decides about a page that sends
+// its tab to another site right after such a tap (core/.../guard/JumpGuard): the decision needs the app's own touch times and happens BEFORE the navigation starts, so nothing of the page state is disturbed.
 var guardState = 'page guard: starting';
 var guardBlocked = 0;
-var lastTap = new Map();      // tabId -> { t, href }: the last real tap in the tab and the link it was on ('' = not on a link)
-var redirectSeen = new Map(); // requestId -> 1
-var TAP_WINDOW = 2500;
 function trimMap(m, max) { while (m.size > max) m.delete(m.keys().next().value); }
-function registrable(h) {
-  var p = (h || '').toLowerCase().split('.');
-  if (p.length <= 2) return p.join('.');
-  var cc = p[p.length - 1].length === 2, generic = /^(co|com|org|net|gov|edu|ac|ne|or|go)$/.test(p[p.length - 2]);
-  return p.slice(-(cc && generic ? 3 : 2)).join('.');
-}
-function sameSiteHosts(a, b) { if (!a || !b) return false; return engine !== null ? engine.isSameSite(a, b) : registrable(a) === registrable(b); }
-function sameUrl(a, b) { return a === b || a.replace(/#.*$/, '') === b.replace(/#.*$/, ''); }
-function redirectBlocked(d) {
-  if (d.method !== 'GET' || !d.originUrl) return false;
-  if (redirectSeen.has(d.requestId)) return false;
-  redirectSeen.set(d.requestId, 1); trimMap(redirectSeen, 200);
-  var prev = tabTop.get(d.tabId);
-  if (!prev) return false;
-  var from = pageHost(prev), to = pageHost(d.url);
-  if (!from || !to || ((cfgFlags.get(from) || 0) & 1) === 0) return false; // the guard does not apply to this site
-  if (sameSiteHosts(from, to)) return false;
-  var tp = lastTap.get(d.tabId);
-  if (!tp || Date.now() - tp.t > TAP_WINDOW) return false;
-  if (tp.href && sameUrl(tp.href, d.url)) return false;
-  return true;
-}
 function guardAnswer(host) {
   var f = cfgFlags.get(host);
   if (f !== undefined) return Promise.resolve({ on: (f & 1) !== 0 });
@@ -228,9 +202,10 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   }
   if (m.k === 'pop') {
     var d = String(m.d || ''), c = d.indexOf('|'), kind = c > 0 ? d.slice(0, c) : d, url = c > 0 ? d.slice(c + 1) : '';
-    if (kind === 'tap') { if (tabId >= 0) { lastTap.set(tabId, { t: Date.now(), href: url }); trimMap(lastTap, 60); } return undefined; }
+    var page = (tabId >= 0 && tabTop.get(tabId)) || m.p || '';
+    if (kind === 'tap') { send({ k: 'pop', d: d, p: page }).catch(function () {}); return undefined; } // every real tap: the app needs it to judge a jump that follows
     guardBlocked++;
-    send({ k: 'pop', d: d, p: (tabId >= 0 && tabTop.get(tabId)) || m.p || '' }).catch(function () {});
+    send({ k: 'pop', d: d, p: page }).catch(function () {});
     markStats();
   }
   return undefined;
@@ -278,12 +253,6 @@ function decide(d, page, host, mode) {
 
 browser.webRequest.onBeforeRequest.addListener(function (d) {
   if (d.type === 'main_frame') {
-    if (redirectBlocked(d)) { // a page sends the tab to another site right after a tap that was not on a link to it: stay where we are, tell the app
-      guardBlocked++;
-      send({ k: 'pop', d: 'redirect|' + d.url, p: tabTop.get(d.tabId) || '' }).catch(function () {});
-      markStats();
-      return { cancel: true };
-    }
     sniffed.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again
     verdicts.clear(); // legacy verdicts are only worth keeping while ONE page loads
     var h = pageHost(d.url);

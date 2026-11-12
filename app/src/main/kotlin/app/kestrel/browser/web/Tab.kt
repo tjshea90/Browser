@@ -71,6 +71,9 @@ class Tab(@JvmField val id: Long) {
     @Volatile @JvmField var mainUrl: String? = null // URL of the most recent main-frame request (to tell main-frame SSL errors from subresource ones)
     @Volatile @JvmField var shields: ShieldSettings = ShieldSettings()
     @Volatile @JvmField var pageAllowed = false
+    /** The last real tap the page reported (pop-up and redirect guard): when (uptime millis) and the link it was on ("" = not on a link). */
+    @Volatile @JvmField var lastTapAt = 0L
+    @Volatile @JvmField var lastTapHref = ""
     @JvmField val blocked = AtomicIntegerArray(4) // per Category, this page
     @JvmField val pendingLifetime = AtomicLong(0) // blocked since last flush to preferences
     @JvmField val shieldDirty = AtomicBoolean(false)
