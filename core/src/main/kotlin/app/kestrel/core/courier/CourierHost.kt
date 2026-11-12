@@ -153,12 +153,15 @@ class CourierHost(
         val kind = j.str("kind") ?: "file"
         if (kind != "file" && !(kind == "stream" && streams != null)) return HttpResponse.error(501, "kind")
         val st: Map<*, *>? = if (kind == "stream") (j.obj("stream") ?: return HttpResponse.error(400, "stream")) else null
-        if (st != null && st.obj("companion") != null) return HttpResponse.error(501, "companion")                 // picture + sound kept apart (DASH): needs the platform merge, not on the phone yet
+        val co: Map<*, *>? = st?.obj("companion")                                                                  // picture + sound kept apart (DASH): the sound is a hidden job that is merged at the end
         val url = (if (st != null) st.str("playlistUrl") else j.str("url")) ?: return HttpResponse.error(400, "url")
         val u = try { if (url.length > 8192) null else URL(url) } catch (e: Exception) { null } ?: return HttpResponse.error(400, "url")
         if (u.protocol != "http" && u.protocol != "https") return HttpResponse.error(400, "url")
+        val coUrl = if (co == null) null else (co.str("playlistUrl")?.takeIf { it.length <= 8192 } ?: return HttpResponse.error(400, "companion"))
+        val coU = if (coUrl == null) null else (try { URL(coUrl) } catch (e: Exception) { null } ?: return HttpResponse.error(400, "companion"))
+        if (coU != null && coU.protocol != "http" && coU.protocol != "https") return HttpResponse.error(400, "companion")
         synchronized(lock) { byCid[cid]?.let { return HttpResponse.json(200, wire(it)) } }               // the same request again: the same job
-        try { Ssrf.check(u.host.removePrefix("[").removeSuffix("]"), resolve) } catch (e: FetchException) { return HttpResponse.error(403, "local_net") }
+        try { Ssrf.check(u.host.removePrefix("[").removeSuffix("]"), resolve); if (coU != null) Ssrf.check(coU.host.removePrefix("[").removeSuffix("]"), resolve) } catch (e: FetchException) { return HttpResponse.error(403, "local_net") }
         val size = j.long("size") ?: -1L
         val free = freeBytes()
         if (free < RESERVE_BYTES || (size > 0 && free < size + RESERVE_BYTES)) return HttpResponse.json(507, mapOf("error" to "no_space", "free" to free))
@@ -173,9 +176,7 @@ class CourierHost(
             if (jobs.size >= MAX_JOBS) return HttpResponse.error(429, "too_many_jobs")
             val eid: Long
             if (st != null) {
-                val text = st.str("playlistText")?.takeIf { it.length <= MAX_PLAYLIST_CHARS }
-                val stem = (st.str("nameStem") ?: "").take(200).ifBlank { "video" }
-                eid = streams!!.enqueue(StreamSource(url, text, st.str("pageUrl")?.takeIf { it.length <= 8192 }, stem, headers, 0, false, true, DEST_APP_PRIVATE, st.long("estimateBytes") ?: -1L, st.str("repId")?.take(200), st.str("ext")?.take(16), null))
+                eid = streams!!.enqueue(streamSource(st, url, headers, if (co != null && coUrl != null) streamSource(co, coUrl, headers, null) else null))
             } else {
                 eid = engine.enqueue(Source(url, null, name, j.str("mime"), headers, 0, priv = false, meteredOk = true, risk = 0, destKind = DEST_APP_PRIVATE, nameFixed = j.bool("nameFixed") ?: false))
             }
@@ -183,6 +184,13 @@ class CourierHost(
             add(job); save()
         }
         return HttpResponse.json(201, wire(job))
+    }
+
+    /** One stream request (the picture, or the sound of a DASH picture) as the segment downloader takes it: always the app-private folder (the tablet copies the result), never a private tab. */
+    private fun streamSource(st: Map<*, *>, url: String, headers: Map<String, String>, companion: StreamSource?): StreamSource {
+        val text = st.str("playlistText")?.takeIf { it.length <= MAX_PLAYLIST_CHARS }
+        val stem = (st.str("nameStem") ?: "").take(200).ifBlank { "video" }
+        return StreamSource(url, text, st.str("pageUrl")?.takeIf { it.length <= 8192 }, stem, headers, 0, false, true, DEST_APP_PRIVATE, st.long("estimateBytes") ?: -1L, st.str("repId")?.take(200), st.str("ext")?.take(16), companion)
     }
 
     private fun list(req: HttpRequest): HttpResponse {

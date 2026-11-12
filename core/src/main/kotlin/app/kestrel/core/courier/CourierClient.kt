@@ -84,6 +84,8 @@ class StreamSpec(
     val estimateBytes: Long = -1L,
     val repId: String? = null,
     val ext: String? = null,
+    /** DASH keeps picture and sound in two files: this is the sound's own request; the phone downloads both and makes ONE MP4 of them. */
+    val companion: StreamSpec? = null,
 )
 
 /** What the tablet asks the phone to download. */
@@ -152,16 +154,19 @@ class CourierClient(
         return PhoneStatus(j.str("name") ?: "phone", j.long("free") ?: 0L, j.int("jobs") ?: 0, j.int("running") ?: 0, j.int("queued") ?: 0)
     }
 
+    private fun streamMap(s: StreamSpec): LinkedHashMap<String, Any?> {
+        val sm = LinkedHashMap<String, Any?>()
+        sm["playlistUrl"] = s.playlistUrl; s.playlistText?.let { sm["playlistText"] = it }; s.pageUrl?.let { sm["pageUrl"] = it }; sm["nameStem"] = s.nameStem
+        if (s.estimateBytes > 0) sm["estimateBytes"] = s.estimateBytes
+        s.repId?.let { sm["repId"] = it }; s.ext?.let { sm["ext"] = it }
+        s.companion?.let { sm["companion"] = streamMap(it) }
+        return sm
+    }
+
     fun create(spec: JobSpec): RemoteJob {
         val m = LinkedHashMap<String, Any?>()
         m["cid"] = spec.cid; m["kind"] = if (spec.stream != null) "stream" else spec.kind; m["url"] = spec.url
-        spec.stream?.let { s ->
-            val sm = LinkedHashMap<String, Any?>()
-            sm["playlistUrl"] = s.playlistUrl; s.playlistText?.let { sm["playlistText"] = it }; s.pageUrl?.let { sm["pageUrl"] = it }; sm["nameStem"] = s.nameStem
-            if (s.estimateBytes > 0) sm["estimateBytes"] = s.estimateBytes
-            s.repId?.let { sm["repId"] = it }; s.ext?.let { sm["ext"] = it }
-            m["stream"] = sm
-        }
+        spec.stream?.let { m["stream"] = streamMap(it) }
         spec.name?.let { m["name"] = it }
         if (spec.nameFixed) m["nameFixed"] = true
         spec.mime?.let { m["mime"] = it }

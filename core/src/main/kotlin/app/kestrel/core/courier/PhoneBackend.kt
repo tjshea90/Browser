@@ -139,9 +139,11 @@ class PhoneBackend(
     /** Like [offload] for a video stream the owner picked a quality of: the phone downloads the segments, writes the MP4 and the tablet copies it. Null = the caller downloads it on the tablet. */
     fun offloadStream(src: StreamSource): Long? {
         val mode = modeOf()
-        if (mode == PhoneMode.OFF || src.priv || src.destKind != DEST_PUBLIC || src.companion != null) return null              // picture + sound kept apart needs the platform merge: not on the phone yet
+        if (mode == PhoneMode.OFF || src.priv || src.destKind != DEST_PUBLIC) return null
         val u = try { URL(src.playlistUrl) } catch (e: Exception) { return null }
         if (u.protocol != "http" && u.protocol != "https") return null
+        val co = src.companion                                                                                               // picture + sound kept apart (DASH): the phone downloads both and merges them
+        if (co != null) { val cu = try { URL(co.playlistUrl) } catch (e: Exception) { return null }; if (cu.protocol != "http" && cu.protocol != "https") return null }
         if (clientFor() == null) return null
         val shown = Source(src.playlistUrl, src.pageUrl, src.nameStem + (src.ext?.let { ".$it" } ?: ".mp4"), "video/mp4", src.headers, src.fetcher, false, true, 0, DEST_PUBLIC, true)
         val p: P
@@ -272,7 +274,7 @@ class PhoneBackend(
             ensureHello(c)
             val hdr = p.src.headers.filter { it.key.lowercase() in REPLAY }
             val st = p.stream
-            val spec = if (st != null) JobSpec(p.cid, st.playlistUrl, null, false, null, -1L, hdr, "stream", StreamSpec(st.playlistUrl, st.playlistText, st.pageUrl, st.nameStem, st.estimateBytes, st.repId, st.ext))
+            val spec = if (st != null) JobSpec(p.cid, st.playlistUrl, null, false, null, -1L, hdr, "stream", specOf(st))
             else JobSpec(p.cid, p.src.url, p.src.nameHint, p.src.nameFixed, p.src.mime, -1L, hdr)
             val r = c.create(spec)
             synchronized(lock) { p.remoteId = r.id; p.last = r; p.unreachableSince = 0; p.note = null; p.updated = clock.now(); save() }
@@ -433,7 +435,7 @@ class PhoneBackend(
             linkedMapOf<String, Any?>(
                 "lid" to p.lid, "cid" to p.cid, "phase" to p.phase.name, "remoteId" to p.remoteId, "engineId" to p.engineId, "created" to p.created, "updated" to p.updated,
                 "note" to p.note, "hidden" to p.hidden, "del" to p.delRemote,
-                "stream" to p.stream?.let { st -> linkedMapOf<String, Any?>("playlistUrl" to st.playlistUrl, "pageUrl" to st.pageUrl, "nameStem" to st.nameStem, "headers" to LinkedHashMap<String, Any?>(st.headers), "fetcher" to st.fetcher, "estimate" to st.estimateBytes, "repId" to st.repId, "ext" to st.ext) },
+                "stream" to p.stream?.let { streamJson(it) },
                 "src" to linkedMapOf<String, Any?>(
                     "url" to p.src.url, "pageUrl" to p.src.pageUrl, "nameHint" to p.src.nameHint, "mime" to p.src.mime, "headers" to LinkedHashMap<String, Any?>(p.src.headers),
                     "fetcher" to p.src.fetcher, "nameFixed" to p.src.nameFixed, "meteredOk" to p.src.meteredOk,
@@ -442,6 +444,20 @@ class PhoneBackend(
             )
         }
         try { AtomicFiles.write(stateFile, Json.write(mapOf("v" to 1, "next" to nextLid, "items" to list))) } catch (e: IOException) { log("phone state write failed: ${e.message}") }
+    }
+
+    private fun specOf(s: StreamSource): StreamSpec = StreamSpec(s.playlistUrl, s.playlistText, s.pageUrl, s.nameStem, s.estimateBytes, s.repId, s.ext, s.companion?.let { specOf(it) })
+
+    private fun streamJson(st: StreamSource): LinkedHashMap<String, Any?> = linkedMapOf(
+        "playlistUrl" to st.playlistUrl, "pageUrl" to st.pageUrl, "nameStem" to st.nameStem, "headers" to LinkedHashMap<String, Any?>(st.headers), "fetcher" to st.fetcher, "estimate" to st.estimateBytes,
+        "repId" to st.repId, "ext" to st.ext, "companion" to st.companion?.let { streamJson(it) },
+    )
+
+    /** The playlist text is not kept on disk (it can be big): after a restart the engine fetches it again. */
+    private fun streamOf(st: Map<*, *>): StreamSource? {
+        val sh = LinkedHashMap<String, String>()
+        st.obj("headers")?.forEach { (k, v) -> if (k is String && v is String) sh[k] = v }
+        return StreamSource(st.str("playlistUrl") ?: return null, null, st.str("pageUrl"), st.str("nameStem") ?: "video", sh, st.int("fetcher") ?: 0, false, true, DEST_PUBLIC, st.long("estimate") ?: -1L, st.str("repId"), st.str("ext"), st.obj("companion")?.let { streamOf(it) })
     }
 
     private fun load() {
@@ -456,12 +472,7 @@ class PhoneBackend(
                     val h = LinkedHashMap<String, String>()
                     s.obj("headers")?.forEach { (k, v) -> if (k is String && v is String) h[k] = v }
                     val src = Source(s.str("url") ?: continue, s.str("pageUrl"), s.str("nameHint"), s.str("mime"), h, s.int("fetcher") ?: 0, false, s.bool("meteredOk") ?: false, 0, DEST_PUBLIC, s.bool("nameFixed") ?: false)
-                    val stream = m.obj("stream")?.let { st ->
-                        val sh = LinkedHashMap<String, String>()
-                        st.obj("headers")?.forEach { (k, v) -> if (k is String && v is String) sh[k] = v }
-                        // the playlist text is not kept on disk (it can be big): after a restart the engine fetches it again
-                        StreamSource(st.str("playlistUrl") ?: return@let null, null, st.str("pageUrl"), st.str("nameStem") ?: "video", sh, st.int("fetcher") ?: 0, false, true, DEST_PUBLIC, st.long("estimate") ?: -1L, st.str("repId"), st.str("ext"), null)
-                    }
+                    val stream = m.obj("stream")?.let { streamOf(it) }
                     val p = P(m.long("lid") ?: continue, m.str("cid") ?: continue, src, m.long("created") ?: 0L, stream)
                     p.phase = try { Phase.valueOf(m.str("phase") ?: "PHONE") } catch (e: IllegalArgumentException) { Phase.PHONE }
                     p.remoteId = m.str("remoteId"); p.engineId = m.long("engineId") ?: 0L; p.updated = m.long("updated") ?: p.created
