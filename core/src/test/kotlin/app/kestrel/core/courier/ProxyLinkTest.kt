@@ -24,7 +24,7 @@ class ProxyLinkTest {
     @After fun tearDown() { for (c in cleanups.reversed()) try { c() } catch (_: Exception) {}; root.deleteRecursively() }
 
     private fun phone(withProxy: Boolean = true) = Phone(FakeServer(testBytes(10)), root, cleanups, withProxy = withProxy)
-    private fun client(p: Phone) = CourierClient(p.base, TEST_KEY, SocketTransport(), baseUrl = p.base)
+    private fun client(p: Phone, key: ByteArray = TEST_KEY) = CourierClient("127.0.0.1", p.port, key)
 
     private fun await(what: String, ms: Long = 10_000, cond: () -> Boolean) { val end = System.currentTimeMillis() + ms; while (!cond()) { if (System.currentTimeMillis() > end) throw AssertionError("timed out: $what"); Thread.sleep(10) } }
 
@@ -73,7 +73,7 @@ class ProxyLinkTest {
         await("active") { link.state is ProxyLink.State.Active }
         // the phone vanishes (hotspot off): the tablet points at an address where nothing listens
         val dead = ServerSocket(0, 1, loop).use { it.localPort }
-        cl = CourierClient("http://127.0.0.1:$dead", TEST_KEY, SocketTransport(), baseUrl = "http://127.0.0.1:$dead")
+        cl = CourierClient("127.0.0.1", dead, TEST_KEY)
         link.refresh()
         await("unavailable") { link.state is ProxyLink.State.Unavailable }
         assertTrue((link.state as ProxyLink.State.Unavailable).why, (link.state as ProxyLink.State.Unavailable).why.contains("does not answer"))
@@ -91,7 +91,7 @@ class ProxyLinkTest {
 
     @Test fun aWrongPairingCodeIsReportedAsThat() {
         val ph = phone()
-        val wrong = CourierClient(ph.base, ByteArray(32) { 7 }, SocketTransport(), baseUrl = ph.base)
+        val wrong = client(ph, ByteArray(32) { 7 })
         val link = ProxyLink({ wrong }, { true }, { }, retryMs = 5000)
         link.start(); cleanups.add { link.stop() }
         await("unavailable") { link.state is ProxyLink.State.Unavailable }
