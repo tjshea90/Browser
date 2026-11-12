@@ -358,7 +358,7 @@ class EngineTest {
 
     @Test(timeout = 60_000) fun anOutageInTheMiddleWaitsAndCarriesOnInsteadOfFailing() {
         val data = testBytes(8 * MiB, 25)
-        val s = FakeServer(data).also { it.chunkDelayMs = 2 }
+        val s = FakeServer(data).also { it.chunkDelayMs = 2; it.probeWindow = 1L shl 20 } // windowed replies, like Firefox's fetcher: the engine asks again after each window
         val c = Config(maxActive = 2, parallel = false, windowBytes = 1L shl 20, checkpointMs = 40, checkpointBytes = 1L shl 20, stallMs = 60_000, backoffBaseMs = 1, backoffCapMs = 4, maxFails = 3,
             outageBaseMs = 40, outageCapMs = 80, outageGiveUpMs = 60_000)
         val h = H(s, c); val id = h.enqueue()
@@ -374,7 +374,7 @@ class EngineTest {
 
     @Test(timeout = 60_000) fun aLongOutageEndsAsStalledWithThePartialKeptAndRetryContinues() {
         val data = testBytes(8 * MiB, 26)
-        val s = FakeServer(data).also { it.chunkDelayMs = 2 }
+        val s = FakeServer(data).also { it.chunkDelayMs = 2; it.probeWindow = 1L shl 20 } // windowed replies, like Firefox's fetcher: the engine asks again after each window
         val c = Config(maxActive = 2, parallel = false, windowBytes = 1L shl 20, checkpointMs = 40, checkpointBytes = 1L shl 20, stallMs = 60_000, backoffBaseMs = 1, backoffCapMs = 4, maxFails = 3,
             outageBaseMs = 30, outageCapMs = 60, outageGiveUpMs = 300)
         val h = H(s, c); val id = h.enqueue()
