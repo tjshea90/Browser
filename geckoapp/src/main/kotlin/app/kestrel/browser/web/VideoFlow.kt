@@ -68,7 +68,7 @@ class VideoFlow(private val a: BrowserActivity) {
     fun show(tab: Tab) {
         val items = tab.media.usable()
         if (items.isEmpty()) {
-            a.toast("No video found on this page yet. Start playing it for a few seconds, then try again.")
+            a.toast("No video found on this page yet. Some sites only show it once you press play: press play, then tap this icon again.")
             return
         }
         val p = VideoPanel(a, a.pal) { choice -> when (val t = choice.tag) { is MediaCandidate -> pick(tab, t); is StreamPick -> pickStream(tab, t) } }
@@ -108,6 +108,12 @@ class VideoFlow(private val a: BrowserActivity) {
         render(p, tab, tab.media.usable())
     }
 
+    /** The name the file will get (without its extension): the page's title and the quality, the same text the download itself uses. */
+    private fun stemFor(tab: Tab, label: String): String = MediaLabels.fileStem(tab.title, UrlParts.hostOf(tab.url) ?: "", label)
+
+    /** One line under the name (owner request X17): resolution, file type, size, length - whatever is known, in that order. */
+    private fun rowDetail(vararg parts: String): String = parts.filter { it.isNotEmpty() && it != "size unknown" }.joinToString("  \u00B7  ")
+
     private fun sections(tab: Tab, items: List<MediaCandidate>): Pair<List<VideoPanel.Section>, String?> {
         val video = ArrayList<VideoPanel.Choice>()
         val audio = ArrayList<VideoPanel.Choice>()
@@ -128,8 +134,11 @@ class VideoFlow(private val a: BrowserActivity) {
                     is Loaded.Failed -> note = note ?: st.message
                     is Loaded.Ready -> { note = note ?: st.note; for ((ch, pick) in st.rows) (if (pick.audioOnly) streamAudio else streams).add(ch) }
                 }
-                c.audioOnly -> audio.add(VideoPanel.Choice("Audio only", detail(c), c))
-                else -> video.add(VideoPanel.Choice(MediaLabels.quality(c.knownHeight).ifEmpty { "Video" }, detail(c), c))
+                c.audioOnly -> audio.add(VideoPanel.Choice(stemFor(tab, "audio") + "." + MediaSniff.saveExtension(c.url, c.mime), rowDetail("Audio only", MediaLabels.format(c), MediaLabels.size(c.length), MediaLabels.duration(c.durationMs)), c))
+                else -> {
+                    val q = MediaLabels.quality(c.knownHeight)
+                    video.add(VideoPanel.Choice(stemFor(tab, q) + "." + MediaSniff.saveExtension(c.url, c.mime), rowDetail(q, MediaLabels.format(c), MediaLabels.size(c.length), MediaLabels.duration(c.durationMs)), c))
+                }
             }
         }
         // two rows that read the same (two files of one quality) get the file's name so they can be told apart
@@ -190,7 +199,8 @@ class VideoFlow(private val a: BrowserActivity) {
             val audio = media.container == "aac" || media.container == "mp3" || media.container == "m4a"
             val est = media.exactBytes
             val pick = StreamPick(if (audio) "audio" else "", c.url, mediaText, est, null, audio, media.container)
-            rows.add(VideoPanel.Choice(if (audio) "Audio only" else "Video", listOf("HLS", MediaLabels.size(est), dur).filter { it.isNotEmpty() && !(it == "size unknown") }.joinToString("  \u00B7  "), pick) to pick)
+            val ext = if (audio) media.container else "mp4"          // a video stream is saved as one MP4 file
+            rows.add(VideoPanel.Choice(stemFor(tab, pick.label) + "." + ext, rowDetail(if (audio) "Audio only" else "", ext.uppercase(), MediaLabels.size(est), dur), pick) to pick)
             return Loaded.Ready(rows, null)
         }
         val seen = HashSet<String>()
@@ -201,8 +211,9 @@ class VideoFlow(private val a: BrowserActivity) {
             val text = if (v === probe) mediaText else null
             val title = if (v.audioOnly) "Audio only" else v.label
             val pick = StreamPick(if (v.audioOnly) "audio" else v.label, v.url, text, est, sepAudio?.url, v.audioOnly, media.container)
-            val detail = listOf("HLS", MediaLabels.size(est, estimate = true), dur).filter { it.isNotEmpty() }.joinToString("  \u00B7  ")
-            rows.add(VideoPanel.Choice(title, detail, pick) to pick)
+            val ext = if (v.audioOnly) media.container else "mp4"
+            val detail = rowDetail(if (v.audioOnly) "Audio only" else v.label, ext.uppercase(), MediaLabels.size(est, estimate = true), dur)
+            rows.add(VideoPanel.Choice(stemFor(tab, pick.label) + "." + ext, detail, pick) to pick)
         }
         return Loaded.Ready(rows, null)
     }
@@ -213,13 +224,13 @@ class VideoFlow(private val a: BrowserActivity) {
         streamInfo[c.key] = Loaded.Loading
         DownloadController.fetchText(a, c.url, requestHeaders(tab), 1, tab.isPrivateTab) { text ->
             val man = text?.let { Dash.parse(it, c.url) }
-            streamInfo[c.key] = if (man == null || text == null) Loaded.Failed("The stream's list could not be read (the site may have refused it).") else dashReady(c, man, text)
+            streamInfo[c.key] = if (man == null || text == null) Loaded.Failed("The stream's list could not be read (the site may have refused it).") else dashReady(tab, c, man, text)
             refresh(tab)
         }
         return Loaded.Loading
     }
 
-    private fun dashReady(c: MediaCandidate, man: Dash.Manifest, text: String): Loaded {
+    private fun dashReady(tab: Tab, c: MediaCandidate, man: Dash.Manifest, text: String): Loaded {
         when (man.problem) {
             Hls.Problem.LIVE -> return Loaded.Failed("This is a live stream. Live streams cannot be saved.")
             Hls.Problem.DRM -> return Loaded.Failed("This video is copy-protected (DRM). Kestrel cannot save it.")
@@ -237,12 +248,12 @@ class VideoFlow(private val a: BrowserActivity) {
             if (!seen.add("${v.height}|${v.bandwidth / 100_000}")) continue
             val est = (v.bytesPerSecond + (sound?.bytesPerSecond ?: 0L)) * (man.durationMs / 1000)
             val pick = StreamPick(v.label, c.url, text, est, null, false, "mp4", repId = v.id, audioRepId = sound?.id)
-            rows.add(VideoPanel.Choice(v.label, listOf("DASH", MediaLabels.size(est, estimate = true), dur).filter { it.isNotEmpty() }.joinToString("  \u00B7  "), pick) to pick)
+            rows.add(VideoPanel.Choice(stemFor(tab, v.label) + ".mp4", rowDetail(v.label, "MP4", MediaLabels.size(est, estimate = true), dur), pick) to pick)
         }
         for (au in man.audio.filter { it.mp4Friendly && it.media != null }.take(2)) {
             val est = au.bytesPerSecond * (man.durationMs / 1000)
             val pick = StreamPick("audio", c.url, text, est, null, true, "m4a", repId = au.id, ext = "m4a")
-            rows.add(VideoPanel.Choice("Audio only", listOf("DASH", MediaLabels.size(est, estimate = true), dur).filter { it.isNotEmpty() }.joinToString("  \u00B7  "), pick) to pick)
+            rows.add(VideoPanel.Choice(stemFor(tab, "audio") + ".m4a", rowDetail("Audio only", "M4A", MediaLabels.size(est, estimate = true), dur), pick) to pick)
         }
         if (rows.isEmpty()) return Loaded.Failed("This stream's qualities use a format (WebM / VP9) that Kestrel cannot save yet.")
         return Loaded.Ready(rows, if (skipped > 0) "Some qualities use a format (WebM / VP9) that Kestrel cannot save yet." else null)
