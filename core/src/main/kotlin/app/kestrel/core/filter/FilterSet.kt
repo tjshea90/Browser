@@ -350,6 +350,8 @@ class FilterSet internal constructor(
     }
 
     companion object {
+        /** D2: the first characters of the CSS of a page that should send its classes and ids (see [cosmeticCss] with `tokenMode`). */
+        const val COSMETIC_TOKEN_MARKER = CosmeticIndex.TOKEN_MARKER
         val EMPTY = FilterSet(HostTable.EMPTY, HostTable.EMPTY, LongArray(0), IntArray(0), PatternTable.EMPTY, CosmeticIndex.EMPTY, FilterMeta.EMPTY)
 
         private const val STAR = '*'.code
