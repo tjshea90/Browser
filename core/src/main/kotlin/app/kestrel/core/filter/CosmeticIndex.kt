@@ -100,6 +100,15 @@ internal class CosmeticIndex(
     /** Builds the token index now (start-up warm-up), so the first page does not wait for it. */
     fun warm() { if (genericCount > 0) tokens() }
 
+    /** One line of numbers about the token index (tests and Diagnostics): how many generic selectors, how many are filed under a token, the biggest bucket. */
+    fun debugStats(): String {
+        if (genericCount == 0) return "generic=0"
+        val t = tokens()
+        var keyed = 0; var biggest = 0
+        for (v in t.byKey.values) { keyed += v.size; if (v.size > biggest) biggest = v.size }
+        return "generic=" + t.lo.size + " keyed=" + keyed + " keys=" + t.byKey.size + " loose=" + t.loose.size + " biggestBucket=" + biggest
+    }
+
     private fun looseCss(limit: Int, exc: Set<String>): String {
         val cached = looseCssCache
         if (cached != null && exc.isEmpty() && limit == DEFAULT_GENERIC_LIMIT) return cached
