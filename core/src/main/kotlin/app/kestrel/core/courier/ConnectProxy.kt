@@ -51,6 +51,8 @@ class ConnectProxy(
     private val log: (String) -> Unit = {},
     /** DEBUG builds of the phone app: one log line per refused peer and per tunnel (host names are private: never on in a release). */
     private val verbose: Boolean = false,
+    /** Called with the number of open tunnels each time it changes (the phone app keeps its CPU awake while there are any). */
+    private val onActive: (Int) -> Unit = {},
 ) {
     /** Opens the real connection. Throws [Blocked] for a destination the proxy must not reach, [UnknownHostException] / other [IOException] otherwise. */
     interface Dialer { @Throws(IOException::class) fun dial(host: String, port: Int, timeoutMs: Int): Socket }
@@ -99,7 +101,7 @@ class ConnectProxy(
     private fun handle(client: Socket) {
         open.add(client)
         var upstream: Socket? = null
-        active.incrementAndGet()
+        onActive(active.incrementAndGet())
         try {
             val remote = client.inetAddress; val local = client.localAddress
             if (remote == null || local == null || !peerAllowed(remote, local)) { refused.incrementAndGet(); if (verbose) log("proxy: turned away ${remote?.hostAddress}"); reset(client); return }
@@ -132,7 +134,7 @@ class ConnectProxy(
         } finally {
             closeQuietly(client); if (upstream != null) closeQuietly(upstream)
             open.remove(client); if (upstream != null) open.remove(upstream)
-            active.decrementAndGet()
+            onActive(active.decrementAndGet())
         }
     }
 
