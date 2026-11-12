@@ -63,4 +63,19 @@ class HardeningTest {
         org.junit.Assert.assertFalse(app.kestrel.browser.net.Downloads.isRisky("report.pdf", "application/pdf"))
         org.junit.Assert.assertFalse(app.kestrel.browser.net.Downloads.isRisky("photo.jpg", null))
     }
+
+    // ------------------------------------------------------------------ an intent: link may only ask for a few harmless actions
+
+    @Test
+    fun intentLinksCanOnlyUseAFewActions() {
+        for (a in listOf("android.settings.SETTINGS", "android.settings.WIFI_SETTINGS", "android.intent.action.DELETE", "android.intent.action.CALL",
+            "android.intent.action.INSTALL_PACKAGE", "android.intent.action.UNINSTALL_PACKAGE", "android.intent.action.MAIN", "android.app.action.ADD_DEVICE_ADMIN")) {
+            assertNull("action $a must be refused", ExternalIntents.plan(ctx, "intent://x.example/p#Intent;scheme=https;action=$a;end"))
+        }
+        for (a in listOf("android.intent.action.VIEW", "android.intent.action.SENDTO", "android.intent.action.DIAL", "android.intent.action.SEND")) {
+            val p = ExternalIntents.plan(ctx, "intent://x.example/p#Intent;scheme=https;action=$a;end")
+            assertTrue("action $a is allowed", p != null && p.intent.action == a)
+        }
+        assertTrue("no action at all is the same as VIEW", ExternalIntents.plan(ctx, "intent://x.example/p#Intent;scheme=https;end") != null)
+    }
 }

@@ -14,6 +14,9 @@ object ExternalIntents {
 
     private val BLOCKED = setOf("file", "content", "javascript", "data", "vbscript", "view-source", "filesystem", "blob", "about", "chrome", "ftp")
     private val DIRECT = setOf("mailto", "tel", "sms", "smsto", "geo")
+
+    /** The only actions a page may ask an app for through an `intent:` link: open it, write to it, dial a number, share text. Anything else (settings screens, delete / install, call, ...) is refused. */
+    private val ACTIONS = setOf(Intent.ACTION_VIEW, Intent.ACTION_SENDTO, Intent.ACTION_DIAL, Intent.ACTION_SEND)
     private const val GRANT_FLAGS = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
         Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
 
@@ -31,6 +34,8 @@ object ExternalIntents {
         if (scheme == "intent") {
             intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME) // URISyntaxException / NumberFormatException are caught by plan()
             fallback = intent.getStringExtra("browser_fallback_url")?.takeIf { it.startsWith("https://") }
+            val action = intent.action
+            if (action != null && action !in ACTIONS) return null
             // never let a page choose the exact component or smuggle a selector intent
             intent.component = null
             intent.selector = null
