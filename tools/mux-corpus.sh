@@ -6,8 +6,7 @@
 set -euo pipefail
 OUT="${1:?usage: mux-corpus.sh <outdir>}"
 mkdir -p "$OUT"
-LAV="-f lavfi -i testsrc2=size=%SIZE%:rate=%RATE% -f lavfi -i sine=frequency=440:sample_rate=44100"
-mk() { # name size rate seconds "video opts" "audio opts" [extra input opts]
+mk() { # name size rate seconds "video opts" "audio opts"
   local name="$1" size="$2" rate="$3" secs="$4" vopts="$5" aopts="$6"
   mkdir -p "$OUT/$name"; rm -f "$OUT/$name"/seg*.ts
   ffmpeg -hide_banner -loglevel error -y -f lavfi -i "testsrc2=size=$size:rate=$rate" -f lavfi -i "sine=frequency=440:sample_rate=44100" -t "$secs" \
