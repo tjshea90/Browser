@@ -663,13 +663,19 @@ open class BrowserActivity : Activity(), DockListener {
     // Most Back presses are answered by the engine's own back/forward cache and are instant. A page that forbids caching (webmail, banking, anything with Cache-Control: no-store) or one the
     // cache no longer holds is LOADED again; until it paints, a recent picture of it covers the page area. The picture is taken at the moment the page is left (as the owner last saw it).
     private var lastLeaveShotAt = 0L
-    private var backTarget: Triple<Tab, String, android.graphics.Bitmap>? = null
+    private class BackArm(val tab: Tab, val fromUrl: String, val picture: android.graphics.Bitmap)
+    private var backTarget: BackArm? = null
+    private var backBusyUntil = 0L
     private val backPictureShow = Runnable {
-        val (t, _, pic) = backTarget ?: return@Runnable
+        val b = backTarget ?: return@Runnable
         backTarget = null
-        if (t !== current || !t.loading || t.error != null || t.showHome || restoringTab != null) { Health.log("tabs", "back-picture-skipped", "loading=${t.loading} cover=${restoringTab != null}"); return@Runnable } // the engine had it already (cache), or the user moved on
+        val t = b.tab
+        // 150 ms after Back the tab still shows the page it left: the engine has not committed the page Back asked for (its back/forward cache would have, by now), so that page has to be
+        // loaded. (Not "is the tab loading": the engine reports the start of a load later than this on a slow CPU.) Its picture covers the page area until it paints.
+        val stillThere = BackPictures.keyOf(t.url) == BackPictures.keyOf(b.fromUrl)
+        if (t !== current || t.error != null || t.showHome || restoringTab != null || !stillThere) { Health.log("tabs", "back-picture-skipped", "same-page=$stillThere cover=${restoringTab != null}"); return@Runnable }
         Health.count("back.picture"); Health.log("tabs", "back-picture", "tab=${t.id}")
-        showRestoring(t, false, "", pic, 0x33)
+        showRestoring(t, false, "", b.picture, 0x33, 6_000)
     }
 
     internal fun goBack(t: Tab) { armBackPicture(t, -1); t.session?.goBack() }
@@ -685,8 +691,13 @@ open class BrowserActivity : Activity(), DockListener {
         val url = st[i].uri ?: return
         val pic = BackPictures.get(t.id, url)
         Health.log("tabs", "back-arm", "tab=${t.id} to=${UrlParts.hostOf(url)} picture=${pic != null} pictures=${BackPictures.size()}")
+        // a second Back within two seconds: the engine's history index has not moved yet, so the page this one leads to is not known from here - show nothing rather than the wrong picture
+        val now = SystemClock.uptimeMillis()
+        val rapid = now < backBusyUntil
+        backBusyUntil = now + 2_000
+        if (rapid) { if (restoringTab === t) hideRestoring("second-back"); return }
         if (pic == null) return
-        backTarget = Triple(t, url, pic)
+        backTarget = BackArm(t, t.url, pic)
         Io.main.postDelayed(backPictureShow, 150) // a cache hit is done by then; a page that has to load shows its picture
     }
 
@@ -1750,13 +1761,13 @@ open class BrowserActivity : Activity(), DockListener {
         }
     }
 
-    private fun showRestoring(tab: Tab, crashed: Boolean, message: String? = null, picture: android.graphics.Bitmap? = null, dim: Int = 0xB3) {
+    private fun showRestoring(tab: Tab, crashed: Boolean, message: String? = null, picture: android.graphics.Bitmap? = null, dim: Int = 0xB3, timeoutMs: Long = 20_000) {
         Health.log("tabs", "cover-show", "tab=${tab.id} thumb=${tab.thumb != null} picture=${picture != null}")
         restoringTab = tab
         val thumb = picture ?: tab.thumb
         restoreOverlay.show(thumb, message ?: if (crashed) "The page stopped - bringing it back" else "Page freed to save memory - bringing it back", dim)
         Io.main.removeCallbacks(restoreTimeout)
-        Io.main.postDelayed(restoreTimeout, 20_000) // never stay up for ever (a page that never paints, a dead connection)
+        Io.main.postDelayed(restoreTimeout, timeoutMs) // never stay up for ever (a page that never paints, a dead connection)
     }
 
     private fun hideRestoring(why: String = "") {
