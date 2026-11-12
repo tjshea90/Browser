@@ -211,6 +211,7 @@ open class BrowserActivity : Activity(), DockListener {
         tabs.add(firstTab)
         show(firstTab)
         val launch = urlFromIntent(intent)
+        if (launch == null) earlyCover() // closed on a page, now starting without a link: "Opening <host>" from the first frame, not the Home screen for a moment
         if (intent?.getBooleanExtra(Notifier.EXTRA_OPEN_DOWNLOADS, false) == true) Io.main.post { showDownloads() }
         handleUpdateIntent(intent)
         Io.fast {
@@ -469,6 +470,17 @@ open class BrowserActivity : Activity(), DockListener {
 
     // ================================================================== tabs
 
+    /** The saved session is a few KB: read it here (no thread hop) to know which page the app was on. The tab's preview joins the cover when the restore runs a moment later. */
+    private fun earlyCover() {
+        val sel = try {
+            sessionFile().takeIf { it.isFile && it.length() < 262_144 }?.readText()?.let { SessionCodec.decode(it) }?.let { s -> s.tabs.firstOrNull { it.id == s.selectedId } ?: s.tabs.lastOrNull() }
+        } catch (e: Exception) { null } ?: return
+        if (!sel.url.startsWith("http")) return
+        Health.log("tabs", "early-cover", UrlParts.hostOf(sel.url) ?: "")
+        restoreOverlay.show(null, "Opening " + (UrlParts.hostOf(sel.url) ?: "page"))
+        Io.main.removeCallbacks(restoreTimeout); Io.main.postDelayed(restoreTimeout, 25_000) // never stays for ever, whatever happens to the restore
+    }
+
     private fun restore(session: Session?, saved: Bundle?, launch: String?, states: Map<Long, String> = emptyMap(), selThumb: android.graphics.Bitmap? = null) {
         sessionRestored = true // from now on saving cannot clobber the saved session
         if (session != null && session.tabs.isNotEmpty()) {
@@ -493,6 +505,7 @@ open class BrowserActivity : Activity(), DockListener {
             if (launch == null) { if (sel.thumb == null) sel.thumb = selThumb; show(sel) } else current = null
         }
         if (launch != null) openInNewTabOrCurrent(launch)
+        if (restoringTab == null) restoreOverlay.hide() // the early cover is only for a restore that really covers its page: nothing took over, so it must not stay
     }
 
     private fun newTabInternal(parent: Tab? = null, privateTab: Boolean = false): Tab {
