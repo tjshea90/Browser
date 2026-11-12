@@ -95,6 +95,8 @@ class SiteShieldStore(initial: Map<String, SiteShields> = emptyMap()) {
 
     companion object {
         const val MAX_SITES = 2000
+        /** Every per-site flag bit that exists (ShieldFlag.SHIELDS .. EMBEDS). The decoder once capped this at 127 and would have dropped a site's Embeds choice as damage. */
+        const val ALL_FLAGS = ShieldFlag.SHIELDS or ShieldFlag.ADS or ShieldFlag.COSMETIC or ShieldFlag.HTTPS or ShieldFlag.COOKIES or ShieldFlag.FINGERPRINT or ShieldFlag.SCRIPTS or ShieldFlag.EMBEDS
 
         fun decode(text: String): SiteShieldStore {
             val out = LinkedHashMap<String, SiteShields>()
@@ -105,7 +107,7 @@ class SiteShieldStore(initial: Map<String, SiteShields> = emptyMap()) {
                 if (host.isEmpty() || host.length > 253) continue
                 val mask = p[1].toIntOrNull() ?: continue
                 val values = p[2].toIntOrNull() ?: continue
-                if (mask <= 0 || mask > 127 || values < 0 || values > 127) continue
+                if (mask <= 0 || mask > ALL_FLAGS || values < 0 || values > ALL_FLAGS) continue // only bits that exist: a damaged or hostile line cannot smuggle others in
                 if (out.size < MAX_SITES) out[host] = SiteShields(mask, values and mask)
             }
             return SiteShieldStore(out)
