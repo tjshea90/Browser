@@ -189,6 +189,10 @@ class StreamEngine(
         var restartAfterStop = false
         var wipeAfterStop = false
         var base = 0L                   // bytes already on the tablet when this run started (output + staged segments)
+        var mux: TsToMp4? = null        // the MP4 being written while the segments arrive ([MUX_MP4] jobs only)
+        @Volatile var muxDirty = false  // the muxer was in the middle of a segment when something failed: its state may not be checkpointed
+        var lastMuxCkpt = 0L
+        @Volatile var forceRaw = false  // the MP4 writer failed once for this job: do it the old way
     }
 
     private val lock = Any()
