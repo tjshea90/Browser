@@ -585,7 +585,10 @@ class StreamEngine(
      */
     private fun decideMux(job: Job, media: Hls.Media, fetcher: Fetcher, dir: File) {
         val rec = job.rec
-        if (synchronized(lock) { rec.mux != MUX_UNDECIDED || job.forceRaw }) { if (job.forceRaw) synchronized(lock) { rec.mux = MUX_RAW }; return }
+        if (synchronized(lock) { rec.mux != MUX_UNDECIDED || job.forceRaw }) {
+            if (job.forceRaw) synchronized(lock) { rec.mux = MUX_RAW; rec.note = "Kept as a .ts file because the MP4 writer could not handle this stream." }
+            return
+        }
         if (!cfg.directMp4 || synchronized(lock) { rec.next > 0 || rec.destUri != null }) { synchronized(lock) { rec.mux = MUX_RAW }; return }   // a download from an older version, or the switch is off
         val seg = media.segments[0]
         val f = File(dir, "0.seg")

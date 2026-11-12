@@ -117,6 +117,7 @@ class FakeSink(val name: String, total: Long, val uriValue: String) : Sink {
     }
     override fun sync() { synchronized(this) { durable = bytes.copyOf() } }
     override fun length(): Long = bytes.size.toLong()
+    override fun truncate(len: Long) { synchronized(this) { if (len < bytes.size) bytes = bytes.copyOf(len.toInt()) } }
     override val readable: Boolean get() = true
     override fun pread(pos: Long, b: ByteArray, off: Int, len: Int): Int = synchronized(this) { val n = minOf(len.toLong(), bytes.size - pos).toInt().coerceAtLeast(0); System.arraycopy(bytes, pos.toInt(), b, off, n); n }
     override fun publish(): String? { published = true; return uriValue }
