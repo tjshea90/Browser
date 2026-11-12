@@ -172,20 +172,32 @@ test('keyboard: an editable region (contenteditable) is moved like a field, and 
 
 // ---------------------------------------------------------------- D2: generic element hiding by the page's classes and ids
 // The fake app answers the `css` question (with or without the marker) and each `gen` batch (the CSS for ".ad-banner" only), and keeps every batch the page sent.
-const fakeApp = (marker) => () => {
+// These run inside the page (addInitScript serialises them), so each one is self-contained.
+const appWithMarker = () => {
   window.__gen = [];
+  window.requestIdleCallback = (f) => setTimeout(f, 30);
   window.browser.runtime.sendMessage = (m) => {
     window.__msgs.push(m);
-    if (m.k === 'css') return Promise.resolve((marker ? '/*kg*/' : '') + '.site-rule{display:none!important}');
+    if (m.k === 'css') return Promise.resolve('/*kg*/.site-rule{display:none!important}');
     if (m.k === 'gen') { window.__gen.push(m.t); return Promise.resolve(m.t.indexOf('.ad-banner') >= 0 ? '.ad-banner{display:none!important}' : ''); }
     return Promise.resolve(undefined);
   };
 };
+const appWithoutMarker = () => {
+  window.__gen = [];
+  window.browser.runtime.sendMessage = (m) => {
+    window.__msgs.push(m);
+    if (m.k === 'css') return Promise.resolve('.site-rule{display:none!important}');
+    if (m.k === 'gen') window.__gen.push(m.t);
+    return Promise.resolve(undefined);
+  };
+};
+const appDown = appDown;
 const gens = (page) => page.evaluate(() => window.__gen);
 const flat = (batches) => [].concat(...batches);
 
 test('tokens: with the marker the page sends its classes and ids (lower case, once each) and the selectors that come back are applied', async () => {
-  const page = await open(`<div id="Top" class="Ad-Banner x">hi</div><span class="plain  other">s</span><p id="">p</p>`, (() => { fakeApp(true)(); quickIdle(); }));
+  const page = await open(`<div id="Top" class="Ad-Banner x">hi</div><span class="plain  other">s</span><p id="">p</p>`, appWithMarker);
   await page.waitForTimeout(1200);
   const sent = flat(await gens(page)).sort();
   assert.deepEqual(sent, ['#top', '.ad-banner', '.other', '.plain', '.x']);
@@ -198,14 +210,14 @@ test('tokens: with the marker the page sends its classes and ids (lower case, on
 });
 
 test('tokens: without the marker nothing is sent (the app turned generic hiding off, or the host is allowed)', async () => {
-  const page = await open(`<div class="ad-banner">hi</div>`, () => { fakeApp(false)(); });
+  const page = await open(`<div class="ad-banner">hi</div>`, appWithoutMarker);
   await page.waitForTimeout(900);
   assert.deepEqual(await gens(page), []);
   assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.ad-banner')).display), 'block');
 });
 
 test('tokens: names that appear later are sent too, each name only once however often it appears', async () => {
-  const page = await open(`<div class="first">a</div>`, () => { fakeApp(true)(); });
+  const page = await open(`<div class="first">a</div>`, appWithMarker);
   await page.waitForTimeout(900);
   await page.evaluate(() => {
     const d = document.createElement('div'); d.className = 'late-one first'; d.innerHTML = '<p class="late-two" id="late-id"></p>';
@@ -220,7 +232,7 @@ test('tokens: names that appear later are sent too, each name only once however 
 
 test('tokens: a page with many names is sent in batches of at most 300', async () => {
   let spans = ''; for (let i = 0; i < 700; i++) spans += `<i class="c${i}"></i>`;
-  const page = await open(spans, () => { fakeApp(true)(); });
+  const page = await open(spans, appWithMarker);
   await page.waitForTimeout(2500);
   const batches = await gens(page);
   assert.ok(batches.length >= 3 && batches.every((b) => b.length <= 300), 'batch sizes: ' + batches.map((b) => b.length));
@@ -228,7 +240,7 @@ test('tokens: a page with many names is sent in batches of at most 300', async (
 });
 
 test('tokens: only the top document asks; an iframe keeps just its own site rules', async () => {
-  const page = await open(`<div class="top-class">a</div><iframe srcdoc="<div class='frame-class'>b</div>" width="100" height="50"></iframe>`, () => { fakeApp(true)(); });
+  const page = await open(`<div class="top-class">a</div><iframe srcdoc="<div class='frame-class'>b</div>" width="100" height="50"></iframe>`, appWithMarker);
   await page.waitForTimeout(1200);
   const sent = flat(await gens(page));
   assert.ok(sent.includes('.top-class'));
@@ -236,7 +248,7 @@ test('tokens: only the top document asks; an iframe keeps just its own site rule
 });
 
 test('tokens: a page without the marker in its first answer, or an app that cannot answer, never breaks the page', async () => {
-  const page = await open(`<div class="x">a</div>`, () => { window.browser.runtime.sendMessage = () => Promise.reject(new Error('no app')); });
+  const page = await open(`<div class="x">a</div>`, appDown);
   await page.waitForTimeout(800);
   assert.equal(await page.evaluate(() => document.body.textContent), 'a');
 });
