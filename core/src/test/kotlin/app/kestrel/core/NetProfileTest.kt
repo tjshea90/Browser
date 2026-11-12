@@ -48,4 +48,59 @@ class NetProfileTest {
         assertEquals(0, NetProfile.effective(Input(true, true, false, helperMode = -5)).helperMode)
         assertEquals(2, NetProfile.effective(Input(true, true, false, helperMode = 99)).helperMode)
     }
+
+    // ---- AB3: behind LinkMeter's own tunnel the link is the phone's connection, not the capped hotspot
+
+    @Test fun onlyLinkMetersOwnTunnelGetsIpv6OffAndTheBiggerPageYield() {
+        val other = NetProfile.effective(Input(dohOn = true, http3On = true, vpn = true, fastTunnel = false))
+        assertFalse("another VPN: nothing is known about IPv6 on it", other.disableIPv6)
+        assertEquals("another VPN keeps the careful 150 KB/s", NetProfile.PAGE_YIELD_KBPS, other.pageYieldKBps)
+        assertFalse(other.tunnel)
+        assertTrue(other.text, other.text.contains("a VPN is the active network"))
+        val own = NetProfile.effective(Input(dohOn = true, http3On = true, vpn = true, fastTunnel = true))
+        assertTrue("the tunnel blocks IPv6: never ask for it", own.disableIPv6)
+        assertEquals(NetProfile.FAST_PAGE_YIELD_KBPS, own.pageYieldKBps)
+        assertTrue(own.pageYieldKBps > 4 * NetProfile.PAGE_YIELD_KBPS)
+        assertTrue(own.tunnel && own.fastWifi)
+        assertTrue(own.text, own.text.contains("LinkMeter's tunnel") && own.text.contains("IPv6") && own.text.contains("1000 KB/s"))
+    }
+
+    @Test fun theTunnelKeepsEverythingTheGenericVpnProfileDoes() {
+        val own = NetProfile.effective(Input(dohOn = true, http3On = true, vpn = true, helperMode = 2, pagesViaPhone = true, fastTunnel = true))
+        assertEquals("the phone's resolver", 0, own.trrMode)
+        assertFalse("no QUIC attempts", own.http3)
+        assertEquals("the Courier rests", 0, own.helperMode)
+        assertFalse(own.pagesViaProxy)
+    }
+
+    @Test fun withoutAVpnTheTunnelFlagChangesNothingAndTheStandardValuesStay() {
+        for (doh in listOf(true, false)) for (h3 in listOf(true, false)) {
+            val a = NetProfile.effective(Input(dohOn = doh, http3On = h3, vpn = false, fastTunnel = false))
+            val b = NetProfile.effective(Input(dohOn = doh, http3On = h3, vpn = false, fastTunnel = true))
+            assertEquals(a.trrMode, b.trrMode); assertEquals(a.http3, b.http3)
+            assertFalse("IPv6 stays on the normal hotspot", b.disableIPv6)
+            assertEquals(NetProfile.PAGE_YIELD_KBPS, b.pageYieldKBps)
+            assertFalse(b.fastWifi); assertFalse(b.tunnel)
+            assertTrue(b.text, b.text.startsWith("Standard profile"))
+        }
+    }
+
+    @Test fun theTunnelIsRecognisedByItsFixedAddressesOnly() {
+        assertTrue("its own address", NetProfile.isFastTunnel(listOf("10.111.222.2")))
+        assertTrue("its DNS address alone", NetProfile.isFastTunnel(listOf("fe80::1", "10.111.222.53")))
+        assertTrue("any entry of the list", NetProfile.isFastTunnel(listOf("192.168.43.1", null, "10.111.222.9")))
+        assertFalse("the hotspot network", NetProfile.isFastTunnel(listOf("192.168.43.2", "192.168.43.1")))
+        assertFalse("a neighbouring private network", NetProfile.isFastTunnel(listOf("10.111.221.2", "10.111.22.2", "10.111.223.2")))
+        assertFalse("a longer third number is not the prefix", NetProfile.isFastTunnel(listOf("10.111.2222.1")))
+        assertFalse("a prefix with no host part", NetProfile.isFastTunnel(listOf("10.111.222.")))
+        assertFalse("IPv6 text", NetProfile.isFastTunnel(listOf("fe80::1", "2001:db8::1")))
+        assertFalse("nothing at all", NetProfile.isFastTunnel(emptyList()))
+        assertFalse("only unknowns", NetProfile.isFastTunnel(listOf(null, null)))
+    }
+
+    @Test fun theBiggerYieldNeverExceedsWhatThePageRuleCanUse() {
+        // one number each, both positive, the fast one larger: the downloader clamps further (PageYieldTest)
+        assertTrue(NetProfile.PAGE_YIELD_KBPS in 50..4000 && NetProfile.FAST_PAGE_YIELD_KBPS in 50..4000)
+        assertTrue(NetProfile.FAST_PAGE_YIELD_KBPS > NetProfile.PAGE_YIELD_KBPS)
+    }
 }
