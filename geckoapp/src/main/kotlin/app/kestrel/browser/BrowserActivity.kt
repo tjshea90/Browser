@@ -237,6 +237,7 @@ open class BrowserActivity : Activity(), DockListener {
     override fun onResume() {
         super.onResume()
         Health.log("life", "resume"); Health.startWatchdog(); Health.watchFrames(window)
+        app.kestrel.browser.net.WifiBoost.set(this, prefs.labWifiBoost) // Network lab: Wi-Fi kept out of power save while the browser is on screen (EX-7)
         PageProxy.refresh()                                           // pages through the phone: renew the phone's proxy door now (the app was away; the Wi-Fi may have changed)
         val t = current
         if (t != null && !t.isNewTab && t.session == null) attachContent(t) // hibernated while we were in the background: bring it back
@@ -261,6 +262,7 @@ open class BrowserActivity : Activity(), DockListener {
     override fun onPause() {
         super.onPause()
         Health.log("life", "pause")
+        app.kestrel.browser.net.WifiBoost.set(this, false)
         flushCounters()
         saveSessionNow()
     }
@@ -1367,7 +1369,7 @@ open class BrowserActivity : Activity(), DockListener {
         val ver = try { Class.forName("org.mozilla.geckoview.BuildConfig").getField("MOZ_APP_VERSION").get(null) } catch (e: Exception) { "?" }
         out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null }} of ${tabs.size} tabs (the memory budget keeps up to ${liveBudget()} ready, MemAvailable ${Health.memAvailableMb()} MB, setting ${listOf("automatic", "few", "many")[prefs.tabsKept]}); current ${current?.url?.take(60) ?: "-"}")
         out.add("Network: ${GeckoEngine.networkProfile} (VPN active: ${NetworkMonitor.vpn}, LinkMeter tunnel recognised: ${NetworkMonitor.fastTunnel}, downloads yield to a loading page at ${DownloadController.pageYieldKBps} KB/s)")
-        out.add(app.kestrel.browser.download.DownloadService.wifiLockLine())
+        out.add(app.kestrel.browser.download.DownloadService.wifiLockLine() + ". " + app.kestrel.browser.net.WifiBoost.line())
         out.add("Keyboard: ${kbProbe.changes} layout event(s) from the probe window this run (more than 0 = the dock follows the keyboard by event, polling only as a safety net)")
         out.add("Warm-ups: ${GeckoEngine.warmCalls} connection head start(s) handed to the engine on its own thread this run (Settings > Network lab > Warm up the top suggestion)")
         out.add(GeckoEngine.prefReadback)

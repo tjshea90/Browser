@@ -94,6 +94,7 @@ object GeckoEngine {
             r.settings.setPostQuantumKeyExchangeEnabled(true)             // X25519MLKEM768 for TLS / HTTP-3 (= default, pinned)
             applyScrollFeel(prefs.scrollFeel)                             // live apz.* prefs of the "Scroll feel" setting
             applyNetwork(prefs)
+            applyLab(prefs)
             // DEBUG builds only (the emulator rig, research/TYPING.md): `setprop debug.kestrel.iwvisual 0` makes the keyboard resize the page's LAYOUT, `1` only the visible area (read back in Diagnostics)
             app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.iwvisual")?.let { v ->
                 if (v == "0" || v == "1") try { org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("dom.interactive_widget_default_resizes_visual", v == "1", org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_DEFAULT) } catch (e: Exception) { /* debug only */ }
@@ -154,7 +155,8 @@ object GeckoEngine {
             "docshell.shistory.bfcache.ship_allow_beforeunload_listeners", "browser.sessionhistory.max_entries", "network.dnsCacheExpiration", "network.dnsCacheEntries",
             "javascript.options.mem.gc_parallel_marking", "dom.script_loader.bytecode_cache.strategy",
             // the external review's rows (research/REVIEW-EXTERNAL-1.md): JPEG XL off in the image Accept header, double-tap zoom and zoom-to-field as the app set them
-            "image.jxl.enabled", "apz.allow_double_tap_zooming", "formhelper.autozoom")
+            "image.jxl.enabled", "apz.allow_double_tap_zooming", "formhelper.autozoom", "dom.prefetch_dns_for_anchor_https_document", "network.buffer.cache.size", "gfx.downloadable_fonts.fallback_delay",
+            "dom.speculation_rules.enabled", "dom.speculation_rules.prefetch.dry_run")
         try {
             org.mozilla.geckoview.GeckoPreferenceController.getGeckoPrefs(names).accept({ list ->
                 prefReadback = "Engine prefs: " + (list?.joinToString(", ") { "${it.pref.substringAfterLast('.')}=${it.value.toString().take(40)}(${when (it.type) { org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_BOOL -> "b"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_INT -> "i"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_STRING -> "s"; else -> "?" }})" } ?: "none")
@@ -182,6 +184,26 @@ object GeckoEngine {
         r.settings.setInputAutoZoomEnabled(prefs.inputAutoZoom)
         applyScrollFeel(prefs.scrollFeel)
         applyNetwork(prefs)
+        applyLab(prefs)
+    }
+
+    /**
+     * "Network lab" experiments of the external review (research/REVIEW-EXTERNAL-1.md 3.3, 3.5, 3.6): default-branch prefs, applied at every start and live from Settings. A default-branch pref cannot be
+     * unset, so each one is set to the engine's own 160 value when its switch is off (checked against StaticPrefList.yaml / geckoview-prefs.js; the engine is pinned and the monthly bump re-checks them).
+     *  - EX-6 `dom.prefetch_dns_for_anchor_https_document` (engine default false): resolve the hosts of links on https pages ahead. Never together with a Data saver level (it is a lookup for every link).
+     *  - EX-16 `network.buffer.cache.size` (GeckoView 16384) and `gfx.downloadable_fonts.fallback_delay` (3000 ms): two cheap A/B rows.
+     *  - EX-12 speculation rules (`dom.speculation_rules.enabled`, Nightly-only by default) with `prefetch.dry_run` first: 0 off, 1 dry run (candidates recorded, nothing fetched), 2 on.
+     */
+    fun applyLab(prefs: Prefs) {
+        val d = org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_DEFAULT
+        val saver = prefs.dataSaver != app.kestrel.core.shield.DataSaver.OFF
+        try {
+            org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("dom.prefetch_dns_for_anchor_https_document", prefs.labDnsPrefetch && !saver, d)
+            org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("network.buffer.cache.size", if (prefs.labBuffer) 32768 else 16384, d)
+            org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("gfx.downloadable_fonts.fallback_delay", if (prefs.labFontDelay) 500 else 3000, d)
+            org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("dom.speculation_rules.enabled", prefs.labSpec > 0, d)
+            org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("dom.speculation_rules.prefetch.dry_run", prefs.labSpec == 1, d)
+        } catch (e: Exception) { app.kestrel.browser.diag.Health.log("engine", "lab-prefs-failed", e.toString().take(140)) }
     }
 
     /**
