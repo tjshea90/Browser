@@ -17,7 +17,7 @@ class BrowserDb(ctx: Context) : SQLiteOpenHelper(ctx.applicationContext, "browse
     override fun onConfigure(db: SQLiteDatabase) {
         // write-ahead log: a visit being recorded after every page no longer makes the address bar's suggestions wait for the disk (two fsyncs less per write, readers never block)
         db.enableWriteAheadLogging()
-        db.execSQL("PRAGMA synchronous=NORMAL")
+        try { db.rawQuery("PRAGMA synchronous=NORMAL", null).close() } catch (e: Exception) { /* the default only costs a little speed */ }
     }
 
     override fun onCreate(db: SQLiteDatabase) {
