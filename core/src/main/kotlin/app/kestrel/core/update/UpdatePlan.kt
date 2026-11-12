@@ -64,18 +64,18 @@ object UpdatePlan {
      * Null when there is nothing worth interrupting for, or when this very set of news was shown before ([shownKey]). Lists are refreshed by the app on its own and only ride along as a
      * line when a dialog is shown anyway ([listsLine]); they never open a dialog alone.
      */
-    fun build(app: AppName, installedName: String, news: AppNews?, engineBundled: String?, engineNewest: String?, listsLine: String?, shownKey: String?, engineName: String = "Firefox"): Notice? {
+    fun build(appTitle: String, installedName: String, news: AppNews?, engineBundled: String?, engineNewest: String?, listsLine: String?, shownKey: String?, engineName: String = "Firefox"): Notice? {
         val engineNews = EngineWatch.isNewer(engineBundled, engineNewest)
         if (news == null && !engineNews) return null
         val key = "app:${news?.tag ?: "-"}:${if (news?.ready == true) "ready" else "new"}|eng:${if (engineNews) engineNewest?.let { EngineWatch.label(it) } else "-"}"
         if (key == shownKey) return null
         val lines = ArrayList<String>()
         if (news != null) {
-            lines.add("${app.title} ${news.versionName}" + (if (news.sizeText.isNotEmpty() && !news.ready) " (${news.sizeText})" else "") + " - you have $installedName.")
+            lines.add("$appTitle ${news.versionName}" + (if (news.sizeText.isNotEmpty() && !news.ready) " (${news.sizeText})" else "") + " - you have $installedName.")
         }
         if (engineNews) {
             val v = EngineWatch.label(engineNewest!!); val have = EngineWatch.label(engineBundled!!)
-            lines.add("Browser engine: $engineName $v is out (this app has $have)." + if (news == null) " ${app.title} will move to it in a coming update." else "")
+            lines.add("Browser engine: $engineName $v is out (this app has $have)." + if (news == null) " $appTitle will move to it in a coming update." else "")
         }
         if (!listsLine.isNullOrEmpty()) lines.add(listsLine)
         val title = when {
@@ -86,7 +86,4 @@ object UpdatePlan {
         val action = when { news == null -> Action.NONE; news.ready -> Action.INSTALL; else -> Action.DOWNLOAD }
         return Notice(key, title, lines, action)
     }
-
-    /** What the app is called in the dialog. */
-    class AppName(val title: String)
 }
