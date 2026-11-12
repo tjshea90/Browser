@@ -403,3 +403,38 @@
 >
 > Now D1 step 1: the image encoder in `:core`.
 <!-- sha:3a01500ddbdc -->
+
+## 2026-11-12T00:07:16Z
+> **alpha13 is out.** It installs over alpha12 and updates in place. Android 10 will still show its own "Install?" screen.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.2.0-alpha13
+>
+> **What changed: the main page-load fix**
+> - **Ad and tracker blocking now runs inside the browser engine.** Before, every request on a page made the engine ask the app "block this?" and wait for the app's screen thread to answer. A busy page makes hundreds of those requests, which is what made loading and typing stall. Now the engine decides for itself and the app is asked once per page.
+> - **The first page after you open the browser is protected sooner.** The engine keeps a saved copy of the lists. Before, requests went through unfiltered while the app was still loading them.
+> - **Diagnostics has a new "Blocker" line.** It shows timing numbers, and a button next to it switches back to the old way if a site misbehaves. Both take effect from the next page.
+> - **Smaller extras:** embedded frames get smaller element-hiding styles, and the filter-list loader starts a bit quicker.
+>
+> **What I checked**
+> - **Same answers as before.** The new blocker gave identical answers to the old one on 63,378 test requests built from the real filter lists, and on 2,200 more from a small test list. A deliberate-bug check caught every one of 10 bugs I injected.
+> - **Emulator.** It blocks the test ad page 3 of 3. A restarted app judged its first page from the saved copy without asking the app. Page timing on the emulator was too noisy to prove anything: a 300-request test page took 38–44 s in the new mode and 45–51 s in the old one, with two runs each.
+> - **Not measured on your tablet.** After browsing a heavy site, open Diagnostics, tap Update, then Copy, and send me the Blocker line. That gives me real numbers.
+>
+> **Still open on my side:**
+> - The cold-start glitch where a restored tab briefly shows Home.
+> - Tab-grid swipe-to-close.
+> - The Settings restyle.
+> - A download-only process after swipe-away.
+> - Back up/Restore, only if updates fail again.
+>
+> **Still open on your side:**
+> - The Blocker line from your tablet, as above.
+> - Tablet numbers: Compare-3-feels and Settings > Storage.
+> - Whether the neon pulse and the scroll/white-gap fixes show.
+> - The Cromite A/B, if you want to run it.
+> - Decisions:
+>   - SEC-1: a private signing key.
+>   - LIC-1: the licence.
+>   - UI-2: the look.
+>   - UI-3: landscape tabs.
+<!-- sha:b8a3739fe815 -->
