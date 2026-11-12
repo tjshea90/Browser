@@ -172,3 +172,15 @@ After you close the courier work, review my past prompts for any unfinished work
 
 I especially want Claude to review and optimize as much as possible this browser app for speed and smooth scrolling and fast webpage loading and caching where logical so the back button doesn't have to reload the last site, and current site on the screen is fast and smooth. Take advantage of the ram and hardware of the tablet I am using. Make this browser fast, well coded, and optimized for my hardware
 ```
+
+## 2026-11-12T19:33:52Z
+```
+I will be using linkmeter fast wifi setting to get better hotspot speed. Optimize the browser to take advantage of this fast wifi feature and make sure websites and services load correctly and as fast as possible. Finish and Close work on the kestrel courier method at the next logical opportunity and keep it turned off in the browser by default because I will use the fast wifi setting in linkmeter more than the courier. 
+
+After you close the courier work, review my past prompts for any unfinished work and finish it. Do not ignore my prompts, work on each one of them, including past prompts not responded to yet. 
+
+I especially want Claude to review and optimize as much as possible this browser app for speed and smooth scrolling and fast webpage loading and caching where logical so the back button doesn't have to reload the last site, and current site on the screen is fast and smooth. Take advantage of the ram and hardware of the tablet I am using. Make this browser fast, well coded, and optimized for my hardware
+1) make sure the menu switch for phone helper on/off turns all features on and off in one button. I turned it off using this switch but even I looked in the settings it still had a setting toggled on for load pages through the phone. 
+2) if I long press a video to download, it brings up multiple files to download. A couple files are usually small files from php web addresses that are obviously not the video I long pressed. Make an automatic filtering system that tries to find the exact video I long pressed for download and ignores small strange files. For the download options, include available formats/resolutions, file sizes, the name of the file given by the source, and an option to rename the file before download. Make the gui intuitive and well organized and easy to find features and functions
+3) do any optimizations available for better speed and handling of the fast wifi feature on the linkmeter app from the linkmeter. I will be using the fast wifi feature often, but the browser must also work without it. If I have the fast wifi feature in linkmeter turned on, make sure the browser is well optimized to connect with it and that websites and downloads behave properly and load as quickly as possible
+```
