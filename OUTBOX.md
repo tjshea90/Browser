@@ -470,3 +470,39 @@
 >
 > MKV needs a muxer Android doesn't include, and MP4 plays everywhere, so I'll explain that rather than force it.
 <!-- sha:7790820b3774 -->
+
+## 2026-11-12T01:50:19Z
+> **Alpha15 is out.** Open this on the tablet and tap the APK (it installs over alpha14, or use Menu > Updates):
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha15
+>
+> I tested all of this on the Android 10 emulator, not on your tablet, so please check it on your movie sites.
+>
+> - **Spam tabs and redirects:**
+>   - A new tab or page jump is allowed only after a real tap of yours.
+>   - It is refused when a timer, a hidden link, an invisible layer over the player or a script triggers it.
+>   - On the test page, the window.open ad, the hidden link, the redirect and the timer pop-up were all blocked. A real link and a same-site window opened normally.
+>   - A small notice with an "Open" button appears when something is stopped.
+>   - You can switch it off under Settings > "Block pop-ups & forced redirects", or per site with Shields off.
+>   - Some sign-in or share pop-ups from sites I haven't listed may get blocked; the "Open" button is the way through.
+> - **Videos without pressing play:**
+>   - The browser now finds videos in the page itself, so there's nothing to play first.
+>   - It covers video tags, og:video tags, links to media files and player settings hidden in scripts.
+>   - Ad networks are filtered out of the list.
+> - **Your long-press problem:**
+>   - A site's own player swallows the long press, so there is now a "Save video" button floating at the bottom right of any page that has something to save.
+>   - Tap it to open the download list. The ✕ hides it for that page.
+> - **.ts files:**
+>   - HLS streams are now converted to MP4 even when the stream has the "discontinuity" markers that sites use to splice in ads. Previously those stayed .ts.
+>   - Parts with a different picture or sound format, which is what a spliced-in ad usually is, are dropped.
+>   - On my test stream (movie, ad, movie) the result was a clean 16-second MP4 with the ad gone.
+>   - **MKV: no.** Android has no MKV writer, and MP4 plays everywhere.
+>   - If a stream can't be converted, the reason now shows in Diagnostics.
+>
+> **Still open from your list:**
+> - **Daily update dialog:** coded and compiling. The updater and its new engine check pass their tests. I haven't tried the dialog on the emulator yet, so it's not in alpha15. It covers the app, a newer Firefox engine and the ad-block lists, with an Update button that downloads in the background and then offers Install.
+> - **Ad-block lists:** will refresh every day instead of weekly.
+> - **Download manager upgrades:** still to do.
+> - **Speed and Proton Mail audit:** I have the engine-tuning research now (written by a background agent, not yet checked against the code), and the audit is next.
+> - **Decision for you:** I'd like a GitHub schedule that rebuilds the ad-block lists daily so the tablet downloads one small file instead of seven. That adds a scheduled workflow, which your rules say needs your OK. Say yes or no.
+<!-- sha:fa6ef4fb01a4 -->
