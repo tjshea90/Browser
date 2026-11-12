@@ -141,6 +141,8 @@ class DownloadView(
     val kind: Int = DEST_PUBLIC,
     /** [total] is a guess (a stream whose size is only known from its bit rate): shown as "about". */
     val estimated: Boolean = false,
+    /** One plain sentence about how this download ended up the way it did (why a stream was kept as a .ts file, that a part was left out of an MP4), or null. */
+    val note: String? = null,
 ) {
     val fraction: Float get() = if (total > 0) (done.toDouble() / total).coerceIn(0.0, 1.0).toFloat() else 0f
 }
@@ -207,6 +209,8 @@ interface Sink {
     fun pread(pos: Long, b: ByteArray, off: Int, len: Int): Int = -1
     /** The open file itself, for code that needs a descriptor of its own (a media muxer); null where the sink has none. */
     fun descriptor(): java.io.FileDescriptor? = null
+    /** Cuts the file to [len] bytes (drops stale bytes an interrupted run left beyond the end). Sinks that cannot ignore it. */
+    fun truncate(len: Long) {}
     /** Make the file visible (clear the pending flag); returns its final URI. */
     @Throws(SinkException::class) fun publish(): String?
     fun discard()

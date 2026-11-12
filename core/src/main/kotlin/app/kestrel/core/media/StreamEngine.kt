@@ -85,6 +85,10 @@ class StreamRec(@JvmField val id: Long) {
     @JvmField var breaks = ""
     /** Restarts in a row in which the process ended in the middle of this download before any segment was written (auto-resume stops after 2). */
     @JvmField var crashes = 0
+    /** How a transport-stream video is written: [MUX_UNDECIDED] until its first segment was looked at, [MUX_MP4] = straight into an MP4 while downloading, [MUX_RAW] = joined as it is (and converted at the end if possible). */
+    @JvmField var mux = MUX_UNDECIDED
+    /** One sentence for the row: why the file is what it is (see [DownloadView.note]). */
+    @JvmField var note: String? = null
     @JvmField var initDone = false
     @JvmField var total = -1L
     @JvmField var created = 0L
@@ -95,10 +99,14 @@ class StreamRec(@JvmField val id: Long) {
         val r = StreamRec(id)
         r.state = state; r.reason = reason; r.detail = detail; r.url = url; r.playlistText = playlistText; r.pageUrl = pageUrl; r.headers = headers; r.fetcher = fetcher; r.priv = priv
         r.meteredOk = meteredOk; r.nameStem = nameStem; r.name = name; r.mime = mime; r.destKind = destKind; r.destUri = destUri; r.estimate = estimate; r.repId = repId; r.ext = ext; r.companionId = companionId; r.parentId = parentId; r.appended = appended
-        r.next = next; r.breaks = breaks; r.crashes = crashes; r.initDone = initDone; r.total = total; r.created = created; r.updated = updated; r.finished = finished
+        r.next = next; r.breaks = breaks; r.crashes = crashes; r.mux = mux; r.note = note; r.initDone = initDone; r.total = total; r.created = created; r.updated = updated; r.finished = finished
         return r
     }
 }
+
+const val MUX_UNDECIDED = 0
+const val MUX_MP4 = 1
+const val MUX_RAW = 2
 
 /**
  * Turns the finished file of a stream into a nicer one (MPEG-TS -> MP4). Runs on the job's supervisor thread while the download shows "Finishing"; it may take a while and may refuse
