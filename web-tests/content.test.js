@@ -57,3 +57,49 @@ test('a bare media element (no source at all) is left alone', async () => {
   assert.equal(await page.evaluate(() => window.__siteMenu), 1);
   assert.deepEqual(await msgs(page), []);
 });
+
+// ---------------------------------------------------------------- the media scan (AA4 / PERF_JS J4)
+const doms = (page) => page.evaluate(() => window.__msgs.filter((m) => m.k === 'dom').map((m) => m.u));
+const settle = (page) => page.waitForTimeout(900); // the scan runs when the page is idle (requestIdleCallback), a moment after load
+
+test('scan: media addresses in elements, meta tags, links and inline player configurations are found without anyone pressing play', async () => {
+  const page = await open(`
+    <video src="https://cdn.example/a.mp4"></video>
+    <meta property="og:video" content="https://cdn.example/og.mp4">
+    <a href="https://cdn.example/link.webm">x</a><a href="https://cdn.example/page.html">y</a>
+    <script>var cfg = {"hls":"https:\\u002f\\u002fcdn.example\\u002fplay\\u002fmaster.m3u8","dash":"https:\\/\\/cdn.example\\/play\\/manifest.mpd"};</script>`);
+  await settle(page);
+  const found = (await doms(page)).sort();
+  assert.deepEqual(found, ['https://cdn.example/a.mp4', 'https://cdn.example/link.webm', 'https://cdn.example/og.mp4', 'https://cdn.example/play/manifest.mpd', 'https://cdn.example/play/master.m3u8']);
+});
+
+test('scan: a huge inline script is skipped without being read, and the scan carries on with the scripts after it', async () => {
+  const filler = 'x'.repeat(250000);
+  const page = await open(`<script>var big = "${filler} https://cdn.example/hidden-in-bundle.mp4";</script><script>var small = "https://cdn.example/real.mp4";</script><script>var nothing = 1 + 2; // no media here at all</script>`);
+  await settle(page);
+  assert.deepEqual(await doms(page), ['https://cdn.example/real.mp4']);
+});
+
+test('scan: at most 40 addresses per frame, each reported once even though the scan runs twice', async () => {
+  let links = ''; for (let i = 0; i < 60; i++) links += `<a href="https://cdn.example/v${i}.mp4">v</a>`;
+  const page = await open(links);
+  await settle(page);
+  await page.evaluate(() => window.dispatchEvent(new Event('load')));
+  await page.waitForTimeout(3000); // the second scan, 2.5 s after load
+  const found = await doms(page);
+  assert.equal(found.length, 40);
+  assert.equal(new Set(found).size, 40);
+});
+
+test('scan: scripts and links that appear after the first scan are found by the second one', async () => {
+  const page = await open(`<a href="https://cdn.example/first.mp4">a</a>`);
+  await settle(page);
+  assert.deepEqual(await doms(page), ['https://cdn.example/first.mp4']);
+  await page.evaluate(() => {
+    const s = document.createElement('script'); s.textContent = 'var late = "https://cdn.example/late.m3u8";'; document.body.appendChild(s);
+    const a = document.createElement('a'); a.href = 'https://cdn.example/late-link.mp4'; document.body.appendChild(a);
+    window.dispatchEvent(new Event('load'));
+  });
+  await page.waitForTimeout(3300);
+  assert.deepEqual((await doms(page)).sort(), ['https://cdn.example/first.mp4', 'https://cdn.example/late-link.mp4', 'https://cdn.example/late.m3u8']);
+});
