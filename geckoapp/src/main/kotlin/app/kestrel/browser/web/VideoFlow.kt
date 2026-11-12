@@ -31,6 +31,7 @@ class VideoFlow(private val a: BrowserActivity) {
     }
     private val streamInfo = HashMap<String, Loaded>()   // candidate key -> what its playlist turned out to be
     private val probed = HashSet<String>()              // files whose first bytes were already read to learn their picture size
+    private val sized = HashSet<String>()               // files whose length was already asked for (found in the page markup, never requested)
     private val children = HashSet<String>()            // addresses of the variant / audio playlists of masters we have read: they are not rows of their own
     private var panel: VideoPanel? = null
     private var panelTab: Tab? = null
@@ -74,14 +75,18 @@ class VideoFlow(private val a: BrowserActivity) {
         panel = p; panelTab = tab
         render(p, tab, items)
         a.sheet.show("Download video", p)
-        for (c in items) if (c.kind == MediaKind.FILE && !c.audioOnly && (c.knownHeight == 0 || c.durationMs == 0L) && looksMp4(c) && probed.add(c.key)) probe(tab, c, 0L, 256 * 1024, 0)
+        for (c in items) {
+            if (c.kind == MediaKind.FILE && !c.audioOnly && (c.knownHeight == 0 || c.durationMs == 0L) && looksMp4(c) && probed.add(c.key)) probe(tab, c, 0L, 256 * 1024, 0)
+            // a file found in the page's own markup has not been requested yet, so nobody has seen its length: one byte asked for gives it back as "Content-Range: bytes 0-0/TOTAL"
+            else if (c.kind == MediaKind.FILE && c.length <= 0 && sized.add(c.key)) DownloadController.fetchBytes(a, c.url, 0L, 0L, requestHeaders(tab), 1, tab.isPrivateTab, onTotal = { n -> if (c.length <= 0) { c.length = n; refresh(tab) } }) { }
+        }
     }
 
     private fun looksMp4(c: MediaCandidate): Boolean = MediaSniff.extension(c.url) in setOf("mp4", "m4v", "mov") || c.mime == "video/mp4" || c.mime == "video/quicktime"
 
     /** Reads the start of an MP4 (and, when its index sits at the end, that box) to name its picture size and length: a few hundred KB, only when the sheet is open. */
     private fun probe(tab: Tab, c: MediaCandidate, from: Long, length: Int, depth: Int) {
-        DownloadController.fetchBytes(a, c.url, from, from + length - 1, requestHeaders(tab), 1, tab.isPrivateTab) { bytes ->
+        DownloadController.fetchBytes(a, c.url, from, from + length - 1, requestHeaders(tab), 1, tab.isPrivateTab, onTotal = { n -> if (c.length <= 0) c.length = n }) { bytes ->
             if (bytes == null || depth > 3) return@fetchBytes
             when (val r = Mp4Probe.probe(bytes, bytes.size, from)) {
                 is Mp4Probe.Result.Found -> { if (c.height == 0 && r.info.height > 0) { c.width = r.info.width; c.height = r.info.height }; if (c.durationMs == 0L) c.durationMs = r.info.durationMs; refresh(tab) }

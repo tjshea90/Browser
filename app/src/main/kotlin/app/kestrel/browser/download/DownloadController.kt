@@ -147,14 +147,17 @@ object DownloadController {
     }
 
     /** A byte range of a file (a media file's first bytes, its `moov` box), at most [to]-[from]+1 bytes, handed to [onDone] on the UI thread; null = it could not be read. */
-    fun fetchBytes(ctx: Context, url: String, from: Long, to: Long, headers: Map<String, String>, kind: Int, priv: Boolean, onDone: (ByteArray?) -> Unit) {
+    fun fetchBytes(ctx: Context, url: String, from: Long, to: Long, headers: Map<String, String>, kind: Int, priv: Boolean, onTotal: ((Long) -> Unit)? = null, onDone: (ByteArray?) -> Unit) {
         init(ctx)
         Io.exec {
             var data: ByteArray? = null
+            var total = -1L
             try {
                 val f = fetchers[kind] ?: fetchers[0]!!
                 val resp = f.open(FetchRequest(url, from, to, null, headers, 15_000, 20_000, priv))
                 try {
+                    // the size of the whole file: the end of "Content-Range: bytes 0-0/48213", or the plain length of a reply that ignored Range
+                    total = (if (resp.status == 206) resp.header("Content-Range")?.substringAfterLast('/')?.trim()?.toLongOrNull() else if (resp.status == 200) resp.header("Content-Length")?.trim()?.toLongOrNull() else null) ?: -1L
                     if (resp.status == 200 || resp.status == 206) {
                         val want = (to - from + 1).coerceAtMost(8L * 1024 * 1024).toInt()
                         val out = java.io.ByteArrayOutputStream()
@@ -171,7 +174,7 @@ object DownloadController {
                     }
                 } finally { try { resp.abort() } catch (e: Exception) { /* ignore */ }; try { resp.close() } catch (e: Exception) { /* ignore */ } }
             } catch (e: Exception) { /* null: the caller carries on without it */ }
-            Io.ui { onDone(data) }
+            Io.ui { if (total > 0 && onTotal != null) onTotal(total); onDone(data) }
         }
     }
 
