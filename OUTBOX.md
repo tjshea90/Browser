@@ -556,3 +556,22 @@
 >
 > The first two alpha16 builds failed (a transient GitHub permission error at the last step, then a test race I fixed). The third is what's published.
 <!-- sha:a4d73dd35a02 -->
+
+## 2026-11-12T03:04:37Z
+> Alpha16 is out and recorded, and everything is pushed to GitHub. Your message was a repeat of the earlier one. I answered it part by part above, including what I need from you for Proton Mail.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha16
+>
+> Since that message, I added a **Settings > Downloads** section. It has a speed limit for all downloads together, how many downloads run at once, and connections per download. It's tested but not in alpha16 on purpose: each release is a 92 MB download for you, so it will ride with the next alpha.
+>
+> **Waiting on you:**
+> 1. **Proton Mail numbers:** open mail.proton.me twice and paste the "Page loads" lines from Menu > Diagnostics. Then repeat with Encrypted DNS off, then with HTTP/3 off, one switch at a time. Also tell me your keyboard app, whether an accessibility or autofill service is on, and whether the hotspot is on 5 GHz.
+> 2. **A yes or no:** may I add a GitHub schedule that builds the ad-block lists once a day? Your rules say no scheduled workflows without your OK.
+>
+> **Still on my side:**
+> - **Download manager:** checksum verification, queue priorities, and a few smaller items.
+> - **Ad blocking:** the uBlock-style scripts, which is about 15 days of work.
+> - **Typing and keyboard resize:** I won't touch this until I have your Proton numbers.
+>
+> I set a wake-up every 4 hours that only does small safe work and otherwise just says it's standing by, to save your usage. It deletes itself if you're quiet for a day.
+<!-- sha:a9d5921e1f1f -->
