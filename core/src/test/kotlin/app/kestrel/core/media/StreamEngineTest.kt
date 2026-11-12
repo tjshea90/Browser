@@ -276,14 +276,49 @@ class StreamEngineTest {
         }
     }
 
-    @Test(timeout = 60_000) fun fragmentedMp4AndStreamsWithDiscontinuitiesAreNotConverted() {
+    @Test(timeout = 60_000) fun fragmentedMp4IsNotHandedToTheFinisher() {
         val sinks = FakeSinks(); val fin = FakeFinisher(sinks)
         val h = H(sinks = sinks, finisher = fin)
         h.cdn.files["https://cdn.test/v/main.mp4"] = testBytes(3_000, 5)
         h.completed(h.enqueue("#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXT-X-MAP:URI=\"main.mp4\",BYTERANGE=\"500@0\"\n#EXTINF:6,\n#EXT-X-BYTERANGE:1000@500\nmain.mp4\n#EXT-X-ENDLIST\n"))
-        val (pl, _) = plainStream(h, 3, 5_000, extra = "")
-        h.completed(h.enqueue(pl.replace("#EXTINF:4.0,\ns1.ts", "#EXT-X-DISCONTINUITY\n#EXTINF:4.0,\ns1.ts")))
-        assertTrue("neither was handed over", fin.asked.isEmpty())
+        assertTrue("an fMP4 stream already plays as it is", fin.asked.isEmpty())
+    }
+
+    @Test(timeout = 60_000) fun aTsStreamWithDiscontinuitiesIsHandedOverAsPartsWithTheirByteRanges() {
+        val sinks = FakeSinks(); val fin = FakeFinisher(sinks)
+        val h = H(sinks = sinks, finisher = fin)
+        val (pl, expected) = plainStream(h, 5, 5_000)
+        // runs: [s0] [s1 s2] [s3 s4]
+        val marked = pl.replace("#EXTINF:4.0,\ns1.ts", "#EXT-X-DISCONTINUITY\n#EXTINF:4.0,\ns1.ts").replace("#EXTINF:4.0,\ns3.ts", "#EXT-X-DISCONTINUITY\n#EXTINF:4.0,\ns3.ts")
+        val v = h.completed(h.enqueue(marked))
+        assertEquals(1, fin.asked.size)
+        val parts = fin.asked[0].parts
+        assertEquals(listOf(0L, 5_000L, 15_000L), parts.map { it.offset })
+        assertEquals(listOf(5_000L, 10_000L, 10_000L), parts.map { it.length })
+        assertEquals(listOf(4_000L, 8_000L, 8_000L), parts.map { it.durationMs })
+        assertEquals(expected.size.toLong(), parts.sumOf { it.length })
+        assertEquals("My clip.mp4", v.name)
+    }
+
+    @Test(timeout = 60_000) fun aTsStreamWithoutDiscontinuitiesHasNoParts() {
+        val sinks = FakeSinks(); val fin = FakeFinisher(sinks)
+        val h = H(sinks = sinks, finisher = fin)
+        val (pl, _) = plainStream(h, 3, 5_000)
+        h.completed(h.enqueue(pl))
+        assertTrue(fin.asked[0].parts.isEmpty())
+    }
+
+    @Test fun partsOfIgnoresPairsThatDoNotFitAndNeedsAtLeastTwoRuns() {
+        val seg = { d: Long -> Hls.Seg("u", d, -1, -1, -1, 0, false) }
+        val segs = listOf(seg(4000), seg(4000), seg(4000), seg(2000))
+        assertTrue(StreamEngine.partsOf("", segs, 400).isEmpty())
+        assertTrue("a pair past the end of the file", StreamEngine.partsOf("2:900;", segs, 400).isEmpty())
+        assertTrue("an index past the last segment", StreamEngine.partsOf("9:100;", segs, 400).isEmpty())
+        assertTrue("garbage", StreamEngine.partsOf("x:y;;:;3", segs, 400).isEmpty())
+        val p = StreamEngine.partsOf("2:100;1:50;3:300;", segs, 400) // 1:50 is out of order (index below the last kept one) and dropped
+        assertEquals(listOf(0L, 100L, 300L), p.map { it.offset })
+        assertEquals(listOf(100L, 200L, 100L), p.map { it.length })
+        assertEquals(listOf(8_000L, 4_000L, 2_000L), p.map { it.durationMs })
     }
 
     @Test(timeout = 60_000) fun aDashRepresentationIsDownloadedFromItsManifest() {

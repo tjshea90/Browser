@@ -873,5 +873,30 @@ class StreamEngine(
         return DownloadView(r.id, r.state, r.reason, r.detail, r.name, r.mime, host, total, fetched, speed, eta, job.alive, r.priv, r.destUri, r.created, r.updated, actions, r.destKind, estimated)
     }
 
-    companion object { private const val MAX_TRIES = 6 }
+    companion object {
+        private const val MAX_TRIES = 6
+
+        /**
+         * The runs of a joined file between discontinuities, from the "index:offset;" pairs the engine kept while appending ([StreamRec.breaks]): the byte range and the playlist's own length of each.
+         * Empty when the stream has no (recorded) discontinuity. Pairs that do not fit the file or are out of order are ignored.
+         */
+        internal fun partsOf(breaks: String, segments: List<Hls.Seg>, total: Long): List<StreamFinisher.Part> {
+            val idx = ArrayList<Int>(); val off = ArrayList<Long>()
+            idx.add(0); off.add(0L)
+            for (e in breaks.split(';')) {
+                if (e.isEmpty()) continue
+                val i = e.substringBefore(':').toIntOrNull() ?: continue
+                val o = e.substringAfter(':', "").toLongOrNull() ?: continue
+                if (i > idx.last() && i < segments.size && o > off.last() && o < total) { idx.add(i); off.add(o) }
+            }
+            if (idx.size < 2) return emptyList()
+            return idx.indices.map { k ->
+                val endIdx = if (k + 1 < idx.size) idx[k + 1] else segments.size
+                val endOff = if (k + 1 < idx.size) off[k + 1] else total
+                var ms = 0L
+                for (i in idx[k] until endIdx) ms += segments[i].durationMs
+                StreamFinisher.Part(off[k], endOff - off[k], ms)
+            }
+        }
+    }
 }
