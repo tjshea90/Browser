@@ -163,7 +163,10 @@ class StreamEngine(
     interface Listener { fun onChanged(id: Long) }
 
     private class Stopped : RuntimeException(null, null, false, false)
-    private class Failed(val reason: Reason, val detail: Int = 0) : RuntimeException(null, null, false, false)
+    /** [restartRaw]: not a failure of the download but of the MP4 writer: the job starts over the old way (joined .ts, converted at the end if possible). */
+    private class Failed(val reason: Reason, val detail: Int = 0, val restartRaw: Boolean = false, val why: String? = null) : RuntimeException(why, null, false, false)
+    /** The MP4 writer broke in the middle of a segment (a bug, or data it cannot handle). */
+    private class MuxBroken(why: String, cause: Throwable?) : RuntimeException(why, cause, false, false)
 
     private inner class Job(val rec: StreamRec) {
         @Volatile var autoResume = false   // the last run ended in the middle of this download: carry on by itself ([resumeInterrupted])
