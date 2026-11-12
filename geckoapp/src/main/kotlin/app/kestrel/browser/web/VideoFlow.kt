@@ -111,55 +111,61 @@ class VideoFlow(private val a: BrowserActivity) {
         }
     }
 
-    private fun render(p: VideoPanel, tab: Tab, items: List<MediaCandidate>) {
-        val (sections, note) = sections(tab, items)
-        p.show(tab.displayTitle, sections, note)
-    }
+    private fun render(p: VideoPanel, tab: Tab) { p.show(model(tab)) }
 
     /** A playlist finished loading: redraw the sheet if it is still open on this tab. */
     private fun refresh(tab: Tab) {
         val p = panel ?: return
         if (panelTab !== tab || !a.sheet.isShowing || p.parent == null) return
-        render(p, tab, tab.media.usable())
+        render(p, tab)
     }
 
-    /** The name the file will get (without its extension): the page's title and the quality, the same text the download itself uses. */
-    private fun stemFor(tab: Tab, label: String): String = MediaLabels.fileStem(tab.title, UrlParts.hostOf(tab.url) ?: "", label)
+    /** The default name (without its extension) of a stream's quality: the page's title and the quality, the same text the download itself uses. */
+    private fun stemFor(tab: Tab, label: String): String = MediaNames.clean(MediaLabels.fileStem(tab.title, UrlParts.hostOf(tab.url) ?: "", label))
 
-    /** One line under the name (owner request X17): resolution, file type, size, length - whatever is known, in that order. */
+    /** One line under the format (owner request X17): file type, size, length - whatever is known, in that order. */
     private fun rowDetail(vararg parts: String): String = parts.filter { it.isNotEmpty() && it != "size unknown" }.joinToString("  \u00B7  ")
 
-    private fun sections(tab: Tab, items: List<MediaCandidate>): Pair<List<VideoPanel.Section>, String?> {
-        val video = ArrayList<VideoPanel.Choice>()
-        val audio = ArrayList<VideoPanel.Choice>()
-        val streams = ArrayList<VideoPanel.Choice>()
-        val streamAudio = ArrayList<VideoPanel.Choice>()
-        var note: String? = null
+    /** What the sheet shows: the ranked files (the long-pressed one first), the streams' quality lists as they arrive, and the small or odd files tucked under "Other files". */
+    private fun model(tab: Tab): VideoPanel.Model {
+        val ranked = MediaRank.rank(candidates(tab, panelPressed), panelPressed)
+        val host = UrlParts.hostOf(tab.url) ?: ""
+        val rows = ArrayList<VideoPanel.Choice>(); val other = ArrayList<VideoPanel.Choice>()
+        var note: String? = null; var busy: String? = null
         val names = HashMap<String, Int>()
-        for (c in items) {
-            when {
-                c.kind == MediaKind.HLS && c.key in children -> {}
-                c.kind == MediaKind.HLS -> when (val st = streamInfo[c.key] ?: loadStream(tab, c)) {
-                    is Loaded.Loading -> streams.add(VideoPanel.Choice("Stream", "Reading the quality list\u2026", null, enabled = false))
-                    is Loaded.Failed -> note = note ?: st.message
-                    is Loaded.Ready -> { note = note ?: st.note; for ((ch, pick) in st.rows) (if (pick.audioOnly) streamAudio else streams).add(ch) }
-                }
-                c.kind == MediaKind.DASH -> when (val st = streamInfo[c.key] ?: loadDash(tab, c)) {
-                    is Loaded.Loading -> streams.add(VideoPanel.Choice("Stream", "Reading the quality list\u2026", null, enabled = false))
-                    is Loaded.Failed -> note = note ?: st.message
-                    is Loaded.Ready -> { note = note ?: st.note; for ((ch, pick) in st.rows) (if (pick.audioOnly) streamAudio else streams).add(ch) }
-                }
-                c.audioOnly -> audio.add(VideoPanel.Choice(stemFor(tab, "audio") + "." + MediaSniff.saveExtension(c.url, c.mime), rowDetail("Audio only", MediaLabels.format(c), MediaLabels.size(c.length), MediaLabels.duration(c.durationMs)), c))
-                else -> {
-                    val q = MediaLabels.quality(c.knownHeight)
-                    video.add(VideoPanel.Choice(stemFor(tab, q) + "." + MediaSniff.saveExtension(c.url, c.mime), rowDetail(q, MediaLabels.format(c), MediaLabels.size(c.length), MediaLabels.duration(c.durationMs)), c))
+        fun addAll(into: MutableList<VideoPanel.Choice>, list: List<MediaCandidate>) {
+            for (c in list) {
+                when {
+                    c.kind == MediaKind.HLS && c.key in children -> {}
+                    c.kind == MediaKind.HLS -> when (val st = streamInfo[c.key] ?: loadStream(tab, c)) {
+                        is Loaded.Loading -> busy = "Reading the quality list\u2026"
+                        is Loaded.Failed -> note = note ?: st.message
+                        is Loaded.Ready -> { note = note ?: st.note; for ((ch, _) in st.rows) into.add(ch) }
+                    }
+                    c.kind == MediaKind.DASH -> when (val st = streamInfo[c.key] ?: loadDash(tab, c)) {
+                        is Loaded.Loading -> busy = "Reading the quality list\u2026"
+                        is Loaded.Failed -> note = note ?: st.message
+                        is Loaded.Ready -> { note = note ?: st.note; for ((ch, _) in st.rows) into.add(ch) }
+                    }
+                    else -> {
+                        val q = MediaLabels.quality(c.knownHeight)
+                        val ext = MediaSniff.saveExtension(c.url, c.mime)
+                        val title = if (c.audioOnly) "Audio only" else q.ifEmpty { "Video file" }
+                        val detail = rowDetail(MediaLabels.format(c), MediaLabels.size(c.length), MediaLabels.duration(c.durationMs))
+                        val stem = MediaNames.defaultStem(c, tab.title, host, if (c.audioOnly) "audio" else q)
+                        into.add(VideoPanel.Choice("f|" + c.key, title, detail, stem, ext, c, badge = if (c === ranked.exact) "THIS VIDEO" else null))
+                    }
                 }
             }
         }
+        addAll(rows, ranked.main); addAll(other, ranked.other)
         // two rows that read the same (two files of one quality) get the file's name so they can be told apart
-        for (list in listOf(video, audio)) for (ch in list) names.merge(ch.title + "|" + ch.detail, 1, Int::plus)
-        fun named(list: List<VideoPanel.Choice>) = list.map { ch -> if ((names[ch.title + "|" + ch.detail] ?: 0) > 1 && ch.tag is MediaCandidate) VideoPanel.Choice(ch.title, ch.detail + "  \u00B7  " + shortName(ch.tag.url), ch.tag) else ch }
-        return listOf(VideoPanel.Section("Video", named(video)), VideoPanel.Section("Stream", streams), VideoPanel.Section("Audio", named(audio) + streamAudio)) to note
+        for (ch in rows) names.merge(ch.title + "|" + ch.detail, 1, Int::plus)
+        fun named(list: List<VideoPanel.Choice>) = list.map { ch -> if ((names[ch.title + "|" + ch.detail] ?: 0) > 1 && ch.tag is MediaCandidate) VideoPanel.Choice(ch.id, ch.title, ch.detail + "  \u00B7  " + shortName(ch.tag.url), ch.stem, ch.ext, ch.tag, ch.enabled, ch.badge) else ch }
+        return VideoPanel.Model(
+            source = tab.displayTitle.takeIf { it.isNotBlank() } ?: host, rows = named(rows), other = other, note = note, busy = busy, extras = panelExtras,
+            sizeText = { ch -> when (val t = ch.tag) { is MediaCandidate -> if (t.length > 0) MediaLabels.size(t.length) else ""; is StreamPick -> if (t.estimate > 0) MediaLabels.size(t.estimate, estimate = true) else ""; else -> "" } },
+        )
     }
 
     private fun shortName(url: String): String = url.substringBefore('?').substringAfterLast('/').take(28)
