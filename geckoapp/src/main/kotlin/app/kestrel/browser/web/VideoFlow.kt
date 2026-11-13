@@ -48,6 +48,41 @@ class VideoFlow(private val a: BrowserActivity) {
         if (t.media.add(c)) a.refreshDownloadButton()
     }
 
+    private val maybeAsked = HashSet<String>() // "tab id|address" already read, so a player that asks for the same playlist again does not make us read it again
+
+    /**
+     * The extension saw a response that says nothing about being media (text/plain, octet-stream, a "picture" or "stylesheet" a script fetched): stream sites disguise their playlists that way. Read its first
+     * bytes with the headers the browser sent (then the other guesses) and offer it when it is a playlist or a video. At most twelve per page come here (the extension rations them). Worker thread.
+     */
+    fun maybe(m: org.json.JSONObject) = Io.ui {
+        val url = m.optString("u"); val page = m.optString("p")
+        if (!(url.startsWith("http://", true) || url.startsWith("https://", true))) return@ui
+        val t = a.current?.takeIf { it.url == page } ?: a.tabWithUrl(page) ?: a.tabForPage(page) ?: a.current ?: return@ui
+        if (t.isNewTab || t.media.find(url) != null) return@ui
+        if (maybeAsked.size > 500) maybeAsked.clear()
+        if (!maybeAsked.add(t.id.toString() + "|" + MediaCandidate.keyOf(url))) return@ui
+        val frame = m.optString("f").takeIf { it != page } ?: ""
+        val seed = MediaCandidate(url, MediaKind.FILE, "", m.optLong("l", -1L), page, frame, System.currentTimeMillis())
+        seed.referer = MediaHeaders.refererOf(m.optString("rf")); seed.origin = MediaHeaders.originOf(m.optString("og"))
+        val sets = MediaHeaders.sets(seed, t.url)
+        val host = UrlParts.hostOf(url) ?: ""
+        Health.log("media", "maybe", "$host type=${m.optString("c").substringBefore(';').take(32)} len=${seed.length} kind=${m.optString("ty")}")
+        fun attempt(i: Int, last: Int) {
+            if (i >= sets.size) { Health.log("media", "maybe-refused", "$host http=$last"); return }
+            var status = -1
+            DownloadController.fetchBytes(a, url, 0L, 4095L, sets[i], 1, t.isPrivateTab, onStatus = { status = it }) { bytes ->
+                if (bytes == null) { if (status == 401 || status == 403 || status == -1) attempt(i + 1, status.takeIf { it > 0 } ?: last) else Health.log("media", "maybe-refused", "$host http=$status"); return@fetchBytes }
+                val s = MediaSniff.classifyBytes(bytes)
+                if (s == null) { Health.log("media", "maybe-no", "$host first=${bytes.size}"); return@fetchBytes }
+                val c = MediaCandidate(url, s.kind, s.mime, if (s.kind == MediaKind.FILE) seed.length else -1L, page, frame, System.currentTimeMillis())
+                c.referer = seed.referer; c.origin = seed.origin; c.viaHeaders = sets[i]
+                Health.log("media", "maybe-hit", "$host ${s.kind} ext=${s.ext} set=${i + 1}/${sets.size}")
+                if (t.media.add(c)) a.refreshDownloadButton()
+            }
+        }
+        attempt(0, 0)
+    }
+
     /** Called on the Shields worker thread. */
     fun info(page: String, url: String, width: Int, height: Int, durationMs: Long, label: String?) = Io.ui {
         val t = (if (page.isNotEmpty()) a.current?.takeIf { it.url == page } ?: a.tabWithUrl(page) ?: a.tabForPage(page) else null) ?: a.current ?: return@ui
@@ -275,7 +310,7 @@ class VideoFlow(private val a: BrowserActivity) {
         if (master == null) {
             val audio = media.container == "aac" || media.container == "mp3" || media.container == "m4a"
             val est = if (media.exactBytes >= 0) media.exactBytes else sizeGuess
-            val pick = StreamPick(if (audio) "audio" else "", c.url, mediaText, est, null, audio, media.container)
+            val pick = StreamPick(if (audio) "audio" else "", c.url, mediaText, est, null, audio, media.container, headers = requestHeaders(tab, c))
             val ext = if (audio) media.container else "mp4"          // a video stream is saved as one MP4 file
             rows.add(streamChoice(tab, c, pick, if (audio) "Audio only" else "Video", rowDetail(ext.uppercase(), MediaLabels.size(est, estimate = media.exactBytes < 0 && est > 0), dur), ext) to pick)
             return Loaded.Ready(rows, null)
@@ -287,7 +322,7 @@ class VideoFlow(private val a: BrowserActivity) {
             val sepAudio = master.audioFor(v)
             val text = if (v === probe) mediaText else null
             val title = if (v.audioOnly) "Audio only" else v.label
-            val pick = StreamPick(if (v.audioOnly) "audio" else v.label, v.url, text, est, sepAudio?.url, v.audioOnly, media.container)
+            val pick = StreamPick(if (v.audioOnly) "audio" else v.label, v.url, text, est, sepAudio?.url, v.audioOnly, media.container, headers = requestHeaders(tab, c))
             val ext = if (v.audioOnly) media.container else "mp4"
             val detail = rowDetail(ext.uppercase(), MediaLabels.size(est, estimate = true), dur)
             rows.add(streamChoice(tab, c, pick, title, detail, ext) to pick)
@@ -324,12 +359,12 @@ class VideoFlow(private val a: BrowserActivity) {
             if (v.media == null || !v.mp4Friendly) { skipped++; continue }
             if (!seen.add("${v.height}|${v.bandwidth / 100_000}")) continue
             val est = (v.bytesPerSecond + (sound?.bytesPerSecond ?: 0L)) * (man.durationMs / 1000)
-            val pick = StreamPick(v.label, c.url, text, est, null, false, "mp4", repId = v.id, audioRepId = sound?.id)
+            val pick = StreamPick(v.label, c.url, text, est, null, false, "mp4", repId = v.id, audioRepId = sound?.id, headers = requestHeaders(tab, c))
             rows.add(streamChoice(tab, c, pick, v.label, rowDetail("MP4", MediaLabels.size(est, estimate = true), dur), "mp4") to pick)
         }
         for (au in man.audio.filter { it.mp4Friendly && it.media != null }.take(2)) {
             val est = au.bytesPerSecond * (man.durationMs / 1000)
-            val pick = StreamPick("audio", c.url, text, est, null, true, "m4a", repId = au.id, ext = "m4a")
+            val pick = StreamPick("audio", c.url, text, est, null, true, "m4a", repId = au.id, ext = "m4a", headers = requestHeaders(tab, c))
             rows.add(streamChoice(tab, c, pick, "Audio only", rowDetail("M4A", MediaLabels.size(est, estimate = true), dur), "m4a") to pick)
         }
         if (rows.isEmpty()) return Loaded.Failed("This stream's qualities use a format (WebM / VP9) that Kestrel cannot save yet.")
@@ -372,6 +407,7 @@ class VideoFlow(private val a: BrowserActivity) {
     private fun pick(tab: Tab, c: MediaCandidate, stem: String) {
         a.sheet.dismiss()
         val name = stem + "." + MediaSniff.saveExtension(c.url, c.mime)
-        a.download(tab, c.url, null, null, c.mime.ifEmpty { null }, c.length, nameOverride = name)
+        Health.log("media", "file", "${UrlParts.hostOf(c.url) ?: ""} referer=${UrlParts.hostOf(requestHeaders(tab, c)["Referer"] ?: "") ?: "none"}")
+        a.download(tab, c.url, null, null, c.mime.ifEmpty { null }, c.length, nameOverride = name, headers = requestHeaders(tab, c))
     }
 }
