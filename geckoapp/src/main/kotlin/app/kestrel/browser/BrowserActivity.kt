@@ -821,6 +821,8 @@ open class BrowserActivity : Activity(), DockListener {
         t.openerHost = opener.topHost
         val s = createSession(t)
         t.session = s
+        t.shields = Shields.effective(prefs, UrlParts.hostOf(t.url)) // the engine loads the new page by itself: its Shields (and Firefox's own protection with them) follow the address it was opened with
+        syncEngineProtection(t)
         Io.main.postDelayed({ if (tabs.contains(t)) show(t) }, 60) // after the engine has opened the new session
         return s
     }
