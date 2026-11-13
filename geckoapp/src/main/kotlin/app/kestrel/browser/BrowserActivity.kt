@@ -1274,7 +1274,7 @@ open class BrowserActivity : Activity(), DockListener {
         }
         if (t != null && !t.isNewTab) items.add(MenuItemSpec(M.RELOAD, "Reload without cache", null, R.drawable.ic_refresh))
         if (t != null && !t.isNewTab) items.add(MenuItemSpec(M.REFRESH, "Refresh screen", null, R.drawable.ic_refresh))
-        if (!isPrivate) items.add(MenuItemSpec(M.SETTINGS, "Settings", null, R.drawable.ic_settings))
+        items.add(MenuItemSpec(M.SETTINGS, "Settings", null, R.drawable.ic_settings)) // in private windows too (owner 2026-11-13: it must not disappear there); Back up / Restore decline by themselves in a private window
         items.add(MenuItemSpec(M.DIAG, "Diagnostics", null, R.drawable.ic_pulse))
         if (!updateHot) items.add(MenuItemSpec(M.UPDATE, "Updates", null, R.drawable.ic_update))
         if (tabs.size > 1) items.add(MenuItemSpec(M.CLOSE_ALL, "Close all tabs", null, R.drawable.ic_close))

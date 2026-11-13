@@ -623,7 +623,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         }
         if (!isPrivate) { items.add(MenuItemSpec(M.BOOKMARKS, "Bookmarks")); items.add(MenuItemSpec(M.HISTORY, "History")) }
         items.add(MenuItemSpec(M.DOWNLOADS, "Downloads"))
-        if (!isPrivate) items.add(MenuItemSpec(M.SETTINGS, "Settings"))
+        items.add(MenuItemSpec(M.SETTINGS, "Settings")) // in private windows too (owner 2026-11-13)
         if (tabs.size > 1) items.add(MenuItemSpec(M.CLOSE_ALL, "Close all tabs"))
         items.add(MenuItemSpec(M.QUIT, if (isPrivate) "Close private window" else "Quit"))
         MenuPopup.show(this, pal, anchor, items) { id -> onMenuPick(id) }
