@@ -33,6 +33,7 @@ import android.widget.Toast
 import app.kestrel.browser.R
 import app.kestrel.browser.web.KestrelGeckoView
 import app.kestrel.browser.ui.DiagnosticsView
+import app.kestrel.browser.ui.DownloadPopup
 import app.kestrel.browser.diag.Health
 import app.kestrel.browser.data.BrowserDb
 import app.kestrel.browser.data.DataMeter
