@@ -269,7 +269,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
     var mp = docOf(m.p);                                                      // the document the script runs in (the player's page for a frame)
     var dp = (domTab >= 0 && tabTop.get(domTab)) || mp || '';                  // the page the tab is on
     if (fid > 0) noteFrame(domTab, fid, undefined, mp);
-    send({ k: 'media', u: String(m.u || ''), c: '', l: -1, p: dp, f: mp !== docOf(dp) ? mp : '', s: 'dom' }).catch(function () {});
+    send({ k: 'media', u: String(m.u || ''), c: '', l: -1, p: dp, f: mp !== docOf(dp) ? mp : '', s: 'dom', x: fid + '|' + (sender && sender.tab ? sender.tab.id : 'none') + '|' + domTab + '|' + (tabTop.get(domTab) ? 'top' : 'notop') + '|' + (sender && sender.url ? 'url' : 'nourl') }).catch(function () {});
     return undefined;
   }
   if (m.k === 'pop') {
