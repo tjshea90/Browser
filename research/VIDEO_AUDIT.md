@@ -100,3 +100,30 @@ Paid / proprietary / patent-encumbered items the owner could approach (no paymen
 1. Menu > Diagnostics > **Video lab** > Run (about 40 s) > Copy the results; paste them to Claude. It states, per clip, smooth / choppy, dropped frames and the real frame rate of the screen.
 2. Diagnostics shows the decoder list: which of H.264 / H.265 / VP9 / AV1 have a HARDWARE decoder and the Widevine level.
 3. Which site and which video was choppy, and whether the loading symbol appeared when the PAGE opened or when the video started (a link is enough).
+
+## 9. The tablet's own numbers (owner, alpha27, 2026-11-13; the status bar shows a VPN key: Fast Wi-Fi was on)
+
+Video lab, run on the MT8168B tablet (UA `Android 10; Mobile; rv:160.0`, 4 cores, screen 560x956 CSS px at ratio 1.07):
+
+| Test | Result |
+| :- | :- |
+| H.264 720p30, 2 Mbit/s | 0 of 150 pictures dropped, started in 307 ms, longest gap 64 ms |
+| H.264 1080p30, 4 Mbit/s | 0 / 150 dropped, 365 ms, longest gap 57 ms |
+| VP9 720p30, 1.5 Mbit/s | 0 / 150 dropped, 359 ms, longest gap 51 ms |
+| H.265 720p30, 1.5 Mbit/s | 0 / 150 dropped, 411 ms, longest gap 52 ms |
+| MediaCapabilities (engine's own judgement) | plays + smooth + HARDWARE for H.264 720p30 / 1080p30 / 1080p60, VP9 720p30 / 1080p30, H.265 1080p30; AV1: no / no / no |
+| Formats offered | H.264, H.265, VP8, VP9 (also in MP4), AAC, Opus (WebM) in streaming; AV1, AC-3, E-AC-3 not at all; HLS playlist "maybe" in `<video>`, not in MSE; Picture-in-Picture: no |
+| Drawing the screen | 65.2 frames per second over 3 s, median gap 15.1 ms, longest 45 ms, 0 gaps over 50 ms |
+| JavaScript | 264 / 36 / 56 / 54 / 77 ms for the five tests (a recent phone: 20-100 ms each) |
+| WebAssembly | works; SIMD NO (32-bit ARM engine), threads yes, shared memory no (sites need special headers) |
+| WebGL | webgl2 yes, "Mali-G51, or similar" (Firefox hides the exact name), biggest picture 8192 px |
+| Protected video | `Widevine: available (com.widevine.alpha)` after Allow |
+
+Reading it: **the tablet decodes every format it is offered in hardware, without dropping a picture, and draws the screen at full rate**; JavaScript is the expected 3-5 times slower than a phone. Whatever made the owner's video choppy
+is therefore NOT the decoder, the screen or the codec choice: it is the stream (more than the 5 Mbit/s hotspot carries), the work the page itself does around the video (ads, trackers, a heavy player), or a stalling player.
+The VP9 / H.265 offer rule (section 5) did the right thing here: the tablet reports hardware decoders for both, so Automatic leaves them on. (The lab printed 24.8 fps and "mostly smooth" for these clips: it counted from the
+moment the player said "playing", about a second before the first picture. Fixed in alpha28: measured from the first to the last picture shown.)
+
+Tap lab (the same session): ten taps, median 3 ms between the finger lifting and the click (touch length 90-135 ms): EX-3 (double-tap zoom off) is PROVEN on the tablet. Decode lab: JPEG 27 ms, WebP 50 ms, AVIF 108 ms,
+JPEG XL cannot (off on purpose); file sizes 123 / 139 / 43 KB. At the hotspot's 1.6 ms per KB AVIF saves 128 ms of transfer for 81 ms of decoding (a gain), at Fast Wi-Fi's about 1 ms per KB it is a tie, above about 2.5 MB/s it
+loses: "No AVIF pictures on Fast Wi-Fi" stays OFF.
