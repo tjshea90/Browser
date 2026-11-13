@@ -1672,7 +1672,7 @@ open class BrowserActivity : Activity(), DockListener {
         val ver = try { packageManager.getPackageInfo(packageName, 0).versionName } catch (e: Exception) { "?" }
         out.add("Kestrel" to "Version $ver")
         out.add("Browser engine" to "Firefox engine (GeckoView 160). Pages are drawn like in current Firefox, independent of this tablet's old Android System WebView. " +
-            "The engine is updated by installing a newer Kestrel G build.")
+            "The engine is updated by installing a newer Kestrel build.")
         out.add("User agent" to "Chosen by the engine (a current Firefox for Android identity)")
         val am = getSystemService(ActivityManager::class.java)
         val ram = ActivityManager.MemoryInfo().also { am?.getMemoryInfo(it) }.totalMem

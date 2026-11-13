@@ -8,7 +8,7 @@ object Flavor {
     /** Which GitHub Releases belong to THIS app: tags start with this ("kestrel-v" = Kestrel on the WebView, "kestrel-g-v" = Kestrel G). Used by the in-app updater. */
     @JvmField var updateTagPrefix = "kestrel-v"
 
-    /** The app's name as shown in the updater ("Kestrel" / "Kestrel G"). */
+    /** The app's name as shown in the updater ("Kestrel" for the Firefox-engine build, "Kestrel" on the WebView build: the WebView app's launcher label is "Kestrel Light" so the two can sit side by side). */
     @JvmField var title = "Kestrel"
 
     /** The engine has the "Scroll feel" prefs (Gecko build only): Settings shows the row. */
