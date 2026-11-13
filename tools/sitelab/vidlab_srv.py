@@ -98,6 +98,30 @@ PAGE_C = b"""<!doctype html><meta charset=utf-8><meta name=viewport content="wid
 
 PAGE_PLAIN = b"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Plain page</title><body style="font:22px sans-serif"><h1>A page with no video</h1><p>Nothing to download here.</p></body>"""
 
+# AP1 lab: a player whose first presses are taken by fake layers (each opens an ad and removes itself); the real play control starts a real video. The page says how many REAL presses it took.
+PAGE_FAKE = b"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Fake play lab</title>
+<body style="background:#111;color:#eee;font:16px sans-serif;margin:0">
+<h2 style="margin:8px">Fake play lab</h2>
+<div id=st style="margin:8px;font:bold 22px monospace;color:#ff6">waiting: press play ONCE</div>
+<div id=ads style="margin:8px;font:15px monospace">fake layers fired: 0 | real presses: 0</div>
+<div id=player class=player style="position:relative;width:100%;height:230px;background:#000">
+  <video id=v src="http://10.0.2.2:8004/ads/ad.mp4" playsinline style="position:absolute;left:0;top:0;width:100%;height:100%"></video>
+  <div id=realplay style="position:absolute;left:50%;top:50%;width:90px;height:90px;margin:-45px 0 0 -45px;background:#19c;border-radius:45px;color:#fff;text-align:center;line-height:90px;font-size:38px">&#9654;</div>
+  <div id=f1 style="position:absolute;left:0;top:0;right:0;bottom:0"></div>
+  <div id=f2 style="position:absolute;left:0;top:0;right:0;bottom:0"></div>
+</div>
+<script>
+var fired = 0, presses = 0, v = document.getElementById('v');
+function show() { document.getElementById('ads').textContent = 'fake layers fired: ' + fired + ' | real presses: ' + presses; }
+document.addEventListener('click', function (e) { if (e.isTrusted) { presses++; show(); } }, true);
+document.getElementById('realplay').addEventListener('click', function () { v.play(); });
+['f1', 'f2'].forEach(function (id) {
+  var el = document.getElementById(id);
+  el.addEventListener('click', function () { fired++; show(); window.open('http://10.0.2.2:8000/ad?l=' + id, '_blank'); el.remove(); });
+});
+v.addEventListener('play', function () { var st = document.getElementById('st'); st.textContent = 'PLAYING after ' + presses + ' real press(es)'; st.style.color = '#6f6'; });
+</script></body>"""
+
 class H(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
     def log_message(self, fmt, *a): pass
@@ -115,6 +139,8 @@ class H(http.server.BaseHTTPRequestHandler):
         if port == 8003 and path == "/embed/movie": return self.send(200, "text/html; charset=utf-8", PAGE_B)
         if port == 8000 and path == "/watch2": return self.send(200, "text/html; charset=utf-8", PAGE_C)
         if port == 8000 and path == "/plain": return self.send(200, "text/html; charset=utf-8", PAGE_PLAIN)
+        if port == 8000 and path == "/fakeplay": return self.send(200, "text/html; charset=utf-8", PAGE_FAKE)
+        if port == 8000 and path == "/ad": return self.send(200, "text/html; charset=utf-8", b"<!doctype html><title>spam</title><h1>THIS IS THE SPAM PAGE</h1>")
         if port == 8003 and path == "/embed/server2": return self.send(200, "text/html; charset=utf-8", player("def"))
         if port == 8003 and path == "/embed/adfirst": return self.send(200, "text/html; charset=utf-8", player("abc", ad=True))
         if port == 8004 and path in FILES:
