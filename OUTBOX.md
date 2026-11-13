@@ -1219,3 +1219,54 @@
 ## 2026-11-13T16:19:08Z
 > Standing down again. This is the same 2-hourly heartbeat with the old alpha22-era text, and its work list is finished. I'm waiting for your reply on alpha30. The heartbeat is still on and costs a wake-up every 2 hours; say "disable it" and approve the request, or tell me to delete it.
 <!-- sha:b5f77a9002d8 -->
+
+## 2026-11-13T17:44:22Z
+> Yes, adb helps. It also exposed a mistake of mine: your tablet very likely has enough room to update already.
+>
+> **What I got wrong.** I told you Android keeps a tenth of the storage free after an install, so you'd need about 3.1 GB free. I checked the Android 10 source and tested on the emulator, and that was wrong. Android keeps 5 % of storage free, but never more than 500 MB, and an update needs about 0.45 GB on top of that. On your tablet (500 MB + 0.45 GB, about 1 GB) the update should already fit in your 1.6 GB free. That is tested on the emulator only, not on your tablet, which may have different settings. I fixed the numbers and wording in the app's code, but the fix is not released yet. You don't need it to update.
+>
+> **Setup once.** On the tablet, go to Settings > About tablet and tap Build number 7 times. Then open Developer options and turn on USB debugging. Plug in the cable and accept the prompt on the tablet. On the computer, install Android "platform-tools". `adb devices` should then show `device`. Turn USB debugging off when you're done.
+>
+> **First, three read-only commands. Paste the output back.**
+> ```
+> adb shell df /data
+> adb shell settings get global sys_storage_threshold_percentage
+> adb shell settings get global sys_storage_threshold_max_bytes
+> ```
+> `null` means Android's normal settings.
+>
+> **Then install over the cable.** Download the alpha30 APK on the computer, which is faster than the 5 Mbit/s hotspot. Run this in the folder where you saved it, with the APK's file name:
+> ```
+> adb install -r <the APK file>
+> ```
+> It prints `Success` and keeps your data. If it fails, the error line says exactly why.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha30
+>
+> **Commands that help speed or function.** I ran these on the Android 10 emulator. The commands worked, but I did not measure a speed-up from any of them.
+> - **Animations off** (undo by setting each back to 1). This makes the whole tablet feel snappier:
+>   ```
+>   adb shell settings put global window_animation_scale 0
+>   adb shell settings put global transition_animation_scale 0
+>   adb shell settings put global animator_duration_scale 0
+>   ```
+> - **Free memory before browsing:** `adb shell am kill-all`.
+> - **Find what eats the 2 GB:** `adb shell dumpsys meminfo`. Paste the "Total PSS by process" part. I can then tell you which preinstalled apps are safe to switch off. That is reversible with `pm enable`.
+> - **In-app updates without the Settings detour:** `adb shell appops set app.kestrel.browser.gecko REQUEST_INSTALL_PACKAGES allow`
+> - **Downloads keep going on battery with the screen off:** `adb shell cmd deviceidle whitelist +app.kestrel.browser.gecko`. Undo it with `-` instead of `+`. I only checked that the command runs.
+> - **More room:** `adb shell pm trim-caches 2G` clears other apps' caches. `adb pull` copies big files to the computer, and then you can delete them on the tablet.
+> - **Only if an install ever says "not enough storage":** `adb shell settings put global sys_storage
+> [... 1310 characters omitted ...]
+> nything to this repo") reached a second session started around 17:17, not this one. This reply answers both. Nothing was written for this answer except the automatic chat log. My test notes and the unreleased fix were saved before that message.
+>
+> **Still open from you:**
+> - The adb outputs above, or just try the in-app update now.
+> - Menu > Diagnostics "App:" version line.
+> - Doraby: after updating, open a watch page, tap play, wait 10 s, then send Diagnostics > Page report. Also the exact words of the "incompatible browser / Cloudflare" site.
+> - Which earlier prompts felt unanswered.
+> - The choppy-video link, scroll and Back feel, Proton Mail numbers, and keyboard test.
+> - Yes or no on the scheduled GitHub ad-list build.
+> - Your private signing key.
+> - Earlier video problems (.ts files, grey icon, spam after play), and network lab results.
+> - Optional: licence, landscape tabs, Cromite comparison.
+<!-- sha:67ae69a79246 -->
