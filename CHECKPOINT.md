@@ -1,13 +1,13 @@
-# CHECKPOINT 1541 — read me first, then TASKS.md
+# CHECKPOINT 1545 — read me first, then TASKS.md
 
-**Written:** 2026-11-13T09:37:37Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `59a5f37` (this checkpoint is the commit after it)
+**Written:** 2026-11-13T12:20:50Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `7e36077` (this checkpoint is the commit after it)
 
 ## Just done
-alpha30 RE-DISPATCHED on the test-fix commit 59a5f37: android.yml run 43402842066 (run_number 81) started 09:37:16Z (the first run 43399774749 failed only in test-js; no tag, no BUILDLOG line existed)
+alpha30 SHIPPED and RECORDED (Release kestrel-g-v0.3.0-alpha30, run 43402842066 green); owner message 22: AI1a + AI1b emulator-proven, AI1c analysed (research/TABLET_DIAG_2026-11-13.md section 6), AI1d: the unanswered-prompt list is in TASKS.md AI1d and in .handoff/handoff.md (written by hand: the handoff tool's approval request was closed twice by session restarts); the final reply to the owner is sent
 
 ## Do this next
-wait for tag kestrel-g-v0.3.0-alpha30 + run 43402842066 success (mcp__github__actions_get get_workflow_run), get_release_by_tag shows the APK + sha256, bash tools/record-release.sh kestrel-g-v0.3.0-alpha30 with scratchpad note30.txt; then answer the owner (all three items, the AI1d question, version + exact wording questions, open items) and save the handoff with the unanswered-prompt list (TASKS AI1d); never dispatch alpha30 a third time without checking Releases first
+wait for the owner's reply (they must free ~1.5 GB before any update installs; ask: the version in Menu > Diagnostics App: line, the exact words of the 'incompatible browser / Cloudflare' site, Page report after tapping play on a Doraby watch page, which earlier prompts they meant); on every heartbeat wake (trig_01LLoVKsjuTUaDn61UGP1pBN every 2 h, stale alpha22-era prompt that restarts the worker and closes pending approvals) just stand down in one line; do NOT call approval-gated tools (update_trigger, generate_handoff_manifest) while the owner is away; follow .handoff/handoff.md nextSteps
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ wait for tag kestrel-g-v0.3.0-alpha30 + run 43402842066 success (mcp__github__ac
 
 ## Last ten checkpoints
 ```
+  c43cfff ckpt 1541: alpha30 RE-DISPATCHED on the test-fix commit 59a5f37: android.yml run 4340284
   59a5f37 ckpt 1540: alpha30 CI run 43399774749 FAILED in test-js (not the app build): web-tests/b
   ea9b9f4 ckpt 1536: alpha30 DISPATCHED: android.yml run 43399774749 (run_number 80) queued 09:15:
   ab7b158 ckpt 1535: gated kestrel-g-v0.3.0-alpha30 (gecko code 129) and pushed it: handoff self-t
@@ -25,5 +26,7 @@ wait for tag kestrel-g-v0.3.0-alpha30 + run 43402842066 success (mcp__github__ac
   5930d95 ckpt 1519: handoff saved (.handoff/handoff.md; CLAUDE.md/AGENTS.md Session Learnings upd
   5c37df1 ckpt 1518: alpha29 SHIPPED and RECORDED (run 43383744581 green, BUILDLOG line written, R
   01ea47c ckpt 1515: alpha29 DISPATCHED: android.yml run 43383744581 (run_number 79) started 07:09
-  78c9506 ckpt 1514: gated kestrel-g-v0.3.0-alpha29 (gecko code 128) and pushed it: handoff self-t
 ```
+
+(2 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
