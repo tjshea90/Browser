@@ -20,6 +20,7 @@ class FakeServer(@Volatile var data: ByteArray) : Fetcher {
     @Volatile var etag: String? = "\"v1\""
     @Volatile var lastModified: String? = null
     @Volatile var sendLength = true
+    @Volatile var bufferedAhead = false           // available() reports everything left in the reply (a socket whose later records have already arrived)
     @Volatile var chunkDelayMs = 0L
     @Volatile var chunk = 16 * 1024
     @Volatile var failNext = 0                    // the next N requests throw FetchException(RESET)
@@ -86,6 +87,7 @@ class FakeServer(@Volatile var data: ByteArray) : Fetcher {
         override fun header(name: String): String? = headers.entries.firstOrNull { it.key.equals(name, true) }?.value
         override val body: InputStream = object : InputStream() {
             var pos = from
+            override fun available(): Int = if (bufferedAhead && !aborted) (to - pos).coerceAtLeast(0) else 0
             override fun read(): Int { val b = ByteArray(1); return if (read(b, 0, 1) < 0) -1 else b[0].toInt() and 0xff }
             override fun read(b: ByteArray, off: Int, len: Int): Int {
                 if (aborted) throw IOException("aborted")
@@ -110,9 +112,11 @@ class FakeSink(val name: String, total: Long, val uriValue: String) : Sink {
     @Volatile var published = false
     @Volatile var discarded = false
     @Volatile var failWrites: SinkException? = null
+    val writes = AtomicInteger()
     override val uri: String? get() = uriValue
     override fun pwrite(pos: Long, b: ByteArray, off: Int, len: Int) {
         failWrites?.let { throw it }
+        writes.incrementAndGet()
         synchronized(this) {
             val end = pos.toInt() + len
             if (end > bytes.size) bytes = bytes.copyOf(end)

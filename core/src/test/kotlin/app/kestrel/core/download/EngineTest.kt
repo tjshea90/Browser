@@ -670,4 +670,17 @@ class EngineTest {
         val s2 = FakeServer(data).also { it.reprDigest = "md5=:AAAAAAAAAAAAAAAAAAAAAA==:" }
         val h2 = H(s2); h2.completed(h2.enqueue())
     }
+
+    // ---- read coalescing (research/REVIEW-EXTERNAL-1.md 6.6): what has already arrived is written in one piece
+    @Test(timeout = 60_000) fun bytesThatHaveAlreadyArrivedAreWrittenInBigPiecesAndTheFileIsStillExact() {
+        val data = testBytes(4 * MiB)
+        val coalesced = FakeServer(data).also { it.chunk = 8 * 1024; it.bufferedAhead = true }
+        val h1 = H(coalesced); val v1 = h1.completed(h1.enqueue())
+        assertArrayEquals(data, h1.sink(v1).bytes)
+        val plain = FakeServer(data).also { it.chunk = 8 * 1024; it.bufferedAhead = false }
+        val h2 = H(plain); val v2 = h2.completed(h2.enqueue())
+        assertArrayEquals(data, h2.sink(v2).bytes)
+        val w1 = h1.sink(v1).writes.get(); val w2 = h2.sink(v2).writes.get()
+        assertTrue("writes with coalescing $w1, without $w2", w1 * 4 <= w2) // 64 KiB per write instead of 8 KiB
+    }
 }

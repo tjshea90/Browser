@@ -647,7 +647,19 @@ class Engine(
             synchronized(lock) { limit = seg.end; cursor = seg.cursor }
             if (limit >= 0 && cursor >= limit) { o.resp.abort(); return }
             val want = if (limit >= 0) minOf(buf.size.toLong(), limit - cursor).toInt() else buf.size
-            val n = try { body.read(buf, 0, want) } catch (e: IOException) { if (job.stop) throw Stopped(); throw e }
+            var n = try { body.read(buf, 0, want) } catch (e: IOException) { if (job.stop) throw Stopped(); throw e }
+            if (n in 1 until want) {
+                // A read returns one TLS record or socket buffer (a few KB), so the 64 KiB buffer was rarely full and every record cost one write to the file. Top the buffer up with what has already
+                // arrived: several times fewer system calls at the same speed (research/REVIEW-EXTERNAL-1.md 6.6). available() never blocks; an error here is reported by the next read.
+                try {
+                    var more = body.available()
+                    while (n < want && more > 0) {
+                        val k = body.read(buf, n, minOf(want - n, more))
+                        if (k <= 0) break
+                        n += k; more = body.available()
+                    }
+                } catch (e: IOException) { if (job.stop) throw Stopped() }
+            }
             if (n < 0) {
                 synchronized(lock) {
                     if (seg.end < 0) { seg.end = seg.cursor; job.rec.total = seg.cursor } // an open-ended reply ended: that was the whole file
