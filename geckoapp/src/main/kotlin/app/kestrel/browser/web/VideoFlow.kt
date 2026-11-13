@@ -418,8 +418,7 @@ class VideoFlow(private val a: BrowserActivity) {
                 else -> null
             }
             DownloadController.enqueueStream(a, StreamSource(p.url, p.text, page, stem, h, fetcher = 1, priv = tab.isPrivateTab, meteredOk = true, estimateBytes = p.estimate, repId = p.repId, ext = p.ext, companion = companion))
-            a.askNotificationPermissionOnce()
-            a.toast("Download started: Menu > Downloads")
+            a.askNotificationPermissionOnce() // the banner at the top says "Download started" (DownloadPopup)
         }
         val limit = a.prefs.dataSaver.confirmDownloadBytes(NetworkMonitor.metered)
         val big = limit >= 0 && (p.estimate <= 0 || p.estimate >= limit)

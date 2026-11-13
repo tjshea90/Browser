@@ -141,6 +141,8 @@ open class BrowserActivity : Activity(), DockListener {
     private var lastTrimAt = 0L
     private lateinit var findBar: FindBar
     private lateinit var suggestions: SuggestionList
+    /** The "Download started" banner and the small download window in the top right (owner message 26, AL2). */
+    private lateinit var downloadPopup: DownloadPopup
     private lateinit var tabGrid: TabGrid
     private lateinit var fullscreen: FrameLayout
     private var settingsView: SettingsView? = null
@@ -234,6 +236,7 @@ open class BrowserActivity : Activity(), DockListener {
     override fun onStart() {
         super.onStart()
         ProcessLife.uiVisible = true; DownloadController.uiVisibilityChanged()
+        downloadPopup.attach(); downloadPopup.resumed()
         val appCtx = applicationContext
         Io.fast { NetworkMonitor.start(appCtx) } // binder calls and the first preferences read: not on the UI thread (start and stop share this lane, so they stay in order)
         Neon.foreground(true)
@@ -327,6 +330,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     override fun onDestroy() {
+        if (::downloadPopup.isInitialized) downloadPopup.detach()
         UpdateManager.removeListener(updateListener)
         kbProbe.detach()
         NetworkMonitor.removeListener(netListener)
@@ -449,6 +453,12 @@ open class BrowserActivity : Activity(), DockListener {
         root.addView(findBar, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dp(52))) // find stays at the TOP: the keyboard never covers it
         suggestions = SuggestionList(this, pal, reverse = true) { value -> hideSuggestions(); clearUrlFocus(); current?.let { navigate(it, value) } }.apply { visibility = View.GONE }
         root.addView(suggestions, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
+        // above the page, below the tab grid, sheets and every full screen: a download that starts shows a banner at the top and a small window of all downloads in the top right
+        downloadPopup = DownloadPopup(this, pal, object : DownloadPopup.Listener {
+            override fun openManager() { showDownloads() }
+            override fun confirm(title: String, message: String, yes: String, then: () -> Unit) { askYesNo(title, message, yes, "Keep", { ok -> if (ok) then() }) }
+        })
+        root.addView(downloadPopup.view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP))
         tabGrid = TabGrid(this, pal, { it.isPrivateTab }, object : TabGrid.Listener {
             override fun select(tab: Tab) { hideTabGrid(); show(tab) }
             override fun close(tab: Tab) {
@@ -2282,8 +2292,7 @@ open class BrowserActivity : Activity(), DockListener {
             if (given != null) headers.putAll(given)
             else UrlParts.parse(tab.url)?.let { headers["Referer"] = "${it.scheme}://${it.hostForAuthority}/" }
             DownloadController.enqueue(this, Source(url, tab.url.takeIf { it.isNotEmpty() }, nameOverride ?: Downloads.fileName(url, cd, mime), mime, headers, fetcher = 1, priv = tab.isPrivateTab, meteredOk = true, nameFixed = nameOverride != null))
-            askNotificationPermissionOnce()
-            toast("Download started: Menu > Downloads")
+            askNotificationPermissionOnce() // the banner at the top says "Download started" (DownloadPopup); no toast any more
         }
         if (tab.isPrivateTab) askYesNo("Download from a private tab?", "The file is saved in your Downloads folder and stays there after you close the private tab. Kestrel keeps no record of it.", "Download", "Cancel", { ok -> if (ok) go() })
         else go()
@@ -2312,9 +2321,10 @@ open class BrowserActivity : Activity(), DockListener {
         })
         downloadsView = v
         root.addView(v, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        downloadPopup.suppress(true) // the full list is open: the small window would only repeat it
     }
 
-    private fun closeDownloads() { downloadsView?.let { root.removeView(it) }; downloadsView = null }
+    private fun closeDownloads() { downloadsView?.let { root.removeView(it) }; downloadsView = null; if (::downloadPopup.isInitialized) downloadPopup.suppress(false) }
 
     private fun openDownload(v: DownloadView) {
         val uri = v.destUri ?: run { toast("The file is not available"); return }
