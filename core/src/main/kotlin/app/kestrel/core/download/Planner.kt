@@ -120,6 +120,57 @@ object Format {
         DlState.FAILED -> failure(v) + if (v.done > 0) "  ·  " + progress(v) + " downloaded" else ""
     }
 
+    /**
+     * The words INSIDE the progress bar (owner message 26, AL3): how much is downloaded, how much is left, the percent and the speed, e.g.
+     * "12.3 MB downloaded  ·  33.3 MB left  ·  27 %  ·  1.2 MB/s". States that are not moving say so first ("Paused  ·  ...", "Waiting in line"). [compact] is the mini window's shorter form
+     * ("27 %  ·  12.3 of 45.6 MB  ·  1.2 MB/s"). Empty when the row has no bar (finished or canceled).
+     */
+    fun barText(v: DownloadView, compact: Boolean = false): String {
+        fun numbers(withSpeed: Boolean): String {
+            val parts = ArrayList<String>(4)
+            val pct = (v.fraction * 100).toInt()
+            if (v.total > 0) {
+                if (compact) {
+                    parts.add("$pct %")
+                    parts.add(bytes(v.done) + " of " + (if (v.estimated) "about " else "") + bytes(v.total))
+                } else {
+                    parts.add(bytes(v.done) + " downloaded")
+                    parts.add((if (v.estimated) "about " else "") + bytes((v.total - v.done).coerceAtLeast(0L)) + " left")
+                    parts.add("$pct %")
+                }
+            } else {
+                parts.add(bytes(v.done) + if (compact) " so far" else " downloaded")
+            }
+            if (withSpeed && v.bytesPerSec > 0) parts.add(speed(v.bytesPerSec))
+            return parts.joinToString("  ·  ")
+        }
+        val hasNumbers = v.done > 0 || v.total > 0 && v.state != DlState.QUEUED && v.state != DlState.STARTING
+        return when (v.state) {
+            DlState.RUNNING -> numbers(withSpeed = true)
+            DlState.STARTING -> "Starting…"
+            DlState.QUEUED -> "Waiting in line" + if (v.done > 0) "  ·  " + numbers(false) else ""
+            DlState.PAUSED_USER, DlState.PAUSED_SYSTEM -> "Paused" + if (hasNumbers) "  ·  " + numbers(false) else ""
+            DlState.WAITING_NETWORK -> "Waiting for the connection…" + if (v.done > 0) "  ·  " + numbers(false) else ""
+            DlState.VERIFYING -> "Finishing…"
+            DlState.NEEDS_DECISION -> "Needs a decision"
+            DlState.FAILED -> if (v.done > 0) "Stopped  ·  " + numbers(false) else "Failed"
+            DlState.COMPLETED, DlState.CANCELED -> ""
+        }
+    }
+
+    /**
+     * The small line UNDER the bar (what the bar does not say): the time left and the number of connections while it runs, the reason when it stopped, the question when it needs a decision,
+     * "Done  ·  size" for a finished one. Empty = draw nothing.
+     */
+    fun belowBar(v: DownloadView): String = when (v.state) {
+        DlState.RUNNING -> listOfNotNull(eta(v.etaSec).ifEmpty { null }, if (v.connections > 1) "${v.connections} connections" else null).joinToString("  ·  ")
+        DlState.NEEDS_DECISION -> status(v)
+        DlState.FAILED -> failure(v)
+        DlState.COMPLETED -> status(v)
+        DlState.CANCELED -> status(v)
+        else -> ""
+    }
+
     fun failure(v: DownloadView): String = when (v.reason) {
         Reason.HTTP -> "The server answered ${v.detail}"
         Reason.LINK_EXPIRED -> "The link expired. Open the page again."
