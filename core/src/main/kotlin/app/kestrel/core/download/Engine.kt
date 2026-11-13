@@ -67,7 +67,12 @@ class Engine(
         val wake = mon.newCondition()
     }
 
-    private companion object { const val MAX_AUTO_CRASHES = 2; const val VERIFY_BYTES = 4096 }
+    private companion object {
+        const val MAX_AUTO_CRASHES = 2; const val VERIFY_BYTES = 4096
+        /** A download with at least this priority was started by "Start now": it runs even when [Config.maxActive] downloads are already running (at most [MAX_FORCED] of them). */
+        const val FORCE_PRIO = 1_000_000
+        const val MAX_FORCED = 3
+    }
 
     private val lock = Any()
     private val jobs = LinkedHashMap<Long, Job>()
@@ -188,8 +193,15 @@ class Engine(
         }
     }
 
-    fun views(): List<DownloadView> = synchronized(lock) { jobs.values.map { view(it) }.sortedByDescending { it.created } }
-    fun view(id: Long): DownloadView? = synchronized(lock) { jobs[id]?.let { view(it) } }
+    fun views(): List<DownloadView> = synchronized(lock) {
+        val q = queueOrder(); val pos = HashMap<Long, Int>(); q.forEachIndexed { i, j -> pos[j.rec.id] = i }
+        jobs.values.map { view(it, pos[it.rec.id] ?: -1, q.size) }.sortedByDescending { it.created }
+    }
+    fun view(id: Long): DownloadView? = synchronized(lock) {
+        val job = jobs[id] ?: return@synchronized null
+        val q = queueOrder()
+        view(job, q.indexOfFirst { it.rec.id == id }, q.size)
+    }
 
     /** The service must stay alive while anything is queued, moving bytes or waiting for the network. */
     fun needsService(): Boolean = synchronized(lock) { jobs.values.any { val s = it.rec.state; s == DlState.QUEUED || s.active || s == DlState.WAITING_NETWORK } }
@@ -217,23 +229,60 @@ class Engine(
         startQueued()
     }
 
+    /** The waiting line, first to start first: higher priority, then the older request (under [lock]). */
+    private fun queueOrder(): List<Job> = jobs.values.filter { it.rec.state == DlState.QUEUED }.sortedWith(compareByDescending<Job> { it.rec.prio }.thenBy { it.rec.created })
+
     private fun startQueued() {
         val go = ArrayList<Job>()
         synchronized(lock) {
-            var active = jobs.values.count { it.rec.state.active }
-            for (j in jobs.values.sortedBy { it.rec.created }) {
-                if (active >= cfg.maxActive) break
-                if (j.rec.state == DlState.QUEUED && j.alive == 0 && j.stopState == null) { j.rec.state = DlState.STARTING; go.add(j); active++ }
+            var active = jobs.values.count { it.rec.state.active && it.rec.prio < FORCE_PRIO }
+            var forced = jobs.values.count { it.rec.state.active && it.rec.prio >= FORCE_PRIO }
+            for (j in queueOrder()) {
+                if (j.alive != 0 || j.stopState != null) continue
+                if (j.rec.prio >= FORCE_PRIO) { if (forced >= MAX_FORCED) continue; forced++ }
+                else { if (active >= cfg.maxActive) continue; active++ }
+                j.rec.state = DlState.STARTING; go.add(j)
             }
         }
         for (j in go) start(j)
     }
 
-    private fun requeue(job: Job, wipe: Boolean) {
+    /**
+     * "Start now" (AD1b-1): the download jumps the waiting line and runs even when the limit of simultaneous downloads is reached (a paused or failed one is resumed first). At most [MAX_FORCED] such
+     * downloads run together; one that is paused and resumed later, or retried, goes back to the normal line.
+     */
+    fun startNow(id: Long) = control.execute {
+        val job = get(id) ?: return@execute
+        val st = synchronized(lock) { job.rec.state }
+        when (st) {
+            DlState.QUEUED -> { synchronized(lock) { job.rec.prio = FORCE_PRIO }; persist(job); changed(id); startQueued() }
+            DlState.PAUSED_USER, DlState.PAUSED_SYSTEM, DlState.WAITING_NETWORK, DlState.FAILED -> requeue(job, wipe = st == DlState.FAILED && !synchronized(lock) { job.rec.resumable }, force = true)
+            else -> {}
+        }
+    }
+
+    /** One place earlier ([up]) or later in the waiting line; the line is renumbered so the order survives a restart (the priority is stored with the download). */
+    fun move(id: Long, up: Boolean) = control.execute {
+        val moved = ArrayList<Long>()
+        synchronized(lock) {
+            val q = queueOrder().filter { it.rec.prio < FORCE_PRIO }.toMutableList()
+            val i = q.indexOfFirst { it.rec.id == id }
+            val j = if (up) i - 1 else i + 1
+            if (i >= 0 && j >= 0 && j < q.size) {
+                java.util.Collections.swap(q, i, j)
+                for ((k, jb) in q.withIndex()) { val p = q.size - k; if (jb.rec.prio != p) { jb.rec.prio = p; moved.add(jb.rec.id) } }
+            }
+        }
+        for (m in moved) { get(m)?.let { persist(it) }; changed(m) }
+        if (moved.isNotEmpty()) startQueued()
+    }
+
+    private fun requeue(job: Job, wipe: Boolean, force: Boolean = false) {
         val rec = job.rec
         val again: Boolean
         synchronized(lock) {
             rec.fails = 0; rec.reason = Reason.NONE; rec.detail = 0
+            rec.prio = if (force) FORCE_PRIO else if (rec.prio >= FORCE_PRIO) 0 else rec.prio // "Start now" is for one run; a later resume or retry waits in the normal line
             again = job.alive > 0 || job.stopState != null
             if (!again && wipe) wipePartial(job)
             rec.state = DlState.QUEUED
@@ -775,16 +824,17 @@ class Engine(
 
     // ================================================================================================ views
 
-    private fun view(job: Job): DownloadView {
+    private fun view(job: Job, queuePos: Int, queueSize: Int): DownloadView {
         val r = job.rec
         val now = clock.now()
         val running = r.state == DlState.RUNNING
         val speed = if (running) job.meter.bytesPerSec(now).toLong() else 0L
         val eta = if (running && speed > 0 && r.total > 0) (r.total - r.done) / speed else -1L
         val actions: List<Action> = when (r.state) {
-            DlState.QUEUED, DlState.STARTING -> listOf(Action.CANCEL)
+            DlState.QUEUED -> buildList { add(Action.START_NOW); if (queuePos > 0 && r.prio < FORCE_PRIO) add(Action.MOVE_UP); if (queuePos in 0 until queueSize - 1 && r.prio < FORCE_PRIO) add(Action.MOVE_DOWN); add(Action.CANCEL) }
+            DlState.STARTING -> listOf(Action.CANCEL)
             DlState.RUNNING -> if (r.resumable) listOf(Action.PAUSE, Action.CANCEL) else listOf(Action.CANCEL)
-            DlState.PAUSED_USER, DlState.PAUSED_SYSTEM -> listOf(Action.RESUME, Action.CANCEL)
+            DlState.PAUSED_USER, DlState.PAUSED_SYSTEM -> listOf(Action.RESUME, Action.START_NOW, Action.CANCEL)
             DlState.WAITING_NETWORK -> if (r.resumable) listOf(Action.PAUSE, Action.CANCEL) else listOf(Action.CANCEL)
             DlState.NEEDS_DECISION -> listOf(Action.RESTART, Action.CANCEL)
             DlState.VERIFYING -> emptyList()
@@ -793,6 +843,6 @@ class Engine(
             DlState.CANCELED -> emptyList()
         }
         val host = try { java.net.URI(r.url).host } catch (e: Exception) { null }
-        return DownloadView(r.id, r.state, r.reason, r.detail, r.name, r.mime, host, r.total, r.done, speed, eta, job.alive, r.priv, r.destUri, r.created, r.updated, actions, r.destKind)
+        return DownloadView(r.id, r.state, r.reason, r.detail, r.name, r.mime, host, r.total, r.done, speed, eta, job.alive, r.priv, r.destUri, r.created, r.updated, actions, r.destKind, queuePos = queuePos, queueSize = queueSize)
     }
 }

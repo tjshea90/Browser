@@ -116,7 +116,8 @@ const val DEST_PUBLIC = 0
 const val DEST_APP_PRIVATE = 2
 
 /** Buttons a row can show, first = primary. */
-enum class Action { PAUSE, RESUME, CANCEL, RETRY, RESTART, OPEN, SHARE, DELETE, /** A finished stream kept as a .ts: write an MP4 from it now. */ MAKE_MP4, /** A download waiting for the phone: do it on the tablet itself instead. */ DOWNLOAD_HERE }
+enum class Action { PAUSE, RESUME, CANCEL, RETRY, RESTART, OPEN, SHARE, DELETE, /** A finished stream kept as a .ts: write an MP4 from it now. */ MAKE_MP4, /** A download waiting for the phone: do it on the tablet itself instead. */ DOWNLOAD_HERE,
+    /** A queued or paused download the owner wants running now, ahead of the queue and even when the limit of simultaneous downloads is reached. */ START_NOW, /** One place earlier / later in the waiting line. */ MOVE_UP, MOVE_DOWN }
 
 /** Immutable snapshot for the UI and the notification (research/DOWNLOADS.md section 5 table). */
 class DownloadView(
@@ -143,6 +144,9 @@ class DownloadView(
     val estimated: Boolean = false,
     /** One plain sentence about how this download ended up the way it did (why a stream was kept as a .ts file, that a part was left out of an MP4), or null. */
     val note: String? = null,
+    /** Place in the waiting line (0 = next to start), -1 when this download is not waiting in the line; [queueSize] = how many wait. */
+    val queuePos: Int = -1,
+    val queueSize: Int = 0,
 ) {
     val fraction: Float get() = if (total > 0) (done.toDouble() / total).coerceIn(0.0, 1.0).toFloat() else 0f
 }
