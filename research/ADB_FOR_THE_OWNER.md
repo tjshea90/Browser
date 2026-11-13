@@ -21,7 +21,21 @@ Failure text seen: `INSTALL_FAILED_INSUFFICIENT_STORAGE` (from `adb install`), o
 
 ## 2. What that means for the owner's tablet (27.75 GB total, 1.62 GB free in the alpha27 Diagnostics)
 5 % of 27.75 GB = 1.39 GB, but the cap is 500 MiB, so Android's own low-storage reserve on that tablet is **500 MiB, not 2.8 GB** (unless the ROM changed the two settings: `adb shell settings get global sys_storage_threshold_percentage` and `..._max_bytes`, "null" = the defaults above).
-(big-APK numbers below)
+
+Big APK (the x86_64 release build: package A = 95.5 MiB, unpacked libraries L = 187.4 MiB), fresh install by `adb install --no-incremental`, smallest free space that installs (bisect, +-8 MiB):
+| setting | smallest free space that installs | model T = low + 2A + 2L |
+| :- | :- | :- |
+| none (low = 297.6 MiB) | 861 fails, 868 passes | 863.4 |
+| `sys_storage_threshold_percentage` = 2 (low = 119.0) | 676 fails, 685 passes | 684.8 |
+| `sys_storage_threshold_max_bytes` = 100 MiB (low = 100) | passes at 760 (fails below about 666) | 665.8 |
+| `sys_storage_cache_percentage` = 1 | still fails at 760 | 863.4 (no effect) |
+So **the free space an install needs = Android's low-storage reserve + TWICE (package + unpacked libraries)** (+ a little for optimised code), and the reserve is the only part the two `threshold` settings move. The small APK fits the same line (low + 2A = 302.2; measured 302-304).
+The earlier "T = 10 % + 2A + L + 32" (1000-1010 MiB on this same APK) was measured with a different emulator state and mis-assigned the logcat number; today's clean runs say about 865 MiB, i.e. the old model was about 140 MiB too high here AND (because of the 10 %) 2.3 GB too high on the owner's tablet.
+
+For the owner's tablet (arm32 alpha30 APK: package 94.4 MiB, libraries 131.7 MiB; 27.75 GB storage => reserve = min(5 % = 1.39 GB, 500 MiB) = **500 MiB**):
+`T = 500 + 2 x (94.4 + 131.7) = 952 MiB` (about 0.93 GiB; plus a safety margin about 0.96 GiB). The Diagnostics paste said 1.62 GB (1.51 GiB) free: **the update should already fit, with about 0.5 GiB to spare**, instead of "about 3.1 GB needed".
+(Tablet ROM could still differ: `adb shell settings get global sys_storage_threshold_percentage` and `..._max_bytes` print "null" for the defaults; the real proof is `adb install -r` printing Success or `INSTALL_FAILED_INSUFFICIENT_STORAGE`.)
+Android's own number for "what an app may still use" is `StorageManager.getAllocatableBytes(UUID_DEFAULT)` (public since API 26) = free + clearable cache - this reserve; the updater now derives the reserve from it when it answers.
 
 ## 3. adb commands tested on Android 10 (all work from the `shell` user, no root)
 - `adb shell dumpsys diskstats` (free space of /data, /system, /cache; per-app sizes once the system has run its disk-stats job)
