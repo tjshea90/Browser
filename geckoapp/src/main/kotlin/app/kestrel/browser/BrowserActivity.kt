@@ -2341,13 +2341,28 @@ open class BrowserActivity : Activity(), DockListener {
     private fun linkMenu(tab: Tab, url: String, imageUrl: String? = null) {
         val labels = ArrayList<String>(); val acts = ArrayList<() -> Unit>()
         val web = NavPolicy.isWebUrl(url)
-        if (web) { labels.add("Open in new tab"); acts.add { val t = newTabInternal(tab, tab.isPrivateTab); show(t); navigateTo(t, url) } }
+        if (web) { labels.add("Open in new tab"); acts.add { openInBackground(tab, url) } }
         if (web && !tab.isPrivateTab) { labels.add("Open in private tab"); acts.add { val t = newTabInternal(null, privateTab = true); show(t); navigateTo(t, url) } }
         labels.add("Copy link address"); acts.add { copy(url) }
         labels.add("Share link"); acts.add { share(url) }
         if (imageUrl != null && NavPolicy.isWebUrl(imageUrl)) { labels.add("Download image"); acts.add { startDownload(imageUrl, null, null, null, tab) } }
         if (video.available(tab)) { labels.add("Download video from this page"); acts.add { video.show(tab) } }
         AlertDialog.Builder(this).setTitle(url.take(80)).setItems(labels.toTypedArray()) { _, i -> acts[i]() }.show()
+    }
+
+    /**
+     * "Open in new tab" from a long-press: the page loads in a tab BEHIND the one in front and the foreground stays exactly where it is (owner 2026-11-13). The new tab is a regular session that is
+     * told it is not visible (less memory, the engine still loads it); it counts as recently used so the live-tab limit hibernates an older tab first, never this one and never the tab in front.
+     */
+    private fun openInBackground(from: Tab, url: String) {
+        val t = newTabInternal(from, from.isPrivateTab) // a private tab opens a private tab: it lives in the same window kind
+        t.lastActive = System.currentTimeMillis()
+        navigateTo(t, url)                              // creates the session and loads; attachContent() runs only for the tab in front, so the view does not change
+        t.session?.setActive(false)
+        enforceLiveLimit()
+        updateUi()                                      // the tab counter in the dock
+        scheduleSave()
+        toast("Opened in a new tab")
     }
 
     private fun imageMenu(tab: Tab, url: String) {
