@@ -689,4 +689,47 @@ class StreamEngineTest {
         val v = h.completed(id)
         assertFalse(v.estimated); assertEquals(expected.size.toLong(), v.total)
     }
+
+    // ---- AO2: the size shown while a stream downloads
+
+    /** Parts whose length in seconds is listed in [secs], every second of video weighing [bytesPerSec] bytes. */
+    private fun ratedStream(h: H, secs: List<Int>, bytesPerSec: Int): Pair<String, ByteArray> {
+        val all = java.io.ByteArrayOutputStream()
+        val sb = StringBuilder("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:6\n#EXT-X-MEDIA-SEQUENCE:0\n")
+        secs.forEachIndexed { i, s -> val b = testBytes(s * bytesPerSec, 500L + i); h.cdn.files["https://cdn.test/v/r$i.ts"] = b; all.write(b); sb.append("#EXTINF:$s.0,\nr$i.ts\n") }
+        sb.append("#EXT-X-ENDLIST\n")
+        return sb.toString() to all.toByteArray()
+    }
+
+    @Test(timeout = 60_000) fun aPoorFirstGuessGivesWayToWhatTheSegmentsWeigh() {
+        val h = H(); h.cdn.chunkDelayMs = 5; h.cdn.chunk = 4096
+        val (pl, expected) = plainStream(h, 16, 40_000)                                  // 640 000 bytes
+        val id = h.enqueue(pl, est = 1_000_000)                                          // a playlist's peak rate: 56 % too high
+        val mid = h.await(id, "a good part in") { it != null && it.state == DlState.RUNNING && it.done > expected.size * 4 / 10 }!!
+        val err = (mid.total - expected.size).toDouble() / expected.size
+        assertTrue("the figure was ${mid.total} for a file of ${expected.size} ($err)", Math.abs(err) < 0.1)
+        h.completed(id)
+    }
+
+    @Test(timeout = 60_000) fun theFigureFollowsSecondsOfVideoNotTheNumberOfParts() {
+        // 5 short parts then 5 long ones at the same rate: counting parts from the short ones would halve the size
+        val h = H(); h.cdn.chunkDelayMs = 25; h.cdn.chunk = 4096
+        val (pl, expected) = ratedStream(h, listOf(2, 2, 2, 2, 2, 6, 6, 6, 6, 6), 10_000)     // 40 s, 400 000 bytes
+        val id = h.enqueue(pl)
+        val early = h.await(id, "the first parts in") { it != null && it.state == DlState.RUNNING && it.done >= 40_000 && it.done < 90_000 }!!
+        val ratio = early.total.toDouble() / expected.size
+        assertTrue("after ${early.done} bytes the figure was ${early.total} of ${expected.size}", ratio in 0.9..1.1)
+        h.completed(id)
+    }
+
+    @Test(timeout = 60_000) fun theFinishedFileIsComparedWithWhatWasShown() {
+        val h = H(); h.cdn.chunkDelayMs = 1
+        val (pl, expected) = plainStream(h, 10, 40_000)
+        assertTrue(h.engine.sizeReport().contains("no stream download has finished"))
+        val id = h.enqueue(pl, est = 500_000)
+        h.completed(id)
+        val r = h.engine.sizeReport()
+        assertTrue(r, r.startsWith("#1 shown ") && r.contains("(+25%)") && expected.size == 400_000)
+        assertFalse("no name of any video in what is pasted around", r.contains("My clip"))
+    }
 }
