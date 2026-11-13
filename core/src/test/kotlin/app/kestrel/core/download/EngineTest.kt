@@ -595,7 +595,7 @@ class EngineTest {
         val v = h2.completed(k.id)
         val out = (sinks2.sinks[v.destUri] ?: sinks2.sinks.values.last()).bytes
         assertArrayEquals("the finished file is the source, with no hole of zeros", k.data, out.copyOf(k.data.size))
-        assertEquals("the first request of the new run starts at zero", 0L, s2.seen.first { it.from >= 0 }.from)
+        assertTrue("the new run starts from the beginning (a plain request, not a continuation at ${k.cursor})", s2.seen.first().from <= 0L)
     }
 
     private val page = "<!DOCTYPE html><html><head><title>Sign in</title></head><body>Your link expired.</body></html>".toByteArray()
