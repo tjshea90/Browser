@@ -300,6 +300,19 @@ open class BrowserActivity : Activity(), DockListener {
         UpdateManager.maybeAutoCheck(this, prefs.autoUpdateCheck, NetworkMonitor.state != NetworkMonitor.State.OFFLINE) // NO_INTERNET is only a guess (a hotspot can fail Android's connectivity probe and still work): try
         Io.main.postDelayed({ maybeShowUpdateNotice() }, 2500) // news the background look found while the app was closed
         Io.main.postDelayed({ maybeRefreshLists() }, 90_000)   // well after start-up: the page the owner opened first comes first
+        Io.main.removeCallbacks(tidyRunnable); Io.main.postDelayed(tidyRunnable, 25_000) // AO4: old update files, stale cache, closed tabs' pictures; due about once a day and after an update
+    }
+
+    private val tidyRunnable = Runnable { runStorageTidy(false) }
+
+    /** AO4: the storage tidy. Off the UI thread; [force] = the Settings button (always runs, and answers with what it did). */
+    private fun runStorageTidy(force: Boolean) {
+        val c = applicationContext
+        val ids: Set<Long>? = if (sessionRestored) tabs.map { it.id }.toSet() else null // an incomplete tab list would make live tabs look closed
+        Io.exec {
+            val text = app.kestrel.browser.diag.StorageTidy.runIfDue(c, ids, force)
+            if (force) Io.main.post { toast(text?.let { "Storage tidy: $it" } ?: "A tidy is already running") }
+        }
     }
 
     private var listRefreshStarted = false
