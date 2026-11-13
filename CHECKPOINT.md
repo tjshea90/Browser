@@ -1,21 +1,22 @@
-# CHECKPOINT 1409 — read me first, then TASKS.md
+# CHECKPOINT 1410 — read me first, then TASKS.md
 
-**Written:** 2026-11-13T02:49:17Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `ab7af60` (this checkpoint is the commit after it)
+**Written:** 2026-11-13T02:56:29Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `9b93232` (this checkpoint is the commit after it)
 
 ## Just done
-Owner message 18 (video audit + research + implement) written into TASKS as AE1 (AE1a audit, AE1b stuck loading symbol, AE1c choppy video, AE1d research+implement, AE1e ship alpha27)
+AE1 research phase done (evidence in summary); re-oriented after compaction; now writing research/VIDEO_AUDIT.md then code
 
 ## Do this next
-Read geckoapp/src/main/assets/gecko-prefs.txt, GeckoEngine media/animation prefs (ui.prefersReducedMotion, image.animation_mode, media.*), extension content.js/guard-main.js/embed code touching <video>, TabDelegates onFullScreen/media; then research (WebSearch) Gecko Android MediaCodec/WebRender on Mali-G52/MT8168 and H.264-vs-VP9 selection; write research/VIDEO_AUDIT.md; implement Diagnostics > Video lab + MediaCodecList/GL probe + fixes
+1) read TabDelegates onContentPermissionRequest (autoplay/DRM denial = new top suspect for the stuck spinner: muted autoplay blocked -> player waits for 'playing'); 2) write research/VIDEO_AUDIT.md; 3) gecko-prefs v7 (animation prefs -> Settings switch), autoplay inaudible allow, DRM ask; 4) DeviceVideo probe + Diagnostics Video section + labs/video.html; 5) ship alpha27 (code 126)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M TASKS.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  9b93232 ckpt 1409: Owner message 18 (video audit + research + implement) written into TASKS as A
   b79c4dd ckpt 1406: alpha26 SHIPPED and RECORDED: kestrel-g-v0.3.0-alpha26 (gecko code 125), run 
   5e34d92 ckpt 1404: alpha26 (code 125) gated + pushed (ckpt 1403) and DISPATCHED: android.yml run
   33c7277 ckpt 1403: gated kestrel-g-v0.3.0-alpha26 (gecko code 125) and pushed it: handoff self-t
@@ -25,8 +26,4 @@ Read geckoapp/src/main/assets/gecko-prefs.txt, GeckoEngine media/animation prefs
   7919d0f ckpt 1373: AD1b-1 download manager DONE in core + UI wiring: Start now / Move up / Move 
   7b80ff7 ckpt 1365: AD1a-1 DONE: link warm-up triggers (finger down + top three search results) i
   ac0f553 ckpt 1353: Owner message 17 written into TASKS as AD1 (AD1a review rows, AD1b earlier AA
-  16fc889 ckpt 1350: alpha25 SHIPPED and RECORDED: kestrel-g-v0.3.0-alpha25 (gecko code 124), run 
 ```
-
-(2 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
