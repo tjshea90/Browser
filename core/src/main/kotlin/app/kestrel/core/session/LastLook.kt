@@ -57,6 +57,8 @@ object LastLookRules {
     const val CAP_MS = 20_000
     /** A new picture is taken at most this often while reading, 700 ms after the last scroll; leaving the page asks for one if the last is older than [LEAVE_MIN_AGE_MS]. */
     const val SETTLE_MS = 700
+    /** The page's own scroll report waits this long after the last scroll before it is sent (content.js). */
+    const val PAGE_DEBOUNCE_MS = 300
     const val MIN_GAP_MS = 4000
     const val LEAVE_MIN_AGE_MS = 1500
     const val AFTER_STOP_MS = 1500

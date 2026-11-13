@@ -149,10 +149,7 @@ open class BrowserActivity : Activity(), DockListener {
     private var lookStopped = false                 // the live page's load ended
     @Volatile private var lookCapturing = false
     private var lastLookAt = 0L                     // uptime ms of the last capture
-    @Volatile private var lookScrollAt = 0L
-    @Volatile private var scrolledTab: Tab? = null
-    private val lookScrollKick = java.util.concurrent.atomic.AtomicBoolean(false)
-    private val lookScrollRun = Runnable { lookScrollKick.set(false); lookScrolledOnUi() }
+    private var lookScrollAt = 0L
     private var lookScrollArmed = false
     private val lookCheckTick = Runnable { lookCheck("tick") }
     private val lookNoteShow = Runnable { if (lookTab != null) restoreOverlay.setLookNote("Saved view - still loading") }
@@ -629,7 +626,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     /** A new page began in [tab]: what the old page offered to save is no longer on offer (TabDelegates.onPageStart). */
-    internal fun pageStarted(tab: Tab) { video.clearTab(tab) }
+    internal fun pageStarted(tab: Tab) { video.clearTab(tab); tab.scrollY = 0 }
 
     internal fun newTabAndShow(privateTab: Boolean = false): Tab { val t = newTabInternal(null, privateTab); show(t); focusUrlBar(); return t }
 
@@ -2008,20 +2005,17 @@ open class BrowserActivity : Activity(), DockListener {
         if (painted) { Io.main.removeCallbacks(lookCheckTick); Io.main.postDelayed(lookCheckTick, maxOf(50L, LastLookRules.AFTER_PAINT_MS - since)) } // the engine may paint before it has scrolled: look again at the latest 1500 ms after the paint
     }
 
-    /** The page's scroll place changed (the engine's compositor thread, up to once per frame): two field writes and at most one pending hop to the UI thread, however many frames come. */
+    /**
+     * The page (top frame) says where it is scrolled (UI thread; the page sends it 300 ms after its last scroll and once after its load, so a place the engine restored by itself is reported too). While a look is
+     * up this is the live page moving to its place; otherwise it arms the "settled" capture (700 ms after the last scroll in all).
+     */
     private fun lookScrolled(tab: Tab, y: Int) {
         tab.scrollY = y
-        scrolledTab = tab; lookScrollAt = SystemClock.uptimeMillis()
-        if (lookScrollKick.compareAndSet(false, true)) Io.main.post(lookScrollRun)
-    }
-
-    /** UI thread. While a look is up this is the live page moving to its place; otherwise it arms the "settled" capture (700 ms after the last scroll). */
-    private fun lookScrolledOnUi() {
-        val tab = scrolledTab ?: return
         if (tab !== current) return
         if (lookTab === tab) { lookCheck("scroll"); return }
         if (!prefs.lastLook) return
-        if (!lookScrollArmed) { lookScrollArmed = true; Io.main.postDelayed(lookScrollTimer, LastLookRules.SETTLE_MS.toLong()) }
+        lookScrollAt = SystemClock.uptimeMillis() - LastLookRules.PAGE_DEBOUNCE_MS
+        if (!lookScrollArmed) { lookScrollArmed = true; Io.main.postDelayed(lookScrollTimer, (LastLookRules.SETTLE_MS - LastLookRules.PAGE_DEBOUNCE_MS).toLong()) }
     }
 
     /**
