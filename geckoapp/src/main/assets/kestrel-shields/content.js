@@ -228,3 +228,73 @@
   } catch (e) { /* never break the page */ }
 })();
 
+
+// EX-15 (research/REVIEW-EXTERNAL-1.md 4.2): a head start for the NEXT page. Gecko closes its idle connections when the app goes to the background and opens a connection only when a link is tapped, so a
+// tap pays DNS + TCP + TLS (2-3 round trips, a second on the hotspot) before the first byte. Two triggers tell the app which origin the owner is likely to open next; the app opens the connection through the
+// engine's own speculative-connect (principal = the target, so the navigation can reuse it). Never an injected <link rel=preconnect> (it would be partitioned under THIS page).
+//  1. finger down on a cross-site https link (the touch lasts about 100 ms before the tap fires),
+//  2. on a search engine's result page, once at idle: the first three results.
+// Limits here: top frame only, https only, another origin than the page, once per origin, 4 touches and 3 results per page. The app adds: the Warm-up switch, never a private tab, Data saver, once per
+// origin per 30 s. A page cannot cause any of this (only trusted touches count) and learns nothing from it.
+(function () {
+  try {
+    if (window.top !== window || !window.URL) return;
+    var sent = {}, touches = 0, results = 0;
+    function originOf(href) {
+      try {
+        var u = new URL(href, location.href);
+        if (u.protocol !== 'https:' || u.username || u.password || u.origin === location.origin || !u.hostname) return '';
+        return u.origin + '/';
+      } catch (e) { return ''; }
+    }
+    function warm(o, kind) {
+      if (!o || sent[o]) return false;
+      sent[o] = 1;
+      browser.runtime.sendMessage({ k: 'warm', o: o, p: location.href, w: kind }).catch(function () {});
+      return true;
+    }
+    window.addEventListener('touchstart', function (e) {
+      try {
+        if (!e.isTrusted || touches >= 4) return;
+        var t = e.target, hops = 0;
+        while (t && hops++ < 8 && !(t.nodeType === 1 && t.tagName === 'A')) t = t.parentNode;
+        if (!t || t.nodeType !== 1) return;
+        var h = t.getAttribute('href');
+        if (!h || h.charAt(0) === '#') return;
+        if (warm(originOf(h), 'touch')) touches++;
+      } catch (x) { /* never break the page */ }
+    }, { capture: true, passive: true });
+
+    // 2. search results. The page must look like a result page of a search engine (host + a query), the links are the ones a person would tap: an https link with a heading inside it (or around it),
+    // visible, to a site that is not the engine itself or one of its ad redirectors. The first three different origins in page order.
+    var ENGINE = /^(?:[a-z0-9-]+\.)*(?:google\.[a-z.]+|bing\.com|duckduckgo\.com|search\.brave\.com|startpage\.com|ecosia\.org|search\.yahoo\.com|yandex\.[a-z.]+|qwant\.com|kagi\.com)$/;
+    var OWN = /(?:^|\.)(?:google|gstatic|googleadservices|googlesyndication|googleusercontent|doubleclick|bing|msn|microsoft|duckduckgo|yahoo|yimg|brave|startpage|ecosia|yandex|qwant|kagi)\.[a-z.]+$/;
+    function isResultPage() {
+      return ENGINE.test(location.hostname) && /[?&](?:q|p|query|text)=/.test(location.search + (location.hash || '')) && location.pathname.indexOf('/maps') !== 0;
+    }
+    function scanResults() {
+      try {
+        if (results >= 3 || !isResultPage()) return;
+        var list = document.querySelectorAll('a[href^="https:"]');
+        for (var i = 0; i < list.length && i < 400 && results < 3; i++) {
+          var a = list[i];
+          var h = a.getAttribute('href');
+          var o = originOf(h);
+          if (!o) continue;
+          var host = o.slice(8, -1).replace(/:\d+$/, '');
+          if (OWN.test(host)) continue;
+          var head = a.querySelector('h1,h2,h3,[role="heading"]') || (a.closest ? a.closest('h1,h2,h3,[role="heading"]') : null);
+          if (!head) continue;
+          var r = a.getBoundingClientRect();
+          if (r.width < 40 || r.height < 12) continue;
+          if (warm(o, 'result')) results++;
+        }
+      } catch (x) { /* never break the page */ }
+    }
+    function later(ms) { setTimeout(function () { if (window.requestIdleCallback) requestIdleCallback(scanResults, { timeout: 2000 }); else scanResults(); }, ms); }
+    if (isResultPage()) {
+      if (document.readyState === 'complete') later(300); else window.addEventListener('load', function () { later(300); });
+      later(2500); // results drawn by script after the load event
+    }
+  } catch (e) { /* never break the page */ }
+})();
