@@ -215,3 +215,78 @@ Research If any free, copyrighted or trademarked or proprietary codecs or engine
 ```
 On doraby.com, brave browser loaded the site fine, but kestrel doesn't show any photos or the search bar
 ```
+
+## 2026-11-13T03:59:23Z
+```
+Video lab
+cores: 4, pixel ratio 1.0714285714285714, screen 560x956, (Android 10; Mobile; rv:160.0) Gecko/160.0 Firefox/160.0
+
+1. Playing the clips
+H.264 720p 30 fps (2 Mbit/s)    mostly smooth start   307 ms,  24.8 fps, 0/150 dropped (0.0%), longest gap 64 ms, 1 gaps over 50 ms, waited 1x, picture 1280x720
+H.264 1080p 30 fps (4 Mbit/s)   mostly smooth start   365 ms,  24.8 fps, 0/150 dropped (0.0%), longest gap 57 ms, 1 gaps over 50 ms, waited 1x, picture 1920x1080
+VP9 720p 30 fps (1.5 Mbit/s)    mostly smooth start   359 ms,  24.8 fps, 0/150 dropped (0.0%), longest gap 51 ms, 1 gaps over 50 ms, waited 1x, picture 1280x720
+H.265 720p 30 fps (1.5 Mbit/s)  mostly smooth start   411 ms,  24.8 fps, 0/150 dropped (0.0%), longest gap 52 ms, 1 gaps over 50 ms, waited 1x, picture 1280x720
+
+Reading it: "smooth" = the tablet kept up. If H.264 is smooth and VP9 or H.265 is CHOPPY, those two are being decoded by the processor instead of the video chip;
+that is why the browser does not offer them to streaming sites (Settings > Video > Video formats offered to sites).
+If even H.264 is CHOPPY the problem is the tablet or the page, not the codec. If all clips here are smooth but a website's video stutters, the website's stream is probably more than the hotspot can carry (5 Mbit/s): pick a lower quality in its player.
+
+2. What the engine says
+format          <video>   streaming (MSE)
+H.264 baseline  probably  yes
+H.264 main      probably  yes
+H.264 high 4.0  probably  yes
+H.265 (HEVC)    probably  yes
+VP8             probably  yes
+VP9             probably  yes
+VP9 in MP4      probably  yes
+AV1             no        no
+AAC             probably  yes
+MP3             maybe     no
+Opus (WebM)     probably  yes
+Opus (Ogg)      probably  no
+Vorbis          probably  no
+FLAC            maybe     no
+AC-3            no        no
+E-AC-3          no        no
+WAV             maybe     no
+HLS playlist    maybe     no
+
+MediaSource: yes, MediaCapabilities: yes, requestVideoFrameCallback: yes, Picture-in-Picture: no, EME: yes
+
+3. Smoothness expected
+video          plays  smooth  hardware
+H.264 720p30   yes    yes     yes
+H.264 1080p30  yes    yes     yes
+H.264 1080p60  yes    yes     yes
+VP9 720p30     yes    yes     yes
+VP9 1080p30    yes    yes     yes
+H.265 1080p30  yes    yes     yes
+AV1 720p30     no     no      no
+
+smooth = the engine expects it to keep up; hardware = decoded by the tablet's video chip, not by the processor.
+
+4. Screen
+65.2 frames per second over 3 s (a 60 Hz screen can do 60), median gap 15.1 ms, longest gap 45 ms, 5 gaps over 25 ms, 0 over 50 ms
+
+5. JavaScript
+number crunching (1.5 million steps)   264 ms
+sort 40 thousand numbers              36 ms
+text: build, split, search            56 ms
+JSON of 10 thousand objects           54 ms
+typed array loop (4 million)          77 ms
+
+WebAssembly: basic support: yes, fast math (SIMD): no, bulk memory: yes, multi-value: yes, reference types: yes, sign extension: yes, threads (atomics): yes, tail calls: yes, shared memory between threads: no (sites need special headers for it)
+Language: optional chaining yes, ?? yes, BigInt yes, structuredClone yes, Array toSorted yes
+(For comparison: a recent phone does each of the first five lines in about 20 to 100 ms. This tablet is expected to be several times slower.)
+
+6. Graphics
+webgl2: yes, Mali-G51, or similar, biggest picture 8192 px
+webgl: yes, Mali-G51, or similar, biggest picture 8192 px
+(Firefox may hide the real graphics chip name from pages; Diagnostics shows it from the system.)
+
+7. DRM
+Widevine: available (com.widevine.alpha)
+
+cores: 4, pixel ratio 1.0714285714285714, screen 560x956, (Android 10; Mobile; rv:160.0) Gecko/160.0 Firefox/160.0
+```
