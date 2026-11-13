@@ -463,6 +463,21 @@ test('sniffer: a "maybe" is rare: not for pages, data, scripts, fonts, tiny or h
   assert.equal(h.of('maybe').length, 13);
 });
 
+test('scroll: the top frame\'s scroll place is handed to the app with the page address; a frame, a negative or odd number and a message from nowhere are not', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  h.message({ k: 'scroll', y: 1366, p: PAGE + '?x=1' }, 1, PAGE, 0);
+  h.message({ k: 'scroll', y: 700, p: PAGE }, 1, PAGE, 7);                  // an embedded frame
+  h.message({ k: 'scroll', y: -50, p: PAGE }, 1, PAGE, 0);                  // clamped to the top
+  h.message({ k: 'scroll', y: 'high', p: PAGE }, 1, PAGE, 0);
+  h.message({ k: 'scroll', y: Infinity, p: PAGE }, 1, PAGE, 0);
+  h.message({ k: 'scroll', y: 300, p: PAGE }, -1, PAGE, 0);                 // not from a tab
+  await tick(10);
+  const s = h.of('scroll');
+  assert.deepEqual(s.map((m) => m.y), [1366, 0]);
+  assert.equal(s[0].p, PAGE + '?x=1');
+});
+
 test('sniffer: the probe budget of a page that stays open is topped up four every twenty seconds (a single-page site swaps its content with no new page request), never above twelve', async () => {
   const h = harness(standardApp());
   h.mainFrame(PAGE);

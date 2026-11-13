@@ -258,6 +258,40 @@ const warms = (page) => page.evaluate(() => window.__msgs.filter((m) => m.k === 
 const idleNow = () => { window.requestIdleCallback = (f) => setTimeout(f, 20); };
 const row = (href, text) => `<a href="${href}" onclick="event.preventDefault()" style="display:block;height:50px">${text}</a>`; // a tap must not navigate: the next document would start with an empty message list
 
+// ---- EY-1: the page reports where it is scrolled, for the app's saved view of the page
+const scrollMsgs = (page) => page.evaluate(() => window.__msgs.filter((m) => m.k === 'scroll'));
+const tall = '<div style="height:6000px;width:100px">tall</div>';
+
+test('scroll: a scrolled page reports its place 300 ms after the last scroll, once, with its address', async () => {
+  const page = await open(tall);
+  await page.evaluate(() => window.scrollTo(0, 1200));
+  await page.waitForTimeout(450);
+  await page.evaluate(() => window.scrollTo(0, 1500)); await page.evaluate(() => window.scrollTo(0, 1800));
+  assert.equal((await scrollMsgs(page)).filter((m) => m.y === 1200).length, 1, 'the first place was reported once');
+  await page.waitForTimeout(450);
+  const m = await scrollMsgs(page);
+  assert.deepEqual(m.map((x) => x.y).filter((y) => y > 0), [1200, 1800], 'two quick scrolls give one report, with the last place');
+  assert.equal(m[m.length - 1].p, 'https://site.example/');
+});
+
+test('scroll: a page that scrolls itself after its load (a restored place) is reported, and the place after load is reported even when it is the top', async () => {
+  const page = await open(tall + '<script>window.addEventListener("load", function () { setTimeout(function () { window.scrollTo(0, 2400); }, 50); });</script>');
+  await page.waitForTimeout(1300);
+  const ys = (await scrollMsgs(page)).map((m) => m.y);
+  assert.ok(ys.includes(2400), 'the restored place arrived: ' + JSON.stringify(ys));
+  const quiet = await open('<p>short page</p>');
+  await quiet.waitForTimeout(1200);
+  assert.deepEqual((await scrollMsgs(quiet)).map((m) => m.y), [0], 'a page that never scrolls tells the app it is at the top, once');
+});
+
+test('scroll: only the top document reports; an embedded frame stays silent', async () => {
+  const page = await open('<iframe id="f" srcdoc="<div style=\'height:4000px\'>x</div>" style="width:200px;height:200px"></iframe>' + tall);
+  await page.waitForTimeout(300);
+  await page.evaluate(() => { document.getElementById('f').contentWindow.scrollTo(0, 900); });
+  await page.waitForTimeout(600);
+  assert.ok((await scrollMsgs(page)).every((m) => m.y === 0), 'the frame\'s scroll was not reported as the page\'s');
+});
+
 test('warm: a finger on a cross-site https link names the link\'s origin (once), the page is not asked anything else', async () => {
   const page = await open(row('https://other.example/a/b?x=1', 'one') + row('https://other.example/second', 'two') + row('https://third.example/', '<span id="deep">three</span>'), undefined, { touch: true });
   await page.touchscreen.tap(20, 20);   // first link
