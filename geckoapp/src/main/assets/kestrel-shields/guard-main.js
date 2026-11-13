@@ -26,6 +26,7 @@
 
   function note(kind, url) {
     try { document.dispatchEvent(new CustomEvent(POP_EVENT, { detail: kind + '|' + (url || '') })); } catch (e) { /* ignore */ }
+    if (kind !== 'tap') { refusedAt = Date.now(); scheduleAssist(); }
   }
 
   function hostOf(u) { try { return new URL(u, location.href).hostname.toLowerCase(); } catch (e) { return ''; } }
@@ -118,6 +119,7 @@
   function onTap(e) {
     var a = anchorOf(e.target);
     tap.t = Date.now(); tap.href = a ? a.href : '';
+    notePress(e);
   }
   function onClick(e) {
     var a = anchorOf(e.target);
@@ -134,7 +136,7 @@
       return;
     }
     onTap(e);
-    if (on && a && isOverlay(a)) { e.preventDefault(); e.stopImmediatePropagation(); note('overlay', absolute(a.href)); }
+    if (on && a && isOverlay(a)) { e.preventDefault(); e.stopImmediatePropagation(); try { a.style.setProperty('pointer-events', 'none', 'important'); } catch (x) { /* ignore */ } note('overlay', absolute(a.href)); }
   }
   window.addEventListener('click', onClick, true);
   window.addEventListener('auxclick', onClick, true);
@@ -151,6 +153,149 @@
       return realSubmit.apply(this, arguments);
     };
   } catch (e) { /* ignore */ }
+
+  // ---- AP1: one press plays the video. A press on a player that makes the page open an ad (refused above) usually never reached the player: a transparent layer or an ad script took it, and only a later press
+  // gets through ("I have to press play several times"). After a refusal that follows a real press on a player, this starts the player itself - the real video of this frame - and when there is no video yet,
+  // presses through the layer that took the press, at the same place. At most three rounds, stopped by any playback; never for a press that was not on a player, and never for a press made while the video was
+  // playing (that one was a pause). A player in a frame is told by message (the frame's own copy of this script plays it). Nothing here opens, loads or navigates anything.
+  var ASSIST_MAX = 3, ASSIST_DELAY = 200, ASSIST_WINDOW = 2000, ASSIST_TAG = '__kst_assist_v1|';
+  var PLAYERISH = /(^|[\s_-])(player|jwplayer|video-js|vjs|plyr|flowplayer|mejs|videoplayer|video-player|embed-player)([\s_-]|$)/i;
+  var press = { t: 0, x: -1, y: -1, playing: false, player: null, target: null };
+  var assist = { n: 0, timer: 0, last: 0 };
+  var refusedAt = 0;
+
+  function playingNow() {
+    try {
+      var l = document.getElementsByTagName('video');
+      for (var i = 0; i < l.length; i++) { var v = l[i]; if (!v.paused && !v.ended && v.readyState > 2 && v.currentTime > 0) return true; }
+    } catch (e) { /* ignore */ }
+    return false;
+  }
+  function pointOf(e) {
+    try {
+      var t = e.changedTouches && e.changedTouches[0];
+      var x = t ? t.clientX : e.clientX, y = t ? t.clientY : e.clientY;
+      return (typeof x === 'number' && typeof y === 'number') ? { x: x, y: y } : null;
+    } catch (x2) { return null; }
+  }
+  // the player under a point: a <video>, a frame or canvas of player size, or a container that calls itself a player. Looked for under whatever layer lies on top of it.
+  function playerAt(x, y) {
+    try {
+      var list = document.elementsFromPoint ? document.elementsFromPoint(x, y) : [document.elementFromPoint(x, y)];
+      for (var i = 0; i < list.length && i < 14; i++) {
+        for (var n = list[i], d = 0; n && n !== document.body && n !== document.documentElement && d < 6; n = n.parentElement, d++) {
+          var tag = n.tagName;
+          if (tag === 'VIDEO') return n;
+          var named = typeof n.className === 'string' && PLAYERISH.test(n.className + ' ' + (n.id || ''));
+          if (tag === 'IFRAME' || tag === 'CANVAS' || named) { var r = n.getBoundingClientRect(); if (r.width >= 120 && r.height >= 80) return n; }
+        }
+      }
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+  function videoIn(root) {
+    try {
+      if (!root) return null;
+      if (root.tagName === 'VIDEO') return root;
+      return root.querySelector ? root.querySelector('video') : null;
+    } catch (e) { return null; }
+  }
+  function bestVideo() {
+    var best = null, area = 0;
+    try {
+      var l = document.getElementsByTagName('video');
+      for (var i = 0; i < l.length; i++) {
+        var r = l[i].getBoundingClientRect();
+        var w = Math.min(r.right, innerWidth) - Math.max(r.left, 0), h = Math.min(r.bottom, innerHeight) - Math.max(r.top, 0);
+        if (w >= 120 && h >= 80 && w * h > area) { area = w * h; best = l[i]; }
+      }
+    } catch (e) { /* ignore */ }
+    return best;
+  }
+  function notePress(e) {
+    var now = Date.now(), pt = pointOf(e);
+    if (now - press.t > 400) { // the first event of a press (touchend, pointerup, click all come): what the page looked like BEFORE any handler ran
+      press = { t: now, x: pt ? pt.x : -1, y: pt ? pt.y : -1, playing: playingNow(), player: pt ? playerAt(pt.x, pt.y) : null, target: e.target };
+      if (now - assist.last > 4000) assist.n = 0;
+    } else { press.t = now; if (pt && press.x < 0) { press.x = pt.x; press.y = pt.y; } }
+    if (now - refusedAt < 800) scheduleAssist(); // the ad was opened by an earlier event of this same press (a mousedown handler)
+  }
+  function scheduleAssist() {
+    if (!on || assist.timer || assist.n >= ASSIST_MAX) return;
+    if (!press.t || !press.player || press.playing || Date.now() - press.t > ASSIST_WINDOW) return;
+    assist.timer = setTimeout(runAssist, ASSIST_DELAY);
+  }
+  function startMedia(v, viaFrame) {
+    try {
+      var p = v.play();
+      // a frame that was not pressed itself may be refused sound: start it muted rather than not at all
+      if (p && p.catch) p.catch(function () { if (!viaFrame) return; try { v.muted = true; var q = v.play(); if (q && q.catch) q.catch(function () { /* ignore */ }); } catch (e) { /* ignore */ } });
+    } catch (e) { /* ignore */ }
+  }
+  // a layer that took the press: positioned, not the player or something that holds it, not a control, no words of its own
+  function isLayer(el, root) {
+    try {
+      if (!el || /^(VIDEO|IFRAME|CANVAS|BUTTON|INPUT|SELECT|TEXTAREA|HTML|BODY|A)$/.test(el.tagName)) return false;
+      if (root && (el === root || el.contains(root))) return false;
+      if (el.querySelector && el.querySelector('video, iframe, canvas')) return false;
+      var pos = getComputedStyle(el).position;
+      if (pos !== 'fixed' && pos !== 'absolute') return false;
+      if ((el.textContent || '').trim().length > 24) return false;
+      return true;
+    } catch (e) { return false; }
+  }
+  // press through at a point: the pointer events of a press, to what lies beneath (a layer on top is switched off for a moment so it does not take the press again)
+  function pressThrough(x, y, layer) {
+    try {
+      if (x < 0 || y < 0) return;
+      var off = null;
+      if (layer && layer.isConnected && isLayer(layer, null)) { off = layer; off.style.setProperty('pointer-events', 'none', 'important'); }
+      var el = document.elementFromPoint(x, y);
+      var a = el ? anchorOf(el) : null;
+      if (el && el !== document.body && el !== document.documentElement && !(a && (crossSiteLink(a) || opensWindow(a)))) {
+        var init = { bubbles: true, cancelable: true, composed: true, view: window, clientX: x, clientY: y, button: 0, buttons: 1 };
+        var seq = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
+        for (var i = 0; i < seq.length; i++) {
+          var type = seq[i];
+          var ev = (type.indexOf('pointer') === 0 && window.PointerEvent) ? new PointerEvent(type, init) : new MouseEvent(type, init);
+          el.dispatchEvent(ev);
+        }
+      }
+      if (off) setTimeout(function () { try { off.style.removeProperty('pointer-events'); } catch (e) { /* ignore */ } }, 1500);
+    } catch (e) { /* ignore */ }
+  }
+  function tellFrame(f) {
+    try {
+      var r = f.getBoundingClientRect();
+      f.contentWindow.postMessage(ASSIST_TAG + Math.round(press.x - r.left) + '|' + Math.round(press.y - r.top), '*');
+    } catch (e) { /* ignore */ }
+  }
+  function runAssist() {
+    assist.timer = 0;
+    if (!on || playingNow()) return;
+    assist.n++; assist.last = Date.now();
+    var root = playerAt(press.x, press.y) || (press.player && press.player.isConnected ? press.player : null);
+    var v = videoIn(root) || bestVideo();
+    if (v) { if (v.paused && !v.ended) startMedia(v, false); return; }
+    if (root && root.tagName === 'IFRAME') {
+      tellFrame(root);
+      try { if (press.target && isLayer(press.target, root)) { var t = press.target; t.style.setProperty('pointer-events', 'none', 'important'); setTimeout(function () { try { t.style.removeProperty('pointer-events'); } catch (e) { /* ignore */ } }, 1500); } } catch (e) { /* ignore */ }
+      return;
+    }
+    pressThrough(press.x, press.y, press.target);
+  }
+  // any playback ends the rounds
+  document.addEventListener('play', function () { assist.n = 0; if (assist.timer) { clearTimeout(assist.timer); assist.timer = 0; } }, true);
+  // a player frame is told by its parent where the press was
+  window.addEventListener('message', function (e) {
+    try {
+      if (!on || e.source !== window.parent || typeof e.data !== 'string' || e.data.indexOf(ASSIST_TAG) !== 0 || playingNow()) return;
+      var p = e.data.slice(ASSIST_TAG.length).split('|'), x = parseInt(p[0], 10), y = parseInt(p[1], 10);
+      var v = bestVideo();
+      if (v) { if (v.paused && !v.ended) startMedia(v, true); return; }
+      if (x >= 0 && y >= 0) pressThrough(x, y, null);
+    } catch (x2) { /* ignore */ }
+  }, false);
 
   // ---- the content script tells us whether the guard applies here
   document.addEventListener(CFG_EVENT, function (e) {
