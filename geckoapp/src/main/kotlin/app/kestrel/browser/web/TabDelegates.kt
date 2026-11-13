@@ -253,7 +253,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
     }
 
     override fun onPopupPrompt(session: GeckoSession, prompt: PromptDelegate.PopupPrompt): GeckoResult<PromptDelegate.PromptResponse>? {
-        a.toast("Pop-up blocked")
+        a.onPopupBlocked(tab.url, "open", prompt.targetUri ?: "") // AR1: the small icon, not a toast (and the page is counted with the other blocked pop-ups)
         return GeckoResult.fromValue(prompt.confirm(deny))
     }
 

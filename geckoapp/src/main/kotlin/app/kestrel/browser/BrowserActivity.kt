@@ -138,7 +138,16 @@ open class BrowserActivity : Activity(), DockListener {
     private lateinit var home: HomeView
     private lateinit var errorView: ErrorView
     private lateinit var pullChip: PullChip // the pull-down-to-refresh indicator, over the page
-    private lateinit var noticeBar: app.kestrel.browser.ui.NoticeBar // "Blocked a pop-up ... Open", over the bottom of the page
+    private lateinit var blockedChip: app.kestrel.browser.ui.BlockedChip // AR1: a page was blocked: one very small icon at the bottom middle for one second; a press opens the page in a new tab
+    private lateinit var miniNav: app.kestrel.browser.ui.MiniNav          // AR2: the one-hand navigation panel (Back, Home, Forward, an address bar with its own keyboard) at the top right
+
+    private val miniNavListener = object : app.kestrel.browser.ui.MiniNav.Listener {
+        override fun navBack() { val t = current; if (t != null && (t.canGoBack || !t.isNewTab || t.showHome || t.parentId != 0L)) handleBack() } // never sends the whole app to the background from this small panel
+        override fun navHome() { if (!homeShown()) onHome() }
+        override fun navForward() { current?.let { goForward(it) } }
+        override fun navSubmit(text: String) { current?.let { navigate(it, text) } }
+        override fun navOpenChanged(open: Boolean) { prefs.miniNavOpen = open }
+    }
     private lateinit var restoreOverlay: RestoreOverlay // over the page view while a page whose engine process died comes back (last preview instead of white)
     private var restoringTab: Tab? = null
     // ---- the last look (EY-1, research/REVIEW-EXTERNAL-2.md section 3.3): the page as it was left, sharp, in the first frame of a start while the live page loads under it. It rides on the restoring cover
@@ -483,8 +492,6 @@ open class BrowserActivity : Activity(), DockListener {
         content.addView(restoreOverlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) // above the page, below Home / error screens
         pullChip = PullChip(this, pal)
         content.addView(pullChip, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
-        noticeBar = app.kestrel.browser.ui.NoticeBar(this)
-        content.addView(noticeBar, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(12); leftMargin = dp(12); rightMargin = dp(12) })
         geckoView.pull = pullListener
         geckoView.pullEnabled = {
             val t = current
@@ -503,6 +510,13 @@ open class BrowserActivity : Activity(), DockListener {
         content.addView(errorView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         home.visibility = View.GONE
         errorView.visibility = View.GONE
+        // above Home and the error screens (so they show there too), below the find bar, sheets and every full screen
+        blockedChip = app.kestrel.browser.ui.BlockedChip(this)
+        content.addView(blockedChip, FrameLayout.LayoutParams(dp(app.kestrel.browser.ui.BlockedChip.TOUCH_DP), dp(app.kestrel.browser.ui.BlockedChip.TOUCH_DP), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(6) })
+        miniNav = app.kestrel.browser.ui.MiniNav(this, pal, miniNavListener)
+        content.addView(miniNav, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply { topMargin = dp(4); rightMargin = dp(6) })
+        miniNav.available = prefs.miniNavToggle
+        miniNav.setOpen(prefs.miniNavOpen, animate = false, notify = false)
         findBar = FindBar(this, pal, object : FindBar.Listener {
             override fun query(q: String) { findIn(q, false) }
             override fun next(forward: Boolean) { findIn(findBar.input.text.toString(), !forward) }
@@ -671,7 +685,7 @@ open class BrowserActivity : Activity(), DockListener {
         skinPrivate = priv
         GeckoEngine.setFrontPrivate(priv, prefs) // the link look-ups of the Network lab pause while a private tab is in front
         pal = if (priv) palPrivate else palRegular
-        dock.applyPal(pal); home.applyPal(pal); suggestions.setPal(pal); sheet.applyPal(pal); progress.setColors(pal.accent, pal.accentHi); restoreOverlay.setPal(pal); pullChip.setPal(pal)
+        dock.applyPal(pal); home.applyPal(pal); miniNav.applyPal(pal); suggestions.setPal(pal); sheet.applyPal(pal); progress.setColors(pal.accent, pal.accentHi); restoreOverlay.setPal(pal); pullChip.setPal(pal)
         @Suppress("DEPRECATION") run {
             window.statusBarColor = if (priv) pal.chromeBg else pal.windowBg
             window.navigationBarColor = pal.chromeBg
@@ -1655,6 +1669,7 @@ open class BrowserActivity : Activity(), DockListener {
         override fun prefsChanged() {
             for (t in tabs) { t.shields = Shields.effective(prefs, t.topHost); syncEngineProtection(t) }
             GeckoEngine.applyPrefs(applicationContext)
+            miniNav.available = prefs.miniNavToggle && !fullscreenOn
             app.kestrel.browser.net.WifiBoost.set(this@BrowserActivity, prefs.labWifiBoost) // the Network lab switch takes effect at once (the browser is on screen: this is its Settings)
             app.kestrel.browser.download.PageProxy.refresh()                                // "Keep the phone helper under Fast Wi-Fi" may have changed what applies
             Io.exec { UpdateJob.schedule(applicationContext) } // the update schedule may have changed
@@ -1805,6 +1820,7 @@ open class BrowserActivity : Activity(), DockListener {
         val canBack = t?.canGoBack == true || (t != null && t.parentId != 0L && tabs.any { it.id == t.parentId })
         val priv = t?.isPrivateTab == true
         dock.bind(t, tabs.count { it.isPrivateTab == priv }, canBack || (t != null && (!t.isNewTab || t.showHome)), homeShown(t))
+        miniNav.sync(canBack || (t != null && (!t.isNewTab || t.showHome)), t?.canGoForward == true, homeShown(t), if (t == null || homeShown(t) || !t.url.startsWith("http")) "" else t.url)
         val p = if (t?.loading == true) t.progress else 0
         if (progress.progress != p) progress.progress = p
         updateNeonBusy()
@@ -1876,12 +1892,9 @@ open class BrowserActivity : Activity(), DockListener {
         shieldCountChanged(tab)
         Health.count("guard.$kind")
         if (tab !== current) return
-        val host = UrlParts.hostOf(url) ?: url.take(40)
-        val what = if (kind == "redirect") "Stopped a jump to $host" else "Blocked a pop-up ($host)"
-        val canOpen = url.startsWith("http://") || url.startsWith("https://")
-        noticeBar.show(pal, what, if (canOpen) "Open" else null, 7000L) {
-            if (kind == "redirect") loadInTab(tab, url) else { val t = newTabInternal(tab, tab.isPrivateTab); show(t); navigate(t, url) }
-        }
+        // AR1: one very small icon at the bottom middle for one second (a second block keeps it and the newest address wins); a press opens the blocked address in a NEW tab, nothing asked.
+        // A forced redirect is opened the same way: the page the owner is on stays where it is.
+        blockedChip.show(pal, url) { link -> val t = newTabInternal(tab, tab.isPrivateTab); show(t); navigate(t, link) }
     }
 
     /**
@@ -2107,6 +2120,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** @return true if the back press did something. */
     private fun handleBack(): Boolean {
+        if (::miniNav.isInitialized && miniNav.onBackPressed()) return true // the small keyboard closes first
         if (sheet.isShowing) { sheet.dismiss(); return true }
         if (downloadsView?.parent != null) { closeDownloads(); return true }
         if (diagView?.parent != null) { closeDiagnostics(); return true }
@@ -2152,6 +2166,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     internal fun fullScreenChanged(on: Boolean) {
         fullscreenOn = on
+        miniNav.available = !on && prefs.miniNavToggle
         dock.visibility = if (on) View.GONE else View.VISIBLE
         progress.visibility = if (on) View.GONE else View.VISIBLE
         applyImmersive(on)
