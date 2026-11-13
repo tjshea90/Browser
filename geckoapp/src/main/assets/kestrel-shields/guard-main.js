@@ -83,7 +83,9 @@
     } catch (e) { return false; }
   }
 
+  var inAssist = false;          // true while the guard repeats a press itself (AP1): nothing opened by a repeated press is the owner's doing
   function allowOpen(u) {
+    if (inAssist) return false;
     if (!fresh()) return false;                         // no real tap just now: timers, page load, background code
     var abs = absolute(u);
     if (!abs || abs.indexOf('http') !== 0) return false; // about:blank pop-unders, javascript:, data:
@@ -258,11 +260,14 @@
       if (el && el !== document.body && el !== document.documentElement && !(a && (crossSiteLink(a) || opensWindow(a)))) {
         var init = { bubbles: true, cancelable: true, composed: true, view: window, clientX: x, clientY: y, button: 0, buttons: 1 };
         var seq = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
-        for (var i = 0; i < seq.length; i++) {
-          var type = seq[i];
-          var ev = (type.indexOf('pointer') === 0 && window.PointerEvent) ? new PointerEvent(type, init) : new MouseEvent(type, init);
-          el.dispatchEvent(ev);
-        }
+        inAssist = true;
+        try {
+          for (var i = 0; i < seq.length; i++) {
+            var type = seq[i];
+            var ev = (type.indexOf('pointer') === 0 && window.PointerEvent) ? new PointerEvent(type, init) : new MouseEvent(type, init);
+            el.dispatchEvent(ev);
+          }
+        } finally { inAssist = false; }
       }
       if (off) setTimeout(function () { try { off.style.removeProperty('pointer-events'); } catch (e) { /* ignore */ } }, 1500);
     } catch (e) { /* ignore */ }

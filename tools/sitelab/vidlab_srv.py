@@ -118,7 +118,7 @@ document.addEventListener('click', function (e) { if (e.isTrusted) { presses++; 
 document.getElementById('realplay').addEventListener('click', function () { v.play(); });
 ['f1', 'f2'].forEach(function (id) {
   var el = document.getElementById(id);
-  el.addEventListener('click', function () { fired++; show(); window.open('http://10.0.2.2:8000/ad?l=' + id, '_blank'); el.remove(); });
+  el.addEventListener('click', function () { fired++; show(); window.open('http://10.0.2.3:8000/ad?l=' + id, '_blank'); window.__opens = (window.__opens || 0) + 1; el.remove(); });
 });
 var realPlay = v.play.bind(v), playCalls = 0, lastResult = '-';
 v.play = function () { playCalls++; var r = realPlay(); if (r && r.then) r.then(function () { lastResult = 'ok'; info(); }, function (e) { lastResult = 'rejected ' + (e && e.name); info(); }); return r; };

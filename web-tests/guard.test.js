@@ -342,3 +342,18 @@ test('AP1: a player that builds its video only after the first press (no source 
   assert.equal(await plays(page), 0, 'a video without a source is not asked to play');
   assert.equal(await real(page), 1, 'the press reached the real play control');
 });
+
+test('AP1: a window that a repeated press makes a layer open is refused even when it is of the same site (the owner did not press that)', async () => {
+  const sameSiteLayer = `<div id="fake2" style="position:absolute;left:0;top:0;right:0;bottom:0"></div><script>document.getElementById('fake2').addEventListener('click', function () { window.open('https://movie.example/promo'); this.remove(); });</script>`;
+  const page = await open(PLAYER_WITH_LAYERS(LAYER('fake1', true) + sameSiteLayer));
+  // the layer on top is the same-site one: the owner's own press may open a page of the same site (allowed, as always)
+  await page.mouse.click(100, 100);
+  await settle(1100);
+  assert.equal(page.popups.length, 1, 'the owner\'s press opened the same-site page');
+  // second case: the cross-site layer is on top, the same-site one below it
+  const page2 = await open(PLAYER_WITH_LAYERS(sameSiteLayer + LAYER('fake1', true)));
+  await page2.mouse.click(100, 100);
+  await settle(1300);
+  assert.equal(page2.popups.length, 0, 'the repeated press made the same-site layer open a window: refused');
+  assert.deepEqual((await notes(page2)).slice(0, 2), ['open|' + AD, 'open|https://movie.example/promo']);
+});
