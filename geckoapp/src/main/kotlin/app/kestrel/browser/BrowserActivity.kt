@@ -363,6 +363,7 @@ open class BrowserActivity : Activity(), DockListener {
         kbProbe.detach()
         NetworkMonitor.removeListener(netListener)
         Io.main.removeCallbacks(saveRunnable)
+        Io.main.removeCallbacks(lookScrollTimer); Io.main.removeCallbacks(lookCheckTick); Io.main.removeCallbacks(lookNoteShow)
         for (t in tabs) { try { t.session?.close() } catch (e: Exception) { /* already gone */ }; t.session = null }
         super.onDestroy()
         if (!isChangingConfigurations) { ProcessLife.uiAlive = false; ProcessLife.uiVisible = false; ProcessLife.maybeExit() } // swiped away: leave unless a download is still running
