@@ -271,29 +271,41 @@ object GeckoEngine {
     @Volatile var videoPolicyText: String = "Video: (not applied yet)"
 
     /**
+     * The engine's preference calls (setGeckoPref / clearGeckoUserPref) send their message and THEN call `.map` on a GeckoResult, which needs a thread with a Looper: on the IO pool they throw
+     * "Must have a Handler" after the first preference. alpha27 applied the video rule from the IO pool (right after the decoder probe), so only its first preference arrived and
+     * Diagnostics kept saying "decoders unknown" (seen on the owner's tablet). Anything that sets engine prefs from another thread comes through here: true = it was handed to the main thread.
+     */
+    private fun hopToMain(block: () -> Unit): Boolean {
+        if (android.os.Looper.myLooper() === android.os.Looper.getMainLooper()) return false
+        Io.main.post(block)
+        return true
+    }
+
+    /**
      * Video and page animation (research/VIDEO_AUDIT.md, owner message 18), all on the USER branch so "no opinion" is a real "clear" that gives the engine's own value back:
      *  - the codec rule (core/media/VideoPolicy): `media.mediasource.vp9.enabled`, `media.av1.enabled`, `media.hevc.enabled` say which codecs a site is OFFERED (a codec the tablet would decode in software is not);
      *  - "Calm pages": `ui.prefersReducedMotion` = 1 and `image.animation_mode` = "once" only while the switch is on (they were fixed on for every site until alpha26, which can leave a site's loading symbol frozen).
-     * Live prefs: they apply to the next media query / the next page without a restart.
+     * Live prefs: they apply to the next media query / the next page without a restart. Main thread only (see [hopToMain]); the Diagnostics text is written FIRST and each preference
+     * has its own try, so one refusal can neither hide the decision nor stop the others.
      */
     fun applyVideo(ctx: Context, prefs: Prefs) {
+        if (hopToMain { applyVideo(ctx, prefs) }) return
         val u = org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_USER
         val hw = DeviceVideo.hardware(ctx)
         val d = app.kestrel.core.media.VideoPolicy.decide(prefs.videoCodecs, hw)
-        fun tri(name: String, v: Boolean?) { if (v == null) org.mozilla.geckoview.GeckoPreferenceController.clearGeckoUserPref(name) else org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref(name, v, u) }
-        try {
-            tri("media.mediasource.vp9.enabled", d.vp9)
-            tri("media.av1.enabled", d.av1)
-            tri("media.hevc.enabled", d.hevc)
-            if (prefs.calmPages) {
-                org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("ui.prefersReducedMotion", 1, u)
-                org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("image.animation_mode", "once", u)
-            } else {
-                org.mozilla.geckoview.GeckoPreferenceController.clearGeckoUserPref("ui.prefersReducedMotion")
-                org.mozilla.geckoview.GeckoPreferenceController.clearGeckoUserPref("image.animation_mode")
-            }
-            videoPolicyText = "Video: codecs offered to sites: ${d.why} [hardware decoders ${hw?.encode() ?: "unknown"}]; page animations ${if (prefs.calmPages) "calm (reduce-motion, GIFs once)" else "normal"}; muted autoplay ${if (prefs.videoMutedAutoplay) "allowed" else "blocked"}; protected video ${if (prefs.videoDrm == 0) "ask" else "never"}"
-        } catch (e: Exception) { app.kestrel.browser.diag.Health.log("engine", "video-prefs-failed", e.toString().take(140)) }
+        videoPolicyText = "Video: codecs offered to sites: ${d.why} [hardware decoders ${hw?.encode() ?: "unknown"}]; page animations ${if (prefs.calmPages) "calm (reduce-motion, GIFs once)" else "normal"}; muted autoplay ${if (prefs.videoMutedAutoplay) "allowed" else "blocked"}; protected video ${if (prefs.videoDrm == 0) "ask" else "denied"}"
+        fun pref(name: String, set: () -> Unit) { try { set() } catch (e: Exception) { app.kestrel.browser.diag.Health.log("engine", "video-pref-failed", "$name ${e.toString().take(100)}") } }
+        fun tri(name: String, v: Boolean?) = pref(name) { if (v == null) org.mozilla.geckoview.GeckoPreferenceController.clearGeckoUserPref(name) else org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref(name, v, u) }
+        tri("media.mediasource.vp9.enabled", d.vp9)
+        tri("media.av1.enabled", d.av1)
+        tri("media.hevc.enabled", d.hevc)
+        if (prefs.calmPages) {
+            pref("ui.prefersReducedMotion") { org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("ui.prefersReducedMotion", 1, u) }
+            pref("image.animation_mode") { org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("image.animation_mode", "once", u) }
+        } else {
+            pref("ui.prefersReducedMotion") { org.mozilla.geckoview.GeckoPreferenceController.clearGeckoUserPref("ui.prefersReducedMotion") }
+            pref("image.animation_mode") { org.mozilla.geckoview.GeckoPreferenceController.clearGeckoUserPref("image.animation_mode") }
+        }
     }
 
     /**
