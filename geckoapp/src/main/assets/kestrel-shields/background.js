@@ -265,6 +265,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   }
   if (m.k === 'dom') { // a media address found in the page itself (content.js): handed to the app like a sniffed one, marked so the app can drop ad networks
     var dp = (tabId >= 0 && tabTop.get(tabId)) || m.p || '';
+    if (sender && sender.frameId > 0) noteFrame(tabId, sender.frameId, undefined, m.p || '');
     send({ k: 'media', u: String(m.u || ''), c: '', l: -1, p: dp, f: m.p !== dp ? (m.p || '') : '', s: 'dom' }).catch(function () {});
     return undefined;
   }
@@ -372,7 +373,9 @@ function decide(d, page, host, mode) {
 }
 
 browser.webRequest.onBeforeRequest.addListener(function (d) {
+  if (d.type === 'sub_frame') frameNavigates(d);
   if (d.type === 'main_frame') {
+    navId.set(d.tabId, Number(d.requestId) || 0); frameParent.delete(d.tabId); mediaFrames.delete(d.tabId);
     sniffed.delete(d.tabId); maybeCount.delete(d.tabId); tabTop.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again (delete first: Map keeps the old position of a key, and the OLDEST position is what is dropped)
     verdicts.clear(); // legacy verdicts are only worth keeping while ONE page loads
     newLog(d.tabId, d.url); reportLater(d.tabId); // the page report starts here (4 s after the last news it goes to the app)
@@ -474,6 +477,44 @@ var sniffed = new Map(); // tabId -> Set of "url|sizeKnown" already reported for
 var SNIFFED_TABS = 40;
 var SNIFFED_PER_TAB = 300;
 
+// AL1 / AL5 (owner 2026-11-13): "only the videos of the page I am looking at" and "switching servers refreshes the download options".
+// * navId: the request id of the newest main-frame request of each tab. Request ids only grow, so an answer to a request with a SMALLER id belongs to the document the tab has already left (a player that was
+//   still fetching when the owner went to another site): it is not news and is never reported.
+// * A server switch is a PLAYER FRAME being navigated to another document (the site sets the iframe's address). Not a new video appearing in the same document: an advertisement that plays before the real
+//   video is another file of the same player and must not look like another server. frameParent / mediaFrames remember which frames reported something, so that navigating a frame can say exactly which documents
+//   (that frame's and the frames inside it) are gone; the app then drops what those documents offered, and the dedupe keys of their files are forgotten so the new document's files are reported again.
+var navId = new Map();       // tabId -> numeric id of the newest main_frame request
+var frameParent = new Map(); // tabId -> Map(frameId -> parentFrameId), from the sub_frame requests (and from candidates)
+var mediaFrames = new Map(); // tabId -> Map(frameId -> document address) of the frames (not the top one) that reported a candidate
+function stale(d) { var n = navId.get(d.tabId), r = Number(d.requestId); return n !== undefined && r === r && r < n; } // r === r: not NaN
+function noteFrame(tabId, frameId, parentId, doc) {
+  if (!(frameId > 0) || tabId < 0) return;
+  var pm = frameParent.get(tabId); if (!pm) { pm = new Map(); frameParent.set(tabId, pm); }
+  if (parentId !== undefined && parentId >= 0 && !pm.has(frameId)) pm.set(frameId, parentId);
+  var mf = mediaFrames.get(tabId); if (!mf) { if (mediaFrames.size >= SNIFFED_TABS) mediaFrames.delete(mediaFrames.keys().next().value); mf = new Map(); mediaFrames.set(tabId, mf); }
+  if (mf.size < 60 || mf.has(frameId)) mf.set(frameId, doc || '');
+}
+function insideFrame(tabId, frameId, outer) { // is frameId the frame [outer] or inside it?
+  var pm = frameParent.get(tabId), p = frameId;
+  for (var i = 0; i < 12 && p !== undefined && p > 0; i++) { if (p === outer) return true; p = pm ? pm.get(p) : undefined; }
+  return false;
+}
+function frameNavigates(d) { // a sub_frame request: the frame [d.frameId] is being (re)loaded
+  var tabId = d.tabId, f = d.frameId;
+  if (tabId < 0 || !(f > 0)) return;
+  var pm = frameParent.get(tabId); if (!pm) { pm = new Map(); frameParent.set(tabId, pm); }
+  if (d.parentFrameId >= 0) pm.set(f, d.parentFrameId);
+  var mf = mediaFrames.get(tabId);
+  if (!mf || !mf.size) return;
+  var gone = [], ids = [];
+  mf.forEach(function (doc, id) { if (insideFrame(tabId, id, f)) { if (doc) gone.push(doc); ids.push(id); } });
+  if (!ids.length) return;
+  for (var i = 0; i < ids.length; i++) mf.delete(ids[i]);
+  var seen = sniffed.get(tabId); // their files may be reported again by the new document
+  if (seen) seen.forEach(function (key) { for (var j = 0; j < ids.length; j++) if (key.indexOf(ids[j] + '|') === 0 || key.indexOf('?' + ids[j] + '|') === 0) { seen.delete(key); break; } });
+  if (gone.length) send({ k: 'gone', p: tabTop.get(tabId) || '', d: gone.slice(0, 20) }).catch(function () {});
+}
+
 // What the browser itself sent with a request that may turn out to be media: its Referer and Origin. A video server often wants the embedded PLAYER's (the page the player sits in is not who asks), so the app
 // repeats these when it reads the playlist and fetches the parts. Kept briefly, by request id; a request that never gets an answer is pushed out by the next ones.
 var reqHdr = new Map();
@@ -508,7 +549,7 @@ function maybeMedia(d, url, ct, size, ref, org) {
   var plain = MAYBE_CT.test(base);
   if (!plain && !(d.type !== 'media' && MAYBE_DISGUISE.test(base))) return;
   if (size >= 0 && (size < 80 || (!plain && size > 800000))) return; // a playlist is never a few bytes, and a script-fetched "picture" or "stylesheet" that is big is one
-  var key = '?' + dedupeKey(url, 0);
+  var key = '?' + d.frameId + '|' + dedupeKey(url, 0);
   var seen = sniffed.get(d.tabId);
   if (!seen) {
     if (sniffed.size >= SNIFFED_TABS) sniffed.delete(sniffed.keys().next().value);
@@ -518,6 +559,7 @@ function maybeMedia(d, url, ct, size, ref, org) {
   var n = maybeCount.get(d.tabId) || 0;
   if (n >= MAYBE_PER_PAGE) return;
   seen.add(key); maybeCount.set(d.tabId, n + 1);
+  noteFrame(d.tabId, d.frameId, d.parentFrameId, d.documentUrl);
   var page = tabTop.get(d.tabId) || ((d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || ''));
   send({ k: 'maybe', u: url, c: ct, l: size, p: page, f: d.documentUrl || '', rf: ref, og: org, ty: d.type }).catch(function () {});
 }
@@ -528,6 +570,7 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
   if (d.statusCode !== 200 && d.statusCode !== 206) return;
   var url = d.url;
   if (SEGMENT.test(url)) return;
+  if (stale(d)) return; // an answer for a document the tab has left (see navId)
   var ct = '', len = -1, total = -1, cd = '', h = d.responseHeaders || [];
   for (var i = 0; i < h.length; i++) {
     var nl = h[i].name.length;
@@ -542,7 +585,7 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
   if (!MEDIA_CT.test(ct) && !MEDIA_EXT.test(url)) { maybeMedia(d, url, ct, size, ref, org); return; }
   if (ct.indexOf('video/mp2t') === 0 || ct.indexOf('iso.segment') > 0) return;
   if (size >= 0 && size < MIN_FILE_BYTES && !PLAYLIST.test(ct) && !PLAYLIST.test(url)) return;
-  var key = dedupeKey(url, size >= 0 ? 1 : 0);
+  var key = d.frameId + '|' + dedupeKey(url, size >= 0 ? 1 : 0);
   var seen = sniffed.get(d.tabId);
   if (!seen) {
     if (sniffed.size >= SNIFFED_TABS) sniffed.delete(sniffed.keys().next().value);
@@ -551,6 +594,7 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
   if (seen.has(key)) return;
   if (seen.size >= SNIFFED_PER_TAB) seen.delete(seen.values().next().value);
   seen.add(key);
+  noteFrame(d.tabId, d.frameId, d.parentFrameId, d.documentUrl);
   var page = tabTop.get(d.tabId) || ((d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || ''));
   send({ k: 'media', u: url, c: ct, l: size, p: page, f: d.documentUrl || '', n: cd, rf: ref, og: org }).catch(function () {});
 }, { urls: ['http://*/*', 'https://*/*'], types: MEDIA_TYPES }, ['responseHeaders']);
