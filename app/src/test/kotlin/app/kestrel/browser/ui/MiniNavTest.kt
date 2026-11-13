@@ -9,6 +9,7 @@ import android.widget.FrameLayout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -60,30 +61,40 @@ class MiniNavTest {
         frame.layout(0, 0, 600, 900)
     }
 
+    /** The slide's clock and frames, stepped by hand (Robolectric's own Choreographer jumps the clock). */
+    private var now = 1000L
+    private var pending: Runnable? = null
+    private fun stepBy(ms: Long) { now += ms; val r = pending ?: return; pending = null; r.run() }
+    private fun manualSlide() { nav.clock = { now }; nav.nextFrame = { pending = it } }
+
     @Test fun theToggleSlidesThePanelDownAndBackUpOnItsOwnClock() {
         animatorScale(0f) // the owner runs with animations OFF: a system animator would jump to its end at once
+        manualSlide()
         assertFalse(nav.isOpen); assertFalse(nav.panelShownForTest)
         nav.pressToggleForTest()
         assertTrue(nav.isOpen); assertTrue(nav.panelShownForTest)
-        assertTrue("starts above the screen", nav.panelOffsetForTest < 0f)
-        val start = nav.panelOffsetForTest
-        idle(100)
-        assertTrue("on its way (${nav.panelOffsetForTest} between $start and 0)", nav.panelOffsetForTest > start && nav.panelOffsetForTest < 0f)
-        idle(200)
-        assertEquals("arrived", 0f, nav.panelOffsetForTest, 0.5f)
+        val hidden = nav.panelOffsetForTest
+        assertTrue("starts above the screen ($hidden)", hidden < 0f)
+        stepBy(0); assertEquals("first frame: still hidden", hidden, nav.panelOffsetForTest, 0.5f)
+        stepBy(60); val a = nav.panelOffsetForTest
+        assertTrue("on its way ($a between $hidden and 0)", a > hidden && a < 0f)
+        stepBy(60); val b = nav.panelOffsetForTest
+        assertTrue("further on ($b after $a)", b > a && b < 0f)
+        stepBy(200); assertEquals("arrived", 0f, nav.panelOffsetForTest, 0.5f)
+        assertNull("no more frames wanted", pending)
         assertEquals(listOf(true), rec.opened)
         nav.pressToggleForTest()
-        idle(100); assertTrue("sliding back up", nav.panelOffsetForTest < 0f && nav.panelShownForTest)
-        idle(250); assertFalse("hidden again", nav.panelShownForTest)
+        stepBy(0); stepBy(80); assertTrue("sliding back up", nav.panelOffsetForTest < 0f && nav.panelShownForTest)
+        stepBy(200); assertFalse("hidden again", nav.panelShownForTest)
         assertEquals(listOf(true, false), rec.opened)
     }
 
-    @Test fun tmpTraceTheSlide() {
+    @Test fun theSlideHasItsOwnClockWhateverAndroidsAnimationScaleIs() {
         animatorScale(0f)
-        nav.pressToggleForTest()
-        val sb = StringBuilder("TRACE t=${android.os.SystemClock.uptimeMillis()} ${nav.panelOffsetForTest}")
-        for (i in 1..6) { idle(20); sb.append(" | t=").append(android.os.SystemClock.uptimeMillis()).append(" off=").append(nav.panelOffsetForTest.toInt()) }
-        println(sb)
+        nav.pressToggleForTest() // the real Choreographer this time
+        assertTrue("a frame is wanted: the slide is not skipped when animations are off", nav.panelShownForTest && nav.panelOffsetForTest < 0f)
+        idle(600)
+        assertEquals(0f, nav.panelOffsetForTest, 0.5f)
     }
 
     @Test fun startingOpenOrClosedNeedsNoAnimation() {

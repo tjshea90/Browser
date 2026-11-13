@@ -166,21 +166,28 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
     // ------------------------------------------------------------------ the slide (its own clock: independent of Android's animation scale)
 
-    private fun cancelAnim() { anim?.let { removeCallbacks(it) }; anim = null; panel.setLayerType(LAYER_TYPE_NONE, null) }
+    /** Where the slide gets its clock and its next frame from: the real ones, unless a test steps them by hand. */
+    internal var clock: () -> Long = { SystemClock.uptimeMillis() }
+    internal var nextFrame: (Runnable) -> Unit = { postOnAnimation(it) }
+    private var slideToken = 0
+
+    private fun cancelAnim() { slideToken++; anim?.let { removeCallbacks(it) }; anim = null; panel.setLayerType(LAYER_TYPE_NONE, null) }
 
     private fun slide(from: Float, to: Float, ip: Interpolator, done: () -> Unit) {
         panel.translationY = from
         panel.setLayerType(LAYER_TYPE_HARDWARE, null)
-        val start = SystemClock.uptimeMillis()
+        val start = clock()
+        val token = ++slideToken
         val step = object : Runnable {
             override fun run() {
-                val t = ((SystemClock.uptimeMillis() - start).toFloat() / SLIDE_MS).coerceIn(0f, 1f)
+                if (token != slideToken) return // a newer slide (or a jump) took over
+                val t = ((clock() - start).toFloat() / SLIDE_MS).coerceIn(0f, 1f)
                 panel.translationY = from + (to - from) * ip.getInterpolation(t)
-                if (t < 1f) postOnAnimation(this) else { anim = null; panel.setLayerType(LAYER_TYPE_NONE, null); done() }
+                if (t < 1f) nextFrame(this) else { anim = null; panel.setLayerType(LAYER_TYPE_NONE, null); done() }
             }
         }
         anim = step
-        postOnAnimation(step)
+        nextFrame(step)
     }
 
     // ------------------------------------------------------------------ colours
