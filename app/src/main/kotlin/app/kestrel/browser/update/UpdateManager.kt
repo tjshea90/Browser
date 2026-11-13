@@ -96,6 +96,9 @@ object UpdateManager {
     @Volatile var spaceHint: SpaceHint? = null
         private set
 
+    /** Tests only. */
+    internal fun setSpaceHintForTest(h: SpaceHint?) { spaceHint = h }
+
     fun hintSpace(ctx: Context) {
         val offer = state.offer ?: return
         if (state.phase != Phase.AVAILABLE && state.phase != Phase.READY) return

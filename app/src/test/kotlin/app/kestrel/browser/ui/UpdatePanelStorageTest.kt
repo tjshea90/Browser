@@ -89,4 +89,23 @@ class UpdatePanelStorageTest {
         assertNotNull(button(p, "Save and uninstall"))
         assertFalse(t.toString(), t.any { it.startsWith("Not yet.") })
     }
+
+    @Test fun theAvailableSheetWarnsBeforeADownloadThatTheInstallerWouldRefuse() {
+        val fmt = UpdateLogic::formatSize
+        UpdateManager.setStateForTest(UpdateManager.State(Phase.AVAILABLE, offer))
+        UpdateManager.setSpaceHintForTest(UpdateManager.SpaceHint(offer.tag, shortBy = m(1550.0), free = m(1.62 * 1024), need = m(3116.0), cacheBytes = m(228.1)))
+        val acts = Acts()
+        val p = UpdatePanel(ctx, Pal(ctx), Prefs.get(ctx), acts).also { it.renderForTest() }
+        val t = texts(p)
+        assertTrue(t.toString(), t.any { it.startsWith("Heads-up: this tablet has ${fmt(m(1.62 * 1024))} free") && it.contains(fmt(m(3116.0))) && it.contains("refuses the file") })
+        button(p, "Clear cache (" + fmt(m(228.1)))!!.performClick()
+        assertEquals(1, acts.cleared)
+        assertNotNull("the download is still offered (the owner's rule: the install is always tried)", button(p, "Download"))
+
+        UpdateManager.setSpaceHintForTest(UpdateManager.SpaceHint("some-other-tag", shortBy = m(1550.0), free = 0, need = 0, cacheBytes = 0))   // a hint about another update says nothing here
+        assertFalse(texts(UpdatePanel(ctx, Pal(ctx), Prefs.get(ctx), acts).also { it.renderForTest() }).any { it.startsWith("Heads-up") })
+        UpdateManager.setSpaceHintForTest(UpdateManager.SpaceHint(offer.tag, shortBy = 0, free = m(5000.0), need = m(3116.0), cacheBytes = m(228.1)))        // it fits: no warning
+        assertFalse(texts(UpdatePanel(ctx, Pal(ctx), Prefs.get(ctx), acts).also { it.renderForTest() }).any { it.startsWith("Heads-up") })
+        UpdateManager.setSpaceHintForTest(null)
+    }
 }
