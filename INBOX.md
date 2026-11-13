@@ -582,3 +582,8 @@ Remove any of the diagnosis tools from the app that are no longer needed or alre
 3) improve the icon of the app and make it look professional. Also include the icon in the Android recent apps list, which currently only shows a generic icon, see the screenshot
 4) make sure the app properly deletes old install files and apks from storage after updates and once the update is installed, delete the latest apk from storage. Maintain the app cache and storage so that very old or stale items don't waste storage. The cache and storage may be used freely for current browsing and speed, but it shouldn't waste storage on old items
 ```
+
+## 2026-11-13T22:21:40Z
+```
+The app is blocking ads and redirects from video sites well right now when I press play to play a video and it tries to redirect to a spam site instead of playing the video. But i have to press play several times for it to get past the fake play button redirects and finally play the video. Is there a way to force the play button to play the video on the first press while blocking all the fake redirects? If so implement it
+```
