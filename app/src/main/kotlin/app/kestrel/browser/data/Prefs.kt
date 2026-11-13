@@ -106,6 +106,10 @@ class Prefs private constructor(ctx: Context) {
     var clearOnExit: Boolean get() = bool("clear_exit", false); set(v) = put("clear_exit", v)
     /** EY-1: the browser opens showing a sharp picture of the page that was left, while the live page loads under it. Pictures stay on the tablet; switching this off deletes them. */
     var lastLook: Boolean get() = bool("last_look", true); set(v) = put("last_look", v)
+    /** AR2: the one-hand mini navigation panel at the top right is shown (its toggle remembers the choice). */
+    var miniNavOpen: Boolean get() = bool("mini_nav_open", false); set(v) = put("mini_nav_open", v)
+    /** AR2: the small toggle for that panel is on screen at all (Settings can remove it from the page's top right corner). */
+    var miniNavToggle: Boolean get() = bool("mini_nav_toggle", true); set(v) = put("mini_nav_toggle", v)
 
     /** 0 weekly, 1 monthly, 2 manual. */
     var updatePolicy: Int get() = sp.getInt("upd_policy", 0); set(v) = put("upd_policy", v)

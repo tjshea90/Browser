@@ -59,7 +59,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         toggle("Block ads & trackers", "Network blocking with EasyList, EasyPrivacy and uBlock lists", prefs.shieldAds) { prefs.shieldAds = it }
         toggle("Hide ad spaces & cookie banners", null, prefs.shieldCosmetic) { prefs.shieldCosmetic = it }
         if (app.kestrel.browser.Flavor.hasEmbedWait) toggle("Embeds wait for a tap", "Video and social players inside a page (YouTube, Vimeo, Facebook, Instagram...) show a tap-to-load box instead of starting by themselves: pages open faster. Each site can override it in its Shields panel.", prefs.shieldEmbeds) { prefs.shieldEmbeds = it }
-        if (app.kestrel.browser.Flavor.hasPopupGuard) toggle("Block pop-ups & forced redirects", "Refuses new tabs and page jumps you did not ask for, such as the ad tab a video site opens when you press play. A notice offers to open one anyway", prefs.blockPopups) { prefs.blockPopups = it }
+        if (app.kestrel.browser.Flavor.hasPopupGuard) toggle("Block pop-ups & forced redirects", "Refuses new tabs and page jumps you did not ask for, such as the ad tab a video site opens when you press play. A small icon shows at the bottom for one second: tap it to open the page in a new tab", prefs.blockPopups) { prefs.blockPopups = it }
         toggle("Block cross-site cookies", null, prefs.shieldCookies) { prefs.shieldCookies = it }
         toggle("Block fingerprinting", null, prefs.shieldFingerprint) { prefs.shieldFingerprint = it }
         toggle("Clear browsing data when the app is closed", "Cookies, cache, history and saved site settings, the next time it opens after you swipe it away", prefs.clearOnExit) { prefs.clearOnExit = it }
@@ -120,6 +120,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
             toggle("Double-tap to zoom", "Off (default): a tap opens a link at once. On: double-tap a page to zoom in, but on pages wider than the screen (Desktop site) every tap then waits about a quarter of a second. Pinching always works.", prefs.doubleTapZoom) { prefs.doubleTapZoom = it; l.prefsChanged() }
             toggle("Zoom to the text box you tap", "On (default): the page zooms to a text box when you tap it. Turn it off if typing starts slowly: small boxes then stay small until you pinch.", prefs.inputAutoZoom) { prefs.inputAutoZoom = it; l.prefsChanged() }
         }
+        if (app.kestrel.browser.Flavor.hasMiniNav) toggle("Mini navigation tab (top right)", "A small tab at the top right of the page slides down a small black panel with Back, Home, Forward and an address bar with its own small keyboard, so the browser can be used with one hand at the top of the screen. Turn this off to remove the tab.", prefs.miniNavToggle) { prefs.miniNavToggle = it; l.prefsChanged() }
         if (app.kestrel.browser.Flavor.hasPullRefresh) toggle("Pull down to refresh", "Drag a page down from its top edge to reload it", prefs.pullRefresh) { prefs.pullRefresh = it }
         choice("Dark pages", listOf("Automatic", "Always", "Never"), prefs.webDark) { prefs.webDark = it }
         choice("Text size", listOf("75%", "100%", "125%", "150%", "175%", "200%"), listOf(75, 100, 125, 150, 175, 200).indexOfFirst { it >= prefs.textZoom }.let { if (it < 0) 1 else it }) {
