@@ -165,6 +165,14 @@ class FilterSet internal constructor(
         return cosmetic.genericCssForTokens(pageHost, tokens, max)
     }
 
+    /** AD1b-4: the procedural cosmetic rules of [pageHost] (see [ProceduralRules]; each line is `base`, then for every operator OP name ARG argument), under the same `$elemhide` / `$document` exceptions as [cosmeticCss]. */
+    fun proceduralFor(pageHost: String): List<String> {
+        if (cosmetic.isEmpty) return emptyList()
+        val flags = siteFlagsFor(pageHost)
+        if ((flags and (SITE_ELEMHIDE or SITE_DOCUMENT_ALLOW)) != 0) return emptyList()
+        return cosmetic.proceduralFor(pageHost)
+    }
+
     /** Builds the lazily made cosmetic tables now (start-up warm-up), so the first page does not wait for them. */
     fun warmCosmetic() { cosmetic.warm() }
 

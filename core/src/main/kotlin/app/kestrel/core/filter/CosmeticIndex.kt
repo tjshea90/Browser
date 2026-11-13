@@ -29,7 +29,9 @@ internal class CosmeticIndex(
         val sb = StringBuilder()
         val site = group(host, siteHash, siteOff, sitePool)
         if (tokenMode && includeGeneric && genericCount > 0 && tokens().byKey.isNotEmpty()) sb.append(TOKEN_MARKER)
-        sb.append(CosmeticSelectors.toCss(if (domainExc.isEmpty()) site else site.filter { it !in domainExc }, 1))
+        val siteRules = if (domainExc.isEmpty()) site else site.filter { it !in domainExc }
+        if (tokenMode && siteRules.any { ProceduralRules.isStored(it) }) sb.append(ProceduralRules.MARKER) // the page script asks for the procedural rules of this host (AD1b-4)
+        sb.append(CosmeticSelectors.toCss(siteRules, 1))
         if (includeGeneric && genericCount > 0 && tokenMode) {
             sb.append(looseCss(genericLimit, globalExceptions() + domainExc))
         } else if (includeGeneric && genericCount > 0) {
@@ -42,6 +44,14 @@ internal class CosmeticIndex(
             }
         }
         return sb.toString()
+    }
+
+    /** The procedural rules of [host] (stored form without the leading marker character), minus the ones a `#@#` rule excepts. */
+    fun proceduralFor(host: String): List<String> {
+        val domainExc = domainExceptions(host)
+        val out = ArrayList<String>(4)
+        for (s in group(host, siteHash, siteOff, sitePool)) if (ProceduralRules.isStored(s) && s !in domainExc) out.add(s.substring(1))
+        return out
     }
 
     private fun buildGeneric(limit: Int, exc: Set<String>): String {

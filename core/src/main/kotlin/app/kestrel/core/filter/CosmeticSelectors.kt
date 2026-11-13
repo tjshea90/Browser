@@ -117,6 +117,7 @@ internal object CosmeticSelectors {
         val sb = StringBuilder(selectors.size * 40)
         var inGroup = 0
         for (sel in selectors) {
+            if (ProceduralRules.isStored(sel)) continue // a procedural rule is run by the page script, not written into a style sheet
             val sep = sel.indexOf(STYLE_SEP)
             if (sep >= 0) { // a restyling rule: its own `selector{declarations}`, never grouped
                 if (inGroup > 0) { sb.append("{display:none!important}\n"); inGroup = 0 }

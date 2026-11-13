@@ -192,6 +192,7 @@ internal class RuleParser {
         var selector = line.substring(selStart).trim()
         if (selector.startsWith("+js(") || selector.startsWith("^") || selector.isEmpty()) return fail2(Skip.COSMETIC_UNSUPPORTED)
         var styled = false
+        var procedural = false
         val st = CosmeticSelectors.splitStyle(selector)
         if (st != null) { // `site##selector:style(declarations)`: a restyling rule for a site (never an exception, never generic: checked below)
             if (exception) return fail2(Skip.COSMETIC_UNSUPPORTED)
@@ -199,7 +200,11 @@ internal class RuleParser {
             if (!CosmeticSelectors.accept(st.first)) return fail2(if (CosmeticSelectors.isProcedural(st.first)) Skip.COSMETIC_UNSUPPORTED else Skip.COSMETIC_UNSAFE)
             selector = st.first + CosmeticSelectors.STYLE_SEP + decls
             styled = true
-        } else if (!CosmeticSelectors.accept(selector)) return fail2(if (CosmeticSelectors.isProcedural(selector)) Skip.COSMETIC_UNSUPPORTED else Skip.COSMETIC_UNSAFE)
+        } else if (!CosmeticSelectors.accept(selector)) {
+            if (!CosmeticSelectors.isProcedural(selector)) return fail2(Skip.COSMETIC_UNSAFE)
+            selector = ProceduralRules.encode(selector) ?: return fail2(Skip.COSMETIC_UNSUPPORTED)   // outside the supported subset (xpath, matches-css, a selector after an operator ...)
+            procedural = true
+        }
 
         val domains = ArrayList<String>()
         if (i > 0) {
@@ -214,6 +219,7 @@ internal class RuleParser {
             if (domains.isEmpty()) return fail2(Skip.BAD_SYNTAX)
         }
         if (styled && domains.isEmpty()) return fail2(Skip.COSMETIC_UNSUPPORTED) // a restyling rule for every site is too broad to take from a list
+        if (procedural && domains.isEmpty()) return fail2(Skip.COSMETIC_UNSUPPORTED) // a script that runs on every page for a generic procedural rule: not worth the cost on this device
         return CosmeticRule(domains, selector, exception)
     }
 
