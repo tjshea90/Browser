@@ -463,6 +463,27 @@ test('sniffer: a "maybe" is rare: not for pages, data, scripts, fonts, tiny or h
   assert.equal(h.of('maybe').length, 13);
 });
 
+test('sniffer: the probe budget of a page that stays open is topped up four every twenty seconds (a single-page site swaps its content with no new page request), never above twelve', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  const probe = (i) => h.listeners.headers(xhr('s' + i, 'https://cdn.example/spa/' + i, 'application/octet-stream', 800));
+  for (let i = 0; i < 20; i++) probe(i);
+  await tick(10);
+  assert.equal(h.of('maybe').length, 12, 'twelve at once');
+  h.clock.now += 19_000;
+  for (let i = 20; i < 25; i++) probe(i);
+  await tick(10);
+  assert.equal(h.of('maybe').length, 12, 'nineteen seconds later: nothing yet');
+  h.clock.now += 2_000;
+  for (let i = 25; i < 40; i++) probe(i);
+  await tick(10);
+  assert.equal(h.of('maybe').length, 16, 'after twenty seconds four more are allowed');
+  h.clock.now += 10 * 60_000;
+  for (let i = 40; i < 80; i++) probe(i);
+  await tick(10);
+  assert.equal(h.of('maybe').length, 28, 'ten quiet minutes give back a full twelve, not more');
+});
+
 test('sniffer: what is plainly media is still reported at once and is never also a "maybe"', async () => {
   const h = harness(standardApp());
   h.mainFrame(PAGE);
