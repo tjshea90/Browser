@@ -1425,6 +1425,8 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(GeckoEngine.prefReadback)
         out.add(GeckoEngine.prefReadback2)
         out.add(GlInfo.text)
+        out.add(DeviceVideo.report())
+        out.add(GeckoEngine.videoPolicyText)
         out.add(app.kestrel.browser.diag.StorageInfo.text)
         out.add(ShieldsBridge.statsLine(prefs.engineInExtension))
         val animScale = try { android.provider.Settings.Global.getFloat(contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) } catch (e: Exception) { 1f }
@@ -1435,7 +1437,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     private fun showDiagnostics() {
         GeckoEngine.readBackPrefs { diagView?.refresh() }
-        Io.exec { GlInfo.read(); app.kestrel.browser.diag.StorageInfo.read(this); Io.ui { diagView?.refresh() } }
+        Io.exec { GlInfo.read(); if (DeviceVideo.read(applicationContext, force = true)) GeckoEngine.applyVideo(applicationContext, prefs); app.kestrel.browser.diag.StorageInfo.read(this); Io.ui { diagView?.refresh() } }
         val v = diagView ?: DiagnosticsView(this, pal, ::engineFacts, { refreshScreen("diagnostics") }, { closeDiagnostics() }, { runScrollTest() }, { runScrollTest(compare = true) }, ::blockerLabel, ::toggleBlocker, ::openLab).also { diagView = it }
         if (v.parent == null) root.addView(v, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) else v.refresh()
     }

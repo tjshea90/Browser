@@ -57,6 +57,7 @@ class DiagnosticsView(ctx: Context, private val pal: Pal, private val facts: () 
             val rowLab = LinearLayout(ctx).apply { orientation = HORIZONTAL; setPadding(ctx.dp(10), 0, ctx.dp(10), ctx.dp(6)) }
             rowLab.addView(big("Tap lab", pal.pill, pal.accent) { onLab.invoke("tap") }, lp(1f))
             rowLab.addView(big("Decode lab", pal.pill, pal.accent) { onLab.invoke("decode") }, lp(1f))
+            rowLab.addView(big("Video lab", pal.pill, pal.accent) { onLab.invoke("video") }, lp(1f))
             addView(rowLab, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         }
 
