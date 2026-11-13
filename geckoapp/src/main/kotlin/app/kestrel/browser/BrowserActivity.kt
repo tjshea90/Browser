@@ -1372,6 +1372,18 @@ open class BrowserActivity : Activity(), DockListener {
             override fun openStorageSettings() {
                 try { startActivity(Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS)) } catch (e: Exception) { toast("Open Settings > Storage") }
             }
+            override fun clearCache(done: (Long) -> Unit) {
+                // the engine's network and image caches (the bulk of the app's cache directory); the bytes that went are measured on the directory a moment later, off the UI thread
+                val appCtx = applicationContext
+                Io.exec {
+                    val before = app.kestrel.browser.diag.StorageInfo.cacheBytes(appCtx)
+                    Io.main.post {
+                        try { GeckoEngine.runtime(this@BrowserActivity).storageController.clearData(StorageController.ClearFlags.ALL_CACHES) } catch (e: Exception) { Health.log("engine", "clear-cache-failed", e.toString().take(100)) }
+                        Io.main.postDelayed({ Io.exec { val after = app.kestrel.browser.diag.StorageInfo.cacheBytes(appCtx); Io.main.post { done((before - after).coerceAtLeast(0L)) } } }, 2500)
+                    }
+                }
+            }
+            override fun openDownloads() { sheet.dismiss(); showDownloads() }
         })
         sheet.show("Updates", panel)
     }

@@ -29,6 +29,9 @@ object StorageInfo {
         } catch (e: Exception) { "Storage: unavailable (${e.javaClass.simpleName})" }
     }
 
+    /** Bytes in the app's cache directory (the engine's network and image caches, previews): what "Clear cache" can give back. Off the UI thread. */
+    fun cacheBytes(ctx: Context): Long = size(ctx.applicationContext.cacheDir)
+
     private fun size(d: File): Long {
         var sum = 0L
         val stack = ArrayDeque<File>(); stack.add(d)
