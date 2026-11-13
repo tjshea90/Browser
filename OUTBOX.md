@@ -1176,3 +1176,38 @@
 > - Optional: a licence, landscape tabs, the Cromite comparison.
 > - Weekly tip: charge the tablet overnight with the screen off.
 <!-- sha:77e28b19adf3 -->
+
+## 2026-11-13T12:21:06Z
+> All three requests are done and in alpha30, but I haven't tested any of it on your tablet. It is still on alpha27, so none of the fixes have reached it.
+>
+> **1. Settings in private mode.** Settings now stays in the menu in private windows (both apps) and opens in the private colours. On the emulator the private menu lists Settings and it opens.
+>
+> **2. "Open in new tab" in the background.** After a long-press on a link, the page now opens in a tab behind the one you're on. The foreground tab stays, the tab counter goes up, and a small "Opened in a new tab" notice appears. On the emulator the second page loaded and the front tab stayed put. "Open in private tab" and "Open image in new tab" work as before.
+>
+> **3. Doraby movies and the Cloudflare message.** I found the likely cause, but I haven't seen it on a device.
+> - Doraby's movie is a frame from another site (vidfast.vc, vidy.st and others). Cloudflare's check runs from `challenges.cloudflare.com`.
+> - Firefox's own tracking protection, as alpha27 set it up, lists `cloudflare.com` and `cdn.jsdelivr.net` as "content" and refuses them. That matches Doraby's missing photos and "can't access Cloudflare".
+> - alpha28 removed that. Shields off for a site (alpha29) now also switches Firefox's own protection off for that site.
+> - Kestrel's own lists don't block the six Doraby players or Cloudflare's check; a new test confirms it.
+> - **Two questions for you:** which version does Menu > Diagnostics show on its "App:" line? And what were the exact words on the site that said "incompatible browser"?
+>
+> **Your complaint that prompts went unanswered.** I compared your messages with my replies. Each one had a reply, but several came hours late, were folded into a release message, or answered only part of a multi-part prompt. Your Diagnostics paste took until 07:18 to get an answer. I can't tell which ones you meant. Which earlier prompts did you mean? Meanwhile the list is in `TASKS.md` (AI1d) and in `.handoff/handoff.md`. The handoff tool needed an approval that nobody answered, so I wrote that file by hand.
+>
+> **Install:** free about 1.5 GB first; the tablet has 1.62 GB free and needs about 3.1 GB. Use Menu > Downloads to delete movies you've watched, and Android's Settings > Storage. Then install alpha30.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha30
+>
+> **Needs your approval:** the heartbeat (a 2-hourly self-wake-up) is still on. It fires with an old message every 2 hours and cancels any approval prompt I have open. Please approve my "disable heartbeat" request next time it appears, or tell me to delete it.
+>
+> **Still open from you**
+> - Doraby: after installing alpha30, open a watch page, tap play, wait 10 s, then send Menu > Diagnostics > Page report.
+> - The site or link with the choppy video.
+> - Does scrolling and Back feel smooth?
+> - Proton Mail speed, and the keyboard app with "Zoom to the text box you tap" off.
+> - Yes or no: scheduled GitHub ad-list builds.
+> - The private signing key.
+> - Earlier video problems: `.ts` files, grey icon, spam after play.
+> - Network lab results.
+> - Optional: licence, landscape tabs, Cromite comparison.
+> - Weekly tip: charge the tablet overnight with the screen off.
+<!-- sha:5dca78d6d931 -->
