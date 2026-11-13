@@ -432,7 +432,7 @@ class StreamEngine(
     }
 
     /** Delete the unfinished output a row still points at, and the staging folder of a row that has no job in memory. Never throws. */
-    private fun dropLeftover(rec: Rec) {
+    private fun dropLeftover(rec: StreamRec) {
         val uri = synchronized(lock) { rec.destUri }
         if (uri != null) try { sinks.delete(uri) } catch (e: Exception) { /* already gone */ }
         try { val d = store.dir(rec.id); d.listFiles()?.forEach { it.delete() }; d.delete() } catch (e: Exception) { /* ignore */ }
