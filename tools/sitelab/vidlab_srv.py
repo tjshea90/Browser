@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """AK4 lab: a movie page (port 8000) with an embedded player page (8003) whose stream comes from a CDN (8004) that wants the PLAYER's Referer.
-The playlists are served as text/plain under .txt names, the parts are named .jpg, wear a real PNG header and are AES-128 encrypted, the key sits behind the same Referer check."""
+The playlists are served as text/plain under .txt names, the parts are named .jpg, wear a real PNG header and are AES-128 encrypted, the key sits behind the same Referer check.
+AL1 / AL5 additions: /watch2 (port 8000) has Server 1 / Server 2 / Server 3 buttons that point ONE iframe at different player pages (a server switch); server 2 offers only the 240p quality
+(so its list differs from server 1's), server 3 first loads a short "ad" video and 4 s later the real stream in the SAME document (an ad before the real video must NOT count as a server switch);
+/plain is a page with no video at all (a page change must empty the list)."""
 import http.server, os, struct, subprocess, sys, threading, time, zlib, binascii
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -32,6 +35,16 @@ def build():
         FILES["/hls/abc/v%s.txt" % q] = ("text/plain", pl.encode())
     FILES["/hls/abc/playlist.txt"] = ("text/plain", master.encode())
     FILES["/hls/abc/key"] = ("application/octet-stream", KEY)
+    # server 2: the same parts under another prefix, but its master lists only the 240p quality
+    for i in range(3): FILES["/hls/def/v240_%d.jpg" % i] = FILES["/hls/abc/v240_%d.jpg" % i]
+    FILES["/hls/def/v240.txt"] = FILES["/hls/abc/v240.txt"]
+    FILES["/hls/def/playlist.txt"] = ("text/plain", ("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH=400000,RESOLUTION=426x240,CODECS=\"avc1.42c01e,mp4a.40.2\"\nv240.txt\n").encode())
+    FILES["/hls/def/key"] = ("application/octet-stream", KEY)
+    # the "ad": a tiny progressive MP4 (no Referer check, see do_GET)
+    ad = os.path.join(GEN, "ad.mp4")
+    if not os.path.exists(ad):
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", os.path.join(GEN, "v240_0.ts"), "-c", "copy", "-movflags", "+faststart", ad], check=True)
+    FILES["/ads/ad.mp4"] = ("video/mp4", open(ad, "rb").read())
 
 PAGE_A = b"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Lab movie page</title>
 <body style="background:#111;color:#eee;font:16px sans-serif"><h1>Lab movie</h1><p>The player below comes from another site.</p>
@@ -55,6 +68,36 @@ PAGE_B = b"""<!doctype html><meta charset=utf-8><title>player</title><body style
 })();
 </script>"""
 
+def player(base, ad=False):
+    """A player page like PAGE_B that reads the stream under [base]; with [ad] it first fetches the ad video and starts the real stream 4 s later in the same document."""
+    return (b"""<!doctype html><meta charset=utf-8><title>player</title><body style="background:#222;color:#9f9;font:14px monospace">
+<div id=s>starting</div><video controls muted playsinline style="width:100%%;height:120px;background:#000"></video>
+<script>
+(function () {
+  var base = 'http://10.0.2.2:8004/hls/%s/', out = document.getElementById('s');
+  function get(u, bin) { return fetch(base + u).then(function (r) { if (!r.ok) throw new Error(u + ' ' + r.status); return bin ? r.arrayBuffer() : r.text(); }); }
+  function stream() {
+    get('playlist.txt').then(function (m) {
+      var v = m.split('\\n').filter(function (l) { return l && l[0] !== '#'; });
+      return get(v[0]).then(function (t) {
+        var segs = t.split('\\n').filter(function (l) { return l && l[0] !== '#'; });
+        return get('key', true).then(function () { return get(segs[0], true); }).then(function () { return get(segs[1], true); }).then(function () { out.textContent = 'player %s loaded: ' + segs.length + ' parts'; });
+      });
+    }).catch(function (e) { out.textContent = 'player error: ' + e; });
+  }
+  if (%s) { out.textContent = 'ad playing'; fetch('http://10.0.2.2:8004/ads/ad.mp4').then(function (r) { return r.arrayBuffer(); }).then(function () { setTimeout(stream, 4000); }); }
+  else setTimeout(stream, 800);
+})();
+</script>""" % (base.encode(), base.encode(), b"true" if ad else b"false"))
+
+PAGE_C = b"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Lab movie servers</title>
+<body style="background:#111;color:#eee;font:18px sans-serif"><h1>Lab movie 2</h1>
+<p><button style="font-size:20px;padding:10px" onclick="go('movie')">Server 1</button> <button style="font-size:20px;padding:10px" onclick="go('server2')">Server 2</button> <button style="font-size:20px;padding:10px" onclick="go('adfirst')">Server 3</button></p>
+<iframe id=f src="" style="width:100%%;height:260px;border:1px solid #444"></iframe>
+<script>function go(n) { document.getElementById('f').src = '%s/embed/' + n + '?id=7'; }</script></body>""" % PLAYER.encode()
+
+PAGE_PLAIN = b"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Plain page</title><body style="font:22px sans-serif"><h1>A page with no video</h1><p>Nothing to download here.</p></body>"""
+
 class H(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
     def log_message(self, fmt, *a): pass
@@ -70,9 +113,13 @@ class H(http.server.BaseHTTPRequestHandler):
         port = self.server.server_port; path = self.path.split("?")[0]
         if port == 8000 and path == "/watch": return self.send(200, "text/html; charset=utf-8", PAGE_A)
         if port == 8003 and path == "/embed/movie": return self.send(200, "text/html; charset=utf-8", PAGE_B)
+        if port == 8000 and path == "/watch2": return self.send(200, "text/html; charset=utf-8", PAGE_C)
+        if port == 8000 and path == "/plain": return self.send(200, "text/html; charset=utf-8", PAGE_PLAIN)
+        if port == 8003 and path == "/embed/server2": return self.send(200, "text/html; charset=utf-8", player("def"))
+        if port == 8003 and path == "/embed/adfirst": return self.send(200, "text/html; charset=utf-8", player("abc", ad=True))
         if port == 8004 and path in FILES:
             ref = self.headers.get("Referer") or ""; org = self.headers.get("Origin")
-            if not ref.startswith(PLAYER + "/") or (org is not None and org != PLAYER):
+            if not path.startswith("/ads/") and (not ref.startswith(PLAYER + "/") or (org is not None and org != PLAYER)):
                 return self.send(403, "text/plain", b"forbidden: this stream is for its own player only")
             ctype, body = FILES[path]
             rng = self.headers.get("Range")
