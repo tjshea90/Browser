@@ -76,6 +76,7 @@ class ShieldsBridge(
                     "pop" -> { onPop(m); "" }
                     "css" -> cosmeticCss(m.optString("h"), m.optBoolean("top", true))
                     "gen" -> genericCss(m.optString("h"), m.optJSONArray("t"))
+                    "proc" -> proceduralRules(m.optString("h"))
                     "media" -> { onMedia(m); "" }
                     "vid" -> { onVid(m); "" }
                     "warm" -> { warmLink(m.optString("o"), m.optString("p"), m.optString("w")); "" }
@@ -226,6 +227,15 @@ class ShieldsBridge(
         return css
     }
     private var cssLogged = 0
+
+    /** AD1b-4: the procedural cosmetic rules of a host (`:has-text()`, `:upward()`, `:remove()` ...), one per line in the stored form of [app.kestrel.core.filter.FilterSet.proceduralFor]; the page script runs them. Same Shields switches as [cosmeticCss]. */
+    private fun proceduralRules(host: String): String {
+        if (host.isEmpty()) return ""
+        val fs = Engine.peek() ?: return ""
+        val s = Shields.effective(prefs(), host)
+        if (!s.shieldsUp || !s.blockAds || !s.cosmetic) return ""
+        return fs.proceduralFor(host).joinToString("\n")
+    }
 
     /** D2: CSS for the generic selectors that can match a page holding these classes and ids (".class" / "#id"; at most [MAX_TOKENS] are looked at), under the same Shields switches as [cosmeticCss]. */
     private fun genericCss(host: String, tokens: org.json.JSONArray?): String {

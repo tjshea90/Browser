@@ -10,7 +10,7 @@ package app.kestrel.core.filter
 object BridgeLane {
     /** Page verdicts, page configuration, counters, media notes. */
     const val QUICK = 0
-    /** Element-hiding CSS (`css`) and the lazy batches of generic selectors (`gen`). */
+    /** Element-hiding CSS (`css`), the lazy batches of generic selectors (`gen`) and the procedural rules of a host (`proc`). */
     const val COSMETIC = 1
     /** The engine image chunks (`img`). */
     const val IMAGE = 2
@@ -21,7 +21,7 @@ object BridgeLane {
         if (raw !is String || !raw.startsWith(HEAD)) return QUICK
         return when {
             raw.startsWith("img\"", HEAD.length) -> IMAGE
-            raw.startsWith("css\"", HEAD.length) || raw.startsWith("gen\"", HEAD.length) -> COSMETIC
+            raw.startsWith("css\"", HEAD.length) || raw.startsWith("gen\"", HEAD.length) || raw.startsWith("proc\"", HEAD.length) -> COSMETIC
             else -> QUICK
         }
     }

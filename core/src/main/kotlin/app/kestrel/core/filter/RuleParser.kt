@@ -187,7 +187,9 @@ internal class RuleParser {
         when {
             line.startsWith("##", i) -> selStart = i + 2
             line.startsWith("#@#", i) -> { exception = true; selStart = i + 3 }
-            else -> return fail2(Skip.COSMETIC_UNSUPPORTED) // #?# #$# #%# #@?# ...
+            line.startsWith("#?#", i) -> selStart = i + 3                              // the ABP / uBO spelling of an extended (procedural) selector; a plain CSS selector here is just a normal rule
+            line.startsWith("#@?#", i) -> { exception = true; selStart = i + 4 }
+            else -> return fail2(Skip.COSMETIC_UNSUPPORTED) // #$# #%# ...
         }
         var selector = line.substring(selStart).trim()
         if (selector.startsWith("+js(") || selector.startsWith("^") || selector.isEmpty()) return fail2(Skip.COSMETIC_UNSUPPORTED)
