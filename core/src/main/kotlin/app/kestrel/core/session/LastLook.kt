@@ -52,9 +52,9 @@ object LastLookRules {
     const val SCROLL_SLOP_PX = 4
     /** The picture goes this long after the first paint at the latest (the engine may paint before it has scrolled to the restored place). */
     const val AFTER_PAINT_MS = 1500
-    /** After this long without a first paint a slim note says the picture is the saved view, and after [CAP_MS] it goes and the engine's own state shows. */
+    /** After this long without a first paint a slim note says the picture is the saved view, and after [CAP_MS] (the report says 12 s; this hotspot is slow, and the plain cover already waits 20 s) it goes and the engine's own state shows. */
     const val NOTE_AFTER_MS = 4000
-    const val CAP_MS = 12_000
+    const val CAP_MS = 20_000
     /** A new picture is taken at most this often while reading, 700 ms after the last scroll; leaving the page asks for one if the last is older than [LEAVE_MIN_AGE_MS]. */
     const val SETTLE_MS = 700
     const val MIN_GAP_MS = 4000

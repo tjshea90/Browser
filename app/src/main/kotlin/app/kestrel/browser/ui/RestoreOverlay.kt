@@ -137,5 +137,5 @@ class RestoreOverlay(ctx: Context, private var pal: Pal) : View(ctx) {
         c.drawText(message, box.centerX(), box.centerY() - (label.descent() + label.ascent()) / 2f, label)
     }
 
-    private fun fireDrawn() { val f = lookDrawn ?: return; lookDrawn = null; post(f) }
+    private fun fireDrawn() { val f = lookDrawn ?: return; lookDrawn = null; f() } // in the draw itself: the start-up timeline's "look" mark must not wait for what else is queued
 }

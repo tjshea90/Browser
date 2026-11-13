@@ -11,7 +11,7 @@ class GeckoTabData {
     var stateWritten: GeckoSession.SessionState? = null // the state object whose text is in tabstate/<id>.json now (the same object is not written twice)
     var stateWrittenUrl: String? = null // the address the tab showed when that file was written: a different address with no newer state = the file is out of date
     var delegates: TabDelegates? = null
-    var scroll: GeckoSession.ScrollDelegate? = null // held here because the session may keep only a weak view of it
+    var scroll: GeckoSession.CompositorScrollDelegate? = null // held here because the session may keep only a weak view of it
 }
 
 internal val Tab.gecko: GeckoTabData get() = (engineData as? GeckoTabData) ?: GeckoTabData().also { engineData = it }
