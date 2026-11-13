@@ -564,3 +564,8 @@ The download works now.
 5) for the video downloader, when I switch servers on the site for the video, it still keeps the old download buttons available. Have the download options refresh when new servers are selected and remove the old results from the list, but be careful not to have a false trigger when an advertisement video loads and then the real video. I don't want the app to think these are separate servers of the same download. 
 6) if it is possible, make the default download file names automatically rename intuitively. For example, if it can be figured from the site or video that the video on the page is Ozark season 2 Episode 5, auto rename the file if I select it for download to something intuitive such as Ozark2.5 or OzarkS02E05
 ```
+
+## 2026-11-13T19:51:19Z
+```
+Remove any of the diagnosis tools from the app that are no longer needed or already used with no further benefit
+```
