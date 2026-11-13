@@ -1575,6 +1575,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add("Network: ${GeckoEngine.networkProfile} (VPN active: ${NetworkMonitor.vpn}, LinkMeter tunnel recognised: ${NetworkMonitor.fastTunnel}, downloads yield to a loading page at ${DownloadController.pageYieldKBps} KB/s)")
         out.add(app.kestrel.browser.download.DownloadService.wifiLockLine() + ". " + app.kestrel.browser.net.WifiBoost.line())
         out.add(DownloadController.windowGapLine())
+        out.add(DownloadController.sizeLine())
         out.add(GeckoEngine.prefReadback)
         out.add(GeckoEngine.prefReadback2)
         out.add(GeckoEngine.videoPolicyText)

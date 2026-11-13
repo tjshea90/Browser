@@ -109,6 +109,9 @@ object DownloadController {
     fun priorityFor(uiVisible: Boolean): Int =
         if (uiVisible) Process.THREAD_PRIORITY_BACKGROUND + Process.THREAD_PRIORITY_MORE_FAVORABLE else Process.THREAD_PRIORITY_DEFAULT
 
+    /** Diagnostics (AO2): the size each recent stream download was shown with before it started, against what the file came to (no names: pasted Diagnostics end up in a public repo). */
+    fun sizeLine(): String = "Video size estimates: " + (streams?.sizeReport() ?: "no stream download has run yet this run")
+
     /** Diagnostics (EX-13): how long a connection sits idle between two windows of a download. */
     fun windowGapLine(): String {
         val g = engine?.windowGaps() ?: return "Download windows: no download has run yet this run"
