@@ -82,6 +82,13 @@ class MiniTrackerTest {
         assertEquals(listOf(3L), u.announce.map { it.id })
     }
 
+    @Test fun aDownloadThatFailedAtOnceIsListedButNotAnnounced() {
+        val t = MiniTracker(lingerMs = 6_000); t.begin(emptyList())
+        val u = t.update(listOf(v(1, DlState.FAILED, "bad.bin")), 0)
+        assertTrue(u.announce.isEmpty()); assertEquals(listOf(1L), ids(u))
+        assertTrue(ids(t.update(listOf(v(1, DlState.FAILED, "bad.bin")), 7_000)).isEmpty())
+    }
+
     @Test fun twoDownloadsAtOnceAreBothAnnouncedAndTheLastNamesTheBanner() {
         val t = MiniTracker(); t.begin(emptyList())
         val u = t.update(listOf(v(1, DlState.QUEUED, "a.zip"), v(2, DlState.QUEUED, "b.zip")), 0)

@@ -38,7 +38,11 @@ class MiniTracker(private val lingerMs: Long = 6_000) {
         for (v in views) byId[v.id] = v
         val announce = ArrayList<DownloadView>(2)
         for (v in views) {
-            if (known.add(v.id)) { if (v.state != DlState.CANCELED) { announce.add(v); tracked[v.id] = null; dismissed.remove(v.id) } }
+            if (known.add(v.id)) {
+                if (v.state == DlState.CANCELED) continue
+                if (v.state != DlState.FAILED) announce.add(v) // a download that failed at once (a bad address) is listed with its reason but did not "start"
+                tracked[v.id] = null; dismissed.remove(v.id)
+            }
             else if (v.id !in tracked && v.id !in dismissed && live(v)) tracked[v.id] = null    // started moving later (resumed from the manager)
             else if (v.id in dismissed && live(v)) { dismissed.remove(v.id); tracked[v.id] = null } // a closed row that was retried is a live download again
         }
