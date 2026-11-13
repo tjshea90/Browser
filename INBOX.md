@@ -592,3 +592,9 @@ The app is blocking ads and redirects from video sites well right now when I pre
 ```
 Use the icon on the left side in this photo. Rename the app Kestrel instead of Kestrel G
 ```
+
+## 2026-11-13T23:37:25Z
+```
+I accidentally pressed stop, continue where you left off 
+I opened the browser and pressed home to go to the home page, then closed and opened it again and it loaded doraby.com. it should have opened the home page because that was the last page open
+```
