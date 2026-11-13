@@ -1457,7 +1457,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** Diagnostics > Tap lab / Decode lab: a bundled page in a tab of its own (assets/labs/<name>.html); the page shows its own numbers. */
     private fun openLab(name: String) {
-        if (name != "tap" && name != "decode") return
+        if (name != "tap" && name != "decode" && name != "video") return
         closeDiagnostics()
         val url = "resource://android/assets/labs/$name.html"
         val t = newTabInternal()
