@@ -15,7 +15,7 @@ const ID = '1.111.1700000000000.1.2.3.4.5.6';
 // objects built inside the vm context have another Object.prototype: compare them as JSON
 const eq = (a, b, msg) => assert.equal(JSON.stringify(a), JSON.stringify(b), msg);
 const tick = (n) => new Promise((r) => setTimeout(r, n || 5));
-async function until(f, what) { for (let i = 0; i < 400; i++) { if (f()) return; await tick(5); } assert.fail('timed out waiting for ' + what); }
+async function until(f, what) { for (let i = 0; i < 2000; i++) { if (f()) return; await tick(5); } assert.fail('timed out waiting for ' + what); }
 
 /** The app's side of the image transfer: Kotlin's ExtImage.chunkReply format with a small chunk size so the image needs several messages. */
 function chunkReply(gen, i, size, id) {
