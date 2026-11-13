@@ -94,6 +94,7 @@ import app.kestrel.browser.data.TabStateStore
 import app.kestrel.browser.ui.BackPictures
 import app.kestrel.core.url.Nav
 import app.kestrel.core.url.Omnibox
+import app.kestrel.core.media.MediaNames
 import app.kestrel.core.url.UrlParts
 import app.kestrel.browser.web.ShieldsBridge
 import app.kestrel.browser.web.TabDelegates
