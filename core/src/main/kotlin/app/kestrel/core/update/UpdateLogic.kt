@@ -149,6 +149,23 @@ object UpdateLogic {
         return StoragePlan(needKeep = needDrop + apkBytes, needDrop = needDrop, free = freeBytes, reserve = reserveBytes, installTakes = 2 * apkBytes + nativeLibBytes + marginBytes)
     }
 
+    /**
+     * "Install the other way" (uninstall first, then install the saved file) is only a cure when the uninstall frees enough: the owner's tablet (alpha27 Diagnostics, 2026-11-13) had 1.62 GB free of 27.75 GB,
+     * the install needs about 3.1 GB, and an uninstall hands back only about 0.5 GB, so it would have left NO Kestrel G on the tablet and Android still refusing the saved file.
+     * [freeAfter]: the free space once the uninstall has handed back [ownBytes] (package, unpacked libraries, optimised code, data, cache), after the saved copy in Downloads took one APK (our own downloaded
+     * copy goes with the app's data: it is in [ownBytes] when it exists, and added here when the file still has to be downloaded). [need]: the bar for the fresh install with that copy kept
+     * ([StoragePlan.needKeep]).
+     */
+    class OtherWayPlan(val freeAfter: Long, val need: Long) {
+        val fits: Boolean get() = freeAfter >= need
+        val shortBy: Long get() = if (fits) 0L else need - freeAfter
+    }
+
+    fun otherWayPlan(plan: StoragePlan, ownBytes: Long, apkBytes: Long, fileKept: Boolean): OtherWayPlan {
+        val ours = if (fileKept) ownBytes else ownBytes + apkBytes // a copy that is still to be downloaded will be on the disk (and leave with the app) by then
+        return OtherWayPlan((plan.free + ours - apkBytes).coerceAtLeast(0L), plan.needKeep)
+    }
+
     /** Round a byte count UP to whole tens of megabytes (what the owner is told to free). */
     fun roundUpTenMb(bytes: Long): Long { val ten = 10L shl 20; return ((bytes + ten - 1) / ten) * ten }
 

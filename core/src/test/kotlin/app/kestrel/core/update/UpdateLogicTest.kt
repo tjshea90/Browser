@@ -107,6 +107,32 @@ class UpdateLogicTest {
         assertTrue(fits(155.5, 1130)); assertFalse(fits(155.5, 1115))
     }
 
+    @Test fun theOwnersTabletNeedsAboutThreeGigabytesAndTheOtherWayDoesNotHelp() {
+        // alpha27 Diagnostics from the owner's tablet: 1.62 GB free of 27.75 GB (reserve a tenth = 2.775 GB); this app: package 94.4 + libraries 131.7 + data 62.3 + cache 228.1 MB; alpha28 is a 94.4 MiB APK
+        val mib = 1L shl 20
+        fun m(x: Double) = (x * mib).toLong()
+        val reserve = m(2.775 * 1024)
+        val plan = UpdateLogic.storagePlan(m(94.4), m(131.7), freeBytes = m(1.62 * 1024), reserveBytes = reserve)
+        assertFalse(plan.fitsKeeping); assertFalse(plan.fitsDropping)
+        assertTrue("short by about 1.4 GB in place: ${plan.shortBy / mib} MiB", plan.shortBy in m(1400.0)..m(1500.0))
+        val other = UpdateLogic.otherWayPlan(plan, ownBytes = m(94.4 + 131.7 + 62.3 + 228.1), apkBytes = m(94.4), fileKept = true)
+        assertFalse(other.fits)
+        assertTrue("about 2.0 GB would be free after the uninstall: ${other.freeAfter / mib} MiB", other.freeAfter in m(2000.0)..m(2150.0))
+        assertTrue("and the install would still be about 1.1 GB short: ${other.shortBy / mib} MiB", other.shortBy in m(1050.0)..m(1200.0))
+    }
+
+    @Test fun theOtherWayFitsWhenTheUninstallFreesEnoughAndCountsADownloadThatIsStillToCome() {
+        val mb = 1L shl 20
+        val plan = UpdateLogic.storagePlan(92 * mb, 132 * mb, freeBytes = 1000 * mb, reserveBytes = 1100 * mb)       // needKeep 1464
+        val big = UpdateLogic.otherWayPlan(plan, ownBytes = 700 * mb, apkBytes = 92 * mb, fileKept = true)            // 1000 + 700 - 92 = 1608 >= 1464
+        assertTrue(big.fits); assertEquals(0L, big.shortBy); assertEquals(1608 * mb, big.freeAfter)
+        val small = UpdateLogic.otherWayPlan(plan, ownBytes = 400 * mb, apkBytes = 92 * mb, fileKept = true)          // 1308: 156 MB short
+        assertFalse(small.fits); assertEquals(156 * mb, small.shortBy)
+        val notYet = UpdateLogic.otherWayPlan(plan, ownBytes = 400 * mb, apkBytes = 92 * mb, fileKept = false)         // the download is on the disk by then and leaves with the app: same as kept
+        assertEquals(1400 * mb, notYet.freeAfter)
+        assertEquals(0L, UpdateLogic.otherWayPlan(UpdateLogic.storagePlan(92 * mb, 0, 0, 0), 0, 92 * mb, true).freeAfter) // never negative
+    }
+
     @Test fun storagePlanWithoutNativeLibraries() { // the WebView build: a 2 MB app on a small partition
         val mb = 1L shl 20
         val plan = UpdateLogic.storagePlan(2 * mb, 0, freeBytes = 400 * mb, reserveBytes = 300 * mb)
