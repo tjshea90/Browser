@@ -1215,3 +1215,7 @@
 ## 2026-11-13T14:23:40Z
 > Standing down: the heartbeat's old work list is finished, and your three requests are shipped in alpha30 and answered. I'm waiting for your reply on the version shown in Menu > Diagnostics, the exact words of the Cloudflare site, and which earlier prompts you meant.
 <!-- sha:c63a9a6b61e6 -->
+
+## 2026-11-13T16:19:08Z
+> Standing down again. This is the same 2-hourly heartbeat with the old alpha22-era text, and its work list is finished. I'm waiting for your reply on alpha30. The heartbeat is still on and costs a wake-up every 2 hours; say "disable it" and approve the request, or tell me to delete it.
+<!-- sha:b5f77a9002d8 -->
