@@ -24,7 +24,7 @@ object GeckoEngine {
      * Opens the connection (DNS, TCP, TLS) to [url]'s origin in Firefox's own network stack. GeckoView 160's public call, GeckoWebExecutor.speculativeConnect, does nothing once the engine
      * runs: its native side (widget/android/nsAppShell.cpp) returns at once unless it is called ON Gecko's main thread, and the Java wrapper calls it on the caller's thread. So the call is
      * dispatched there (research/REVIEW-EXTERNAL-1.md 2.2, EX-2). Both classes are GeckoView internals (org.mozilla.gecko): a newer GeckoView that moves them fails to compile here, which is the
-     * signal; the monthly engine check (HANDOFF.md section 2 step 0) must confirm that "speculativeConnect still compiles and still connects" (Diagnostics counts the calls). A head start only:
+     * signal; the monthly engine check (HANDOFF.md section 2 step 0) must confirm that "speculativeConnect still compiles and still connects" (each call is an `engine warm` line in the Diagnostics events). A head start only:
      * every failure is swallowed. Gecko itself skips it behind a proxy (the Courier PAC), by design.
      * @return true when the call was handed to the engine
      */
