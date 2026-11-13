@@ -32,6 +32,38 @@ object MediaSniff {
         return null
     }
 
+    /** What the first bytes of a response say it is, with the type and the file extension to use for it. */
+    class Sniffed(val kind: MediaKind, val mime: String, val ext: String)
+
+    /**
+     * Judge a response by its FIRST BYTES when its URL and Content-Type say nothing: stream sites often serve a playlist as text/plain or octet-stream under a ".txt" / ".css" / no extension, and a
+     * video under ".bin" or ".dat" (nothing in the URL names it, so [classify] cannot). Playlists: "#EXTM3U" (after a BOM and blanks) is HLS, an XML document with an `<MPD` root is DASH.
+     * Files: the signatures of MP4/MOV (`ftyp` at 4), Matroska/WebM, Ogg, FLV, AVI, MP3 (ID3 or a frame sync), MPEG program streams. A bare MPEG-TS is NOT a candidate (it is a segment).
+     * Conservative: null for anything else (a web page, JSON, an image, random data).
+     */
+    fun classifyBytes(b: ByteArray, n: Int = b.size): Sniffed? {
+        val len = minOf(n, b.size)
+        if (len < 8) return null
+        var i = 0
+        if (len >= 3 && b[0] == 0xEF.toByte() && b[1] == 0xBB.toByte() && b[2] == 0xBF.toByte()) i = 3
+        while (i < len && (b[i] == ' '.code.toByte() || b[i] == '\n'.code.toByte() || b[i] == '\r'.code.toByte() || b[i] == '\t'.code.toByte())) i++
+        fun at(o: Int, s: String): Boolean { if (o + s.length > len) return false; for (k in s.indices) if (b[o + k] != s[k].code.toByte()) return false; return true }
+        if (at(i, "#EXTM3U")) return Sniffed(MediaKind.HLS, "application/vnd.apple.mpegurl", "m3u8")
+        if (at(i, "<")) { // an XML document: DASH when its root element is MPD (a prolog or comments may come first)
+            val head = String(b, i, minOf(len - i, 1024), Charsets.ISO_8859_1)
+            if (head.contains("<MPD", ignoreCase = false) && !head.contains("<html", ignoreCase = true)) return Sniffed(MediaKind.DASH, "application/dash+xml", "mpd")
+            return null
+        }
+        if (at(4, "ftyp")) return Sniffed(MediaKind.FILE, if (at(8, "qt  ")) "video/quicktime" else if (at(8, "M4A ") || at(8, "M4B ")) "audio/mp4" else "video/mp4", if (at(8, "qt  ")) "mov" else if (at(8, "M4A ") || at(8, "M4B ")) "m4a" else "mp4")
+        if (len >= 4 && b[0] == 0x1A.toByte() && b[1] == 0x45.toByte() && b[2] == 0xDF.toByte() && b[3] == 0xA3.toByte()) return Sniffed(MediaKind.FILE, "video/webm", "webm") // EBML: WebM or Matroska
+        if (at(0, "OggS")) return Sniffed(MediaKind.FILE, "video/ogg", "ogv")
+        if (at(0, "FLV") && len > 3 && b[3] == 1.toByte()) return Sniffed(MediaKind.FILE, "video/x-flv", "flv")
+        if (at(0, "RIFF") && at(8, "AVI ")) return Sniffed(MediaKind.FILE, "video/x-msvideo", "avi")
+        if (at(0, "ID3") || (len > 1 && b[0] == 0xFF.toByte() && (b[1].toInt() and 0xFE) == 0xFA)) return Sniffed(MediaKind.FILE, "audio/mpeg", "mp3") // ID3 tag or an MPEG-1 layer 3 frame sync
+        if (len >= 4 && b[0] == 0.toByte() && b[1] == 0.toByte() && b[2] == 1.toByte() && b[3] == 0xBA.toByte()) return Sniffed(MediaKind.FILE, "video/mpeg", "mpg")
+        return null
+    }
+
     /** "video/mp4; codecs=avc1" -> "video/mp4" (lower case, no parameters). */
     fun baseType(contentType: String?): String = contentType?.substringBefore(';')?.trim()?.lowercase() ?: ""
 
