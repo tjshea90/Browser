@@ -1,0 +1,30 @@
+# What the owner's tablet said about itself (Diagnostics copy, alpha27, 2026-11-13)
+
+Source: owner message 21, pasted verbatim into INBOX.md (header `## 2026-11-13T05:02:25Z`). The report itself is stamped 03:59:20 UTC, app running 591 s, **alpha27 (code 126)**: the owner could NOT install alpha28 (see 1).
+Read once, do not re-derive. Open work is in TASKS.md AH1.
+
+## 1. Storage: the update cannot install (the blocker for every fix since alpha27)
+- `Storage: 1.62 GB free of 27.75 GB; free + caches Android can clear: 1.62 GB` (so there are no clearable caches; Kestrel's own 228.1 MB cache is NOT counted by Android as room it may take).
+- This app: package 94.4 MB + unpacked libraries 131.7 MB + data 62.3 MB + cache 228.1 MB (= 0.52 GB that an uninstall would give back, plus compiled code).
+- Android's rule (measured on the emulator image, research/UPDATE_STORAGE.md, `UpdateLogic.storagePlan`): keep 10 % of the data partition free after the install (here 2.77 GB) + the installer's staged copy of the APK (99 MB for alpha28) + the libraries it unpacks (131.7 MB) + about 48 MB of compiled code = **about 3.0 GB, 3.1 GB while Kestrel keeps its own downloaded copy**.
+- So: an update in place is short by **about 1.5 GB**. Uninstall first (Updates sheet "install the other way") gives back about 0.5 GB and a fresh install needs the same ~3.0 GB, so it is still about **0.9 GB short**: the other way would leave the owner with NO Kestrel G installed and the installer still refusing. (Their earlier "I installed it fine from GitHub after uninstalling" happened when the tablet had more free room.)
+- Not yet confirmed on this tablet: the 10 % rule itself (the emulator measured it; the owner's long-standing "newer versions never install over the old ones" fits it). The Updates sheet prints Android's own refusal and the number the first time Install is tried.
+- Only real fixes: the owner frees about 1.5 GB (downloaded movies in Downloads, unused apps, photos; a microSD card if the tablet has a slot), or Kestrel gets smaller. Kestrel can help with: a one-tap "Clear Kestrel's cache" (228 MB now, the engine's disk cache may grow to 500 MB), a listing of its own biggest downloads, and honest after-uninstall numbers (AH1b).
+
+## 2. doraby.com on alpha27 = the Firefox tracking-protection theory confirmed from the owner's own page
+- Page loads: `doraby.com  paint 1.1 s, done 1.6 s, 18 blocked`. The mirror/lab counts of OUR lists for that page were 7, so about 11 requests were blocked by **Firefox's own** protection (Disconnect "Content" list: jsDelivr, JW Player, Brightcove ...). alpha28 removes the CONTENT category and lists what the engine still blocks (Diagnostics > "Firefox's own tracking protection, this page"). Details: research/DORABY.md.
+- Events show the owner opened it at +318 s (`engine warm https://doraby.com/`), then 22 touch-downs about 0.2 s apart with `scrollable=0 handled=0` (+362 .. +384 s): the `pull down` log label is just the engine's answer to every finger-down (KestrelGeckoView.onTouchEvent), not a failed pull-to-refresh. Nothing on the page could scroll or take a tap: the owner was tapping where the missing search bar should be. No gesture bug.
+- Per-site "Shields off" does NOT switch Firefox's own protection off (no ContentBlockingController exception anywhere in geckoapp), so a page broken that way cannot be rescued by the owner without a new release: AH1c.
+
+## 3. Video and GPU (replaces the guesses in VIDEO_AUDIT.md sections 1 and 3)
+- Hardware decoders on this tablet: H.264 `MTK.VIDEO.DECODER.AVC` 2048x1088@145, H.265 `MTK.VIDEO.DECODER.HEVC` 2048x1088@145, **VP9 `MTK.VIDEO.DECODER.VP9` 2048x1088@68 (confirmed hardware)**, VP8 `MTK.VIDEO.DECODER.VPX`, MPEG-4, MPEG-2, MP3. AV1: software only (so never offered). AAC/Opus/Vorbis/FLAC: software (cheap). AC-3 / E-AC-3: none (a site stream with only Dolby audio would be silent or fail).
+- Widevine: L3, Google 15.0.0, HDCP unprotected (so protected video is standard-definition only; nothing we can change).
+- GPU: ARM Mali-G52 MC2, OpenGL ES 3.2 (pages see "Mali-G51, or similar": Firefox hides the exact chip).
+- BUG seen: `Video: codecs offered to sites: device decoders unknown: engine defaults, no AV1 [hardware decoders unknown]` although the probe read 26 decoders (`video decoders AHVi 26 decoder(s)` in the events, five times). `GeckoEngine.applyVideo` writes `videoPolicyText` as its last statement and never reruns once the answer is unchanged: AH1d.
+
+## 4. Everything else in the report is healthy (nothing to fix)
+- Memory 450-600 MB available, 4 of 6 tabs live, hibernation worked (`tabs hibernate tab=2,3`), heap 14/128 MB.
+- Fast Wi-Fi: LinkMeter tunnel recognised, 1000 KB/s yield, Wi-Fi lock taken once; keyboard probe delivered 14 layout events (EX-11 works on the real tablet); 7 warm-ups handed to the engine.
+- Scroll feel (measured): Standard / Smoother / Smoothest all SMOOTH, 64-65 compositor frames a second, 0 of 32 swipes with a gap over 100 ms; the real touch path 62 frames a second (worst first frame after touch 259 ms on one swipe).
+- Blocker: list #1 (2641 KB) loaded in 2974 ms at start (the image waited 2335 ms for the app), then 648 requests judged in the engine, average 723 us, slowest 11 ms, 0 errors.
+- Page loads: pelisjuanita.com 7 visits (3-15 blocked, done 1.5-5.2 s), tiktok 4.6 s, doraby 1.6 s. Nothing in the numbers says pelisjuanita.com is broken; whether it is the owner's choppy-video / stuck-symbol site is still unknown (asked in the alpha27 and alpha28 replies).
