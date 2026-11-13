@@ -151,6 +151,67 @@ function reportStats(force) {
   send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, w: (guardState + ', ' + guardBlocked + ' blocked | ' + stats.last).slice(0, 400) }).catch(function () {});
 }
 
+// ---------------------------------------------------------------- the page report (Diagnostics > Page report)
+// A page that is half empty here and fine in another browser is almost always one file that did not arrive (a CDN that cannot be reached, a 404, a reset connection) or one script that threw after a
+// blocked file, and none of it is visible to the owner. This keeps one short line for each of those per tab (the CURRENT page only) and hands them to the app once the page has settled:
+// 4 s after the last news, at most 3 times per page, nothing for a page nobody could look at. Blocked requests are listed too (a Shields block is the usual suspect), but ours are not "failures".
+var pageLog = new Map();   // tabId -> { page, reqs, nb, blocked: [], failed: [], errs: [], sent, key }
+var blockedIds = new Set(); // request ids WE cancelled: the browser reports them as errors too, they are not failures
+var reportTimers = new Map();
+var LOG_MAX = 30;
+function shortUrl(u) {
+  u = String(u || '');
+  var i = u.indexOf('://'); if (i > 0 && i < 8) u = u.slice(i + 3);
+  var q = u.indexOf('?'); if (q >= 0) u = u.slice(0, q + 1) + '..';
+  return u.length > 110 ? u.slice(0, 108) + '..' : u;
+}
+function newLog(tabId, url) {
+  pageLog.delete(tabId); // a new page: the old lines are history
+  pageLog.set(tabId, { page: String(url || '').slice(0, 200), reqs: 0, nb: 0, blocked: [], failed: [], errs: [], sent: 0, key: '' });
+  if (pageLog.size > 12) pageLog.delete(pageLog.keys().next().value);
+  var t = reportTimers.get(tabId); if (t !== undefined) { clearTimeout(t); reportTimers.delete(tabId); }
+}
+function reportLater(tabId) {
+  var old = reportTimers.get(tabId); if (old !== undefined) clearTimeout(old);
+  reportTimers.set(tabId, setTimeout(function () { reportTimers.delete(tabId); sendReport(tabId); }, 4000));
+}
+function sendReport(tabId) {
+  var L = pageLog.get(tabId);
+  if (!L || L.sent >= 3) return;
+  var key = L.reqs + '|' + L.nb + '|' + L.failed.length + '|' + L.errs.length;
+  if (key === L.key) return; // nothing new since the last one
+  L.key = key; L.sent++;
+  send({ k: 'rep', p: L.page, n: L.reqs, nb: L.nb, b: L.blocked, f: L.failed, e: L.errs }).catch(function () {});
+}
+function logBlocked(d) {
+  if (d.requestId !== undefined) { blockedIds.add(d.requestId); if (blockedIds.size > 300) blockedIds.delete(blockedIds.values().next().value); }
+  var L = pageLog.get(d.tabId); if (!L) return;
+  L.nb++; if (L.blocked.length < LOG_MAX) L.blocked.push(d.type + ' ' + shortUrl(d.url));
+  reportLater(d.tabId);
+}
+function logFailed(d, what) {
+  var L = pageLog.get(d.tabId); if (!L) return;
+  if (L.failed.length < LOG_MAX) L.failed.push(d.type + ' ' + shortUrl(d.url) + ' ' + what);
+  reportLater(d.tabId);
+}
+browser.webRequest.onErrorOccurred.addListener(function (d) {
+  if (d.tabId < 0 || blockedIds.has(d.requestId)) return;
+  if (d.error === 'NS_BINDING_ABORTED' || d.error === 'NS_ERROR_ABORT') return; // the page was left or stopped, or another extension said no: not a network failure
+  logFailed(d, String(d.error || 'error').replace(/^NS_ERROR_/, ''));
+}, { urls: ['http://*/*', 'https://*/*'] });
+browser.webRequest.onCompleted.addListener(function (d) {
+  if (d.statusCode >= 400 && d.tabId >= 0) logFailed(d, 'HTTP ' + d.statusCode);
+}, { urls: ['http://*/*', 'https://*/*'] });
+// content.js tells about scripts that threw and about files an element could not load (the network may have worked and the file still be unusable: wrong type, broken)
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'jserr' || !sender || !sender.tab) return undefined;
+  var L = pageLog.get(sender.tab.id);
+  if (!L || L.errs.length >= 12) return undefined;
+  L.errs.push(m.t === 'load' ? ('file not usable: ' + String(m.m).slice(0, 12) + ' ' + shortUrl(m.s)) : (String(m.m || '').slice(0, 140) + ' @ ' + shortUrl(m.s) + ':' + (m.l | 0)));
+  reportLater(sender.tab.id);
+  return undefined;
+});
+
 // ---------------------------------------------------------------- the legacy path: one question to the app per request (cached per page; used while no engine is loaded)
 var verdicts = new Map();
 var VERDICT_MAX = 4000;
@@ -169,7 +230,7 @@ function legacy(d, page) {
   var key = d.type + '|' + d.url + '|' + page;
   var hit = verdicts.get(key);
   if (hit !== undefined) {
-    if (hit) { legacyCountLater(page); return { cancel: true }; }
+    if (hit) { legacyCountLater(page); logBlocked(d); return { cancel: true }; }
     return {};
   }
   // Plain strings both ways (JSON text in, "1"/"0" out): the engine's object marshalling rejected structured replies ("Invalid event data for callback").
@@ -179,6 +240,7 @@ function legacy(d, page) {
     var blocked = r === '1';
     if (verdicts.size >= VERDICT_MAX) verdicts.delete(verdicts.keys().next().value);
     verdicts.set(key, blocked);
+    if (blocked) logBlocked(d);
     return blocked ? { cancel: true } : {};
   }, function () { return {}; }); // never break a page because the app could not answer
 }
@@ -298,7 +360,7 @@ function decide(d, page, host, mode) {
       var us = (performance.now() - t0) * 1000;
       stats.checks++; stats.us += us; if (us > stats.maxUs) stats.maxUs = us; if (us > 2000) stats.slow++;
       markStats();
-      if ((v & 1) !== 0) { countBlock(page, (v >>> 2) & 3); return { cancel: true }; }
+      if ((v & 1) !== 0) { countBlock(page, (v >>> 2) & 3); logBlocked(d); return { cancel: true }; }
       return {};
     } catch (e) {
       stats.errors++; stats.last = 'check failed: ' + (e && e.message); markStats();
@@ -313,10 +375,12 @@ browser.webRequest.onBeforeRequest.addListener(function (d) {
   if (d.type === 'main_frame') {
     sniffed.delete(d.tabId); tabTop.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again (delete first: Map keeps the old position of a key, and the OLDEST position is what is dropped)
     verdicts.clear(); // legacy verdicts are only worth keeping while ONE page loads
+    newLog(d.tabId, d.url); reportLater(d.tabId); // the page report starts here (4 s after the last news it goes to the app)
     var h = pageHost(d.url);
     if (h) { cfgMode.delete(h); cfgAt.delete(h); cssCache.delete('t|' + h); askCfg(h); } // a Shields switch may have changed: ask again. Not awaited - the answer beats the document's first bytes over a hotspot
     return {};
   }
+  var L0 = pageLog.get(d.tabId); if (L0) L0.reqs++;
   var page = topPage(d);
   if (!page) return {};
   var host = pageHost(page);
