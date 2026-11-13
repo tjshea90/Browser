@@ -3,11 +3,11 @@ package app.kestrel.core.shield
 /**
  * The categories of Firefox's own tracking protection (GeckoView `ContentBlocking.AntiTracking`; the numbers are the shipped constants, pinned by EtpCategoriesTest) and the choice Kestrel makes.
  *
- * GeckoView's STRICT (766) is AD + ANALYTIC + SOCIAL + CONTENT + TEST + CRYPTOMINING + FINGERPRINTING + STP + EMAIL. CONTENT is Mozilla's (Disconnect's) "Content" list: not trackers but the CDNs and video players
+ * GeckoView's STRICT (766) is AD + ANALYTIC + SOCIAL + CONTENT + TEST + CRYPTOMINING + FINGERPRINTING + EMAIL (STP, strict social tracking protection, is a separate builder switch that Kestrel also sets). CONTENT is Mozilla's (Disconnect's) "Content" list: not trackers but the CDNs and video players
  * pages are built from: cdn.jsdelivr.net, unpkg.com, jwpcdn.com (JW Player), Brightcove, Kaltura, Mux, Bitmovin, Uplynk, Vimeo, Cloudflare, Shopify's CDN, pinimg.com, twimg.com ... Firefox itself only gets away
  * with blocking them in Strict mode because Mozilla's service sends it allow-lists for the sites that break; a GeckoView app does not get those. Until alpha28 Kestrel blocked them for everybody: doraby.com showed no
  * photos and no icons (its lazy-loader, slider and icon font come from jsDelivr) and video players stayed on their loading symbol (research/DORABY.md). Ads and trackers are Kestrel's own lists' job (EasyList,
- * EasyPrivacy, uBlock), so everything of STRICT stays except CONTENT.
+ * EasyPrivacy, uBlock), so everything of STRICT stays except CONTENT (750).
  */
 object EtpCategories {
     const val AD = 2

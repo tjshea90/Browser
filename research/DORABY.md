@@ -34,7 +34,7 @@ Same local copy, same real Gecko build, but the jsDelivr host answers 404 (`tool
 
 1. **Mozilla's tracking-protection list names jsDelivr.** `disconnect-blacklist.json` (mozilla-services/shavar-prod-lists) has `cdn.jsdelivr.net` (entity "Volentio JSD") in the **"Content"** category. The same category holds JW Player's
    CDN (jwpcdn.com), Brightcove, Kaltura, Mux, Bitmovin, Uplynk, Vimeo, UNPKG, Cloudflare, Shopify's CDN, pinimg.com, twimg.com ... (115 entities): the libraries and video players pages are built from.
-2. **Kestrel asked Firefox for its Strict set, which includes that category.** `GeckoEngine.create` used `AntiTracking.STRICT` = 766 = AD + ANALYTIC + SOCIAL + **CONTENT (16)** + TEST + CRYPTOMINING + FINGERPRINTING + STP + EMAIL.
+2. **Kestrel asked Firefox for its Strict set, which includes that category.** `GeckoEngine.create` used `AntiTracking.STRICT` = 766 = AD + ANALYTIC + SOCIAL + **CONTENT (16)** + TEST + CRYPTOMINING + FINGERPRINTING + EMAIL (strict social tracking protection is a separate switch).
    Read back on the emulator: `urlclassifier.trackingTable = moztest-track-simple,ads-track-digest256,analytics-track-digest256,social-track-digest256,content-track-digest256`.
 3. **Firefox blocks what is in that table.** Experiment on the emulator (test entries mark a third-party host as a tracker: `debug.kestrel.pref1 urlclassifier.trackingTable.testEntries=127.0.0.1`): the page's third-party script and picture
    did not load, the dock shield counted 3, and the new Page report said `FAILED: script 127.0.0.1:8003/probe.js TRACKING_URI` (that is Firefox's error name for "blocked as a tracker").
