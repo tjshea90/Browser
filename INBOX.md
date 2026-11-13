@@ -536,3 +536,8 @@ You didn't answer several of my last prompts. Put any unanswered prompt into the
 2) when I long press a link and press open in new tab, open it in a new tab in the background, but keep the foreground on the current tab
 3) there are some web site compatibility issues. Doraby doesn't load movies at all, one site said incompatible browser or the browser can't access cloudflare
 ```
+
+## 2026-11-13T16:36:25Z
+```
+Can this browser benefit from adb commands because I have the cable now
+```
