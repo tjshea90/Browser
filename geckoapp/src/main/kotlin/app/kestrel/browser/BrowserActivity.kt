@@ -640,7 +640,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun createSession(tab: Tab): GeckoSession {
         val settings = GeckoSessionSettings.Builder()
             .usePrivateMode(tab.isPrivateTab)
-            .useTrackingProtection(true)
+            .useTrackingProtection(app.kestrel.browser.diag.DebugProps.get(this, "debug.kestrel.notp") != "1") // debug builds only: `setprop debug.kestrel.notp 1` creates sessions with the engine's per-session tracking protection flag OFF (emulator experiment, research/TABLET_DIAG_2026-11-13.md)
             .suspendMediaWhenInactive(true)
             .userAgentMode(if (tab.desktop) GeckoSessionSettings.USER_AGENT_MODE_DESKTOP else GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
             .viewportMode(if (tab.desktop) GeckoSessionSettings.VIEWPORT_MODE_DESKTOP else GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
