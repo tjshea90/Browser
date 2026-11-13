@@ -111,7 +111,7 @@ class StreamEngineMp4Test {
         assertNotNull(v.note); assertTrue(v.note!!, v.note!!.startsWith("1 part"))
         val r = Mp4Reader(h.out(v))
         assertEquals("the film is whole: two runs of two segments", 200, r.track("vide")!!.samples.size)
-        val asked = h.cdn.seen.map { it.url.substringAfterLast('/') }.toSet()
+        val asked = h.cdn.requests.map { it.substringBefore(' ').substringAfterLast('/') }.toSet()
         assertTrue("segment 2 (the first of the advertisement) was fetched to judge it: $asked", "s2.ts" in asked)
         assertTrue("the rest of the advertisement (3, 4, 5) was never asked for: $asked", listOf("s3.ts", "s4.ts", "s5.ts").none { it in asked })
         assertTrue("the film around it was fetched: $asked", listOf("s0.ts", "s1.ts", "s6.ts", "s7.ts").all { it in asked })
