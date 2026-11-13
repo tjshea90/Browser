@@ -312,6 +312,31 @@ class VideoFlow(private val a: BrowserActivity) {
             val media = (text?.let { Hls.parse(it, probe.url) } as? Hls.MediaPlaylist)?.media
             streamInfo[c.key] = if (media == null) Loaded.Failed("The stream's list could not be read.") else ready(tab, c, master, media, text, probe)
             refresh(tab)
+            if (media != null && text != null) calibrateMaster(tab, c, master, media, text, probe)
+        }
+    }
+
+    /**
+     * The qualities of a master playlist are sized by the rate each one declares, and a declared rate is the PEAK, often 20 to 50 % above what the file averages (AO2: "the video downloader is inaccurate at
+     * estimating file size"). Measure a few parts of the one quality whose list was read (a one-byte Range request each: only the headers of the reply matter, so it costs almost no data), see how far its
+     * declared rate was off, and scale every quality by that ([SizeEstimate]). Muxed streams only: with the sound in a list of its own the declared rate covers both and the measured parts only the picture.
+     * The list is redrawn when the answers are in.
+     */
+    private fun calibrateMaster(tab: Tab, c: MediaCandidate, master: Hls.Master, media: Hls.Media, text: String, probe: Hls.Variant) {
+        val n = media.segments.size
+        if (media.exactBytes >= 0 || n == 0 || probe.bytesPerSecond <= 0 || master.audioFor(probe) != null) return
+        val idx = SizeEstimate.sampleIndexes(n)
+        val sizes = LongArray(idx.size) { -1L }
+        var answered = 0
+        idx.forEachIndexed { k, i ->
+            DownloadController.fetchBytes(a, media.segments[i].url, 0L, 0L, requestHeaders(tab, c), 1, tab.isPrivateTab, onTotal = { len -> sizes[k] = len }) {
+                if (++answered == idx.size) {
+                    val rate = SizeEstimate.measuredRate(idx.indices.map { sizes[it] }, idx.map { media.segments[it].durationMs })
+                    val cal = SizeEstimate.calibration(rate, probe.bytesPerSecond)
+                    Health.log("media", "size-calibrated", "samples=${idx.size} measured=${rate.toLong()} B/s declared=${probe.bytesPerSecond} B/s factor=${String.format(java.util.Locale.US, "%.2f", cal)}")
+                    if (rate > 0 && streamInfo[c.key] is Loaded.Ready) { streamInfo[c.key] = ready(tab, c, master, media, text, probe, calibration = cal); refresh(tab) }
+                }
+            }
         }
     }
 
@@ -322,20 +347,22 @@ class VideoFlow(private val a: BrowserActivity) {
     private fun sizeBareStream(tab: Tab, c: MediaCandidate, media: Hls.Media, text: String) {
         val n = media.segments.size
         if (media.exactBytes >= 0 || n == 0 || media.segments[0].len >= 0) return
-        val picks = if (n >= 3) listOf(0, n / 2) else listOf(0)
-        val got = ArrayList<Long>()
-        for (i in picks) DownloadController.fetchBytes(a, media.segments[i].url, 0L, 0L, requestHeaders(tab, c), 1, tab.isPrivateTab, onTotal = { len ->
-            got.add(len)
-            if (got.size == picks.size) {
-                val factor = if (media.container == "ts") 0.95 else 1.0               // the MP4 made of a transport stream is a little smaller than the stream
-                val guess = (got.average() * n * factor).toLong()
-                val cur = streamInfo[c.key]
-                if (cur is Loaded.Ready) { streamInfo[c.key] = ready(tab, c, null, media, text, null, guess); refresh(tab) }
+        val idx = SizeEstimate.sampleIndexes(n)                     // spread over the timeline, weighted by each part's length (AO2)
+        val sizes = LongArray(idx.size) { -1L }
+        var answered = 0
+        idx.forEachIndexed { k, i ->
+            DownloadController.fetchBytes(a, media.segments[i].url, 0L, 0L, requestHeaders(tab, c), 1, tab.isPrivateTab, onTotal = { len -> sizes[k] = len }) {
+                if (++answered == idx.size) {
+                    val rate = SizeEstimate.measuredRate(idx.indices.map { sizes[it] }, idx.map { media.segments[it].durationMs })
+                    val guess = SizeEstimate.total(rate, media.durationMs, media.container) // an MP4 made of a transport stream is a little smaller than the stream
+                    val cur = streamInfo[c.key]
+                    if (guess > 0 && cur is Loaded.Ready) { streamInfo[c.key] = ready(tab, c, null, media, text, null, guess); refresh(tab) }
+                }
             }
-        }) { }
+        }
     }
 
-    private fun ready(tab: Tab, c: MediaCandidate, master: Hls.Master?, media: Hls.Media, mediaText: String?, probe: Hls.Variant?, sizeGuess: Long = -1L): Loaded {
+    private fun ready(tab: Tab, c: MediaCandidate, master: Hls.Master?, media: Hls.Media, mediaText: String?, probe: Hls.Variant?, sizeGuess: Long = -1L, calibration: Double = 1.0): Loaded {
         when (media.problem) {
             Hls.Problem.LIVE -> return Loaded.Failed("This is a live stream. Live streams cannot be saved.")
             Hls.Problem.DRM -> return Loaded.Failed("This video is copy-protected (DRM). Kestrel cannot save it.")
@@ -356,7 +383,7 @@ class VideoFlow(private val a: BrowserActivity) {
         val seen = HashSet<String>()
         for (v in master.variants.sortedWith(compareBy<Hls.Variant> { it.audioOnly }.thenByDescending { it.height }.thenByDescending { it.bandwidth })) {
             if (!seen.add("${v.height}|${v.bandwidth / 100_000}|${v.audioOnly}")) continue
-            val est = v.bytesPerSecond * (media.durationMs / 1000)
+            val est = SizeEstimate.calibrated(v.bytesPerSecond, calibration, media.durationMs, media.container) // the declared rate is a peak: scaled by what the measured parts weighed (calibrateMaster)
             val sepAudio = master.audioFor(v)
             val text = if (v === probe) mediaText else null
             val title = if (v.audioOnly) "Audio only" else v.label
