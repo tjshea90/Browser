@@ -256,9 +256,13 @@ class FilterSetTest {
             "example.com##.ok", "example.com##.bad{background:url(http://evil/x)}", "example.com##div:has-text(Ad)",
             "example.com##+js(set-constant, a, b)", "example.com#?#.x", "example.com##.esc\\:ape", "~example.com##.neg", "example.*##.entity",
         ))
-        val css = b.build(1L).cosmeticCss("example.com")
-        assertEquals(".ok{display:none!important}\n", css)
-        assertEquals(1, b.report.cosmeticSite)
+        val fs = b.build(1L)
+        val css = fs.cosmeticCss("example.com")
+        // `#?#.x` is only the extended SPELLING of a plain selector (a normal rule since alpha26); the :has-text() rule is a procedural one for the page script (ProceduralRulesTest): never CSS
+        assertEquals(".ok{display:none!important}\n.x{display:none!important}\n", css)
+        assertEquals(3, b.report.cosmeticSite)
+        assertEquals(1, fs.proceduralFor("example.com").size)
+        assertFalse(css.contains("has-text") || css.contains("Ad") || css.contains('\u0002'))
     }
 
     @Test
