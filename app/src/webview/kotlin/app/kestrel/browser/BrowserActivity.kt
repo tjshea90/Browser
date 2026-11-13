@@ -761,6 +761,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
             if (!isPrivate) Io.exec { UpdateJob.schedule(applicationContext) } // the update schedule may have changed
         }
         override fun clearBrowsingData() { this@BrowserActivity.clearBrowsingData() }
+        override fun tidyStorage() { runStorageTidy(true) }
         override fun resetSiteShields() { Shields.clearAll(); toast("Per-site Shields reset") }
         override fun backupNow() { backup.backupNow() }
         override fun restoreFromFile() { backup.restoreFromFile() }
