@@ -24,6 +24,7 @@ import java.io.IOException
  */
 class MediaStoreSinks(private val ctx: Context) : SinkFactory {
     private val resolver: ContentResolver = ctx.contentResolver
+    private companion object { const val TRIES = 8 }
 
     /**
      * Android renames a clashing name itself ("big.bin" -> "big (1).bin"), but when THAT name is also taken by a leftover database row for a file that no longer
