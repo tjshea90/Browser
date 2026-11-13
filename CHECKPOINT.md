@@ -1,26 +1,22 @@
-# CHECKPOINT 1478 — read me first, then TASKS.md
+# CHECKPOINT 1482 — read me first, then TASKS.md
 
-**Written:** 2026-11-13T05:02:13Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `b7d8126` (this checkpoint is the commit after it)
+**Written:** 2026-11-13T05:11:00Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `f1ba26b` (this checkpoint is the commit after it)
 
 ## Just done
-handoff saved (.handoff/handoff.md + archive 2026-11-13T05-01-56Z; CLAUDE.md/AGENTS.md Session Learnings updated); alpha28 shipped and answered
+Owner message 21 (their Diagnostics copy from the tablet, alpha27) written into TASKS as AH1 (a-g) and read in research/TABLET_DIAG_2026-11-13.md: the tablet cannot install alpha28 (1.62 GB free, about 3.1 GB needed), doraby 18 blocked vs 7 of ours confirms the Firefox tracking-protection cause, hardware VP9/H.265/H.264 decoders confirmed, Video policy line stale, no gesture bug
 
 ## Do this next
-wait for the owner's reply on alpha28 (doraby.com photos/icons, movie player, Diagnostics copy if still broken, site/link of any choppy video); then follow .handoff/handoff.md nextSteps; heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN stands down while work is under 60 min old
+AH1d: GeckoEngine.applyVideo set videoPolicyText before the prefs + UI-thread hop + Health.log; then AH1c ContentBlockingController exceptions on the per-site Shields switch; then AH1b updater sheet (after-uninstall numbers, Clear cache); then answer the owner (storage first)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M .handoff/handoff.json
-     M .handoff/handoff.md
-     M .handoff/handoffs/index.md
-     M AGENTS.md
-     M CLAUDE.md
-    ?? .handoff/handoffs/2026-11-13/
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  29bfbb4 ckpt 1478: handoff saved (.handoff/handoff.md + archive 2026-11-13T05-01-56Z; CLAUDE.md/
   2e2935d ckpt 1476: alpha28 SHIPPED and RECORDED: kestrel-g-v0.3.0-alpha28 (gecko code 127), run 
   ec67869 ckpt 1474: gated kestrel-g-v0.3.0-alpha28 (gecko code 127) and pushed it: handoff self-t
   a562cab ckpt 1473: alpha28 gates green: JVM (core + app + gecko compile), 123 web tests, pref na
@@ -30,8 +26,7 @@ wait for the owner's reply on alpha28 (doraby.com photos/icons, movie player, Di
   101b4b1 ckpt 1447: Owner message 19 (doraby.com: no photos, no search bar in Kestrel; Brave fine
   c0c149f ckpt 1443: alpha27 SHIPPED and RECORDED: kestrel-g-v0.3.0-alpha27 (gecko code 126), run 
   d107bc4 ckpt 1440: alpha27 (kestrel-g-v0.3.0-alpha27, gecko code 126) gated, pushed and DISPATCH
-  f453a50 ckpt 1439: gated kestrel-g-v0.3.0-alpha27 (gecko code 126) and pushed it: handoff self-t
 ```
 
-(1 automatic checkpoint(s) since the last deliberate one — the
+(3 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
