@@ -156,10 +156,14 @@ object UpdateLogic {
         val shortBy: Long get() = if (free >= needDrop) 0L else needDrop - free
     }
 
-    /** [marginBytes]: the optimised code the installer compiles (measured 31 MiB for the release build; 48 leaves room for a larger dex). */
-    fun storagePlan(apkBytes: Long, nativeLibBytes: Long, freeBytes: Long, reserveBytes: Long, marginBytes: Long = 48L shl 20): StoragePlan {
-        val needDrop = reserveBytes + apkBytes + nativeLibBytes + marginBytes // our own copy is deleted once the installer has its own: that frees one APK
-        return StoragePlan(needKeep = needDrop + apkBytes, needDrop = needDrop, free = freeBytes, reserve = reserveBytes, installTakes = 2 * apkBytes + nativeLibBytes + marginBytes)
+    /**
+     * [reserveBytes]: what Android keeps free ([lowReserve], or Android's own answer). [marginBytes]: room for the optimised code the installer compiles and for rounding (the measured line has none: the
+     * bisection brackets of 3-8 MiB sat within 5 MiB of it).
+     */
+    fun storagePlan(apkBytes: Long, nativeLibBytes: Long, freeBytes: Long, reserveBytes: Long, marginBytes: Long = 32L shl 20): StoragePlan {
+        val installTakes = 2 * (apkBytes + nativeLibBytes) + marginBytes
+        val needKeep = reserveBytes + installTakes
+        return StoragePlan(needKeep = needKeep, needDrop = needKeep - apkBytes, free = freeBytes, reserve = reserveBytes, installTakes = installTakes) // our own copy is deleted once the installer has its own: that frees one APK
     }
 
     /**
