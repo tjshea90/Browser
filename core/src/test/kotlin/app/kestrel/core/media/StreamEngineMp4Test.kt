@@ -104,17 +104,17 @@ class StreamEngineMp4Test {
     }
 
     @Test(timeout = 60_000) fun theRestOfALeftOutAdvertisementIsNotFetched() {
-        // one connection: the first segment of the advertisement is judged (another format = left out) before the next one is asked for
+        // one connection: the first segment of the advertisement is judged (another format, not longer than the film so far = left out) before the next one is asked for
         val h = H(config = cfg(conns = 1))
-        val names = listOf("a_0.ts", "a_1.ts", "ad_0.ts", "ad_0.ts", "ad_0.ts", "ad_0.ts", "a_0.ts", "a_1.ts")
-        val v = h.completed(h.enqueue(tsStream(h, names, disc = setOf(2, 6))))
+        val names = listOf("a_0.ts", "a_1.ts", "a_2.ts", "ad_0.ts", "ad_0.ts", "ad_0.ts", "a_0.ts", "a_1.ts", "a_2.ts")
+        val v = h.completed(h.enqueue(tsStream(h, names, disc = setOf(3, 6))))
         assertNotNull(v.note); assertTrue(v.note!!, v.note!!.startsWith("1 part"))
         val r = Mp4Reader(h.out(v))
-        assertEquals("the film is whole: two runs of two segments", 200, r.track("vide")!!.samples.size)
+        assertEquals("the film is whole: two runs of three segments", 300, r.track("vide")!!.samples.size)
         val asked = h.cdn.requests.map { it.substringBefore(' ').substringAfterLast('/') }.toSet()
-        assertTrue("segment 2 (the first of the advertisement) was fetched to judge it: $asked", "s2.ts" in asked)
-        assertTrue("the rest of the advertisement (3, 4, 5) was never asked for: $asked", listOf("s3.ts", "s4.ts", "s5.ts").none { it in asked })
-        assertTrue("the film around it was fetched: $asked", listOf("s0.ts", "s1.ts", "s6.ts", "s7.ts").all { it in asked })
+        assertTrue("segment 3 (the first of the advertisement) was fetched to judge it: $asked", "s3.ts" in asked)
+        assertTrue("the rest of the advertisement (4, 5) was never asked for: $asked", listOf("s4.ts", "s5.ts").none { it in asked })
+        assertTrue("the film around it was fetched: $asked", listOf("s0.ts", "s1.ts", "s2.ts", "s6.ts", "s7.ts", "s8.ts").all { it in asked })
     }
 
     @Test(timeout = 60_000) fun streamsThatAreNotH264WithAacStayTsFilesAndSayWhy() {
