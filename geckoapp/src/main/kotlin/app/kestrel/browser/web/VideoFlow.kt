@@ -37,14 +37,45 @@ class VideoFlow(private val a: BrowserActivity) {
     private val probed = HashSet<String>()              // files whose first bytes were already read to learn their picture size
     private val sized = HashSet<String>()               // files whose length was already asked for (found in the page markup, never requested)
     private val children = HashSet<String>()            // addresses of the variant / audio playlists of masters we have read: they are not rows of their own
+    private val childUrls = HashMap<String, List<String>>() // master key -> its children (forgotten together with it)
     private var panel: VideoPanel? = null
     private var panelTab: Tab? = null
     private var panelPressed: String? = null
     private var panelExtras: List<Pair<String, () -> Unit>> = emptyList()
 
+    /**
+     * The tab a sniffed address belongs to (owner 2026-11-13: "only include downloadable videos for the page I am currently viewing"): the selected tab when it is on exactly that page (two tabs on one page:
+     * the one being looked at), else the first tab on it, else a tab on that site. NEVER simply "the tab in front": a late answer of a page the tab has already left is not news for the page it is on now.
+     */
+    private fun tabOf(page: String): Tab? {
+        if (page.isEmpty()) return a.current
+        val u = page.substringBefore('#')
+        return a.current?.takeIf { it.url.substringBefore('#') == u } ?: a.tabWithUrl(page) ?: a.tabForPage(page)
+    }
+
+    /** What the tab's list held is gone (a new page): the list is emptied and everything learned about its entries is forgotten, so the same address on the next page is read afresh. UI thread. */
+    fun clearTab(tab: Tab) { val keys = tab.media.keys(); tab.media.clear(); forget(keys) }
+
+    private fun forget(keys: List<String>) {
+        for (k in keys) { streamInfo.remove(k); probed.remove(k); sized.remove(k); childUrls.remove(k)?.forEach { children.remove(it) } }
+    }
+
+    /**
+     * The player frame of the page went to another document (the owner switched servers): what that document offered is removed and the sheet, if it is open, shows what is left. Called on the Shields
+     * worker thread. An advertisement in the same player, or an ad frame of its own, never comes here: the extension only says "gone" for a frame that is REPLACED.
+     */
+    fun gone(page: String, docs: List<String>) = Io.ui {
+        val t = tabOf(page) ?: return@ui
+        val keys = t.media.dropFrames(docs)
+        if (keys.isEmpty()) return@ui
+        forget(keys)
+        Health.log("media", "server-switch", "dropped=${keys.size} frames=${docs.size}")
+        a.refreshDownloadButton(); refresh(t)
+    }
+
     /** Called on the Shields worker thread. */
     fun seen(c: MediaCandidate) = Io.ui {
-        val t = a.current?.takeIf { it.url == c.page } ?: a.tabWithUrl(c.page) ?: a.tabForPage(c.page) ?: a.current ?: return@ui // the selected tab when it is on exactly that page (two tabs on one page: the one being looked at), else the first tab on it; the same host or the selected tab only as a fallback
+        val t = tabOf(c.page) ?: return@ui
         if (t.media.add(c)) a.refreshDownloadButton()
     }
 
@@ -57,7 +88,7 @@ class VideoFlow(private val a: BrowserActivity) {
     fun maybe(m: org.json.JSONObject) = Io.ui {
         val url = m.optString("u"); val page = m.optString("p")
         if (!(url.startsWith("http://", true) || url.startsWith("https://", true))) return@ui
-        val t = a.current?.takeIf { it.url == page } ?: a.tabWithUrl(page) ?: a.tabForPage(page) ?: a.current ?: return@ui
+        val t = tabOf(page) ?: return@ui
         if (t.isNewTab || t.media.find(url) != null) return@ui
         if (maybeAsked.size > 500) maybeAsked.clear()
         if (!maybeAsked.add(t.id.toString() + "|" + MediaCandidate.keyOf(url))) return@ui
@@ -85,7 +116,7 @@ class VideoFlow(private val a: BrowserActivity) {
 
     /** Called on the Shields worker thread. */
     fun info(page: String, url: String, width: Int, height: Int, durationMs: Long, label: String?) = Io.ui {
-        val t = (if (page.isNotEmpty()) a.current?.takeIf { it.url == page } ?: a.tabWithUrl(page) ?: a.tabForPage(page) else null) ?: a.current ?: return@ui
+        val t = tabOf(page) ?: return@ui
         t.media.applyInfo(url, width, height, durationMs, label)
         a.refreshDownloadButton()
     }
@@ -268,6 +299,7 @@ class VideoFlow(private val a: BrowserActivity) {
         val vs = master.variants
         for (v in vs) children.add(v.url)
         for (r in master.renditions) r.url?.let { children.add(it) }
+        childUrls[c.key] = vs.map { it.url } + master.renditions.mapNotNull { it.url }
         if (vs.isEmpty()) { streamInfo[c.key] = Loaded.Failed("This stream lists no qualities."); refresh(tab); return }
         val probe = vs.filter { !it.audioOnly }.minByOrNull { it.bandwidth } ?: vs.minByOrNull { it.bandwidth }!!
         DownloadController.fetchText(a, probe.url, headers, 1, tab.isPrivateTab) { text ->

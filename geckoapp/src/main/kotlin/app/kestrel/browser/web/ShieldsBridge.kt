@@ -45,6 +45,8 @@ class ShieldsBridge(
     private val pageIsPrivate: (String) -> Boolean = { true },
     /** A response that says nothing about being media (text/plain, octet-stream, a "picture" a script fetched) but might be a playlist or a video in disguise: the whole message (u, c, l, p, f, rf, og, ty). Worker thread. */
     private val mediaMaybe: (JSONObject) -> Unit = {},
+    /** A player frame of the page went to another document (a server switch): the page's address and the documents that are gone (their candidates must be dropped). Worker thread. */
+    private val mediaGone: (String, List<String>) -> Unit = { _, _ -> },
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -84,6 +86,7 @@ class ShieldsBridge(
                     "proc" -> proceduralRules(m.optString("h"))
                     "media" -> { onMedia(m); "" }
                     "maybe" -> { mediaMaybe(m); "" }
+                    "gone" -> { m.optJSONArray("d")?.let { arr -> mediaGone(m.optString("p"), (0 until arr.length()).map { arr.optString(it) }.filter { it.isNotEmpty() }) }; "" }
                     "vid" -> { onVid(m); "" }
                     "warm" -> { warmLink(m.optString("o"), m.optString("p"), m.optString("w")); "" }
                     "rep" -> { onPageReport(m); "" }

@@ -204,7 +204,7 @@ open class BrowserActivity : Activity(), DockListener {
                 GeckoEngine.runtime(this)
                 GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
                 GeckoEngine.warmUp(this)
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l -> video.info(p, u, w, h, d, l) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l -> video.info(p, u, w, h, d, l) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }))
                 Health.log("engine", "runtime-ready")
             }
         }
@@ -564,6 +564,9 @@ open class BrowserActivity : Activity(), DockListener {
         return try { tabs.toTypedArray().firstOrNull { it != null && it.topHost == h } } catch (e: Exception) { null }
     }
 
+    /** A new page began in [tab]: what the old page offered to save is no longer on offer (TabDelegates.onPageStart). */
+    internal fun pageStarted(tab: Tab) { video.clearTab(tab) }
+
     internal fun newTabAndShow(privateTab: Boolean = false): Tab { val t = newTabInternal(null, privateTab); show(t); focusUrlBar(); return t }
 
     /** Regular <-> private skin: the whole chrome (dock, Home, progress line, system bars) turns violet in private mode, so it can never be mistaken for a normal tab. */
@@ -899,7 +902,7 @@ open class BrowserActivity : Activity(), DockListener {
         tab.topHost = host
         tab.shields = Shields.effective(prefs, host)
         tab.resetPageCounters()
-        tab.media.clear()
+        video.clearTab(tab)
         val s = ensureSession(tab, cover = false) // the address typed now replaces whatever the tab held: no preview of the old page
         syncEngineProtection(tab)
         if (current === tab) attachContent(tab)
