@@ -1426,3 +1426,7 @@
 ## 2026-11-13T23:42:09Z
 > Home-restore fix status: the session file now records "Home was showing", and a restored Home tab loads nothing behind it. It compiles and its session tests pass. I'm building it into the emulator now to prove the open page → Home → close → reopen sequence, then I'll re-run the full suite and ship alpha33.
 <!-- sha:e98976976859 -->
+
+## 2026-11-13T23:42:41Z
+> Waiting on the install and the emulator run. Nothing else is running that could disturb it.
+<!-- sha:ee9deda89b8e -->
