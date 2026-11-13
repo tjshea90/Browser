@@ -48,6 +48,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
 
     fun rebuild() {
         body.removeAllViews()
+        card = null
         section("Search")
         choice("Search engine", Prefs.ENGINES.map { it.name }, Prefs.ENGINES.indexOfFirst { it.id == prefs.searchId }.coerceAtLeast(0)) { prefs.searchId = Prefs.ENGINES[it].id }
 
