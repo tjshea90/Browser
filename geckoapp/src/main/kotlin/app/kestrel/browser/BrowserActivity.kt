@@ -179,6 +179,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        StartTimeline.activityCreated() // EY-2: the start-up timeline (Diagnostics)
         window.setBackgroundDrawableResource(R.color.window_bg) // the cold-start window showed the shield; from here on it is plain black behind every page and panel
         ProcessLife.uiAlive = true; ProcessLife.cancel()
         prefs = Prefs.get(this)
@@ -202,13 +203,14 @@ open class BrowserActivity : Activity(), DockListener {
         // Start the engine right AFTER the first frame (it takes a moment on this CPU; the native UI is already on screen), pre-launch its content process,
         // then attach the ad/tracker blocking extension to the app's filter engine.
         android.view.Choreographer.getInstance().postFrameCallback {
+            StartTimeline.mark("frame")
             Io.main.post {
                 Health.log("engine", "runtime-create")
                 GeckoEngine.runtime(this)
                 GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
                 GeckoEngine.warmUp(this)
                 ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l -> video.info(p, u, w, h, d, l) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }))
-                Health.log("engine", "runtime-ready")
+                Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
             }
         }
         val firstTab = Tab(nextTabId++)
@@ -1489,6 +1491,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun engineFacts(): List<String> {
         val out = ArrayList<String>()
         val ver = try { Class.forName("org.mozilla.geckoview.BuildConfig").getField("MOZ_APP_VERSION").get(null) } catch (e: Exception) { "?" }
+        out.addAll(StartTimeline.lines())
         out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null }} of ${tabs.size} tabs (the memory budget keeps up to ${liveBudget()} ready, MemAvailable ${Health.memAvailableMb()} MB, setting ${listOf("automatic", "few", "many")[prefs.tabsKept]}); current ${current?.url?.take(60) ?: "-"}")
         out.add("Network: ${GeckoEngine.networkProfile} (VPN active: ${NetworkMonitor.vpn}, LinkMeter tunnel recognised: ${NetworkMonitor.fastTunnel}, downloads yield to a loading page at ${DownloadController.pageYieldKBps} KB/s)")
         out.add(app.kestrel.browser.download.DownloadService.wifiLockLine() + ". " + app.kestrel.browser.net.WifiBoost.line())
@@ -1833,6 +1836,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     internal fun pageFinished(tab: Tab, real: Boolean = true) {
+        if (tab === current) StartTimeline.mark("stop")
         flushCounters()
         if (real && tab === restoringTab) hideRestoring("page-stop") // the load ended (a page that never reported its first paint must not keep the preview up)
         // A failed or blocked load is not a visit (typos and malware URLs would otherwise fill history and the top sites).
@@ -1910,7 +1914,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     /** The engine painted real content for [tab] (called from ContentDelegate.onFirstContentfulPaint). */
-    internal fun firstPaint(tab: Tab) { if (tab === restoringTab) hideRestoring("first-paint") }
+    internal fun firstPaint(tab: Tab) { if (tab === current) StartTimeline.mark("paint"); if (tab === restoringTab) hideRestoring("first-paint") }
 
     // ================================================================== back handling (works on Android 10 and on 16's predictive back)
 
