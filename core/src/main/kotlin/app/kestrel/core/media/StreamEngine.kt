@@ -186,6 +186,8 @@ class StreamEngine(
         var media: Hls.Media? = null
         val staged = BitSet()
         val claimed = BitSet()
+        /** Segments nobody fetched because the MP4 writer is leaving their run out (an advertisement of another format): they only move the output's pointer. */
+        val skipped = BitSet()
         var stagedBytes = 0L
         var stagedCount = 0
         val inflight = AtomicLong()
@@ -887,7 +889,7 @@ class StreamEngine(
     /** The lowest segment nobody has and nobody is fetching: in order, so the output can grow as soon as the first ones are in. */
     private fun claim(job: Job, n: Int): Int? = synchronized(lock) {
         var i = job.rec.next
-        while (i < n) { if (!job.staged.get(i) && !job.claimed.get(i)) { job.claimed.set(i); return i }; i++ }
+        while (i < n) { if (!job.staged.get(i) && !job.claimed.get(i) && !job.skipped.get(i)) { job.claimed.set(i); return i }; i++ }
         null
     }
 
@@ -910,12 +912,19 @@ class StreamEngine(
         catch (e: IOException) { throw SinkException(Reason.STORAGE, "the MP4 journal could not be written", e) }
     }
 
-    private fun nextReady(job: Job, media: Hls.Media): Boolean = synchronized(lock) { !job.stop && job.rec.next < media.segments.size && job.staged.get(job.rec.next) }
+    private fun nextReady(job: Job, media: Hls.Media): Boolean = synchronized(lock) { !job.stop && job.rec.next < media.segments.size && (job.staged.get(job.rec.next) || job.skipped.get(job.rec.next)) }
 
     private fun appendNext(job: Job, media: Hls.Media): Boolean {
         val rec = job.rec
         val idx: Int
-        synchronized(lock) { idx = rec.next; if (job.stop || idx >= media.segments.size || !job.staged.get(idx)) return false }
+        synchronized(lock) {
+            idx = rec.next
+            if (job.stop || idx >= media.segments.size) return false
+            if (!job.staged.get(idx)) {
+                if (!job.skipped.get(idx)) return false
+                rec.next = idx + 1; return true                          // never fetched: the MP4 writer leaves this run out, only the pointer moves
+            }
+        }
         val seg = media.segments[idx]
         val sink = job.sink ?: return false
         val mux = job.mux
@@ -945,7 +954,7 @@ class StreamEngine(
                     while (true) { val r = input.read(buf); if (r < 0) break; emit(buf, 0, r) }
                 }
             }
-            if (mux != null) { mux.endSegment(); written = mux.position }
+            if (mux != null) { mux.endSegment(); written = mux.position; if (mux.leavingRunOut) skipRestOfRun(job, media, idx) }
         } catch (e: IOException) { if (mux != null) job.muxDirty = true; throw SinkException(Reason.STORAGE, "could not read a staged segment", e) }
         catch (e: SinkException) { if (mux != null) job.muxDirty = true; throw e }
         catch (e: Failed) { if (mux != null) job.muxDirty = true; throw e }
@@ -958,6 +967,15 @@ class StreamEngine(
         }
         f.delete()
         return true
+    }
+
+    /**
+     * The MP4 writer judged the run [idx] belongs to (after its first segment) and is leaving it out: the rest of that run, up to the next #EXT-X-DISCONTINUITY, is not worth fetching. Segments that are
+     * already being fetched or are staged are left alone (they are appended and thrown away as before); a download that is resumed after a kill fetches them again (the muxer's journal knows the run is out).
+     */
+    private fun skipRestOfRun(job: Job, media: Hls.Media, idx: Int) = synchronized(lock) {
+        var i = idx + 1
+        while (i < media.segments.size && !media.segments[i].discontinuity) { if (!job.staged.get(i) && !job.claimed.get(i)) job.skipped.set(i); i++ }
     }
 
     /** The playing time of the run that segment [idx] begins (it runs up to the next #EXT-X-DISCONTINUITY); 0 for a segment inside a run. */

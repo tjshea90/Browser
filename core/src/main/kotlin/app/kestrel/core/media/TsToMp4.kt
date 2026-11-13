@@ -30,6 +30,9 @@ class TsToMp4(
     private val mux = Mp4Mux(out, nowMs)
     private val demux = TsDemux(this)
 
+    /** True while the rest of a run is being left out (its format is not the main one): the engine need not fetch the segments that remain in that run. */
+    val leavingRunOut: Boolean get() = skipping
+
     /** Bytes written to the output so far (the MP4 body; the `moov` follows at [finish]). */
     val position: Long get() = mux.pos
 

@@ -26,7 +26,7 @@ class StreamEngineMp4Test {
     private val harnesses = ArrayList<H>()
     @After fun cleanup() { harnesses.forEach { it.stop() } }
 
-    private fun cfg(directMp4: Boolean = true) = Config(maxActive = 2, maxConnsPerDownload = 3, maxConnsTotal = 6, windowBytes = 0, checkpointMs = 20, stallMs = 60_000, backoffBaseMs = 1, backoffCapMs = 4, directMp4 = directMp4)
+    private fun cfg(directMp4: Boolean = true, conns: Int = 3) = Config(maxActive = 2, maxConnsPerDownload = conns, maxConnsTotal = 6, windowBytes = 0, checkpointMs = 20, stallMs = 60_000, backoffBaseMs = 1, backoffCapMs = 4, directMp4 = directMp4)
 
     private inner class H(val cdn: FakeCdn = FakeCdn(), val sinks: FakeSinks = FakeSinks(), val store: MemStreamStore = MemStreamStore(), config: Config = cfg()) {
         val net = FakeNet()
@@ -101,6 +101,20 @@ class StreamEngineMp4Test {
         assertNotNull(v.note); assertTrue(v.note!!, v.note!!.startsWith("1 part"))
         val r = Mp4Reader(h.out(v))
         assertEquals(200, r.track("vide")!!.samples.size); assertEquals(128, r.track("vide")!!.width)
+    }
+
+    @Test(timeout = 60_000) fun theRestOfALeftOutAdvertisementIsNotFetched() {
+        // one connection: the first segment of the advertisement is judged (another format = left out) before the next one is asked for
+        val h = H(config = cfg(conns = 1))
+        val names = listOf("a_0.ts", "a_1.ts", "ad_0.ts", "ad_0.ts", "ad_0.ts", "ad_0.ts", "a_0.ts", "a_1.ts")
+        val v = h.completed(h.enqueue(tsStream(h, names, disc = setOf(2, 6))))
+        assertNotNull(v.note); assertTrue(v.note!!, v.note!!.startsWith("1 part"))
+        val r = Mp4Reader(h.out(v))
+        assertEquals("the film is whole: two runs of two segments", 200, r.track("vide")!!.samples.size)
+        val asked = h.cdn.seen.map { it.url.substringAfterLast('/') }.toSet()
+        assertTrue("segment 2 (the first of the advertisement) was fetched to judge it: $asked", "s2.ts" in asked)
+        assertTrue("the rest of the advertisement (3, 4, 5) was never asked for: $asked", listOf("s3.ts", "s4.ts", "s5.ts").none { it in asked })
+        assertTrue("the film around it was fetched: $asked", listOf("s0.ts", "s1.ts", "s6.ts", "s7.ts").all { it in asked })
     }
 
     @Test(timeout = 60_000) fun streamsThatAreNotH264WithAacStayTsFilesAndSayWhy() {
