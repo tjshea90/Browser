@@ -1,21 +1,27 @@
-# CHECKPOINT 1476 — read me first, then TASKS.md
+# CHECKPOINT 1478 — read me first, then TASKS.md
 
-**Written:** 2026-11-13T04:59:07Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `48237ff` (this checkpoint is the commit after it)
+**Written:** 2026-11-13T05:02:13Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `b7d8126` (this checkpoint is the commit after it)
 
 ## Just done
-alpha28 SHIPPED and RECORDED: kestrel-g-v0.3.0-alpha28 (gecko code 127), run 43368098105 green, Release has the 99 MB signed APK + .sha256; AF1 (doraby.com) cause found+fixed (Firefox ETP STRICT incl. CONTENT blocked jsDelivr/JW Player/Brightcove... CDNs), AG1 lab numbers recorded
+handoff saved (.handoff/handoff.md + archive 2026-11-13T05-01-56Z; CLAUDE.md/AGENTS.md Session Learnings updated); alpha28 shipped and answered
 
 ## Do this next
-answer the owner in plain words (Release link on its own line): doraby cause + fix + proof level (emulator; jsDelivr itself on the tablet not observed), video complaint probably same cause, lab numbers meaning (tablet fine: hardware decode, 0 dropped, 65 fps), Page report + Reload without cache usage, what to send if still broken; re-list open owner items. Then idle (heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN stands down while work is under 60 min old)
+wait for the owner's reply on alpha28 (doraby.com photos/icons, movie player, Diagnostics copy if still broken, site/link of any choppy video); then follow .handoff/handoff.md nextSteps; heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN stands down while work is under 60 min old
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M TASKS.md
+     M .handoff/handoff.json
+     M .handoff/handoff.md
+     M .handoff/handoffs/index.md
+     M AGENTS.md
+     M CLAUDE.md
+    ?? .handoff/handoffs/2026-11-13/
 
 ## Last ten checkpoints
 ```
+  2e2935d ckpt 1476: alpha28 SHIPPED and RECORDED: kestrel-g-v0.3.0-alpha28 (gecko code 127), run 
   ec67869 ckpt 1474: gated kestrel-g-v0.3.0-alpha28 (gecko code 127) and pushed it: handoff self-t
   a562cab ckpt 1473: alpha28 gates green: JVM (core + app + gecko compile), 123 web tests, pref na
   a3a8e82 ckpt 1470: AF1 cause found + fixed + proven in real Gecko on the emulator: Kestrel asked
@@ -25,5 +31,7 @@ answer the owner in plain words (Release link on its own line): doraby cause + f
   c0c149f ckpt 1443: alpha27 SHIPPED and RECORDED: kestrel-g-v0.3.0-alpha27 (gecko code 126), run 
   d107bc4 ckpt 1440: alpha27 (kestrel-g-v0.3.0-alpha27, gecko code 126) gated, pushed and DISPATCH
   f453a50 ckpt 1439: gated kestrel-g-v0.3.0-alpha27 (gecko code 126) and pushed it: handoff self-t
-  6b35128 ckpt 1437: AE1 alpha27 built+tested: autoplay fix PROVEN on emulator, DRM prompt proven,
 ```
+
+(1 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
