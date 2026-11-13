@@ -218,14 +218,19 @@ object DownloadController {
      * Fetch a small text (a playlist) through the same network stack the downloads use (Firefox's, so the page's cookies apply) and hand it to [onDone] on the UI thread;
      * null = it could not be read. At most 4 MB.
      */
-    fun fetchText(ctx: Context, url: String, headers: Map<String, String>, kind: Int, priv: Boolean, onDone: (String?) -> Unit) {
+    fun fetchText(ctx: Context, url: String, headers: Map<String, String>, kind: Int, priv: Boolean, onDone: (String?) -> Unit) = fetchTextStatus(ctx, url, headers, kind, priv) { text, _ -> onDone(text) }
+
+    /** [fetchText] that also says what the server answered: the HTTP status (-1 = no answer at all: a network error, a timeout). Lets the caller try other request headers after a 401 / 403. */
+    fun fetchTextStatus(ctx: Context, url: String, headers: Map<String, String>, kind: Int, priv: Boolean, onDone: (String?, Int) -> Unit) {
         init(ctx)
         Io.exec {
             var text: String? = null
+            var status = -1
             try {
                 val f = fetchers[kind] ?: fetchers[0]!!
                 val resp = f.open(FetchRequest(url, -1, -1, null, headers, 15_000, 20_000, priv))
                 try {
+                    status = resp.status
                     if (resp.status in 200..299) {
                         val out = java.io.ByteArrayOutputStream()
                         val buf = ByteArray(16 * 1024)
@@ -235,20 +240,22 @@ object DownloadController {
                     }
                 } finally { try { resp.close() } catch (e: Exception) { /* ignore */ } }
             } catch (e: Exception) { /* null: the caller says so */ }
-            Io.ui { onDone(text) }
+            Io.ui { onDone(text, status) }
         }
     }
 
     /** A byte range of a file (a media file's first bytes, its `moov` box), at most [to]-[from]+1 bytes, handed to [onDone] on the UI thread; null = it could not be read. */
-    fun fetchBytes(ctx: Context, url: String, from: Long, to: Long, headers: Map<String, String>, kind: Int, priv: Boolean, onTotal: ((Long) -> Unit)? = null, onDone: (ByteArray?) -> Unit) {
+    fun fetchBytes(ctx: Context, url: String, from: Long, to: Long, headers: Map<String, String>, kind: Int, priv: Boolean, onTotal: ((Long) -> Unit)? = null, onStatus: ((Int) -> Unit)? = null, onDone: (ByteArray?) -> Unit) {
         init(ctx)
         Io.exec {
             var data: ByteArray? = null
             var total = -1L
+            var status = -1
             try {
                 val f = fetchers[kind] ?: fetchers[0]!!
                 val resp = f.open(FetchRequest(url, from, to, null, headers, 15_000, 20_000, priv))
                 try {
+                    status = resp.status
                     // the size of the whole file: the end of "Content-Range: bytes 0-0/48213", or the plain length of a reply that ignored Range
                     total = (if (resp.status == 206) resp.header("Content-Range")?.substringAfterLast('/')?.trim()?.toLongOrNull() else if (resp.status == 200) resp.header("Content-Length")?.trim()?.toLongOrNull() else null) ?: -1L
                     if (resp.status == 200 || resp.status == 206) {
