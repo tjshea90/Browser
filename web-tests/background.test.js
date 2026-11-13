@@ -82,7 +82,7 @@ function harness(app, opts) {
     sent, raws, ctx, listeners, clock,
     mainFrame: (url, extra) => listeners.before(Object.assign({ type: 'main_frame', url, tabId: 1, frameId: 0 }, extra || {})),
     /** a message from a content script (the first listener that answers wins, like the browser) */
-    message: (m, tabId, senderUrl) => { for (const f of listeners.message || []) { const r = f(m, { tab: tabId === undefined ? { id: 1 } : (tabId < 0 ? undefined : { id: tabId }), url: senderUrl }); if (r !== undefined) return r; } return undefined; },
+    message: (m, tabId, senderUrl, frameId) => { for (const f of listeners.message || []) { const r = f(m, { tab: tabId === undefined ? { id: 1 } : (tabId < 0 ? undefined : { id: tabId }), url: senderUrl, frameId: frameId === undefined ? 0 : frameId }); if (r !== undefined) return r; } return undefined; },
     req,
     flushTimers: async () => { const t = timers.splice(0); t.forEach((f) => f()); await tick(); },
     of: (k) => sent.filter((m) => m.k === k),
@@ -527,6 +527,25 @@ test('server switch: a player frame that went to another server gets a fresh bud
   for (let f = 1; f <= 10; f++) for (let i = 0; i < 12; i++) h2.listeners.headers(inFrame(f, 0, 'https://f' + f + '.example/d', 'https://cdn.example/f' + f + '/' + i, 'application/octet-stream', 800, 1000 + f * 20 + i));
   await tick(10);
   assert.equal(h2.of('maybe').length, 48, 'forty-eight over all frames');
+});
+
+test('server switch: an address found in a player frame\'s own script is filed under the PAGE and the player document, even when the message names no tab', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '10' });
+  navigate(h, 7, 0, PLAYER1);                                                  // the page's iframe loads server one (the frame is now known to belong to tab 1)
+  h.message({ k: 'dom', u: 'https://ads.example/preroll.mp4', p: PLAYER1 }, -1, PLAYER1, 7); // its script names a file; the browser gave the message no tab
+  await tick(10);
+  const m = h.of('media');
+  assert.equal(m.length, 1);
+  assert.equal(m[0].p, PAGE, 'the page the tab is on, not the player\'s address'); assert.equal(m[0].f, PLAYER1, 'the document that holds it'); assert.equal(m[0].s, 'dom');
+  navigate(h, 7, 0, PLAYER2);                                                  // another server: that document is gone, and so is what its script named
+  await tick(10);
+  const g = h.of('gone');
+  assert.equal(g.length, 1); eq(g[0].d, [PLAYER1]);
+  h.message({ k: 'dom', u: 'https://ads.example/preroll.mp4', p: PLAYER2 + '#x' }, -1, PLAYER2, 7); // the second player names the same file; a fragment does not make another document
+  navigate(h, 7, 0, PLAYER1);
+  await tick(10);
+  eq(h.of('gone').map((x) => x.d), [[PLAYER1], [PLAYER2]]);
 });
 
 test('server switch: an advertisement that plays before the real video is NOT a server switch (same document, or a frame of its own)', async () => {
