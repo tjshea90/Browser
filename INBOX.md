@@ -204,3 +204,9 @@ This session's worker process was restarted. If your previous turn was already c
 ```
 Do the fixes and optimizations from the review, but also finish the work you were already doing before I interrupted with the review file
 ```
+
+## 2026-11-13T02:47:31Z
+```
+Audit how the browser handles video within a webpage. Is it using proper acceleration and hardware? Does the browser need more built in codecs or video support? A video I'm playing is choppy, and the initial loading symbol which came from the site's own video player seems to be stuck over the video when it should have disappeared after loading. Figure out if the browser has proper support for common elements of web sites such as updated java, hardware acceleration, video and audio codecs, etc. 
+Research If any free, copyrighted or trademarked or proprietary codecs or engines or code or plugins or features or software can be implemented in this browser that can genuinely speed anything up, help any of the features, optimize the browser for my hardware, or improve anything in the browser at all including but not limited to coding, speed, support for web page loading, faster video/audio loading and decoding, video downloading, security, caching, or anything else without slowing down the browser or breaking anything, then implement it. For paid/proprietary/copyrighted software or scripts or anything else, I will contact the owner/company for approval and payment
+```
