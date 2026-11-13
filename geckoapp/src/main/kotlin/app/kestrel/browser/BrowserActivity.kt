@@ -640,7 +640,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun createSession(tab: Tab): GeckoSession {
         val settings = GeckoSessionSettings.Builder()
             .usePrivateMode(tab.isPrivateTab)
-            .useTrackingProtection(app.kestrel.browser.diag.DebugProps.get(this, "debug.kestrel.notp") != "1") // debug builds only: `setprop debug.kestrel.notp 1` creates sessions with the engine's per-session tracking protection flag OFF (emulator experiment, research/TABLET_DIAG_2026-11-13.md)
+            .useTrackingProtection(true)                       // the engine's own tracking protection; syncEngineProtection() switches it off for sites whose Shields are down
             .suspendMediaWhenInactive(true)
             .userAgentMode(if (tab.desktop) GeckoSessionSettings.USER_AGENT_MODE_DESKTOP else GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
             .viewportMode(if (tab.desktop) GeckoSessionSettings.VIEWPORT_MODE_DESKTOP else GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
@@ -670,12 +670,14 @@ open class BrowserActivity : Activity(), DockListener {
                 tab.gecko.state = null
                 tab.pendingLoad = null
                 tab.shields = Shields.effective(prefs, UrlParts.hostOf(tab.url))
+                syncEngineProtection(tab)
                 s.restoreState(state!!) // brings back the tab's whole history, not just its last page
             }
             pending != null -> {
                 tab.pendingLoad = null
                 tab.shields = Shields.effective(prefs, UrlParts.hostOf(pending))
                 tab.topHost = UrlParts.hostOf(pending)
+                syncEngineProtection(tab)
                 s.loadUri(pending)
             }
         }
@@ -897,6 +899,7 @@ open class BrowserActivity : Activity(), DockListener {
         tab.resetPageCounters()
         tab.media.clear()
         val s = ensureSession(tab, cover = false) // the address typed now replaces whatever the tab held: no preview of the old page
+        syncEngineProtection(tab)
         if (current === tab) attachContent(tab)
         s.loadUri(url)
         updateUi()
@@ -1005,6 +1008,7 @@ open class BrowserActivity : Activity(), DockListener {
         for (t in tabs) {
             if ((t.topHost ?: UrlParts.hostOf(t.url)) == host) {
                 t.shields = Shields.effective(prefs, host)
+                syncEngineProtection(t) // BEFORE the reload: Firefox's own protection follows the site's Shields too
                 if (t === current) t.session?.reload()
             }
         }
@@ -1574,7 +1578,7 @@ open class BrowserActivity : Activity(), DockListener {
         override fun say(message: String) { Toast.makeText(this@BrowserActivity, message, Toast.LENGTH_LONG).show() }
         override fun ask(title: String, message: String, yes: String, no: String, result: (Boolean) -> Unit) { askYesNo(title, message, yes, no, result) }
         override fun afterRestore() {
-            for (t in tabs) t.shields = Shields.effective(prefs, t.topHost)
+            for (t in tabs) { t.shields = Shields.effective(prefs, t.topHost); syncEngineProtection(t) }
             GeckoEngine.applyPrefs(applicationContext)
             Io.exec { UpdateJob.schedule(applicationContext) }
             settingsView?.rebuild()
@@ -1588,7 +1592,7 @@ open class BrowserActivity : Activity(), DockListener {
     private val settingsListener = object : SettingsListener {
         override fun closeSettings() { this@BrowserActivity.closeSettings() }
         override fun prefsChanged() {
-            for (t in tabs) t.shields = Shields.effective(prefs, t.topHost)
+            for (t in tabs) { t.shields = Shields.effective(prefs, t.topHost); syncEngineProtection(t) }
             GeckoEngine.applyPrefs(applicationContext)
             app.kestrel.browser.net.WifiBoost.set(this@BrowserActivity, prefs.labWifiBoost) // the Network lab switch takes effect at once (the browser is on screen: this is its Settings)
             app.kestrel.browser.download.PageProxy.refresh()                                // "Keep the phone helper under Fast Wi-Fi" may have changed what applies
@@ -2043,7 +2047,23 @@ open class BrowserActivity : Activity(), DockListener {
         tab.topHost = h
         tab.mainUrl = url
         tab.shields = Shields.effective(prefs, h)
+        syncEngineProtection(tab)
         tab.pageAllowed = h != null && Engine.peek()?.isPageAllowed(h) == true
+    }
+
+    /**
+     * Firefox's own tracking protection (the engine's Disconnect-list blocking: a second blocker beside ours) follows the site's Shields: it is off while Shields are down for the site or its
+     * "Block ads & trackers" switch is off, so a page that protection breaks (doraby.com, owner message 19) can be fixed from the Shields panel without a new release. The per-session flag
+     * (GeckoSessionSettings.useTrackingProtection) is applied by the engine to the next request: PROVEN on the emulator with a tracker test entry (flag on: the third-party script is refused and
+     * the shield counts it; flag off: it loads), research/TABLET_DIAG_2026-11-13.md section 2. Called BEFORE every load starts and before the panel reloads. Debug builds: `setprop debug.kestrel.notp 1` forces it off.
+     */
+    internal fun syncEngineProtection(tab: Tab) {
+        val st = tab.session?.settings ?: return
+        val on = tab.shields.let { it.shieldsUp && it.blockAds } && app.kestrel.browser.diag.DebugProps.get(this, "debug.kestrel.notp") != "1"
+        if (st.useTrackingProtection != on) {
+            st.useTrackingProtection = on
+            Health.log("engine", "etp", "${tab.topHost ?: "?"} ${if (on) "on" else "off"}")
+        }
     }
 
     /** The https:// we chose ourselves does not work: load http:// (UPGRADE mode) or ask (STRICT). */
