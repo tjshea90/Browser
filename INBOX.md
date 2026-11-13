@@ -592,3 +592,8 @@ The app is blocking ads and redirects from video sites well right now when I pre
 ```
 Use the icon on the left side in this photo. Rename the app Kestrel instead of Kestrel G
 ```
+
+## 2026-11-13T23:23:56Z
+```
+Without writing to the repo or interfering with the other Claude account working on it, research If it is possible to optimize the underlying gecko browser engine for the hardware I have, such as removing unnecessary elements, shrinking the size, making the engine more efficient for my hardware
+```
