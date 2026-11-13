@@ -358,6 +358,24 @@ browser.runtime.onMessage.addListener(function (m) {
   return w;
 });
 
+// AD1b-4: the procedural cosmetic rules of a host (a page whose CSS carries the /*kp*/ marker asks once). Cached like the CSS (60 s) so frames of one host share one question.
+var procCache = new Map(), procWait = new Map();
+browser.runtime.onMessage.addListener(function (m) {
+  if (!m || m.k !== 'proc' || !m.h) return undefined;
+  var hit = procCache.get(m.h);
+  if (hit !== undefined && Date.now() - hit.at < CSS_TTL) return Promise.resolve(hit.text);
+  var w = procWait.get(m.h);
+  if (w) return w;
+  w = send({ k: 'proc', h: m.h }).then(function (r) {
+    procWait.delete(m.h);
+    var text = (typeof r === 'string') ? r : '';
+    if (cssGen > 0) { if (procCache.size >= 100) procCache.delete(procCache.keys().next().value); procCache.set(m.h, { text: text, at: Date.now() }); }
+    return text;
+  }, function () { procWait.delete(m.h); return ''; });
+  procWait.set(m.h, w);
+  return w;
+});
+
 // D2: the top document of a page whose CSS starts with the marker sends the classes and ids it holds, in small batches, and gets back only the generic selectors that can match them. Not cached
 // (every batch is different); the app answers from an index in memory and the page's own Shields switches decide there.
 browser.runtime.onMessage.addListener(function (m) {

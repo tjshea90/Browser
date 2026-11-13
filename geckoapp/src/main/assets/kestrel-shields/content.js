@@ -68,6 +68,78 @@
       }
     } catch (e) { /* never break the page */ }
   }
+  // ---- AD1b-4: procedural cosmetic rules (`:has-text()`, `:upward()`, `:remove()` ...). The app parsed and checked them (core ProceduralRules); a line is the base selector, then for every operator
+  // OP name ARG argument, with the control characters below. Names: t = has-text, u = upward, r = remove, a = remove-attr, c = remove-class. No eval, no innerHTML: the only things done with the page are
+  // querySelectorAll, text reads, a hide (display none), a removal, an attribute or class change. The work is bounded: few candidates per run, text read up to 20,000 characters, a time budget, few runs.
+  function parseProcedural(text) {
+    var out = [], lines = String(text).split('\n');
+    for (var i = 0; i < lines.length && out.length < 200; i++) {
+      var parts = lines[i].split('\u0003');
+      if (!parts[0]) continue;
+      var rule = { sel: parts[0], ops: [] }, ok = true;
+      for (var k = 1; k < parts.length; k++) {
+        var j = parts[k].indexOf('\u0004');
+        if (j < 0) { ok = false; break; }
+        var name = parts[k].slice(0, j), arg = parts[k].slice(j + 1), op = { n: name, a: arg };
+        if (name === 't') {
+          var e = arg.lastIndexOf('/');
+          if (arg.charAt(0) === '/' && e > 0) { try { op.re = new RegExp(arg.slice(1, e), arg.slice(e + 1).replace(/[gy]/g, '')); } catch (x) { ok = false; break; } }
+        } else if (name === 'u') { var nn = parseInt(arg, 10); if (String(nn) === arg) op.k = nn; }
+        rule.ops.push(op);
+      }
+      if (ok && rule.ops.length) out.push(rule);
+    }
+    return out;
+  }
+  function textOf(el) { var t = el.textContent || ''; return t.length > 20000 ? t.slice(0, 20000) : t; }
+  function applyProcedural(rule, budget) {
+    var nodes;
+    try { nodes = document.querySelectorAll(rule.sel); } catch (x) { return 0; }
+    var seen = 0;
+    for (var i = 0; i < nodes.length && budget.n > 0; i++) {
+      var cur = nodes[i], act = null;
+      if (cur.getAttribute && cur.getAttribute('data-kst-p') === '1') continue;      // already handled
+      budget.n--; seen++;
+      for (var o = 0; o < rule.ops.length && cur; o++) {
+        var op = rule.ops[o];
+        if (op.n === 't') { var t = textOf(cur); if (!(op.re ? op.re.test(t) : t.indexOf(op.a) >= 0)) cur = null; }
+        else if (op.n === 'u') {
+          if (op.k) { for (var h = 0; h < op.k && cur; h++) cur = cur.parentElement; }
+          else { try { cur = cur.parentElement ? cur.parentElement.closest(op.a) : null; } catch (x) { cur = null; } }
+        } else act = op;
+      }
+      if (!cur || cur === document.documentElement || cur === document.body) continue;
+      if (!act) { cur.style.setProperty('display', 'none', 'important'); cur.setAttribute('data-kst-p', '1'); }
+      else if (act.n === 'r') { if (cur.parentNode) cur.parentNode.removeChild(cur); }
+      else if (act.n === 'a') { cur.removeAttribute(act.a); cur.setAttribute('data-kst-p', '1'); }
+      else if (act.n === 'c') { cur.classList.remove(act.a); cur.setAttribute('data-kst-p', '1'); }
+    }
+    return seen;
+  }
+  function startProcedural(host) {
+    try {
+      browser.runtime.sendMessage({ k: 'proc', h: host }).then(function (text) {
+        var rules = text ? parseProcedural(text) : [];
+        if (!rules.length) return;
+        var runs = 0, spent = 0, timer = 0;
+        function run() {
+          timer = 0;
+          if (runs >= 40 || spent > 1500) return;
+          runs++;
+          var t0 = Date.now(), budget = { n: 400 };
+          for (var r = 0; r < rules.length && budget.n > 0; r++) applyProcedural(rules[r], budget);
+          spent += Date.now() - t0;
+        }
+        function later() { if (!timer && runs < 40 && spent <= 1500) timer = setTimeout(run, 400); }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', later); else later();
+        window.addEventListener('load', later);
+        if (window.MutationObserver) {
+          var mo = new MutationObserver(function () { if (runs >= 40 || spent > 1500) { mo.disconnect(); return; } later(); });
+          mo.observe(document, { childList: true, subtree: true, characterData: true });
+        }
+      }, function () {});
+    } catch (e) { /* never break the page */ }
+  }
   try {
     var host = location.hostname;
     if (!host) return;
@@ -76,6 +148,8 @@
       if (!css) return;
       inject(css, '1');
       if (top && css.indexOf('/*kg*/') === 0) startTokens(host);
+      var kp = css.indexOf('/*kp*/');
+      if (kp >= 0 && kp < 12) startProcedural(host);
     }, function () {});
   } catch (e) { /* never break the page */ }
 })();
