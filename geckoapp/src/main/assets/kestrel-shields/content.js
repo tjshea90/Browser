@@ -372,3 +372,26 @@
     }
   } catch (e) { /* never break the page */ }
 })();
+
+// ---------------------------------------------------------------- page problems for Diagnostics > Page report
+// A script that throws, or a <script>, <link> or <img> that could not be loaded or used. The background keeps one line for each (at most 8 per frame here, 12 per page there) and hands them to the app
+// once the page has settled; nothing leaves the tablet, and a private tab's lines are never kept. A failed load fires `error` on the ELEMENT (it does not bubble: the capture phase sees it).
+(function () {
+  var sent = 0;
+  function tell(o) {
+    if (sent >= 8) return;
+    sent++;
+    try { browser.runtime.sendMessage(o).catch(function () {}); } catch (x) { /* never break the page */ }
+  }
+  try {
+    window.addEventListener('error', function (e) {
+      var t = e.target;
+      if (t && t !== window && t.nodeType === 1) {
+        var u = t.src || t.href || '';
+        if (u && /^https?:/.test(u) && !t.hasAttribute('data-kestrel')) tell({ k: 'jserr', t: 'load', m: String(t.tagName || '').toLowerCase(), s: u.slice(0, 200) });
+        return;
+      }
+      tell({ k: 'jserr', t: 'js', m: String(e.message || '').slice(0, 140), s: String(e.filename || '').slice(0, 200), l: e.lineno | 0 });
+    }, true);
+  } catch (e) { /* never break the page */ }
+})();
