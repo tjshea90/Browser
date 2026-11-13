@@ -89,6 +89,42 @@ class StreamEngineTest {
         assertEquals(1, h.cdn.count("https://cdn.test/v/key.bin"))                    // the key is fetched once
     }
 
+    // ---- parts that are named like pictures and start with a picture (owner 2026-11-13: more videos found and saved; some servers hide their parts as ".jpg" / ".png")
+    private fun tsLike(packets: Int, seed: Int): ByteArray {
+        val b = ByteArray(packets * 188)
+        for (p in 0 until packets) { b[p * 188] = 0x47; b[p * 188 + 1] = 0x01; b[p * 188 + 3] = (0x10 or (p and 15)).toByte(); for (i in 4 until 188) b[p * 188 + i] = ((p * 31 + i * 7 + seed) and 0xFF).toByte().let { if (it == 0x47.toByte()) 0x48 else it } }
+        return b
+    }
+    private fun beInt(v: Int) = byteArrayOf((v ushr 24).toByte(), (v ushr 16).toByte(), (v ushr 8).toByte(), v.toByte())
+    private fun pngChunk(type: String, data: ByteArray) = beInt(data.size) + type.toByteArray(Charsets.ISO_8859_1) + data + byteArrayOf(0, 0, 0, 0)
+    private val fakePng: ByteArray get() = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A) + pngChunk("IHDR", ByteArray(13) { if (it == 3) 1 else 0 }) + pngChunk("IDAT", ByteArray(12) { 7 }) + pngChunk("IEND", ByteArray(0))
+
+    @Test(timeout = 60_000) fun partsWithAPictureHeaderInFrontAreJoinedWithoutIt() {
+        val h = H()
+        val all = java.io.ByteArrayOutputStream()
+        val sb = StringBuilder("#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n")
+        for (i in 0 until 5) { val ts = tsLike(40 + i, i * 13); all.write(ts); h.cdn.files["https://cdn.test/v/p$i.jpg"] = fakePng + ts; sb.append("#EXTINF:4,\np$i.jpg\n") } // named like pictures, wearing a real PNG header
+        sb.append("#EXT-X-ENDLIST\n")
+        val v = h.completed(h.enqueue(sb.toString()))
+        assertArrayEquals("no picture header is left in the saved stream", all.toByteArray(), h.out(v))
+    }
+
+    @Test(timeout = 60_000) fun encryptedPartsWithAPictureHeaderAreDecryptedFromAfterIt() {
+        val h = H()
+        val key = testBytes(16, 9)
+        h.cdn.files["https://cdn.test/v/key.bin"] = key
+        val all = java.io.ByteArrayOutputStream()
+        val sb = StringBuilder("#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-KEY:METHOD=AES-128,URI=\"key.bin\"\n")
+        for (i in 0 until 4) {
+            val ts = tsLike(30 + i, i * 5); all.write(ts)
+            val c = Cipher.getInstance("AES/CBC/PKCS5Padding"); c.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(Hls.sequenceIv(i.toLong())))
+            h.cdn.files["https://cdn.test/v/q$i.png"] = fakePng + c.doFinal(ts); sb.append("#EXTINF:4,\nq$i.png\n")
+        }
+        sb.append("#EXT-X-ENDLIST\n")
+        val v = h.completed(h.enqueue(sb.toString()))
+        assertArrayEquals(all.toByteArray(), h.out(v))
+    }
+
     @Test(timeout = 60_000) fun aWrongKeyFailsInsteadOfWritingGarbage() {
         val h = H()
         h.cdn.files["https://cdn.test/v/key.bin"] = testBytes(16, 1)
