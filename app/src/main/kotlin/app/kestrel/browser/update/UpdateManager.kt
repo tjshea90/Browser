@@ -474,7 +474,7 @@ object UpdateManager {
     private fun needSpace(ctx: Context, offer: UpdateOffer, sp: Space, fileKept: Boolean) {
         val short = UpdateLogic.roundUpTenMb(sp.shortBy).coerceAtLeast(10L shl 20)
         state = State(Phase.NEEDS_SPACE, offer, 0, 0, "", state.checkedAt, state.installedName, shortBy = short, freeNow = sp.free, fileKept = fileKept, installedBytes = sp.installed, reserveBytes = sp.plan.reserve,
-            needInPlace = if (fileKept) sp.plan.needKeep else sp.plan.needDrop, ownBytes = sp.own.total, cacheBytes = sp.own.cache, otherFreeAfter = sp.other.freeAfter, otherNeed = sp.other.need)
+            needInPlace = sp.plan.needDrop, ownBytes = sp.own.total, cacheBytes = sp.own.cache, otherFreeAfter = sp.other.freeAfter, otherNeed = sp.other.need)
         Io.main.post { for (l in listeners) l() }
     }
 
