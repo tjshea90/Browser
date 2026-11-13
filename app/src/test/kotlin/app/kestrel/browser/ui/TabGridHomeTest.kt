@@ -41,7 +41,7 @@ class TabGridHomeTest {
     }
 
     private fun grid(vararg tabs: Tab, selected: Tab): TabGrid {
-        val g = TabGrid(ctx, Pal(ctx, false), { it.isPrivateTab }, none)
+        val g = TabGrid(ctx, Pal(ctx, false), { false }, none)
         g.measure(View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(973, View.MeasureSpec.EXACTLY))
         g.layout(0, 0, 600, 973)
         g.open(tabs.toList(), selected)
