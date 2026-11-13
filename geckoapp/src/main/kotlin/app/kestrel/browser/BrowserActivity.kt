@@ -558,7 +558,7 @@ open class BrowserActivity : Activity(), DockListener {
         val look = savedLook(sel.id, sel.url, sel.desktopSite)
         if (look != null) {
             val fallback = "Opening " + (UrlParts.hostOf(sel.url) ?: "page")
-            restoreOverlay.showLook(look.bitmap, fallback, onDrawn = { StartTimeline.mark("look") })
+            restoreOverlay.showLook(look.bitmap, fallback, onDrawn = { StartTimeline.mark("look"); Health.log("tabs", "look-drawn", "tab=${sel.id} start") })
             lookTab = null; lookMeta = look.meta; lookPending = sel.id; lookPaintAt = 0L; lookStopped = false
             Health.count("look.start"); Health.log("tabs", "look-shown", "tab=${sel.id} ${look.meta.w}x${look.meta.h} y=${look.meta.scrollY}")
             Io.main.removeCallbacks(restoreTimeout); Io.main.postDelayed(restoreTimeout, LastLookRules.CAP_MS.toLong()); Io.main.removeCallbacks(lookNoteShow); Io.main.postDelayed(lookNoteShow, LastLookRules.NOTE_AFTER_MS.toLong())
@@ -2003,7 +2003,7 @@ open class BrowserActivity : Activity(), DockListener {
         val pm = lookMeta
         if (restoreOverlay.showingLook && lookPending == tab.id && pm != null && LastLookRules.samePage(pm.url, tab.url)) { lookTab = tab; lookPending = 0L; Health.log("tabs", "look-adopted", "tab=${tab.id}"); return true }
         val look = savedLook(tab.id, tab.url, tab.desktop) ?: return false
-        restoreOverlay.showLook(look.bitmap, note, note)
+        restoreOverlay.showLook(look.bitmap, note, note, onDrawn = { Health.log("tabs", "look-drawn", "tab=${tab.id} revive") })
         lookTab = tab; lookMeta = look.meta; lookPending = 0L; lookPaintAt = 0L; lookStopped = false
         Health.count("look.revive"); Health.log("tabs", "look-shown", "tab=${tab.id} revive ${look.meta.w}x${look.meta.h} y=${look.meta.scrollY}")
         return true
