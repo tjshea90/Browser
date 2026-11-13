@@ -74,8 +74,6 @@ object Neon {
     private var touching = false // a finger is dragging or a fling is still running: never compete with the page's scrolling for frames
     private var away = true // the app is not on screen
     private var covered = false // a full-screen page (Downloads, Settings, History, Diagnostics) hides every glow: nothing to animate
-    private var forcedUntil = 0L // "Test the pulse": every hold is ignored until then
-    private val endTest = Runnable { applyAll() }
 
     /** Make [v] breathe between alpha [lo] and [hi]. Attach once per view; it follows the view's attach/detach/visibility by itself. */
     fun pulse(v: GlowView, lo: Float = 0.5f, hi: Float = 1f, periodMs: Long = 4200L) {
@@ -100,26 +98,17 @@ object Neon {
     /** The app came to the front / went away. */
     fun foreground(on: Boolean) { away = !on; applyAll() }
 
-    /** Settings > "Test the pulse": every glow breathes for [ms] whatever else is going on (even with the setting off), so a pulse that never shows can be told apart from a hold. */
-    fun test(ms: Long) {
-        forcedUntil = SystemClock.uptimeMillis() + ms
-        handler.removeCallbacks(endTest); handler.postDelayed(endTest, ms + 50)
-        applyAll()
-    }
-
     /** Re-read the mode and start or stop every pulse (after a settings change). */
     fun refresh() = applyAll()
 
     internal fun visibility(v: GlowView, visible: Boolean) { for (p in pulsers) if (p.v === v) apply(p, visible) }
 
     private fun applyAll() { for (p in pulsers.toList()) apply(p, p.v.isShown) }
-    private fun forced(): Boolean = SystemClock.uptimeMillis() < forcedUntil
     // NOT gated on the system's animation scale (Developer options) and NOT on battery saver or on idle time: the owner asked for a pulse he can see, Settings > Neon glow is the switch.
     private fun animated(): Boolean = mode == PULSE && !busy && !touching && !away && !covered
 
     /** One line for Settings / Diagnostics: is the glow breathing, and if not, why. */
     fun status(): String {
-        if (forced()) return "test running: every glow is breathing"
         if (mode == OFF) return "off (Settings > Neon glow)"
         if (mode == STATIC) return "steady (Settings > Neon glow is set to Steady)"
         val why = ArrayList<String>()
@@ -131,7 +120,6 @@ object Neon {
 
     private fun apply(p: Pulser, visible: Boolean) {
         when {
-            visible && forced() -> start(p)
             mode == OFF -> { stop(p); p.v.alpha = 0f }
             visible && animated() -> start(p)
             else -> { stop(p); p.v.alpha = p.lo + (p.hi - p.lo) * 0.7f } // a steady glow at about 70 % of the peak
