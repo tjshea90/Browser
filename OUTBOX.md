@@ -965,3 +965,45 @@
 >
 > Next I'll finish the rest of the ad-hiding work and then the download manager queue.
 <!-- sha:95e28771348b -->
+
+## 2026-11-13T02:47:28Z
+> Alpha26 is built, signed and published. Nothing in it has been tried on your tablet: the checks were 857 JVM tests, 114 browser-script tests, ffmpeg-made video test files, and runs on the Android 10 emulator.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha26
+>
+> It installs over your current Kestrel G, and the Updates sheet will offer it.
+>
+> **Fixes and optimizations from the review**
+> - **Link warm-up:** the browser opens the connection to a link the moment your finger touches it, and to the first three search results after a search. On the emulator, holding a finger on a cross-site link made the browser connect while the finger was still down. The search-result part is covered by web tests only, because the emulator can't reach a search engine.
+> - **Two optimizations are now on by default, not left as switches:**
+>   - Firefox looks up the addresses of links ahead of your tap. The emulator can only load plain-http pages, where this already happens, so the https effect needs your tablet to measure.
+>   - Web-font text appears in a plain font after half a second instead of staying invisible for up to 3 seconds. This was proven on the emulator.
+> - **Privacy costs:** the warm-up makes the site see a connection from your phone's address even if you never open it. The link look-ups show your DNS resolver the addresses of links you never tap. Both stay off in private tabs and with Data saver. Settings > Network lab has "Warm up connections" and "Look up links ahead" to turn them off.
+> - **New switch, off by default:** "No AVIF pictures on Fast Wi-Fi". Turn it on if the Decode lab shows AVIF is slow on your tablet.
+> - **Proven on the emulator:** the Wi-Fi lock for downloads and the "no JPEG XL pictures" header.
+> - **Not built:** I decided not to raise the download window size for Fast Wi-Fi. Two download connections already cover each other's gaps, and bigger windows would double the worst-case memory.
+>
+> **Work I was doing before the review**
+> - **Download manager:**
+>   - A waiting download says "Waiting in line" with Start now, Move up and Move down. A paused one also has Start now. I tried these on the emulator and they work.
+>   - A file whose server states a checksum is checked at the end.
+>   - Files are written in bigger pieces.
+>   - A file name Android refuses makes the download try the next name instead of failing.
+> - **Videos:** H.265 pictures and AC-3, E-AC-3 and MP3 sound now end as one MP4 instead of a `.ts` file. The rest of an advertisement the MP4 writer leaves out is no longer downloaded. ffmpeg decodes the files I produced without errors; whether your tablet's player does is untested.
+> - **Ad blocking:** the bundled lists now include rules that restyle a page and rules that hide a box containing a word like "Sponsored". 522 of 1,172 such rules in the real lists are understood.
+> - **Look:** Settings sections are cards like the menu and the Downloads list. The app also shows a shield on black the moment you tap its icon, instead of an emp
+> [... 499 characters omitted ...]
+> helper under Fast Wi-Fi, keep Wi-Fi awake (battery), zoom to the text box you tap, and fetching the next page early.
+>
+> **Open items for you**
+> 1. Check the "Network:" line with LinkMeter on (the tunnel should be recognised, about 1000 KB/s).
+> 2. Tell me how tabs, Back and scrolling feel.
+> 3. Send Proton Mail numbers and your keyboard app. For typing lag, try Settings > Appearance, "Zoom to the text box you tap", off.
+> 4. Answer yes or no on the scheduled GitHub list-build workflow.
+> 5. Decide on a private signing key (four secrets).
+> 6. Report video-site problems: `.ts` files, the grey icon, spam after play.
+> 7. Send the Tap lab and Decode lab numbers from the tablet.
+> 8. Try the Network lab switches one at a time and tell me the results.
+> 9. Optional: the licence, landscape tabs, and the Cromite comparison.
+> 10. Tip: about once a week, leave the tablet on the charger overnight with the screen off.
+<!-- sha:639c7e60cb22 -->
