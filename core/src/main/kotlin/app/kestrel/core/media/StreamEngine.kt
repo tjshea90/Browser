@@ -849,6 +849,7 @@ class StreamEngine(
         synchronized(lock) {
             if (converted != null) { rec.destUri = converted.uri; rec.name = converted.name; rec.mime = converted.mime; job.written = converted.size }
             rec.total = job.written; rec.appended = job.written
+            if (rec.parentId == 0L) noteSize(rec.estimate, rec.total)
             rec.state = DlState.COMPLETED; rec.reason = Reason.NONE; rec.detail = 0; rec.finished = clock.now(); rec.updated = rec.finished
             rec.headers = emptyMap(); rec.playlistText = null
             rec.headerSets = emptyList(); rec.masterUrl = null; rec.frame = null; rec.fp = null // a finished download keeps no address of its source and no header of the site it came from
