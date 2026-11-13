@@ -458,13 +458,10 @@ object UpdateManager {
     } catch (e: Exception) { dataRoot(ctx).usableSpace }
 
     /**
-     * What Android insists on keeping free AFTER the install: 10 % of the data partition (measured, research/UPDATE_STORAGE.md: installd "Failed to free up 624066560 on /data" on a 6.2 GB partition).
-     * The settings key is honoured when somebody raised it above 10 %.
+     * What Android insists on keeping free AFTER the install: its own answer (free - StorageManager.getAllocatableBytes), else its rule min(5 % of the storage, 500 MiB) read from the two
+     * `sys_storage_threshold_*` settings (research/ADB_FOR_THE_OWNER.md: Android 10 source, measured on the emulator). alpha8-alpha30 assumed a tenth of the storage (2.8 GB on the owner's tablet): wrong.
      */
-    private fun reserveBytes(ctx: Context): Long {
-        val pct = try { Settings.Global.getInt(ctx.contentResolver, "sys_storage_cache_percentage", 10).coerceIn(10, 50) } catch (e: Exception) { 10 }
-        return dataRoot(ctx).totalSpace * pct / 100
-    }
+    private fun reserveBytes(ctx: Context, free: Long): Long = app.kestrel.browser.diag.StorageInfo.reserveBytes(ctx, free)
 
     /** Bytes the installer unpacks from the APK: read from the file when we have it, else estimated from the libraries of the app that is installed now. */
     private fun nativeLibBytes(ctx: Context, apk: File?): Long {
