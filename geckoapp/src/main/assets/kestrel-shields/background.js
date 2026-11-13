@@ -559,6 +559,11 @@ var MAYBE_REFILL = 4;       // EY-17: a page that stays open (a single-page site
 var MAYBE_REFILL_MS = 20000;
 var MAYBE_PER_PAGE = 12;    // per document: a player frame that goes to another server starts with a fresh budget (emulator lab, 2026-11-13: three servers in a row ate the old per-page twelve and the third server's playlist was never looked at)
 var MAYBE_PER_TAB = 48;     // and over all the frames of the page, so a page full of frames cannot flood the app
+function topUp(q, now) {
+  if (q.n <= 0) { q.at = now; return; }
+  var steps = Math.floor((now - q.at) / MAYBE_REFILL_MS);
+  if (steps > 0) { q.n = Math.max(0, q.n - steps * MAYBE_REFILL); q.at += steps * MAYBE_REFILL_MS; }
+}
 function maybeMedia(d, url, ct, size, ref, org) {
   if (d.type !== 'xmlhttprequest' && d.type !== 'other' && d.type !== 'media') return;
   if (NOT_MAYBE.test(url)) return;
