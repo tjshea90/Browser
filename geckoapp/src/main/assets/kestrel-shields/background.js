@@ -635,6 +635,13 @@ browser.runtime.onMessage.addListener(function (m) {
   return undefined;
 });
 
+// EY-1: the page's scroll place from the content script (top frame), for the app's saved view of the page. A number and the page address; nothing else.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'scroll' || typeof m.y !== 'number' || !isFinite(m.y) || !sender || !sender.tab || sender.frameId !== 0) return undefined;
+  send({ k: 'scroll', y: Math.max(0, Math.round(m.y)), p: String(m.p || '').slice(0, 600) }).catch(function () {});
+  return undefined;
+});
+
 // EX-15: the page's content script names an origin the owner is likely to open next (a link the finger touches, a top search result); the app decides (switch, private tab, Data saver, rate) and opens
 // the connection through the engine. Nothing is fetched here. The message names the page so the app can tell a private tab from a normal one.
 browser.runtime.onMessage.addListener(function (m) {

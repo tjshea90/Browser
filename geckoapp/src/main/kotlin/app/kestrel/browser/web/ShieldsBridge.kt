@@ -47,6 +47,8 @@ class ShieldsBridge(
     private val mediaMaybe: (JSONObject) -> Unit = {},
     /** A player frame of the page went to another document (a server switch): the page's address and the documents that are gone (their candidates must be dropped). Worker thread. */
     private val mediaGone: (String, List<String>) -> Unit = { _, _ -> },
+    /** The page (top frame) says where it is scrolled: the page's address and the place in CSS pixels (EY-1, the saved view). Worker thread. */
+    private val pageScrolled: (String, Int) -> Unit = { _, _ -> },
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -88,6 +90,7 @@ class ShieldsBridge(
                     "maybe" -> { mediaMaybe(m); "" }
                     "gone" -> { m.optJSONArray("d")?.let { arr -> mediaGone(m.optString("p"), (0 until arr.length()).map { arr.optString(it) }.filter { it.isNotEmpty() }) }; "" }
                     "vid" -> { onVid(m); "" }
+                    "scroll" -> { pageScrolled(m.optString("p"), m.optInt("y")); "" }
                     "warm" -> { warmLink(m.optString("o"), m.optString("p"), m.optString("w")); "" }
                     "rep" -> { onPageReport(m); "" }
                     else -> ""

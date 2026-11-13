@@ -236,7 +236,7 @@ open class BrowserActivity : Activity(), DockListener {
                 GeckoEngine.runtime(this)
                 GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
                 GeckoEngine.warmUp(this)
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l -> video.info(p, u, w, h, d, l) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l -> video.info(p, u, w, h, d, l) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y) } } }))
                 Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
             }
         }
@@ -721,11 +721,6 @@ open class BrowserActivity : Activity(), DockListener {
         s.promptDelegate = d
         s.permissionDelegate = d
         s.contentBlockingDelegate = d
-        // The page's scroll place (kept with the last look; the look stays up until the live page is back at it). The compositor's delegate, not the UI-thread one: it also hears the places the engine
-        // scrolls to by itself (a restored page, source OTHER), which the UI-thread delegate does not report (emulator, 2026-11-13: a restored page stayed at "y=0").
-        val sd = object : GeckoSession.CompositorScrollDelegate { override fun onScrollChanged(session: GeckoSession, update: GeckoSession.ScrollPositionUpdate) { lookScrolled(tab, update.scrollY.toInt()) } }
-        tab.gecko.scroll = sd
-        s.compositorScrollDelegate = sd
         return s
     }
 

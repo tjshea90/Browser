@@ -181,6 +181,24 @@
   } catch (e) { /* never break the page */ }
 })();
 
+// EY-1: where the page is scrolled, for the app's saved view of the page (top frame only). The engine's own scroll callbacks do not report the place a restored page scrolls itself to, the page does: a
+// scroll event 300 ms after the last scroll, and once after the load. Passive and debounced: nothing happens per frame. The number is CSS pixels (pageYOffset); the app compares it only with itself.
+(function () {
+  try {
+    if (window.top !== window) return;
+    var timer = 0, last = -1;
+    function report() {
+      timer = 0;
+      var y = Math.round(window.pageYOffset || (document.documentElement && document.documentElement.scrollTop) || 0);
+      if (y === last) return;
+      last = y;
+      browser.runtime.sendMessage({ k: 'scroll', y: y, p: location.href }).catch(function () {});
+    }
+    window.addEventListener('scroll', function () { if (!timer) timer = setTimeout(report, 300); }, { passive: true });
+    window.addEventListener('load', function () { if (!timer) timer = setTimeout(report, 800); }, false);
+  } catch (e) { /* never break the page */ }
+})();
+
 // Pop-up and redirect guard: guard-main.js runs inside the page and talks to us with events (it cannot reach the extension itself). We tell it whether the guard applies to this site and relay what it
 // blocked and which link was last tapped to the background page.
 (function () {
