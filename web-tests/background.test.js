@@ -510,7 +510,14 @@ test('embeds: a frame that waits is counted as one thing held back for the page,
 
 // ---------------------------------------------------------------- the page report (Diagnostics > Page report)
 const SITE = 'https://example.com/';
-function ready(h) { return until(() => h.of('img').length >= 3, 'the image transfer').then(() => until(() => !isPromise(h.req('script', PLAIN, PAGE)), 'the engine')); }
+// the engine answers a PLAIN request before the page's own configuration has been applied (a request that no rule matches needs no configuration), so "the engine is up" is not yet "the page may be
+// blocked": a request that a rule matches waits for the page's answer (a promise, which the JSON comparison below prints as {}). Wait for that answer with a probe on ANOTHER tab, so this page's counts stay untouched.
+function ready(h) {
+  return until(() => h.of('img').length >= 3, 'the image transfer')
+    .then(() => until(() => !isPromise(h.req('script', PLAIN, PAGE)), 'the engine'))
+    .then(() => { h.mainFrame(PAGE2, { tabId: 2 }); return until(() => { const r = h.listeners.before({ type: 'script', url: AD, tabId: 2, frameId: 0, documentUrl: PAGE2, frameAncestors: [{ url: PAGE2, frameId: 0 }] }); return !isPromise(r); }, 'the page configuration'); });
+}
+const PAGE2 = 'https://probe.example.org/page';
 
 test('page report: what Shields blocked, what failed to load, an HTTP error and a script error reach the app once the page has settled; our own cancel is not a failure', async () => {
   const h = harness(standardApp());
