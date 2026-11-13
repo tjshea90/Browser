@@ -166,17 +166,32 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
 
     // ------------------------------------------------------------------ row builders
 
+    /** The card the rows of the current section go into (a section is one chamfered card, like the rows of the Downloads screen and the tiles of the menu); null before the first section. */
+    private var card: LinearLayout? = null
+
     private fun section(text: String) {
-        body.addView(label(ctx, text.uppercase(), 12f, pal.accent, bold = true).apply { setPadding(ctx.dp(20), ctx.dp(24), ctx.dp(20), ctx.dp(6)); includeFontPadding = true })
+        body.addView(label(ctx, text.uppercase(), 12f, pal.accent, bold = true).apply { setPadding(ctx.dp(20), ctx.dp(22), ctx.dp(20), ctx.dp(8)); includeFontPadding = true })
+        val c = LinearLayout(ctx).apply {
+            orientation = VERTICAL
+            setPadding(0, ctx.dp(6), 0, ctx.dp(6))
+            background = ChamferDrawable(pal.card, ctx.dpf(14f), ChamferDrawable.TL or ChamferDrawable.BR, pal.divider, ctx.dpf(1f))
+        }
+        body.addView(c, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { marginStart = ctx.dp(12); marginEnd = ctx.dp(12) })
+        card = c
     }
 
     private fun rowBase(title: String, subtitle: String?): Pair<LinearLayout, LinearLayout> {
-        val r = LinearLayout(ctx).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(ctx.dp(20), ctx.dp(10), ctx.dp(16), ctx.dp(10)); minimumHeight = ctx.dp(56) }
+        val r = LinearLayout(ctx).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(ctx.dp(16), ctx.dp(10), ctx.dp(14), ctx.dp(10)); minimumHeight = ctx.dp(56) }
         val t = LinearLayout(ctx).apply { orientation = VERTICAL }
         t.addView(label(ctx, title, 16f, pal.fg).apply { includeFontPadding = true })
         if (!subtitle.isNullOrEmpty()) t.addView(label(ctx, subtitle, 13f, pal.muted).apply { setPadding(0, ctx.dp(2), 0, 0); includeFontPadding = true })
         r.addView(t, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-        body.addView(r, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        val c = card
+        if (c == null) body.addView(r, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        else {
+            if (c.childCount > 0) c.addView(View(ctx).apply { setBackgroundColor(pal.divider) }, LayoutParams(LayoutParams.MATCH_PARENT, 1).apply { marginStart = ctx.dp(16); marginEnd = ctx.dp(16) })
+            c.addView(r, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        }
         return r to t
     }
 
