@@ -25,7 +25,6 @@ object DeviceVideo {
     )
 
     @Volatile private var list: List<Dec>? = null
-    @Volatile private var drm: String = "not read yet"
     @Volatile private var widevine = false
     @Volatile private var hw: VideoPolicy.Hardware? = null
     @Volatile private var readMs = -1L
@@ -85,27 +84,5 @@ object DeviceVideo {
     private fun readDrm() {
         val uuid = UUID(java.lang.Long.parseUnsignedLong("EDEF8BA979D64ACE", 16), java.lang.Long.parseUnsignedLong("A3C827DCD51D21ED", 16))
         widevine = try { MediaDrm.isCryptoSchemeSupported(uuid) } catch (e: Throwable) { false }
-        drm = if (!widevine) "Widevine: not available on this device (protected video cannot play)" else try {
-            val m = MediaDrm(uuid)
-            try { "Widevine: available, security level ${m.getPropertyString("securityLevel")}, ${m.getPropertyString("vendor")} ${m.getPropertyString("version")}, HDCP ${try { m.getPropertyString("hdcpLevel") } catch (e: Exception) { "?" }}" }
-            finally { if (Build.VERSION.SDK_INT >= 28) m.close() else @Suppress("DEPRECATION") m.release() }
-        } catch (e: Throwable) { "Widevine: available (details unreadable: ${e.javaClass.simpleName})" }
-    }
-
-    /** The Diagnostics block: one line per codec, hardware decoders first, with the biggest size and the 720p frame rate each can do. */
-    fun report(): String {
-        val l = list ?: return "Video decoders: (not read yet; tap Diagnostics > Video > Read the decoders again)"
-        val sb = StringBuilder("Video decoders (Android MediaCodec; HW = hardware, sw = software; the engine uses HW first), read in $readMs ms:")
-        for ((mime, label) in CODECS) {
-            val all = l.filter { it.mime == mime }
-            if (all.isEmpty()) { sb.append("\n  ").append(label).append(": none"); continue }
-            val hwList = all.filter { it.hardware }
-            val swList = all.filter { !it.hardware }
-            sb.append("\n  ").append(label).append(": ")
-            if (hwList.isNotEmpty()) sb.append("HW ").append(hwList.joinToString(", ") { it.name.removePrefix("OMX.").removePrefix("c2.") + (if (it.size.isNotEmpty()) " " + it.size else "") + (if (it.secure) " secure" else "") }) else sb.append("no hardware decoder")
-            if (swList.isNotEmpty()) sb.append(" | sw ").append(swList.joinToString(", ") { it.name.removePrefix("OMX.").removePrefix("c2.") })
-        }
-        sb.append("\n  ").append(drm)
-        return sb.toString()
     }
 }
