@@ -57,3 +57,18 @@ class CpuSeries(private val keep: Int = 60) {
         return if (best < 0) null else at[best] to pct[best]
     }
 }
+
+/** The Diagnostics sentence about CPU use, built from numbers the Android side collected (kept here so it can be tested without a device). */
+object CpuReport {
+    class Row(val name: String, val avg: Int, val peak: Int)
+    /** A reading above the busy mark: how long ago, which process, how busy, and the busiest threads in it. */
+    class Moment(val ageMs: Long, val who: String, val pct: Int, val threads: String)
+
+    fun line(cores: Int, everySec: Int, busyPct: Int, rows: List<Row>, moments: List<Moment>): String {
+        val head = "CPU by process, % of ONE core (this tablet has $cores; read every $everySec s while the browser is on screen, last 5 min): "
+        if (rows.isEmpty()) return head + "no reading yet"
+        val body = rows.joinToString("; ") { "${it.name} avg ${it.avg} / peak ${it.peak}" }
+        val busy = if (moments.isEmpty()) "no process over $busyPct % yet" else moments.joinToString("; ") { "${it.ageMs / 60_000} min ${(it.ageMs / 1000) % 60} s ago ${it.who} ${it.pct} % [${it.threads}]" }
+        return "$head$body | busy moments: $busy | reading: a page that lags while 'tab' sits near 100 is limited by its own script or layout (one thread cannot use the other cores); a lag while every process is low is the network or the player"
+    }
+}

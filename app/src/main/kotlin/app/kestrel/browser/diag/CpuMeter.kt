@@ -4,6 +4,7 @@ import android.os.SystemClock
 import android.system.Os
 import android.system.OsConstants
 import app.kestrel.browser.Io
+import app.kestrel.core.diag.CpuReport
 import app.kestrel.core.diag.CpuSeries
 import app.kestrel.core.diag.ProcStat
 import java.io.File
@@ -140,13 +141,11 @@ object CpuMeter {
     /** The Diagnostics line. */
     fun line(): String {
         val now = SystemClock.elapsedRealtime()
-        val head = "CPU by process, % of ONE core (this tablet has $cores; read every ${EVERY_MS / 1000} s while the browser is on screen, last 5 min): "
         synchronized(lock) {
             val rows = procs.values.filter { it.series.size > 0 }.sortedByDescending { it.series.mean(now, WINDOW_MS) }
-            if (rows.isEmpty()) return head + "no reading yet"
-            val body = rows.joinToString("; ") { p -> "${short(p.name)} avg ${p.series.mean(now, WINDOW_MS).toInt()} / peak ${p.series.peak()?.second?.toInt() ?: 0}" }
-            val busy = if (moments.isEmpty()) "no process over ${BUSY_PCT.toInt()} % yet" else moments.joinToString("; ") { m -> "${(now - m.at) / 60_000} min ${((now - m.at) / 1000) % 60} s ago ${m.who} ${m.pct.toInt()} % [${m.threads}]" }
-            return "$head$body | busy moments: $busy | reading: a page that lags while 'tab' sits near 100 is limited by its own script or layout (one thread cannot use the other cores); a lag while every process is low is the network or the player"
+                .map { p -> CpuReport.Row(short(p.name), p.series.mean(now, WINDOW_MS).toInt(), (p.series.peak()?.second ?: 0.0).toInt()) }
+            val ms = moments.map { m -> CpuReport.Moment(now - m.at, m.who, m.pct.toInt(), m.threads) }
+            return CpuReport.line(cores, (EVERY_MS / 1000).toInt(), BUSY_PCT.toInt(), rows, ms)
         }
     }
 }

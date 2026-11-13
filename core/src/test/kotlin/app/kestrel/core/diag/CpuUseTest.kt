@@ -36,4 +36,15 @@ class CpuUseTest {
         assertEquals("the last two readings only", 55.0, s.mean(6000, 1000), 1e-9)
         assertEquals(45.0, s.mean(6000, 10_000), 1e-9)
     }
+
+    @Test fun theReportNamesEachProcessAndTheBusyMoments() {
+        val rows = listOf(CpuReport.Row("tab", 31, 98), CpuReport.Row("parent", 9, 40))
+        val moments = listOf(CpuReport.Moment(130_000, "tab", 98, "GeckoMain 71, DOM Worker 20"))
+        val l = CpuReport.line(4, 5, 70, rows, moments)
+        assertEquals(true, l.contains("(this tablet has 4; read every 5 s") && l.contains("tab avg 31 / peak 98; parent avg 9 / peak 40"))
+        assertEquals(true, l.contains("2 min 10 s ago tab 98 % [GeckoMain 71, DOM Worker 20]"))
+        assertEquals(true, l.contains("reading:"))
+        assertEquals(true, CpuReport.line(4, 5, 70, rows, emptyList()).contains("no process over 70 % yet"))
+        assertEquals(true, CpuReport.line(4, 5, 70, emptyList(), emptyList()).endsWith("no reading yet"))
+    }
 }
