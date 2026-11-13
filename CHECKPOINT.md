@@ -1,27 +1,22 @@
-# CHECKPOINT 1519 — read me first, then TASKS.md
+# CHECKPOINT 1525 — read me first, then TASKS.md
 
-**Written:** 2026-11-13T07:18:30Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `5c37df1` (this checkpoint is the commit after it)
+**Written:** 2026-11-13T08:19:41Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `6b60451` (this checkpoint is the commit after it)
 
 ## Just done
-handoff saved (.handoff/handoff.md; CLAUDE.md/AGENTS.md Session Learnings updated) after alpha29 shipped and recorded; owner answer written
+new context window (session restart): the owner re-sent items 1-3 of message 22 alone at 08:18:03Z (INBOX), so the earlier stop-and-save order is satisfied and the work starts: TASKS AI1a-c claimed; AI1d (unanswered prompts) goes into the final reply and the final handoff
 
 ## Do this next
-wait for the owner's reply on alpha29 (they must free ~1.5 GB before it can install; then doraby.com photos/icons + movie player, Diagnostics copy with Page report if still broken, site/link of the choppy video); then follow .handoff/handoff.md nextSteps; heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN stands down while work is under 60 minutes old
+AI1a: find the Gecko menu builder that drops Settings for private tabs (geckoapp BrowserActivity / Panels) and keep it; AI1b: long-press link sheet 'Open in new tab' must open a BACKGROUND tab (no show()); AI1c: evidence first on doraby movie pages + the Cloudflare 'incompatible browser' site (top suspect: the Embeds-wait-for-a-tap guard replacing third-party frames incl. challenges.cloudflare.com and the movie player iframe; then FPP, cookies); build once, emulator-check 1+2, then ship alpha30 and answer ALL three plainly + re-list open items; final handoff must list the unanswered earlier prompts (TASKS AI1d)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M .handoff/handoff.json
-     M .handoff/handoff.md
-     M .handoff/handoffs/2026-11-13/handoff-2026-11-13T05-01-56-557Z.json
-     M .handoff/handoffs/2026-11-13/handoff-2026-11-13T05-01-56-557Z.md
-     M .handoff/handoffs/index.md
-     M AGENTS.md
-     M CLAUDE.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  5930d95 ckpt 1519: handoff saved (.handoff/handoff.md; CLAUDE.md/AGENTS.md Session Learnings upd
   5c37df1 ckpt 1518: alpha29 SHIPPED and RECORDED (run 43383744581 green, BUILDLOG line written, R
   01ea47c ckpt 1515: alpha29 DISPATCHED: android.yml run 43383744581 (run_number 79) started 07:09
   78c9506 ckpt 1514: gated kestrel-g-v0.3.0-alpha29 (gecko code 128) and pushed it: handoff self-t
@@ -31,5 +26,7 @@ wait for the owner's reply on alpha29 (they must free ~1.5 GB before it can inst
   7d3044a ckpt 1482: Owner message 21 (their Diagnostics copy from the tablet, alpha27) written in
   29bfbb4 ckpt 1478: handoff saved (.handoff/handoff.md + archive 2026-11-13T05-01-56Z; CLAUDE.md/
   2e2935d ckpt 1476: alpha28 SHIPPED and RECORDED: kestrel-g-v0.3.0-alpha28 (gecko code 127), run 
-  ec67869 ckpt 1474: gated kestrel-g-v0.3.0-alpha28 (gecko code 127) and pushed it: handoff self-t
 ```
+
+(5 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
