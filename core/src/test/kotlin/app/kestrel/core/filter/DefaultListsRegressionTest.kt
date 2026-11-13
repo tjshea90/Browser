@@ -115,6 +115,35 @@ class DefaultListsRegressionTest {
         assertTrue("essential resources blocked (would break sites): $blocked", blocked.isEmpty())
     }
 
+    /**
+     * Owner message 22 (2026-11-13): "Doraby doesn't load movies at all, one site said incompatible browser or the browser can't access cloudflare". Doraby's player is a cross-site frame of one of
+     * six embed hosts (the theme's `Servers` object); those players and Cloudflare's visitor check (Turnstile, `challenges.cloudflare.com`) must never be refused by OUR lists. (Firefox's own
+     * Disconnect "Content" list names cloudflare.com and cdn.jsdelivr.net: that blocking was removed in alpha28, research/TABLET_DIAG_2026-11-13.md section 6.)
+     */
+    @Test
+    fun theMoviePlayersOfDorabyAndCloudflaresVisitorCheckAreNotBlocked() {
+        val sub = RequestType.SUBDOCUMENT; val s = RequestType.SCRIPT; val x = RequestType.XHR
+        val cases = listOf(
+            Triple("https://vidfast.vc/movie/1381071", "doraby.com", sub),
+            Triple("https://www.vidy.st/movie/1381071", "doraby.com", sub),
+            Triple("https://vidcore.net/movie/1381071", "doraby.com", sub),
+            Triple("https://embed.vidrift.net/embed/movie/1381071?autoPlay=true", "doraby.com", sub),
+            Triple("https://play.xpass.top/e/movie/1381071", "doraby.com", sub),
+            Triple("https://furniturebeast.nl/embed/movie/tt34384661", "doraby.com", sub),
+            Triple("https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/g/turnstile/if/ov2/av0/rcv/abc/0x4AAAAAAA/auto/fbE/new/normal/auto/", "vidfast.vc", sub),
+            Triple("https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onloadTurnstileCallback&render=explicit", "vidfast.vc", s),
+            Triple("https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/orchestrate/chl_api/v1?ray=9a1b2c3d4e5f", "vidfast.vc", s),
+            Triple("https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/g/flow/ov1/123:456:abc/9a1b/def", "vidfast.vc", x),
+            Triple("https://vidfast.vc/cdn-cgi/challenge-platform/scripts/jsd/main.js", "vidfast.vc", s),
+            Triple("https://vidfast.vc/cdn-cgi/challenge-platform/h/g/jsd/oneshot/7c7fee70a876/0.8:1:abc", "vidfast.vc", x),
+            Triple("https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js", "vidfast.vc", s),
+            Triple("https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.7/hls.min.js", "vidfast.vc", s),
+            Triple("https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video.min.js", "embed.vidrift.net", s),
+        )
+        val blocked = cases.filter { (u, p, t) -> Verdict.isBlocked(verdict(u, p, t)) }.map { it.first }
+        assertTrue("a player or a Cloudflare check would be refused by our own lists: $blocked", blocked.isEmpty())
+    }
+
     @Test
     fun essentialResourcesSurviveEvenWhenTheRequestTypeIsAmbiguous() {
         // shouldInterceptRequest cannot always tell the type (extension-less script URLs, fetch()): such requests must still pass.
