@@ -27,7 +27,7 @@ import app.kestrel.core.url.UrlParts
  */
 class VideoFlow(private val a: BrowserActivity) {
     /** One quality of an HLS stream, ready to download. */
-    private class StreamPick(val label: String, val url: String, val text: String?, val estimate: Long, val audioUrl: String?, val audioOnly: Boolean, val container: String, val repId: String? = null, val audioRepId: String? = null, val ext: String? = null, val headers: Map<String, String>? = null)
+    private class StreamPick(val label: String, val url: String, val text: String?, val estimate: Long, val audioUrl: String?, val audioOnly: Boolean, val container: String, val repId: String? = null, val audioRepId: String? = null, val ext: String? = null, val headers: Map<String, String>? = null, val cand: MediaCandidate? = null)
     private sealed class Loaded {
         object Loading : Loaded()
         class Failed(val message: String) : Loaded()
@@ -348,7 +348,7 @@ class VideoFlow(private val a: BrowserActivity) {
         if (master == null) {
             val audio = media.container == "aac" || media.container == "mp3" || media.container == "m4a"
             val est = if (media.exactBytes >= 0) media.exactBytes else sizeGuess
-            val pick = StreamPick(if (audio) "audio" else "", c.url, mediaText, est, null, audio, media.container, headers = requestHeaders(tab, c))
+            val pick = StreamPick(if (audio) "audio" else "", c.url, mediaText, est, null, audio, media.container, headers = requestHeaders(tab, c), cand = c)
             val ext = if (audio) media.container else "mp4"          // a video stream is saved as one MP4 file
             rows.add(streamChoice(tab, c, pick, if (audio) "Audio only" else "Video", rowDetail(ext.uppercase(), MediaLabels.size(est, estimate = media.exactBytes < 0 && est > 0), dur), ext) to pick)
             return Loaded.Ready(rows, null)
@@ -360,7 +360,7 @@ class VideoFlow(private val a: BrowserActivity) {
             val sepAudio = master.audioFor(v)
             val text = if (v === probe) mediaText else null
             val title = if (v.audioOnly) "Audio only" else v.label
-            val pick = StreamPick(if (v.audioOnly) "audio" else v.label, v.url, text, est, sepAudio?.url, v.audioOnly, media.container, headers = requestHeaders(tab, c))
+            val pick = StreamPick(if (v.audioOnly) "audio" else v.label, v.url, text, est, sepAudio?.url, v.audioOnly, media.container, headers = requestHeaders(tab, c), cand = c)
             val ext = if (v.audioOnly) media.container else "mp4"
             val detail = rowDetail(ext.uppercase(), MediaLabels.size(est, estimate = true), dur)
             rows.add(streamChoice(tab, c, pick, title, detail, ext) to pick)
@@ -397,12 +397,12 @@ class VideoFlow(private val a: BrowserActivity) {
             if (v.media == null || !v.mp4Friendly) { skipped++; continue }
             if (!seen.add("${v.height}|${v.bandwidth / 100_000}")) continue
             val est = (v.bytesPerSecond + (sound?.bytesPerSecond ?: 0L)) * (man.durationMs / 1000)
-            val pick = StreamPick(v.label, c.url, text, est, null, false, "mp4", repId = v.id, audioRepId = sound?.id, headers = requestHeaders(tab, c))
+            val pick = StreamPick(v.label, c.url, text, est, null, false, "mp4", repId = v.id, audioRepId = sound?.id, headers = requestHeaders(tab, c), cand = c)
             rows.add(streamChoice(tab, c, pick, v.label, rowDetail("MP4", MediaLabels.size(est, estimate = true), dur), "mp4") to pick)
         }
         for (au in man.audio.filter { it.mp4Friendly && it.media != null }.take(2)) {
             val est = au.bytesPerSecond * (man.durationMs / 1000)
-            val pick = StreamPick("audio", c.url, text, est, null, true, "m4a", repId = au.id, ext = "m4a", headers = requestHeaders(tab, c))
+            val pick = StreamPick("audio", c.url, text, est, null, true, "m4a", repId = au.id, ext = "m4a", headers = requestHeaders(tab, c), cand = c)
             rows.add(streamChoice(tab, c, pick, "Audio only", rowDetail("M4A", MediaLabels.size(est, estimate = true), dur), "m4a") to pick)
         }
         if (rows.isEmpty()) return Loaded.Failed("This stream's qualities use a format (WebM / VP9) that Kestrel cannot save yet.")
@@ -418,12 +418,17 @@ class VideoFlow(private val a: BrowserActivity) {
             val page = tab.url.takeIf { it.isNotEmpty() }
             val soundStem = "$stem (sound)"
             // the sound of a picture that comes separately is downloaded alongside and merged into one MP4 when both are in (if the merge is refused, both files stay)
+            // EY-8: what the engine needs to find its way back when a link is refused: the address the owner picked from, the player's document, the header ladder (the first is [h])
+            val c = p.cand
+            val master = c?.url; val frame = c?.frame?.takeIf { it.isNotEmpty() }
+            val ladder = if (c != null) listOf(h) + MediaHeaders.sets(c, tab.url).filter { it != h }.take(5) else emptyList()
+            val made = System.currentTimeMillis()
             val companion = when {
-                p.audioRepId != null -> StreamSource(p.url, p.text, page, soundStem, h, fetcher = 1, priv = tab.isPrivateTab, meteredOk = true, repId = p.audioRepId, ext = "m4a")
-                p.audioUrl != null -> StreamSource(p.audioUrl, null, page, soundStem, h, fetcher = 1, priv = tab.isPrivateTab, meteredOk = true)
+                p.audioRepId != null -> StreamSource(p.url, p.text, page, soundStem, h, fetcher = 1, priv = tab.isPrivateTab, meteredOk = true, repId = p.audioRepId, ext = "m4a", masterUrl = master, frame = frame, headerSets = ladder, madeAt = made)
+                p.audioUrl != null -> StreamSource(p.audioUrl, null, page, soundStem, h, fetcher = 1, priv = tab.isPrivateTab, meteredOk = true, masterUrl = master, frame = frame, headerSets = ladder, madeAt = made)
                 else -> null
             }
-            DownloadController.enqueueStream(a, StreamSource(p.url, p.text, page, stem, h, fetcher = 1, priv = tab.isPrivateTab, meteredOk = true, estimateBytes = p.estimate, repId = p.repId, ext = p.ext, companion = companion))
+            DownloadController.enqueueStream(a, StreamSource(p.url, p.text, page, stem, h, fetcher = 1, priv = tab.isPrivateTab, meteredOk = true, estimateBytes = p.estimate, repId = p.repId, ext = p.ext, companion = companion, masterUrl = master, frame = frame, headerSets = ladder, madeAt = made))
             a.askNotificationPermissionOnce() // the banner at the top says "Download started" (DownloadPopup)
         }
         val limit = a.prefs.dataSaver.confirmDownloadBytes(NetworkMonitor.metered)

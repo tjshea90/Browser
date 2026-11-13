@@ -28,6 +28,9 @@ class StreamStoreFiles(private val root: File, private val privateRoot: File) : 
                 r.destKind = j.optInt("destKind"); r.destUri = j.optString("destUri").takeIf { it.isNotEmpty() }
                 r.estimate = j.optLong("estimate", -1); r.repId = j.optString("repId").takeIf { it.isNotEmpty() }; r.ext = j.optString("ext").takeIf { it.isNotEmpty() }; r.appended = j.optLong("appended"); r.next = j.optInt("next"); r.breaks = j.optString("breaks"); r.crashes = j.optInt("crashes"); r.mux = j.optInt("mux"); r.note = j.optString("note").takeIf { it.isNotEmpty() }; r.initDone = j.optBoolean("initDone")
                 r.total = j.optLong("total", -1); r.created = j.optLong("created"); r.updated = j.optLong("updated"); r.finished = j.optLong("finished")
+                r.masterUrl = j.optString("masterUrl").takeIf { it.isNotEmpty() }; r.frame = j.optString("frame").takeIf { it.isNotEmpty() }; r.fp = j.optString("fp").takeIf { it.isNotEmpty() }
+                r.madeAt = j.optLong("madeAt"); r.expiresAt = j.optLong("expiresAt")
+                j.optJSONArray("headerSets")?.let { a -> val l = ArrayList<Map<String, String>>(); for (i in 0 until minOf(a.length(), 8)) a.optJSONObject(i)?.let { o -> l.add(o.keys().asSequence().associateWith { k -> o.optString(k) }) }; r.headerSets = l }
                 val pl = File(root, "${r.id}.m3u8")
                 if (pl.isFile) r.playlistText = pl.readText()
                 out.add(r)
@@ -43,6 +46,8 @@ class StreamStoreFiles(private val root: File, private val privateRoot: File) : 
         j.put("fetcher", r.fetcher); j.put("meteredOk", r.meteredOk); j.put("nameStem", r.nameStem); j.put("name", r.name); j.put("mime", r.mime ?: "")
         j.put("destKind", r.destKind); j.put("destUri", r.destUri ?: ""); j.put("estimate", r.estimate); j.put("repId", r.repId ?: ""); j.put("ext", r.ext ?: ""); j.put("appended", r.appended); j.put("next", r.next); j.put("breaks", r.breaks); j.put("crashes", r.crashes); j.put("mux", r.mux); j.put("note", r.note ?: "")
         j.put("initDone", r.initDone); j.put("total", r.total); j.put("created", r.created); j.put("updated", r.updated); j.put("finished", r.finished)
+        j.put("masterUrl", r.masterUrl ?: ""); j.put("frame", r.frame ?: ""); j.put("fp", r.fp ?: ""); j.put("madeAt", r.madeAt); j.put("expiresAt", r.expiresAt)
+        if (r.headerSets.isNotEmpty()) j.put("headerSets", org.json.JSONArray(r.headerSets.map { JSONObject(it as Map<*, *>) }))
         val text = r.playlistText
         val pl = File(root, "${r.id}.m3u8")
         if (text != null) { if (!pl.isFile || pl.length() != text.toByteArray().size.toLong()) atomic(pl, text) } else if (pl.exists()) pl.delete()
