@@ -256,7 +256,7 @@ test('tokens: a page without the marker in its first answer, or an app that cann
 // ---------------------------------------------------------------- EX-15: a head start for the next navigation (research/REVIEW-EXTERNAL-1.md 4.2)
 const warms = (page) => page.evaluate(() => window.__msgs.filter((m) => m.k === 'warm').map((m) => ({ o: m.o, p: m.p, w: m.w })));
 const idleNow = () => { window.requestIdleCallback = (f) => setTimeout(f, 20); };
-const row = (href, text) => `<a href="${href}" style="display:block;height:50px">${text}</a>`;
+const row = (href, text) => `<a href="${href}" onclick="event.preventDefault()" style="display:block;height:50px">${text}</a>`; // a tap must not navigate: the next document would start with an empty message list
 
 test('warm: a finger on a cross-site https link names the link\'s origin (once), the page is not asked anything else', async () => {
   const page = await open(row('https://other.example/a/b?x=1', 'one') + row('https://other.example/second', 'two') + row('https://third.example/', '<span id="deep">three</span>'), undefined, { touch: true });
@@ -287,7 +287,7 @@ test('warm: at most four touched origins per page', async () => {
 });
 
 test('warm: a touch inside a frame does nothing (the top document only)', async () => {
-  const page = await open(`<iframe srcdoc="<a href='https://other.example/' style='display:block;height:80px'>x</a>" width="300" height="100" style="border:0"></iframe>`, undefined, { touch: true });
+  const page = await open(`<iframe srcdoc="<a href='https://other.example/' onclick='event.preventDefault()' style='display:block;height:80px'>x</a>" width="300" height="100" style="border:0"></iframe>`, undefined, { touch: true });
   await page.touchscreen.tap(20, 20);
   await page.waitForTimeout(200);
   assert.deepEqual(await warms(page), []);
