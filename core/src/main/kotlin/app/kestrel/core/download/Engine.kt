@@ -124,19 +124,25 @@ class Engine(
         return id
     }
 
+    /** Whether the partial files can be read back (every sink of the app can: MediaStore, files, staging); learned from the last sink that was opened. A paused download has no open sink. */
+    @Volatile private var sinksReadable = true
+    private fun readable(job: Job): Boolean = job.sink?.readable ?: sinksReadable
+    /** EY-22: can this download be paused, waited out and resumed (a validator, or a file that can be compared with what the server sends again)? */
+    private fun canContinue(job: Job): Boolean = synchronized(lock) { job.rec.canContinue(readable(job)) }
+
     fun pause(id: Long) = control.execute {
         val job = get(id) ?: return@execute
         val st = synchronized(lock) { job.rec.state }
         when {
             st == DlState.QUEUED -> { synchronized(lock) { job.rec.state = DlState.PAUSED_USER }; persist(job); changed(id) }
-            (st == DlState.RUNNING || st == DlState.WAITING_NETWORK) && synchronized(lock) { job.rec.resumable } -> requestStop(job, DlState.PAUSED_USER)
+            (st == DlState.RUNNING || st == DlState.WAITING_NETWORK) && canContinue(job) -> requestStop(job, DlState.PAUSED_USER)
         }
     }
 
     fun resume(id: Long) = control.execute {
         val job = get(id) ?: return@execute
         val st = synchronized(lock) { job.rec.state }
-        if (st == DlState.PAUSED_USER || st == DlState.PAUSED_SYSTEM || st == DlState.WAITING_NETWORK || st == DlState.FAILED) requeue(job, wipe = st == DlState.FAILED && !synchronized(lock) { job.rec.resumable })
+        if (st == DlState.PAUSED_USER || st == DlState.PAUSED_SYSTEM || st == DlState.WAITING_NETWORK || st == DlState.FAILED) requeue(job, wipe = st == DlState.FAILED && !canContinue(job))
     }
 
     /** The "Restart" answer of a NEEDS_DECISION download: throw the partial file away and download again from the start. */
@@ -180,7 +186,7 @@ class Engine(
         try { sinks.delete(uri) } catch (e: Exception) { /* already gone */ }
     }
 
-    fun pauseAll() = control.execute { for (j in snapshotJobs()) if (synchronized(lock) { j.rec.state == DlState.RUNNING && j.rec.resumable }) requestStop(j, DlState.PAUSED_USER) }
+    fun pauseAll() = control.execute { for (j in snapshotJobs()) if (synchronized(lock) { j.rec.state == DlState.RUNNING && j.rec.canContinue(readable(j)) }) requestStop(j, DlState.PAUSED_USER) }
 
     fun resumeAll() = control.execute {
         for (j in snapshotJobs()) {
@@ -268,7 +274,7 @@ class Engine(
         val st = synchronized(lock) { job.rec.state }
         when (st) {
             DlState.QUEUED -> { synchronized(lock) { job.rec.prio = FORCE_PRIO }; persist(job); changed(id); startQueued() }
-            DlState.PAUSED_USER, DlState.PAUSED_SYSTEM, DlState.WAITING_NETWORK, DlState.FAILED -> requeue(job, wipe = st == DlState.FAILED && !synchronized(lock) { job.rec.resumable }, force = true)
+            DlState.PAUSED_USER, DlState.PAUSED_SYSTEM, DlState.WAITING_NETWORK, DlState.FAILED -> requeue(job, wipe = st == DlState.FAILED && !canContinue(job), force = true)
             else -> {}
         }
     }
@@ -331,9 +337,15 @@ class Engine(
         val uri = synchronized(lock) { rec.destUri }
         val sink = if (uri != null) try { sinks.reopen(uri, rec.total) } catch (e: Exception) { null } else null
         if (sink == null) { synchronized(lock) { wipePartial(job) }; spawnWorker(job, null); return } // the partial file is gone: start over
+        // G18 (EY-22): a partial file SHORTER than where the record says the download got to (something cut it, or another file took its place) is never continued: the next bytes would land behind a hole.
+        val reached = synchronized(lock) { rec.segs.maxOfOrNull { it.cursor } ?: 0L }
+        if (reached > 0 && sink.length() in 0 until reached) {
+            try { sink.discard() } catch (e: Exception) { /* ignore */ }
+            synchronized(lock) { wipePartial(job) }; spawnWorker(job, null); return
+        }
         val allDone: Boolean
         synchronized(lock) {
-            job.sink = sink; job.resumed = true; job.useOriginal = true
+            job.sink = sink; sinksReadable = sink.readable; job.resumed = true; job.useOriginal = true
             rec.state = DlState.RUNNING
             for (s in rec.segs) { s.worker = false; s.live = false; s.reqEnd = -1; s.fails = 0 }
             allDone = rec.segs.all { it.done }
@@ -498,7 +510,7 @@ class Engine(
                 rec.lastMod = if (etag == null && HttpSemantics.isStrongLastModified(lm, date)) lm else null
                 rec.dateHdr = date
                 rec.destUri = sink.uri; rec.segs.clear(); rec.segs.add(seg); rec.done = 0
-                job.sink = sink; job.useOriginal = false; rec.state = DlState.RUNNING; job.lastBytesAt = now
+                job.sink = sink; sinksReadable = sink.readable; job.useOriginal = false; rec.state = DlState.RUNNING; job.lastBytesAt = now
             }
             control.execute { checkpoint(job); plan(job) } // the record now has its file and segment: durable before the first byte
             changed(rec.id)
@@ -754,7 +766,7 @@ class Engine(
     private fun waitOutOutage(job: Job, now: Long): Boolean {
         val rec = job.rec
         synchronized(lock) {
-            if (!(rec.done > 0 && rec.resumable) || job.alive > 1) return false // a fresh download (a typo in the address, a dead host) fails fast as before
+            if (!(rec.done > 0 && rec.canContinue(readable(job))) || job.alive > 1) return false // a fresh download (a typo in the address, a dead host) fails fast as before
             if (job.outageSince == 0L) job.outageSince = now
             job.outageProbes++
             job.resumeAt = now + Backoff.delayMs(job.outageProbes - 1, cfg.outageBaseMs, cfg.outageCapMs, 0L, rnd)
@@ -884,9 +896,9 @@ class Engine(
         val actions: List<Action> = when (r.state) {
             DlState.QUEUED -> buildList { add(Action.START_NOW); if (queuePos > 0 && r.prio < FORCE_PRIO) add(Action.MOVE_UP); if (queuePos in 0 until queueSize - 1 && r.prio < FORCE_PRIO) add(Action.MOVE_DOWN); add(Action.CANCEL) }
             DlState.STARTING -> listOf(Action.CANCEL)
-            DlState.RUNNING -> if (r.resumable) listOf(Action.PAUSE, Action.CANCEL) else listOf(Action.CANCEL)
+            DlState.RUNNING -> if (r.canContinue(readable(job))) listOf(Action.PAUSE, Action.CANCEL) else listOf(Action.CANCEL)
             DlState.PAUSED_USER, DlState.PAUSED_SYSTEM -> listOf(Action.RESUME, Action.START_NOW, Action.CANCEL)
-            DlState.WAITING_NETWORK -> if (r.resumable) listOf(Action.PAUSE, Action.CANCEL) else listOf(Action.CANCEL)
+            DlState.WAITING_NETWORK -> if (r.canContinue(readable(job))) listOf(Action.PAUSE, Action.CANCEL) else listOf(Action.CANCEL)
             DlState.NEEDS_DECISION -> listOf(Action.RESTART, Action.CANCEL)
             DlState.VERIFYING -> emptyList()
             DlState.FAILED -> listOf(Action.RETRY, Action.DELETE)

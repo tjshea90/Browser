@@ -81,8 +81,15 @@ class Rec(@JvmField val id: Long) {
 
     /** A strong validator exists, so a partial file can be continued without risking a spliced, corrupt file. */
     val hasValidator: Boolean get() = etag != null || lastMod != null
-    /** Pause / resume makes sense: the server did not say no to ranges, the length is known, a validator exists. */
+    /** Several connections make sense (they read ONE file version only when a validator says so): the server did not say no to ranges, the length is known, a validator exists. */
     val resumable: Boolean get() = ranges != 0 && total > 0 && hasValidator
+
+    /**
+     * Pause, wait-out of an outage and resume make sense (EY-22, research/REVIEW-EXTERNAL-2.md section 6.2): the server did not say no to ranges, the length is known, and either a strong validator exists or the
+     * partial file can be READ BACK ([sinkReadable]): the request then starts up to 4 KiB before the cursor and the bytes that come back are compared with the file, so a different file is caught (the engine's
+     * `sameTail`). Residual risk, as in Chrome: a change beyond that window with the same length goes unnoticed until a checksum exists (research/DOWNLOAD_MANAGERS.md M6).
+     */
+    fun canContinue(sinkReadable: Boolean): Boolean = total > 0 && ranges != 0 && (hasValidator || (ranges == 1 && sinkReadable))
 
     fun snapshot(): Rec {
         val r = Rec(id)
