@@ -58,6 +58,16 @@ object ThumbStore {
 
     fun clearAll(ctx: Context) { try { dir(ctx).listFiles()?.forEach { it.delete() } } catch (e: Exception) { /* ignore */ } }
 
+    /** Only the previews of [keep] stay: the preview of a tab that no longer exists goes (AO4). */
+    fun retain(ctx: Context, keep: Set<Long>) {
+        try {
+            for (f in dir(ctx).listFiles() ?: return) {
+                val id = f.name.substringBefore('.').toLongOrNull()
+                if (id == null || id !in keep) f.delete()
+            }
+        } catch (e: Exception) { /* ignore */ }
+    }
+
     /** Keep at most [MAX_IN_MEMORY] previews in RAM: the oldest ones (except [keep]) are dropped; they reload from disk when the grid needs them. */
     fun trim(tabs: List<Tab>, keep: Tab?) {
         val have = tabs.filter { it.thumb != null && it !== keep }
