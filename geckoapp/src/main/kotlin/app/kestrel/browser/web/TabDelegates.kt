@@ -281,7 +281,23 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
 
     override fun onContentPermissionRequest(session: GeckoSession, perm: PermissionDelegate.ContentPermission): GeckoResult<Int>? {
         val r = GeckoResult<Int>()
-        // Only location is worth asking about here. Notifications, persistent storage, autoplay, DRM, tracking/storage-access and local-network
+        // Video first (research/VIDEO_AUDIT.md): the engine asks the app whenever a page starts a video by itself. Refusing the MUTED ones (until alpha26) left every player that starts muted
+        // waiting for a "playing" event that never came, so its loading symbol stayed on top of the video; the emulator showed it: muted autoplay and a muted script play() were refused (NotAllowedError).
+        // Muted start = allowed (as in every browser; Settings > Video turns it off); a start WITH sound and no tap stays refused (a tap always works).
+        when (perm.permission) {
+            PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE -> return GeckoResult.fromValue(if (a.prefs.videoMutedAutoplay) PermissionDelegate.ContentPermission.VALUE_ALLOW else PermissionDelegate.ContentPermission.VALUE_DENY)
+            PermissionDelegate.PERMISSION_AUTOPLAY_AUDIBLE -> return GeckoResult.fromValue(PermissionDelegate.ContentPermission.VALUE_DENY)
+            PermissionDelegate.PERMISSION_MEDIA_KEY_SYSTEM_ACCESS -> {
+                // Protected video (Widevine through Android's own MediaDrm): only when the device has it and the owner has not turned it off; asked per request because it identifies the tablet to the site's licence server.
+                if (a.prefs.videoDrm != 0 || !app.kestrel.browser.DeviceVideo.widevineAvailable()) return GeckoResult.fromValue(PermissionDelegate.ContentPermission.VALUE_DENY)
+                val drmHost = UrlParts.hostOf(perm.uri) ?: perm.uri
+                a.askYesNo("$drmHost wants to play protected video", "Protected (DRM) video needs a code that identifies this tablet to the site's licence server. Only allow this on sites you trust.", "Allow", "Block") { ok ->
+                    r.complete(if (ok) PermissionDelegate.ContentPermission.VALUE_ALLOW else PermissionDelegate.ContentPermission.VALUE_DENY)
+                }
+                return r
+            }
+        }
+        // Only location is worth asking about here. Notifications, persistent storage, tracking/storage-access and local-network
         // requests are refused: they are bloat, data drains or privacy leaks on this device.
         if (perm.permission != PermissionDelegate.PERMISSION_GEOLOCATION) return GeckoResult.fromValue(PermissionDelegate.ContentPermission.VALUE_DENY)
         val host = UrlParts.hostOf(perm.uri) ?: perm.uri
