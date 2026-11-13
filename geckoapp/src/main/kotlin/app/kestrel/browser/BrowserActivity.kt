@@ -1579,6 +1579,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(GeckoEngine.prefReadback2)
         out.add(GeckoEngine.videoPolicyText)
         out.add(app.kestrel.browser.diag.StorageInfo.text)
+        out.add(app.kestrel.browser.diag.StorageTidy.line(applicationContext))
         out.add(ShieldsBridge.statsLine())
         out.add(ShieldsBridge.pageReports.text(System.currentTimeMillis()))
         current?.takeIf { !it.isNewTab }?.let { t -> val b = ArrayList(t.engineBlocks); out.add("Firefox's own tracking protection, this page: " + (if (t.session?.settings?.useTrackingProtection == false) "OFF (Shields are down for this site); " else "on; ") + if (b.isEmpty()) "blocked nothing" else "blocked ${b.size}: " + b.take(12).joinToString("; ") + " (a page that is missing pictures or buttons: switch Shields off for this site from the shield icon)") }
