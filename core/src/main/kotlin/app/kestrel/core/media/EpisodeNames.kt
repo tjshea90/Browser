@@ -15,15 +15,15 @@ object EpisodeNames {
     private class Mark(val start: Int, val season: Int, val episode: Int)
 
     // S02E05, s2e5, S02 E05, S02.E05, S02-E05 (the digits must stand alone: "ABS2E5X" is not a marker)
-    private val SXXEXX = Regex("""(?<![A-Za-z0-9])S(\d{1,2})[ ._-]?E(\d{1,3})(?![0-9])""", OPTS)
+    private val SXXEXX = Regex("""(?<![A-Za-z0-9])S(\d{1,2})[ ._-]?E(\d{1,4})(?![0-9])""", OPTS)
     // Season 2 Episode 5, Season 2, Episode 5, Season 2 - Ep. 5, Series 2 | Episode 5
-    private val SEASON_EPISODE = Regex("""(?<![A-Za-z])(?:season|series)[ ._-]*(\d{1,2})(?![0-9])[^0-9A-Za-z]{0,8}(?:episode|ep)\b[ ._-]*(\d{1,3})(?![0-9])""", OPTS)
+    private val SEASON_EPISODE = Regex("""(?<![A-Za-z])(?:season|series)[ ._-]*(\d{1,2})(?![0-9])[^0-9A-Za-z]{0,8}(?:episode|ep)\b[ ._-]*(\d{1,4})(?![0-9])""", OPTS)
     // Episode 5 (Season 2), Ep 5 - Season 2
-    private val EPISODE_SEASON = Regex("""(?<![A-Za-z])(?:episode|ep)\b[ ._-]*(\d{1,3})(?![0-9])[^0-9A-Za-z]{0,8}(?:season|series)[ ._-]*(\d{1,2})(?![0-9])""", OPTS)
+    private val EPISODE_SEASON = Regex("""(?<![A-Za-z])(?:episode|ep)\b[ ._-]*(\d{1,4})(?![0-9])[^0-9A-Za-z]{0,8}(?:season|series)[ ._-]*(\d{1,2})(?![0-9])""", OPTS)
     // 2x05 (never 1920x1080: the digits before the x stand alone and are one or two)
     private val NXM = Regex("""(?<![0-9A-Za-z])(\d{1,2})x(\d{2,3})(?![0-9A-Za-z])""", OPTS)
     // Episode 220 (no season: anime sites)
-    private val EPISODE_ONLY = Regex("""(?<![A-Za-z])(?:episode|ep)\b[ ._-]*(\d{1,3})(?![0-9])""", OPTS)
+    private val EPISODE_ONLY = Regex("""(?<![A-Za-z])(?:episode|ep)\b[ ._-]*(\d{1,4})(?![0-9])""", OPTS)
 
     private fun mark(text: String, withEpisodeOnly: Boolean): Mark? {
         SXXEXX.find(text)?.let { return Mark(it.range.first, it.groupValues[1].toInt(), it.groupValues[2].toInt()) }
