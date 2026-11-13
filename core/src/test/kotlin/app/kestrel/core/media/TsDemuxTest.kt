@@ -139,15 +139,15 @@ class TsDemuxTest {
         assertNull("a prefix of the segment is enough", TsToMp4.probe(ok, 0, 20_000))
         assertNotNull("no data at all", TsToMp4.probe(ByteArray(0), 0, 0))
         assertNotNull("not a transport stream", TsToMp4.probe(ByteArray(5000) { 0x11 }, 0, 5000))
-        // flip the video stream type of the PMT to H.265: refused with a reason
+        // flip the video stream type of the PMT to MPEG-2 video (nothing here can write that): refused with a reason
         val hevc = ok.copyOf()
         var i = 0
         while (i < hevc.size) {
             val pid = ((hevc[i + 1].toInt() and 0x1F) shl 8) or (hevc[i + 2].toInt() and 0xFF)
-            if (pid == 4096 && (hevc[i + 1].toInt() and 0x40) != 0) { for (k in i + 4 until i + 188) if (hevc[k].toInt() == 0x1B && hevc[k + 1].toInt() == 0xE1.toByte().toInt()) { hevc[k] = 0x24; break } }   // every repeat of the PMT
+            if (pid == 4096 && (hevc[i + 1].toInt() and 0x40) != 0) { for (k in i + 4 until i + 188) if (hevc[k].toInt() == 0x1B && hevc[k + 1].toInt() == 0xE1.toByte().toInt()) { hevc[k] = 0x02; break } }   // every repeat of the PMT
             i += 188
         }
         val why = TsToMp4.probe(hevc, 0, hevc.size)
-        assertNotNull(why); assertTrue(why!!, why.contains("H.264"))
+        assertNotNull(why); assertTrue(why!!, why.contains("MPEG-2") && why.contains("H.264"))
     }
 }

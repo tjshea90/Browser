@@ -240,12 +240,12 @@ class TsToMp4Test {
     }
 
     @Test fun unsupportedRunsAreLeftOutAndTheFirstSupportedStreamStillWorks() {
-        // the PMT of the 'ad' run says H.265: the run cannot be written and is left out
+        // the PMT of the 'ad' run says MPEG-2 video: the run cannot be written and is left out
         val hevc = Fixtures.bytes("ad_0.ts").copyOf()
         var i = 0
         while (i < hevc.size) {
             val pid = ((hevc[i + 1].toInt() and 0x1F) shl 8) or (hevc[i + 2].toInt() and 0xFF)
-            if (pid == 4096 && (hevc[i + 1].toInt() and 0x40) != 0) { for (k in i + 4 until i + 188) if (hevc[k].toInt() == 0x1B && hevc[k + 1].toInt() == 0xE1.toByte().toInt()) { hevc[k] = 0x24; break } }
+            if (pid == 4096 && (hevc[i + 1].toInt() and 0x40) != 0) { for (k in i + 4 until i + 188) if (hevc[k].toInt() == 0x1B && hevc[k + 1].toInt() == 0xE1.toByte().toInt()) { hevc[k] = 0x02; break } }
             i += 188
         }
         val segs = listOf(Seg("ad_0.ts", data = hevc, disc = true), Seg("a_0.ts", disc = true), Seg("a_1.ts"))
@@ -255,6 +255,108 @@ class TsToMp4Test {
         val fin = r.m.finish()
         assertNotNull(fin.warning)
         assertEquals(100, Mp4Reader(r.out.bytes()).track("vide")!!.samples.size)
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------- H.265 and other sound (AD1b-2: "mp4 always")
+
+    /** Every sample of an H.265 track is a run of length-prefixed NAL units without parameter sets / delimiters (they live in `hvcC`); the first sample is an IRAP picture. */
+    private fun checkHevcSamples(r: Mp4Reader, v: Mp4Reader.Track) {
+        assertTrue("the first picture is a keyframe", v.samples.first().sync)
+        for ((i, s) in v.samples.withIndex()) {
+            val b = r.sampleBytes(s)
+            var p = 0
+            while (p < b.size) {
+                assertTrue("sample $i: room for a length at $p", p + 4 <= b.size)
+                val len = ((b[p].toInt() and 0xFF) shl 24) or ((b[p + 1].toInt() and 0xFF) shl 16) or ((b[p + 2].toInt() and 0xFF) shl 8) or (b[p + 3].toInt() and 0xFF)
+                assertTrue("sample $i: NAL length $len at $p", len > 2 && p + 4 + len <= b.size)
+                assertEquals("sample $i: forbidden_zero_bit", 0, b[p + 4].toInt() and 0x80)
+                val type = (b[p + 4].toInt() shr 1) and 0x3F
+                assertTrue("sample $i: NAL type $type is not a parameter set or delimiter", type !in 32..38)
+                p += 4 + len
+            }
+            assertEquals("sample $i ends exactly at its last NAL", b.size, p)
+        }
+    }
+
+    @Test fun anH265StreamBecomesAnMp4WithHvc1() {
+        val segs = listOf(Seg("hevc_0.ts"), Seg("hevc_1.ts"))
+        assertNull("the writer accepts it", TsToMp4.probe(segs[0].data, 0, segs[0].data.size))
+        val (file, res) = mux(segs)
+        assertNull(res.first.warning)
+        val r = Mp4Reader(file)
+        assertEquals(listOf("ftyp", "wide", "mdat", "moov"), r.topLevel)
+        val v = r.track("vide")!!; val a = r.track("soun")!!
+        assertEquals("hvc1", v.entryType); assertEquals(128, v.width); assertEquals(72, v.height)
+        assertEquals(50, v.samples.size)
+        assertTrue("one keyframe per second", v.samples.count { it.sync } >= 2)
+        assertEquals("mp4a", a.entryType)
+        checkHevcSamples(r, v)
+        assertDecodes(file)
+        if (Fixtures.ffmpeg) {
+            val p = Fixtures.ffprobe(file, "video", "codec_name,width,height,nb_read_frames,profile")
+            assertEquals("hevc", p["codec_name"]); assertEquals("128", p["width"]); assertEquals("72", p["height"]); assertEquals("50", p["nb_read_frames"])
+        }
+    }
+
+    @Test fun ac3SoundIsKeptAsAc3SamplesOnTheExactGrid() {
+        val segs = listOf(Seg("ac3_0.ts"), Seg("ac3_1.ts"))
+        assertNull(TsToMp4.probe(segs[0].data, 0, segs[0].data.size))
+        val (file, res) = mux(segs)
+        assertNull(res.first.warning)
+        val r = Mp4Reader(file)
+        val v = r.track("vide")!!; val a = r.track("soun")!!
+        assertEquals("avc1", v.entryType); assertEquals("ac-3", a.entryType); assertEquals(48000L, a.timescale); assertEquals(1, a.channels)
+        assertTrue("about two seconds of sound: ${a.samples.size} frames", a.samples.size in 60..64)
+        assertTrue(a.samples.zipWithNext { x, y -> y.dts - x.dts }.all { it == 1536L })
+        for (s in a.samples) { val b = r.sampleBytes(s); assertEquals("every sample is one whole syncframe", 0x0B, b[0].toInt()); assertEquals(0x77, b[1].toInt()) }
+        assertDecodes(file)
+        if (Fixtures.ffmpeg) { val p = Fixtures.ffprobe(file, "audio", "codec_name,sample_rate,channels"); assertEquals("ac3", p["codec_name"]); assertEquals("48000", p["sample_rate"]); assertEquals("1", p["channels"]) }
+    }
+
+    @Test fun eac3SoundIsKeptAsEc3Samples() {
+        val segs = listOf(Seg("eac3_0.ts"), Seg("eac3_1.ts"))
+        assertNull(TsToMp4.probe(segs[0].data, 0, segs[0].data.size))
+        val (file, res) = mux(segs)
+        assertNull(res.first.warning)
+        val r = Mp4Reader(file)
+        val a = r.track("soun")!!
+        assertEquals("ec-3", a.entryType); assertEquals(48000L, a.timescale)
+        assertTrue("about two seconds of sound: ${a.samples.size} frames", a.samples.size in 60..64)
+        assertTrue(a.samples.zipWithNext { x, y -> y.dts - x.dts }.all { it == 1536L })
+        assertDecodes(file)
+        if (Fixtures.ffmpeg) { val p = Fixtures.ffprobe(file, "audio", "codec_name,sample_rate"); assertEquals("eac3", p["codec_name"]); assertEquals("48000", p["sample_rate"]) }
+    }
+
+    @Test fun mp3SoundIsKeptAsMp4aWithTheMpegAudioObjectType() {
+        val segs = listOf(Seg("mp3_0.ts"), Seg("mp3_1.ts"))
+        assertNull(TsToMp4.probe(segs[0].data, 0, segs[0].data.size))
+        val (file, res) = mux(segs)
+        assertNull(res.first.warning)
+        val r = Mp4Reader(file)
+        val a = r.track("soun")!!
+        assertEquals("mp4a", a.entryType); assertEquals(48000L, a.timescale)
+        assertTrue("every frame lasts 1152 samples", a.samples.zipWithNext { x, y -> y.dts - x.dts }.all { it == 1152L })
+        assertTrue("object type 0x6B (MPEG-1 audio) in the esds: ${a.codecConfig.joinToString(",") { "%02x".format(it) }}", a.codecConfig.any { it.toInt() == 0x6B })
+        assertDecodes(file)
+        if (Fixtures.ffmpeg) { val p = Fixtures.ffprobe(file, "audio", "codec_name,sample_rate"); assertEquals("mp3", p["codec_name"]); assertEquals("48000", p["sample_rate"]) }
+    }
+
+    @Test fun aKilledH265DownloadCarriesOnFromItsCheckpoint() {
+        // the journal knows the new picture and sound configs: a resumed file equals an uninterrupted one
+        val segs = listOf(Seg("hevc_0.ts"), Seg("hevc_1.ts"))
+        val (whole, _) = mux(segs)
+        val out = MemOut(); val journal = MemJournal()
+        val first = TsToMp4(out, journal, {}, 4000L, now); first.startFresh()
+        first.beginSegment(0, false, 4000L); val d0 = segs[0].data; var p = 0
+        while (p < d0.size) { val n = minOf(4096, d0.size - p); first.feed(d0, p, n); p += n }
+        first.endSegment(); first.checkpoint(1)
+        val second = TsToMp4(out, journal, {}, 4000L, now)           // a new process: nothing but the file and the journal
+        assertEquals(1, second.recover())
+        second.beginSegment(1, false, 4000L); val d1 = segs[1].data; p = 0
+        while (p < d1.size) { val n = minOf(4096, d1.size - p); second.feed(d1, p, n); p += n }
+        second.endSegment()
+        second.finish()
+        assertArrayEquals(whole, out.bytes())
     }
 
     // ---------------------------------------------------------------------------------------------------------------- kill and resume
