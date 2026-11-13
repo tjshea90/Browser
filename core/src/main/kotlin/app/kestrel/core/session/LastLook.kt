@@ -65,6 +65,9 @@ object LastLookRules {
 
     private fun bare(url: String): String = url.substringBefore('#')
 
+    /** The same page (the #fragment aside). */
+    fun samePage(a: String, b: String): Boolean = bare(a) == bare(b)
+
     /** Only real web pages: not about:, data:, a blank page, the new-tab page or an error page (the caller has already left those out), and no address with a password in it. */
     fun worthKeeping(url: String): Boolean {
         val u = url.trim()
@@ -75,7 +78,7 @@ object LastLookRules {
 
     /** True when the saved picture may be shown for a tab that is on [tabUrl] now: the same page (the #fragment aside), engine, skin, dark-pages and desktop-site choice. */
     fun usable(meta: LastLookMeta, tabUrl: String, engine: String, skin: String, dark: Boolean, desktop: Boolean): Boolean =
-        bare(meta.url) == bare(tabUrl) && meta.engine == engine && meta.skin == skin && meta.dark == dark && meta.desktop == desktop
+        samePage(meta.url, tabUrl) && meta.engine == engine && meta.skin == skin && meta.dark == dark && meta.desktop == desktop
 
     /** [metaW] x [metaH] is the picture, [viewW] x [viewH] the page area it has to fill. */
     fun fit(metaW: Int, metaH: Int, viewW: Int, viewH: Int): LookFit {

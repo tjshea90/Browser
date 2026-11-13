@@ -104,6 +104,8 @@ class Prefs private constructor(ctx: Context) {
     var inputAutoZoom: Boolean get() = bool("input_zoom", true); set(v) = put("input_zoom", v)
     var searchSuggestions: Boolean get() = bool("suggest", false); set(v) = put("suggest", v) // off: each keystroke would cost data + privacy
     var clearOnExit: Boolean get() = bool("clear_exit", false); set(v) = put("clear_exit", v)
+    /** EY-1: the browser opens showing a sharp picture of the page that was left, while the live page loads under it. Pictures stay on the tablet; switching this off deletes them. */
+    var lastLook: Boolean get() = bool("last_look", true); set(v) = put("last_look", v)
 
     /** 0 weekly, 1 monthly, 2 manual. */
     var updatePolicy: Int get() = sp.getInt("upd_policy", 0); set(v) = put("upd_policy", v)

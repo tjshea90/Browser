@@ -16,6 +16,8 @@ interface SettingsListener {
     fun closeSettings()
     fun prefsChanged()
     fun clearBrowsingData()
+    /** The "Show the last page right away" switch went off: delete the saved pictures. */
+    fun lastLookOff() {}
     fun resetSiteShields()
     fun updateFiltersNow()
     fun resetDataCounter()
@@ -59,6 +61,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         toggle("Block cross-site cookies", null, prefs.shieldCookies) { prefs.shieldCookies = it }
         toggle("Block fingerprinting", null, prefs.shieldFingerprint) { prefs.shieldFingerprint = it }
         toggle("Clear browsing data when the app is closed", "Cookies, cache, history and saved site settings, the next time it opens after you swipe it away", prefs.clearOnExit) { prefs.clearOnExit = it }
+        toggle("Show the last page right away", "When the browser opens it shows a picture of the page you left, sharp, while the real page loads under it. The picture stays on this tablet. Turn this off and the pictures are deleted.", prefs.lastLook) { prefs.lastLook = it; if (!it) l.lastLookOff() }
         button("Clear browsing data now", "Cookies, cache, history, site permissions") { confirm("Clear all browsing data?", "Cookies, cache, history and saved logins will be deleted. Bookmarks are kept.") { l.clearBrowsingData() } }
         button("Reset per-site Shields", "Forget the choices you made in the Shields panel") { confirm("Reset per-site Shields?", "Every site goes back to the defaults above.") { l.resetSiteShields() } }
 
