@@ -24,7 +24,7 @@ async function open(body, pre, opts) {
     window.__msgs = [];
     window.browser = { runtime: { sendMessage: (m) => { window.__msgs.push(m); return Promise.resolve(undefined); } } };
   });
-  if (pre) await page.addInitScript(pre);
+  if (Array.isArray(pre)) await page.addInitScript(pre[0], pre[1]); else if (pre) await page.addInitScript(pre);
   await page.addInitScript({ content: CONTENT });
   await page.goto(o.url || 'https://site.example/');
   return page;
@@ -333,18 +333,18 @@ test('warm: an app that does not answer never breaks the page', async () => {
 
 // ---------------------------------------------------------------- AD1b-4: procedural cosmetic rules (:has-text(), :upward(), :remove() ...)
 const O = '\u0003', A = '\u0004';
-/** An app that says "this host has procedural rules" (the /*kp*/ marker in its CSS) and hands out [lines] when asked. */
-const appWithProcedural = (lines) => `() => {
+// An app that says "this host has procedural rules" (the kp marker comment in its CSS) and hands out the lines when asked.
+const proceduralApp = (lines) => {
   window.__asked = [];
   window.browser.runtime.sendMessage = (m) => {
     window.__msgs.push(m);
     if (m.k === 'css') return Promise.resolve('/*kp*/.site-rule{display:none!important}');
-    if (m.k === 'proc') { window.__asked.push(m.h); return Promise.resolve(${JSON.stringify(lines.join('\n'))}); }
+    if (m.k === 'proc') { window.__asked.push(m.h); return Promise.resolve(lines.join('\n')); }
     return Promise.resolve(undefined);
   };
-}`;
+};
 const hiddenIds = (page) => page.evaluate(() => Array.from(document.querySelectorAll('[id]')).filter((e) => getComputedStyle(e).display === 'none').map((e) => e.id));
-const procOpen = (body, lines) => open(body, eval(appWithProcedural(lines)));
+const procOpen = (body, lines) => open(body, [proceduralApp, lines]);
 const settleProc = (page) => page.waitForTimeout(1100);
 
 test('procedural: has-text (plain text is case-sensitive, a regex with i is not) hides only the elements that match', async () => {
