@@ -6,6 +6,7 @@ import app.kestrel.browser.shield.Engine
 class GeckoApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        app.kestrel.browser.diag.Health.mirror = (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
         Flavor.secureDnsBuiltIn = true
         Flavor.updateTagPrefix = "kestrel-g-v"
         Flavor.title = "Kestrel G"

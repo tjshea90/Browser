@@ -36,8 +36,13 @@ object Health {
         val frac = (ms % 1000).toInt(); if (frac < 100) sb.append('0'); if (frac < 10) sb.append('0'); sb.append(frac)
         sb.append("s ").append(layer).append(' ').append(event)
         if (detail.isNotEmpty()) sb.append(' ').append(detail)
-        ring.add(sb.toString())
+        val line = sb.toString()
+        ring.add(line)
+        if (mirror) android.util.Log.d("KestrelHealth", line)   // DEBUG builds only (the emulator test rig reads `adb logcat -s KestrelHealth`: no menu taps on a slow screen)
     }
+
+    /** Set once at start-up from the debuggable flag: a release build never mirrors the event list to the system log. */
+    @Volatile var mirror = false
 
     fun count(name: String): Int = counters.getOrPut(name) { AtomicInteger() }.incrementAndGet()
 
