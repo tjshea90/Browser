@@ -1373,3 +1373,7 @@
 > - Your private signing key.
 > - Optional: the hidden USB debug switch, the licence, landscape tabs, and a Cromite comparison.
 <!-- sha:57c2ddc0d012 -->
+
+## 2026-11-13T18:32:17Z
+> Standing down on the 2-hourly heartbeat. Its alpha22-era work list is long finished, and alpha31 shipped about 15 minutes ago. The owner wrote today at 17:44, so I'm leaving the trigger in place. I'm waiting for the owner's report on whether alpha31 saves the vidsrc movie and for the Diagnostics "media" lines if it doesn't.
+<!-- sha:b664c2e9ed81 -->
