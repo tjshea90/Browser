@@ -1127,3 +1127,52 @@
 >
 > The 2-hourly wake-up trigger (`trig_01LLoVKsjuTUaDn61UGP1pBN`) is still active. It stands down while work is less than an hour old.
 <!-- sha:da89b6f0586a -->
+
+## 2026-11-13T07:18:45Z
+> Your report shows the tablet is still on alpha27. alpha28 never installed, so the doraby.com fix hasn't reached it. The tablet only has 1.62 GB free of 27.75 GB, and Android refuses an update unless about 3.1 GB would still be free afterwards. It insists on keeping a tenth of the storage free, plus room to unpack the new version.
+>
+> I made alpha29, which includes alpha28 (full list below). I haven't run any of it on your tablet. I tested it on an emulator and with unit tests.
+>
+> **What to do**
+> 1. Free about 1.5 GB, more if you can.
+>    - Kestrel's menu, then Downloads, lists every file with its size. Delete movies you've already watched.
+>    - Android's Settings, then Storage, shows what else is big. If the tablet has a microSD slot, move videos there.
+>    - Android's Settings, then Apps, then Kestrel G, then Storage, then Clear cache gives back about 228 MB right now.
+> 2. Install the newest Release below. It covers everything since alpha27.
+> 3. Don't uninstall first. You'd still be about 1.1 GB short and would be left with no browser.
+>
+> The 3.1 GB figure comes from a rule I measured on a test tablet, so your tablet's own message may differ. If Android refuses, Kestrel's Updates screen shows its exact number.
+>
+> **What else your report showed**
+> - **doraby.com:** 18 requests were blocked, but only 7 were ours. Firefox's own tracking protection blocked about 11 more, which confirms the cause.
+> - **Video hardware:** your tablet has real hardware decoders for H.264, H.265, VP9 and VP8, and a Mali-G52 GPU. AV1 is software only, so Kestrel never offers it. Protected video (Widevine L3) is standard-definition only.
+> - **Scrolling:** all three scroll modes measured smooth, 62–65 frames a second.
+> - **Fast Wi-Fi:** the Fast Wi-Fi tunnel is recognised, and the keyboard detection works.
+> - **pelisjuanita.com:** the part I can see is a login page, so I can't tell whether its video pages have a problem.
+>
+> **What alpha29 changes**
+> - **Shields off:** it now also turns Firefox's own tracker blocking off for that site. If a page is missing photos, icons or its player, tap the shield icon and switch Shields off for the site.
+> - **Updates screen:**
+>   - It shows the real numbers, warns before a download the installer would refuse, and has a Clear cache button.
+>   - It lists your biggest downloads.
+>   - It only offers "install the other way" when uninstalling would actually free enough.
+> - **Diagnostics:** the Video line was stuck on "decoders unknown" and now shows the real ones. The Storage line says how far short an update would be.
+>
+> **What I tested**
+> - **Emulator:** Shields off made a blocked test script load. The warning and Clear cache button worked with the real engine (cache 24 MB to 0.1 MB, 23.5 MB freed).
+> - **Not reproduced:** Android's real "not enough storage" refusal after a download. Only unit tests cover that screen.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha29
+>
+> **Still open, from you**
+> - Once alpha29 is installed: do doraby.com's photos, icons and movie player work? If not, open Menu, Diagnostics, Page report right after the page loads and send me the copy.
+> - Which site or link has the choppy video, and on which page does the loading symbol stick?
+> - Does scrolling and Back feel smooth to you, given the measured numbers?
+> - Proton Mail speed, and the keyboard app, with "Zoom to the text box you tap" switched off.
+> - Yes or no: build the ad-block lists on a GitHub schedule?
+> - The private signing key (four repo secrets).
+> - Earlier video-site problems: .ts files, the grey icon, spam after play.
+> - Network lab switch results.
+> - Optional: a licence, landscape tabs, the Cromite comparison.
+> - Weekly tip: charge the tablet overnight with the screen off.
+<!-- sha:77e28b19adf3 -->
