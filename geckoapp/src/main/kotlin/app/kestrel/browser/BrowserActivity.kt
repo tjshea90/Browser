@@ -35,6 +35,7 @@ import app.kestrel.browser.web.KestrelGeckoView
 import app.kestrel.browser.ui.DiagnosticsView
 import app.kestrel.browser.ui.DownloadPopup
 import app.kestrel.browser.diag.Health
+import app.kestrel.browser.diag.StartTimeline
 import app.kestrel.browser.data.BrowserDb
 import app.kestrel.browser.data.DataMeter
 import app.kestrel.browser.data.Entry
@@ -678,6 +679,7 @@ open class BrowserActivity : Activity(), DockListener {
         val s = createSession(tab)
         s.open(GeckoEngine.runtime(this))
         tab.session = s
+        if (tab === current) StartTimeline.mark("open")
         var state = tab.gecko.state
         if (state == null) tab.gecko.stateJson?.let { state = stateFromDisk(tab, it) } // a tab that was saved by the last run: its Back stack and scroll position come back
         val pending = tab.pendingLoad
