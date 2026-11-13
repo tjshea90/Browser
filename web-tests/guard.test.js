@@ -220,7 +220,7 @@ const plays = (page) => page.evaluate(() => window.__plays || 0);
 const real = (page) => page.evaluate(() => window.__real || 0);
 
 test('AP1: an ad script that takes the first press on the video: the pop-up is refused and the video is started at once', async () => {
-  const page = await open(`<video id="v" style="width:300px;height:200px;background:#000"></video><script>${STUB_PLAY}
+  const page = await open(`<video id="v" src="https://movie.example/clip.mp4" style="width:300px;height:200px;background:#000"></video><script>${STUB_PLAY}
     var first = true;
     document.addEventListener('click', function (e) { if (first) { first = false; window.open('${AD}', '_blank'); e.stopImmediatePropagation(); e.preventDefault(); } }, true);</script>`);
   await page.mouse.click(100, 100);
@@ -231,7 +231,7 @@ test('AP1: an ad script that takes the first press on the video: the pop-up is r
 });
 
 test('AP1: an invisible link laid over the player: refused as before, switched off, and the video starts', async () => {
-  const page = await open(`<video style="width:300px;height:200px"></video><a id="cover" href="${AD}" target="_blank" style="position:fixed;inset:0;opacity:0"></a><script>${STUB_PLAY}</script>`);
+  const page = await open(`<video src="https://movie.example/clip.mp4" style="width:300px;height:200px"></video><a id="cover" href="${AD}" target="_blank" style="position:fixed;inset:0;opacity:0"></a><script>${STUB_PLAY}</script>`);
   await page.mouse.click(100, 100);
   await settle(800);
   assert.equal(page.popups.length, 0);
@@ -273,14 +273,14 @@ test('AP1: a fake layer that never goes away is stepped over for the replay and 
   assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById('fake1')).pointerEvents), 'auto', 'the layer is back to normal afterwards (it may be a control)');
 });
 
-test('AP1: at most three rounds, however many layers an ad stacks', async () => {
-  const layers = [1, 2, 3, 4, 5, 6].map((n) => LAYER('fake' + n, true)).join('');
+test('AP1: at most five rounds, however many layers an ad stacks', async () => {
+  const layers = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => LAYER('fake' + n, true)).join('');
   const page = await open(PLAYER_WITH_LAYERS(layers));
   await page.mouse.click(100, 100);
   await settle(2200);
   assert.equal(page.popups.length, 0);
-  assert.ok((await notes(page)).length <= 4, 'the real press and three rounds at most: ' + (await notes(page)).length);
-  assert.equal(await real(page), 0, 'six layers: the cap stops the rounds before the player is reached (the next real press continues)');
+  assert.ok((await notes(page)).length <= 6, 'the real press and five rounds at most: ' + (await notes(page)).length);
+  assert.equal(await real(page), 0, 'nine layers: the cap stops the rounds before the player is reached (the next real press continues)');
 });
 
 test('AP1: a press on a video with no ad in the way is left alone (nothing is started by us)', async () => {
@@ -292,7 +292,7 @@ test('AP1: a press on a video with no ad in the way is left alone (nothing is st
 });
 
 test('AP1: a press that pauses a playing video is not turned into a play, even if an ad script opens a pop-up with it', async () => {
-  const page = await open(`<video id="v" style="width:300px;height:200px"></video><script>${STUB_PLAY}
+  const page = await open(`<video id="v" src="https://movie.example/clip.mp4" style="width:300px;height:200px"></video><script>${STUB_PLAY}
     Object.defineProperty(HTMLMediaElement.prototype, 'paused', { get: function () { return false; } });
     Object.defineProperty(HTMLMediaElement.prototype, 'readyState', { get: function () { return 4; } });
     Object.defineProperty(HTMLMediaElement.prototype, 'currentTime', { get: function () { return 12; } });
@@ -314,7 +314,7 @@ test('AP1: a press that was not on a player never starts a video, even when it m
 test('AP1: a player in a frame under a layer of the page: the refused press is passed to the frame, which starts its video', async () => {
   const page = await open(`<iframe src="https://player.example/embed" style="position:absolute;left:0;top:0;width:400px;height:300px;border:0"></iframe>
     <div id="layer" style="position:absolute;left:0;top:0;width:400px;height:300px" onclick="window.open('${AD}')"></div>`,
-    { embed: `<video id="v" style="width:400px;height:300px;background:#000"></video><script>${STUB_PLAY}</script>` });
+    { embed: `<video id="v" src="https://player.example/clip.mp4" style="width:400px;height:300px;background:#000"></video><script>${STUB_PLAY}</script>` });
   await settle(900);
   await page.mouse.click(100, 100);
   await settle(900);
@@ -331,4 +331,14 @@ test('AP1: with the guard off for the site nothing is assisted (the page behaves
   await popup;
   await settle(600);
   assert.equal(await plays(page), 0);
+});
+
+test('AP1: a player that builds its video only after the first press (no source yet) gets the press passed through instead of a play() that cannot work', async () => {
+  const page = await open(`<div id="player" class="player" style="position:relative;width:300px;height:200px;background:#111"><video style="position:absolute;inset:0;width:300px;height:200px"></video>
+    <div id="realplay" style="position:absolute;inset:0" onclick="window.__real=(window.__real||0)+1">play</div><div id="fake1" style="position:absolute;inset:0"></div></div>
+    <script>${STUB_PLAY} document.getElementById('fake1').addEventListener('click', function () { window.open('${AD}'); this.remove(); });</script>`);
+  await page.mouse.click(100, 100);
+  await settle(900);
+  assert.equal(await plays(page), 0, 'a video without a source is not asked to play');
+  assert.equal(await real(page), 1, 'the press reached the real play control');
 });
