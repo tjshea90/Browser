@@ -44,7 +44,11 @@ class MediaStoreSinks(private val ctx: Context) : SinkFactory {
             }
             try { resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v)?.let { return it } } catch (e: Exception) { last = e }
             tried.add(candidate)
-            candidate = app.kestrel.core.download.FileNames.dedupe(name) { it in tried }
+            candidate = if (attempt < TRIES - 3) app.kestrel.core.download.FileNames.dedupe(name) { it in tried }
+            else { // a long run of leftover rows: stop counting, a time stamp cannot clash
+                val dot = name.lastIndexOf('.')
+                (if (dot > 0) name.substring(0, dot) else name) + " (" + System.currentTimeMillis() + ")" + (if (dot > 0) name.substring(dot) else "")
+            }
         }
         throw SinkException(Reason.STORAGE, "could not create the file", last)
     }
