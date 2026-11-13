@@ -25,15 +25,31 @@ import java.io.IOException
 class MediaStoreSinks(private val ctx: Context) : SinkFactory {
     private val resolver: ContentResolver = ctx.contentResolver
 
-    override fun create(name: String, mime: String?, total: Long, priv: Boolean): Sink {
-        val v = ContentValues().apply {
-            put(MediaStore.Downloads.DISPLAY_NAME, name)
-            put(MediaStore.Downloads.MIME_TYPE, mime ?: "application/octet-stream")
-            put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
-            put(MediaStore.Downloads.IS_PENDING, 1)
+    /**
+     * Android renames a clashing name itself ("big.bin" -> "big (1).bin"), but when THAT name is also taken by a leftover database row for a file that no longer
+     * exists (a file manager or `rm` removed it without telling MediaStore) the insert fails with a UNIQUE error and the download would die for good. So a refused
+     * insert is retried with the next free-looking name ("big (1).bin", "big (2).bin" ...), at most [TRIES] times (seen on the emulator after test clean-up).
+     */
+    private fun insertRow(name: String, mime: String?): Uri {
+        val tried = HashSet<String>()
+        var last: Exception? = null
+        var candidate = name
+        for (attempt in 0 until TRIES) {
+            val v = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, candidate)
+                put(MediaStore.Downloads.MIME_TYPE, mime ?: "application/octet-stream")
+                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                put(MediaStore.Downloads.IS_PENDING, 1)
+            }
+            try { resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v)?.let { return it } } catch (e: Exception) { last = e }
+            tried.add(candidate)
+            candidate = app.kestrel.core.download.FileNames.dedupe(name) { it in tried }
         }
-        val uri = try { resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v) } catch (e: Exception) { throw SinkException(Reason.STORAGE, "could not create the file", e) }
-            ?: throw SinkException(Reason.STORAGE, "could not create the file")
+        throw SinkException(Reason.STORAGE, "could not create the file", last)
+    }
+
+    override fun create(name: String, mime: String?, total: Long, priv: Boolean): Sink {
+        val uri = insertRow(name, mime)
         val real = try { resolver.query(uri, arrayOf(MediaStore.Downloads.DISPLAY_NAME), null, null, null)?.use { if (it.moveToFirst()) it.getString(0) else null } } catch (e: Exception) { null } ?: name
         val pfd = try { resolver.openFileDescriptor(uri, "rw") } catch (e: Exception) { null }
         if (pfd == null) { try { resolver.delete(uri, null, null) } catch (e: Exception) { /* ignore */ }; throw SinkException(Reason.STORAGE, "could not open the file") }
