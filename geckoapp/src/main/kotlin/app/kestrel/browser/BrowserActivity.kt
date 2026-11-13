@@ -250,7 +250,7 @@ open class BrowserActivity : Activity(), DockListener {
             val text = try { sessionFile().takeIf { it.isFile }?.readText() } catch (e: Exception) { null }
             val session = SessionCodec.decode(text)
             if (prefs.preconnect && launch == null && session != null) { // the page that was in front loads at once: warm its origin while the engine starts (EX-2 B)
-                session.tabs.firstOrNull { it.id == session.selectedId }?.url?.let { u -> GeckoEngine.warmOrigin(u)?.let { GeckoEngine.warmAtStart(it) } }
+                session.tabs.firstOrNull { it.id == session.selectedId && !it.homeOverPage }?.url?.let { u -> GeckoEngine.warmOrigin(u)?.let { GeckoEngine.warmAtStart(it) } } // not when Home was in front: that page does not load
             }
             // each regular tab's saved engine state (Back stack + scroll position) is read here, off the UI thread; it is parsed only when the tab is opened
             val states = HashMap<Long, String>()
@@ -565,6 +565,7 @@ open class BrowserActivity : Activity(), DockListener {
         val sel = try {
             sessionFile().takeIf { it.isFile && it.length() < 262_144 }?.readText()?.let { SessionCodec.decode(it) }?.let { s -> s.tabs.firstOrNull { it.id == s.selectedId } ?: s.tabs.lastOrNull() }
         } catch (e: Exception) { null } ?: return
+        if (sel.homeOverPage) { Health.log("tabs", "early-cover-skipped", "left on Home"); return } // AQ1: the Home screen is the page that was in front: no picture of the site, no "Opening ..."
         if (!sel.url.startsWith("http")) return
         Health.log("tabs", "early-cover", UrlParts.hostOf(sel.url) ?: "")
         // EY-1: the page as it was left, sharp, in this very first frame (the read and decode are about 20 ms on this CPU; the start-up timeline's "look" mark says so)
@@ -606,6 +607,7 @@ open class BrowserActivity : Activity(), DockListener {
                 t.parentId = r.parentId
                 t.desktop = r.desktopSite
                 t.lastActive = r.lastActiveMillis
+                t.showHome = r.homeOverPage && t.url.isNotEmpty() // AQ1: the app was left on the Home screen: it comes back to Home, the page stays this tab's address and loads when Back is pressed
                 if (t.url.isNotEmpty()) t.pendingLoad = t.url
                 states[r.id]?.let { t.gecko.stateJson = it; t.gecko.stateWrittenUrl = t.url }
                 tabs.add(t)
@@ -717,7 +719,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     private fun attachContent(tab: Tab) {
-        if (!tab.isNewTab) {
+        if (!tab.isNewTab && !(tab.showHome && tab.session == null)) { // AQ1: a tab restored on Home has no engine session yet and gets none until Back: nothing loads behind the Home screen at start
             val s = ensureSession(tab)
             if (geckoView.session !== s) { geckoView.releaseSession(); geckoView.setSession(s) }
         }
@@ -1308,7 +1310,7 @@ open class BrowserActivity : Activity(), DockListener {
      */
     private fun warmFrontOrigin() {
         val t = current ?: return
-        if (pausedAt == 0L || SystemClock.uptimeMillis() - pausedAt < 5_000 || t.isNewTab) return
+        if (pausedAt == 0L || SystemClock.uptimeMillis() - pausedAt < 5_000 || t.isNewTab || t.showHome) return
         preconnect(t.url, app.kestrel.core.net.WarmPolicy.Kind.RESUME)
     }
 
@@ -1733,7 +1735,7 @@ open class BrowserActivity : Activity(), DockListener {
         val keep = tabs.filter { !it.isPrivateTab } // private tabs are never written anywhere
         if (keep.isEmpty() || !sessionRestored) return
         val sel = current?.takeIf { !it.isPrivateTab }?.id ?: keep.last().id
-        val records = keep.map { TabRecord(it.id, withoutUserinfo(it.url).ifEmpty { "about:blank" }, it.title, it.lastActive, it.parentId, it.desktop) }
+        val records = keep.map { TabRecord(it.id, withoutUserinfo(it.url).ifEmpty { "about:blank" }, it.title, it.lastActive, it.parentId, it.desktop, it.homeOverPage) }
         val text = SessionCodec.encode(Session(records, sel))
         val f = sessionFile()
         // The engine's own state of each tab (history + scroll position) goes next to the addresses, so a swipe-away or a process kill restores more than the last address.
