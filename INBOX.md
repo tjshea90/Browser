@@ -194,3 +194,8 @@ I especially want Claude to review and optimize as much as possible this browser
 ```
 This session's worker process was restarted. If your previous turn was already complete, take no action and wait for the next event. Otherwise, continue from where you left off.
 ```
+
+## 2026-11-13T00:24:18Z
+```
+@"/root/.claude/uploads/30a5aa00-41c9-5bd3-87d1-b10052a52d84/4a3bede6-REVIEW-EXTERNAL-1.md" The attached file is a claude fable review of the browser.  Save it to the repo as research/REVIEW-EXTERNAL-1.md and follow section 0.
+```
