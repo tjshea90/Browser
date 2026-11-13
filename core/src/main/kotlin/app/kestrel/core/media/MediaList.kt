@@ -66,7 +66,7 @@ class MediaList(private val max: Int = 24) {
     fun keys(): List<String> = items.map { it.key }
 
     /** What the list holds, for the Diagnostics events: kind and the asking document (host and path only, never a query). */
-    fun describe(): String = items.joinToString(" | ") { it.kind.name + " f=" + (if (it.frame.isEmpty()) "-" else it.frame.substringAfter("://").substringBefore('?').take(40)) }
+    fun describe(): String = items.joinToString(" | ") { it.kind.name + " len=" + it.length + " f=" + (if (it.frame.isEmpty()) "-" else it.frame.substringAfter("://").substringBefore('?').take(40)) + " p=" + it.page.substringAfter("://").substringBefore('?').take(40) }
     /**
      * A player frame went to another document (the owner switched servers): what the documents in [docs] offered is gone. [MediaCandidate.frame] names the document that asked ("" = the page itself, never
      * dropped here: a new page clears the whole list). @return the addresses removed.
