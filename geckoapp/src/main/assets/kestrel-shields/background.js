@@ -427,3 +427,11 @@ browser.runtime.onMessage.addListener(function (m) {
   send({ k: 'vid', u: m.u, w: m.w | 0, h: m.h | 0, d: Math.round((m.d || 0) * 1000), l: m.l || '', p: m.p || '' }).catch(function () {});
   return undefined;
 });
+
+// EX-15: the page's content script names an origin the owner is likely to open next (a link the finger touches, a top search result); the app decides (switch, private tab, Data saver, rate) and opens
+// the connection through the engine. Nothing is fetched here. The message names the page so the app can tell a private tab from a normal one.
+browser.runtime.onMessage.addListener(function (m) {
+  if (!m || m.k !== 'warm' || typeof m.o !== 'string' || m.o.indexOf('https://') !== 0) return undefined;
+  send({ k: 'warm', o: m.o.slice(0, 300), p: String(m.p || '').slice(0, 600), w: m.w === 'result' ? 'result' : 'touch' }).catch(function () {});
+  return undefined;
+});
