@@ -44,10 +44,16 @@ internal class Reader(private val b: ByteArray, private val end: Int = b.size) {
 }
 
 /**
+ * The sound track's codec: [kind] is one of the `Mp4Mux.KIND_*` constants, [config] its own configuration (AAC: the 2-byte AudioSpecificConfig, AC-3: the `dac3` body, E-AC-3: the `dec3` body, MP3: the one
+ * byte object type of its `esds`), [frameSamples] how many samples one frame lasts (1024 AAC, 1536 AC-3, 256 x blocks E-AC-3, 1152 or 576 MP3).
+ */
+class AudioCfg(val kind: Int, val rate: Int, val channels: Int, val config: ByteArray, val frameSamples: Int)
+
+/**
  * Writes a plain (progressive, not fragmented) MP4 while the samples are still arriving: `ftyp`, a `wide`+`mdat` header that is patched at the end, the samples in arrival order, and the
  * `moov` with all sample tables after them. Local files do not need the `moov` in front, and a progressive file scrubs and shares everywhere (a fragmented one does not).
  *
- * One picture track (H.264, 90 kHz) and optionally one AAC track (time scale = its sample rate). Everything it does to its tables is also recorded in a small journal ([drainJournal]) in
+ * One picture track (H.264 or H.265, 90 kHz) and optionally one sound track (AAC, AC-3, E-AC-3 or MP3; time scale = its sample rate). Everything it does to its tables is also recorded in a small journal ([drainJournal]) in
  * the exact order it happened, so a fresh muxer can be brought to the same state with [replay] after the process was killed (the samples are already in the file).
  * [mark] / [rollback] cut the tables and the write position back to an earlier point (an advertisement run that turned out not to belong in the file).
  */
@@ -70,7 +76,8 @@ class Mp4Mux(private val out: MuxOut, private val nowMs: () -> Long = { System.c
         private set
     var height = 0
         private set
-    private var avcC: ByteArray? = null
+    private var avcC: ByteArray? = null      // the codec configuration of the picture track: `avcC` for H.264, `hvcC` for H.265
+    private var hevc = false
 
     // sound track: size and duration per frame (1024 ticks of the sample rate; a gap in the stream lengthens the frame before it)
     private var aSize = IntArray(2048)
@@ -80,6 +87,8 @@ class Mp4Mux(private val out: MuxOut, private val nowMs: () -> Long = { System.c
     private var aFirstTick = 0L
     private var aEndTick = 0L
     private var asc: ByteArray? = null
+    private var aKind = KIND_AAC
+    private var aFrame = AAC_FRAME
     var sampleRate = 0
         private set
     private var channels = 0
@@ -113,14 +122,25 @@ class Mp4Mux(private val out: MuxOut, private val nowMs: () -> Long = { System.c
         out.write(0, h.a, 0, h.n)
     }
 
+    /** The picture is H.264: [avcConfig] is the `avcC` body. */
     fun setVideo(w: Int, h: Int, avcConfig: ByteArray) {
-        width = w; height = h; avcC = avcConfig
+        width = w; height = h; avcC = avcConfig; hevc = false
         journal.u8(E_CFGV); journal.varint(w.toLong()); journal.varint(h.toLong()); journal.varint(avcConfig.size.toLong()); journal.put(avcConfig)
     }
 
-    fun setAudio(config: ByteArray, rate: Int, channelCount: Int) {
-        asc = config; sampleRate = rate; channels = channelCount
-        journal.u8(E_CFGA); journal.varint(rate.toLong()); journal.varint(channelCount.toLong()); journal.varint(config.size.toLong()); journal.put(config)
+    /** The picture is H.265: [hvcConfig] is the `hvcC` body (sample entry `hvc1`; the parameter sets live there, not in the samples). */
+    fun setVideoHevc(w: Int, h: Int, hvcConfig: ByteArray) {
+        width = w; height = h; avcC = hvcConfig; hevc = true
+        journal.u8(E_CFGV2); journal.u8(1); journal.varint(w.toLong()); journal.varint(h.toLong()); journal.varint(hvcConfig.size.toLong()); journal.put(hvcConfig)
+    }
+
+    /** The sound is AAC: [config] is its AudioSpecificConfig. */
+    fun setAudio(config: ByteArray, rate: Int, channelCount: Int) = setAudio(AudioCfg(KIND_AAC, rate, channelCount, config, AAC_FRAME))
+
+    fun setAudio(c: AudioCfg) {
+        asc = c.config; sampleRate = c.rate; channels = c.channels; aKind = c.kind; aFrame = c.frameSamples
+        if (c.kind == KIND_AAC && c.frameSamples == AAC_FRAME) { journal.u8(E_CFGA); journal.varint(c.rate.toLong()); journal.varint(c.channels.toLong()); journal.varint(c.config.size.toLong()); journal.put(c.config) }
+        else { journal.u8(E_CFGA2); journal.u8(c.kind); journal.varint(c.frameSamples.toLong()); journal.varint(c.rate.toLong()); journal.varint(c.channels.toLong()); journal.varint(c.config.size.toLong()); journal.put(c.config) }
     }
 
     fun addVideo(b: ByteArray, off: Int, len: Int, dts: Long, cts: Int, sync: Boolean) {
@@ -131,7 +151,7 @@ class Mp4Mux(private val out: MuxOut, private val nowMs: () -> Long = { System.c
         journal.u8(E_V); journal.varint((len.toLong() shl 1) or (if (sync) 1L else 0L)); journal.zigzag(dts - prev); journal.zigzag(cts.toLong())
     }
 
-    /** [n] AAC frames, [sizes] long, laid end to end in `b[off until off+total]`; [startTick] is the stream time of the first in sample-rate ticks. */
+    /** [n] sound frames (one sample each), [sizes] long, laid end to end in `b[off until off+total]`; [startTick] is the stream time of the first in sample-rate ticks. */
     fun addAudio(b: ByteArray, off: Int, total: Int, sizes: IntArray, n: Int, startTick: Long) {
         require(n > 0 && sampleRate > 0)
         if (writing) out.write(pos, b, off, total)
@@ -175,8 +195,10 @@ class Mp4Mux(private val out: MuxOut, private val nowMs: () -> Long = { System.c
                         val p = r.varint(); val v = r.varint().toInt(); val a = r.varint().toInt(); val c = r.varint().toInt(); val ae = r.zigzag()
                         applyRollback(p, v, a, c, ae); prevDts = if (videoCount > 0) vDts[videoCount - 1] else 0L
                     }
-                    E_CFGV -> { val w = r.varint().toInt(); val h = r.varint().toInt(); val l = r.varint().toInt(); width = w; height = h; avcC = r.bytes(l) }
-                    E_CFGA -> { val rate = r.varint().toInt(); val ch = r.varint().toInt(); val l = r.varint().toInt(); sampleRate = rate; channels = ch; asc = r.bytes(l) }
+                    E_CFGV -> { val w = r.varint().toInt(); val h = r.varint().toInt(); val l = r.varint().toInt(); width = w; height = h; avcC = r.bytes(l); hevc = false }
+                    E_CFGV2 -> { val codec = r.u8(); val w = r.varint().toInt(); val h = r.varint().toInt(); val l = r.varint().toInt(); width = w; height = h; avcC = r.bytes(l); hevc = codec == 1 }
+                    E_CFGA -> { val rate = r.varint().toInt(); val ch = r.varint().toInt(); val l = r.varint().toInt(); sampleRate = rate; channels = ch; asc = r.bytes(l); aKind = KIND_AAC; aFrame = AAC_FRAME }
+                    E_CFGA2 -> { val kind = r.u8(); val fs = r.varint().toInt(); val rate = r.varint().toInt(); val ch = r.varint().toInt(); val l = r.varint().toInt(); sampleRate = rate; channels = ch; asc = r.bytes(l); aKind = kind; aFrame = fs }
                     else -> error("unknown journal event $e")
                 }
             }
@@ -201,8 +223,8 @@ class Mp4Mux(private val out: MuxOut, private val nowMs: () -> Long = { System.c
         }
         for (i in 0 until n) {
             if (audioCount == aSize.size) { val m = audioCount * 2; aSize = aSize.copyOf(m); aDur = aDur.copyOf(m) }
-            aSize[audioCount] = sizes[i]; aDur[audioCount] = AAC_FRAME; audioCount++
-            aEndTick += AAC_FRAME
+            aSize[audioCount] = sizes[i]; aDur[audioCount] = aFrame; audioCount++
+            aEndTick += aFrame
         }
         chunk(1, n, total)
     }
@@ -350,9 +372,9 @@ class Mp4Mux(private val out: MuxOut, private val nowMs: () -> Long = { System.c
     private fun videoTables(m: Bytes) {
         m.fullBox("stsd", 0, 0) {
             m.u32(1)
-            m.box("avc1") {
+            m.box(if (hevc) "hvc1" else "avc1") {
                 m.zeros(6); m.u16(1); m.zeros(16); m.u16(width); m.u16(height); m.u32(0x00480000); m.u32(0x00480000); m.u32(0); m.u16(1); m.zeros(32); m.u16(0x0018); m.u16(0xFFFF)
-                m.box("avcC") { m.put(avcC!!) }
+                m.box(if (hevc) "hvcC" else "avcC") { m.put(avcC!!) }
             }
         }
         // decoding times, run-length coded
@@ -372,16 +394,26 @@ class Mp4Mux(private val out: MuxOut, private val nowMs: () -> Long = { System.c
     private fun audioTables(m: Bytes, mediaDur: Long) {
         m.fullBox("stsd", 0, 0) {
             m.u32(1)
-            m.box("mp4a") {
+            val entry = when (aKind) { KIND_AC3 -> "ac-3"; KIND_EAC3 -> "ec-3"; else -> "mp4a" }
+            m.box(entry) {
                 m.zeros(6); m.u16(1); m.zeros(8); m.u16(channels); m.u16(16); m.u16(0); m.u16(0); m.u32(sampleRate.toLong() shl 16)
-                m.fullBox("esds", 0, 0) {
-                    val cfg = asc!!
-                    var bytes = 0L; for (i in 0 until audioCount) bytes += aSize[i]
-                    val bitrate = if (mediaDur > 0) (bytes * 8L * sampleRate / mediaDur) else 0L
-                    m.u8(0x03); m.u8(3 + 2 + (13 + 2 + cfg.size) + 3); m.u16(2); m.u8(0)
-                    m.u8(0x04); m.u8(13 + 2 + cfg.size); m.u8(0x40); m.u8(0x15); m.u8(0); m.u16(0); m.u32(bitrate); m.u32(bitrate)
-                    m.u8(0x05); m.u8(cfg.size); m.put(cfg)
-                    m.u8(0x06); m.u8(1); m.u8(2)
+                val cfg = asc!!
+                when (aKind) {
+                    KIND_AC3 -> m.box("dac3") { m.put(cfg) }
+                    KIND_EAC3 -> m.box("dec3") { m.put(cfg) }
+                    else -> m.fullBox("esds", 0, 0) {
+                        var bytes = 0L; for (i in 0 until audioCount) bytes += aSize[i]
+                        val bitrate = if (mediaDur > 0) (bytes * 8L * sampleRate / mediaDur) else 0L
+                        if (aKind == KIND_MP3) {                                      // no DecoderSpecificInfo: the object type (0x6B MPEG-1 audio, 0x69 MPEG-2) says everything
+                            m.u8(0x03); m.u8(3 + 2 + 13 + 3); m.u16(2); m.u8(0)
+                            m.u8(0x04); m.u8(13); m.u8(cfg[0].toInt()); m.u8(0x15); m.u8(0); m.u16(0); m.u32(bitrate); m.u32(bitrate)
+                        } else {
+                            m.u8(0x03); m.u8(3 + 2 + (13 + 2 + cfg.size) + 3); m.u16(2); m.u8(0)
+                            m.u8(0x04); m.u8(13 + 2 + cfg.size); m.u8(0x40); m.u8(0x15); m.u8(0); m.u16(0); m.u32(bitrate); m.u32(bitrate)
+                            m.u8(0x05); m.u8(cfg.size); m.put(cfg)
+                        }
+                        m.u8(0x06); m.u8(1); m.u8(2)
+                    }
                 }
             }
         }
@@ -420,11 +452,17 @@ class Mp4Mux(private val out: MuxOut, private val nowMs: () -> Long = { System.c
         /** `ftyp` (32 bytes) + `wide` (8) + the `mdat` header (8): the samples start here. */
         const val HEADER_END = 48L
         const val AAC_FRAME = 1024
+        const val KIND_AAC = 0
+        const val KIND_AC3 = 1
+        const val KIND_EAC3 = 2
+        const val KIND_MP3 = 3
         private const val E_V = 1
         private const val E_A = 2
         private const val E_CLOSE = 3
         private const val E_ROLLBACK = 4
         private const val E_CFGV = 5
         private const val E_CFGA = 6
+        private const val E_CFGV2 = 7                 // picture config with its codec (H.265): older journals only know E_CFGV
+        private const val E_CFGA2 = 8                 // sound config with its kind and frame length (AC-3, E-AC-3, MP3)
     }
 }
