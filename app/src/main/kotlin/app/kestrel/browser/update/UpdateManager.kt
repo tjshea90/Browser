@@ -8,7 +8,6 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInstaller
 import android.os.storage.StorageManager
 import android.os.Build
-import android.provider.Settings
 import app.kestrel.browser.Flavor
 import app.kestrel.browser.Io
 import app.kestrel.browser.diag.Health
@@ -62,7 +61,7 @@ object UpdateManager {
         val installedName: String = "",
         /**
          * NEEDS_SPACE only: bytes still to free (rounded up to 10 MB); the free space the installer can count on now (free + caches it may clear); whether the downloaded file is still there;
-         * what the install itself takes (APK + unpacked libraries + optimised code); and the part of the storage Android insists on keeping free afterwards (10 % of the partition).
+         * what the install itself takes (APK + unpacked libraries + optimised code); and the part of the storage Android insists on keeping free afterwards (min(5 % of the partition, 500 MiB), see [reserveBytes]).
          */
         val shortBy: Long = 0,
         val freeNow: Long = 0,
@@ -90,9 +89,9 @@ object UpdateManager {
 
     /**
      * A HINT for the AVAILABLE / READY sheets (the owner's rule stays: the installer is always tried): would Android's installer find room for this update once it is here? Measured off the UI thread
-     * when the sheet opens, so nobody spends 99 MB of hotspot data on a file the installer then refuses (the owner's tablet, alpha27 Diagnostics: 1.62 GB free, about 3.1 GB needed).
+     * when the sheet opens, so nobody spends 99 MB of hotspot data on a file the installer then refuses (the owner's tablet, alpha27 Diagnostics: 1.62 GB free; alpha28-alpha30 said about 3.1 GB was needed, which was a wrong reserve: it is about 1 GB).
      */
-    class SpaceHint(val tag: String, val shortBy: Long, val free: Long, val need: Long, val cacheBytes: Long)
+    class SpaceHint(val tag: String, val shortBy: Long, val free: Long, val need: Long, val cacheBytes: Long, val reserve: Long = 0L)
     @Volatile var spaceHint: SpaceHint? = null
         private set
 
@@ -109,7 +108,7 @@ object UpdateManager {
                 val kept = apk.isFile && sp(app).getString("verified", null) == offer.tag
                 val s = space(app, offer, if (kept) apk else null, pending = if (kept) 0L else offer.size) // a download still to come takes its room first
                 val short = if (s.plan.shortBy > 0) UpdateLogic.roundUpTenMb(s.plan.shortBy) else 0L
-                spaceHint = SpaceHint(offer.tag, short, s.free, s.plan.needDrop, s.own.cache)
+                spaceHint = SpaceHint(offer.tag, short, s.free, s.plan.needDrop, s.own.cache, s.plan.reserve)
                 Health.log("update", "hint", "free=${s.free shr 20} MB need=${s.plan.needDrop shr 20} MB short=${short shr 20} MB cache=${s.own.cache shr 20} MB own=${s.own.total shr 20} MB")
                 Io.main.post { for (l in listeners) l() }
             } catch (e: Exception) { Health.log("update", "hint-failed", e.toString().take(100)) } // only a hint

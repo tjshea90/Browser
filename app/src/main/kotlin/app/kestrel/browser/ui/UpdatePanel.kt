@@ -84,7 +84,7 @@ class UpdatePanel(ctx: Context, private val pal: Pal, private val prefs: Prefs, 
         fun roomHint() {
             val h = UpdateManager.spaceHint?.takeIf { it.tag == o?.tag && it.shortBy > 0 } ?: return
             val f = UpdateLogic::formatSize
-            sub("Heads-up: this tablet has ${f(h.free)} free and Android wants about ${f(h.need)} free to install this update (a tenth of the storage stays free, plus room for the update itself): about ${f(h.shortBy)} more. " +
+            sub("Heads-up: this tablet has ${f(h.free)} free and Android wants about ${f(h.need)} free to install this update (Android keeps ${if (h.reserve > 0) f(h.reserve) else "part of the storage"} free, plus room for the update itself): about ${f(h.shortBy)} more. " +
                 "Without it the installer refuses the file after it is downloaded.", pal.warn)
             if (h.cacheBytes >= (10L shl 20)) buttons(secondary("Clear cache (${f(h.cacheBytes)})") {
                 actions.clearCache { freed ->
@@ -167,7 +167,7 @@ class UpdatePanel(ctx: Context, private val pal: Pal, private val prefs: Prefs, 
                     }
                 } else {
                     headline("Not enough free storage to update", pal.warn)
-                    sub("Free now: ${fmt(s.freeNow)}. Android insists on keeping ${fmt(s.reserveBytes)} free after any install (a tenth of this tablet's storage) and needs about ${fmt(s.installedBytes)} of room while it installs, so an update in place needs about ${fmt(s.needInPlace)} free" +
+                    sub("Free now: ${fmt(s.freeNow)}. Android insists on keeping ${fmt(s.reserveBytes)} free after any install (5 % of this tablet's storage, at most 500 MB) and needs about ${fmt(s.installedBytes)} of room while it installs, so an update in place needs about ${fmt(s.needInPlace)} free" +
                         (if (s.shortBy > 0) ": about ${fmt(s.shortBy)} more than you have." else "."), pal.fg)
                     sub(if (s.fileKept) "The update file is already downloaded: nothing is downloaded again." else "The update file (${o?.let { fmt(it.size) } ?: ""}) still has to be downloaded.")
                     // what this app can free on its own: its cache, the installers of earlier updates, and a look at its biggest downloads
