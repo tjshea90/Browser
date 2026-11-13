@@ -54,7 +54,6 @@ import app.kestrel.browser.ui.Pal
 import app.kestrel.browser.ui.Neon
 import app.kestrel.browser.ui.NeonBar
 import app.kestrel.browser.ui.RestoreOverlay
-import app.kestrel.browser.web.ScrollTest
 import app.kestrel.browser.ui.SettingsListener
 import app.kestrel.browser.ui.SettingsView
 import app.kestrel.browser.ui.ShieldsPanel
@@ -433,7 +432,7 @@ open class BrowserActivity : Activity(), DockListener {
         geckoView.pullEnabled = {
             val t = current
             prefs.pullRefresh && t != null && !t.isNewTab && !t.showHome && t.error == null && t.session != null && !fullscreenOn && tabGrid.visibility != View.VISIBLE &&
-                !sheet.isShowing && restoreOverlay.visibility != View.VISIBLE && !t.url.startsWith("resource://android/assets/scrolltest")
+                !sheet.isShowing && restoreOverlay.visibility != View.VISIBLE
         }
         // The navigation bar is at the BOTTOM (owner request): page on top, a 2 dp load-progress line, then the dock.
         column.addView(content, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -1494,12 +1493,8 @@ open class BrowserActivity : Activity(), DockListener {
         out.add("Network: ${GeckoEngine.networkProfile} (VPN active: ${NetworkMonitor.vpn}, LinkMeter tunnel recognised: ${NetworkMonitor.fastTunnel}, downloads yield to a loading page at ${DownloadController.pageYieldKBps} KB/s)")
         out.add(app.kestrel.browser.download.DownloadService.wifiLockLine() + ". " + app.kestrel.browser.net.WifiBoost.line())
         out.add(DownloadController.windowGapLine())
-        out.add("Keyboard: ${kbProbe.changes} layout event(s) from the probe window this run (more than 0 = the dock follows the keyboard by event, polling only as a safety net)")
-        out.add("Warm-ups: ${GeckoEngine.warmCalls} connection head start(s) handed to the engine on its own thread this run (Settings > Network lab > Warm up connections)")
         out.add(GeckoEngine.prefReadback)
         out.add(GeckoEngine.prefReadback2)
-        out.add(GlInfo.text)
-        out.add(DeviceVideo.report())
         out.add(GeckoEngine.videoPolicyText)
         out.add(app.kestrel.browser.diag.StorageInfo.text)
         out.add(ShieldsBridge.statsLine(prefs.engineInExtension))
@@ -1513,82 +1508,12 @@ open class BrowserActivity : Activity(), DockListener {
 
     private fun showDiagnostics() {
         GeckoEngine.readBackPrefs { diagView?.refresh() }
-        Io.exec { GlInfo.read(); if (DeviceVideo.read(applicationContext, force = true)) GeckoEngine.applyVideo(applicationContext, prefs); app.kestrel.browser.diag.StorageInfo.read(this); Io.ui { diagView?.refresh() } }
-        val v = diagView ?: DiagnosticsView(this, pal, ::engineFacts, { refreshScreen("diagnostics") }, { closeDiagnostics() }, { runScrollTest() }, { runScrollTest(compare = true) }, ::blockerLabel, ::toggleBlocker, ::openLab).also { diagView = it }
+        Io.exec { if (DeviceVideo.read(applicationContext, force = true)) GeckoEngine.applyVideo(applicationContext, prefs); app.kestrel.browser.diag.StorageInfo.read(this); Io.ui { diagView?.refresh() } }
+        val v = diagView ?: DiagnosticsView(this, pal, ::engineFacts, { refreshScreen("diagnostics") }, { closeDiagnostics() }).also { diagView = it }
         if (v.parent == null) root.addView(v, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) else v.refresh()
     }
 
     private fun closeDiagnostics() { diagView?.let { detach(it) } }
-
-    private fun blockerLabel(): String = if (prefs.engineInExtension) "Blocker: fast (tap for compatibility)" else "Blocker: compatibility (tap for fast)"
-
-    /** Flips where ad-blocking decisions are made; the extension learns it with the next page's `cfg` answer, so it applies from the next page load. */
-    private fun toggleBlocker() {
-        prefs.engineInExtension = !prefs.engineInExtension
-        Health.log("blocker", if (prefs.engineInExtension) "fast mode on" else "compatibility mode on")
-        android.widget.Toast.makeText(this, if (prefs.engineInExtension) "Fast blocker: applies from the next page" else "Compatibility blocker: applies from the next page", android.widget.Toast.LENGTH_SHORT).show()
-    }
-
-    private var scrollTestTab: Tab? = null
-
-    /** Diagnostics > Tap lab / Decode lab: a bundled page in a tab of its own (assets/labs/<name>.html); the page shows its own numbers. */
-    private fun openLab(name: String) {
-        if (name != "tap" && name != "decode") return
-        closeDiagnostics()
-        val url = "resource://android/assets/labs/$name.html"
-        val t = newTabInternal()
-        t.url = url; t.pendingLoad = url
-        show(t)
-    }
-
-    /**
-     * Diagnostics > Scroll test: a temporary tab with the bundled long page ([ScrollTest.URL]); once it has loaded, [ScrollTest] scrolls it and reports the frames the
-     * compositor produced. The tab is closed afterwards, the numbers are shown and logged (Copy/Share on the Diagnostics page includes them).
-     */
-    private fun runScrollTest(compare: Boolean = false) {
-        closeDiagnostics()
-        compareLevels = if (compare) ArrayDeque(listOf(0, 1, 2)) else null
-        compareResults.clear(); compareOriginal = prefs.scrollFeel
-        val t = newTabInternal()
-        t.url = ScrollTest.URL; t.pendingLoad = ScrollTest.URL
-        scrollTestTab = t
-        show(t)
-        toast(if (compare) "Comparing the three scroll feels (about 90 s): loading the test page..." else "Scroll test: loading the test page...")
-    }
-
-    /** "Compare 3 feels": the same test run at Standard, Smoother and Smoothest on the same page, one after the other (the prefs are live), then the user's own setting is put back. */
-    private var compareLevels: ArrayDeque<Int>? = null
-    private val compareResults = ArrayList<String>()
-    private var compareOriginal = 0
-
-    private fun startScrollTest(tab: Tab) {
-        val s = tab.session
-        if (s == null || current !== tab || isFinishing || isDestroyed) { endCompare(); doCloseTab(tab); toast("Scroll test could not start"); return }
-        val queue = compareLevels
-        val level = queue?.removeFirstOrNull()
-        if (level != null) GeckoEngine.applyScrollFeel(level)
-        toast(if (level == null) "Scroll test running (about 30 s): do not touch the screen" else "Scroll feel ${3 - (queue?.size ?: 0)} of 3: ${GeckoEngine.scrollFeelNames[level]} - do not touch the screen")
-        Health.log("scrolltest", "start", "level=${level ?: "own"} " + memFacts())
-        ScrollTest(s, window.decorView, { memFacts() }) { report ->
-            Health.log("scrolltest", "result", "level=${level ?: "own"} " + report.lineSequence().take(3).joinToString(" | "))
-            if (level != null) {
-                compareResults.add(GeckoEngine.scrollFeelNames[level] + ":\n  " + report.lineSequence().filter { it.startsWith("Result:") || it.startsWith("Compositor frames:") }.joinToString("\n  "))
-                if (queue != null && queue.isNotEmpty() && !isFinishing && !isDestroyed && current === tab) { Io.main.postDelayed({ startScrollTest(tab) }, 2500); return@ScrollTest }
-            }
-            val text = if (level != null) { endCompare(); compareResults.joinToString("\n\n") + "\n\nSmoother is what Kestrel G starts with. Settings > Appearance > Scroll feel switches it; your own setting is back in place now." } else report
-            doCloseTab(tab)
-            if (isFinishing || isDestroyed) return@ScrollTest
-            android.app.AlertDialog.Builder(this).setTitle(if (level != null) "Scroll feel comparison" else "Scroll test").setMessage(text)
-                .setPositiveButton("OK", null)
-                .setNeutralButton("Copy") { _, _ ->
-                    (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Kestrel scroll test", text))
-                    toast("Copied")
-                }
-                .show()
-        }.start()
-    }
-
-    private fun endCompare() { if (compareLevels != null) { compareLevels = null; GeckoEngine.applyScrollFeel(compareOriginal) } }
 
     /**
      * What switching apps and coming back does to the page, on demand: re-send the focus and keyboard state (R0), toggle the session's active state (R1),
@@ -1647,10 +1572,6 @@ open class BrowserActivity : Activity(), DockListener {
             Io.exec { UpdateJob.schedule(applicationContext) } // the update schedule may have changed
         }
         override fun clearBrowsingData() { this@BrowserActivity.clearBrowsingData() }
-        override fun testNeon() {
-            closeSettings(); Neon.mode = prefs.neon
-            Io.main.postDelayed({ Neon.test(10_000); toast("Watch the glow around the address bar and above the dock for 10 seconds") }, 300)
-        }
         override fun resetSiteShields() { Shields.clearAll(); toast("Per-site Shields reset") }
         override fun backupNow() { backup.backupNow() }
         override fun restoreFromFile() { backup.restoreFromFile() }
@@ -1912,7 +1833,6 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     internal fun pageFinished(tab: Tab, real: Boolean = true) {
-        if (tab === scrollTestTab) { scrollTestTab = null; Io.main.postDelayed({ startScrollTest(tab) }, 2500); return } // the bundled test page: nothing else to do for it
         flushCounters()
         if (real && tab === restoringTab) hideRestoring("page-stop") // the load ended (a page that never reported its first paint must not keep the preview up)
         // A failed or blocked load is not a visit (typos and malware URLs would otherwise fill history and the top sites).
