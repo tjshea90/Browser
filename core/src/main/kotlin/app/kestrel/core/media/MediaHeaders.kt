@@ -12,7 +12,7 @@ object MediaHeaders {
     fun fromAddress(address: String): Map<String, String> {
         val p = UrlParts.parse(address) ?: return emptyMap()
         if (!p.scheme.equals("http", true) && !p.scheme.equals("https", true)) return emptyMap()
-        val origin = "${p.scheme}://${p.hostForAuthority}"
+        val origin = "${p.scheme}://${p.hostForAuthority}" + (if (p.port >= 0) ":${p.port}" else "")
         return linkedMapOf("Referer" to "$origin/", "Origin" to origin)
     }
 
