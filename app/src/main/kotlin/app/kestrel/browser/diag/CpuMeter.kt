@@ -26,6 +26,7 @@ object CpuMeter {
         var ticks = -1L
         var at = 0L
         var snapping = false
+        var loggedAt = -1_000_000L
         val series = CpuSeries(60)
     }
 
@@ -105,10 +106,12 @@ object CpuMeter {
                     val top = after.mapNotNull { (tid, a) -> val b = before[tid] ?: return@mapNotNull null; a.first to ProcStat.percent(a.second - b.second, dt, clk) }
                         .filter { it.second >= 3.0 }.sortedByDescending { it.second }.take(3)
                         .joinToString(", ") { "${it.first} ${it.second.toInt()}" }
+                    val said = top.ifEmpty { "no single thread stood out" }
                     synchronized(lock) {
-                        moments.add(Moment(now, short(p.name), pct, top.ifEmpty { "no single thread stood out" }))
+                        moments.add(Moment(now, short(p.name), pct, said))
                         while (moments.size > 6) moments.removeAt(0)
                     }
+                    if (now - p.loggedAt > 30_000) { p.loggedAt = now; Health.log("cpu", "busy", "${short(p.name)} ${pct.toInt()} % [$said]") }
                 } catch (e: Exception) { /* gone */ } finally { p.snapping = false }
             }
         }, SNAP_MS)
