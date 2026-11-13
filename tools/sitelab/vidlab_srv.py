@@ -104,8 +104,9 @@ PAGE_FAKE = b"""<!doctype html><meta charset=utf-8><meta name=viewport content="
 <h2 style="margin:8px">Fake play lab</h2>
 <div id=st style="margin:8px;font:bold 22px monospace;color:#ff6">waiting: press play ONCE</div>
 <div id=ads style="margin:8px;font:15px monospace">fake layers fired: 0 | real presses: 0</div>
+<div id=dbg style="margin:8px;font:13px monospace;color:#9cf">...</div>
 <div id=player class=player style="position:relative;width:100%;height:230px;background:#000">
-  <video id=v src="http://10.0.2.2:8004/ads/ad.mp4" playsinline style="position:absolute;left:0;top:0;width:100%;height:100%"></video>
+  <video id=v src="http://10.0.2.2:8000/clip.mp4" playsinline style="position:absolute;left:0;top:0;width:100%;height:100%"></video>
   <div id=realplay style="position:absolute;left:50%;top:50%;width:90px;height:90px;margin:-45px 0 0 -45px;background:#19c;border-radius:45px;color:#fff;text-align:center;line-height:90px;font-size:38px">&#9654;</div>
   <div id=f1 style="position:absolute;left:0;top:0;right:0;bottom:0"></div>
   <div id=f2 style="position:absolute;left:0;top:0;right:0;bottom:0"></div>
@@ -119,6 +120,10 @@ document.getElementById('realplay').addEventListener('click', function () { v.pl
   var el = document.getElementById(id);
   el.addEventListener('click', function () { fired++; show(); window.open('http://10.0.2.2:8000/ad?l=' + id, '_blank'); el.remove(); });
 });
+var realPlay = v.play.bind(v), playCalls = 0, lastResult = '-';
+v.play = function () { playCalls++; var r = realPlay(); if (r && r.then) r.then(function () { lastResult = 'ok'; info(); }, function (e) { lastResult = 'rejected ' + (e && e.name); info(); }); return r; };
+function info() { document.getElementById('dbg').textContent = 'play() calls: ' + playCalls + ' | last: ' + lastResult + ' | error: ' + (v.error ? v.error.code : '-') + ' | state: ' + v.readyState + '/' + v.networkState; }
+v.addEventListener('error', info); v.addEventListener('loadeddata', info);
 v.addEventListener('play', function () { var st = document.getElementById('st'); st.textContent = 'PLAYING after ' + presses + ' real press(es)'; st.style.color = '#6f6'; });
 </script></body>"""
 
@@ -140,6 +145,7 @@ class H(http.server.BaseHTTPRequestHandler):
         if port == 8000 and path == "/watch2": return self.send(200, "text/html; charset=utf-8", PAGE_C)
         if port == 8000 and path == "/plain": return self.send(200, "text/html; charset=utf-8", PAGE_PLAIN)
         if port == 8000 and path == "/fakeplay": return self.send(200, "text/html; charset=utf-8", PAGE_FAKE)
+        if port == 8000 and path == "/clip.mp4": return self.send(200, "video/mp4", FILES["/ads/ad.mp4"][1])
         if port == 8000 and path == "/ad": return self.send(200, "text/html; charset=utf-8", b"<!doctype html><title>spam</title><h1>THIS IS THE SPAM PAGE</h1>")
         if port == 8003 and path == "/embed/server2": return self.send(200, "text/html; charset=utf-8", player("def"))
         if port == 8003 and path == "/embed/adfirst": return self.send(200, "text/html; charset=utf-8", player("abc", ad=True))
