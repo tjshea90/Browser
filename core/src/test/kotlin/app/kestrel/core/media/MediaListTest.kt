@@ -1,6 +1,7 @@
 package app.kestrel.core.media
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -121,6 +122,43 @@ class MediaListFramesTest {
         assertTrue(l.dropFrames(listOf("https://player-one.test/embed")).isEmpty())  // already gone
         assertTrue(l.dropFrames(listOf("")).isEmpty())                                 // the page itself is never dropped by a frame
         assertEquals(2, l.size)
+    }
+
+    // ---- EY-17 (research/REVIEW-EXTERNAL-2.md): rank, not age
+    @Test fun aRealVideoIsNotPushedOutBySixtyPreviews() {
+        val l = MediaList()
+        val big = MediaCandidate("https://cdn.test/movie.mp4", MediaKind.FILE, "video/mp4", 300L * 1024 * 1024, "https://site.test/watch")
+        l.add(big)                                                                    // the real video came FIRST (the oldest entry)
+        for (i in 1..60) l.add(MediaCandidate("https://ads.test/p$i.mp4", MediaKind.FILE, "video/mp4", 200L * 1024, "https://site.test/watch")) // then sixty previews / ads
+        assertEquals(48, l.size)
+        assertNotNull("the oldest, biggest entry stays", l.find("https://cdn.test/movie.mp4"))
+        assertNotNull("and so does the newest preview", l.find("https://ads.test/p60.mp4"))
+        // a real one that arrives LAST is never the one dropped
+        val late = MediaCandidate("https://cdn.test/late.mp4", MediaKind.FILE, "video/mp4", 120L * 1024 * 1024, "https://site.test/watch")
+        l.add(late)
+        assertEquals(48, l.size); assertNotNull(l.find("https://cdn.test/late.mp4")); assertNotNull(l.find("https://cdn.test/movie.mp4"))
+    }
+
+    @Test fun aStreamAndAPlayedOrTouchedEntryAreNeverEvicted() {
+        val l = MediaList(max = 6)
+        val stream = MediaCandidate("https://cdn.test/master.m3u8", MediaKind.HLS, "", -1, "https://site.test/watch")
+        val played = MediaCandidate("https://cdn.test/clip.mp4", MediaKind.FILE, "video/mp4", 3L * 1024 * 1024, "https://site.test/watch")
+        l.add(stream); l.add(played)
+        l.applyInfo("https://cdn.test/clip.mp4", 640, 360, 30_000, null)              // the page's player reported it: touched
+        for (i in 1..20) l.add(MediaCandidate("https://ads.test/p$i.mp4", MediaKind.FILE, "video/mp4", 150L * 1024, "https://site.test/watch"))
+        assertEquals(6, l.size)
+        assertNotNull(l.find("https://cdn.test/master.m3u8")); assertNotNull(l.find("https://cdn.test/clip.mp4"))
+        assertTrue("the played 3 MB clip is shown next to the stream (not hidden as a preview)", l.usable().any { it.url == "https://cdn.test/clip.mp4" })
+        // an untouched 3 MB file next to a stream IS still hidden
+        val l2 = MediaList()
+        l2.add(MediaCandidate("https://cdn.test/master.m3u8", MediaKind.HLS, "", -1, "https://site.test/watch"))
+        l2.add(MediaCandidate("https://cdn.test/preview.mp4", MediaKind.FILE, "video/mp4", 3L * 1024 * 1024, "https://site.test/watch"))
+        assertTrue(l2.usable().none { it.url == "https://cdn.test/preview.mp4" })
+        // sharp (480p+) or long (20 s+) files are shown too
+        val sharp = MediaCandidate("https://cdn.test/sharp.mp4", MediaKind.FILE, "video/mp4", 3L * 1024 * 1024, "https://site.test/watch").also { it.height = 720 }
+        val long = MediaCandidate("https://cdn.test/long.mp4", MediaKind.FILE, "video/mp4", 3L * 1024 * 1024, "https://site.test/watch").also { it.durationMs = 25_000 }
+        l2.add(sharp); l2.add(long)
+        assertTrue(l2.usable().any { it.url == "https://cdn.test/sharp.mp4" } && l2.usable().any { it.url == "https://cdn.test/long.mp4" })
     }
 
     @Test fun theNewestSightingNamesTheDocumentThatAsks() {
