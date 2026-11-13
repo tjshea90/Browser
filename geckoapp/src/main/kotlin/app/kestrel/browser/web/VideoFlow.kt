@@ -54,7 +54,7 @@ class VideoFlow(private val a: BrowserActivity) {
     }
 
     /** What the tab's list held is gone (a new page): the list is emptied and everything learned about its entries is forgotten, so the same address on the next page is read afresh. UI thread. */
-    fun clearTab(tab: Tab) { val keys = tab.media.keys(); tab.media.clear(); forget(keys) }
+    fun clearTab(tab: Tab) { val keys = tab.media.keys(); tab.media.clear(); forget(keys); val p = tab.id.toString() + "|"; maybeAsked.removeAll { it.startsWith(p) } }
 
     private fun forget(keys: List<String>) {
         for (k in keys) { streamInfo.remove(k); probed.remove(k); sized.remove(k); childUrls.remove(k)?.forEach { children.remove(it) } }
@@ -65,8 +65,12 @@ class VideoFlow(private val a: BrowserActivity) {
      * worker thread. An advertisement in the same player, or an ad frame of its own, never comes here: the extension only says "gone" for a frame that is REPLACED.
      */
     fun gone(page: String, docs: List<String>) = Io.ui {
-        val t = tabOf(page) ?: return@ui
+        val t = tabOf(page) ?: run { Health.log("media", "frame-gone-no-tab", "docs=${docs.size}"); return@ui }
         val keys = t.media.dropFrames(docs)
+        // those documents are gone: an address asked about in one of them (even one that turned out not to be media) is news again when a new document asks for it
+        val p = t.id.toString() + "|"
+        maybeAsked.removeAll { k -> docs.any { d -> k.startsWith("$p$d|") } }
+        Health.log("media", "frame-gone", "docs=${docs.size} dropped=${keys.size} left=${t.media.keys().size}") // always, so a report shows whether the extension's message arrived
         if (keys.isEmpty()) return@ui
         forget(keys)
         Health.log("media", "server-switch", "dropped=${keys.size} frames=${docs.size}")
@@ -79,7 +83,8 @@ class VideoFlow(private val a: BrowserActivity) {
         if (t.media.add(c)) a.refreshDownloadButton()
     }
 
-    private val maybeAsked = HashSet<String>() // "tab id|address" already read, so a player that asks for the same playlist again does not make us read it again
+    /** "tab id|document|address" already read, so a player that asks for the same playlist again does not make us read it again. Per DOCUMENT: another server (another document) that asks for the same address is news ([gone] forgets the replaced document's entries, [clearTab] a tab's). */
+    private val maybeAsked = HashSet<String>()
 
     /**
      * The extension saw a response that says nothing about being media (text/plain, octet-stream, a "picture" or "stylesheet" a script fetched): stream sites disguise their playlists that way. Read its first
@@ -90,9 +95,9 @@ class VideoFlow(private val a: BrowserActivity) {
         if (!(url.startsWith("http://", true) || url.startsWith("https://", true))) return@ui
         val t = tabOf(page) ?: return@ui
         if (t.isNewTab || t.media.find(url) != null) return@ui
-        if (maybeAsked.size > 500) maybeAsked.clear()
-        if (!maybeAsked.add(t.id.toString() + "|" + MediaCandidate.keyOf(url))) return@ui
         val frame = m.optString("f").takeIf { it != page } ?: ""
+        if (maybeAsked.size > 500) maybeAsked.clear()
+        if (!maybeAsked.add(t.id.toString() + "|" + frame + "|" + MediaCandidate.keyOf(url))) return@ui
         val seed = MediaCandidate(url, MediaKind.FILE, "", m.optLong("l", -1L), page, frame, System.currentTimeMillis())
         seed.referer = MediaHeaders.refererOf(m.optString("rf")); seed.origin = MediaHeaders.originOf(m.optString("og"))
         val sets = MediaHeaders.sets(seed, t.url)
