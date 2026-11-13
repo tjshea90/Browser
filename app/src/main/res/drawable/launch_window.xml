@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The window Android draws the moment the icon is tapped, before this process has run a line of code (a cold start loads a 118 MB engine: seconds). Black with the shield instead of an empty
+     black screen; BrowserActivity.onCreate puts the plain black window background back so the shield is never visible behind a page or a panel. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/window_bg" />
+    <item android:drawable="@drawable/launch_shield" android:gravity="center" android:width="72dp" android:height="72dp" />
+</layer-list>

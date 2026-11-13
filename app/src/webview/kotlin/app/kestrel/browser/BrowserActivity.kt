@@ -138,6 +138,7 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.setBackgroundDrawableResource(R.color.window_bg) // the cold-start window showed the shield; from here on it is plain black behind every page and panel
         prefs = Prefs.get(this)
         Shields.init(this)
         pal = Pal(this, isPrivate)

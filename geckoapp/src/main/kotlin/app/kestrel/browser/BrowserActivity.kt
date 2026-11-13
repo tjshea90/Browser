@@ -176,6 +176,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.setBackgroundDrawableResource(R.color.window_bg) // the cold-start window showed the shield; from here on it is plain black behind every page and panel
         ProcessLife.uiAlive = true; ProcessLife.cancel()
         prefs = Prefs.get(this)
         coldStartClear()

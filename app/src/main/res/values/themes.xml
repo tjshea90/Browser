@@ -6,7 +6,8 @@
         <item name="android:alertDialogTheme">@style/Theme.Kestrel.Alert</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowActionBar">false</item>
-        <item name="android:windowBackground">@color/window_bg</item>
+        <!-- the starting window of a cold start (shield on black); the activity swaps in the plain black background in onCreate -->
+        <item name="android:windowBackground">@drawable/launch_window</item>
         <item name="android:statusBarColor">@color/chrome_bg</item>
         <item name="android:navigationBarColor">@color/chrome_bg</item>
         <item name="android:windowLightStatusBar">false</item>
