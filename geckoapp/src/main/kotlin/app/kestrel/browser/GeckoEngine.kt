@@ -81,8 +81,12 @@ object GeckoEngine {
     private fun create(ctx: Context): GeckoRuntime {
         appCtx = ctx
         val prefs = Prefs.get(ctx)
+        // Firefox's Strict set WITHOUT its CONTENT category (cdn.jsdelivr.net, unpkg.com, JW Player, Brightcove, Kaltura, Vimeo ...): those are what pages are built from, not trackers, and without Mozilla's allow-lists
+        // blocking them broke doraby.com (no photos, no icons) and video players (research/DORABY.md, core/shield/EtpCategories). Debug builds only: `setprop debug.kestrel.etpcontent 1` brings the old setting back to compare.
+        val antiTracking = if (app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.etpcontent") == "1") ContentBlocking.AntiTracking.STRICT
+            else ContentBlocking.AntiTracking.STRICT and ContentBlocking.AntiTracking.CONTENT.inv()
         val blocking = ContentBlocking.Settings.Builder()
-            .antiTracking(ContentBlocking.AntiTracking.STRICT)
+            .antiTracking(antiTracking)
             .enhancedTrackingProtectionLevel(ContentBlocking.EtpLevel.STRICT)
             .strictSocialTrackingProtection(true)
             .cookieBehavior(ContentBlocking.CookieBehavior.ACCEPT_FIRST_PARTY_AND_ISOLATE_OTHERS)
@@ -196,10 +200,13 @@ object GeckoEngine {
             "media.autoplay.default", "media.autoplay.blocking_policy", "media.geckoview.autoplay.request", "media.rdd-process.enabled", "media.utility-process.enabled", "media.video-queue.default-size",
             "media.suspend-background-video.enabled", "ui.prefersReducedMotion", "image.animation_mode", "gfx.webrender.all", "gfx.webrender.compositor", "gfx.canvas.accelerated", "webgl.disabled",
             "javascript.options.ion", "javascript.options.baselinejit", "javascript.options.blinterp", "javascript.options.wasm", "javascript.options.wasm_optimizingjit", "network.early-hints.enabled",
-            "network.dns.echconfig.enabled", "security.tls.enable_kyber", "network.http.http2.enabled")
+            "network.dns.echconfig.enabled", "security.tls.enable_kyber", "network.http.http2.enabled",
+            // Firefox's own tracking protection: which lists block (content-track-digest256 = the CDN / player category), and the allow-lists Mozilla's service would fill
+            "urlclassifier.trackingTable", "urlclassifier.trackingAnnotationTable", "privacy.trackingprotection.enabled", "privacy.annotate_channels.strict_list.enabled",
+            "privacy.trackingprotection.allow_list.baseline.enabled", "privacy.trackingprotection.allow_list.convenience.enabled")
         try {
             org.mozilla.geckoview.GeckoPreferenceController.getGeckoPrefs(names).accept({ list ->
-                prefReadback = "Engine prefs: " + (list?.joinToString(", ") { "${shortPref(it.pref)}=${it.value.toString().take(40)}(${when (it.type) { org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_BOOL -> "b"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_INT -> "i"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_STRING -> "s"; else -> "?" }})" } ?: "none")
+                prefReadback = "Engine prefs: " + (list?.joinToString(", ") { "${shortPref(it.pref)}=${it.value.toString().take(if (it.pref.startsWith("urlclassifier")) 220 else 40)}(${when (it.type) { org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_BOOL -> "b"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_INT -> "i"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_STRING -> "s"; else -> "?" }})" } ?: "none")
                 done()
             }, { e -> prefReadback = "Engine prefs: read failed ($e)"; done() })
         } catch (e: Exception) { prefReadback = "Engine prefs: unavailable ($e)"; done() }

@@ -79,5 +79,7 @@ class Tab(@JvmField val id: Long) {
     @JvmField val shieldDirty = AtomicBoolean(false)
 
     fun blockedTotal(): Int { var n = 0; for (i in 0 until 4) n += blocked.get(i); return n }
-    fun resetPageCounters() { for (i in 0 until 4) blocked.set(i, 0) }
+    /** What Firefox's own tracking protection blocked on this page, as "host/path [category]" lines (at most 30; Diagnostics shows them; cleared with the counters at every new page). */
+    @JvmField val engineBlocks: MutableList<String> = java.util.Collections.synchronizedList(ArrayList())
+    fun resetPageCounters() { for (i in 0 until 4) blocked.set(i, 0); engineBlocks.clear() }
 }

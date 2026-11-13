@@ -212,6 +212,10 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
 
     override fun onContentBlocked(session: GeckoSession, event: ContentBlocking.BlockEvent) {
         val c = event.antiTrackingCategory
+        if (event.isBlocking && tab.engineBlocks.size < 30) { // the evidence for "this page is half empty": WHICH file the engine's own protection refused, and under which category
+            val u = event.uri.substringAfter("://").let { x -> val q = x.indexOf('?'); (if (q >= 0) x.substring(0, q + 1) + ".." else x).take(110) }
+            tab.engineBlocks.add("$u [${app.kestrel.core.shield.EtpCategories.names(c)}]")
+        }
         val category = if ((c and ContentBlocking.AntiTracking.AD) != 0) Category.ADS else Category.PRIVACY
         tab.blocked.incrementAndGet(category)
         tab.pendingLifetime.incrementAndGet()
