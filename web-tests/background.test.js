@@ -529,23 +529,32 @@ test('server switch: a player frame that went to another server gets a fresh bud
   assert.equal(h2.of('maybe').length, 48, 'forty-eight over all frames');
 });
 
-test('server switch: an address found in a player frame\'s own script is filed under the PAGE and the player document, even when the message names no tab', async () => {
-  const h = harness(standardApp());
-  h.mainFrame(PAGE, { requestId: '10' });
-  navigate(h, 7, 0, PLAYER1);                                                  // the page's iframe loads server one (the frame is now known to belong to tab 1)
-  h.message({ k: 'dom', u: 'https://ads.example/preroll.mp4', p: PLAYER1 }, -1, PLAYER1, 7); // its script names a file; the browser gave the message no tab
+test('server switch: an address found in a player frame\'s own script is filed under the PAGE and the player document, even when the extension never saw the page\'s own request (the first page after a cold start)', async () => {
+  const h = harness(standardApp());                                              // no mainFrame(): the page loaded before the extension was active
+  navigate(h, 7, 0, PLAYER1);                                                   // the iframe's request names its ancestors: the page is learned from them
+  h.message({ k: 'dom', u: 'https://ads.example/preroll.mp4', p: PLAYER1 }, 1, PLAYER1, 7);
   await tick(10);
   const m = h.of('media');
   assert.equal(m.length, 1);
   assert.equal(m[0].p, PAGE, 'the page the tab is on, not the player\'s address'); assert.equal(m[0].f, PLAYER1, 'the document that holds it'); assert.equal(m[0].s, 'dom');
-  navigate(h, 7, 0, PLAYER2);                                                  // another server: that document is gone, and so is what its script named
+  navigate(h, 7, 0, PLAYER2);                                                   // another server: that document is gone, and so is what its script named
   await tick(10);
   const g = h.of('gone');
   assert.equal(g.length, 1); eq(g[0].d, [PLAYER1]);
-  h.message({ k: 'dom', u: 'https://ads.example/preroll.mp4', p: PLAYER2 + '#x' }, -1, PLAYER2, 7); // the second player names the same file; a fragment does not make another document
+  h.message({ k: 'dom', u: 'https://ads.example/preroll.mp4', p: PLAYER2 + '#x' }, 1, PLAYER2, 7); // the second player names the same file; a fragment does not make another document
   navigate(h, 7, 0, PLAYER1);
   await tick(10);
   eq(h.of('gone').map((x) => x.d), [[PLAYER1], [PLAYER2]]);
+  // a frame whose page cannot be learned (no ancestors) never names the page by its OWN address: the app then takes the tab in front
+  const h2 = harness(standardApp());
+  h2.message({ k: 'dom', u: 'https://ads.example/x.mp4', p: 'https://orphan.example/frame' }, 1, 'https://orphan.example/frame', 9);
+  await tick(10);
+  assert.equal(h2.of('media')[0].p, ''); assert.equal(h2.of('media')[0].f, 'https://orphan.example/frame');
+  // the top frame's own message teaches the page
+  const h3 = harness(standardApp());
+  h3.message({ k: 'dom', u: 'https://cdn.example/top.mp4', p: PAGE }, 1, PAGE, 0);
+  await tick(10);
+  assert.equal(h3.of('media')[0].p, PAGE); assert.equal(h3.of('media')[0].f, '');
 });
 
 test('server switch: an advertisement that plays before the real video is NOT a server switch (same document, or a frame of its own)', async () => {

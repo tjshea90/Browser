@@ -88,7 +88,6 @@ class ShieldsBridge(
                     "maybe" -> { mediaMaybe(m); "" }
                     "gone" -> { m.optJSONArray("d")?.let { arr -> mediaGone(m.optString("p"), (0 until arr.length()).map { arr.optString(it) }.filter { it.isNotEmpty() }) }; "" }
                     "vid" -> { onVid(m); "" }
-                    "dbg" -> { app.kestrel.browser.diag.Health.log("ext", "dbg", m.optString("m")); "" } // TEMPORARY (emulator lab 2026-11-13)
                     "warm" -> { warmLink(m.optString("o"), m.optString("p"), m.optString("w")); "" }
                     "rep" -> { onPageReport(m); "" }
                     else -> ""
@@ -124,7 +123,6 @@ class ShieldsBridge(
         val ct = m.optString("c")
         val kind = MediaSniff.classify(url, ct, 200) ?: return
         val page = m.optString("p")
-        if (m.optString("s") == "dom") app.kestrel.browser.diag.Health.log("media", "dom", "x=${m.optString("x")} f=${m.optString("f").isNotEmpty()}") // TEMPORARY (emulator lab 2026-11-13): which frame / tab the browser names for a content script's message
         // an address found in the page's own markup (not loaded yet): ad networks are dropped here, the same lists that block their requests
         if (m.optString("s") == "dom") {
             val fs = Engine.peek()
