@@ -492,7 +492,7 @@ object UpdateManager {
         val libs = nativeLibBytes(ctx, apk)
         val rawFree = freeForInstall(ctx)
         val free = (rawFree - pending).coerceAtLeast(0) // the download comes first and takes its room
-        val plan = UpdateLogic.storagePlan(apkBytes, libs, free, reserveBytes(ctx))
+        val plan = UpdateLogic.storagePlan(apkBytes, libs, free, reserveBytes(ctx, rawFree))
         val own = ownFootprint(ctx)
         val other = UpdateLogic.otherWayPlan(plan, own.total, apkBytes, fileKept = apk != null && apk.isFile)
         return Space(plan, rawFree, plan.installTakes, 0L, own, other) // (a floor learned from earlier refusals used to inflate the figure: gone, the number is only what Android's rule says)
