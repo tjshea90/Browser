@@ -89,7 +89,7 @@ class ShieldsPanel(private val ctx: Context, private val pal: Pal, private val o
             col.addView(row(label(ctx, s.title, 15f, pal.fg).apply { includeFontPadding = true }, s.subtitle, sw))
         }
         refreshDim()
-        col.addView(label(ctx, "Changes reload the page. These are this site's settings; defaults are in Settings.", 12f, pal.muted).apply { setPadding(0, ctx.dp(8), 0, 0); includeFontPadding = true })
+        col.addView(label(ctx, "Changes reload the page. These are this site's settings; defaults are in Settings." + (if (app.kestrel.browser.Flavor.hasEmbedWait) " With Shields off, Firefox's own tracker blocking is off for this site too." else ""), 12f, pal.muted).apply { setPadding(0, ctx.dp(8), 0, 0); includeFontPadding = true })
         return col
     }
 
