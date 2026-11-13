@@ -1,13 +1,13 @@
-# CHECKPOINT 1729 — read me first, then TASKS.md
+# CHECKPOINT 1750 — read me first, then TASKS.md
 
-**Written:** 2026-11-13T21:57:58Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `f3217c5` (this checkpoint is the commit after it)
+**Written:** 2026-11-13T22:17:57Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `c4534d8` (this checkpoint is the commit after it)
 
 ## Just done
-alpha32 SHIPPED and recorded (run 43514151508 green, APK 92,539,679 B vs alpha31 93,443,198 B); owner answered in OUTBOX text; EY-22a (canContinue + G18) done; EY-1 in progress: core LastLookRules + LastLookMeta (+7 tests), app LastLook store, RestoreOverlay look mode written, BrowserActivity wiring NOT yet done
+owner message 29 recorded (AO1 smoothness audit, AO2 download size accuracy, AO3 professional icon + Recents icon, AO4 delete update APKs and stale storage) in TASKS before code; EY-1 last look: capture + early-cover look + hide rule + Settings switch + Diagnostics line written, page-side scroll report added (content.js/background.js/ShieldsBridge, web tests 40 content + 87 background pass), 17 JVM tests for the look (rules, store, overlay pixels), emulator: look shown in first frame, scroll captured; alpha33 versionCode 132 / extension 1.0.132 prepared (NOT shipped)
 
 ## Do this next
-EY-1 wiring in geckoapp BrowserActivity: Prefs.lastLook (key last_look default true) + Settings toggle under Clear browsing data + SettingsView.Listener.lastLookOff(); Tab.scrollY + a GeckoSession.ScrollDelegate set in createSession; captureLook(tab, why) on onPause (first line), 700 ms after the last scroll (>= 4 s apart) and 1.5 s after page stop (regular http tabs only, not loading, session attached), saved via LastLook.save on Io.exec then LastLook.retain(LastLookRules.keep); earlyCover(): load meta+bitmap synchronously on the UI thread, LastLookRules.usable(meta, url, Flavor.engineVersion, LastLook.SKIN, prefs.webDark != 0?, tab.desktop) then restoreOverlay.showLook(bitmap, 'Opening host', onDrawn = StartTimeline.mark('look')); hide rule via LastLookRules.hideNow in firstPaint/scroll/page-stop/1500 ms timer, NOTE chip after 4 s (setLookNote), cap 12 s; wipes: coldStartClear, clearBrowsingData, doCloseTab, showNewTabPage, switch off; drop the look when the page URL differs at page start; then tests (core done), emulator proof: open a long page, scroll, swipe away, turn Wi-Fi off, reopen: picture is in the first frame; update research/COLD_START.md
+1) read scratchpad look_flow.out + lk_events_a.txt (chain_look2.sh: build+install+flow with the page-side scroll report): expect look-hide why=look-scroll/look-paint with y=cur/saved close, and look-saved y>0 after the restore; if hide is only by timeout on this slow emulator that is the emulator (page paint takes 70 s), say so; 2) full suite (./gradlew :core:test :app:testDebugUnitTest :geckoapp:compileDebugKotlin :app:lintDebug + cd web-tests && npm test) then tick EY-1 with claim.sh; 3) AO3 icon (geckoapp + app manifests, mipmap-anydpi-v26 adaptive icon, setTaskDescription in BrowserActivity), AO4 storage cleanup (update APKs after the new version runs, stale files), AO2 size estimates, AO1 smoothness research (research/VIDEO_SMOOTHNESS.md); 4) ship alpha33 and answer the owner (plain words, list open items); heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN stands down on wakes
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ EY-1 wiring in geckoapp BrowserActivity: Prefs.lastLook (key last_look default t
 
 ## Last ten checkpoints
 ```
+  4220445 ckpt 1729: alpha32 SHIPPED and recorded (run 43514151508 green, APK 92,539,679 B vs alph
   8999097 ckpt 1719: gated kestrel-g-v0.3.0-alpha32 (gecko code 131) and pushed it: handoff self-t
   e9da0f9 ckpt 1718: EY-2 (start timeline, emulator marks + Diagnostics line, research/COLD_START.
   caaf9c8 ckpt 1700: AL1-AL6 + AM1 ticked with evidence (AL5 final emulator chain: S1->S2 dropped=
@@ -25,8 +26,7 @@ EY-1 wiring in geckoapp BrowserActivity: Prefs.lastLook (key last_look default t
   d19f54f ckpt 1672: owner message 28 written into TASKS as AN1 (review and complete all fixes and
   d14b0ab ckpt 1665: AL5 emulator lab found a real bug and it is fixed in code: after two server s
   e03327f ckpt 1661: AM1 CODE DONE: removed Tap lab, Decode lab (assets/labs 394 KB), Scroll test 
-  bab3a84 ckpt 1650: owner message 27 written into TASKS as AM1 (remove finished diagnosis tools);
 ```
 
-(8 automatic checkpoint(s) since the last deliberate one — the
+(20 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
