@@ -228,6 +228,7 @@ open class BrowserActivity : Activity(), DockListener {
         // then attach the ad/tracker blocking extension to the app's filter engine.
         android.view.Choreographer.getInstance().postFrameCallback {
             StartTimeline.mark("frame")
+            setRecentsLook() // AO3: the icon and colour of this app's card in the Recents list
             Io.main.post {
                 Health.log("engine", "runtime-create")
                 GeckoEngine.runtime(this)
@@ -258,6 +259,21 @@ open class BrowserActivity : Activity(), DockListener {
             Io.ui { restore(session, savedInstanceState, launch, states, selThumb) }
         }
         Io.exec { db?.purge(5000, 90); UpdateJob.schedule(applicationContext); app.kestrel.browser.update.ReleaseCheckJob.schedule(applicationContext) } // after the session read: nothing at launch waits for this
+    }
+
+    /**
+     * AO3 (owner message 29): the card of this app in Android's Recents list shows its icon and colour. Some Recents screens (Android 10 Go on the tablet) do not draw an adaptive icon from the manifest and show the
+     * platform's generic robot tile instead; an icon handed over as a plain picture is drawn by every Recents screen. Drawn once from the same adaptive icon the launcher uses.
+     */
+    @Suppress("DEPRECATION")
+    private fun setRecentsLook() {
+        try {
+            val icon = getDrawable(R.mipmap.ic_launcher) ?: return
+            val size = 192
+            val bmp = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+            icon.setBounds(0, 0, size, size); icon.draw(android.graphics.Canvas(bmp))
+            setTaskDescription(android.app.ActivityManager.TaskDescription(applicationInfo.loadLabel(packageManager).toString(), bmp, pal.chromeBg or 0xFF000000.toInt()))
+        } catch (e: Throwable) { /* a plain card in Recents is harmless */ }
     }
 
     override fun onStart() {
