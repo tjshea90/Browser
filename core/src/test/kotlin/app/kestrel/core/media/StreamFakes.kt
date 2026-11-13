@@ -18,6 +18,11 @@ class FakeCdn : Fetcher {
     val requests = CopyOnWriteArrayList<String>()
     val failFirst = ConcurrentHashMap<String, Int>()      // url -> fail this many requests with a reset first
     val statusFor = ConcurrentHashMap<String, Int>()      // url -> always answer this status
+    val denyFirst = ConcurrentHashMap<String, Int>()      // url -> answer 403 to this many requests first, then serve it (an edge hiccup, a spent token)
+    /** Decides per request: a status to answer instead of the file, or null to serve it. Runs before everything else except [failFirst]. */
+    @Volatile var gate: ((FetchRequest) -> Int?)? = null
+    /** Every request that reached the server: the address and the headers it carried. */
+    val seen = CopyOnWriteArrayList<Pair<String, Map<String, String>>>()
     @Volatile var chunkDelayMs = 0L
     @Volatile var chunk = 8 * 1024
     @Volatile var ignoreRange = false
@@ -29,7 +34,10 @@ class FakeCdn : Fetcher {
 
     override fun open(req: FetchRequest): FetchResponse {
         requests.add(req.url + " " + req.from + "-" + req.toInclusive)
+        seen.add(req.url to req.headers)
         failFirst[req.url]?.let { n -> if (n > 0) { failFirst[req.url] = n - 1; throw FetchException(FetchException.Kind.RESET, "fake reset") } }
+        gate?.invoke(req)?.let { return Resp(it, req.url, emptyMap(), ByteArray(0), 0, 0, this) }
+        denyFirst[req.url]?.let { n -> if (n > 0) { denyFirst[req.url] = n - 1; return Resp(403, req.url, emptyMap(), ByteArray(0), 0, 0, this) } }
         statusFor[req.url]?.let { return Resp(it, req.url, emptyMap(), ByteArray(0), 0, 0, this) }
         val d = files[req.url] ?: return Resp(404, req.url, emptyMap(), ByteArray(0), 0, 0, this)
         if (req.from >= 0 && !ignoreRange) {
