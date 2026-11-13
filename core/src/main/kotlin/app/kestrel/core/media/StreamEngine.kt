@@ -1244,6 +1244,35 @@ class StreamEngine(
 
     private fun totalOf(contentRange: String?): Long = contentRange?.substringAfterLast('/')?.trim()?.toLongOrNull() ?: -1L
 
+    /** How much of the video the complete segments cover (appended ones and the ones waiting in staging), in milliseconds. */
+    private fun doneMs(job: Job, media: Hls.Media): Long {
+        val segs = media.segments
+        var ms = 0L
+        val next = job.rec.next.coerceIn(0, segs.size)
+        for (i in 0 until next) ms += segs[i].durationMs
+        var i = job.staged.nextSetBit(next)
+        while (i in 0 until segs.size) { ms += segs[i].durationMs; i = job.staged.nextSetBit(i + 1) }
+        return ms
+    }
+
+    // ---- how right the figure shown at the start was (Diagnostics): the last few finished downloads, no names
+
+    private val sizeNotes = java.util.ArrayDeque<String>()
+    private var sizeCount = 0
+
+    private fun noteSize(estimate: Long, actual: Long) {
+        if (estimate <= 0 || actual <= 0) return
+        val pct = Math.round((estimate - actual) * 100.0 / actual)
+        synchronized(sizeNotes) {
+            sizeCount++
+            sizeNotes.addLast("#$sizeCount shown ${app.kestrel.core.update.UpdateLogic.formatSize(estimate)}, finished ${app.kestrel.core.update.UpdateLogic.formatSize(actual)} (${if (pct > 0) "+" else ""}$pct%)")
+            while (sizeNotes.size > 8) sizeNotes.removeFirst()
+        }
+    }
+
+    /** One Diagnostics sentence: the size the list showed before each recent stream download against what the file came to. */
+    fun sizeReport(): String = synchronized(sizeNotes) { if (sizeNotes.isEmpty()) "no stream download has finished yet this run" else sizeNotes.joinToString("; ") }
+
     // ================================================================================================ views
 
     private fun view(job: Job): DownloadView {
