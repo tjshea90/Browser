@@ -17,9 +17,10 @@ import app.kestrel.browser.diag.Health
 /**
  * Full-screen Diagnostics: device and engine facts, counters and the last events of the freeze watchdog (research/FREEZE.md). Large buttons:
  * "Refresh screen" re-creates the page surface by hand (what switching apps does), Copy/Share put the report on the clipboard or in a message.
- * Nothing leaves the tablet unless the owner shares it.
+ * Nothing leaves the tablet unless the owner shares it. The test pages and switches that answered their questions (Tap lab, Decode lab, Scroll test, the blocker mode switch) were
+ * removed on the owner's request (message 27, research/DIAG_TOOLS.md).
  */
-class DiagnosticsView(ctx: Context, private val pal: Pal, private val facts: () -> List<String>, private val onRefreshScreen: () -> Unit, private val onClose: () -> Unit, private val onScrollTest: (() -> Unit)? = null, private val onScrollCompare: (() -> Unit)? = null, private val blockerLabel: (() -> String)? = null, private val onBlocker: (() -> Unit)? = null, private val onLab: ((String) -> Unit)? = null) : LinearLayout(ctx) {
+class DiagnosticsView(ctx: Context, private val pal: Pal, private val facts: () -> List<String>, private val onRefreshScreen: () -> Unit, private val onClose: () -> Unit) : LinearLayout(ctx) {
     private val body = TextView(ctx).apply {
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
         typeface = Typeface.MONOSPACE
@@ -45,31 +46,7 @@ class DiagnosticsView(ctx: Context, private val pal: Pal, private val facts: () 
         row.addView(big("Copy", pal.pill, pal.fg) { copy() }, lp(1f))
         row.addView(big("Share", pal.pill, pal.fg) { share() }, lp(1f))
         addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-        if (onScrollTest != null) {
-            val row2 = LinearLayout(ctx).apply { orientation = HORIZONTAL; setPadding(ctx.dp(10), 0, ctx.dp(10), ctx.dp(6)) }
-            row2.addView(big("Scroll test (30 s)", pal.pill, pal.accent) { onScrollTest.invoke() }, lp(1f))
-            if (onScrollCompare != null) row2.addView(big("Compare 3 feels (90 s)", pal.pill, pal.accent) { onScrollCompare.invoke() }, lp(1f))
-            addView(row2, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-        }
-
-        if (onLab != null) {
-            // bundled test pages that measure the tablet itself (research/REVIEW-EXTERNAL-1.md section 8): they open in a tab of their own and show their numbers on the page
-            val rowLab = LinearLayout(ctx).apply { orientation = HORIZONTAL; setPadding(ctx.dp(10), 0, ctx.dp(10), ctx.dp(6)) }
-            rowLab.addView(big("Tap lab", pal.pill, pal.accent) { onLab.invoke("tap") }, lp(1f))
-            rowLab.addView(big("Decode lab", pal.pill, pal.accent) { onLab.invoke("decode") }, lp(1f))
-            addView(rowLab, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-        }
-
-        if (blockerLabel != null && onBlocker != null) {
-            // switches where ad-blocking decisions are made (fast: inside the page engine; compatibility: every request asks the app). Takes effect from the next page load.
-            val row3 = LinearLayout(ctx).apply { orientation = HORIZONTAL; setPadding(ctx.dp(10), 0, ctx.dp(10), ctx.dp(6)) }
-            lateinit var btn: TextView
-            btn = big(blockerLabel.invoke(), pal.pill, pal.accent) { onBlocker.invoke(); btn.text = blockerLabel.invoke(); refresh() }
-            row3.addView(btn, lp(1f))
-            addView(row3, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-        }
-
-        val hint = label(ctx, "If the screen freezes while typing, tap Refresh screen, then tell Claude whether it helped. Copy/Share this page when you report it.", 12f, pal.muted)
+        val hint = label(ctx, "Copy or Share this page when you report a problem. Refresh screen re-creates the page view if it ever stops updating.", 12f, pal.muted)
         hint.setPadding(ctx.dp(16), ctx.dp(2), ctx.dp(16), ctx.dp(6))
         hint.includeFontPadding = true
         addView(hint, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
