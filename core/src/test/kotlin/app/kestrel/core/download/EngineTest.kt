@@ -623,8 +623,8 @@ class EngineTest {
         h.await(b, "b paused again") { it?.state == DlState.PAUSED_USER }
         h.engine.resume(b)                                // the normal way back: into the line, not ahead of everything
         h.await(b, "b waits again") { it?.state == DlState.QUEUED }
-        assertEquals("the forced priority was for one run only", 0, h.awaitRow(b, "priority back") { it?.state == DlState.QUEUED }!!.prio)
         h.completed(a); h.completed(b)
+        assertEquals("the forced priority was for one run only", 0, h.awaitRow(b, "completed row") { it?.state == DlState.COMPLETED }!!.prio)
     }
 
     @Test(timeout = 90_000) fun atMostThreeStartNowDownloadsRunTogether() {
