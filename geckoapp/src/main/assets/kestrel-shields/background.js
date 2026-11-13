@@ -509,7 +509,8 @@ function frameNavigates(d) { // a sub_frame request: the frame [d.frameId] is be
   var gone = [], ids = [];
   mf.forEach(function (doc, id) { if (insideFrame(tabId, id, f)) { if (doc) gone.push(doc); ids.push(id); } });
   if (!ids.length) return;
-  for (var i = 0; i < ids.length; i++) mf.delete(ids[i]);
+  var fc = maybeCount.get(tabId);
+  for (var i = 0; i < ids.length; i++) { mf.delete(ids[i]); if (fc) fc.delete(ids[i]); } // the new document starts with a fresh probe budget
   var seen = sniffed.get(tabId); // their files may be reported again by the new document
   if (seen) seen.forEach(function (key) { for (var j = 0; j < ids.length; j++) if (key.indexOf(ids[j] + '|') === 0 || key.indexOf('?' + ids[j] + '|') === 0) { seen.delete(key); break; } });
   if (gone.length) send({ k: 'gone', p: tabTop.get(tabId) || '', d: gone.slice(0, 20) }).catch(function () {});
@@ -536,12 +537,13 @@ browser.webRequest.onBeforeSendHeaders.addListener(function (d) {
 }, { urls: ['http://*/*', 'https://*/*'], types: ['media', 'xmlhttprequest', 'other', 'object'] }, ['requestHeaders']);
 
 // A response that says nothing about being media (text/plain, octet-stream, no type at all, or a "picture" / "stylesheet" fetched by a script) but could still be a playlist or a video: stream sites often
-// disguise their playlists (".txt", ".css", no extension). The app reads the first bytes itself with the same headers and decides ("maybe" message). Small, rare and rate-limited: at most MAYBE_PER_PAGE per page.
+// disguise their playlists (".txt", ".css", no extension). The app reads the first bytes itself with the same headers and decides ("maybe" message). Small, rare and rate-limited: at most MAYBE_PER_PAGE per document (frame) and MAYBE_PER_TAB per page.
 var MAYBE_CT = /^(?:text\/plain|application\/octet-stream|binary\/octet-stream|application\/force-download|application\/x-download|application\/download|application\/unknown|)$/;
 var MAYBE_DISGUISE = /^(?:image\/|text\/css)/; // a "picture" or "stylesheet" that a SCRIPT fetched (an <img> or <link> has its own request type and is never probed)
 var NOT_MAYBE = /\.(?:json|html?|svg|ico|woff2?|ttf|otf|eot|map|wasm|gif)(?:$|[?#])/i; // never a playlist
-var maybeCount = new Map(); // tabId -> probes asked for on the current page
-var MAYBE_PER_PAGE = 12;
+var maybeCount = new Map(); // tabId -> Map(frameId -> probes asked for by that frame's current document)
+var MAYBE_PER_PAGE = 12;    // per document: a player frame that goes to another server starts with a fresh budget (emulator lab, 2026-11-13: three servers in a row ate the old per-page twelve and the third server's playlist was never looked at)
+var MAYBE_PER_TAB = 48;     // and over all the frames of the page, so a page full of frames cannot flood the app
 function maybeMedia(d, url, ct, size, ref, org) {
   if (d.type !== 'xmlhttprequest' && d.type !== 'other' && d.type !== 'media') return;
   if (NOT_MAYBE.test(url)) return;
@@ -556,9 +558,12 @@ function maybeMedia(d, url, ct, size, ref, org) {
     seen = new Set(); sniffed.set(d.tabId, seen);
   }
   if (seen.has(key)) return;
-  var n = maybeCount.get(d.tabId) || 0;
+  var fc = maybeCount.get(d.tabId); if (!fc) { fc = new Map(); maybeCount.set(d.tabId, fc); }
+  var n = fc.get(d.frameId) || 0;
   if (n >= MAYBE_PER_PAGE) return;
-  seen.add(key); maybeCount.set(d.tabId, n + 1);
+  var total = 0; fc.forEach(function (v) { total += v; });
+  if (total >= MAYBE_PER_TAB) return;
+  seen.add(key); fc.set(d.frameId, n + 1);
   noteFrame(d.tabId, d.frameId, d.parentFrameId, d.documentUrl);
   var page = tabTop.get(d.tabId) || ((d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || ''));
   send({ k: 'maybe', u: url, c: ct, l: size, p: page, f: d.documentUrl || '', rf: ref, og: org, ty: d.type }).catch(function () {});

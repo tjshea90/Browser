@@ -506,6 +506,29 @@ test('server switch: the player frame going to another document says which docum
   assert.equal(h.of('media').length, 2);
 });
 
+test('server switch: a player frame that went to another server gets a fresh budget of disguised-file probes (three servers in a row must not use the first ones up)', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '10' });
+  const probe = (frame, doc, i, id) => h.listeners.headers(inFrame(frame, 0, doc, 'https://cdn.example/' + doc.slice(-3) + '/pl/' + i, 'application/octet-stream', 800, id));
+  for (let i = 0; i < 20; i++) probe(7, PLAYER1, i, 100 + i);          // server one asks for more than twelve
+  await tick(10);
+  assert.equal(h.of('maybe').length, 12, 'twelve per document');
+  navigate(h, 7, 0, PLAYER2);                                          // the site points the iframe at server two
+  for (let i = 0; i < 20; i++) probe(7, PLAYER2, i, 200 + i);
+  await tick(10);
+  assert.equal(h.of('maybe').length, 24, 'the second server has its own twelve');
+  navigate(h, 7, 0, PLAYER1);
+  for (let i = 0; i < 5; i++) probe(7, PLAYER1, 50 + i, 300 + i);
+  await tick(10);
+  assert.equal(h.of('maybe').length, 29, 'and so has the third document in the same frame');
+  // a page full of frames cannot flood the app: 48 over the whole page
+  const h2 = harness(standardApp());
+  h2.mainFrame(PAGE, { requestId: '10' });
+  for (let f = 1; f <= 10; f++) for (let i = 0; i < 12; i++) h2.listeners.headers(inFrame(f, 0, 'https://f' + f + '.example/d', 'https://cdn.example/f' + f + '/' + i, 'application/octet-stream', 800, 1000 + f * 20 + i));
+  await tick(10);
+  assert.equal(h2.of('maybe').length, 48, 'forty-eight over all frames');
+});
+
 test('server switch: an advertisement that plays before the real video is NOT a server switch (same document, or a frame of its own)', async () => {
   const h = harness(standardApp());
   h.mainFrame(PAGE, { requestId: '10' });
