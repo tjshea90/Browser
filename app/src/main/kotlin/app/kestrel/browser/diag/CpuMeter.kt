@@ -20,6 +20,7 @@ object CpuMeter {
     private const val EVERY_MS = 5_000L
     private const val BUSY_PCT = 70.0
     private const val SNAP_MS = 1_000L
+    private const val MIN_GAP_MS = 2_000L
     private const val WINDOW_MS = 300_000L
 
     private class Proc(val name: String) {
@@ -40,10 +41,13 @@ object CpuMeter {
     @Volatile private var pkg = ""
     private val cores = Runtime.getRuntime().availableProcessors()
 
+    private val queued = java.util.concurrent.atomic.AtomicBoolean(false)
+
     private val tick = object : Runnable {
         override fun run() {
             if (!running) return
-            Io.exec { try { sample() } catch (e: Exception) { /* a meter never breaks the browser */ } }
+            // one reading waiting at a time: the IO lane is a single low-priority thread, and on a loaded tablet readings that piled up would run back to back, a few milliseconds apart
+            if (queued.compareAndSet(false, true)) Io.exec { try { sample() } catch (e: Exception) { /* a meter never breaks the browser */ } finally { queued.set(false) } }
             Io.main.postDelayed(this, EVERY_MS)
         }
     }
@@ -86,8 +90,9 @@ object CpuMeter {
             if (p == null) { val n = nameOf(pid) ?: continue; p = Proc(n); synchronized(lock) { procs[pid] = p } }
             val t = ProcStat.ticks(readText("/proc/$pid/stat") ?: continue) ?: continue
             seen.add(pid)
-            if (p.ticks >= 0 && now > p.at) {
-                val pct = ProcStat.percent(t - p.ticks, now - p.at, clk)
+            if (p.ticks >= 0 && now - p.at < MIN_GAP_MS) continue // too soon after the last reading: the kernel counts in 10 ms ticks, so a short gap would turn one tick into hundreds of percent
+            if (p.ticks >= 0) {
+                val pct = minOf(ProcStat.percent(t - p.ticks, now - p.at, clk), cores * 100.0)
                 synchronized(lock) { p.series.add(now, pct) }
                 if (pct >= BUSY_PCT && !p.snapping) snapshot(pid, p, now, pct)
             }
@@ -106,7 +111,7 @@ object CpuMeter {
                 try {
                     val after = threadTicks(pid)
                     val dt = SystemClock.elapsedRealtime() - t0
-                    val top = after.mapNotNull { (tid, a) -> val b = before[tid] ?: return@mapNotNull null; a.first to ProcStat.percent(a.second - b.second, dt, clk) }
+                    val top = after.mapNotNull { (tid, a) -> val b = before[tid] ?: return@mapNotNull null; a.first to minOf(ProcStat.percent(a.second - b.second, dt, clk), 100.0) }
                         .filter { it.second >= 3.0 }.sortedByDescending { it.second }.take(3)
                         .joinToString(", ") { "${it.first} ${it.second.toInt()}" }
                     val said = top.ifEmpty { "no single thread stood out" }
