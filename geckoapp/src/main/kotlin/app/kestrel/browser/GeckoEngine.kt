@@ -293,7 +293,7 @@ object GeckoEngine {
         val u = org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_USER
         val hw = DeviceVideo.hardware(ctx)
         val d = app.kestrel.core.media.VideoPolicy.decide(prefs.videoCodecs, hw)
-        videoPolicyText = "Video: codecs offered to sites: ${d.why} [hardware decoders ${hw?.encode() ?: "unknown"}]; page animations ${if (prefs.calmPages) "calm (reduce-motion, GIFs once)" else "normal"}; muted autoplay ${if (prefs.videoMutedAutoplay) "allowed" else "blocked"}; protected video ${if (prefs.videoDrm == 0) "ask" else "denied"}"
+        videoPolicyText = "Video: codecs offered to sites: ${d.why} [hardware decoders ${hw?.encode() ?: "unknown"}]; page animations ${if (prefs.calmPages) "calm (reduce-motion, GIFs once)" else "normal"}; muted autoplay ${if (prefs.videoMutedAutoplay) "allowed" else "blocked"}; protected video ${if (prefs.videoDrm == 0) "ask" else "never"}"
         fun pref(name: String, set: () -> Unit) { try { set() } catch (e: Exception) { app.kestrel.browser.diag.Health.log("engine", "video-pref-failed", "$name ${e.toString().take(100)}") } }
         fun tri(name: String, v: Boolean?) = pref(name) { if (v == null) org.mozilla.geckoview.GeckoPreferenceController.clearGeckoUserPref(name) else org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref(name, v, u) }
         tri("media.mediasource.vp9.enabled", d.vp9)
