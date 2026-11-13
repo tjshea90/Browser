@@ -439,6 +439,33 @@ object UpdateManager {
 
     private fun cleanup(ctx: Context) { try { dir(ctx).listFiles()?.forEach { it.delete() } } catch (e: Exception) { /* ignore */ } }
 
+    /**
+     * Gives back everything in the update folder that nothing needs (AO4: "once the update is installed, delete the latest apk from storage"). While an update newer than the installed version is on
+     * offer only its installer (and its half-written `.part`) stays; with nothing on offer (the update was installed, or the offer is gone) the folder is emptied and the download engine forgets its
+     * finished job. A download or an install in flight owns the folder: nothing is touched then. Off the UI thread. Returns the bytes freed.
+     */
+    fun sweepFiles(ctx: Context): Long {
+        val app = ctx.applicationContext
+        var freed = 0L
+        try {
+            val ph = state.phase
+            if (ph == Phase.DOWNLOADING || ph == Phase.INSTALLING) return 0L
+            val offer = state.offer?.takeIf { it.versionCode > installedCode(app) }
+            val keep = if (offer == null) emptySet() else setOf(offer.apkName, offer.apkName + ".part")
+            for (f in dir(app).listFiles() ?: emptyArray()) {
+                if (f.name in keep) continue
+                val n = f.length()
+                if (f.delete()) freed += n
+            }
+            if (offer == null) {
+                val id = jobId(app)
+                if (id != 0L) { DownloadController.remove(id, true) }
+                sp(app).edit().remove("job").remove("verified").apply()
+            }
+        } catch (e: Exception) { /* a tidy never breaks the updater */ }
+        return freed
+    }
+
     private fun sha256(f: File): String {
         val md = MessageDigest.getInstance("SHA-256")
         f.inputStream().use { ins -> val b = ByteArray(128 * 1024); while (true) { val n = ins.read(b); if (n < 0) break; md.update(b, 0, n) } }
