@@ -1414,3 +1414,28 @@
 >
 > Now continuing with the last-page feature.
 <!-- sha:70a78e79e274 -->
+
+## 2026-11-13T23:49:29Z
+> **Yes, it's possible, but the useful part isn't rebuilding Gecko.** Mozilla's build for your tablet's chip is already profile-guided and link-time optimized. A home build would be slower and would trim only a few percent. The real win is in how the engine is packaged: about 35% less installed storage, with no engine changes.
+>
+> I checked this in the real engine package and Mozilla's source. Nothing ran on your tablet or an emulator, because this sandbox has neither. The size numbers are computed from the real package. The speed and RAM effects are estimates.
+>
+> - **Rebuilding Gecko: not worth it.** The shipped build already uses profile-guided and link-time optimization, `-O2` and the "lite" variant. To match it you'd need an instrumented build plus a training run. That can't run on GitHub's free builders or here. It would need a rented 16–32-core machine and a redo every Firefox release.
+> - **Features removed in a rebuild:** I estimate 5–10 MB off the 118 MB engine library.
+> - **Stored libraries: the real saving.**
+>   - The app currently unpacks the engine's libraries on install, which costs 92.5 MB for the APK plus 138 MB unpacked. Keeping them uncompressed inside the APK takes the installed size from 230 to 158 MB, about 73 MB less.
+>   - The catch is a bigger update download, +65 MB to about 158 MB.
+>   - The repo's note "GeckoView needs the libraries on disk" has no source and looks wrong. GeckoView has supported in-APK libraries since version 96. Mozilla's bug tracker shows Firefox for Android stopped forcing extraction in version 143.
+>   - It's a one-line change at `geckoapp/build.gradle.kts:68`. It needs a test on an emulator first, then the tablet, covering start-up time and an in-place update.
+> - **Trimming `omni.ja`:** the repo already researched it. It saves about 9 MB more, so about 149 MB installed in total.
+> - **The `:crashhelper` process:** it looks removable but isn't. Gecko 160 starts it unconditionally and child processes wait for it, so switching it off would probably hang the engine.
+> - **Settings:** they're already near their ceiling. The open question is what the GPU and utility processes cost in RAM. I'd measure that on the tablet first.
+>
+> I'd do it in this order: per-process memory in Diagnostics, then the stored-libraries test, then the `omni.ja` trim. A custom build comes last or never.
+>
+> **Heads-up about the other session.** I wrote nothing to the repo, but its hooks copied your message and my helpers' reports into `INBOX.md` on my branch `claude/dazzling-bohr-qjnxhe` and pushed them, about 480 lines. This reply will add `OUTBOX.md`. The other session merges any branch idle for 20+ minutes, so those lines could show up in its INBOX and look like a request it should act on.
+>
+> To avoid that, delete my branch on GitHub after this reply, or tell the other session to ignore INBOX entries from about 23:23 UTC today. I can't delete it myself, because the hooks would push it back.
+>
+> The full report with sources is at `/tmp/claude-0/-home-user-Browser/3ffc23c1-bccc-579d-b684-db627ad5b4a9/scratchpad/GECKO_ENGINE_OPTIMIZATION.md`. If you want, I can turn it into a private page you can paste to the other session, or commit it to `research/` once that's safe.
+<!-- sha:532d7f6a075d -->
