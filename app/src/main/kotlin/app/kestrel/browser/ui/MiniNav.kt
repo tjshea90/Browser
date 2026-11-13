@@ -195,7 +195,12 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     internal fun pressKeyForTest(label: String): Boolean = keys.pressLabel(label)
     internal fun pressBarForTest() = bar.tap()
     internal fun pressToggleForTest() = toggle.tap()
-    internal fun pressNavForTest(which: String) { when (which) { "back" -> back.performClick(); "home" -> home.performClick(); "forward" -> forward.performClick() } }
+    /** Tests: a finger goes down and up on a button (so it lights up and acts), the way a touch would. */
+    internal fun tapNavForTest(which: String) {
+        val b = when (which) { "back" -> back; "home" -> home; else -> forward }
+        val t = SystemClock.uptimeMillis()
+        for (a in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) { val e = MotionEvent.obtain(t, t, a, 5f, 5f, 0); b.dispatchTouchEvent(e); e.recycle() }
+    }
     internal val barTextForTest: String get() = bar.shownText()
     internal val selectedForTest: Boolean get() = keyboardShowing && model.allSelected
     internal val panelShownForTest: Boolean get() = panel.visibility == VISIBLE
