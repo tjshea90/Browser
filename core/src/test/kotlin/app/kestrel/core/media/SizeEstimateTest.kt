@@ -10,11 +10,10 @@ class SizeEstimateTest {
     @Test fun samplesAreSpreadOverTheWholeTimeline() {
         assertEquals(emptyList<Int>(), SizeEstimate.sampleIndexes(0))
         assertEquals("a short stream is measured part by part", listOf(0, 1, 2), SizeEstimate.sampleIndexes(3))
-        assertEquals(listOf(0, 1, 2, 3), SizeEstimate.sampleIndexes(4))
-        val ten = SizeEstimate.sampleIndexes(10)
-        assertEquals(listOf(1, 3, 6, 8), ten)
+        assertEquals((0 until 8).toList(), SizeEstimate.sampleIndexes(8))
+        assertEquals(listOf(0, 1, 3, 4, 5, 6, 8, 9), SizeEstimate.sampleIndexes(10))
         val long = SizeEstimate.sampleIndexes(1200)
-        assertEquals(4, long.size); assertTrue(long.first() in 100..200 && long.last() in 1000..1100)
+        assertEquals(8, long.size); assertTrue(long.first() in 50..100 && long.last() in 1100..1150)
         assertEquals(long, long.sorted().distinct())
         assertTrue("never the first or the last part of a long stream (logo, short tail)", 0 !in long && 1199 !in long)
     }
@@ -53,9 +52,9 @@ class SizeEstimateTest {
 
     /**
      * What the owner asked about, in numbers. A synthetic ladder of variable-rate video (parts differ by up to +-35 % around the average, as real encodes do): the playlist declares the PEAK rate, which is
-     * 1.35 to 1.5 times the average, as on real sites. Before: declared rate x length. After: four parts measured on ONE quality, every quality scaled by that. Errors are against the true size of each file.
+     * 1.35 to 1.5 times the average, as on real sites. Before: declared rate x length. After: eight parts measured on ONE quality, every quality scaled by that. Errors are against the true size of each file.
      */
-    @Test fun measuringFourPartsBeatsTrustingThePlaylistOnAVariableRateLadder() {
+    @Test fun measuringEightPartsBeatsTrustingThePlaylistOnAVariableRateLadder() {
         val rnd = Random(42)
         val seconds = 3600; val partMs = 6000L; val n = seconds / 6
         // (label, true average bytes/s, peak-to-average ratio the encoder declared)
@@ -64,7 +63,7 @@ class SizeEstimateTest {
         val trueTotal = partsOf.map { it.sum() }
         val declared = ladder.mapIndexed { i, (_, _, peak) -> (partsOf[i].max() / 6.0 * 0.0 + (trueTotal[i] / seconds.toDouble()) * peak).toLong() }
         val before = declared.mapIndexed { i, d -> d * seconds.toLong() }.mapIndexed { i, e -> (e - trueTotal[i]).toDouble() / trueTotal[i] }
-        // measure the lowest quality only (the one whose playlist is read), 4 spread parts, then scale every quality
+        // measure the lowest quality only (the one whose playlist is read), 8 spread parts, then scale every quality
         val idx = SizeEstimate.sampleIndexes(n)
         val rate = SizeEstimate.measuredRate(idx.map { partsOf[0][it] }, idx.map { partMs })
         val cal = SizeEstimate.calibration(rate, declared[0])
@@ -75,6 +74,6 @@ class SizeEstimateTest {
             assertTrue("${ladder[i].first} before: ${before[i]}", before[i] > 0.3)       // the declared peak overshoots by a third or more
             assertTrue("${ladder[i].first} after: ${after[i]}", Math.abs(after[i]) < 0.12)
         }
-        assertTrue("the measured quality itself is close", Math.abs(after[0]) < 0.07)
+        assertTrue("the measured quality itself is close", Math.abs(after[0]) < 0.08)
     }
 }

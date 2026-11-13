@@ -716,7 +716,7 @@ class StreamEngineTest {
         val h = H(); h.cdn.chunkDelayMs = 25; h.cdn.chunk = 4096
         val (pl, expected) = ratedStream(h, listOf(2, 2, 2, 2, 2, 6, 6, 6, 6, 6), 10_000)     // 40 s, 400 000 bytes
         val id = h.enqueue(pl)
-        val early = h.await(id, "the first parts in") { it != null && it.state == DlState.RUNNING && it.done >= 40_000 && it.done < 90_000 }!!
+        val early = h.await(id, "the first parts in") { it != null && it.state == DlState.RUNNING && it.total > 0 }!!      // the first moment there is any figure: two short parts are in
         val ratio = early.total.toDouble() / expected.size
         assertTrue("after ${early.done} bytes the figure was ${early.total} of ${expected.size}", ratio in 0.9..1.1)
         h.completed(id)

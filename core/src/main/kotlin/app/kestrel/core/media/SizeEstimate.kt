@@ -14,8 +14,8 @@ object SizeEstimate {
     /** An MPEG-TS stream saved as MP4 comes out a little smaller than the stream (no 188-byte packet framing, no ADTS headers). */
     const val TS_TO_MP4 = 0.95
 
-    /** How many parts are worth measuring before a download starts. */
-    const val SAMPLES = 4
+    /** How many parts are worth measuring before a download starts: each costs one tiny request, and variable-rate video differs by a third from part to part, so four were not enough (error about 10 %). */
+    const val SAMPLES = 8
 
     /**
      * Which parts to measure out of [n]: spread evenly over the timeline (the first part often carries a logo, the last is short; neither is typical). Every part when there are no more than [max].
