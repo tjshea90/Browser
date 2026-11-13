@@ -126,10 +126,23 @@ object UpdateLogic {
         else -> "%.2f GB".format(java.util.Locale.ROOT, bytes / 1073741824.0)
     }
 
+    /** The system defaults of Android 10's low-storage reserve (StorageManager.DEFAULT_THRESHOLD_PERCENTAGE / DEFAULT_THRESHOLD_MAX_BYTES). */
+    const val DEFAULT_LOW_PERCENT = 5
+    const val DEFAULT_LOW_MAX_BYTES = 500L shl 20
+
     /**
-     * What Android's installer needs before it will finish an install or an update. MEASURED (research/UPDATE_STORAGE.md): it refuses (INSTALL_FAILED_INSUFFICIENT_STORAGE, installd "Failed to free up <10 % of /data>")
-     * unless, once the install has taken its own room, 10 % of the data partition ([reserve]) is still free. The install takes the APK TWICE (the installer's staged copy and the installed one; measured: the
-     * threshold rises by 2 MiB for every MiB of APK), the native libraries it unpacks and about 32 MiB of optimised code.
+     * What Android keeps free after any install: StorageManager.getStorageLowBytes = the smaller of [percent] % of the storage and [maxBytes] (settings `sys_storage_threshold_percentage` and
+     * `sys_storage_threshold_max_bytes`; the defaults are 5 % and 500 MiB). Android 10 source, and measured on the emulator (research/ADB_FOR_THE_OWNER.md): 5 % of 5.8 GiB = 297.6 MiB moved to 119 MiB
+     * with 2 %, to 100 MiB with a 100 MiB cap, and stayed at the 500 MiB cap with 20 %. A 27.75 GB tablet therefore keeps 500 MiB free, NOT a tenth (2.8 GB) as alpha8-alpha30 assumed.
+     */
+    fun lowReserve(totalBytes: Long, percent: Int = DEFAULT_LOW_PERCENT, maxBytes: Long = DEFAULT_LOW_MAX_BYTES): Long =
+        minOf(totalBytes.coerceAtLeast(0L) * percent.coerceIn(0, 100) / 100, maxBytes.coerceAtLeast(0L))
+
+    /**
+     * What Android's installer needs before it will finish an install or an update. MEASURED on the Android 10 emulator (research/ADB_FOR_THE_OWNER.md), fresh installs by `adb install`, bisecting the free
+     * space: it refuses (INSTALL_FAILED_INSUFFICIENT_STORAGE) unless the free space BEFORE the install is at least [reserve] ([lowReserve]) + TWICE (package + unpacked native libraries) + a little for optimised code:
+     * 2 MB app: 302-304 MiB (= 297.6 + 2 x 2.3); Gecko APK 95.5 MiB + 187.4 MiB of libraries: 861 fails / 868 passes (= 297.6 + 565.8 = 863.4), 676 / 685 with a 2 % reserve (= 119 + 565.8), passes at 760
+     * with a 100 MiB cap. (Not the 10 % of the partition that research/UPDATE_STORAGE.md first took from a logcat line: that line is the periodic storage monitor asking for 2 x the reserve.)
      * [free] = free space + the caches the system may clear (StorageStatsManager.getFreeBytes). Our own downloaded copy is already counted as used; it is deleted once the installer holds its own copy
      * ([StoragePlan.fitsDropping]), which hands one APK of room back.
      * This is why "uninstall first" always worked: the uninstall frees the old install and its data (about a gigabyte), so the same APK then clears the bar. In place and fresh need the same free space BEFORE.
