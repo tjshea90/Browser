@@ -56,6 +56,8 @@ class JsonStreamStore(private val root: File, private val log: (String) -> Unit 
             m["destKind"] = r.destKind; m["destUri"] = r.destUri; m["estimate"] = r.estimate; m["repId"] = r.repId; m["ext"] = r.ext; m["companionId"] = r.companionId; m["parentId"] = r.parentId
             m["appended"] = r.appended; m["next"] = r.next; m["breaks"] = r.breaks; m["crashes"] = r.crashes; m["mux"] = r.mux; m["note"] = r.note; m["initDone"] = r.initDone
             m["total"] = r.total; m["created"] = r.created; m["updated"] = r.updated; m["finished"] = r.finished
+            m["masterUrl"] = r.masterUrl; m["frame"] = r.frame; m["fp"] = r.fp; m["madeAt"] = r.madeAt; m["expiresAt"] = r.expiresAt
+            if (r.headerSets.isNotEmpty()) m["headerSets"] = r.headerSets.map { set -> LinkedHashMap<String, Any?>(set) }
             return m
         }
 
@@ -72,6 +74,8 @@ class JsonStreamStore(private val root: File, private val log: (String) -> Unit 
             r.appended = m.long("appended") ?: 0L; r.next = m.int("next") ?: 0; r.breaks = m.str("breaks") ?: ""; r.crashes = m.int("crashes") ?: 0; r.mux = m.int("mux") ?: 0
             r.note = m.str("note"); r.initDone = m.bool("initDone") ?: false
             r.total = m.long("total") ?: -1L; r.created = m.long("created") ?: 0L; r.updated = m.long("updated") ?: 0L; r.finished = m.long("finished") ?: 0L
+            r.masterUrl = m.str("masterUrl"); r.frame = m.str("frame"); r.fp = m.str("fp"); r.madeAt = m.long("madeAt") ?: 0L; r.expiresAt = m.long("expiresAt") ?: 0L
+            (m["headerSets"] as? List<*>)?.let { l -> r.headerSets = l.mapNotNull { e -> (e as? Map<*, *>)?.let { o -> LinkedHashMap<String, String>().also { out -> o.forEach { (k, v) -> if (k is String && v is String) out[k] = v } } } }.take(8) }
             return r
         }
     }

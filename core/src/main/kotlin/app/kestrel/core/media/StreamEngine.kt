@@ -1042,13 +1042,30 @@ class StreamEngine(
 
     // ---- one segment: fetched into [dest] (".part" first, renamed when whole), retried with back-off
 
-    private fun fetchTo(job: Job, fetcher: Fetcher, url: String, from: Long, toInclusive: Long, dest: File, count: Boolean) {
-        val deny = IntArray(2)  // [0] refusals of THIS part so far; [1] = 1 while this worker is the one asking again (the others wait, see [Job.recovering])
-        try { fetchLoop(job, fetcher, url, from, toInclusive, dest, count, deny) }
-        finally { if (deny[1] != 0) synchronized(lock) { job.recovering-- } }
+    /** One part's run of refusals (EY-7, EY-8): how often it was asked for again, whether this worker holds the "asking again" place, and where the header ladder stands. */
+    private class Refusals {
+        var again = 0                      // refusals answered with a short wait and the same headers (rung L0)
+        var holding = false                // this worker counts in [Job.recovering]: the others wait
+        var rung = 0                       // the next set of the header ladder to try (rung L1)
+        var first: Map<String, String>? = null // the set in use when the ladder was entered (what a failed ladder goes back to)
+        var mine: Map<String, String>? = null  // the set this worker switched to last
     }
 
-    private fun fetchLoop(job: Job, fetcher: Fetcher, url: String, from: Long, toInclusive: Long, dest: File, count: Boolean, deny: IntArray) {
+    private fun fetchTo(job: Job, fetcher: Fetcher, url: String, from: Long, toInclusive: Long, dest: File, count: Boolean) {
+        val ref = Refusals()
+        try {
+            fetchLoop(job, fetcher, url, from, toInclusive, dest, count, ref)
+            val won = ref.mine
+            if (won != null && job.rec.headers === won) { log("stream ${job.rec.id}: the part was refused with the first headers and came in with the next set of the ladder; it stays", null); persist(job.rec) }
+        } catch (e: Failed) {
+            // the ladder ran out: back to the set the download started with (unless somebody else has found a working one meanwhile)
+            val back = ref.first
+            if (back != null) synchronized(lock) { if (job.rec.headers === ref.mine) job.rec.headers = back }
+            throw e
+        } finally { if (ref.holding) synchronized(lock) { job.recovering-- } }
+    }
+
+    private fun fetchLoop(job: Job, fetcher: Fetcher, url: String, from: Long, toInclusive: Long, dest: File, count: Boolean, ref: Refusals) {
         val part = File(dest.parentFile, dest.name.removeSuffix(".seg") + ".part")
         var tries = 0
         while (true) {
@@ -1079,14 +1096,21 @@ class StreamEngine(
                 if (++tries >= MAX_TRIES) throw Failed(if (e.status > 0) Reason.HTTP else Reason.NETWORK, e.status)
                 backoff(job, tries, e.retryAfterMs)
             } catch (e: Denied) {
-                // EY-7, rung L0: a refused part is a hiccup (an edge that is not in sync, a token that allows few connections) until it has been refused again and again. Ask again after a short, jittered wait; every
-                // other worker waits meanwhile; only after the last try does the link count as expired. A part that comes in gives everything back (each part counts its own refusals).
                 if (count) job.inflight.addAndGet(-ctr[0])
                 if (job.stop) throw Stopped()
-                if (deny[0] >= cfg.denyDelaysMs.size) throw Failed(if (e.status == 404) Reason.HTTP else Reason.LINK_EXPIRED, e.status)
-                if (deny[1] == 0) { deny[1] = 1; synchronized(lock) { job.recovering++ } }
-                val base = cfg.denyDelaysMs[deny[0]++]
-                pause(job, maxOf(base, e.retryAfterMs.coerceAtMost(30_000L)) + rnd.nextInt((base / 5).toInt() + 1))
+                if (e.sent !== job.rec.headers) continue // another worker found headers that work while this request was on its way: ask again with them, nothing is used up
+                // EY-7, rung L0: a refused part is a hiccup (an edge that is not in sync, a token that allows few connections) until it has been refused again and again. Ask again after a short, jittered wait; every
+                // other worker waits meanwhile. Each part counts its own refusals, so a part that comes in gives everything back.
+                if (ref.again < cfg.denyDelaysMs.size) {
+                    if (!ref.holding) { ref.holding = true; synchronized(lock) { job.recovering++ } }
+                    val base = cfg.denyDelaysMs[ref.again++]
+                    pause(job, maxOf(base, e.retryAfterMs.coerceAtMost(30_000L)) + rnd.nextInt((base / 5).toInt() + 1))
+                    continue
+                }
+                // EY-8, rung L1: the same part with the next set of the header ladder (a server that wants the player's address and was given the page's). The set that works stays for the whole download.
+                if (!ref.holding) { ref.holding = true; synchronized(lock) { job.recovering++ } }
+                if (nextHeaders(job, ref)) continue
+                throw Failed(if (e.status == 404) Reason.HTTP else Reason.LINK_EXPIRED, e.status) // the last try is over: the link counts as expired
             } catch (e: IOException) {
                 if (count) job.inflight.addAndGet(-ctr[0])
                 if (job.stop) throw Stopped()
@@ -1113,7 +1137,20 @@ class StreamEngine(
     private class Retry(val status: Int, val retryAfterMs: Long = 0) : RuntimeException(null, null, false, false)
 
     /** A refused part: 401 / 403 / 410, and 404 once other parts of this download came in (the address was right, the edge or the token is not). */
-    private class Denied(val status: Int, val retryAfterMs: Long = 0) : RuntimeException(null, null, false, false)
+    private class Denied(val status: Int, val sent: Map<String, String>, val retryAfterMs: Long = 0) : RuntimeException(null, null, false, false)
+
+    /** Switches the download to the next set of its header ladder that has not been tried for this part (the one in use was just refused). False when the ladder is used up. */
+    private fun nextHeaders(job: Job, ref: Refusals): Boolean = synchronized(lock) {
+        val sets = job.rec.headerSets
+        if (ref.first == null) ref.first = job.rec.headers
+        while (ref.rung < sets.size) {
+            val set = sets[ref.rung++]
+            if (set == ref.first || set == job.rec.headers) continue
+            ref.mine = set; job.rec.headers = set
+            return true
+        }
+        false
+    }
 
     private fun backoff(job: Job, tries: Int, minMs: Long = 0) = pause(job, maxOf(minMs, minOf(cfg.backoffCapMs, cfg.backoffBaseMs shl minOf(tries - 1, 10))) + rnd.nextInt(250))
 
@@ -1136,12 +1173,13 @@ class StreamEngine(
                 window > 0 -> { rf = pos; rt = pos + window - 1 }
                 else -> { rf = -1; rt = -1 }
             }
-            val resp = open(job, fetcher, FetchRequest(url, rf, rt, null, job.rec.headers, priv = job.rec.priv))
+            val sent = job.rec.headers
+            val resp = open(job, fetcher, FetchRequest(url, rf, rt, null, sent, priv = job.rec.priv))
             var got = 0L; var total = -1L; var whole = false
             try {
                 val st = resp.status
                 if (st == 416 && pos > 0) return          // asked past the end: the segment is whole
-                if (st != 200 && st != 206) throw partFailure(job, st, resp)
+                if (st != 200 && st != 206) throw partFailure(job, st, resp, sent)
                 whole = st == 200
                 if (st == 206) total = totalOf(resp.header("Content-Range"))
                 val body = resp.body ?: throw FetchException(FetchException.Kind.PROTOCOL, "no body")
@@ -1180,9 +1218,9 @@ class StreamEngine(
     }
 
     /** The answer to a PART of a stream: refusals are tried again first ([Denied]); everything else is judged as before ([statusFailure]). */
-    private fun partFailure(job: Job, status: Int, resp: FetchResponse?): RuntimeException =
+    private fun partFailure(job: Job, status: Int, resp: FetchResponse?, sent: Map<String, String>): RuntimeException =
         if (status == 401 || status == 403 || status == 410 || (status == 404 && partsFetched(job)))
-            Denied(status, resp?.header("Retry-After")?.trim()?.toLongOrNull()?.times(1000) ?: 0)
+            Denied(status, sent, resp?.header("Retry-After")?.trim()?.toLongOrNull()?.times(1000) ?: 0)
         else statusFailure(status, resp)
 
     /** True once any part of this download came in (in this run or an earlier one): a refusal after that is more likely an edge hiccup or an expiry than a wrong address. */
