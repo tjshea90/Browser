@@ -30,21 +30,13 @@ object GeckoEngine {
      */
     fun speculativeConnect(url: String): Boolean {
         if (rt == null) return false
-        // DEBUG builds only (the emulator proof of EX-2): `setprop debug.kestrel.warmpath old` calls the public GeckoWebExecutor method on this thread, the way the app did before, to show that GeckoView 160 drops it
-        val ctx = appCtx
-        if (ctx != null && app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.warmpath") == "old") {
-            return try { executorOrNull()?.speculativeConnect(url); warmCalls++; true } catch (e: Throwable) { false }
-        }
         return try {
             val gecko = org.mozilla.gecko.util.XPCOMEventTarget.mainThread() ?: return false
             gecko.execute { try { org.mozilla.gecko.GeckoThread.speculativeConnect(url) } catch (e: Throwable) { /* only a head start */ } }
-            warmCalls++
             app.kestrel.browser.diag.Health.log("engine", "warm", url.take(80))
             true
         } catch (e: Throwable) { false } // engine not up yet, or an internal class moved in a newer GeckoView
     }
-    @Volatile var warmCalls = 0
-        private set
 
     /** True while a private tab is in front (BrowserActivity.applySkin): the look-ups of links ahead (EX-6) pause then. */
     @Volatile var frontPrivate = false
@@ -73,7 +65,7 @@ object GeckoEngine {
      * profile is ready the engine drops a call made from any other thread, so this is harmless later. Only for pages that load anyway: it opens nothing the owner did not ask for.
      */
     fun warmAtStart(origin: String) {
-        try { org.mozilla.gecko.GeckoThread.speculativeConnect(origin); warmCalls++; app.kestrel.browser.diag.Health.log("engine", "warm-start", origin.take(80)) } catch (e: Throwable) { /* only a head start */ }
+        try { org.mozilla.gecko.GeckoThread.speculativeConnect(origin); app.kestrel.browser.diag.Health.log("engine", "warm-start", origin.take(80)) } catch (e: Throwable) { /* only a head start */ }
     }
 
     fun runtime(ctx: Context): GeckoRuntime = rt ?: synchronized(this) { rt ?: create(ctx.applicationContext).also { rt = it } }

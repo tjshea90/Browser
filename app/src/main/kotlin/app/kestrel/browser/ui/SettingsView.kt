@@ -22,8 +22,6 @@ interface SettingsListener {
     fun filterStatus(): String
     fun dataUsed(): String
     fun aboutLines(): List<Pair<String, String>>
-    /** Settings > Neon glow > Test the pulse: close Settings and make every glow breathe for 10 seconds (Kestrel G). */
-    fun testNeon() {}
     /** Settings > Back up & restore (owner AA3-7): write the backup file now / pick a backup file to bring back. */
     fun backupNow() {}
     fun restoreFromFile() {}
@@ -102,7 +100,6 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         section("Appearance")
         choice("Neon glow", listOf("Off", "Steady", "Subtle pulse"), prefs.neon) { prefs.neon = it; app.kestrel.browser.ui.Neon.mode = it; app.kestrel.browser.ui.Neon.refresh(); rebuild() }
         info("The glow right now", app.kestrel.browser.ui.Neon.status().replaceFirstChar { it.uppercase() })
-        if (app.kestrel.browser.Flavor.hasPullRefresh) button("Test the pulse (10 s)", "Closes Settings and makes every glow breathe for 10 seconds, whatever else is going on") { l.testNeon() }
         if (app.kestrel.browser.Flavor.hasScrollFeel) {
             choice("Scroll feel", listOf("Standard (Firefox's own)", "Smoother (default): pre-draws about twice the screen around your finger, answers touches sooner", "Smoothest: pre-draws even more (more memory), lower top fling speed"), prefs.scrollFeel) {
                 prefs.scrollFeel = it; l.prefsChanged()
@@ -155,7 +152,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
             toggle("Bigger network buffer", "Passes the downloaded bytes on in bigger pieces. Helps a fast link (Fast Wi-Fi) a little; no effect on the slow hotspot.", prefs.labBuffer) { prefs.labBuffer = it; l.prefsChanged() }
             toggle("Show text sooner while a web font loads", "Text in a web font appears after half a second in a plain font instead of staying invisible for up to 3 seconds, then swaps. Pages may jump a little when the font arrives. On by default.", prefs.labFontDelay) { prefs.labFontDelay = it; l.prefsChanged() }
             choice("Fetch the next page early (experimental)", listOf("Off", "Dry run: only note what would be fetched", "On: sites that ask for it get their next page fetched when you press down"), prefs.labSpec) { prefs.labSpec = it; l.prefsChanged() }
-            toggle("No AVIF pictures on Fast Wi-Fi", "While LinkMeter's Fast Wi-Fi is on, websites are asked for WebP or JPEG pictures instead of AVIF: bigger files, but far less decoding work for this tablet's processor. Turn it on if Diagnostics > Decode lab shows AVIF taking much longer than WebP. No effect without Fast Wi-Fi.", prefs.labNoAvif) { prefs.labNoAvif = it; l.prefsChanged() }
+            toggle("No AVIF pictures on Fast Wi-Fi", "While LinkMeter's Fast Wi-Fi is on, websites are asked for WebP or JPEG pictures instead of AVIF: bigger files, but far less decoding work for this tablet's processor. Turn it on if pictures seem slow to appear on Fast Wi-Fi. No effect without Fast Wi-Fi.", prefs.labNoAvif) { prefs.labNoAvif = it; l.prefsChanged() }
             toggle("Keep Wi-Fi awake while Kestrel is open", "The tablet's Wi-Fi stays out of power save while the browser is on screen, so the first tap after a pause is not slowed by a sleeping radio. Uses more battery.", prefs.labWifiBoost) { prefs.labWifiBoost = it; l.prefsChanged() }
             toggle("Keep the phone helper under Fast Wi-Fi", "While LinkMeter's Fast Wi-Fi is on, the phone helper (Kestrel Courier) normally rests. On: it keeps working as set above, so you can compare page times and download speed through the helper with the VPN's. Needs the Courier running on the phone.", prefs.labHelperUnderVpn) { prefs.labHelperUnderVpn = it; l.prefsChanged() }
         }
