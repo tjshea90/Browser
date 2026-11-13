@@ -15,6 +15,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
@@ -25,7 +26,7 @@ class StreamEngineTest {
     private val harnesses = ArrayList<H>()
     @After fun cleanup() { harnesses.forEach { it.stop() } }
 
-    private fun cfg(conns: Int = 3, window: Long = 0) = Config(maxActive = 2, maxConnsPerDownload = conns, maxConnsTotal = 6, windowBytes = window, checkpointMs = 40, stallMs = 60_000, backoffBaseMs = 1, backoffCapMs = 4)
+    private fun cfg(conns: Int = 3, window: Long = 0) = Config(maxActive = 2, maxConnsPerDownload = conns, maxConnsTotal = 6, windowBytes = window, checkpointMs = 40, stallMs = 60_000, backoffBaseMs = 1, backoffCapMs = 4, denyDelaysMs = listOf(1L, 2L, 3L))
 
     private inner class H(val cdn: FakeCdn = FakeCdn(), val sinks: FakeSinks = FakeSinks(), val store: MemStreamStore = MemStreamStore(), config: Config = cfg(), finisher: StreamFinisher? = null) {
         val net = FakeNet()
@@ -250,14 +251,14 @@ class StreamEngineTest {
         assertTrue("no output was published", h.sinks.sinks.values.none { it.published })
     }
 
-    @Test(timeout = 60_000) fun serverErrorsAreRetriedButMissingAndForbiddenFailAtOnce() {
+    @Test(timeout = 60_000) fun serverErrorsAndRefusalsAreRetriedAndAMissingFirstPartFailsAtOnce() {
         val h = H()
         val (pl, _) = plainStream(h, 3, 5_000)
         h.cdn.statusFor["https://cdn.test/v/s1.ts"] = 403
         val expired = h.await(h.enqueue(pl), "failure") { it?.state == DlState.FAILED }!!
         assertEquals(Reason.LINK_EXPIRED, expired.reason)
-        // "at once": one request, or two when a second worker had already claimed the same segment as the failure landed (seen once under a loaded machine); never the 8 retries of a server error
-        assertTrue("a forbidden segment is not retried: ${h.cdn.count("https://cdn.test/v/s1.ts")}", h.cdn.count("https://cdn.test/v/s1.ts") in 1..2)
+        // EY-7: a refusal is tried again three times (the first answer may be an edge hiccup or a spent token) before the link counts as expired; nobody else asks for that part meanwhile
+        assertEquals("one try and three more", 4, h.cdn.count("https://cdn.test/v/s1.ts"))
         val h2 = H()
         val (pl2, _) = plainStream(h2, 3, 5_000)
         h2.cdn.statusFor["https://cdn.test/v/s0.ts"] = 404
@@ -269,6 +270,65 @@ class StreamEngineTest {
         val busy = h3.await(h3.enqueue(pl3), "failure", 60_000) { it?.state == DlState.FAILED }!!
         assertEquals(Reason.HTTP, busy.reason); assertEquals(503, busy.detail)
         assertEquals(6, h3.cdn.count("https://cdn.test/v/s0.ts"))                      // retried, then given up
+    }
+
+    // ---- EY-7 (research/REVIEW-EXTERNAL-2.md section 4.4): a refused part is transient first
+    @Test(timeout = 60_000) fun aPartRefusedOnceIsTriedAgainAndTheJobCompletesWithoutAnExpiredMessage() {
+        val h = H()
+        val (pl, expected) = plainStream(h, 6, 20_000)
+        h.cdn.denyFirst["https://cdn.test/v/s2.ts"] = 1
+        val v = h.completed(h.enqueue(pl))
+        assertArrayEquals(expected, h.out(v)); assertEquals(Reason.NONE, v.reason)
+        assertEquals("one refusal, one success", 2, h.cdn.count("https://cdn.test/v/s2.ts"))
+        for (i in listOf(0, 1, 3, 4, 5)) assertEquals("a part that was never refused is fetched once", 1, h.cdn.count("https://cdn.test/v/s$i.ts"))
+    }
+
+    @Test(timeout = 60_000) fun everyKindOfRefusalGetsThreeMoreTriesThenTheLinkCountsAsExpired() {
+        for (status in listOf(401, 403, 410)) {
+            val h = H()
+            val (pl, _) = plainStream(h, 4, 5_000)
+            h.cdn.statusFor["https://cdn.test/v/s2.ts"] = status
+            val f = h.await(h.enqueue(pl), "failure") { it?.state == DlState.FAILED }!!
+            assertEquals("$status", Reason.LINK_EXPIRED, f.reason); assertEquals(status, f.detail)
+            assertEquals("$status: the first try and three more", 4, h.cdn.count("https://cdn.test/v/s2.ts"))
+        }
+    }
+
+    @Test(timeout = 60_000) fun anySuccessGivesTheTriesBackSoRefusalsAtSeveralPartsAllPassOneByOne() {
+        val h = H()
+        val (pl, expected) = plainStream(h, 8, 10_000)
+        for (i in listOf(1, 3, 5, 7)) h.cdn.denyFirst["https://cdn.test/v/s$i.ts"] = 3    // each of four parts is refused three times and then served
+        val v = h.completed(h.enqueue(pl))
+        assertArrayEquals(expected, h.out(v))
+        for (i in listOf(1, 3, 5, 7)) assertEquals(4, h.cdn.count("https://cdn.test/v/s$i.ts"))
+    }
+
+    @Test(timeout = 60_000) fun whileOnePartIsBeingTriedAgainTheOtherWorkersStartNothingNew() {
+        val h = H(config = Config(maxActive = 2, maxConnsPerDownload = 3, maxConnsTotal = 6, windowBytes = 0, checkpointMs = 40, stallMs = 60_000, backoffBaseMs = 1, backoffCapMs = 4, denyDelaysMs = listOf(150L, 150L, 150L)))
+        h.cdn.chunkDelayMs = 25                                                          // a part takes about 100 ms, so the other workers are busy when the refusal lands
+        val (pl, expected) = plainStream(h, 9, 30_000)
+        val served = CopyOnWriteArrayList<String>(); val refused = java.util.concurrent.atomic.AtomicInteger()
+        h.cdn.gate = { r -> if (r.url == "https://cdn.test/v/s1.ts" && refused.get() < 2) { refused.incrementAndGet(); 403 } else { served.add(r.url); null } }
+        val v = h.completed(h.enqueue(pl))
+        assertArrayEquals(expected, h.out(v))
+        val firstS1Ok = served.indexOf("https://cdn.test/v/s1.ts")
+        val firstLater = listOf(4, 5, 6, 7, 8).map { served.indexOf("https://cdn.test/v/s$it.ts") }.filter { it >= 0 }.min()
+        assertTrue("no part beyond the first three workers' own was started before the refused one was served (served: $served)", firstS1Ok in 0 until firstLater)
+    }
+
+    @Test(timeout = 60_000) fun aMissingPartIsTriedAgainOnceOtherPartsWereFetchedButAMissingFirstPartFailsAtOnce() {
+        val h = H()
+        val (pl, expected) = plainStream(h, 6, 20_000)
+        h.cdn.chunkDelayMs = 3
+        val misses = java.util.concurrent.atomic.AtomicInteger()
+        h.cdn.gate = { r -> if (r.url == "https://cdn.test/v/s4.ts" && misses.getAndIncrement() < 2) 404 else null }  // a CDN edge that does not have the part yet
+        val v = h.completed(h.enqueue(pl))
+        assertArrayEquals(expected, h.out(v)); assertEquals(3, h.cdn.count("https://cdn.test/v/s4.ts"))
+        val h2 = H()
+        val (pl2, _) = plainStream(h2, 3, 5_000)
+        h2.cdn.statusFor["https://cdn.test/v/s0.ts"] = 404
+        val f = h2.await(h2.enqueue(pl2), "failure") { it?.state == DlState.FAILED }!!
+        assertEquals(Reason.HTTP, f.reason); assertEquals(404, f.detail)
     }
 
     @Test(timeout = 60_000) fun liveDrmAndUnreadablePlaylistsAreRefused() {
