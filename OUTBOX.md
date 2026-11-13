@@ -923,3 +923,45 @@
 > - Report any video-site problems: `.ts` files, a grey download icon, spam after pressing play.
 > - Optional: the licence choice, landscape tabs, and the Cromite comparison.
 <!-- sha:15de348e3486 -->
+
+## 2026-11-13T00:48:18Z
+> Alpha25 is built, signed and published; the Release has the 93 MB APK. It should install over your current Kestrel G, and the in-app Updates sheet will offer it.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha25
+>
+> Your message 16 reached me twice after a session restart, and I handled it once. The review is saved as `research/REVIEW-EXTERNAL-1.md`, and its 18 rows are in TASKS as EX-1 to EX-18. I worked them top to bottom, and alpha25 is the result.
+>
+> **Changes you will notice, and how to switch each off**
+> - **Taps no longer wait about a quarter of a second on wide pages.** Double-tap zoom is now off by default; pinching still works. On the emulator a tap took 18 ms instead of 253 ms. To get double-tap zoom back, use Settings > Appearance.
+> - **YouTube, Vimeo, Facebook, Instagram, TikTok, Spotify, SoundCloud, Disqus and Google Maps players now show a "Tap to load" box.** Nothing in them runs until you tap, so pages open faster. Settings > Shields turns it off, or you can turn it off per site in the Shields panel. On the emulator the box replaced a test player, and one tap loaded the real address.
+> - **2,441 more rules clean tracking parts out of links you open.**
+> - **Three fixes.**
+>   - The Wi-Fi lock for background downloads really works on Android 10 now. Android logged it being taken when a download started and released at the last byte.
+>   - "Warm up the top suggestion" really opens the connection while you type. The Firefox engine silently ignored it before.
+>   - JPEG XL pictures are no longer requested; this tablet decodes them slowly.
+> - **Settings > Network lab has six new switches, all off.** Each says what it costs, for example battery or lookups for links you never tap. Diagnostics has a Tap lab and a Decode lab to measure the tablet.
+> - **Smaller fixes.**
+>   - Ad-hiding rules arrive sooner after a cold start.
+>   - The dock follows the keyboard.
+>   - A swiped-away tab keeps its scroll position.
+>   - A download whose file name Android refuses now tries the next name instead of failing. I found this while testing.
+>
+> **Not built:** I skipped the idea of pre-connecting to search results and to the link under your finger. It would contact sites you haven't chosen, for a head start of about a tenth of a second.
+>
+> **What was and wasn't tested:** The checks were 825 unit tests, 99 browser-script tests and the Android 10 emulator. Nothing was run on your tablet, and the emulator numbers only show the before/after difference.
+>
+> **Tip:** About once a week, leave the tablet on the charger overnight with the screen off. Android only does its storage clean-up and app optimising then.
+>
+> **Still open, and only you can do these**
+> 1. Check the "Network:" line with LinkMeter on (the tunnel should be recognised, about 1000 KB/s).
+> 2. Tell me how tabs, Back and scrolling feel.
+> 3. Send Proton Mail numbers and your keyboard app. For typing lag, try Settings > Appearance, "Zoom to the text box you tap", off.
+> 4. Answer yes or no on the scheduled GitHub list-build workflow.
+> 5. Decide on a private signing key (four secrets).
+> 6. Report video-site problems: `.ts` files, the grey icon, spam after play.
+> 7. Send the Tap lab and Decode lab numbers from the tablet.
+> 8. Try the Network lab switches one at a time and tell me the results.
+> 9. Optional: the licence, landscape tabs, and the Cromite comparison.
+>
+> Next I'll finish the rest of the ad-hiding work and then the download manager queue.
+<!-- sha:95e28771348b -->
