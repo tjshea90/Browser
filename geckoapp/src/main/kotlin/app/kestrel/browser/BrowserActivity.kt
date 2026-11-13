@@ -1044,6 +1044,7 @@ open class BrowserActivity : Activity(), DockListener {
         t.showHome = true
         attachContent(t)
         updateUi()
+        scheduleSave() // AQ1: the session file says "on Home" at once, not only when the app next goes to the background
     }
 
     /** The + button opens a tab of the CURRENT kind: private mode stays private until you pick a regular tab in the tab list. */
@@ -2115,7 +2116,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (findBar.visibility == View.VISIBLE) { closeFind(); return true }
         if (suggestions.visibility == View.VISIBLE || home.suggest.visibility == View.VISIBLE || typing()) { hideSuggestions(); clearUrlFocus(); updateUi(); return true }
         val t = current ?: return false
-        if (t.showHome && !t.isNewTab) { t.showHome = false; attachContent(t); updateUi(); return true } // Home laid over a page: Back returns to the page
+        if (t.showHome && !t.isNewTab) { t.showHome = false; attachContent(t); updateUi(); scheduleSave(); return true } // Home laid over a page: Back returns to the page
         if (t.error != null) {
             t.error = null
             if (t.canGoBack && t.session != null) { attachContent(t); goBack(t) } else if (t.parentId != 0L && tabs.any { it.id == t.parentId }) doCloseTab(t) else showNewTabPage(t)
