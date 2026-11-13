@@ -13,6 +13,7 @@ import app.kestrel.core.filter.Psl
 import app.kestrel.core.filter.RequestType
 import app.kestrel.core.filter.Verdict
 import app.kestrel.core.media.MediaCandidate
+import app.kestrel.core.media.MediaHeaders
 import app.kestrel.core.media.MediaSniff
 import app.kestrel.core.url.UrlParts
 import org.json.JSONObject
@@ -42,6 +43,8 @@ class ShieldsBridge(
     private val warmLink: (String, String, String) -> Unit = { _, _, _ -> },
     /** True when a PRIVATE tab shows a page of this address's host (its report must never be kept). Defaults to "yes, drop everything" so an unwired bridge keeps nothing. */
     private val pageIsPrivate: (String) -> Boolean = { true },
+    /** A response that says nothing about being media (text/plain, octet-stream, a "picture" a script fetched) but might be a playlist or a video in disguise: the whole message (u, c, l, p, f, rf, og, ty). Worker thread. */
+    private val mediaMaybe: (JSONObject) -> Unit = {},
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -80,6 +83,7 @@ class ShieldsBridge(
                     "gen" -> genericCss(m.optString("h"), m.optJSONArray("t"))
                     "proc" -> proceduralRules(m.optString("h"))
                     "media" -> { onMedia(m); "" }
+                    "maybe" -> { mediaMaybe(m); "" }
                     "vid" -> { onVid(m); "" }
                     "warm" -> { warmLink(m.optString("o"), m.optString("p"), m.optString("w")); "" }
                     "rep" -> { onPageReport(m); "" }
@@ -123,6 +127,7 @@ class ShieldsBridge(
         }
         val len = if (kind == app.kestrel.core.media.MediaKind.FILE) m.optLong("l", -1L) else -1L
         val cand = MediaCandidate(url, kind, MediaSniff.baseType(ct), len, page, m.optString("f").takeIf { it != page } ?: "", System.currentTimeMillis())
+        cand.referer = MediaHeaders.refererOf(m.optString("rf")); cand.origin = MediaHeaders.originOf(m.optString("og")) // what the browser itself sent: the player's own Referer / Origin (origins only)
         cand.sourceName = app.kestrel.core.download.FileNames.fromContentDisposition(m.optString("n").takeIf { it.isNotBlank() })?.let { app.kestrel.core.download.FileNames.sanitize(it) } ?: "" // the name the server gave it
         mediaSeen(cand)
     }

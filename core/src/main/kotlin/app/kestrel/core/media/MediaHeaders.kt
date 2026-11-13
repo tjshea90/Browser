@@ -16,6 +16,12 @@ object MediaHeaders {
         return linkedMapOf("Referer" to "$origin/", "Origin" to origin)
     }
 
+    /** The Referer the browser sent, reduced to its origin ("https://player.test/embed/7?hash=x" -> "https://player.test/"): a path or query can carry a token and the replay goes to other hosts too. "" if not http(s). */
+    fun refererOf(raw: String): String = fromAddress(raw)["Referer"] ?: ""
+
+    /** The Origin the browser sent ("https://player.test"); "" for "null" (a sandboxed frame), a blank or anything that is not an http(s) origin. */
+    fun originOf(raw: String): String = fromAddress(raw)["Origin"] ?: ""
+
     /**
      * The sets to try, best first, without repeats: (1) what the browser sent, (2) the player's page, (3) the web page, (4) the Referer alone (a server that dislikes an Origin it did not expect),
      * (5) nothing. A set that WORKED is remembered in [MediaCandidate.viaHeaders] and comes first from then on.

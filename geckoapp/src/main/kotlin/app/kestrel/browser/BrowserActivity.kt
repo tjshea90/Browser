@@ -204,7 +204,7 @@ open class BrowserActivity : Activity(), DockListener {
                 GeckoEngine.runtime(this)
                 GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
                 GeckoEngine.warmUp(this)
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l -> video.info(p, u, w, h, d, l) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l -> video.info(p, u, w, h, d, l) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }))
                 Health.log("engine", "runtime-ready")
             }
         }
@@ -2243,13 +2243,13 @@ open class BrowserActivity : Activity(), DockListener {
 
     // ================================================================== downloads, external links, long-press
 
-    internal fun download(tab: Tab, url: String, userAgent: String?, contentDisposition: String?, mime: String?, length: Long, nameOverride: String? = null) {
+    internal fun download(tab: Tab, url: String, userAgent: String?, contentDisposition: String?, mime: String?, length: Long, nameOverride: String? = null, headers: Map<String, String>? = null) {
         val name = nameOverride ?: Downloads.fileName(url, contentDisposition, mime)
         val limit = prefs.dataSaver.confirmDownloadBytes(NetworkMonitor.metered)
         val big = limit >= 0 && (length < 0 || length >= limit)
         val risky = Downloads.isRisky(name, mime)
         val cleartext = url.startsWith("http://", ignoreCase = true) // on a hotspot the carrier can read or change an unencrypted download
-        if (!big && !risky && !cleartext) { startDownload(url, userAgent, contentDisposition, mime, tab, nameOverride); leaveDownloadTab(tab); return }
+        if (!big && !risky && !cleartext) { startDownload(url, userAgent, contentDisposition, mime, tab, nameOverride, headers); leaveDownloadTab(tab); return }
         val size = if (length >= 0) NewTabPage.fmtBytes(length) else "unknown size"
         val msg = buildString {
             append(name).append("\nFrom: ").append(UrlParts.hostOf(url) ?: "unknown site").append("\nSize: ").append(size)
@@ -2257,7 +2257,7 @@ open class BrowserActivity : Activity(), DockListener {
             if (big) append("\n\nYou're on a metered connection (your phone's hotspot). This may use a lot of mobile data.")
             if (risky) append("\n\nThis type of file can install software or run code. Only continue if you trust the site.")
         }
-        askYesNo("Download this file?", msg, "Download", "Cancel", { ok -> if (ok) startDownload(url, userAgent, contentDisposition, mime, tab, nameOverride); leaveDownloadTab(tab) })
+        askYesNo("Download this file?", msg, "Download", "Cancel", { ok -> if (ok) startDownload(url, userAgent, contentDisposition, mime, tab, nameOverride, headers); leaveDownloadTab(tab) })
     }
 
     /** A tab whose only "page" was the download link has nothing to show: back to the page it came from, to Home, or closed when a page opened it. */
@@ -2272,11 +2272,12 @@ open class BrowserActivity : Activity(), DockListener {
         }
     }
 
-    private fun startDownload(url: String, ua: String?, cd: String?, mime: String?, tab: Tab, nameOverride: String? = null) {
+    private fun startDownload(url: String, ua: String?, cd: String?, mime: String?, tab: Tab, nameOverride: String? = null, given: Map<String, String>? = null) {
         val go = {
-            // Referer = the page's ORIGIN only (never the full URL: it can carry tokens / search terms)
+            // Referer = the page's ORIGIN only (never the full URL: it can carry tokens / search terms); a video file found by the sniffer brings the headers its player used (a server that checks "who is asking")
             val headers = HashMap<String, String>()
-            UrlParts.parse(tab.url)?.let { headers["Referer"] = "${it.scheme}://${it.hostForAuthority}/" }
+            if (given != null) headers.putAll(given)
+            else UrlParts.parse(tab.url)?.let { headers["Referer"] = "${it.scheme}://${it.hostForAuthority}/" }
             DownloadController.enqueue(this, Source(url, tab.url.takeIf { it.isNotEmpty() }, nameOverride ?: Downloads.fileName(url, cd, mime), mime, headers, fetcher = 1, priv = tab.isPrivateTab, meteredOk = true, nameFixed = nameOverride != null))
             askNotificationPermissionOnce()
             toast("Download started: Menu > Downloads")
