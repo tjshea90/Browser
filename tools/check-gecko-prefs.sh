@@ -18,5 +18,11 @@ while IFS= read -r line; do
   N=$((N+1))
   if grep -a -q -F -- "$name" "$W/aar/jni/armeabi-v7a/libxul.so" || grep -r -a -q -F -- "$name" "$W/omni" 2>/dev/null; then :; else echo "  MISSING  $name (not in this GeckoView: remove it from gecko-prefs.txt)"; MISSING=$((MISSING+1)); fi
 done < geckoapp/src/main/assets/gecko-prefs.txt
+# the names the Kotlin code sets or clears LIVE (setGeckoPref / clearGeckoUserPref / the video rule's tri()) are held to the same rule
+while IFS= read -r name; do
+  [ -n "$name" ] || continue
+  N=$((N+1))
+  if grep -a -q -F -- "$name" "$W/aar/jni/armeabi-v7a/libxul.so" || grep -r -a -q -F -- "$name" "$W/omni" 2>/dev/null; then :; else echo "  MISSING  $name (set live from the Kotlin code, but not in this GeckoView)"; MISSING=$((MISSING+1)); fi
+done < <(grep -rhoE '(setGeckoPref|clearGeckoUserPref|tri)\("[a-z0-9_.-]+"' geckoapp/src/main/kotlin | sed -E 's/^[A-Za-z]+\("//; s/"$//' | sort -u)
 echo "  checked $N pref names against $(basename "$AAR"): $MISSING missing"
 [ "$MISSING" -eq 0 ]
