@@ -291,7 +291,10 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
                 // Protected video (Widevine through Android's own MediaDrm): only when the device has it and the owner has not turned it off; asked per request because it identifies the tablet to the site's licence server.
                 if (a.prefs.videoDrm != 0 || !app.kestrel.browser.DeviceVideo.widevineAvailable()) return GeckoResult.fromValue(PermissionDelegate.ContentPermission.VALUE_DENY)
                 val drmHost = UrlParts.hostOf(perm.uri) ?: perm.uri
+                // a site the owner already allowed in a normal tab during this run is not asked again (a player asks once per video); private tabs never remember
+                if (!perm.privateMode && drmAllowed.contains(drmHost)) return GeckoResult.fromValue(PermissionDelegate.ContentPermission.VALUE_ALLOW)
                 a.askYesNo("$drmHost wants to play protected video", "Protected (DRM) video needs a code that identifies this tablet to the site's licence server. Only allow this on sites you trust.", "Allow", "Block") { ok ->
+                    if (ok && !perm.privateMode) drmAllowed.add(drmHost)
                     r.complete(if (ok) PermissionDelegate.ContentPermission.VALUE_ALLOW else PermissionDelegate.ContentPermission.VALUE_DENY)
                 }
                 return r
@@ -320,6 +323,8 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
     }
 
     private companion object {
+        /** Sites whose protected-video request the owner allowed in a normal tab since the app started (memory only). */
+        val drmAllowed: MutableSet<String> = java.util.Collections.synchronizedSet(HashSet())
         const val BLANK = "data:text/html;charset=utf-8,%3Chtml%3E%3Cbody%20style%3D%22background%3A%23121212%22%3E%3C%2Fbody%3E%3C%2Fhtml%3E"
         // the WebViewClient.ERROR_* values the shared ErrorView understands
         const val ERROR_HOST_LOOKUP = -2
