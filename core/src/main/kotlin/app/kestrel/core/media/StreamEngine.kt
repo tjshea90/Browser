@@ -53,6 +53,15 @@ class StreamSource(
     val ext: String? = null,
     /** The sound of this picture, downloaded alongside it as a hidden job and merged into one MP4 at the end (DASH keeps them apart). */
     val companion: StreamSource? = null,
+    /** EY-8 (research/REVIEW-EXTERNAL-2.md section 4.5): what the download needs to find its way back when a link is refused. The address the owner picked from (a master playlist or manifest; [playlistUrl] is the chosen quality's own). */
+    val masterUrl: String? = null,
+    /** The document that asked for it (an embedded player's own page), null when it was the page itself. */
+    val frame: String? = null,
+    /** The header ladder, best first (the browser's own, the player's page, the web page, the Referer alone, nothing): when a part keeps being refused the engine tries the next set, and the one that works stays. [headers] is the first. */
+    val headerSets: List<Map<String, String>> = emptyList(),
+    /** When the link was handed over, and when it says it stops working (0 = unknown). */
+    val madeAt: Long = 0,
+    val expiresAt: Long = 0,
 )
 
 /** One stream download as stored (everything needed to carry on after the app was killed: the playlist text is kept, so the segment list is the same on resume). */
@@ -63,7 +72,8 @@ class StreamRec(@JvmField val id: Long) {
     @JvmField var url = ""
     @JvmField var playlistText: String? = null
     @JvmField var pageUrl: String? = null
-    @JvmField var headers: Map<String, String> = emptyMap()
+    /** The header set in use (one worker may switch it to the next of [headerSets] while a part is refused, so every reader sees the newest). */
+    @JvmField @Volatile var headers: Map<String, String> = emptyMap()
     @JvmField var fetcher = 0
     @JvmField var priv = false
     @JvmField var meteredOk = false
@@ -89,6 +99,14 @@ class StreamRec(@JvmField val id: Long) {
     @JvmField var mux = MUX_UNDECIDED
     /** One sentence for the row: why the file is what it is (see [DownloadView.note]). */
     @JvmField var note: String? = null
+    /** EY-8: what it takes to find the same video again when the link is refused (see [StreamSource]). Old records have none of it and carry on as before. */
+    @JvmField var masterUrl: String? = null
+    @JvmField var frame: String? = null
+    @JvmField var headerSets: List<Map<String, String>> = emptyList()
+    /** The rendition's fingerprint (EY-11 fills and compares it); empty until then. */
+    @JvmField var fp: String? = null
+    @JvmField var madeAt = 0L
+    @JvmField var expiresAt = 0L
     @JvmField var initDone = false
     @JvmField var total = -1L
     @JvmField var created = 0L
@@ -100,6 +118,7 @@ class StreamRec(@JvmField val id: Long) {
         r.state = state; r.reason = reason; r.detail = detail; r.url = url; r.playlistText = playlistText; r.pageUrl = pageUrl; r.headers = headers; r.fetcher = fetcher; r.priv = priv
         r.meteredOk = meteredOk; r.nameStem = nameStem; r.name = name; r.mime = mime; r.destKind = destKind; r.destUri = destUri; r.estimate = estimate; r.repId = repId; r.ext = ext; r.companionId = companionId; r.parentId = parentId; r.appended = appended
         r.next = next; r.breaks = breaks; r.crashes = crashes; r.mux = mux; r.note = note; r.initDone = initDone; r.total = total; r.created = created; r.updated = updated; r.finished = finished
+        r.masterUrl = masterUrl; r.frame = frame; r.headerSets = headerSets; r.fp = fp; r.madeAt = madeAt; r.expiresAt = expiresAt
         return r
     }
 }
@@ -279,6 +298,7 @@ class StreamEngine(
         val r = StreamRec(id)
         r.url = s.playlistUrl; r.playlistText = s.playlistText; r.pageUrl = s.pageUrl; r.headers = s.headers; r.fetcher = s.fetcher; r.priv = s.priv; r.meteredOk = s.meteredOk
         r.nameStem = FileNames.sanitize(s.nameStem.ifBlank { "video" }); r.name = r.nameStem; r.destKind = s.destKind; r.estimate = s.estimateBytes; r.repId = s.repId; r.ext = s.ext
+        r.masterUrl = s.masterUrl; r.frame = s.frame; r.headerSets = s.headerSets; r.madeAt = if (s.madeAt > 0) s.madeAt else clock.now(); r.expiresAt = s.expiresAt
         r.created = clock.now(); r.updated = r.created
         if (!(s.playlistUrl.startsWith("http://", true) || s.playlistUrl.startsWith("https://", true))) { r.state = DlState.FAILED; r.reason = Reason.BAD_URL; r.finished = r.created }
         return r
