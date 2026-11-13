@@ -1,13 +1,13 @@
-# CHECKPOINT 1540 — read me first, then TASKS.md
+# CHECKPOINT 1541 — read me first, then TASKS.md
 
-**Written:** 2026-11-13T09:37:08Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `ff56881` (this checkpoint is the commit after it)
+**Written:** 2026-11-13T09:37:37Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `59a5f37` (this checkpoint is the commit after it)
 
 ## Just done
-alpha30 CI run 43399774749 FAILED in test-js (not the app build): web-tests/background.test.js 'page report: what Shields blocked...' was flaky (the plain-request count depended on how often ready() polled: n=2 vs >=3; and the first matched request can still be a promise): test made deterministic (count a plain request on purpose, await the first matched request), 14/14 standalone and 2x full 123/123 locally; no extension code changed, no tag was created
+alpha30 RE-DISPATCHED on the test-fix commit 59a5f37: android.yml run 43402842066 (run_number 81) started 09:37:16Z (the first run 43399774749 failed only in test-js; no tag, no BUILDLOG line existed)
 
 ## Do this next
-re-dispatch android.yml for alpha30 on the new commit (same inputs: app=gecko full_build=true note from scratchpad note30.txt; the tag kestrel-g-v0.3.0-alpha30 does not exist yet and BUILDLOG has no alpha30 line, so this is not a second shipment), wait for tag + success, get_release_by_tag, bash tools/record-release.sh kestrel-g-v0.3.0-alpha30 with note30.txt, then answer the owner (all three items + the AI1d question + open items) and save the handoff with the unanswered-prompt list
+wait for tag kestrel-g-v0.3.0-alpha30 + run 43402842066 success (mcp__github__actions_get get_workflow_run), get_release_by_tag shows the APK + sha256, bash tools/record-release.sh kestrel-g-v0.3.0-alpha30 with scratchpad note30.txt; then answer the owner (all three items, the AI1d question, version + exact wording questions, open items) and save the handoff with the unanswered-prompt list (TASKS AI1d); never dispatch alpha30 a third time without checking Releases first
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ re-dispatch android.yml for alpha30 on the new commit (same inputs: app=gecko fu
 
 ## Last ten checkpoints
 ```
+  59a5f37 ckpt 1540: alpha30 CI run 43399774749 FAILED in test-js (not the app build): web-tests/b
   ea9b9f4 ckpt 1536: alpha30 DISPATCHED: android.yml run 43399774749 (run_number 80) queued 09:15:
   ab7b158 ckpt 1535: gated kestrel-g-v0.3.0-alpha30 (gecko code 129) and pushed it: handoff self-t
   ac7766e ckpt 1534: pre-ship: alpha30 (includes alpha29 and alpha28): your three requests. 1) Set
@@ -25,8 +26,4 @@ re-dispatch android.yml for alpha30 on the new commit (same inputs: app=gecko fu
   5c37df1 ckpt 1518: alpha29 SHIPPED and RECORDED (run 43383744581 green, BUILDLOG line written, R
   01ea47c ckpt 1515: alpha29 DISPATCHED: android.yml run 43383744581 (run_number 79) started 07:09
   78c9506 ckpt 1514: gated kestrel-g-v0.3.0-alpha29 (gecko code 128) and pushed it: handoff self-t
-  f2230eb ckpt 1511: AH1b DONE and emulator-proven with the real engine (heads-up before a refused
 ```
-
-(3 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
