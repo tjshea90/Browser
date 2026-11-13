@@ -1060,3 +1060,15 @@
 > - **Optional decisions:** licence, landscape tabs, Cromite comparison.
 > - **Charging:** the weekly overnight-charge tip.
 <!-- sha:efc99f48089f -->
+
+## 2026-11-13T03:47:59Z
+> Two late heartbeat wake-ups arrived: scheduled prompts from the 2-hourly "Kestrel resume heartbeat" that I set up earlier. They fired while I was busy, and their text still describes the alpha22 work list. I'm standing down on both, per the rule they carry ("stand down if another session's real work is under 60 minutes old"). This session finished alpha27 minutes ago.
+>
+> - **State:** nothing is uncommitted. Local and GitHub are both at `c689906`, which includes alpha27 recorded in BUILDLOG.
+> - **Heartbeat:** it stays armed (`trig_01LLoVKsjuTUaDn61UGP1pBN`). Its delete condition, 24 hours of owner silence with nothing safe left, is not met, since you wrote about two hours ago.
+> - **Nothing started:** the remaining items either need your tablet data or are speculative without it. These are the ad-player stand-ins, the fragmented-MP4 downloader, background audio and picture-in-picture. I'll pick them up once the Video lab numbers or the choppy video's site arrive.
+>
+> My reply above is current: the same Release link, and the same questions still open for you.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha27
+<!-- sha:29ddb7e9c7de -->
