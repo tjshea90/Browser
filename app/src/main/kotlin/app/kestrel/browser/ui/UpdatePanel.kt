@@ -52,6 +52,9 @@ class UpdatePanel(ctx: Context, private val pal: Pal, private val prefs: Prefs, 
     override fun onAttachedToWindow() { super.onAttachedToWindow(); UpdateManager.addListener(listener); render(); UpdateManager.recheckSpace(context) } // a stale "not enough space" goes away as soon as there is enough
     override fun onDetachedFromWindow() { UpdateManager.removeListener(listener); super.onDetachedFromWindow() }
 
+    /** Tests only: draw the sheet for the current [UpdateManager.state] without attaching it to a window (attaching also starts a storage re-check). */
+    internal fun renderForTest() { render() }
+
     private fun render() {
         val s = UpdateManager.state
         if (s.phase == Phase.DOWNLOADING && drawnPhase == Phase.DOWNLOADING && bar != null) { // a progress tick: move the bar, keep everything else

@@ -85,6 +85,9 @@ object UpdateManager {
     @Volatile var state = State(Phase.IDLE)
         private set
 
+    /** Tests only: put the sheet into a given state without the network and the installer. */
+    internal fun setStateForTest(s: State) { state = s }
+
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
     @Volatile private var appCtx: Context? = null
     private var ready = false
