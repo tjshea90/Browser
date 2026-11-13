@@ -19,8 +19,10 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 /**
- * The "not enough free storage" sheet with the numbers of the owner's tablet (alpha27 Diagnostics, 2026-11-13: 1.62 GB free of 27.75 GB, this app 94.4 + 131.7 libraries + 62.3 data + 228.1 cache MB):
- * the in-place update needs about 3.1 GB, an uninstall gives back only about 0.5 GB, so "install the other way" must NOT be offered (it would leave no browser on the tablet).
+ * The "not enough free storage" sheet, rendered from fixed numbers: a tablet that really is this short (1.62 GB free, an in-place update that needs about 3.1 GB, an uninstall that gives back only about 0.5 GB), so
+ * "install the other way" must NOT be offered (it would leave no browser on the tablet). The numbers began as the owner's alpha27 Diagnostics (2026-11-13: 1.62 GB free of 27.75 GB, this app 94.4 + 131.7 libraries + 62.3 data
+ * + 228.1 cache MB) under the 10 % reserve of alpha8-alpha30; Android's real reserve is min(5 %, 500 MiB), so that tablet needs about 1 GB and never sees this sheet (UpdateLogicTest.theOwnersTabletAlreadyHasRoomForTheUpdate).
+ * They stay as a rendering fixture only: this class tests the panel, not the model.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
