@@ -141,6 +141,38 @@ class ShieldAndSessionTest {
     }
 
     @Test
+    fun aTabThatWasOnHomeComesBackOnHome() {
+        val t = listOf(
+            TabRecord(1, "https://doraby.com/", "Doraby", 1000L, 0, false, homeOverPage = true),
+            TabRecord(2, "https://a.example/", "A", 2000L, 0, true, homeOverPage = true),   // desktop site and Home at once
+            TabRecord(3, "https://b.example/", "B", 3000L, 0, true),
+        )
+        val text = SessionCodec.encode(Session(t, 1))
+        assertEquals(6, text.lines()[1].split('\t').size)                              // still six fields: an older app still finds every tab
+        val back = SessionCodec.decode(text)!!
+        assertEquals(t, back.tabs)
+        assertEquals(listOf(true, true, false), back.tabs.map { it.homeOverPage })
+        assertEquals(listOf(false, true, true), back.tabs.map { it.desktopSite })
+    }
+
+    @Test
+    fun sessionFilesFromBeforeTheHomeFlagStillLoadAsNotOnHome() {
+        val old = "KSESSION 1 2\n1\t1000\t0\t0\thttps://one.example/\tOne\n2\t2000\t1\t1\thttps://two.example/\tTwo\n"
+        val s = SessionCodec.decode(old)!!
+        assertEquals(listOf(false, false), s.tabs.map { it.homeOverPage })
+        assertEquals(listOf(false, true), s.tabs.map { it.desktopSite })
+        // a flag field this version does not know is read as "not desktop, not Home", never as a reason to drop the tab
+        val odd = SessionCodec.decode("KSESSION 1 1\n1\t1\t0\tZ\thttps://one.example/\tOne\n")!!
+        assertEquals(1, odd.tabs.size); assertFalse(odd.tabs[0].desktopSite || odd.tabs[0].homeOverPage)
+    }
+
+    @Test
+    fun anEmptyTabCannotBeOnHomeOverAPage() {
+        val s = SessionCodec.decode("KSESSION 1 1\n1\t1\t0\t0H\tabout:blank\t\n")!!
+        assertFalse("a new tab has no page under Home", s.tabs[0].homeOverPage)
+    }
+
+    @Test
     fun sessionIsCapped() {
         val many = (1L..500L).map { TabRecord(it, "https://e.example/$it", "t", it, 0, false) }
         assertEquals(SessionCodec.MAX_TABS, SessionCodec.decode(SessionCodec.encode(Session(many, 1)))!!.tabs.size)
