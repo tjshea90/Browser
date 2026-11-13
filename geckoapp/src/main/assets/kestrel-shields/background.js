@@ -264,9 +264,12 @@ browser.runtime.onMessage.addListener(function (m, sender) {
     return guardAnswer((top && pageHost(top)) || m.h, (top && pageHost(top)) || '');
   }
   if (m.k === 'dom') { // a media address found in the page itself (content.js): handed to the app like a sniffed one, marked so the app can drop ad networks
-    var dp = (tabId >= 0 && tabTop.get(tabId)) || m.p || '';
-    if (sender && sender.frameId > 0) noteFrame(tabId, sender.frameId, undefined, m.p || '');
-    send({ k: 'media', u: String(m.u || ''), c: '', l: -1, p: dp, f: m.p !== dp ? (m.p || '') : '', s: 'dom' }).catch(function () {});
+    var fid = sender ? sender.frameId : 0;
+    var domTab = (fid > 0 && frameTab.has(fid)) ? frameTab.get(fid) : tabId; // a frame's own tab first: its message may name no tab at all
+    var mp = docOf(m.p);                                                      // the document the script runs in (the player's page for a frame)
+    var dp = (domTab >= 0 && tabTop.get(domTab)) || mp || '';                  // the page the tab is on
+    if (fid > 0) noteFrame(domTab, fid, undefined, mp);
+    send({ k: 'media', u: String(m.u || ''), c: '', l: -1, p: dp, f: mp !== docOf(dp) ? mp : '', s: 'dom' }).catch(function () {});
     return undefined;
   }
   if (m.k === 'pop') {
@@ -487,8 +490,11 @@ var navId = new Map();       // tabId -> numeric id of the newest main_frame req
 var frameParent = new Map(); // tabId -> Map(frameId -> parentFrameId), from the sub_frame requests (and from candidates)
 var mediaFrames = new Map(); // tabId -> Map(frameId -> document address) of the frames (not the top one) that reported a candidate
 function stale(d) { var n = navId.get(d.tabId), r = Number(d.requestId); return n !== undefined && r === r && r < n; } // r === r: not NaN
+var frameTab = new Map(); // frameId of a sub frame -> the tab it sits in (seen when its document was requested). A content script's message can arrive without its tab (emulator, 2026-11-13: an address found in a player frame's script was filed under the PLAYER's address, so a server switch never dropped it); its frame says which tab it is in.
+function docOf(u) { return u ? String(u).replace(/#.*$/, '') : ''; } // a document's address without its fragment: the same document is always the same string
 function noteFrame(tabId, frameId, parentId, doc) {
   if (!(frameId > 0) || tabId < 0) return;
+  doc = docOf(doc);
   var pm = frameParent.get(tabId); if (!pm) { pm = new Map(); frameParent.set(tabId, pm); }
   if (parentId !== undefined && parentId >= 0 && !pm.has(frameId)) pm.set(frameId, parentId);
   var mf = mediaFrames.get(tabId); if (!mf) { if (mediaFrames.size >= SNIFFED_TABS) mediaFrames.delete(mediaFrames.keys().next().value); mf = new Map(); mediaFrames.set(tabId, mf); }
@@ -502,6 +508,7 @@ function insideFrame(tabId, frameId, outer) { // is frameId the frame [outer] or
 function frameNavigates(d) { // a sub_frame request: the frame [d.frameId] is being (re)loaded
   var tabId = d.tabId, f = d.frameId;
   if (tabId < 0 || !(f > 0)) return;
+  frameTab.set(f, tabId); if (frameTab.size > 400) frameTab.delete(frameTab.keys().next().value);
   var pm = frameParent.get(tabId); if (!pm) { pm = new Map(); frameParent.set(tabId, pm); }
   if (d.parentFrameId >= 0) pm.set(f, d.parentFrameId);
   var mf = mediaFrames.get(tabId);
@@ -566,7 +573,7 @@ function maybeMedia(d, url, ct, size, ref, org) {
   seen.add(key); fc.set(d.frameId, n + 1);
   noteFrame(d.tabId, d.frameId, d.parentFrameId, d.documentUrl);
   var page = tabTop.get(d.tabId) || ((d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || ''));
-  send({ k: 'maybe', u: url, c: ct, l: size, p: page, f: d.documentUrl || '', rf: ref, og: org, ty: d.type }).catch(function () {});
+  send({ k: 'maybe', u: url, c: ct, l: size, p: page, f: docOf(d.documentUrl), rf: ref, og: org, ty: d.type }).catch(function () {});
 }
 
 browser.webRequest.onHeadersReceived.addListener(function (d) {
@@ -601,7 +608,7 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
   seen.add(key);
   noteFrame(d.tabId, d.frameId, d.parentFrameId, d.documentUrl);
   var page = tabTop.get(d.tabId) || ((d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || ''));
-  send({ k: 'media', u: url, c: ct, l: size, p: page, f: d.documentUrl || '', n: cd, rf: ref, og: org }).catch(function () {});
+  send({ k: 'media', u: url, c: ct, l: size, p: page, f: docOf(d.documentUrl), n: cd, rf: ref, og: org }).catch(function () {});
 }, { urls: ['http://*/*', 'https://*/*'], types: MEDIA_TYPES }, ['responseHeaders']);
 
 // What the page's own <video> says about the file it plays (picture size, length, the label next to a <source>): relayed by content.js.

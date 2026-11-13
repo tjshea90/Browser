@@ -11,9 +11,9 @@ class MediaCandidate(
     /** Bytes (the whole file, from Content-Length / Content-Range); -1 = unknown. Always -1 for a playlist. */
     var length: Long,
     /** The top-level page when it was seen. */
-    val page: String,
-    /** The document that asked for it (an embedded player's own page), "" if the same as [page]. */
-    val frame: String = "",
+    var page: String,
+    /** The document that asked for it (an embedded player's own page), "" if the same as [page]. The newest sighting names it ([MediaList.add]). */
+    var frame: String = "",
     val seenAt: Long = 0,
 ) {
     /** The file name the SERVER gave it (Content-Disposition), "" when it gave none: the best name to offer when saving it. */
@@ -98,6 +98,8 @@ class MediaList(private val max: Int = 24) {
             if (old.mime.isEmpty() && c.mime.isNotEmpty()) { old.mime = c.mime; changed = true }
             if (old.referer.isEmpty() && c.referer.isNotEmpty()) { old.referer = c.referer; changed = true }
             if (old.origin.isEmpty() && c.origin.isNotEmpty()) { old.origin = c.origin; changed = true }
+            // the newest sighting names who asks NOW: an address found in a player's script, asked for later by the next server's player, belongs to the second one (a server switch drops by document)
+            if (c.frame.isNotEmpty() && old.frame != c.frame) { old.frame = c.frame; old.page = c.page; changed = true }
             if (changed) version++
             return changed
         }
