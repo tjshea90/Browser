@@ -1,13 +1,13 @@
-# CHECKPOINT 1447 — read me first, then TASKS.md
+# CHECKPOINT 1451 — read me first, then TASKS.md
 
-**Written:** 2026-11-13T03:49:18Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `b686fba` (this checkpoint is the commit after it)
+**Written:** 2026-11-13T04:02:33Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `41d8a21` (this checkpoint is the commit after it)
 
 ## Just done
-Owner message 19 (doraby.com: no photos, no search bar in Kestrel; Brave fine) written into TASKS as AF1 (AF1a diagnose, AF1b fix+test, AF1c general guard, AF1d ship+answer)
+Owner message 20 (their Video lab / Tap lab / Decode lab numbers from the tablet) written into TASKS as AG1 (AG1a record, AG1b fix the lab fps arithmetic, AG1c decide: decode/screen/JS fine -> network/site, AG1d AVIF keep off). doraby.com (AF1) in progress: real page + our network verdicts + our extension scripts + our cosmetic CSS all render fine in Chromium; local mirror (scratchpad/dora/mirror served on :8001) renders fine in REAL Gecko on the emulator (icons + posters) once its protocol-relative links are local
 
 ## Do this next
-AF1a: find out what doraby.com is and which Kestrel layer breaks it: fetch the page (web-fetch agent or Playwright through the proxy), list its image/script/search-bar requests, run default.kfs on each URL (core test harness like the old ZzProbeTest), run content.js cosmetic/guard/embed gate in web-tests on the saved HTML, check Data saver / mixed content; write findings into research/DORABY.md
+AF1a: the owner's tablet differs from every test so far, so instrument instead of guessing: (1) read how the app handles zstd/HTTP3/ECH/DoH for Cloudflare sites and the Fast Wi-Fi VPN profile (NetProfile), (2) add a 'This page' report to Diagnostics from the extension (webRequest.onErrorOccurred + blocked counts per tab + window error / resource error events from content.js) so the owner can copy what failed on doraby.com, (3) lab fps fix AG1b, (4) answer both messages (AF1 + AG1) in plain words
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ AF1a: find out what doraby.com is and which Kestrel layer breaks it: fetch the p
 
 ## Last ten checkpoints
 ```
+  101b4b1 ckpt 1447: Owner message 19 (doraby.com: no photos, no search bar in Kestrel; Brave fine
   c0c149f ckpt 1443: alpha27 SHIPPED and RECORDED: kestrel-g-v0.3.0-alpha27 (gecko code 126), run 
   d107bc4 ckpt 1440: alpha27 (kestrel-g-v0.3.0-alpha27, gecko code 126) gated, pushed and DISPATCH
   f453a50 ckpt 1439: gated kestrel-g-v0.3.0-alpha27 (gecko code 126) and pushed it: handoff self-t
@@ -25,7 +26,6 @@ AF1a: find out what doraby.com is and which Kestrel layer breaks it: fetch the p
   9b93232 ckpt 1409: Owner message 18 (video audit + research + implement) written into TASKS as A
   b79c4dd ckpt 1406: alpha26 SHIPPED and RECORDED: kestrel-g-v0.3.0-alpha26 (gecko code 125), run 
   5e34d92 ckpt 1404: alpha26 (code 125) gated + pushed (ckpt 1403) and DISPATCHED: android.yml run
-  33c7277 ckpt 1403: gated kestrel-g-v0.3.0-alpha26 (gecko code 125) and pushed it: handoff self-t
 ```
 
 (3 automatic checkpoint(s) since the last deliberate one — the
