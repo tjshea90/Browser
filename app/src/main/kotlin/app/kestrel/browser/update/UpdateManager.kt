@@ -110,8 +110,9 @@ object UpdateManager {
                 val s = space(app, offer, if (kept) apk else null, pending = if (kept) 0L else offer.size) // a download still to come takes its room first
                 val short = if (s.plan.shortBy > 0) UpdateLogic.roundUpTenMb(s.plan.shortBy) else 0L
                 spaceHint = SpaceHint(offer.tag, short, s.free, s.plan.needDrop, s.own.cache)
+                Health.log("update", "hint", "free=${s.free shr 20} MB need=${s.plan.needDrop shr 20} MB short=${short shr 20} MB cache=${s.own.cache shr 20} MB own=${s.own.total shr 20} MB")
                 Io.main.post { for (l in listeners) l() }
-            } catch (e: Exception) { /* only a hint */ }
+            } catch (e: Exception) { Health.log("update", "hint-failed", e.toString().take(100)) } // only a hint
         }, "kestrel-update-hint").apply { isDaemon = true }.start()
     }
 
@@ -448,10 +449,13 @@ object UpdateManager {
     // ------------------------------------------------------------------------------------------- install
 
     /** Free space the installer can count on: what is free plus the caches the system may clear (installd clears every app's cache before it gives up). */
+    /** The partition the installer works on. NOT [dir]: that folder only exists once a download has been made, and a missing folder answers 0 for its total and free space. */
+    private fun dataRoot(ctx: Context): File = ctx.applicationContext.filesDir
+
     private fun freeForInstall(ctx: Context): Long = try {
         val sm = ctx.getSystemService(StorageManager::class.java)
-        ctx.getSystemService(StorageStatsManager::class.java).getFreeBytes(sm.getUuidForPath(dir(ctx)))
-    } catch (e: Exception) { dir(ctx).usableSpace }
+        ctx.getSystemService(StorageStatsManager::class.java).getFreeBytes(sm.getUuidForPath(dataRoot(ctx)))
+    } catch (e: Exception) { dataRoot(ctx).usableSpace }
 
     /**
      * What Android insists on keeping free AFTER the install: 10 % of the data partition (measured, research/UPDATE_STORAGE.md: installd "Failed to free up 624066560 on /data" on a 6.2 GB partition).
@@ -459,7 +463,7 @@ object UpdateManager {
      */
     private fun reserveBytes(ctx: Context): Long {
         val pct = try { Settings.Global.getInt(ctx.contentResolver, "sys_storage_cache_percentage", 10).coerceIn(10, 50) } catch (e: Exception) { 10 }
-        return dir(ctx).totalSpace * pct / 100
+        return dataRoot(ctx).totalSpace * pct / 100
     }
 
     /** Bytes the installer unpacks from the APK: read from the file when we have it, else estimated from the libraries of the app that is installed now. */
