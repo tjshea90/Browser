@@ -100,16 +100,17 @@ class DownloadsScreen(ctx: Context, private var pal: Pal, private val l: Listene
         list.addView(r.root, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = context.dp(10) })
     }
 
-    private companion object { const val NONE = "\u0000" } // "nothing drawn yet": differs from the signature of an EMPTY list
+    private companion object { const val NONE = "\u0000"; const val BAR_HEIGHT_DP = 30 } // NONE: "nothing drawn yet", differs from the signature of an EMPTY list
 
     private inner class Row(ctx: Context, v: DownloadView) {
         val root = LinearLayout(ctx)
         private val name = label(ctx, v.name, 16f, pal.fg, bold = true).apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END; includeFontPadding = true }
         private val sub = label(ctx, "", 12f, pal.muted).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END; includeFontPadding = true }
-        private val status = label(ctx, "", 14f, pal.fg).apply { includeFontPadding = true }
+        /** The small line under the bar: time left and connections while it runs, the reason when it stopped, "Done  ·  size" when finished. Hidden when there is nothing to add. */
+        private val status = label(ctx, "", 13f, pal.muted).apply { includeFontPadding = true }
         /** One plain sentence about how the file came to be what it is (kept as a .ts and why; a part left out of an MP4). */
         private val note = label(ctx, "", 13f, pal.warn).apply { includeFontPadding = true; visibility = GONE }
-        private val bar = Bar(ctx, pal)
+        private val bar = DownloadBar(ctx, pal)
 
         init {
             root.orientation = LinearLayout.VERTICAL
@@ -122,8 +123,8 @@ class DownloadsScreen(ctx: Context, private var pal: Pal, private val l: Listene
             top.addView(col, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             root.addView(top)
             val showBar = v.state != DlState.COMPLETED && v.state != DlState.CANCELED
-            if (showBar) root.addView(bar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ctx.dp(8)).apply { topMargin = ctx.dp(12) })
-            root.addView(status, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(8) })
+            if (showBar) root.addView(bar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ctx.dp(BAR_HEIGHT_DP)).apply { topMargin = ctx.dp(12) }) // 30 dp: nearly four times the old 8 dp strip (owner message 26)
+            root.addView(status, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(6) })
             root.addView(note, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(4) })
             if (v.actions.isNotEmpty()) {
                 val btns = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
@@ -136,9 +137,12 @@ class DownloadsScreen(ctx: Context, private var pal: Pal, private val l: Listene
         fun bind(v: DownloadView) {
             bar.fraction = v.fraction
             bar.indeterminate = v.state == DlState.RUNNING && v.total <= 0
-            val st = Format.status(v)
+            bar.tone = when (v.state) { DlState.FAILED -> DownloadBar.Tone.DANGER; DlState.NEEDS_DECISION, DlState.WAITING_NETWORK -> DownloadBar.Tone.WARN; else -> DownloadBar.Tone.NORMAL }
+            bar.text = Format.barText(v) // MB downloaded / MB left / % / speed, centred inside the bar itself
+            val st = Format.belowBar(v)
             if (status.text.toString() != st) status.text = st // setText rebuilds the text layout even for the same words
-            status.setTextColor(when (v.state) { DlState.FAILED -> pal.danger; DlState.NEEDS_DECISION, DlState.WAITING_NETWORK -> pal.warn; DlState.COMPLETED -> pal.ok; else -> pal.fg })
+            status.visibility = if (st.isEmpty()) GONE else VISIBLE
+            status.setTextColor(when (v.state) { DlState.FAILED -> pal.danger; DlState.NEEDS_DECISION, DlState.WAITING_NETWORK -> pal.warn; DlState.COMPLETED -> pal.ok; else -> pal.muted })
             val line = listOfNotNull(v.host?.removePrefix("www."), if (v.total >= 0) (if (v.estimated) "about " else "") + Format.bytes(v.total) else null, if (v.priv) "private" else null).joinToString("  ·  ")
             if (sub.text.toString() != line) sub.text = line
             val n = v.note.orEmpty()
@@ -188,27 +192,6 @@ class DownloadsScreen(ctx: Context, private var pal: Pal, private val l: Listene
             c.drawPath(path, fill)
             text.textSize = height * (if (ext.length > 3) 0.26f else 0.3f)
             c.drawText(ext, width / 2f, height / 2f - (text.descent() + text.ascent()) / 2f, text)
-        }
-    }
-
-    /** Flat chamfered progress bar; unknown size shows a solid stripe (no animation anywhere). */
-    private class Bar(ctx: Context, private val pal: Pal) : View(ctx) {
-        private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        private val box = RectF()
-        private val path = Path()
-        var fraction = 0f
-            set(v) { val c = v.coerceIn(0f, 1f); if (c != field) { field = c; invalidate() } }
-        var indeterminate = false
-            set(v) { if (v != field) { field = v; invalidate() } }
-
-        override fun onDraw(c: Canvas) {
-            box.set(0f, 0f, width.toFloat(), height.toFloat())
-            ChamferDrawable.path(box, context.dpf(3f), ChamferDrawable.TL or ChamferDrawable.BR, path)
-            paint.color = pal.pill; c.drawPath(path, paint)
-            c.save(); c.clipPath(path)
-            paint.color = pal.accent
-            if (indeterminate) c.drawRect(width * 0.25f, 0f, width * 0.75f, height.toFloat(), paint) else c.drawRect(0f, 0f, width * fraction, height.toFloat(), paint)
-            c.restore()
         }
     }
 }
