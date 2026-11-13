@@ -1655,6 +1655,7 @@ open class BrowserActivity : Activity(), DockListener {
         }
         override fun clearBrowsingData() { this@BrowserActivity.clearBrowsingData() }
         override fun lastLookOff() { val c = applicationContext; if (lookTab != null) hideRestoring("look-off"); Io.exec { LastLook.clearAll(c) } }
+        override fun tidyStorage() { runStorageTidy(true) }
         override fun resetSiteShields() { Shields.clearAll(); toast("Per-site Shields reset") }
         override fun backupNow() { backup.backupNow() }
         override fun restoreFromFile() { backup.restoreFromFile() }
