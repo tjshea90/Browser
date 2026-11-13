@@ -95,7 +95,7 @@ class Engine(
             var max = 0L
             for (r in recs) {
                 if (r.id > max) max = r.id
-                if (r.state == DlState.CANCELED) { store.delete(r.id); continue }
+                if (r.state == DlState.CANCELED) { dropLeftover(r); store.delete(r.id); continue } // a cancel that was cut off half way: the partial file must not outlive it
                 val wanted = r.state == DlState.RUNNING || r.state == DlState.STARTING || r.state == DlState.VERIFYING || r.state == DlState.QUEUED || r.state == DlState.WAITING_NETWORK || r.state == DlState.PAUSED_SYSTEM
                 val unclean = r.state == DlState.RUNNING || r.state == DlState.STARTING || r.state == DlState.VERIFYING // the process ended while it was working
                 if (!r.state.terminal && r.state != DlState.PAUSED_USER && r.state != DlState.NEEDS_DECISION) r.state = DlState.PAUSED_SYSTEM
@@ -164,9 +164,20 @@ class Engine(
         changed(rec.id)
     }
 
+    /** "Clear" forgets finished rows. A completed download keeps its file; a failed one (or a cancelled one that is still listed) leaves a half file nobody can see, so that goes with the row. */
     fun clearFinished() = control.execute {
         val ids = synchronized(lock) { jobs.values.filter { it.rec.state == DlState.COMPLETED || it.rec.state == DlState.FAILED || it.rec.state == DlState.CANCELED }.map { it.rec.id } }
-        for (id in ids) { val j = get(id) ?: continue; synchronized(lock) { jobs.remove(id) }; if (!j.rec.priv) store.delete(id); changed(id) }
+        for (id in ids) {
+            val j = get(id) ?: continue
+            if (synchronized(lock) { j.rec.state } != DlState.COMPLETED) dropLeftover(j.rec)
+            synchronized(lock) { jobs.remove(id) }; if (!j.rec.priv) store.delete(id); changed(id)
+        }
+    }
+
+    /** Delete the unfinished file a row still points at (a pending MediaStore item or a part file). Never throws. */
+    private fun dropLeftover(rec: Rec) {
+        val uri = synchronized(lock) { rec.destUri } ?: return
+        try { sinks.delete(uri) } catch (e: Exception) { /* already gone */ }
     }
 
     fun pauseAll() = control.execute { for (j in snapshotJobs()) if (synchronized(lock) { j.rec.state == DlState.RUNNING && j.rec.resumable }) requestStop(j, DlState.PAUSED_USER) }

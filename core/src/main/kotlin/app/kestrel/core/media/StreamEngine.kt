@@ -232,7 +232,7 @@ class StreamEngine(
             var max = idBase - 1
             for (r in recs) {
                 if (r.id > max) max = r.id
-                if (r.state == DlState.CANCELED) { store.delete(r.id); continue }
+                if (r.state == DlState.CANCELED) { dropLeftover(r); store.delete(r.id); continue } // a cancel that was cut off half way: neither the output nor the staging may outlive it
                 val wanted = r.state == DlState.QUEUED || r.state.active || r.state == DlState.WAITING_NETWORK || r.state == DlState.PAUSED_SYSTEM
                 val unclean = r.state.active // the process ended while it was working
                 if (!r.state.terminal && r.state != DlState.PAUSED_USER) r.state = DlState.PAUSED_SYSTEM
