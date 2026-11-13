@@ -71,7 +71,10 @@ object CpuMeter {
         return if (pkg.isNotEmpty() && n.startsWith(pkg)) n else null
     }
 
-    private fun short(name: String) = name.substringAfter(':', "parent")
+    /** `app.kestrel.browser.gecko:sandboxed_tab_disable_art_image_39` -> `tab`; the main process -> `parent`. */
+    internal fun short(name: String): String = name.substringAfter(':', "").let { n ->
+        if (n.isEmpty()) "parent" else n.removePrefix("sandboxed_").replace(Regex("_disable_art_image_\\d*$"), "").ifEmpty { n }
+    }
 
     private fun sample() {
         val now = SystemClock.elapsedRealtime()
