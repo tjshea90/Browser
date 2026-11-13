@@ -1211,3 +1211,7 @@
 > - Optional: licence, landscape tabs, Cromite comparison.
 > - Weekly tip: charge the tablet overnight with the screen off.
 <!-- sha:5dca78d6d931 -->
+
+## 2026-11-13T14:23:40Z
+> Standing down: the heartbeat's old work list is finished, and your three requests are shipped in alpha30 and answered. I'm waiting for your reply on the version shown in Menu > Diagnostics, the exact words of the Cloudflare site, and which earlier prompts you meant.
+<!-- sha:c63a9a6b61e6 -->
