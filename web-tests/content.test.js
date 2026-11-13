@@ -264,6 +264,7 @@ const tall = '<div style="height:6000px;width:100px">tall</div>';
 
 test('scroll: a scrolled page reports its place 300 ms after the last scroll, once, with its address', async () => {
   const page = await open(tall);
+  await page.waitForTimeout(1000);                                          // the one report after the load (the top) is out of the way
   await page.evaluate(() => window.scrollTo(0, 1200));
   await page.waitForTimeout(450);
   await page.evaluate(() => window.scrollTo(0, 1500)); await page.evaluate(() => window.scrollTo(0, 1800));
