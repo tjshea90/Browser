@@ -199,3 +199,8 @@ This session's worker process was restarted. If your previous turn was already c
 ```
 @"/root/.claude/uploads/30a5aa00-41c9-5bd3-87d1-b10052a52d84/4a3bede6-REVIEW-EXTERNAL-1.md" The attached file is a claude fable review of the browser.  Save it to the repo as research/REVIEW-EXTERNAL-1.md and follow section 0.
 ```
+
+## 2026-11-13T00:48:20Z
+```
+Do the fixes and optimizations from the review, but also finish the work you were already doing before I interrupted with the review file
+```
