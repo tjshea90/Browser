@@ -2,7 +2,6 @@ package app.kestrel.browser.ui
 
 import android.content.Context
 import android.graphics.Bitmap
-import androidx.test.core.app.ApplicationProvider
 import app.kestrel.core.session.LastLookMeta
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -13,6 +12,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import java.io.File
 
@@ -20,7 +20,7 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class LastLookStoreTest {
-    private val ctx: Context get() = ApplicationProvider.getApplicationContext()
+    private val ctx: Context get() = RuntimeEnvironment.getApplication()
     private fun meta(url: String = "https://news.test/story", sy: Int = 640) = LastLookMeta(url, sy, 8, 12, 1_700_000_000_000L, "160.0", "reaper1:0:16", false, false)
     private fun bmp(): Bitmap = Bitmap.createBitmap(8, 12, Bitmap.Config.ARGB_8888)
     private val dir: File get() = File(ctx.filesDir, "lastlook")
