@@ -574,3 +574,11 @@ Remove any of the diagnosis tools from the app that are no longer needed or alre
 ```
 @"/root/.claude/uploads/30a5aa00-41c9-5bd3-87d1-b10052a52d84/47cf041c-REVIEW-EXTERNAL-2.md" Review and complete all fixes and optimizations from this report
 ```
+
+## 2026-11-13T22:16:35Z
+```
+1) The video player and web page animations inside the browser are still slow and laggy. Investigate if it has the proper codecs/gpu acceleration/cpu acceleration to play videos smoothly within web sites. 
+2) the video downloader is inaccurate at estimating file size. Is there any way to improve it? 
+3) improve the icon of the app and make it look professional. Also include the icon in the Android recent apps list, which currently only shows a generic icon, see the screenshot
+4) make sure the app properly deletes old install files and apks from storage after updates and once the update is installed, delete the latest apk from storage. Maintain the app cache and storage so that very old or stale items don't waste storage. The cache and storage may be used freely for current browsing and speed, but it shouldn't waste storage on old items
+```
