@@ -42,4 +42,36 @@ class MediaNamesTest {
     @Test fun anExtensionIsCutOnlyWhenThereIsOne() {
         assertEquals("clip", MediaNames.stemOf("clip.mp4")); assertEquals("Mr. Smith goes", MediaNames.stemOf("Mr. Smith goes")); assertEquals("a.b", MediaNames.stemOf("a.b.mkv"))
     }
+
+    // ---- AL6 (owner message 26): intuitive default names
+    @Test fun anEpisodeThePageNamesBeatsASourceNameThatDoesNotSayWhich() {
+        assertEquals("Ozark S02E05", MediaNames.defaultStem(file("https://cdn.example/v/video_8431.mp4"), "Watch Ozark Season 2 Episode 5 Online Free | Doraby", "doraby.com", "720p", "https://doraby.com/watch/ozark"))
+        assertEquals("Ozark S02E05", MediaNames.defaultStem(file("https://cdn.example/v/The_Badlands.mp4"), "Ozark - Doraby", "doraby.com", "1080p", "https://doraby.com/tv/ozark/season-2/episode-5"))
+    }
+
+    @Test fun aReleaseStyleSourceNameIsMadeReadable() {
+        assertEquals("Ozark S02E05", MediaNames.defaultStem(file("https://cdn.example/Ozark.S02E05.1080p.WEB.H264-NTb.mkv"), "Some page", "cdn.example", "1080p"))
+        assertEquals("Dune Part Two (2024)", MediaNames.defaultStem(file("https://cdn.example/Dune.Part.Two.2024.1080p.WEB-DL.H.264-FLUX.mp4"), "", "cdn.example", ""))
+    }
+
+    @Test fun aFilmPageLosesTheSiteNoiseButKeepsTheQuality() {
+        assertEquals("Dune - Part Two (2024) - 720p", MediaNames.defaultStem(file("https://s.example/get.php?id=1"), "Watch Dune: Part Two (2024) Full Movie Online Free - Doraby", "doraby.com", "720p"))
+        assertEquals("Dune - Part Two (2024) - 480p", MediaNames.streamStem("Watch Dune: Part Two (2024) Full Movie Online Free - Doraby", "https://doraby.com/movie/dune-2", "doraby.com", "480p"))
+    }
+
+    @Test fun streamQualityRowsOfAnEpisodeShareTheEpisodeName() {
+        assertEquals("Ozark S02E05", MediaNames.streamStem("Ozark S02E05 - Doraby", "https://doraby.com/x", "doraby.com", "720p"))
+        assertEquals("Great Movie - 720p", MediaNames.streamStem("Great Movie", "https://s.example/m", "s.example", "720p"))
+        assertEquals("s.example", MediaNames.streamStem("", "", "s.example", ""))
+    }
+
+    @Test fun plainVideoFilesAreRenamedOnlyWhenTheNameSaysNothingOrIsAReleaseName() {
+        assertEquals("Ozark S02E05.mkv", MediaNames.friendlyFileName("Ozark.S02E05.1080p.WEB.H264-NTb.mkv", "video/x-matroska", "x", "", "h"))
+        assertEquals("Ozark S02E05.mp4", MediaNames.friendlyFileName("video.mp4", "video/mp4", "Ozark Season 2 Episode 5", "https://doraby.com/x", "doraby.com"))
+        assertEquals("Trailer.mp4", MediaNames.friendlyFileName("Trailer.mp4", "video/mp4", "Ozark Season 2 Episode 5", "https://doraby.com/x", "doraby.com"))
+        assertEquals("report.pdf", MediaNames.friendlyFileName("report.pdf", "application/pdf", "Ozark Season 2 Episode 5", "https://doraby.com/x", "doraby.com"))
+        assertEquals("Holiday_Clip.mp4", MediaNames.friendlyFileName("Holiday_Clip.mp4", "video/mp4", "Page", "https://x.test/", "x.test"))
+        assertEquals("noext", MediaNames.friendlyFileName("noext", "video/mp4", "Ozark Season 2 Episode 5", "", ""))
+    }
 }
+
