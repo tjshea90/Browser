@@ -83,6 +83,8 @@ class Prefs private constructor(ctx: Context) {
     var labFontDelay: Boolean get() = bool("lab_font", true); set(v) = put("lab_font", v)
     /** EX-12: speculation rules (a site's own "fetch the next page early" hints): 0 off, 1 dry run (candidates recorded, nothing fetched), 2 on. A pre-release engine feature. */
     var labSpec: Int get() = sp.getInt("lab_spec", 0); set(v) = put("lab_spec", v.coerceIn(0, 2))
+    /** EX-14: while LinkMeter's Fast Wi-Fi is on, ask websites for WebP / JPEG / PNG instead of AVIF (cheaper to decode on this CPU when bytes are cheap; image.http.accept on the USER branch, cleared when the profile ends). OFF until the Decode lab shows AVIF is slow on the tablet. */
+    var labNoAvif: Boolean get() = bool("lab_noavif", false); set(v) = put("lab_noavif", v)
     /** EX-7: hold the Wi-Fi out of power save while Kestrel is on screen (lower, steadier round-trip time; costs battery). */
     var labWifiBoost: Boolean get() = bool("lab_wifi", false); set(v) = put("lab_wifi", v)
     /** EX-5: under LinkMeter's Fast Wi-Fi keep the phone helper (downloads and pages through the Courier) instead of resting it. */

@@ -48,7 +48,7 @@
       rows.forEach(function (r) {
         lines.push((r.name + '         ').slice(0, 9) + ' ' + ('      ' + (r.bytes < 0 ? '?' : (r.bytes / 1024).toFixed(0))).slice(-7) + '   ' + ('        ' + (r.failed ? 'cannot' : r.ms.toFixed(0))).slice(-9) + '   ' + (r.failed ? '' : (r.ms - jpeg >= 0 ? '+' : '') + (r.ms - jpeg).toFixed(0) + ' ms'));
       });
-      lines.push('', 'Read it like this: a smaller file saves transfer time (about 1.6 ms per KB at 5 Mbit/s, 0.27 ms per KB at 30 Mbit/s). If a format costs more extra decode time than the transfer time it saves, it is a loss on this tablet.');
+      lines.push('', 'Read it like this: a smaller file saves transfer time (about 1.6 ms per KB at 5 Mbit/s, 0.27 ms per KB at 30 Mbit/s). If a format costs more extra decode time than the transfer time it saves, it is a loss on this tablet. If AVIF is far slower than WebP, turn on Settings > Network lab > No AVIF pictures on Fast Wi-Fi.');
       out.textContent = lines.join('\n'); run.disabled = false;
     });
   });

@@ -31,7 +31,7 @@ object BackupManager {
         Spec("net_doh", T.BOOL), Spec("net_h3", T.BOOL), Spec("net_preconnect", T.BOOL),
         Spec("dl_yield", T.BOOL), Spec("dl_limit_kbps", T.INT, 0, 1_000_000), Spec("dl_active", T.INT, 1, 3), Spec("dl_conns", T.INT, 0, 3),
         Spec("pull_refresh", T.BOOL), Spec("suggest", T.BOOL), Spec("clear_exit", T.BOOL), Spec("tap_zoom", T.BOOL), Spec("input_zoom", T.BOOL),
-        Spec("lab_dns", T.BOOL), Spec("lab_buf", T.BOOL), Spec("lab_font", T.BOOL), Spec("lab_spec", T.INT, 0, 2), Spec("lab_wifi", T.BOOL), Spec("lab_helper_vpn", T.BOOL),
+        Spec("lab_dns", T.BOOL), Spec("lab_noavif", T.BOOL), Spec("lab_buf", T.BOOL), Spec("lab_font", T.BOOL), Spec("lab_spec", T.INT, 0, 2), Spec("lab_wifi", T.BOOL), Spec("lab_helper_vpn", T.BOOL),
         Spec("upd_policy", T.INT, 0, 2), Spec("upd_unmetered", T.BOOL), Spec("app_upd_auto", T.BOOL), Spec("app_upd_dl", T.BOOL), Spec("app_upd_inst", T.BOOL),
     )
 

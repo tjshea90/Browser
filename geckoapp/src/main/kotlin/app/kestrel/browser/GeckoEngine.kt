@@ -186,7 +186,7 @@ object GeckoEngine {
             "docshell.shistory.bfcache.ship_allow_beforeunload_listeners", "browser.sessionhistory.max_entries", "network.dnsCacheExpiration", "network.dnsCacheEntries",
             "javascript.options.mem.gc_parallel_marking", "dom.script_loader.bytecode_cache.strategy",
             // the external review's rows (research/REVIEW-EXTERNAL-1.md): JPEG XL off in the image Accept header, double-tap zoom and zoom-to-field as the app set them
-            "image.jxl.enabled", "apz.allow_double_tap_zooming", "formhelper.autozoom", "dom.prefetch_dns_for_anchor_https_document", "network.buffer.cache.size", "gfx.downloadable_fonts.fallback_delay",
+            "image.jxl.enabled", "image.http.accept", "apz.allow_double_tap_zooming", "formhelper.autozoom", "dom.prefetch_dns_for_anchor_https_document", "network.buffer.cache.size", "gfx.downloadable_fonts.fallback_delay",
             "dom.speculation_rules.enabled", "dom.speculation_rules.prefetch.dry_run")
         try {
             org.mozilla.geckoview.GeckoPreferenceController.getGeckoPrefs(names).accept({ list ->
@@ -260,6 +260,10 @@ object GeckoEngine {
             org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("network.dns.disableIPv6", eff.disableIPv6, d)
             networkProfile = eff.text
             pagesViaProxy = eff.pagesViaProxy
+            // EX-14 (research/REVIEW-EXTERNAL-1.md 3.2): the engine honours `image.http.accept` only when it has a USER value, so this is the one pref set on that branch (and cleared when the profile ends).
+            // Without AVIF, CDNs answer WebP / JPEG: bigger files, much less decode work for the four A53 cores; worth it only while bytes are cheap (Fast Wi-Fi).
+            if (prefs.labNoAvif && (eff.fastWifi || eff.tunnel)) org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("image.http.accept", "image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5", org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_USER)
+            else org.mozilla.geckoview.GeckoPreferenceController.clearGeckoUserPref("image.http.accept")
             app.kestrel.browser.diag.Health.log("engine", "network-profile", "${if (eff.tunnel) "fast-wifi-tunnel" else if (eff.fastWifi) "fast-wifi" else "standard"} trr=${eff.trrMode} http3=${eff.http3} noIPv6=${eff.disableIPv6} pageYield=${eff.pageYieldKBps}")
         } catch (e: Exception) { app.kestrel.browser.diag.Health.log("engine", "network-lab-failed", e.toString()) }
     }
