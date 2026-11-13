@@ -587,7 +587,7 @@ open class BrowserActivity : Activity(), DockListener {
             if (launch == null) { if (sel.thumb == null) sel.thumb = selThumb; show(sel) } else current = null
         }
         if (launch != null) openInNewTabOrCurrent(launch)
-        if (restoringTab == null) restoreOverlay.hide() // the early cover is only for a restore that really covers its page: nothing took over, so it must not stay
+        if (restoringTab == null) { restoreOverlay.hide(); clearLook() } // the early cover is only for a restore that really covers its page: nothing took over, so it must not stay
     }
 
     private fun newTabInternal(parent: Tab? = null, privateTab: Boolean = false): Tab {
@@ -1812,6 +1812,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     private var gridRebindPending = false
     internal fun tabChanged(tab: Tab) {
+        if (tab === lookTab) lookCheck("tab") // a redirect changes the address: the saved picture then shows another page
         if (tab === current) updateUi()
         // the open tab grid is rebuilt (every card is a handful of views) at most once per turn of the message loop, however many progress / title / address events arrive
         if (tabGrid.visibility == View.VISIBLE && !gridRebindPending) { gridRebindPending = true; Io.main.post { gridRebindPending = false; if (tabGrid.visibility == View.VISIBLE) tabGrid.rebind(tabs, current) } }
@@ -1895,6 +1896,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (!tab.isPrivateTab && tab.error == null && tab.url.startsWith("http")) { val u = withoutUserinfo(tab.url); val ti = tab.title; Io.exec { db?.recordVisit(u, ti) } }
         scheduleSave()
         if (tab === current) updateUi()
+        if (real) Io.main.postDelayed({ if (tab === current && !tab.loading) captureLook(tab, "page-stop") }, LastLookRules.AFTER_STOP_MS.toLong()) // EY-1: the page as it settled
         // a while after the load: the page has settled, nobody is typing -> take the preview the tab grid will show. Each capture is a GPU read-back + scale + a disk write, so not
         // for quick successive navigations (one per 15 s at most) and later than the first paint (research/HW_SPEED.md H3).
         Io.main.postDelayed({
@@ -1952,6 +1954,10 @@ open class BrowserActivity : Activity(), DockListener {
     private fun showRestoring(tab: Tab, crashed: Boolean, message: String? = null, picture: android.graphics.Bitmap? = null, dim: Int = 0xB3, timeoutMs: Long = 20_000) {
         Health.log("tabs", "cover-show", "tab=${tab.id} thumb=${tab.thumb != null} picture=${picture != null}")
         restoringTab = tab
+        if (picture == null && lookFor(tab, message ?: if (crashed) "The page stopped - bringing it back" else "Page freed to save memory - bringing it back")) {
+            Io.main.removeCallbacks(restoreTimeout); Io.main.postDelayed(restoreTimeout, minOf(timeoutMs, LastLookRules.CAP_MS.toLong() + 8_000)) // a look is held a little longer than a plain cover: it is the page itself
+            return
+        }
         val thumb = picture ?: tab.thumb
         restoreOverlay.show(thumb, message ?: if (crashed) "The page stopped - bringing it back" else "Page freed to save memory - bringing it back", dim)
         Io.main.removeCallbacks(restoreTimeout)
@@ -1961,12 +1967,89 @@ open class BrowserActivity : Activity(), DockListener {
     private fun hideRestoring(why: String = "") {
         if (restoringTab != null) Health.log("tabs", "cover-hide", "tab=${restoringTab?.id} why=$why")
         Io.main.removeCallbacks(restoreTimeout)
+        if (lookTab != null) { Health.count("look.hide"); Health.log("tabs", "look-hide", "tab=${lookTab?.id} why=$why") }
         restoringTab = null
         restoreOverlay.hide()
+        clearLook()
+    }
+
+    // ---------------------------------------------------------------- the last look (EY-1)
+
+    private fun clearLook() {
+        Io.main.removeCallbacks(lookNoteShow); Io.main.removeCallbacks(lookCheckTick)
+        lookTab = null; lookMeta = null; lookPending = 0L; lookPaintAt = 0L; lookStopped = false
+    }
+
+    /**
+     * A saved look is up for [tab]: either the early cover's (put up in the very first frame; the restore has now made its tab) or, for a tab that comes back after being freed or after its process died,
+     * the newest saved picture of that page when it matches. [note] is the slim line at the bottom for the second case (the owner is still told the page had to be loaded again).
+     */
+    private fun lookFor(tab: Tab, note: String): Boolean {
+        val pm = lookMeta
+        if (restoreOverlay.showingLook && lookPending == tab.id && pm != null && LastLookRules.samePage(pm.url, tab.url)) { lookTab = tab; lookPending = 0L; Health.log("tabs", "look-adopted", "tab=${tab.id}"); return true }
+        val look = savedLook(tab.id, tab.url, tab.desktop) ?: return false
+        restoreOverlay.showLook(look.bitmap, note, note)
+        lookTab = tab; lookMeta = look.meta; lookPending = 0L; lookPaintAt = 0L; lookStopped = false
+        Health.count("look.revive"); Health.log("tabs", "look-shown", "tab=${tab.id} revive ${look.meta.w}x${look.meta.h} y=${look.meta.scrollY}")
+        return true
+    }
+
+    /** The live page painted: the picture goes once the page is where the picture was (research/REVIEW-EXTERNAL-2.md "Hide rule"). */
+    private fun lookPainted() { if (lookPaintAt == 0L) lookPaintAt = SystemClock.uptimeMillis(); lookCheck("paint") }
+
+    private fun lookCheck(why: String) {
+        val t = lookTab ?: return; val m = lookMeta ?: return
+        if (!LastLookRules.samePage(t.url, m.url)) { hideRestoring("look-other-page"); return } // a redirect: the picture shows another page than the one that is coming
+        val painted = lookPaintAt != 0L
+        val since = if (painted) SystemClock.uptimeMillis() - lookPaintAt else 0L
+        if (LastLookRules.hideNow(painted, m.scrollY, t.scrollY, false, since)) { hideRestoring("look-$why"); return }
+        if (painted) { Io.main.removeCallbacks(lookCheckTick); Io.main.postDelayed(lookCheckTick, maxOf(50L, LastLookRules.AFTER_PAINT_MS - since)) } // the engine may paint before it has scrolled: look again at the latest 1500 ms after the paint
+    }
+
+    /** The page's scroll place changed (UI thread; one field write per event). While a look is up it is the live page moving to its place; otherwise it re-arms the "settled" capture. */
+    private fun lookScrolled(tab: Tab, y: Int) {
+        tab.scrollY = y
+        if (tab !== current) return
+        if (lookTab === tab) { lookCheck("scroll"); return }
+        if (!prefs.lastLook) return
+        lookScrollAt = SystemClock.uptimeMillis()
+        if (!lookScrollArmed) { lookScrollArmed = true; Io.main.postDelayed(lookScrollTimer, LastLookRules.SETTLE_MS.toLong()) }
+    }
+
+    /**
+     * Take the page's picture for the next start (a regular tab, a real web page, not loading, nothing over it). [why] names the trigger in the Health list. [minGapMs]: how old the last picture must be.
+     * The read-back is the tab grid's own call; the encode and the write are on a worker. Never for a private tab.
+     */
+    private fun captureLook(tab: Tab?, why: String, minGapMs: Long = LastLookRules.MIN_GAP_MS.toLong()) {
+        if (tab == null || !prefs.lastLook || tab !== current || tab.isPrivateTab || homeShown(tab) || tab.error != null || tab.loading || tab.session == null || geckoView.session !== tab.session) return
+        if (restoringTab != null || lookTab != null || lookCapturing || tabGrid.visibility == View.VISIBLE || sheet.isShowing || !LastLookRules.worthKeeping(tab.url)) return
+        val now = SystemClock.uptimeMillis()
+        if (now - lastLookAt < minGapMs) return
+        if (geckoView.width <= 0 || geckoView.height <= 0) return
+        lastLookAt = now; lookCapturing = true
+        val appCtx = applicationContext
+        val id = tab.id; val url = tab.url; val sy = tab.scrollY; val desktop = tab.desktop
+        val appearance = LastLook.appearance(appCtx, prefs.webDark); val dark = prefs.webDark == 1
+        val keep = LastLookRules.keep(id, tabs.filter { !it.isPrivateTab && !it.isNewTab }.associate { it.id to it.lastActive })
+        try {
+            geckoView.capturePixels().accept({ full ->
+                if (full == null) lookCapturing = false
+                else Io.exec {
+                    try {
+                        val ok = LastLook.save(appCtx, id, full, LastLookMeta(url, sy, full.width, full.height, System.currentTimeMillis(), Flavor.engineVersion, appearance, dark, desktop))
+                        if (ok) LastLook.retain(appCtx, keep)
+                        Health.log("tabs", "look-saved", "tab=$id why=$why ok=$ok y=$sy")
+                    } finally { if (!full.isRecycled) full.recycle(); lookCapturing = false }
+                }
+            }, { _ -> lookCapturing = false /* the surface was not ready: the previous picture stays */ })
+        } catch (e: Throwable) { lookCapturing = false }
     }
 
     /** The engine painted real content for [tab] (called from ContentDelegate.onFirstContentfulPaint). */
-    internal fun firstPaint(tab: Tab) { if (tab === current) StartTimeline.mark("paint"); if (tab === restoringTab) hideRestoring("first-paint") }
+    internal fun firstPaint(tab: Tab) {
+        if (tab === current) StartTimeline.mark("paint")
+        if (tab === restoringTab) { if (tab === lookTab) lookPainted() else hideRestoring("first-paint") }
+    }
 
     // ================================================================== back handling (works on Android 10 and on 16's predictive back)
 
