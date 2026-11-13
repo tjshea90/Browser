@@ -1115,3 +1115,15 @@
 > - **Optional:** licence, landscape tabs, Cromite comparison.
 > - **Charging:** the overnight-charge tip.
 <!-- sha:6db802838522 -->
+
+## 2026-11-13T05:02:23Z
+> I saved a handoff for this session, and the work is committed and pushed to GitHub.
+>
+> The handoff files are `.handoff/handoff.md` and `.handoff/handoff.json`, plus a timestamped copy under `.handoff/handoffs/2026-11-13/`. It also refreshed the learnings section in `CLAUDE.md` and `AGENTS.md`. I checked the files for the owner's email and found nothing.
+>
+> The next session picks up from there. The main thing it is waiting on is the owner confirming that alpha28 fixes doraby.com and the video player on the tablet. If it is still broken, they should send a Diagnostics copy so the Page report can name the failed files.
+>
+> The two doraby.com fix links I couldn't test on the tablet remain open. I tested the Firefox-tracking-protection cause on the emulator, but not jsDelivr being refused on the owner's tablet itself.
+>
+> The 2-hourly wake-up trigger (`trig_01LLoVKsjuTUaDn61UGP1pBN`) is still active. It stands down while work is less than an hour old.
+<!-- sha:da89b6f0586a -->
