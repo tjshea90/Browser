@@ -548,4 +548,7 @@ I need to know what adb permissions to give the browser app now that will help i
 In the next release, delete the test videos and the video test diagnosis because they take up space and are no longer needed
 1) when I switch to the home screen then look at the active tabs, it still shows the tab as being on the last web site I went to instead of the home screen
 2) a movie from doraby.com on the vidsrc server couldn't be downloaded in kestrel, but video downloader app can download it. See if there are additional ways to find video sources for the app and make the app better at finding and downloading videos
+## 2026-11-13T17:22:30Z
+```
+Without writing anything to this repo, tell me what adb commands I can type such as permissions that can help this browser speed or function
 ```

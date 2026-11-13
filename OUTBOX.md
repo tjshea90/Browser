@@ -1270,3 +1270,62 @@
 > - Earlier video problems (.ts files, grey icon, spam after play), and network lab results.
 > - Optional: licence, landscape tabs, Cromite comparison.
 <!-- sha:67ae69a79246 -->
+## 2026-11-13T17:35:45Z
+> No permission will make Kestrel faster: it asks Android for almost nothing, and none of it affects speed. Below is what adb can do, best first.
+>
+> I can't reach your cable from the cloud, so none of this ran on your tablet. "(tested)" means I ran it on the Android 10 emulator last session (`research/ADB_FOR_THE_OWNER.md`). The rest are standard Android 10 commands I haven't run anywhere. None need root. Commands with a `|` are in quotes so they run on the tablet and work on any computer.
+>
+> Names: Kestrel G is `app.kestrel.browser.gecko`, Kestrel (WebView) is `app.kestrel.browser`, and Courier on the phone is `app.kestrel.courier`. Start with `adb devices`; the tablet should show as `device`. If it says `unauthorized`, tap Allow on the tablet.
+>
+> **1. Install updates over the cable (tested)**
+> ```
+> adb install -r the-downloaded-file.apk
+> ```
+> This updates in place, keeps your tabs and settings, and skips the 99 MB download over the hotspot. If it fails, adb prints Android's exact reason.
+>
+> - **Space:** last session's emulator maths says alpha30 needs about 0.95 GB free, and your last report showed 1.62 GB. The app's "needs 3.1 GB" message was a wrong estimate (fix AJ1d).
+> - **`INSTALL_FAILED_INSUFFICIENT_STORAGE`:** run `adb shell pm trim-caches 900G` (tested) and retry.
+> - **`INSTALL_FAILED_UPDATE_INCOMPATIBLE`:** the installed copy was signed with another key. Don't uninstall, because that wipes your tabs. Tell me first.
+>
+> Newest build per the checkpoint:
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha30
+>
+> **2. Pre-compile Kestrel's own code**
+> ```
+> adb shell cmd package compile -m speed -f app.kestrel.browser.gecko
+> adb shell "dumpsys package dexopt | grep -A4 app.kestrel.browser.gecko"
+> ```
+> Android normally does this overnight on the charger, and this does it now. The second command should show `status=speed`. It helps Kestrel's own start-up and menus, not Firefox's engine or page loading, so expect a modest gain. Repeat it after every update. Undo with `adb shell cmd package compile --reset app.kestrel.browser.gecko`.
+>
+> **3. Stop a false "no internet" on the hotspot**
+> Kestrel treats any Wi-Fi that Android hasn't "validated" as no-internet. That changes the error-page wording and, per `docs/ARCHITECTURE.md`, the auto-retry when the link returns. A carrier hotspot can fail Android's Google check while working fine. Pages load either way.
+>
+> Check first:
+> ```
+> adb shell "dumpsys connectivity | grep -o 'Transports: WIFI Capabilities: [A-Z_&]*'"
+> ```
+> If the Wi-Fi line has no `VALIDATED`, try:
+> ```
+> adb shell settings put global captive_portal_mode 0
+> adb shell svc wifi disable
+> adb shell svc wifi enable
+> ```
+> Undo with `captive_portal_mode 1`. As a side benefit, Android stops pinging Google to test the link. The cost is no sign-in pop-up on hotel-style Wi-Fi, and no Android warning when the phone really has no data.
+>
+> **4. The permissions that exist**
+> ```
+> adb shell cmd appops set app.kestrel.browser.gecko REQUEST_INSTALL_PACKAGES allow
+> adb shell cmd devi
+> [... 4224 characters omitted ...]
+> latform-tools" folder, and I'll adjust the commands.
+>
+> I wrote nothing to the repo; I only read files. Its own hooks still copy chat into `INBOX.md` and `OUTBOX.md` (`INBOX.md` already has your message), and I can't turn that off from here.
+>
+> **Still open, left untouched:**
+> - AJ1d, the updater's storage-maths fix: the last session was cut off mid-change.
+> - AJ1b, this answer: not ticked in `TASKS.md` because you said to write nothing. Tell me when to record it.
+> - AJ1c, optional: a hidden "Debug pages from a computer (USB)" switch so desktop Firefox can show Kestrel G's console and network for the Doraby/Cloudflare problem. Say yes if you want it.
+> - Waiting on you: the version shown in Menu > Diagnostics, the exact Cloudflare-site message, and which earlier prompts felt unanswered.
+>
+> Want this as a one-page cheat sheet to keep next to the terminal? I can publish it as a page, not in the repo.
+<!-- sha:ff5510698cba -->
