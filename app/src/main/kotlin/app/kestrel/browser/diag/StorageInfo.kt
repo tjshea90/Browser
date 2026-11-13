@@ -25,8 +25,29 @@ object StorageInfo {
             val files = size(app.filesDir)
             val cache = size(app.cacheDir)
             "Storage: ${f(dir.usableSpace)} free of ${f(dir.totalSpace)}; free + caches Android can clear: ${if (installerFree >= 0) f(installerFree) else "?"}; Android keeps ${f(dir.totalSpace / 10)} free after an install (a tenth); " +
-                "this app: package ${f(apk)} + unpacked libraries ${f(libs)} + data ${f(files)} + cache ${f(cache)}; an install or update needs free >= reserve + 2 x package + libraries + about 48 MB"
+                "this app: package ${f(apk)} + unpacked libraries ${f(libs)} + data ${f(files)} + cache ${f(cache)}; an install or update needs free >= reserve + 2 x package + libraries + about 48 MB. " + updateVerdict(app, apk, libs, if (installerFree >= 0) installerFree else dir.usableSpace, dir.totalSpace / 10)
         } catch (e: Exception) { "Storage: unavailable (${e.javaClass.simpleName})" }
+    }
+
+    /**
+     * What an uninstall of this app hands back: [0] = package + unpacked libraries + optimised code + data + cache, [1] = the cache part of it. Android's own figures for this package
+     * (an app may always ask about itself); zeros when it will not say.
+     */
+    fun ownFootprint(ctx: Context): LongArray = try {
+        val app = ctx.applicationContext
+        val sm = app.getSystemService(StorageManager::class.java)
+        val st = app.getSystemService(StorageStatsManager::class.java).queryStatsForPackage(sm.getUuidForPath(app.filesDir), app.packageName, android.os.Process.myUserHandle())
+        longArrayOf(st.appBytes + st.dataBytes, st.cacheBytes) // getDataBytes() already includes the cache
+    } catch (e: Exception) { longArrayOf(0L, 0L) }
+
+    /** The same arithmetic as the Updates sheet, for an update the size of the installed package that is not downloaded yet: how far short the tablet is in place and after an uninstall. */
+    private fun updateVerdict(app: Context, apk: Long, libs: Long, free: Long, reserve: Long): String {
+        val f = UpdateLogic::formatSize
+        val plan = UpdateLogic.storagePlan(apk, libs, (free - apk).coerceAtLeast(0L), reserve) // the download takes its room first
+        val own = ownFootprint(app)
+        val other = UpdateLogic.otherWayPlan(plan, own[0], apk, fileKept = false)
+        return "An update of this size would need about ${f(plan.needDrop)} free: " + (if (plan.shortBy > 0) "this tablet is about ${f(plan.shortBy)} short" else "it fits") +
+            "; uninstalling first would leave about ${f(other.freeAfter)} against ${f(other.need)} (" + (if (other.fits) "that works" else "still ${f(other.shortBy)} short") + ")."
     }
 
     /** Bytes in the app's cache directory (the engine's network and image caches, previews): what "Clear cache" can give back. Off the UI thread. */

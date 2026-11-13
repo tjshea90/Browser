@@ -456,11 +456,7 @@ object UpdateManager {
     /** What an uninstall of THIS app hands back ([total]: package, unpacked libraries, optimised code, data, cache) and the cache part of it. Android's own figures for the package; 0 when it will not say. */
     private class Own(val total: Long, val cache: Long)
 
-    private fun ownFootprint(ctx: Context): Own = try {
-        val sm = ctx.getSystemService(StorageManager::class.java)
-        val st = ctx.getSystemService(StorageStatsManager::class.java).queryStatsForPackage(sm.getUuidForPath(dir(ctx)), ctx.packageName, android.os.Process.myUserHandle())
-        Own(st.appBytes + st.dataBytes, st.cacheBytes) // getDataBytes() already includes the cache
-    } catch (e: Exception) { Own(0L, 0L) }
+    private fun ownFootprint(ctx: Context): Own = app.kestrel.browser.diag.StorageInfo.ownFootprint(ctx).let { Own(it[0], it[1]) }
 
     /** [pending]: bytes of the update file that are still to be downloaded (not on the disk yet, but about to be). */
     private fun space(ctx: Context, offer: UpdateOffer, apk: File?, pending: Long = 0): Space {
