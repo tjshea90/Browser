@@ -1,23 +1,22 @@
-# CHECKPOINT 1605 — read me first, then TASKS.md
+# CHECKPOINT 1606 — read me first, then TASKS.md
 
-**Written:** 2026-11-13T18:23:30Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `71159a7` (this checkpoint is the commit after it)
+**Written:** 2026-11-13T18:24:20Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `3336bd5` (this checkpoint is the commit after it)
 
 ## Just done
-gated kestrel-g-v0.3.0-alpha31 (gecko code 130) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
+alpha31 shipped to GitHub: ship.sh gecko gates green + pushed, android.yml dispatched (app=gecko, full_build=true, ref ccr-a57c163e-mtq8js). Contains AJ1d (updater maths), AK2 (Video lab + 5.3 MiB clips removed), AK3 (tab switcher shows Home), AK4 (player headers, maybe-media by first bytes, picture-headed parts, honest reasons). Tests: core, app, geckoapp compile, lint, web 125/125 all green; emulator lab proof of AK3 and AK4 (saved MP4 ffprobe h264+aac 12.0 s)
 
 ## Do this next
-TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref ccr-a57c163e-mtq8js, inputs {"app":"gecko","full_build":"true","note":"alpha31 (includes alpha30): 1) The tab list now shows a tab that is on the Home screen as "Home", with a picture of the Home screen, instead of the last web site it was on. 2) The Video lab and its four test clips are gone (5.3 MB smaller). 3) Saving videos from a player that sits inside another site (the "servers" on movie sites): a video server often refuses anyone who is not its own player, and Kestrel used to introduce itself with the movie page's address. It now repeats the player's own headers, tries other combinations before giving up, finds playlists a site hides under names like .txt, handles stream parts disguised as pictures, and says why when a site refuses (with the HTTP number). Still not possible: players that keep the stream out of the network, copy-protected (DRM) video and live streams. Checked here on a test site built to behave like that, not on doraby.com itself. 4) The update-space numbers are fixed: Android keeps only about 0.5 GB free after an install (5 % of the storage, at most 500 MB), so an update needs about 1 GB free on this tablet, not 3 GB."}.
-When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha31), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha31 "alpha31 (includes alpha30): 1) The tab list now shows a tab that is on the Home screen as "Home", with a picture of the Home screen, instead of the last web site it was on. 2) The Video lab and its four test clips are gone (5.3 MB smaller). 3) Saving videos from a player that sits inside another site (the "servers" on movie sites): a video server often refuses anyone who is not its own player, and Kestrel used to introduce itself with the movie page's address. It now repeats the player's own headers, tries other combinations before giving up, finds playlists a site hides under names like .txt, handles stream parts disguised as pictures, and says why when a site refuses (with the HTTP number). Still not possible: players that keep the stream out of the network, copy-protected (DRM) video and live streams. Checked here on a test site built to behave like that, not on doraby.com itself. 4) The update-space numbers are fixed: Android keeps only about 0.5 GB free after an install (5 % of the storage, at most 500 MB), so an update needs about 1 GB free on this tablet, not 3 GB."
-NEVER ship kestrel-g-v0.3.0-alpha31 twice (check BUILDLOG.md and the Releases first).
+WAIT for the android.yml run: poll mcp__github__actions_list list_workflow_runs (workflow android.yml, branch ccr-a57c163e-mtq8js) until completed+success AND git ls-remote origin refs/tags/kestrel-g-v0.3.0-alpha31 shows the tag; then mcp__github__get_release_by_tag (owner tjshea90 repo browser) to see the APK, then bash tools/record-release.sh kestrel-g-v0.3.0-alpha31 with the note from scratchpad note31.txt (alpha31 ... 4 points), tick AK4d with the run id via bash tools/claim.sh AK4 --done, then answer the owner in plain words (Release link on its own line, what to try on doraby.com: open the movie, press play, tap the download icon; if still nothing: Menu>Diagnostics>Copy and paste the lines with 'media'), re-list open items. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN still on: stand down on its wakes. Never ship the tag twice.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M geckoapp/src/main/assets/kestrel-shields/manifest.json
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  3336bd5 ckpt 1605: gated kestrel-g-v0.3.0-alpha31 (gecko code 130) and pushed it: handoff self-t
   e4be816 ckpt 1596: AK4 steps 1-3 done in code + tests: (1) extension background.js captures the 
   a32efe5 ckpt 1582: AK1 answered in chat (appops REQUEST_INSTALL_PACKAGES/RUN_IN_BACKGROUND/RUN_A
   24b86ca ckpt 1570: AJ1 DONE and answered in chat: adb question (owner msgs 23 + newer msg 24 'wi
@@ -27,8 +26,4 @@ NEVER ship kestrel-g-v0.3.0-alpha31 twice (check BUILDLOG.md and the Releases fi
   9a8cb75 ckpt 1545: alpha30 SHIPPED and RECORDED (Release kestrel-g-v0.3.0-alpha30, run 434028420
   c43cfff ckpt 1541: alpha30 RE-DISPATCHED on the test-fix commit 59a5f37: android.yml run 4340284
   59a5f37 ckpt 1540: alpha30 CI run 43399774749 FAILED in test-js (not the app build): web-tests/b
-  ea9b9f4 ckpt 1536: alpha30 DISPATCHED: android.yml run 43399774749 (run_number 80) queued 09:15:
 ```
-
-(7 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
