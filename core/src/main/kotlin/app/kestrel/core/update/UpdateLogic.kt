@@ -167,8 +167,8 @@ object UpdateLogic {
     }
 
     /**
-     * "Install the other way" (uninstall first, then install the saved file) is only a cure when the uninstall frees enough: the owner's tablet (alpha27 Diagnostics, 2026-11-13) had 1.62 GB free of 27.75 GB,
-     * the install needs about 3.1 GB, and an uninstall hands back only about 0.5 GB, so it would have left NO Kestrel G on the tablet and Android still refusing the saved file.
+     * "Install the other way" (uninstall first, then install the saved file) is only a cure when the uninstall frees enough: it would leave NO Kestrel G on the tablet if Android then still refuses the saved
+     * file (alpha28 reasoned so from the owner's alpha27 Diagnostics, 2026-11-13, with a reserve of 2.8 GB; with the real reserve of 500 MiB that tablet needs about 1 GB and has 1.5 GB, so it never gets here).
      * [freeAfter]: the free space once the uninstall has handed back [ownBytes] (package, unpacked libraries, optimised code, data, cache), after the saved copy in Downloads took one APK (our own downloaded
      * copy goes with the app's data: it is in [ownBytes] when it exists, and added here when the file still has to be downloaded). [need]: the bar for the fresh install with that copy kept
      * ([StoragePlan.needKeep]).
