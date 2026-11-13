@@ -1,5 +1,7 @@
 # UPDATE_STORAGE - why an update (or a fresh install) of Kestrel G needs about a gigabyte of free space (owner report U1, 2026-11-11)
 
+> **CORRECTION (2026-11-13, alpha31; measured on the Android 10 emulator and read from the Android 10 source: `research/ADB_FOR_THE_OWNER.md`).** The "10 % of the partition" reserve below is WRONG. The logcat line `installd: Failed to free up 624066560` is the periodic storage monitor (DeviceStorageMonitorService) asking for 2 x the low-storage threshold (2 x 5 %), not the installer's own need. The installer's reserve is `StorageManager.getStorageLowBytes` = min(5 % of the storage, 500 MiB) (settings `sys_storage_threshold_percentage` / `sys_storage_threshold_max_bytes`), and an install needs free space >= reserve + 2 x (package + unpacked libraries) (small app 302-304 MiB, Gecko 95.5/187.4 MiB APK 861-868 MiB on a 5.8 GiB partition; 2 % moved both down by the same 178 MiB; the cache keys moved nothing; 20 % stayed at the 500 MiB cap). On the owner's 27.75 GB tablet the reserve is 500 MiB, so the update needs about 1 GB, not 3.1 GB, and 1.62 GB free should already fit. The 2 x APK slope below was right; the 10 % and the +32 MiB were not. Kept below as the historical record.
+
 Owner after alpha7: "The newer versions never install over the old ones. I always have to uninstall the old one first. I don't think free space was the issue because I installed it from github fine."
 
 ## What is NOT the cause
