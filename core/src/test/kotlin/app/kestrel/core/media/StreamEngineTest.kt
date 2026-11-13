@@ -307,6 +307,46 @@ class StreamEngineTest {
         assertTrue(h.store.stagedFiles(id).isEmpty())
     }
 
+    @Test(timeout = 60_000) fun cancelWhilePausedRemovesTheOutputAndTheStaging() {
+        val h = H(); h.cdn.chunkDelayMs = 4; h.cdn.chunk = 2048
+        val (pl, _) = plainStream(h, 8, 30_000)
+        val id = h.enqueue(pl)
+        val uri = h.await(id, "progress") { it != null && it.state == DlState.RUNNING && it.done > 40_000 && it.destUri != null }!!.destUri!!
+        h.engine.pause(id)
+        h.await(id, "paused") { it?.state == DlState.PAUSED_USER }
+        assertTrue("the paused job keeps its staged parts for the resume", h.store.stagedFiles(id).isNotEmpty())
+        h.engine.cancel(id)
+        h.await(id, "gone") { it == null }
+        assertTrue(h.sinks.sinks[uri]!!.discarded || h.sinks.deleted.contains(uri))
+        assertNull(h.store.rows[id])
+        assertTrue(h.store.stagedFiles(id).isEmpty())
+    }
+
+    @Test(timeout = 60_000) fun clearingAFailedSaveDeletesItsHalfFileAndItsStaging() {
+        val h = H()
+        val failed = StreamRec(1L).also { it.state = DlState.FAILED; it.destUri = "mem://9/half.mp4" }
+        val done = StreamRec(2L).also { it.state = DlState.COMPLETED; it.destUri = "mem://9/whole.mp4" }
+        h.store.rows[1L] = failed; h.store.rows[2L] = done
+        java.io.File(h.store.dir(1L), "p0.part").writeText("staged")
+        h.engine.restore()
+        h.engine.clearFinished()
+        h.await(1L, "failed row gone") { it == null }; h.await(2L, "finished row gone") { it == null }
+        h.eventually("failed row deleted from the store") { h.store.rows[1L] == null && h.store.rows[2L] == null }
+        assertTrue("mem://9/half.mp4" in h.sinks.deleted)
+        assertFalse("mem://9/whole.mp4" in h.sinks.deleted)
+        assertTrue(h.store.stagedFiles(1L).isEmpty())
+    }
+
+    @Test(timeout = 60_000) fun aCancelThatWasCutOffIsFinishedAtTheNextStart() {
+        val h = H()
+        h.store.rows[1L] = StreamRec(1L).also { it.state = DlState.CANCELED; it.destUri = "mem://9/half.mp4" }
+        java.io.File(h.store.dir(1L), "p0.part").writeText("staged")
+        h.engine.restore()
+        assertNull(h.view(1L)); assertNull(h.store.rows[1L])
+        assertTrue("mem://9/half.mp4" in h.sinks.deleted)
+        assertTrue(h.store.stagedFiles(1L).isEmpty())
+    }
+
     /** A finisher that "converts" by making a new output of its own and counting how often it was asked. */
     private class FakeFinisher(val sinks: FakeSinks, val result: ((StreamFinisher.Joined) -> StreamFinisher.Converted?)? = null) : StreamFinisher {
         val asked = java.util.concurrent.CopyOnWriteArrayList<StreamFinisher.Joined>()

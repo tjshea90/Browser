@@ -228,6 +228,54 @@ class EngineTest {
         assertTrue(h.engine.views().isEmpty())
     }
 
+    // ---- AL4 (owner message 26): cancelling ANY download deletes its unfinished file
+    @Test(timeout = 60_000) fun cancelWhilePausedDeletesThePartialFile() {
+        val s = FakeServer(testBytes(6 * MiB, 13)).also { it.chunkDelayMs = 2; it.chunk = 64 * 1024 }
+        val h = H(s); val id = h.enqueue()
+        val paused = h.pauseAt(id, 0.2)
+        val uri = paused.destUri!!
+        assertFalse("a paused download keeps its half file for the resume", uri in h.sinks.deleted)
+        h.engine.cancel(id)
+        h.await(id, "gone") { it == null }
+        assertTrue(uri in h.sinks.deleted || h.sinks.sinks[uri]!!.discarded)
+        h.awaitRow(id, "row removed") { it == null }
+    }
+
+    @Test(timeout = 60_000) fun cancelWhileWaitingInTheLineDeletesNothingToKeepAndDropsTheRow() {
+        val s = FakeServer(testBytes(6 * MiB, 14)).also { it.chunkDelayMs = 2; it.chunk = 64 * 1024 }
+        val h = H(s)
+        val first = h.enqueue("https://files.test/pub/one.bin")
+        val ids = (1..6).map { h.enqueue("https://files.test/pub/q$it.bin") }
+        val queued = ids.last()
+        h.await(first, "first runs") { it?.state == DlState.RUNNING }
+        h.engine.cancel(queued)
+        h.await(queued, "gone") { it == null }
+        h.awaitRow(queued, "row removed") { it == null }
+        assertEquals("the others keep going", true, h.view(first) != null)
+    }
+
+    @Test(timeout = 60_000) fun clearingAFailedDownloadDeletesItsHalfFile() {
+        val store = FakeStore()
+        store.rows[1L] = Rec(1L).also { it.state = DlState.FAILED; it.url = "https://x.test/a"; it.destUri = "mem://9/failed.bin"; it.done = 1234 }
+        store.rows[2L] = Rec(2L).also { it.state = DlState.COMPLETED; it.url = "https://x.test/b"; it.destUri = "mem://9/finished.bin"; it.done = 99; it.total = 99 }
+        val h = H(FakeServer(testBytes(10)), store = store)
+        h.engine.restore()
+        h.engine.clearFinished()
+        h.await(1L, "failed row gone") { it == null }
+        h.await(2L, "finished row gone") { it == null }
+        assertTrue("the half file of a failed download goes with its row", "mem://9/failed.bin" in h.sinks.deleted)
+        assertFalse("a finished download keeps its file when only the row is cleared", "mem://9/finished.bin" in h.sinks.deleted)
+    }
+
+    @Test(timeout = 60_000) fun aCancelThatWasCutOffIsFinishedAtTheNextStart() {
+        val store = FakeStore()
+        store.rows[1L] = Rec(1L).also { it.state = DlState.CANCELED; it.url = "https://x.test/a"; it.destUri = "mem://9/half.bin"; it.done = 55 }
+        val h = H(FakeServer(testBytes(10)), store = store)
+        h.engine.restore()
+        assertNull(h.view(1L)); assertNull(store.rows[1L])
+        assertTrue("mem://9/half.bin" in h.sinks.deleted)
+    }
+
     @Test(timeout = 60_000) fun httpErrorsFailWithTheStatus() {
         val s = FakeServer(testBytes(1000)).also { it.statusNext = arrayListOf(404) }
         val h = H(s); val f = h.await(h.enqueue(), "failure") { it?.state == DlState.FAILED }!!
