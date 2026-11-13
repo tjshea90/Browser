@@ -159,6 +159,37 @@ class PlannerTest {
     private fun view(state: DlState, reason: Reason = Reason.NONE, total: Long, done: Long, bps: Long = 0, eta: Long = -1, conns: Int = 1) =
         DownloadView(1, state, reason, 0, "a", null, "h", total, done, bps, eta, conns, false, null, 0, 0, listOf(Action.PAUSE))
 
+    /** Owner message 26 (AL3): the text INSIDE the taller bar is "MB downloaded / MB left / % / speed", centred; what the bar does not say goes in the small line under it. */
+    @Test fun barTextSaysDownloadedLeftPercentAndSpeed() {
+        val mb = 1_048_576L
+        assertEquals("3.0 MB downloaded  ·  5.0 MB left  ·  37 %  ·  1.0 MB/s", Format.barText(view(DlState.RUNNING, total = 8 * mb, done = 3 * mb, bps = mb, eta = 5)))
+        assertEquals("3.0 MB downloaded  ·  5.0 MB left  ·  37 %", Format.barText(view(DlState.RUNNING, total = 8 * mb, done = 3 * mb)))
+        assertEquals("3.0 MB downloaded  ·  1.0 MB/s", Format.barText(view(DlState.RUNNING, total = -1, done = 3 * mb, bps = mb)))
+        assertEquals("37 %  ·  3.0 MB of 8.0 MB  ·  1.0 MB/s", Format.barText(view(DlState.RUNNING, total = 8 * mb, done = 3 * mb, bps = mb), compact = true))
+        assertEquals("Paused  ·  3.0 MB downloaded  ·  5.0 MB left  ·  37 %", Format.barText(view(DlState.PAUSED_USER, total = 8 * mb, done = 3 * mb, bps = mb)))
+        assertEquals("Paused", Format.barText(view(DlState.PAUSED_SYSTEM, total = 8 * mb, done = 0)))
+        assertEquals("Waiting in line", Format.barText(view(DlState.QUEUED, total = 8 * mb, done = 0)))
+        assertEquals("Starting…", Format.barText(view(DlState.STARTING, total = 8 * mb, done = 0)))
+        assertEquals("Waiting for the connection…  ·  3.0 MB downloaded  ·  5.0 MB left  ·  37 %", Format.barText(view(DlState.WAITING_NETWORK, total = 8 * mb, done = 3 * mb)))
+        assertEquals("Stopped  ·  3.0 MB downloaded  ·  5.0 MB left  ·  37 %", Format.barText(view(DlState.FAILED, Reason.STALLED, total = 8 * mb, done = 3 * mb)))
+        assertEquals("Failed", Format.barText(view(DlState.FAILED, Reason.STALLED, total = 8 * mb, done = 0)))
+        assertEquals("", Format.barText(view(DlState.COMPLETED, total = 8 * mb, done = 8 * mb)))
+        assertEquals("", Format.barText(view(DlState.CANCELED, total = 8 * mb, done = 3 * mb)))
+        // a guessed total (a stream sized from its bit rate) says "about" before the part that is left
+        val est = DownloadView(1, DlState.RUNNING, Reason.NONE, 0, "a", null, "h", 8 * mb, 3 * mb, mb, 5, 1, false, null, 0, 0, listOf(Action.PAUSE), estimated = true)
+        assertEquals("3.0 MB downloaded  ·  about 5.0 MB left  ·  37 %  ·  1.0 MB/s", Format.barText(est))
+        // never a negative "left" when the guess was too small
+        val over = DownloadView(1, DlState.RUNNING, Reason.NONE, 0, "a", null, "h", 2 * mb, 3 * mb, 0, -1, 1, false, null, 0, 0, listOf(Action.PAUSE), estimated = true)
+        assertEquals("3.0 MB downloaded  ·  about 0 B left  ·  100 %", Format.barText(over))
+        // under the bar: time left and connections while it runs, the reason when it stopped
+        assertEquals("5 s left", Format.belowBar(view(DlState.RUNNING, total = 8 * mb, done = 3 * mb, bps = mb, eta = 5)))
+        assertEquals("3 min left  ·  3 connections", Format.belowBar(view(DlState.RUNNING, total = 8 * mb, done = 3 * mb, bps = mb, eta = 200, conns = 3)))
+        assertEquals("", Format.belowBar(view(DlState.RUNNING, total = 8 * mb, done = 3 * mb)))
+        assertEquals("The connection stalled", Format.belowBar(view(DlState.FAILED, Reason.STALLED, total = 8 * mb, done = 3 * mb)))
+        assertEquals("", Format.belowBar(view(DlState.PAUSED_USER, total = 8 * mb, done = 3 * mb)))
+        assertEquals("Done  ·  8.0 MB", Format.belowBar(view(DlState.COMPLETED, total = 8 * mb, done = 8 * mb)))
+    }
+
     /** Every status line says how much of the file is on the tablet (owner request: MB downloaded next to the total). */
     @Test fun statusShowsMegabytesDownloaded() {
         val mb = 1_048_576L

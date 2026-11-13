@@ -144,7 +144,7 @@ object Format {
             if (withSpeed && v.bytesPerSec > 0) parts.add(speed(v.bytesPerSec))
             return parts.joinToString("  ·  ")
         }
-        val hasNumbers = v.done > 0 || v.total > 0 && v.state != DlState.QUEUED && v.state != DlState.STARTING
+        val hasNumbers = v.done > 0
         return when (v.state) {
             DlState.RUNNING -> numbers(withSpeed = true)
             DlState.STARTING -> "Starting…"
