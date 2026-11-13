@@ -1007,3 +1007,56 @@
 > 9. Optional: the licence, landscape tabs, and the Cromite comparison.
 > 10. Tip: about once a week, leave the tablet on the charger overnight with the screen off.
 <!-- sha:639c7e60cb22 -->
+
+## 2026-11-13T03:47:31Z
+> **Alpha27 is out.** I found why the loading symbol stays on the video, and fixed it. I could not explain the choppiness: I have no access to your tablet, so the new Video lab (below) is how we find out.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha27
+>
+> **The stuck loading symbol**
+> - **Cause:** the browser refused every request by a page to start a video by itself, even a muted one. Most players start muted and only hide their loading symbol once the video starts, so it never went away.
+> - **Reproduced:** on the emulator with alpha26, muted autoplay stayed paused and a muted `play()` call got a "not allowed" error. With alpha27 both play and the symbol clears.
+> - **Still blocked:** a video with sound still waits for your tap, as in every browser. **Settings > Video** turns muted autoplay off.
+> - **Second suspect:** since alpha3 every site was told "reduce motion", and GIFs played once. That can freeze a site's own loading symbol. Pages now animate normally. **Settings > Video > Calm pages** brings the old behaviour back.
+>
+> **Your questions**
+> - **Hardware:** H.264 and AAC (what most sites use) go through the tablet's own video decoders. The engine decodes VP9, AV1, Opus and similar itself, on the processor.
+> - **VP9:** the engine already keeps it away from streaming sites.
+> - **AV1 and H.265:** alpha27 now keeps them away too, unless the tablet has a hardware decoder for them. Sites then send H.264. The choice is **Settings > Video > Video formats offered to sites**.
+> - **More codecs:** none needed. The few missing ones (Dolby, DTS) are licensed formats the tablet's own decoders cover if the maker paid for them.
+> - **"Updated java":** I took this to mean JavaScript. It is Firefox 160's engine with its fast compilers and WebAssembly on. Java applets and Flash no longer exist in any browser.
+> - **Protected (Netflix-style) video:** it was refused outright. It now asks "wants to play protected video" if the tablet supports it. The emulator does, and I proved the prompt there; your tablet is untested.
+>
+> **Choppy video**
+> There are three possible causes, and the new tools tell them apart:
+> - **Menu > Diagnostics > Video lab** plays short clips stored in the app and says smooth or choppy for each, with dropped pictures.
+> - **All clips smooth:** the site's stream is probably more than your 5 Mbit/s hotspot carries. Pick a lower quality in its player.
+> - **Only VP9 or H.265 choppy:** the processor is doing the decoding.
+> - **H.264 choppy too:** the problem is the tablet or the page itself.
+> - **Diagnostics** also lists the tablet's real video decoders, hardware or software.
+>
+> **Paid or licensed items** (none needed today, full list in `research/VIDEO_AUDIT.md`):
+> - **Widevine L1** (HD protected video): Google, through the tablet's maker.
+> - **Patent pools**, only if we ever shipped our own decoders: Via LA (H.264, AAC) and Access Advance (H.265).
+> - **Dolby and DTS:** for their soundtracks.
+>
+> I declined three free options. Ruffle (a Flash emulator) is 
+> [... 550 characters omitted ...]
+> e of the test clips.
+>
+> **Please send:**
+> 1. The site or link of the choppy video, and whether the symbol shows when the page opens or after you press play.
+> 2. The Video lab result (Run, then Copy the results).
+>
+> **Still open from you:**
+> - **LinkMeter Fast Wi-Fi:** the "Network:" line in Diagnostics, and the speed (~1000 KB/s).
+> - **Feel:** tabs, Back and scroll.
+> - **Proton Mail:** the numbers, and whether turning off "Zoom to the text box you tap" helps the keyboard.
+> - **Ad-lists build:** yes or no to a scheduled GitHub build of the lists.
+> - **Signing key:** the private signing key (four secrets).
+> - **Earlier video problems:** the `.ts` files, grey icon and spam after play.
+> - **Lab numbers:** Tap lab and Decode lab from the tablet.
+> - **Network lab:** the switch comparisons.
+> - **Optional decisions:** licence, landscape tabs, Cromite comparison.
+> - **Charging:** the weekly overnight-charge tip.
+<!-- sha:efc99f48089f -->
