@@ -339,26 +339,36 @@ class StreamEngineTest {
         h.engine.enqueue(StreamSource("https://cdn.test/v/index.m3u8", pl, "https://site.test/watch", "My clip", first, masterUrl = "https://cdn.test/v/master.m3u8",
             frame = "https://player.test/embed/7", headerSets = ladder, madeAt = 1_700_000_000_000L, expiresAt = 1_700_000_600_000L))
 
-    @Test(timeout = 60_000) fun theRecoveryDataIsKeptWithTheDownload() {
-        val h = H()
-        val (pl, _) = plainStream(h, 3, 5_000)
+    @Test(timeout = 60_000) fun theRecoveryDataIsKeptWhileTheDownloadLivesAndDroppedWhenItIsFinished() {
+        val h = H(); h.cdn.chunkDelayMs = 6; h.cdn.chunk = 2048
+        val (pl, expected) = plainStream(h, 8, 60_000)
         val id = enqueueWithLadder(h, pl, site, listOf(site, player, emptyMap()))
-        h.completed(id)
-        h.eventually("the record is stored") { h.store.rows[id]?.state == DlState.COMPLETED }
+        h.await(id, "progress") { it != null && it.state == DlState.RUNNING && it.done > 100_000 }
+        h.engine.pause(id)
+        h.await(id, "paused") { it?.state == DlState.PAUSED_USER }
+        h.eventually("the paused record is stored") { h.store.rows[id]?.state == DlState.PAUSED_USER }
         val r = h.store.rows[id]!!
         assertEquals("https://cdn.test/v/master.m3u8", r.masterUrl); assertEquals("https://player.test/embed/7", r.frame)
         assertEquals(listOf(site, player, emptyMap<String, String>()), r.headerSets)
         assertEquals(1_700_000_000_000L, r.madeAt); assertEquals(1_700_000_600_000L, r.expiresAt)
+        h.engine.resume(id)
+        val v = h.completed(id)
+        assertArrayEquals(expected, h.out(v))
+        h.eventually("the finished record keeps none of it") { h.store.rows[id]?.let { it.state == DlState.COMPLETED && it.masterUrl == null && it.frame == null && it.headerSets.isEmpty() && it.headers.isEmpty() } == true }
     }
 
     @Test(timeout = 60_000) fun aServerThatWantsThePlayersAddressGetsTheNextSetOfTheLadderAtOnceAndItStays() {
-        val h = H()
-        val (pl, expected) = plainStream(h, 6, 20_000)
+        val h = H(); h.cdn.chunkDelayMs = 6; h.cdn.chunk = 2048
+        val (pl, expected) = plainStream(h, 8, 60_000)
         h.cdn.gate = { r -> if (r.headers["Referer"] == "https://player.test/") null else 403 }
         val id = enqueueWithLadder(h, pl, site, listOf(site, player, emptyMap()))
+        h.await(id, "progress") { it != null && it.state == DlState.RUNNING && it.done > 100_000 }
+        h.engine.pause(id)
+        h.await(id, "paused") { it?.state == DlState.PAUSED_USER }
+        h.eventually("the working set is stored") { h.store.rows[id]?.let { it.state == DlState.PAUSED_USER && it.headers == player } == true }
+        h.engine.resume(id)
         val v = h.completed(id)
         assertArrayEquals(expected, h.out(v))
-        h.eventually("the working set is stored") { h.store.rows[id]?.headers == player }
         // nothing of the download was in yet, so the headers were suspected first: no short waits were spent on the wrong ones, and the workers that were refused meanwhile took the new set without using a try
         val refused = h.cdn.seen.count { it.second != player }
         assertTrue("only the first requests were refused, not four per part ($refused)", refused <= 4)
@@ -373,9 +383,9 @@ class StreamEngineTest {
         val id = enqueueWithLadder(h, pl, site, listOf(site, player, emptyMap()))
         val v = h.completed(id)
         assertArrayEquals(expected, h.out(v))
-        h.eventually("the working set is stored") { h.store.rows[id]?.headers == player }
         val perPart = h.cdn.seen.filter { it.second == site }.groupingBy { it.first }.eachCount()
         assertTrue("the first refused part was asked for again with the same headers first: $perPart", (perPart.values.maxOrNull() ?: 0) >= 4)
+        assertTrue("and the set that worked was used from then on", h.cdn.seen.any { it.second == player })
     }
 
     @Test(timeout = 60_000) fun whenNoSetOfTheLadderWorksTheLinkCountsAsExpiredAndTheFirstHeadersStay() {
