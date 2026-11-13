@@ -170,13 +170,22 @@
   // ---- 5. JavaScript speed and WebAssembly features
   function bytes(a) { return new Uint8Array(a); }
   function js() {
+    // one test per turn of the event loop: a slow tablet must never trip the engine's "This page is slow" prompt (it counts one uninterrupted script)
     var out = [];
-    function time(name, fn) { var t = performance.now(); var r = fn(); out.push(pad(name, 34) + lpad(Math.round(performance.now() - t), 6) + ' ms'); return r; }
-    time('number crunching (3 million steps)', function () { var s = 0; for (var i = 1; i < 3000000; i++) s += Math.sqrt(i) * Math.sin(i); return s; });
-    time('sort 60 thousand numbers', function () { var a = []; for (var i = 0; i < 60000; i++) a.push((i * 7919) % 100003); a.sort(function (x, y) { return x - y; }); return a[0]; });
-    time('text: build, split, search', function () { var s = ''; for (var i = 0; i < 30000; i++) s += 'item' + i + ','; return s.split(',').filter(function (x) { return /7$/.test(x); }).length; });
-    time('JSON of 20 thousand objects', function () { var a = []; for (var i = 0; i < 20000; i++) a.push({ id: i, name: 'n' + i, tags: ['a', 'b'] }); return JSON.parse(JSON.stringify(a)).length; });
-    time('typed array loop (8 million)', function () { var f = new Float64Array(1 << 20); for (var k = 0; k < 8; k++) for (var i = 0; i < f.length; i++) f[i] = f[i] * 0.5 + i; return f[5]; });
+    function time(name, fn) {
+      return new Promise(function (resolve) {
+        setTimeout(function () { var t = performance.now(); fn(); out.push(pad(name, 34) + lpad(Math.round(performance.now() - t), 6) + ' ms'); $('js').textContent = out.join('\n'); resolve(); }, 0);
+      });
+    }
+    $('js').textContent = 'running...';
+    return time('number crunching (1.5 million steps)', function () { var s = 0; for (var i = 1; i < 1500000; i++) s += Math.sqrt(i) * Math.sin(i); return s; })
+      .then(function () { return time('sort 40 thousand numbers', function () { var a = []; for (var i = 0; i < 40000; i++) a.push((i * 7919) % 100003); a.sort(function (x, y) { return x - y; }); return a[0]; }); })
+      .then(function () { return time('text: build, split, search', function () { var s = ''; for (var i = 0; i < 20000; i++) s += 'item' + i + ','; return s.split(',').filter(function (x) { return /7$/.test(x); }).length; }); })
+      .then(function () { return time('JSON of 10 thousand objects', function () { var a = []; for (var i = 0; i < 10000; i++) a.push({ id: i, name: 'n' + i, tags: ['a', 'b'] }); return JSON.parse(JSON.stringify(a)).length; }); })
+      .then(function () { return time('typed array loop (4 million)', function () { var f = new Float64Array(1 << 19); for (var k = 0; k < 8; k++) for (var i = 0; i < f.length; i++) f[i] = f[i] * 0.5 + i; return f[5]; }); })
+      .then(function () { $('js').textContent = out.join('\n') + '\n\n' + features() + '\n(For comparison: a recent phone does each of the first five lines in about 20 to 100 ms. This tablet is expected to be several times slower.)'; });
+  }
+  function features() {
     var W = {
       'WebAssembly': typeof WebAssembly === 'object',
       'fast math (SIMD)': [0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11],
@@ -197,11 +206,10 @@
     var modern = [];
     try { modern.push('optional chaining ' + (new Function('var a={};return a?.b?.c===undefined')() ? 'yes' : 'no')); } catch (e) { modern.push('optional chaining NO'); }
     try { modern.push('?? ' + (new Function('return null ?? 1')() === 1 ? 'yes' : 'no')); } catch (e) { modern.push('?? NO'); }
-    try { modern.push('BigInt ' + (typeof BigInt === 'function' ? 'yes' : 'no')); } catch (e) { /* none */ }
-    try { modern.push('top-level await/modules ' + ('noModule' in document.createElement('script') ? 'yes' : 'no')); } catch (e) { /* none */ }
+    modern.push('BigInt ' + (typeof BigInt === 'function' ? 'yes' : 'no'));
     modern.push('structuredClone ' + (typeof structuredClone === 'function' ? 'yes' : 'no'));
-    modern.push('Array.prototype.toSorted ' + (typeof [].toSorted === 'function' ? 'yes' : 'no'));
-    $('js').textContent = out.join('\n') + '\n\nWebAssembly: ' + feats.join(', ') + '\nLanguage: ' + modern.join(', ') + '\n(For comparison: a recent phone does the first five lines in about 40 to 150 ms each. This tablet is expected to be several times slower.)';
+    modern.push('Array toSorted ' + (typeof [].toSorted === 'function' ? 'yes' : 'no'));
+    return 'WebAssembly: ' + feats.join(', ') + '\nLanguage: ' + modern.join(', ');
   }
 
   // ---- 6. WebGL
@@ -231,7 +239,7 @@
   $('run').addEventListener('click', function () {
     if (busy) return; busy = true; $('run').disabled = true;
     can(); gl();
-    safe(mc, $('mc')).then(function () { return safe(raf, $('raf')); }).then(function () { return safe(function () { js(); }, $('js')); })
+    safe(mc, $('mc')).then(function () { return safe(raf, $('raf')); }).then(function () { return safe(js, $('js')); })
       .then(function () { return safe(plays, $('play')); }).then(function () { busy = false; $('run').disabled = false; $('run').textContent = 'Run again'; });
   });
   $('copy').addEventListener('click', function () {
@@ -243,6 +251,6 @@
     $('copy').textContent = ok ? 'Copied' : 'Could not copy: select the text by hand';
     if (!ok && navigator.clipboard) navigator.clipboard.writeText(t).then(function () { $('copy').textContent = 'Copied'; }, function () { /* keep the message */ });
   });
-  can(); gl(); js();
+  can(); gl(); $('js').textContent = features();
 })();
 </script></body></html>
