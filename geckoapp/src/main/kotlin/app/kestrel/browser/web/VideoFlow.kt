@@ -70,7 +70,7 @@ class VideoFlow(private val a: BrowserActivity) {
         // those documents are gone: an address asked about in one of them (even one that turned out not to be media) is news again when a new document asks for it
         val p = t.id.toString() + "|"
         maybeAsked.removeAll { k -> docs.any { d -> k.startsWith("$p$d|") } }
-        Health.log("media", "frame-gone", "docs=${docs.size} dropped=${keys.size} left=${t.media.keys().size}") // always, so a report shows whether the extension's message arrived
+        Health.log("media", "frame-gone", "docs=${docs.joinToString(",") { it.substringAfter("://").substringBefore('?').take(40) }} dropped=${keys.size} left=${t.media.keys().size} [${t.media.describe()}]") // always, so a report shows whether the extension's message arrived and what stayed
         if (keys.isEmpty()) return@ui
         forget(keys)
         Health.log("media", "server-switch", "dropped=${keys.size} frames=${docs.size}")
