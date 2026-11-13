@@ -141,7 +141,8 @@
     });
     return p.then(function () {
       lines.push('', 'Reading it: "smooth" = the tablet kept up. If H.264 is smooth and VP9 or H.265 is CHOPPY, those two are being decoded by the processor instead of the video chip;',
-        'that is why Settings > Video formats offered to sites keeps them from websites. If even H.264 is CHOPPY the problem is the tablet or the page, not the codec.');
+        'that is why the browser does not offer them to streaming sites (Settings > Video > Video formats offered to sites).',
+        'If even H.264 is CHOPPY the problem is the tablet or the page, not the codec. If all clips here are smooth but a website\'s video stutters, the website\'s stream is probably more than the hotspot can carry (5 Mbit/s): pick a lower quality in its player.');
       out.textContent = lines.join('\n');
     });
   }
@@ -187,7 +188,7 @@
   }
   function features() {
     var W = {
-      'WebAssembly': typeof WebAssembly === 'object',
+      'basic support': typeof WebAssembly === 'object',
       'fast math (SIMD)': [0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11],
       'bulk memory': [0, 97, 115, 109, 1, 0, 0, 0, 1, 4, 1, 96, 0, 0, 3, 2, 1, 0, 5, 3, 1, 0, 1, 10, 14, 1, 12, 0, 65, 0, 65, 0, 65, 0, 252, 10, 0, 0, 11],
       'multi-value': [0, 97, 115, 109, 1, 0, 0, 0, 1, 6, 1, 96, 0, 2, 127, 127, 3, 2, 1, 0, 10, 8, 1, 6, 0, 65, 0, 65, 0, 11],
