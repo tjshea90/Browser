@@ -40,15 +40,15 @@ On a lighter page (400 boxes, throttle 4x) all three ran at a locked 16.7 ms a f
 `gecko-prefs.txt` and `GeckoEngine.applyVideo`: hardware decoding is the engine's default path (`media.android-media-codec.*` untouched), AV1 off, VP9 and H.265 offered only when the tablet reports a hardware decoder (it does), WebRender untouched with `gfx.webrender.precache-shaders = true` (no first-use hitch), `layout.framevisibility.numscrollportheights = 2`, image decode ahead, smooth scrolling off (instant), reduced motion is now a switch (Settings > Video > Calm pages, off by default, so players' spinners and animations run as the site wrote them). Background tabs: `setActive(false)` on every tab switch and when the browser stops (`BrowserActivity`), so a covered page stops rendering.
 
 ### 2c. The app's own animation is not free on a software-rendered screen
-On the emulator (no GPU) the home screen's neon animation alone keeps the parent process near 100 % of a core (RenderThread 36 %, Gecko 30 %). On the tablet the animation is drawn by the GPU; the new CPU line below will say whether the parent process is ever the busy one.
+On the emulator (no GPU, software drawing) the home screen's neon animation alone keeps the parent process near 100 % of a core (RenderThread 36 %, Gecko 30 %), and a busy page drives the graphics process (`WRSceneBuilder`, `WRRenderBackend` threads: WebRender's software path) to 200 %. On the tablet the animation is drawn by the GPU; the new CPU line below will say whether the parent process is ever the busy one.
 
 ## 3. Built: "CPU by process" in Diagnostics (so the next lag report carries the answer)
 `diag/CpuMeter.kt` + `core/diag/CpuUse.kt` (`CpuUseTest`, 4 tests): every 5 s while the browser is on screen it reads the CPU time of each of the app's own processes from `/proc/<pid>/stat` (parent, page process `tab`, graphics, sockets: five tiny file reads, no network, nothing while the browser is in the background). A process above 70 % of a core is looked at thread by thread for one second. The Diagnostics line shows the last five minutes:
 
-`CPU by process, % of ONE core (this tablet has 4 ...): tab avg 31 / peak 98; parent avg 9 / peak 40; gpu avg 4 / peak 22 | busy moments: 2 min 10 s ago tab 98 % [GeckoMain 71, DOM Worker 20, Compositor 5] | reading: ...`
+`CPU by process, % of ONE core (this tablet has 4 ...): tab avg 31 / peak 98; parent avg 9 / peak 40; gpu avg 4 / peak 22 | busy moments: 2 min 10 s ago tab 98 % [Web Content 71, DOM Worker 20, Compositor 5] | reading: ...`
 
 How to read it:
-* **`tab` near 100 % (GeckoMain high)** while the page lags: the page's own script or layout is the limit. Switching Shields to Strict for that site, closing other tabs, or Settings > Video > Calm pages are the levers; the A/B of two page processes is worth doing only if OTHER tabs show up busy too.
+* **`tab` near 100 % (the thread `Web Content` high: it is the page's own main thread)** while the page lags: the page's own script or layout is the limit. Switching Shields to Strict for that site, closing other tabs, or Settings > Video > Calm pages are the levers; the A/B of two page processes is worth doing only if OTHER tabs show up busy too.
 * **`tab` low, `parent` or `gpu` high**: the app's own drawing or the compositor; send the line.
 * **Every process low** while the video stutters: the stream (network) or the player stalling, not the CPU.
 * **A thread named like a decoder (`MediaPDecoder`, `VPXDecoder`...) busy**: a video is being decoded in software; send the page link.

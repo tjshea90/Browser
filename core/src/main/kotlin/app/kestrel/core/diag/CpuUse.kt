@@ -69,6 +69,6 @@ object CpuReport {
         if (rows.isEmpty()) return head + "no reading yet"
         val body = rows.joinToString("; ") { "${it.name} avg ${it.avg} / peak ${it.peak}" }
         val busy = if (moments.isEmpty()) "no process over $busyPct % yet" else moments.joinToString("; ") { "${it.ageMs / 60_000} min ${(it.ageMs / 1000) % 60} s ago ${it.who} ${it.pct} % [${it.threads}]" }
-        return "$head$body | busy moments: $busy | reading: a page that lags while 'tab' sits near 100 is limited by its own script or layout (one thread cannot use the other cores); a lag while every process is low is the network or the player"
+        return "$head$body | busy moments: $busy | reading: a page that lags while 'tab' sits near 100 (its thread 'Web Content' is the page's own script and layout) is limited by that one thread, which cannot use the other cores; a lag while every process is low is the network or the player; decoder or 'WR' threads busy = the picture is drawn or decoded in software"
     }
 }
