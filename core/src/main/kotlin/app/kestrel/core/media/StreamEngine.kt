@@ -1047,6 +1047,7 @@ class StreamEngine(
         var again = 0                      // refusals answered with a short wait and the same headers (rung L0)
         var holding = false                // this worker counts in [Job.recovering]: the others wait
         var rung = 0                       // the next set of the header ladder to try (rung L1)
+        var laddered = false               // every set of the ladder was tried for this part
         var first: Map<String, String>? = null // the set in use when the ladder was entered (what a failed ladder goes back to)
         var mine: Map<String, String>? = null  // the set this worker switched to last
     }
@@ -1057,10 +1058,8 @@ class StreamEngine(
             fetchLoop(job, fetcher, url, from, toInclusive, dest, count, ref)
             val won = ref.mine
             if (won != null && job.rec.headers === won) { log("stream ${job.rec.id}: the part was refused with the first headers and came in with the next set of the ladder; it stays", null); persist(job.rec) }
-        } catch (e: Failed) {
-            // the ladder ran out: back to the set the download started with (unless somebody else has found a working one meanwhile)
-            val back = ref.first
-            if (back != null) synchronized(lock) { if (job.rec.headers === ref.mine) job.rec.headers = back }
+        } catch (e: RuntimeException) {
+            headersBack(job, ref) // whatever ended this part (a stop, another failure): a set that was only being tried does not stay
             throw e
         } finally { if (ref.holding) synchronized(lock) { job.recovering-- } }
     }
@@ -1099,17 +1098,21 @@ class StreamEngine(
                 if (count) job.inflight.addAndGet(-ctr[0])
                 if (job.stop) throw Stopped()
                 if (e.sent !== job.rec.headers) continue // another worker found headers that work while this request was on its way: ask again with them, nothing is used up
-                // EY-7, rung L0: a refused part is a hiccup (an edge that is not in sync, a token that allows few connections) until it has been refused again and again. Ask again after a short, jittered wait; every
-                // other worker waits meanwhile. Each part counts its own refusals, so a part that comes in gives everything back.
+                if (!ref.holding) { ref.holding = true; synchronized(lock) { job.recovering++ } }
+                // Two rungs, in the order that fits what is known. L1 (EY-8): the same part with the next set of the header ladder (a server that wants the player's address and was given the page's); the set that works stays
+                // for the whole download. L0 (EY-7): a refused part is a hiccup (an edge that is not in sync, a token that allows few connections) until it has been refused again and again: ask again after a short, jittered
+                // wait; every other worker waits meanwhile. With nothing of the download in yet the headers are the likelier cause (ladder first); once parts came in an expiry or a hiccup is (waits first).
+                if (!partsFetched(job) && !ref.laddered) {
+                    if (nextHeaders(job, ref)) continue
+                    ref.laddered = true; headersBack(job, ref)
+                }
                 if (ref.again < cfg.denyDelaysMs.size) {
-                    if (!ref.holding) { ref.holding = true; synchronized(lock) { job.recovering++ } }
                     val base = cfg.denyDelaysMs[ref.again++]
                     pause(job, maxOf(base, e.retryAfterMs.coerceAtMost(30_000L)) + rnd.nextInt((base / 5).toInt() + 1))
                     continue
                 }
-                // EY-8, rung L1: the same part with the next set of the header ladder (a server that wants the player's address and was given the page's). The set that works stays for the whole download.
-                if (!ref.holding) { ref.holding = true; synchronized(lock) { job.recovering++ } }
-                if (nextHeaders(job, ref)) continue
+                if (!ref.laddered) { if (nextHeaders(job, ref)) continue; ref.laddered = true }
+                headersBack(job, ref)
                 throw Failed(if (e.status == 404) Reason.HTTP else Reason.LINK_EXPIRED, e.status) // the last try is over: the link counts as expired
             } catch (e: IOException) {
                 if (count) job.inflight.addAndGet(-ctr[0])
@@ -1138,6 +1141,12 @@ class StreamEngine(
 
     /** A refused part: 401 / 403 / 410, and 404 once other parts of this download came in (the address was right, the edge or the token is not). */
     private class Denied(val status: Int, val sent: Map<String, String>, val retryAfterMs: Long = 0) : RuntimeException(null, null, false, false)
+
+    /** After a ladder that found nothing: back to the set the download started with (unless somebody else has found a working one meanwhile). */
+    private fun headersBack(job: Job, ref: Refusals) {
+        val back = ref.first ?: return
+        synchronized(lock) { if (job.rec.headers === ref.mine) job.rec.headers = back }
+    }
 
     /** Switches the download to the next set of its header ladder that has not been tried for this part (the one in use was just refused). False when the ladder is used up. */
     private fun nextHeaders(job: Job, ref: Refusals): Boolean = synchronized(lock) {
