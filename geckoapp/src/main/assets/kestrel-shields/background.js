@@ -497,16 +497,16 @@ browser.webRequest.onBeforeSendHeaders.addListener(function (d) {
 // A response that says nothing about being media (text/plain, octet-stream, no type at all, or a "picture" / "stylesheet" fetched by a script) but could still be a playlist or a video: stream sites often
 // disguise their playlists (".txt", ".css", no extension). The app reads the first bytes itself with the same headers and decides ("maybe" message). Small, rare and rate-limited: at most MAYBE_PER_PAGE per page.
 var MAYBE_CT = /^(?:text\/plain|application\/octet-stream|binary\/octet-stream|application\/force-download|application\/x-download|application\/download|application\/unknown|)$/;
-var MAYBE_DISGUISE = /^(?:image\/|text\/css|(?:application|text)\/(?:x-)?javascript)/; // only for requests a script made (not <img>, which has its own type)
-var NOT_MAYBE = /\.(?:js|mjs|css|json|html?|svg|ico|woff2?|ttf|otf|eot|map|wasm|gif)(?:$|[?#])/i;
+var MAYBE_DISGUISE = /^(?:image\/|text\/css)/; // a "picture" or "stylesheet" that a SCRIPT fetched (an <img> or <link> has its own request type and is never probed)
+var NOT_MAYBE = /\.(?:json|html?|svg|ico|woff2?|ttf|otf|eot|map|wasm|gif)(?:$|[?#])/i; // never a playlist
 var maybeCount = new Map(); // tabId -> probes asked for on the current page
 var MAYBE_PER_PAGE = 12;
 function maybeMedia(d, url, ct, size, ref, org) {
   if (d.type !== 'xmlhttprequest' && d.type !== 'other' && d.type !== 'media') return;
+  if (NOT_MAYBE.test(url)) return;
   var base = ct.indexOf(';') >= 0 ? ct.slice(0, ct.indexOf(';')).trim() : ct.trim();
   var plain = MAYBE_CT.test(base);
   if (!plain && !(d.type !== 'media' && MAYBE_DISGUISE.test(base))) return;
-  if (!plain && NOT_MAYBE.test(url) && base.indexOf('image/') !== 0) return;
   if (size >= 0 && (size < 80 || (!plain && size > 800000))) return; // a playlist is never a few bytes, and a script-fetched "picture" or "stylesheet" that is big is one
   var key = '?' + dedupeKey(url, 0);
   var seen = sniffed.get(d.tabId);
