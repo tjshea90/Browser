@@ -529,3 +529,10 @@ Memory after:  avail=540MB thr=144MB low=false trim=20@2s
 3) there are some web site compatibility issues. Doraby doesn't load movies at all, one site said incompatible browser or the browser can't access cloudflare
 You didn't answer several of my last prompts. Put any unanswered prompt into the handoff file and stop all work and save for a new context window
 ```
+
+## 2026-11-13T08:18:03Z
+```
+1) in private mode, the settings in the menu disappears. Keep it in there. 
+2) when I long press a link and press open in new tab, open it in a new tab in the background, but keep the foreground on the current tab
+3) there are some web site compatibility issues. Doraby doesn't load movies at all, one site said incompatible browser or the browser can't access cloudflare
+```
