@@ -274,7 +274,7 @@ object DownloadController {
                     }
                 } finally { try { resp.abort() } catch (e: Exception) { /* ignore */ }; try { resp.close() } catch (e: Exception) { /* ignore */ } }
             } catch (e: Exception) { /* null: the caller carries on without it */ }
-            Io.ui { if (total > 0 && onTotal != null) onTotal(total); onDone(data) }
+            Io.ui { if (total > 0 && onTotal != null) onTotal(total); onStatus?.invoke(status); onDone(data) }
         }
     }
 

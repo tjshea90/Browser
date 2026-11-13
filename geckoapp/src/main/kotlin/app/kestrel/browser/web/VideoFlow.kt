@@ -3,12 +3,14 @@ package app.kestrel.browser.web
 import android.app.AlertDialog
 import app.kestrel.browser.BrowserActivity
 import app.kestrel.browser.Io
+import app.kestrel.browser.diag.Health
 import app.kestrel.browser.ui.VideoPanel
 import app.kestrel.browser.download.DownloadController
 import app.kestrel.browser.net.NetworkMonitor
 import app.kestrel.core.media.Dash
 import app.kestrel.core.media.Hls
 import app.kestrel.core.media.MediaCandidate
+import app.kestrel.core.media.MediaHeaders
 import app.kestrel.core.media.MediaKind
 import app.kestrel.core.media.MediaLabels
 import app.kestrel.core.media.MediaNames
@@ -25,7 +27,7 @@ import app.kestrel.core.url.UrlParts
  */
 class VideoFlow(private val a: BrowserActivity) {
     /** One quality of an HLS stream, ready to download. */
-    private class StreamPick(val label: String, val url: String, val text: String?, val estimate: Long, val audioUrl: String?, val audioOnly: Boolean, val container: String, val repId: String? = null, val audioRepId: String? = null, val ext: String? = null)
+    private class StreamPick(val label: String, val url: String, val text: String?, val estimate: Long, val audioUrl: String?, val audioOnly: Boolean, val container: String, val repId: String? = null, val audioRepId: String? = null, val ext: String? = null, val headers: Map<String, String>? = null)
     private sealed class Loaded {
         object Loading : Loaded()
         class Failed(val message: String) : Loaded()
@@ -86,7 +88,7 @@ class VideoFlow(private val a: BrowserActivity) {
         for (c in ranked.main + listOfNotNull(ranked.exact)) { // only what is on top is looked into: a few hundred KB each, never the files tucked away
             if (c.kind == MediaKind.FILE && !c.audioOnly && (c.knownHeight == 0 || c.durationMs == 0L) && looksMp4(c) && probed.add(c.key)) probe(tab, c, 0L, 256 * 1024, 0)
             // a file found in the page's own markup has not been requested yet, so nobody has seen its length: one byte asked for gives it back as "Content-Range: bytes 0-0/TOTAL"
-            else if (c.kind == MediaKind.FILE && c.length <= 0 && sized.add(c.key)) DownloadController.fetchBytes(a, c.url, 0L, 0L, requestHeaders(tab), 1, tab.isPrivateTab, onTotal = { n -> if (c.length <= 0) { c.length = n; refresh(tab) } }) { }
+            else if (c.kind == MediaKind.FILE && c.length <= 0 && sized.add(c.key)) DownloadController.fetchBytes(a, c.url, 0L, 0L, requestHeaders(tab, c), 1, tab.isPrivateTab, onTotal = { n -> if (c.length <= 0) { c.length = n; refresh(tab) } }) { }
         }
     }
 
@@ -101,7 +103,7 @@ class VideoFlow(private val a: BrowserActivity) {
 
     /** Reads the start of an MP4 (and, when its index sits at the end, that box) to name its picture size and length: a few hundred KB, only when the sheet is open. */
     private fun probe(tab: Tab, c: MediaCandidate, from: Long, length: Int, depth: Int) {
-        DownloadController.fetchBytes(a, c.url, from, from + length - 1, requestHeaders(tab), 1, tab.isPrivateTab, onTotal = { n -> if (c.length <= 0) c.length = n }) { bytes ->
+        DownloadController.fetchBytes(a, c.url, from, from + length - 1, requestHeaders(tab, c), 1, tab.isPrivateTab, onTotal = { n -> if (c.length <= 0) c.length = n }) { bytes ->
             if (bytes == null || depth > 3) return@fetchBytes
             when (val r = Mp4Probe.probe(bytes, bytes.size, from)) {
                 is Mp4Probe.Result.Found -> { if (c.height == 0 && r.info.height > 0) { c.width = r.info.width; c.height = r.info.height }; if (c.durationMs == 0L) c.durationMs = r.info.durationMs; refresh(tab) }
@@ -179,21 +181,48 @@ class VideoFlow(private val a: BrowserActivity) {
 
     // ---- HLS: read the playlist, list the qualities
 
-    private fun requestHeaders(tab: Tab): Map<String, String> {
-        val h = HashMap<String, String>()
-        UrlParts.parse(tab.url)?.let { h["Referer"] = "${it.scheme}://${it.hostForAuthority}/"; h["Origin"] = "${it.scheme}://${it.hostForAuthority}" } // the page's origin only, never its full address
-        return h
+    /**
+     * The headers a candidate is fetched with: the ones that were seen to work for it, else the first guess ([MediaHeaders.sets]: what the browser itself sent, the player's page, the web page).
+     * A video server often answers 403 unless the request names ITS player as the asker (owner: a movie from an embedded "vidsrc" server could not be saved).
+     */
+    private fun requestHeaders(tab: Tab, c: MediaCandidate): Map<String, String> = MediaHeaders.sets(c, tab.url).first()
+
+    /** The words for a refused or failed read of a playlist: what the server said, and what to try. */
+    private fun whyNotRead(status: Int): String = when {
+        status == 401 || status == 403 -> "The site refused to show the stream's list (HTTP $status), even with the player's own headers. Reload the page, press play, and try again: the link may have expired."
+        status == 404 || status == 410 -> "The stream's list is gone (HTTP $status). Reload the page, press play, and try again."
+        status >= 400 -> "The site answered the stream's list with an error (HTTP $status)."
+        else -> "The stream's list could not be read (no answer from the site)."
+    }
+
+    /**
+     * Reads a playlist, trying the request headers one set after the other ([MediaHeaders.sets]) until the site answers with something [valid]. The set that worked is remembered for the candidate, so every
+     * later request of this download (qualities, sizes, the parts, the keys) repeats it. [done]: the text and the HTTP status of the last try.
+     */
+    private fun fetchPlaylist(tab: Tab, c: MediaCandidate, url: String, valid: (String) -> Boolean, done: (String?, Int) -> Unit) {
+        val sets = MediaHeaders.sets(c, tab.url)
+        val host = UrlParts.hostOf(url) ?: ""
+        fun attempt(i: Int, last: Int) {
+            if (i >= sets.size) { Health.log("media", "list-failed", "$host http=$last tried=${sets.size}"); done(null, last); return }
+            DownloadController.fetchTextStatus(a, url, sets[i], 1, tab.isPrivateTab) { text, status ->
+                if (text != null && valid(text)) {
+                    if (c.viaHeaders != sets[i]) c.viaHeaders = sets[i]
+                    Health.log("media", "list-ok", "$host http=$status set=${i + 1}/${sets.size} referer=${UrlParts.hostOf(sets[i]["Referer"] ?: "") ?: "none"}")
+                    done(text, status)
+                } else attempt(i + 1, if (status > 0) status else last)
+            }
+        }
+        attempt(0, 0)
     }
 
     private fun loadStream(tab: Tab, c: MediaCandidate): Loaded {
         streamInfo[c.key] = Loaded.Loading
-        val headers = requestHeaders(tab)
-        DownloadController.fetchText(a, c.url, headers, 1, tab.isPrivateTab) { text ->
+        fetchPlaylist(tab, c, c.url, { Hls.parse(it, c.url) != null }) { text, status ->
             val pl = text?.let { Hls.parse(it, c.url) }
             when (pl) {
-                null -> { streamInfo[c.key] = Loaded.Failed("The stream's list could not be read (the site may have refused it)."); refresh(tab) }
+                null -> { streamInfo[c.key] = Loaded.Failed(whyNotRead(status)); refresh(tab) }
                 is Hls.MediaPlaylist -> { streamInfo[c.key] = ready(tab, c, null, pl.media, text, null); refresh(tab); sizeBareStream(tab, c, pl.media, text) }
-                is Hls.MasterPlaylist -> loadVariants(tab, c, pl.master, headers)
+                is Hls.MasterPlaylist -> loadVariants(tab, c, pl.master, requestHeaders(tab, c))
             }
         }
         return Loaded.Loading
@@ -222,7 +251,7 @@ class VideoFlow(private val a: BrowserActivity) {
         if (media.exactBytes >= 0 || n == 0 || media.segments[0].len >= 0) return
         val picks = if (n >= 3) listOf(0, n / 2) else listOf(0)
         val got = ArrayList<Long>()
-        for (i in picks) DownloadController.fetchBytes(a, media.segments[i].url, 0L, 0L, requestHeaders(tab), 1, tab.isPrivateTab, onTotal = { len ->
+        for (i in picks) DownloadController.fetchBytes(a, media.segments[i].url, 0L, 0L, requestHeaders(tab, c), 1, tab.isPrivateTab, onTotal = { len ->
             got.add(len)
             if (got.size == picks.size) {
                 val factor = if (media.container == "ts") 0.95 else 1.0               // the MP4 made of a transport stream is a little smaller than the stream
@@ -270,9 +299,9 @@ class VideoFlow(private val a: BrowserActivity) {
 
     private fun loadDash(tab: Tab, c: MediaCandidate): Loaded {
         streamInfo[c.key] = Loaded.Loading
-        DownloadController.fetchText(a, c.url, requestHeaders(tab), 1, tab.isPrivateTab) { text ->
+        fetchPlaylist(tab, c, c.url, { Dash.parse(it, c.url) != null }) { text, status ->
             val man = text?.let { Dash.parse(it, c.url) }
-            streamInfo[c.key] = if (man == null || text == null) Loaded.Failed("The stream's list could not be read (the site may have refused it).") else dashReady(tab, c, man, text)
+            streamInfo[c.key] = if (man == null || text == null) Loaded.Failed(whyNotRead(status)) else dashReady(tab, c, man, text)
             refresh(tab)
         }
         return Loaded.Loading
@@ -312,7 +341,7 @@ class VideoFlow(private val a: BrowserActivity) {
         val host = UrlParts.hostOf(tab.url) ?: ""
         val size = MediaLabels.size(p.estimate, estimate = true)
         val go = {
-            val h = requestHeaders(tab)
+            val h = p.headers ?: MediaHeaders.fromAddress(tab.url)
             val page = tab.url.takeIf { it.isNotEmpty() }
             val soundStem = "$stem (sound)"
             // the sound of a picture that comes separately is downloaded alongside and merged into one MP4 when both are in (if the merge is refused, both files stay)
