@@ -75,9 +75,9 @@ class TabGridHomeTest {
             override fun newTab() {}
             override fun dismiss() {}
         })
-        panel.measure(View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(973, View.MeasureSpec.EXACTLY))
-        panel.layout(0, 0, 600, 973)
         panel.bind(listOf(onHome), onHome)
+        panel.measure(View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(973, View.MeasureSpec.EXACTLY))
+        panel.layout(0, 0, 600, 973) // the list builds its rows during layout, after the data is bound
         val t = texts(panel)
         assertTrue(t.toString(), "Home" in t)
         assertFalse(t.toString(), t.any { it.contains("A long movie page title") || it.contains("example.com") })
