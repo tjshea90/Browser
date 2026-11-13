@@ -203,7 +203,7 @@ open class BrowserActivity : Activity(), DockListener {
                 GeckoEngine.runtime(this)
                 GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
                 GeckoEngine.warmUp(this)
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l -> video.info(p, u, w, h, d, l) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l -> video.info(p, u, w, h, d, l) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }))
                 Health.log("engine", "runtime-ready")
             }
         }
@@ -566,6 +566,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (skinApplied && priv == skinPrivate) return
         skinApplied = true
         skinPrivate = priv
+        GeckoEngine.setFrontPrivate(priv, prefs) // the link look-ups of the Network lab pause while a private tab is in front
         pal = if (priv) palPrivate else palRegular
         dock.applyPal(pal); home.applyPal(pal); suggestions.setPal(pal); sheet.applyPal(pal); progress.setColors(pal.accent, pal.accentHi); restoreOverlay.setPal(pal); pullChip.setPal(pal)
         @Suppress("DEPRECATION") run {
@@ -1189,6 +1190,27 @@ open class BrowserActivity : Activity(), DockListener {
         if (origin == warmHost && now - warmAt < 30_000) return
         warmHost = origin; warmAt = now
         Io.exec { GeckoEngine.speculativeConnect(origin) } // dispatched onto the Gecko thread: the public GeckoWebExecutor call is dropped by GeckoView 160 (EX-2)
+    }
+
+    private val warmSeen = HashMap<String, Long>()
+
+    /**
+     * EX-15 triggers 2 and 3 (research/REVIEW-EXTERNAL-1.md 4.2): the page's own script (extension content.js) names an origin the owner is likely to open next - the link a finger is on, or one of the first
+     * three search results. The rules of the typed suggestion apply (the Warm-up switch, https only, never a private tab, once per origin per 30 s) plus: not while a Data saver level is on, not while pages go through
+     * the phone helper (the engine skips warm-ups behind a proxy anyway), a touch only counts on the page in front, and a private tab with the same address stops it.
+     */
+    private fun onWarmLink(origin: String, page: String, kind: String) {
+        if (!prefs.preconnect || prefs.dataSaver != app.kestrel.core.shield.DataSaver.OFF || GeckoEngine.pagesViaProxy) return
+        val front = current ?: return
+        if (front.isPrivateTab || tabs.any { it.isPrivateTab && it.url == page }) return
+        if (kind == "touch" && front.url != page) return
+        val o = GeckoEngine.warmOrigin(origin) ?: return
+        val now = SystemClock.uptimeMillis()
+        val last = warmSeen[o]
+        if (last != null && now - last < 30_000) return
+        if (warmSeen.size > 64) warmSeen.clear()
+        warmSeen[o] = now
+        Io.exec { GeckoEngine.speculativeConnect(o) } // on the Gecko thread: the public call is dropped by GeckoView 160 (EX-2)
     }
 
     private fun hideSuggestions() { suggestSeq++; suggestions.visibility = View.GONE; home.hideSuggestions() }

@@ -38,6 +38,8 @@ class ShieldsBridge(
     private val mediaInfo: (String, String, Int, Int, Long, String?) -> Unit = { _, _, _, _, _, _ -> },
     /** The pop-up and redirect guard refused something: page address, kind ("open", "click", "overlay", "form", "redirect"), the address it wanted (called on the worker thread). */
     private val popupBlocked: (String, String, String) -> Unit = { _, _, _ -> },
+    /** The page's script named an origin the owner is likely to open next (EX-15): `https://host[:port]/`, the page's address, "touch" (finger on a link) or "result" (a top search result). Worker thread. */
+    private val warmLink: (String, String, String) -> Unit = { _, _, _ -> },
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -76,6 +78,7 @@ class ShieldsBridge(
                     "gen" -> genericCss(m.optString("h"), m.optJSONArray("t"))
                     "media" -> { onMedia(m); "" }
                     "vid" -> { onVid(m); "" }
+                    "warm" -> { warmLink(m.optString("o"), m.optString("p"), m.optString("w")); "" }
                     else -> ""
                 }
             } catch (e: Exception) {

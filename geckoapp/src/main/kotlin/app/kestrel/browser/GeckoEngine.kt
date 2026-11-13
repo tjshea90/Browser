@@ -46,6 +46,19 @@ object GeckoEngine {
     @Volatile var warmCalls = 0
         private set
 
+    /** True while a private tab is in front (BrowserActivity.applySkin): the look-ups of links ahead (EX-6) pause then. */
+    @Volatile var frontPrivate = false
+        private set
+    /** True while pages go through the phone helper's proxy (set with the network profile): the engine skips warm-ups behind a proxy, so the app does not ask for them. */
+    @Volatile var pagesViaProxy = false
+        private set
+
+    fun setFrontPrivate(priv: Boolean, prefs: Prefs) {
+        if (frontPrivate == priv) return
+        frontPrivate = priv
+        if (rt != null) applyLab(prefs)
+    }
+
     /** `https://host[:port]/` of an https address, the origin a warm-up should open (a suggestion with its own port is warmed on THAT port); null for anything else. */
     fun warmOrigin(url: String): String? {
         if (!url.startsWith("https://", true)) return null
@@ -222,7 +235,7 @@ object GeckoEngine {
         val d = org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_DEFAULT
         val saver = prefs.dataSaver != app.kestrel.core.shield.DataSaver.OFF
         try {
-            org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("dom.prefetch_dns_for_anchor_https_document", prefs.labDnsPrefetch && !saver, d)
+            org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("dom.prefetch_dns_for_anchor_https_document", prefs.labDnsPrefetch && !saver && !frontPrivate, d)
             org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("network.buffer.cache.size", if (prefs.labBuffer) 32768 else 16384, d)
             org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("gfx.downloadable_fonts.fallback_delay", if (prefs.labFontDelay) 500 else 3000, d)
             org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("dom.speculation_rules.enabled", prefs.labSpec > 0, d)
@@ -246,6 +259,7 @@ object GeckoEngine {
             org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("network.http.http3.enable", eff.http3, d)
             org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("network.dns.disableIPv6", eff.disableIPv6, d)
             networkProfile = eff.text
+            pagesViaProxy = eff.pagesViaProxy
             app.kestrel.browser.diag.Health.log("engine", "network-profile", "${if (eff.tunnel) "fast-wifi-tunnel" else if (eff.fastWifi) "fast-wifi" else "standard"} trr=${eff.trrMode} http3=${eff.http3} noIPv6=${eff.disableIPv6} pageYield=${eff.pageYieldKBps}")
         } catch (e: Exception) { app.kestrel.browser.diag.Health.log("engine", "network-lab-failed", e.toString()) }
     }
