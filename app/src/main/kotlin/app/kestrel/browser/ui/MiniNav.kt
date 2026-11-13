@@ -118,10 +118,11 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         toggle.invalidate()
         cancelAnim()
         if (open) {
+            val wasVisible = panel.visibility == VISIBLE // reopened while it was still sliding away: carry on from where it is
             panel.visibility = VISIBLE
             panel.measure(MeasureSpec.makeMeasureSpec(panelWidth(), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
             val hidden = -(panel.measuredHeight + topGap).toFloat()
-            if (animate) slide(hidden, 0f, DecelerateInterpolator(2f)) {} else panel.translationY = 0f
+            if (animate) slide(if (wasVisible) panel.translationY else hidden, 0f, DecelerateInterpolator(2f)) {} else panel.translationY = 0f
         } else {
             if (keyboardShowing) closeKeyboard()
             val hidden = -(panel.height.coerceAtLeast(panel.measuredHeight) + topGap).toFloat()
