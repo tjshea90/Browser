@@ -81,61 +81,87 @@ class UpdateLogicTest {
         assertFalse(UpdateLogic.canResume(0, 206, 0))
     }
 
+    private val mib = 1L shl 20
+    private fun m(x: Double) = (x * mib).toLong()
+
+    @Test fun lowReserveIsTheSmallerOfFivePercentAndHalfAGigabyte() {
+        // Android 10 StorageManager.getStorageLowBytes, measured on the emulator (research/ADB_FOR_THE_OWNER.md): 6,094,400 KiB data partition
+        val total = 6_094_400L * 1024
+        assertEquals(312_033_280L, UpdateLogic.lowReserve(total))                       // 5 % = 297.6 MiB
+        assertEquals(124_813_312L, UpdateLogic.lowReserve(total, percent = 2))          // 2 % = 119.0 MiB (the install bar moved down by the same 178.6 MiB)
+        assertEquals(100 * mib, UpdateLogic.lowReserve(total, maxBytes = 100 * mib))    // the cap
+        assertEquals(500 * mib, UpdateLogic.lowReserve(total, percent = 20))            // 20 % would be 1190 MiB: the default 500 MiB cap binds (measured: 502 fails / 505 passes for a 2 MB app)
+        assertEquals(500 * mib, UpdateLogic.lowReserve(m(27.75 * 1024)))                // the owner's 27.75 GB tablet: 5 % = 1.39 GB, capped to 500 MiB (NOT a tenth = 2.8 GB)
+        assertEquals(0L, UpdateLogic.lowReserve(0L)); assertEquals(0L, UpdateLogic.lowReserve(total, percent = 0)); assertEquals(500 * mib, UpdateLogic.lowReserve(total * 100, percent = 500))
+    }
+
     @Test fun storagePlanForTheGeckoApk() {
-        val mb = 1L shl 20
-        // alpha numbers: 92 MB APK, 132 MB of libraries to unpack, 48 MB margin, and Android's reserve of 10 % of an 11 GB data partition
-        val reserve = 1100 * mb
-        val plan = UpdateLogic.storagePlan(92 * mb, 132 * mb, freeBytes = 1800 * mb, reserveBytes = reserve)
-        assertEquals((1100 + 92 + 132 + 48 + 92) * mb, plan.needKeep)   // 1464
-        assertEquals((1100 + 92 + 132 + 48) * mb, plan.needDrop)        // 1372
-        assertEquals((2 * 92 + 132 + 48) * mb, plan.installTakes)       // 364
+        // an 11 GB data partition: 5 % = 550 MiB, capped to 500 MiB; 92 MB APK, 132 MB of libraries to unpack, 32 MB margin
+        val reserve = UpdateLogic.lowReserve(11_000L * mib)
+        assertEquals(500 * mib, reserve)
+        val plan = UpdateLogic.storagePlan(92 * mib, 132 * mib, freeBytes = 1800 * mib, reserveBytes = reserve)
+        assertEquals((500 + 2 * (92 + 132) + 32) * mib, plan.needKeep)    // 980
+        assertEquals((500 + 2 * (92 + 132) + 32 - 92) * mib, plan.needDrop) // 888: our own copy deleted once the installer holds its own
+        assertEquals((2 * (92 + 132) + 32) * mib, plan.installTakes)       // 480
         assertTrue(plan.fitsKeeping); assertFalse(plan.fitsDropping); assertEquals(0L, plan.shortBy)
-        val tight = UpdateLogic.storagePlan(92 * mb, 132 * mb, freeBytes = 1400 * mb, reserveBytes = reserve) // enough only without our own copy
+        val tight = UpdateLogic.storagePlan(92 * mib, 132 * mib, freeBytes = 900 * mib, reserveBytes = reserve) // enough only without our own copy
         assertFalse(tight.fitsKeeping); assertTrue(tight.fitsDropping); assertEquals(0L, tight.shortBy)
-        val short = UpdateLogic.storagePlan(92 * mb, 132 * mb, freeBytes = 900 * mb, reserveBytes = reserve) // the owner "made 900 MB": not enough on such a tablet
-        assertFalse(short.fitsKeeping); assertFalse(short.fitsDropping); assertEquals(472 * mb, short.shortBy)
-        assertEquals(80 * mb, UpdateLogic.roundUpTenMb(75 * mb)); assertEquals(0L, UpdateLogic.roundUpTenMb(0)); assertEquals(10 * mb, UpdateLogic.roundUpTenMb(1))
+        val short = UpdateLogic.storagePlan(92 * mib, 132 * mib, freeBytes = 800 * mib, reserveBytes = reserve)
+        assertFalse(short.fitsKeeping); assertFalse(short.fitsDropping); assertEquals(88 * mib, short.shortBy)
+        assertEquals(80 * mib, UpdateLogic.roundUpTenMb(75 * mib)); assertEquals(0L, UpdateLogic.roundUpTenMb(0)); assertEquals(10 * mib, UpdateLogic.roundUpTenMb(1))
     }
 
     @Test fun storagePlanMatchesWhatTheEmulatorMeasured() {
-        val mib = 1L shl 20
-        // Android 10 emulator, 6,094,400 KiB data partition: reserve 624,066,560 B. `adb install` of a fresh app (no copy of ours on the disk), free space BEFORE the install:
-        //   release APK 95.5 MiB + 187.4 MiB of libraries: passes at 1010, fails at 1000;  the same APK padded to 155.5 MiB: passes at 1130, fails at 1115 (the line rises 2 MiB per MiB of APK).
-        val reserve = 624_066_560L
-        fun fits(apkMiB: Double, freeMiB: Long) = UpdateLogic.storagePlan((apkMiB * mib).toLong(), (187.4 * mib).toLong(), freeBytes = freeMiB * mib, reserveBytes = reserve, marginBytes = 32 * mib).fitsKeeping
-        assertTrue(fits(95.5, 1010)); assertFalse(fits(95.5, 1000))
-        assertTrue(fits(155.5, 1130)); assertFalse(fits(155.5, 1115))
+        // Android 10 emulator, 6,094,400 KiB data partition, `adb install --no-incremental` of a fresh app (no copy of ours on the disk), the smallest free space BEFORE the install that succeeded (bisection):
+        // small WebView APK (2.3 MiB, no libraries): 301 fails / 304 passes (reserve 297.6 MiB); 2 %: 122 fails / 124 passes (119.0); 100 MiB cap: 104 fails / 106 passes; 20 %: 502 fails / 505 passes (500 MiB cap).
+        // Gecko release APK (95.5 MiB + 187.4 MiB of libraries): 861 fails / 868 passes (297.6); with 2 %: 676 fails / 685 passes (119.0); with the 100 MiB cap: passes at 760.  Line = reserve + 2 x (APK + libraries).
+        val total = 6_094_400L * 1024
+        fun fits(apkMiB: Double, libMiB: Double, freeMiB: Long, reserve: Long) =
+            UpdateLogic.storagePlan(m(apkMiB), m(libMiB), freeBytes = freeMiB * mib, reserveBytes = reserve, marginBytes = 0).fitsKeeping
+        val r5 = UpdateLogic.lowReserve(total); val r2 = UpdateLogic.lowReserve(total, percent = 2); val r100 = UpdateLogic.lowReserve(total, maxBytes = 100 * mib); val r20 = UpdateLogic.lowReserve(total, percent = 20)
+        assertTrue(fits(2.3, 0.0, 304, r5)); assertFalse(fits(2.3, 0.0, 301, r5))
+        assertTrue(fits(2.3, 0.0, 124, r2)); assertFalse(fits(2.3, 0.0, 122, r2))
+        assertTrue(fits(2.3, 0.0, 106, r100)); assertFalse(fits(2.3, 0.0, 104, r100))
+        assertTrue(fits(2.3, 0.0, 505, r20)); assertFalse(fits(2.3, 0.0, 502, r20))
+        assertTrue(fits(95.5, 187.4, 868, r5)); assertFalse(fits(95.5, 187.4, 861, r5))
+        assertTrue(fits(95.5, 187.4, 690, r2)); assertFalse(fits(95.5, 187.4, 676, r2)) // measured passes at 685; the line says 684.8 (rounded inputs): 690 keeps a margin
+        assertTrue(fits(95.5, 187.4, 760, r100))
     }
 
-    @Test fun theOwnersTabletNeedsAboutThreeGigabytesAndTheOtherWayDoesNotHelp() {
-        // alpha27 Diagnostics from the owner's tablet: 1.62 GB free of 27.75 GB (reserve a tenth = 2.775 GB); this app: package 94.4 + libraries 131.7 + data 62.3 + cache 228.1 MB; alpha28 is a 94.4 MiB APK
-        val mib = 1L shl 20
-        fun m(x: Double) = (x * mib).toLong()
-        val reserve = m(2.775 * 1024)
+    @Test fun theOwnersTabletAlreadyHasRoomForTheUpdate() {
+        // alpha27 Diagnostics from the owner's tablet: 1.62 GB free of 27.75 GB; this app: package 94.4 + libraries 131.7 + data 62.3 + cache 228.1 MB; alpha30 is a 94.4 MiB APK.
+        // The reserve there is 500 MiB (the cap), not a tenth (2.8 GB): alpha28-alpha30 said "needs about 3.1 GB, free 1.4 GB more" and sent the owner to delete things for nothing.
+        val reserve = UpdateLogic.lowReserve(m(27.75 * 1024))
         val plan = UpdateLogic.storagePlan(m(94.4), m(131.7), freeBytes = m(1.62 * 1024), reserveBytes = reserve)
-        assertFalse(plan.fitsKeeping); assertFalse(plan.fitsDropping)
-        assertTrue("short by about 1.4 GB in place: ${plan.shortBy / mib} MiB", plan.shortBy in m(1400.0)..m(1500.0))
-        val other = UpdateLogic.otherWayPlan(plan, ownBytes = m(94.4 + 131.7 + 62.3 + 228.1), apkBytes = m(94.4), fileKept = true)
-        assertFalse(other.fits)
-        assertTrue("about 2.0 GB would be free after the uninstall: ${other.freeAfter / mib} MiB", other.freeAfter in m(2000.0)..m(2150.0))
-        assertTrue("and the install would still be about 1.1 GB short: ${other.shortBy / mib} MiB", other.shortBy in m(1050.0)..m(1200.0))
+        assertTrue("needs about 0.96 GiB: ${plan.needKeep / mib} MiB", plan.needKeep in m(970.0)..m(1000.0))
+        assertTrue(plan.fitsKeeping); assertEquals(0L, plan.shortBy)
+        // and with the old picture (a tenth) it would have said the opposite
+        val old = UpdateLogic.storagePlan(m(94.4), m(131.7), freeBytes = m(1.62 * 1024), reserveBytes = m(2.775 * 1024), marginBytes = 48 * mib)
+        assertFalse(old.fitsKeeping)
+    }
+
+    @Test fun theOtherWayHelpsOnlyWhenTheUninstallFreesEnough() {
+        // a tablet that is genuinely tight: 700 MiB free, a 92 MB APK with 132 MB of libraries, reserve 500 MiB -> in place needs 980 (kept) / 888 (dropped)
+        val plan = UpdateLogic.storagePlan(92 * mib, 132 * mib, freeBytes = 700 * mib, reserveBytes = 500 * mib)
+        assertFalse(plan.fitsKeeping); assertFalse(plan.fitsDropping); assertEquals(188 * mib, plan.shortBy)
+        val other = UpdateLogic.otherWayPlan(plan, ownBytes = m(94.4 + 131.7 + 62.3 + 228.1), apkBytes = 92 * mib, fileKept = true) // the uninstall hands back about 0.5 GB
+        assertTrue("about 1.1 GB would be free after the uninstall: ${other.freeAfter / mib} MiB", other.freeAfter in m(1100.0)..m(1200.0))
+        assertTrue(other.fits); assertEquals(0L, other.shortBy)
     }
 
     @Test fun theOtherWayFitsWhenTheUninstallFreesEnoughAndCountsADownloadThatIsStillToCome() {
-        val mb = 1L shl 20
-        val plan = UpdateLogic.storagePlan(92 * mb, 132 * mb, freeBytes = 1000 * mb, reserveBytes = 1100 * mb)       // needKeep 1464
-        val big = UpdateLogic.otherWayPlan(plan, ownBytes = 700 * mb, apkBytes = 92 * mb, fileKept = true)            // 1000 + 700 - 92 = 1608 >= 1464
-        assertTrue(big.fits); assertEquals(0L, big.shortBy); assertEquals(1608 * mb, big.freeAfter)
-        val small = UpdateLogic.otherWayPlan(plan, ownBytes = 400 * mb, apkBytes = 92 * mb, fileKept = true)          // 1308: 156 MB short
-        assertFalse(small.fits); assertEquals(156 * mb, small.shortBy)
-        val notYet = UpdateLogic.otherWayPlan(plan, ownBytes = 400 * mb, apkBytes = 92 * mb, fileKept = false)         // the download is on the disk by then and leaves with the app: same as kept
-        assertEquals(1400 * mb, notYet.freeAfter)
-        assertEquals(0L, UpdateLogic.otherWayPlan(UpdateLogic.storagePlan(92 * mb, 0, 0, 0), 0, 92 * mb, true).freeAfter) // never negative
+        val plan = UpdateLogic.storagePlan(92 * mib, 132 * mib, freeBytes = 1000 * mib, reserveBytes = 1100 * mib)       // needKeep 1100 + 448 + 32 = 1580
+        val big = UpdateLogic.otherWayPlan(plan, ownBytes = 700 * mib, apkBytes = 92 * mib, fileKept = true)            // 1000 + 700 - 92 = 1608 >= 1580
+        assertTrue(big.fits); assertEquals(0L, big.shortBy); assertEquals(1608 * mib, big.freeAfter)
+        val small = UpdateLogic.otherWayPlan(plan, ownBytes = 400 * mib, apkBytes = 92 * mib, fileKept = true)          // 1308: 272 MB short
+        assertFalse(small.fits); assertEquals(272 * mib, small.shortBy)
+        val notYet = UpdateLogic.otherWayPlan(plan, ownBytes = 400 * mib, apkBytes = 92 * mib, fileKept = false)         // the download is on the disk by then and leaves with the app: same as kept
+        assertEquals(1400 * mib, notYet.freeAfter)
+        assertEquals(0L, UpdateLogic.otherWayPlan(UpdateLogic.storagePlan(92 * mib, 0, 0, 0), 0, 92 * mib, true).freeAfter) // never negative
     }
 
     @Test fun storagePlanWithoutNativeLibraries() { // the WebView build: a 2 MB app on a small partition
-        val mb = 1L shl 20
-        val plan = UpdateLogic.storagePlan(2 * mb, 0, freeBytes = 400 * mb, reserveBytes = 300 * mb)
+        val plan = UpdateLogic.storagePlan(2 * mib, 0, freeBytes = 400 * mib, reserveBytes = 300 * mib)
         assertTrue(plan.fitsKeeping); assertEquals(0L, plan.shortBy)
     }
 
