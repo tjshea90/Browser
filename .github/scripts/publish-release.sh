@@ -32,7 +32,7 @@ esac
   else
     echo "- Install: open this page on the tablet, tap \`$ASSET\`, and allow installing from this source if Android asks. It installs over the previous $TITLE because the signing certificate is the same."
   fi
-  echo "- If Android says \"App not installed\" or \"not enough storage\": an install only finishes while a tenth of the tablet's storage stays free afterwards, on top of the room the update takes while it installs (the file twice plus its unpacked libraries: about 0.4 GB for Kestrel G). On a 28 GB tablet that is about 3.1 GB free. Free some room (old installer files and watched videos in Downloads, Settings > Storage) and try again; Kestrel's Updates screen shows the exact numbers. Uninstalling first frees only what the old copy used (about 0.5 GB), so it helps only when you are that close."
+  echo "- If Android says \"App not installed\" or \"not enough storage\": an install only finishes while Android's own reserve stays free afterwards (5 % of the tablet's storage, at most 500 MB), on top of the room the update takes while it installs (the file and its unpacked libraries, each counted twice: about 0.45 GB for Kestrel G). On a 28 GB tablet that is about 1 GB free. Free some room (old installer files and watched videos in Downloads, Settings > Storage) and try again; Kestrel's Updates screen shows the exact numbers. Uninstalling first frees only what the old copy used (about 0.5 GB), so it helps only when you are that close."
   echo "- Built and signed by GitHub Actions from commit \`${GITHUB_SHA:-unknown}\`; the certificate was verified on this exact APK (SHA-256 \`$CERT\`)."
   echo "- APK SHA-256: \`$SUM\`"
 } > release-notes.md
