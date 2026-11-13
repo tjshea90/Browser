@@ -566,4 +566,76 @@ class EngineTest {
         val n = h.enqueue("https://x.test/new")
         assertTrue(n > 5)
     }
+
+    // ---- the waiting line (AD1b-1): Start now, move up / down, order kept in the store
+    private fun slow(bytes: Int = 6 * MiB) = FakeServer(testBytes(bytes)).also { it.chunkDelayMs = 15; it.chunk = 64 * 1024 }
+    private fun line(h: H, vararg ids: Long) = ids.map { h.view(it)!!.queuePos }
+
+    @Test(timeout = 90_000) fun startNowRunsAQueuedDownloadOverTheLimitAndOffersTheMoves() {
+        val h = H(slow(), cfg(maxActive = 1))
+        val a = h.enqueue("https://files.test/a.bin"); val b = h.enqueue("https://files.test/b.bin"); val c = h.enqueue("https://files.test/c.bin")
+        h.await(a, "a running") { it?.state == DlState.RUNNING }
+        h.await(c, "c waiting") { it?.state == DlState.QUEUED && it.queuePos == 1 }
+        assertEquals(listOf(0, 1), line(h, b, c))
+        assertEquals(listOf(Action.START_NOW, Action.MOVE_DOWN, Action.CANCEL), h.view(b)!!.actions)           // first in line: nothing above it
+        assertEquals(listOf(Action.START_NOW, Action.MOVE_UP, Action.CANCEL), h.view(c)!!.actions)             // last in line: nothing below it
+        h.engine.startNow(c)
+        h.await(c, "c running over the limit of one") { it?.state == DlState.RUNNING }
+        assertEquals("a is not disturbed", DlState.RUNNING, h.view(a)!!.state)
+        assertEquals("b still waits, and is now first and last of the line", DlState.QUEUED, h.view(b)!!.state)
+        h.await(b, "b alone in the line") { it?.queuePos == 0 && it.queueSize == 1 }
+        assertEquals(listOf(Action.START_NOW, Action.CANCEL), h.view(b)!!.actions)
+        h.completed(a); h.completed(b); h.completed(c)
+    }
+
+    @Test(timeout = 90_000) fun movingUpAndDownReordersTheLineAndTheOrderIsStored() {
+        val h = H(slow(), cfg(maxActive = 1))
+        val a = h.enqueue("https://files.test/a.bin"); val b = h.enqueue("https://files.test/b.bin"); val c = h.enqueue("https://files.test/c.bin"); val d = h.enqueue("https://files.test/d.bin")
+        h.await(a, "a running") { it?.state == DlState.RUNNING }
+        h.await(d, "d waiting") { it?.queuePos == 2 }
+        h.engine.move(d, up = true)                       // b d c
+        h.await(d, "d moved up") { it?.queuePos == 1 }
+        assertEquals(listOf(0, 2, 1), line(h, b, c, d))
+        h.engine.move(b, up = false)                      // d b c
+        h.await(b, "b moved down") { it?.queuePos == 1 }
+        assertEquals(listOf(1, 2, 0), line(h, b, c, d))
+        h.engine.move(d, up = true)                       // the first one cannot go higher: nothing changes
+        Thread.sleep(150)
+        assertEquals(listOf(1, 2, 0), line(h, b, c, d))
+        val rows = listOf(d, b, c).map { id -> h.awaitRow(id, "stored priority") { (it?.prio ?: 0) > 0 }!!.prio }
+        assertTrue("the stored priorities follow the line: $rows", rows[0] > rows[1] && rows[1] > rows[2])
+        h.completed(a)
+        h.await(d, "d starts first after a") { it?.state == DlState.RUNNING || it?.state == DlState.STARTING || it?.state == DlState.COMPLETED }
+        assertEquals("b and c still wait their turn", DlState.QUEUED, h.view(c)!!.state)
+        h.completed(d); h.completed(b); h.completed(c)
+    }
+
+    @Test(timeout = 90_000) fun aPausedDownloadCanStartNowAndOnlyThatRunJumpsTheLine() {
+        val h = H(slow(), cfg(maxActive = 1))
+        val a = h.enqueue("https://files.test/a.bin"); val b = h.enqueue("https://files.test/b.bin")
+        h.await(a, "a running") { it?.state == DlState.RUNNING }
+        h.engine.pause(b)
+        h.await(b, "b paused") { it?.state == DlState.PAUSED_USER }
+        assertTrue(Action.START_NOW in h.view(b)!!.actions)
+        h.engine.startNow(b)
+        h.await(b, "b running beside a") { it?.state == DlState.RUNNING }
+        h.engine.pause(b)
+        h.await(b, "b paused again") { it?.state == DlState.PAUSED_USER }
+        h.engine.resume(b)                                // the normal way back: into the line, not ahead of everything
+        h.await(b, "b waits again") { it?.state == DlState.QUEUED }
+        assertEquals("the forced priority was for one run only", 0, h.awaitRow(b, "priority back") { it?.state == DlState.QUEUED }!!.prio)
+        h.completed(a); h.completed(b)
+    }
+
+    @Test(timeout = 90_000) fun atMostThreeStartNowDownloadsRunTogether() {
+        val h = H(slow(12 * MiB), cfg(maxActive = 1))
+        val ids = (1..6).map { h.enqueue("https://files.test/f$it.bin") }
+        h.await(ids[0], "first running") { it?.state == DlState.RUNNING }
+        for (id in ids.drop(1)) h.engine.startNow(id)
+        h.await(ids[3], "three forced running") { it?.state == DlState.RUNNING }
+        Thread.sleep(300)
+        val running = ids.count { h.view(it)!!.state == DlState.RUNNING || h.view(it)!!.state == DlState.STARTING }
+        assertEquals("one normal + at most three forced", 4, running)
+        for (id in ids) h.completed(id)
+    }
 }
