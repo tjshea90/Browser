@@ -331,6 +331,64 @@ class StreamEngineTest {
         assertEquals(Reason.HTTP, f.reason); assertEquals(404, f.detail)
     }
 
+    // ---- EY-8 (research/REVIEW-EXTERNAL-2.md section 4.5): what the download carries, and the header ladder
+    private val player = mapOf("Referer" to "https://player.test/", "Origin" to "https://player.test")
+    private val site = mapOf("Referer" to "https://site.test/", "Origin" to "https://site.test")
+
+    private fun enqueueWithLadder(h: H, pl: String, first: Map<String, String>, ladder: List<Map<String, String>>): Long =
+        h.engine.enqueue(StreamSource("https://cdn.test/v/index.m3u8", pl, "https://site.test/watch", "My clip", first, masterUrl = "https://cdn.test/v/master.m3u8",
+            frame = "https://player.test/embed/7", headerSets = ladder, madeAt = 1_700_000_000_000L, expiresAt = 1_700_000_600_000L))
+
+    @Test(timeout = 60_000) fun theRecoveryDataIsKeptWithTheDownload() {
+        val h = H()
+        val (pl, _) = plainStream(h, 3, 5_000)
+        val id = enqueueWithLadder(h, pl, site, listOf(site, player, emptyMap()))
+        h.completed(id)
+        h.eventually("the record is stored") { h.store.rows[id]?.state == DlState.COMPLETED }
+        val r = h.store.rows[id]!!
+        assertEquals("https://cdn.test/v/master.m3u8", r.masterUrl); assertEquals("https://player.test/embed/7", r.frame)
+        assertEquals(listOf(site, player, emptyMap<String, String>()), r.headerSets)
+        assertEquals(1_700_000_000_000L, r.madeAt); assertEquals(1_700_000_600_000L, r.expiresAt)
+    }
+
+    @Test(timeout = 60_000) fun aServerThatWantsThePlayersAddressGetsTheNextSetOfTheLadderAtOnceAndItStays() {
+        val h = H()
+        val (pl, expected) = plainStream(h, 6, 20_000)
+        h.cdn.gate = { r -> if (r.headers["Referer"] == "https://player.test/") null else 403 }
+        val id = enqueueWithLadder(h, pl, site, listOf(site, player, emptyMap()))
+        val v = h.completed(id)
+        assertArrayEquals(expected, h.out(v))
+        h.eventually("the working set is stored") { h.store.rows[id]?.headers == player }
+        // nothing of the download was in yet, so the headers were suspected first: no short waits were spent on the wrong ones, and the workers that were refused meanwhile took the new set without using a try
+        val refused = h.cdn.seen.count { it.second != player }
+        assertTrue("only the first requests were refused, not four per part ($refused)", refused <= 4)
+    }
+
+    @Test(timeout = 60_000) fun refusalsThatStartHalfWayAreAskedAgainBeforeTheLadderIsTried() {
+        val h = H()
+        val (pl, expected) = plainStream(h, 8, 10_000)
+        h.cdn.chunkDelayMs = 2
+        val passed = java.util.concurrent.atomic.AtomicInteger()
+        h.cdn.gate = { r -> if (passed.get() >= 3 && r.headers["Referer"] != "https://player.test/") 403 else { passed.incrementAndGet(); null } }
+        val id = enqueueWithLadder(h, pl, site, listOf(site, player, emptyMap()))
+        val v = h.completed(id)
+        assertArrayEquals(expected, h.out(v))
+        h.eventually("the working set is stored") { h.store.rows[id]?.headers == player }
+        val perPart = h.cdn.seen.filter { it.second == site }.groupingBy { it.first }.eachCount()
+        assertTrue("the first refused part was asked for again with the same headers first: $perPart", (perPart.values.maxOrNull() ?: 0) >= 4)
+    }
+
+    @Test(timeout = 60_000) fun whenNoSetOfTheLadderWorksTheLinkCountsAsExpiredAndTheFirstHeadersStay() {
+        val h = H()
+        val (pl, _) = plainStream(h, 4, 5_000)
+        h.cdn.statusFor["https://cdn.test/v/s1.ts"] = 403                           // refused whatever is sent
+        val id = enqueueWithLadder(h, pl, site, listOf(site, player, emptyMap()))
+        val f = h.await(id, "failure") { it?.state == DlState.FAILED }!!
+        assertEquals(Reason.LINK_EXPIRED, f.reason)
+        assertEquals("the first try, three short waits, and the two other sets", 6, h.cdn.count("https://cdn.test/v/s1.ts"))
+        h.eventually("the stored headers are the first set again") { h.store.rows[id]?.headers == site }
+    }
+
     @Test(timeout = 60_000) fun liveDrmAndUnreadablePlaylistsAreRefused() {
         val h = H()
         val live = h.await(h.enqueue("#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\na.ts\n"), "live") { it?.state == DlState.FAILED }!!
