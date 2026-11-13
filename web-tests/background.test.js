@@ -569,3 +569,14 @@ test('page report: a message from a frame without a tab, an unknown tab and a ma
   await h.flushTimers();
   eq(h.of('rep')[0].f, []); eq(h.of('rep')[0].e, []);
 });
+
+test('page report: a page whose main request this script never saw (a cold start with a link) is still reported from its first sub-resource', async () => {
+  const h = harness(standardApp());
+  await h.req('script', PLAIN, 'https://early.example/');           // no main_frame request first: the extension was not ready yet
+  h.listeners.completed({ tabId: 1, type: 'image', url: 'https://early.example/a.png', statusCode: 404 });
+  await h.flushTimers();
+  const r = h.of('rep');
+  assert.equal(r.length, 1);
+  assert.equal(r[0].p, 'https://early.example/');
+  eq(r[0].f, ['image early.example/a.png HTTP 404']);
+});

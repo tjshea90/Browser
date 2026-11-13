@@ -380,9 +380,11 @@ browser.webRequest.onBeforeRequest.addListener(function (d) {
     if (h) { cfgMode.delete(h); cfgAt.delete(h); cssCache.delete('t|' + h); askCfg(h); } // a Shields switch may have changed: ask again. Not awaited - the answer beats the document's first bytes over a hotspot
     return {};
   }
-  var L0 = pageLog.get(d.tabId); if (L0) L0.reqs++;
   var page = topPage(d);
   if (!page) return {};
+  var L0 = pageLog.get(d.tabId);
+  if (!L0 && d.tabId >= 0) { newLog(d.tabId, page); reportLater(d.tabId); L0 = pageLog.get(d.tabId); } // a page that began before this script was ready (a cold start with a link) is reported too
+  if (L0) L0.reqs++;
   var host = pageHost(page);
   if (!host) return {};
   var mode = cfgMode.get(host);
