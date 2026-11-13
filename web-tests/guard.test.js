@@ -213,3 +213,122 @@ test('a link with words of its own near the player, and a same-site link on it, 
   assert.deepEqual(await notes(page), []);
 });
 
+
+// ---- AP1: one press plays the video, the fake layers are still refused
+const STUB_PLAY = 'HTMLMediaElement.prototype.play = function () { window.__plays = (window.__plays || 0) + 1; return Promise.resolve(); };';
+const plays = (page) => page.evaluate(() => window.__plays || 0);
+const real = (page) => page.evaluate(() => window.__real || 0);
+
+test('AP1: an ad script that takes the first press on the video: the pop-up is refused and the video is started at once', async () => {
+  const page = await open(`<video id="v" style="width:300px;height:200px;background:#000"></video><script>${STUB_PLAY}
+    var first = true;
+    document.addEventListener('click', function (e) { if (first) { first = false; window.open('${AD}', '_blank'); e.stopImmediatePropagation(); e.preventDefault(); } }, true);</script>`);
+  await page.mouse.click(100, 100);
+  await settle(800);
+  assert.equal(page.popups.length, 0);
+  assert.deepEqual(await notes(page), ['open|' + AD]);
+  assert.equal(await plays(page), 1, 'one press started the video');
+});
+
+test('AP1: an invisible link laid over the player: refused as before, switched off, and the video starts', async () => {
+  const page = await open(`<video style="width:300px;height:200px"></video><a id="cover" href="${AD}" target="_blank" style="position:fixed;inset:0;opacity:0"></a><script>${STUB_PLAY}</script>`);
+  await page.mouse.click(100, 100);
+  await settle(800);
+  assert.equal(page.popups.length, 0);
+  assert.deepEqual(await notes(page), ['overlay|' + AD]);
+  assert.equal(await plays(page), 1);
+  assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById('cover')).pointerEvents), 'none', 'the next press goes straight through');
+});
+
+const PLAYER_WITH_LAYERS = (layers) => `<div id="player" class="player" style="position:relative;width:300px;height:200px;background:#111">
+  <div id="realplay" style="position:absolute;left:0;top:0;right:0;bottom:0" onclick="window.__real=(window.__real||0)+1">play</div>${layers}</div>`;
+const LAYER = (id, remove) => `<div id="${id}" style="position:absolute;left:0;top:0;right:0;bottom:0"></div><script>document.getElementById('${id}').addEventListener('click', function () { window.__layerClicks = (window.__layerClicks || 0) + 1; window.open('${AD}'); ${remove ? 'this.remove();' : ''} });</script>`;
+
+test('AP1: a fake play layer that opens an ad and removes itself: the press is repeated at the same place and reaches the real player', async () => {
+  const page = await open(PLAYER_WITH_LAYERS(LAYER('fake1', true)));
+  await page.mouse.click(100, 100);
+  await settle(900);
+  assert.equal(page.popups.length, 0);
+  assert.deepEqual(await notes(page), ['open|' + AD]);
+  assert.equal(await real(page), 1, 'the real play control got the press');
+});
+
+test('AP1: two fake layers on top of each other: one press goes through both', async () => {
+  const page = await open(PLAYER_WITH_LAYERS(LAYER('fake1', true) + LAYER('fake2', true)));
+  await page.mouse.click(100, 100);
+  await settle(1300);
+  assert.equal(page.popups.length, 0);
+  assert.deepEqual(await notes(page), ['open|' + AD, 'open|' + AD]);
+  assert.equal(await real(page), 1);
+});
+
+test('AP1: a fake layer that never goes away is stepped over for the replay and still counted once per press', async () => {
+  const page = await open(PLAYER_WITH_LAYERS(LAYER('fake1', false)));
+  await page.mouse.click(100, 100);
+  await settle(900);
+  assert.equal(page.popups.length, 0);
+  assert.equal(await page.evaluate(() => window.__layerClicks), 1, 'the layer saw only the real press');
+  assert.equal(await real(page), 1);
+  await settle(1700);
+  assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById('fake1')).pointerEvents), 'auto', 'the layer is back to normal afterwards (it may be a control)');
+});
+
+test('AP1: at most three rounds, however many layers an ad stacks', async () => {
+  const layers = [1, 2, 3, 4, 5, 6].map((n) => LAYER('fake' + n, true)).join('');
+  const page = await open(PLAYER_WITH_LAYERS(layers));
+  await page.mouse.click(100, 100);
+  await settle(2200);
+  assert.equal(page.popups.length, 0);
+  assert.ok((await notes(page)).length <= 4, 'the real press and three rounds at most: ' + (await notes(page)).length);
+  assert.equal(await real(page), 0, 'six layers: the cap stops the rounds before the player is reached (the next real press continues)');
+});
+
+test('AP1: a press on a video with no ad in the way is left alone (nothing is started by us)', async () => {
+  const page = await open(`<video id="v" style="width:300px;height:200px"></video><script>${STUB_PLAY}</script>`);
+  await page.mouse.click(100, 100);
+  await settle(700);
+  assert.deepEqual(await notes(page), []);
+  assert.equal(await plays(page), 0);
+});
+
+test('AP1: a press that pauses a playing video is not turned into a play, even if an ad script opens a pop-up with it', async () => {
+  const page = await open(`<video id="v" style="width:300px;height:200px"></video><script>${STUB_PLAY}
+    Object.defineProperty(HTMLMediaElement.prototype, 'paused', { get: function () { return false; } });
+    Object.defineProperty(HTMLMediaElement.prototype, 'readyState', { get: function () { return 4; } });
+    Object.defineProperty(HTMLMediaElement.prototype, 'currentTime', { get: function () { return 12; } });
+    document.addEventListener('click', function () { window.open('${AD}'); }, true);</script>`);
+  await page.mouse.click(100, 100);
+  await settle(800);
+  assert.deepEqual(await notes(page), ['open|' + AD]);
+  assert.equal(await plays(page), 0);
+});
+
+test('AP1: a press that was not on a player never starts a video, even when it makes the page open an ad', async () => {
+  const page = await open(`<button style="width:100px;height:50px" onclick="window.open('${AD}')">b</button><div style="margin-top:300px"><video style="width:300px;height:200px"></video></div><script>${STUB_PLAY}</script>`);
+  await page.mouse.click(40, 25);
+  await settle(800);
+  assert.deepEqual(await notes(page), ['open|' + AD]);
+  assert.equal(await plays(page), 0);
+});
+
+test('AP1: a player in a frame under a layer of the page: the refused press is passed to the frame, which starts its video', async () => {
+  const page = await open(`<iframe src="https://player.example/embed" style="position:absolute;left:0;top:0;width:400px;height:300px;border:0"></iframe>
+    <div id="layer" style="position:absolute;left:0;top:0;width:400px;height:300px" onclick="window.open('${AD}')"></div>`,
+    { embed: `<video id="v" style="width:400px;height:300px;background:#000"></video><script>${STUB_PLAY}</script>` });
+  await settle(900);
+  await page.mouse.click(100, 100);
+  await settle(900);
+  assert.equal(page.popups.length, 0);
+  assert.deepEqual(await notes(page), ['open|' + AD]);
+  const frame = page.frames().find((f) => f.url().indexOf('player.example') >= 0);
+  assert.equal(await frame.evaluate(() => window.__plays || 0), 1, 'the frame started its own video');
+});
+
+test('AP1: with the guard off for the site nothing is assisted (the page behaves as it would in any browser)', async () => {
+  const page = await open(`<video style="width:300px;height:200px"></video><div style="position:absolute;inset:0" onclick="window.open('${AD}')"></div><script>${STUB_PLAY}</script>`, { off: true });
+  const popup = page.waitForEvent('popup', { timeout: 3000 });
+  await page.mouse.click(100, 100);
+  await popup;
+  await settle(600);
+  assert.equal(await plays(page), 0);
+});
