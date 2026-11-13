@@ -1,0 +1,15 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- a browser window with a slash through it: "a page was blocked" -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:strokeMiterLimit="4"
+        android:pathData="M3.5,6 H20.5 V18 H3.5 Z M3.5,9.5 H20.5 M4,20.5 L20,3.5" />
+</vector>
