@@ -99,23 +99,13 @@ object Eac3 {
         val h = head(b, o, end) ?: return null
         val samples = h.blocks * 256
         val rateKbps = ((h.size.toLong() * 8 * h.rate) / samples / 1000).toInt()
-        // dec3: data_rate(13) num_ind_sub(3) | per independent substream: fscod(2) bsid(5) reserved(1) asvc(1) bsmod(3) acmod(3) lfeon(1) reserved(3) num_dep_sub(4) reserved(1)
-        val bits = java.math.BigInteger.ZERO.let { _ ->
-            var v = 0L
-            v = (v shl 13) or rateKbps.toLong().coerceIn(0, 8191)
-            v = (v shl 3) or 0L
-            v = (v shl 2) or h.fscod.toLong()
-            v = (v shl 5) or h.bsid.toLong()
-            v = (v shl 1); v = (v shl 1)
-            v = (v shl 3)                                                       // bsmod unknown
-            v = (v shl 3) or h.acmod.toLong()
-            v = (v shl 1) or h.lfe.toLong()
-            v = (v shl 3)
-            v = (v shl 4)                                                       // num_dep_sub = 0 (a dependent substream only widens the layout)
-            v = (v shl 1)
-            v
-        }
-        val cfg = ByteArray(5) { i -> (bits shr (8 * (4 - i))).toByte() }
+        // dec3: data_rate(13) num_ind_sub(3) | per independent substream: fscod(2) bsid(5) reserved(1) asvc(1) bsmod(3) acmod(3) lfeon(1) reserved(3) num_dep_sub(4) reserved(1) = 40 bits
+        var v = 0L
+        fun put(value: Long, width: Int) { v = (v shl width) or (value and ((1L shl width) - 1)) }
+        put(rateKbps.toLong().coerceIn(0, 8191), 13); put(0, 3)                // one independent substream
+        put(h.fscod.toLong(), 2); put(h.bsid.toLong(), 5); put(0, 1); put(0, 1); put(0, 3) // asvc and bsmod unknown
+        put(h.acmod.toLong(), 3); put(h.lfe.toLong(), 1); put(0, 3); put(0, 4); put(0, 1) // num_dep_sub = 0: a dependent substream only widens the layout
+        val cfg = ByteArray(5) { k -> (v shr (8 * (4 - k))).toByte() }
         return AudioInfo(h.rate, CHANNELS[h.acmod] + h.lfe, samples, cfg)
     }
 }
