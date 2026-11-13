@@ -31,6 +31,7 @@ object DeviceVideo {
     @Volatile private var readMs = -1L
 
     private const val KEY_HW = "vid_hw"
+    private const val KEY_WV = "vid_wv"
     private const val KEY_FP = "vid_fp"
 
     /** Hardware decoders as known right now: from this run's probe, else from the stored answer for this system build, else null (unknown). Cheap; safe on any thread. */
@@ -38,7 +39,7 @@ object DeviceVideo {
         hw?.let { return it }
         val p = ctx.getSharedPreferences("kestrel_video", Context.MODE_PRIVATE)
         if (p.getString(KEY_FP, null) != Build.FINGERPRINT) return null
-        return VideoPolicy.Hardware.decode(p.getString(KEY_HW, null))?.also { hw = it }
+        return VideoPolicy.Hardware.decode(p.getString(KEY_HW, null))?.also { hw = it; widevine = p.getBoolean(KEY_WV, false) }
     }
 
     /** True once a probe found the Widevine scheme (the DRM prompt is only worth showing then). Unknown (never probed) counts as false until [read] ran. */
@@ -73,7 +74,7 @@ object DeviceVideo {
         val changed = hw?.encode() != fresh.encode()
         if (decs.isNotEmpty()) { // a probe that found nothing (service not ready) is not remembered
             hw = fresh
-            ctx.getSharedPreferences("kestrel_video", Context.MODE_PRIVATE).edit().putString(KEY_HW, fresh.encode()).putString(KEY_FP, Build.FINGERPRINT).apply()
+            ctx.getSharedPreferences("kestrel_video", Context.MODE_PRIVATE).edit().putString(KEY_HW, fresh.encode()).putBoolean(KEY_WV, widevine).putString(KEY_FP, Build.FINGERPRINT).apply()
         }
         app.kestrel.browser.diag.Health.log("video", "decoders", "${fresh.encode()} ${decs.size} decoder(s) in $readMs ms, widevine=$widevine")
         return changed
