@@ -189,7 +189,7 @@ class VideoFlow(private val a: BrowserActivity) {
     }
 
     /** The default name (without its extension) of a stream's quality: the page's title and the quality, the same text the download itself uses. */
-    private fun stemFor(tab: Tab, label: String): String = MediaNames.clean(MediaLabels.fileStem(tab.title, UrlParts.hostOf(tab.url) ?: "", label))
+    private fun stemFor(tab: Tab, label: String): String = MediaNames.streamStem(tab.title, tab.url, UrlParts.hostOf(tab.url) ?: "", label)
 
     /** One line under the format (owner request X17): file type, size, length - whatever is known, in that order. */
     private fun rowDetail(vararg parts: String): String = parts.filter { it.isNotEmpty() && it != "size unknown" }.joinToString("  \u00B7  ")
@@ -224,7 +224,7 @@ class VideoFlow(private val a: BrowserActivity) {
                         val ext = MediaSniff.saveExtension(c.url, c.mime)
                         val title = if (c.audioOnly) "Audio only" else q.ifEmpty { "Video file" }
                         val detail = rowDetail(MediaLabels.format(c), MediaLabels.size(c.length), MediaLabels.duration(c.durationMs))
-                        val stem = MediaNames.defaultStem(c, tab.title, host, if (c.audioOnly) "audio" else q)
+                        val stem = MediaNames.defaultStem(c, tab.title, host, if (c.audioOnly) "audio" else q, tab.url)
                         into.add(VideoPanel.Choice("f|" + c.key, title, detail, stem, ext, c, badge = if (c === ranked.exact) "THIS VIDEO" else null))
                     }
                 }

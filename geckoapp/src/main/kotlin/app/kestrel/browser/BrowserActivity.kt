@@ -2292,7 +2292,10 @@ open class BrowserActivity : Activity(), DockListener {
             val headers = HashMap<String, String>()
             if (given != null) headers.putAll(given)
             else UrlParts.parse(tab.url)?.let { headers["Referer"] = "${it.scheme}://${it.hostForAuthority}/" }
-            DownloadController.enqueue(this, Source(url, tab.url.takeIf { it.isNotEmpty() }, nameOverride ?: Downloads.fileName(url, cd, mime), mime, headers, fetcher = 1, priv = tab.isPrivateTab, meteredOk = true, nameFixed = nameOverride != null))
+            // a video named like a release, or one whose own name says nothing on a page that names the episode, is saved as "Ozark S02E05.mp4" (owner message 26, AL6); every other file keeps the server's name
+            val raw = nameOverride ?: Downloads.fileName(url, cd, mime)
+            val named = if (nameOverride == null) MediaNames.friendlyFileName(raw, mime, tab.title, tab.url, UrlParts.hostOf(tab.url) ?: "") else raw
+            DownloadController.enqueue(this, Source(url, tab.url.takeIf { it.isNotEmpty() }, named, mime, headers, fetcher = 1, priv = tab.isPrivateTab, meteredOk = true, nameFixed = nameOverride != null || named != raw))
             askNotificationPermissionOnce() // the banner at the top says "Download started" (DownloadPopup); no toast any more
         }
         if (tab.isPrivateTab) askYesNo("Download from a private tab?", "The file is saved in your Downloads folder and stays there after you close the private tab. Kestrel keeps no record of it.", "Download", "Cancel", { ok -> if (ok) go() })
