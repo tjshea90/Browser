@@ -407,3 +407,27 @@ test('procedural: an app that does not answer, or answers nothing, never breaks 
   assert.equal(await a.evaluate(() => document.getElementById('ok').textContent), 'ok');
   assert.deepEqual(await hiddenIds(b), []);
 });
+
+// ---------------------------------------------------------------- page problems for Diagnostics > Page report
+const jserr = (page) => page.evaluate(() => window.__msgs.filter((m) => m.k === 'jserr'));
+
+test('page problems: a script that throws and an image that cannot be used are reported to the background, with the address of the file', async () => {
+  const page = await open(`<img src="https://site.example/broken.png"><script>throw new Error('boom')<\/script>`);
+  await page.waitForTimeout(600);
+  const m = await jserr(page);
+  assert.ok(m.some((x) => x.t === 'js' && /boom/.test(x.m)), 'the script error: ' + JSON.stringify(m));
+  assert.ok(m.some((x) => x.t === 'load' && x.m === 'img' && /broken\.png/.test(x.s)), 'the failed picture: ' + JSON.stringify(m));
+});
+
+test('page problems: a page that throws in a loop is reported at most eight times from one frame', async () => {
+  const page = await open(`<script>for (var i = 0; i < 30; i++) setTimeout(function () { throw new Error('again'); }, 10 + i);<\/script>`);
+  await page.waitForTimeout(900);
+  assert.equal((await jserr(page)).length, 8);
+});
+
+test('page problems: our own injected elements and a page without problems report nothing', async () => {
+  const page = await open(`<p>fine</p>`);
+  await page.evaluate(() => { const s = document.createElement('style'); s.setAttribute('data-kestrel', 'x'); document.head.appendChild(s); s.dispatchEvent(new Event('error')); });
+  await page.waitForTimeout(300);
+  assert.deepEqual(await jserr(page), []);
+});
