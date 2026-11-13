@@ -1430,3 +1430,7 @@
 ## 2026-11-13T23:42:41Z
 > Waiting on the install and the emulator run. Nothing else is running that could disturb it.
 <!-- sha:ee9deda89b8e -->
+
+## 2026-11-13T23:57:58Z
+> The Home-restore fix and the two new features (blocked-page icon, top-right panel) are built and unit-tested. I'm now waiting on the emulator Home-restore check to finish, then I'll run the visual check of the icon and panel.
+<!-- sha:9417c957f59c -->
