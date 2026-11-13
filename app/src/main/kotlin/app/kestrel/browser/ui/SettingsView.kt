@@ -129,7 +129,6 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
             choice("Video formats offered to sites", listOf("Automatic (default): not a format this tablet would decode in software, so sites send H.264, which it decodes in hardware", "H.264 only: the smoothest and the most compatible; more data on a slow link", "Everything the engine can decode: least data, but VP9 and AV1 run in software and can stutter"), prefs.videoCodecs) { prefs.videoCodecs = it; l.prefsChanged() }
             choice("Protected video (DRM)", listOf("Ask when a site wants it (default; only if this tablet supports it)", "Never"), prefs.videoDrm) { prefs.videoDrm = it; l.prefsChanged() }
             toggle("Calm pages", "Sites are told you prefer less motion and animated GIF pictures play once. Off (default): some sites use animation to hide their loading symbol, so with this on it can stay on screen.", prefs.calmPages) { prefs.calmPages = it; l.prefsChanged() }
-            info("Video tests", "Menu > Diagnostics > Video lab plays short clips in each format on this tablet and counts the dropped frames.")
         }
 
         if (app.kestrel.browser.Flavor.hasPullRefresh) {

@@ -1,5 +1,8 @@
 # Video audit (owner message 18, 2026-11-13) - TASKS AE1
 
+> **2026-11-13 (alpha31): the Video lab (Diagnostics > Video lab, `labs/video.html`) and its four test clips (5.3 MiB: h264 1080p/720p, hevc 720p, vp9 720p) were REMOVED at the owner's request ("delete the test videos and the video test diagnosis because they take up space and are no longer needed"). The results below stay as the record; the decoder line and the video policy line in Diagnostics stay (text only). The Tap lab and Decode lab stay.**
+
+
 > "Audit how the browser handles video within a webpage. Is it using proper acceleration and hardware? Does the browser need more built in codecs or video support? A video I'm playing is choppy,
 > and the initial loading symbol which came from the site's own video player seems to be stuck over the video when it should have disappeared after loading. Figure out if the browser has proper
 > support for common elements of web sites such as updated java, hardware acceleration, video and audio codecs, etc. Research [...] free [...] codecs or engines [...] that can genuinely speed anything

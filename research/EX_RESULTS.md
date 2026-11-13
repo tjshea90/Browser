@@ -1,5 +1,8 @@
 # EX_RESULTS - what happened to the rows of research/REVIEW-EXTERNAL-1.md (work log of 2026-11-12, alpha25)
 
+> **2026-11-13 (alpha31): the Video lab and its test clips were removed (owner request); the numbers below are the record.**
+
+
 The outside review (a separate Claude session) ordered 18 rows. This file keeps what was PROVEN, what only compiles, and what turned out differently from the review. The per-row status lives in TASKS.md (EX-1 .. EX-18).
 Evidence tags as in the review: [V-EMU] seen on the Android 10 x86_64 emulator (no KVM, slow), [V-JVM] a unit/web test, [E] estimate, [N] needs the real tablet.
 
