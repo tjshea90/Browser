@@ -28,6 +28,8 @@ class FakeServer(@Volatile var data: ByteArray) : Fetcher {
     @Volatile var truncateFirstAt = -1L           // the first successful reply ends after this many bytes
     @Volatile var disposition: String? = null
     @Volatile var contentType: String? = "application/octet-stream"
+    @Volatile var reprDigest: String? = null      // sent as Repr-Digest on every reply (the digest of the WHOLE file, as RFC 9530 says even for a 206)
+    @Volatile var contentEncoding: String? = null
     @Volatile var blockUrl: String? = null        // requests to this exact URL get a 403 (an expired signed link)
     @Volatile var redirectTo: String? = null
     @Volatile var failKind: FetchException.Kind? = null
@@ -59,6 +61,8 @@ class FakeServer(@Volatile var data: ByteArray) : Fetcher {
         lastModified?.let { h["Last-Modified"] = it; h["Date"] = "Thu, 01 Jan 2026 00:00:00 GMT" }
         disposition?.let { h["Content-Disposition"] = it }
         contentType?.let { h["Content-Type"] = it }
+        reprDigest?.let { h["Repr-Digest"] = it }
+        contentEncoding?.let { h["Content-Encoding"] = it }
         // If-Match mismatch -> 412 (no body), like a real server
         if (req.cond is Cond.IfMatch && etag != null && (req.cond as Cond.IfMatch).etag != etag) return Resp(412, finalUrl, emptyMap(), ByteArray(0), 0, 0)
         if (req.from >= 0 && supportRange) {

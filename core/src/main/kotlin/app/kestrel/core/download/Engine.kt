@@ -58,6 +58,7 @@ class Engine(
         var sinceCkpt = 0L
         var ckptPending = false
         var resumeAt = 0L
+        var digest: Pair<String, String>? = null // (sha-256 | sha-512, hex) the server states for the WHOLE file (Repr-Digest): checked when the last byte is in (AD1b-1)
         var autoResume = false       // the last run ended in the middle of this download: carry on by itself ([resumeInterrupted])
         var expectBinary = false     // the caller / the file name says this is not a web page: a web page in its place is an error ([ContentSniff])
         var sniffed = false
@@ -469,6 +470,7 @@ class Engine(
             val etag = resp.header("ETag")?.trim()?.takeIf { HttpSemantics.isStrongEtag(it) }
             val lm = resp.header("Last-Modified")?.trim()
             val date = resp.header("Date")?.trim()
+            if (!encoded) noteDigest(job, resp, full = !ranged)
             val wantsBinary = ContentSniff.expectsBinary(rec.name, rec.mime) || ContentSniff.expectsBinary(rec.url, null)
             if (wantsBinary && ContentSniff.isHtmlType(ctype)) { quiet(resp); fail(job, Reason.BAD_CONTENT, 0); throw Exit() } // an honest "text/html" where a video or file was expected: nothing is created
             synchronized(lock) { job.expectBinary = wantsBinary; job.sniffed = false }
@@ -559,6 +561,7 @@ class Engine(
                 val replyLm = resp.header("Last-Modified")?.trim()
                 if (lm != null && replyLm != null && replyLm != lm) { quiet(resp); needDecision(job, Reason.FILE_CHANGED); throw Exit() }
                 synchronized(lock) { rec.ranges = 1; if (job.useOriginal) { job.useOriginal = false; rec.finalUrl = resp.finalUrl; rec.finalAt = now } }
+                if (!HttpSemantics.isEncoded(resp.header("Content-Encoding"))) noteDigest(job, resp, full = false) // a resumed run learns the checksum again: the record does not store it
                 return Opened(resp, reqEnd, reqFrom, verifyLen)
             }
             HttpSemantics.Verdict.FULL_200 -> return fullReply(job, seg, resp)
@@ -598,6 +601,26 @@ class Engine(
     }
 
     /** A plain 200 to a Range request: this server does not do ranges. */
+    /** The checksum of the whole file when the server states one: `Repr-Digest` is for the full representation even on a 206; `Content-Digest` only counts on a complete (200) reply. */
+    private fun noteDigest(job: Job, resp: FetchResponse, full: Boolean) {
+        val d = HttpSemantics.reprDigest(resp.header("Repr-Digest")) ?: (if (full) HttpSemantics.reprDigest(resp.header("Content-Digest")) else null) ?: return
+        synchronized(lock) { job.digest = d }
+    }
+
+    /** True when the finished file hashes to what the server said, or when that cannot be told (the sink cannot be read back: a good download is never failed on a guess). */
+    private fun digestMatches(sink: Sink, d: Pair<String, String>, length: Long): Boolean {
+        if (!sink.readable || length <= 0) return true
+        val md = try { java.security.MessageDigest.getInstance(if (d.first == "sha-512") "SHA-512" else "SHA-256") } catch (e: Exception) { return true }
+        val buf = ByteArray(256 * 1024)
+        var pos = 0L
+        while (pos < length) {
+            val n = sink.pread(pos, buf, 0, minOf(buf.size.toLong(), length - pos).toInt())
+            if (n <= 0) return true
+            md.update(buf, 0, n); pos += n
+        }
+        return md.digest().joinToString("") { "%02x".format(it) } == d.second
+    }
+
     private fun fullReply(job: Job, seg: Seg, resp: FetchResponse): Opened {
         val rec = job.rec
         val onlySeg: Boolean
@@ -810,6 +833,11 @@ class Engine(
             sink.sync()
             val sum = synchronized(lock) { rec.segs.sumOf { it.cursor - it.start } }
             if (rec.total > 0 && sum != rec.total) throw SinkException(Reason.STORAGE, "size mismatch $sum != ${rec.total}")
+            val dg = synchronized(lock) { job.digest }
+            if (dg != null && !digestMatches(sink, dg, sum)) {
+                synchronized(lock) { wipePartial(job) }   // the bytes are wrong: nothing worth resuming, a retry starts clean
+                throw SinkException(Reason.DIGEST, "checksum mismatch")
+            }
             val uri = sink.publish()
             synchronized(lock) {
                 rec.destUri = uri ?: rec.destUri; rec.done = sum; rec.total = if (rec.total < 0) sum else rec.total

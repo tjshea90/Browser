@@ -638,4 +638,36 @@ class EngineTest {
         assertEquals("one normal + at most three forced", 4, running)
         for (id in ids) h.completed(id)
     }
+
+    // ---- the checksum the server states (AD1b-1)
+    private fun sha256Header(b: ByteArray): String = "sha-256=:" + java.util.Base64.getEncoder().encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(b)) + ":"
+
+    @Test(timeout = 60_000) fun aFileThatMatchesItsReprDigestCompletes() {
+        val data = testBytes(3 * MiB)
+        val s = FakeServer(data).also { it.reprDigest = sha256Header(data) }
+        val h = H(s, cfg(parallel = true)); val id = h.enqueue()
+        val v = h.completed(id)
+        assertArrayEquals(data, h.sink(v).bytes)
+    }
+
+    @Test(timeout = 60_000) fun aFileThatDoesNotMatchItsReprDigestFailsAndIsWipedForARetry() {
+        val data = testBytes(3 * MiB)
+        val s = FakeServer(data).also { it.reprDigest = sha256Header(testBytes(3 * MiB, seed = 2)) } // the digest of some other bytes
+        val h = H(s); val id = h.enqueue()
+        val v = h.await(id, "checksum failure") { it?.state == DlState.FAILED }!!
+        assertEquals(Reason.DIGEST, v.reason)
+        assertTrue("the wrong file is not left behind", h.sinks.sinks.values.all { it.discarded && !it.published })
+        assertTrue("a retry starts from nothing", Action.RETRY in v.actions)
+        s.reprDigest = sha256Header(data)                 // the server is right now (a cached copy was stale)
+        h.engine.resume(id)
+        h.completed(id)
+    }
+
+    @Test(timeout = 60_000) fun aDigestOfAnEncodedReplyOrAnUnknownAlgorithmIsIgnored() {
+        val data = testBytes(MiB)
+        val s1 = FakeServer(data).also { it.reprDigest = sha256Header(testBytes(MiB, seed = 9)); it.contentEncoding = "gzip" }
+        h1@ run { val h = H(s1); val id = h.enqueue(); h.completed(id) }          // the digest would describe the compressed bytes, not the file on disk
+        val s2 = FakeServer(data).also { it.reprDigest = "md5=:AAAAAAAAAAAAAAAAAAAAAA==:" }
+        val h2 = H(s2); h2.completed(h2.enqueue())
+    }
 }
