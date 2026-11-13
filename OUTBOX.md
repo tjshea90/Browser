@@ -1422,3 +1422,7 @@
 ## 2026-11-13T23:37:23Z
 > Both jobs are still running: the emulator CPU check and the full test suite with lint. I'll pick up as soon as either reports back.
 <!-- sha:986a213631e9 -->
+
+## 2026-11-13T23:42:09Z
+> Home-restore fix status: the session file now records "Home was showing", and a restored Home tab loads nothing behind it. It compiles and its session tests pass. I'm building it into the emulator now to prove the open page → Home → close → reopen sequence, then I'll re-run the full suite and ship alpha33.
+<!-- sha:e98976976859 -->
