@@ -179,6 +179,20 @@ open class BrowserActivity : Activity(), TabHost, ToolbarListener {
         current?.webView?.onResume()
         current?.webView?.resumeTimers()
         refreshNtpIfShown()
+        if (!isPrivate) { Io.main.removeCallbacks(tidyRunnable); Io.main.postDelayed(tidyRunnable, 25_000) } // AO4: old update files, closed tabs' pictures; due about once a day and after an update
+    }
+
+    private val tidyRunnable = Runnable { runStorageTidy(false) }
+
+    /** AO4: the storage tidy. Off the UI thread; [force] = the Settings button. Never from the private window's process: its tab list is not the browser's. */
+    private fun runStorageTidy(force: Boolean) {
+        if (isPrivate) return
+        val c = applicationContext
+        val ids: Set<Long>? = if (sessionRestored) tabs.map { it.id }.toSet() else null // an incomplete tab list would make live tabs look closed
+        Io.exec {
+            val text = app.kestrel.browser.diag.StorageTidy.runIfDue(c, ids, force)
+            if (force) Io.main.post { toast(text?.let { "Storage tidy: $it" } ?: "A tidy is already running") }
+        }
     }
 
     override fun onPause() {
