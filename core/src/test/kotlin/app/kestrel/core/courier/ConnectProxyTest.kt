@@ -253,7 +253,11 @@ class ConnectProxyTest {
         assertArrayEquals(src.digest(), dst.digest())
         val ms = System.currentTimeMillis() - t0
         assertTrue("48 MB each way took $ms ms: far too slow for a relay", ms < 40_000)
-        val st = pr.proxy.stats(); assertTrue(st.up >= total && st.down >= total)
+        // the relay adds to its counters AFTER it has forwarded a chunk, so the last chunk can be on the wire a moment before it is counted: wait for the counters (flaked under load)
+        val until = System.currentTimeMillis() + 5_000
+        var st = pr.proxy.stats()
+        while ((st.up < total || st.down < total) && System.currentTimeMillis() < until) { Thread.sleep(10); st = pr.proxy.stats() }
+        assertTrue("counted up ${st.up} down ${st.down} of $total", st.up >= total && st.down >= total)
     }
 
     @Test fun anIdleTunnelIsClosedButABusyOneIsNot() {
