@@ -77,6 +77,9 @@ class UpdatePanel(ctx: Context, private val pal: Pal, private val prefs: Prefs, 
             for ((i, v) in b.withIndex()) row.addView(v, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply { if (i > 0) marginStart = ctx.dp(10) })
             addView(row)
         }
+        fun primary(t: String, f: () -> Unit) = pillButton(ctx, t, pal.accent, pal.accentOn) { f() }
+        fun secondary(t: String, f: () -> Unit) = outlineButton(ctx, t, pal.pill, pal.divider, pal.fg) { f() }
+
         /** The heads-up above Download / Install now when the tablet has too little room for Android's installer (a hint only: the install is still tried). */
         fun roomHint() {
             val h = UpdateManager.spaceHint?.takeIf { it.tag == o?.tag && it.shortBy > 0 } ?: return
@@ -91,8 +94,6 @@ class UpdatePanel(ctx: Context, private val pal: Pal, private val prefs: Prefs, 
                 }
             })
         }
-        fun primary(t: String, f: () -> Unit) = pillButton(ctx, t, pal.accent, pal.accentOn) { f() }
-        fun secondary(t: String, f: () -> Unit) = outlineButton(ctx, t, pal.pill, pal.divider, pal.fg) { f() }
 
         when (s.phase) {
             Phase.IDLE, Phase.UP_TO_DATE -> {
