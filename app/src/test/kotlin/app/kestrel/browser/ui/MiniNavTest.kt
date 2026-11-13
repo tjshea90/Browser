@@ -48,7 +48,12 @@ class MiniNavTest {
         relayout()
     }
 
-    @After fun resetAnimatorScale() { ValueAnimator.setDurationScale(1f) }
+    /** The system's "Animator duration scale" (developer options) for this process: hidden API, so by reflection; the owner runs with it at 0. */
+    private fun animatorScale(v: Float) {
+        try { ValueAnimator::class.java.getMethod("setDurationScale", Float::class.javaPrimitiveType).invoke(null, v) } catch (e: Exception) { throw AssertionError("cannot set the animator scale: $e") }
+    }
+
+    @After fun resetAnimatorScale() { animatorScale(1f) }
 
     private fun relayout() {
         frame.measure(View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(900, View.MeasureSpec.EXACTLY))
@@ -56,7 +61,7 @@ class MiniNavTest {
     }
 
     @Test fun theToggleSlidesThePanelDownAndBackUpOnItsOwnClock() {
-        ValueAnimator.setDurationScale(0f) // the owner runs with animations OFF: a system animator would jump to its end at once
+        animatorScale(0f) // the owner runs with animations OFF: a system animator would jump to its end at once
         assertFalse(nav.isOpen); assertFalse(nav.panelShownForTest)
         nav.pressToggleForTest()
         assertTrue(nav.isOpen); assertTrue(nav.panelShownForTest)
