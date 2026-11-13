@@ -128,7 +128,7 @@ object StorageTidy {
             val sessions = abandonStaleInstallSessions(app)
             if (liveTabs != null) add("previews of closed tabs", sweepTabFiles(app, liveTabs))
             add("stopped downloads", sweepStoppedDownloads())
-            add("engine files", pruneEngineFiles(app))
+            add("engine files", pruneEngineFiles(app)) // also while the engine runs: Android itself trims cache folders under a running app, and the engine copes with an entry that has vanished
             add("engine cache", StorageInfo.purgeDoomedCache(app))
             val total = parts.values.sum()
             val text = (if (after) "after an update, " else "") +
