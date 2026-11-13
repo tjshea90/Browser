@@ -14,6 +14,46 @@ import java.io.File
 object StorageInfo {
     @Volatile var text: String = "Storage: (not read yet)"
 
+    private const val KEY_PCT = "sys_storage_threshold_percentage"
+    private const val KEY_MAX = "sys_storage_threshold_max_bytes"
+
+    /**
+     * Android's low-storage reserve by the framework's own rule (StorageManager.getStorageLowBytes): the smaller of [KEY_PCT] % of the storage and [KEY_MAX] bytes, else the system defaults
+     * (5 % and 500 MiB). Reading these two global settings needs no permission. Measured on the emulator: research/ADB_FOR_THE_OWNER.md.
+     */
+    fun ruleReserve(ctx: Context, totalBytes: Long): Long {
+        val cr = ctx.applicationContext.contentResolver
+        val pct = try { Settings.Global.getInt(cr, KEY_PCT, UpdateLogic.DEFAULT_LOW_PERCENT) } catch (e: Exception) { UpdateLogic.DEFAULT_LOW_PERCENT }
+        val max = try { Settings.Global.getLong(cr, KEY_MAX, UpdateLogic.DEFAULT_LOW_MAX_BYTES) } catch (e: Exception) { UpdateLogic.DEFAULT_LOW_MAX_BYTES }
+        return UpdateLogic.lowReserve(totalBytes, pct, max)
+    }
+
+    /** What the two settings hold, for the Diagnostics line ("default" = not set, the system default applies). */
+    private fun settingsNote(ctx: Context): String {
+        val cr = ctx.applicationContext.contentResolver
+        fun v(k: String) = try { Settings.Global.getString(cr, k) ?: "default" } catch (e: Exception) { "?" }
+        return "$KEY_PCT=${v(KEY_PCT)}, $KEY_MAX=${v(KEY_MAX)}"
+    }
+
+    /**
+     * Android's own "this much may still be allocated" (StorageManager.getAllocatableBytes, API 26, no permission): free space + the caches it may clear - its reserve, never below 0. -1 when it will not say.
+     */
+    fun allocatableBytes(ctx: Context): Long = try {
+        val app = ctx.applicationContext
+        val sm = app.getSystemService(StorageManager::class.java)
+        sm.getAllocatableBytes(sm.getUuidForPath(app.filesDir))
+    } catch (e: Exception) { -1L }
+
+    /**
+     * What Android keeps free after any install. Its own answer when that is informative ([free] - allocatable, with 0 < allocatable < [free]: the framework's own arithmetic, so a ROM that changed the
+     * defaults is followed too), else the rule ([ruleReserve]). [free] = free + caches Android may clear (StorageStatsManager.getFreeBytes).
+     */
+    fun reserveBytes(ctx: Context, free: Long): Long {
+        val rule = ruleReserve(ctx, ctx.applicationContext.filesDir.totalSpace)
+        val alloc = allocatableBytes(ctx)
+        return if (alloc in 1 until free) free - alloc else rule
+    }
+
     fun read(ctx: Context) {
         val app = ctx.applicationContext
         val f = UpdateLogic::formatSize
@@ -25,8 +65,13 @@ object StorageInfo {
             val libs = try { File(app.applicationInfo.nativeLibraryDir).listFiles()?.sumOf { it.length() } ?: 0L } catch (e: Exception) { 0L }
             val files = size(app.filesDir)
             val cache = size(app.cacheDir)
-            "Storage: ${f(dir.usableSpace)} free of ${f(dir.totalSpace)}; free + caches Android can clear: ${if (installerFree >= 0) f(installerFree) else "?"}; Android keeps ${f(dir.totalSpace / 10)} free after an install (a tenth); " +
-                "this app: package ${f(apk)} + unpacked libraries ${f(libs)} + data ${f(files)} + cache ${f(cache)}; an install or update needs free >= reserve + 2 x package + libraries + about 48 MB. " + updateVerdict(app, apk, libs, if (installerFree >= 0) installerFree else dir.usableSpace, dir.totalSpace / 10)
+            val free = if (installerFree >= 0) installerFree else dir.usableSpace
+            val rule = ruleReserve(app, dir.totalSpace)
+            val alloc = allocatableBytes(app)
+            val reserve = reserveBytes(app, free)
+            "Storage: ${f(dir.usableSpace)} free of ${f(dir.totalSpace)}; free + caches Android can clear: ${if (installerFree >= 0) f(installerFree) else "?"}; Android says an app may still use ${if (alloc >= 0) f(alloc) else "?"} " +
+                "(it keeps ${f(reserve)} free after an install: by its rule min(5 % of the storage, 500 MB) = ${f(rule)}; settings: ${settingsNote(app)}); " +
+                "this app: package ${f(apk)} + unpacked libraries ${f(libs)} + data ${f(files)} + cache ${f(cache)}; an install or update needs free >= reserve + 2 x (package + libraries) + about 32 MB. " + updateVerdict(app, apk, libs, free, reserve)
         } catch (e: Exception) { "Storage: unavailable (${e.javaClass.simpleName})" }
     }
 
