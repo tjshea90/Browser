@@ -68,23 +68,30 @@ class SizeEstimateTest {
      * the interpolation between them. Errors are against the true size of each file.
      */
     @Test fun measuringEightPartsOfTwoQualitiesBeatsTrustingThePlaylistOnAVariableRateLadder() {
-        val rnd = Random(42)
         val seconds = 3600; val partMs = 6000L; val n = seconds / 6
         // (label, true average bytes/s, peak-to-average ratio the encoder declared)
         val ladder = listOf(Triple("360p", 60_000.0, 1.35), Triple("480p", 110_000.0, 1.40), Triple("720p", 250_000.0, 1.45), Triple("1080p", 520_000.0, 1.50))
-        val partsOf = ladder.map { (_, avg, _) -> LongArray(n) { (avg * 6 * (1.0 + (rnd.nextDouble() - 0.5) * 0.7)).toLong() } }
-        val trueTotal = partsOf.map { it.sum() }
-        val declared = ladder.mapIndexed { i, (_, _, peak) -> ((trueTotal[i] / seconds.toDouble()) * peak).toLong() }
-        val before = declared.mapIndexed { i, d -> (d * seconds.toLong() - trueTotal[i]).toDouble() / trueTotal[i] }
-        val idx = SizeEstimate.sampleIndexes(n)
-        fun point(q: Int) = declared[q] to SizeEstimate.calibration(SizeEstimate.measuredRate(idx.map { partsOf[q][it] }, idx.map { partMs }), declared[q])
-        val points = listOf(point(0), point(ladder.size - 1))
-        val after = declared.mapIndexed { i, d -> (SizeEstimate.calibrated(d, SizeEstimate.factorFor(d, points), seconds * 1000L, "mp4") - trueTotal[i]).toDouble() / trueTotal[i] }
-        val line = ladder.indices.joinToString("; ") { "${ladder[it].first}: before ${"%+.0f".format(before[it] * 100)} %, after ${"%+.0f".format(after[it] * 100)} %" }
-        println("AO2 synthetic ladder (peak declared 1.35-1.50 x the average, calibrated on 360p and 1080p): $line")
+        val trials = 300
+        val before = DoubleArray(ladder.size); val after = DoubleArray(ladder.size); val worstAfter = DoubleArray(ladder.size)
+        for (seed in 1..trials) {
+            val rnd = Random(seed.toLong())
+            val partsOf = ladder.map { (_, avg, _) -> LongArray(n) { (avg * 6 * (1.0 + (rnd.nextDouble() - 0.5) * 0.7)).toLong() } }
+            val trueTotal = partsOf.map { it.sum() }
+            val declared = ladder.mapIndexed { i, (_, _, peak) -> ((trueTotal[i] / seconds.toDouble()) * peak).toLong() }
+            val idx = SizeEstimate.sampleIndexes(n)
+            fun point(q: Int) = declared[q] to SizeEstimate.calibration(SizeEstimate.measuredRate(idx.map { partsOf[q][it] }, idx.map { partMs }), declared[q])
+            val points = listOf(point(0), point(ladder.size - 1))
+            for (i in ladder.indices) {
+                val b = Math.abs((declared[i] * seconds.toLong() - trueTotal[i]).toDouble() / trueTotal[i])
+                val a = Math.abs((SizeEstimate.calibrated(declared[i], SizeEstimate.factorFor(declared[i], points), seconds * 1000L, "mp4") - trueTotal[i]).toDouble() / trueTotal[i])
+                before[i] += b / trials; after[i] += a / trials; if (a > worstAfter[i]) worstAfter[i] = a
+            }
+        }
+        val line = ladder.indices.joinToString("; ") { "${ladder[it].first}: ${"%.0f".format(before[it] * 100)} % off before, ${"%.1f".format(after[it] * 100)} % after (worst of $trials ${"%.0f".format(worstAfter[it] * 100)} %)" }
+        println("AO2 synthetic ladder, mean error over $trials random encodes (peak declared 1.35-1.50 x the average, calibrated on 360p and 1080p): $line")
         for (i in ladder.indices) {
             assertTrue("${ladder[i].first} before: ${before[i]}", before[i] > 0.3)       // the declared peak overshoots by a third or more
-            assertTrue("${ladder[i].first} after: ${after[i]}", Math.abs(after[i]) < 0.08)
+            assertTrue("${ladder[i].first} after: ${after[i]}", after[i] < 0.08)
         }
     }
 }
