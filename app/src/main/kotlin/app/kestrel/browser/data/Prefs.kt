@@ -90,6 +90,16 @@ class Prefs private constructor(ctx: Context) {
     /** EX-5: under LinkMeter's Fast Wi-Fi keep the phone helper (downloads and pages through the Courier) instead of resting it. */
     var labHelperUnderVpn: Boolean get() = bool("lab_helper_vpn", false); set(v) = put("lab_helper_vpn", v)
 
+    // ---- Video (research/VIDEO_AUDIT.md, owner message 18)
+    /** Muted videos may start by themselves, as in every other browser (a site's player shows its loading symbol until that muted start happens, so refusing it leaves the symbol up). Sound without a tap stays blocked. ON. */
+    var videoMutedAutoplay: Boolean get() = bool("vid_muted_auto", true); set(v) = put("vid_muted_auto", v)
+    /** Protected video (Widevine DRM, Netflix-style players): 0 ask each time a site wants it (only when the device has Widevine), 1 never. */
+    var videoDrm: Int get() = sp.getInt("vid_drm", 0).coerceIn(0, 1); set(v) = put("vid_drm", v.coerceIn(0, 1))
+    /** Which codecs a site is offered: 0 automatic (not one that would run in software on this device), 1 H.264 only, 2 everything the engine can decode (core/media/VideoPolicy). */
+    var videoCodecs: Int get() = sp.getInt("vid_codecs", 0).coerceIn(0, 2); set(v) = put("vid_codecs", v.coerceIn(0, 2))
+    /** Calm pages: sites see "reduce motion" and GIFs play once (the owner's "have no animations", now for pages too). OFF since alpha27: a site that hides its loading symbol from an animation, or whose reduce-motion style leaves one frozen, kept it on screen. */
+    var calmPages: Boolean get() = bool("calm_pages", false); set(v) = put("calm_pages", v)
+
     /** Kestrel G: double-tap to zoom a page. OFF by default: while it is allowed, Firefox holds every tap on a page wider than the screen (Desktop site, no viewport tag) for about a quarter of a second to see whether a second tap follows (research/REVIEW-EXTERNAL-1.md 3.1, EX-3). Pinch zoom is separate and always works. */
     var doubleTapZoom: Boolean get() = bool("tap_zoom", false); set(v) = put("tap_zoom", v)
     /** Kestrel G: zoom the page to a text box that gets focus (the engine's default, so ON). OFF removes an animated zoom + repaint at the moment typing starts (EX-8, an A/B for the typing lag). */
