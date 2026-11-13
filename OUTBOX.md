@@ -1072,3 +1072,46 @@
 >
 > https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha27
 <!-- sha:29ddb7e9c7de -->
+
+## 2026-11-13T04:59:32Z
+> **Alpha28 is out. I found why doraby.com loses its photos and the search icon, and fixed it.** Everything was tested on the emulator, but one link in the chain is not seen on your tablet yet.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha28
+>
+> **doraby.com**
+> - **What the site needs:** its photos, menu and search icons all load through one helper host, `cdn.jsdelivr.net`. If those files can't arrive, the page looks exactly as you described. I reproduced that on the emulator.
+> - **The cause:** Kestrel asked Firefox's built-in tracking protection for its strictest set. That set includes a "Content" list that names jsDelivr and many video-player hosts (JW Player, Brightcove, Kaltura, Mux, Bitmovin, Vimeo and more).
+> - **The fix:** alpha28 leaves that list out. Ads and trackers are still blocked by Kestrel's own lists.
+> - **Likely the video player too:** the loading symbol stuck on your video player is probably this same cause. The muted-autoplay problem from alpha27 was real as well.
+>
+> **Proof, and what's missing**
+> - I checked that Firefox blocks hosts on that list (a stand-in host was blocked), that Kestrel's old setting included it, and that the new one drops it.
+> - jsDelivr itself being refused on your tablet is not observed, because the emulator can't download Mozilla's lists. So please check doraby.com yourself.
+>
+> **New tools**
+> - **Menu > Diagnostics > Page report:** for each page it lists which files failed and why, script errors, and what Firefox's own protection blocked. It is never kept for private tabs.
+> - **Menu > Reload without cache:** loads the page and all its files fresh.
+>
+> **Your lab numbers**
+> - **Video:** all four clips (H.264 720p and 1080p, VP9, H.265) played with 0 of 150 pictures dropped, decoded by the video chip. The screen drew at 65 frames per second. So the tablet is not what makes video choppy; the cause is the site's stream versus the 5 Mbit/s hotspot, or the page itself.
+> - **JavaScript:** about 3 to 5 times slower than a phone, as expected. WebAssembly "fast math" (SIMD) is not available on this tablet's 32-bit mode, which is rarely needed.
+> - **Protected video:** Widevine works.
+> - **Lab fix:** the "24.8 fps, mostly smooth" lines were my arithmetic error (fixed).
+> - **Tap lab:** taps are answered in 3 ms, so the double-tap-zoom fix works on the tablet.
+> - **Decode lab:** AVIF takes 108 ms to decode against WebP's 50 ms, but its files are three times smaller. On your hotspot AVIF still wins, so "No AVIF" stays off.
+>
+> **Please check**
+> 1. After installing, does doraby.com show the photos and the menu and search icons? If anything is still missing, tap Menu > Diagnostics > Copy and paste it to me. The Page report names the failed files.
+> 2. If a video still stutters, send me the site or link.
+>
+> **Still open from you**
+> - **LinkMeter:** the "Network:" line in Diagnostics.
+> - **Feel:** tabs, Back and scroll.
+> - **Proton Mail:** the numbers and keyboard test.
+> - **Ad lists:** yes or no to the scheduled GitHub list build.
+> - **Signing key:** the private signing key.
+> - **Earlier video problems:** the `.ts` files, grey icon and spam after play.
+> - **Network lab:** the switch comparisons.
+> - **Optional:** licence, landscape tabs, Cromite comparison.
+> - **Charging:** the overnight-charge tip.
+<!-- sha:6db802838522 -->
