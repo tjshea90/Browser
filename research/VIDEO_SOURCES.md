@@ -55,3 +55,25 @@ script requests, `Origin: https://<player site>`. A "video downloader" app built
 `Health` lines (layer `media`): `maybe <host> type= len=` (a disguised candidate was looked at), `maybe-hit <host> HLS ext= set=n/m` (it was a playlist), `maybe-no` (its bytes were not media), `maybe-refused <host> http=403` (the site refused even the other header sets),
 `list-ok <host> http= set=n/m referer=<host>` (a playlist was read; which header set worked and the Referer host it carried), `list-failed <host> http=N tried=m`, `file <host> referer=<host>` (a plain file download started).
 No line at all for a page = the extension saw no media-looking request (an MSE-only player or one that starts only after play).
+
+## 7. The video list follows the page, and a server switch refreshes it (alpha32, owner message 26: AL1 + AL5)
+
+Owner: "when I go from a site with videos and then go to a different site, the prior site videos are still listed" / "when I switch servers on the site for the video, it still keeps the old download buttons... be careful not to have a false trigger when an advertisement video loads and then the real video".
+
+**Why the old list stayed (two causes, both found by reading the code):** (a) the extension labelled a late response of the OLD document with the NEW page's address (`tabTop`), and (b) the app's `VideoFlow.seen()` fell back to "the tab in front" for any page address it could not match, so a late answer from the page that was just left landed on the page now in front.
+**What changed**
+| Where | Change |
+| :- | :- |
+| `background.js` `navId` / `stale(d)` | Firefox request ids only grow, so an answer whose request id is smaller than the newest main-frame request of its tab began on a page the tab has left: it is dropped before it is reported |
+| `background.js` `frameNavigates(d)` | a `sub_frame` request for a frame that owns candidates = the site pointed the player iframe at another server: the extension sends `{k:'gone', d:[old document addresses]}`, forgets the frame's dedupe keys (so the SAME file on another server is news again) and gives its probe budget back (see below). Frames inside the navigating frame go too; sibling frames stay |
+| `VideoFlow.tabOf(page)` | the tab a message belongs to: the tab in front when its address matches, else the tab that has that address; **never** "the tab in front" as a guess |
+| `VideoFlow.gone` / `clearTab` / `forget` | the app drops the candidates of the replaced documents (`MediaList.dropFrames`), forgets what it had read for them (`streamInfo`, size probes, variants) and redraws the dock icon and the open sheet; a new page clears the whole tab's list |
+**Why an advertisement does not trigger it:** a server switch is a player FRAME being replaced (a `sub_frame` request for a frame that has offered media). An ad before the real video is another media file in the SAME document, or a frame of its own (a new frame id owning no candidate yet): neither is a replacement, so nothing is dropped and both are listed (web test "an advertisement that plays before the real video is NOT a server switch").
+**Known limit, said plainly:** a site that switches servers WITHOUT loading another document (its script re-initialises hls.js inside the same player page) cannot be told from "ad, then real video": the old candidates stay listed next to the new ones. Only frame replacement refreshes the list. A change of address without a page load (a single-page app) is not a new page either.
+**A bug the lab found on the way:** the probe budget for disguised files was twelve per PAGE, so after two server switches the third server's playlist was never looked at. It is now twelve per document (a frame going to another server starts afresh, `maybeCount` per frame) and 48 per page.
+**Emulator proof** (`tools/sitelab/vidlab_srv.py`: `/watch2` with Server 1 / 2 / 3 buttons, `/plain`; the `lab.log` and the sheet screenshots): Server 1 lists 360p and 240p; Server 2 (240p only) replaces that list; Server 3 (ad, then the real stream in the same document) lists the ad and the stream; a page without video empties the list.
+
+## 8. Names (alpha32, owner message 26: AL6)
+
+`core/media/EpisodeNames.kt` (+ `MediaNames.defaultStem / streamStem / friendlyFileName`, `EpisodeNamesTest`, `MediaNamesTest`): "Watch Ozark Season 2 Episode 5 Online Free | Doraby" -> **Ozark S02E05**; "Naruto Shippuden Episode 220" -> Naruto Shippuden E220; a film page -> "Dune - Part Two (2024) - 720p". Order of trust: a release-style file name ("Ozark.S02E05.1080p.WEB.H264-GRP") made readable; an episode the PAGE names (title, then address); the source's own name; the page title without the site's noise and the quality. Markers read: S02E05, Season 2 Episode 5, Episode 5 (Season 2), 2x05, Episode 220; never 1920x1080. A plain video file keeps the server's name unless that name is a release name or says nothing ("video.mp4"). The name stays editable in the sheet. Guesses can be wrong: a page that only LISTS episodes ("all episodes of season 2") names none and gets the plain title.
+
