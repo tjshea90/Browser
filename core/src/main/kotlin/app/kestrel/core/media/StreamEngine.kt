@@ -705,14 +705,15 @@ class StreamEngine(
             fetchTo(job, fetcher, seg.url, seg.from, if (seg.len >= 0) seg.from + seg.len - 1 else -1, f, count = true)
         }
         val why: String? = try {
-            val n = minOf(f.length(), 384L * 1024).toInt().let { if (seg.key >= 0) it and 15.inv() else it }
+            val n = minOf(f.length(), 384L * 1024).toInt()
             val buf = ByteArray(n)
             FileInputStream(f).use { input -> var p = 0; while (p < n) { val r = input.read(buf, p, n - p); if (r < 0) break; p += r } }
+            val skip = if (seg.key >= 0) SegmentPrefix.imageLength(buf, n, ts = false) else SegmentPrefix.length(buf, n, ts = true) // a picture header in front of the part (a part named ".jpg"): not media
             val plain = if (seg.key >= 0) {
                 val c = Cipher.getInstance("AES/CBC/NoPadding")
                 try { c.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes(job, media, seg.key), "AES"), IvParameterSpec(media.keys[seg.key].iv ?: Hls.sequenceIv(seg.seq))) } catch (e: Exception) { throw Failed(Reason.UNSUPPORTED) }
-                c.update(buf, 0, n)
-            } else buf
+                c.update(buf, skip, (n - skip) and 15.inv())
+            } else buf.copyOfRange(skip, n)
             TsToMp4.probe(plain, 0, plain.size)
         } catch (e: IOException) { "the first part of the stream could not be read back" }
         synchronized(lock) {
@@ -938,6 +939,8 @@ class StreamEngine(
             mux?.beginSegment(idx, seg.discontinuity, runMs(media, idx))
             FileInputStream(f).use { input ->
                 val buf = ByteArray(64 * 1024)
+                var skip = prefixSkip(f, seg.key >= 0, media.container).toLong()
+                while (skip > 0) { val k = input.skip(skip); if (k <= 0) break; skip -= k } // a picture header (or other garbage) in front of the part is not media
                 if (seg.key >= 0) {
                     val key = keyBytes(job, media, seg.key)
                     val iv = media.keys[seg.key].iv ?: Hls.sequenceIv(seg.seq)
@@ -1040,6 +1043,15 @@ class StreamEngine(
             }
         }
     }
+
+    /** Bytes in front of a part's media that are not media (a tiny picture a server wrote before a transport stream, see [SegmentPrefix]); looks at the first 4 KB only. */
+    private fun prefixSkip(f: File, encrypted: Boolean, container: String): Int = try {
+        FileInputStream(f).use { i ->
+            val b = ByteArray(SegmentPrefix.HEAD); var p = 0
+            while (p < b.size) { val r = i.read(b, p, b.size - p); if (r < 0) break; p += r }
+            if (encrypted) SegmentPrefix.imageLength(b, p, ts = false) else SegmentPrefix.length(b, p, ts = container == "ts")
+        }
+    } catch (e: IOException) { 0 }
 
     private fun looksLikeHtmlFile(f: File): Boolean = try {
         FileInputStream(f).use { i -> val b = ByteArray(512); val n = i.read(b); n > 0 && app.kestrel.core.download.ContentSniff.looksLikeHtml(b, 0, n) }
