@@ -373,7 +373,7 @@ function decide(d, page, host, mode) {
 
 browser.webRequest.onBeforeRequest.addListener(function (d) {
   if (d.type === 'main_frame') {
-    sniffed.delete(d.tabId); tabTop.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again (delete first: Map keeps the old position of a key, and the OLDEST position is what is dropped)
+    sniffed.delete(d.tabId); maybeCount.delete(d.tabId); tabTop.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again (delete first: Map keeps the old position of a key, and the OLDEST position is what is dropped)
     verdicts.clear(); // legacy verdicts are only worth keeping while ONE page loads
     newLog(d.tabId, d.url); reportLater(d.tabId); // the page report starts here (4 s after the last news it goes to the app)
     var h = pageHost(d.url);
@@ -474,7 +474,57 @@ var sniffed = new Map(); // tabId -> Set of "url|sizeKnown" already reported for
 var SNIFFED_TABS = 40;
 var SNIFFED_PER_TAB = 300;
 
+// What the browser itself sent with a request that may turn out to be media: its Referer and Origin. A video server often wants the embedded PLAYER's (the page the player sits in is not who asks), so the app
+// repeats these when it reads the playlist and fetches the parts. Kept briefly, by request id; a request that never gets an answer is pushed out by the next ones.
+var reqHdr = new Map();
+var REQ_HDR_MAX = 160;
+browser.webRequest.onBeforeSendHeaders.addListener(function (d) {
+  var h = d.requestHeaders;
+  if (!h) return;
+  var ref = '', org = '';
+  for (var i = 0; i < h.length; i++) {
+    var nl = h[i].name.length;
+    if (nl !== 7 && nl !== 6) continue; // referer (7), origin (6): nothing else is read
+    var n = h[i].name.toLowerCase();
+    if (n === 'referer') ref = String(h[i].value || '').slice(0, 400);
+    else if (n === 'origin') org = String(h[i].value || '').slice(0, 200);
+  }
+  if (!ref && !org) return;
+  if (reqHdr.size >= REQ_HDR_MAX) reqHdr.delete(reqHdr.keys().next().value);
+  reqHdr.set(d.requestId, ref + '\n' + org);
+}, { urls: ['http://*/*', 'https://*/*'], types: ['media', 'xmlhttprequest', 'other', 'object'] }, ['requestHeaders']);
+
+// A response that says nothing about being media (text/plain, octet-stream, no type at all, or a "picture" / "stylesheet" fetched by a script) but could still be a playlist or a video: stream sites often
+// disguise their playlists (".txt", ".css", no extension). The app reads the first bytes itself with the same headers and decides ("maybe" message). Small, rare and rate-limited: at most MAYBE_PER_PAGE per page.
+var MAYBE_CT = /^(?:text\/plain|application\/octet-stream|binary\/octet-stream|application\/force-download|application\/x-download|application\/download|application\/unknown|)$/;
+var MAYBE_DISGUISE = /^(?:image\/|text\/css|(?:application|text)\/(?:x-)?javascript)/; // only for requests a script made (not <img>, which has its own type)
+var NOT_MAYBE = /\.(?:js|mjs|css|json|html?|svg|ico|woff2?|ttf|otf|eot|map|wasm|gif)(?:$|[?#])/i;
+var maybeCount = new Map(); // tabId -> probes asked for on the current page
+var MAYBE_PER_PAGE = 12;
+function maybeMedia(d, url, ct, size, ref, org) {
+  if (d.type !== 'xmlhttprequest' && d.type !== 'other' && d.type !== 'media') return;
+  var base = ct.indexOf(';') >= 0 ? ct.slice(0, ct.indexOf(';')).trim() : ct.trim();
+  var plain = MAYBE_CT.test(base);
+  if (!plain && !(d.type !== 'media' && MAYBE_DISGUISE.test(base))) return;
+  if (!plain && NOT_MAYBE.test(url) && base.indexOf('image/') !== 0) return;
+  if (size >= 0 && (size < 80 || (!plain && size > 800000))) return; // a playlist is never a few bytes, and a script-fetched "picture" or "stylesheet" that is big is one
+  var key = '?' + dedupeKey(url, 0);
+  var seen = sniffed.get(d.tabId);
+  if (!seen) {
+    if (sniffed.size >= SNIFFED_TABS) sniffed.delete(sniffed.keys().next().value);
+    seen = new Set(); sniffed.set(d.tabId, seen);
+  }
+  if (seen.has(key)) return;
+  var n = maybeCount.get(d.tabId) || 0;
+  if (n >= MAYBE_PER_PAGE) return;
+  seen.add(key); maybeCount.set(d.tabId, n + 1);
+  var page = tabTop.get(d.tabId) || ((d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || ''));
+  send({ k: 'maybe', u: url, c: ct, l: size, p: page, f: d.documentUrl || '', rf: ref, og: org, ty: d.type }).catch(function () {});
+}
+
 browser.webRequest.onHeadersReceived.addListener(function (d) {
+  var rh = reqHdr.get(d.requestId), ref = '', org = '';
+  if (rh !== undefined) { reqHdr.delete(d.requestId); var nlp = rh.indexOf('\n'); ref = rh.slice(0, nlp); org = rh.slice(nlp + 1); }
   if (d.statusCode !== 200 && d.statusCode !== 206) return;
   var url = d.url;
   if (SEGMENT.test(url)) return;
@@ -488,9 +538,9 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
     else if (n === 'content-disposition') cd = String(h[i].value || '').slice(0, 300); // the file name the server gave (the sheet offers it as the name)
     else if (n === 'content-range') { var m = /\/(\d+)\s*$/.exec(h[i].value || ''); if (m) total = parseInt(m[1], 10); }
   }
-  if (!MEDIA_CT.test(ct) && !MEDIA_EXT.test(url)) return;
-  if (ct.indexOf('video/mp2t') === 0 || ct.indexOf('iso.segment') > 0) return;
   var size = total >= 0 ? total : (d.statusCode === 200 && len >= 0 ? len : -1);
+  if (!MEDIA_CT.test(ct) && !MEDIA_EXT.test(url)) { maybeMedia(d, url, ct, size, ref, org); return; }
+  if (ct.indexOf('video/mp2t') === 0 || ct.indexOf('iso.segment') > 0) return;
   if (size >= 0 && size < MIN_FILE_BYTES && !PLAYLIST.test(ct) && !PLAYLIST.test(url)) return;
   var key = dedupeKey(url, size >= 0 ? 1 : 0);
   var seen = sniffed.get(d.tabId);
@@ -502,7 +552,7 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
   if (seen.size >= SNIFFED_PER_TAB) seen.delete(seen.values().next().value);
   seen.add(key);
   var page = tabTop.get(d.tabId) || ((d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || ''));
-  send({ k: 'media', u: url, c: ct, l: size, p: page, f: d.documentUrl || '', n: cd }).catch(function () {});
+  send({ k: 'media', u: url, c: ct, l: size, p: page, f: d.documentUrl || '', n: cd, rf: ref, og: org }).catch(function () {});
 }, { urls: ['http://*/*', 'https://*/*'], types: MEDIA_TYPES }, ['responseHeaders']);
 
 // What the page's own <video> says about the file it plays (picture size, length, the label next to a <source>): relayed by content.js.
