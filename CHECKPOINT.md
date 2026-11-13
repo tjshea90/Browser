@@ -1,13 +1,13 @@
-# CHECKPOINT 1750 — read me first, then TASKS.md
+# CHECKPOINT 1761 — read me first, then TASKS.md
 
-**Written:** 2026-11-13T22:17:57Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `c4534d8` (this checkpoint is the commit after it)
+**Written:** 2026-11-13T22:35:22Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `e611605` (this checkpoint is the commit after it)
 
 ## Just done
-owner message 29 recorded (AO1 smoothness audit, AO2 download size accuracy, AO3 professional icon + Recents icon, AO4 delete update APKs and stale storage) in TASKS before code; EY-1 last look: capture + early-cover look + hide rule + Settings switch + Diagnostics line written, page-side scroll report added (content.js/background.js/ShieldsBridge, web tests 40 content + 87 background pass), 17 JVM tests for the look (rules, store, overlay pixels), emulator: look shown in first frame, scroll captured; alpha33 versionCode 132 / extension 1.0.132 prepared (NOT shipped)
+EY-1 last look ticked (emulator-proven: first-frame picture, scroll place restored and reported, revive path); AO3 icon + Recents task description + rename to Kestrel done (emulator Recents shows the new icon); JVM 977 tests, web 137, lint green; alpha33 (versionCode 132, extension 1.0.132) prepared, NOT shipped; AP1 (one press plays) recorded in TASKS, design: assist in guard-main.js
 
 ## Do this next
-1) read scratchpad look_flow.out + lk_events_a.txt (chain_look2.sh: build+install+flow with the page-side scroll report): expect look-hide why=look-scroll/look-paint with y=cur/saved close, and look-saved y>0 after the restore; if hide is only by timeout on this slow emulator that is the emulator (page paint takes 70 s), say so; 2) full suite (./gradlew :core:test :app:testDebugUnitTest :geckoapp:compileDebugKotlin :app:lintDebug + cd web-tests && npm test) then tick EY-1 with claim.sh; 3) AO3 icon (geckoapp + app manifests, mipmap-anydpi-v26 adaptive icon, setTaskDescription in BrowserActivity), AO4 storage cleanup (update APKs after the new version runs, stale files), AO2 size estimates, AO1 smoothness research (research/VIDEO_SMOOTHNESS.md); 4) ship alpha33 and answer the owner (plain words, list open items); heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN stands down on wakes
+1) AP1: in geckoapp/src/main/assets/kestrel-shields/guard-main.js add the assist (after a refused pop-up/overlay/redirect within 1.5 s of a real press on a player: play the video of that frame, else press through at the same place, up to 3 times, cancelled by any play event; parent forwards to a player iframe via postMessage), web tests in web-tests/guard.test.js (overlay link, overlay div, ad script that eats the first press, 2 and 3 layers, normal page unchanged, cap 3), lab page tools/sitelab + emulator proof; 2) AO4 storage cleanup, AO2 size estimates, AO1 smoothness research; 3) ship alpha33 (bash ship.sh gecko note; dispatch android.yml; record-release) and answer the owner (list open items); heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN stands down on wakes
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ owner message 29 recorded (AO1 smoothness audit, AO2 download size accuracy, AO3
 
 ## Last ten checkpoints
 ```
+  edbe131 ckpt 1750: owner message 29 recorded (AO1 smoothness audit, AO2 download size accuracy, 
   4220445 ckpt 1729: alpha32 SHIPPED and recorded (run 43514151508 green, APK 92,539,679 B vs alph
   8999097 ckpt 1719: gated kestrel-g-v0.3.0-alpha32 (gecko code 131) and pushed it: handoff self-t
   e9da0f9 ckpt 1718: EY-2 (start timeline, emulator marks + Diagnostics line, research/COLD_START.
@@ -25,8 +26,7 @@ owner message 29 recorded (AO1 smoothness audit, AO2 download size accuracy, AO3
   a3bd814 ckpt 1673: report saved as research/REVIEW-EXTERNAL-2.md and its TASKS block (EY-1..EY-3
   d19f54f ckpt 1672: owner message 28 written into TASKS as AN1 (review and complete all fixes and
   d14b0ab ckpt 1665: AL5 emulator lab found a real bug and it is fixed in code: after two server s
-  e03327f ckpt 1661: AM1 CODE DONE: removed Tap lab, Decode lab (assets/labs 394 KB), Scroll test 
 ```
 
-(20 automatic checkpoint(s) since the last deliberate one — the
+(10 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
