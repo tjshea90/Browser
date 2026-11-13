@@ -1377,3 +1377,40 @@
 ## 2026-11-13T18:32:17Z
 > Standing down on the 2-hourly heartbeat. Its alpha22-era work list is long finished, and alpha31 shipped about 15 minutes ago. The owner wrote today at 17:44, so I'm leaving the trigger in place. I'm waiting for the owner's report on whether alpha31 saves the vidsrc movie and for the Diagnostics "media" lines if it doesn't.
 <!-- sha:b664c2e9ed81 -->
+
+## 2026-11-13T21:58:02Z
+> Kestrel G alpha32 is built, signed and published. The GitHub build passed and the release page has the APK (92.5 MB, about 0.9 MB smaller than alpha31).
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha32
+>
+> **Your requests (messages 26 and 27)**
+> 1. **Video list:** it only lists videos of the page you are on now. When you move to another site the old list is dropped, and the dock icon goes grey on a page with no video.
+> 2. **Download pop-ups:** every download (video or file) shows a "Download started" message at the top. A small window in the top right lists all downloads, each with pause or resume, a progress bar and an X. The X on a row cancels and deletes the unfinished file. The X on the window closes it without stopping anything.
+> 3. **Download manager:** the bar is about 4 times taller, with MB done, MB left, percent and speed written inside it. The bar is transparent and fills with neon blue, and the text changes colour where the blue crosses it so it stays readable.
+> 4. **Cancel:** cancelling any download now deletes the partly downloaded file, whether it started from the manager, the new window or the notification.
+> 5. **Switching servers:** when the site swaps the player for another server's, the old download choices are removed and the new server's appear. An ad that plays first and then the real video is not mistaken for a server switch.
+>    - **Limit:** a site that swaps servers inside the same page, without loading another player, looks the same as an ad followed by the real video. Kestrel can't tell those apart yet.
+> 6. **Names:** when the page says what a video is, the file name offered is like "Ozark S02E05".
+> 7. **Diagnosis tools:** I removed the ones whose questions are already answered. The list is in `research/DIAG_TOOLS.md`.
+>    - **Removed:** the tap lab, decode lab, scroll test and "compare 3 feels", the blocker mode switch, the neon pulse test, and the GPU, video-decoder, keyboard and warm-up lines.
+>    - **Kept:** the Diagnostics screen itself and the lines for questions that are still open.
+>
+> **From the review report (message 28)**
+> - **Link expired:** for videos that come as a playlist of parts (most streaming sites), a refused part is now tried again three times, and then with other Referer/Origin headers, before the download says "expired". The other parts wait while one is retried.
+> - **Video list:** a page that loads many previews can no longer push the real video out of the list.
+> - **Start-up timing:** Menu > Diagnostics now shows a copyable "Cold start" line with milliseconds for each stage.
+> - **Not yet in alpha32:** pause and resume for files from servers that send no change marker, and a check that stops a cut-off partial file from being continued. They are written and tested but not shipped.
+> - **In progress:** your last ask, showing the last page instantly when you reopen the browser. The picture-saving and display parts are written; I'm wiring them in now.
+>
+> **Not tested on the tablet:** all of the above was checked on the emulator and with 940 JVM tests plus 133 extension tests. The "link expired" retry was tested only against test servers, not a real link that expires.
+>
+> **Open items for you**
+> 1. After a fresh start (swipe the browser away, then open it), tap Menu > Diagnostics > Copy and paste the report. The "Cold start" line is the number I need to judge the instant-last-page work.
+> 2. Menu > Diagnostics > "App:" line, to confirm alpha32 installed.
+> 3. The exact words of the "incompatible browser / Cloudflare" site, and a page report from doraby.com.
+> 4. The choppy-video link, how scrolling and Back feel, and the Proton Mail numbers and keyboard test.
+> 5. Your decision on a scheduled GitHub ad-list build (yes or no), and the private signing key.
+> 6. The network lab results and the optional items (licence, landscape tabs, Cromite comparison).
+>
+> Now continuing with the last-page feature.
+<!-- sha:70a78e79e274 -->
