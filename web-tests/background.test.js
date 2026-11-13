@@ -57,7 +57,8 @@ function harness(app, opts) {
     performance: { now: () => Number(process.hrtime.bigint()) / 1e6 },
     atob: (s) => Buffer.from(s, 'base64').toString('latin1'),
     // short timers (the chunk-transfer yields) run at once; the 500 ms / 5 s batching timers wait until the test runs them
-    setTimeout: (f, ms) => { if (!ms || ms < 100) { setImmediate(f); return 1; } timers.push(f); return timers.length; },
+    setTimeout: (f, ms) => { if (!ms || ms < 100) { setImmediate(f); return -1; } timers.push(f); return timers.length; },
+    clearTimeout: (id) => { if (id > 0 && timers[id - 1]) timers[id - 1] = () => {}; },
     indexedDB: fakeIdb(opts.idb || new Map()),
     browser: {
       runtime: {
