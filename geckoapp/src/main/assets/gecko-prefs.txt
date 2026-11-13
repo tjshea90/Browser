@@ -2,10 +2,10 @@
 # One per line:  name = true|false|integer|"string".   They are default-branch prefs applied before Gecko starts, so "once" prefs (caches, graphics) work.
 # A name that does not exist in the bundled engine is a SILENT no-op: tools/check-gecko-prefs.sh checks every name against the real GeckoView in CI.
 # Bump kestrel.config.version when this list changes: Diagnostics reads it back to prove the file was applied.
-kestrel.config.version = 6
+kestrel.config.version = 7
 
-# --- video: no AV1 (software decode on 4x Cortex-A53); sites then choose H.264 -> MediaCodec hardware decode
-media.av1.enabled = false
+# --- video codecs (media.av1.enabled, media.mediasource.vp9.enabled, media.hevc.enabled) are no longer fixed here: GeckoEngine.applyVideo decides them from the device's own decoder list and Settings > Video
+# (research/VIDEO_AUDIT.md; a codec with no hardware decoder is not offered, so sites send H.264, which the tablet decodes in hardware)
 # --- images (research/REVIEW-EXTERNAL-1.md 3.2, EX-4): do not advertise JPEG XL in the image Accept header (Firefox 160 sends image/jxl and ships a Rust decoder); CDNs then answer WebP/AVIF/JPEG, which cost less CPU per pixel on 4x Cortex-A53
 image.jxl.enabled = false
 # --- the owner's hotspot is UNMETERED (2026-11-12: "No data saving is necessary"): the Wi-Fi values for media buffering again and speculative loading (link rel=prefetch) back on
@@ -35,9 +35,8 @@ image.mem.surfacecache.size_factor = 20
 browser.cache.disk.smart_size.enabled = false
 browser.cache.disk.capacity = 512000
 dom.script_loader.bytecode_cache.strategy = 1
-# --- no animations (the app's own UI has none either): sites see prefers-reduced-motion, GIFs play once, keyboard scroll is instant
-ui.prefersReducedMotion = 1
-image.animation_mode = "once"
+# --- keyboard scroll is instant. The page-side "no animations" (ui.prefersReducedMotion = 1, image.animation_mode = "once") is now Settings > Video > Calm pages, OFF by default: with it fixed on, a
+# site's loading symbol could stay frozen on screen (alpha26 and before; GeckoEngine.applyVideo sets it live)
 general.smoothScroll = false
 # --- security / privacy pins (research/SECURITY.md 4.1): no push or notification machinery, no WebRTC LAN-address leak, never import OS root certificates
 dom.push.enabled = false
