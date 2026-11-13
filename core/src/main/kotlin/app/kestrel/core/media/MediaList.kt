@@ -23,6 +23,8 @@ class MediaCandidate(
     var durationMs = 0L
     /** What the page calls it ("720p", "HD") when it said so. */
     var label: String? = null
+    /** Somebody showed interest in it (the page's player reported it, it was long-pressed, opened in the sheet or downloaded): it is never pushed out of a full list and never hidden as a preview ([MediaList]). */
+    var touched = false
     /**
      * What the browser itself sent when it loaded this address (the extension saw the request): its Referer and Origin. A video server that checks "who is asking" wants exactly these (the embedded
      * PLAYER's address, not the page the player sits in), so the downloads repeat them. "" = not seen (an address found in the page's markup, or a long-pressed element).
@@ -54,7 +56,7 @@ class MediaCandidate(
 }
 
 /** What a tab has seen, newest first. The same URL is one entry however many Range requests the player made. */
-class MediaList(private val max: Int = 24) {
+class MediaList(private val max: Int = 48) {
     private val items = ArrayList<MediaCandidate>()
 
     val size: Int get() = items.size
@@ -104,9 +106,30 @@ class MediaList(private val max: Int = 24) {
             return changed
         }
         items.add(0, c)
-        while (items.size > max) items.removeAt(items.size - 1)
+        while (items.size > max) removeLeastValuable()
         version++
         return true
+    }
+
+    /**
+     * EY-17 (research/REVIEW-EXTERNAL-2.md): a full list drops the entry worth LEAST, not the oldest: a page that loads thirty previews and ads before (or after) the real video must not push the real video out.
+     * Never the one that was just added (index 0).
+     */
+    private fun removeLeastValuable() {
+        var worst = -1; var worstV = Int.MAX_VALUE
+        for (i in 1 until items.size) { val v = value(items[i], i); if (v < worstV) { worstV = v; worst = i } }
+        items.removeAt(if (worst >= 0) worst else items.size - 1)
+    }
+
+    /** What an entry is worth keeping: playlists and manifests, anything somebody showed interest in, big and long files, a playlist that was really read. Equal worth: the newer stays. */
+    private fun value(c: MediaCandidate, index: Int): Int {
+        var v = 0
+        if (c.kind != MediaKind.FILE) v += 100
+        if (c.touched) v += 80
+        if (c.length >= MIN_WITH_STREAM) v += 40 else if (c.length >= MIN_FILE) v += 10
+        if (c.durationMs >= 60_000) v += 20
+        if (c.viaHeaders != null) v += 5
+        return v * 100 - index
     }
 
     /** What the page's own `<video>` / `<source>` told us about a URL (picture size, length in time, the label it shows). */
@@ -117,6 +140,7 @@ class MediaList(private val max: Int = 24) {
         if (height > 0 && c.height != height) { c.height = height; changed = true }
         if (durationMs > 0 && c.durationMs != durationMs) { c.durationMs = durationMs; changed = true }
         if (!label.isNullOrBlank() && c.label != label) { c.label = label.trim().take(24); changed = true }
+        if (!c.touched) { c.touched = true; changed = true } // the page itself reported it (a player started it): that makes it a real video
         if (changed) version++
         return changed
     }
@@ -131,6 +155,7 @@ class MediaList(private val max: Int = 24) {
         return items.filter { c ->
             when {
                 c.kind != MediaKind.FILE -> true
+                c.touched || c.durationMs >= 20_000 || c.knownHeight >= 480 -> true // played, long, or sharp: never hidden as a preview or an ad
                 c.length in 0 until MIN_FILE -> false
                 hasStream && c.length in 0 until MIN_WITH_STREAM -> false
                 else -> true
