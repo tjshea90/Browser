@@ -68,6 +68,7 @@ function harness(app, opts) {
       },
       webRequest: {
         onBeforeRequest: { addListener: (f) => { listeners.before = f; } },
+        onBeforeSendHeaders: { addListener: (f) => { listeners.sendHeaders = f; } },
         onHeadersReceived: { addListener: (f) => { listeners.headers = f; } },
         onErrorOccurred: { addListener: (f) => { listeners.error = f; } },
         onCompleted: { addListener: (f) => { listeners.completed = f; } },
@@ -403,6 +404,73 @@ test('sniffer: headers that matter are still read when they come after many that
   await tick(10);
   const m = h.of('media');
   assert.equal(m.length, 1); assert.equal(m[0].l, 7000000, 'the total from Content-Range, not the 100 bytes of this piece'); assert.equal(m[0].c, 'video/mp4');
+});
+
+// ---------------------------------------------------------------- the player's own headers and playlists in disguise (AK4, owner 2026-11-13: a movie on an embedded "vidsrc" server could not be downloaded)
+const sent = (id, ref, org) => ({ requestId: id, tabId: 1, requestHeaders: [{ name: 'User-Agent', value: 'x' }].concat(ref ? [{ name: 'Referer', value: ref }] : [], org ? [{ name: 'Origin', value: org }] : []) });
+const xhr = (id, url, ct, len, extra) => Object.assign({ requestId: id, type: 'xmlhttprequest', statusCode: 200, url, tabId: 1, documentUrl: 'https://player.test/embed/7', responseHeaders: [{ name: 'Content-Type', value: ct }].concat(len >= 0 ? [{ name: 'Content-Length', value: String(len) }] : []) }, extra || {});
+
+test('sniffer: the Referer and Origin the browser sent travel with the candidate (an embedded player\'s server wants the player\'s, not the web page\'s)', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  h.listeners.sendHeaders(sent('r1', 'https://player.test/', 'https://player.test'));
+  h.listeners.headers(xhr('r1', 'https://cdn.example/pl/master.m3u8', 'application/vnd.apple.mpegurl', 300));
+  h.listeners.headers(xhr('r2', 'https://cdn.example/pl/other.m3u8', 'application/vnd.apple.mpegurl', 300)); // no request headers seen for this one
+  await tick(10);
+  const m = h.of('media');
+  assert.equal(m.length, 2);
+  assert.equal(m[0].rf, 'https://player.test/'); assert.equal(m[0].og, 'https://player.test');
+  assert.equal(m[1].rf, ''); assert.equal(m[1].og, '');
+  assert.equal(m[0].f, 'https://player.test/embed/7', 'the document that asked is still named');
+});
+
+test('sniffer: a script-fetched response that says nothing about being media is reported as a "maybe" so the app can read its first bytes', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  h.listeners.sendHeaders(sent('p1', 'https://player.test/', 'https://player.test'));
+  h.listeners.headers(xhr('p1', 'https://cdn.example/hls/abc/playlist.txt', 'text/plain', 900));          // a playlist in disguise
+  h.listeners.headers(xhr('p2', 'https://cdn.example/hls/abc/index', 'application/octet-stream', -1));   // no name, no size
+  h.listeners.headers(xhr('p3', 'https://cdn.example/hls/abc/pl.css', 'text/css', 1200));                 // "a stylesheet" that a script fetched
+  h.listeners.headers(xhr('p4', 'https://cdn.example/hls/abc/img.png', 'image/png', 700));                // "a picture" that a script fetched
+  await tick(10);
+  const m = h.of('maybe');
+  assert.deepEqual(m.map((x) => x.u), ['https://cdn.example/hls/abc/playlist.txt', 'https://cdn.example/hls/abc/index', 'https://cdn.example/hls/abc/pl.css', 'https://cdn.example/hls/abc/img.png']);
+  assert.equal(m[0].rf, 'https://player.test/'); assert.equal(m[0].og, 'https://player.test'); assert.equal(m[0].ty, 'xmlhttprequest'); assert.equal(m[0].l, 900);
+  assert.equal(h.of('media').length, 0, 'nothing is claimed to be media before the bytes are read');
+});
+
+test('sniffer: a "maybe" is rare: not for pages, data, scripts, fonts, tiny or huge replies, <img>, and at most twelve per page', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  h.listeners.headers(xhr('a', 'https://x.test/api/list', 'application/json', 900));
+  h.listeners.headers(xhr('b', 'https://x.test/page', 'text/html; charset=utf-8', 5000));
+  h.listeners.headers(xhr('c', 'https://x.test/app.js', 'text/javascript', 5000));
+  h.listeners.headers(xhr('d', 'https://x.test/f.woff2', 'font/woff2', 5000));
+  h.listeners.headers(xhr('e', 'https://x.test/beacon', 'text/plain', 2));                                // two bytes: not a playlist
+  h.listeners.headers(xhr('f', 'https://x.test/big.png', 'image/png', 5_000_000));                        // a real picture, far too big for a playlist
+  h.listeners.headers(xhr('g', 'https://x.test/shot.png', 'image/png', 900, { type: 'image' }));          // an <img>: its own request type, never probed
+  h.listeners.headers(xhr('h', 'https://x.test/pixel.gif', 'image/gif', 900));                            // .gif is never a playlist
+  h.listeners.headers(xhr('i', 'https://x.test/err', 'text/plain', 900, { statusCode: 404 }));
+  await tick(10);
+  assert.equal(h.of('maybe').length, 0, JSON.stringify(h.of('maybe').map((x) => x.u)));
+  for (let i = 0; i < 30; i++) h.listeners.headers(xhr('z' + i, 'https://cdn.example/pl/' + i, 'application/octet-stream', 800));
+  h.listeners.headers(xhr('dup', 'https://cdn.example/pl/3', 'application/octet-stream', 800));
+  await tick(10);
+  assert.equal(h.of('maybe').length, 12, 'twelve per page');
+  h.mainFrame('https://example.com/next'); // a new page: the budget starts again
+  h.listeners.headers(xhr('n1', 'https://cdn.example/other/1', 'application/octet-stream', 800));
+  await tick(10);
+  assert.equal(h.of('maybe').length, 13);
+});
+
+test('sniffer: what is plainly media is still reported at once and is never also a "maybe"', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  h.listeners.headers(xhr('m1', 'https://cdn.example/a.m3u8', 'text/plain', 800));              // by name
+  h.listeners.headers(xhr('m2', 'https://cdn.example/movie', 'video/mp4', 9_000_000));          // by type
+  await tick(10);
+  assert.deepEqual(h.of('media').map((x) => x.u), ['https://cdn.example/a.m3u8', 'https://cdn.example/movie']);
+  assert.equal(h.of('maybe').length, 0);
 });
 
 // ---------------------------------------------------------------- tab bookkeeping (AA4 / PERF_JS B2)
