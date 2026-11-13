@@ -46,6 +46,11 @@ class PageReportsTest {
         val many = (1..30).map { "script t$it.example/x.js" }
         r.add(rep("https://p.example/", blocked = many, failed = many, errors = many))
         val t = r.text(1000)
-        assertTrue(t.contains("... 20 more")); assertTrue(t.contains("t10.example")); assertFalse(t.contains("t11.example/x.js; "))
+        val blockedLine = t.lines().first { it.trim().startsWith("blocked:") }
+        assertTrue(blockedLine.contains("... 20 more")); assertTrue(blockedLine.contains("t10.example")); assertFalse(blockedLine.contains("t11.example"))
+        val failedLine = t.lines().first { it.trim().startsWith("FAILED:") }
+        assertTrue(failedLine.contains("t20.example")); assertFalse(failedLine.contains("t21.example"))
+        val errorsLine = t.lines().first { it.trim().startsWith("script errors:") }
+        assertTrue(errorsLine.contains("t8.example")); assertFalse(errorsLine.contains("t9.example"))
     }
 }
