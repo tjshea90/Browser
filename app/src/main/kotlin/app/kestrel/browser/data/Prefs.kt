@@ -54,7 +54,7 @@ class Prefs private constructor(ctx: Context) {
     /** Network experiments (Kestrel G, Settings > Network lab): encrypted DNS through Cloudflare (on = private; off = the system resolver, which can be quicker on a hotspot) and HTTP/3 over UDP. Both on by default. */
     var dohOn: Boolean get() = bool("net_doh", true); set(v) = put("net_doh", v)
     var http3On: Boolean get() = bool("net_h3", true); set(v) = put("net_h3", v)
-    /** Warm up the connection (DNS, TCP, TLS) to the site the top address-bar suggestion names, so its first bytes do not wait for the handshakes when the owner presses Go. History and bookmarks only, never in a private tab. */
+    /** Warm up the connection (DNS, TCP, TLS) to the site the owner is about to open, so its first bytes do not wait for the handshakes: the top address-bar suggestion (history and bookmarks only), the page in front after a few seconds away, a link a finger is on, the first search results. https only, never in a private tab, never with Data saver. */
     var preconnect: Boolean get() = bool("net_preconnect", true); set(v) = put("net_preconnect", v)
 
     /** Downloads (Settings > Downloads): one speed limit for all of them in KB/s (0 = none), how many run at once (1-3, default 2) and connections per download (0 = automatic, else 1-3). The last two apply the next time the browser starts. */
@@ -74,13 +74,13 @@ class Prefs private constructor(ctx: Context) {
     /** Kestrel G: the blocking engine runs inside the Gecko extension (fast). Off = compatibility mode, every request asks the app (the older, slower path). Diagnostics has the switch. */
     var engineInExtension: Boolean get() = bool("eng_ext", true); set(v) = put("eng_ext", v)
     var pullRefresh: Boolean get() = bool("pull_refresh", true); set(v) = put("pull_refresh", v)
-    // ---- Network lab additions of the external review (research/REVIEW-EXTERNAL-1.md): experiments, all OFF until the owner has measured them with Diagnostics > Page loads
-    /** EX-6: let Firefox look up the hosts of the links on https pages before they are tapped (engine default: off for https pages). */
-    var labDnsPrefetch: Boolean get() = bool("lab_dns", false); set(v) = put("lab_dns", v)
+    // ---- Network lab additions of the external review (research/REVIEW-EXTERNAL-1.md). Since alpha26 the two with a clear gain and a small stated cost are ON (link look-ups, font fallback); the others stay OFF until measured with Diagnostics
+    /** EX-6: let Firefox look up the hosts of the links on https pages before they are tapped (engine default: off for https pages). ON by default since alpha26; never with Data saver, never while a private tab is in front. */
+    var labDnsPrefetch: Boolean get() = bool("lab_dns", true); set(v) = put("lab_dns", v)
     /** EX-16: network.buffer.cache.size 32768 instead of GeckoView's 16384 (half as many buffer hand-offs per megabyte at Fast Wi-Fi speeds). */
     var labBuffer: Boolean get() = bool("lab_buf", false); set(v) = put("lab_buf", v)
-    /** EX-16: text in a web font shows after 0.5 s in the fallback font instead of staying invisible for up to 3 s. */
-    var labFontDelay: Boolean get() = bool("lab_font", false); set(v) = put("lab_font", v)
+    /** EX-16: text in a web font shows after 0.5 s in the fallback font instead of staying invisible for up to 3 s. ON by default since alpha26 (readable text sooner on a slow link; the page may jump a little when the font arrives). */
+    var labFontDelay: Boolean get() = bool("lab_font", true); set(v) = put("lab_font", v)
     /** EX-12: speculation rules (a site's own "fetch the next page early" hints): 0 off, 1 dry run (candidates recorded, nothing fetched), 2 on. A pre-release engine feature. */
     var labSpec: Int get() = sp.getInt("lab_spec", 0); set(v) = put("lab_spec", v.coerceIn(0, 2))
     /** EX-7: hold the Wi-Fi out of power save while Kestrel is on screen (lower, steadier round-trip time; costs battery). */

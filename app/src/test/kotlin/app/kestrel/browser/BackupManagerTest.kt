@@ -127,18 +127,18 @@ class BackupManagerTest {
     }
 
     @Test fun theSwitchesOfTheExternalReviewDefaultToSafeValuesAndSurviveABackup() {
-        // an untouched install: every experiment off, the zoom-to-field as the engine has it, double-tap zoom off
-        assertFalse(prefs.labDnsPrefetch); assertFalse(prefs.labBuffer); assertFalse(prefs.labFontDelay); assertEquals(0, prefs.labSpec)
+        // an untouched install: the link look-ups and the font fallback (clear gains, small stated cost) on, every other experiment off, the zoom-to-field as the engine has it, double-tap zoom off
+        assertTrue(prefs.labDnsPrefetch); assertFalse(prefs.labBuffer); assertTrue(prefs.labFontDelay); assertEquals(0, prefs.labSpec)
         assertFalse(prefs.labWifiBoost); assertFalse(prefs.labHelperUnderVpn); assertFalse(prefs.doubleTapZoom); assertTrue(prefs.inputAutoZoom)
-        prefs.labDnsPrefetch = true; prefs.labSpec = 2; prefs.doubleTapZoom = true; prefs.inputAutoZoom = false; prefs.labHelperUnderVpn = true; prefs.labWifiBoost = true; prefs.shieldEmbeds = false
+        prefs.labDnsPrefetch = false; prefs.labFontDelay = false; prefs.labSpec = 2; prefs.doubleTapZoom = true; prefs.inputAutoZoom = false; prefs.labHelperUnderVpn = true; prefs.labWifiBoost = true; prefs.shieldEmbeds = false
         val d = BackupManager.build(db, prefs, emptyList(), "x")
-        assertEquals(true, d.settings["lab_dns"]); assertEquals(2L, d.settings["lab_spec"]); assertEquals(true, d.settings["tap_zoom"]); assertEquals(false, d.settings["input_zoom"])
+        assertEquals(false, d.settings["lab_dns"]); assertEquals(false, d.settings["lab_font"]); assertEquals(2L, d.settings["lab_spec"]); assertEquals(true, d.settings["tap_zoom"]); assertEquals(false, d.settings["input_zoom"])
         assertEquals(true, d.settings["lab_helper_vpn"]); assertEquals(true, d.settings["lab_wifi"])
         assertEquals(false, d.settings["sh_embeds"])
         val text = BackupCodec.encode(d)
         sp().edit().clear().commit()
         BackupManager.restore(db, prefs, BackupCodec.decode(text))
-        assertTrue(prefs.labDnsPrefetch); assertEquals(2, prefs.labSpec); assertTrue(prefs.doubleTapZoom); assertFalse(prefs.inputAutoZoom); assertTrue(prefs.labHelperUnderVpn); assertTrue(prefs.labWifiBoost); assertFalse(prefs.shieldEmbeds)
+        assertFalse(prefs.labDnsPrefetch); assertFalse(prefs.labFontDelay); assertEquals(2, prefs.labSpec); assertTrue(prefs.doubleTapZoom); assertFalse(prefs.inputAutoZoom); assertTrue(prefs.labHelperUnderVpn); assertTrue(prefs.labWifiBoost); assertFalse(prefs.shieldEmbeds)
         prefs.labSpec = 7
         assertEquals("out of range values are clamped", 2, prefs.labSpec)
     }

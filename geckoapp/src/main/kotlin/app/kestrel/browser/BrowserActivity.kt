@@ -1425,7 +1425,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(app.kestrel.browser.download.DownloadService.wifiLockLine() + ". " + app.kestrel.browser.net.WifiBoost.line())
         out.add(DownloadController.windowGapLine())
         out.add("Keyboard: ${kbProbe.changes} layout event(s) from the probe window this run (more than 0 = the dock follows the keyboard by event, polling only as a safety net)")
-        out.add("Warm-ups: ${GeckoEngine.warmCalls} connection head start(s) handed to the engine on its own thread this run (Settings > Network lab > Warm up the top suggestion)")
+        out.add("Warm-ups: ${GeckoEngine.warmCalls} connection head start(s) handed to the engine on its own thread this run (Settings > Network lab > Warm up connections)")
         out.add(GeckoEngine.prefReadback)
         out.add(GeckoEngine.prefReadback2)
         out.add(GlInfo.text)
