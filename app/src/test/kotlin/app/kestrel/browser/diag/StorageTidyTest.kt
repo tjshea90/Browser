@@ -54,8 +54,9 @@ class StorageTidyTest {
     @Test fun theEnginesProfileIsFoundWhateverItsFolderIsCalled() {
         val a = File(ctx.cacheDir, "a/b/cache2")
         plant(File(a, "entries"), "OLD", 10, 40)
+        val other = plant(File(ctx.cacheDir, "other"), "x", 5, 99)
         assertEquals(10L, StorageTidy.pruneEngineFiles(ctx))
-        assertEquals("only cache2 folders are touched", 1, plant(File(ctx.cacheDir, "other"), "x", 5, 99).parentFile!!.listFiles()!!.size)
+        assertTrue("only cache2 folders are touched", other.isFile)
     }
 
     @Test fun crashReportsOlderThanAWeekGoButProfileDataNeverDoes() {
@@ -105,7 +106,7 @@ class StorageTidyTest {
     }
 
     @Test fun anOfferTheInstalledVersionHasCaughtUpWithIsUsedUp() {
-        UpdateManager.setStateForTest(UpdateManager.State(UpdateManager.Phase.AVAILABLE, offer(1L, "kestrel-0.0.1.apk")))
+        UpdateManager.setStateForTest(UpdateManager.State(UpdateManager.Phase.AVAILABLE, offer(0L, "kestrel-0.0.1.apk")))
         plant(updates(), "kestrel-0.0.1.apk", 400, 1)
         assertEquals(400L, UpdateManager.sweepFiles(ctx))
     }
@@ -159,7 +160,7 @@ class StorageTidyTest {
         assertFalse("just run", StorageTidy.due(ctx))
         assertEquals("not due: nothing happens", null, StorageTidy.runIfDue(ctx, emptySet()))
         val sp = ctx.getSharedPreferences("kestrel_tidy", 0)
-        sp.edit().putLong("code", 1L).commit()   // the last tidy was made by another version: an update was installed
+        sp.edit().putLong("code", 12345L).commit()   // the last tidy was made by another version: an update was installed
         assertTrue(StorageTidy.due(ctx))
         val after = StorageTidy.runIfDue(ctx, emptySet())!!
         assertTrue(after, after.startsWith("after an update, "))
