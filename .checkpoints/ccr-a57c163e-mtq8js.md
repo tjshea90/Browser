@@ -1,21 +1,22 @@
-# CHECKPOINT 1348 — read me first, then TASKS.md
+# CHECKPOINT 1350 — read me first, then TASKS.md
 
-**Written:** 2026-11-13T00:39:50Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `e95b292` (this checkpoint is the commit after it)
+**Written:** 2026-11-13T00:47:55Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `beb299b` (this checkpoint is the commit after it)
 
 ## Just done
-alpha25 (code 124) gated + pushed (ckpt 1347) and DISPATCHED: android.yml run 43338760626 (run #75, started 00:39Z, ~6-7 min). Gates: 825 JVM tests 0 failed, 99 web tests, Gecko compile green. Emulator proofs done: EX-1, EX-2, EX-3, EX-4, EX-10, EX-11. NOT yet recorded in BUILDLOG
+alpha25 SHIPPED and RECORDED: kestrel-g-v0.3.0-alpha25 (gecko code 124), run 43338760626 green, Release has the 93.3 MB signed APK + .sha256, BUILDLOG line pushed (beb299b); TASKS AC1 notes it, EX-17 ticked (told in the reply)
 
 ## Do this next
-WAIT for run 43338760626: background loop until git ls-remote origin refs/tags/kestrel-g-v0.3.0-alpha25 shows the tag, then mcp__github__actions_get get_workflow_run 43338760626 (conclusion success; NEVER poll get_job_logs, 404 until the job ends); then mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha25 (APK asset present); then bash tools/record-release.sh kestrel-g-v0.3.0-alpha25 "$(cat scratchpad/note25.txt)" (the note text is also in the body of ckpt 1347's commit message); then reply to the owner (message 16, plain words, Release link on its own line, honest: emulator/unit/web-tested only, not on the tablet; list the open owner items). Do NOT dispatch alpha25 twice. Heartbeat trigger trig_01LLoVKsjuTUaDn61UGP1pBN exists (every 2 h).
+Reply to the owner now (message 16; plain words; Release link https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha25 on its own line; honest: emulator/unit/web only; behaviour changes + how to switch off; EX-17 tip; re-list the open owner items). Then, if time/usage: AA3-3b rest (regenerate app/src/main/assets/filters/default.kfs with scripts/make-default-lists.sh so :style() rules are in the bundled list, procedural cosmetics, scriptlets, redirect= neutering, sub-resource removeparam), AA3-4 mp4-always, AA3-5 download manager queue, AA3-6 UI polish, AA3-9 rest. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN every 2 h exists; delete it after 24 h of owner silence when nothing safe remains.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  62b643d ckpt 1348: alpha25 (code 124) gated + pushed (ckpt 1347) and DISPATCHED: android.yml run
   e95b292 ckpt 1347: gated kestrel-g-v0.3.0-alpha25 (gecko code 124) and pushed it: handoff self-t
   bede630 ckpt 1346: EX-10 PROVEN on the emulator (Tap to load box replaced the third-party frame;
   d7c8bb0 ckpt 1341: EX-1 PROVEN on the emulator (WifiService acquireWifiLock lockMode=3 at the st
@@ -25,5 +26,4 @@ WAIT for run 43338760626: background loop until git ls-remote origin refs/tags/k
   49dea49 ckpt 1320: Docs: docs/ARCHITECTURE.md alpha25 section, research/EX_RESULTS.md (what was 
   c560ca9 ckpt 1316: EX ladder: EX-10 embeds-wait-for-a-tap coded (Shields flag EMBEDS=128 + Prefs
   352efcb ckpt 1306: More of the EX ladder coded (compiles; unit tests green: NetProfile 12, Backu
-  edaf04d ckpt 1288: EX-2/3/4/8/9/11 code done (compile green, unit tests for EX-9; emulator proof
 ```
