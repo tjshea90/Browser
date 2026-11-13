@@ -154,6 +154,10 @@ class MediaListFramesTest {
         l2.add(MediaCandidate("https://cdn.test/master.m3u8", MediaKind.HLS, "", -1, "https://site.test/watch"))
         l2.add(MediaCandidate("https://cdn.test/preview.mp4", MediaKind.FILE, "video/mp4", 3L * 1024 * 1024, "https://site.test/watch"))
         assertTrue(l2.usable().none { it.url == "https://cdn.test/preview.mp4" })
+        // pressing it (or choosing it in the sheet) makes it a real one too
+        l2.touch("https://cdn.test/preview.mp4")
+        assertTrue(l2.usable().any { it.url == "https://cdn.test/preview.mp4" })
+        assertFalse("touching an address the list does not hold changes nothing", l2.touch("https://cdn.test/nothing.mp4"))
         // sharp (480p+) or long (20 s+) files are shown too
         val sharp = MediaCandidate("https://cdn.test/sharp.mp4", MediaKind.FILE, "video/mp4", 3L * 1024 * 1024, "https://site.test/watch").also { it.height = 720 }
         val long = MediaCandidate("https://cdn.test/long.mp4", MediaKind.FILE, "video/mp4", 3L * 1024 * 1024, "https://site.test/watch").also { it.durationMs = 25_000 }

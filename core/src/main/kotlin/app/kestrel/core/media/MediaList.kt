@@ -132,6 +132,14 @@ class MediaList(private val max: Int = 48) {
         return v * 100 - index
     }
 
+    /** Somebody showed interest in this address (long-pressed, opened in the sheet, downloaded): it is kept when the list is full and shown even when it looks like a preview. @return true if that changed the list. */
+    fun touch(url: String): Boolean {
+        val c = find(url) ?: return false
+        if (c.touched) return false
+        c.touched = true; version++
+        return true
+    }
+
     /** What the page's own `<video>` / `<source>` told us about a URL (picture size, length in time, the label it shows). */
     fun applyInfo(url: String, width: Int, height: Int, durationMs: Long, label: String?): Boolean {
         val c = items.firstOrNull { it.key == MediaCandidate.keyOf(url) } ?: return false

@@ -137,6 +137,7 @@ class VideoFlow(private val a: BrowserActivity) {
         val direct = srcUri?.takeIf { it.startsWith("http://", true) || it.startsWith("https://", true) }
         // The element's own address is always worth offering, even when the sniffer has not seen the request (cached, or it ran before the extension was ready).
         if (direct != null && tab.media.find(direct) == null) tab.media.add(MediaCandidate(direct, MediaKind.FILE, "", -1, tab.url, "", System.currentTimeMillis()))
+        if (direct != null) tab.media.touch(direct) // the owner pressed it: it is kept and shown whatever its size (MediaList, EY-17)
         val extras = ArrayList<Pair<String, () -> Unit>>()
         if (direct != null) extras.add("Copy video address" to { a.copyText(direct) })
         if (linkUri != null) extras.add("Open link in new tab" to { a.sheet.dismiss(); onLink(linkUri) })
@@ -442,6 +443,7 @@ class VideoFlow(private val a: BrowserActivity) {
 
     private fun pick(tab: Tab, c: MediaCandidate, stem: String) {
         a.sheet.dismiss()
+        tab.media.touch(c.url)
         val name = stem + "." + MediaSniff.saveExtension(c.url, c.mime)
         Health.log("media", "file", "${UrlParts.hostOf(c.url) ?: ""} referer=${UrlParts.hostOf(requestHeaders(tab, c)["Referer"] ?: "") ?: "none"}")
         a.download(tab, c.url, null, null, c.mime.ifEmpty { null }, c.length, nameOverride = name, headers = requestHeaders(tab, c))
