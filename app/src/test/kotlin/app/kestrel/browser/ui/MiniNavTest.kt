@@ -78,6 +78,14 @@ class MiniNavTest {
         assertEquals(listOf(true, false), rec.opened)
     }
 
+    @Test fun tmpTraceTheSlide() {
+        animatorScale(0f)
+        nav.pressToggleForTest()
+        val sb = StringBuilder("TRACE ${nav.panelOffsetForTest}")
+        for (i in 1..16) { idle(20); sb.append(" ").append(nav.panelOffsetForTest.toInt()) }
+        println(sb)
+    }
+
     @Test fun startingOpenOrClosedNeedsNoAnimation() {
         nav.setOpen(true, animate = false, notify = false)
         assertTrue(nav.isOpen && nav.panelShownForTest); assertEquals(0f, nav.panelOffsetForTest, 0f)
