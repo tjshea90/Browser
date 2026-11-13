@@ -23,6 +23,14 @@ class MediaCandidate(
     var durationMs = 0L
     /** What the page calls it ("720p", "HD") when it said so. */
     var label: String? = null
+    /**
+     * What the browser itself sent when it loaded this address (the extension saw the request): its Referer and Origin. A video server that checks "who is asking" wants exactly these (the embedded
+     * PLAYER's address, not the page the player sits in), so the downloads repeat them. "" = not seen (an address found in the page's markup, or a long-pressed element).
+     */
+    var referer: String = ""
+    var origin: String = ""
+    /** The request headers that were seen to WORK for this address (its playlist was read with them): every later request of the download repeats them. Null until one worked. */
+    var viaHeaders: Map<String, String>? = null
 
     val key: String get() = keyOf(url)
     val audioOnly: Boolean get() = kind == MediaKind.FILE && MediaSniff.isAudio(url, mime)
@@ -72,6 +80,8 @@ class MediaList(private val max: Int = 24) {
             var changed = false
             if (old.length < 0 && c.length >= 0) { old.length = c.length; changed = true }
             if (old.mime.isEmpty() && c.mime.isNotEmpty()) { old.mime = c.mime; changed = true }
+            if (old.referer.isEmpty() && c.referer.isNotEmpty()) { old.referer = c.referer; changed = true }
+            if (old.origin.isEmpty() && c.origin.isNotEmpty()) { old.origin = c.origin; changed = true }
             if (changed) version++
             return changed
         }
