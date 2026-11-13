@@ -330,3 +330,80 @@ test('warm: an app that does not answer never breaks the page', async () => {
   await page.waitForTimeout(1500);
   assert.equal(await page.evaluate(() => document.getElementById('ok').textContent), 'ok');
 });
+
+// ---------------------------------------------------------------- AD1b-4: procedural cosmetic rules (:has-text(), :upward(), :remove() ...)
+const O = '\u0003', A = '\u0004';
+/** An app that says "this host has procedural rules" (the /*kp*/ marker in its CSS) and hands out [lines] when asked. */
+const appWithProcedural = (lines) => `() => {
+  window.__asked = [];
+  window.browser.runtime.sendMessage = (m) => {
+    window.__msgs.push(m);
+    if (m.k === 'css') return Promise.resolve('/*kp*/.site-rule{display:none!important}');
+    if (m.k === 'proc') { window.__asked.push(m.h); return Promise.resolve(${JSON.stringify(lines.join('\n'))}); }
+    return Promise.resolve(undefined);
+  };
+}`;
+const hiddenIds = (page) => page.evaluate(() => Array.from(document.querySelectorAll('[id]')).filter((e) => getComputedStyle(e).display === 'none').map((e) => e.id));
+const procOpen = (body, lines) => open(body, eval(appWithProcedural(lines)));
+const settleProc = (page) => page.waitForTimeout(1100);
+
+test('procedural: has-text (plain text is case-sensitive, a regex with i is not) hides only the elements that match', async () => {
+  const page = await procOpen(`<div class="post" id="a">Sponsored post</div><div class="post" id="b">Normal post</div><div class="post" id="c">SPONSORED shout</div><div class="card" id="d">Promoted today</div>`,
+    [`.post${O}t${A}Sponsored`, `.card${O}t${A}/promoted/i`]);
+  await settleProc(page);
+  assert.deepEqual(await hiddenIds(page), ['a', 'd']);
+  assert.deepEqual(await page.evaluate(() => window.__asked), ['site.example']);
+});
+
+test('procedural: upward moves to the n-th parent or the closest parent that matches, and only that element is hidden', async () => {
+  const page = await procOpen(`<div id="w1"><div id="m1"><span class="x" id="s1">Ad</span></div></div><div class="item" id="w2"><p><b class="y" id="s2">Ad</b></p></div><div id="keep"><span class="x">fine</span></div>`,
+    [`span.x${O}t${A}Ad${O}u${A}2`, `b.y${O}t${A}Ad${O}u${A}.item`]);
+  await settleProc(page);
+  assert.deepEqual(await hiddenIds(page), ['w1', 'w2']);
+});
+
+test('procedural: remove takes the element out of the page, remove-attr and remove-class change it', async () => {
+  const page = await procOpen(`<div class="ov" id="o">Subscribe now</div><img id="i" style="filter:blur(9px)" alt="Gate"><div class="blur wall" id="c">Members only</div><div id="stay">Subscribe</div>`,
+    [`div.ov${O}t${A}Subscribe${O}r${A}`, `img${O}t${A}${O}x`, `img[alt]${O}a${A}style`, `div.wall${O}t${A}Members${O}c${A}blur`]);
+  await settleProc(page);
+  assert.equal(await page.evaluate(() => !!document.getElementById('o')), false);
+  assert.equal(await page.evaluate(() => document.getElementById('stay').textContent), 'Subscribe');
+  assert.equal(await page.evaluate(() => document.getElementById('c').className), 'wall');
+});
+
+test('procedural: remove-attr works without a text test, and elements that appear later are found by the next run', async () => {
+  const page = await procOpen(`<img id="i" style="filter:blur(9px)" alt="x"><div id="host"></div>`, [`img[alt]${O}a${A}style`, `div.late${O}t${A}Sponsored`]);
+  await settleProc(page);
+  assert.equal(await page.evaluate(() => document.getElementById('i').hasAttribute('style')), false);
+  await page.evaluate(() => { const d = document.createElement('div'); d.className = 'late'; d.id = 'late'; d.textContent = 'Sponsored later'; document.getElementById('host').appendChild(d); });
+  await page.waitForTimeout(1100);
+  assert.deepEqual(await hiddenIds(page), ['late']);
+});
+
+test('procedural: a rule with a broken regex, an unknown operator or a selector the page rejects is ignored and the other rules still run', async () => {
+  const page = await procOpen(`<div class="post" id="a">Sponsored</div>`, [`.post${O}t${A}/(/`, `.post${O}z${A}x`, `div[${O}t${A}x`, `.post${O}t${A}Sponsored`]);
+  await settleProc(page);
+  assert.deepEqual(await hiddenIds(page), ['a']);
+});
+
+test('procedural: never hides or removes the page itself, however much text matches', async () => {
+  const page = await procOpen(`<div id="a">Sponsored everywhere</div>`, [`body${O}t${A}Sponsored`, `html${O}t${A}Sponsored`, `div#a${O}t${A}Sponsored${O}u${A}5`]);
+  await settleProc(page);
+  assert.equal(await page.evaluate(() => getComputedStyle(document.body).display !== 'none' && getComputedStyle(document.documentElement).display !== 'none'), true);
+});
+
+test('procedural: a page whose CSS has no marker never asks for rules', async () => {
+  const page = await open(`<div class="post">Sponsored</div>`, () => {
+    window.browser.runtime.sendMessage = (m) => { window.__msgs.push(m); return Promise.resolve(m.k === 'css' ? '.site-rule{display:none!important}' : undefined); };
+  });
+  await page.waitForTimeout(900);
+  assert.deepEqual(await page.evaluate(() => window.__msgs.filter((m) => m.k === 'proc')), []);
+});
+
+test('procedural: an app that does not answer, or answers nothing, never breaks the page', async () => {
+  const a = await open(`<p id="ok">ok</p>`, () => { window.browser.runtime.sendMessage = (m) => (m.k === 'css' ? Promise.resolve('/*kp*/') : Promise.reject(new Error('no app'))); });
+  const b = await open(`<p id="ok">ok</p><div class="post">Sponsored</div>`, () => { window.browser.runtime.sendMessage = (m) => Promise.resolve(m.k === 'css' ? '/*kp*/' : ''); });
+  await a.waitForTimeout(900);
+  assert.equal(await a.evaluate(() => document.getElementById('ok').textContent), 'ok');
+  assert.deepEqual(await hiddenIds(b), []);
+});
