@@ -76,10 +76,12 @@ class DownloadsScreen(ctx: Context, private var pal: Pal, private val l: Listene
 
     private fun render() {
         val views = DownloadController.views()
-        val running = views.filter { it.state != DlState.COMPLETED }.sortedByDescending { it.created }
+        // moving bytes first, then the waiting line in the order it will start (Start now / Move up / Move down change it), then everything that is paused or has failed, newest first
+        fun rank(v: DownloadView) = when (v.state) { DlState.RUNNING, DlState.STARTING, DlState.VERIFYING -> 0; DlState.QUEUED -> 1; else -> 2 }
+        val running = views.filter { it.state != DlState.COMPLETED }.sortedWith(compareBy<DownloadView> { rank(it) }.thenBy { if (it.state == DlState.QUEUED) it.queuePos else 0 }.thenByDescending { it.created })
         val done = views.filter { it.state == DlState.COMPLETED }.sortedByDescending { it.updated }
         clear.visibility = if (views.any { it.state == DlState.COMPLETED || it.state == DlState.FAILED }) VISIBLE else GONE
-        val sig = (running + done).joinToString("|") { "${it.id}:${it.state}:${it.reason}:${it.actions}:${it.note}" }
+        val sig = (running + done).joinToString("|") { "${it.id}:${it.state}:${it.reason}:${it.actions}:${it.note}:${it.queuePos}" }
         if (sig == signature) { for (v in running) rows[v.id]?.bind(v); return } // same cards: just move the bars of the ones that are not finished (a finished row never changes)
         signature = sig
         val keep = scroller.scrollY
@@ -146,11 +148,14 @@ class DownloadsScreen(ctx: Context, private var pal: Pal, private val l: Listene
     }
 
     private fun button(ctx: Context, a: Action, primary: Boolean, v: DownloadView): TextView {
-        val text = when (a) { Action.PAUSE -> "Pause"; Action.RESUME -> "Resume"; Action.CANCEL -> "Cancel"; Action.RETRY -> "Retry"; Action.RESTART -> "Restart"; Action.OPEN -> "Open"; Action.SHARE -> "Share"; Action.DELETE -> "Delete"; Action.MAKE_MP4 -> "Make MP4"; Action.DOWNLOAD_HERE -> "Download here" }
+        val text = when (a) { Action.PAUSE -> "Pause"; Action.RESUME -> "Resume"; Action.START_NOW -> "Start now"; Action.MOVE_UP -> "Move up"; Action.MOVE_DOWN -> "Move down"; Action.CANCEL -> "Cancel"; Action.RETRY -> "Retry"; Action.RESTART -> "Restart"; Action.OPEN -> "Open"; Action.SHARE -> "Share"; Action.DELETE -> "Delete"; Action.MAKE_MP4 -> "Make MP4"; Action.DOWNLOAD_HERE -> "Download here" }
         val click: () -> Unit = {
             when (a) {
                 Action.PAUSE -> DownloadController.pause(v.id)
                 Action.RESUME -> DownloadController.resume(ctx, v.id)
+                Action.START_NOW -> DownloadController.startNow(ctx, v.id)
+                Action.MOVE_UP -> DownloadController.move(v.id, true)
+                Action.MOVE_DOWN -> DownloadController.move(v.id, false)
                 Action.RETRY -> DownloadController.resume(ctx, v.id)
                 Action.RESTART -> DownloadController.restart(ctx, v.id)
                 Action.CANCEL -> { val cur = DownloadController.view(v.id) ?: v; if (cur.done > 0) l.confirm("Cancel this download?", "The part already downloaded (${Format.bytes(cur.done)}) is deleted.", "Cancel download") { DownloadController.cancel(v.id) } else DownloadController.cancel(v.id) }

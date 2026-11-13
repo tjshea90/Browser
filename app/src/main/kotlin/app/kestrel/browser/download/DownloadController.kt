@@ -299,6 +299,9 @@ object DownloadController {
     fun view(id: Long): DownloadView? = if (isPhone(id)) phone?.view(id) else if (isStream(id)) streams?.view(id) else engine?.view(id)
     fun pause(id: Long) { if (isPhone(id)) phone?.pause(id) else if (isStream(id)) streams?.pause(id) else engine?.pause(id) }
     fun resume(ctx: Context, id: Long) { init(ctx); if (isPhone(id)) phone?.resume(id) else if (isStream(id)) streams?.resume(id) else engine?.resume(id); DownloadService.start(ctx) }
+    /** "Start now": jump the waiting line (the tablet's own byte downloads only; videos and phone downloads have no line of their own). */
+    fun startNow(ctx: Context, id: Long) { init(ctx); if (!isPhone(id) && !isStream(id)) engine?.startNow(id); DownloadService.start(ctx) }
+    fun move(id: Long, up: Boolean) { if (!isPhone(id) && !isStream(id)) engine?.move(id, up) }
     fun cancel(id: Long) { if (isPhone(id)) phone?.cancel(id) else if (isStream(id)) streams?.cancel(id) else engine?.cancel(id) }
     fun restart(ctx: Context, id: Long) { init(ctx); if (isPhone(id)) phone?.restart(id) else if (isStream(id)) streams?.restart(id) else engine?.restart(id); DownloadService.start(ctx) }
     fun remove(id: Long, deleteFile: Boolean) { if (isPhone(id)) phone?.remove(id) else if (isStream(id)) streams?.remove(id, deleteFile) else engine?.remove(id, deleteFile) }
