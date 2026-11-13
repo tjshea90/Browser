@@ -68,6 +68,8 @@ function harness(app, opts) {
       webRequest: {
         onBeforeRequest: { addListener: (f) => { listeners.before = f; } },
         onHeadersReceived: { addListener: (f) => { listeners.headers = f; } },
+        onErrorOccurred: { addListener: (f) => { listeners.error = f; } },
+        onCompleted: { addListener: (f) => { listeners.completed = f; } },
       },
     },
   };
@@ -503,4 +505,66 @@ test('embeds: a frame that waits is counted as one thing held back for the page,
   const cnt = h.of('cnt');
   assert.ok(cnt.length >= 1 && cnt[0].c && cnt[0].c[3] === 1, 'one annoyance-category count: ' + JSON.stringify(cnt));
   release();
+});
+
+// ---------------------------------------------------------------- the page report (Diagnostics > Page report)
+const SITE = 'https://example.com/';
+function ready(h) { return until(() => h.of('img').length >= 3, 'the image transfer').then(() => until(() => !isPromise(h.req('script', PLAIN, PAGE)), 'the engine')); }
+
+test('page report: what Shields blocked, what failed to load, an HTTP error and a script error reach the app once the page has settled; our own cancel is not a failure', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  await ready(h);
+  eq(h.listeners.before({ type: 'script', url: AD, tabId: 1, frameId: 0, requestId: 'r1', documentUrl: PAGE, frameAncestors: [{ url: PAGE, frameId: 0 }] }), { cancel: true });
+  h.listeners.error({ tabId: 1, requestId: 'r1', type: 'script', url: AD, error: 'NS_ERROR_ABORT' });                 // our own cancel comes back as an error: not a failure
+  h.listeners.error({ tabId: 1, requestId: 'r2', type: 'script', url: 'https://cdn.example.net/lib.js?ver=2', error: 'NS_ERROR_NET_RESET' });
+  h.listeners.error({ tabId: 1, requestId: 'r3', type: 'image', url: 'https://example.com/left.png', error: 'NS_BINDING_ABORTED' });   // the page was left: not a failure either
+  h.listeners.completed({ tabId: 1, type: 'stylesheet', url: 'https://example.com/a.css', statusCode: 404 });
+  h.listeners.completed({ tabId: 1, type: 'image', url: 'https://example.com/ok.png', statusCode: 200 });
+  h.message({ k: 'jserr', t: 'js', m: 'ReferenceError: Swiper is not defined', s: 'https://example.com/wp-content/script.js', l: 1 }, 1);
+  assert.equal(h.of('rep').length, 0, 'nothing is sent before the page has settled');
+  await h.flushTimers();
+  const r = h.of('rep');
+  assert.equal(r.length, 1);
+  assert.equal(r[0].p, PAGE);
+  assert.ok(r[0].n >= 3, 'requests counted: ' + r[0].n);
+  assert.equal(r[0].nb, 1);
+  eq(r[0].b, ['script ads.example.com/x.js']);
+  eq(r[0].f, ['script cdn.example.net/lib.js?.. NET_RESET', 'stylesheet example.com/a.css HTTP 404']);
+  eq(r[0].e, ['ReferenceError: Swiper is not defined @ example.com/wp-content/script.js:1']);
+  await h.flushTimers();
+  assert.equal(h.of('rep').length, 1, 'nothing new: nothing sent again');
+});
+
+test('page report: a failed element load told by the page is listed, news after the first report is sent again, at most three times per page, a new page starts clean', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  await ready(h);
+  await h.flushTimers();                         // the first report: a page with nothing wrong is reported too (the app shows "no failed loads")
+  assert.equal(h.of('rep').length, 1);
+  eq(h.of('rep')[0].f, []);
+  h.message({ k: 'jserr', t: 'load', m: 'script', s: 'https://cdn.example.net/swiper.js?ver=5' }, 1);
+  await h.flushTimers();
+  assert.equal(h.of('rep').length, 2);
+  eq(h.of('rep')[1].e, ['file not usable: script cdn.example.net/swiper.js?..']);
+  h.listeners.completed({ tabId: 1, type: 'script', url: 'https://example.com/a.js', statusCode: 500 }); await h.flushTimers();
+  assert.equal(h.of('rep').length, 3);
+  h.listeners.completed({ tabId: 1, type: 'script', url: 'https://example.com/b.js', statusCode: 500 }); await h.flushTimers();
+  assert.equal(h.of('rep').length, 3, 'the third report was the last one for this page');
+  h.mainFrame('https://other.example/'); await h.flushTimers();
+  assert.equal(h.of('rep').length, 4);
+  assert.equal(h.of('rep')[3].p, 'https://other.example/');
+  eq(h.of('rep')[3].f, []); eq(h.of('rep')[3].e, []);
+});
+
+test('page report: a message from a frame without a tab, an unknown tab and a malformed message change nothing and throw nothing', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  await ready(h);
+  assert.equal(h.message({ k: 'jserr', t: 'js', m: 'x', s: '', l: 0 }, -1), undefined);
+  assert.equal(h.message({ k: 'jserr', t: 'js', m: 'x' }, 99), undefined);
+  assert.equal(h.message({ k: 'nonsense' }, 1), undefined);
+  h.listeners.error({ tabId: -1, requestId: 'x', type: 'script', url: 'https://a.example/b.js', error: 'NS_ERROR_NET_RESET' }); // not a tab (the browser's own request)
+  await h.flushTimers();
+  eq(h.of('rep')[0].f, []); eq(h.of('rep')[0].e, []);
 });
