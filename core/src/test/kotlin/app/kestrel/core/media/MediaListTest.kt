@@ -107,3 +107,28 @@ class MediaListTest {
         assertEquals(0, MediaCandidate.heightOfLabel(null))
     }
 }
+
+class MediaListFramesTest {
+    private fun hls(url: String, frame: String = "") = MediaCandidate(url, MediaKind.HLS, "application/vnd.apple.mpegurl", -1, "https://site.test/watch", frame)
+
+    @Test fun whatAGoneDocumentOfferedIsDroppedAndNothingElse() {
+        val l = MediaList()
+        l.add(hls("https://cdn.test/one.m3u8", "https://player-one.test/embed"))   // server one
+        l.add(hls("https://cdn.test/side.m3u8", "https://sidebar.test/s"))         // another frame, still there
+        l.add(hls("https://cdn.test/page.m3u8"))                                   // the page's own (frame "")
+        assertEquals(listOf("https://cdn.test/one.m3u8"), l.dropFrames(listOf("https://player-one.test/embed")))
+        assertEquals(setOf("https://cdn.test/side.m3u8", "https://cdn.test/page.m3u8"), l.keys().toSet())
+        assertTrue(l.dropFrames(listOf("https://player-one.test/embed")).isEmpty())  // already gone
+        assertTrue(l.dropFrames(listOf("")).isEmpty())                                 // the page itself is never dropped by a frame
+        assertEquals(2, l.size)
+    }
+
+    @Test fun theDownloadCountFollowsTheDrop() {
+        val l = MediaList()
+        l.add(hls("https://cdn.test/one.m3u8", "https://player-one.test/embed"))
+        assertEquals(1, l.usableCount())
+        l.dropFrames(listOf("https://player-one.test/embed"))
+        assertEquals(0, l.usableCount())
+        assertTrue(l.isEmpty())
+    }
+}

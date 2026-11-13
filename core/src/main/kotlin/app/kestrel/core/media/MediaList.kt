@@ -62,6 +62,19 @@ class MediaList(private val max: Int = 24) {
     /** The candidate for exactly this address (the #fragment aside), or null. */
     fun find(url: String): MediaCandidate? = MediaCandidate.keyOf(url).let { k -> items.firstOrNull { it.key == k } }
     fun clear() { items.clear(); version++ }
+    /** The addresses of everything in the list (for forgetting what was learned about them). */
+    fun keys(): List<String> = items.map { it.key }
+    /**
+     * A player frame went to another document (the owner switched servers): what the documents in [docs] offered is gone. [MediaCandidate.frame] names the document that asked ("" = the page itself, never
+     * dropped here: a new page clears the whole list). @return the addresses removed.
+     */
+    fun dropFrames(docs: Collection<String>): List<String> {
+        if (docs.isEmpty()) return emptyList()
+        val gone = items.filter { it.frame.isNotEmpty() && it.frame in docs }
+        if (gone.isEmpty()) return emptyList()
+        items.removeAll(gone.toSet()); version++
+        return gone.map { it.key }
+    }
 
     // The dock's download button asks "how many?" on every refresh of the screen (page progress, title, shield counter...): the sorted list is only rebuilt when the list changed.
     private var version = 0
