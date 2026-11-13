@@ -69,7 +69,18 @@ object UpdateManager {
         val fileKept: Boolean = true,
         val installedBytes: Long = 0,
         val reserveBytes: Long = 0,
-    )
+        /**
+         * NEEDS_SPACE only: what Android keeps free before it installs this update in place ([needInPlace], reserve + the update + room to unpack it), what an uninstall of this app would hand back
+         * ([ownBytes]) of which [cacheBytes] is cache the browser can clear alone, and what the other way (uninstall first) would leave free ([otherFreeAfter]) against what the fresh install needs ([otherNeed]).
+         */
+        val needInPlace: Long = 0,
+        val ownBytes: Long = 0,
+        val cacheBytes: Long = 0,
+        val otherFreeAfter: Long = 0,
+        val otherNeed: Long = 0,
+    ) {
+        val otherShort: Long get() = if (otherFreeAfter >= otherNeed) 0L else otherNeed - otherFreeAfter
+    }
 
     @Volatile var state = State(Phase.IDLE)
         private set
@@ -435,9 +446,18 @@ object UpdateManager {
     }
 
     /** [floorShort]: what Android's own refusals still ask for beyond our estimate (see [installNeedsSpace]). */
-    private class Space(val plan: UpdateLogic.StoragePlan, val free: Long, val installed: Long, val floorShort: Long) {
+    private class Space(val plan: UpdateLogic.StoragePlan, val free: Long, val installed: Long, val floorShort: Long, val own: Own, val other: UpdateLogic.OtherWayPlan) {
         val shortBy: Long get() = maxOf(plan.shortBy, floorShort)
     }
+
+    /** What an uninstall of THIS app hands back ([total]: package, unpacked libraries, optimised code, data, cache) and the cache part of it. Android's own figures for the package; 0 when it will not say. */
+    private class Own(val total: Long, val cache: Long)
+
+    private fun ownFootprint(ctx: Context): Own = try {
+        val sm = ctx.getSystemService(StorageManager::class.java)
+        val st = ctx.getSystemService(StorageStatsManager::class.java).queryStatsForPackage(sm.getUuidForPath(dir(ctx)), ctx.packageName, android.os.Process.myUserHandle())
+        Own(st.appBytes + st.dataBytes, st.cacheBytes) // getDataBytes() already includes the cache
+    } catch (e: Exception) { Own(0L, 0L) }
 
     /** [pending]: bytes of the update file that are still to be downloaded (not on the disk yet, but about to be). */
     private fun space(ctx: Context, offer: UpdateOffer, apk: File?, pending: Long = 0): Space {
@@ -446,12 +466,15 @@ object UpdateManager {
         val rawFree = freeForInstall(ctx)
         val free = (rawFree - pending).coerceAtLeast(0) // the download comes first and takes its room
         val plan = UpdateLogic.storagePlan(apkBytes, libs, free, reserveBytes(ctx))
-        return Space(plan, rawFree, plan.installTakes, 0L) // (a floor learned from earlier refusals used to inflate the figure: gone, the number is only what Android's rule says)
+        val own = ownFootprint(ctx)
+        val other = UpdateLogic.otherWayPlan(plan, own.total, apkBytes, fileKept = apk != null && apk.isFile)
+        return Space(plan, rawFree, plan.installTakes, 0L, own, other) // (a floor learned from earlier refusals used to inflate the figure: gone, the number is only what Android's rule says)
     }
 
     private fun needSpace(ctx: Context, offer: UpdateOffer, sp: Space, fileKept: Boolean) {
         val short = UpdateLogic.roundUpTenMb(sp.shortBy).coerceAtLeast(10L shl 20)
-        state = State(Phase.NEEDS_SPACE, offer, 0, 0, "", state.checkedAt, state.installedName, shortBy = short, freeNow = sp.free, fileKept = fileKept, installedBytes = sp.installed, reserveBytes = sp.plan.reserve)
+        state = State(Phase.NEEDS_SPACE, offer, 0, 0, "", state.checkedAt, state.installedName, shortBy = short, freeNow = sp.free, fileKept = fileKept, installedBytes = sp.installed, reserveBytes = sp.plan.reserve,
+            needInPlace = if (fileKept) sp.plan.needKeep else sp.plan.needDrop, ownBytes = sp.own.total, cacheBytes = sp.own.cache, otherFreeAfter = sp.other.freeAfter, otherNeed = sp.other.need)
         Io.main.post { for (l in listeners) l() }
     }
 
