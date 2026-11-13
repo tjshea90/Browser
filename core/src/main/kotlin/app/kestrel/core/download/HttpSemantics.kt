@@ -214,6 +214,8 @@ class Config(
     val maxFails: Int = 8,
     val backoffBaseMs: Long = 1000,
     val backoffCapMs: Long = 60_000,
+    /** A refused stream part (401 / 403 / 410, or 404 once other parts came in) is tried again after each of these waits (plus up to a fifth of jitter) before the link counts as expired (EY-7). */
+    val denyDelaysMs: List<Long> = listOf(1500L, 4000L, 9000L),
     val parallel: Boolean = true,
     /** Files at least this big start with two connections at once (0 = off). */
     val fastStart: Boolean = true,
