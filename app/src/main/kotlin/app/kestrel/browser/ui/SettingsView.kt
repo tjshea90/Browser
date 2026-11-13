@@ -18,6 +18,8 @@ interface SettingsListener {
     fun clearBrowsingData()
     /** The "Show the last page right away" switch went off: delete the saved pictures. */
     fun lastLookOff() {}
+    /** Settings > "Tidy storage now" (AO4): run the storage tidy now and say what it freed. */
+    fun tidyStorage() {}
     fun resetSiteShields()
     fun updateFiltersNow()
     fun resetDataCounter()
