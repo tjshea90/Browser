@@ -37,6 +37,6 @@ class ZzProbeTest {
             Triple("https://pixel.adsafeprotected.com/services/pub?anid=1", "news.example", img),
             Triple("https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js", "news.example", s),
         )
-        for ((u, p, t) in cases) { val v = fs.check(u, p, t, psl); println("PROBE " + (if (FilterSet.isBlocked(v)) "BLOCK " else "allow ") + u) }
+        for ((u, p, t) in cases) { val v = fs.check(u, p, t, psl); println("PROBE " + (if (Verdict.isBlocked(v)) "BLOCK " else "allow ") + u) }
     }
 }
