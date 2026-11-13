@@ -587,3 +587,8 @@ Remove any of the diagnosis tools from the app that are no longer needed or alre
 ```
 The app is blocking ads and redirects from video sites well right now when I press play to play a video and it tries to redirect to a spam site instead of playing the video. But i have to press play several times for it to get past the fake play button redirects and finally play the video. Is there a way to force the play button to play the video on the first press while blocking all the fake redirects? If so implement it
 ```
+
+## 2026-11-13T22:23:31Z
+```
+Use the icon on the left side in this photo. Rename the app Kestrel instead of Kestrel G
+```
