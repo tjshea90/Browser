@@ -290,3 +290,234 @@ Widevine: available (com.widevine.alpha)
 
 cores: 4, pixel ratio 1.0714285714285714, screen 560x956, (Android 10; Mobile; rv:160.0) Gecko/160.0 Firefox/160.0
 ```
+
+## 2026-11-13T05:02:25Z
+```
+Kestrel diagnostics  2026-11-13 03:59:20 UTC  (app running 591 s)
+App: app.kestrel.browser.gecko 0.3.0-alpha27 (code 126)
+Device: alps 711, Android 10 (API 29), armeabi-v7a/armeabi
+Display: 600x973 px, 170 dpi, font scale 1.2
+Memory: total 1954 MB, available 534 MB, low=false, threshold 144 MB; MemAvailable 451156 kB; low-RAM device=true; app heap 14/128 MB
+Keyboard: com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME
+Processes: main#24826, :utility_disable_art_image_#25410, :gpu_disable_art_image_#24977, :sandboxed_tab_disable_art_image_10#24936, :crashhelper_disable_art_image_#24892, :media#25174
+Engine: GeckoView 160.0; live sessions 4 of 6 tabs (the memory budget keeps up to 4 ready, MemAvailable 440 MB, setting automatic); current resource://android/assets/labs/decode.html
+Network: Fast Wi-Fi profile: LinkMeter's tunnel is the active network, so lookups use the phone's own resolver, HTTP/3 and IPv6 are off, downloads give a loading page more room (1000 KB/s) and the phone helper rests. (VPN active: true, LinkMeter tunnel recognised: true, downloads yield to a loading page at 1000 KB/s)
+Wi-Fi lock: HIGH_PERF (radio kept out of power save, also with the screen off), held now=false, taken 1 time(s) by downloads. Keep Wi-Fi awake in front: not held, taken 0 time(s) this run
+Download windows: no window boundary seen yet this run (a download needs more than one window)
+Keyboard: 14 layout event(s) from the probe window this run (more than 0 = the dock follows the keyboard by event, polling only as a safety net)
+Warm-ups: 7 connection head start(s) handed to the engine on its own thread this run (Settings > Network lab > Warm up connections)
+Engine prefs: version=7(i), av1.enabled=false(b), processCount=1(i), prefersReducedMotion=null(?), prefetch-next=true(b), size_factor=20(i), discard_factor=1(i), min_expiration_ms=180000(i), disk.capacity=512000(i), push.enabled=false(b), y_skate_size_multiplier=4.0(s), y_stationary_size_multiplier=3.0(s), content_response_timeout=300(i), max_velocity_inches_per_ms=0.07(s), gc_on_memory_pressure=false(b), gpu-process.enabled=true(b), software=false(b), cache_readahead_limit=60(i), cache_resume_threshold=30(i), max_total_viewers=6(i), contentViewerTimeout=3600(i), memory.capacity=65536(i), decode_bytes_at_a_time=65536(i), numscrollportheights=2(i), numscrollportwidths=1(i), top=1500.0(s), bottom=1500.0(s), precache-shaders=true(b), proxy.type=5(i), failover_timeout=10(i), autoconfig_url=(s), trr.mode=0(i), enable=false(b), disableIPv6=true(b), interactive_widget_default_resizes_visual=true(b), allow_unload_listeners=true(b), require_no_opener=true(b), ship_allow_beforeunload_listeners=true(b), max_entries=50(i), dnsCacheExpiration=60(i), dnsCacheEntries=3200(i), gc_parallel_marking=false(b), bytecode_cache.strategy=1(i), jxl.enabled=false(b), accept=image/webp,image/png,image/svg+xml,image(s), allow_double_tap_zooming=false(b), autozoom=true(b), prefetch_dns_for_anchor_https_document=true(b), cache.size=32768(i), fallback_delay=500(i), speculation_rules.enabled=true(b), dry_run=false(b), vp9.enabled=false(b), hevc.enabled=true(b), android-media-codec.enabled=true(b), preferred=true(b), hls.enabled=true(b), eme.enabled=true(b), require-app-approval=true(b), default=1(i), blocking_policy=0(i), request=true(b), rdd-process.enabled=false(b), utility-process.enabled=true(b), default-size=10(i), suspend-background-video.enabled=true(b), prefersReducedMotion=null(?), animation_mode=normal(s), all=false(b), compositor=false(b), accelerated=true(b), disabled=false(b), ion=true(b), baselinejit=true(b), blinterp=true(b), wasm=true(b), wasm_optimizingjit=true(b), early-hints.enabled=true(b), echconfig.enabled=true(b), enable_kyber=true(b), http2.enabled=true(b)
+Engine scroll/network prefs: touch_start_tolerance=0.06, touch_move_tolerance=0.03, fling_stop_on_tap_threshold=0.05, fling_min_velocity_threshold=0.5, velocity_bias=1.0, displayport_expiry_ms=180000, prefer_jank_minimal_displayports=true, min_skate_speed=1.0, allow_immediate_handoff=false, fling_friction=0.004, chrome_fling_physics.friction=0.015, chrome_fling_physics.inflexion=0.35, chrome_fling_physics.stop_threshold=0.1, paint_skipping.enabled=true, layout.display-list.retain=true, dom.ipc.processPriorityManager.enabled=true, browser.cache.memory.capacity=65536, layout.frame_rate=-1, http.max-connections=128, http.max-persistent-connections-per-server=6, http.speculative-parallel-limit=20, http.pacing.requests.enabled=true, dnsCacheEntries=3200, dnsCacheExpiration=60, layout.css.scroll-anchoring.enabled=true, dom.lazy-loading.margin.top=1500.0, image.cache.size=20971520
+GPU: ARM / Mali-G52 MC2 / OpenGL ES 3.2 v1.r20p0-01rel0.1736f181fe152c329cb4303b5523103a
+Video decoders (Android MediaCodec; HW = hardware, sw = software; the engine uses HW first), read in 132 ms:
+  H.264: HW MTK.VIDEO.DECODER.AVC 2048x1088@145 | sw android.avc.decoder, google.h264.decoder
+  H.265: HW MTK.VIDEO.DECODER.HEVC 2048x1088@145 | sw android.hevc.decoder, google.hevc.decoder
+  VP9: HW MTK.VIDEO.DECODER.VP9 2048x1088@68 | sw android.vp9.decoder, google.vp9.decoder
+  VP8: HW MTK.VIDEO.DECODER.VPX 2048x1088@960 | sw android.vp8.decoder, google.vp8.decoder
+  AV1: no hardware decoder | sw android.av1.decoder
+  MPEG-4: HW MTK.VIDEO.DECODER.MPEG4 896x896
+  MPEG-2: HW MTK.VIDEO.DECODER.MPEG2 1920x1088@60
+  AAC: no hardware decoder | sw google.aac.decoder, android.aac.decoder
+  Opus: no hardware decoder | sw google.opus.decoder, android.opus.decoder
+  Vorbis: no hardware decoder | sw google.vorbis.decoder, android.vorbis.decoder
+  MP3: HW MTK.AUDIO.DECODER.MP3 | sw google.mp3.decoder, android.mp3.decoder
+  AC-3: none
+  E-AC-3: none
+  FLAC: no hardware decoder | sw google.flac.decoder, android.flac.decoder
+  Widevine: available, security level L3, Google 15.0.0, HDCP Unprotected
+Video: codecs offered to sites: device decoders unknown: engine defaults, no AV1 [hardware decoders unknown]; page animations normal; muted autoplay allowed; protected video ask
+Storage: 1.62 GB free of 27.75 GB; free + caches Android can clear: 1.62 GB; Android keeps 2.77 GB free after an install (a tenth); this app: package 94.4 MB + unpacked libraries 131.7 MB + data 62.3 MB + cache 228.1 MB; an install or update needs free >= reserve + 2 x package + libraries + about 48 MB
+Blocker: fast mode, list #1, 2641 KB, loaded in 2974 ms, 1 transfer(s). 648 requests judged in the engine (average 723 us, slowest 11000 us, 28 over 2 ms), 0 asked the app one by one, 0 errors. page guard on, 0 blocked | image 1 from the app: 11 chunks, waiting for the app 2335 ms (its encode 82 ms), base64 decode 161 ms, verify+warm-up 100 ms
+Neon glow: holding still: finger on screen, a full-screen page covers them; system animation scale off (the glow ignores it)
+Page view: attached=true session=true windowFocus=true
+Page loads (newest last; time from tap to first paint / to load finished):
+  www.tiktok.com  paint -, done 4.6 s, 0 blocked
+  pelisjuanita.com  paint 0.0 s, done 1.7 s, 3 blocked
+  pelisjuanita.com  paint 2.2 s, done 5.2 s, 11 blocked, visit #2
+  pelisjuanita.com  paint 1.1 s, done 4.5 s, 15 blocked, visit #3
+  pelisjuanita.com  paint 0.7 s, done 3.4 s, 11 blocked, visit #4
+  pelisjuanita.com  paint 0.9 s, done 1.5 s, 11 blocked, visit #5
+  pelisjuanita.com  paint 0.7 s, done 2.8 s, 10 blocked, visit #6
+  pelisjuanita.com  paint 1.1 s, done 3.1 s, 12 blocked, visit #7
+  doraby.com  paint 1.1 s, done 1.6 s, 18 blocked
+  android  paint 0.1 s, done 0.1 s, 0 blocked
+  android  paint -, done 0.1 s, 0 blocked, visit #2
+  android  paint 0.3 s, done 0.3 s, 0 blocked, visit #3
+  android  paint -, done 0.2 s, 0 blocked, visit #4
+  android  paint -, done 0.1 s, 0 blocked, visit #5
+Pages: Pages load directly (switched off).
+Phone link: mode=off, paired=false, address=10.97.182.19:8780, reachable=false, rtt=0 ms, clock offset=0 ms, last error=none, rows on the phone=0
+Counters: back.picture=1  frames.jank=126  gecko.firstComposite=40  mem.trim=6  mem.trim.20=5  mem.trim.5=1  tabs.hibernate=2  tabstate.restored=1  ui.late=1
+
+-- last 150 events (297 recorded) --
++318.111s health watchdog-start
++318.140s engine warm https://doraby.com/
++318.373s win focus true
++318.786s gecko first-composite trim=20@146s
++320.333s gecko size 600x884 (was 600x824)
++320.487s gecko first-composite trim=20@148s
++323.258s video decoders AHVi 26 decoder(s) in 381 ms, widevine=true
++325.273s gecko size 600x824 (was 600x884)
++325.609s gecko first-composite trim=20@153s
++325.611s gecko first-composite trim=20@153s
++325.611s gecko first-composite trim=20@153s
++325.783s gecko first-composite trim=20@153s
++328.171s frames 10s frames=102 jank=11 worst=440ms
++332.542s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++342.985s win focus false
++343.937s win focus true
++346.922s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++350.308s video decoders AHVi 26 decoder(s) in 99 ms, widevine=true
++352.312s gecko first-composite trim=20@179s
++352.312s gecko first-composite trim=20@179s
++352.313s gecko first-composite trim=20@179s
++352.420s gecko first-composite trim=20@180s
++358.356s frames 10s frames=89 jank=7 worst=166ms
++362.645s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++363.845s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++365.491s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++366.912s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++368.453s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++369.342s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++370.687s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++371.366s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++372.574s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++373.364s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++376.500s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++376.889s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++377.894s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++378.088s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++378.286s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++378.452s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++378.635s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++378.817s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++378.999s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++379.181s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++382.636s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++383.976s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++385.994s win focus false
++387.202s win focus true
++396.328s video decoders AHVi 26 decoder(s) in 128 ms, widevine=true
++399.766s gecko first-composite trim=20@227s
++399.771s gecko first-composite trim=20@227s
++399.771s gecko first-composite trim=20@227s
++400.049s frames 10s frames=90 jank=5 worst=173ms
++400.294s gecko first-composite trim=20@227s
++402.301s pull down scrollable=4 overscroll=3 handled=1 -> canScrollUp=false
++431.303s pull down scrollable=4 overscroll=3 handled=1 -> canScrollUp=false
++434.355s pull down scrollable=5 overscroll=3 handled=1 -> canScrollUp=true
++435.131s pull down scrollable=5 overscroll=3 handled=1 -> canScrollUp=true
++435.587s pull down scrollable=5 overscroll=3 handled=1 -> canScrollUp=true
++436.682s pull down scrollable=5 overscroll=3 handled=1 -> canScrollUp=true
++437.030s pull down scrollable=5 overscroll=3 handled=1 -> canScrollUp=true
++438.078s pull down scrollable=5 overscroll=3 handled=1 -> canScrollUp=true
++439.046s pull down scrollable=5 overscroll=3 handled=1 -> canScrollUp=true
++440.557s pull down scrollable=4 overscroll=3 handled=1 -> canScrollUp=false
++441.702s frames 10s frames=68 jank=3 worst=72ms
++442.998s win focus false
++443.887s win focus true
++444.408s pull down scrollable=4 overscroll=3 handled=1 -> canScrollUp=false
++445.134s pull down scrollable=5 overscroll=3 handled=1 -> canScrollUp=true
++445.698s pull down scrollable=5 overscroll=3 handled=1 -> canScrollUp=true
++446.214s pull down scrollable=5 overscroll=3 handled=1 -> canScrollUp=true
++448.136s win focus false
++449.113s win focus true
++450.644s pull down scrollable=5 overscroll=3 handled=1 -> canScrollUp=true
++451.323s pull down scrollable=5 overscroll=3 handled=1 -> canScrollUp=true
++451.887s pull down scrollable=5 overscroll=3 handled=1 -> canScrollUp=true
++454.720s win focus false
++455.655s win focus true
++456.897s pull down scrollable=5 overscroll=3 handled=1 -> canScrollUp=true
++457.449s pull down scrollable=1 overscroll=3 handled=1 -> canScrollUp=true
++460.130s win focus false
++461.149s win focus true
++462.397s pull down scrollable=1 overscroll=3 handled=1 -> canScrollUp=true
++462.780s win focus false
++464.051s win focus true
++466.933s win focus false
++467.943s win focus true
++470.192s life pause
++470.217s win focus false
++470.406s mem trim level=20 avail=589MB thr=144MB low=false trim=20@0s
++470.414s life stop
++470.414s health watchdog-stop
++471.388s life resume
++471.389s health watchdog-start
++471.502s win focus true
++471.549s gecko first-composite trim=20@1s
++472.615s pull down scrollable=1 overscroll=3 handled=1 -> canScrollUp=true
++476.437s video decoders AHVi 26 decoder(s) in 205 ms, widevine=true
++477.538s life pause
++477.545s win focus false
++477.667s mem trim level=20 avail=599MB thr=144MB low=false trim=20@0s
++477.672s life stop
++477.672s health watchdog-stop
++497.346s life resume
++497.348s health watchdog-start
++497.572s win focus true
++497.597s gecko first-composite trim=20@19s
++499.987s gecko first-composite trim=20@22s
++499.988s gecko first-composite trim=20@22s
++499.988s gecko first-composite trim=20@22s
++500.344s gecko first-composite trim=20@22s
++501.505s pull down scrollable=4 overscroll=3 handled=1 -> canScrollUp=false
++502.003s pull down scrollable=1 overscroll=3 handled=1 -> canScrollUp=true
++503.157s pull down scrollable=1 overscroll=3 handled=1 -> canScrollUp=true
++504.755s pull down scrollable=1 overscroll=3 handled=1 -> canScrollUp=true
++506.594s pull down scrollable=1 overscroll=3 handled=1 -> canScrollUp=true
++507.395s pull down scrollable=1 overscroll=3 handled=2 -> canScrollUp=true
++507.783s frames 10s frames=64 jank=7 worst=247ms
++508.798s pull down scrollable=1 overscroll=3 handled=1 -> canScrollUp=true
++509.938s pull down scrollable=1 overscroll=3 handled=1 -> canScrollUp=true
++510.729s pull down scrollable=1 overscroll=3 handled=2 -> canScrollUp=true
++514.191s pull down scrollable=1 overscroll=3 handled=2 -> canScrollUp=true
++516.441s pull down scrollable=1 overscroll=3 handled=2 -> canScrollUp=true
++518.119s pull down scrollable=5 overscroll=3 handled=2 -> canScrollUp=true
++518.807s frames 10s frames=67 jank=10 worst=50ms
++519.456s pull down scrollable=5 overscroll=3 handled=1 -> canScrollUp=true
++519.586s pull down scrollable=1 overscroll=3 handled=1 -> canScrollUp=true
++520.594s pull down scrollable=1 overscroll=3 handled=1 -> canScrollUp=true
++521.939s pull down scrollable=1 overscroll=3 handled=2 -> canScrollUp=true
++524.589s life pause
++524.600s win focus false
++524.789s mem trim level=20 avail=595MB thr=144MB low=false trim=20@0s
++524.805s life stop
++524.805s health watchdog-stop
++571.676s life resume
++571.688s health watchdog-start
++571.822s win focus true
++571.906s gecko first-composite trim=20@47s
++573.230s pull down scrollable=1 overscroll=3 handled=1 -> canScrollUp=true
++577.603s video decoders AHVi 26 decoder(s) in 122 ms, widevine=true
++579.626s tabs hibernate tab=2 live=6 max=4 avail=474MB
++579.629s tabs hibernate tab=3 live=5 max=4 avail=474MB
++579.965s gecko first-composite trim=20@55s
++579.966s gecko first-composite trim=20@55s
++579.996s gecko first-composite trim=20@55s
++580.117s gecko first-composite trim=20@55s
++581.507s pull down scrollable=0 overscroll=3 handled=0 -> canScrollUp=false
++581.953s frames 10s frames=82 jank=9 worst=170ms
++586.053s video decoders AHVi 26 decoder(s) in 132 ms, widevine=true
++588.875s blocker compatibility mode on
++591.931s blocker fast mode on
+
+Standard (Firefox's own):
+  Result: SMOOTH - about 64 frames a second, 95% of gaps under 22 ms.
+  Compositor frames: 1615 in 25.1 s of motion = 64/s; gap median 15 ms, 95% 22 ms, worst 47 ms (0 over 50 ms); first frame after touch: median 8 ms, worst 36 ms; swipes with a gap over 100 ms: 0 of 32
+
+Smoother:
+  Result: SMOOTH - about 65 frames a second, 95% of gaps under 19 ms.
+  Compositor frames: 1648 in 25.2 s of motion = 65/s; gap median 15 ms, 95% 19 ms, worst 43 ms (0 over 50 ms); first frame after touch: median 7 ms, worst 27 ms; swipes with a gap over 100 ms: 0 of 32
+
+Smoothest:
+  Result: SMOOTH - about 65 frames a second, 95% of gaps under 19 ms.
+  Compositor frames: 1617 in 25.0 s of motion = 65/s; gap median 15 ms, 95% 19 ms, worst 45 ms (0 over 50 ms); first frame after touch: median 7 ms, worst 28 ms; swipes with a gap over 100 ms: 0 of 32
+
+Smoother is what Kestrel G starts with. Settings > Appearance > Scroll feel switches it; your own setting is back in place now.
+32 finger swipes through the real touch path (page scrolled down, then back up)
+Result: SMOOTH - about 62 frames a second, 95% of gaps under 30 ms.
+Compositor frames: 626 in 10.2 s of motion = 62/s; gap median 15 ms, 95% 30 ms, worst 100 ms (1 over 50 ms); first frame after touch: median 5 ms, worst 259 ms; swipes with a gap over 100 ms: 0 of 32
+Main-thread updates: 583 in 10.0 s of motion = 58/s; gap median 15 ms, 95% 31 ms, worst 91 ms (6 over 50 ms); first frame after touch: median 10 ms, worst 247 ms; swipes with a gap over 100 ms: 0 of 32
+Memory before: avail=514MB thr=144MB low=false trim=20@27s
+Memory after:  avail=540MB thr=144MB low=false trim=20@2s
+```
