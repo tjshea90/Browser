@@ -51,3 +51,11 @@ Emulator proof (2026-11-13, AVD kestrel29x64, no KVM, slow): scroll a long page 
 Found on the way: GeckoView's UI-thread scroll callback does not report the place the engine restores a page to by itself, so a restored page stayed at "y=0" in the record; the compositor callback (`CompositorScrollDelegate`, source OTHER) is used instead.
 
 What only the tablet can say: how long the picture takes to appear (the `look` mark in the Cold start line, next to `frame`), whether a pause capture finishes before the owner swipes the app away (it took about 5 s on the emulator), and whether the hand-over to the live page is invisible. Owner's smallest step: after alpha33, use the browser as usual for a few pages, swipe it away, open it again, and paste Menu > Diagnostics > Copy.
+
+## AQ1 - left on the Home screen: the app comes back to Home (alpha33; owner 2026-11-13: "I pressed home ... closed and opened it again and it loaded doraby.com")
+
+Cause: the Home button lays the Home screen OVER the tab's page (`Tab.showHome`, the page's session stays alive underneath; a tab on Home keeps its address for the tab switcher, AK3). The saved session (`session.txt`) had only the address, so after the process died the tab was restored as that page.
+
+Fix: `TabRecord.homeOverPage`, saved in the existing flags field of the session line (`0` / `1` = desktop site, plus `H` when Home was over the page: still six fields, so older files load as "not on Home" and an older app still finds every tab; `SessionCodec`, tests in `ShieldAndSessionTest`). On restore a tab flagged Home gets `showHome = true` and NO engine session: `attachContent` makes none for a Home tab that has none, so nothing loads behind the Home screen at start (the address and the saved Back stack wait; Back, or typing an address, brings the page). Also skipped for a tab left on Home: the early cover and its last-look picture (`earlyCover`), the start-up connection warm-up of its site, the resume warm-up (`warmFrontOrigin`). The session file is written at once when Home is pressed or left (`scheduleSave`), not only when the app goes to the background.
+
+Rules that stay: switching to a tab shows its PAGE, not Home (`show()` resets the flag of the tab it switches to); only the tab that was in front when the app was closed comes back on Home.
