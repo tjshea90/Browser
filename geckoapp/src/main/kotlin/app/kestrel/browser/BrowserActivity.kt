@@ -544,7 +544,7 @@ open class BrowserActivity : Activity(), DockListener {
             val fallback = "Opening " + (UrlParts.hostOf(sel.url) ?: "page")
             restoreOverlay.showLook(look.bitmap, fallback, onDrawn = { StartTimeline.mark("look") })
             lookTab = null; lookMeta = look.meta; lookPending = sel.id; lookPaintAt = 0L; lookStopped = false
-            Health.log("tabs", "look-shown", "tab=${sel.id} ${look.meta.w}x${look.meta.h} y=${look.meta.scrollY}")
+            Health.count("look.start"); Health.log("tabs", "look-shown", "tab=${sel.id} ${look.meta.w}x${look.meta.h} y=${look.meta.scrollY}")
             Io.main.removeCallbacks(restoreTimeout); Io.main.postDelayed(restoreTimeout, LastLookRules.CAP_MS.toLong()); Io.main.removeCallbacks(lookNoteShow); Io.main.postDelayed(lookNoteShow, LastLookRules.NOTE_AFTER_MS.toLong())
             return
         }
@@ -2039,7 +2039,7 @@ open class BrowserActivity : Activity(), DockListener {
                 else Io.exec {
                     try {
                         val ok = LastLook.save(appCtx, id, full, LastLookMeta(url, sy, full.width, full.height, System.currentTimeMillis(), Flavor.engineVersion, appearance, dark, desktop))
-                        if (ok) LastLook.retain(appCtx, keep)
+                        if (ok) { Health.count("look.saved"); LastLook.retain(appCtx, keep) }
                         Health.log("tabs", "look-saved", "tab=$id why=$why ok=$ok y=$sy")
                     } finally { if (!full.isRecycled) full.recycle(); lookCapturing = false }
                 }

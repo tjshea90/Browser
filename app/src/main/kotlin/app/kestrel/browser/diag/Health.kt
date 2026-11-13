@@ -45,6 +45,8 @@ object Health {
     @Volatile var mirror = false
 
     fun count(name: String): Int = counters.getOrPut(name) { AtomicInteger() }.incrementAndGet()
+    /** The current value of a counter (0 if it was never counted). */
+    fun counter(name: String): Int = counters[name]?.get() ?: 0
 
     // ------------------------------------------------------------------ UI-thread watchdog (L0)
     private val main = Handler(Looper.getMainLooper())
