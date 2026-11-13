@@ -473,6 +473,75 @@ test('sniffer: what is plainly media is still reported at once and is never also
   assert.equal(h.of('maybe').length, 0);
 });
 
+// ---------------------------------------------------------------- AL1 / AL5: the page being viewed, and a server switch (owner 2026-11-13 message 26)
+const PLAYER1 = 'https://player-one.test/embed/7', PLAYER2 = 'https://player-two.test/e/9';
+const inFrame = (frameId, parentFrameId, doc, url, ct, len, id) => Object.assign(hdr(url, ct, len), { requestId: id === undefined ? undefined : String(id), frameId, parentFrameId, documentUrl: doc, type: 'xmlhttprequest' });
+const navigate = (h, frameId, parentFrameId, url) => h.listeners.before({ type: 'sub_frame', url, tabId: 1, frameId, parentFrameId, documentUrl: PAGE, frameAncestors: [{ url: PAGE, frameId: 0 }] });
+
+test('page: an answer to a request that began before the tab went to another page is not reported (a player still fetching when the owner left)', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '100' });
+  h.listeners.headers(inFrame(0, -1, PAGE, 'https://cdn.example/new.m3u8', 'application/vnd.apple.mpegurl', 300, 101)); // started after: this page's
+  h.listeners.headers(inFrame(0, -1, PAGE, 'https://cdn.example/late.m3u8', 'application/vnd.apple.mpegurl', 300, 99));  // started before: the page that was left
+  await tick(10);
+  assert.deepEqual(h.of('media').map((m) => m.u), ['https://cdn.example/new.m3u8']);
+  h.mainFrame('https://other.example/', { requestId: '200' });
+  h.listeners.headers(inFrame(0, -1, PAGE, 'https://cdn.example/again.m3u8', 'application/vnd.apple.mpegurl', 300, 150)); // before the second navigation
+  await tick(10);
+  assert.equal(h.of('media').length, 1, 'nothing from the first page after the second navigation began');
+});
+
+test('server switch: the player frame going to another document says which documents are gone, and its files are reported again', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '10' });
+  h.listeners.headers(inFrame(7, 0, PLAYER1, 'https://cdn.example/server1/master.m3u8', 'application/vnd.apple.mpegurl', 300, 11));
+  await tick(10);
+  assert.equal(h.of('media').length, 1); assert.equal(h.of('gone').length, 0);
+  navigate(h, 7, 0, PLAYER2);                                    // the site set the iframe's address: another server
+  await tick(10);
+  const g = h.of('gone');
+  assert.equal(g.length, 1); eq(g[0].d, [PLAYER1]); assert.equal(g[0].p, PAGE);
+  h.listeners.headers(inFrame(7, 0, PLAYER2, 'https://cdn.example/server1/master.m3u8', 'application/vnd.apple.mpegurl', 300, 12)); // even the SAME file (server one again) is news
+  await tick(10);
+  assert.equal(h.of('media').length, 2);
+});
+
+test('server switch: an advertisement that plays before the real video is NOT a server switch (same document, or a frame of its own)', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '10' });
+  h.listeners.headers(inFrame(7, 0, PLAYER1, 'https://ads.example/preroll.mp4', 'video/mp4', 3_000_000, 11));            // the ad, inside the player document
+  h.listeners.headers(inFrame(7, 0, PLAYER1, 'https://cdn.example/movie/master.m3u8', 'application/vnd.apple.mpegurl', 300, 12)); // then the real stream
+  navigate(h, 8, 7, 'https://adserver.example/frame');                                                                    // an ad frame appears INSIDE the player
+  navigate(h, 9, 0, 'https://adserver.example/banner');                                                                   // another next to it
+  await tick(10);
+  assert.equal(h.of('media').length, 2); assert.equal(h.of('gone').length, 0, 'nothing was replaced');
+});
+
+test('server switch: navigating a frame also drops what the frames INSIDE it offered, and a sibling frame is left alone', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '10' });
+  navigate(h, 7, 0, PLAYER1);                                    // the outer player frame
+  navigate(h, 9, 7, 'https://inner.example/p');                  // an inner frame
+  navigate(h, 8, 0, 'https://sidebar.example/s');                // a sibling
+  h.listeners.headers(inFrame(9, 7, 'https://inner.example/p', 'https://cdn.example/inner/a.m3u8', 'application/vnd.apple.mpegurl', 300, 20));
+  h.listeners.headers(inFrame(8, 0, 'https://sidebar.example/s', 'https://cdn.example/side/b.m3u8', 'application/vnd.apple.mpegurl', 300, 21));
+  await tick(10);
+  assert.equal(h.of('media').length, 2);
+  navigate(h, 7, 0, PLAYER2);                                    // the outer frame is replaced
+  await tick(10);
+  eq(h.of('gone').map((g) => g.d), [['https://inner.example/p']]);   // the inner frame's document, not the sibling's
+});
+
+test('server switch: a new page forgets the old frames (nothing is "gone" for a frame of the page that was left)', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '10' });
+  h.listeners.headers(inFrame(7, 0, PLAYER1, 'https://cdn.example/a.m3u8', 'application/vnd.apple.mpegurl', 300, 11));
+  h.mainFrame('https://other.example/', { requestId: '30' });
+  navigate(h, 7, 0, PLAYER2);
+  await tick(10);
+  assert.equal(h.of('gone').length, 0);
+});
+
 // ---------------------------------------------------------------- tab bookkeeping (AA4 / PERF_JS B2)
 test('a tab that keeps being used keeps its page address in the extension while many other tabs come and go', async () => {
   const h = harness(standardApp());
