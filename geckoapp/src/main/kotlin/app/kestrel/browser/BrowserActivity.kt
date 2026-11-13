@@ -1164,8 +1164,7 @@ open class BrowserActivity : Activity(), DockListener {
         Io.fast { val entries = dbRef.suggest(q, 6); Io.ui { showRows(entries) } }
     }
 
-    private var warmHost = ""
-    private var warmAt = 0L
+    private val warmPolicy = app.kestrel.core.net.WarmPolicy()
     private var pausedAt = 0L
 
     /**
@@ -1176,40 +1175,36 @@ open class BrowserActivity : Activity(), DockListener {
     private fun warmFrontOrigin() {
         val t = current ?: return
         if (pausedAt == 0L || SystemClock.uptimeMillis() - pausedAt < 5_000 || t.isNewTab) return
-        preconnect(t.url)
+        preconnect(t.url, app.kestrel.core.net.WarmPolicy.Kind.RESUME)
     }
 
     /**
      * Opens the connection (DNS, TCP, TLS) to the site the top suggestion names while the owner is still typing, so the page's first bytes do not wait for the handshakes (about 1-3 round trips,
      * a second or more on a hotspot). Sites from history and bookmarks only, https only, never from a private tab, once per host per 30 s; Settings > Network lab can switch it off.
      */
-    private fun preconnect(url: String) {
-        if (!prefs.preconnect || current?.isPrivateTab == true || !url.startsWith("https://", true)) return
+    private fun preconnect(url: String, kind: app.kestrel.core.net.WarmPolicy.Kind = app.kestrel.core.net.WarmPolicy.Kind.SUGGESTION) {
+        if (!url.startsWith("https://", true)) return
         val origin = GeckoEngine.warmOrigin(url) ?: return // the origin the page will really use: a suggestion with its own port is warmed on THAT port, not on 443
-        val now = SystemClock.uptimeMillis()
-        if (origin == warmHost && now - warmAt < 30_000) return
-        warmHost = origin; warmAt = now
+        if (!warmAllowed(kind, origin, null)) return
         Io.exec { GeckoEngine.speculativeConnect(origin) } // dispatched onto the Gecko thread: the public GeckoWebExecutor call is dropped by GeckoView 160 (EX-2)
     }
 
-    private val warmSeen = HashMap<String, Long>()
+    /** The one place that decides whether a connection head start may be asked for (core WarmPolicy, tested): [page] is the address of the page whose script asked, null for the app's own triggers. */
+    private fun warmAllowed(kind: app.kestrel.core.net.WarmPolicy.Kind, origin: String?, page: String?): Boolean {
+        val front = current
+        return warmPolicy.allow(app.kestrel.core.net.WarmPolicy.Ask(kind, origin, enabled = prefs.preconnect, saver = prefs.dataSaver != app.kestrel.core.shield.DataSaver.OFF,
+            viaProxy = GeckoEngine.pagesViaProxy, frontPrivate = front?.isPrivateTab == true, pagePrivate = page != null && tabs.any { it.isPrivateTab && it.url == page },
+            pageIsFront = page == null || front?.url == page, now = SystemClock.uptimeMillis()))
+    }
 
     /**
      * EX-15 triggers 2 and 3 (research/REVIEW-EXTERNAL-1.md 4.2): the page's own script (extension content.js) names an origin the owner is likely to open next - the link a finger is on, or one of the first
-     * three search results. The rules of the typed suggestion apply (the Warm-up switch, https only, never a private tab, once per origin per 30 s) plus: not while a Data saver level is on, not while pages go through
-     * the phone helper (the engine skips warm-ups behind a proxy anyway), a touch only counts on the page in front, and a private tab with the same address stops it.
+     * three search results. Same rules as every warm-up (WarmPolicy): the Warm-up switch, https only, never a private tab, no Data saver, once per origin per 30 s, a touch only on the page in front.
      */
     private fun onWarmLink(origin: String, page: String, kind: String) {
-        if (!prefs.preconnect || prefs.dataSaver != app.kestrel.core.shield.DataSaver.OFF || GeckoEngine.pagesViaProxy) return
-        val front = current ?: return
-        if (front.isPrivateTab || tabs.any { it.isPrivateTab && it.url == page }) return
-        if (kind == "touch" && front.url != page) return
         val o = GeckoEngine.warmOrigin(origin) ?: return
-        val now = SystemClock.uptimeMillis()
-        val last = warmSeen[o]
-        if (last != null && now - last < 30_000) return
-        if (warmSeen.size > 64) warmSeen.clear()
-        warmSeen[o] = now
+        val k = if (kind == "result") app.kestrel.core.net.WarmPolicy.Kind.RESULT else app.kestrel.core.net.WarmPolicy.Kind.TOUCH
+        if (!warmAllowed(k, o, page)) return
         Io.exec { GeckoEngine.speculativeConnect(o) } // on the Gecko thread: the public call is dropped by GeckoView 160 (EX-2)
     }
 
