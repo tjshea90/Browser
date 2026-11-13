@@ -35,3 +35,13 @@ Size: about 0.95 MB of assets and about 300 lines of code less in the APK; Diagn
 | `DebugProps` (`debug.kestrel.*` system properties) | read ONLY by debuggable builds (a release build always gets null), used by the emulator test rig; costs nothing on the tablet |
 
 Anything in section 2 can go too when its question closes: tell the next session which one and it is a one-file change.
+
+## 3. Added in alpha33 (three report lines, each answers an open question; all text, no lab, no download)
+
+| Line | Question it answers | Cost |
+| :- | :- | :- |
+| `Storage tidy: last <time>: freed ...` | AO4: did the daily clean-up run, what did it remove (update files, old installers, stale engine cache, crash reports, closed tabs' pictures, stopped downloads) | none: a stored sentence; the tidy runs 25 s after the app comes to the front, at most once a day and straight after an update |
+| `Video size estimates: #1 shown 210 MB, finished 188 MB (+12%)` | AO2: how far off was the size the list showed before each recent stream download (last 8, no names) | none: one note when a stream finishes |
+| `CPU by process, % of ONE core ...: tab avg 31 / peak 98; ... busy moments: ... [GeckoMain 71 ...]` | AO1: when a page or video lagged, which process and which thread was working flat out (`research/VIDEO_SMOOTHNESS.md`) | five tiny `/proc` reads every 5 s while the browser is on screen, nothing in the background; one extra second of thread reads while a process is above 70 % |
+
+Close them when answered: the Storage line when the owner reports free space stays healthy over a week; the size line after a handful of real downloads; the CPU line when a lag report has been explained.
