@@ -968,6 +968,19 @@ open class BrowserActivity : Activity(), DockListener {
         }
     }
 
+    /**
+     * Menu > Reload without cache (research/DORABY.md): the page AND every file it uses are fetched from the network again. The answer to "this site is half empty here and fine elsewhere" when a stale or
+     * damaged cached file (the disk cache keeps files for months) or one bad answer from a CDN is the cause; the Page report in Diagnostics says which file failed.
+     */
+    private fun reloadFresh() {
+        val t = current ?: return
+        val s = t.session
+        if (s == null || t.error != null) { retry(t); return }
+        t.loading = true; updateUi()
+        s.reload(org.mozilla.geckoview.GeckoSession.LOAD_FLAGS_BYPASS_CACHE)
+        Toast.makeText(this, "Reloading without the cache", Toast.LENGTH_SHORT).show()
+    }
+
     private fun pullRefresh() {
         val t = current ?: return
         Health.log("pull", "refresh", t.url.take(60)); Health.count("pull.refresh")
@@ -1227,7 +1240,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     // ---- menu
     private object M { const val REFRESH = 14; const val DIAG = 15; const val NEW = 1; const val PRIVATE = 2; const val FIND = 3; const val SHARE = 4; const val BOOKMARK = 5; const val BOOKMARKS = 6; const val HISTORY = 7
-        const val DOWNLOADS = 8; const val UPDATE = 17; const val VIDEO = 18; const val DESKTOP = 9; const val IMAGES = 10; const val PRINT = 11; const val SETTINGS = 12; const val CLOSE_ALL = 16; const val PHONE = 19 }
+        const val DOWNLOADS = 8; const val UPDATE = 17; const val VIDEO = 18; const val DESKTOP = 9; const val IMAGES = 10; const val PRINT = 11; const val SETTINGS = 12; const val CLOSE_ALL = 16; const val PHONE = 19; const val RELOAD = 20 }
 
     override fun onMenu(anchor: View) {
         val t = current
@@ -1253,6 +1266,7 @@ open class BrowserActivity : Activity(), DockListener {
             val helperOn = PhoneBridge.mode(this) != PhoneMode.OFF
             items.add(MenuItemSpec(M.PHONE, if (helperOn && NetworkMonitor.vpn) "Phone helper: resting (Fast Wi-Fi)" else if (helperOn) "Phone helper: on" else "Phone helper: off", helperOn, R.drawable.ic_phone))
         }
+        if (t != null && !t.isNewTab) items.add(MenuItemSpec(M.RELOAD, "Reload without cache", null, R.drawable.ic_refresh))
         if (t != null && !t.isNewTab) items.add(MenuItemSpec(M.REFRESH, "Refresh screen", null, R.drawable.ic_refresh))
         if (!isPrivate) items.add(MenuItemSpec(M.SETTINGS, "Settings", null, R.drawable.ic_settings))
         items.add(MenuItemSpec(M.DIAG, "Diagnostics", null, R.drawable.ic_pulse))
@@ -1266,6 +1280,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun onMenuPick(id: Int) {
         val t = current
         when (id) {
+            M.RELOAD -> reloadFresh()
             M.REFRESH -> refreshScreen("menu")
             M.DIAG -> showDiagnostics()
             M.UPDATE -> showUpdates()

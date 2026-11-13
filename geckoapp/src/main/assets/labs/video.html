@@ -94,11 +94,12 @@
       var v = document.createElement('video');
       v.muted = true; v.playsInline = true; v.preload = 'auto'; v.controls = false;
       $('holder').appendChild(v);
-      var t0 = performance.now(), first = -1, tFirst = 0, waits = 0, err = null, frames = 0, last = 0, worst = 0, slow = 0, done = false;
+      var t0 = performance.now(), first = -1, tFirst = 0, waits = 0, err = null, frames = 0, last = 0, worst = 0, slow = 0, done = false, firstPic = 0;
       function finish(why) {
         if (done) return; done = true;
         var q = v.getVideoPlaybackQuality ? v.getVideoPlaybackQuality() : {};
-        var secs = tFirst ? (performance.now() - tFirst) / 1000 : 0;
+        // the rate is measured from the first to the LAST picture shown: counting from the moment the player said "playing" (which can be a second before the first picture) made a perfect clip look slow
+        var secs = (firstPic && last > firstPic) ? (last - firstPic) / 1000 : (tFirst ? (performance.now() - tFirst) / 1000 : 0);
         var res = { name: c[0], why: why, first: first, w: v.videoWidth, h: v.videoHeight, total: q.totalVideoFrames, dropped: q.droppedVideoFrames, corrupt: q.corruptedVideoFrames,
                     cbFrames: frames, secs: secs, waits: waits, err: err, worst: worst, slow: slow, at: v.currentTime };
         try { v.pause(); v.removeAttribute('src'); v.load(); $('holder').removeChild(v); } catch (e) { /* gone */ }
@@ -112,6 +113,7 @@
         var cb = function () {
           if (done) return;
           var now = performance.now(); frames++;
+          if (!firstPic) firstPic = now;
           if (last) { var d = now - last; if (d > worst) worst = d; if (d > 50) slow++; }
           last = now; v.requestVideoFrameCallback(cb);
         };
@@ -128,8 +130,9 @@
     if (r.err) return pad(r.name, 32) + 'FAILED: ' + r.err;
     var total = r.total || r.cbFrames || 0, dropped = r.dropped || 0;
     var pct = total ? (100 * dropped / total) : 0;
-    var fps = r.secs > 0 && r.cbFrames ? r.cbFrames / r.secs : (r.secs > 0 && total ? total / r.secs : 0);
-    var verdict = r.first < 0 ? 'NEVER STARTED' : (pct <= 3 && fps >= 26) ? 'smooth' : (pct <= 10 && fps >= 20) ? 'mostly smooth' : 'CHOPPY';
+    var fps = r.secs > 0 && r.cbFrames > 1 ? (r.cbFrames - 1) / r.secs : (r.secs > 0 && total ? total / r.secs : 0);
+    // judged by the pictures it could not show and by the pauses between pictures; the clips are 30 pictures a second
+    var verdict = r.first < 0 ? 'NEVER STARTED' : (pct <= 3 && r.slow <= 3 && fps >= 26) ? 'smooth' : (pct <= 10 && r.slow <= 10 && fps >= 20) ? 'mostly smooth' : 'CHOPPY';
     return pad(r.name, 32) + pad(verdict, 14) + 'start ' + lpad(r.first, 5) + ' ms, ' + lpad(fps ? fps.toFixed(1) : '?', 5) + ' fps, ' + dropped + '/' + total + ' dropped (' + pct.toFixed(1) + '%), longest gap ' + Math.round(r.worst) + ' ms, ' + r.slow + ' gaps over 50 ms, waited ' + r.waits + 'x, picture ' + r.w + 'x' + r.h;
   }
   function plays() {
