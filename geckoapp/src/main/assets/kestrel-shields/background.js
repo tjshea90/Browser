@@ -574,11 +574,14 @@ function maybeMedia(d, url, ct, size, ref, org) {
   }
   if (seen.has(key)) return;
   var fc = maybeCount.get(d.tabId); if (!fc) { fc = new Map(); maybeCount.set(d.tabId, fc); }
-  var n = fc.get(d.frameId) || 0;
-  if (n >= MAYBE_PER_PAGE) return;
-  var total = 0; fc.forEach(function (v) { total += v; });
+  var now = Date.now(), total = 0;
+  fc.forEach(function (v) { topUp(v, now); total += v.n; });
+  var q = fc.get(d.frameId);
+  if (q && q.n >= MAYBE_PER_PAGE) return;
   if (total >= MAYBE_PER_TAB) return;
-  seen.add(key); fc.set(d.frameId, n + 1);
+  seen.add(key);
+  if (!q) { q = { n: 0, at: now }; fc.set(d.frameId, q); }
+  q.n++;
   noteFrame(d.tabId, d.frameId, d.parentFrameId, d.documentUrl);
   var page = tabTop.get(d.tabId) || ((d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || ''));
   send({ k: 'maybe', u: url, c: ct, l: size, p: page, f: docOf(d.documentUrl), rf: ref, og: org, ty: d.type }).catch(function () {});
