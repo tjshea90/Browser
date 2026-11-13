@@ -88,6 +88,30 @@ object UpdateManager {
     /** Tests only: put the sheet into a given state without the network and the installer. */
     internal fun setStateForTest(s: State) { state = s }
 
+    /**
+     * A HINT for the AVAILABLE / READY sheets (the owner's rule stays: the installer is always tried): would Android's installer find room for this update once it is here? Measured off the UI thread
+     * when the sheet opens, so nobody spends 99 MB of hotspot data on a file the installer then refuses (the owner's tablet, alpha27 Diagnostics: 1.62 GB free, about 3.1 GB needed).
+     */
+    class SpaceHint(val tag: String, val shortBy: Long, val free: Long, val need: Long, val cacheBytes: Long)
+    @Volatile var spaceHint: SpaceHint? = null
+        private set
+
+    fun hintSpace(ctx: Context) {
+        val offer = state.offer ?: return
+        if (state.phase != Phase.AVAILABLE && state.phase != Phase.READY) return
+        val app = ctx.applicationContext
+        Thread({
+            try {
+                val apk = File(dir(app), offer.apkName)
+                val kept = apk.isFile && sp(app).getString("verified", null) == offer.tag
+                val s = space(app, offer, if (kept) apk else null, pending = if (kept) 0L else offer.size) // a download still to come takes its room first
+                val short = if (s.plan.shortBy > 0) UpdateLogic.roundUpTenMb(s.plan.shortBy) else 0L
+                spaceHint = SpaceHint(offer.tag, short, s.free, s.plan.needDrop, s.own.cache)
+                Io.main.post { for (l in listeners) l() }
+            } catch (e: Exception) { /* only a hint */ }
+        }, "kestrel-update-hint").apply { isDaemon = true }.start()
+    }
+
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
     @Volatile private var appCtx: Context? = null
     private var ready = false

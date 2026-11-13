@@ -49,7 +49,7 @@ class UpdatePanel(ctx: Context, private val pal: Pal, private val prefs: Prefs, 
         setPadding(ctx.dp(20), ctx.dp(4), ctx.dp(20), ctx.dp(18))
     }
 
-    override fun onAttachedToWindow() { super.onAttachedToWindow(); UpdateManager.addListener(listener); render(); UpdateManager.recheckSpace(context) } // a stale "not enough space" goes away as soon as there is enough
+    override fun onAttachedToWindow() { super.onAttachedToWindow(); UpdateManager.addListener(listener); render(); UpdateManager.recheckSpace(context); UpdateManager.hintSpace(context) } // a stale "not enough space" goes away as soon as there is enough
     override fun onDetachedFromWindow() { UpdateManager.removeListener(listener); super.onDetachedFromWindow() }
 
     /** Tests only: draw the sheet for the current [UpdateManager.state] without attaching it to a window (attaching also starts a storage re-check). */
@@ -77,6 +77,20 @@ class UpdatePanel(ctx: Context, private val pal: Pal, private val prefs: Prefs, 
             for ((i, v) in b.withIndex()) row.addView(v, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply { if (i > 0) marginStart = ctx.dp(10) })
             addView(row)
         }
+        /** The heads-up above Download / Install now when the tablet has too little room for Android's installer (a hint only: the install is still tried). */
+        fun roomHint() {
+            val h = UpdateManager.spaceHint?.takeIf { it.tag == o?.tag && it.shortBy > 0 } ?: return
+            val f = UpdateLogic::formatSize
+            sub("Heads-up: this tablet has ${f(h.free)} free and Android wants about ${f(h.need)} free to install this update (a tenth of the storage stays free, plus room for the update itself): about ${f(h.shortBy)} more. " +
+                "Without it the installer refuses the file after it is downloaded.", pal.warn)
+            if (h.cacheBytes >= (10L shl 20)) buttons(secondary("Clear cache (${f(h.cacheBytes)})") {
+                actions.clearCache { freed ->
+                    android.widget.Toast.makeText(ctx, "Cleared ${f(freed)}", android.widget.Toast.LENGTH_SHORT).show()
+                    Io.main.postDelayed({ UpdateManager.hintSpace(ctx) }, 1200)
+                    Io.main.postDelayed({ UpdateManager.hintSpace(ctx) }, 3500)
+                }
+            })
+        }
         fun primary(t: String, f: () -> Unit) = pillButton(ctx, t, pal.accent, pal.accentOn) { f() }
         fun secondary(t: String, f: () -> Unit) = outlineButton(ctx, t, pal.pill, pal.divider, pal.fg) { f() }
 
@@ -91,6 +105,7 @@ class UpdatePanel(ctx: Context, private val pal: Pal, private val prefs: Prefs, 
                 headline("Update available: ${o?.versionName ?: ""}")
                 sub("You have $installed. " + (o?.let { UpdateLogic.formatSize(it.size) + " from GitHub Releases." } ?: ""))
                 notes(o?.notes)
+                roomHint()
                 val partial = s.done > 0 && o != null && s.done < o.size
                 buttons(
                     primary(if (partial) "Continue download" else "Download " + (o?.let { UpdateLogic.formatSize(it.size) } ?: "")) { actions.download() },
@@ -109,6 +124,7 @@ class UpdatePanel(ctx: Context, private val pal: Pal, private val prefs: Prefs, 
             Phase.READY -> {
                 headline("Ready to install ${o?.versionName ?: ""}")
                 sub(if (o?.sha256 != null) "The file was checked against the checksum published with the release. Android will ask you to confirm." else "Android will ask you to confirm.")
+                roomHint()
                 buttons(primary("Install now") { UpdateManager.install(ctx) }, secondary("Delete download") { UpdateManager.discard(ctx) })
             }
             Phase.INSTALLING -> { headline("Waiting for Android's installer…"); sub("Confirm on the screen Android shows. $name restarts when it is done.") }
