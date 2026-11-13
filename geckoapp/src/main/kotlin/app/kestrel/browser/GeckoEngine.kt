@@ -256,6 +256,7 @@ object GeckoEngine {
      *  - EX-12 speculation rules (`dom.speculation_rules.enabled`, Nightly-only by default) with `prefetch.dry_run` first: 0 off, 1 dry run (candidates recorded, nothing fetched), 2 on.
      */
     fun applyLab(prefs: Prefs) {
+        if (hopToMain { applyLab(prefs) }) return // engine prefs need a thread with a Looper (see hopToMain)
         val d = org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_DEFAULT
         val saver = prefs.dataSaver != app.kestrel.core.shield.DataSaver.OFF
         try {
@@ -313,6 +314,7 @@ object GeckoEngine {
      * They exist because the hotspot's behaviour decides which is faster (research/GECKO_TUNING_2.md 2.3 and 3.2); Diagnostics > Page loads shows what each choice costs on the real tablet.
      */
     fun applyNetwork(prefs: Prefs) {
+        if (hopToMain { applyNetwork(prefs) }) return // engine prefs need a thread with a Looper (see hopToMain)
         val d = org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_DEFAULT
         // the owner's switches, unless a VPN (LinkMeter's Fast Wi-Fi) is the active network: then lookups go to the phone's own resolver and HTTP/3 stays off; behind LinkMeter's OWN tunnel there is also no
         // IPv6 (it is blocked there) and downloads give a loading page more room (core/net/NetProfile.kt, research/SPEED4.md)
@@ -346,6 +348,7 @@ object GeckoEngine {
     private class Feel(val skate: String, val still: String, val bias: String, val wait: Int, val expiry: Int, val vel: String)
 
     fun applyScrollFeel(level: Int) {
+        if (hopToMain { applyScrollFeel(level) }) return // engine prefs need a thread with a Looper (see hopToMain)
         val d = org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_DEFAULT
         // skate/still = how much of the page is painted around the viewport, bias = how far that window is shifted toward the scroll direction, wait = how long a touch waits for the
         // page's own touch handlers, expiry = how long after scrolling stops the extra painted area is kept (0 = for ever), vel = the top fling speed.
