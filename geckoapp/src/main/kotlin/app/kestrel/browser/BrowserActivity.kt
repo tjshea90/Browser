@@ -2036,6 +2036,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun captureLook(tab: Tab?, why: String, minGapMs: Long = LastLookRules.MIN_GAP_MS.toLong()) {
         if (tab == null || !prefs.lastLook || tab !== current || tab.isPrivateTab || homeShown(tab) || tab.error != null || tab.loading || tab.session == null || geckoView.session !== tab.session) return
         if (restoringTab != null || lookTab != null || lookCapturing || tabGrid.visibility == View.VISIBLE || sheet.isShowing || !LastLookRules.worthKeeping(tab.url)) return
+        if (why != "pause" && typing()) return // nobody is typing into the address field (leaving the page is the one moment that is taken whatever is on screen: the Recents screen shows the same)
         val now = SystemClock.uptimeMillis()
         if (now - lastLookAt < minGapMs) return
         if (geckoView.width <= 0 || geckoView.height <= 0) return
