@@ -123,6 +123,25 @@ class MediaListFramesTest {
         assertEquals(2, l.size)
     }
 
+    @Test fun theNewestSightingNamesTheDocumentThatAsks() {
+        // an address found in server one's script (the document that holds it), asked for later by server two's player: it belongs to the second one now
+        val l = MediaList()
+        val first = MediaCandidate("https://ads.test/preroll.mp4", MediaKind.FILE, "", -1, "https://site.test/watch", "https://player-one.test/embed", 1)
+        l.add(first)
+        val second = MediaCandidate("https://ads.test/preroll.mp4", MediaKind.FILE, "video/mp4", 3_000_000, "https://site.test/watch", "https://player-two.test/e/9", 2)
+        assertTrue(l.add(second))
+        assertEquals(1, l.size)
+        assertEquals("https://player-two.test/e/9", first.frame)
+        assertEquals(3_000_000L, first.length)
+        assertTrue("server one going away leaves it alone", l.dropFrames(listOf("https://player-one.test/embed")).isEmpty())
+        assertEquals(listOf("https://ads.test/preroll.mp4"), l.dropFrames(listOf("https://player-two.test/e/9")))
+        // a sighting that names no document never takes the frame away
+        val l2 = MediaList()
+        val a = MediaCandidate("https://cdn.test/a.m3u8", MediaKind.HLS, "", -1, "https://site.test/watch", "https://player-one.test/embed", 1)
+        l2.add(a); l2.add(MediaCandidate("https://cdn.test/a.m3u8", MediaKind.HLS, "", -1, "https://site.test/watch", "", 2))
+        assertEquals("https://player-one.test/embed", a.frame)
+    }
+
     @Test fun theDownloadCountFollowsTheDrop() {
         val l = MediaList()
         l.add(hls("https://cdn.test/one.m3u8", "https://player-one.test/embed"))
