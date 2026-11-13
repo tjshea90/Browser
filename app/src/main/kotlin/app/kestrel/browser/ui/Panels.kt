@@ -80,11 +80,11 @@ class TabSwitcher(ctx: Context, private val pal: Pal, private val l: Listener) :
             isClickable = true
             setOnClickListener { l.select(tab) }
         }
-        val host = app.kestrel.core.url.UrlParts.hostOf(tab.url) ?: ""
-        r.addView(LetterAvatar(ctx, host.ifEmpty { "new" }, pal), LayoutParams(ctx.dp(36), ctx.dp(36)))
+        val host = if (tab.homeOverPage) "" else app.kestrel.core.url.UrlParts.hostOf(tab.url) ?: ""
+        r.addView(LetterAvatar(ctx, host.ifEmpty { if (tab.homeOverPage) "home" else "new" }, pal), LayoutParams(ctx.dp(36), ctx.dp(36)))
         val col = LinearLayout(ctx).apply { orientation = VERTICAL; setPadding(ctx.dp(14), 0, ctx.dp(8), 0) }
-        col.addView(label(ctx, tab.displayTitle, 15f, pal.fg, bold = tab.id == selectedId).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END; includeFontPadding = true })
-        col.addView(label(ctx, if (tab.isNewTab) "New tab" else host.removePrefix("www."), 12f, pal.muted).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END; includeFontPadding = true })
+        col.addView(label(ctx, tab.cardTitle, 15f, pal.fg, bold = tab.id == selectedId).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END; includeFontPadding = true })
+        col.addView(label(ctx, if (tab.isNewTab) "New tab" else if (tab.homeOverPage) "Home screen" else host.removePrefix("www."), 12f, pal.muted).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END; includeFontPadding = true })
         r.addView(col, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
         r.addView(iconButton(ctx, R.drawable.ic_close, "Close tab", pal.muted) { l.close(tab) })
         return r

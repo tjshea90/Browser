@@ -166,7 +166,10 @@ class TabGrid(ctx: Context, private var pal: Pal, private val isPrivate: (Tab) -
     }
 
     /** A preview arrived (capture finished / loaded from disk): swap it into its card without rebuilding the grid. */
-    fun thumbChanged(tab: Tab) { thumbViews[tab.id]?.setBitmap(tab.thumb) }
+    fun thumbChanged(tab: Tab) { if (!tab.homeOverPage) thumbViews[tab.id]?.setBitmap(tab.thumb) } // a tab on Home keeps its Home picture: the page's preview would show the last site again
+
+    /** The Home screen as it looks now (drawn by the activity), for the card of a tab that is on Home. */
+    fun homePreview(tab: Tab, b: Bitmap?) { if (tab.homeOverPage) thumbViews[tab.id]?.setBitmap(b) }
 
     /** Cards need the window width to know their size: build after the layout pass that gave this view its size (adding views from inside it leaves them unmeasured). */
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
@@ -229,19 +232,19 @@ class TabGrid(ctx: Context, private var pal: Pal, private val isPrivate: (Tab) -
             isClickable = true
             isFocusable = true
             setOnClickListener { l.select(tab) }
-            contentDescription = tab.displayTitle
+            contentDescription = tab.cardTitle
         }
-        val host = UrlParts.hostOf(tab.url)?.removePrefix("www.") ?: ""
+        val host = if (tab.homeOverPage) "" else UrlParts.hostOf(tab.url)?.removePrefix("www.") ?: ""
         val head = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(ctx.dp(12), 0, 0, 0) }
         val fav = tab.favicon
-        if (fav != null && !tab.isNewTab) head.addView(ImageView(ctx).apply { setImageBitmap(fav); scaleType = ImageView.ScaleType.FIT_CENTER }, LinearLayout.LayoutParams(ctx.dp(18), ctx.dp(18)).apply { marginEnd = ctx.dp(8) })
-        else head.addView(LetterAvatar(ctx, host.ifEmpty { "new" }, skin), LinearLayout.LayoutParams(ctx.dp(18), ctx.dp(18)).apply { marginEnd = ctx.dp(8) })
-        head.addView(label(ctx, if (tab.isNewTab) "New tab" else tab.displayTitle, 13f, skin.fg, bold = selected).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END; includeFontPadding = true },
+        if (fav != null && !tab.isNewTab && !tab.homeOverPage) head.addView(ImageView(ctx).apply { setImageBitmap(fav); scaleType = ImageView.ScaleType.FIT_CENTER }, LinearLayout.LayoutParams(ctx.dp(18), ctx.dp(18)).apply { marginEnd = ctx.dp(8) })
+        else head.addView(LetterAvatar(ctx, host.ifEmpty { if (tab.homeOverPage) "home" else "new" }, skin), LinearLayout.LayoutParams(ctx.dp(18), ctx.dp(18)).apply { marginEnd = ctx.dp(8) })
+        head.addView(label(ctx, tab.cardTitle, 13f, skin.fg, bold = selected).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END; includeFontPadding = true },
             LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         head.addView(iconButton(ctx, R.drawable.ic_close, "Close tab", skin.muted, 44) { l.close(tab) })
         outer.addView(head, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ctx.dp(44)))
-        val thumb = ThumbView(ctx, skin, host, tab.isNewTab, ctx.dpf(CUT_DP - 2f))
-        thumb.setBitmap(tab.thumb)
+        val thumb = ThumbView(ctx, skin, host, tab.isNewTab, ctx.dpf(CUT_DP - 2f), tab.homeOverPage)
+        thumb.setBitmap(if (tab.homeOverPage) null else tab.thumb)
         thumbViews[tab.id] = thumb
         outer.addView(thumb, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (cardW * 1.05f).toInt() - ctx.dp(44)))
         if (!selected) return outer.also { it.setOnTouchListener(SwipeToClose(ctx, it) { l.close(tab) }) }
@@ -265,7 +268,7 @@ class TabGrid(ctx: Context, private var pal: Pal, private val isPrivate: (Tab) -
 }
 
 /** The page preview inside a card: the snapshot scaled to the card's width and cropped at the bottom; a letter + host when there is no snapshot yet. */
-class ThumbView(ctx: Context, private val pal: Pal, private val host: String, private val isNew: Boolean, private val cut: Float) : View(ctx) {
+class ThumbView(ctx: Context, private val pal: Pal, private val host: String, private val isNew: Boolean, private val cut: Float, private val isHome: Boolean = false) : View(ctx) {
     private var bmp: Bitmap? = null
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
     private val fill = Paint().apply { color = 0xFF0A0B0D.toInt() }
@@ -290,6 +293,11 @@ class ThumbView(ctx: Context, private val pal: Pal, private val host: String, pr
             src.set(0, 0, b.width, srcH)
             dst.set(0f, 0f, w, srcH * w / b.width)
             c.drawBitmap(b, src, dst, paint)
+        } else if (isHome) {
+            // a tab on the Home screen before its picture is drawn: the wordmark of the Home screen, not the page that is behind it
+            big.textSize = context.dpf(26f)
+            c.drawText("KESTREL", w / 2f, h / 2f - (big.descent() + big.ascent()) / 2f - context.dpf(8f), big)
+            c.drawText("Home", w / 2f, h / 2f + context.dpf(34f), text)
         } else {
             val label = if (isNew) "+" else (host.firstOrNull()?.uppercaseChar()?.toString() ?: "?")
             c.drawText(label, w / 2f, h / 2f - (big.descent() + big.ascent()) / 2f - context.dpf(8f), big)

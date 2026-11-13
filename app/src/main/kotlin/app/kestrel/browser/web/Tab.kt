@@ -66,6 +66,12 @@ class Tab(@JvmField val id: Long) {
     val isNewTab: Boolean get() = url.isEmpty() && pendingLoad == null
     val displayTitle: String get() = if (title.isNotBlank()) title else if (url.isEmpty()) "New tab" else url
 
+    /** The Home button's Home screen is in front of this tab's page (a blank new tab is not this: it has no page behind it). */
+    val homeOverPage: Boolean get() = showHome && !isNewTab
+
+    /** What the tab switcher and the tab list call this tab: "Home" while Home is laid over its page (owner: the switcher kept showing the last web site), "New tab" for a blank tab, else the page title. */
+    val cardTitle: String get() = if (isNewTab) "New tab" else if (showHome) "Home" else displayTitle
+
     // ---- shared with WebView IO threads
     @Volatile @JvmField var topHost: String? = null
     @Volatile @JvmField var mainUrl: String? = null // URL of the most recent main-frame request (to tell main-frame SSL errors from subresource ones)
