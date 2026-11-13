@@ -1,21 +1,22 @@
-# CHECKPOINT 1440 — read me first, then TASKS.md
+# CHECKPOINT 1443 — read me first, then TASKS.md
 
-**Written:** 2026-11-13T03:39:14Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `f453a50` (this checkpoint is the commit after it)
+**Written:** 2026-11-13T03:46:56Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `94e87c0` (this checkpoint is the commit after it)
 
 ## Just done
-alpha27 (kestrel-g-v0.3.0-alpha27, gecko code 126) gated, pushed and DISPATCHED: android.yml run 43360306667 (run #77, started 03:38Z, ~7 min)
+alpha27 SHIPPED and RECORDED: kestrel-g-v0.3.0-alpha27 (gecko code 126), run 43360306667 green, Release has the 99 MB signed APK + .sha256, BUILDLOG line pushed; TASKS AE1e ticked, AE1 parent waits for the owner's tablet numbers
 
 ## Do this next
-wait for tag kestrel-g-v0.3.0-alpha27 (git ls-remote origin refs/tags/kestrel-g-v0.3.0-alpha27) and a completed/success run (actions_list list_workflow_runs android.yml perPage 1), get_release_by_tag shows the APK, then bash tools/record-release.sh kestrel-g-v0.3.0-alpha27 "$(cat scratchpad/note27.txt)" ONLY after green; then answer the owner in plain words with the Release link on its own line: what was wrong (muted autoplay refused), what changed (Settings > Video, Video lab, decoders in Diagnostics, DRM ask), ask for the site/URL of the choppy video + Video lab results + whether the symbol appears on page open or at play, mention optional backlog (ad-SDK stand-ins, fMP4 defragmenter, background audio, PiP) and re-list open owner items; tick AE1e in TASKS.md
+answer the owner in plain words (Release link on its own line, what was wrong, what changed, what is proven only on the emulator, ask for the site/URL + Video lab numbers + when the symbol shows, re-list open owner items). Then idle: heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN (every 2 h) stands down if nothing safe remains; AE2 backlog (ad-SDK stand-ins, fMP4/CMAF defragmenter, MediaSession background audio, PiP) only after the owner's Video lab numbers or site
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  d107bc4 ckpt 1440: alpha27 (kestrel-g-v0.3.0-alpha27, gecko code 126) gated, pushed and DISPATCH
   f453a50 ckpt 1439: gated kestrel-g-v0.3.0-alpha27 (gecko code 126) and pushed it: handoff self-t
   6b35128 ckpt 1437: AE1 alpha27 built+tested: autoplay fix PROVEN on emulator, DRM prompt proven,
   fd0f98f ckpt 1426: AE1: CAUSE OF STUCK LOADING SYMBOL PROVEN on emulator with alpha26 (muted aut
@@ -25,5 +26,7 @@ wait for tag kestrel-g-v0.3.0-alpha27 (git ls-remote origin refs/tags/kestrel-g-
   5e34d92 ckpt 1404: alpha26 (code 125) gated + pushed (ckpt 1403) and DISPATCHED: android.yml run
   33c7277 ckpt 1403: gated kestrel-g-v0.3.0-alpha26 (gecko code 125) and pushed it: handoff self-t
   bc3596c ckpt 1401: AD1b-3/4 + AD1a-3 DONE: Settings cards + launch screen + Downloads queue UI v
-  af1938b ckpt 1388: AD1b-3 UI polish: Settings sections are chamfered cards with dividers (like t
 ```
+
+(1 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
