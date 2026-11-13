@@ -37,7 +37,7 @@ object StorageInfo {
         val app = ctx.applicationContext
         val sm = app.getSystemService(StorageManager::class.java)
         val st = app.getSystemService(StorageStatsManager::class.java).queryStatsForPackage(sm.getUuidForPath(app.filesDir), app.packageName, android.os.Process.myUserHandle())
-        longArrayOf(st.appBytes + st.dataBytes, st.cacheBytes) // getDataBytes() already includes the cache
+        longArrayOf(st.appBytes + st.dataBytes, maxOf(st.cacheBytes, size(app.cacheDir))) // getDataBytes() already includes the cache; Android's cache figure lags (0 for a while after the engine filled it), the folder does not
     } catch (e: Exception) { longArrayOf(0L, 0L) }
 
     /** The same arithmetic as the Updates sheet, for an update the size of the installed package that is not downloaded yet: how far short the tablet is in place and after an uninstall. */
