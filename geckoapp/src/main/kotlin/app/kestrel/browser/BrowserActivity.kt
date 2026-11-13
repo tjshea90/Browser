@@ -1895,7 +1895,8 @@ open class BrowserActivity : Activity(), DockListener {
         if (tab !== current) return
         // AR1: one very small icon at the bottom middle for one second (a second block keeps it and the newest address wins); a press opens the blocked address in a NEW tab, nothing asked.
         // A forced redirect is opened the same way: the page the owner is on stays where it is.
-        blockedChip.show(pal, url) { link -> val t = newTabInternal(tab, tab.isPrivateTab); show(t); navigate(t, link) }
+        Health.log("guard", "chip-show", "$kind ${UrlParts.hostOf(url) ?: url.take(40)}")
+        blockedChip.show(pal, url) { link -> Health.log("guard", "chip-open", UrlParts.hostOf(link) ?: link.take(40)); val t = newTabInternal(tab, tab.isPrivateTab); show(t); navigate(t, link) }
     }
 
     /**
