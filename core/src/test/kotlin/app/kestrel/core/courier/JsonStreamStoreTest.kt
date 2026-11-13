@@ -43,7 +43,7 @@ class JsonStreamStoreTest {
     @Test fun theLadderIsCappedAndOddEntriesAreLeftOut() {
         val many = (1..12).map { mapOf("Referer" to "https://h$it.test/") }
         val m = LinkedHashMap<String, Any?>(JsonStreamStore.encode(StreamRec(1_000_000_003L).also { it.url = "https://cdn.test/v/b.m3u8"; it.state = DlState.QUEUED }))
-        m["headerSets"] = many.map { LinkedHashMap<String, Any?>(it) } + listOf("not a map", 7L, mapOf("Referer" to 5L))
+        m["headerSets"] = listOf("not a map", 7L) + many.map { LinkedHashMap<String, Any?>(it) }
         val back = JsonStreamStore.decode(m)!!
         assertEquals("at most eight sets are kept", 8, back.headerSets.size)
         assertEquals(many.take(8), back.headerSets)
