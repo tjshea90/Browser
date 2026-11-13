@@ -74,7 +74,8 @@ object GeckoEngine {
         appCtx = ctx
         val prefs = Prefs.get(ctx)
         // entries the engine dropped sit in cache2/doomed until something unlinks them, and a restart does not (seen on the emulator: 48 MB across a restart): nothing can hold them, so take the room back (off the UI thread)
-        Io.exec { try { app.kestrel.browser.diag.StorageInfo.purgeDoomedCache(ctx) } catch (e: Exception) { /* only housekeeping */ } }
+        // AO4: once a day (and after an update) the engine's cache entries nobody has rewritten for three weeks and its old crash reports go too, before the engine reads them
+        Io.exec { try { app.kestrel.browser.diag.StorageInfo.purgeDoomedCache(ctx); if (app.kestrel.browser.diag.StorageTidy.due(ctx)) app.kestrel.browser.diag.StorageTidy.pruneEngineFiles(ctx) } catch (e: Exception) { /* only housekeeping */ } }
         // Firefox's Strict set WITHOUT its CONTENT category (cdn.jsdelivr.net, unpkg.com, JW Player, Brightcove, Kaltura, Vimeo ...): those are what pages are built from, not trackers, and without Mozilla's allow-lists
         // blocking them broke doraby.com (no photos, no icons) and video players (research/DORABY.md, core/shield/EtpCategories). Debug builds only: `setprop debug.kestrel.etpcontent 1` brings the old setting back to compare.
         val antiTracking = if (app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.etpcontent") == "1") ContentBlocking.AntiTracking.STRICT
