@@ -17,6 +17,7 @@ import app.kestrel.core.media.MediaNames
 import app.kestrel.core.media.MediaRank
 import app.kestrel.core.media.MediaSniff
 import app.kestrel.core.media.Mp4Probe
+import app.kestrel.core.media.SizeEstimate
 import app.kestrel.core.media.StreamSource
 import app.kestrel.core.url.UrlParts
 
