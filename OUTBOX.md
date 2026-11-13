@@ -1329,3 +1329,47 @@
 >
 > Want this as a one-page cheat sheet to keep next to the terminal? I can publish it as a page, not in the repo.
 <!-- sha:ff5510698cba -->
+
+## 2026-11-13T18:32:00Z
+> Kestrel G alpha31 is out. I ran it on the emulator, not on your tablet. The Doraby/vidsrc fix was checked against a test site I built to behave like that player, not on doraby.com itself.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha31
+>
+> **1. adb permissions to give it now** (tested on the emulator; the package is `app.kestrel.browser.gecko`):
+> ```
+> adb shell cmd appops set app.kestrel.browser.gecko REQUEST_INSTALL_PACKAGES allow
+> adb shell cmd appops set app.kestrel.browser.gecko RUN_IN_BACKGROUND allow
+> adb shell cmd appops set app.kestrel.browser.gecko RUN_ANY_IN_BACKGROUND allow
+> adb shell cmd deviceidle whitelist +app.kestrel.browser.gecko
+> ```
+> These help updates and keep downloads going with the screen off. None of them makes pages load faster, because the browser asks Android for nothing that affects speed.
+>
+> **2. Test videos and Video lab:** removed. The update file is 93.4 MB instead of 99.0 MB, about 5.3 MB smaller. The Tap lab, the Decode lab and the one-line decoder readout stay; say if you want those gone too.
+>
+> **3. Home screen in the tab list:** fixed. A tab on the Home screen now shows as "Home" with a picture of the Home screen, not the last site. I checked this on the emulator with a screenshot.
+>
+> **4. Videos from doraby.com's vidsrc server:**
+> - **Cause:** the video server wants the headers of the player the movie sits in. Kestrel sent the movie page's headers, so the server said no.
+> - **What changed:**
+>   - Kestrel now repeats the player's own headers and tries other header combinations before giving up.
+>   - It finds playlists that sites hide under names like `.txt`.
+>   - It handles video parts disguised as pictures.
+>   - When a site refuses, it tells you why, with the HTTP number.
+> - **Test:** on my test site, with the player on a different address than the movie page, an encrypted stream with disguised playlists, and a stream server that refused any other player, Kestrel found it and saved a valid 12-second MP4 with picture and sound.
+> - **Still not possible:** players that keep the stream out of the network, copy-protected (DRM) video, and live streams.
+> - **Try it:** open the movie, press play, wait a few seconds, then tap the download icon. If it still fails, send me the Diagnostics lines that mention "media" (Menu > Diagnostics > Copy); they say exactly why.
+>
+> **Also in alpha31:** the update-space numbers are fixed. Android only keeps about 0.5 GB free after an install, so your update needs about 1 GB, not 3 GB, and your 1.6 GB free should be enough.
+>
+> **Still open from you:**
+> - Does the vidsrc movie save now?
+> - The "App:" version line in Menu > Diagnostics.
+> - The exact words of the "incompatible browser / Cloudflare" site, plus a Page report from a Doraby watch page after you press play.
+> - Which earlier prompts felt unanswered.
+> - The choppy-video site or link.
+> - How scrolling and Back feel.
+> - Proton Mail numbers, and the keyboard test.
+> - Yes or no on the scheduled GitHub ad-list build.
+> - Your private signing key.
+> - Optional: the hidden USB debug switch, the licence, landscape tabs, and a Cromite comparison.
+<!-- sha:57c2ddc0d012 -->
