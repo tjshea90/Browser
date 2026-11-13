@@ -109,13 +109,13 @@
       v.addEventListener('error', function () { err = 'error ' + (v.error && v.error.code); finish('error'); });
       v.addEventListener('ended', function () { finish('ended'); });
       if (v.requestVideoFrameCallback) {
-        (function cb() {
+        var cb = function () {
           if (done) return;
           var now = performance.now(); frames++;
           if (last) { var d = now - last; if (d > worst) worst = d; if (d > 50) slow++; }
           last = now; v.requestVideoFrameCallback(cb);
-        })();
-        v.requestVideoFrameCallback(function again() { /* the loop above re-arms itself */ });
+        };
+        v.requestVideoFrameCallback(cb);
       }
       setTimeout(function () { finish('timeout'); }, 14000);
       v.src = c[1] + '?run=' + Math.random().toString(36).slice(2);
