@@ -81,8 +81,8 @@ class MiniNavTest {
     @Test fun tmpTraceTheSlide() {
         animatorScale(0f)
         nav.pressToggleForTest()
-        val sb = StringBuilder("TRACE ${nav.panelOffsetForTest}")
-        for (i in 1..16) { idle(20); sb.append(" ").append(nav.panelOffsetForTest.toInt()) }
+        val sb = StringBuilder("TRACE t=${android.os.SystemClock.uptimeMillis()} ${nav.panelOffsetForTest}")
+        for (i in 1..6) { idle(20); sb.append(" | t=").append(android.os.SystemClock.uptimeMillis()).append(" off=").append(nav.panelOffsetForTest.toInt()) }
         println(sb)
     }
 
