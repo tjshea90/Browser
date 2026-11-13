@@ -614,6 +614,7 @@ open class BrowserActivity : Activity(), DockListener {
             // Replace the placeholder tab. Nothing is loaded here except the selected tab (lazy: no network at startup).
             for (t in tabs.toList()) { try { t.session?.close() } catch (e: Exception) { /* ignore */ }; t.session = null }
             tabs.clear()
+            current = null // the placeholder tab is gone and nothing "comes back" from it: show() would otherwise clear the Home flag of the tab that was left on Home (AQ1)
             for (r in session.tabs) {
                 val t = Tab(r.id)
                 t.url = if (r.url == "about:blank") "" else r.url
