@@ -1263,8 +1263,9 @@ class StreamEngine(
         when {
             r.state == DlState.COMPLETED -> total = r.total
             media != null && media.exactBytes >= 0 -> total = media.exactBytes
-            // the average size of the segments that are COMPLETE (appended or staged) times the number of segments: bytes of half-fetched segments would make the guess jump up and down
-            media != null && n > 0 && have >= 2 -> { total = ((job.written + job.stagedBytes).toDouble() / have * n).toLong(); estimated = true }
+            // what the segments that are COMPLETE (appended or staged) weigh per second of video, times the whole length (bytes of half-fetched segments would make the guess jump up and down), blended
+            // with the figure shown at the start until a share of the video is in (AO2: by length, not by count: the last segment is short; and the first guess is only a playlist's declared rate)
+            media != null && n > 0 && have >= 2 -> { total = SizeEstimate.running(r.estimate, job.written + job.stagedBytes, doneMs(job, media), media.durationMs); estimated = true }
             r.estimate > 0 -> { total = r.estimate; estimated = true }
             else -> total = -1
         }
