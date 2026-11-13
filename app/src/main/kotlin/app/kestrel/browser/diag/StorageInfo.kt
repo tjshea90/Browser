@@ -3,6 +3,7 @@ package app.kestrel.browser.diag
 import android.content.Context
 import android.app.usage.StorageStatsManager
 import android.os.storage.StorageManager
+import android.provider.Settings
 import app.kestrel.core.update.UpdateLogic
 import java.io.File
 
