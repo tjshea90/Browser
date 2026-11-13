@@ -528,6 +528,76 @@ class EngineTest {
         h2.completed(k.id)   // only a checksum could tell (research/DOWNLOAD_MANAGERS.md M6); the tail comparison cannot see this
     }
 
+    // ---- EY-22 step 1 (research/REVIEW-EXTERNAL-2.md section 6.2): a file from a server that sends no validator can be paused, waited out and resumed, because the 4 KiB tail compare proves it is the same file
+
+    @Test(timeout = 60_000) fun aFileWithoutAValidatorOffersPauseAndResumesFromTheCursorWithTheTailCompare() {
+        val data = testBytes(8 * MiB, 41)
+        val s = FakeServer(data).also { it.etag = null; it.lastModified = null; it.chunkDelayMs = 2 }
+        val h = H(s); val id = h.enqueue()
+        h.await(id, "the row offers Pause") { it != null && it.state == DlState.RUNNING && it.done > 2L * MiB && Action.PAUSE in it.actions }
+        h.engine.pause(id)
+        val paused = h.await(id, "paused") { it?.state == DlState.PAUSED_USER }!!
+        assertTrue("paused part way: ${paused.done}", paused.done in 1 until data.size.toLong())
+        val cursor = h.awaitRow(id, "the paused row is stored") { it?.state == DlState.PAUSED_USER }!!.segs.maxOf { it.cursor }
+        val before = s.seen.size
+        h.engine.resume(id)
+        val v = h.completed(id)
+        assertArrayEquals(data, h.sink(v).bytes)
+        val first = s.seen.drop(before).first { it.from >= 0 }
+        assertEquals("the first request after the pause starts 4 KiB before the cursor and asks for no condition", cursor - 4096, first.from)
+        assertNull(first.cond)
+    }
+
+    @Test(timeout = 60_000) fun anOutageInTheMiddleOfAFileWithoutAValidatorWaitsInsteadOfFailing() {
+        val data = testBytes(8 * MiB, 42)
+        val s = FakeServer(data).also { it.etag = null; it.lastModified = null; it.chunkDelayMs = 2; it.probeWindow = 1L shl 20 }
+        val c = Config(maxActive = 2, parallel = false, windowBytes = 1L shl 20, checkpointMs = 40, checkpointBytes = 1L shl 20, stallMs = 60_000, backoffBaseMs = 1, backoffCapMs = 4, maxFails = 3,
+            outageBaseMs = 40, outageCapMs = 80, outageGiveUpMs = 60_000)
+        val h = H(s, c); val id = h.enqueue()
+        h.await(id, "progress") { it != null && it.state == DlState.RUNNING && it.done > 2L * MiB }
+        s.down = true
+        h.await(id, "waiting, not failed") { it?.state == DlState.WAITING_NETWORK }
+        s.down = false
+        val v = h.completed(id)
+        assertArrayEquals(data, h.sink(v).bytes)
+    }
+
+    @Test(timeout = 60_000) fun aFileWithoutAValidatorThatCannotBeReadBackStillHasNoPause() {
+        val data = testBytes(8 * MiB, 43)
+        val s = FakeServer(data).also { it.etag = null; it.lastModified = null; it.chunkDelayMs = 2 }
+        val sinks = object : SinkFactory {
+            val inner = FakeSinks()
+            override fun create(name: String, mime: String?, total: Long, priv: Boolean): Sink = blind(inner.create(name, mime, total, priv))
+            override fun reopen(uri: String, total: Long): Sink? = inner.reopen(uri, total)?.let { blind(it) }
+            override fun delete(uri: String): Boolean = inner.delete(uri)
+            fun blind(s: Sink): Sink = object : Sink by s { override val readable: Boolean get() = false }
+        }
+        val e = Engine({ s }, sinks, FakeStore(), FakeNet(), Executors.newSingleThreadExecutor { r -> Thread(r, "blind-control").also { it.isDaemon = true } }, Clock.System, cfg())
+        val ticker = Thread { while (true) { e.tick(); try { Thread.sleep(20) } catch (x: InterruptedException) { return@Thread } } }.also { it.isDaemon = true; it.start() }
+        try {
+            val id = e.enqueue(Source("https://files.test/pub/data.bin"))
+            val deadline = System.currentTimeMillis() + 20_000
+            var running: DownloadView? = null
+            while (System.currentTimeMillis() < deadline && running == null) { e.view(id)?.let { if (it.state == DlState.RUNNING && it.done > MiB) running = it }; Thread.sleep(5) }
+            assertTrue("the download runs", running != null)
+            assertFalse("no validator and no way to compare: no Pause button (as before EY-22)", Action.PAUSE in running!!.actions)
+        } finally { ticker.interrupt(); e.cancel(e.views().firstOrNull()?.id ?: 0L) }
+    }
+
+    @Test(timeout = 60_000) fun aPartialFileShorterThanTheRecordSaysStartsOverInsteadOfLeavingAHole() {
+        val k = killedWithoutValidator(44)
+        val s2 = FakeServer(k.data).also { it.etag = null; it.lastModified = null }
+        val sinks2 = FakeSinks(); val uri = k.rows.destUri!!
+        val keep = (k.cursor / 2).toInt()                                                     // something cut the file to half of where the record says the download got to
+        sinks2.sinks[uri] = FakeSink("data.bin", keep.toLong(), uri).also { it.bytes = k.durable.copyOf(keep); it.durable = it.bytes.copyOf() }
+        val h2 = H(s2, sinks = sinks2, store = FakeStore().also { it.rows[k.id] = k.rows })
+        h2.engine.restore(); h2.engine.resumeInterrupted()
+        val v = h2.completed(k.id)
+        val out = (sinks2.sinks[v.destUri] ?: sinks2.sinks.values.last()).bytes
+        assertArrayEquals("the finished file is the source, with no hole of zeros", k.data, out.copyOf(k.data.size))
+        assertEquals("the first request of the new run starts at zero", 0L, s2.seen.first { it.from >= 0 }.from)
+    }
+
     private val page = "<!DOCTYPE html><html><head><title>Sign in</title></head><body>Your link expired.</body></html>".toByteArray()
 
     @Test(timeout = 60_000) fun aWebPageWhereAVideoWasExpectedCreatesNoFileAndFailsWithAClearReason() {
