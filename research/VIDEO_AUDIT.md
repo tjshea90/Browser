@@ -89,7 +89,11 @@ Paid / proprietary / patent-encumbered items the owner could approach (no paymen
 
 ## 7. After the fix (emulator, alpha27 build)
 
-See `research/EX_RESULTS.md` "alpha27" and the last section of this file (filled in when the build ran).
+* `autoplay.html`: A (muted autoplay) and C (muted script play) play and their overlays hide; B (audible autoplay) still waits for a tap. No `play() REJECTED` line any more.
+* Engine defaults read back (Diagnostics): `media.mediasource.vp9.enabled = false` ON THIS ENGINE BY DEFAULT: VP9 is not offered to streaming sites unless Settings > Video formats = Everything; the rule only forces it off when a future engine flips that default and the tablet has no hardware VP9. AV1 and H.265 are switched off when there is no hardware decoder.
+* Video lab on the emulator: every section prints; the clips are CHOPPY there (software decoders, no video chip: 94-98 % dropped), which is what the lab is for; the tablet's numbers are the owner's part (section 8).
+* Protected video: prompt -> Allow -> `Widevine: available (com.widevine.alpha)` (the emulator image has Widevine L3).
+* Full list with numbers: `research/EX_RESULTS.md` "Alpha27 additions".
 
 ## 8. What only the tablet can answer (the owner's part)
 
