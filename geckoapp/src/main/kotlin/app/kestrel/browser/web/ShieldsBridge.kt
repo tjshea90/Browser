@@ -40,6 +40,8 @@ class ShieldsBridge(
     private val popupBlocked: (String, String, String) -> Unit = { _, _, _ -> },
     /** The page's script named an origin the owner is likely to open next (EX-15): `https://host[:port]/`, the page's address, "touch" (finger on a link) or "result" (a top search result). Worker thread. */
     private val warmLink: (String, String, String) -> Unit = { _, _, _ -> },
+    /** True when a PRIVATE tab shows a page of this address's host (its report must never be kept). Defaults to "yes, drop everything" so an unwired bridge keeps nothing. */
+    private val pageIsPrivate: (String) -> Boolean = { true },
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -80,6 +82,7 @@ class ShieldsBridge(
                     "media" -> { onMedia(m); "" }
                     "vid" -> { onVid(m); "" }
                     "warm" -> { warmLink(m.optString("o"), m.optString("p"), m.optString("w")); "" }
+                    "rep" -> { onPageReport(m); "" }
                     else -> ""
                 }
             } catch (e: Exception) {
@@ -265,8 +268,18 @@ class ShieldsBridge(
         }
     }
 
+    /** The extension's page report (Diagnostics > Page report): kept only for a page a normal tab shows, never for a private one. */
+    private fun onPageReport(m: JSONObject) {
+        val page = m.optString("p")
+        if (page.isEmpty() || tabForPage(page) == null || pageIsPrivate(page)) return
+        fun list(k: String): List<String> { val a = m.optJSONArray(k) ?: return emptyList(); val out = ArrayList<String>(a.length()); for (i in 0 until minOf(a.length(), 40)) out.add(a.optString(i).take(200)); return out }
+        pageReports.add(app.kestrel.core.diag.PageReport(page.take(200), m.optInt("n"), m.optInt("nb"), list("b"), list("f"), list("e"), System.currentTimeMillis()))
+    }
+
     companion object {
         const val EXTENSION_ID = "shields@kestrel.local"
+        /** The last pages' reports for Diagnostics (see [app.kestrel.core.diag.PageReports]). */
+        val pageReports = app.kestrel.core.diag.PageReports()
         /** The most classes / ids of one batch the app looks at (the page script sends at most this many per message). */
         const val MAX_TOKENS = 400
 

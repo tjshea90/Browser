@@ -204,7 +204,7 @@ open class BrowserActivity : Activity(), DockListener {
                 GeckoEngine.runtime(this)
                 GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
                 GeckoEngine.warmUp(this)
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l -> video.info(p, u, w, h, d, l) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l -> video.info(p, u, w, h, d, l) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }))
                 Health.log("engine", "runtime-ready")
             }
         }
@@ -548,6 +548,13 @@ open class BrowserActivity : Activity(), DockListener {
      */
     private fun tabOfTouch(pageUrl: String, kind: String): Tab? =
         if (kind == "tap" || kind == "vmenu") current?.takeIf { it.url.substringBefore('#') == pageUrl.substringBefore('#') } else null
+
+    /** True when a private tab shows a page of this address's host (Shields worker thread: a snapshot, never the live list). */
+    internal fun pageIsPrivate(url: String): Boolean {
+        val h = UrlParts.hostOf(url) ?: return true
+        @Suppress("UNNECESSARY_SAFE_CALL", "SENSELESS_COMPARISON")
+        return try { tabs.toTypedArray().any { it != null && it.topHost == h && it.isPrivateTab } } catch (e: Exception) { true }
+    }
 
     internal fun tabForPage(url: String): Tab? {
         val h = UrlParts.hostOf(url) ?: return null
@@ -1429,6 +1436,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(GeckoEngine.videoPolicyText)
         out.add(app.kestrel.browser.diag.StorageInfo.text)
         out.add(ShieldsBridge.statsLine(prefs.engineInExtension))
+        out.add(ShieldsBridge.pageReports.text(System.currentTimeMillis()))
         val animScale = try { android.provider.Settings.Global.getFloat(contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) } catch (e: Exception) { 1f }
         out.add("Neon glow: ${Neon.status()}; system animation scale ${if (animScale == 0f) "off (the glow ignores it)" else "x$animScale"}")
         out.add("Page view: attached=${geckoView.parent != null} session=${geckoView.session != null} windowFocus=${hasWindowFocus()}")
