@@ -126,6 +126,9 @@ object GeckoEngine {
             applyScrollFeel(prefs.scrollFeel)                             // live apz.* prefs of the "Scroll feel" setting
             applyNetwork(prefs)
             applyLab(prefs)
+            applyVideo(ctx, prefs)
+            // the device's decoder list: from the stored answer at once (above), from Android (off the UI thread) when this system build has not been asked yet; a changed answer re-applies the codec rule
+            if (DeviceVideo.hardware(ctx) == null) Io.exec { if (DeviceVideo.read(ctx)) applyVideo(ctx, Prefs.get(ctx)) }
             // DEBUG builds only (the emulator rig, research/TYPING.md): `setprop debug.kestrel.iwvisual 0` makes the keyboard resize the page's LAYOUT, `1` only the visible area (read back in Diagnostics)
             app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.iwvisual")?.let { v ->
                 if (v == "0" || v == "1") try { org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("dom.interactive_widget_default_resizes_visual", v == "1", org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_DEFAULT) } catch (e: Exception) { /* debug only */ }
@@ -187,7 +190,13 @@ object GeckoEngine {
             "javascript.options.mem.gc_parallel_marking", "dom.script_loader.bytecode_cache.strategy",
             // the external review's rows (research/REVIEW-EXTERNAL-1.md): JPEG XL off in the image Accept header, double-tap zoom and zoom-to-field as the app set them
             "image.jxl.enabled", "image.http.accept", "apz.allow_double_tap_zooming", "formhelper.autozoom", "dom.prefetch_dns_for_anchor_https_document", "network.buffer.cache.size", "gfx.downloadable_fonts.fallback_delay",
-            "dom.speculation_rules.enabled", "dom.speculation_rules.prefetch.dry_run")
+            "dom.speculation_rules.enabled", "dom.speculation_rules.prefetch.dry_run",
+            // video, graphics and JavaScript (research/VIDEO_AUDIT.md): what the engine really runs with on this device; a name this engine does not have is simply left out of the line
+            "media.mediasource.vp9.enabled", "media.hevc.enabled", "media.android-media-codec.enabled", "media.android-media-codec.preferred", "media.hls.enabled", "media.eme.enabled", "media.eme.require-app-approval",
+            "media.autoplay.default", "media.autoplay.blocking_policy", "media.geckoview.autoplay.request", "media.rdd-process.enabled", "media.utility-process.enabled", "media.video-queue.default-size",
+            "media.suspend-background-video.enabled", "ui.prefersReducedMotion", "image.animation_mode", "gfx.webrender.all", "gfx.webrender.compositor", "gfx.canvas.accelerated", "webgl.disabled",
+            "javascript.options.ion", "javascript.options.baselinejit", "javascript.options.blinterp", "javascript.options.wasm", "javascript.options.wasm_optimizingjit", "network.early-hints.enabled",
+            "network.dns.echconfig.enabled", "security.tls.enable_kyber", "network.http.http2.enabled")
         try {
             org.mozilla.geckoview.GeckoPreferenceController.getGeckoPrefs(names).accept({ list ->
                 prefReadback = "Engine prefs: " + (list?.joinToString(", ") { "${shortPref(it.pref)}=${it.value.toString().take(40)}(${when (it.type) { org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_BOOL -> "b"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_INT -> "i"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_STRING -> "s"; else -> "?" }})" } ?: "none")
@@ -222,6 +231,7 @@ object GeckoEngine {
         applyScrollFeel(prefs.scrollFeel)
         applyNetwork(prefs)
         applyLab(prefs)
+        applyVideo(ctx, prefs)
     }
 
     /**
@@ -241,6 +251,35 @@ object GeckoEngine {
             org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("dom.speculation_rules.enabled", prefs.labSpec > 0, d)
             org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("dom.speculation_rules.prefetch.dry_run", prefs.labSpec == 1, d)
         } catch (e: Exception) { app.kestrel.browser.diag.Health.log("engine", "lab-prefs-failed", e.toString().take(140)) }
+    }
+
+    /** What applyVideo last decided, in words (Diagnostics). */
+    @Volatile var videoPolicyText: String = "Video: (not applied yet)"
+
+    /**
+     * Video and page animation (research/VIDEO_AUDIT.md, owner message 18), all on the USER branch so "no opinion" is a real "clear" that gives the engine's own value back:
+     *  - the codec rule (core/media/VideoPolicy): `media.mediasource.vp9.enabled`, `media.av1.enabled`, `media.hevc.enabled` say which codecs a site is OFFERED (a codec the tablet would decode in software is not);
+     *  - "Calm pages": `ui.prefersReducedMotion` = 1 and `image.animation_mode` = "once" only while the switch is on (they were fixed on for every site until alpha26, which can leave a site's loading symbol frozen).
+     * Live prefs: they apply to the next media query / the next page without a restart.
+     */
+    fun applyVideo(ctx: Context, prefs: Prefs) {
+        val u = org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_USER
+        val hw = DeviceVideo.hardware(ctx)
+        val d = app.kestrel.core.media.VideoPolicy.decide(prefs.videoCodecs, hw)
+        fun tri(name: String, v: Boolean?) { if (v == null) org.mozilla.geckoview.GeckoPreferenceController.clearGeckoUserPref(name) else org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref(name, v, u) }
+        try {
+            tri("media.mediasource.vp9.enabled", d.vp9)
+            tri("media.av1.enabled", d.av1)
+            tri("media.hevc.enabled", d.hevc)
+            if (prefs.calmPages) {
+                org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("ui.prefersReducedMotion", 1, u)
+                org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("image.animation_mode", "once", u)
+            } else {
+                org.mozilla.geckoview.GeckoPreferenceController.clearGeckoUserPref("ui.prefersReducedMotion")
+                org.mozilla.geckoview.GeckoPreferenceController.clearGeckoUserPref("image.animation_mode")
+            }
+            videoPolicyText = "Video: codecs offered to sites: ${d.why} [hardware decoders ${hw?.encode() ?: "unknown"}]; page animations ${if (prefs.calmPages) "calm (reduce-motion, GIFs once)" else "normal"}; muted autoplay ${if (prefs.videoMutedAutoplay) "allowed" else "blocked"}; protected video ${if (prefs.videoDrm == 0) "ask" else "never"}"
+        } catch (e: Exception) { app.kestrel.browser.diag.Health.log("engine", "video-prefs-failed", e.toString().take(140)) }
     }
 
     /**
