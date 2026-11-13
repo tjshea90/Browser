@@ -54,6 +54,26 @@ object SizeEstimate {
         total(declaredBytesPerSec * calibration, totalMs, container)
 
     /**
+     * The calibration for a quality whose rate was not measured, from the ones that were ([points]: declared bytes per second to calibration). Between two measured qualities it is interpolated on the
+     * logarithm of the declared rate (higher renditions are usually spikier, so their peak is further above their average); outside them the nearest one is used; 1.0 when none was measured.
+     */
+    fun factorFor(declaredBytesPerSec: Long, points: List<Pair<Long, Double>>): Double {
+        if (points.isEmpty() || declaredBytesPerSec <= 0) return 1.0
+        val pts = points.filter { it.first > 0 }.sortedBy { it.first }
+        if (pts.isEmpty()) return 1.0
+        if (declaredBytesPerSec <= pts.first().first) return pts.first().second
+        if (declaredBytesPerSec >= pts.last().first) return pts.last().second
+        for (i in 0 until pts.size - 1) {
+            val a = pts[i]; val b = pts[i + 1]
+            if (declaredBytesPerSec in a.first..b.first && b.first > a.first) {
+                val t = (Math.log(declaredBytesPerSec.toDouble()) - Math.log(a.first.toDouble())) / (Math.log(b.first.toDouble()) - Math.log(a.first.toDouble()))
+                return a.second + (b.second - a.second) * t
+            }
+        }
+        return pts.last().second
+    }
+
+    /**
      * The size while a download runs: what the finished parts weigh ([written] bytes covering [doneMs] of [totalMs]) scaled up to the whole length, blended with the [prior] (the figure shown at the start, -1 =
      * none). The measurement takes over completely once [FULL_TRUST] of the video is in; with no prior it is used at once.
      */

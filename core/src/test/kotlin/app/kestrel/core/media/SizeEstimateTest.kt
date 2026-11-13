@@ -50,30 +50,41 @@ class SizeEstimateTest {
         assertTrue(total > 0)
     }
 
+    @Test fun theCalibrationOfAQualityThatWasNotMeasuredIsInterpolatedBetweenTheOnesThatWere() {
+        val pts = listOf(60_000L to 0.74, 520_000L to 0.66)
+        assertEquals("below the lowest measured: its own", 0.74, SizeEstimate.factorFor(30_000, pts), 1e-9)
+        assertEquals("above the highest measured: its own", 0.66, SizeEstimate.factorFor(900_000, pts), 1e-9)
+        assertEquals(0.74, SizeEstimate.factorFor(60_000, pts), 1e-9); assertEquals(0.66, SizeEstimate.factorFor(520_000, pts), 1e-9)
+        val mid = SizeEstimate.factorFor(176_000, pts)                         // the geometric middle of 60 000 and 520 000
+        assertEquals(0.70, mid, 0.005)
+        assertEquals("one point: that point everywhere", 0.8, SizeEstimate.factorFor(500, listOf(100L to 0.8)), 1e-9)
+        assertEquals("nothing measured: no change", 1.0, SizeEstimate.factorFor(500, emptyList()), 0.0)
+        assertEquals(1.0, SizeEstimate.factorFor(0, pts), 0.0)
+    }
+
     /**
      * What the owner asked about, in numbers. A synthetic ladder of variable-rate video (parts differ by up to +-35 % around the average, as real encodes do): the playlist declares the PEAK rate, which is
-     * 1.35 to 1.5 times the average, as on real sites. Before: declared rate x length. After: eight parts measured on ONE quality, every quality scaled by that. Errors are against the true size of each file.
+     * 1.35 to 1.5 times the average and grows with the rendition, as on real sites. Before: declared rate x length. After: eight parts measured on the lowest and on the highest quality, the others scaled by
+     * the interpolation between them. Errors are against the true size of each file.
      */
-    @Test fun measuringEightPartsBeatsTrustingThePlaylistOnAVariableRateLadder() {
+    @Test fun measuringEightPartsOfTwoQualitiesBeatsTrustingThePlaylistOnAVariableRateLadder() {
         val rnd = Random(42)
         val seconds = 3600; val partMs = 6000L; val n = seconds / 6
         // (label, true average bytes/s, peak-to-average ratio the encoder declared)
         val ladder = listOf(Triple("360p", 60_000.0, 1.35), Triple("480p", 110_000.0, 1.40), Triple("720p", 250_000.0, 1.45), Triple("1080p", 520_000.0, 1.50))
         val partsOf = ladder.map { (_, avg, _) -> LongArray(n) { (avg * 6 * (1.0 + (rnd.nextDouble() - 0.5) * 0.7)).toLong() } }
         val trueTotal = partsOf.map { it.sum() }
-        val declared = ladder.mapIndexed { i, (_, _, peak) -> (partsOf[i].max() / 6.0 * 0.0 + (trueTotal[i] / seconds.toDouble()) * peak).toLong() }
-        val before = declared.mapIndexed { i, d -> d * seconds.toLong() }.mapIndexed { i, e -> (e - trueTotal[i]).toDouble() / trueTotal[i] }
-        // measure the lowest quality only (the one whose playlist is read), 8 spread parts, then scale every quality
+        val declared = ladder.mapIndexed { i, (_, _, peak) -> ((trueTotal[i] / seconds.toDouble()) * peak).toLong() }
+        val before = declared.mapIndexed { i, d -> (d * seconds.toLong() - trueTotal[i]).toDouble() / trueTotal[i] }
         val idx = SizeEstimate.sampleIndexes(n)
-        val rate = SizeEstimate.measuredRate(idx.map { partsOf[0][it] }, idx.map { partMs })
-        val cal = SizeEstimate.calibration(rate, declared[0])
-        val after = declared.mapIndexed { i, d -> (SizeEstimate.calibrated(d, cal, seconds * 1000L, "mp4") - trueTotal[i]).toDouble() / trueTotal[i] }
+        fun point(q: Int) = declared[q] to SizeEstimate.calibration(SizeEstimate.measuredRate(idx.map { partsOf[q][it] }, idx.map { partMs }), declared[q])
+        val points = listOf(point(0), point(ladder.size - 1))
+        val after = declared.mapIndexed { i, d -> (SizeEstimate.calibrated(d, SizeEstimate.factorFor(d, points), seconds * 1000L, "mp4") - trueTotal[i]).toDouble() / trueTotal[i] }
         val line = ladder.indices.joinToString("; ") { "${ladder[it].first}: before ${"%+.0f".format(before[it] * 100)} %, after ${"%+.0f".format(after[it] * 100)} %" }
-        println("AO2 synthetic ladder (peak declared 1.35-1.50 x the average, calibrated on 360p only): $line")
+        println("AO2 synthetic ladder (peak declared 1.35-1.50 x the average, calibrated on 360p and 1080p): $line")
         for (i in ladder.indices) {
             assertTrue("${ladder[i].first} before: ${before[i]}", before[i] > 0.3)       // the declared peak overshoots by a third or more
-            assertTrue("${ladder[i].first} after: ${after[i]}", Math.abs(after[i]) < 0.12)
+            assertTrue("${ladder[i].first} after: ${after[i]}", Math.abs(after[i]) < 0.08)
         }
-        assertTrue("the measured quality itself is close", Math.abs(after[0]) < 0.08)
     }
 }
