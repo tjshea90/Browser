@@ -69,7 +69,7 @@ class TabGridHomeTest {
 
     @Test fun theTabListNamesAHomeTabHomeToo() {
         val onHome = page(1, "https://example.com/some/movie", "A long movie page title", home = true)
-        val panel = TabsPanel(ctx, Pal(ctx, false), object : TabsPanel.Listener {
+        val panel = TabSwitcher(ctx, Pal(ctx, false), object : TabSwitcher.Listener {
             override fun select(tab: Tab) {}
             override fun close(tab: Tab) {}
             override fun newTab() {}
