@@ -1414,3 +1414,7 @@
 >
 > Now continuing with the last-page feature.
 <!-- sha:70a78e79e274 -->
+
+## 2026-11-13T23:37:05Z
+> Storage tidy (AO4) and the video size estimates (AO2) are done and tested. The CPU-by-process Diagnostics line (AO1) is built, but its on-screen check isn't finished. That emulator check is waiting on the rebuilt app to install, and the full test suite plus lint are running in the background. When they finish I'll check the CPU line on the emulator, tick AO1, and ship alpha33.
+<!-- sha:3abec246d40f -->
