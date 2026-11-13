@@ -1444,8 +1444,12 @@ open class BrowserActivity : Activity(), DockListener {
 
     private fun closeList() { listPanel?.let { detach(it) } }
 
+    private var settingsSkinPrivate = false
+
     private fun showSettings() {
-        val v = settingsView ?: SettingsView(this, pal, prefs, settingsListener).also { settingsView = it }
+        // the colours are fixed when the view is built: Settings now opens in private windows too, so a view built for the other skin is thrown away and built again
+        if (settingsView != null && settingsSkinPrivate != skinPrivate) { settingsView?.let { detach(it) }; settingsView = null }
+        val v = settingsView ?: SettingsView(this, pal, prefs, settingsListener).also { settingsView = it; settingsSkinPrivate = skinPrivate }
         v.rebuild()
         if (v.parent == null) root.addView(v, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
     }
