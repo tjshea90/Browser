@@ -15,8 +15,9 @@ before(async () => { browser = await chromium.launch(); });
 after(async () => { await browser.close(); });
 
 /** A page at https://site.example/ with content.js running against a fake extension API that records every message. */
-async function open(body, pre) {
-  const context = await browser.newContext();
+async function open(body, pre, opts) {
+  const o = opts || {};
+  const context = await browser.newContext(o.touch ? { hasTouch: true, viewport: { width: 400, height: 700 } } : {});
   await context.route('https://**/*', (r) => r.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><title>t</title></head><body style="margin:0">${body}</body></html>` }));
   const page = await context.newPage();
   await page.addInitScript(() => {
@@ -25,7 +26,7 @@ async function open(body, pre) {
   });
   if (pre) await page.addInitScript(pre);
   await page.addInitScript({ content: CONTENT });
-  await page.goto('https://site.example/');
+  await page.goto(o.url || 'https://site.example/');
   return page;
 }
 const msgs = (page) => page.evaluate(() => window.__msgs.filter((m) => m.k === 'pop'));
@@ -250,4 +251,82 @@ test('tokens: a page without the marker in its first answer, or an app that cann
   const page = await open(`<div class="x">a</div>`, appDown);
   await page.waitForTimeout(800);
   assert.equal(await page.evaluate(() => document.body.textContent), 'a');
+});
+
+// ---------------------------------------------------------------- EX-15: a head start for the next navigation (research/REVIEW-EXTERNAL-1.md 4.2)
+const warms = (page) => page.evaluate(() => window.__msgs.filter((m) => m.k === 'warm').map((m) => ({ o: m.o, p: m.p, w: m.w })));
+const idleNow = () => { window.requestIdleCallback = (f) => setTimeout(f, 20); };
+const row = (href, text) => `<a href="${href}" style="display:block;height:50px">${text}</a>`;
+
+test('warm: a finger on a cross-site https link names the link\'s origin (once), the page is not asked anything else', async () => {
+  const page = await open(row('https://other.example/a/b?x=1', 'one') + row('https://other.example/second', 'two') + row('https://third.example/', '<span id="deep">three</span>'), undefined, { touch: true });
+  await page.touchscreen.tap(20, 20);   // first link
+  await page.touchscreen.tap(20, 70);   // same origin again: nothing more
+  await page.touchscreen.tap(20, 120);  // a child element of the third link: found by walking up to the anchor
+  await page.waitForTimeout(200);
+  assert.deepEqual(await warms(page), [
+    { o: 'https://other.example/', p: 'https://site.example/', w: 'touch' },
+    { o: 'https://third.example/', p: 'https://site.example/', w: 'touch' },
+  ]);
+});
+
+test('warm: same-site links, http links, links with a password, #anchors and javascript: links are never warmed', async () => {
+  const page = await open(row('https://site.example/other', 'same site') + row('http://plain.example/', 'plain http') + row('https://user:pw@secret.example/', 'password')
+    + row('#top', 'anchor') + row('javascript:void(0)', 'script') + row('https://ok.example/', 'fine'), undefined, { touch: true });
+  for (let i = 0; i < 6; i++) await page.touchscreen.tap(20, 20 + i * 50);
+  await page.waitForTimeout(200);
+  assert.deepEqual((await warms(page)).map((m) => m.o), ['https://ok.example/']);
+});
+
+test('warm: at most four touched origins per page', async () => {
+  let rows = ''; for (let i = 0; i < 7; i++) rows += row(`https://site${i}.example/`, 'l' + i);
+  const page = await open(rows, undefined, { touch: true });
+  for (let i = 0; i < 7; i++) await page.touchscreen.tap(20, 20 + i * 50);
+  await page.waitForTimeout(200);
+  assert.equal((await warms(page)).length, 4);
+});
+
+test('warm: a touch inside a frame does nothing (the top document only)', async () => {
+  const page = await open(`<iframe srcdoc="<a href='https://other.example/' style='display:block;height:80px'>x</a>" width="300" height="100" style="border:0"></iframe>`, undefined, { touch: true });
+  await page.touchscreen.tap(20, 20);
+  await page.waitForTimeout(200);
+  assert.deepEqual(await warms(page), []);
+});
+
+const RESULTS = `
+  <div id="rso">
+    <a href="https://www.google.com/url?q=https://redirect.example/&sa=U"><h3>redirector</h3></a>
+    <a href="https://ads.example/landing"><div role="heading">Sponsored</div></a>
+    <a href="https://www.googleadservices.com/pagead/aclk?x=1"><h3>ad redirect</h3></a>
+    <a href="https://first.example/page"><h3>First result</h3></a>
+    <a href="https://first.example/other"><h3>Same origin again</h3></a>
+    <a href="https://second.example:8443/x"><h3>Second result</h3></a>
+    <a href="https://no-heading.example/">no heading, not a result</a>
+    <a href="http://plain.example/"><h3>http result</h3></a>
+    <a href="https://third.example/z"><h3>Third result</h3></a>
+    <a href="https://fourth.example/"><h3>Fourth result</h3></a>
+  </div>`;
+
+test('warm: on a search engine\'s result page the first three results are named once at idle (engine links, no-heading links and http links are skipped)', async () => {
+  const page = await open(RESULTS, idleNow, { url: 'https://www.google.com/search?q=cats' });
+  await page.waitForTimeout(3500);
+  const w = await warms(page);
+  assert.deepEqual(w.map((m) => m.o), ['https://ads.example/', 'https://first.example/', 'https://second.example:8443/']);
+  assert.ok(w.every((m) => m.w === 'result' && m.p === 'https://www.google.com/search?q=cats'));
+});
+
+test('warm: a page that is not a search result page is never scanned, even with the same markup (and neither is Google Maps)', async () => {
+  const a = await open(RESULTS, idleNow, { url: 'https://site.example/search?q=cats' });
+  const b = await open(RESULTS, idleNow, { url: 'https://www.google.com/maps/search/?q=cats' });
+  const c = await open(RESULTS, idleNow, { url: 'https://www.google.com/' });
+  await a.waitForTimeout(3500);
+  assert.deepEqual(await warms(a), []);
+  assert.deepEqual(await warms(b), []);
+  assert.deepEqual(await warms(c), []);
+});
+
+test('warm: an app that does not answer never breaks the page', async () => {
+  const page = await open(RESULTS + '<p id="ok">ok</p>', () => { window.requestIdleCallback = (f) => setTimeout(f, 20); window.browser.runtime.sendMessage = () => Promise.reject(new Error('no app')); }, { url: 'https://www.google.com/search?q=cats' });
+  await page.waitForTimeout(1500);
+  assert.equal(await page.evaluate(() => document.getElementById('ok').textContent), 'ok');
 });
