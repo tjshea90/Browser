@@ -287,7 +287,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onResume() {
         super.onResume()
-        Health.log("life", "resume"); Health.startWatchdog(); Health.watchFrames(window)
+        Health.log("life", "resume"); Health.startWatchdog(); Health.watchFrames(window); app.kestrel.browser.diag.CpuMeter.start(packageName)
         flushStateWanted = false
         warmFrontOrigin()
         app.kestrel.browser.net.WifiBoost.set(this, prefs.labWifiBoost) // Network lab: Wi-Fi kept out of power save while the browser is on screen (EX-7)
@@ -349,7 +349,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onStop() {
         super.onStop()
-        Health.log("life", "stop"); Health.stopWatchdog(); Health.unwatchFrames(window)
+        Health.log("life", "stop"); Health.stopWatchdog(); Health.unwatchFrames(window); app.kestrel.browser.diag.CpuMeter.stop()
         current?.session?.setActive(false) // stops rendering and throttles the page: saves battery and mobile data
         Io.fast { NetworkMonitor.stop() }
         Neon.foreground(false)
@@ -1581,6 +1581,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(GeckoEngine.videoPolicyText)
         out.add(app.kestrel.browser.diag.StorageInfo.text)
         out.add(app.kestrel.browser.diag.StorageTidy.line(applicationContext))
+        out.add(app.kestrel.browser.diag.CpuMeter.line())
         out.add(ShieldsBridge.statsLine())
         out.add(ShieldsBridge.pageReports.text(System.currentTimeMillis()))
         current?.takeIf { !it.isNewTab }?.let { t -> val b = ArrayList(t.engineBlocks); out.add("Firefox's own tracking protection, this page: " + (if (t.session?.settings?.useTrackingProtection == false) "OFF (Shields are down for this site); " else "on; ") + if (b.isEmpty()) "blocked nothing" else "blocked ${b.size}: " + b.take(12).joinToString("; ") + " (a page that is missing pictures or buttons: switch Shields off for this site from the shield icon)") }
