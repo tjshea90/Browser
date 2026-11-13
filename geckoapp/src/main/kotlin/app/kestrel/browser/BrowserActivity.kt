@@ -1381,7 +1381,9 @@ open class BrowserActivity : Activity(), DockListener {
                     val before = app.kestrel.browser.diag.StorageInfo.cacheBytes(appCtx)
                     Io.main.post {
                         try { GeckoEngine.runtime(this@BrowserActivity).storageController.clearData(StorageController.ClearFlags.ALL_CACHES) } catch (e: Exception) { Health.log("engine", "clear-cache-failed", e.toString().take(100)) }
-                        Io.main.postDelayed({ Io.exec { val after = app.kestrel.browser.diag.StorageInfo.cacheBytes(appCtx); Io.main.post { done((before - after).coerceAtLeast(0L)) } } }, 2500)
+                        // the engine moves what it dropped to cache2/doomed and unlinks it only at its next start: give that room back now (a second pass catches a big cache that was still being moved)
+                        Io.main.postDelayed({ Io.exec { app.kestrel.browser.diag.StorageInfo.purgeDoomedCache(appCtx); val after = app.kestrel.browser.diag.StorageInfo.cacheBytes(appCtx); Io.main.post { done((before - after).coerceAtLeast(0L)) } } }, 2500)
+                        Io.main.postDelayed({ Io.exec { app.kestrel.browser.diag.StorageInfo.purgeDoomedCache(appCtx) } }, 9000)
                     }
                 }
             }

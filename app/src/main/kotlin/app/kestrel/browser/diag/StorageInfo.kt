@@ -50,6 +50,26 @@ object StorageInfo {
             "; uninstalling first would leave about ${f(other.freeAfter)} against ${f(other.need)} (" + (if (other.fits) "that works" else "still ${f(other.shortBy)} short") + ")."
     }
 
+    /**
+     * After the engine cleared its caches the entries it dropped sit in `cache2/doomed` (and `cache2/trash*`) until the engine's next start: nothing holds them open (checked with /proc/<pid>/fd on the
+     * emulator: 48 MB doomed, no process with an open descriptor), they only wait. Unlinking them gives the room back now. Off the UI thread. Returns the bytes removed.
+     */
+    fun purgeDoomedCache(ctx: Context): Long {
+        var freed = 0L
+        val stack = ArrayDeque<File>(); stack.add(ctx.applicationContext.cacheDir)
+        var n = 0
+        while (stack.isNotEmpty() && n < 100_000) {
+            val d = stack.removeLast(); n++
+            val kids = d.listFiles() ?: continue
+            val doomedHere = d.parentFile?.name == "cache2" && (d.name == "doomed" || d.name.startsWith("trash"))
+            for (k in kids) {
+                if (k.isDirectory) { stack.add(k); continue }
+                if (doomedHere) { val len = k.length(); if (k.delete()) freed += len }
+            }
+        }
+        return freed
+    }
+
     /** Bytes in the app's cache directory (the engine's network and image caches, previews): what "Clear cache" can give back. Off the UI thread. */
     fun cacheBytes(ctx: Context): Long = size(ctx.applicationContext.cacheDir)
 
