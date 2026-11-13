@@ -23,7 +23,6 @@ test('the page runs, lists the formats and every WebAssembly feature probe is a 
   assert.ok(can.includes('MediaSource:'), 'the capability line');
   const js = await page.textContent('#js');
   for (const k of ['fast math (SIMD)', 'bulk memory', 'multi-value', 'reference types', 'sign extension', 'threads (atomics)', 'tail calls']) assert.ok(js.includes(k + ': yes'), 'wasm probe ' + k + ' must validate in Chromium:\n' + js);
-  assert.ok(/number crunching[^\n]*\d+ ms/.test(js), 'the speed lines');
   assert.ok((await page.textContent('#gl')).includes('webgl'), 'the graphics lines');
   assert.deepEqual(errors, [], 'no script error');
   await ctx.close();
@@ -40,6 +39,7 @@ test('Run: the screen test, the capability table and the clip test finish with a
   const play = await page.textContent('#play');
   for (const n of ['H.264 720p 30 fps', 'H.264 1080p 30 fps', 'VP9 720p 30 fps', 'H.265 720p 30 fps']) assert.ok(play.includes(n), 'clip line: ' + n + '\n' + play);
   assert.ok(/frames per second over 3 s/.test(await page.textContent('#raf')), 'the screen test');
+  assert.ok(/number crunching[^\n]*\d+ ms/.test(await page.textContent('#js')), 'the speed lines after Run');
   assert.ok((await page.textContent('#mc')).includes('video'), 'the capability table');
   assert.deepEqual(errors, [], 'no script error');
   await ctx.close();
