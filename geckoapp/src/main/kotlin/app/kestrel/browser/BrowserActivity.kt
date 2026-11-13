@@ -1024,12 +1024,25 @@ open class BrowserActivity : Activity(), DockListener {
         tabGrid.open(tabs, cur)
         // fresh preview of the page in front (the others keep the one taken when they were last in front); previews of restored tabs come from the cache directory
         if (cur != null) captureThumb(cur)
+        if (cur != null && cur.homeOverPage) tabGrid.homePreview(cur, homeSnapshot()) // the tab is on the Home screen: its card shows Home, not the page behind it
         val appCtx = applicationContext
         val missing = tabs.filter { it.thumb == null && !it.isPrivateTab && !it.isNewTab }
         if (missing.isNotEmpty()) Io.fast { for (t in missing) { val b = ThumbStore.load(appCtx, t.id); if (b != null) Io.ui { if (t.thumb == null) { t.thumb = b; t.thumbAt = SystemClock.uptimeMillis(); tabGrid.thumbChanged(t) } } } }
     }
 
     private fun hideTabGrid() { tabGrid.visibility = View.GONE; applyPrivacyFlags() }
+
+    /** The Home screen drawn into a small picture (about 240 px wide, like the page previews) for the tab grid; null when it is not laid out. Memory only: never written to disk. */
+    private fun homeSnapshot(): android.graphics.Bitmap? = try {
+        val w = home.width; val h = home.height
+        if (w <= 0 || h <= 0 || home.visibility != View.VISIBLE) null else {
+            val outW = 240; val scale = outW / w.toFloat(); val outH = (h * scale).toInt().coerceAtLeast(1)
+            val b = android.graphics.Bitmap.createBitmap(outW, outH, android.graphics.Bitmap.Config.RGB_565)
+            val c = android.graphics.Canvas(b)
+            c.drawColor(android.graphics.Color.BLACK); c.scale(scale, scale); home.draw(c)
+            b
+        }
+    } catch (e: Throwable) { null }
 
     /**
      * Snapshot the page in front for the tab grid: a GPU read-back (not a screenshot, so it also works under FLAG_SECURE), scaled down on the IO thread.
