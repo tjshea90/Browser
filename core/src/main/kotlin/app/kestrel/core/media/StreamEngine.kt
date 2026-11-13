@@ -420,8 +420,22 @@ class StreamEngine(
         changed(rec.id)
     }
 
+    /** "Clear" forgets finished rows: a completed save keeps its file, a failed (or still listed cancelled) one takes its unfinished output and its staging with it. */
     fun clearFinished() = control.execute {
-        for (j in snapshotJobs()) { val st = synchronized(lock) { j.rec.state }; if (j.rec.parentId == 0L && (st == DlState.COMPLETED || st == DlState.FAILED || st == DlState.CANCELED)) { wipeStaging(j); dropJob(j.rec.id); if (!j.rec.priv) store.delete(j.rec.id); changed(j.rec.id) } }
+        for (j in snapshotJobs()) {
+            val st = synchronized(lock) { j.rec.state }
+            if (j.rec.parentId == 0L && (st == DlState.COMPLETED || st == DlState.FAILED || st == DlState.CANCELED)) {
+                if (st != DlState.COMPLETED) dropLeftover(j.rec)
+                wipeStaging(j); dropJob(j.rec.id); if (!j.rec.priv) store.delete(j.rec.id); changed(j.rec.id)
+            }
+        }
+    }
+
+    /** Delete the unfinished output a row still points at, and the staging folder of a row that has no job in memory. Never throws. */
+    private fun dropLeftover(rec: Rec) {
+        val uri = synchronized(lock) { rec.destUri }
+        if (uri != null) try { sinks.delete(uri) } catch (e: Exception) { /* already gone */ }
+        try { val d = store.dir(rec.id); d.listFiles()?.forEach { it.delete() }; d.delete() } catch (e: Exception) { /* ignore */ }
     }
 
     fun pauseAll() = control.execute { for (j in snapshotJobs()) if (synchronized(lock) { j.rec.state.active }) requestStop(j, DlState.PAUSED_USER) }
