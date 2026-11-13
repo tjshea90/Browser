@@ -375,7 +375,7 @@ class TsToMp4(
         private fun audioName(t: Int) = when (t) { 0x81 -> "AC-3"; 0x87 -> "E-AC-3"; 0x03, 0x04 -> "MP3 (MPEG audio)"; 0x11 -> "AAC in LATM"; 0x82, 0x8A -> "DTS"; else -> "an unknown sound format (stream type 0x${Integer.toHexString(t)})" }
 
         /**
-         * Looks at the start of a stream's first segment and says why it cannot be written as an MP4 here, or null when it can: H.264 picture with its parameters, and sound that is AAC or absent.
+         * Looks at the start of a stream's first segment and says why it cannot be written as an MP4 here, or null when it can: an H.264 or H.265 picture with its parameters, and sound that is AAC, AC-3, E-AC-3, MP3 or absent.
          * Costs one pass over at most the bytes given.
          */
         fun probe(b: ByteArray, off: Int, len: Int): String? {
