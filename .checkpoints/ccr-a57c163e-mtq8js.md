@@ -1,21 +1,24 @@
-# CHECKPOINT 1511 — read me first, then TASKS.md
+# CHECKPOINT 1514 — read me first, then TASKS.md
 
-**Written:** 2026-11-13T07:06:38Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `9252bef` (this checkpoint is the commit after it)
+**Written:** 2026-11-13T07:09:31Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `f185029` (this checkpoint is the commit after it)
 
 ## Just done
-AH1b DONE and emulator-proven with the real engine (heads-up before a refused download, Clear cache 24 MB -> 0.1 MB and +23.5 MB free, doomed cache files unlinked at once and at each engine start), AH1e answered (pelisjuanita.com public part is a login page); next: bump versionCode 128 / 0.3.0-alpha29, run the gates with ship.sh, dispatch, record, answer the owner
+gated kestrel-g-v0.3.0-alpha29 (gecko code 128) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
 
 ## Do this next
-bump geckoapp/build.gradle.kts to versionCode 128 + versionName 0.3.0-alpha29, then bash ship.sh gecko with the note from scratchpad note29.txt (alpha29 text drafted in the TASKS AH1f line), dispatch android.yml app=gecko full_build=true on ccr-a57c163e-mtq8js, wait for tag kestrel-g-v0.3.0-alpha29 + green run, get_release_by_tag, bash tools/record-release.sh, then answer the owner (storage first: 1.62 GB free vs about 3.1 GB needed, how to free about 1.5 GB, install the newest Release, what alpha29 fixes; re-list open items)
+TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref ccr-a57c163e-mtq8js, inputs {"app":"gecko","full_build":"true","note":"alpha29 (includes alpha28): fixes for pages that show no photos or buttons, and a clearer update screen. Shields off for a site now also switches Firefox's own tracker blocking off for that site: if a page is missing its pictures, icons or player, tap the shield icon and switch Shields off for the site (before this, Firefox's own protection kept blocking the libraries and players pages are built from, like on doraby.com; alpha28 already stopped blocking the common ones). The Updates screen now says exactly how much free room Android needs to install an update (this tablet needs about 3 GB free: a tenth of its storage stays free, plus room for the update), warns BEFORE a download that the installer would refuse, has a Clear cache button, lists your biggest downloads, and no longer offers install the other way when uninstalling would not free enough. Diagnostics: the Video line now shows the real decoders (it stayed on unknown), and the Storage line says how far short an update would be. Also from alpha28: Page report in Diagnostics, Reload without cache in the menu."}.
+When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha29), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha29 "alpha29 (includes alpha28): fixes for pages that show no photos or buttons, and a clearer update screen. Shields off for a site now also switches Firefox's own tracker blocking off for that site: if a page is missing its pictures, icons or player, tap the shield icon and switch Shields off for the site (before this, Firefox's own protection kept blocking the libraries and players pages are built from, like on doraby.com; alpha28 already stopped blocking the common ones). The Updates screen now says exactly how much free room Android needs to install an update (this tablet needs about 3 GB free: a tenth of its storage stays free, plus room for the update), warns BEFORE a download that the installer would refuse, has a Clear cache button, lists your biggest downloads, and no longer offers install the other way when uninstalling would not free enough. Diagnostics: the Video line now shows the real decoders (it stayed on unknown), and the Storage line says how far short an update would be. Also from alpha28: Page report in Diagnostics, Reload without cache in the menu."
+NEVER ship kestrel-g-v0.3.0-alpha29 twice (check BUILDLOG.md and the Releases first).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M TASKS.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  f2230eb ckpt 1511: AH1b DONE and emulator-proven with the real engine (heads-up before a refused
   11126ad ckpt 1495: AH1c done and emulator-proven end to end (Shields master switch off -> Firefo
   939a120 ckpt 1487: AH1d done and emulator-proven: the Video line stayed on 'decoders unknown' be
   7d3044a ckpt 1482: Owner message 21 (their Diagnostics copy from the tablet, alpha27) written in
@@ -25,8 +28,7 @@ bump geckoapp/build.gradle.kts to versionCode 128 + versionName 0.3.0-alpha29, t
   a562cab ckpt 1473: alpha28 gates green: JVM (core + app + gecko compile), 123 web tests, pref na
   a3a8e82 ckpt 1470: AF1 cause found + fixed + proven in real Gecko on the emulator: Kestrel asked
   a0403ec ckpt 1458: AF1 diagnostics built (not yet compiled/shipped): extension page log (blocked
-  697f62b ckpt 1451: Owner message 20 (their Video lab / Tap lab / Decode lab numbers from the tab
 ```
 
-(15 automatic checkpoint(s) since the last deliberate one — the
+(2 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
