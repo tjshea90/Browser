@@ -71,7 +71,10 @@ import app.kestrel.core.download.Source
 import app.kestrel.browser.ui.UpdatePanel
 import app.kestrel.browser.update.UpdateManager
 import app.kestrel.browser.update.UpdateNotifier
+import app.kestrel.browser.ui.LastLook
 import app.kestrel.browser.ui.ThumbStore
+import app.kestrel.core.session.LastLookMeta
+import app.kestrel.core.session.LastLookRules
 import app.kestrel.browser.ui.BottomDock
 import app.kestrel.browser.ui.DockListener
 import app.kestrel.browser.ui.HomeView
@@ -138,6 +141,26 @@ open class BrowserActivity : Activity(), DockListener {
     private lateinit var noticeBar: app.kestrel.browser.ui.NoticeBar // "Blocked a pop-up ... Open", over the bottom of the page
     private lateinit var restoreOverlay: RestoreOverlay // over the page view while a page whose engine process died comes back (last preview instead of white)
     private var restoringTab: Tab? = null
+    // ---- the last look (EY-1, research/REVIEW-EXTERNAL-2.md section 3.3): the page as it was left, sharp, in the first frame of a start while the live page loads under it. It rides on the restoring cover
+    // ([restoringTab] is set too, so every way the cover goes away also takes the look down).
+    private var lookTab: Tab? = null                // the tab whose saved picture covers the page area
+    private var lookMeta: LastLookMeta? = null
+    private var lookPaintAt = 0L                    // uptime ms of the live page's first paint (0 = not yet)
+    private var lookStopped = false                 // the live page's load ended
+    @Volatile private var lookCapturing = false
+    private var lastLookAt = 0L                     // uptime ms of the last capture
+    private var lookScrollAt = 0L
+    private var lookScrollArmed = false
+    private val lookCheckTick = Runnable { lookCheck("tick") }
+    private val lookNoteShow = Runnable { if (lookTab != null) restoreOverlay.setLookNote("Saved view - still loading") }
+    private val lookScrollTimer: Runnable = object : Runnable {
+        override fun run() {
+            val quiet = SystemClock.uptimeMillis() - lookScrollAt
+            if (quiet < LastLookRules.SETTLE_MS) { Io.main.postDelayed(this, LastLookRules.SETTLE_MS - quiet); return }
+            lookScrollArmed = false
+            captureLook(current, "settled")
+        }
+    }
     private val restoreTimeout = Runnable { hideRestoring("timeout") }
     private var lastTrim = 0           // the newest onTrimMemory level and when it came: logged with every process death (the evidence for "why did the page reload")
     private var lastTrimAt = 0L
@@ -276,6 +299,7 @@ open class BrowserActivity : Activity(), DockListener {
     override fun onPause() {
         super.onPause()
         Health.log("life", "pause")
+        captureLook(current, "pause", LastLookRules.LEAVE_MIN_AGE_MS.toLong()) // EY-1: the page as it is left, before anything else (the read-back is a few hundred ms at most)
         app.kestrel.browser.net.WifiBoost.set(this, false)
         pausedAt = SystemClock.uptimeMillis()
         flushCounters()
@@ -356,7 +380,7 @@ open class BrowserActivity : Activity(), DockListener {
         val appCtx = applicationContext
         File(filesDir, "session.txt").delete()
         TabStateStore.wipe(this)
-        Io.exec { try { BrowserDb(appCtx).clearHistory() } catch (e: Exception) { /* ignore */ }; ThumbStore.clearAll(appCtx) }
+        Io.exec { try { BrowserDb(appCtx).clearHistory() } catch (e: Exception) { /* ignore */ }; ThumbStore.clearAll(appCtx); LastLook.clearAll(appCtx) }
         Io.main.post { try { GeckoEngine.runtime(this).storageController.clearData(StorageController.ClearFlags.ALL) } catch (e: Exception) { /* engine not ready: next time */ } }
     }
 
@@ -513,9 +537,31 @@ open class BrowserActivity : Activity(), DockListener {
         } catch (e: Exception) { null } ?: return
         if (!sel.url.startsWith("http")) return
         Health.log("tabs", "early-cover", UrlParts.hostOf(sel.url) ?: "")
+        // EY-1: the page as it was left, sharp, in this very first frame (the read and decode are about 20 ms on this CPU; the start-up timeline's "look" mark says so)
+        val look = savedLook(sel.id, sel.url, sel.desktopSite)
+        if (look != null) {
+            val fallback = "Opening " + (UrlParts.hostOf(sel.url) ?: "page")
+            restoreOverlay.showLook(look.bitmap, fallback, onDrawn = { StartTimeline.mark("look") })
+            lookTab = null; lookMeta = look.meta; lookPending = sel.id; lookPaintAt = 0L; lookStopped = false
+            Health.log("tabs", "look-shown", "tab=${sel.id} ${look.meta.w}x${look.meta.h} y=${look.meta.scrollY}")
+            Io.main.removeCallbacks(restoreTimeout); Io.main.postDelayed(restoreTimeout, LastLookRules.CAP_MS.toLong()); Io.main.removeCallbacks(lookNoteShow); Io.main.postDelayed(lookNoteShow, LastLookRules.NOTE_AFTER_MS.toLong())
+            return
+        }
         restoreOverlay.show(null, "Opening " + (UrlParts.hostOf(sel.url) ?: "page"))
         Io.main.removeCallbacks(restoreTimeout); Io.main.postDelayed(restoreTimeout, 25_000) // never stays for ever, whatever happens to the restore
     }
+
+    /** EY-1: the saved picture for tab [id] when it may be shown for [url] now (same page, engine, appearance, desktop-site choice); null otherwise. Reads and decodes on the calling thread. */
+    private fun savedLook(id: Long, url: String, desktop: Boolean): LastLook.Look? {
+        if (!prefs.lastLook || !LastLookRules.worthKeeping(url)) return null
+        val appCtx = applicationContext
+        val meta = LastLook.meta(appCtx, id) ?: return null
+        if (!LastLookRules.usable(meta, url, Flavor.engineVersion, LastLook.appearance(appCtx, prefs.webDark), prefs.webDark == 1, desktop)) return null
+        return LastLook.load(appCtx, id, meta)
+    }
+
+    /** The tab id the early cover's look belongs to until [restore] has made the tab (then it becomes [lookTab]). */
+    private var lookPending = 0L
 
     private fun restore(session: Session?, saved: Bundle?, launch: String?, states: Map<Long, String> = emptyMap(), selThumb: android.graphics.Bitmap? = null) {
         sessionRestored = true // from now on saving cannot clobber the saved session
@@ -671,6 +717,9 @@ open class BrowserActivity : Activity(), DockListener {
         s.promptDelegate = d
         s.permissionDelegate = d
         s.contentBlockingDelegate = d
+        val sd = object : GeckoSession.ScrollDelegate { override fun onScrollChanged(session: GeckoSession, scrollX: Int, scrollY: Int) { lookScrolled(tab, scrollY) } }
+        tab.gecko.scroll = sd
+        s.scrollDelegate = sd // the page's scroll place (UI thread): kept with the last look, and the look stays up until the live page is back at it
         return s
     }
 
@@ -855,7 +904,7 @@ open class BrowserActivity : Activity(), DockListener {
         tab.thumb = null
         val appCtx = applicationContext
         BackPictures.dropTab(tab.id)
-        Io.exec { ThumbStore.delete(appCtx, tab.id); TabStateStore.delete(appCtx, tab.id) }
+        Io.exec { ThumbStore.delete(appCtx, tab.id); TabStateStore.delete(appCtx, tab.id); LastLook.delete(appCtx, tab.id) }
         tab.session?.let { s -> if (geckoView.session === s) geckoView.releaseSession(); try { s.close() } catch (e: Exception) { /* ignore */ } }
         tab.session = null
         if (current === tab) {
@@ -868,7 +917,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun showNewTabPage(tab: Tab) {
         tab.gecko.stateJson = null; tab.gecko.stateWritten = null; tab.gecko.stateWrittenUrl = null
         val appCtx = applicationContext; val tid = tab.id
-        Io.exec { TabStateStore.delete(appCtx, tid) }
+        Io.exec { TabStateStore.delete(appCtx, tid); LastLook.delete(appCtx, tid) }
         tab.session?.let { s -> if (geckoView.session === s) geckoView.releaseSession(); try { s.close() } catch (e: Exception) { /* ignore */ } }
         tab.session = null
         tab.gecko.state = null
@@ -1577,6 +1626,7 @@ open class BrowserActivity : Activity(), DockListener {
             Io.exec { UpdateJob.schedule(applicationContext) } // the update schedule may have changed
         }
         override fun clearBrowsingData() { this@BrowserActivity.clearBrowsingData() }
+        override fun lastLookOff() { val c = applicationContext; if (lookTab != null) hideRestoring("look-off"); Io.exec { LastLook.clearAll(c) } }
         override fun resetSiteShields() { Shields.clearAll(); toast("Per-site Shields reset") }
         override fun backupNow() { backup.backupNow() }
         override fun restoreFromFile() { backup.restoreFromFile() }
@@ -1625,7 +1675,7 @@ open class BrowserActivity : Activity(), DockListener {
         val appCtx = applicationContext
         BackPictures.clear()
         for (t in tabs) { t.gecko.stateJson = null; t.gecko.stateWritten = null; t.gecko.stateWrittenUrl = null } // the saved Back stacks are browsing data too
-        Io.exec { db?.clearHistory(); ThumbStore.clearAll(appCtx); TabStateStore.wipe(appCtx) }
+        Io.exec { db?.clearHistory(); ThumbStore.clearAll(appCtx); TabStateStore.wipe(appCtx); LastLook.clearAll(appCtx) }
         for (t in tabs) t.thumb = null // the previews are page contents too
         toast("Browsing data cleared")
     }
