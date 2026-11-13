@@ -15,6 +15,7 @@ Emulator, small WebView APK (2.3 MiB, no native libraries), smallest free space 
 | none (defaults) | 302-304 MiB | 5 % of 6,094,400 KiB = 297.6 MiB + about 5 |
 | `sys_storage_threshold_percentage` = 2 | 123-124 MiB | 2 % = 119.0 MiB + about 5 |
 | `sys_storage_threshold_max_bytes` = 104857600 (100 MiB cap) | 105-106 MiB | cap 100 MiB + about 5: the cap works exactly as in the source |
+| `sys_storage_threshold_percentage` = 20 | 503-505 MiB | 20 % would be 1190 MiB, but the default 500 MiB cap binds: **the cap exists on this Android 10 image and limits the reserve to 500 MiB (+ about 5)** |
 | `sys_storage_cache_percentage` = 1 | 302-304 MiB | the cache keys do not move it for a small APK |
 Failure text seen: `INSTALL_FAILED_INSUFFICIENT_STORAGE` (from `adb install`), or at very low free space `java.io.IOException: Requested internal only, but not enough space` from `PackageInstallerService.createSession`.
 
