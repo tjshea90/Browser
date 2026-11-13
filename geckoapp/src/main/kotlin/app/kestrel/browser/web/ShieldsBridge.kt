@@ -88,6 +88,7 @@ class ShieldsBridge(
                     "maybe" -> { mediaMaybe(m); "" }
                     "gone" -> { m.optJSONArray("d")?.let { arr -> mediaGone(m.optString("p"), (0 until arr.length()).map { arr.optString(it) }.filter { it.isNotEmpty() }) }; "" }
                     "vid" -> { onVid(m); "" }
+                    "dbg" -> { app.kestrel.browser.diag.Health.log("ext", "dbg", m.optString("m")); "" } // TEMPORARY (emulator lab 2026-11-13)
                     "warm" -> { warmLink(m.optString("o"), m.optString("p"), m.optString("w")); "" }
                     "rep" -> { onPageReport(m); "" }
                     else -> ""

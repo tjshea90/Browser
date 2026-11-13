@@ -269,7 +269,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
     var mp = docOf(m.p);                                                      // the document the script runs in (the player's page for a frame)
     var dp = (domTab >= 0 && tabTop.get(domTab)) || mp || '';                  // the page the tab is on
     if (fid > 0) noteFrame(domTab, fid, undefined, mp);
-    send({ k: 'media', u: String(m.u || ''), c: '', l: -1, p: dp, f: mp !== docOf(dp) ? mp : '', s: 'dom', x: fid + '|' + (sender && sender.tab ? sender.tab.id : 'none') + '|' + domTab + '|' + (tabTop.get(domTab) ? 'top' : 'notop') + '|' + (sender && sender.url ? 'url' : 'nourl') }).catch(function () {});
+    send({ k: 'media', u: String(m.u || ''), c: '', l: -1, p: dp, f: mp !== docOf(dp) ? mp : '', s: 'dom', x: fid + '|' + (sender && sender.tab ? sender.tab.id : 'none') + '|' + domTab + '|' + (tabTop.get(domTab) ? 'top' : 'notop') + '|keys=' + Array.from(tabTop.keys()).slice(0, 4).join(',') }).catch(function () {});
     return undefined;
   }
   if (m.k === 'pop') {
@@ -379,6 +379,7 @@ browser.webRequest.onBeforeRequest.addListener(function (d) {
   if (d.type === 'sub_frame') frameNavigates(d);
   if (d.type === 'main_frame') {
     navId.set(d.tabId, Number(d.requestId) || 0); frameParent.delete(d.tabId); mediaFrames.delete(d.tabId);
+    dbg('main_frame tab=' + d.tabId + ' frame=' + d.frameId + ' req=' + d.requestId);
     sniffed.delete(d.tabId); maybeCount.delete(d.tabId); tabTop.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again (delete first: Map keeps the old position of a key, and the OLDEST position is what is dropped)
     verdicts.clear(); // legacy verdicts are only worth keeping while ONE page loads
     newLog(d.tabId, d.url); reportLater(d.tabId); // the page report starts here (4 s after the last news it goes to the app)
@@ -491,6 +492,7 @@ var frameParent = new Map(); // tabId -> Map(frameId -> parentFrameId), from the
 var mediaFrames = new Map(); // tabId -> Map(frameId -> document address) of the frames (not the top one) that reported a candidate
 function stale(d) { var n = navId.get(d.tabId), r = Number(d.requestId); return n !== undefined && r === r && r < n; } // r === r: not NaN
 var frameTab = new Map(); // frameId of a sub frame -> the tab it sits in (seen when its document was requested). A content script's message can arrive without its tab (emulator, 2026-11-13: an address found in a player frame's script was filed under the PLAYER's address, so a server switch never dropped it); its frame says which tab it is in.
+var dbgN = 0; function dbg(m) { if (dbgN++ < 40) send({ k: 'dbg', m: String(m).slice(0, 180) }).catch(function () {}); } // TEMPORARY (emulator lab 2026-11-13): which ids the browser gives
 function docOf(u) { return u ? String(u).replace(/#.*$/, '') : ''; } // a document's address without its fragment: the same document is always the same string
 function noteFrame(tabId, frameId, parentId, doc) {
   if (!(frameId > 0) || tabId < 0) return;
@@ -509,6 +511,7 @@ function frameNavigates(d) { // a sub_frame request: the frame [d.frameId] is be
   var tabId = d.tabId, f = d.frameId;
   if (tabId < 0 || !(f > 0)) return;
   frameTab.set(f, tabId); if (frameTab.size > 400) frameTab.delete(frameTab.keys().next().value);
+  dbg('sub_frame tab=' + tabId + ' frame=' + f + ' parent=' + d.parentFrameId);
   var pm = frameParent.get(tabId); if (!pm) { pm = new Map(); frameParent.set(tabId, pm); }
   if (d.parentFrameId >= 0) pm.set(f, d.parentFrameId);
   var mf = mediaFrames.get(tabId);
