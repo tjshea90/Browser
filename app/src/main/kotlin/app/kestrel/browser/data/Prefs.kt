@@ -72,7 +72,6 @@ class Prefs private constructor(ctx: Context) {
     var pagesViaPhone: Boolean get() = sp.getBoolean("pages_via_phone", false); set(v) = put("pages_via_phone", v)
 
     /** Kestrel G: the blocking engine runs inside the Gecko extension (fast). Off = compatibility mode, every request asks the app (the older, slower path). Diagnostics has the switch. */
-    var engineInExtension: Boolean get() = bool("eng_ext", true); set(v) = put("eng_ext", v)
     var pullRefresh: Boolean get() = bool("pull_refresh", true); set(v) = put("pull_refresh", v)
     // ---- Network lab additions of the external review (research/REVIEW-EXTERNAL-1.md). Since alpha26 the two with a clear gain and a small stated cost are ON (link look-ups, font fallback); the others stay OFF until measured with Diagnostics
     /** EX-6: let Firefox look up the hosts of the links on https pages before they are tapped (engine default: off for https pages). ON by default since alpha26; never with Data saver, never while a private tab is in front. */

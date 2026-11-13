@@ -1,7 +1,7 @@
 'use strict';
 // Kestrel Shields, background page. Sub-resource requests are decided HERE by engine.js (a port of the app's filter engine over an image of the app's lists), synchronously:
 // no message to the app per request. The app only answers one question per page ("does blocking apply to this site?" = cfg) and hands over the list image in chunks (img).
-// While no engine is loaded yet (start-up, a failed transfer, the compatibility switch in Diagnostics) every request is still sent to the app one by one - the older, slower path - so
+// While no engine is loaded yet (start-up, a failed transfer) every request is still sent to the app one by one - the older, slower path - so
 // nothing is ever left unblocked. Documents are NOT handled here (the app's NavPolicy and malware screen do that). Design: research/D1-DESIGN.md.
 var NATIVE = 'kestrel';
 var E = KestrelEngine;

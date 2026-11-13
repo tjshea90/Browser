@@ -169,11 +169,10 @@ class ShieldsBridge(
     private fun pageConfig(host: String): String {
         val snap = Engine.snapshot()
         val gen = snap?.generation ?: 0
-        if (host.isEmpty()) return (if (prefs().engineInExtension) "0:" else "L:") + gen + "::0"
+        if (host.isEmpty()) return "0:" + gen + "::0"
         val s = Shields.effective(prefs(), host)
         // flags for the page, a bit field: 1 = the pop-up and redirect guard applies (it follows the Shields master switch and its own setting), 2 = video and social embeds wait for a tap (EX-10)
         val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0)
-        if (!prefs().engineInExtension) return "L:$gen::$guard"
         val on = s.shieldsUp && s.blockAds && snap?.fs?.isPageAllowed(host) != true
         return (if (on) "1:" else "0:") + gen + ":" + (if (snap != null) contentId(snap) else "") + ":" + guard
     }
@@ -295,12 +294,7 @@ class ShieldsBridge(
         @Volatile var stats: EngineStats? = null
 
         /** One line for Diagnostics: where the blocking decisions are made and how long they take. */
-        fun statsLine(inExtension: Boolean): String {
-            if (!inExtension) {
-                val c = stats
-                val held = if (c != null && c.perRequestAsks > 0) " ${c.perRequestAsks} requests asked the app one by one, each held ${c.perRequestUs / c.perRequestAsks} us on average." else ""
-                return "Blocker: compatibility mode - every request asks the app (slower). Tap the Blocker button to go back to fast mode.$held"
-            }
+        fun statsLine(): String {
             val s = stats ?: return "Blocker: fast mode (decisions inside the page engine). No numbers yet: open a page, then press Update."
             val avg = if (s.checks > 0) s.totalUs / s.checks else 0L
             val state = when {
