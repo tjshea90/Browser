@@ -271,7 +271,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
     var top = tabId >= 0 ? tabTop.get(tabId) : null;
     var gh = (top && pageHost(top)) || m.h;
     if (m.s !== 1) return guardAnswer(gh, (top && pageHost(top)) || '');
-    return guardAnswer(gh, (top && pageHost(top)) || '').then(function (r) { skipAsked++; if (r && r.skip === true) skipYes++; statsDirty = true; return r; });
+    return guardAnswer(gh, (top && pageHost(top)) || '').then(function (r) { skipAsked++; if (r && r.skip === true) skipYes++; markStats(); return r; });
   }
   if (m.k === 'dom') { // a media address found in the page itself (content.js): handed to the app like a sniffed one, marked so the app can drop ad networks
     var fid = sender ? sender.frameId : 0;
@@ -832,7 +832,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
 browser.runtime.onMessage.addListener(function (m, sender) {
   if (!m || m.k !== 'yts' || !sender || !sender.tab) return undefined;
   function n(v) { v = v | 0; return v > 0 && v < 1000 ? v : 0; }
-  skipReports++; statsDirty = true;
+  skipReports++; markStats();
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || '';
   send({ k: 'yts', w: m.w === 'p' ? 'p' : 'y', a: n(m.a), s: n(m.s), c: n(m.c), o: n(m.o), d: n(m.d), f: n(m.f), g: n(m.g), r: String(m.r || '').slice(0, 60), p: String(page).slice(0, 300) }).catch(function () {});
   return undefined;

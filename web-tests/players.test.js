@@ -251,3 +251,31 @@ test('the reports carry numbers and a few words, never an address', async () => 
   for (const m of msgs.filter((x) => x.k === 'yts')) assert.deepEqual(Object.keys(m).sort(), ['a', 'c', 'd', 'f', 'g', 'k', 'o', 'r', 's', 'w'].sort());
   await page.context().close();
 });
+
+test('a page with many videos: the ad of a late one is still skipped (the cap forgets finished videos and keeps up to a dozen playing ones)', async () => {
+  const feed = Array.from({ length: 6 }, (_, i) => `<video class="feed" id="f${i}" style="width:60px;height:30px" muted loop></video>`).join('');
+  const page = await open({ html: feed + FAMILY.jw.html, fam: FAMILY.jw, timing: FAST });
+  await page.evaluate((wavUrl) => { document.querySelectorAll('video.feed').forEach((v) => { v.src = wavUrl; v.play().catch(() => {}); }); }, MAIN);   // six more videos playing: seven in all
+  await page.waitForTimeout(500);
+  await page.evaluate(() => window.__startAd());
+  await waitFor(page, () => window.__ended === 1);
+  await page.waitForTimeout(500);
+  const s = await state(page);
+  assert.equal(sum(s.msgs, 'f'), 1, 'the ad of the seventh video was handled');
+  await page.context().close();
+});
+
+test('a long feed: videos that played and stopped are forgotten, so the player that comes after them is still followed', async () => {
+  const feed = Array.from({ length: 16 }, (_, i) => `<video class="feed" id="f${i}" style="width:40px;height:20px" muted></video>`).join('');
+  const page = await open({ html: feed + FAMILY.jw.html, fam: FAMILY.jw, timing: FAST });
+  await page.evaluate(async (wavUrl) => {
+    const list = Array.from(document.querySelectorAll('video.feed'));
+    for (const v of list) { v.src = wavUrl; try { await v.play(); } catch (e) { /* ignore */ } v.pause(); }          // each one plays and is stopped again, like a feed that plays the video on screen
+  }, MAIN);
+  await page.waitForTimeout(300);
+  await page.evaluate(() => window.__startAd());
+  await waitFor(page, () => window.__ended === 1);
+  await page.waitForTimeout(500);
+  assert.equal(sum((await state(page)).msgs, 'f'), 1, 'handled although sixteen videos came first');
+  await page.context().close();
+});

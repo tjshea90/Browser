@@ -91,7 +91,7 @@ var MAIN = '%WAV20%', AD = '%WAV12%';
 function until(fn, ms) { return new Promise(function (res) { var t0 = Date.now(); (function p() { var r = false; try { r = fn(); } catch (e) {} if (r || Date.now() - t0 > ms) res(!!r); else setTimeout(p, 120); })(); }); }
 function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 function startFilm(v) { v.muted = true; v.loop = true; v.src = MAIN; return v.play().catch(function (e) { L('error', 'film play refused: ' + e); }); }
-function sampler(v) { var s = { n: 0, fast: 0 }; var id = setInterval(function () { s.n++; if (v.playbackRate === 16) s.fast++; }, 100); return { stop: function () { clearInterval(id); return s; } }; }
+function sampler(v) { var t0 = Date.now(), s = { n: 0, fast: 0, first: -1 }; var id = setInterval(function () { s.n++; if (v.playbackRate === 16) { s.fast++; if (s.first < 0) s.first = Date.now() - t0; } }, 100); return { stop: function () { clearInterval(id); return s; } }; }
 // the ad takes the SAME element (state-class players) or its own element (hosted players); [ended] is set by the ad element's own ended event
 function runAd(name, v, before, during, afterAd) {
   var t0 = Date.now(), ended = false, sm = sampler(v);
@@ -102,7 +102,7 @@ function runAd(name, v, before, during, afterAd) {
     return v.play().catch(function (e) { L('error', name + ' ad play refused: ' + e); });
   }).then(function () { return until(function () { return ended; }, 30000); }).then(function (ok) {
     var took = Date.now() - t0, s = sm.stop();
-    L(name, 'ad ' + (ok ? 'ended after ' + took + ' ms' : 'did NOT end within 30 s') + ' (12000 ms = normal speed, not skipped); samples ' + s.n + ', at speed 16 in ' + s.fast);
+    L(name, 'ad ' + (ok ? 'ended after ' + took + ' ms' : 'did NOT end within 30 s') + ' (12000 ms = normal speed, not skipped); samples ' + s.n + ', at speed 16 in ' + s.fast + (s.first >= 0 ? ', first fast sample after ' + s.first + ' ms' : ', never fast'));
     afterAd && afterAd();
   });
 }
@@ -114,6 +114,12 @@ function jw() {
   var r = document.getElementById('jw'), v = document.getElementById('jwv');
   return startFilm(v).then(function () { return sleep(1500); }).then(function () {
     return runAd('jw', v, null, function () { r.classList.add('jw-flag-ads'); }, function () { r.classList.remove('jw-flag-ads'); });
+  });
+}
+function warm() {   // the first question to the app (may the skipper run?) can take long on the emulator: one ad on a hidden player gets it answered before the measured ones
+  var r = document.getElementById('jw'), v = document.getElementById('jwv');
+  return startFilm(v).then(function () { return sleep(500); }).then(function () {
+    return runAd('warm-up', v, null, function () { r.classList.add('jw-flag-ads'); }, function () { r.classList.remove('jw-flag-ads'); });
   });
 }
 function vjs() {
@@ -154,7 +160,7 @@ function jwskip() {
   });
 }
 L('load', 'playerlab');
-plain().then(jw).then(vjs).then(ima).then(jwskip).then(function () { L('DONE', 'all five scenarios finished'); }, function (e) { L('error', 'lab: ' + e); L('DONE', 'with an error'); });
+plain().then(warm).then(jw).then(vjs).then(ima).then(jwskip).then(function () { L('DONE', 'all five scenarios finished'); }, function (e) { L('error', 'lab: ' + e); L('DONE', 'with an error'); });
 </script></body></html>
 """
 
