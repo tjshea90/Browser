@@ -2181,18 +2181,31 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     /**
-     * A page asks for a NEW window (a link with target=_blank, window.open): true = refuse it. The page-side guard (guard-main.js) already refuses what a script opens without a real tap on that very link; this
-     * is the second wall for what reaches the engine anyway: a window with no tap behind it (the engine's own blocker lets one open for several seconds after any tap) or one that a `$popup` rule names.
+     * A page asks for a NEW window (a link with target=_blank, window.open). The page-side guard (guard-main.js) already refuses what a script opens without a real tap on that very link; this is the second wall
+     * for what reaches the engine anyway (an iframe race, the guard not yet in a frame). RX3-G5: it uses the same evidence ([app.kestrel.core.guard.PopupGuard]): the same site, a sign-in / payment host, or a real
+     * tap on a link to exactly this address; before, ANY window that came within 2.5 s of ANY touch (the play press) was allowed. The verdict is STOP (the caller shows the blocked-window icon and refuses) or WAIT
+     * (the tap report is still on its way through the extension: ask again for at most [app.kestrel.core.guard.PopupGuard.WAIT_MS]). A `$popup` rule of the lists stops it in every case.
      */
-    internal fun refusePopup(tab: Tab, uri: String, hasUserGesture: Boolean): Boolean {
-        if (!prefs.blockPopups) return false
+    internal fun judgePopup(tab: Tab, uri: String): app.kestrel.core.guard.PopupGuard.Verdict {
+        val V = app.kestrel.core.guard.PopupGuard.Verdict
+        if (!prefs.blockPopups) return V.ALLOW
         val host = tab.topHost
-        if (!Shields.effective(prefs, host).shieldsUp) return false
-        // (the engine's own "user gesture" flag is false for a window.open inside a tap on some pages, so the app's own record of the last finger touch decides)
-        if (SystemClock.uptimeMillis() - lastTouchAt > 2500) { onPopupBlocked(tab.url, "open", uri); return true }
+        if (!Shields.effective(prefs, host).shieldsUp) return V.ALLOW
+        val to = UrlParts.hostOf(uri) ?: return V.ALLOW
         val fs = Engine.peek()
-        if (fs != null && Verdict.isBlocked(fs.check(uri, host, RequestType.POPUP))) { onPopupBlocked(tab.url, "open", uri); return true }
-        return false
+        if (fs != null && Verdict.isBlocked(fs.check(uri, host, RequestType.POPUP))) return V.STOP
+        // (the engine's own "user gesture" flag is false for a window.open inside a tap on some pages, so the app's own record of the last finger touch decides)
+        val now = SystemClock.uptimeMillis()
+        return app.kestrel.core.guard.PopupGuard.decide(
+            sameSite = host != null && app.kestrel.core.filter.Psl.default.isSameSite(host, to),
+            touchAgeMs = now - lastTouchAt,
+            tapArrived = tab.lastTapAt >= lastTouchAt - 50,
+            tapAgeMs = now - tab.lastTapAt,
+            tapHref = tab.lastTapHref,
+            uri = uri,
+            authHost = app.kestrel.core.guard.PopupGuard.isAuthHost(to),
+            guardReady = true,   // the guard is declared in the manifest since RX3-G1: it is in every document from its first script; the app has no per-page signal to ask
+        )
     }
 
     internal fun errorChanged(tab: Tab) {
