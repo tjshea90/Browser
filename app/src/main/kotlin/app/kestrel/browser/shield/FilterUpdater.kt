@@ -43,6 +43,24 @@ object FilterSources {
         ListSource("ubo-quick-fixes", UBO + "quick-fixes.min.txt", Category.ADS, trusted = true),
         ListSource("easylist-cookies", "https://secure.fanboy.co.nz/fanboy-cookiemonster.txt", Category.ANNOYANCE),
     )
+
+    /**
+     * RX3-B2 (research/ADBLOCK_ENGINE.md section 6, research/REVIEW-EXTERNAL-3.md B2): two more lists, on unless the owner switches "Extra tracker lists" off. Never trusted (no `trusted-*` scriptlets).
+     * HaGeZi Light (GPL-3.0): ~2.2 MB, 90k `||host^` rules, mostly cookie-sync and tracker hosts. AdGuard Tracking Protection (GPL-3.0) is taken from its four SOURCE sections in the AdguardFilters repository
+     * (~560 KB together): the composite file at filters.adtidy.org is 15 MB (it carries the cosmetic and scriptlet parts too), more than [FilterUpdater]'s 14 MB cap and far too much for the hotspot and the tablet.
+     * All six come from raw.githubusercontent.com, so one TLS connection serves them. Measured with the real files (2026-11-14): 111,988 -> 210,598 network rules, canaries unchanged.
+     */
+    private const val RAW_ADGUARD = "https://raw.githubusercontent.com/AdguardTeam/AdguardFilters/master/SpywareFilter/sections/"
+    val EXTRA = listOf(
+        ListSource("hagezi-light", "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/light.txt", Category.PRIVACY),
+        ListSource("adguard-tracking-servers", RAW_ADGUARD + "tracking_servers.txt", Category.PRIVACY),
+        ListSource("adguard-tracking-firstparty", RAW_ADGUARD + "tracking_servers_firstparty.txt", Category.PRIVACY),
+        ListSource("adguard-tracking-general", RAW_ADGUARD + "general_url.txt", Category.PRIVACY),
+        ListSource("adguard-tracking-specific", RAW_ADGUARD + "specific.txt", Category.PRIVACY),
+    )
+
+    /** What the daily update fetches and compiles: the standard lists, and the extra tracker lists when the owner has them on. */
+    fun active(extraTrackerLists: Boolean): List<ListSource> = if (extraTrackerLists) DEFAULT + EXTRA else DEFAULT
 }
 
 sealed class FetchResult {
@@ -137,14 +155,14 @@ object FilterUpdater {
     fun run(
         ctx: Context,
         manual: Boolean,
-        sources: List<ListSource> = FilterSources.DEFAULT,
+        sources: List<ListSource>? = null,                         // null = what the owner's switches say ([FilterSources.active])
         fetcher: Fetcher = HttpFetcher(),
         online: () -> Boolean = { isOnline(ctx) },
         metered: () -> Boolean = { isMetered(ctx) },
     ): Result = synchronized(lock) {
         cancelled = false
         val prefs = Prefs.get(ctx)
-        val result = try { runLocked(ctx, prefs, manual, sources, fetcher, online, metered) } catch (t: Throwable) {
+        val result = try { runLocked(ctx, prefs, manual, sources ?: FilterSources.active(prefs.extraTrackerLists), fetcher, online, metered) } catch (t: Throwable) {
             Log.w(Io.TAG, "filter update crashed", t)
             Result.Failed("Update failed: ${t.javaClass.simpleName}")
         }
@@ -193,6 +211,11 @@ object FilterUpdater {
         // (every list answers 304). The marker survives until a compiled set was actually installed.
         val pending = File(srcDir, "needs-compile")
         if (changed > 0) pending.writeText("1")
+        // RX3-B2: the set of lists that went into the installed compile; a different set (the owner switched the extra tracker lists) needs a compile even when every list answers 304
+        val setFile = File(dir, "sources.txt")
+        val setNow = sources.map { it.id }.sorted().joinToString(",")
+        val setBefore = setFile.takeIf { it.isFile }?.readText()?.trim() ?: FilterSources.DEFAULT.map { it.id }.sorted().joinToString(",")   // an install from before this file existed had the standard lists
+        if (compiled.isFile && setBefore != setNow) pending.writeText("1")
         if (changed == 0 && compiled.isFile && !pending.exists()) {
             return if (failures.isEmpty()) Result.Unchanged("Up to date ($summary)") else Result.Failed("Some lists could not be checked: ${failures.joinToString("; ")}")
         }
