@@ -111,6 +111,19 @@ PAGE = r"""<!doctype html>
 </script></body></html>
 """
 
+WA_PAGE = r"""<!doctype html><html><head><meta charset="utf-8"><title>wa</title></head><body><pre id="o">running</pre><script>
+ function say(k, v) { try { new Image().src = '/log?k=' + k + '&v=' + encodeURIComponent(v) + '&h=wa&t=' + Date.now(); } catch (e) {} document.getElementById('o').textContent += '\n' + k + ': ' + v; }
+ say('wa1', 'PublicKeyCredential is ' + typeof window.PublicKeyCredential + ', credentials is ' + typeof navigator.credentials);
+ try {
+   if (window.PublicKeyCredential) {
+     PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(function (r) { say('wa2', 'uvpaa ' + r); }, function (e) { say('wa2', 'uvpaa error ' + e); });
+     if (PublicKeyCredential.isConditionalMediationAvailable) PublicKeyCredential.isConditionalMediationAvailable().then(function (r) { say('wa3', 'conditional ' + r); }, function (e) { say('wa3', 'conditional error ' + e); });
+   }
+   navigator.credentials.get({ publicKey: { challenge: new Uint8Array(32), timeout: 4000, userVerification: 'discouraged', rpId: location.hostname } }).then(function (c) { say('wa4', 'get answered ' + c); }, function (e) { say('wa4', 'get rejected ' + e.name); });
+ } catch (e) { say('wa5', 'threw ' + e); }
+ setTimeout(function () { say('wa9', 'page still alive after 6 s'); }, 6000);
+</script></body></html>"""
+
 class H(http.server.BaseHTTPRequestHandler):
     logfile = None
     port = 0
@@ -137,6 +150,10 @@ class H(http.server.BaseHTTPRequestHandler):
         if u.path == "/beacon":
             self._write("BEACON reached the server host=%s (the ad host was not blocked)" % host)
             return self._send(200, b"pong")
+        if u.path == "/wa":
+            # AX2: what a banking page does at load - ask the browser about passkeys (WebAuthn). On a tablet without Google Play services the engine's Android implementation has nothing to call.
+            self._write("wa page host=%s" % host)
+            return self._send(200, WA_PAGE.replace("__PORT__", str(self.port)).encode())
         if u.path == "/popup":
             self._write("POPUP opened host=%s" % host)
             return self._send(200, b"<!doctype html><title>popup</title><h1>an ad window opened</h1>")
