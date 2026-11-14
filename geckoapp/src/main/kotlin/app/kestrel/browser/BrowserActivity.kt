@@ -2463,7 +2463,7 @@ open class BrowserActivity : Activity(), DockListener {
      */
     internal fun askSlowScript(tab: Tab): GeckoResult<SlowScriptResponse> {
         val n = Health.count("gecko.slowScript.waited")
-        if (n == 1 || n % 20 == 0) Health.log("gecko", "slow-script-waited", "n=$n " + tab.url.take(60))
+        if (n == 1 || n % 20 == 0) Health.log("gecko", "slow-script-waited", "n=$n " + (if (tab.isPrivateTab) "private tab" else tab.url.take(60)))
         return GeckoResult.fromValue(SlowScriptResponse.CONTINUE)
     }
 
