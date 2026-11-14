@@ -71,6 +71,14 @@ class GlideParams(
     val confCap: Float = 1.6f,
     /** ... and only for a word whose path fit is close to the first guess's: its cost per letter may be at most this much higher (pitch squared). A correction settles lookalike words, not a clear miss. */
     val confMaxGap: Float = 0.9f,
+    /**
+     * Glide shapes the person drew before (AX1): a word whose remembered shapes look like this glide is lifted by [patGain] times ln(1 + how much it looks like them, counted in confirmations), never
+     * more than [patCap]. Only for words whose own path fit is within [patMaxGap] (pitch squared per letter) of the best fit's: a remembered shape settles a sloppy glide, it does not make a word
+     * the finger never went near. [patGain] 0 = no pattern learning.
+     */
+    val patGain: Float = 1.7f,
+    val patCap: Float = 4.5f,
+    val patMaxGap: Float = 2.2f,
 )
 
 class GlideCandidate(val text: String, val score: Float, val cost: Float, val prior: Float, val letters: Int = 1) {
@@ -112,12 +120,19 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
     var lastCandidates = 0; private set
     var lastLm = 0f; private set
 
+    /** The shape of the last glide as [Fingerprint] numbers (null for a tap): what is remembered when the person confirms or corrects the word. */
+    var lastPrint: FloatArray? = null; private set
+    /** The last decode: a remembered shape lifted at least one word / changed which word came first (for the Diagnostics line and the tests). */
+    var lastPatternLifted = false; private set
+    var lastPatternFlipped = false; private set
+
     /**
      * [xs]/[ys] are the first [count] touch points in view pixels. [prev] is the word before (lowercase letters) or null. Returns up to [max] words, best first; empty when the path is a tap or
      * nothing fits.
      */
     fun decode(xs: FloatArray, ys: FloatArray, count: Int, lexicons: List<GlideLexicon>, prev: String?, max: Int = 3, prev2: String? = null): List<GlideCandidate> {
-        lastCandidates = 0
+        lastCandidates = 0; lastPatternLifted = false; lastPatternFlipped = false
+        lastPrint = if (p.patGain > 0f) Fingerprint.of(xs, ys, count, keys) else null
         if (count < 2 || !resample(xs, ys, count)) return emptyList()
         // the path moved by the learned habit; everything after judges this one
         for (i in 0 until n) { qx[i] -= biasX; qy[i] -= biasY }
@@ -179,6 +194,7 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
             out.add(GlideCandidate(lex.text(id), -costs[h] + lm * priors[h], costs[h], priors[h], letters))
         }
         out.sortByDescending { it.score }
+        applyPatterns(out)
         applyCorrections(out)
         val seen = HashSet<String>()
         val res = ArrayList<GlideCandidate>(max)
@@ -424,6 +440,29 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
         }
         if (!known) return Math.log(pu).toFloat()
         return Math.log((1.0 - p.bigramMix) * pu + p.bigramMix * pb).toFloat()
+    }
+
+    /**
+     * What this person's glides looked like before (AX1): every candidate whose remembered shapes look like this glide gets a lift that grows with how often they were confirmed and how close this
+     * one is; a word nobody ever drew like this gets nothing, so it can only lose to the words the person actually means by this shape.
+     */
+    private fun applyPatterns(out: ArrayList<GlideCandidate>) {
+        val pm = personal?.patterns ?: return
+        val print = lastPrint ?: return
+        if (p.patGain <= 0f || out.isEmpty() || pm.isEmpty) return
+        var bestPer = Float.MAX_VALUE
+        for (c in out) if (c.perLetter < bestPer) bestPer = c.perLetter
+        val firstBefore = out[0].text
+        var changed = false
+        for (i in out.indices) {
+            val c = out[i]
+            if (c.perLetter - bestPer > p.patMaxGap) continue
+            val e = pm.evidence(c.text, print)
+            if (e < 0.05f) continue
+            val lift = Math.min(p.patCap, p.patGain * Math.log(1.0 + e).toFloat())
+            out[i] = GlideCandidate(c.text, c.score + lift, c.cost, c.prior, c.letters); changed = true
+        }
+        if (changed) { out.sortByDescending { it.score }; lastPatternLifted = true; lastPatternFlipped = out[0].text != firstBefore }
     }
 
     /**
