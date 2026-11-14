@@ -763,7 +763,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                     if (!moved) return
                     if (mode == DRAG_MOVE) moveBy(dx, dy) else sizeBy(dx, dy)
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> finish(ev)
+                MotionEvent.ACTION_UP -> { if (moved) { if (mode == DRAG_MOVE) moveBy(dx, dy) else sizeBy(dx, dy) }; finish(ev) } // the lift's own position counts too: events that arrive late (a busy screen) are not lost
+                MotionEvent.ACTION_CANCEL -> finish(ev)
             }
         }
 
