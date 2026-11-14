@@ -1848,3 +1848,57 @@
 >
 > You sent the same words again at 15:04, so I treated it as the same request.
 <!-- sha:590cc0ddab8c -->
+
+## 2026-11-14T18:01:02Z
+> alpha39 is out. The keyboard now remembers what your glides look like, not just which words you use. I reproduced your "for"/"fir" problem on the emulator and then fixed it there. It is not tried on your tablet or with your real thumb.
+>
+> **What was wrong.** On the emulator, a glide for "for" whose turn lands on the "i" typed "fir", exactly your complaint. The old learning only remembered "guessed fir, you meant for" as a word pair, with a small capped nudge. With a sloppy hand the wrong word keeps changing (fur, fit, fire, due, fir), so each wrong word would need correcting separately. In my simulated-hand test the old keyboard stayed about 85% right, however often it was corrected.
+>
+> **What it does now.**
+> - It remembers the shape of each glide together with the word you meant. The shape is the path over the keys, measured in key widths, so it doesn't depend on how big you drag the keyboard.
+> - It learns from three things: tapping the right word in the strip, deleting the word and typing the right one (or gliding it again), and words you simply keep.
+> - The next time you draw that shape, even sloppily, that word comes first. A shape it learned wrongly fades when you correct it.
+> - It keeps counting the words you use most, as before. It now also always considers words you have drawn that way before. Previously a sloppy glide could drift so far that the right word never made the shortlist, and that was the main remaining mistake.
+>
+> **What I measured.**
+> - **Emulator, real touches:** the first sloppy glide typed "fir". I tapped "for" in the strip once. The same sloppy glide then typed "for", and still did after restarting the app.
+> - **Simulated hand that draws the same shape every time:** "for" is right about 90% of the time after one correction, and nearly every time from the fifth glide.
+> - **3000 mixed glides:**
+>   - A strong-habit hand went from about 60% to about 80% right.
+>   - A hand with no habits went from about 94% to about 98%.
+> - **Cost:** decoding time is unchanged.
+>
+> **Safety.**
+> - Nothing is learned in private tabs or password fields.
+> - "Forget what the keyboard learned" wipes everything, including the shapes.
+> - It all stays on the tablet, size is capped, and old habits fade.
+>
+> **Export and import.**
+> - **Settings > Export what the keyboard learned:** one tap saves `Kestrel keyboard learning <date>.txt` in Downloads. It is plain text with your words, word pairs, corrections, glide shapes and thumb habit.
+> - **Import what the keyboard learned:** reads such a file through the file picker and adds it. Importing the same file twice changes nothing.
+> - **Format:** written down in `docs/KEYBOARD-EXPORT.md`.
+> - **Before you uninstall:** export first, because the keyboard's memory is deleted with the app.
+> - **Privacy:** the file lists words you typed, so keep it private.
+> - **On the emulator:** I tested export, forget, import through the system picker, and app restart.
+>
+> **Decision for you: do you want a system keyboard for all apps (yes/no)?** Making this your 
+> [... 516 characters omitted ...]
+>  Ally crash fix from alpha38.
+>
+> Release (tap `kestrel-g-0.3.0-alpha39.apk`; it installs over the old one):
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha39
+>
+> **Still open for you**
+> - Yes/no: system keyboard app (new).
+> - Diagnostics paste after real use: the "Glide typing" and "Mini keyboard in page fields" lines, plus the EARLIER CRASH line if the app closes again.
+> - Doraby / Cloudflare "incompatible browser" page: the wording and a page report.
+> - The choppy-video link.
+> - How scroll and Back feel.
+> - Proton Mail numbers and a keyboard test there.
+> - Yes/no: a scheduled GitHub ad-list build. It is not built, because it spends GitHub minutes.
+> - Yes/no: a separate video-site ad switch.
+> - Yes/no: stored libraries (AS1).
+> - Your private signing key (SEC-1).
+> - Network lab results.
+> - Optional: the licence note (LIC-1), landscape tabs (UI-3), and the Cromite comparison (P2b).
+<!-- sha:d535dc644105 -->
