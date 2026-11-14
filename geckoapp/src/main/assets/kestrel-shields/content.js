@@ -317,6 +317,8 @@
   try {
     var TAGS = { IMG: 1, PICTURE: 1, VIDEO: 1, AUDIO: 1, CANVAS: 1, OBJECT: 1, EMBED: 1, IFRAME: 1, INPUT: 1, TEXTAREA: 1, SELECT: 1, OPTION: 1, BUTTON: 1, LABEL: 1, SUMMARY: 1, DETAILS: 0 };
     var ROLES = /^(link|button|checkbox|radio|menuitem|menuitemcheckbox|menuitemradio|tab|switch|slider|spinbutton|textbox|searchbox|combobox|listbox|option|treeitem|gridcell)$/i;
+    // a wrapper that fills the whole screen (an app root with a tab stop, a page with an onclick on its body) is not a control: it must not make the whole page "not open space"
+    function huge(el) { try { var r = el.getBoundingClientRect(); return r.width >= window.innerWidth * 0.95 && r.height >= window.innerHeight * 0.9; } catch (x) { return false; } }
     function interactive(el) {
       var t = el.tagName ? String(el.tagName).toUpperCase() : '';
       if (!t) return false;
@@ -325,7 +327,7 @@
       if (el.isContentEditable) return true;
       var r = el.getAttribute ? el.getAttribute('role') : null;
       if (r && ROLES.test(r)) return true;
-      if (el.hasAttribute && (el.hasAttribute('onclick') || (el.hasAttribute('tabindex') && el.tabIndex >= 0))) return true;
+      if (el.hasAttribute && (el.hasAttribute('onclick') || (el.hasAttribute('tabindex') && el.tabIndex >= 0)) && !huge(el)) return true;
       try { if (window.getComputedStyle(el).cursor === 'pointer') return true; } catch (x) { /* a node without style */ }
       return false;
     }

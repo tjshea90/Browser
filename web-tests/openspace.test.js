@@ -68,6 +68,12 @@ test('widgets by role, an onclick, a tab stop, an editable region and a pointer 
   assert.deepEqual(await opens(page), []);
 });
 
+test('a wrapper that fills the whole screen (a tab stop or an onclick on the page root) does not make every spot "not open space"', async () => {
+  const page = await open(`<div tabindex="0" onclick="1" style="position:absolute;left:0;top:0;width:100%;height:100%"></div>`);
+  await press(page, [[300, 300]]);
+  assert.equal((await opens(page)).length, 1);
+});
+
 test('a transparent layer over a link does not make the link open space (the whole stack under the finger is looked at)', async () => {
   const page = await open(`<a href="https://x.example/" style="position:absolute;left:0;top:0;width:200px;height:100px;display:block">link</a><div style="position:absolute;left:0;top:0;width:200px;height:100px"></div>`);
   await press(page, [[50, 50]]);
