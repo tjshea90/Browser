@@ -1099,3 +1099,8 @@ There isn't anything outside the box that might speed up the browser?
 ```
 I don't charge my tablet overnight. Does it still do the overnight compile of the app
 ```
+
+## 2026-11-14T01:26:37Z
+```
+Make the mini keyboard on the top right panel have glide typing like Gboard. Try to make the glide word predictions accurate. 
+```
