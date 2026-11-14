@@ -12,3 +12,15 @@ The ad flag: an ancestor (8 levels, never body) whose class or id, split at ever
 `core/media/VideoRole.kt` (pure): `decide(facts, durationMs)` -> PLAYER | DECOR | AD. No facts (an old extension, a report from somewhere else) = PLAYER (nothing changes). AD = ad flag. DECOR = (loop && muted && !controls) || (muted && autoplay && !controls && 0 < duration <= 30 s) || (rendered area > 0 and under 160 x 90).
 `MediaList.applyInfo(..., role)`: PLAYER sets `touched` as before; DECOR / AD record the role and do NOT set `touched`; the latest report wins; `touch(url)` (the owner long-pressed, opened or downloaded it) still sets `touched`, and `touched` always shows. `usableUnsorted` hides a DECOR / AD entry before the "played, long or sharp" exemption (a stream too). `MediaRank.junk` sends them to "Other files" (never deleted: one tap). `value()` makes them the first to be evicted from a full list.
 Cost of a wrong guess: a muted autoplay clip of under 30 s with custom controls that nobody recognised is hidden from the badge and sits one tap away under "Other files on this page".
+
+### 1.1 Emulator proof (2026-11-14; Android 10 x86_64 emulator, GeckoView 160 debug build: NOT the tablet)
+Lab: `tools/sitelab/guardlab.py` page `/finderlab` (four REAL media elements, 20 s silent audio each, described differently by the page itself) + `tools/emu/playerlab_emu.py --path /finderlab --grep "video info"`; the app logs one line per report: `video info role=... length=...s counted=N of M` (no address).
+| Element | What the page says | Role the app decided |
+| :- | :- | :- |
+| `<video muted loop autoplay>` 300x100, no controls | a hero loop | DECOR |
+| `<video controls>` 300x140 | a player | PLAYER |
+| `<video controls>` inside `div.sidebar.ad-slot` | an ad slot | AD |
+| `<video controls>` 120x60 | thumbnail-sized | DECOR (area 7200 < 14400) |
+Final line of the run: `counted=1 of 4` - only the player counts for the dock badge; the other three stay in the list for "Other files" (the sheet), nothing deleted.
+Defect found by the first emulator run and fixed (with a JVM test): the element's report can arrive BEFORE the extension reported the file (loadedmetadata vs the response), and `applyInfo` then dropped it (`counted=0 of 0`, two roles lost). `MediaList` now keeps what an element said about a file it does not hold yet (32 files, forgotten with the list) and applies it when the file is added.
+Tests: core `VideoRoleTest` (7), `MediaListTest` (+9), `MediaRankTest` (+4); web-tests `videofacts.test.js` (9, real Chromium), `background.test.js` (+1 relay). NOT done: a real site's hover previews and pre-rolls (the sandbox cannot reach one that plays them), the tablet.
