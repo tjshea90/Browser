@@ -746,7 +746,7 @@ class Engine(
         val n = if (seg != null) synchronized(lock) { if (seg.fails == 0) seg.failedAt = now; ++seg.fails } else attempt + 1
         if (seg != null && n >= 2 && retireExtra(job, seg, now)) throw Exit()
         if (n >= cfg.maxFails) {
-            if (status == 0 && waitOutOutage(job, now)) throw Exit()
+            if (status == 0 && waitOutOutage(job, now, seg)) throw Exit()
             fail(job, if (status != 0) Reason.HTTP else Reason.NETWORK, status); throw Exit()
         }
         sleep(job, Backoff.delayMs(n - 1, cfg.backoffBaseMs, cfg.backoffCapMs, retryAfterMs, rnd))
@@ -763,12 +763,12 @@ class Engine(
     }
 
     /** The only connection of a started download keeps failing at the transport level: wait and look again later, with growing pauses (the 30-minute give-up is in [doTick]). */
-    private fun waitOutOutage(job: Job, now: Long): Boolean {
+    private fun waitOutOutage(job: Job, now: Long, seg: Seg?): Boolean {
         val rec = job.rec
         synchronized(lock) {
             if (!(rec.done > 0 && rec.canContinue(readable(job)))) return false                // a fresh download (a typo in the address, a dead host) fails fast as before
             // RX3-D1: with several connections this used to give up at once (`alive > 1`), so a dip that hit them all ended a download in FAILED. Now it waits unless a connection is still moving bytes (then this one is a lone failure)
-            if (job.alive > 1 && rec.segs.any { it.worker && now - it.lastAt < cfg.refusedFreshMs }) return false
+            if (job.alive > 1 && seg != null && seg.failedAt != 0L && rec.segs.any { it !== seg && it.worker && it.lastAt > seg.failedAt + cfg.refusedEvidenceMs && now - it.lastAt < cfg.refusedFreshMs }) return false
             if (job.outageSince == 0L) job.outageSince = now
             job.outageProbes++
             job.resumeAt = now + Backoff.delayMs(job.outageProbes - 1, cfg.outageBaseMs, cfg.outageCapMs, 0L, rnd)

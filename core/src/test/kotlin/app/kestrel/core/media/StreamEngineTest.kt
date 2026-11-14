@@ -131,7 +131,7 @@ class StreamEngineTest {
     // ---- RX3-D1: the hotspot loses its upstream for a while; the tablet still sees it (net.online stays true). The download WAITS instead of failing, then carries on.
 
     private fun cfgOutage(giveUpMs: Long = 60_000) = Config(maxActive = 2, maxConnsPerDownload = 3, maxConnsTotal = 6, windowBytes = 0, checkpointMs = 40, stallMs = 60_000, backoffBaseMs = 1, backoffCapMs = 4,
-        denyDelaysMs = listOf(1L, 2L, 3L), outageBaseMs = 40, outageCapMs = 80, outageGiveUpMs = giveUpMs)
+        denyDelaysMs = listOf(1L, 2L, 3L), outageBaseMs = 40, outageCapMs = 80, outageGiveUpMs = giveUpMs, outageQuietMs = 30)
 
     private fun killAll(h: H, n: Int) { for (i in 0 until n) h.cdn.failFirst["https://cdn.test/v/s$i.ts"] = 1_000_000 }
 
