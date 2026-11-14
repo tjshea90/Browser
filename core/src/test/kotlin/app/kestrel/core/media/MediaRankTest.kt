@@ -124,7 +124,7 @@ class MediaRankTest {
     }
 
     @Test fun aDecoyTheOwnerTouchedIsNotTuckedAway() {
-        val loop = file("https://cdn.example/loop.mp4", 40 * MB, h = 1080, dur = 120_000).also { it.role = VideoRole.DECOR; it.touched = true }
+        val loop = file("https://cdn.example/loop.mp4", 40 * MB, h = 1080, dur = 120_000).also { it.role = VideoRole.DECOR; it.touched = true; it.interest = true }
         val film = file("https://cdn.example/film.mp4", 300 * MB)
         assertTrue(urls(MediaRank.rank(listOf(loop, film)).main).contains(loop.url))
     }
