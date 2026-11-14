@@ -62,9 +62,21 @@ class BackLab(private val log: (String) -> Unit = {}) {
 
     private class Open(val key: String, val host: String, val forward: Boolean, val at: Long, val savedY: Int) {
         var kind: BackKind? = null
+        var locAt = 0L
         var showAt = 0L
         var paintAt = 0L
         var sampleY = -1
+    }
+
+    /** A small least-recently-used map of page key -> why the engine cannot keep that page. */
+    private class KeyMap(private val cap: Int) {
+        private val m = object : LinkedHashMap<String, String>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > cap
+        }
+        fun put(k: String, why: String) { m[k] = why }
+        fun remove(k: String) { m.remove(k) }
+        fun get(k: String): String? = m[k]
+        fun clear() = m.clear()
     }
 
     private class KeySet(private val cap: Int) {
@@ -78,7 +90,7 @@ class BackLab(private val log: (String) -> Unit = {}) {
     }
 
     private var cur: Open? = null
-    private val notKeptKeys = KeySet(KNOWN_PAGES)
+    private val notKeptKeys = KeyMap(KNOWN_PAGES)
     private val noStoreKeys = KeySet(KNOWN_PAGES)
 
     // ---------------------------------------------------------------- one press
@@ -89,6 +101,9 @@ class BackLab(private val log: (String) -> Unit = {}) {
         stats.presses++
         cur = Open(BackScrollRules.keyOf(url), UrlParts.hostOf(url) ?: "?", forward, now, savedY)
     }
+
+    /** The tab's address became the target's (the engine committed it): the first sighting after the press counts. */
+    fun located(now: Long) { val o = cur ?: return; if (o.locAt == 0L) o.locAt = now }
 
     /** The target's content script reported a `pageshow`: [persisted] = the engine restored it from its back/forward cache, [navType] = the navigation timing type, [transferSize] = bytes the page's file cost (0 = from cache). */
     fun pageshow(now: Long, url: String, persisted: Boolean, navType: String, transferSize: Long, y: Int) {
@@ -136,7 +151,7 @@ class BackLab(private val log: (String) -> Unit = {}) {
             if (ok) stats.scrollOk++
             place = "${o.sampleY}/${o.savedY}" + if (ok) "" else " MISSED"
         }
-        log("kind=${kind.label} dir=${if (o.forward) "fwd" else "back"} show=${if (o.kind == null) -1 else o.showAt - o.at} paint=$paintMs y=$place to=${o.host}")
+        log("kind=${kind.label} dir=${if (o.forward) "fwd" else "back"} loc=${if (o.locAt == 0L) -1 else o.locAt - o.at} show=${if (o.kind == null) -1 else o.showAt - o.at} paint=$paintMs y=$place to=${o.host}")
     }
 
     // ---------------------------------------------------------------- what is known about the pages that were left
@@ -149,14 +164,18 @@ class BackLab(private val log: (String) -> Unit = {}) {
     /** The page in front is being LEFT: remember whether the engine can have kept it (it was still loading, forbids caching, or held a stream player: it cannot). The newest answer for a page replaces the older one. */
     fun left(url: String, loading: Boolean, stream: Boolean = false) {
         val k = BackScrollRules.keyOf(url); if (k.isEmpty()) return
-        if (loading || stream || noStoreKeys.contains(k)) notKeptKeys.add(k) else notKeptKeys.remove(k)
+        val why = if (loading) "loading" else if (stream) "stream" else if (noStoreKeys.contains(k)) "no-store" else null
+        if (why != null) notKeptKeys.put(k, why) else notKeptKeys.remove(k)
     }
 
     /** The extension saw [n] requests still open when [url] was left: a page with open requests cannot enter the engine's back/forward cache, whatever the engine said about its load. */
-    fun pending(url: String, n: Int) { if (n <= 0) return; val k = BackScrollRules.keyOf(url); if (k.isNotEmpty()) notKeptKeys.add(k) }
+    fun pending(url: String, n: Int) { if (n <= 0) return; val k = BackScrollRules.keyOf(url); if (k.isNotEmpty() && notKeptKeys.get(k) == null) notKeptKeys.put(k, "pending $n") }
 
     /** True when Back to [url] will certainly have to load it again (so its picture goes up at once). */
-    fun notKept(url: String): Boolean { val k = BackScrollRules.keyOf(url); return notKeptKeys.contains(k) || noStoreKeys.contains(k) }
+    fun notKept(url: String): Boolean = notKeptWhy(url).isNotEmpty()
+
+    /** Why Back to [url] will have to load it again ("loading", "stream", "no-store", "pending N"), or "" when nothing says so. */
+    fun notKeptWhy(url: String): String { val k = BackScrollRules.keyOf(url); return notKeptKeys.get(k) ?: if (noStoreKeys.contains(k)) "no-store" else "" }
 
     fun reset() { cur = null; stats.reset(); notKeptKeys.clear(); noStoreKeys.clear() }
 

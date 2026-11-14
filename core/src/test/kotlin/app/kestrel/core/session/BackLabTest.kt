@@ -139,6 +139,31 @@ class BackLabTest {
         assertFalse(lab.notKept("https://a.test/other"))
     }
 
+    @Test fun theReasonAPageCannotBeKeptIsRemembered() {
+        val lab = BackLab {}
+        lab.left("https://a.test/1", loading = true); assertEquals("loading", lab.notKeptWhy("https://a.test/1"))
+        lab.left("https://a.test/2", loading = false, stream = true); assertEquals("stream", lab.notKeptWhy("https://a.test/2"))
+        lab.noStore("https://a.test/3"); lab.left("https://a.test/3", loading = false); assertEquals("no-store", lab.notKeptWhy("https://a.test/3"))
+        lab.left("https://a.test/4", loading = false); lab.pending("https://a.test/4", 2); assertEquals("pending 2", lab.notKeptWhy("https://a.test/4"))
+        lab.left("https://a.test/5", loading = false); assertEquals("", lab.notKeptWhy("https://a.test/5"))
+        assertEquals("", lab.notKeptWhy("https://a.test/never-seen"))
+        lab.left("https://a.test/1", loading = false); assertEquals("a newer answer replaces the older reason", "", lab.notKeptWhy("https://a.test/1"))
+    }
+
+    @Test fun theTimeTheTargetAddressShowedIsInTheLine() {
+        val lines = ArrayList<String>(); val lab = BackLab { lines += it }
+        press(lab, at = 1_000L); lab.located(1_250L); lab.located(1_900L)          // the first sighting counts
+        lab.pageshow(4_000L, B, true, "back_forward", 0, 1800); lab.finish(8_000L)
+        assertTrue(lines[0], lines[0].contains(" loc=250 "))
+        assertTrue(lines[0], lines[0].contains(" show=3000 "))
+    }
+
+    @Test fun aPressThatNeverSawItsAddressSaysSo() {
+        val lines = ArrayList<String>(); val lab = BackLab { lines += it }
+        press(lab); lab.finish(5_000L)
+        assertTrue(lines[0], lines[0].contains(" loc=-1 "))
+    }
+
     // ---- the Diagnostics line
 
     @Test fun theLineSaysPlainlyWhatHappened() {
