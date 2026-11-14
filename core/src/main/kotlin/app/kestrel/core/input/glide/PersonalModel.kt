@@ -8,7 +8,7 @@ package app.kestrel.core.input.glide
  * statistics: a word the person uses a lot gets the probability of a more common word (growing slowly: ten uses make an ordinary word, a hundred a very common one), and a pair the person
  * writes often makes the second word much more likely after the first. Nothing here can take over: the boost has a ceiling and old habits fade (all weights halve when the total gets large).
  */
-class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int = 8000, private val capTriples: Int = 6000, private val capConfusions: Int = 3000) {
+class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int = 8000, private val capTriples: Int = 6000, private val capConfusions: Int = 3000, private val recency: Boolean = true) {
     private val words = HashMap<String, Float>()
     private val pairs = HashMap<String, Float>()      // "previous word" -> weight
     private val pairTotals = HashMap<String, Float>() // previous word -> weight of everything seen after it
@@ -40,10 +40,11 @@ class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int 
                 tripleTotals["$p2 $p"] = (tripleTotals["$p2 $p"] ?: 0f) + weight
             }
         }
-        // the short memory: everything fades, this word was just used
-        val it = recent.entries.iterator()
-        while (it.hasNext()) { val e = it.next(); e.setValue(e.value * RECENT_FADE); if (e.value < 0.02f) it.remove() }
-        recent[w] = (recent[w] ?: 0f) + 1f
+        if (recency) { // the short memory: everything fades, this word was just used
+            val it = recent.entries.iterator()
+            while (it.hasNext()) { val e = it.next(); e.setValue(e.value * RECENT_FADE); if (e.value < 0.02f) it.remove() }
+            recent[w] = (recent[w] ?: 0f) + 1f
+        }
         if (words.size > capWords || pairs.size > capPairs || triples.size > capTriples) trim()
         if (total > DECAY_AT) decay()
     }

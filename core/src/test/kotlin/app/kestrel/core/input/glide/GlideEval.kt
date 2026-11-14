@@ -126,11 +126,11 @@ object GlideEval {
      */
     class Curve(val blocks: List<Double>, val favouriteBlocks: List<Double>, val known: Int, val pairs: Int)
 
-    fun learningCurve(lex: BinaryLexicon, keys: GlideKeys, params: GlideParams, noise: SimNoise, glides: Int, blocks: Int, learn: Boolean, seed: Long, habitPercent: Int = 70, favourites: Int = 150, corrections: Boolean = true, burst: Int = 0, twoWords: Boolean = true): Curve {
+    fun learningCurve(lex: BinaryLexicon, keys: GlideKeys, params: GlideParams, noise: SimNoise, glides: Int, blocks: Int, learn: Boolean, seed: Long, habitPercent: Int = 70, favourites: Int = 150, corrections: Boolean = true, burst: Int = 0, twoWords: Boolean = true, recency: Boolean = true): Curve {
         val rnd = Random(seed * 31 + 7)
         val sim = GestureSim(keys, Random(seed))
         val dec = GlideDecoder(keys, params)
-        val model = if (learn) PersonalModel() else null
+        val model = if (learn) PersonalModel(recency = recency) else null
         dec.personal = model
         // the person: 150 favourite words from ranks 1500..15000, phrases of two or three of them
         val ranked = (0 until lex.size).filter { distinct(lex, it) >= 3 }.sortedByDescending { lex.logProb(it) }.drop(1500).take(13500)
@@ -200,9 +200,9 @@ object GlideEval {
             for (nm in (a["noise"] ?: "normal,sloppy").split(',')) {
                 val noise = noiseFrom(a + mapOf("noise" to nm))
                 val hp = a["habit"]?.toInt() ?: 70; val fv = a["favs"]?.toInt() ?: 150
-                val conf = (a["confs"] ?: "1") == "1"; val burst = a["burst"]?.toInt() ?: 0; val two = (a["two"] ?: "1") == "1"
-                val off = learningCurve(lex, keys, paramsFrom(a), noise, g, nb, false, seed, hp, fv, conf, burst, two)
-                val on = learningCurve(lex, keys, paramsFrom(a), noise, g, nb, true, seed, hp, fv, conf, burst, two)
+                val conf = (a["confs"] ?: "1") == "1"; val burst = a["burst"]?.toInt() ?: 0; val two = (a["two"] ?: "1") == "1"; val rec = (a["rec"] ?: "1") == "1"
+                val off = learningCurve(lex, keys, paramsFrom(a), noise, g, nb, false, seed, hp, fv, conf, burst, two, rec)
+                val on = learningCurve(lex, keys, paramsFrom(a), noise, g, nb, true, seed, hp, fv, conf, burst, two, rec)
                 println("${noise.name}, a person who writes $hp percent of what they type from their own phrases, $g glides in $nb stretches (first guess right, %):")
                 println("   without learning: " + off.blocks.joinToString(" ") { "%.1f".format(it) } + "   own favourites: " + off.favouriteBlocks.joinToString(" ") { "%.1f".format(it) })
                 println("   with learning:    " + on.blocks.joinToString(" ") { "%.1f".format(it) } + "   own favourites: " + on.favouriteBlocks.joinToString(" ") { "%.1f".format(it) } + "   (knows ${on.known} words, ${on.pairs} pairs)")
