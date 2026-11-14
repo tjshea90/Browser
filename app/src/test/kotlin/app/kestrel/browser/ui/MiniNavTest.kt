@@ -890,6 +890,20 @@ class MiniNavTest {
         assertEquals("the key's own long press: the digit on it", "1", nav.barTextForTest)
     }
 
+    @Test fun zzDebugKeys() {
+        openPanel(); nav.pressBarForTest(); relayout()
+        val (x, y) = nav.keyPointForTest("q")!!
+        val o = nav.outlineForTest()
+        val sb = StringBuilder("keys=" + nav.keysSizeForTest().toList() + " point=" + x + "," + y + " outline=" + o.toList() + " zone=" + nav.zoneForTest(x, y))
+        val t = SystemClock.uptimeMillis()
+        val h1 = nav.dispatchTouchEvent(ev(t, t, MotionEvent.ACTION_DOWN, x, y))
+        sb.append(" down=" + h1)
+        sb.append(" bubble=" + nav.bubbleForTest)
+        nav.dispatchTouchEvent(ev(t, t + 40, MotionEvent.ACTION_UP, x, y))
+        sb.append(" textAfterTap=[" + nav.barTextForTest + "] showing=" + nav.keyboardShowing)
+        throw AssertionError(sb.toString())
+    }
+
     @Test fun withTheKeyboardOpenTheButtonsAndTheBarStillPickThePanelUp() {
         openPanel(); nav.pressBarForTest(); relayout()
         val (x, y) = nav.buttonPointForTest("forward")
