@@ -73,7 +73,7 @@ test('a stand-in answers only the kinds of request it suits, anything else is le
 });
 
 test('no address leaks the extension: every stand-in is a data: URL', () => {
-  for (let i = 1; i <= R.count; i++) assert.ok(/^data:[a-z/+-]+(;charset=utf-8)?(;base64)?,/.test(R.urlFor(i, R.typesOf(i)[0])), R.names[i]);
+  for (let i = 1; i <= R.count; i++) assert.ok(/^data:[a-z0-9/+.-]+(;charset=utf-8)?(;base64)?,/.test(R.urlFor(i, R.typesOf(i)[0])), R.names[i]);
 });
 
 // ---------------------------------------------------------------- 2. the binary files
