@@ -207,6 +207,8 @@ class StreamEngine(
         val claimed = BitSet()
         /** Segments nobody fetched because the MP4 writer is leaving their run out (an advertisement of another format): they only move the output's pointer. */
         val skipped = BitSet()
+        /** RX3-V5: "Left out 1:30 of advertising (2 breaks)" when the playlist's own markers or a foreign run were left out before they were fetched; joined to the row's note when the download finishes. */
+        @Volatile var adNote: String? = null
         var stagedBytes = 0L
         var stagedCount = 0
         val inflight = AtomicLong()
@@ -675,10 +677,15 @@ class StreamEngine(
                 Hls.Problem.EMPTY -> throw Failed(Reason.BAD_PLAYLIST)
                 null -> {}
             }
+            // RX3-V5: advertising the playlist itself gives away (its own markers, a run from another source) is never fetched: the set of skipped segments is filled before the first request
+            val ads = AdRuns.find(media)
+            val effective = AdRuns.withBreaks(media, ads)
             synchronized(lock) {
-                job.media = media
+                job.media = effective
+                job.adNote = AdRuns.note(ads)
+                for (r in ads.ranges) job.skipped.set(r.first, r.last + 1)
                 rec.playlistText = text
-                if (media.exactBytes >= 0) rec.estimate = media.exactBytes
+                if (effective.exactBytes >= 0) rec.estimate = effective.exactBytes
             }
         }
         val media = synchronized(lock) { job.media!! }
@@ -848,6 +855,7 @@ class StreamEngine(
         }
         synchronized(lock) {
             if (converted != null) { rec.destUri = converted.uri; rec.name = converted.name; rec.mime = converted.mime; job.written = converted.size }
+            job.adNote?.let { rec.note = listOfNotNull(it, rec.note).joinToString(" ") }
             rec.total = job.written; rec.appended = job.written
             if (rec.parentId == 0L) noteSize(rec.estimate, rec.total)
             rec.state = DlState.COMPLETED; rec.reason = Reason.NONE; rec.detail = 0; rec.finished = clock.now(); rec.updated = rec.finished

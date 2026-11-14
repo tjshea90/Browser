@@ -73,6 +73,57 @@ class StreamEngineTest {
         h.eventually("the row is stored as completed") { h.store.rows[id]?.state == DlState.COMPLETED }
     }
 
+    // ---- RX3-V5: advertising found in the playlist is never fetched
+
+    /** The same CDN layout as [plainStream], with a marked advertising break around segments [from] until [to] (exclusive): the bytes of the film only, in order. */
+    private fun markedStream(h: H, n: Int, size: Int, from: Int, to: Int): Pair<String, ByteArray> {
+        val film = java.io.ByteArrayOutputStream()
+        val sb = StringBuilder("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n")
+        for (i in 0 until n) {
+            val b = testBytes(size, 100L + i); h.cdn.files["https://cdn.test/v/s$i.ts"] = b
+            if (i == from) sb.append("#EXT-X-CUE-OUT:DURATION=${(to - from) * 4}\n")
+            if (i == to) sb.append("#EXT-X-CUE-IN\n")
+            if (i !in from until to) film.write(b)
+            sb.append("#EXTINF:4.0,\ns$i.ts\n")
+        }
+        sb.append("#EXT-X-ENDLIST\n")
+        return sb.toString() to film.toByteArray()
+    }
+
+    @Test(timeout = 60_000) fun segmentsInsideAMarkedAdvertisingBreakAreNeverRequestedAndTheRowSaysSo() {
+        val h = H()
+        val (pl, film) = markedStream(h, 14, 30_000, 5, 8)
+        val id = h.enqueue(pl)
+        val v = h.completed(id)
+        assertArrayEquals(film, h.out(v))                                           // the film only, in order
+        for (i in 5 until 8) assertEquals("segment $i is advertising: not requested", 0, h.cdn.count("https://cdn.test/v/s$i.ts"))
+        for (i in (0 until 5) + (8 until 14)) assertEquals("segment $i is film: fetched once", 1, h.cdn.count("https://cdn.test/v/s$i.ts"))
+        assertEquals("Left out 0:12 of advertising (1 break)", v.note)
+    }
+
+    @Test(timeout = 60_000) fun aRunFromAnotherSiteIsLeftOutBeforeItsFirstSegmentIsFetched() {
+        val h = H()
+        val film = java.io.ByteArrayOutputStream()
+        val sb = StringBuilder("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n")
+        for (i in 0 until 24) {
+            if (i == 10) { for (k in 0 until 3) { h.cdn.files["https://ads.adnet.test/a/a$k.ts"] = testBytes(30_000, 900L + k); sb.append("${if (k == 0) "#EXT-X-DISCONTINUITY\n" else ""}#EXTINF:4.0,\nhttps://ads.adnet.test/a/a$k.ts\n") } }
+            val b = testBytes(30_000, 100L + i); h.cdn.files["https://cdn.test/v/s$i.ts"] = b; film.write(b)
+            sb.append("${if (i == 10) "#EXT-X-DISCONTINUITY\n" else ""}#EXTINF:4.0,\ns$i.ts\n")
+        }
+        sb.append("#EXT-X-ENDLIST\n")
+        val v = h.completed(h.enqueue(sb.toString()))
+        assertArrayEquals(film.toByteArray(), h.out(v))
+        for (k in 0 until 3) assertEquals(0, h.cdn.count("https://ads.adnet.test/a/a$k.ts"))
+        assertEquals("Left out 0:12 of advertising (1 break)", v.note)
+    }
+
+    @Test(timeout = 60_000) fun aPlaylistWithoutMarkersOrForeignRunsIsDownloadedWholeWithNoNote() {
+        val h = H()
+        val (pl, all) = plainStream(h, 10, 20_000)
+        val v = h.completed(h.enqueue(pl))
+        assertArrayEquals(all, h.out(v)); assertNull(v.note)
+    }
+
     @Test(timeout = 60_000) fun aes128SegmentsAreDecrypted() {
         val h = H()
         val key = testBytes(16, 7)
