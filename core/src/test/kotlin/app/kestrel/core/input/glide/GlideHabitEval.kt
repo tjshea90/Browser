@@ -67,7 +67,7 @@ object GlideHabitEval {
     }
 
 
-    class HabitCurve(val blocks: List<Double>, val favouriteBlocks: List<Double>, val shapes: Int, val shapeWords: Int, val flips: Int, val good: Int, val bad: Int, val glides: Int, val early: Double, val late: Double)
+    class HabitCurve(val blocks: List<Double>, val favouriteBlocks: List<Double>, val shapes: Int, val shapeWords: Int, val flips: Int, val good: Int, val bad: Int, val glides: Int, val early: Double, val late: Double, val lateMissRecall: Int = 0, val lateMissRank: Int = 0)
 
     /**
      * A long stretch of use by a person whose hand has a habit for every word it writes ([habitDp] dp of fixed shift per letter, on top of the finger's scatter): 70 % of what they write comes from
@@ -88,7 +88,7 @@ object GlideHabitEval {
         val base = GlideEval.frequencyPick(lex, 4000, Random(seed * 13), 3).map { lex.text(it.id) }
         val lexicons = listOf<GlideLexicon>(lex)
         val hits = IntArray(blocks); val seen = IntArray(blocks); val favHits = IntArray(blocks); val favSeen = IntArray(blocks)
-        val times = HashMap<String, Int>(); var eHit = 0; var eSeen = 0; var lHit = 0; var lSeen = 0
+        val times = HashMap<String, Int>(); var eHit = 0; var eSeen = 0; var lHit = 0; var lSeen = 0; var missRecall = 0; var missRank = 0
         var done = 0; var flips = 0; var good = 0; var bad = 0
         while (done < glides) {
             val q: List<String> = if (rnd.nextInt(100) < habitPercent) phrases[rnd.nextInt(phrases.size)] else List(1 + rnd.nextInt(3)) { base[rnd.nextInt(base.size)] }
@@ -111,7 +111,7 @@ object GlideHabitEval {
                 seen[b]++; if (first) hits[b]++
                 if (w in fav) { favSeen[b]++; if (first) favHits[b]++ }
                 val k = times.merge(w, 1, Int::plus)!!
-                if (k <= 2) { eSeen++; if (first) eHit++ } else if (k >= 6) { lSeen++; if (first) lHit++ }
+                if (k <= 2) { eSeen++; if (first) eHit++ } else if (k >= 6) { lSeen++; if (first) lHit++ else if (w in dec.survivorTexts(lexicons)) missRank++ else missRecall++ }
                 val print = dec.lastPrint
                 if (words) {
                     model!!.add(prev, w, if (first) 1f else if (inThree) 3f else 1f, prev2)
@@ -128,7 +128,7 @@ object GlideHabitEval {
                 prev2 = prev; prev = w; done++
             }
         }
-        return HabitCurve(List(blocks) { 100.0 * hits[it] / seen[it].coerceAtLeast(1) }, List(blocks) { 100.0 * favHits[it] / favSeen[it].coerceAtLeast(1) }, model?.patterns?.patternCount ?: 0, model?.patterns?.wordCount ?: 0, flips, good, bad, glides, 100.0 * eHit / eSeen.coerceAtLeast(1), 100.0 * lHit / lSeen.coerceAtLeast(1))
+        return HabitCurve(List(blocks) { 100.0 * hits[it] / seen[it].coerceAtLeast(1) }, List(blocks) { 100.0 * favHits[it] / favSeen[it].coerceAtLeast(1) }, model?.patterns?.patternCount ?: 0, model?.patterns?.wordCount ?: 0, flips, good, bad, glides, 100.0 * eHit / eSeen.coerceAtLeast(1), 100.0 * lHit / lSeen.coerceAtLeast(1), missRecall, missRank)
     }
 
     @JvmStatic fun main(args: Array<String>) {
@@ -160,7 +160,7 @@ object GlideHabitEval {
                 for ((label, w, sh) in listOf(Triple("nothing learned          ", false, false), Triple("words/pairs/corrections ", true, false), Triple("+ glide shapes          ", true, true))) {
                     if (a["only"] != null && a["only"] != (if (sh) "shapes" else if (w) "words" else "none")) continue
                     val c = habitCurve(lex, keys, noise, g, nb, w, sh, hd, a["seed"]?.toLong() ?: 3L, GlideEval.paramsFrom(a), a["sigma"]?.toFloat() ?: PatternMemory.SIGMA, a["merge"]?.toFloat() ?: PatternMemory.MERGE_D)
-                    println("   $label " + c.blocks.joinToString(" ") { "%.1f".format(it) } + "  (" + c.favouriteBlocks.joinToString(" ") { "%.0f".format(it) } + ")  words seen 1-2 times: %.1f %%, 6+ times: %.1f %%".format(c.early, c.late) + if (sh) "   shapes kept ${c.shapes} for ${c.shapeWords} words, changed the first guess ${c.flips} times (mended ${c.good}, spoiled ${c.bad})" else "")
+                    println("   $label " + c.blocks.joinToString(" ") { "%.1f".format(it) } + "  (" + c.favouriteBlocks.joinToString(" ") { "%.0f".format(it) } + ")  words seen 1-2 times: %.1f %%, 6+ times: %.1f %%".format(c.early, c.late) + if (sh) "   shapes kept ${c.shapes} for ${c.shapeWords} words, changed the first guess ${c.flips} times (mended ${c.good}, spoiled ${c.bad}); words seen 6+ times that were wrong: not among the ${GlideParams().keep} candidates ${c.lateMissRecall}, ranked below the first ${c.lateMissRank}" else "")
                 }
             }
             return
