@@ -1494,3 +1494,7 @@
 ## 2026-11-14T00:28:06Z
 > Status: the blocked-page icon and the top-right panel are both proven on the emulator and ticked. I'm doing one last emulator check that the new Diagnostics lines show on screen, then I'll run the full test suite and ship alpha33.
 <!-- sha:b8c2b206b2a0 -->
+
+## 2026-11-14T00:29:22Z
+> Waiting for the Diagnostics screen check to finish on the emulator; then the full test run and the release.
+<!-- sha:5da169992d6b -->
