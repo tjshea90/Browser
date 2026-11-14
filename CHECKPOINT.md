@@ -1,13 +1,13 @@
-# CHECKPOINT 2185 — read me first, then TASKS.md
+# CHECKPOINT 2190 — read me first, then TASKS.md
 
-**Written:** 2026-11-14T16:16:56Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `f11e406` (this checkpoint is the commit after it)
+**Written:** 2026-11-14T16:18:59Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `61de143` (this checkpoint is the commit after it)
 
 ## Just done
-alpha37 RELEASED AND RECORDED: kestrel-g-v0.3.0-alpha37 (gecko code 138), android.yml run 43613953896 green (check, test-jvm, test-js, build-gecko), Release has kestrel-g-0.3.0-alpha37.apk (94.6 MB, certificate verified), BUILDLOG line written; AW1 (owner message 37, repeated 15:04Z) ticked as a whole; owner answered in plain words
+owner message 38 written into TASKS (AX1 keyboard learns sloppy glide patterns + corrections + exportable file for a future system keyboard; AX2 the app closes while loading www.ally.com/help/invest/dividend-reinvestment/); alpha37 was answered; nothing else in flight
 
 ## Do this next
-nothing is in flight: wait for the owner's reply. Open owner items to keep re-listing: Diagnostics paste after use (Glide typing + Mini keyboard in page fields lines), AI1c Doraby/Cloudflare incompatible-browser wording + page report, choppy-video link, scroll/Back feel, Proton Mail numbers + keyboard test, scheduled GitHub ad-list build yes/no (NOT built: spends the owner's GitHub minutes), private signing key (SEC-1), network lab results and optional items (LIC-1 licence, UI-3 landscape tabs, P2b Cromite comparison), AS1 stored-libraries yes/no, AS2 per-process memory line unbuilt; optional follow-ups AW2 (more scriptlets, only if ads still get through) and FLK1 (flaky ProxyLinkTest); heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN is disabled (delete it after 24 h of owner silence)
+AX2a first (a crash closes the whole app): try to fetch the page (WebFetch / web-fetch agent) to see what it loads; read TabDelegates.onCrash/onKill + BrowserActivity.2053 (content process death) and look for an uncaught Throwable path from the Shields bridge (ShieldsBridge.onMessage catches Exception only: OutOfMemoryError/StackOverflowError escape), the alpha37 additions (sc message, per-host contentScripts, data: redirects) and the Health log; add a crash note written by Thread.setDefaultUncaughtExceptionHandler into files/ + Diagnostics line; then AX1a-f (research/GLIDE_TYPING.md section 11, GlideDecoder, PersonalModel, MiniNav, export format docs/KEYBOARD-EXPORT.md); heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN is disabled
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ nothing is in flight: wait for the owner's reply. Open owner items to keep re-li
 
 ## Last ten checkpoints
 ```
+  3d38f35 ckpt 2185: alpha37 RELEASED AND RECORDED: kestrel-g-v0.3.0-alpha37 (gecko code 138), and
   aef75f4 ckpt 2180: alpha37 DISPATCHED: android.yml run 43613953896 (run_number 88, app=gecko ful
   551bd7e ckpt 2179: gated kestrel-g-v0.3.0-alpha37 (gecko code 138) and pushed it: handoff self-t
   ec2ea4b ckpt 2178: pre-ship: alpha37 (includes alpha36): Better ad blocking. 1) A site now gets 
@@ -25,8 +26,7 @@ nothing is in flight: wait for the owner's reply. Open owner items to keep re-li
   41441d2 ckpt 2148: AW1c BUILT (not yet emulator-proven): engine.js mirrors FilterSet.check for $
   8085098 ckpt 2130: AW1b DONE and EMULATOR-PROVEN: early delivery works (lab adlab.test vs contro
   3529f3d ckpt 2127: AW1b+ early scriptlet delivery BUILT: lab proved the late race (calls ran 100
-  26045f2 ckpt 2103: AW1b step 2 DONE: scriptlets-main.js (our own library, 28 scriptlets) + web-t
 ```
 
-(3 automatic checkpoint(s) since the last deliberate one — the
+(4 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
