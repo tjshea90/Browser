@@ -523,6 +523,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
     private fun applyColors() {
         panel.background = InsetDrawable(chamferSurface(context, 0xF2000000.toInt(), 8f, strokeColor = pal.deep, strokeDp = 1f, pressable = false), context.dp(BAND_DP))
+        val edge = context.dp(PANEL_PAD_DP) + context.dp(BAND_DP)
+        panel.setPadding(edge, edge, edge, edge) // setting a background takes the padding from the drawable (the inset): the frame and the band are set again here
         for (v in listOf<View>(back, home, forward, bar, keys)) v.invalidate()
     }
 
