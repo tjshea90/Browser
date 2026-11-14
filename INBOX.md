@@ -1202,3 +1202,8 @@ Without interfering with the other claude account working on this repo, do a rea
 
 Put your findings in a file which I can upload to another Claude session to work on and optimize the output file for another Claude session to understand and work on
 ```
+
+## 2026-11-14T19:06:44Z
+```
+Yes to all four, and include YouTube ad skipping and blocking. Redo the file with these permissions, and add a request for the other Claude session to make it so when I press back to go to the last web page, it automatically goes back to the last scroll position I was at on that web page, and it should load immediately because it should be cached. Finally, make the file itself tell the other claude session exactly what to do, including where to save the research file
+```
