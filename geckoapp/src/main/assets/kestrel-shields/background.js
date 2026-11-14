@@ -167,7 +167,7 @@ function shortUrl(u) {
 }
 function newLog(tabId, url) {
   pageLog.delete(tabId); // a new page: the old lines are history
-  pageLog.set(tabId, { page: String(url || '').slice(0, 200), reqs: 0, nb: 0, blocked: [], failed: [], errs: [], sent: 0, key: '' });
+  pageLog.set(tabId, { page: String(url || '').slice(0, 200), reqs: 0, done: 0, nb: 0, blocked: [], failed: [], errs: [], sent: 0, key: '' });
   if (pageLog.size > 12) pageLog.delete(pageLog.keys().next().value);
   var t = reportTimers.get(tabId); if (t !== undefined) { clearTimeout(t); reportTimers.delete(tabId); }
 }
@@ -189,17 +189,21 @@ function logBlocked(d) {
   L.nb++; if (L.blocked.length < LOG_MAX) L.blocked.push(d.type + ' ' + shortUrl(d.url));
   reportLater(d.tabId);
 }
+// RX3-BK1: requests the page started minus the ones that ended = what is still pending when the page is left (a page with pending requests cannot enter the engine's back/forward cache).
+function noteDone(d) { var L = pageLog.get(d.tabId); if (L && !stale(d)) L.done++; }
 function logFailed(d, what) {
   var L = pageLog.get(d.tabId); if (!L) return;
   if (L.failed.length < LOG_MAX) L.failed.push(d.type + ' ' + shortUrl(d.url) + ' ' + what);
   reportLater(d.tabId);
 }
 browser.webRequest.onErrorOccurred.addListener(function (d) {
+  noteDone(d); // RX3-BK1: every request that ended, whatever the reason, is no longer pending (an aborted one or one we cancelled included)
   if (d.tabId < 0 || blockedIds.has(d.requestId)) return;
   if (d.error === 'NS_BINDING_ABORTED' || d.error === 'NS_ERROR_ABORT') return; // the page was left or stopped, or another extension said no: not a network failure
   logFailed(d, String(d.error || 'error').replace(/^NS_ERROR_/, ''));
 }, { urls: ['http://*/*', 'https://*/*'] });
 browser.webRequest.onCompleted.addListener(function (d) {
+  noteDone(d);
   if (d.statusCode >= 400 && d.tabId >= 0) logFailed(d, 'HTTP ' + d.statusCode);
 }, { urls: ['http://*/*', 'https://*/*'] });
 // content.js tells about scripts that threw and about files an element could not load (the network may have worked and the file still be unusable: wrong type, broken)
@@ -509,6 +513,8 @@ function decide(d, page, host, mode) {
 function onRequest(d) {
   if (d.type === 'sub_frame') frameNavigates(d);
   if (d.type === 'main_frame') {
+    var left = pageLog.get(d.tabId);
+    if (left && left.page && left.reqs - left.done > 0) send({ k: 'pend', p: left.page, n: left.reqs - left.done }).catch(function () {}); // RX3-BK1: the page that is being left still had requests open
     navId.set(d.tabId, Number(d.requestId) || 0); frameParent.delete(d.tabId); mediaFrames.delete(d.tabId);
     sniffed.delete(d.tabId); maybeCount.delete(d.tabId); tabTop.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again (delete first: Map keeps the old position of a key, and the OLDEST position is what is dropped)
     verdicts.clear(); // legacy verdicts are only worth keeping while ONE page loads
@@ -736,7 +742,7 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
   if (SEGMENT.test(url)) return;
   if (stale(d)) return; // an answer for a document the tab has left (see navId)
   if (d.frameId > 0) learnTop(d);
-  var ct = '', len = -1, total = -1, cd = '', h = d.responseHeaders || [];
+  var ct = '', len = -1, total = -1, cd = '', nostore = false, h = d.responseHeaders || [];
   for (var i = 0; i < h.length; i++) {
     var nl = h[i].name.length;
     if (nl !== 12 && nl !== 13 && nl !== 14 && nl !== 19) continue; // content-type (12), content-range (13), content-length (14), content-disposition (19): most header names are never lower-cased
@@ -745,7 +751,9 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
     else if (n === 'content-length') len = parseInt(h[i].value, 10);
     else if (n === 'content-disposition') cd = String(h[i].value || '').slice(0, 300); // the file name the server gave (the sheet offers it as the name)
     else if (n === 'content-range') { var m = /\/(\d+)\s*$/.exec(h[i].value || ''); if (m) total = parseInt(m[1], 10); }
+    else if (n === 'cache-control' && d.type === 'main_frame' && /no-store/i.test(h[i].value || '')) nostore = true; // 13 letters like content-range: it passes the length filter above
   }
+  if (nostore) send({ k: 'ns', p: url.slice(0, 600) }).catch(function () {}); // RX3-BK1: this page forbids every cache, so Back has to load it again (the Back lab and the early picture use it)
   var size = total >= 0 ? total : (d.statusCode === 200 && len >= 0 ? len : -1);
   if (!MEDIA_CT.test(ct) && !MEDIA_EXT.test(url)) { maybeMedia(d, url, ct, size, ref, org); return; }
   if (ct.indexOf('video/mp2t') === 0 || ct.indexOf('iso.segment') > 0) return;
@@ -785,6 +793,19 @@ browser.runtime.onMessage.addListener(function (m, sender) {
 browser.runtime.onMessage.addListener(function (m, sender) {
   if (!m || m.k !== 'scroll' || typeof m.y !== 'number' || !isFinite(m.y) || !sender || !sender.tab || sender.frameId !== 0) return undefined;
   send({ k: 'scroll', y: Math.max(0, Math.round(m.y)), p: String(m.p || '').slice(0, 600) }).catch(function () {});
+  return undefined;
+});
+
+// RX3-BK2: a page the engine loaded again for Back / Forward asks where the owner left it (content.js, top frame). The app answers with the place as text, or "" when nothing is armed for that page.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'bk' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
+  return send({ k: 'bk', p: String(m.p || '').slice(0, 600) }).then(function (r) { return typeof r === 'string' ? r : ''; }, function () { return ''; });
+});
+
+// RX3-BK1: what kind of show a Back / Forward was (content.js, top frame): kept by the engine or loaded again, what the page's file cost, where the page was. Numbers and the address; nothing else.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'bf' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
+  send({ k: 'bf', p: String(m.p || '').slice(0, 600), ps: m.ps ? 1 : 0, nt: String(m.nt || '').slice(0, 20), ts: Math.max(0, m.ts | 0), y: Math.max(0, Math.round(m.y) || 0) }).catch(function () {});
   return undefined;
 });
 
