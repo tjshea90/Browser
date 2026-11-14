@@ -1,13 +1,13 @@
-# CHECKPOINT 2260 — read me first, then TASKS.md
+# CHECKPOINT 2266 — read me first, then TASKS.md
 
-**Written:** 2026-11-14T17:51:26Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `db0854d` (this checkpoint is the commit after it)
+**Written:** 2026-11-14T18:00:29Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `8b3b740` (this checkpoint is the commit after it)
 
 ## Just done
-alpha39 DISPATCHED (AX1: glide shapes + export/import): android.yml run_workflow queued at 17:51Z, app=gecko full_build=true, ref ccr-a57c163e-mtq8js, gates passed locally (handoff self-test, :core:test :app:testDebugUnitTest :geckoapp:compileDebugKotlin, lint earlier); builds, signs, creates tag kestrel-g-v0.3.0-alpha39 (about 9 minutes). Emulator proof done (research/GLIDE_TYPING.md 11.7)
+alpha39 RELEASED AND RECORDED: kestrel-g-v0.3.0-alpha39 (gecko code 140, run 43623337064 green, APK in the Release, BUILDLOG.md line pushed); AX1 + AX1a-f ticked (AX1g = system keyboard app, OWNER YES/NO, not started). Owner answer for message 38 (keyboard part) given in plain words with the Release link. In the tree but NOT in alpha39: GlideTyping.ensurePersonal (export/import/learn load the saved file first; test anExportAndAnImportUseWhatIsSavedEvenBeforeTheEngineWasPrepared), KeyboardFlow empty-text guard + export file written on the IO thread, KEYBOARD-EXPORT.md shortlist note - they ship with the next release
 
 ## Do this next
-WAIT: git ls-remote --tags origin until kestrel-g-v0.3.0-alpha39 appears, then mcp__github__actions_list list_workflow_runs (android.yml, branch ccr-a57c163e-mtq8js, event workflow_dispatch, perPage 1) and list_workflow_jobs until build-gecko is success, mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha39 (APK present), then bash tools/record-release.sh kestrel-g-v0.3.0-alpha39 with the SAME note as in the CHECKPOINT of ckpt before this one / ship3 log ('alpha39 (includes alpha38): The keyboard now learns the SHAPE of your glides ...'), claim.sh AX1f --done, then ANSWER THE OWNER (message 38 part 1, plain words: what it learns, the for/fir reproduction and result, export/import where and how, a system keyboard needs a separate small app - ask yes/no, what was NOT run on the tablet; Release link on its own line; re-list open items). NEVER ship alpha39 twice
+NOTHING is in flight. Wait for the owner: (1) AX1g yes/no: a separate small system-keyboard app reusing :core and importing the export file; (2) the Diagnostics paste after real use (Glide typing line: glide shapes remembered / helped / changed the first guess; Mini keyboard in page fields line; EARLIER CRASH line if the app closes); (3) AI1c Doraby/Cloudflare, choppy video link, scroll/Back feel, Proton Mail numbers, ad-list schedule yes/no, video-site ad switch yes/no, SEC-1 private signing key, network lab results, LIC-1/UI-3/P2b, AS1 yes/no. Optional while idle: AW2 (more scriptlets only if ads still get through), FLK1 (flaky ProxyLinkTest), per-key thumb map (not needed per the lab), shape-injection tuning on real Diagnostics numbers. Any next release: bump geckoapp/build.gradle.kts versionCode 141, bash ship.sh gecko note, dispatch, record
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ WAIT: git ls-remote --tags origin until kestrel-g-v0.3.0-alpha39 appears, then m
 
 ## Last ten checkpoints
 ```
+  418e420 ckpt 2260: alpha39 DISPATCHED (AX1: glide shapes + export/import): android.yml run_workf
   db0854d ckpt 2259: gated kestrel-g-v0.3.0-alpha39 (gecko code 140) and pushed it: handoff self-t
   4c766a1 ckpt 2258: pre-ship: alpha39 (includes alpha38): The keyboard now learns the SHAPE of yo
   899e135 ckpt 2244: AX1: remembered-word injection added (the lab found that for words seen 6+ ti
@@ -25,5 +26,7 @@ WAIT: git ls-remote --tags origin until kestrel-g-v0.3.0-alpha39 appears, then m
   da5124b ckpt 2200: gated kestrel-g-v0.3.0-alpha38 (gecko code 139) and pushed it: handoff self-t
   b72f9b2 ckpt 2199: pre-ship: alpha38 (includes alpha37): Fixes the app closing on some bank page
   3495b5b ckpt 2198: AX2 root cause found, reproduced and fixed: GeckoView's Android WebAuthn need
-  ac84c28 ckpt 2190: owner message 38 written into TASKS (AX1 keyboard learns sloppy glide pattern
 ```
+
+(4 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
