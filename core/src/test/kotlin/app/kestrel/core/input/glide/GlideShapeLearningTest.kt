@@ -77,4 +77,37 @@ class GlideShapeLearningTest {
         val last = c.blocks.last(); val lastWithout = without.blocks.last()
         assertTrue("last third: with shapes $last %, without $lastWithout %", last >= lastWithout - 1.0)
     }
+
+    @Test fun aWordTheQuickPassWouldDropIsStillConsideredWhenTheMemoryHasItsShape() {
+        // the quick pass keeps only the best word of two ("fur" is far more common and lies one key from the path); the person's memory has the shape of "for"
+        val small = ArrayLexicon(listOf("fur" to 9000L, "for" to 10L))
+        val g = GestureSim(keys, Random(1)).path("for", SimNoise.CALM)!!
+        val plain = GlideDecoder(keys, GlideParams(keep = 1, patGain = 0f))
+        assertEquals("fur", plain.decode(g.xs, g.ys, g.xs.size, listOf(small), null, 3).first().text)
+        val dec = GlideDecoder(keys, GlideParams(keep = 1)); val model = PersonalModel(); dec.personal = model
+        assertEquals("nothing remembered: the same as before", "fur", dec.decode(g.xs, g.ys, g.xs.size, listOf(small), null, 3).first().text)
+        model.patterns.add("for", dec.lastPrint!!, 3f)
+        val c = dec.decode(g.xs, g.ys, g.xs.size, listOf(small), null, 3)
+        assertEquals("for", c.first().text)
+        assertTrue(dec.lastPatternFlipped)
+        // a remembered word that does not fit the ends of this glide is not brought in
+        val other = PersonalModel(); other.patterns.add("fur", dec.lastPrint!!, 3f); other.patterns.add("our", dec.lastPrint!!, 3f)
+        val d2 = GlideDecoder(keys, GlideParams(keep = 1)); d2.personal = other
+        assertFalse(d2.decode(g.xs, g.ys, g.xs.size, listOf(ArrayLexicon(listOf("fur" to 9000L, "our" to 10L))), null, 3).any { it.text == "our" })
+    }
+
+    @Test fun rememberedWordsGetOnlyAFewExtraPlacesAndTheDecoderStaysFast() {
+        // 3000 words with a shape each (a deliberately full memory): one decode is not slower than twice a decode without the memory (plus a small allowance for the very first, cold run)
+        val model = PersonalModel(); val rnd = Random(4)
+        val g = GestureSim(keys, Random(5)).path("together", SimNoise.NORMAL)!!
+        val pr = Fingerprint.of(g.xs, g.ys, g.xs.size, keys)!!
+        for (i in 0 until 1200) { val w = lex.text(rnd.nextInt(lex.size)); if (PersonalModel.norm(w) != null) model.patterns.add(w, FloatArray(pr.size) { pr[it] + rnd.nextFloat() * 0.3f }, 2f) }
+        val withMemory = GlideDecoder(keys, GlideParams()); withMemory.personal = model
+        val without = GlideDecoder(keys, GlideParams(patGain = 0f))
+        repeat(3) { withMemory.decode(g.xs, g.ys, g.xs.size, listOf(lex), null, 3); without.decode(g.xs, g.ys, g.xs.size, listOf(lex), null, 3) } // warm up
+        var a = 0L; var b = 0L
+        repeat(15) { val t0 = System.nanoTime(); withMemory.decode(g.xs, g.ys, g.xs.size, listOf(lex), null, 3); val t1 = System.nanoTime(); without.decode(g.xs, g.ys, g.xs.size, listOf(lex), null, 3); val t2 = System.nanoTime(); a += t1 - t0; b += t2 - t1 }
+        assertTrue("with the memory ${a / 15 / 1000} us, without ${b / 15 / 1000} us", a <= 2 * b + 3_000_000L * 15)
+        assertTrue("never more than the survivors plus the extra places: ${withMemory.lastCandidates}", withMemory.lastCandidates <= GlideParams().keep + GlideDecoder.MAX_INJECT)
+    }
 }
