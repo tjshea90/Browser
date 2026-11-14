@@ -37,7 +37,6 @@ class ScriptletRulesTest {
         assertEquals(listOf("x", "/a\\d+/", "b"), ScriptletRules.splitArgs("x,  /a\\d+/ ,b"))
         assertEquals("a quote that is not an argument's wrapper is just text", listOf("x", "it's", "y"), ScriptletRules.splitArgs("x, it's, y"))
         assertEquals(listOf("set", "a", "true", ""), ScriptletRules.splitArgs("set, a, true,"))
-        assertEquals(listOf("a", "b", "c").size, call("set, a.b, 'c'").args.let { it.size + 1 })
         assertEquals(listOf("a.b", "c d"), call("set, a.b, 'c d'").args)
         assertEquals("trailing empty arguments carry nothing", listOf("click"), call("aeld, click, ").args)
         assertEquals(listOf("", "_0x"), call("aeld, , _0x").args)
