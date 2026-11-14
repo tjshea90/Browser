@@ -1,21 +1,22 @@
-# CHECKPOINT 1945 — read me first, then TASKS.md
+# CHECKPOINT 1949 — read me first, then TASKS.md
 
-**Written:** 2026-11-14T02:26:53Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `b0aa50b` (this checkpoint is the commit after it)
+**Written:** 2026-11-14T02:55:34Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `9b68567` (this checkpoint is the commit after it)
 
 ## Just done
-AT1e-g DONE and green: glide typing in the mini keyboard (KeysView glide vs tap, neon trail, strip of 3 guesses, one-Backspace-removes-the-word, swap, learned thumb habit + own words + visited site names, Settings switch, Diagnostics line, 'no word fits' limit). Full suite + lint green (core, app incl. MiniNavTest 23, gecko compile). research/GLIDE_TYPING.md written (measured accuracy tables, key-size table, limits). TASKS AT1a-g ticked, AT2 (Spanish list question) added.
+AT1h emulator proof DONE with a real multi-point finger (sendevent-style binary input events): hello -> 'hello ' + strip hello/help/jello, world after it, tap on 2nd guess swaps, ONE Backspace removes the whole word, neon trail visible mid-glide, Diagnostics 'Glide typing' line seen. Then: cheaper defaults (48 steps, 200 candidates, 40 second looks: -45 % time, -0.5 points) + a warm-up decode when the keyboard opens (the emulator needed 1.6 s per glide with no acceleration: software emulation, NOT a tablet number); research/GLIDE_TYPING.md tables re-measured + section 7 (what was and was not run). 68 glide tests green.
 
 ## Do this next
-AT1h: (1) git status clean? run bash tools/ckpt.sh again after any edit; (2) emulator proof: boot AVD kestrel29x64 (scratchpad/emu.sh, boot 3-5 min, no KVM), build debug gecko APK (scratchpad/build_look.sh pattern: ./gradlew :geckoapp:installDebug), serve nothing needed; open menu > mini panel toggle > bar > keyboard, then a REAL multi-point glide via on-device sendevent loop (find touch device with adb shell getevent -p, scale to its ABS range) for 'hello' / 'world'; screenshot the trail + strip (not kept in the repo); verify bar text, strip, Backspace removes the word, Diagnostics line shows the glide. (3) bump versionCode 135 / 0.3.0-alpha34 only when shipping, ship.sh gecko, dispatch android.yml, record-release, answer the owner in plain words (what glide does, accuracy numbers as SIMULATED, limits, ask the Spanish-list question AT2, ask how the glide feels + paste the Diagnostics Glide typing line).
+1) wait for scratchpad/build_glide2.log + install_glide2.log (background: rebuild + install of the warm-up build), then one glide + Diagnostics to see 'first decode (warm-up) N ms' (python3 -I scratchpad/glide_emu.py hello after opening the panel keyboard via tapxy 500 133). 2) run the full suite once more: ./gradlew :core:test :app:testDebugUnitTest :geckoapp:compileDebugKotlin :app:lintDebug --continue + cd web-tests && npm test (unchanged but the gate). 3) bump versionCode 135 / versionName 0.3.0-alpha34 in geckoapp/build.gradle.kts, ckpt, bash ship.sh gecko with a plain-words note, dispatch android.yml (app=gecko full_build=true ref=ccr-a57c163e-mtq8js), wait tag + green, get_release_by_tag, bash tools/record-release.sh, tick AT1h + AT1 with claim.sh AT1 --done, answer the owner (what glide does, SIMULATED accuracy table, key-size finding, what was not run on the tablet, ask: Spanish list AT2, how the glide feels, paste Diagnostics Glide typing line).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M TASKS.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  58ae170 ckpt 1945: AT1e-g DONE and green: glide typing in the mini keyboard (KeysView glide vs t
   54eae48 ckpt 1931: AT1e core half done and green (45 tests in core input): MiniKeyboardModel.com
   7aca167 ckpt 1925: AT1c/d: tests written and green: LexiconFileTest 6, GlideDecoderTest 15 (tiny
   5ae6905 ckpt 1920: AT1b/c/d first cut works: MIT symspell word list compiled to geckoapp/src/mai
@@ -25,8 +26,7 @@ AT1h: (1) git status clean? run bash tools/ckpt.sh again after any edit; (2) emu
   f11808c ckpt 1876: gated kestrel-g-v0.3.0-alpha33 (gecko code 134) and pushed it: handoff self-t
   cc028b28 ckpt 1875: AO1 ticked in TASKS (emulator Diagnostics screen shows the CPU by process, S
   9689afe ckpt 1860: AQ1, AR1 and AR2 ticked in TASKS with evidence: Home restore proven on the em
-  2874e84 ckpt 1844: AQ1: found on the emulator that restore's show() cleared the Home flag (the p
 ```
 
-(13 automatic checkpoint(s) since the last deliberate one — the
+(3 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
