@@ -42,7 +42,7 @@ try {
 ASSIST_PARENT = b"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>assist-parent</title></head>
 <body style="margin:0;font:18px sans-serif"><div style="position:relative;width:100%;height:420px">
 <iframe id="f" src="http://127.0.0.1:%PORT%/assist-child" style="position:absolute;left:0;top:0;width:100%;height:420px;border:0"></iframe>
-<div id="layer" style="position:absolute;left:0;top:0;width:100%;height:420px" onclick="window.open('/popad?n=layer','_blank')"></div></div>
+<div id="layer" style="position:absolute;left:0;top:0;width:100%;height:420px" onclick="window.open('http://127.0.0.1:%PORT%/popad?n=layer','_blank')"></div></div>
 <p>assist-parent: tap the dark box. The layer on top tries to open an ad; the frame's video should start instead.</p>
 <script>
 function L(k, v) { try { var x = new XMLHttpRequest(); x.open('GET', '/log?kind=' + encodeURIComponent(k) + '&v=' + encodeURIComponent(v) + '&t=' + Date.now()); x.send(); } catch (e) {} }
