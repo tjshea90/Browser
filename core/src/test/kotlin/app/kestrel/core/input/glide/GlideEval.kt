@@ -116,7 +116,7 @@ object GlideEval {
 
     fun noiseFrom(a: Map<String, String>): SimNoise = when (val n = a["noise"] ?: "normal") {
         "calm" -> SimNoise.CALM; "normal" -> SimNoise.NORMAL; "sloppy" -> SimNoise.SLOPPY; "bad" -> SimNoise.BAD
-        else -> SimNoise.aim(n.removePrefix("aim").toFloat())
+        else -> if (n.startsWith("c:")) { val v = n.removePrefix("c:").split(':').map { it.toFloat() }; SimNoise(v[0], v[1], v[2], v[3], v[4], "custom aim ${v[0]} cut ${v[1]} bias ${v[2]} jitter ${v[3]} wobble ${v[4]}") } else SimNoise.aim(n.removePrefix("aim").toFloat())
     }
 
     @JvmStatic fun main(args: Array<String>) {
