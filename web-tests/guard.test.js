@@ -168,13 +168,13 @@ test('the guard does not break an ordinary page: links, buttons and forms in the
   assert.equal(new URL(page.url()).hostname, 'movie.example');
 });
 
-test('every real tap is reported, with the link it landed on, so the app can tell the owner\'s jump from a script\'s', async () => {
+test('the page-side guard reports no taps at all: the owner\'s real taps are recorded by content.js in the isolated world (RX3-G2, tap.test.js), a page script could fake this report', async () => {
   const page = await open(`<div style="width:300px;height:80px">nothing here</div><a href="https://news.example/story" target="_blank" style="display:block;width:300px;height:80px">story</a>`);
   await page.mouse.click(50, 40);                                   // on the plain block
   const popup = page.waitForEvent('popup', { timeout: 3000 });
   await page.mouse.click(50, 120);                                  // on the link
   await popup;
-  assert.deepEqual(await taps(page), ['tap|', 'tap|https://news.example/story']);
+  assert.deepEqual(await taps(page), [], 'no tap report comes from the page world any more');
   assert.deepEqual(await notes(page), []);
 });
 
