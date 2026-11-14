@@ -2004,3 +2004,7 @@
 > - Do you want the keyboard as a separate system keyboard app for all your apps? It would start from your exported file. Yes or no.
 > - Tell me how the long press and the slide feel on the tablet, and I'll adjust the timings.
 <!-- sha:852bd53074ff -->
+
+## 2026-11-14T20:00:34Z
+> The handoff save is running in the background. I'll confirm the saved paths once it finishes. The alpha40 answer above stands.
+<!-- sha:e2264f7b91c8 -->
