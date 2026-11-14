@@ -1165,3 +1165,8 @@ Also, if I already have a text field open on a web site, make the mini keyboard 
 ```
 When you are finished with the current tasks, make the mini keyboard resizeable by dragging corners. Make it able to detatch and i can move it around the screen if possible.  Then research Google gboard and Samsung keyboard because i like how their glide typing works, but they often predict the wrong word and i want this app's keyboard to continuously learn and improve glide typing based on the words i actually type. Do not include Spanish. Polish the keyboard and make it as responsive as possible and able to learn and constantly improve so that it accurately predicts the words I'm typing
 ```
+
+## 2026-11-14T06:21:40Z
+```
+Work on improving the ad blocking that you didn't finish before
+```
