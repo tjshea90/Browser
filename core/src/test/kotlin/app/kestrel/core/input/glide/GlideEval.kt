@@ -78,6 +78,10 @@ object GlideEval {
     class Result(val n: Int, val top1: Int, val top3: Int, val recall: Int, val millis: Double, val worstMillis: Double, val byLen: Map<Int, IntArray>) {
         /** Cost per letter of the right answer when it was first (sorted), for choosing the point where a glide counts as "no word". */
         var hitCosts: List<Float> = emptyList()
+        /** When the right word was second or third: how much worse its path fit than the first guess's (cost per letter, pitch squared), sorted. Where a correction habit may lift a word (GlideParams.confMaxGap). */
+        var gaps: List<Float> = emptyList()
+        /** How many words the careful pass looked at, per glide (sorted): the width of the candidate list. */
+        var widths: List<Int> = emptyList()
         fun pct(x: Int) = 100.0 * x / n
         override fun toString() = "n=$n top1=%.1f%% top3=%.1f%% recall=%.1f%% decode avg %.2f ms worst %.1f ms".format(pct(top1), pct(top3), pct(recall), millis, worstMillis)
         fun lengths(): String = byLen.toSortedMap().entries.joinToString("  ") { (l, a) -> "len$l:%.0f/%.0f%%(n=%d)".format(100.0 * a[1] / a[0], 100.0 * a[2] / a[0], a[0]) }
@@ -89,7 +93,7 @@ object GlideEval {
         val dec = GlideDecoder(keys, params)
         val lexicons = listOf<GlideLexicon>(lex) + extra
         var t1 = 0; var t3 = 0; var rec = 0; var n = 0; var nanos = 0L; var worst = 0L
-        val hitCosts = ArrayList<Float>()
+        val hitCosts = ArrayList<Float>(); val gaps = ArrayList<Float>(); val widths = ArrayList<Int>()
         val byLen = HashMap<Int, IntArray>()
         for (pk in picks) {
             val word = lex.text(pk.id)
@@ -102,6 +106,7 @@ object GlideEval {
             n++
             val surv = dec.survivorTexts(lexicons)
             if (word in surv) rec++
+            widths.add(surv.size)
             val l = distinct(lex, pk.id).coerceAtMost(8)
             val a = byLen.getOrPut(l) { IntArray(3) }
             a[0]++
@@ -115,8 +120,9 @@ object GlideEval {
             if (trace != null && word == trace) { for (cand in listOf(word) + c.map { it.text }) { val ci = lex.idOf(cand); if (ci >= 0) println("    TRACE $cand: " + dec.debugTrace(lex, ci)) } }
             if (c.isNotEmpty() && String(GlideLetters.keyOf(c[0].text)) == key) { t1++; a[1]++; hitCosts.add(c[0].perLetter) }
             if (c.any { String(GlideLetters.keyOf(it.text)) == key }) { t3++; a[2]++ }
+            if (c.isNotEmpty() && String(GlideLetters.keyOf(c[0].text)) != key) { val j = c.indexOfFirst { String(GlideLetters.keyOf(it.text)) == key }; if (j > 0) gaps.add(c[j].perLetter - c[0].perLetter) }
         }
-        return Result(n, t1, t3, rec, nanos / 1e6 / n, worst / 1e6, byLen).also { it.hitCosts = hitCosts.sorted() }
+        return Result(n, t1, t3, rec, nanos / 1e6 / n, worst / 1e6, byLen).also { it.hitCosts = hitCosts.sorted(); it.gaps = gaps.sorted(); it.widths = widths.sorted() }
     }
 
     /**
@@ -175,7 +181,7 @@ object GlideEval {
             samples = a["samples"]?.toInt() ?: d.samples, endReach2 = a["endReach2"]?.toFloat() ?: d.endReach2, visitCap = a["visitCap"]?.toFloat() ?: d.visitCap,
             missLimit2 = a["missLimit2"]?.toFloat() ?: d.missLimit2, keep = a["keep"]?.toInt() ?: d.keep, quickEnds = a["quickEnds"]?.toFloat() ?: d.quickEnds,
             quickPrior = a["quickPrior"]?.toFloat() ?: d.quickPrior, shapeW = a["shapeW"]?.toFloat() ?: d.shapeW, endW = a["endW"]?.toFloat() ?: d.endW,
-            lmW = a["lmW"]?.toFloat() ?: d.lmW, confGain = a["confGain"]?.toFloat() ?: d.confGain, lmA = a["lmA"]?.toFloat() ?: d.lmA, lmMin = a["lmMin"]?.toFloat() ?: d.lmMin, lmMax = a["lmMax"]?.toFloat() ?: d.lmMax, bigramMix = a["bigramMix"]?.toFloat() ?: d.bigramMix, minLength = a["minLength"]?.toFloat() ?: d.minLength, slack = a["slack"]?.toInt() ?: d.slack, biasKeep = a["biasKeep"]?.toInt() ?: d.biasKeep, biasGain = a["biasGain"]?.toFloat() ?: d.biasGain, biasW = a["biasW"]?.toFloat() ?: d.biasW, maxPerLetter = a["maxPerLetter"]?.toFloat() ?: d.maxPerLetter,
+            lmW = a["lmW"]?.toFloat() ?: d.lmW, confGain = a["confGain"]?.toFloat() ?: d.confGain, confCap = a["confCap"]?.toFloat() ?: d.confCap, confMaxGap = a["confMaxGap"]?.toFloat() ?: d.confMaxGap, lmA = a["lmA"]?.toFloat() ?: d.lmA, lmMin = a["lmMin"]?.toFloat() ?: d.lmMin, lmMax = a["lmMax"]?.toFloat() ?: d.lmMax, bigramMix = a["bigramMix"]?.toFloat() ?: d.bigramMix, minLength = a["minLength"]?.toFloat() ?: d.minLength, slack = a["slack"]?.toInt() ?: d.slack, biasKeep = a["biasKeep"]?.toInt() ?: d.biasKeep, biasGain = a["biasGain"]?.toFloat() ?: d.biasGain, biasW = a["biasW"]?.toFloat() ?: d.biasW, maxPerLetter = a["maxPerLetter"]?.toFloat() ?: d.maxPerLetter,
         )
     }
 
@@ -221,6 +227,8 @@ object GlideEval {
             val r = run(lex, keys, paramsFrom(a), noise, picks, seed, debug = a["dbg"]?.toInt() ?: 0, trace = a["trace"], learn = a["learn"] == "1")
             println("${noise.name}: $r")
             if (a["lens"] != null) println("    ${r.lengths()}")
+            if (a["gaps"] != null) { val g = r.gaps; val w = r.widths
+                println("    right word second/third: %d times; its extra cost per letter vs the first guess: p10 %.2f median %.2f p90 %.2f max %.2f; careful-pass width (words per glide): min %d median %d max %d".format(g.size, if (g.isEmpty()) 0f else g[g.size / 10], if (g.isEmpty()) 0f else g[g.size / 2], if (g.isEmpty()) 0f else g[g.size * 9 / 10], g.lastOrNull() ?: 0f, w.firstOrNull() ?: 0, if (w.isEmpty()) 0 else w[w.size / 2], w.lastOrNull() ?: 0)) }
             if (a["costs"] != null) { val h = r.hitCosts; if (h.isNotEmpty()) println("    cost per letter of the right word: median %.2f  p90 %.2f  p99 %.2f  max %.2f".format(h[h.size / 2], h[h.size * 9 / 10], h[h.size * 99 / 100], h.last())) }
         }
     }
