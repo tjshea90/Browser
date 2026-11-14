@@ -141,6 +141,32 @@ class MiniKeyboardModel {
         return tok.lowercase()
     }
 
+    /** The two words before the place a glide would go, (second last, last), lowercase: the language's context. Both null when the last thing is not a plain word; the first null when only one word precedes. */
+    fun previousTwo(): Pair<String?, String?> {
+        if (allSelected) return null to null
+        val toks = text.trimEnd().split(' ')
+        fun plain(t: String): String? = if (t.isNotEmpty() && t.length <= 24 && t.all { it.isLetter() || it == '\'' }) t.lowercase() else null
+        val last = toks.lastOrNull()?.let { plain(it) } ?: return null to null
+        val second = if (toks.size >= 2) plain(toks[toks.size - 2]) else null
+        return second to last
+    }
+
+    /** (the second last word, the word before, the word) for every plain word of the text that was typed letter by letter: what the person writes, with the last two words as the context for it. */
+    fun typedContexts(): List<Triple<String?, String?, String>> {
+        val glidedLeft = HashMap<String, Int>()
+        for (g in glided) glidedLeft[g] = (glidedLeft[g] ?: 0) + 1
+        val out = ArrayList<Triple<String?, String?, String>>()
+        var prev: String? = null; var prev2: String? = null
+        for (tok in text.split(' ')) {
+            val w = tok.lowercase()
+            if (w.length !in 2..24 || !w.all { it in 'a'..'z' || it == '\'' } || w.startsWith("'") || w.endsWith("'")) { prev = null; prev2 = null; continue }
+            val left = glidedLeft[w]
+            if (left != null && left > 0) { glidedLeft[w] = left - 1; prev2 = prev; prev = w; continue }
+            out.add(Triple(prev2, prev, w)); prev2 = prev; prev = w
+        }
+        return out
+    }
+
     /** (the word before, the word) for every plain word of the text that was typed letter by letter: what the person writes, for the keyboard to learn (glided words were learned when they were kept). */
     fun typedPairs(): List<Pair<String?, String>> {
         val glidedLeft = HashMap<String, Int>()

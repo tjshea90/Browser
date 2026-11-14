@@ -83,6 +83,9 @@ class UserWords(private val cap: Int = 800) {
             return u
         }
 
+        /** The plain words of a page title that a finger can draw: "The Godfather (1972) - Watch online" -> godfather, watch, online (lowercase letters, four to 20 long: shorter words are in the list anyway). */
+        fun wordsOfTitle(title: String): List<String> = title.lowercase().split(Regex("[^a-z]+")).filter { it.length in 4..20 && glideable(it) }
+
         /** The word a site name stands for: "www.doraby.com" -> "doraby", "news.bbc.co.uk" -> "bbc", "pelisjuanita.com" -> "pelisjuanita". Null when there is no plain word in it. */
         fun wordOfHost(host: String): String? {
             val labels = host.lowercase().removePrefix("www.").split('.').filter { it.isNotEmpty() }
@@ -215,10 +218,10 @@ class GlideTyping(
      * The person's own choice: [word] was meant (after [prev] when known). [weight] 1 = it was kept or typed, 3 = the person CHOSE it over the keyboard's first guess (or replaced a deleted word by it). The next
      * glides lean towards it; the table is saved now and then, and at [saveLearned].
      */
-    fun learn(prev: String?, word: String, weight: Float, prev2: String? = null, guessed: String? = null) {
+    fun learn(prev: String?, word: String, weight: Float, prev2: String? = null, guessed: String? = null, guessedWeight: Float = 1f) {
         executor.execute {
             personal.add(prev, word, weight, prev2)
-            if (guessed != null) personal.addConfusion(guessed, word) // the keyboard guessed [guessed] and the person meant [word]: a correction
+            if (guessed != null) personal.addConfusion(guessed, word, guessedWeight) // the keyboard guessed [guessed] and the person meant [word]: a correction
             personalDirty = true
             stats.onLearned(personal.wordCount, personal.pairCount, personal.confusionCount, personal.tripleCount)
             val now = System.nanoTime() / 1_000_000

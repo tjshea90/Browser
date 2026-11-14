@@ -175,6 +175,13 @@ open class BrowserActivity : Activity(), DockListener {
         // where the person put the panel and how big the keyboard is (AV1)
         override fun navGeometry(): IntArray? = prefs.miniGeom
         override fun navGeometryChanged(g: IntArray?) { prefs.miniGeom = g }
+        override fun navGlideTitles(done: (List<String>) -> Unit) {
+            val d = db ?: return
+            Io.exec {
+                val titles = try { (d.history(300) + d.bookmarks()).map { it.title }.filter { it.isNotBlank() } } catch (ex: Exception) { emptyList() }
+                runOnUiThread { done(titles) }
+            }
+        }
         override fun navGlideHosts(done: (List<String>) -> Unit) {
             val d = db ?: return
             Io.exec {

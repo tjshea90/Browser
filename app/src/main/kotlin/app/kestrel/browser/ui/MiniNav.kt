@@ -72,6 +72,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         fun navGlideWordsChanged(text: String) {}
         /** The host names of the sites visited (asked when the keyboard opens; answer on any thread): names like doraby join the words that can be glided. */
         fun navGlideHosts(done: (List<String>) -> Unit) {}
+        /** The titles of the pages visited and bookmarked (asked when the keyboard opens; answer on any thread): the words of the titles join the words that can be glided (AV2). */
+        fun navGlideTitles(done: (List<String>) -> Unit) {}
         /** What the keyboard learned from the person's choices and typing (AU2), as the engine wrote it; read and written on the glide thread (any thread is fine). */
         fun navGlideLearned(): String? = null
         fun navGlideLearnedSave(text: String) {}
@@ -104,8 +106,14 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private var siteWords = emptyList<String>()
     private var pendingWord: String? = null     // the word the last glide put in: kept when the next thing is not a correction
     private var pendingPrev: String? = null     // the word before it (the language's context for what is learned)
+    private var pendingPrev2: String? = null    // and the one before that
+    private var topGuess: String? = null        // the first guess the decoder made for the last glide (what a pick or a deletion corrects)
+    private var pendingGuessed: String? = null  // the word the person picked INSTEAD of this guess: the correction that is learned when the picked word is kept
+    private var lastDeleted: String? = null     // the glided word that was just deleted: the word that is kept next may be what they meant instead
     private var pendingWeight = 1f              // 3 when the person CHOSE it from the strip: learned (like a kept glide) only when the next thing is not a Backspace
     private var lastGlidePrev: String? = null   // the word before the glide that is being decoded
+    private var lastGlidePrev2: String? = null  // and the one before that
+    private var titleCounts = emptyMap<String, Int>() // words of the titles of visited pages
     private var afterUndo = false               // a glided word was just deleted: the next word that is kept is the one meant instead
     /** Tests: where the engine comes from (the real one reads the shipped word list). */
     internal var glideFactory: (() -> GlideTyping)? = null
@@ -267,6 +275,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         pushOwnWords()
         // the names of the sites visited so far (asked at every opening: a site visited a minute ago can be glided now)
         l.navGlideHosts { hosts -> post { siteWords = hosts.mapNotNull { UserWords.wordOfHost(it) }.distinct().take(300); pushOwnWords() } }
+        // ... and the words of the titles of the pages visited and bookmarked (a movie's name can be glided once its page was seen)
+        l.navGlideTitles { titles -> post { titleCounts = titles.flatMap { UserWords.wordsOfTitle(it) }.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.take(400).associate { it.key to it.value }; pushOwnWords() } }
     }
 
     private var preparedFor = ""
@@ -283,8 +293,9 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     }
 
     private fun mergedWords(): UserWords {
-        val m = UserWords.parse(ownWords.serialize())
+        val m = UserWords.parse(ownWords.serialize(), 1400)
         for (w in siteWords) m.add(w)
+        for ((w, n) in titleCounts) m.add(w, Math.min(n, 4))
         return m
     }
 
@@ -297,8 +308,12 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         val g = glide ?: return
         g.stats.onKept()
         g.accepted(w) { h -> post { l.navGlideHabitChanged(h) } }
-        if (learnAllowed()) g.learn(pendingPrev, w, maxOf(pendingWeight, if (afterUndo) 3f else 1f)) // kept: the keyboard hears it (a word the person chose, or one that replaced a deleted one, counts more)
-        pendingWeight = 1f
+        if (learnAllowed()) {
+            // kept: the keyboard hears it (a word the person chose, or one that replaced a deleted one, counts more); a correction remembers what it was picked over (a pick) or put in the place of (a deletion)
+            val guessed = pendingGuessed ?: if (afterUndo) lastDeleted else null
+            g.learn(pendingPrev, w, maxOf(pendingWeight, if (afterUndo) 3f else 1f), pendingPrev2, guessed?.takeIf { it != w }, if (pendingGuessed != null) 1f else 0.5f)
+        }
+        pendingWeight = 1f; pendingGuessed = null
         afterUndo = false
     }
 
@@ -311,8 +326,9 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         val before = model.text
         model.commitGlide(best.text)
         pageField?.let { sendEdit(it, before) }
-        pendingWord = best.text; pendingWeight = 1f
-        pendingPrev = lastGlidePrev
+        pendingWord = best.text; pendingWeight = 1f; pendingGuessed = null
+        topGuess = best.text
+        pendingPrev = lastGlidePrev; pendingPrev2 = lastGlidePrev2
         keys.showCandidates(res.candidates.map { it.text })
         bar.invalidate()
     }
@@ -325,6 +341,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         if (!model.swapGlide(word)) return
         pageField?.let { sendEdit(it, before) }
         pendingWord = word; pendingWeight = 3f // the person CHOSE this word over the keyboard's first guess: it counts three times, once it is kept (a Backspace right after takes it back)
+        pendingGuessed = topGuess?.takeIf { it != word } // ... and the keyboard remembers it guessed the other one
         afterUndo = false
         g?.stats?.onPicked()
         g?.accepted(word) { h -> post { l.navGlideHabitChanged(h) } }
@@ -417,7 +434,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         syncField() // the page's field may have changed or gone since the last key
         val f = pageField
         when (key) {
-            Key.Backspace -> if (model.glideActive) { pendingWord = null; afterUndo = true; glide?.stats?.onUndone() } // right after a glide: the word was wrong
+            Key.Backspace -> if (model.glideActive) { lastDeleted = pendingWord ?: topGuess; pendingWord = null; pendingGuessed = null; afterUndo = true; glide?.stats?.onUndone() } // right after a glide: the word was wrong
             Key.Shift, Key.ToLetters -> {}                                                       // the text does not change
             else -> { confirmGlide(); if (key is Key.Ch) afterUndo = false }                     // typing on, the symbols page or Go: the glided word stays
         }
@@ -487,7 +504,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         learnedText = text
         val typedWords = model.plainWords()
         if (typedWords.isNotEmpty()) g.learnTyped(typedWords, ownWords) { t -> post { l.navGlideWordsChanged(t) } }
-        for ((prev, w) in model.typedPairs()) g.learn(prev, w, 1f) // what was typed letter by letter (the glided words were learned when they were kept)
+        for ((prev2, prev, w) in model.typedContexts()) g.learn(prev, w, 1f, prev2) // what was typed letter by letter (the glided words were learned when they were kept)
     }
 
     /** Glide typing works unless the page field is a password (the guesses would show it on the screen). */
@@ -1019,8 +1036,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             if (g == null) return
             prepareGlide() // the key positions as they are now (a no-op when nothing changed since the keyboard opened)
             confirmGlide() // the glide before this one stays: learn from it first (one thread, in order)
-            lastGlidePrev = model.previousWord()
-            g.decode(gx, gy, gn, lastGlidePrev) { res -> post { glideDone(res) } }
+            val two = model.previousTwo(); lastGlidePrev = two.second; lastGlidePrev2 = two.first
+            g.decode(gx, gy, gn, lastGlidePrev, lastGlidePrev2) { res -> post { glideDone(res) } }
         }
 
         // ------------------------------------------------------------------ draw and touch
