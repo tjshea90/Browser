@@ -48,3 +48,12 @@ and the EasyList cookie list at `secure.fanboy.co.nz/fanboy-cookiemonster.txt` (
 404 and was replaced. Total about 6.8 MB uncompressed, roughly 2 MB gzipped; unchanged lists cost a conditional-GET round trip (a few hundred bytes).
 `FilterUpdater` keeps the SAFETY INVARIANT: the compiled set only replaces the active one if every list is available, the new rule count is >= 60 % of the old
 and >= 20 000, and it round-trips through the codec. A failing source is reported in Settings and is never fatal.
+
+## Which lists are trusted (RX3-B1, 2026-11-14)
+A list is "trusted" when its maintainers also write the scriptlet semantics: only then may its `+js(trusted-*)` lines run. Those scriptlets rewrite what a site's own API answers
+(`trusted-replace-fetch-response`, `trusted-replace-xhr-response`, alias `trusted-rpfr`) and set cookies or storage by script (`trusted-set-cookie`, `trusted-set-local-storage-item`).
+uBlock Origin itself honours them only from its own lists. In code: `ListSource.trusted` (default false) for the downloaded lists, `abp-trusted:` in `scripts/make-default-lists.sh` for the
+bundled snapshot, `FilterSetBuilder.addAbpList(..., trusted)` (default false) and `ScriptletRules.encode(inner, trusted)`. Trusted: the six `ubo-*` sources and our own seed lists.
+Not trusted: EasyList, EasyPrivacy, `easylist-cookies` (Fanboy), and every list added later until someone says otherwise (`FilterSourcesTrustTest` pins it).
+A `trusted-*` line in an untrusted list is skipped as `SCRIPTLET_UNTRUSTED` (counted per list in `BuildReport.untrustedByList`), also as an exception line (an untrusted list cannot switch a trusted call off).
+Measured the same day on the real files (EasyList 2.06 MB, EasyPrivacy 1.52 MB, Fanboy cookie list 0.91 MB): none of the three holds a single `trusted-*` scriptlet line, so nothing they do today is lost.

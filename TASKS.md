@@ -491,7 +491,7 @@ A question, not an order: answer it in plain words with a TESTED recipe, then le
   - [ ] RX3-BK3 raise the instant-hit rate where BK1 says it can be raised (bfcache size floor, fewer pending loads, optional stop-at-90% experiment default off)
   - [ ] RX3-BK4 BackPictures: 8 pictures when MemAvailable > 700 MB, retake the picture after a scroll settles
   - [ ] RX3-BK5 (OWNER QUESTION, do not build before the answer) Back instant for no-store pages on sites the owner picks (header rewrite no-store -> no-cache; off by default; never password pages or private tabs)
-  - [ ] RX3-B1 ListSource.trusted + trusted-* scriptlets and long arguments only from trusted lists; count per list first; keep cookie-banner suppression
+  - [~] RX3-B1 ListSource.trusted + trusted-* scriptlets and long arguments only from trusted lists; count per list first; keep cookie-banner suppression {claude/new-session-7d9rxz 2026-11-14T20:26Z}
   - [ ] RX3-Y1 YouTube answer of the lists: raised caps for trusted lists (MAX_ARG 4096, MAX_TOTAL 8192, MAX_CALLS 64, MAX_PAYLOAD 32000), JSON edit engine + json-edit*, trusted-edit-inbound-object, trusted-prevent-dom-bypass; real YouTube list lines as test fixtures; Diagnostics accepted-of-total per YouTube host
   - [ ] RX3-Y2 built-in YouTube ad skipper and hider in its own content script (EXT/youtube.js, static manifest entry for the YouTube hosts), observer only on the player class, bounded loop, restore mute/rate, skip button, overlay, enforcement dialog, counters, ONE new Settings row "Skip ads inside video players (YouTube and others)" default ON
   - [ ] RX3-Y3 YouTube lab (tools/sitelab/ytlab.py mock pages with the real rule lines) + optional live Playwright check + research/YOUTUBE_ADS.md with a selector table (verified or not)
