@@ -36,6 +36,10 @@ class ExtImageTest {
         "||font.example^\$font", "||media.example^\$media", "||obj.example^\$object", "||other.example^\$other", "||style.example^\$stylesheet",
         "||notimg.example^\$~image", "||dom.example^\$domain=example.com", "||excl.example^\$domain=~example.com", "/analytics.js", "/collect?v=",
         "/impban/*\$important", "||impath.example/ads/\$important", "@@||impath.example^", "|https://impanchor.\$important,script", "/AdBanner.", "||UPPER.example^", "||ipv4.example^", "||1.2.3.4^", "/\$ext/",
+        // AW1c: redirect= names the stand-in a block is answered with, redirect-rule= only picks it for a request something else blocks; the verdict word carries the resource id in bits 8-12
+        "||redir.example^\$script,redirect=noopjs", "||redir.example/pix^\$image,redirect=1x1.gif", "/redir-path/*.js\$script,redirect=noopjs:10", "||ro.example^\$script", "||ro.example^\$redirect-rule=noopjs",
+        "||ro2.example^\$redirect-rule=noopjs", "||impr.example^\$important,redirect=noopmp4-1s", "||excr.example^\$redirect=noopjs", "@@||excr.example/ok^", "||unk.example^\$redirect=no-such-resource",
+        "||ruk.example^\$redirect-rule=no-such-resource", "||dr.example^\$script,redirect=noopjs", "||dr.example/b^\$script,redirect=nooptext", "||ro3.example/p^\$redirect-rule=1x1.gif", "||ro3.example^\$image",
     )
 
     private val hosts = listOf(
@@ -138,6 +142,11 @@ class ExtImageTest {
             if (rnd.nextInt(12) == 0) sb.append('#').append(pick(words))
             out.add(sb.toString() to 2)
         }
+        // AW1c: every stand-in case once more with all request types and pages
+        out.addAll(listOf(
+            "https://redir.example/a.js", "https://redir.example/pix/a.gif", "https://x.net/redir-path/lib.js", "https://x.net/redir-path/lib.js?v=2", "https://ro.example/a.js", "https://ro.example/a.gif", "https://ro2.example/a.js",
+            "https://impr.example/v.mp4", "https://excr.example/a.js", "https://excr.example/ok/a.js", "https://unk.example/a.js", "https://ruk.example/a.js", "https://dr.example/b/x.js", "https://dr.example/a.js", "https://ro3.example/p/x.gif",
+        ).map { it to 8 })
         // shapes that are not ordinary: non-network schemes, empty/odd hosts, hostile lengths
         out.addAll(listOf(
             "data:text/plain,hello", "blob:https://example.com/1", "about:blank", "file:///etc/hosts", "javascript:void(0)", "ftp://ads.example.com/x", "https://", "https:///x", "https://:80/x",
@@ -260,6 +269,7 @@ class ExtImageTest {
         assertTrue("blocks (not important): ${share { it and 1 != 0 && it and 16 == 0 }}", share { it and 1 != 0 && it and 16 == 0 } >= 15.0)
         assertTrue("exceptions: ${share { it == 2 }}", share { it == 2 } >= 3.0)
         assertTrue("important: ${share { it and 16 != 0 }}", share { it and 16 != 0 } in 1.0..20.0)
+        assertTrue("stand-ins: ${share { Verdict.redirect(it) != 0 }}", share { Verdict.redirect(it) != 0 } >= 0.5) // AW1c: the redirect bits are part of what the JavaScript engine must reproduce
         assertTrue("several categories", rows.filter { it and 1 != 0 }.map { (it shr 2) and 3 }.toSet().size >= 3)
     }
 
