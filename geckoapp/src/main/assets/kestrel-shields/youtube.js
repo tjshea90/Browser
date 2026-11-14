@@ -134,7 +134,7 @@
           if (v.playbackRate === 16) v.playbackRate = a.saved.rate || 1;
         }
       } catch (e) { /* ignore */ }
-      if (ok) failsInRow = 0;
+      if (ok) { failsInRow = 0; mark('s'); }
       else {
         givenUp = true; failsInRow++; mark('g');
         pend.r = 'an ad was still showing after ' + Math.round(MAXMS / 1000) + ' s';
