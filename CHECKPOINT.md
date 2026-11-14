@@ -1,13 +1,13 @@
-# CHECKPOINT 1877 — read me first, then TASKS.md
+# CHECKPOINT 1883 — read me first, then TASKS.md
 
-**Written:** 2026-11-14T00:43:36Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `f11808c` (this checkpoint is the commit after it)
+**Written:** 2026-11-14T00:51:38Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `f5960b3` (this checkpoint is the commit after it)
 
 ## Just done
-alpha33 (gecko code 134) DISPATCHED: android.yml run 43536066565 (run #84, started 2026-11-14T00:43:13Z) on ccr-a57c163e-mtq8js, full_build=true. Local gates all green first: core 819 tests, app 223, lintDebug, geckoapp compile, web-tests 150/150. AO1 ticked.
+alpha33 SHIPPED AND RECORDED: run 43536066565 green (all jobs success, pref check + cert pin verified), Release https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha33 with kestrel-g-0.3.0-alpha33.apk 92,594,827 B (alpha32 was 92,539,679), BUILDLOG line e7572d4. AQ2 ticked. HANDOFF.md now has a feature-to-file map (alpha30-33); TASKS has AS2 (per-process memory line).
 
 ## Do this next
-WAIT for run 43536066565 (about 7-9 min like alpha32): git ls-remote --tags origin kestrel-g-v0.3.0-alpha33 shows the tag when the publish step runs; then mcp__github__actions_get get_workflow_run 43536066565 must say conclusion success; then mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha33 shows the APK; THEN bash tools/record-release.sh kestrel-g-v0.3.0-alpha33 with the note in scratchpad/alpha33_note.txt (use: bash tools/record-release.sh kestrel-g-v0.3.0-alpha33 "$(cat that file)"). NEVER dispatch alpha33 twice. After that: answer the owner in plain words (everything in messages 29-33), re-list open items, ckpt, delete heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN only after 24 h of owner silence (stand down on wakes).
+1) send the owner the plain-words answer for messages 29-33 with the Release link on its own line (what changed per request, what was only emulator-tested, the limits: first page after a cold start has no guard, Kestrel Light has no mini panel, the 1 s icon race and the key size need the tablet, DASH/separate-sound sizes unmeasured; relay the other account's research AS0 and ASK about AS1 stored libraries: -73 MB installed vs +65 MB download per update, my lean is leave it unless space gets tight; re-list the open items). 2) then wait for the owner: next work = AS2 per-process memory Diagnostics line (claim it), AN1 Waves 2-3, AI1c Doraby needs owner words. 3) heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN: stand down on wakes; delete after 24 h of owner silence. Do NOT bump versionCode until the next real release is started (ship.sh gates code > 134).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ WAIT for run 43536066565 (about 7-9 min like alpha32): git ls-remote --tags orig
 
 ## Last ten checkpoints
 ```
+  79e5865 ckpt 1877: alpha33 (gecko code 134) DISPATCHED: android.yml run 43536066565 (run #84, st
   f11808c ckpt 1876: gated kestrel-g-v0.3.0-alpha33 (gecko code 134) and pushed it: handoff self-t
   cc028b28 ckpt 1875: AO1 ticked in TASKS (emulator Diagnostics screen shows the CPU by process, S
   9689afe ckpt 1860: AQ1, AR1 and AR2 ticked in TASKS with evidence: Home restore proven on the em
@@ -25,5 +26,7 @@ WAIT for run 43536066565 (about 7-9 min like alpha32): git ls-remote --tags orig
   fa60b0e ckpt 1812: AO1 code + research written: core/diag/CpuUse.kt (ProcStat/CpuSeries, CpuUseT
   33ceee7 ckpt 1804: AO2 DONE and ticked: SizeEstimate + VideoFlow calibration + engine running es
   da2a562 ckpt 1790: AO4 DONE and ticked: emulator proof with planted files (engine start pruned t
-  6b3800f ckpt 1788: AO4 code written and green: core ApkFiles (+5 tests), app diag/StorageTidy (+
 ```
+
+(4 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
