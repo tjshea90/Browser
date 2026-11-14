@@ -1170,6 +1170,17 @@ test('RX3-G7: the ad skipper reports are forwarded as numbers with their kind (Y
   assert.equal(got[2].w, 'y'); assert.equal(got[2].a, 0); assert.equal(got[2].s, 0); assert.equal(got[2].c, 0); assert.equal(got[2].r.length, 60);
 });
 
+test('RX3-G7: a report from the top frame of a tab whose page the extension never saw (the first page after a cold start) names that page; a frame of such a tab names none', async () => {
+  const h = harness(standardApp());                                                             // no main-frame request was judged: tabTop knows nothing about tab 7
+  h.message({ k: 'yts', w: 'p', a: 1, s: 1 }, 7, PAGE + '#section', 0);
+  h.message({ k: 'yts', w: 'p', a: 1, s: 1 }, 7, 'https://player.example/embed?id=1', 4);   // a frame: its own address is NOT the page
+  await tick(20);
+  const got = h.of('yts');
+  assert.equal(got.length, 2);
+  assert.equal(got[0].p, PAGE, 'the top frame\'s address without its fragment');
+  assert.equal(got[1].p, '', 'a frame says nothing: the app then drops the report like one from a private tab');
+});
+
 test('RX3-G1: the manifest declares the pop-up guard and the scriptlet library for the page world, every frame, from the first moment; nothing registers them at run time', () => {
   const m = JSON.parse(fs.readFileSync(path.join(SHIELDS, 'manifest.json'), 'utf8'));
   for (const f of ['guard-main.js', 'scriptlets-main.js']) {

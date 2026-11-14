@@ -833,7 +833,8 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   if (!m || m.k !== 'yts' || !sender || !sender.tab) return undefined;
   function n(v) { v = v | 0; return v > 0 && v < 1000 ? v : 0; }
   skipReports++; markStats();
-  var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || '';
+  // the page the tab is on; the FIRST page after a cold start (and a restored tab nobody navigated) loads before the extension knows it, so the top frame's own address stands in (found on the emulator 2026-11-14: every report was dropped as "private")
+  var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || (sender.frameId === 0 ? docOf(sender.url) : '');
   send({ k: 'yts', w: m.w === 'p' ? 'p' : 'y', a: n(m.a), s: n(m.s), c: n(m.c), o: n(m.o), d: n(m.d), f: n(m.f), g: n(m.g), r: String(m.r || '').slice(0, 60), p: String(page).slice(0, 300) }).catch(function () {});
   return undefined;
 });
