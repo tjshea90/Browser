@@ -183,7 +183,7 @@ object GeckoEngine {
             }, { e -> prefReadback2 = "Engine scroll/network prefs: read failed ($e)"; done() })
         } catch (e: Exception) { prefReadback2 = "Engine scroll/network prefs: unavailable ($e)"; done() }
         val names = listOf("kestrel.config.version", "media.av1.enabled", "dom.ipc.processCount", "ui.prefersReducedMotion", "network.prefetch-next",
-            "image.mem.surfacecache.size_factor", "image.mem.surfacecache.discard_factor", "image.mem.surfacecache.min_expiration_ms", "browser.cache.disk.capacity", "dom.push.enabled",
+            "image.mem.surfacecache.size_factor", "image.mem.surfacecache.discard_factor", "image.mem.surfacecache.min_expiration_ms", "browser.cache.disk.capacity", "dom.push.enabled", "security.webauth.webauthn",
             "apz.y_skate_size_multiplier", "apz.y_stationary_size_multiplier", "apz.content_response_timeout", "apz.max_velocity_inches_per_ms",
             "javascript.options.gc_on_memory_pressure", "layers.gpu-process.enabled", "gfx.webrender.software",
             // the speed batch of config v4 (research/SPEED2.md section 6): name=value(type) so a wrong type shows up as an unchanged default

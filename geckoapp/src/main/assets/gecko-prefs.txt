@@ -2,7 +2,7 @@
 # One per line:  name = true|false|integer|"string".   They are default-branch prefs applied before Gecko starts, so "once" prefs (caches, graphics) work.
 # A name that does not exist in the bundled engine is a SILENT no-op: tools/check-gecko-prefs.sh checks every name against the real GeckoView in CI.
 # Bump kestrel.config.version when this list changes: Diagnostics reads it back to prove the file was applied.
-kestrel.config.version = 7
+kestrel.config.version = 8
 
 # --- video codecs (media.av1.enabled, media.mediasource.vp9.enabled, media.hevc.enabled) are no longer fixed here: GeckoEngine.applyVideo decides them from the device's own decoder list and Settings > Video
 # (research/VIDEO_AUDIT.md; a codec with no hardware decoder is not offered, so sites send H.264, which the tablet decodes in hardware)
@@ -45,3 +45,7 @@ media.peerconnection.ice.default_address_only = true
 security.certerrors.mitm.auto_enable_enterprise_roots = false
 # --- hygiene (research/GECKO_TUNING_2.md 3.1): the Translations actor is registered in every http/https frame; the app never offers translation (no models over the hotspot)
 browser.translations.enable = false
+# --- NO passkeys / WebAuthn (AX2, 2026-11-14): the engine's Android WebAuthn code needs Google Play services (com.google.android.gms.fido, which this tablet does not have and must not get). A page that only
+# ASKS (a bank's login widget: PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable() or navigator.credentials.get) made the engine throw NoClassDefFoundError inside the app and the whole app
+# closed (www.ally.com help pages; reproduced on the emulator at http://localhost). With the API off the page sees no PublicKeyCredential and offers the password.
+security.webauth.webauthn = false
