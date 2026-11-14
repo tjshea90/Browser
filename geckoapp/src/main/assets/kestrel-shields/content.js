@@ -297,7 +297,15 @@
       } catch (x) { /* ignore */ }
     }
     window.addEventListener('click', realTap, true);
-    window.addEventListener('pointerup', realTap, { capture: true, passive: true }); // a page that cancels the click still gets its tap counted; a swipe that scrolls ends in pointercancel, never here
+    // A page that cancels the click still gets its tap counted through the pointer events. A tap is the PRIMARY button, up within 400 ms and within 12 px of where it went down: a long press, a right click, a drag
+    // and a swipe are not taps (a swipe that scrolls ends in pointercancel anyway).
+    var down = { t: 0, x: 0, y: 0 };
+    window.addEventListener('pointerdown', function (e) { if (e.isTrusted) { down.t = Date.now(); down.x = e.clientX; down.y = e.clientY; } }, { capture: true, passive: true });
+    window.addEventListener('pointerup', function (e) {
+      if (!e.isTrusted || e.button !== 0 || !down.t) return;
+      if (Date.now() - down.t > 400 || Math.abs(e.clientX - down.x) > 12 || Math.abs(e.clientY - down.y) > 12) return;
+      realTap(e);
+    }, { capture: true, passive: true });
     browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { wanted = !(r && r.on === false); topHost = (r && r.top) ? String(r.top) : ''; push(); }, function () {});
   } catch (e) { /* never break the page */ }
 })();

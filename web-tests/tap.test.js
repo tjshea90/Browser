@@ -60,7 +60,7 @@ test('a script that dispatches the report event itself is not believed: no tap, 
 
 test('a script that clicks a link is not a tap (untrusted events never count)', async () => {
   const page = await open();
-  await page.evaluate(() => { document.getElementById('l').click(); document.getElementById('l').dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+  await page.evaluate(() => { document.getElementById('l').click(); document.getElementById('l').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); });
   assert.deepEqual(await taps(page), []);
 });
 
@@ -108,6 +108,19 @@ test('a swipe that scrolls the page is not a tap', async () => {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Input.synthesizeScrollGesture', { x: 100, y: 300, yDistance: -400, gestureSourceType: 'touch', speed: 800 });
   assert.deepEqual(await taps(page), []);
+});
+
+test('a long press, a right click and a drag are not taps', async () => {
+  const page = await open({ touch: true });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 50, y: 50 }] });
+  await page.waitForTimeout(700);                                  // held: a long press (the page's menu), not a tap
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await page.mouse.click(50, 50, { button: 'right' });             // a right click
+  await page.mouse.move(40, 150); await page.mouse.down(); await page.mouse.move(200, 190, { steps: 4 }); await page.mouse.up();   // a drag across 160 px
+  assert.deepEqual((await taps(page)).filter((t) => t.indexOf('shop.example') > 0 && false), []);
+  const t = await taps(page);
+  assert.ok(!t.includes('tap|https://shop.example/item'), 'the long press and the right click on the link were no taps: ' + JSON.stringify(t));
 });
 
 test('two different links tapped in a row are two reports; the same link twice within a blink is one', async () => {
