@@ -27,8 +27,8 @@ android {
         applicationId = "app.kestrel.browser.gecko"  // installs BESIDE the WebView build (app.kestrel.browser)
         minSdk = 29
         targetSdk = 36
-        versionCode = 136
-        versionName = "0.3.0-alpha35"
+        versionCode = 137
+        versionName = "0.3.0-alpha36"
         ndk { abiFilters += geckoAbi } // the tablet's userspace is 32-bit; only this engine build is bundled (~90 MB)
     }
 
