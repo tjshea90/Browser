@@ -62,12 +62,17 @@ class MiniKeyboardModel {
     var allSelected = false; private set
     var symbols = false; private set
     var shift = false; private set
+    /** What the last glide added (a space before it when one was needed, the word, a space after it): ONE Backspace takes all of it away, and a candidate from the strip can replace it. */
+    private var glideTail: String? = null
+    /** True while the last thing that happened was a glide (the candidate strip is showing for it). */
+    val glideActive: Boolean get() = glideTail != null
 
     fun open(current: String) {
         text = current.take(MAX_CHARS)
         allSelected = text.isNotEmpty()
         symbols = false
         shift = false
+        glideTail = null
     }
 
     fun press(key: Key): KeyResult {
@@ -77,15 +82,58 @@ class MiniKeyboardModel {
                 text = if (allSelected) t else (text + t).take(MAX_CHARS)
                 allSelected = false
                 shift = false
+                glideTail = null
             }
-            Key.Backspace -> { text = if (allSelected) "" else text.dropLast(1); allSelected = false }
+            Key.Backspace -> {
+                val tail = glideTail
+                text = if (allSelected) "" else if (tail != null && text.endsWith(tail)) text.removeSuffix(tail) else text.dropLast(1)
+                allSelected = false
+                glideTail = null
+            }
             Key.Shift -> shift = !shift
-            Key.ToSymbols -> { symbols = true; shift = false }
+            Key.ToSymbols -> { symbols = true; shift = false; glideTail = null }
             Key.ToLetters -> symbols = false
             Key.Go -> { val t = text.trim(); if (t.isNotEmpty()) return KeyResult.Submit(t) }
         }
         return KeyResult.None
     }
+
+    /** A glide ended on [word]: it goes in after what is there, with a space after it (and one before it when the text does not end in one); the first thing typed replaces a selected address. Shift makes it start with a capital. */
+    fun commitGlide(word: String) {
+        if (word.isEmpty()) return
+        val w = if (shift) word.replaceFirstChar { it.uppercase() } else word
+        val base = if (allSelected) "" else text
+        val tail = (if (base.isNotEmpty() && !base.endsWith(' ')) " " else "") + w + " "
+        if (base.length + tail.length > MAX_CHARS) return
+        text = base + tail
+        glideTail = tail
+        allSelected = false
+        shift = false
+    }
+
+    /** The candidate [word] from the strip replaces the word the last glide put in. False when the last thing was not a glide. */
+    fun swapGlide(word: String): Boolean {
+        val tail = glideTail ?: return false
+        if (!text.endsWith(tail)) { glideTail = null; return false }
+        val lead = if (tail.startsWith(" ")) " " else ""
+        val capital = tail.trimStart().firstOrNull()?.isUpperCase() == true
+        val w = if (capital) word.replaceFirstChar { it.uppercase() } else word
+        val newTail = lead + w + " "
+        text = text.removeSuffix(tail) + newTail
+        glideTail = newTail
+        return true
+    }
+
+    /** The word before the place a glide would go, lowercase, for the language (null when there is none or it is not a plain word: an address, a number). */
+    fun previousWord(): String? {
+        if (allSelected) return null
+        val tok = text.trimEnd().substringAfterLast(' ')
+        if (tok.isEmpty() || tok.length > 24 || !tok.all { it.isLetter() || it == '\'' }) return null
+        return tok.lowercase()
+    }
+
+    /** Plain words in what is typed (for the words the keyboard remembers): letters only, three to 24 of them. */
+    fun plainWords(): List<String> = text.split(' ').map { it.lowercase() }.filter { w -> w.length in 3..24 && w.all { it in 'a'..'z' } }
 
     companion object { const val MAX_CHARS = 2048 }
 }
