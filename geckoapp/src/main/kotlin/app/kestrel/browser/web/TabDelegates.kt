@@ -26,7 +26,16 @@ import org.mozilla.geckoview.WebResponse
  * the same job in BrowserWebViewClient / BrowserChromeClient.
  */
 class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
-    NavigationDelegate, ProgressDelegate, ContentDelegate, PromptDelegate, PermissionDelegate, ContentBlocking.Delegate {
+    NavigationDelegate, ProgressDelegate, ContentDelegate, PromptDelegate, PermissionDelegate, ContentBlocking.Delegate, org.mozilla.geckoview.MediaSession.Delegate {
+
+    // ---- RX3-S1: the engine's media session says whether the page's video plays; the neon glow holds still while it does (BrowserActivity.updateNeonBusy)
+    private fun media(e: app.kestrel.core.session.NeonRules.MediaEvent) { val now = app.kestrel.core.session.NeonRules.videoAfter(tab.gecko.videoPlaying, e); if (now != tab.gecko.videoPlaying) { tab.gecko.videoPlaying = now; a.videoStateChanged(tab) } }
+    override fun onActivated(session: GeckoSession, mediaSession: org.mozilla.geckoview.MediaSession) = media(app.kestrel.core.session.NeonRules.MediaEvent.ACTIVATED)
+    override fun onPlay(session: GeckoSession, mediaSession: org.mozilla.geckoview.MediaSession) = media(app.kestrel.core.session.NeonRules.MediaEvent.PLAY)
+    override fun onPause(session: GeckoSession, mediaSession: org.mozilla.geckoview.MediaSession) = media(app.kestrel.core.session.NeonRules.MediaEvent.PAUSE)
+    override fun onStop(session: GeckoSession, mediaSession: org.mozilla.geckoview.MediaSession) = media(app.kestrel.core.session.NeonRules.MediaEvent.STOP)
+    override fun onDeactivated(session: GeckoSession, mediaSession: org.mozilla.geckoview.MediaSession) = media(app.kestrel.core.session.NeonRules.MediaEvent.DEACTIVATED)
+
 
     private val allow = AllowOrDeny.ALLOW
     private val deny = AllowOrDeny.DENY

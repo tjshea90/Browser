@@ -922,6 +922,7 @@ open class BrowserActivity : Activity(), DockListener {
         s.promptDelegate = d
         s.permissionDelegate = d
         s.contentBlockingDelegate = d
+        s.setMediaSessionDelegate(d)   // RX3-S1: whether the page's video plays
         // AU3: the mini keyboard types into the page's own text field: this wrapper keeps the system keyboard down while the mini one is up and tells the panel when a field gains or loses focus
         val input = PageFieldInput(s, s.textInput.delegate, held = { ::miniNav.isInitialized && miniNav.keyboardShowing }, changed = { Io.main.post { if (::miniNav.isInitialized) miniNav.pageFieldChanged() } })
         s.textInput.setDelegate(input) // (a setter and getter of different nullability: Kotlin has no property for it)
@@ -2109,8 +2110,10 @@ open class BrowserActivity : Activity(), DockListener {
         if (t?.loading != true) loadSeen = null
         else if (loadSeen !== t) { loadSeen = t; loadSeenAt = now; Io.main.postDelayed({ updateNeonBusy() }, 3100) }
         val heavyLoad = t?.loading == true && now - loadSeenAt < 3000
-        Neon.busy(heavyLoad || kbTopScreen > 0 || keyboardComing)
+        Neon.busy(app.kestrel.core.session.NeonRules.busy(heavyLoad, kbTopScreen > 0, keyboardComing, t?.gecko?.videoPlaying == true))   // RX3-S1: a playing video holds the glow still too
     }
+    /** RX3-S1: the page's video started or stopped; only the tab in front matters for the glow. UI thread (the engine's delegates run there). */
+    internal fun videoStateChanged(tab: Tab) { Health.log("neon", "video", "playing=${tab.gecko.videoPlaying} front=${tab === current}"); if (tab === current) updateNeonBusy() }
     private var loadSeen: Tab? = null
     private var loadSeenAt = 0L
 
