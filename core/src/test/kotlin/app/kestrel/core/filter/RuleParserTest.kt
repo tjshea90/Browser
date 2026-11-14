@@ -74,8 +74,9 @@ class RuleParserTest {
     fun unsupportedConstructsAreSkippedNotMisread() {
         assertEquals(Skip.REGEX, skipOf("/banner/"))
         assertEquals(Skip.REGEX, skipOf("/ad[sz]/\$script"))
-        for (o in listOf("csp=script-src 'none'", "redirect=noopjs", "removeparam=x", "match-case", "replace=/a/b/", "header=x", "inline-script", "denyallow=x.com"))
+        for (o in listOf("csp=script-src 'none'", "removeparam=x", "match-case", "replace=/a/b/", "header=x", "inline-script", "denyallow=x.com"))
             assertEquals("option $o", Skip.UNSUPPORTED_OPTION, skipOf("||e.com^\$$o"))
+        // AW1c: `redirect=` is supported now (RedirectRulesTest); the option names that are still left out
         assertEquals(Skip.NON_ASCII, skipOf("||bücher.example^"))
         assertEquals(Skip.BAD_SYNTAX, skipOf("||e.com/a b^"))
         assertEquals(Skip.BAD_SYNTAX, skipOf("|\$script"))
