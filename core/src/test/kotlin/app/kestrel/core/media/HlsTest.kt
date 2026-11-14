@@ -216,4 +216,3 @@ class HlsTest {
         assertEquals(listOf(false, false), ads(m)); assertEquals(1, m.discontinuities)
     }
 }
-}
