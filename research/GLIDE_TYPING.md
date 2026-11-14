@@ -27,13 +27,13 @@
 | the word list | `geckoapp/src/main/assets/glide/en.klx`, made by `:tools:glideLexicon` (`docs/DICTIONARY.md`) |
 | the accuracy yardstick | `core/src/test/.../glide/GestureSim.kt`, `GlideEval.kt`; tests `GlideDecoderTest`, `LexiconFileTest`, `GlideSupportTest`; keyboard flow `MiniNavTest` |
 
-### The decoder in four steps (no allocation per word, no Android types, about 5 ms per glide on a laptop core)
-1. **Cut the path** into 64 equal steps (in key pitches, so the keyboard's size does not matter) and move it by the learned thumb habit.
+### The decoder in four steps (no allocation per word, no Android types, about 2.6 ms per glide on a laptop core)
+1. **Cut the path** into 48 equal steps (in key pitches, so the keyboard's size does not matter) and move it by the learned thumb habit.
 2. **Quick pass** (one table of "how close does the path come to each of the 26 keys" answers it for every word): a word is a candidate when its first and last letter are near where the finger went down and
-   lifted and every other letter is near the path. The best 250 by (fit + a light language weight) go on.
+   lifted and every other letter is near the path. The best 200 by (fit + a light language weight) go on.
 3. **Careful pass** (dynamic programming per word): put the letters on the path in order, the first at the start and the last at the end, minimising how far each step is from its letter plus how far the path
    strays from the straight line between two neighbouring letters (a letter the path merely passes costs nothing; a corner the word does not explain costs). Cost is summed over letters (more letters = more
-   evidence). The 60 best are judged a second time with the whole path moved by 80 % of how far it sat off the word's letters (the thumb lands beside the key the same way along a whole path), the move charged.
+   evidence). The 40 best are judged a second time with the whole path moved by 80 % of how far it sat off the word's letters (the thumb lands beside the key the same way along a whole path), the move charged.
 4. **Language**: score = -cost + w * ln P(word | word before). P is the word's frequency, mixed 40/60 with the pair frequency when the pair is known. **w is not fixed**: it is 1.5 times the best fit's cost per
    letter (limited to 0.12 .. 1.2), so a clean glide trusts the path and a sloppy one trusts the language. A word whose cost is above 3.4 per letter is dropped ("no word fits").
 
@@ -48,18 +48,21 @@ aims at every letter with scatter (a normal distribution), rounds each corner, d
 
 | Words drawn as often as people use them (3000 glides each) | first guess right | right word in the 3 guesses |
 | :- | -: | -: |
-| calm | 96.5 % | 99.1 % |
-| normal | 91.1 % | 97.2 % |
-| sloppy | 81.7 % | 93.4 % |
-| bad | 67.1 % | 81.1 % |
+| calm | 96.2 % | 99.0 % |
+| normal | 90.5 % | 96.9 % |
+| sloppy | 80.9 % | 92.9 % |
+| bad | 66.3 % | 80.4 % |
 
 | Harder / easier mixes (first / in 3) | normal | sloppy |
 | :- | -: | -: |
-| uniform over the 20 000 commonest words (as many rare words as common ones) | 81.8 / 94.5 | 64.2 / 80.6 |
-| the word before is known (pairs drawn from the pair list: optimistic, same data) | 97.8 / 99.5 | 94.0 / 98.5 |
+| uniform over the 20 000 commonest words (as many rare words as common ones) | 79.8 / 93.3 | 62.9 / 79.2 |
+| the word before is known (pairs drawn from the pair list: optimistic, same data) | 97.3 / 99.4 | 93.7 / 98.1 |
 
-A thumb that lands 10 dp (3 mm) beside the key every time, normal aim: 78.2 / 91.1 without any correction, 85.9 / 94.9 with the second look, 91.2 / 97.4 after the decoder learned the habit (the same as
-a finger without the habit: 91.1 / 97.2).
+A thumb that lands 10 dp (3 mm) beside the key every time, normal aim: 77.0 / 88.9 without any correction, 85.2 / 94.3 with the second look, 90.5 / 96.7 after the decoder learned the habit (the same as
+a finger without the habit: 90.5 / 96.9).
+
+(An earlier setting, 250 candidates and 64 steps, was 0.6 points better on normal and twice as slow; the cheaper one was chosen because the tablet's first glides run while the runtime is still compiling
+the decoder. The key-size and robustness figures below were measured with that earlier setting and are within about 1 point of today's.)
 
 **Key size** (same finger noise in dp, only the keyboard's width changes; first / in 3):
 
@@ -82,7 +85,9 @@ guess) cut reversals far too much and made the yardstick unrealistically hard; t
 
 ## 4. Speed and memory
 
-* Decode: about 5 ms on a laptop core (first call about 15-30 ms while the JIT warms up). The tablet's A53 is 5-8 times slower: about 25-40 ms, on ONE background thread; the UI thread is never held. The word list is
+* Decode: about 2.6 ms on a laptop core. The tablet's A53 is 5-8 times slower and Android's runtime compiles the decoder's loops only after the first runs: about 15-30 ms once compiled, much more before (the
+  emulator, which has no hardware acceleration, took 1.6 s per glide: NOT a tablet number). A throw-away decode of "the" runs on the glide thread when the keyboard opens to get the compiling over with; its time is in the
+  Diagnostics line ("first decode (warm-up) N ms"). Everything runs on ONE background thread; the UI thread is never held. The word list is
   loaded on that thread the first time the keyboard opens (about 3 MB read, a few tens of ms here).
 * Memory: the word list in flat arrays is about 3.5 MB of heap (82 971 words, 242 342 pairs, no object per word) plus the person's own words (at most 800). APK: +2.7 MB uncompressed (about 1.4 MB packed), Kestrel (GeckoView)
   build only.
@@ -90,7 +95,7 @@ guess) cut reversals far too much and made the yardstick unrealistically hard; t
 ## 5. What only the tablet can say (and the owner's smallest step)
 
 1. Use the glide for a day, then Menu > Diagnostics > Copy: the **Glide typing** line reads like `Glide typing: 41 glides: best word kept 33 (80 %), another candidate picked 5, deleted right away 3; decode avg 31 ms,
-   worst 120 ms; word list 82971 words ready after 180 ms; thumb habit x 2.1 y -1.4 dp; own words 6`. "Kept" below about 75 % means the keys are too small for this thumb (see the size table) or a word is missing.
+   worst 120 ms; word list 82971 words ready after 180 ms, first decode (warm-up) 90 ms; thumb habit x 2.1 y -1.4 dp; own words 6`. "Kept" below about 75 % means the keys are too small for this thumb (see the size table) or a word is missing.
 2. Words the list lacks (names, brands, Spanish) are glided into the nearest English word until they have been typed once (they are remembered when Go is pressed) or the site has been visited.
 
 ## 6. Limits and decisions
@@ -99,3 +104,14 @@ guess) cut reversals far too much and made the yardstick unrealistically hard; t
 * No live preview while the finger is still moving (Gboard shows one); decoding on lift keeps the decoder simple and cheap on the A53.
 * Space, symbols and Go are not part of a glide; a glide that starts on them is not a glide. Glide on the symbol page is off (the strip shows nothing there).
 * Capital letters: only through Shift (an address bar is lower case).
+
+## 7. Emulator proof (2026-11-14, AT1h) - what was and was NOT run
+
+Run: the debug Kestrel build on the Android 10 x86_64 emulator (no hardware acceleration, software drawing), a REAL multi-point touch injected through the Linux input device (`sendevent`-style binary
+events written to `/dev/input/event1`, 52 and 105 points for "hello" and "world", tool: scratchpad `glide_emu.py`, not kept in the repo; the recipe is: `getevent -p` for the touch device and its range, the keys view
+bounds from a uiautomator dump of the view named "Keyboard", key centres from the same layout formula as `MiniKeyboardGeometry`, one `cat` of a chunk of `struct input_event` per few points):
+* "hello" -> bar `hello ` + strip `hello | help | jello`; "world" after it -> `hello world ` + `world | wield | worlds`; a tap on the second guess swapped it (`hello wield `, strip led by `wield`); ONE Backspace
+  removed the whole `wield ` (`hello `, strip back to the hint). A picture half-way through a glide shows the neon trail over the keys.
+* Menu > Diagnostics: `Glide typing: 2 glides: best word kept 1 (50 %), another candidate picked 1, deleted right away 0; decode avg 1607 ms, worst 1880 ms; word list 82971 words ready after 743 ms; thumb habit x 0.7 y -0.0 dp`.
+Not run: any real thumb, the real tablet's speed (the emulator's 1.6 s per decode is software emulation; see section 4), the owner's feel for the key size.
+
