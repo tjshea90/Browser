@@ -1458,3 +1458,7 @@
 ## 2026-11-14T00:21:08Z
 > Waiting for the icon check to finish; nothing else is running on the emulator.
 <!-- sha:e3bf565c626f -->
+
+## 2026-11-14T00:24:44Z
+> The icon check is rerunning with the app already warm, because the first run came right after a cold start, when Shields is not yet active on the page. Waiting for it to finish.
+<!-- sha:77f6538cc7a0 -->
