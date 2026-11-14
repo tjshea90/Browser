@@ -1466,6 +1466,23 @@
 ## 2026-11-14T00:27:42Z
 > Status: the blocked-page icon and the top-right panel are both proven on the emulator and ticked. I'm doing one last emulator check that the new Diagnostics lines show on screen, then I'll run the full test suite and ship alpha33.
 <!-- sha:b8c2b206b2a0 -->
+
+## 2026-11-14T00:33:03Z
+> **It would only help storage. It would not make the browser faster.**
+>
+> - **Speed:** Pages would load and scroll exactly the same.
+>   - **The change:** Android currently keeps two copies of the browser engine's biggest files on your tablet, one packed and one unpacked. The change would drop the second copy, and the engine itself would be identical.
+>   - **The gain:** about 73 MB freed, roughly 4% of your 1.6 GB free.
+>   - **The cost:** each update download would be about 65 MB bigger, a couple of extra minutes on your hotspot.
+>   - **Start-up:** the one thing I can't predict is how fast the browser opens right after an update. It could be slightly faster or slower.
+>   - **Other options:** I found nothing that would make the engine itself faster on your tablet. Mozilla's own version is already tuned for it, and one I built would run slower. The remaining speed work is in settings and memory handling, which the other session is already doing.
+> - **Safety:** your bookmarks, history and settings aren't touched by this. The risk is that Kestrel G fails to start on your tablet, and you'd then reinstall the previous version. Mozilla uses this method for Firefox on most phones, as far as I can tell from their bug tracker. Your tablet is unusual, though (32-bit, Android 10 Go).
+> - **Confidence:** no, not yet. I think it will probably work, but I haven't tested it anywhere. I can't test it here, because there's no tablet or emulator in this sandbox. The way to find out is to test it on a computer-simulated tablet first, and only then on yours.
+>
+> **Nothing has been changed.** I checked both versions of the code, and the setting is untouched. The other session merged my notes and filed them as a finished question plus one waiting to-do, "AS1". That item says it won't be tried on your tablet until you say yes. It also marked my message copies as automatic, so there's nothing for you to clean up.
+>
+> My advice is to skip it unless running out of storage becomes a problem again. If you do want it, the next step is to have the other session test it on the simulated tablet first. Do you want to skip it, or have it tested there first?
+<!-- sha:971e8f5b0b20 -->
 ## 2026-11-13T23:49:29Z
 > **Yes, it's possible, but the useful part isn't rebuilding Gecko.** Mozilla's build for your tablet's chip is already profile-guided and link-time optimized. A home build would be slower and would trim only a few percent. The real win is in how the engine is packaged: about 35% less installed storage, with no engine changes.
 >
@@ -1550,3 +1567,56 @@
 >
 > Next I'll add a memory-per-process line to Diagnostics. Then I'll wait for what you find on the tablet.
 <!-- sha:f23ef84c6210 -->
+## 2026-11-14T00:43:37Z
+> **It would only help storage. It would not make the browser faster.**
+>
+> - **Speed:** Pages would load and scroll exactly the same.
+>   - **The change:** Android currently keeps two copies of the browser engine's biggest files on your tablet, one packed and one unpacked. The change would drop the second copy, and the engine itself would be identical.
+>   - **The gain:** about 73 MB freed, roughly 4% of your 1.6 GB free.
+>   - **The cost:** each update download would be about 65 MB bigger, a couple of extra minutes on your hotspot.
+>   - **Start-up:** the one thing I can't predict is how fast the browser opens right after an update. It could be slightly faster or slower.
+>   - **Other options:** I found nothing that would make the engine itself faster on your tablet. Mozilla's own version is already tuned for it, and one I built would run slower. The remaining speed work is in settings and memory handling, which the other session is already doing.
+> - **Safety:** your bookmarks, history and settings aren't touched by this. The risk is that Kestrel G fails to start on your tablet, and you'd then reinstall the previous version. Mozilla uses this method for Firefox on most phones, as far as I can tell from their bug tracker. Your tablet is unusual, though (32-bit, Android 10 Go).
+> - **Confidence:** no, not yet. I think it will probably work, but I haven't tested it anywhere. I can't test it here, because there's no tablet or emulator in this sandbox. The way to find out is to test it on a computer-simulated tablet first, and only then on yours.
+>
+> **Nothing has been changed.** I checked both versions of the code, and the setting is untouched. The other session merged my notes and filed them as a finished question plus one waiting to-do, "AS1". That item says it won't be tried on your tablet until you say yes. It also marked my message copies as automatic, so there's nothing for you to clean up.
+>
+> My advice is to skip it unless running out of storage becomes a problem again. If you do want it, the next step is to have the other session test it on the simulated tablet first. Do you want to skip it, or have it tested there first?
+<!-- sha:971e8f5b0b20 -->
+
+## 2026-11-14T00:43:40Z
+> The earlier answer only covered what the engine itself can do. Before I list unconventional ideas, I'm checking the repo and the engine package, so I don't suggest something that already exists or can't work.
+<!-- sha:b31c3d72f7c8 -->
+
+## 2026-11-14T00:46:21Z
+> There's no hidden switch that makes the engine itself faster. But there are a few ideas outside the engine that you could actually feel, listed best first. I haven't tested any of them on your tablet.
+>
+> 1. **Free up space on the tablet.** It's about 94% full. Cheap flash storage slows down as it fills, because it has to shuffle data around before it can write. That affects app start-up and the page cache. The mechanism is well known, but I couldn't find an exact threshold, and I haven't measured your tablet. It costs nothing to try: move movies and downloads off, and aim for a few GB more free.
+> 2. **Turn off pre-installed apps you never use.** Only about 0.5 GB of the 2 GB is free, and the system and its apps use the rest. With your cable this is reversible. More free memory means fewer reloaded tabs and a smoother browser. I haven't seen what uses the memory, so I can't promise how much. A report from the cable would show it, and a session could tell you which apps are safe to turn off.
+> 3. **A "no scripts" button per site, plus a Reader view.** A big part of heavy-page slowness is the page's own programs running on four slow cores. The engine you ship already has a per-site switch for that, and it includes the pieces of Firefox's Reader view. Article and news pages could load and scroll much faster. Some sites would break, so it would be your choice per site. It does nothing for video or mail. The project lists it as not built yet.
+> 4. **Google results in "Web" mode.** Adding `&udm=14` to the search address drops the AI box and extra panels, and you don't want AI anyway. A blog test says it still worked in October 2026. I found no one who measured a speed gain. Google could remove it at any time, and it hides the image and shopping tabs.
+> 5. **Small free things.**
+>    - Set the three animation scales in Developer options to 0.5×. Don't set them to Off, because that freezes loading spinners on web pages.
+>    - Keep battery saver off.
+>    - Try 5 GHz when the phone is close.
+>
+> The big idea I don't recommend now is letting the phone do the heavy page work and sending the finished page to the tablet. The phone is much faster and has the uncapped connection. It would help heavy sites most, but it's a months-long project and would slow every tap and keystroke.
+>
+> Items 1, 2 and 5 you can try now. Items 3 and 4 would need the other session. Which would you like to start with?
+>
+> Sources: [Google "Web" filter guide](https://geotoolbox.ai/blog/how-to-turn-off-ai-overviews), [IONOS on Google without AI](https://www.ionos.com/digitalguide/online-marketing/search-engine-marketing/google-search-without-ai/), [Kioxia on flash garbage collection](https://kioxia.com/content/dam/kioxia/en-us/business/memory/mlc-nand/asset/KIOXIA_Efficient_Garbage_Collection_Operations_Tech_Brief.pdf), [Performance drop without discards](https://embeddedcomputing.com/technology/processing/performance-drop-without-discards)
+<!-- sha:52487ae6a506 -->
+
+## 2026-11-14T00:49:26Z
+> **Not unless the tablet is plugged in and left alone.** Android runs that background compile only when it is charging and the screen has been off and untouched for a while, usually about an hour. It also only runs about once a day. It doesn't have to be overnight or fully charged, because any long idle charge counts. If the tablet is never plugged in with the screen off for that long, the compile basically never happens. It also stops as soon as you pick the tablet up or unplug it. This is how stock Android 10 works. Your tablet's maker may have changed it, and I haven't checked on the tablet itself.
+>
+> **Does that matter?** Very little. The compile only speeds up the app's own interface code. It doesn't touch the engine that loads and draws pages, which Mozilla already compiled. The project's own notes call the gain small. So there's no need to change your charging habits for this.
+>
+> If you ever want it, there are two ways:
+> - Charge it with the screen off for an hour or two sometime, day or night.
+> - With your cable, one command compiles the app right away. The result is lost every time the app updates.
+>
+> Want me to give you that command?
+>
+> Source: [Android's description of the background compile job](https://android.googlesource.com/platform/art/+show/refs/tags/android-security-14.0.0_r24/libartservice/service/README.md) (Android 14 version).
+<!-- sha:6eadb43d5499 -->
