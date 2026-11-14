@@ -506,11 +506,11 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         if (keyboardShowing) post { prepareGlide() }
     }
 
-    /** True when the window point is on the panel (the activity does not treat a long press there as the corner's). */
+    /** True when the window point is on the panel itself (its body, its grip, a corner while the keyboard is open); the transparent band around it belongs to the page, and so does everything else. */
     fun coversWindowPoint(x: Float, y: Float): Boolean {
         if (!isOpen || panel.visibility != VISIBLE) return false
         val loc = IntArray(2); panel.getLocationInWindow(loc)
-        return x >= loc[0] && x < loc[0] + panel.width && y >= loc[1] && y < loc[1] + panel.height
+        return panel.zoneAt(x - loc[0], y - loc[1]) != ZONE_NONE
     }
 
     private var lastShiftAt = -1L

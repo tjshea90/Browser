@@ -208,13 +208,39 @@ open class BrowserActivity : Activity(), DockListener {
         return true
     }
 
+    /**
+     * The window point is on something of the app's own that acts on a press or a long press: the open mini panel, Home's search box, its Go button and its suggestions, a button of the error screen.
+     * Not open space (AY2): the touch detector leaves it alone.
+     */
+    private fun ownActionAt(x: Float, y: Float): Boolean {
+        if (::miniNav.isInitialized && miniNav.coversWindowPoint(x, y)) return true
+        val t = current ?: return false
+        if (homeShown(t)) return ownViewAt(home, x, y)
+        if (t.error != null) return ownViewAt(errorView, x, y)
+        return false
+    }
+
+    /** A clickable, long-clickable or editable view below [root] (not [root] itself: Home and the error screen swallow touches as a whole) is under the window point. */
+    private fun ownViewAt(root: android.view.ViewGroup, x: Float, y: Float): Boolean {
+        val loc = IntArray(2)
+        for (i in 0 until root.childCount) {
+            val c = root.getChildAt(i)
+            if (c.visibility != View.VISIBLE) continue
+            c.getLocationInWindow(loc)
+            if (x < loc[0] || x >= loc[0] + c.width || y < loc[1] || y >= loc[1] + c.height) continue
+            if (c is android.widget.EditText || c.isClickable || c.isLongClickable) return true
+            if (c is android.view.ViewGroup && ownViewAt(c, x, y)) return true
+        }
+        return false
+    }
+
     private val hotCornerHost = object : app.kestrel.browser.ui.HotCorner.Host {
         override fun zone(): IntArray? {
             if (!::miniNav.isInitialized || !miniNav.available || !browserInFront() || pageAnswersLongPress()) return null
             val loc = IntArray(2); content.getLocationInWindow(loc)
             return intArrayOf(loc[0], loc[1], loc[0] + content.width, loc[1] + content.height) // the whole page area: a long press anywhere puts the panel under the finger
         }
-        override fun covers(x: Float, y: Float): Boolean = ::miniNav.isInitialized && miniNav.coversWindowPoint(x, y)
+        override fun covers(x: Float, y: Float): Boolean = ownActionAt(x, y)
         override fun fired(downTime: Long, x: Float, y: Float) {
             // the page was given the touch-down: tell it the touch is over, so its own long press (context menu, text selection) never starts
             val cancel = android.view.MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), android.view.MotionEvent.ACTION_CANCEL, x, y, 0)
@@ -230,6 +256,7 @@ open class BrowserActivity : Activity(), DockListener {
     private var pressX = 0f; private var pressY = 0f; private var pressDownTime = 0L; private var pressEndAt = 0L
     private var pressMovedFar = false
     private var pressSwallow = false
+    private var pressOnPanel = false // the touch went down on the mini panel: the page never saw it, so no answer from the page can be about it
 
     internal fun onOpenSpace(page: String) {
         if (!::miniNav.isInitialized || !miniNav.available || !prefs.miniNavToggle || !browserInFront()) return
@@ -485,7 +512,9 @@ open class BrowserActivity : Activity(), DockListener {
         }
         when (ev.actionMasked) {
             android.view.MotionEvent.ACTION_DOWN -> {
-                pressActive = true; pressX = ev.x; pressY = ev.y; pressDownTime = ev.downTime; pressMovedFar = false
+                pressOnPanel = ::miniNav.isInitialized && miniNav.coversWindowPoint(ev.x, ev.y)
+                pressActive = !pressOnPanel; pressX = ev.x; pressY = ev.y; pressDownTime = ev.downTime; pressMovedFar = false
+                if (pressOnPanel) pressEndAt = 0L
                 Neon.touching(true)
                 lastTouchAt = SystemClock.uptimeMillis()
                 downX = ev.x; downY = ev.y; dragged = false
@@ -497,7 +526,7 @@ open class BrowserActivity : Activity(), DockListener {
                 if (!pressMovedFar && (Math.abs(ev.x - pressX) > touchSlop * 3 || Math.abs(ev.y - pressY) > touchSlop * 3)) pressMovedFar = true
             }
             android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
-                pressActive = false; pressEndAt = SystemClock.uptimeMillis()
+                pressActive = false; if (!pressOnPanel) pressEndAt = SystemClock.uptimeMillis()
                 lastTouchAt = SystemClock.uptimeMillis()
                 // a swipe may leave a fling running (hold the glow still for it); a plain tap leaves nothing behind, so the glow comes back almost at once
                 Io.main.removeCallbacks(touchRelease); Io.main.postDelayed(touchRelease, if (dragged) 1500L else 350L)
