@@ -300,3 +300,99 @@ test('nothing leaks onto the page: one marker property, no globals added by the 
   assert.deepEqual(added.sort(), ['__kstSL', '__n'].sort());
   assert.equal(await page.evaluate(() => typeof window.__kstSL), 'number');
 });
+
+// ---------------------------------------------------------------- AW1e: rewriting the text of an answer, and the small defusers
+const PLAYER = '{"video":"movie.mp4","adPlacements":[{"a":1}],"playerAds":[2],"adSlots":["x"],"keep":"yes"}';
+
+test('trusted-replace-fetch-response: a plain text is replaced everywhere in the answer of a matching request, others are untouched, status and the address survive', async () => {
+  const page = await open([['trusted-replace-fetch-response', '"adPlacements"', '"no_ads"', '/data.json']], '', { json: PLAYER });
+  const r = await page.evaluate(async () => {
+    const a = await fetch('/data.json');
+    return { text: await a.text(), status: a.status, url: a.url, ok: a.ok };
+  });
+  assert.equal(r.text, PLAYER.replace('"adPlacements"', '"no_ads"'));
+  assert.equal(r.status, 200); assert.ok(r.url.endsWith('/data.json')); assert.equal(r.ok, true);
+  const other = await page.evaluate(async () => (await (await fetch('/other.json')).text()).slice(0, 15));
+  assert.ok(other.startsWith('<!doctype html'), 'a request that does not match is not touched');
+});
+
+test('trusted-replace-fetch-response: a regular expression with flags and a group reference, an empty replacement, several rules at once', async () => {
+  const page = await open([
+    ['trusted-replace-fetch-response', '/"adPlacements.*?("adSlots"|"adBreakHeartbeatParams")/gms', '$1', '/data.json'],
+    ['trusted-replace-fetch-response', '/"keep":"yes"/', '', 'data.json'],
+    ['json-prune-fetch-response', 'playerAds', '', 'propsToMatch', '/data.json'],
+  ], '', { json: PLAYER });
+  const t = await page.evaluate(async () => (await fetch('/data.json')).text());
+  assert.equal(t, '{"video":"movie.mp4","adSlots":["x"],}', 'the placement block is cut down to its end marker, the empty replacement deletes, the JSON prune ran too: ' + t);
+});
+
+test('trusted-replace-fetch-response: a needle that looks like /path/word is an address, not a regular expression with flags', async () => {
+  const page = await open([['trusted-replace-fetch-response', 'movie', 'film', '/api/graphql'], ['no-fetch-if', '/api/blocked']], '', { json: PLAYER });
+  const r = await page.evaluate(async () => {
+    const out = [];
+    out.push((await (await fetch('/api/graphql')).text()).includes('<!doctype') ? 'page' : 'json');   // the route answers other paths with a page: the rule must at least not throw
+    out.push((await (await fetch('/api/blocked')).text()));
+    return out;
+  });
+  assert.equal(r[1], '{}', 'no-fetch-if with the path /api/blocked matched as an address');
+});
+
+test('trusted-replace-xhr-response: the text and the json of a matching answer are rewritten when read, in every order of the page\'s own handlers', async () => {
+  const page = await open([['trusted-replace-xhr-response', '"adPlacements"', '"no_ads"', '/data.json']], '', { json: PLAYER });
+  const t = await page.evaluate(() => new Promise((res) => { const x = new XMLHttpRequest(); x.onload = () => res(x.responseText); x.open('GET', '/data.json'); x.send(); }));
+  assert.equal(t, PLAYER.replace('"adPlacements"', '"no_ads"'));
+  const j = await page.evaluate(() => new Promise((res) => { const x = new XMLHttpRequest(); x.responseType = 'json'; x.onload = () => res(Object.keys(x.response)); x.open('GET', '/data.json'); x.send(); }));
+  assert.deepEqual(j, ['video', 'no_ads', 'playerAds', 'adSlots', 'keep']);
+  const early = await page.evaluate(() => new Promise((res) => { const x = new XMLHttpRequest(); x.onreadystatechange = () => { if (x.readyState === 4) res(x.response); }; x.open('GET', '/data.json'); x.send(); }));
+  assert.ok(early.includes('"no_ads"') && !early.includes('"adPlacements"'));
+  const miss = await page.evaluate(() => new Promise((res) => { const x = new XMLHttpRequest(); x.onload = () => res(x.responseText.slice(0, 9)); x.open('GET', '/other.json'); x.send(); }));
+  assert.equal(miss, '<!doctype');
+});
+
+test('trusted-replace-xhr-response: a replacement that breaks the JSON of a json-typed answer leaves the answer as it was', async () => {
+  const page = await open([['trusted-replace-xhr-response', '{', '<<', '/data.json']], '', { json: PLAYER });
+  const j = await page.evaluate(() => new Promise((res) => { const x = new XMLHttpRequest(); x.responseType = 'json'; x.onload = () => res(x.response && x.response.video); x.open('GET', '/data.json'); x.send(); }));
+  assert.equal(j, 'movie.mp4');
+});
+
+test('nobab: BlockAdBlock and FuckAdBlock report no blocker, also when the page assigns its own over them', async () => {
+  const page = await open([['nobab']], '<script>window.r = []; var b = new BlockAdBlock({ checkOnLoad: true }); b.onDetected(function () { r.push("detected"); }); b.onNotDetected(function () { r.push("clean"); }); window.BlockAdBlock = function () { r.push("page class used"); }; fuckAdBlock.onNotDetected(function () { r.push("fuck clean"); }); try { window.blockAdBlock = null; } catch (e) { r.push("threw"); }</script>');
+  await settle(150);
+  assert.deepEqual((await ev(page, () => window.r)).sort(), ['clean', 'fuck clean']);
+  assert.equal(await ev(page, () => typeof window.blockAdBlock.onNotDetected), 'function');
+});
+
+test('popads-dummy: the globals exist and are empty, writes are ignored', async () => {
+  const page = await open([['popads-dummy']], '<script>window.__a = JSON.stringify(window.PopAds); window.PopAds = { real: 1 }; window.__b = JSON.stringify(window.PopAds); window.__c = typeof popns;</script>');
+  assert.deepEqual(await ev(page, () => [window.__a, window.__b, window.__c]), ['{}', '{}', 'object']);
+});
+
+test('norafif: animation-frame callbacks that hold the needle never run, the others do', async () => {
+  const page = await open([['norafif', 'exoframe']], '<script>window.r = []; requestAnimationFrame(function exoframeTick() { r.push("exo"); }); requestAnimationFrame(function other() { r.push("other"); });</script>');
+  await settle(200);
+  assert.deepEqual(await ev(page, () => window.r), ['other']);
+});
+
+test('href-sanitizer: a redirector link points at its target (query parameter, base64, link text), later links too, and never at anything but a web address', async () => {
+  const b64 = Buffer.from('https://target.example/page?x=1').toString('base64');
+  const body = '<a id="a" href="https://go.example/out?url=https%3A%2F%2Ftarget.example%2Fa">x</a>'
+    + '<a id="b" href="https://go.example/full?url=' + b64 + '">x</a>'
+    + '<a id="c" href="https://go.example/t">https://target.example/from-text</a>'
+    + '<a id="d" href="https://go.example/out?url=javascript%3Aalert(1)">x</a>'
+    + '<a id="e" href="https://other.example/out?url=https%3A%2F%2Ftarget.example%2Fe">x</a>';
+  const page = await open([
+    ['href-sanitizer', 'a[href^="https://go.example/out?url="]', '?url'],
+    ['href-sanitizer', 'a[href^="https://go.example/full?url="]', '?url -base64'],
+    ['href-sanitizer', 'a[href="https://go.example/t"]', 'text'],
+  ], body);
+  await settle(200);
+  const h = await page.evaluate(() => ['a', 'b', 'c', 'd', 'e'].map((i) => document.getElementById(i).href));
+  assert.equal(h[0], 'https://target.example/a');
+  assert.equal(h[1], 'https://target.example/page?x=1');
+  assert.equal(h[2], 'https://target.example/from-text');
+  assert.ok(h[3].startsWith('https://go.example/out?url=javascript'), 'a javascript: target is never used');
+  assert.ok(h[4].startsWith('https://other.example/'), 'a link the selector does not name is left alone');
+  await page.evaluate(() => { const a = document.createElement('a'); a.id = 'f'; a.href = 'https://go.example/out?url=https%3A%2F%2Ftarget.example%2Flate'; document.body.appendChild(a); });
+  await settle(250);
+  assert.equal(await page.evaluate(() => document.getElementById('f').href), 'https://target.example/late');
+});
