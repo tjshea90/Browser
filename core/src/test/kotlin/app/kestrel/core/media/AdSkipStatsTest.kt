@@ -52,4 +52,12 @@ class AdSkipStatsTest {
         val s = AdSkipStats(); s.add(1, 1, 1, 1, 1, 1, 1, "x"); s.reset()
         assertEquals("YouTube ads: none seen yet", s.line())
     }
+
+    @Test fun theScriptForOtherPlayersKeepsItsOwnNumbersUnderItsOwnLabel() {   // RX3-G7
+        val youtube = AdSkipStats(); val others = AdSkipStats("Other players' ads")
+        assertEquals("Other players' ads: none seen yet", others.line())
+        others.add(seen = 2, skipped = 1, clicks = 1, overlays = 0, dialogs = 0, jumps = 1, gaveUp = 1, reason = "speed refused")
+        assertEquals("Other players' ads: 2 seen, 1 skipped (1 fast-forwarded, 1 skip button pressed), 1 gave up; last problem: speed refused", others.line())
+        assertEquals("YouTube ads: none seen yet", youtube.line())
+    }
 }

@@ -4,8 +4,9 @@ package app.kestrel.core.media
  * RX3-Y2 (research/YOUTUBE_ADS.md section 4): what the YouTube ad skipper (content script youtube.js) has done since the app started, as plain numbers. The script reports DIFFERENCES (ads it saw, ads it saw
  * end while it was working, skip buttons pressed, overlay ads closed, enforcement dialogs removed, ads moved to their end, ads it gave up on) and, in a few words, the last thing that went wrong.
  * Never an address. UI thread only; RAM only; private tabs are dropped by the caller before they reach it.
+ * RX3-G7: the same numbers come from the script for other video players (players.js); the app keeps a second instance for them with its own [label].
  */
-class AdSkipStats {
+class AdSkipStats(private val label: String = "YouTube ads") {
     var seen = 0; private set
     var skipped = 0; private set
     private var clicks = 0; private var overlays = 0; private var dialogs = 0; private var jumps = 0; private var gaveUp = 0
@@ -23,7 +24,7 @@ class AdSkipStats {
 
     /** One plain line for Diagnostics; only what happened is mentioned. */
     fun line(): String {
-        val sb = StringBuilder("YouTube ads: ")
+        val sb = StringBuilder(label).append(": ")
         if (seen == 0) sb.append("none seen yet")
         else {
             sb.append(seen).append(" seen, ").append(skipped).append(" skipped")
