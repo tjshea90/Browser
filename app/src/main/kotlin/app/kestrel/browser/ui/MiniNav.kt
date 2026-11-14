@@ -165,6 +165,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         panel.visibility = GONE
         addView(panel, LayoutParams(ctx.dp(PANEL_W_DP) + 2 * ctx.dp(BAND_DP), LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END))
         keys.onKey = { key -> typed(key) }
+        keys.onCursor = { n -> cursorSlid(n) }
         applyColors()
     }
 
@@ -526,6 +527,24 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                 if (!model.glideActive) keys.clearCandidates(); bar.invalidate(); keys.invalidate()
             }
         }
+    }
+
+    /**
+     * The space key was slid sideways (AY3, owner message 39): the text cursor moves [delta] characters. In a page's text field the page's own caret moves (the arrow keys, a field the keyboard does not
+     * mirror), and what was typed so far is handed to the keyboard's memory first; in the address bar the keyboard's own cursor moves.
+     */
+    private fun cursorSlid(delta: Int) {
+        if (delta == 0) return
+        syncField()
+        confirmGlide()
+        val f = pageField
+        if (f != null) {
+            learnFromText()
+            f.moveCursor(delta)
+            model.restartText(); learnedText = null // the caret is somewhere else now: what follows starts from an empty text
+        } else if (!model.moveCursor(delta)) return
+        pendingWord = null; afterUndo = false; retypeWatch = false
+        keys.clearCandidates(); bar.invalidate(); keys.invalidate()
     }
 
     // ------------------------------------------------------------------ typing into the page's own text field (AU3)
@@ -926,6 +945,14 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
      */
     private inner class KeysView(ctx: Context) : View(ctx) {
         var onKey: ((Key) -> Unit)? = null
+        /** The space key was slid over (AY3, owner message 39): the text cursor moves this many characters (negative = left). */
+        var onCursor: ((Int) -> Unit)? = null
+        private var spaceDown = false       // the finger went down on the space key
+        private var slideStartX = 0f        // where it went down
+        private var slideAnchorX = 0f       // the x that the characters moved so far are counted from
+        private var sliding = false         // it moved far enough sideways: this is a cursor slide, not a space
+        private val slideStartPx = ctx.dpf(SLIDE_START_DP)
+        private val slideStepPx = ctx.dpf(SLIDE_STEP_DP)
         private val handler = Handler(Looper.getMainLooper())
         private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
         private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
@@ -1231,6 +1258,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                     if (glideUsable() && e.y < stripPx()) { stripDown = chipAt(e.x, e.y); invalidate(); return true } // a guess in the strip was touched
                     removeCallbacks(fadeStep); gn = 0; fadeStart = 0L
                     down = keyAt(e.x, e.y); light(down)
+                    spaceDown = (down?.key as? Key.Ch)?.text == " "; sliding = false; slideStartX = e.x; slideAnchorX = e.x
                     clearHold(); if (isBubbleKey(down)) { bubbleKey = down; bubbleText = down!!.label }
                     if (down != null) { haptic(); if (altOf(down) != null) handler.postDelayed(hold, HOLD_MS) }
                     if (down?.key === Key.Backspace) { onKey?.invoke(Key.Backspace); handler.postDelayed(repeat, REPEAT_FIRST_MS) }
@@ -1244,6 +1272,14 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                         if (gliding) { invalidate(); maybePreview() }
                         return true
                     }
+                    if (spaceDown) { // press the space key and slide sideways: the text cursor follows the finger, one character for every few millimetres (the way other keyboards do it)
+                        if (!sliding && Math.abs(e.x - slideStartX) > slideStartPx) { sliding = true; slideAnchorX = e.x; litKey = down; invalidate() }
+                        if (sliding) {
+                            val steps = ((e.x - slideAnchorX) / slideStepPx).toInt()
+                            if (steps != 0) { slideAnchorX += steps * slideStepPx; haptic(); onCursor?.invoke(steps) }
+                            return true
+                        }
+                    }
                     val k = keyAt(e.x, e.y); if (k !== down) { down = k; handler.removeCallbacks(repeat); clearHold(); if (isBubbleKey(k)) { bubbleKey = k; bubbleText = k!!.label }; light(k) }
                 }
                 MotionEvent.ACTION_UP -> {
@@ -1253,6 +1289,13 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                         return true
                     }
                     if (gliding) { addMotion(e); endGlide(); return true }
+                    if (sliding) { // the end of a cursor slide: no space is typed
+                        val steps = ((e.x - slideAnchorX) / slideStepPx).toInt()
+                        if (steps != 0) onCursor?.invoke(steps)
+                        sliding = false; spaceDown = false; down = null; litKey = null; gn = 0; invalidate()
+                        return true
+                    }
+                    spaceDown = false
                     handler.removeCallbacks(repeat)
                     val alt = holdAlt; clearHold(); invalidate()
                     if (armed) { // a tap on a letter types the letter it went down on, even when the finger drifted a little (held: its digit)
@@ -1268,7 +1311,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                     down = null; gn = 0
                 }
                 MotionEvent.ACTION_CANCEL -> {
-                    handler.removeCallbacks(repeat); clearHold(); down = null; armed = false; pressedKey = null; stripDown = -1; invalidate()
+                    handler.removeCallbacks(repeat); clearHold(); down = null; armed = false; pressedKey = null; stripDown = -1; sliding = false; spaceDown = false; litKey = null; invalidate()
                     if (gliding) { gliding = false; fadeStart = SystemClock.uptimeMillis(); postOnAnimation(fadeStep) }
                 }
             }
@@ -1299,6 +1342,9 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
     companion object {
         const val SLIDE_MS = 200L
+        /** Sliding over the space key: the finger must move this far sideways before it is a cursor slide and not a space, and every step of this width moves the cursor one character. */
+        const val SLIDE_START_DP = 10f
+        const val SLIDE_STEP_DP = 11f
         /** How long a pressed button, key or bar stays lit. */
         const val FLASH_MS = 130L
         private const val REPEAT_FIRST_MS = 380L
