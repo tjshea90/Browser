@@ -119,6 +119,48 @@ object GlideEval {
         return Result(n, t1, t3, rec, nanos / 1e6 / n, worst / 1e6, byLen).also { it.hitCosts = hitCosts.sorted() }
     }
 
+    /**
+     * A person with habits (AU2d): favourite words that are not among the commonest, and phrases they write again and again. They glide [glides] words; the first guess is judged in [blocks] equal
+     * stretches of use. With [learn] the keyboard's personal model hears what the person did: a word that was first is kept (1), one they had to pick from the three guesses counts more (3), one
+     * that was not there at all they type letter by letter (1).
+     */
+    class Curve(val blocks: List<Double>, val favouriteBlocks: List<Double>, val known: Int, val pairs: Int)
+
+    fun learningCurve(lex: BinaryLexicon, keys: GlideKeys, params: GlideParams, noise: SimNoise, glides: Int, blocks: Int, learn: Boolean, seed: Long): Curve {
+        val rnd = Random(seed * 31 + 7)
+        val sim = GestureSim(keys, Random(seed))
+        val dec = GlideDecoder(keys, params)
+        val model = if (learn) PersonalModel() else null
+        dec.personal = model
+        // the person: 150 favourite words from ranks 1500..15000, phrases of two or three of them
+        val ranked = (0 until lex.size).filter { distinct(lex, it) >= 3 }.sortedByDescending { lex.logProb(it) }.drop(1500).take(13500)
+        val fav = List(150) { lex.text(ranked[rnd.nextInt(ranked.size)]) }.distinct()
+        val phrases = List(40) { val n = 2 + rnd.nextInt(2); List(n) { fav[rnd.nextInt(fav.size)] } }
+        val base = frequencyPick(lex, 4000, Random(seed * 13), 3).map { lex.text(it.id) }
+        val lexicons = listOf<GlideLexicon>(lex)
+        val hits = IntArray(blocks); val seen = IntArray(blocks); val favHits = IntArray(blocks); val favSeen = IntArray(blocks)
+        var done = 0
+        while (done < glides) {
+            val q: List<String> = if (rnd.nextInt(100) < 70) phrases[rnd.nextInt(phrases.size)] else List(1 + rnd.nextInt(3)) { base[rnd.nextInt(base.size)] }
+            var prev: String? = null
+            for (w in q) {
+                if (done >= glides) break
+                val path = sim.path(w, noise) ?: continue
+                val c = dec.decode(path.xs, path.ys, path.xs.size, lexicons, prev, 3)
+                val b = (done * blocks / glides).coerceAtMost(blocks - 1)
+                val key = String(GlideLetters.keyOf(w))
+                val first = c.isNotEmpty() && String(GlideLetters.keyOf(c[0].text)) == key
+                val inThree = c.any { String(GlideLetters.keyOf(it.text)) == key }
+                seen[b]++; if (first) hits[b]++
+                if (w in fav) { favSeen[b]++; if (first) favHits[b]++ }
+                // what the person did, and so what the keyboard learned
+                model?.add(prev, w, if (first) 1f else if (inThree) 3f else 1f)
+                prev = w; done++
+            }
+        }
+        return Curve(List(blocks) { 100.0 * hits[it] / seen[it].coerceAtLeast(1) }, List(blocks) { 100.0 * favHits[it] / favSeen[it].coerceAtLeast(1) }, model?.wordCount ?: 0, model?.pairCount ?: 0)
+    }
+
     fun parse(args: Array<String>): Map<String, String> = args.mapNotNull { a -> a.split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }.toMap()
 
     fun paramsFrom(a: Map<String, String>): GlideParams {
@@ -147,6 +189,18 @@ object GlideEval {
         val seed = a["seed"]?.toLong() ?: 1L
         val rnd = Random(seed * 7919)
         val picks = when (a["pop"] ?: "freq") { "rank" -> rankPick(lex, n, rnd); "ctx" -> contextPick(lex, n, rnd); else -> frequencyPick(lex, n, rnd) }
+        if (a["curve"] != null) {
+            val g = a["glides"]?.toInt() ?: 1800; val nb = a["blocks"]?.toInt() ?: 6
+            for (nm in (a["noise"] ?: "normal,sloppy").split(',')) {
+                val noise = noiseFrom(a + mapOf("noise" to nm))
+                val off = learningCurve(lex, keys, paramsFrom(a), noise, g, nb, false, seed)
+                val on = learningCurve(lex, keys, paramsFrom(a), noise, g, nb, true, seed)
+                println("${noise.name}, a person with habits, $g glides in $nb stretches (first guess right, %):")
+                println("   without learning: " + off.blocks.joinToString(" ") { "%.1f".format(it) } + "   own favourites: " + off.favouriteBlocks.joinToString(" ") { "%.1f".format(it) })
+                println("   with learning:    " + on.blocks.joinToString(" ") { "%.1f".format(it) } + "   own favourites: " + on.favouriteBlocks.joinToString(" ") { "%.1f".format(it) } + "   (knows ${on.known} words, ${on.pairs} pairs)")
+            }
+            return
+        }
         if (a["garbage"] != null) {
             val dec = GlideDecoder(keys, paramsFrom(a)); val rnd2 = Random(5)
             val costs = ArrayList<Float>(); var none = 0; val total = 800
