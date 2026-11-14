@@ -60,6 +60,78 @@ test('a bare media element (no source at all) is left alone', async () => {
   assert.deepEqual(await msgs(page), []);
 });
 
+// ---------------------------------------------------------------- a long press on OPEN space (AY2, owner message 39)
+// The engine delivers a long press as a trusted `contextmenu` event on whatever is under the finger. Only when nothing there could have an action of its own, and the engine did not select a word, the page tells the
+// app ({k:'os'}) that the press was on open space, and the app puts the mini panel under the finger. (Headless Chromium does not select a word on a right click: the page here does what the engine does.)
+const opens = (page) => page.evaluate(() => window.__msgs.filter((m) => m.k === 'os'));
+const press = async (page, x, y) => { await rightClick(page, x, y); await page.waitForTimeout(350); };
+const selectWord = () => { document.addEventListener('contextmenu', () => { const r = document.createRange(); r.selectNodeContents(document.getElementById('t')); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); }); };
+
+test('open space: a long press on blank space is reported once, with the address of the page and nothing else', async () => {
+  const page = await open(`<div style="height:600px"></div>`);
+  await press(page, 120, 200);
+  assert.deepEqual(await opens(page), [{ k: 'os', p: 'https://site.example/' }]);
+});
+
+test('open space: a link, a picture, a button, a form control and a video are not open space', async () => {
+  const page = await open(`
+    <a href="https://x.example/" style="position:absolute;left:0;top:0;width:100px;height:40px;display:block">link</a>
+    <img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" style="position:absolute;left:0;top:50px;width:100px;height:40px">
+    <button style="position:absolute;left:0;top:100px;width:100px;height:40px">b</button>
+    <input style="position:absolute;left:0;top:150px;width:100px;height:40px">
+    <textarea style="position:absolute;left:0;top:200px;width:100px;height:40px"></textarea>
+    <select style="position:absolute;left:0;top:250px;width:100px;height:40px"><option>o</option></select>
+    <video src="https://cdn.example/v.mp4" style="position:absolute;left:0;top:300px;width:100px;height:40px"></video>`);
+  for (const y of [20, 70, 120, 170, 220, 270, 320]) await press(page, 50, y);
+  assert.deepEqual(await opens(page), []);
+});
+
+test('open space: widgets by role, an onclick, a tab stop, an editable region and a pointer cursor are not open space either', async () => {
+  const page = await open(`
+    <div role="button" style="position:absolute;left:0;top:0;width:100px;height:40px"></div>
+    <div onclick="1" style="position:absolute;left:0;top:50px;width:100px;height:40px"></div>
+    <div tabindex="0" style="position:absolute;left:0;top:100px;width:100px;height:40px"></div>
+    <div contenteditable="true" style="position:absolute;left:0;top:150px;width:100px;height:40px"></div>
+    <div style="position:absolute;left:0;top:200px;width:100px;height:40px;cursor:pointer"></div>
+    <div role="textbox" style="position:absolute;left:0;top:250px;width:100px;height:40px"></div>`);
+  for (const y of [20, 70, 120, 170, 220, 270]) await press(page, 50, y);
+  assert.deepEqual(await opens(page), []);
+});
+
+test('open space: a transparent layer over a link does not make the link open space (the whole stack under the finger is looked at)', async () => {
+  const page = await open(`<a href="https://x.example/" style="position:absolute;left:0;top:0;width:200px;height:100px;display:block">link</a><div style="position:absolute;left:0;top:0;width:200px;height:100px"></div>`);
+  await press(page, 50, 50);
+  assert.deepEqual(await opens(page), []);
+});
+
+test('open space: a link NEXT to blank space does not stop a press on the blank space', async () => {
+  const page = await open(`<a href="https://x.example/" style="position:absolute;left:0;top:0;width:100px;height:40px;display:block">link</a><div style="height:600px"></div>`);
+  await press(page, 300, 300);
+  assert.equal((await opens(page)).length, 1);
+});
+
+test('open space: a press on text is the engine\'s (it selects the word), not open space', async () => {
+  const page = await open(`<p id="t" style="margin:0;padding:20px;width:300px">some words of a paragraph</p><div style="height:600px"></div>`, selectWord);
+  await press(page, 50, 30);
+  assert.deepEqual(await opens(page), [], 'the word is selected: the press belongs to the selection');
+  await page.evaluate(() => window.getSelection().removeAllRanges());
+  await press(page, 100, 400);
+  assert.equal((await opens(page)).length, 1, 'but blank space below it is open space');
+});
+
+test('open space: a context menu event a page makes up itself is never believed', async () => {
+  const page = await open(`<div style="height:600px"></div>`);
+  await page.evaluate(() => document.body.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 50, clientY: 50 })));
+  await page.waitForTimeout(350);
+  assert.deepEqual(await opens(page), []);
+});
+
+test('open space: a page that stops the event itself (a custom menu) is still asked first, and an app that does not answer never breaks the page', async () => {
+  const page = await open(`<div style="height:600px" oncontextmenu="window.__own=1"></div>`, () => { window.browser.runtime.sendMessage = () => Promise.reject(new Error('no app')); });
+  await press(page, 50, 50);
+  assert.equal(await page.evaluate(() => window.__own), 1);
+});
+
 // ---------------------------------------------------------------- the media scan (AA4 / PERF_JS J4)
 const doms = (page) => page.evaluate(() => window.__msgs.filter((m) => m.k === 'dom').map((m) => m.u));
 const settle = (page) => page.waitForTimeout(500); // the scan runs when the page is idle (requestIdleCallback), a moment after load
