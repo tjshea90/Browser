@@ -524,3 +524,4 @@ A question, not an order: answer it in plain words with a TESTED recipe, then le
   - [ ] RX3-S6 A/B lazy-load margin 600/1000/1500 on the plain hotspot
   - [ ] RX3-M1 back/forward cache viewers follow LiveBudget (floor 4; live pref if the engine observes it)
   - [ ] RX3-H1 NetProfile "capped hotspot" state: frugal lazy margin, no prefetch-next, shorter media read-ahead; Page loads A/B
+- [x] AY5 ship (alpha40 or later) and answer the owner in plain words incl. what was NOT run on the tablet - kestrel-g-v0.3.0-alpha40 (gecko code 141): GitHub run 43634029105 green (check, test-js, test-jvm, build-gecko; APK in the Release, certificate verified), recorded in BUILDLOG.md; owner answered with the Release link
