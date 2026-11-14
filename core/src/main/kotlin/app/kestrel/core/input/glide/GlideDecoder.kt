@@ -433,12 +433,16 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
     private fun applyCorrections(out: ArrayList<GlideCandidate>) {
         val pm = personal ?: return
         if (p.confGain <= 0f || out.size < 2 || pm.confusionCount == 0) return
-        val top = out[0].text
+        val first = out[0]
         var changed = false
         for (i in 1 until out.size) {
             val c = out[i]
-            val n = pm.confusionWeight(top, c.text)
-            if (n > 0f) { out[i] = GlideCandidate(c.text, c.score + p.confGain * Math.log(1.0 + n).toFloat(), c.cost, c.prior, c.letters); changed = true }
+            if (c.perLetter - first.perLetter > p.confMaxGap) continue // the path fits this word clearly worse: a habit does not overrule the finger
+            val n = pm.confusionWeight(first.text, c.text)
+            if (n > 0f) {
+                val lift = Math.min(p.confCap, p.confGain * Math.log(1.0 + n).toFloat())
+                out[i] = GlideCandidate(c.text, c.score + lift, c.cost, c.prior, c.letters); changed = true
+            }
         }
         if (changed) out.sortByDescending { it.score }
     }
