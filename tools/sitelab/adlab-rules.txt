@@ -10,11 +10,12 @@ adlab.test##+js(rmnt, script, adbait)
 adlab.test##+js(no-fetch-if, ads.adlab.test)
 adlab.test##+js(nowoif)
 adlab.*##+js(set, entityOk, true)
-! AW1c: blocked files answered with a stand-in (control.test has none of these)
-||adlab.test/r/tag.js$script,redirect=noopjs
-||adlab.test/r/ima.js$script,redirect=google-ima.js
-||adlab.test/r/pixel.gif$image,redirect=1x1.gif
-||adlab.test/r/data.json$xhr,redirect=noopjson
-||adlab.test/r/clip.mp4$media,redirect=noopmp4-1s
-||adlab.test/r/frame.html$subdocument,redirect=noopframe
-||adlab.test/r/plain.js$script
+! AW1c: blocked files answered with a stand-in. (A host-anchored rule such as ||adlab.test/r/tag.js does not match when the address has a port, as the lab's has: ABP syntax, so these are
+! path rules limited to the lab page with domain=. control.test has none of them.)
+/r/tag.js$script,redirect=noopjs,domain=adlab.test
+/r/ima.js$script,redirect=google-ima.js,domain=adlab.test
+/r/pixel.gif$image,redirect=1x1.gif,domain=adlab.test
+/r/data.json$xhr,redirect=noopjson,domain=adlab.test
+/r/clip.mp4$media,redirect=noopmp4-1s,domain=adlab.test
+/r/frame.html$subdocument,redirect=noopframe,domain=adlab.test
+/r/plain.js$script,domain=adlab.test
