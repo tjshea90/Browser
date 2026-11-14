@@ -96,4 +96,18 @@ class MiniNavLookTest {
         assertTrue("the digit bubble is painted over the strip above the key ($n pixels differ)", n > 40)
         nav.touchKeysForTest(MotionEvent.ACTION_UP, x, y)
     }
+
+    @Test fun theBubbleAlsoShowsWhenTheTouchComesThroughThePanelsOwnDispatchLikeOnTheDevice() {
+        val before = render()
+        val (x, y) = nav.keyCenterForTest("h")!!
+        val loc = IntArray(2); nav.keysViewForTest().getLocationInWindow(loc)
+        val t0 = android.os.SystemClock.uptimeMillis()
+        val handled = nav.dispatchTouchEvent(MotionEvent.obtain(t0, t0, MotionEvent.ACTION_DOWN, loc[0] + x, loc[1] + y, 0))
+        idle(400)
+        val after = render()
+        val n = changed(before, after, (x - 40).toInt(), (y - 80).toInt(), (x + 40).toInt(), (y - 22).toInt())
+        assertTrue("the panel took the touch", handled)
+        assertTrue("the bubble is painted above the key when the touch arrives through the panel ($n pixels differ; window offset ${loc[0]},${loc[1]})", n > 60)
+        nav.dispatchTouchEvent(MotionEvent.obtain(t0, t0 + 400, MotionEvent.ACTION_UP, loc[0] + x, loc[1] + y, 0))
+    }
 }
