@@ -442,13 +442,13 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         return x >= loc[0] && x < loc[0] + panel.width && y >= loc[1] && y < loc[1] + panel.height
     }
 
-    private var lastShiftAt = 0L
+    private var lastShiftAt = -1L
 
     private fun typed(key: Key) {
         syncField() // the page's field may have changed or gone since the last key
         if (key === Key.Shift) { // Shift tapped twice quickly: caps lock
             val now = SystemClock.uptimeMillis()
-            if (model.shift && !model.shiftLock && lastShiftAt > 0L && now - lastShiftAt < DOUBLE_TAP_MS) { model.lockShift(); lastShiftAt = 0L; bar.invalidate(); keys.invalidate(); return }
+            if (model.shift && !model.shiftLock && lastShiftAt >= 0L && now - lastShiftAt < DOUBLE_TAP_MS) { model.lockShift(); lastShiftAt = -1L; bar.invalidate(); keys.invalidate(); return }
             lastShiftAt = now
         }
         val f = pageField
@@ -583,6 +583,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     }
     internal val barTextForTest: String get() = bar.shownText()
     internal val typesIntoPageForTest: Boolean get() = typesIntoPage
+    internal val bubbleForTest: String? get() = keys.bubbleTextForTest()
+    internal val shiftLockForTest: Boolean get() = model.shiftLock
     internal val barDescriptionForTest: String get() = bar.contentDescription.toString()
     /** Tests: the outline of the panel in this view's pixels (left, top, right, bottom), and where its grip and corners are. */
     internal fun outlineForTest(): IntArray { val b = context.dp(BAND_DP); return intArrayOf(panel.left + b, panel.top + b, panel.right - b, panel.bottom - b) }
@@ -964,6 +966,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             holdAlt = alt; bubbleKey = k; bubbleText = alt; invalidate(); haptic()
         }
         private fun clearHold() { handler.removeCallbacks(hold); holdAlt = null; bubbleKey = null }
+        fun bubbleTextForTest(): String? = if (bubbleKey != null) bubbleText else null
 
         private fun drawBubble(c: Canvas) {
             val k = bubbleKey ?: return

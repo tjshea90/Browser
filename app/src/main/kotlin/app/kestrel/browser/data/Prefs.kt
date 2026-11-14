@@ -112,6 +112,8 @@ class Prefs private constructor(ctx: Context) {
     var miniNavToggle: Boolean get() = bool("mini_nav_toggle", true); set(v) = put("mini_nav_toggle", v)
     /** AT1: glide typing on the mini keyboard (slide over the letters of a word instead of tapping each one). */
     var glideTyping: Boolean get() = bool("glide_typing", true); set(v) = put("glide_typing", v)
+    /** A short tick on every key of the mini keyboard (the system's touch feedback still applies). */
+    var keyHaptics: Boolean get() = bool("key_haptics", true); set(v) = put("key_haptics", v)
     /** AV1: where the person put the mini panel and how big the keyboard is (distance from the right edge, from the top, keyboard width, height of the keys, in dp); null = docked at the first size. */
     var miniGeom: IntArray?
         get() = sp.getString("mini_geom", null)?.split(',')?.mapNotNull { it.trim().toIntOrNull() }?.takeIf { it.size == 4 }?.toIntArray()

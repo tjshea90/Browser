@@ -173,6 +173,7 @@ open class BrowserActivity : Activity(), DockListener {
         override fun navKeyboardChanged(showing: Boolean) { if (showing) hideKeyboard() } // the system keyboard goes down while the mini one is up
         override fun navPrivateTab(): Boolean = current?.isPrivateTab == true
         // where the person put the panel and how big the keyboard is (AV1)
+        override fun navKeyHaptics(): Boolean = prefs.keyHaptics
         override fun navGeometry(): IntArray? = prefs.miniGeom
         override fun navGeometryChanged(g: IntArray?) { prefs.miniGeom = g }
         override fun navGlideTitles(done: (List<String>) -> Unit) {

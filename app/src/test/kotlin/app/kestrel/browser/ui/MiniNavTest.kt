@@ -735,5 +735,58 @@ class MiniNavTest {
         assertEquals("hello ", nav.barTextForTest)
         assertTrue(nav.glideLine(), nav.glideLine().contains("live preview") && nav.glideLine().contains("word shown"))
     }
+
+    // ------------------------------------------------------------------ polish: held digits, caps lock, the page-field row, the key preview (AV3b)
+
+    private fun openPlainKeyboard() { nav.setOpen(true, animate = false); relayout(); nav.pressBarForTest(); relayout(); idle(50) }
+
+    @Test fun holdingATopRowLetterTypesItsDigitAndATapStillTypesTheLetter() {
+        openPlainKeyboard()
+        val (x, y) = nav.keyCenterForTest("q")!!
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, x, y); idle(600)
+        assertEquals("the digit shows large above the key while it is held", "1", nav.bubbleForTest)
+        nav.touchKeysForTest(MotionEvent.ACTION_UP, x, y); idle(20)
+        assertEquals("1", nav.barTextForTest); assertNull(nav.bubbleForTest)
+        tapKey("w"); assertEquals("1w", nav.barTextForTest)
+    }
+
+    @Test fun theKeyUnderTheFingerShowsLargeAboveItUntilTheFingerLifts() {
+        openPlainKeyboard()
+        val (x, y) = nav.keyCenterForTest("h")!!
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, x, y)
+        assertEquals("h", nav.bubbleForTest)
+        nav.touchKeysForTest(MotionEvent.ACTION_UP, x, y)
+        assertNull(nav.bubbleForTest)
+    }
+
+    @Test fun aSlowGlideFromATopRowLetterIsAGlideNotAHold() {
+        openGlideKeyboard()
+        val pts = fingerPath("hello")
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, pts.first().first, pts.first().second)
+        idle(600) // held on "h" (no digit on that row) and then glided: still a glide
+        for (p in pts.drop(1).dropLast(1)) nav.touchKeysForTest(MotionEvent.ACTION_MOVE, p.first, p.second)
+        nav.touchKeysForTest(MotionEvent.ACTION_UP, pts.last().first, pts.last().second); idle(20)
+        assertEquals("hello ", nav.barTextForTest)
+    }
+
+    @Test fun twoQuickTapsOnShiftLockCapsAndATapUnlocksIt() {
+        openPlainKeyboard(); idle(10)
+        assertTrue(nav.pressKeyForTest("\u21e7")); assertFalse(nav.shiftLockForTest)
+        assertTrue(nav.pressKeyForTest("\u21e7")); assertTrue("two quick taps: caps lock", nav.shiftLockForTest)
+        nav.pressKeyForTest("A"); nav.pressKeyForTest("B")
+        assertEquals("AB", nav.barTextForTest)
+        assertTrue(nav.pressKeyForTest("\u21e7")); assertFalse(nav.shiftLockForTest)
+        nav.pressKeyForTest("c"); assertEquals("ABc", nav.barTextForTest)
+    }
+
+    @Test fun inAPageFieldTheLettersPageHasACommaAnApostropheAndAQuestionMark() {
+        val f = FakeField(); openKeyboardWith(f)
+        assertTrue(nav.pressKeyForTest(",")); assertTrue(nav.pressKeyForTest("'")); assertTrue(nav.pressKeyForTest("?"))
+        assertEquals(",'?", f.text.toString())
+        assertFalse("and no .com there", nav.pressKeyForTest(".com"))
+        nav.closeKeyboard()
+        openKeyboardWith(null)
+        assertTrue("in the address bar the slash and .com are back", nav.pressKeyForTest("/") && nav.pressKeyForTest(".com"))
+    }
 }
 
