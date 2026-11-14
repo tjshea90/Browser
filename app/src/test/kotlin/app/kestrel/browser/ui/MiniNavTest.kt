@@ -722,10 +722,12 @@ class MiniNavTest {
         openGlideKeyboard()
         val pts = fingerPath("hello")
         nav.touchKeysForTest(MotionEvent.ACTION_DOWN, pts.first().first, pts.first().second)
-        val half = pts.size / 2
-        for (q in pts.subList(1, half)) nav.touchKeysForTest(MotionEvent.ACTION_MOVE, q.first, q.second)
-        idle(300)                                                             // time passes while the finger moves on
-        for (q in pts.subList(half, pts.size - 1)) nav.touchKeysForTest(MotionEvent.ACTION_MOVE, q.first, q.second)
+        for ((i, q) in pts.subList(1, pts.size - 1).withIndex()) {
+            nav.touchKeysForTest(MotionEvent.ACTION_MOVE, q.first, q.second)
+            if (i % 5 == 4) idle(150)                                         // time passes while the finger moves on: a live guess is asked for now and then
+        }
+        idle(150)
+        nav.touchKeysForTest(MotionEvent.ACTION_MOVE, pts[pts.size - 2].first, pts[pts.size - 2].second) // one more touch: the path so far is (nearly) the whole word
         idle(50)
         assertTrue("before the lift the strip already shows guesses: ${nav.candidatesForTest}", nav.candidatesForTest.isNotEmpty())
         assertEquals("but nothing is typed yet", "", nav.barTextForTest.trim().let { if (it.startsWith("http")) "" else it })
