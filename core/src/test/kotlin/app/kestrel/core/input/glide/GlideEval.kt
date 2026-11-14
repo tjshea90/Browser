@@ -68,7 +68,8 @@ object GlideEval {
         fun lengths(): String = byLen.toSortedMap().entries.joinToString("  ") { (l, a) -> "len$l:%.0f/%.0f%%(n=%d)".format(100.0 * a[1] / a[0], 100.0 * a[2] / a[0], a[0]) }
     }
 
-    fun run(lex: BinaryLexicon, keys: GlideKeys, params: GlideParams, noise: SimNoise, picks: List<Pick>, seed: Long, extra: List<GlideLexicon> = emptyList()): Result {
+    fun run(lex: BinaryLexicon, keys: GlideKeys, params: GlideParams, noise: SimNoise, picks: List<Pick>, seed: Long, extra: List<GlideLexicon> = emptyList(), debug: Int = 0): Result {
+        var shown = 0
         val sim = GestureSim(keys, Random(seed))
         val dec = GlideDecoder(keys, params)
         val lexicons = listOf<GlideLexicon>(lex) + extra
@@ -88,6 +89,11 @@ object GlideEval {
             val l = distinct(lex, pk.id).coerceAtMost(8)
             val a = byLen.getOrPut(l) { IntArray(3) }
             a[0]++
+            if (debug > 0 && !(c.isNotEmpty() && c[0].text == word) && shown < debug) {
+                shown++
+                val tc = if (word in surv) dec.debugCost(lex, pk.id) else Float.NaN
+                println("    MISS '%s' (prior %.1f, cost %.3f, survived=%b) -> %s".format(word, lex.logProb(pk.id), tc, word in surv, c.joinToString(" | ") { "%s cost %.3f prior %.1f".format(it.text, it.cost, it.prior) }))
+            }
             if (c.isNotEmpty() && c[0].text == word) { t1++; a[1]++ }
             if (c.any { it.text == word }) { t3++; a[2]++ }
         }
@@ -122,7 +128,7 @@ object GlideEval {
         val picks = when (a["pop"] ?: "freq") { "rank" -> rankPick(lex, n, rnd); "ctx" -> contextPick(lex, n, rnd); else -> frequencyPick(lex, n, rnd) }
         for (nm in (a["noise"] ?: "calm,normal,sloppy,bad").split(',')) {
             val noise = noiseFrom(mapOf("noise" to nm))
-            val r = run(lex, keys, paramsFrom(a), noise, picks, seed)
+            val r = run(lex, keys, paramsFrom(a), noise, picks, seed, debug = a["dbg"]?.toInt() ?: 0)
             println("${noise.name}: $r")
             if (a["lens"] != null) println("    ${r.lengths()}")
         }

@@ -131,6 +131,10 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
     /** The words that went through to the careful pass in the last decode (for the accuracy tests). */
     internal fun survivorTexts(lexicons: List<GlideLexicon>): List<String> = (0 until heapN).map { lexicons[heapLex[it]].text(heapId[it]) }
 
+    /** The careful-pass cost of word [id] for the path decoded last (for the accuracy tests and the tuning). */
+    internal fun debugCost(lex: GlideLexicon, id: Int): Float = careful(lex, id)
+    internal fun debugPrior(lex: GlideLexicon, id: Int, prev: String?): Float = prior(lex, id, prevIds(listOf(lex), prev)[0])
+
     private fun d2(dx: Float, dy: Float) = dx * dx + dy * dy
 
     /** Cut the path into [n] equal steps in pitches; false when it is too short to be a glide. */
