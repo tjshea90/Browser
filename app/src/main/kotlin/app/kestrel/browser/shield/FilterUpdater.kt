@@ -234,7 +234,9 @@ object FilterUpdater {
         val fs = builder.build()
         val active = Engine.peek()
         val previous = active?.meta?.totalNetwork ?: 0
-        if (!sane(fs, previous)) return Result.Failed("The new lists looked incomplete (${fs.meta.totalNetwork} rules); kept the current ones")
+        // a deliberately different set of lists (the owner switched the extra tracker lists off) is smaller on purpose: only the absolute minimum is checked then
+        val deliberate = setBefore != setNow
+        if (!sane(fs, if (deliberate) 0 else previous)) return Result.Failed("The new lists looked incomplete (${fs.meta.totalNetwork} rules); kept the current ones")
         Canaries.problem(active, fs)?.let { return Result.Failed("The new lists were rejected ($it); kept the current ones") }
         val data = FilterSetCodec.write(fs)
         FilterSetCodec.read(data) // must round-trip, or it never ships
@@ -242,6 +244,7 @@ object FilterUpdater {
         tmp.writeBytes(data)
         if (!tmp.renameTo(compiled)) { compiled.delete(); tmp.renameTo(compiled) }
         pending.delete()
+        try { setFile.writeText(setNow) } catch (e: Exception) { /* the next run compiles again: harmless */ }
         ScriptletSummary.write(ctx, builder.report.scriptletSummary()) // RX3-Y1: what this compile did with the scriptlet lines, for Diagnostics
         Engine.swap(fs, "updated list")
         return Result.Updated("Updated: $summary, ${"%,d".format(fs.meta.totalNetwork)} network rules")

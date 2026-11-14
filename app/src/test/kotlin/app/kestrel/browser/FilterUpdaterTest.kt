@@ -187,4 +187,52 @@ class FilterUpdaterTest {
         assertTrue("must retry and keep failing visibly, not say 'Up to date': ${r.message}", r is FilterUpdater.Result.Failed)
         assertTrue("the last good set is still active", Verdict.isBlocked(Engine.filters().check("https://adhost7.example/x.js", "page.example", RequestType.SCRIPT)))
     }
+
+    // ---- RX3-B2: the extra tracker lists (AdGuard Tracking Protection sections + HaGeZi Light) and their Settings switch
+
+    /** Every standard and extra list as a small canned list; the extras each block one host of their own. */
+    private fun everyList(): FakeFetcher {
+        val m = mutableMapOf<String, String>()
+        for (s in FilterSources.DEFAULT) m[s.url] = listText(s.id.replace("-", ""), 4_000)
+        for (s in FilterSources.EXTRA) m[s.url] = listText(s.id.replace("-", ""), 4_000) + "||only-in-" + s.id + ".example^\n"
+        return FakeFetcher(m)
+    }
+    private fun blocked(host: String) = Verdict.isBlocked(Engine.filters().check("https://$host/x.js", "page.example", RequestType.SCRIPT))
+
+    @Test
+    fun theExtraTrackerListsAreFetchedCompiledAndOnByDefault() {
+        assertTrue(Prefs.get(ctx).extraTrackerLists)
+        val r = FilterUpdater.run(ctx, true, null, everyList(), { true }, { true })
+        assertTrue(r.message, r is FilterUpdater.Result.Updated)
+        for (s in FilterSources.EXTRA) assertTrue(s.id, blocked("only-in-${s.id}.example"))
+    }
+
+    @Test
+    fun switchingTheExtraListsOffRebuildsWithoutThemEvenWhenEveryListAnswers304AndBackOnAgain() {
+        val f = everyList()
+        assertTrue(FilterUpdater.run(ctx, true, null, f, { true }, { true }) is FilterUpdater.Result.Updated)
+        assertTrue(blocked("only-in-hagezi-light.example"))
+        f.notModified.addAll(f.bodies.keys)
+        Prefs.get(ctx).extraTrackerLists = false
+        val off = FilterUpdater.run(ctx, true, null, f, { true }, { true })
+        assertTrue(off.message, off is FilterUpdater.Result.Updated)                                    // the set of lists changed: compiled again although nothing was downloaded
+        assertFalse(blocked("only-in-hagezi-light.example")); assertFalse(blocked("only-in-adguard-tracking-servers.example"))
+        assertTrue("the standard lists still work", blocked("easylist0.example"))
+        val offAgain = FilterUpdater.run(ctx, true, null, f, { true }, { true })
+        assertTrue(offAgain.message, offAgain is FilterUpdater.Result.Unchanged)                         // nothing changed since: a cheap no-op
+        Prefs.get(ctx).extraTrackerLists = true
+        val on = FilterUpdater.run(ctx, true, null, f, { true }, { true })
+        assertTrue(on.message, on is FilterUpdater.Result.Updated)
+        assertTrue(blocked("only-in-hagezi-light.example"))
+    }
+
+    @Test
+    fun theExtraListsAreNeverTrustedAndSmallEnoughForTheLimitsOfTheUpdater() {
+        assertTrue(FilterSources.EXTRA.none { it.trusted })
+        assertTrue(FilterSources.EXTRA.all { it.url.startsWith("https://raw.githubusercontent.com/") })
+        val all = FilterSources.active(true) + FilterSources.active(false)
+        assertEquals(FilterSources.DEFAULT.size + FilterSources.EXTRA.size + FilterSources.DEFAULT.size, all.size)
+        assertEquals((FilterSources.DEFAULT + FilterSources.EXTRA).map { it.id }.toSet().size, FilterSources.DEFAULT.size + FilterSources.EXTRA.size)   // every id once
+        assertFalse(FilterSources.EXTRA.any { it.url.contains("filters.adtidy.org") })                  // the 15 MB composite is over the updater's 14 MB cap
+    }
 }
