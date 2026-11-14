@@ -252,4 +252,68 @@ class ScriptletRulesTest {
         b.addAbpLine("a.example##+js(trusted-set-cookie, a, b)", Category.ADS)
         assertTrue(b.build(1L).scriptletsFor("a.example").isEmpty())
     }
+
+    // ---- RX3-Y1 (research/REVIEW-EXTERNAL-3.md part Y): the lists' own YouTube answer, from the real list lines
+
+    private fun youtubeLines(): List<String> =
+        ScriptletRulesTest::class.java.getResourceAsStream("/youtube-scriptlets.txt")!!.bufferedReader(Charsets.US_ASCII).readLines().filter { it.isNotBlank() && !it.startsWith("!") }
+
+    @Test fun everyScriptletLineTheListsHaveForYoutubeIsAcceptedFromATrustedList() {
+        val lines = youtubeLines()
+        assertTrue("the fixture holds the real lines", lines.size >= 25 && lines.any { it.contains("trusted-edit-inbound-object") } && lines.any { it.contains("json-edit-fetch-response") } && lines.any { it.length > 3000 })
+        val b = FilterSetBuilder(); b.addAbpList("ubo-youtube", Category.ADS, lines.asSequence(), trusted = true)
+        val fs = b.build(1L)
+        assertEquals("nothing is skipped as unsupported", 0, b.report.skippedCount(Skip.SCRIPTLET_UNSUPPORTED))
+        assertEquals(0, b.report.skippedCount(Skip.SCRIPTLET_UNTRUSTED))
+        for (host in listOf("www.youtube.com", "m.youtube.com")) {
+            val names = names(fs, host)
+            assertTrue("$host has calls", names.isNotEmpty())
+            assertTrue("$host: the payload stays inside the caps", fs.scriptletPayload(host).length <= ScriptletRules.MAX_PAYLOAD)
+            assertEquals("$host: every stored call reaches the page", names.size, fs.scriptletPayload(host).let { p -> p.count { it == '[' } - 1 })
+        }
+        assertTrue("the mobile site gets the feed edit", names(fs, "m.youtube.com").contains("json-edit-fetch-response"))
+        assertTrue("the desktop site gets the enforcement answer", names(fs, "www.youtube.com").containsAll(listOf("trusted-edit-inbound-object", "trusted-prevent-dom-bypass", "rpnt")))
+    }
+
+    @Test fun theSameLinesFromAListThatIsNotTrustedKeepOnlyWhatIsSmallAndOrdinary() {
+        val b = FilterSetBuilder(); b.addAbpList("third-party", Category.ADS, youtubeLines().asSequence())
+        val fs = b.build(1L)
+        for (n in names(fs, "www.youtube.com") + names(fs, "m.youtube.com")) assertFalse("$n needs a trusted list", n.startsWith("trusted-"))
+        assertTrue("the trusted-only lines were skipped for that reason", b.report.skippedCount(Skip.SCRIPTLET_UNTRUSTED) >= 10)
+        assertTrue("the 3.5 KB script injection is too long for a list that is not trusted", b.report.skippedCount(Skip.SCRIPTLET_UNSUPPORTED) >= 1)
+        assertTrue(names(fs, "www.youtube.com").none { it == "rpnt" && fs.scriptletPayload("www.youtube.com").length > 3000 })
+    }
+
+    @Test fun longArgumentsAreForTrustedListsOnly() {
+        val long = "x".repeat(ScriptletRules.MAX_ARG + 100)
+        assertNull(ScriptletRules.encode("rpnt, script, /a/, $long", trusted = false))
+        assertNotNull(ScriptletRules.encode("rpnt, script, /a/, $long", trusted = true))
+        val huge = "y".repeat(ScriptletRules.MAX_ARG_TRUSTED + 1)
+        assertNull("even a trusted list has a limit", ScriptletRules.encode("rpnt, script, /a/, $huge", trusted = true))
+        val many = (1..9).joinToString(", ") { "z".repeat(ScriptletRules.MAX_ARG_TRUSTED - 10) }
+        assertNull("and a total", ScriptletRules.encode("rpnt, $many", trusted = true))
+    }
+
+    @Test fun aHostMayHaveSixtyFourCallsInThirtyTwoThousandCharacters() {
+        val stored = (1..70).map { ScriptletRules.encode("set, a$it, true", trusted = true)!! }
+        val p = ScriptletRules.payload(stored)
+        assertEquals(64, p.count { it == '[' } - 1)
+        val fat = (1..20).map { ScriptletRules.encode("rpnt, script, /a$it/, " + "w".repeat(3000), trusted = true)!! }
+        assertTrue("never more than the payload cap", ScriptletRules.payload(fat).length <= ScriptletRules.MAX_PAYLOAD)
+    }
+
+    @Test fun theJsonEditFamilyAndTheTwoGuardsNeedTheirArgumentsToMeanSomething() {
+        for (n in listOf("json-edit", "json-edit-fetch-response", "json-edit-xhr-response", "trusted-json-edit", "trusted-json-edit-fetch-response", "trusted-json-edit-xhr-response")) {
+            assertNotNull(n, ScriptletRules.encode("$n, ..a.b[?.c], propsToMatch, /api", trusted = true))
+            assertNull("$n without a query does nothing", ScriptletRules.encode(n, trusted = true))
+        }
+        assertEquals("json-edit-fetch-response", ScriptletRules.decode(ScriptletRules.encode("json-edit-fetch-response, ..a.*[?.b], propsToMatch, /api", trusted = false)!!)!!.name)
+        assertNotNull(ScriptletRules.encode("trusted-edit-inbound-object, JSON.stringify, 0, [?.a]+={\"b\":1}", trusted = true))
+        assertNull("an object path, an index and a query are all needed", ScriptletRules.encode("trusted-edit-inbound-object, JSON.stringify, 0", trusted = true))
+        assertNull(ScriptletRules.encode("trusted-edit-inbound-object, JSON.stringify", trusted = true))
+        assertNotNull(ScriptletRules.encode("trusted-prevent-dom-bypass, Node.prototype.appendChild, fetch", trusted = true))
+        assertNull(ScriptletRules.encode("trusted-prevent-dom-bypass, Node.prototype.appendChild", trusted = true))
+        assertNull("the trusted-only names stay closed to a list that is not trusted", ScriptletRules.encode("trusted-edit-inbound-object, JSON.stringify, 0, [?.a]", trusted = false))
+        assertNull(ScriptletRules.encode("trusted-prevent-dom-bypass, Node.prototype.appendChild, fetch", trusted = false))
+    }
 }
