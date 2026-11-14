@@ -85,7 +85,7 @@ class VideoFlow(private val a: BrowserActivity) {
     }
 
     // ---- RX3-V2 (research/FINDER_LAB.md section 2): an address found only in the page's text was never requested; on a page with nothing verified, up to three of them get ONE cheap question at idle
-    private val verifyPending = HashSet<Int>()
+    private val verifyPending = HashSet<Long>()
     private fun verifySoon(t: Tab) {
         if (!verifyPending.add(t.id)) return
         Io.main.postDelayed({ verifyNow(t, 0) }, 2_500)
