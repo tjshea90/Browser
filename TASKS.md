@@ -483,3 +483,44 @@ A question, not an order: answer it in plain words with a TESTED recipe, then le
 - [x] AY4 (owner message 39) "Make the navigation panel a floating panel which I can move around easily by long pressing it and dragging it around" - MiniNavTest: long press on bar/button picks up and carries (400 ms, not on keys), grip tap closes, no snap-dock, timer + event-clock paths; emulator 2026-11-14: long press on the bar then drag moved the panel by exactly the finger distance, it stayed; tap on grip closed it
   - [x] AY4a long press on the panel (anywhere that is not a key) and drag moves it, with a small tick when it lets go of the page; it floats over the page and stays where it was put; tests + emulator proof
 - [ ] AY5 ship (alpha40 or later) and answer the owner in plain words incl. what was NOT run on the tablet
+
+## Owner request 2026-11-14 (outside review round 3, read-only; answered later the same day) - research/REVIEW-EXTERNAL-3.md - seven asks + YouTube + Back
+- [ ] RX3 "Without interfering with the other claude account working on this repo, do a read only review of the browser app so far. Look for: 1) ways to improve the coding for speed and efficiency of the app and web page loading and video playback 2) ways to improve video finding on web pages for the video downloader and reduce false videos and advertisements showing up in the downloads list 3) ways to improve or speed up the download manager 4) ways to decrease ram usage and make the app more lightweight without sacrificing any speed or function 5) ways to improve ad blocking, tracker blocking, and security without making websites break 6) ways to improve true video finding on websites so the video plays the first time I press play instead of redirecting or showing advertisements or pop ups 7) ways to improve the hotspot connection settings and speed and efficiency in the browser app" -> then the owner answered: "Yes to all four, and include YouTube ad skipping and blocking." (the four: extra tracker lists with a Settings switch, stricter pop-up/redirect wall, pause the glow while a video plays, skip ads inside video players by default) and: "add a request for the other Claude session to make it so when I press back to go to the last web page, it automatically goes back to the last scroll position I was at on that web page, and it should load immediately because it should be cached" - report: research/REVIEW-EXTERNAL-3.md (START HERE at its top); Wave A = BK1, BK2, B1, Y1, Y2, Y3, G7, G2, G3, G1; Wave B = V1, V2, V5, V3, D1, G4, G5, G6, S1, B2; Wave C = the rest, each gated by its measurement
+  - [ ] RX3-BK1 Back lab: Diagnostics line + Health events per Back/Forward press (kept / reload / network, ms to paint, scroll before/after, why not kept); content.js pageshow + navigation type + transferSize, no-store from the main-frame headers, in-flight count; lab pages /back-static /back-nostore /back-dynamic /back-loading /back-mse; research/BACK_SCROLL.md
+  - [ ] RX3-BK2 Back keeps the scroll place: Tab.scrollByUrl LRU; armBackPicture carries the target's y; the cover hides only when painted AND at its place (reuse LastLookRules.hideNow, 1.5 s / 20 s bounds); content.js asks the app for the place after a back_forward reload and scrolls (retries 0/250/700/1500/3000 ms, stops on touch); 0 ms picture for targets known not to be kept; JVM + web tests + emulator proof
+  - [ ] RX3-BK3 raise the instant-hit rate where BK1 says it can be raised (bfcache size floor, fewer pending loads, optional stop-at-90% experiment default off)
+  - [ ] RX3-BK4 BackPictures: 8 pictures when MemAvailable > 700 MB, retake the picture after a scroll settles
+  - [ ] RX3-BK5 (OWNER QUESTION, do not build before the answer) Back instant for no-store pages on sites the owner picks (header rewrite no-store -> no-cache; off by default; never password pages or private tabs)
+  - [ ] RX3-B1 ListSource.trusted + trusted-* scriptlets and long arguments only from trusted lists; count per list first; keep cookie-banner suppression
+  - [ ] RX3-Y1 YouTube answer of the lists: raised caps for trusted lists (MAX_ARG 4096, MAX_TOTAL 8192, MAX_CALLS 64, MAX_PAYLOAD 32000), JSON edit engine + json-edit*, trusted-edit-inbound-object, trusted-prevent-dom-bypass; real YouTube list lines as test fixtures; Diagnostics accepted-of-total per YouTube host
+  - [ ] RX3-Y2 built-in YouTube ad skipper and hider in its own content script (EXT/youtube.js, static manifest entry for the YouTube hosts), observer only on the player class, bounded loop, restore mute/rate, skip button, overlay, enforcement dialog, counters, ONE new Settings row "Skip ads inside video players (YouTube and others)" default ON
+  - [ ] RX3-Y3 YouTube lab (tools/sitelab/ytlab.py mock pages with the real rule lines) + optional live Playwright check + research/YOUTUBE_ADS.md with a selector table (verified or not)
+  - [ ] RX3-Y4 refresh quick-fixes when the first YouTube page of the day starts and the data is older than 8 h; Diagnostics "YouTube rules from <date>"
+  - [ ] RX3-Y5 Settings text, Diagnostics "YouTube ads" line, plain answer to the owner (may warn or limit playback)
+  - [ ] RX3-G7 skip ads inside other video players (generic: observe a player's class only after a video in it fired play; ad-state words; same actions as Y2)
+  - [ ] RX3-G2 tap evidence recorded by content.js with isTrusted listeners; the DOM-event relay may forward only open/click/overlay/form/redirect; web tests for a forged tap
+  - [ ] RX3-G3 remove the postMessage assist channel (cross-frame click injection); assist hop through content.js + background tabs.sendMessage; the 13 AP1 web tests still pass
+  - [ ] RX3-G1 guard-main.js and scriptlets-main.js active on the very first page after a cold start (manifest world MAIN, or scripting API with persistAcrossSessions, or exportFunction from content.js); proof /fakeplay as first page after force-stop; handoff test that the manifest lists the guard
+  - [ ] RX3-G4 neutralize invisible fake layers over a player before the press (outside the player's subtree); web tests incl. negatives
+  - [ ] RX3-G5 core PopupGuard (tap evidence, AUTH hosts mirrored, WAIT 150 ms) used by BrowserActivity.refusePopup; strict while the guard is not ready; needs G2
+  - [ ] RX3-G6 scripted jump to a listed ad host stopped after any delay unless the tap was on that very link; JumpGuardTest cases; /slowjump lab
+  - [ ] RX3-V1 core VideoRole (PLAYER/DECOR/AD) from element facts; applyInfo touches only PLAYER; flags override the display exemptions; MediaListTest + lab pages
+  - [ ] RX3-V2 verified flag: badge counts only wire-verified or visible-element or player-reported entries; at most 3 one-byte checks per page with no other evidence
+  - [ ] RX3-V3 playing-element signal and duration-jump ad rule; primary video first in MediaRank
+  - [ ] RX3-V4 blob:/MSE players matched to playlists by duration and height; playlists under 60 s next to a 5 min one go to Other
+  - [ ] RX3-V5 early look at new playlists (live/DRM/short/CUE markers) + core AdRuns (markers, foreign registrable domain, dominant run) pre-seeding job.skipped; note "Left out m:ss of advertising"
+  - [ ] RX3-V6 soft ad/decor words and VAST/IMA hints in MediaRank (soft signals only)
+  - [ ] RX3-V7 false-positive corpus and precision metric in the finder lab (research/FINDER_LAB.md)
+  - [ ] RX3-D1 outage wait for StreamEngine and for multi-connection Engine downloads (WAITING_NETWORK ladder, 30 min STALLED, partial kept); failing tests first
+  - [ ] RX3-D2 window size / next-window overlap by measured link speed (after EY-27 numbers)
+  - [ ] RX3-D3 HLS start-up: workers start while the mux decision is made
+  - [ ] RX3-B2 AdGuard Tracking Protection + Hagezi Light as separate sources, Settings row "Extra tracker lists" default ON; regression test with the owner's sites; pick pop-up lists by replaying blocked-popup hosts; docs/FILTER-LISTS.md
+  - [ ] RX3-B3 signed list bundle (SECURITY B20), priority raised
+  - [ ] RX3-S1 hold the glow pulse while a video plays (GeckoSession MediaSession delegate); CPU line before/after
+  - [ ] RX3-S2 extension listener counters, then restrict onErrorOccurred/onCompleted types and the onBeforeSendHeaders scope
+  - [ ] RX3-S3 time budget and stop for the class/id token MutationObserver (content.js D2); web test; Proton Mail A/B
+  - [ ] RX3-S4 blocker histogram with cold/warm split; trigger on average x requests; bucket report; then the cuts in section 9
+  - [ ] RX3-S5 site-group hashes in the engine image so frames without rules never ask the app (PERF_JS "css")
+  - [ ] RX3-S6 A/B lazy-load margin 600/1000/1500 on the plain hotspot
+  - [ ] RX3-M1 back/forward cache viewers follow LiveBudget (floor 4; live pref if the engine observes it)
+  - [ ] RX3-H1 NetProfile "capped hotspot" state: frugal lazy margin, no prefetch-next, shorter media read-ahead; Page loads A/B
