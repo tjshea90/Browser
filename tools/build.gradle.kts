@@ -29,5 +29,6 @@ tasks.register<JavaExec>("glideLexicon") {
     group = "kestrel"
     description = "Compile the glide-typing word list"
     classpath = sourceSets["main"].runtimeClasspath
+    workingDir = rootProject.projectDir // paths in --args are relative to the repository root
     mainClass.set("app.kestrel.tools.GlideLexiconCompilerKt")
 }
