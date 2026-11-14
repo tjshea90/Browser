@@ -78,7 +78,7 @@ class LearnedExportTest {
         assertNull(LearnedExport.read("OTHER-KEYBOARD 1\nw for 3.0\n"))
         assertNull(LearnedExport.read("w for 3.0\nKESTREL-KEYBOARD-LEARNING 1\n"))   // the name must come first
         assertNull(LearnedExport.read("KESTREL-KEYBOARD-LEARNING 1\n" + "x".repeat(LearnedExport.MAX_CHARS)))
-        assertNotNull(LearnedExport.read("﻿KESTREL-KEYBOARD-LEARNING 1\nw for 3.0\nend 1\n")) // a text editor's byte order mark does not matter
+        assertNotNull(LearnedExport.read("\uFEFFKESTREL-KEYBOARD-LEARNING 1\nw for 3.0\nend 1\n")) // a text editor's byte order mark does not matter
     }
 
     @Test fun linesItDoesNotKnowAreSkippedAndACutOffFileIsStillUsedAndSaysSo() {

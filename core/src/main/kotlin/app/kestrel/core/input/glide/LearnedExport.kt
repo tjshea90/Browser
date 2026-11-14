@@ -66,7 +66,7 @@ object LearnedExport {
         if (text.length > MAX_CHARS) return null
         val lines = text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("#") }.iterator()
         if (!lines.hasNext()) return null
-        val head = lines.next().removePrefix("﻿").split(' ')
+        val head = lines.next().removePrefix("\uFEFF").split(' ')
         if (head.size != 2 || head[0] != MAGIC) return null
         val ver = head[1].toIntOrNull() ?: return null
         if (ver < 1 || ver > VERSION) return null
