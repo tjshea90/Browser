@@ -33,13 +33,16 @@ class KeyboardFlow(private val a: Activity, private val host: Host) {
     fun exportNow() {
         if (host.isPrivateWindow()) { host.say("Open a normal window to export: a private window keeps nothing."); return }
         Io.exec {
+            // the keyboard's own thread answers with the text; the file is written on the IO thread, not on the one that decodes glides
             host.exportText { text ->
-                val message = try {
-                    val name = save(text)
-                    val s = LearnedExport.read(text)?.summary
-                    "Saved \"$name\" in Downloads" + (if (s != null) ": " + s.describe() else "") + ". It lists words you typed: keep it private."
-                } catch (e: Exception) { "The file could not be saved: " + (e.message ?: e.javaClass.simpleName) }
-                Io.ui { host.say(message) }
+                Io.exec {
+                    val message = try {
+                        val name = save(text)
+                        val s = LearnedExport.read(text)?.summary
+                        "Saved \"$name\" in Downloads" + (if (s != null) ": " + s.describe() else "") + ". It lists words you typed: keep it private."
+                    } catch (e: Exception) { "The file could not be saved: " + (e.message ?: e.javaClass.simpleName) }
+                    Io.ui { host.say(message) }
+                }
             }
         }
     }
