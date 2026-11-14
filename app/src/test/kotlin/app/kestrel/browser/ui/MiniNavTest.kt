@@ -311,20 +311,20 @@ class MiniNavTest {
         assertTrue(nav.glideLine(), nav.glideLine().contains("no word fitted 1"))
     }
 
-    @Test fun withGlideTypingOffThereIsNoStripAndASlideTypesNothing() {
+    @Test fun withGlideTypingOffThereIsNoStripAndTheKeysBehaveAsBefore() {
         nav.setGlideEnabled(false)
         nav.setOpen(true, animate = false); relayout(); nav.pressBarForTest(); relayout()
         assertEquals(161, nav.keysHeightForTest)
         val (hx, hy) = nav.keyCenterForTest("h")!!; val (ox, oy) = nav.keyCenterForTest("o")!!
         nav.touchKeysForTest(MotionEvent.ACTION_DOWN, hx, hy); nav.touchKeysForTest(MotionEvent.ACTION_MOVE, ox, oy); nav.touchKeysForTest(MotionEvent.ACTION_UP, ox, oy)
-        assertEquals("", nav.barTextForTest)
+        assertEquals("the keyboard behaves as before: the key the finger lifts on", "o", nav.barTextForTest)
+        assertTrue(nav.candidatesForTest.isEmpty())
         assertTrue(nav.glideLine().contains("off"))
     }
 
     @Test fun wordsTypedLetterByLetterAreRememberedAfterGoButKnownOnesAreNot() {
         openGlideKeyboard()
         for (ch in "kestrel") tapKey(ch.toString())
-        tapKey(".com"); // not a plain word: the dot ends it
         nav.pressKeyForTest("Go")
         idle(50)
         assertTrue("saved: ${rec.savedWords}", rec.savedWords.isNotEmpty() && rec.savedWords.last().contains("kestrel"))
