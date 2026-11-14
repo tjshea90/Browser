@@ -24,6 +24,9 @@ class BlockedChip(ctx: Context) : FrameLayout(ctx) {
     private var target: String? = null
     private var onOpen: ((String) -> Unit)? = null
 
+    /** How long the icon stays; [LIFETIME_MS] always, except that the emulator rig (debug builds only, `debug.kestrel.chipms`) stretches it so a screenshot and a slow tap can catch it. */
+    internal var lifetimeMs = LIFETIME_MS
+
     init {
         visibility = GONE
         isClickable = true
@@ -50,7 +53,7 @@ class BlockedChip(ctx: Context) : FrameLayout(ctx) {
         target = url?.takeIf { it.startsWith("http://", true) || it.startsWith("https://", true) }
         this.onOpen = onOpen
         visibility = VISIBLE
-        handler.postDelayed(hideLater, LIFETIME_MS)
+        handler.postDelayed(hideLater, lifetimeMs)
     }
 
     fun hide() {

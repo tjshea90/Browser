@@ -512,6 +512,7 @@ open class BrowserActivity : Activity(), DockListener {
         errorView.visibility = View.GONE
         // above Home and the error screens (so they show there too), below the find bar, sheets and every full screen
         blockedChip = app.kestrel.browser.ui.BlockedChip(this)
+        app.kestrel.browser.diag.DebugProps.get(this, "debug.kestrel.chipms")?.toLongOrNull()?.let { blockedChip.lifetimeMs = it.coerceIn(200L, 60_000L) } // emulator rig only: a release build always gets null
         content.addView(blockedChip, FrameLayout.LayoutParams(dp(app.kestrel.browser.ui.BlockedChip.TOUCH_DP), dp(app.kestrel.browser.ui.BlockedChip.TOUCH_DP), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(6) })
         miniNav = app.kestrel.browser.ui.MiniNav(this, pal, miniNavListener)
         content.addView(miniNav, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply { topMargin = dp(4); rightMargin = dp(6) })
@@ -1882,7 +1883,7 @@ open class BrowserActivity : Activity(), DockListener {
      */
     internal fun onPopupBlocked(pageUrl: String, kind: String, url: String) {
         // attribution by the exact page address first (several tabs can be on the same host), then by host, then the tab in front
-        val tab = (if (pageUrl.isNotEmpty()) tabOfTouch(pageUrl, kind) ?: tabWithUrl(pageUrl) ?: tabForPage(pageUrl) else null) ?: current ?: return
+        val tab = (if (pageUrl.isNotEmpty()) tabOfTouch(pageUrl, kind) ?: current?.takeIf { it.url.substringBefore('#') == pageUrl.substringBefore('#') } ?: tabWithUrl(pageUrl) ?: tabForPage(pageUrl) else null) ?: current ?: return // the same address may be open in several tabs: the one in front is the one the owner tapped in
         if (kind == "tap") { tab.lastTapAt = SystemClock.uptimeMillis(); tab.lastTapHref = url; return } // a real tap in the page, and the link it was on: the jump guard's evidence
         if (kind == "vmenu") { // a long press on a video or audio element, taken by the page script before the site's own player menu could appear (owner request X14)
             if (tab === current && !isFinishing) video.longPress(tab, url.takeIf { it.startsWith("http", true) }, null) { link -> val t = newTabInternal(tab, tab.isPrivateTab); show(t); navigateTo(t, link) }
