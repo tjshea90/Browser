@@ -49,6 +49,9 @@ PAGE = b"""<!doctype html>
  window.addEventListener('touchstart', function (e) { var t = e.touches[0]; log('touchstart', 'at ' + Math.round(t.clientX) + ',' + Math.round(t.clientY)); }, { capture: true, passive: true });
  window.addEventListener('touchend', function (e) { log('touchend', ''); }, { capture: true, passive: true });
  window.addEventListener('touchcancel', function (e) { log('touchcancel', ''); }, { capture: true, passive: true });
+ var inp = document.getElementById('inp');
+ inp.addEventListener('input', function (e) { log('input', '[' + e.target.value + '] caret=' + e.target.selectionStart); });
+ inp.addEventListener('keydown', function (e) { log('keydown', e.key); });
  log('loaded', 'dpr=' + window.devicePixelRatio + ' inner=' + innerWidth + 'x' + innerHeight);
 </script>
 </body></html>
