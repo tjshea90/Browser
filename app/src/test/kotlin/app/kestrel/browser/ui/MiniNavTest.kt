@@ -395,7 +395,7 @@ class MiniNavTest {
 
     @Test fun backspaceTakesOffWhatWasTypedAndThenTheFieldsOwnText() {
         val f = FakeField(start = "abc"); openKeyboardWith(f)
-        nav.pressKeyForTest("Backspace".let { "⌫" })                      // nothing typed here: the field's own text goes
+        nav.pressKeyForTest("⌫")  // nothing typed here: the field's own text goes
         assertEquals("ab", f.text.toString())
         nav.pressKeyForTest("x"); nav.pressKeyForTest("⌫")
         assertEquals("ab", f.text.toString()); assertEquals(listOf("-1", "+x", "-1"), f.log)
@@ -427,7 +427,6 @@ class MiniNavTest {
         assertEquals("\u2022\u2022\u2022\u2022\u2022\u2022", nav.barTextForTest)
         nav.pressKeyForTest("Go"); idle(50)
         assertTrue("nothing learned from a password: ${rec.savedWords}", rec.savedWords.isEmpty())
-        assertTrue(nav.glideLine().let { !it.contains("learned") || it.contains("learned 0") || true })
     }
 
     @Test fun nothingIsLearnedInAPrivateTabNeitherInAFieldNorInTheAddressBar() {
@@ -460,7 +459,7 @@ class MiniNavTest {
         nav.pressKeyForTest("a"); nav.pressKeyForTest("b")
         rec.field = null; nav.pageFieldChanged()
         assertFalse(nav.typesIntoPage)
-        assertEquals("the address is selected again", "example.com", nav.barTextForTest.removePrefix("https://www.").removeSuffix("/").let { if (it.startsWith("example")) "example.com" else it })
+        assertEquals("the address is selected again", "https://www.example.com/", nav.barTextForTest)
         assertTrue(nav.selectedForTest)
         nav.pressKeyForTest("c")
         assertEquals("ab", f.text.toString()); assertEquals("c", nav.barTextForTest)
