@@ -558,6 +558,13 @@ class MiniNavTest {
         assertFalse(nav.isDetached); assertFalse(nav.isResized)
     }
 
+    @Test fun theFrameInsideTheOutlineIsStillSixDpAfterTheColoursAreApplied() {
+        openPanel()
+        assertEquals(6, nav.frameForTest())
+        nav.applyPal(Pal(activity)) // setting the background again must not take the frame away (it did once: the background's inset replaced the padding)
+        assertEquals(6, nav.frameForTest())
+    }
+
     @Test fun theGripMovesThePanelAndItIsSavedAndTheKeyboardOpensWhereItWasLeft() {
         openPanel()
         val (gx, gy) = gripPoint()

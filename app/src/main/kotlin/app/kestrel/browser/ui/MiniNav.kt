@@ -551,6 +551,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     /** Tests: the outline of the panel in this view's pixels (left, top, right, bottom), and where its grip and corners are. */
     internal fun outlineForTest(): IntArray { val b = context.dp(BAND_DP); return intArrayOf(panel.left + b, panel.top + b, panel.right - b, panel.bottom - b) }
     internal fun geometryForTest(): FloatArray = floatArrayOf(gRight, gTop, gW, gH)
+    /** Tests: how far the buttons, the bar and the keys are inside the outline (the frame). */
+    internal fun frameForTest(): Int = panel.paddingLeft - context.dp(BAND_DP)
     internal fun keysSizeForTest(): IntArray = intArrayOf(keys.width, keys.height)
     internal fun zoneForTest(x: Float, y: Float): Int = panel.zoneAt(x - panel.left, y - panel.top)
     internal val selectedForTest: Boolean get() = keyboardShowing && model.allSelected
