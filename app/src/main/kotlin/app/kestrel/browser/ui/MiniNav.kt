@@ -114,6 +114,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private var topGuess: String? = null        // the first guess the decoder made for the last glide (what a pick or a deletion corrects)
     private var pendingGuessed: String? = null  // the word the person picked INSTEAD of this guess: the correction that is learned when the picked word is kept
     private var lastDeleted: String? = null     // the glided word that was just deleted: the word that is kept next may be what they meant instead
+    private var deletedAt = 0L                  // when it was deleted: a glide a few seconds later that gives the same word first again is a retry, so that word moves to second place
     private var pendingWeight = 1f              // 3 when the person CHOSE it from the strip: learned (like a kept glide) only when the next thing is not a Backspace
     private var lastGlidePrev: String? = null   // the word before the glide that is being decoded
     private var lastGlidePrev2: String? = null  // and the one before that
@@ -332,8 +333,15 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         val g = glide ?: return
         if (liftAt != 0L) { g.stats.onShown(SystemClock.uptimeMillis() - liftAt); liftAt = 0L }
         if (!keyboardShowing) return
-        val best = res.candidates.firstOrNull()
-        if (best == null) { keys.showNoWord(); return }
+        var cands = res.candidates
+        if (cands.isEmpty()) { keys.showNoWord(); return }
+        // a retry: the word they just deleted comes up first again, so it is wrong again for them: the next one goes first and the deleted one stays in the strip, second
+        val rejected = lastDeleted
+        if (afterUndo && rejected != null && cands.size >= 2 && cands[0].text == rejected && SystemClock.uptimeMillis() - deletedAt <= RETRY_MS && cands[1].perLetter - cands[0].perLetter <= RETRY_GAP) {
+            cands = listOf(cands[1], cands[0]) + cands.drop(2)
+            g.stats.onRetryDemoted()
+        }
+        val best = cands[0]
         syncField()
         val before = model.text
         model.commitGlide(best.text)
@@ -341,7 +349,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         pendingWord = best.text; pendingWeight = 1f; pendingGuessed = null
         topGuess = best.text
         pendingPrev = lastGlidePrev; pendingPrev2 = lastGlidePrev2
-        keys.showCandidates(res.candidates.map { it.text })
+        keys.showCandidates(cands.map { it.text })
         bar.invalidate()
     }
 
@@ -453,7 +461,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         }
         val f = pageField
         when (key) {
-            Key.Backspace -> if (model.glideActive) { lastDeleted = pendingWord ?: topGuess; pendingWord = null; pendingGuessed = null; afterUndo = true; glide?.stats?.onUndone() } // right after a glide: the word was wrong
+            Key.Backspace -> if (model.glideActive) { lastDeleted = pendingWord ?: topGuess; deletedAt = SystemClock.uptimeMillis(); pendingWord = null; pendingGuessed = null; afterUndo = true; glide?.stats?.onUndone() } // right after a glide: the word was wrong
             Key.Shift, Key.ToLetters -> {}                                                       // the text does not change
             else -> { confirmGlide(); if (key is Key.Ch) afterUndo = false }                     // typing on, the symbols page or Go: the glided word stays
         }
