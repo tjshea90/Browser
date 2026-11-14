@@ -121,15 +121,21 @@ class PersonalModelTest {
     }
 
     @Test fun aWordTheyHadUsedBeforeIsCountedWhenItIsTheFirstGuess() {
-        val scale = 5.4e11
-        val bytes = LexiconFile.build(listOf("hello" to 500_000_000L, "help" to 400_000_000L).map { LexiconFile.Entry(it.first, it.second) }, emptyList())
+        // a list at the real scale (one huge word sets the total), three words whose paths differ clearly
+        val bytes = LexiconFile.build(listOf("the" to 530_000_000_000L, "hello" to 500_000_000L, "world" to 900_000_000L, "pizza" to 300_000_000L).map { LexiconFile.Entry(it.first, it.second) }, emptyList())
         val g = GlideTyping({ bytes }, direct)
         g.prepare(keys, null, null)
         g.learn(null, "hello", 1f)
-        val p = GestureSim(keys, Random(2)).path("hello", SimNoise.CALM)!!
-        var r: GlideResult? = null
-        g.decode(p.xs, p.ys, p.xs.size, null) { r = it }
-        assertEquals("hello", r!!.candidates[0].text)
+        val sim = GestureSim(keys, Random(2))
+        fun glide(word: String): String {
+            val p = sim.path(word, SimNoise.CALM)!!
+            var r: GlideResult? = null
+            g.decode(p.xs, p.ys, p.xs.size, null) { r = it }
+            return r!!.candidates[0].text
+        }
+        assertEquals("world", glide("world"))
+        assertTrue(g.stats.line(), g.stats.line().contains("a learned word was the first guess 0 times"))
+        assertEquals("hello", glide("hello"))
         assertTrue(g.stats.line(), g.stats.line().contains("a learned word was the first guess 1 times"))
     }
 
