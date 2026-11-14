@@ -23,7 +23,8 @@ const BODY = `<a id="l" href="https://shop.example/item" onclick="return false" 
 async function open(opts) {
   const o = opts || {};
   const context = await browser.newContext({ hasTouch: !!o.touch, viewport: { width: 400, height: 700 } });
-  await context.route('https://**/*', (r) => r.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><title>t</title></head><body style="margin:0">${o.body || BODY}</body></html>` }));
+  // the page itself gets the body of the test, a frame address ending in /inner gets a plain document (so a frame never nests itself)
+  await context.route('https://**/*', (r) => r.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><title>t</title></head><body style="margin:0">${r.request().url().indexOf('/inner') > 0 ? '<div style="height:100px">inner document</div>' : (o.body || BODY)}</body></html>` }));
   const page = await context.newPage();
   await page.addInitScript(() => {
     window.__msgs = [];
