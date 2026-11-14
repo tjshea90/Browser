@@ -9,7 +9,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const SHIELDS = path.join(__dirname, '..', 'geckoapp', 'src', 'main', 'assets', 'kestrel-shields');
-const SRC = fs.readFileSync(path.join(SHIELDS, 'engine.js'), 'utf8') + '\n' + fs.readFileSync(path.join(SHIELDS, 'background.js'), 'utf8');
+const SRC = ['engine.js', 'redirects.js', 'background.js'].map((f) => fs.readFileSync(path.join(SHIELDS, f), 'utf8')).join('\n'); // the order of the manifest's background scripts
 const IMAGE = fs.readFileSync(path.join(__dirname, 'fixtures', 'mini.kex'));
 const ID = '1.111.1700000000000.1.2.3.4.5.6';
 // objects built inside the vm context have another Object.prototype: compare them as JSON
@@ -984,4 +984,49 @@ test('early scriptlets: the numbers for Diagnostics say how many pages ran calls
   const w = h.of('st').map((m) => m.w).join(' | ');
   assert.match(w, /2 pages ran 9 calls \(1 failed\), 1 before the page's first script/, w);
   assert.match(w, /1 sites set up early \(1 kept, 1 asks\)/, w);
+});
+
+
+// ---------------------------------------------------------------- AW1c: a blocked request is answered with a harmless stand-in when its rule names one
+// The fixture list has `||redir.test^$script,redirect=noopjs`, `||redir.test/pix^$image,redirect=1x1.gif` and (for the type-mismatch case) `||ro.test^$script` + `||ro.test^$redirect-rule=noopjs`.
+async function standInHarness(flags) {
+  const h = harness(standardApp({ cfg: `1:1:${ID}:${flags}` }));
+  h.mainFrame(PAGE);
+  await until(() => h.of('img').length >= 3, 'the image transfer');
+  await until(() => !isPromise(h.req('script', PLAIN, PAGE)), 'the engine');
+  return h;
+}
+
+test('stand-ins: the rule names one and the page allows it (flag 4): the request is redirected to a data: URL of the right kind and still counted as blocked', async () => {
+  const h = await standInHarness(4);
+  const js = h.req('script', 'https://redir.test/a.js', PAGE);
+  assert.ok(js.redirectUrl && js.redirectUrl.indexOf('data:text/javascript') === 0 && js.cancel === undefined, JSON.stringify(js));
+  const gif = h.req('image', 'https://redir.test/pix/a.gif', PAGE);
+  assert.ok(gif.redirectUrl && gif.redirectUrl.indexOf('data:image/gif;base64,') === 0, JSON.stringify(gif));
+  assert.ok(h.req('script', 'https://ro.test/a.js', PAGE).redirectUrl, 'redirect-rule picks the stand-in for a request the other rule blocks');
+  eq(h.req('image', 'https://ro.test/a.gif', PAGE), { cancel: true });            // blocked, but the stand-in the rule names (a script) does not suit a picture: plain cancel
+  eq(h.req('script', AD, PAGE), { cancel: true });                                // an ordinary block rule names none
+  eq(h.req('script', PLAIN, PAGE), {});                                           // not blocked at all
+  await h.flushTimers();
+  eq(h.of('cnt')[0].c.reduce((a, b) => a + b, 0), 5, 'every one of the five blocked requests is counted, redirected or not');
+  assert.match(h.of('st').map((m) => m.w).join('|') + '', /answered with a stand-in|^$/);
+});
+
+test('stand-ins: without flag 4 (Settings switch "Fix ad and anti-adblock scripts" off, or Shields off for the page) every blocked request is a plain cancel', async () => {
+  const h = await standInHarness(1);
+  eq(h.req('script', 'https://redir.test/a.js', PAGE), { cancel: true });
+  eq(h.req('image', 'https://redir.test/pix/a.gif', PAGE), { cancel: true });
+});
+
+test('stand-ins: a stand-in that cannot be built never breaks the request: it is cancelled as before', async () => {
+  const h = await standInHarness(4);
+  h.ctx.KestrelRedirects.urlFor = () => { throw new Error('boom'); };
+  eq(h.req('script', 'https://redir.test/a.js', PAGE), { cancel: true });
+});
+
+test('stand-ins: the Diagnostics numbers count the files answered with a stand-in', async () => {
+  const h = await standInHarness(4);
+  h.req('script', 'https://redir.test/a.js', PAGE); h.req('script', 'https://redir.test/b.js', PAGE);
+  await h.flushTimers();
+  assert.match(h.of('st').map((m) => m.w).join(' | '), /2 blocked files answered with a stand-in/);
 });
