@@ -822,7 +822,7 @@ open class BrowserActivity : Activity(), DockListener {
         s.contentBlockingDelegate = d
         // AU3: the mini keyboard types into the page's own text field: this wrapper keeps the system keyboard down while the mini one is up and tells the panel when a field gains or loses focus
         val input = PageFieldInput(s, s.textInput.delegate, held = { ::miniNav.isInitialized && miniNav.keyboardShowing }, changed = { Io.main.post { if (::miniNav.isInitialized) miniNav.pageFieldChanged() } })
-        s.textInput.delegate = input
+        s.textInput.setDelegate(input) // (a setter and getter of different nullability: Kotlin has no property for it)
         tab.gecko.fieldInput = input
         return s
     }
