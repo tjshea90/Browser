@@ -58,29 +58,41 @@ class GlideParams(
     val minLength: Float = 1.2f,
     /** First / last letter may be matched this many samples away from the very end of the path. */
     val slack: Int = 1,
+    /** A thumb lands a little beside where it aims, the same way along the whole path: the best [biasKeep] words are judged a second time with the path moved by [biasGain] of its mean offset from the word's letters. */
+    val biasKeep: Int = 60,
+    val biasGain: Float = 0.8f,
+    /** Cost of each pitch squared of that move, so a word cannot buy a good fit by sliding the whole path. */
+    val biasW: Float = 3.0f,
 )
 
 class GlideCandidate(val text: String, val score: Float, val cost: Float, val prior: Float)
 
 /**
  * Turns a finger path over the letter keys into words (AT1). The path is cut into equal steps; every word whose first and last letter are near where the finger went down and lifted is
- * judged in two passes: a quick one that asks only "was each letter of the word visited" (one table of 26 distances answers that for every word), then a careful one that finds, letter by letter, the
- * place along the path where the finger was at that letter, and how far the path between two letters strays from the straight line a word would draw there. The language weighs in the same way a
- * glide keyboard's does: how common the word is, and how likely it is after the word before. No allocation per word, no Android types.
+ * judged in passes: a quick one that asks only "was each letter of the word visited" (one table of 26 distances answers that for every word), then a careful one that finds, letter by letter, the
+ * place along the path where the finger was at that letter, and how far the path between two letters strays from the straight line a word would draw there; the best words get that look a second time with
+ * the whole path moved by the way the finger was off. The language weighs in the same way a glide keyboard's does: how common the word is, and how likely it is after the word before. No allocation
+ * per word, no Android types.
  */
 class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = GlideParams()) {
     private val n = p.samples
     private val kx = FloatArray(26) { keys.cx[it] / keys.pitch }
     private val ky = FloatArray(26) { keys.cy[it] / keys.pitch }
-    private val qx = FloatArray(n); private val qy = FloatArray(n)
+    private val qx = FloatArray(n); private val qy = FloatArray(n)     // the path as it was drawn (moved by the learned habit)
+    private val wx = FloatArray(n); private val wy = FloatArray(n)     // the path as judged (moved a bit more for the second look)
     private val dKey = FloatArray(26)
-    // scratch for the careful pass: prefix sums of squared distance to each segment, and two DP rows
+    // scratch for the careful pass: prefix sums of squared distance to each segment, two DP rows, the choices
     private val pre = FloatArray(MAX_LETTERS * (n + 1))
     private var fPrev = FloatArray(n); private var fCur = FloatArray(n)
-    private var gestureLen = 0f
+    private val from = IntArray(MAX_LETTERS * n)
+    private val assign = IntArray(MAX_LETTERS)
     private val letters = IntArray(MAX_LETTERS)
+    private var gestureLen = 0f
     // the survivors of the quick pass (a small max-heap by quick score, kept as parallel arrays)
     private val heapScore = FloatArray(p.keep); private val heapLex = IntArray(p.keep); private val heapId = IntArray(p.keep); private var heapN = 0
+
+    /** The offset the learned finger habit adds to every path (pitches): what the finger usually lands beside the key it aims at. Set by [learnFrom]. */
+    var biasX = 0f; var biasY = 0f
 
     /** How many words the last decode looked at closely, and the language weight it used (for the diagnostics and the tests). */
     var lastCandidates = 0; private set
@@ -93,6 +105,8 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
     fun decode(xs: FloatArray, ys: FloatArray, count: Int, lexicons: List<GlideLexicon>, prev: String?, max: Int = 3): List<GlideCandidate> {
         lastCandidates = 0
         if (count < 2 || !resample(xs, ys, count)) return emptyList()
+        // the path moved by the learned habit; everything after judges this one
+        for (i in 0 until n) { qx[i] -= biasX; qy[i] -= biasY }
         // how close does the path come to each key
         for (k in 0 until 26) {
             var best = Float.MAX_VALUE
@@ -118,23 +132,35 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
         lastCandidates = heapN
         if (heapN == 0) return emptyList()
 
-        // ---- careful pass, then the language
+        // ---- careful pass
         val ids = prevIds(lexicons, prev)
-        val costs = FloatArray(heapN); val per = FloatArray(heapN)
+        val costs = FloatArray(heapN); val priors = FloatArray(heapN)
         var bestPer = Float.MAX_VALUE
         for (h in 0 until heapN) {
             val lex = lexicons[heapLex[h]]; val id = heapId[h]
             costs[h] = careful(lex, id)
-            per[h] = costs[h] / distinctLetters(lex, id)
-            if (per[h] < bestPer) bestPer = per[h]
+            priors[h] = prior(lex, id, ids[heapLex[h]])
+            val per = costs[h] / distinctLetters(lex, id)
+            if (per < bestPer) bestPer = per
         }
-        val lm = if (p.lmA > 0f) (p.lmA * bestPer).coerceIn(p.lmMin, p.lmMax) else p.lmW
+        var lm = if (p.lmA > 0f) (p.lmA * bestPer).coerceIn(p.lmMin, p.lmMax) else p.lmW
+        // ---- the best ones again, with the path moved by the way the finger was off
+        if (p.biasKeep > 0 && p.biasGain > 0f) {
+            val order = (0 until heapN).sortedByDescending { -costs[it] + lm * priors[it] }.take(p.biasKeep)
+            var best2 = Float.MAX_VALUE
+            for (h in order) {
+                val lex = lexicons[heapLex[h]]; val id = heapId[h]
+                costs[h] = refine(lex, id, costs[h])
+                val per = costs[h] / distinctLetters(lex, id)
+                if (per < best2) best2 = per
+            }
+            if (p.lmA > 0f && best2 < bestPer) lm = (p.lmA * best2).coerceIn(p.lmMin, p.lmMax)
+        }
         lastLm = lm
         val out = ArrayList<GlideCandidate>(heapN)
         for (h in 0 until heapN) {
             val lex = lexicons[heapLex[h]]; val id = heapId[h]
-            val prior = prior(lex, id, ids[heapLex[h]])
-            out.add(GlideCandidate(lex.text(id), -costs[h] + lm * prior, costs[h], prior))
+            out.add(GlideCandidate(lex.text(id), -costs[h] + lm * priors[h], costs[h], priors[h]))
         }
         out.sortByDescending { it.score }
         val seen = HashSet<String>()
@@ -143,55 +169,45 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
         return res
     }
 
+    /**
+     * How far the finger was off the letters of word [id] on the path decoded last, on average, in pitches (x, y): what the finger tends to land beside. The words the person accepted go to
+     * [learnFrom] to make the decoder expect it. Null when the word cannot be laid on the path.
+     */
+    fun offsetFor(lex: GlideLexicon, id: Int): FloatArray? {
+        if (!loadLetters(lex, id)) return null
+        setWork(0f, 0f)
+        if (dp(mCount) >= Float.MAX_VALUE / 8) return null
+        return meanOffset(mCount)
+    }
+
+    /** The habit learns from a glide whose word was accepted: the decoder expects the finger to land [rate] of the way more towards where that glide was off. */
+    fun learnFrom(lex: GlideLexicon, id: Int, rate: Float = 0.12f) {
+        val o = offsetFor(lex, id) ?: return
+        // the offset measured now is what is LEFT after the habit so far was taken off, so it is added to the habit
+        biasX = (biasX + rate * o[0]).coerceIn(-MAX_BIAS, MAX_BIAS); biasY = (biasY + rate * o[1]).coerceIn(-MAX_BIAS, MAX_BIAS)
+    }
+
+    // ------------------------------------------------------------------ for the tests
+
     /** The words that went through to the careful pass in the last decode (for the accuracy tests). */
     internal fun survivorTexts(lexicons: List<GlideLexicon>): List<String> = (0 until heapN).map { lexicons[heapLex[it]].text(heapId[it]) }
 
-    /** Debug: where the careful pass put every letter of word [id] on the path, and what it cost (visit, shape). */
+    /** The careful-pass cost of word [id] for the path decoded last (both looks). */
+    internal fun debugCost(lex: GlideLexicon, id: Int): Float = refine(lex, id, careful(lex, id))
+
+    /** Where the careful pass put every letter of word [id] on the path, and what it cost. */
     internal fun debugTrace(lex: GlideLexicon, id: Int): String {
-        val len = lex.length(id)
-        var m = 0; var prevL = -1
-        for (i in 0 until len) { val l = lex.letter(id, i); if (l != prevL) { letters[m++] = l; prevL = l } }
-        val ls = (0 until m).map { letters[it] }
-        // brute-force the same DP with back pointers
-        val INF = Float.MAX_VALUE / 4
-        val f = Array(m) { FloatArray(n) { INF } }; val from = Array(m) { IntArray(n) { -1 } }
-        val shapeScale = gestureLen / n
-        fun seg(j: Int, a: Int, b: Int): Float {
-            val ax = kx[ls[j]]; val ay = ky[ls[j]]; val bx = kx[ls[j + 1]]; val by = ky[ls[j + 1]]
-            val vx = bx - ax; val vy = by - ay; val vv = vx * vx + vy * vy
-            var sum = 0f
-            for (i in a until b) {
-                var t = if (vv > 0f) ((qx[i] - ax) * vx + (qy[i] - ay) * vy) / vv else 0f
-                t = t.coerceIn(0f, 1f)
-                val dx = qx[i] - (ax + vx * t); val dy = qy[i] - (ay + vy * t); sum += dx * dx + dy * dy
-            }
-            return sum * shapeScale * p.shapeW
-        }
-        for (i in 0..p.slack) f[0][i] = p.endW * visit(ls[0], i)
-        for (j in 1 until m) for (i in j until n) {
-            if (j == m - 1 && i < n - 1 - p.slack) continue
-            val w = if (j == m - 1) p.endW else 1f
-            for (a in j - 1 until i) { if (f[j - 1][a] >= INF) continue; val c = f[j - 1][a] + seg(j - 1, a, i); if (c + w * visit(ls[j], i) < f[j][i]) { f[j][i] = c + w * visit(ls[j], i); from[j][i] = a } }
-        }
-        var bi = 0; for (i in 0 until n) if (f[m - 1][i] < f[m - 1][bi]) bi = i
-        val idx = IntArray(m); var cur = bi
-        for (j in m - 1 downTo 0) { idx[j] = cur; cur = if (j > 0) from[j][cur] else 0 }
-        val sb = StringBuilder("total %.3f  len=%.1f pitches  ".format(f[m - 1][bi], gestureLen))
-        for (j in 0 until m) {
-            val v = visit(ls[j], idx[j])
-            val sh = if (j < m - 1) seg(j, idx[j], idx[j + 1]) else 0f
-            sb.append("%c@%d(v=%.2f%s) ".format('a' + ls[j], idx[j], v, if (j < m - 1) ", shape=%.2f".format(sh) else ""))
-        }
+        if (!loadLetters(lex, id)) return "?"
+        setWork(0f, 0f)
+        val c = dp(mCount)
+        val sb = StringBuilder("cost %.3f len=%.1f pitches  ".format(c, gestureLen))
+        for (j in 0 until mCount) sb.append("%c@%d(v=%.2f) ".format('a' + letters[j], assign[j], visit(letters[j], assign[j])))
         return sb.toString()
     }
 
-    /** The careful-pass cost of word [id] for the path decoded last (for the accuracy tests and the tuning). */
-    internal fun debugCost(lex: GlideLexicon, id: Int): Float = careful(lex, id)
-    internal fun debugPrior(lex: GlideLexicon, id: Int, prev: String?): Float = prior(lex, id, prevIds(listOf(lex), prev)[0])
+    private fun d2(dx: Float, dy: Float) = dx * dx + dy * dy
 
     private fun distinctLetters(lex: GlideLexicon, id: Int): Int { var m = 0; var p0 = -1; for (i in 0 until lex.length(id)) { val l = lex.letter(id, i); if (l != p0) { m++; p0 = l } }; return maxOf(m, 1) }
-
-    private fun d2(dx: Float, dy: Float) = dx * dx + dy * dy
 
     /** Cut the path into [n] equal steps in pitches; false when it is too short to be a glide. */
     private fun resample(xs: FloatArray, ys: FloatArray, count: Int): Boolean {
@@ -269,27 +285,68 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
 
     // ------------------------------------------------------------------ careful pass
 
-    /** The cost of the path as the word [id]: where the finger was at each letter and how far the path strays between letters, added up over the letters (more letters = more evidence). Lower is better. */
-    private fun careful(lex: GlideLexicon, id: Int): Float {
+    private var mCount = 0
+
+    /** Puts the letters of word [id] (a letter that repeats counts once) into [letters]; false when there are fewer than two. */
+    private fun loadLetters(lex: GlideLexicon, id: Int): Boolean {
         val len = lex.length(id)
+        if (len > MAX_LETTERS) return false
         var m = 0; var prevL = -1
         for (i in 0 until len) { val l = lex.letter(id, i); if (l != prevL) { letters[m++] = l; prevL = l } }
-        // squared distance of every sample to each straight segment between two letters, as prefix sums
+        mCount = m
+        return m >= 2
+    }
+
+    private fun setWork(dx: Float, dy: Float) { for (i in 0 until n) { wx[i] = qx[i] - dx; wy[i] = qy[i] - dy } }
+
+    /** The cost of the path as the word [id] (first look: the path as drawn). */
+    private fun careful(lex: GlideLexicon, id: Int): Float {
+        if (!loadLetters(lex, id)) return Float.MAX_VALUE / 8
+        setWork(0f, 0f)
+        return dp(mCount)
+    }
+
+    /** The second look: move the whole path by [GlideParams.biasGain] of how far it sat off the word's letters, and judge again (the better of the two, with the move charged). */
+    private fun refine(lex: GlideLexicon, id: Int, cost1: Float): Float {
+        if (!loadLetters(lex, id)) return cost1
+        setWork(0f, 0f)
+        if (dp(mCount) >= Float.MAX_VALUE / 8) return cost1
+        val o = meanOffset(mCount)
+        val mx = o[0] * p.biasGain; val my = o[1] * p.biasGain
+        setWork(mx, my)
+        val c2 = dp(mCount) + p.biasW * (mx * mx + my * my) * mCount
+        return if (c2 < cost1) c2 else cost1
+    }
+
+    /** Mean (x, y) of the judged path's points minus the letters they were assigned to, in the last [dp]. */
+    private fun meanOffset(m: Int): FloatArray {
+        var sx = 0f; var sy = 0f
+        for (j in 0 until m) { val i = assign[j]; sx += wx[i] - kx[letters[j]]; sy += wy[i] - ky[letters[j]] }
+        return floatArrayOf(sx / m, sy / m)
+    }
+
+    private fun visit(k: Int, i: Int): Float { val d = d2(wx[i] - kx[k], wy[i] - ky[k]); return if (d < p.visitCap) d else p.visitCap }
+
+    /**
+     * The best way to put the [m] letters on the path, in order: letter j at step i_j, the first at the start and the last at the end, minimising how far each step is from its letter plus how far
+     * the path strays from the straight line between two neighbouring letters. Fills [assign]; returns the cost.
+     */
+    private fun dp(m: Int): Float {
+        val shapeScale = gestureLen / n // every step stands for this many pitches of path
+        // squared distance of every step to each straight segment between two letters, as prefix sums
         for (j in 0 until m - 1) {
             val ax = kx[letters[j]]; val ay = ky[letters[j]]; val bx = kx[letters[j + 1]]; val by = ky[letters[j + 1]]
             val vx = bx - ax; val vy = by - ay; val vv = vx * vx + vy * vy
             val base = j * (n + 1)
             pre[base] = 0f
             for (i in 0 until n) {
-                var t = if (vv > 0f) ((qx[i] - ax) * vx + (qy[i] - ay) * vy) / vv else 0f
+                var t = if (vv > 0f) ((wx[i] - ax) * vx + (wy[i] - ay) * vy) / vv else 0f
                 if (t < 0f) t = 0f else if (t > 1f) t = 1f
-                val dx = qx[i] - (ax + vx * t); val dy = qy[i] - (ay + vy * t)
+                val dx = wx[i] - (ax + vx * t); val dy = wy[i] - (ay + vy * t)
                 pre[base + i + 1] = pre[base + i] + dx * dx + dy * dy
             }
         }
         val inf = Float.MAX_VALUE / 4
-        val shapeScale = gestureLen / n // every sample stands for this many pitches of path
-        // first letter near the start of the path
         val k0 = letters[0]
         for (i in 0 until n) fPrev[i] = if (i <= p.slack) p.endW * visit(k0, i) else inf
         for (j in 1 until m) {
@@ -298,24 +355,26 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
             val w = if (last) p.endW else 1f
             val base = (j - 1) * (n + 1)
             for (i in 0 until n) {
-                if (i < j || (last && i < n - 1 - p.slack)) { fCur[i] = inf; continue }
-                var best = inf
+                if (i < j || (last && i < n - 1 - p.slack)) { fCur[i] = inf; from[j * n + i] = -1; continue }
+                var best = inf; var arg = -1
                 for (a in j - 1 until i) {
                     val fa = fPrev[a]
                     if (fa >= inf) continue
-                    val c = fa + p.shapeW * (pre[base + i] - pre[base + a]) * shapeScale // how far the path strays between the two letters, summed along the path: a stretch of one pitch that is one pitch off the line costs about one letter's miss
-                    if (c < best) best = c
+                    val c = fa + p.shapeW * (pre[base + i] - pre[base + a]) * shapeScale
+                    if (c < best) { best = c; arg = a }
                 }
+                from[j * n + i] = arg
                 fCur[i] = if (best >= inf) inf else best + w * visit(kj, i)
             }
             val t = fPrev; fPrev = fCur; fCur = t
         }
-        var best = inf
-        for (i in 0 until n) if (fPrev[i] < best) best = fPrev[i]
+        var best = inf; var bi = -1
+        for (i in 0 until n) if (fPrev[i] < best) { best = fPrev[i]; bi = i }
+        if (bi < 0) return inf
+        var cur = bi
+        for (j in m - 1 downTo 0) { assign[j] = cur; if (j > 0) cur = from[j * n + cur] }
         return best
     }
-
-    private fun visit(k: Int, i: Int): Float { val d = d2(qx[i] - kx[k], qy[i] - ky[k]); return if (d < p.visitCap) d else p.visitCap }
 
     // ------------------------------------------------------------------ the language
 
@@ -335,5 +394,9 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
         return Math.log((1.0 - p.bigramMix) * Math.exp(u.toDouble()) + p.bigramMix * Math.exp(b.toDouble())).toFloat()
     }
 
-    companion object { const val MAX_LETTERS = 24 }
+    companion object {
+        const val MAX_LETTERS = 24
+        /** The learned habit never moves a path by more than this many pitches. */
+        const val MAX_BIAS = 0.6f
+    }
 }
