@@ -51,12 +51,14 @@ class GlideShapeLearningTest {
     }
 
     @Test fun aShapeNeverMakesAWordAppearThatTheFingerWentNowhereNear() {
-        // "world" was confirmed for a shape that is really the shape of "hello": a glide of "hello" must not turn into "world" (the letters are far from the path and the first letter differs anyway)
-        val dec = GlideDecoder(keys, GlideParams()); val model = PersonalModel(); dec.personal = model
+        // "world" was confirmed twelve times for the shape of a glide that is really the shape of "hello": a glide like that must not turn into "world" (its letters are far from the path and its first letter differs)
         val g = GestureSim(keys, Random(2)).path("hello", SimNoise.CALM)!!
+        val plain = GlideDecoder(keys, GlideParams(patGain = 0f)).decode(g.xs, g.ys, g.xs.size, listOf(lex), null, 3)
+        val dec = GlideDecoder(keys, GlideParams()); val model = PersonalModel(); dec.personal = model
         model.patterns.add("world", Fingerprint.of(g.xs, g.ys, g.xs.size, keys)!!, 12f)
         val c = dec.decode(g.xs, g.ys, g.xs.size, listOf(lex), null, 3)
-        assertEquals("hello", c.first().text)
+        assertEquals(plain.map { it.text }, c.map { it.text })
+        assertFalse(c.any { it.text == "world" })
     }
 
     @Test fun anEmptyMemoryChangesNothingAndCostsNothingMeasurable() {
