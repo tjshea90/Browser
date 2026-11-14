@@ -171,6 +171,9 @@ class FilterSet internal constructor(
         return if (payload.isEmpty()) "" else ScriptletRules.MARKER_START + payload + ScriptletRules.MARKER_END
     }
 
+    /** AW1b+: the calls of [pageHost] as the JSON text the page-world library takes (`[["name","arg"],...]`), or "" when the host has none. The extension asks for it BEFORE a document of the host loads (message `sc`) and registers it ahead of the page's own scripts. */
+    fun scriptletPayload(pageHost: String): String = ScriptletRules.payload(scriptletsFor(pageHost))
+
     /** AW1b: the scriptlet calls of [pageHost] in stored form (see [ScriptletRules]), under the same `$elemhide` / `$document` exceptions as [cosmeticCss] (tests and Diagnostics; the page gets them inside the CSS answer). */
     fun scriptletsFor(pageHost: String): List<String> {
         if (cosmetic.isEmpty) return emptyList()
