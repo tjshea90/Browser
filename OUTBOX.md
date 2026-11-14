@@ -1490,3 +1490,7 @@
 >
 > The full report with sources is at `/tmp/claude-0/-home-user-Browser/3ffc23c1-bccc-579d-b684-db627ad5b4a9/scratchpad/GECKO_ENGINE_OPTIMIZATION.md`. If you want, I can turn it into a private page you can paste to the other session, or commit it to `research/` once that's safe.
 <!-- sha:532d7f6a075d -->
+
+## 2026-11-14T00:28:06Z
+> Status: the blocked-page icon and the top-right panel are both proven on the emulator and ticked. I'm doing one last emulator check that the new Diagnostics lines show on screen, then I'll run the full test suite and ship alpha33.
+<!-- sha:b8c2b206b2a0 -->
