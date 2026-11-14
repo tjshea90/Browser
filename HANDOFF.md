@@ -31,7 +31,7 @@ The single entry point for a new Claude session or account. After this, in order
 6. NEVER ship a tag twice (check BUILDLOG.md and the Releases first). Gecko APK is ~92 MB and is never committed.
 
 ## 3. Test system (what runs where)
-- `core/` (127 JVM tests), `app/` (81 Robolectric tests), `web-tests/` (16 Playwright tests of the injected WebView scripts), lint: `scripts/verify.sh quick|full` (WebView build). The workflow repeats them on GitHub.
+- `core/` (about 880 JVM tests), `app/` (about 260 Robolectric tests), `web-tests/` (Playwright tests of the injected WebView scripts), lint: `scripts/verify.sh quick|full` (WebView build). The workflow repeats them on GitHub. `EngineTest.anOutageInTheMiddleWaitsAndCarriesOnInsteadOfFailing` (download engine) is timing-sensitive: it failed once while Gradle compiled and linted in parallel and passed 57/57 alone - rerun it alone before suspecting a change.
 - The Gecko module has no unit tests yet (TASKS.md); its APK is audited by `tools/verify-apk.sh gecko`.
 - Emulator runs (software mode, no KVM, minutes per step): recipe in the "Emulator" section of `docs/ARCHITECTURE.md` / the old notes in git history of `docs/handoff/STATE.md`
   (`sdkmanager --install emulator "system-images;android-29;default;x86_64"`, avd `kestrel29x64` pixel_c 600x973@170, `emulator -no-window -no-audio -no-snapshot -no-boot-anim -gpu swiftshader_indirect -no-accel`,
