@@ -1,21 +1,22 @@
-# CHECKPOINT 2013 — read me first, then TASKS.md
+# CHECKPOINT 2020 — read me first, then TASKS.md
 
-**Written:** 2026-11-14T04:33:56Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `0996ada` (this checkpoint is the commit after it)
+**Written:** 2026-11-14T04:41:57Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `9de48ee` (this checkpoint is the commit after it)
 
 ## Just done
-owner message 36 written into TASKS (AV1 resize+detach the mini keyboard, AV2 research Gboard/Samsung glide + learning upgrades, AV3 polish/responsiveness); AT2 Spanish closed ('Do not include Spanish')
+AV1 code: MiniNav panel geometry (grip drag detaches/moves with dock snap + double-tap dock, four corner marks resize the open keyboard with limits, transparent band passes touches to the page), HotCorner.covers guard, prefs miniGeom, Settings reset button, activity wiring (MiniNav now fills the page area); MiniNavTest 51 + HotCornerTest 14 pass
 
 ## Do this next
-start AV1: read MiniNav panel layout (panel LinearLayout in a FrameLayout, topGap, PANEL_KEYS_W_DP, KEYS_H_DP), design geometry prefs (right/top offsets, keys width/height, detached flag) then implement corner drag + grip drag; in parallel launch a research agent for AV2a (Agent general-purpose, brief in scratchpad) and write research/GLIDE_RESEARCH.md from its report
+emulator proof of AV1: build ./gradlew :geckoapp:assembleDebug -PgeckoAbi=x86_64, boot scratchpad boot_wipe.sh (avd kestrel29x64), install, long press corner, drag grip, drag corners, screenshots; then AV2b/AV3 code in core (per-key thumb centres from taps, confusion learning, recency, trigram) while the research agent report (agent ab679ad8ef33678f3) arrives -> write research/GLIDE_RESEARCH.md
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    M  TASKS.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  2287b4e ckpt 2013: owner message 36 written into TASKS (AV1 resize+detach the mini keyboard, AV2
   d4f48f8 ckpt 2010: alpha35 (kestrel-g-v0.3.0-alpha35, code 136) released and RECORDED: run 43556
   b59f884 ckpt 2005: alpha35 dispatched: android.yml queued for ref ccr-a57c163e-mtq8js (app=gecko
   072c85d ckpt 2004: gated kestrel-g-v0.3.0-alpha35 (gecko code 136) and pushed it: handoff self-t
@@ -25,8 +26,7 @@ start AV1: read MiniNav panel layout (panel LinearLayout in a FrameLayout, topGa
   85e6e7a ckpt 1990: AU3 code: TextEdit (core, 7 tests), PageField interface + MiniNav field mode 
   4ad5eb4 ckpt 1979: AU3 research written (research/MINI_NAV.md): GeckoView 160 input path read fr
   543c7ef ckpt 1978: AU2 learning keyboard: PersonalModel tests (11) + MiniKeyboard typedPairs tes
-  a2b40ea ckpt 1965: alpha34 SHIPPED AND RECORDED (run 43549663530 green, Release kestrel-g-v0.3.0
 ```
 
-(2 automatic checkpoint(s) since the last deliberate one — the
+(6 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
