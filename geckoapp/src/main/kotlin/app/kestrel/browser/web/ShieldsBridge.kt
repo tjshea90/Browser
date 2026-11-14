@@ -67,6 +67,7 @@ class ShieldsBridge(
     // fraction of one core while Gecko holds every request until this thread answers (research/HW_SPEED.md H1).
     // A HandlerThread (not an executor) so the GeckoResult can be created WITH its handler: its callbacks (the reply to Gecko) then run on this thread instead of being posted back to the
     // Android UI thread (the third UI task of every request; sendSuccess / sendError are dispatched to Gecko's own thread by the engine, any thread may call them).
+    @Volatile private var lastExtState = ""
     private val workerThread = android.os.HandlerThread("kestrel-shield", android.os.Process.THREAD_PRIORITY_DEFAULT).also { it.start() }
     private val workerHandler = android.os.Handler(workerThread.looper)
     // Element-hiding CSS is slow the first time a host is seen (the generic selector set is built once, about 2 s on the emulator): it must not hold up the verdicts queued behind it.
@@ -91,7 +92,7 @@ class ShieldsBridge(
                     "cfg" -> pageConfig(m.optString("h"))
                     "img" -> imageChunk(m.optInt("g"), m.optInt("i", -1))
                     "cnt" -> { counts(m); "" }
-                    "st" -> { stats = EngineStats.from(m); "" }
+                    "st" -> { stats = EngineStats.from(m); m.optString("w").let { w -> if (w != lastExtState) { lastExtState = w; app.kestrel.browser.diag.Health.log("shields", "ext-state", w) } }; "" }
                     "pop" -> { onPop(m); "" }
                     "sc" -> scriptletCalls(m.optString("h"))
                     "css" -> cosmeticCss(m.optString("h"), m.optBoolean("top", true))

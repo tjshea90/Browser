@@ -148,7 +148,7 @@ function markStats() { // lazy timer: nothing is scheduled while no request is b
 function reportStats(force) {
   if (!force && !statsDirty) return;
   statsDirty = false;
-  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, w: (guardState + ', ' + guardBlocked + ' blocked | ' + slState + (slPages ? ', ' + slPages + ' pages ran ' + slCalls + ' calls' + (slBad ? ' (' + slBad + ' failed)' : '') + ', ' + slEarlyPages + ' before the page\'s first script' : '') + (slEarlySet ? ', ' + slEarlySet + ' sites set up early (' + slReg.size + ' kept, ' + slEarlyAsks + ' asks)' : '') + (standIns ? ', ' + standIns + ' blocked files answered with a stand-in' : '') + (slEarlyFail ? ', early error: ' + slEarlyFail : '') + ' | ' + stats.last).slice(0, 400) }).catch(function () {});
+  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, w: (guardState + ', ' + guardBlocked + ' blocked' + assistText() + ' | ' + slState + (slPages ? ', ' + slPages + ' pages ran ' + slCalls + ' calls' + (slBad ? ' (' + slBad + ' failed)' : '') + ', ' + slEarlyPages + ' before the page\'s first script' : '') + (slEarlySet ? ', ' + slEarlySet + ' sites set up early (' + slReg.size + ' kept, ' + slEarlyAsks + ' asks)' : '') + (standIns ? ', ' + standIns + ' blocked files answered with a stand-in' : '') + (slEarlyFail ? ', early error: ' + slEarlyFail : '') + ' | ' + stats.last).slice(0, 400) }).catch(function () {});
 }
 
 // ---------------------------------------------------------------- the page report (Diagnostics > Page report)
@@ -253,6 +253,8 @@ function legacy(d, page) {
 // guard-main.js (registered below, runs inside every page and frame) refuses windows the user did not ask for, and reports every real tap with the link it was on. The app decides about a page that sends
 // its tab to another site right after such a tap (core/.../guard/JumpGuard): the decision needs the app's own touch times and happens BEFORE the navigation starts, so nothing of the page state is disturbed.
 var guardState = 'page guard: starting';
+var assistAsked = 0, assistSent = 0, assistFail = ''; // RX3-G3: how often a frame player was asked to start, how often the relay reached it, and why not
+function assistText() { return assistAsked ? ' | assist ' + assistSent + '/' + assistAsked + (assistFail ? ' (' + assistFail + ')' : '') : ''; }
 var guardBlocked = 0;
 function trimMap(m, max) { while (m.size > max) m.delete(m.keys().next().value); }
 function guardAnswer(host, topHost) {
@@ -795,11 +797,16 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   if (!m || m.k !== 'assist' || !sender || !sender.tab || !(sender.tab.id >= 0)) return undefined;
   var tabId = sender.tab.id, from = sender.frameId | 0, pm = frameParent.get(tabId), fd = frameDoc.get(tabId);
   var x = Math.round(m.x), y = Math.round(m.y);
-  if (!pm || !(x >= 0 && y >= 0 && x < 10000 && y < 10000)) return undefined;
+  assistAsked++;
+  if (!pm || !(x >= 0 && y >= 0 && x < 10000 && y < 10000)) { assistFail = pm ? 'bad place' : 'no frame known'; markStats(); return undefined; }
   var kids = [], exact = [], want = docOf(m.s);
   pm.forEach(function (parent, id) { if (parent === from) { kids.push(id); if (want && fd && fd.get(id) === want) exact.push(id); } });
   var target = exact.length === 1 ? exact[0] : (kids.length === 1 ? kids[0] : -1); // several frames and no unique address: no guess
-  if (target > 0) { try { browser.tabs.sendMessage(tabId, { k: 'assist', x: x, y: y }, { frameId: target }).catch(function () {}); } catch (e) { /* ignore */ } }
+  if (target <= 0) { assistFail = 'frame not found among ' + kids.length; markStats(); return undefined; }
+  try {
+    if (!browser.tabs || typeof browser.tabs.sendMessage !== 'function') { assistFail = 'tabs.sendMessage is not there'; markStats(); return undefined; }
+    browser.tabs.sendMessage(tabId, { k: 'assist', x: x, y: y }, { frameId: target }).then(function () { assistSent++; assistFail = ''; markStats(); }, function (e) { assistFail = String((e && e.message) || e).slice(0, 60); markStats(); });
+  } catch (e) { assistFail = String((e && e.message) || e).slice(0, 60); markStats(); }
   return undefined;
 });
 
