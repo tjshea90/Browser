@@ -258,11 +258,14 @@ class FilterSetTest {
         ))
         val fs = b.build(1L)
         val css = fs.cosmeticCss("example.com")
-        // `#?#.x` is only the extended SPELLING of a plain selector (a normal rule since alpha26); the :has-text() rule is a procedural one for the page script (ProceduralRulesTest): never CSS
-        assertEquals(".ok{display:none!important}\n.x{display:none!important}\n", css)
-        assertEquals(3, b.report.cosmeticSite)
+        // `#?#.x` is only the extended SPELLING of a plain selector (a normal rule since alpha26); the :has-text() rule is a procedural one for the page script (ProceduralRulesTest) and the +js() line a scriptlet
+        // call for the page-world library (ScriptletRulesTest): neither is ever CSS. Since AW1 the entity rule `example.*##.entity` applies to example.com, and `~example.com##.neg` (every site but this one) does not.
+        assertEquals(".ok{display:none!important}\n.x{display:none!important}\n.entity{display:none!important}\n", css)
+        assertEquals(5, b.report.cosmeticSite) // .ok, :has-text, the scriptlet, .x, .entity
         assertEquals(1, fs.proceduralFor("example.com").size)
-        assertFalse(css.contains("has-text") || css.contains("Ad") || css.contains('\u0002'))
+        assertEquals(1, fs.scriptletsFor("example.com").size)
+        assertFalse(css.contains("has-text") || css.contains("Ad") || css.contains('\u0002') || css.contains('\u0005'))
+        assertTrue("every other site gets the generic .neg", fs.cosmeticCss("other.org").contains(".neg"))
     }
 
     @Test

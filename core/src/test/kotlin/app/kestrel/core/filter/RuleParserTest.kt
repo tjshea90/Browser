@@ -119,9 +119,14 @@ class RuleParserTest {
         assertTrue(p.parseCosmetic("example.com#@#.ad")!!.exception)
 
         fun skipC(l: String): Skip { assertNull("should skip: $l", p.parseCosmetic(l)); return p.skip }
-        assertEquals(Skip.COSMETIC_EXCLUSIONS, skipC("~a.com##.x"))
-        assertEquals(Skip.ENTITY_DOMAIN, skipC("example.*##.x"))
-        assertEquals(Skip.COSMETIC_UNSUPPORTED, skipC("example.com##+js(aopr, x)"))
+        // AW1: a generic rule that is off on some sites, an entity domain and a scriptlet call are understood now (ScriptletRulesTest); stars anywhere but at the end still are not
+        assertEquals(listOf("a.com"), p.parseCosmetic("~a.com##.x")!!.excluded); assertTrue(p.parseCosmetic("~a.com##.x")!!.domains.isEmpty())
+        assertEquals(listOf("example.*"), p.parseCosmetic("example.*##.x")!!.domains)
+        assertEquals(Skip.ENTITY_DOMAIN, skipC("*.example.com##.x"))
+        assertEquals(Skip.ENTITY_DOMAIN, skipC("example.*.uk##.x"))
+        assertTrue(ScriptletRules.isStored(p.parseCosmetic("example.com##+js(aopr, x)")!!.selector))
+        assertEquals(Skip.COSMETIC_UNSUPPORTED, skipC("##+js(aopr, x)")) // a scriptlet for every site is never taken from a list
+        assertEquals(Skip.SCRIPTLET_UNSUPPORTED, skipC("example.com##+js(no-such-scriptlet, x)"))
         // :has-text() / :upward() / :remove() are procedural rules since alpha26 (ProceduralRulesTest); what the page script cannot run is still skipped
         assertTrue(p.parseCosmetic("example.com#?#div:has-text(x)") != null)
         assertTrue(p.parseCosmetic("example.com##div:has-text(x)") != null)
