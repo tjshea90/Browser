@@ -2,7 +2,7 @@ package app.kestrel.core.filter
 
 /** Why a line was not turned into a rule (surfaced in the build report so list coverage is measurable). */
 enum class Skip {
-    NONE, EMPTY, REGEX, UNSUPPORTED_OPTION, NON_ASCII, BAD_SYNTAX, ENTITY_DOMAIN, COSMETIC_UNSUPPORTED, COSMETIC_EXCLUSIONS, COSMETIC_UNSAFE,
+    NONE, EMPTY, REGEX, UNSUPPORTED_OPTION, NON_ASCII, BAD_SYNTAX, ENTITY_DOMAIN, COSMETIC_UNSUPPORTED, COSMETIC_EXCLUSIONS, COSMETIC_UNSAFE, SCRIPTLET_UNSUPPORTED,
 }
 
 /** A parsed network rule in normalised form (see FilterSetBuilder for how it is stored). */
@@ -23,9 +23,10 @@ internal class NetRule(
 )
 
 internal class CosmeticRule(
-    @JvmField val domains: List<String>, // empty = generic
+    @JvmField val domains: List<String>, // empty = generic; an entry `site.*` is an entity domain (any registrable domain with that name, whatever its public suffix)
     @JvmField val selector: String,
     @JvmField val exception: Boolean,
+    @JvmField val excluded: List<String> = emptyList(), // `~site.com`: the rule is off on these (filed as an exception of the same text)
 )
 
 internal const val SITE_DOCUMENT_ALLOW = 1
@@ -175,8 +176,8 @@ internal class RuleParser {
     // ------------------------------------------------------------------ cosmetic
 
     /**
-     * Parses `[domains]##selector` and `[domains]#@#selector`. Returns null (with [skip] set) for procedural / scriptlet /
-     * HTML-filtering / CSS-injection forms, rules with `~domain` exclusions, entity (`site.*`) domains and unsafe selectors.
+     * Parses `[domains]##selector` and `[domains]#@#selector`. Returns null (with [skip] set) for the unsupported procedural / HTML-filtering / CSS-injection forms and unsafe selectors. `+js(...)` scriptlet
+     * calls (AW1b) need domains and are stored in their own form ([ScriptletRules]). Domains may be entity domains (`site.*`, AW1d) and may carry `~site.com` exclusions.
      */
     fun parseCosmetic(line: String): CosmeticRule? {
         skip = Skip.NONE
@@ -192,37 +193,50 @@ internal class RuleParser {
             else -> return fail2(Skip.COSMETIC_UNSUPPORTED) // #$# #%# ...
         }
         var selector = line.substring(selStart).trim()
-        if (selector.startsWith("+js(") || selector.startsWith("^") || selector.isEmpty()) return fail2(Skip.COSMETIC_UNSUPPORTED)
+        if (selector.startsWith("^") || selector.isEmpty()) return fail2(Skip.COSMETIC_UNSUPPORTED)
         var styled = false
         var procedural = false
-        val st = CosmeticSelectors.splitStyle(selector)
-        if (st != null) { // `site##selector:style(declarations)`: a restyling rule for a site (never an exception, never generic: checked below)
-            if (exception) return fail2(Skip.COSMETIC_UNSUPPORTED)
-            val decls = CosmeticSelectors.acceptDeclarations(st.second) ?: return fail2(Skip.COSMETIC_UNSAFE)
-            if (!CosmeticSelectors.accept(st.first)) return fail2(if (CosmeticSelectors.isProcedural(st.first)) Skip.COSMETIC_UNSUPPORTED else Skip.COSMETIC_UNSAFE)
-            selector = st.first + CosmeticSelectors.STYLE_SEP + decls
-            styled = true
-        } else if (!CosmeticSelectors.accept(selector)) {
-            if (!CosmeticSelectors.isProcedural(selector)) return fail2(Skip.COSMETIC_UNSAFE)
-            selector = ProceduralRules.encode(selector) ?: return fail2(Skip.COSMETIC_UNSUPPORTED)   // outside the supported subset (xpath, matches-css, a selector after an operator ...)
-            procedural = true
+        var scriptlet = false
+        if (selector.startsWith("+js(")) {
+            if (!selector.endsWith(")")) return fail2(Skip.SCRIPTLET_UNSUPPORTED)
+            val inner = selector.substring(4, selector.length - 1)
+            selector = (if (inner.isBlank()) (if (exception) ScriptletRules.ALL_STORED else null) else ScriptletRules.encode(inner)) ?: return fail2(Skip.SCRIPTLET_UNSUPPORTED)
+            scriptlet = true
+        } else {
+            val st = CosmeticSelectors.splitStyle(selector)
+            if (st != null) { // `site##selector:style(declarations)`: a restyling rule for a site (never an exception, never generic: checked below)
+                if (exception) return fail2(Skip.COSMETIC_UNSUPPORTED)
+                val decls = CosmeticSelectors.acceptDeclarations(st.second) ?: return fail2(Skip.COSMETIC_UNSAFE)
+                if (!CosmeticSelectors.accept(st.first)) return fail2(if (CosmeticSelectors.isProcedural(st.first)) Skip.COSMETIC_UNSUPPORTED else Skip.COSMETIC_UNSAFE)
+                selector = st.first + CosmeticSelectors.STYLE_SEP + decls
+                styled = true
+            } else if (!CosmeticSelectors.accept(selector)) {
+                if (!CosmeticSelectors.isProcedural(selector)) return fail2(Skip.COSMETIC_UNSAFE)
+                selector = ProceduralRules.encode(selector) ?: return fail2(Skip.COSMETIC_UNSUPPORTED)   // outside the supported subset (xpath, matches-css, a selector after an operator ...)
+                procedural = true
+            }
         }
 
         val domains = ArrayList<String>()
+        val excluded = ArrayList<String>()
         if (i > 0) {
             for (d in line.substring(0, i).split(',')) {
-                val t = d.trim().lowercase()
+                var t = d.trim().lowercase()
                 if (t.isEmpty()) continue
-                if (t.startsWith("~")) return fail2(Skip.COSMETIC_EXCLUSIONS)
-                if (t.indexOf('*') >= 0) return fail2(Skip.ENTITY_DOMAIN)
-                if (!isHostName(t)) return fail2(Skip.BAD_SYNTAX)
-                domains.add(t)
+                var ex = false
+                if (t.startsWith("~")) { ex = true; t = t.substring(1) }
+                if (t.indexOf('*') >= 0 && !isEntity(t)) return fail2(Skip.ENTITY_DOMAIN)   // a star anywhere but at the end ("*.site.com", "site.*.uk") is not understood
+                if (!isHostName(if (t.endsWith(".*")) t.substring(0, t.length - 2) else t)) return fail2(Skip.BAD_SYNTAX)
+                if (ex) excluded.add(t) else domains.add(t)
             }
-            if (domains.isEmpty()) return fail2(Skip.BAD_SYNTAX)
+            if (domains.isEmpty() && excluded.isEmpty()) return fail2(Skip.BAD_SYNTAX)
         }
+        if (domains.isEmpty() && excluded.isNotEmpty() && !(scriptlet || exception)) { /* a generic rule that is off on some sites: fine, the exclusions become exceptions */ }
+        if (scriptlet && domains.isEmpty()) return fail2(Skip.COSMETIC_UNSUPPORTED) // a scriptlet for every site: never taken from a list
         if (styled && domains.isEmpty()) return fail2(Skip.COSMETIC_UNSUPPORTED) // a restyling rule for every site is too broad to take from a list
         if (procedural && domains.isEmpty()) return fail2(Skip.COSMETIC_UNSUPPORTED) // a script that runs on every page for a generic procedural rule: not worth the cost on this device
-        return CosmeticRule(domains, selector, exception)
+        if (exception && excluded.isNotEmpty()) return fail2(Skip.COSMETIC_EXCLUSIONS)  // an exception that is itself off on some sites: no list writes this
+        return CosmeticRule(domains, selector, exception, excluded)
     }
 
     private fun fail2(reason: Skip): CosmeticRule? { skip = reason; return null }
@@ -231,6 +245,9 @@ internal class RuleParser {
         private const val MAX_LINE = 16_384 // legit uBlock lines with long domain= lists reach a few KB
         private const val MAX_PATTERN = 1_000 // legit URL patterns are < 300 chars; keeps token indexing linear
         private const val MIN_LITERALS = 3
+
+        /** `site.*`: a name followed by `.*` (the name itself a plain host name), nothing else starred. */
+        fun isEntity(t: String): Boolean = t.length > 2 && t.endsWith(".*") && t.indexOf('*') == t.length - 1
 
         /** Lower-case hostname characters only (letters, digits, '.', '-'); no empty labels. */
         fun isHostName(s: String): Boolean {

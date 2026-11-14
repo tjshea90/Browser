@@ -33,7 +33,7 @@ internal object ScriptletRules {
 
     class Call(val name: String, val args: List<String>)
 
-    private enum class Need { NONE, ONE, TWO, ONE_OF_TWO, ONE_OF_ONE_OR_TWO }
+    private enum class Need { NONE, ONE, TWO, ONE_OF_TWO }
 
     /** canonical name -> how many arguments make the call meaningful. A call that would act on EVERYTHING when its arguments are empty (every listener, every timer, every fetch) must name something. */
     private val NEED = mapOf(
@@ -147,7 +147,6 @@ internal object ScriptletRules {
             Need.ONE -> arg(0)
             Need.TWO -> arg(0) && args.size >= 2
             Need.ONE_OF_TWO -> arg(0) || arg(1)
-            Need.ONE_OF_ONE_OR_TWO -> arg(0) || arg(1)
         }
         if (!ok) return null
         while (args.isNotEmpty() && args.last().isEmpty()) args.removeAt(args.size - 1) // trailing empty arguments carry nothing
