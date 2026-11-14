@@ -1104,3 +1104,59 @@ I don't charge my tablet overnight. Does it still do the overnight compile of th
 ```
 Make the mini keyboard on the top right panel have glide typing like Gboard. Try to make the glide word predictions accurate. 
 ```
+
+## 2026-11-14T03:06:48Z
+```
+1) make the top right slide down box with the navigation panel and keyboard have no visible button at all. Instead, if I long press the top right corner of the browser (make it a decently large target square to long press, but invisible), it slides open the panel and if I long press above the open panel it slides it back closed. 
+2) make the new glide type keyboard learn from my typing. I can choose words that I meant to type if it predicts incorrectly, and over time it will become more accurate by learning my more common word patterns
+
+Kestrel diagnostics  2026-11-14 01:43:05 UTC  (app running 10 s)
+App: app.kestrel.browser.gecko 0.3.0-alpha33 (code 134)
+Device: alps 711, Android 10 (API 29), armeabi-v7a/armeabi
+Display: 600x973 px, 170 dpi, font scale 1.2
+Memory: total 1954 MB, available 642 MB, low=false, threshold 144 MB; MemAvailable 586396 kB; low-RAM device=true; app heap 12/128 MB
+Keyboard: com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME
+Processes: main#31951, :sandboxed_tab_disable_art_image_21#32041, :crashhelper_disable_art_image_#31998
+Cold start (ms since the process started): app 96 | activity 223 | frame 520 | look - | runtime 1045 | open - | paint - | stop -
+Last look (the saved picture of the page, EY-1): on, 1 stored, shown at start 0, shown after a revive 0, taken 0, hidden 0
+Engine: GeckoView 160.0; live sessions 0 of 1 tabs (the memory budget keeps up to 5 ready, MemAvailable 572 MB, setting automatic); current https://www.google.com/search?q=hey
+Network: Standard profile: your own switches apply. (VPN active: false, LinkMeter tunnel recognised: false, downloads yield to a loading page at 150 KB/s)
+Wi-Fi lock: HIGH_PERF (radio kept out of power save, also with the screen off), held now=false, taken 0 time(s) by downloads. Keep Wi-Fi awake in front: not held, taken 0 time(s) this run
+Download windows: no window boundary seen yet this run (a download needs more than one window)
+Video size estimates: no stream download has finished yet this run
+Engine prefs: version=7(i), av1.enabled=false(b), processCount=1(i), prefersReducedMotion=null(?), prefetch-next=true(b), size_factor=20(i), discard_factor=1(i), min_expiration_ms=180000(i), disk.capacity=512000(i), push.enabled=false(b), y_skate_size_multiplier=4.0(s), y_stationary_size_multiplier=3.0(s), content_response_timeout=300(i), max_velocity_inches_per_ms=0.07(s), gc_on_memory_pressure=false(b), gpu-process.enabled=true(b), software=false(b), cache_readahead_limit=60(i), cache_resume_threshold=30(i), max_total_viewers=6(i), contentViewerTimeout=3600(i), memory.capacity=65536(i), decode_bytes_at_a_time=65536(i), numscrollportheights=2(i), numscrollportwidths=1(i), top=1500.0(s), bottom=1500.0(s), precache-shaders=true(b), proxy.type=5(i), failover_timeout=10(i), autoconfig_url=(s), trr.mode=2(i), enable=true(b), disableIPv6=false(b), interactive_widget_default_resizes_visual=true(b), allow_unload_listeners=true(b), require_no_opener=true(b), ship_allow_beforeunload_listeners=true(b), max_entries=50(i), dnsCacheExpiration=60(i), dnsCacheEntries=3200(i), gc_parallel_marking=false(b), bytecode_cache.strategy=1(i), jxl.enabled=false(b), accept=(s), allow_double_tap_zooming=false(b), autozoom=true(b), prefetch_dns_for_anchor_https_document=true(b), cache.size=32768(i), fallback_delay=500(i), speculation_rules.enabled=true(b), dry_run=false(b), vp9.enabled=false(b), hevc.enabled=true(b), android-media-codec.enabled=true(b), preferred=true(b), hls.enabled=true(b), eme.enabled=true(b), require-app-approval=true(b), default=1(i), blocking_policy=0(i), request=true(b), rdd-process.enabled=false(b), utility-process.enabled=true(b), default-size=10(i), suspend-background-video.enabled=true(b), prefersReducedMotion=null(?), animation_mode=normal(s), all=false(b), compositor=false(b), accelerated=true(b), disabled=false(b), ion=true(b), baselinejit=true(b), blinterp=true(b), wasm=true(b), wasm_optimizingjit=true(b), early-hints.enabled=true(b), echconfig.enabled=true(b), enable_kyber=true(b), http2.enabled=true(b), trackingTable=moztest-track-simple,ads-track-digest256,analytics-track-digest256,social-track-digest256(s), trackingAnnotationTable=moztest-track-simple,ads-track-digest256,social-track-digest256,analytics-track-digest256,content-track-digest256(s), trackingprotection.enabled=false(b), strict_list.enabled=true(b), baseline.enabled=true(b), convenience.enabled=true(b)
+Engine scroll/network prefs: touch_start_tolerance=0.06, touch_move_tolerance=0.03, fling_stop_on_tap_threshold=0.05, fling_min_velocity_threshold=0.5, velocity_bias=1.0, displayport_expiry_ms=180000, prefer_jank_minimal_displayports=true, min_skate_speed=1.0, allow_immediate_handoff=false, fling_friction=0.004, chrome_fling_physics.friction=0.015, chrome_fling_physics.inflexion=0.35, chrome_fling_physics.stop_threshold=0.1, paint_skipping.enabled=true, layout.display-list.retain=true, dom.ipc.processPriorityManager.enabled=true, browser.cache.memory.capacity=65536, layout.frame_rate=-1, http.max-connections=128, http.max-persistent-connections-per-server=6, http.speculative-parallel-limit=20, http.pacing.requests.enabled=true, dnsCacheEntries=3200, dnsCacheExpiration=60, layout.css.scroll-anchoring.enabled=true, dom.lazy-loading.margin.top=1500.0, image.cache.size=20971520
+Video: codecs offered to sites: VP9 as the engine decides, no AV1 (software only here), H.265 as the engine decides [hardware decoders AHVi]; page animations normal; muted autoplay allowed; protected video ask
+Storage: 1.27 GB free of 27.75 GB; free + caches Android can clear: 1.27 GB; Android says an app may still use 800.5 MB (it keeps 501.1 MB free after an install: by its rule min(5 % of the storage, 500 MB) = 500.0 MB; settings: sys_storage_threshold_percentage=default, sys_storage_threshold_max_bytes=default); this app: package 88.3 MB + unpacked libraries 131.7 MB + data 59.6 MB + cache 56.3 MB; an install or update needs free >= reserve + 2 x (package + libraries) + about 32 MB. An update of this size would need about 884.7 MB free: it fits; uninstalling first would leave about 1.51 GB against 973.1 MB (that works).
+Storage tidy: last 2026-11-13 19:56: nothing to remove; it looks at update files, old installers, engine cache older than 21 days, crash reports older than 7 days, previews of closed tabs and stopped downloads older than 14 days, about once a day and right after an update
+CPU by process, % of ONE core (this tablet has 4; read every 5 s while the browser is on screen, last 5 min): parent avg 5 / peak 5 | busy moments: no process over 70 % yet | reading: a page that lags while 'tab' sits near 100 (its thread 'Web Content' is the page's own script and layout) is limited by that one thread, which cannot use the other cores; a lag while every process is low is the network or the player; decoder or 'WR' threads busy = the picture is drawn or decoded in software
+Blocker: fast mode (decisions inside the page engine). No numbers yet: open a page, then press Update.
+Page report (the last pages: what Shields blocked, what failed to load, scripts that threw; a private tab is never listed): nothing yet. Open a page, wait a few seconds, then open Diagnostics.
+Firefox's own tracking protection, this page: on; blocked nothing
+Neon glow: holding still: finger on screen, a full-screen page covers them; system animation scale off (the glow ignores it)
+Page view: attached=true session=false windowFocus=true
+Page loads: (none yet; open a page)
+Pages: Pages load directly (switched off).
+Phone link: mode=off, paired=false, address=10.97.182.19:8780, reachable=false, rtt=0 ms, clock offset=0 ms, last error=none, rows on the phone=0
+Counters: (none yet)
+
+-- last 400 events (16 recorded) --
++0.129s start activity cold 223 ms
++0.387s tabs early-cover-skipped left on Home
++0.399s life resume
++0.399s health watchdog-start
++0.426s start frame cold 520 ms
++0.472s gecko view-attached
++0.536s gecko size 600x824 (was 0x0)
++0.750s engine runtime-create
++0.913s engine scroll-feel level=1 skate=4.0 still=3.0 bias=1.0 wait=300 expiry=180000 vel=0.07
++0.915s engine network-profile standard trr=2 http3=true noIPv6=false pageYield=150
++0.951s engine runtime-ready
++0.952s start runtime cold 1045 ms
++0.966s gecko size 600x884 (was 600x824)
++0.979s win focus true
++1.062s engine phone-proxy pages direct
++4.537s video decoders AHVi 26 decoder(s) in 613 ms, widevine=true
+
+Also, if I already have a text field open on a web site, make the mini keyboard enter text into that field instead of searching Google
+```
