@@ -124,7 +124,7 @@ class KeyboardFlowTest {
     }
 
     @Test fun theFileIsNamedForTheDay() {
-        assertEquals("Kestrel keyboard learning 2026-11-14.txt", KeyboardFlow.fileName(1_794_000_000_000L).let { n -> if (n.startsWith("Kestrel keyboard learning 2026-11-")) "Kestrel keyboard learning 2026-11-14.txt" else n })
         assertTrue(KeyboardFlow.fileName().matches(Regex("Kestrel keyboard learning \\d{4}-\\d{2}-\\d{2}\\.txt")))
+        assertEquals("Kestrel keyboard learning 2026-11-14.txt", KeyboardFlow.fileName(java.util.GregorianCalendar(2026, 10, 14, 12, 0).timeInMillis))
     }
 }
