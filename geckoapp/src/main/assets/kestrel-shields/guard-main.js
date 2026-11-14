@@ -160,7 +160,7 @@
   // gets through ("I have to press play several times"). After a refusal that follows a real press on a player, this starts the player itself - the real video of this frame - and when there is no video yet,
   // presses through the layer that took the press, at the same place. At most three rounds, stopped by any playback; never for a press that was not on a player, and never for a press made while the video was
   // playing (that one was a pause). A player in a frame is told by message (the frame's own copy of this script plays it). Nothing here opens, loads or navigates anything.
-  var ASSIST_MAX = 5, ASSIST_DELAY = 200, ASSIST_WINDOW = 2000, ASSIST_TAG = '__kst_assist_v1|';
+  var ASSIST_MAX = 5, ASSIST_DELAY = 200, ASSIST_WINDOW = 2000, ASSIST_EVENT = '__kst_assist_v1';
   var PLAYERISH = /(^|[\s_-])(player|jwplayer|video-js|vjs|plyr|flowplayer|mejs|videoplayer|video-player|embed-player)([\s_-]|$)/i;
   var press = { t: 0, x: -1, y: -1, playing: false, player: null, target: null };
   var assist = { n: 0, timer: 0, last: 0 };
@@ -272,12 +272,10 @@
       if (off) setTimeout(function () { try { off.style.removeProperty('pointer-events'); } catch (e) { /* ignore */ } }, 1500);
     } catch (e) { /* ignore */ }
   }
-  function tellFrame(f) {
-    try {
-      var r = f.getBoundingClientRect();
-      f.contentWindow.postMessage(ASSIST_TAG + Math.round(press.x - r.left) + '|' + Math.round(press.y - r.top), '*');
-    } catch (e) { /* ignore */ }
-  }
+  // A player in a FRAME is not told by this script (RX3-G3): a page cannot be trusted to speak to a frame it embeds, and a frame must not obey its parent (any page could then play videos and click
+  // buttons inside any frame it embeds, with no action of the owner). This only says "go" to the extension's content script (a DOM event without parameters); that script works out the frame and the place
+  // from the owner's own recorded press, and the background page asks the frame through the extension (a channel no web page can use).
+  function askFrame() { try { document.dispatchEvent(new CustomEvent(ASSIST_EVENT, { detail: '' })); } catch (e) { /* ignore */ } }
   function runAssist() {
     assist.timer = 0;
     if (!on || playingNow()) return;
@@ -287,7 +285,7 @@
     if (v && !hasSource(v)) v = null;                  // a player that only builds its video after the first press: that press has to go through instead
     if (v) { if (v.paused && !v.ended) startMedia(v, false); return; }
     if (root && root.tagName === 'IFRAME') {
-      tellFrame(root);
+      askFrame();
       try { if (press.target && isLayer(press.target, root)) { var t = press.target; t.style.setProperty('pointer-events', 'none', 'important'); setTimeout(function () { try { t.style.removeProperty('pointer-events'); } catch (e) { /* ignore */ } }, 1500); } } catch (e) { /* ignore */ }
       return;
     }
@@ -295,17 +293,6 @@
   }
   // any playback ends the rounds
   document.addEventListener('play', function () { assist.n = 0; if (assist.timer) { clearTimeout(assist.timer); assist.timer = 0; } }, true);
-  // a player frame is told by its parent where the press was
-  window.addEventListener('message', function (e) {
-    try {
-      if (!on || e.source !== window.parent || typeof e.data !== 'string' || e.data.indexOf(ASSIST_TAG) !== 0 || playingNow()) return;
-      var p = e.data.slice(ASSIST_TAG.length).split('|'), x = parseInt(p[0], 10), y = parseInt(p[1], 10);
-      var v = bestVideo();
-      if (v && !hasSource(v)) v = null;
-      if (v) { if (v.paused && !v.ended) startMedia(v, true); return; }
-      if (x >= 0 && y >= 0) pressThrough(x, y, null);
-    } catch (x2) { /* ignore */ }
-  }, false);
 
   // ---- the content script tells us whether the guard applies here
   document.addEventListener(CFG_EVENT, function (e) {

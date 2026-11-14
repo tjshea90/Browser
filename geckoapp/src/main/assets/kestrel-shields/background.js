@@ -515,7 +515,7 @@ function onRequest(d) {
   if (d.type === 'main_frame') {
     var left = pageLog.get(d.tabId);
     if (left && left.page && left.reqs - left.done > 0) send({ k: 'pend', p: left.page, n: left.reqs - left.done }).catch(function () {}); // RX3-BK1: the page that is being left still had requests open
-    navId.set(d.tabId, Number(d.requestId) || 0); frameParent.delete(d.tabId); mediaFrames.delete(d.tabId);
+    navId.set(d.tabId, Number(d.requestId) || 0); frameParent.delete(d.tabId); mediaFrames.delete(d.tabId); frameDoc.delete(d.tabId);
     sniffed.delete(d.tabId); maybeCount.delete(d.tabId); tabTop.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again (delete first: Map keeps the old position of a key, and the OLDEST position is what is dropped)
     verdicts.clear(); // legacy verdicts are only worth keeping while ONE page loads
     newLog(d.tabId, d.url); reportLater(d.tabId); // the page report starts here (4 s after the last news it goes to the app)
@@ -631,6 +631,7 @@ var SNIFFED_PER_TAB = 300;
 var navId = new Map();       // tabId -> numeric id of the newest main_frame request
 var frameParent = new Map(); // tabId -> Map(frameId -> parentFrameId), from the sub_frame requests (and from candidates)
 var mediaFrames = new Map(); // tabId -> Map(frameId -> document address) of the frames (not the top one) that reported a candidate
+var frameDoc = new Map();    // tabId -> Map(frameId -> address the frame was asked to load), from the sub_frame requests (RX3-G3: which frame is the player the owner pressed)
 function stale(d) { var n = navId.get(d.tabId), r = Number(d.requestId); return n !== undefined && r === r && r < n; } // r === r: not NaN
 // The page a tab is on is learned from its main-frame request. The FIRST page after a cold start loads before the extension is active (emulator lab, 2026-11-13: tabTop was empty, so an address named in a
 // player frame's script was filed under the PLAYER's address and a server switch never dropped it): a request of a frame carries its ancestors, the last of which is the top page, and a content script of the top frame knows it.
@@ -659,6 +660,8 @@ function frameNavigates(d) { // a sub_frame request: the frame [d.frameId] is be
   learnTop(d);
   var pm = frameParent.get(tabId); if (!pm) { pm = new Map(); frameParent.set(tabId, pm); }
   if (d.parentFrameId >= 0) pm.set(f, d.parentFrameId);
+  var fd = frameDoc.get(tabId); if (!fd) { fd = new Map(); frameDoc.set(tabId, fd); }
+  if (fd.size < 80 || fd.has(f)) fd.set(f, docOf(d.url));
   var mf = mediaFrames.get(tabId);
   if (!mf || !mf.size) return;
   var gone = [], ids = [];
@@ -786,6 +789,20 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   var tabId = (sender && sender.tab) ? sender.tab.id : -1;
   var page = (tabId >= 0 && tabTop.get(tabId)) || String(m.p || '');
   send({ k: 'os', p: page.slice(0, 600) }).catch(function () {});
+  return undefined;
+});
+
+// RX3-G3: the assist of a player inside a frame. The content script of the PARENT frame decided (from the owner's own press) and names the place inside the iframe and the iframe's address; this relays
+// to that ONE frame of the tab (a unique child of the sender: by address, or the only child), whose own content script plays its video or presses through. Nothing the page says is relayed.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'assist' || !sender || !sender.tab || !(sender.tab.id >= 0)) return undefined;
+  var tabId = sender.tab.id, from = sender.frameId | 0, pm = frameParent.get(tabId), fd = frameDoc.get(tabId);
+  var x = Math.round(m.x), y = Math.round(m.y);
+  if (!pm || !(x >= 0 && y >= 0 && x < 10000 && y < 10000)) return undefined;
+  var kids = [], exact = [], want = docOf(m.s);
+  pm.forEach(function (parent, id) { if (parent === from) { kids.push(id); if (want && fd && fd.get(id) === want) exact.push(id); } });
+  var target = exact.length === 1 ? exact[0] : (kids.length === 1 ? kids[0] : -1); // several frames and no unique address: no guess
+  if (target > 0) { try { browser.tabs.sendMessage(tabId, { k: 'assist', x: x, y: y }, { frameId: target }).catch(function () {}); } catch (e) { /* ignore */ } }
   return undefined;
 });
 

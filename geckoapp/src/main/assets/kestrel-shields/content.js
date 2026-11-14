@@ -309,6 +309,76 @@
       if (Date.now() - down.t > 500 || Math.abs(e.clientX - down.x) > 12 || Math.abs(e.clientY - down.y) > 12) return;
       realTap(e);
     }, { capture: true, passive: true });
+
+    // RX3-G3: the assist of a player inside a FRAME (the guard's one-press-plays help). The guard in the page says "go" with no parameters; THIS script decides, from the owner's own trusted press (recorded
+    // above): the press must be fresh (2 s), the frame and the place are worked out from THAT press, never from the event, and at most five per press. The background page relays to the frame
+    // (tabs.sendMessage: a channel a web page cannot reach) and the frame's own copy of this script plays its video or presses through (below). Same-frame help stays in the guard.
+    var ASSIST = '__kst_assist_v1', assistN = 0, assistFor = 0;
+    document.addEventListener(ASSIST, function () {
+      try {
+        if (!wanted || !down.t || Date.now() - down.t > 2000) return;
+        if (assistFor !== down.t) { assistFor = down.t; assistN = 0; }
+        if (assistN >= 5) return;
+        var list = document.elementsFromPoint ? document.elementsFromPoint(down.x, down.y) : [], f = null, i;
+        for (i = 0; i < list.length && i < 14 && !f; i++) if (list[i].tagName === 'IFRAME') { var r = list[i].getBoundingClientRect(); if (r.width >= 120 && r.height >= 80) f = list[i]; }
+        if (!f) return;
+        assistN++;
+        var rr = f.getBoundingClientRect();
+        browser.runtime.sendMessage({ k: 'assist', x: Math.round(down.x - rr.left), y: Math.round(down.y - rr.top), s: String(f.src || '').slice(0, 600) }).catch(function () {});
+      } catch (x) { /* ignore */ }
+    }, true);
+
+    // the frame's own part: the extension asks (only the background page can) to play the frame's video, or to press at a place when the player has no video yet. Never on a link or a form control.
+    function playingNow() {
+      try { var l = document.getElementsByTagName('video'); for (var i = 0; i < l.length; i++) { var v = l[i]; if (!v.paused && !v.ended && v.readyState > 2 && v.currentTime > 0) return true; } } catch (e) { /* ignore */ }
+      return false;
+    }
+    function hasSource(v) { try { return !!(v.currentSrc || v.getAttribute('src') || v.srcObject || (v.querySelector && v.querySelector('source[src]'))); } catch (e) { return false; } }
+    function bestVideo() {
+      var best = null, area = 0;
+      try {
+        var l = document.getElementsByTagName('video');
+        for (var i = 0; i < l.length; i++) {
+          var r = l[i].getBoundingClientRect();
+          var w = Math.min(r.right, innerWidth) - Math.max(r.left, 0), h = Math.min(r.bottom, innerHeight) - Math.max(r.top, 0);
+          if (w >= 120 && h >= 80 && w * h > area) { area = w * h; best = l[i]; }
+        }
+      } catch (e) { /* ignore */ }
+      return best;
+    }
+    function startMedia(v) {
+      try {
+        var p = v.play();
+        // a frame that was not pressed itself may be refused sound: start it muted rather than not at all
+        if (p && p.catch) p.catch(function () { try { v.muted = true; var q = v.play(); if (q && q.catch) q.catch(function () { /* ignore */ }); } catch (e) { /* ignore */ } });
+      } catch (e) { /* ignore */ }
+    }
+    function pressThrough(x, y) {
+      try {
+        var el = document.elementFromPoint(x, y);
+        if (!el || el === document.body || el === document.documentElement) return;
+        for (var n = el; n && n !== document; n = n.parentNode) { if (/^(A|BUTTON|INPUT|SELECT|TEXTAREA|LABEL|OPTION|FORM|SUMMARY)$/.test(n.tagName) || n.isContentEditable) return; }
+        var init = { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, button: 0, buttons: 1 };
+        var seq = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
+        for (var i = 0; i < seq.length; i++) {
+          var type = seq[i];
+          el.dispatchEvent((type.indexOf('pointer') === 0 && window.PointerEvent) ? new PointerEvent(type, init) : new MouseEvent(type, init));
+        }
+      } catch (e) { /* ignore */ }
+    }
+    browser.runtime.onMessage.addListener(function (m) {
+      try {
+        if (!m || m.k !== 'assist' || window.top === window || !wanted) return undefined;
+        var x = Math.round(m.x), y = Math.round(m.y);
+        if (!(x >= 0 && y >= 0 && x < 10000 && y < 10000)) return undefined; // not a number: the comparison fails
+        if (playingNow()) return undefined;
+        var v = bestVideo();
+        if (v && !hasSource(v)) v = null; // a player that only builds its video after the first press: that press has to go through instead
+        if (v) { if (v.paused && !v.ended) startMedia(v); return undefined; }
+        pressThrough(x, y);
+      } catch (e) { /* ignore */ }
+      return undefined;
+    });
     browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { wanted = !(r && r.on === false); topHost = (r && r.top) ? String(r.top) : ''; push(); }, function () {});
   } catch (e) { /* never break the page */ }
 })();
