@@ -80,7 +80,8 @@ window.__startHosted = function () {
   var a = document.getElementById('adv');
   a.src = AD; a.onended = function () { window.__ended++; }; a.play();
 };
-(function () { var v = document.querySelector('#player video, #content'); if (v) { v.src = MAIN; v.loop = true; v.muted = false; v.play().catch(function () {}); } })();
+window.__startFilm = function () { var v = document.querySelector('#player video, #content'); if (v) { v.src = MAIN; v.loop = true; v.muted = false; v.play().catch(function () {}); } };
+if (!window.__NOFILM) window.__startFilm();
 `;
 
 async function open(opts) {
@@ -90,13 +91,13 @@ async function open(opts) {
   await context.route('https://**/*', (r) => r.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><title>article</title></head><body style="margin:0">${html}<script>${MOCK}</script></body></html>` }));
   const page = await context.newPage();
   await page.addInitScript((cfg) => {
-    window.__MAIN = cfg.main; window.__AD = cfg.ad; window.__FAM = cfg.fam; window.__msgs = [];
+    window.__MAIN = cfg.main; window.__AD = cfg.ad; window.__FAM = cfg.fam; window.__msgs = []; window.__NOFILM = !!cfg.noFilm;
     window.__kstPLcfg = cfg.timing || {};
     window.browser = { runtime: { sendMessage: (m) => { window.__msgs.push(m); return Promise.resolve(m.k === 'guard' ? { on: true, top: location.hostname, skip: cfg.skip !== false } : undefined); } } };
-  }, { main: MAIN, ad: AD12, fam: opts.fam || FAMILY.videojs, skip: opts.skip, timing: opts.timing });
+  }, { main: MAIN, ad: AD12, fam: opts.fam || FAMILY.videojs, skip: opts.skip, timing: opts.timing, noFilm: opts.noFilm });
   await page.addInitScript({ content: PL });                                  // document_start, like the manifest: before the page's own scripts
   await page.goto(opts.url || 'https://news.example/article');
-  await page.waitForFunction(() => { const v = document.querySelector('#player video, #content'); return v && !v.paused && v.currentTime > 0.1; }, null, { timeout: 8000 }).catch(() => {});
+  if (!opts.noFilm) await page.waitForFunction(() => { const v = document.querySelector('#player video, #content'); return v && !v.paused && v.currentTime > 0.1; }, null, { timeout: 8000 }).catch(() => {});
   return page;
 }
 async function waitFor(page, fn, ms) { await page.waitForFunction(fn, null, { timeout: ms || 6000 }); }
@@ -254,9 +255,11 @@ test('the reports carry numbers and a few words, never an address', async () => 
 
 test('a page with many videos: the ad of a late one is still skipped (the cap forgets finished videos and keeps up to a dozen playing ones)', async () => {
   const feed = Array.from({ length: 6 }, (_, i) => `<video class="feed" id="f${i}" style="width:60px;height:30px" muted loop></video>`).join('');
-  const page = await open({ html: feed + FAMILY.jw.html, fam: FAMILY.jw, timing: FAST });
-  await page.evaluate((wavUrl) => { document.querySelectorAll('video.feed').forEach((v) => { v.src = wavUrl; v.play().catch(() => {}); }); }, MAIN);   // six more videos playing: seven in all
+  const page = await open({ html: feed + FAMILY.jw.html, fam: FAMILY.jw, timing: FAST, noFilm: true });
+  await page.evaluate((wavUrl) => { document.querySelectorAll('video.feed').forEach((v) => { v.src = wavUrl; v.play().catch(() => {}); }); }, MAIN);   // six videos playing ...
   await page.waitForTimeout(500);
+  await page.evaluate(() => window.__startFilm());                         // ... and the player starts last: the seventh
+  await page.waitForFunction(() => { const v = document.querySelector('#player video'); return v && !v.paused && v.currentTime > 0.1; }, null, { timeout: 8000 });
   await page.evaluate(() => window.__startAd());
   await waitFor(page, () => window.__ended === 1);
   await page.waitForTimeout(500);
