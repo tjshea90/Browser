@@ -128,6 +128,9 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
         return res
     }
 
+    /** The words that went through to the careful pass in the last decode (for the accuracy tests). */
+    internal fun survivorTexts(lexicons: List<GlideLexicon>): List<String> = (0 until heapN).map { lexicons[heapLex[it]].text(heapId[it]) }
+
     private fun d2(dx: Float, dy: Float) = dx * dx + dy * dy
 
     /** Cut the path into [n] equal steps in pitches; false when it is too short to be a glide. */
