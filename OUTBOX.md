@@ -1540,3 +1540,22 @@
 ## 2026-11-14T00:43:40Z
 > The earlier answer only covered what the engine itself can do. Before I list unconventional ideas, I'm checking the repo and the engine package, so I don't suggest something that already exists or can't work.
 <!-- sha:b31c3d72f7c8 -->
+
+## 2026-11-14T00:46:21Z
+> There's no hidden switch that makes the engine itself faster. But there are a few ideas outside the engine that you could actually feel, listed best first. I haven't tested any of them on your tablet.
+>
+> 1. **Free up space on the tablet.** It's about 94% full. Cheap flash storage slows down as it fills, because it has to shuffle data around before it can write. That affects app start-up and the page cache. The mechanism is well known, but I couldn't find an exact threshold, and I haven't measured your tablet. It costs nothing to try: move movies and downloads off, and aim for a few GB more free.
+> 2. **Turn off pre-installed apps you never use.** Only about 0.5 GB of the 2 GB is free, and the system and its apps use the rest. With your cable this is reversible. More free memory means fewer reloaded tabs and a smoother browser. I haven't seen what uses the memory, so I can't promise how much. A report from the cable would show it, and a session could tell you which apps are safe to turn off.
+> 3. **A "no scripts" button per site, plus a Reader view.** A big part of heavy-page slowness is the page's own programs running on four slow cores. The engine you ship already has a per-site switch for that, and it includes the pieces of Firefox's Reader view. Article and news pages could load and scroll much faster. Some sites would break, so it would be your choice per site. It does nothing for video or mail. The project lists it as not built yet.
+> 4. **Google results in "Web" mode.** Adding `&udm=14` to the search address drops the AI box and extra panels, and you don't want AI anyway. A blog test says it still worked in October 2026. I found no one who measured a speed gain. Google could remove it at any time, and it hides the image and shopping tabs.
+> 5. **Small free things.**
+>    - Set the three animation scales in Developer options to 0.5×. Don't set them to Off, because that freezes loading spinners on web pages.
+>    - Keep battery saver off.
+>    - Try 5 GHz when the phone is close.
+>
+> The big idea I don't recommend now is letting the phone do the heavy page work and sending the finished page to the tablet. The phone is much faster and has the uncapped connection. It would help heavy sites most, but it's a months-long project and would slow every tap and keystroke.
+>
+> Items 1, 2 and 5 you can try now. Items 3 and 4 would need the other session. Which would you like to start with?
+>
+> Sources: [Google "Web" filter guide](https://geotoolbox.ai/blog/how-to-turn-off-ai-overviews), [IONOS on Google without AI](https://www.ionos.com/digitalguide/online-marketing/search-engine-marketing/google-search-without-ai/), [Kioxia on flash garbage collection](https://kioxia.com/content/dam/kioxia/en-us/business/memory/mlc-nand/asset/KIOXIA_Efficient_Garbage_Collection_Operations_Tech_Brief.pdf), [Performance drop without discards](https://embeddedcomputing.com/technology/processing/performance-drop-without-discards)
+<!-- sha:52487ae6a506 -->
