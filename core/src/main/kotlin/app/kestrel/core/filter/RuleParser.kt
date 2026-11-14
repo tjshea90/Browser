@@ -231,7 +231,6 @@ internal class RuleParser {
             }
             if (domains.isEmpty() && excluded.isEmpty()) return fail2(Skip.BAD_SYNTAX)
         }
-        if (domains.isEmpty() && excluded.isNotEmpty() && !(scriptlet || exception)) { /* a generic rule that is off on some sites: fine, the exclusions become exceptions */ }
         if (scriptlet && domains.isEmpty()) return fail2(Skip.COSMETIC_UNSUPPORTED) // a scriptlet for every site: never taken from a list
         if (styled && domains.isEmpty()) return fail2(Skip.COSMETIC_UNSUPPORTED) // a restyling rule for every site is too broad to take from a list
         if (procedural && domains.isEmpty()) return fail2(Skip.COSMETIC_UNSUPPORTED) // a script that runs on every page for a generic procedural rule: not worth the cost on this device

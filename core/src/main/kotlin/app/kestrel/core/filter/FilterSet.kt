@@ -147,11 +147,19 @@ class FilterSet internal constructor(
      * CSS that hides ad containers on [pageHost] (site-specific rules + a capped generic set), or "".
      * Honors `$elemhide` / `$generichide` / `$document` exceptions and `#@#` cosmetic exceptions.
      */
-    fun cosmeticCss(pageHost: String, includeGeneric: Boolean = true, genericLimit: Int = CosmeticIndex.DEFAULT_GENERIC_LIMIT, tokenMode: Boolean = false): String {
+    fun cosmeticCss(pageHost: String, includeGeneric: Boolean = true, genericLimit: Int = CosmeticIndex.DEFAULT_GENERIC_LIMIT, tokenMode: Boolean = false, scriptlets: Boolean = false): String {
         if (cosmetic.isEmpty) return ""
         val flags = siteFlagsFor(pageHost)
         if ((flags and (SITE_ELEMHIDE or SITE_DOCUMENT_ALLOW)) != 0) return ""
-        return cosmetic.cssFor(pageHost, includeGeneric && (flags and SITE_GENERICHIDE) == 0, genericLimit, tokenMode)
+        return cosmetic.cssFor(pageHost, includeGeneric && (flags and SITE_GENERICHIDE) == 0, genericLimit, tokenMode, scriptlets)
+    }
+
+    /** AW1b: the scriptlet calls of [pageHost] in stored form (see [ScriptletRules]), under the same `$elemhide` / `$document` exceptions as [cosmeticCss] (tests and Diagnostics; the page gets them inside the CSS answer). */
+    fun scriptletsFor(pageHost: String): List<String> {
+        if (cosmetic.isEmpty) return emptyList()
+        val flags = siteFlagsFor(pageHost)
+        if ((flags and (SITE_ELEMHIDE or SITE_DOCUMENT_ALLOW)) != 0) return emptyList()
+        return cosmetic.scriptletsFor(pageHost)
     }
 
     /**

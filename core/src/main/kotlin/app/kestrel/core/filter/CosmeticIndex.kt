@@ -24,13 +24,17 @@ internal class CosmeticIndex(
      * and only the selectors that can match are injected. This CSS then carries the site's own rules, the generic selectors that name neither (attribute selectors, tags: at most [genericLimit]), and
      * the [TOKEN_MARKER] that tells the page script to start sending tokens.
      */
-    fun cssFor(host: String, includeGeneric: Boolean, genericLimit: Int, tokenMode: Boolean = false): String {
+    fun cssFor(host: String, includeGeneric: Boolean, genericLimit: Int, tokenMode: Boolean = false, scriptlets: Boolean = false): String {
         val domainExc = domainExceptions(host)
         val sb = StringBuilder()
         val site = group(host, siteHash, siteOff, sitePool)
         if (tokenMode && includeGeneric && genericCount > 0 && tokens().byKey.isNotEmpty()) sb.append(TOKEN_MARKER)
         val siteRules = if (domainExc.isEmpty()) site else site.filter { it !in domainExc }
         if (tokenMode && siteRules.any { ProceduralRules.isStored(it) }) sb.append(ProceduralRules.MARKER) // the page script asks for the procedural rules of this host (AD1b-4)
+        if (tokenMode && scriptlets) { // AW1b: the calls for the page-world library ride in a comment right after the markers (the page script cuts it out before injecting the CSS)
+            val payload = ScriptletRules.payload(scriptletsOf(siteRules, domainExc))
+            if (payload.isNotEmpty()) sb.append(ScriptletRules.MARKER_START).append(payload).append(ScriptletRules.MARKER_END)
+        }
         sb.append(CosmeticSelectors.toCss(siteRules, 1))
         if (includeGeneric && genericCount > 0 && tokenMode) {
             sb.append(looseCss(genericLimit, globalExceptions() + domainExc))
@@ -44,6 +48,22 @@ internal class CosmeticIndex(
             }
         }
         return sb.toString()
+    }
+
+    /** The scriptlet calls of [host] in stored form ([ScriptletRules]), minus the ones a `#@#+js(...)` rule excepts; none at all when the site has `#@#+js()`. */
+    fun scriptletsFor(host: String): List<String> {
+        val domainExc = domainExceptions(host)
+        return scriptletsOf(group(host, siteHash, siteOff, sitePool), domainExc)
+    }
+
+    private fun scriptletsOf(siteRules: List<String>, domainExc: Set<String>): List<String> {
+        if (ScriptletRules.ALL_STORED in domainExc) return emptyList()
+        var out: ArrayList<String>? = null
+        for (s in siteRules) if (ScriptletRules.isStored(s) && s !in domainExc && s != ScriptletRules.ALL_STORED) {
+            val o = out ?: ArrayList<String>(4).also { out = it }
+            if (s !in o) o.add(s)
+        }
+        return out ?: emptyList()
     }
 
     /** The procedural rules of [host] (stored form without the leading marker character), minus the ones a `#@#` rule excepts. */
@@ -176,10 +196,17 @@ internal class CosmeticIndex(
         return if (l.isEmpty()) emptySet() else l.toHashSet()
     }
 
+    /** The hashes a host's rules are filed under: the host and every parent (`a.b.com`, `b.com`, `com`), then its entity keys (AW1d): `www.site.*` and `site.*` for `www.site.co.uk`, whatever the public suffix. */
+    private fun hostKeys(host: String): LongArray {
+        val base = FilterSet.suffixHashes(host)
+        val keys = entityKeys(host) ?: return base
+        return base + keys
+    }
+
     private fun group(host: String, hashes: LongArray, offs: IntArray, pool: ByteArray): List<String> {
         if (hashes.isEmpty()) return emptyList()
         var out: ArrayList<String>? = null
-        for (h in FilterSet.suffixHashes(host)) {
+        for (h in hostKeys(host)) {
             val i = Hash.firstIndexOf(hashes, h)
             if (i < 0) continue
             val l = decode(pool, offs[i], offs[i + 1])
@@ -189,6 +216,28 @@ internal class CosmeticIndex(
     }
 
     companion object {
+        /** `www.site.*` and `site.*` for `www.site.co.uk` (the labels before the public suffix, each suffix of them followed by `.*`), hashed like the entity entries of the lists; null for an address that has no public suffix (an IP). */
+        internal fun entityKeys(host: String): LongArray? {
+            if (host.isEmpty() || host.indexOf(':') >= 0) return null
+            var allNumeric = true
+            for (c in host) if (c != '.' && c !in '0'..'9') { allNumeric = false; break }
+            if (allNumeric) return null
+            val site = Psl.default.siteOf(host) ?: return null
+            val dot = site.indexOf('.')
+            if (dot <= 0) return null
+            val prefixEnd = host.length - (site.length - dot - 1) - 1 // host without ".<public suffix>"
+            if (prefixEnd <= 0 || prefixEnd > host.length) return null
+            val out = ArrayList<Long>(3)
+            var start = 0
+            while (true) {
+                out.add(Hash.h64(host.substring(start, prefixEnd) + ".*"))
+                val d = host.indexOf('.', start)
+                if (d < 0 || d + 1 >= prefixEnd) break
+                start = d + 1
+            }
+            return out.toLongArray()
+        }
+
         const val DEFAULT_GENERIC_LIMIT = 1200
         private const val GENERIC_CHUNK = 10
         /** The first thing in the CSS of a page that should send its classes and ids (a CSS comment: harmless to a browser that does not know it). */

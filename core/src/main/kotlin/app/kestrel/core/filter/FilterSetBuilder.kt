@@ -15,12 +15,13 @@ class BuildReport {
     @JvmField var cosmeticGeneric = 0
     @JvmField var cosmeticExceptions = 0
     @JvmField var queryRules = 0
+    @JvmField var scriptlets = 0
     @JvmField val skipped = IntArray(Skip.values().size)
 
     fun skippedCount(s: Skip): Int = skipped[s.ordinal]
     override fun toString(): String = buildString {
         append("lines=$lines host=$hostRules hostExc=$hostExceptions pattern=$patternRules site=$siteRules badfilter=$badfilters ")
-        append("cosSite=$cosmeticSite cosGeneric=$cosmeticGeneric cosExc=$cosmeticExceptions query=$queryRules skipped{")
+        append("cosSite=$cosmeticSite cosGeneric=$cosmeticGeneric cosExc=$cosmeticExceptions scriptlets=$scriptlets query=$queryRules skipped{")
         for (s in Skip.values()) if (s != Skip.NONE && skipped[s.ordinal] > 0) append("$s=${skipped[s.ordinal]} ")
         append("}")
     }
@@ -128,11 +129,16 @@ class FilterSetBuilder {
             report.cosmeticExceptions++
             if (c.domains.isEmpty()) cosGenericExc.add(c.selector)
             else for (d in c.domains) cosExc.getOrPut(Hash.h64(d)) { LinkedHashSet() }.add(c.selector)
-        } else if (c.domains.isEmpty()) {
-            if (cosGeneric.add(c.selector)) report.cosmeticGeneric++
         } else {
-            report.cosmeticSite++
-            for (d in c.domains) cosSite.getOrPut(Hash.h64(d)) { LinkedHashSet() }.add(c.selector)
+            if (ScriptletRules.isStored(c.selector)) report.scriptlets++
+            if (c.domains.isEmpty()) {
+                if (cosGeneric.add(c.selector)) report.cosmeticGeneric++
+            } else {
+                report.cosmeticSite++
+                for (d in c.domains) cosSite.getOrPut(Hash.h64(d)) { LinkedHashSet() }.add(c.selector)
+            }
+            // `~site.com`: off on that site = an exception of the same text there (what `site.com#@#...` means)
+            for (x in c.excluded) cosExc.getOrPut(Hash.h64(x)) { LinkedHashSet() }.add(c.selector)
         }
     }
 
