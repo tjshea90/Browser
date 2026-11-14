@@ -1144,6 +1144,32 @@ test('RX3-G3: nothing is relayed for a sender without a tab, a place that is not
   assert.equal(h.tabMsgs.length, 0);
 });
 
+test('RX3-G7: the manifest declares the other-players ad skipper for every web page and frame except the YouTube hosts (youtube.js owns those), in the extension world, from the first moment', () => {
+  const m = JSON.parse(fs.readFileSync(path.join(SHIELDS, 'manifest.json'), 'utf8'));
+  const e = m.content_scripts.filter((c) => c.js.includes('players.js'));
+  assert.equal(e.length, 1, 'declared once');
+  assert.equal(e[0].run_at, 'document_start'); assert.equal(e[0].all_frames, true); assert.equal(e[0].world, undefined, 'it needs the extension API: not the page world');
+  assert.deepEqual(e[0].matches, ['http://*/*', 'https://*/*']);
+  assert.deepEqual(e[0].exclude_matches, ['*://*.youtube.com/*', '*://*.youtube-nocookie.com/*', '*://*.youtubekids.com/*']);
+  const y = m.content_scripts.filter((c) => c.js.includes('youtube.js'));
+  assert.deepEqual(y[0].matches, e[0].exclude_matches, 'the two scripts split the web between them: exactly the same hosts');
+});
+
+test('RX3-G7: the ad skipper reports are forwarded as numbers with their kind (YouTube y, other players p) and the tab page, nothing else', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '9' });
+  h.message({ k: 'yts', w: 'p', a: 2, s: 1, c: 1, o: 0, d: 0, f: 1, g: 0, r: 'speed refused', junk: 'x'.repeat(4000) }, 1, PAGE, 0);
+  h.message({ k: 'yts', a: 1, s: 1, c: 0, o: 0, d: 0, f: 0, g: 0, r: '' }, 1, PAGE, 3);               // from youtube.js: no kind given
+  h.message({ k: 'yts', w: 'zzz', a: 5000, s: -3, c: 'x', r: 'y'.repeat(300) }, 1, PAGE, 0);          // a made-up kind, absurd numbers, a long reason
+  assert.equal(h.message({ k: 'yts', w: 'p', a: 1 }, -1, PAGE, 0), undefined, 'not from a tab');
+  await tick(20);
+  const got = h.of('yts');
+  assert.equal(got.length, 3);
+  assert.equal(got[0].w, 'p'); assert.equal(got[0].a, 2); assert.equal(got[0].f, 1); assert.equal(got[0].r, 'speed refused'); assert.equal(got[0].junk, undefined);
+  assert.equal(got[1].w, 'y', 'no kind means YouTube');
+  assert.equal(got[2].w, 'y'); assert.equal(got[2].a, 0); assert.equal(got[2].s, 0); assert.equal(got[2].c, 0); assert.equal(got[2].r.length, 60);
+});
+
 test('RX3-G1: the manifest declares the pop-up guard and the scriptlet library for the page world, every frame, from the first moment; nothing registers them at run time', () => {
   const m = JSON.parse(fs.readFileSync(path.join(SHIELDS, 'manifest.json'), 'utf8'));
   for (const f of ['guard-main.js', 'scriptlets-main.js']) {
