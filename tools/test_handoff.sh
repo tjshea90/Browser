@@ -79,6 +79,15 @@ cmds=[h[\"command\"] for ev in t[\"hooks\"].values() for e in ev for h in e[\"ho
 assert cmds and all(\"kestrel-checkpoint-hooks\" in c for c in cmds)
 " "$D/tools/session-root-hooks.json"'
 check "the built-in extension's manifest version equals 1.0.<Kestrel G versionCode> (else an updated background.js never reaches existing installs)" 'bash "$D/tools/sync-ext-version.sh" --check'
+check "the extension manifest declares the pop-up guard and the scriptlet library for the PAGE world, from a document's first moment (RX3-G1: a script registered only at run time misses a document that starts first)" 'python3 -I - "$D" <<PY
+import json, os, sys
+m = json.load(open(os.path.join(sys.argv[1], "geckoapp/src/main/assets/kestrel-shields/manifest.json")))
+cs = m["content_scripts"]
+for f in ("guard-main.js", "scriptlets-main.js"):
+    e = [c for c in cs if f in c.get("js", [])]
+    assert e, f + " is not declared"
+    assert e[0].get("world") == "MAIN" and e[0].get("run_at") == "document_start" and e[0].get("all_frames") is True, f + " must be world MAIN, document_start, all frames"
+PY'
 check "signing/CERT_SHA256 pins a 64-hex certificate" 'grep -Eq "^[0-9a-f]{64}$" "$D/signing/CERT_SHA256"'
 check "tools/MIRROR_MAIN is on or off" 'grep -Eq "^(on|off)$" "$D/tools/MIRROR_MAIN"'
 check "HANDOFF.md, BRIEF.md, TASKS.md, BUILDLOG.md and CLAUDE.md exist" '[ -f "$D/HANDOFF.md" ] && [ -f "$D/BRIEF.md" ] && [ -f "$D/TASKS.md" ] && [ -f "$D/BUILDLOG.md" ] && [ -f "$D/CLAUDE.md" ]'
