@@ -27,3 +27,24 @@ Decisions and why:
 Tests: `MiniKeyboardTest` (core, 9), `MiniNavTest` (Robolectric, 13: slide on its own clock, buttons, flash, dimming, bar selects all, first key replaces, Go, shift and symbols, Back closes the keyboard, hiding closes it, unavailable = gone).
 
 What only the tablet can say: whether 28 x 40 px keys are comfortable for the right thumb (the key size is `KEYS_H_DP` and the panel widths `PANEL_*_DP` at the top of `MiniNav.kt`), whether the toggle in the corner gets in the way of a site's own top-right buttons (then it can be switched off in Settings), whether the slide looks smooth on the real GPU.
+
+## AU3 - the mini keyboard types into the web page's own text field (owner message 35, 2026-11-14)
+
+> "Also, if I already have a text field open on a web site, make the mini keyboard enter text into that field instead of searching Google"
+
+The pasted Diagnostics showed the symptom: the mini keyboard's text always went to the address / Google search, whatever the page had focused.
+
+### How a page field can be reached (GeckoView 160, read from the AAR's classes, not guessed)
+* `GeckoSession.TextInputDelegate` has EMPTY default methods; the real work is the library's `SessionTextInput.DefaultDelegate` (it talks to Android's `InputMethodManager`). `session.textInput.delegate` returns that default when none was set, so a wrapper can call it for everything and only hold back what the mini keyboard must stop. Set it in `createSession` (UI thread).
+* The page tells the delegate three things: `restartInput(session, reason)` (a field gained or lost focus, or its type changed; reasons FOCUS / BLUR / CONTENT_CHANGE), `showSoftInput` (a field wants a keyboard) and `hideSoftInput`. When the system keyboard is already up and a second field is tapped, only `restartInput` arrives (the keyboard re-binds), so "a field has focus" cannot be read from show / hide alone.
+* The truth is the editable's own state: `session.textInput.onCreateInputConnection(EditorInfo())` fills the EditorInfo from the focused field (inputType 0 = no field or `inputmode=none`) and returns the connection (null when no field). The library's `GeckoInputConnection` returns ITSELF every time (one object per view); the call only refreshes the EditorInfo and the last selection. It is the same call Android's keyboard makes.
+* `commitText(text, 1)` on that connection is what Gboard does to insert: the text lands at the caret (replacing a selection) and the page sees real `beforeinput` / `input` events. Enter and Delete go through `sendKeyEvent` (down + up): the same key events a hardware keyboard sends, so a search box submits and a selection is deleted. `deleteSurroundingText(n, 0)` is used for removing a whole glided word.
+* THREAD: the editable asserts it is used on its "IC thread". `ic.handler` (the no-argument `InputConnection.getHandler()`; for the library's connection it is the UI handler when a hardware keyboard is present, else its own background looper) also TELLS the editable which handler that is. So every operation is `ic.handler.post { ... }`, exactly as the Android framework does for a keyboard; posts to one handler stay in order.
+* `EditorInfo.imeOptions & IME_FLAG_NO_PERSONALIZED_LEARNING` is set for a private tab: the keyboard learns nothing there.
+
+### The design
+* `PageFieldInput` (geckoapp) wraps the session's TextInputDelegate. While the mini keyboard is up (`held`) it swallows `showSoftInput` and `restartInput` (so the system keyboard never covers the mini one); `hideSoftInput` always goes through. It counts focus changes (`generation`) and tells the activity so the panel can follow a field that appears or goes.
+* The panel talks to it only through the small `PageField` interface in `:app` (the WebView build has none: `navPageField()` is null there), so MiniNav stays free of GeckoView types and testable with a fake.
+* Opening the keyboard with a page field focused = field mode: the bar starts EMPTY (the address is not selected), says "type into the page" and carries a small "page" tag; keys, glides, candidate swaps and Backspace are applied to the same text model as before and the DIFFERENCE (characters removed from the end, characters added) is sent to the field. A Backspace beyond what was typed here deletes the page field's own text. Go presses Enter in the field (a one-line field also closes the keyboard, a multi-line one stays open). A password field shows dots in the bar and is never learned from. A private tab is never learned from (also in address mode).
+* If the field goes away (the page navigated, the field was blurred) the keyboard falls back to the address bar behaviour; if another field is tapped, typing continues there with a fresh text buffer. With no field focused nothing changes: address or Google search as before. To type an address while a field is focused, tap the page outside the field (or use the main address bar).
+
