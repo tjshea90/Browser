@@ -95,6 +95,6 @@ object AdRuns {
         val u = URI(url)
         val host = (u.host ?: "").lowercase()
         val dir = (u.path ?: "").substringBeforeLast('/').replace(Regex("[0-9]+"), "#")
-        (Psl.siteOf(host) ?: host) + "|" + dir
+        (Psl.default.siteOf(host) ?: host) + "|" + dir
     } catch (e: Exception) { "?" }
 }
