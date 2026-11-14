@@ -12,6 +12,8 @@
               "video info role=... counted=N of M" say what it decided. Ends with a DONE line once all four loaded their metadata. /clip1.wav .. /clip4.wav: the same 20 s silent audio under four addresses.
   /teaser-link  RX3-V2: a page with nothing but two LINKS to video files and no player: /teaser.mp4 (30 KB, a preview) and /bigfile.mp4 (700 KB, a real one); both answer a one-byte Range request with
               Content-Range. The app's Health lines "media verify asked=N" and "media verified length=... counted=N of M" show that only the big one ends up counted for the badge.
+  /hls-lab    RX3-V5: a page that asks for three stream playlists (the segments are never requested): /live.m3u8 (no end list), /short.m3u8 (a 12 s clip) and /film.m3u8 (2 minutes with an advertising
+              break marked by CUE-OUT / CUE-IN). The app's Health lines "media look live=.. length=..s advertising=..s in N breaks counted=N of M" show what the early look found.
   /playerlab  RX3-G7: five mock video players on one page, driven by the page itself (no touch needed): an ordinary video (no ad words), a JW-style player (jw-flag-ads on its root), a Video.js-style player
               (vjs-ad-loading, then vjs-ad-playing), a Google-IMA-style host (the ad video inside .ima-ad-container) and a JW-style ad with a skip button (.jw-skip, .jw-skippable). Each ad is a REAL 12 s silent
               media element. The log says how long the ad took (about 12000 ms = not skipped, a few hundred = fast-forwarded), at what speed it ran, and which events the skip button got. Ends with a DONE line.
@@ -194,6 +196,29 @@ TEASERLINK = b"""<!doctype html><html><head><meta charset="utf-8"><meta name="vi
 """
 SIZES = {"/teaser.mp4": 30000, "/bigfile.mp4": 700000}
 
+HLSLAB = b"""<!doctype html><html><head><meta charset="utf-8"><title>hls-lab</title></head>
+<body style="margin:8px;font:18px sans-serif"><p>hls-lab: asks for three playlists.</p>
+<script>
+function L(k, v) { try { var x = new XMLHttpRequest(); x.open('GET', '/log?kind=' + encodeURIComponent(k) + '&v=' + encodeURIComponent(v)); x.send(); } catch (e) {} }
+L('load', 'hls-lab');
+['/live.m3u8', '/short.m3u8', '/film.m3u8'].forEach(function (u, i) { setTimeout(function () { fetch(u).then(function (r) { return r.text(); }).then(function (t) { L('got', u + ' ' + t.length + ' bytes'); }); }, 300 * i); });
+setTimeout(function () { L('DONE', 'asked for all three'); }, 6000);
+</script></body></html>
+"""
+
+def hls_playlist(kind):
+    head = "#EXTM3U\\n#EXT-X-VERSION:3\\n#EXT-X-TARGETDURATION:6\\n#EXT-X-MEDIA-SEQUENCE:0\\n"
+    if kind == "live":
+        return head + "".join("#EXTINF:6.0,\\n/seg/live%d.ts\\n" % i for i in range(4))
+    if kind == "short":
+        return head + "#EXT-X-PLAYLIST-TYPE:VOD\\n" + "".join("#EXTINF:6.0,\\n/seg/short%d.ts\\n" % i for i in range(2)) + "#EXT-X-ENDLIST\\n"
+    out = head + "#EXT-X-PLAYLIST-TYPE:VOD\\n"
+    for i in range(20):
+        if i == 10: out += "#EXT-X-CUE-OUT:DURATION=12\\n"
+        if i == 12: out += "#EXT-X-CUE-IN\\n"
+        out += "#EXTINF:6.0,\\n/seg/film%d.ts\\n" % i
+    return out + "#EXT-X-ENDLIST\\n"
+
 POPAD = b"""<!doctype html><meta charset=utf-8><title>an ad</title><body style="font:20px sans-serif;margin:24px">popad: this is the ad page. If you can see it, the pop-up was NOT stopped.</body>"""
 
 
@@ -241,6 +266,12 @@ class H(http.server.BaseHTTPRequestHandler):
                 self.send_response(206); self.send_header("Content-Type", "video/mp4"); self.send_header("Content-Range", "bytes %d-%d/%d" % (lo, hi, total))
                 self.send_header("Content-Length", str(len(body))); self.send_header("Accept-Ranges", "bytes"); self.end_headers(); self.wfile.write(body); return
             return self._send(200, b"\x00" * total, "video/mp4")
+        if u.path == "/hls-lab":
+            self._write("GET /hls-lab")
+            return self._send(200, HLSLAB)
+        if u.path in ("/live.m3u8", "/short.m3u8", "/film.m3u8"):
+            self._write("GET " + u.path)
+            return self._send(200, hls_playlist(u.path[1:].split(".")[0]).encode(), "application/vnd.apple.mpegurl")
         if u.path == "/popad":
             self._write("GET /popad %s   <- the pop-up was NOT stopped" % q.get("n", ["?"])[0])
             return self._send(200, POPAD)
