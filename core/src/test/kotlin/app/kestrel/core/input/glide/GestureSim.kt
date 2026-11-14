@@ -39,8 +39,12 @@ class GestureSim(private val keys: GlideKeys, private val rnd: Random) {
     class Path(val xs: FloatArray, val ys: FloatArray)
     private var habitX = Float.NaN; private var habitY = 0f
 
-    /** The touch points of one glide over [word]'s letters (px of the keyboard view), or null when the word has fewer than two different letters in a row. */
-    fun path(word: String, noise: SimNoise): Path? {
+    /**
+     * The touch points of one glide over [word]'s letters (px of the keyboard view), or null when the word has fewer than two different letters in a row. [shift] is where THIS person's hand
+     * habitually lands for this word, as (dx, dy) in dp for each of the word's letters in order (a letter that repeats counts once); null entries and a null list mean no habit (AX1: the same
+     * sloppy shape every time, which the generic decoder can only see as noise).
+     */
+    fun path(word: String, noise: SimNoise, shift: List<FloatArray?>? = null): Path? {
         val k = GlideLetters.keyOf(word)
         val ls = ArrayList<Int>()
         for (b in k) if (ls.isEmpty() || ls.last() != b.toInt()) ls.add(b.toInt())
@@ -49,8 +53,9 @@ class GestureSim(private val keys: GlideKeys, private val rnd: Random) {
         val bx = rnd.nextGaussian().toFloat() * noise.biasDp + habitX; val by = rnd.nextGaussian().toFloat() * noise.biasDp + habitY
         val px = FloatArray(ls.size); val py = FloatArray(ls.size)
         for (j in ls.indices) {
-            px[j] = keys.cx[ls[j]] + rnd.nextGaussian().toFloat() * noise.aimDp + bx
-            py[j] = keys.cy[ls[j]] + rnd.nextGaussian().toFloat() * noise.aimDp + by
+            val sh = shift?.getOrNull(j)
+            px[j] = keys.cx[ls[j]] + rnd.nextGaussian().toFloat() * noise.aimDp + bx + (sh?.get(0) ?: 0f)
+            py[j] = keys.cy[ls[j]] + rnd.nextGaussian().toFloat() * noise.aimDp + by + (sh?.get(1) ?: 0f)
         }
         // a dense curve: straight between the aim points, with every corner rounded by a quadratic curve that starts and ends [cut] dp from the corner
         val dense = ArrayList<FloatArray>()
