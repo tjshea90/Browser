@@ -1,21 +1,22 @@
-# CHECKPOINT 2061 — read me first, then TASKS.md
+# CHECKPOINT 2073 — read me first, then TASKS.md
 
-**Written:** 2026-11-14T05:47:07Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `1211fa1` (this checkpoint is the commit after it)
+**Written:** 2026-11-14T05:51:03Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `98310d5` (this checkpoint is the commit after it)
 
 ## Just done
-AV3 EMULATOR-PROVEN (page-field row, live guess mid-glide her|he|hd, held digit bubble 2, caps lock WORLD, retry demotion too|to|trio, Diagnostics lines) + MiniNavLookTest real-pixel tests + glide notes sections 9-10 written
+version bump 137 / 0.3.0-alpha36 for the release of AV1-AV3 (resize/detach, learning round two, polish); full suite green (core + app + lint + gecko compile, EXIT 0); TASKS AV1a-c AV2a-c AV3a-c ticked with evidence; HANDOFF feature map extended
 
 ## Do this next
-tick TASKS AV1a-c AV2a-c AV3a-d with evidence (claim.sh AV1/AV2/AV3 --done), MINI_NAV.md AV3 emulator note, bump geckoapp versionCode 137 / 0.3.0-alpha36, full suite + lint + gecko compile, ASCII release note, ship.sh gecko, dispatch android.yml app=gecko, wait, get_release_by_tag, record-release.sh, answer owner message 36 in plain words and re-list open items
+bash ship.sh gecko "$(cat scratchpad alpha36_note.txt)" (runs the gates + unit suites + pushes), then dispatch android.yml app=gecko full_build=true ref ccr-a57c163e-mtq8js with the same note, wait for tag + green run (git ls-remote tag kestrel-g-v0.3.0-alpha36), get_release_by_tag, bash tools/record-release.sh kestrel-g-v0.3.0-alpha36, claim.sh AV2/AV3/AV3d --done, answer the owner (message 36) in plain words and re-list open items
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    M  research/GLIDE_TYPING.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  eac3369 ckpt 2061: AV3 EMULATOR-PROVEN (page-field row, live guess mid-glide her|he|hd, held dig
   c5c3d98 ckpt 2057: AV2b done: repeated-letter words ('awwww') never learned (PersonalModel.stret
   39b545b ckpt 2047: AV2a research REPORT saved to research/GLIDE_RESEARCH.md (Gboard/Samsung/Swif
   b097785 ckpt 2044: AV3b: caps lock (double tap Shift, accent-filled key), page-field bottom row 
@@ -25,8 +26,7 @@ tick TASKS AV1a-c AV2a-c AV3a-d with evidence (claim.sh AV1/AV2/AV3 --done), MIN
   2287b4e ckpt 2013: owner message 36 written into TASKS (AV1 resize+detach the mini keyboard, AV2
   d4f48f8 ckpt 2010: alpha35 (kestrel-g-v0.3.0-alpha35, code 136) released and RECORDED: run 43556
   b59f884 ckpt 2005: alpha35 dispatched: android.yml queued for ref ccr-a57c163e-mtq8js (app=gecko
-  072c85d ckpt 2004: gated kestrel-g-v0.3.0-alpha35 (gecko code 136) and pushed it: handoff self-t
 ```
 
-(3 automatic checkpoint(s) since the last deliberate one — the
+(11 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
