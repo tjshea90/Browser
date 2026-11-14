@@ -28,6 +28,7 @@ import app.kestrel.core.input.KeySpec
 import app.kestrel.core.input.MiniKeyboardGeometry
 import app.kestrel.core.input.MiniKeyboardLayout
 import app.kestrel.core.input.MiniKeyboardModel
+import app.kestrel.core.input.TextEdit
 import app.kestrel.core.input.glide.GlideKeys
 import app.kestrel.core.input.glide.GlideResult
 import app.kestrel.core.input.glide.GlideTyping
@@ -72,6 +73,12 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         /** What the keyboard learned from the person's choices and typing (AU2), as the engine wrote it; read and written on the glide thread (any thread is fine). */
         fun navGlideLearned(): String? = null
         fun navGlideLearnedSave(text: String) {}
+        /** AU3: the text field of the web page that has focus right now, or null (none, or this build has no page fields). Asked when the keyboard opens and before every key. */
+        fun navPageField(): PageField? = null
+        /** AU3: the keyboard opened or closed (while it is open the system keyboard must stay down). */
+        fun navKeyboardChanged(showing: Boolean) {}
+        /** The tab in front is a private one: the keyboard learns nothing there. */
+        fun navPrivateTab(): Boolean = false
     }
 
     private val model = MiniKeyboardModel()
@@ -96,6 +103,13 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private var afterUndo = false               // a glided word was just deleted: the next word that is kept is the one meant instead
     /** Tests: where the engine comes from (the real one reads the shipped word list). */
     internal var glideFactory: (() -> GlideTyping)? = null
+
+    // ---- typing into the page's own text field (AU3)
+    private var field: PageField? = null         // the page field the keys go into (null: the bar is the address / search bar)
+    private var fieldIdentity = 0                // which field it is: another number means the text typed so far belongs to a field that is gone
+    private var learnedText: String? = null      // the text whose words were already handed to the keyboard's memory (closing after Enter must not count them twice)
+    /** The keyboard is open and its keys go into a text field of the page. */
+    val typesIntoPage: Boolean get() = keyboardShowing && field != null
 
     /** The panel is shown (sliding in counts as shown). */
     var isOpen = false; private set
@@ -133,6 +147,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         forward.dim = !canForward
         home.active = homeShown
         if (this.address != address) { this.address = address; if (!keyboardShowing) bar.invalidate() }
+        if (keyboardShowing) syncField() // the page changed: the field it had may be gone
     }
 
     fun applyPal(p: Pal) {
@@ -174,24 +189,39 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
     fun openKeyboard() {
         if (!isOpen || keyboardShowing) return
-        model.open(address)
+        val f = l.navPageField()              // a text field of the page has focus: the keys go there, from an empty text (the address is not selected)
+        field = f; fieldIdentity = f?.identity ?: 0; learnedText = null
+        model.open(if (f != null) "" else address)
         keyboardShowing = true
         keys.visibility = VISIBLE
         setPanelWidth(PANEL_KEYS_W_DP)
         pendingWord = null
         preparedFor = ""
         startGlideEngine()
-        bar.invalidate(); keys.invalidate()
+        barMode(); keys.invalidate()
+        l.navKeyboardChanged(true)
     }
 
     fun closeKeyboard() {
         if (!keyboardShowing) return
         confirmGlide()
+        if (field != null) learnFromText()     // typed into a page field: there is no Go to wait for
         glide?.saveLearned()
         keys.reset()
         keyboardShowing = false
+        field = null
         keys.visibility = GONE
         setPanelWidth(PANEL_W_DP)
+        barMode()
+        l.navKeyboardChanged(false)
+    }
+
+    /** The activity tells the panel that the page's focused field changed (focus moved, a field appeared or went away): the keys follow it. */
+    fun pageFieldChanged() { if (keyboardShowing) syncField() }
+
+    /** The bar's description says where the keys go. */
+    private fun barMode() {
+        bar.contentDescription = if (!keyboardShowing) "Address. Tap to type a new one." else if (field != null) "Typing into the text field of the page. Tap to close the keyboard." else "Address. Tap to close the keyboard."
         bar.invalidate()
     }
 
@@ -257,7 +287,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         val g = glide ?: return
         g.stats.onKept()
         g.accepted(w) { h -> post { l.navGlideHabitChanged(h) } }
-        g.learn(pendingPrev, w, if (afterUndo) 3f else 1f) // kept: the keyboard hears it (a word that replaced a deleted one counts more: the person had to correct)
+        if (learnAllowed()) g.learn(pendingPrev, w, if (afterUndo) 3f else 1f) // kept: the keyboard hears it (a word that replaced a deleted one counts more: the person had to correct)
         afterUndo = false
     }
 
@@ -266,7 +296,10 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         if (!keyboardShowing) return
         val best = res.candidates.firstOrNull()
         if (best == null) { keys.showNoWord(); return }
+        syncField()
+        val before = model.text
         model.commitGlide(best.text)
+        field?.let { sendEdit(it, before) }
         pendingWord = best.text
         pendingPrev = lastGlidePrev
         keys.showCandidates(res.candidates.map { it.text })
@@ -276,12 +309,15 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     /** A candidate in the strip was tapped: it replaces the word the glide put in. */
     private fun pickCandidate(word: String) {
         val g = glide
+        syncField()
+        val before = model.text
         if (!model.swapGlide(word)) return
+        field?.let { sendEdit(it, before) }
         pendingWord = null
         afterUndo = false
         g?.stats?.onPicked()
         g?.accepted(word) { h -> post { l.navGlideHabitChanged(h) } }
-        g?.learn(pendingPrev, word, 3f) // the person CHOSE this word over the keyboard's first guess: it counts three times
+        if (learnAllowed()) g?.learn(pendingPrev, word, 3f) // the person CHOSE this word over the keyboard's first guess: it counts three times
         keys.showCandidates(keys.candidateTexts().let { list -> listOf(word) + list.filter { it != word } }.take(3))
         bar.invalidate()
     }
@@ -295,24 +331,83 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     }
 
     private fun typed(key: Key) {
+        syncField() // the page's field may have changed or gone since the last key
+        val f = field
         when (key) {
             Key.Backspace -> if (model.glideActive) { pendingWord = null; afterUndo = true; glide?.stats?.onUndone() } // right after a glide: the word was wrong
             Key.Shift, Key.ToLetters -> {}                                                       // the text does not change
             else -> { confirmGlide(); if (key is Key.Ch) afterUndo = false }                     // typing on, the symbols page or Go: the glided word stays
         }
+        if (f != null && key === Key.Go) { fieldGo(f); return }
+        val before = model.text
         when (val r = model.press(key)) {
             is KeyResult.Submit -> {
-                val g = glide
-                if (g != null) {
-                    val typedWords = model.plainWords()
-                    if (typedWords.isNotEmpty()) g.learnTyped(typedWords, ownWords) { text -> post { l.navGlideWordsChanged(text) } }
-                    for ((prev, w) in model.typedPairs()) g.learn(prev, w, 1f) // what was typed letter by letter (the glided words were learned when they were kept)
-                }
+                learnFromText() // what was typed letter by letter is remembered (the glided words were learned when they were kept)
                 closeKeyboard(); l.navSubmit(r.text)
             }
-            KeyResult.None -> { if (!model.glideActive) keys.clearCandidates(); bar.invalidate(); keys.invalidate() }
+            KeyResult.None -> {
+                if (f != null) sendEdit(f, before, key === Key.Backspace)
+                if (!model.glideActive) keys.clearCandidates(); bar.invalidate(); keys.invalidate()
+            }
         }
     }
+
+    // ------------------------------------------------------------------ typing into the page's own text field (AU3)
+
+    /**
+     * The page's focused field may have changed since the keys last went somewhere. The same field: carry on. Another field, or one that appeared: the keys go there, from an empty text. A field that is gone
+     * (the page moved on, something else took focus): the bar is the address / search bar again. What was typed into a field that is left behind counts for the keyboard's memory.
+     */
+    private fun syncField() {
+        if (!keyboardShowing) return
+        val f = l.navPageField()
+        val was = field
+        if (f == null && was == null) return
+        if (f != null && was != null && f.identity == fieldIdentity) { field = f; return } // the same field (a fresh object: its type may have changed)
+        if (was != null) { confirmGlide(); learnFromText() }
+        field = f; fieldIdentity = f?.identity ?: 0
+        learnedText = null
+        model.open(if (f != null) "" else address)
+        pendingWord = null; afterUndo = false
+        keys.clearCandidates(); barMode(); keys.invalidate()
+    }
+
+    /** The text model changed from [before]: the same change goes into the page's field (what was taken off the end, what was added). */
+    private fun sendEdit(f: PageField, before: String, backspace: Boolean = false) {
+        var e = TextEdit.between(before, model.text)
+        if (backspace && e.isEmpty) e = TextEdit(1, "") // nothing typed here is left to take off: the field's own text goes
+        if (e.remove > 0) f.deleteBefore(e.remove)
+        if (e.insert.isNotEmpty()) f.insert(e.insert)
+    }
+
+    /** Go in a page field presses Enter there; a field whose Enter submits (a search box) closes the keyboard, a text area stays open with an empty text for the next line. */
+    private fun fieldGo(f: PageField) {
+        learnFromText()
+        f.enter()
+        if (f.enterSubmits) closeKeyboard()
+        else { model.open(""); learnedText = null; keys.clearCandidates(); bar.invalidate(); keys.invalidate() }
+    }
+
+    /** Nothing is learned from a private tab or a password field. */
+    private fun learnAllowed(): Boolean {
+        if (l.navPrivateTab()) return false
+        val f = field ?: return true
+        return !f.password && !f.privateTab
+    }
+
+    /** The words of the text (typed letter by letter or glided) go to the keyboard's memory, once per text. */
+    private fun learnFromText() {
+        val g = glide ?: return
+        val text = model.text
+        if (text.isEmpty() || text == learnedText || !learnAllowed()) return
+        learnedText = text
+        val typedWords = model.plainWords()
+        if (typedWords.isNotEmpty()) g.learnTyped(typedWords, ownWords) { t -> post { l.navGlideWordsChanged(t) } }
+        for ((prev, w) in model.typedPairs()) g.learn(prev, w, 1f) // what was typed letter by letter (the glided words were learned when they were kept)
+    }
+
+    /** Glide typing works unless the page field is a password (the guesses would show it on the screen). */
+    private fun glideUsable(): Boolean = glideOn && field?.password != true
 
     // ------------------------------------------------------------------ the slide (its own clock: independent of Android's animation scale)
 
@@ -365,6 +460,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         for (a in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) { val e = MotionEvent.obtain(t, t, a, 5f, 5f, 0); b.dispatchTouchEvent(e); e.recycle() }
     }
     internal val barTextForTest: String get() = bar.shownText()
+    internal val typesIntoPageForTest: Boolean get() = typesIntoPage
     internal val selectedForTest: Boolean get() = keyboardShowing && model.allSelected
     internal val panelShownForTest: Boolean get() = panel.visibility == VISIBLE
     internal val panelOffsetForTest: Float get() = panel.translationY
@@ -426,11 +522,12 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
         private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = ctx.dpf(1f) }
         private val box = RectF()
+        private val tag = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 10f, resources.displayMetrics); typeface = Typeface.DEFAULT_BOLD }
 
         init { contentDescription = "Address. Tap to type a new one."; isClickable = true }
 
         /** What the bar shows right now (also read by the tests). */
-        fun shownText(): String = if (keyboardShowing) model.text else display(address)
+        fun shownText(): String = if (!keyboardShowing) display(address) else if (field?.password == true) "\u2022".repeat(model.text.length) else model.text
 
         private fun display(url: String) = url.removePrefix("https://").removePrefix("http://").removePrefix("www.").removeSuffix("/")
 
@@ -444,13 +541,19 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             line.color = if (lit || keyboardShowing) pal.accent else pal.deep
             c.drawRoundRect(box, r, r, fill); c.drawRoundRect(box, r, r, line)
             val pad = context.dpf(10f)
-            val avail = (w - 2 * pad).coerceAtLeast(1f)
+            var avail = (w - 2 * pad).coerceAtLeast(1f)
+            if (keyboardShowing && field != null) { // the keys go into the page: a small tag says so
+                tag.color = pal.accent
+                val tw0 = tag.measureText("page")
+                c.drawText("page", w - pad - tw0, (h - (tag.fontMetrics.ascent + tag.fontMetrics.descent)) / 2f, tag)
+                avail = (avail - tw0 - context.dpf(8f)).coerceAtLeast(1f)
+            }
             val raw = shownText()
             val fm = text.fontMetrics
             val base = (h - (fm.ascent + fm.descent)) / 2f
             if (raw.isEmpty()) {
                 text.color = pal.muted
-                c.drawText(TextUtils.ellipsize(if (keyboardShowing) "type an address or search" else "Search or type a URL", text, avail, TextUtils.TruncateAt.END).toString(), pad, base, text)
+                c.drawText(TextUtils.ellipsize(if (keyboardShowing) (if (field != null) "type into the page" else "type an address or search") else "Search or type a URL", text, avail, TextUtils.TruncateAt.END).toString(), pad, base, text)
                 if (keyboardShowing) drawCaret(c, pad, h)
                 return
             }
@@ -728,11 +831,11 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                     parent?.requestDisallowInterceptTouchEvent(true)
                     layoutKeys()
                     armed = false; gliding = false; stripDown = -1
-                    if (glideOn && e.y < stripPx()) { stripDown = chipAt(e.x, e.y); invalidate(); return true } // a guess in the strip was touched
+                    if (glideUsable() && e.y < stripPx()) { stripDown = chipAt(e.x, e.y); invalidate(); return true } // a guess in the strip was touched
                     removeCallbacks(fadeStep); gn = 0; fadeStart = 0L
                     down = keyAt(e.x, e.y); light(down)
                     if (down?.key === Key.Backspace) { onKey?.invoke(Key.Backspace); handler.postDelayed(repeat, REPEAT_FIRST_MS) }
-                    if (glideOn && !model.symbols && isLetter(down)) { armed = true; pressedKey = down; downBox = boxOf(down); addPoint(e.x, e.y) }
+                    if (glideUsable() && !model.symbols && isLetter(down)) { armed = true; pressedKey = down; downBox = boxOf(down); addPoint(e.x, e.y) }
                 }
                 MotionEvent.ACTION_MOVE -> {
                     if (stripDown >= 0) return true
