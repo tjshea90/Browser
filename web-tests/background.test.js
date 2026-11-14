@@ -51,7 +51,7 @@ function fakeIdb(store) {
 /** @param app (message) => reply string (may be async). @param opts { idb: Map } */
 function harness(app, opts) {
   opts = opts || {};
-  const sent = [], raws = [], timers = [], listeners = {}, clock = { now: 1700000000000 };
+  const sent = [], raws = [], timers = [], tabMsgs = [], listeners = {}, clock = { now: 1700000000000 };
   const ctx = {
     console, Promise, Map, Set, Uint8Array, ArrayBuffer, Int32Array, Math, Date: { now: () => clock.now }, JSON, parseInt, Object, Error, RegExp, String, Array,
     performance: { now: () => Number(process.hrtime.bigint()) / 1e6 },
@@ -74,6 +74,7 @@ function harness(app, opts) {
           return Promise.resolve(r);
         },
       } : undefined,
+      tabs: { sendMessage: (tabId, m, o) => { tabMsgs.push({ tabId, m, o }); return Promise.resolve(); } }, // what the background page tells a tab's frames (RX3-G3)
       webRequest: {
         onBeforeRequest: { addListener: (f) => { listeners.before = f; } },
         onBeforeSendHeaders: { addListener: (f) => { listeners.sendHeaders = f; } },
@@ -87,7 +88,7 @@ function harness(app, opts) {
   vm.runInContext(SRC, ctx);
   const req = (type, url, page) => listeners.before({ type, url, tabId: 1, frameId: 0, documentUrl: page, frameAncestors: [{ url: page, frameId: 0 }] });
   return {
-    sent, raws, ctx, listeners, clock,
+    sent, raws, ctx, listeners, clock, tabMsgs,
     mainFrame: (url, extra) => listeners.before(Object.assign({ type: 'main_frame', url, tabId: 1, frameId: 0 }, extra || {})),
     /** a message from a content script (the first listener that answers wins, like the browser) */
     message: (m, tabId, senderUrl, frameId) => { for (const f of listeners.message || []) { const r = f(m, { tab: tabId === undefined ? { id: 1 } : (tabId < 0 ? undefined : { id: tabId }), url: senderUrl, frameId: frameId === undefined ? 0 : frameId }); if (r !== undefined) return r; } return undefined; },
@@ -1095,4 +1096,56 @@ test('RX3-BK1: an answer to a request of the page the tab already left does not 
   await tick(20);
   const p = h.of('pend');
   assert.equal(p.filter((m) => m.p === 'https://example.com/next')[0].n, 1, 'the late answer of the old page did not hide the new page\'s own pending request');
+});
+
+// ---------------------------------------------------------------- RX3-G3: the assist of a player inside a frame is relayed to the ONE frame the owner pressed
+
+const frameReq = (h, id, parent, url) => h.listeners.before({ type: 'sub_frame', url, tabId: 1, frameId: id, parentFrameId: parent, requestId: String(100 + id), documentUrl: PAGE, frameAncestors: [{ url: PAGE, frameId: 0 }] });
+
+test('RX3-G3: an assist from the parent frame goes to the ONE child frame that has the iframe\'s address, as a number place; frames inside it and other frames get nothing', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '5' });
+  frameReq(h, 3, 0, 'https://player.example/embed');
+  frameReq(h, 4, 0, 'https://other.example/ad');
+  frameReq(h, 5, 3, 'https://inner.example/x');
+  h.message({ k: 'assist', x: 100.4, y: 80, s: 'https://player.example/embed#t=1' }, 1, PAGE, 0);
+  await tick(20);
+  assert.equal(h.tabMsgs.length, 1);
+  eq(h.tabMsgs[0], { tabId: 1, m: { k: 'assist', x: 100, y: 80 }, o: { frameId: 3 } });
+});
+
+test('RX3-G3: two frames with the same address and none to tell apart: no guess, nothing is sent', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '5' });
+  frameReq(h, 3, 0, 'https://player.example/embed');
+  frameReq(h, 4, 0, 'https://player.example/embed');
+  h.message({ k: 'assist', x: 10, y: 10, s: 'https://player.example/embed' }, 1, PAGE, 0);
+  await tick(20);
+  assert.equal(h.tabMsgs.length, 0);
+});
+
+test('RX3-G3: the only child frame is used even when its address changed since the request; an inner frame can ask about its own child', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '5' });
+  frameReq(h, 3, 0, 'https://player.example/embed');
+  frameReq(h, 5, 3, 'https://inner.example/x');
+  h.message({ k: 'assist', x: 5, y: 6, s: 'https://player.example/other-address' }, 1, PAGE, 0);   // top frame: its only child is frame 3
+  h.message({ k: 'assist', x: 7, y: 8, s: '' }, 1, 'https://player.example/embed', 3);              // frame 3: its only child is frame 5
+  await tick(20);
+  eq(h.tabMsgs.map((t) => [t.o.frameId, t.m.x, t.m.y]), [[3, 5, 6], [5, 7, 8]]);
+});
+
+test('RX3-G3: nothing is relayed for a sender without a tab, a place that is not a number, no known frame, or another page after a navigation', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '5' });
+  frameReq(h, 3, 0, 'https://player.example/embed');
+  h.message({ k: 'assist', x: 10, y: 10, s: 'https://player.example/embed' }, -1, PAGE, 0);      // not from a tab
+  h.message({ k: 'assist', x: 'a', y: 10, s: 'https://player.example/embed' }, 1, PAGE, 0);
+  h.message({ k: 'assist', x: -4, y: 10, s: 'https://player.example/embed' }, 1, PAGE, 0);
+  h.message({ k: 'assist', x: 99999, y: 10, s: 'https://player.example/embed' }, 1, PAGE, 0);
+  h.message({ k: 'assist', x: 10, y: 10, s: 'https://player.example/embed' }, 1, PAGE, 9);        // a frame that has no children
+  h.mainFrame('https://example.com/next', { requestId: '30' });                                    // a new page: the old frames are forgotten
+  h.message({ k: 'assist', x: 10, y: 10, s: 'https://player.example/embed' }, 1, 'https://example.com/next', 0);
+  await tick(20);
+  assert.equal(h.tabMsgs.length, 0);
 });
