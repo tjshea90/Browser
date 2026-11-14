@@ -50,8 +50,10 @@ import java.util.concurrent.Executors
  * OFF (the system's animation scale would make a system animator jump straight to its end; the neon glow already works the same way, see [Neon]). Android's own keyboard cannot be moved by an app, so the
  * keyboard here is the app's own ([KeysView] over [MiniKeyboardModel] in the core module). The page below keeps every touch outside the panel's own views.
  *
- * AU1 (owner message 35: "make the top right slide down box ... have no visible button at all"): the small tab is gone. A long press on the invisible square in the top right corner of the page ([HotCorner])
- * slides the panel open, and a long press on the same square (it sits ABOVE the open panel) slides it closed; [toggle] is what that calls.
+ * AU1 (owner message 35: "make the top right slide down box ... have no visible button at all"): the small tab is gone. AY2 (owner message 39: "make it so I can long press anywhere in the browser and it
+ * will show up under where I long pressed, but only if I am long pressing an open space"): a long press on open space of the page puts the panel under the finger ([showAt]; the page's own script tells open
+ * space from a link, a picture or text, and [HotCorner] stands in for a page whose script cannot answer). AY4 (same message: "make the navigation panel a floating panel which I can move around easily by long
+ * pressing it and dragging it around"): a long press on the panel itself picks it up and the finger carries it; it stays where it is put. A tap on the bar at the top of the panel (the grip) closes it.
  *
  * Glide typing (AT1, owner message 34: "glide typing like Gboard ... make the glide word predictions accurate"): a finger that slides off the key it went down on draws a word over the letters;
  * on lift the core decoder (core/input/glide) turns the path into words, the best goes into the bar with a space after it and the next two show in a strip above the keys.
@@ -437,6 +439,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private var gW = PANEL_KEYS_W_DP.toFloat(); private var gH = KEYS_H_DP.toFloat()
     private var availWdp = 100000f; private var availHdp = 100000f   // the page area, known once it has been measured
     private var resizing = false                                      // a corner is being dragged: the decoder is told the key positions when it is over, not at every frame
+    private var lifted = false                                        // the panel is in the finger (picked up by a long press or by its grip): its outline is drawn lit
     init { loadGeometry() } // after the fields above: Kotlin runs initialisers in the order they are written, an earlier init block would be overwritten by their defaults
 
     /** The panel has been moved away from the corner it starts in. */
@@ -493,7 +496,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         gRight = effRight(); gTop = effTop()
     }
 
-    /** Back under the corner it starts in; the size stays (a double tap on the grip does this). */
+    /** Back under the corner it starts in; the size stays. */
     fun dock() { gRight = DOCK_RIGHT_DP.toFloat(); gTop = HotCorner.SIZE_DP.toFloat(); applyGeometry(); saveGeometry() }
 
     /** Settings > "Reset the mini keyboard's size and position": the corner and the first size. */
@@ -640,6 +643,9 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     internal var nextFrame: (Runnable) -> Unit = { postOnAnimation(it) }
     private var slideToken = 0
 
+    /** The panel is in the finger (or not): its outline is drawn lit. */
+    private fun setLifted(on: Boolean) { if (lifted == on) return; lifted = on; applyColors() }
+
     private fun cancelAnim() { slideToken++; anim?.let { removeCallbacks(it) }; anim = null; panel.setLayerType(LAYER_TYPE_NONE, null) }
 
     private fun slide(from: Float, to: Float, ip: Interpolator, done: () -> Unit) {
@@ -662,7 +668,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     // ------------------------------------------------------------------ colours
 
     private fun applyColors() {
-        panel.background = InsetDrawable(chamferSurface(context, 0xF2000000.toInt(), 8f, strokeColor = pal.deep, strokeDp = 1f, pressable = false), context.dp(BAND_DP))
+        panel.background = InsetDrawable(chamferSurface(context, 0xF2000000.toInt(), 8f, strokeColor = if (lifted) pal.accentHi else pal.deep, strokeDp = if (lifted) 2f else 1f, pressable = false), context.dp(BAND_DP))
         val edge = context.dp(PANEL_PAD_DP) + context.dp(BAND_DP)
         panel.setPadding(edge, edge, edge, edge) // setting a background takes the padding from the drawable (the inset): the frame and the band are set again here
         for (v in listOf<View>(back, home, forward, bar, keys)) v.invalidate()
@@ -843,9 +849,11 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     }
 
     /**
-     * The panel (AV1, owner message 36: "resizeable by dragging corners ... able to detach and I can move it around the screen"). Its OUTLINE is what the person sees; around it is a transparent band that belongs to the
-     * page, except for two things drawn and grabbed there: the GRIP (a short bar in the middle of the top edge: drag it and the panel leaves the corner and follows the finger; let go near the corner or double tap it and
-     * the panel docks again) and, while the keyboard is open, the four CORNERS (drag one to change the keyboard's width and height). The keys, the buttons and the bar are inside the outline's frame and are never taken by a drag.
+     * The panel (AV1, owner message 36: "resizeable by dragging corners ... able to detach and I can move it around the screen"; AY4, owner message 39: "make the navigation panel a floating panel which I can
+     * move around easily by long pressing it and dragging it around"). Its OUTLINE is what the person sees; around it is a transparent band that belongs to the page, except for two things drawn and grabbed there:
+     * the GRIP (a short bar in the middle of the top edge: drag it and the panel follows the finger, tap it and the panel closes) and, while the keyboard is open, the four CORNERS (drag one to change the keyboard's
+     * width and height). A LONG PRESS on the panel itself (the buttons, the bar, the frame between them) picks it up, and the finger then carries it anywhere on the page; it stays where it is put. The keys are
+     * never picked up: they keep their own long press (digits and letters). The buttons and the bar still act on a short tap, because a long press is the one thing they did not use.
      */
     private inner class PanelLayout(ctx: Context) : LinearLayout(ctx) {
         private val bandPx = ctx.dp(BAND_DP)
@@ -857,7 +865,11 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         private var corner = 0                       // bit 0: right side, bit 1: bottom
         private var downRawX = 0f; private var downRawY = 0f; private var downAt = 0L; private var moved = false
         private var right0 = 0f; private var top0 = 0f; private var w0 = 0f; private var h0 = 0f
-        private var lastTapAt = -1L
+        // a finger is down on the panel (not on the keys) and has stayed still: when it has stayed for PICK_MS the panel is picked up (AY4)
+        private var pickArmed = false
+        private var pickDownTime = 0L; private var pickDownRawX = 0f; private var pickDownRawY = 0f
+        private var pickX = 0f; private var pickY = 0f; private var pickRawX = 0f; private var pickRawY = 0f // the latest place of the finger
+        private val pickRun = Runnable { if (pickArmed) pickUp(SystemClock.uptimeMillis()) }
         private val mark = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
         private val markPath = Path()
 
@@ -876,18 +888,68 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             return if (x >= b && x <= w - b && y >= b && y <= h - b) ZONE_BODY else ZONE_NONE
         }
 
+        /** The point is on the keys (and the strip of guesses above them): those keep every touch, long ones too. */
+        private fun onKeys(x: Float, y: Float): Boolean = keys.visibility == View.VISIBLE && x >= keys.left && x < keys.right && y >= keys.top && y < keys.bottom
+
         override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
             if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
-                mode = DRAG_NONE
+                mode = DRAG_NONE; disarmPick()
                 when (val z = zoneAt(ev.x, ev.y)) {
                     ZONE_NONE -> return false   // the transparent band: the page keeps this touch
-                    ZONE_BODY -> {}
+                    ZONE_BODY -> if (!onKeys(ev.x, ev.y)) armPick(ev)
                     ZONE_GRIP -> begin(ev, DRAG_MOVE, 0)
                     else -> begin(ev, DRAG_SIZE, z - ZONE_CORNER0)
                 }
                 if (mode != DRAG_NONE) return true
             } else if (mode != DRAG_NONE) { drag(ev); return true }
+            else if (pickArmed && watchPick(ev)) return true
             return super.dispatchTouchEvent(ev)
+        }
+
+        private fun armPick(ev: MotionEvent) {
+            pickArmed = true
+            pickDownTime = ev.downTime; pickDownRawX = ev.rawX; pickDownRawY = ev.rawY
+            pickX = ev.x; pickY = ev.y; pickRawX = ev.rawX; pickRawY = ev.rawY
+            postDelayed(pickRun, PICK_MS)
+        }
+
+        private fun disarmPick() { if (pickArmed) { pickArmed = false; removeCallbacks(pickRun) } }
+
+        /**
+         * The rest of a touch that went down on the panel: it ends the wait when the finger moves (a drag across a button is nobody's long press) or a second finger comes, and it picks the panel up when the
+         * event's OWN clock says the finger has been down long enough (events that reach a busy UI thread late: the timer alone would miss it). True when it picked the panel up with this event.
+         */
+        private fun watchPick(ev: MotionEvent): Boolean {
+            pickX = ev.x; pickY = ev.y; pickRawX = ev.rawX; pickRawY = ev.rawY
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP -> {
+                    if (Math.hypot((ev.rawX - pickDownRawX).toDouble(), (ev.rawY - pickDownRawY).toDouble()) > slop) { disarmPick(); return false }
+                    if (ev.eventTime - pickDownTime >= PICK_MS) {
+                        pickUp(ev.eventTime)
+                        if (ev.actionMasked == MotionEvent.ACTION_UP) drag(ev) // lifted without moving: the touch ends here, the panel stays where it is
+                        return true
+                    }
+                    if (ev.actionMasked == MotionEvent.ACTION_UP) disarmPick()
+                }
+                MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> disarmPick()
+            }
+            return false
+        }
+
+        /** The long press happened: the button or the bar under the finger is told its touch is over (it does not act when the finger lifts), and from now on the finger moves the panel. */
+        private fun pickUp(at: Long) {
+            disarmPick()
+            val cancel = MotionEvent.obtain(pickDownTime, at, MotionEvent.ACTION_CANCEL, pickX, pickY, 0)
+            super.dispatchTouchEvent(cancel); cancel.recycle()
+            parent?.requestDisallowInterceptTouchEvent(true)
+            cancelAnim(); panel.translationY = if (isOpen) 0f else panel.translationY
+            mode = DRAG_MOVE; corner = 0; moved = true
+            downRawX = pickRawX; downRawY = pickRawY; downAt = pickDownTime
+            right0 = effRight(); top0 = effTop(); w0 = gW; h0 = gH
+            gRight = right0; gTop = top0
+            setLifted(true)
+            performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            invalidate()
         }
 
         private fun begin(ev: MotionEvent, m: Int, c: Int) {
@@ -897,7 +959,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             downRawX = ev.rawX; downRawY = ev.rawY; downAt = ev.eventTime
             right0 = effRight(); top0 = effTop(); w0 = gW; h0 = gH
             gRight = right0; gTop = top0
-            if (m == DRAG_SIZE) resizing = true
+            if (m == DRAG_SIZE) resizing = true else setLifted(true)
             invalidate()
         }
 
@@ -937,17 +999,16 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             applyGeometry()
         }
 
+        /** The finger lifted (or the touch was taken away). The panel stays exactly where it was put: no snapping back to the corner (AY4, "floating"). A short tap on the grip closes the panel. */
         private fun finish(ev: MotionEvent) {
             val tap = !moved && ev.eventTime - downAt < ViewConfiguration.getTapTimeout() + 150
             val m = mode
             mode = DRAG_NONE
-            if (m == DRAG_MOVE) {
-                if (tap) { if (lastTapAt >= 0L && ev.eventTime - lastTapAt < DOUBLE_TAP_MS) { lastTapAt = -1L; dock() } else lastTapAt = ev.eventTime }
-                else if (Math.abs(gRight - DOCK_RIGHT_DP) <= SNAP_DP && Math.abs(gTop - HotCorner.SIZE_DP) <= SNAP_DP) dock() // let go near the corner: it docks again
-            }
+            if (m == DRAG_MOVE) setLifted(false)
             clampStored()
             if (m == DRAG_SIZE) { resizing = false; preparedFor = ""; post { prepareGlide() } }
             applyGeometry(); saveGeometry(); invalidate()
+            if (m == DRAG_MOVE && tap && ev.actionMasked == MotionEvent.ACTION_UP) setOpen(false, true)
         }
 
         override fun onDraw(c: Canvas) {
@@ -1378,9 +1439,11 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
     companion object {
         const val SLIDE_MS = 200L
-        /** Sliding over the space key: the finger must move this far sideways before it is a cursor slide and not a space, and every step of this width moves the cursor one character. */
-        /** A long press shows the panel with its top edge this far below the finger. */
+        /** A long press on open space shows the panel with its top edge this far below the finger. */
         const val SHOW_BELOW_DP = 26f
+        /** A finger that stays down this long on the panel (not on its keys) picks it up. Longer than any tap, shorter than the page's own long press. */
+        const val PICK_MS = 400L
+        /** Sliding over the space key: the finger must move this far sideways before it is a cursor slide and not a space, and every step of this width moves the cursor one character. */
         const val SLIDE_START_DP = 10f
         const val SLIDE_STEP_DP = 11f
         /** How long a pressed button, key or bar stays lit. */
@@ -1403,8 +1466,6 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         const val CORNER_ZONE_DP = 26
         const val GRIP_W_DP = 44
         const val GRIP_ZONE_HALF_DP = 56
-        /** Let go this close to the dock and the panel docks again. */
-        const val SNAP_DP = 40
         const val DOUBLE_TAP_MS = 350L
         private const val DRAG_NONE = 0
         private const val DRAG_MOVE = 1
