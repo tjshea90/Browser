@@ -571,6 +571,66 @@ class MiniNavTest {
         assertTrue("the kept words were learned: ${nav.glideLine()}", nav.glideLine().contains("learned 2 words"))
     }
 
+    // ------------------------------------------------------------------ the space key slides the text cursor (AY3, owner message 39)
+
+    /** A finger that goes down on the space key, slides [dxDp] sideways in a few steps and lifts. */
+    private fun slideSpace(dxDp: Float, steps: Int = 6) {
+        val (x, y) = nav.keyCenterForTest("space")!!
+        val dx = dxDp * d
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, x, y)
+        for (i in 1..steps) nav.touchKeysForTest(MotionEvent.ACTION_MOVE, x + dx * i / steps, y)
+        nav.touchKeysForTest(MotionEvent.ACTION_UP, x + dx, y)
+        idle(20)
+    }
+
+    @Test fun slidingOverTheSpaceKeyMovesTheCursorInTheAddressBarAndTypesNoSpace() {
+        openKeyboardWith(null)
+        for (ch in "hello") nav.pressKeyForTest(ch.toString())
+        assertEquals(5, nav.cursorForTest)
+        slideSpace(-34f) // about three characters to the left (one step is 11 dp, the slide starts after 10 dp)
+        assertEquals("no space was typed", "hello", nav.barTextForTest)
+        assertTrue("the cursor moved left: ${nav.cursorForTest}", nav.cursorForTest in 1..3)
+        val at = nav.cursorForTest
+        nav.pressKeyForTest("X")
+        assertEquals("typing goes in at the cursor", "hello".substring(0, at) + "X" + "hello".substring(at), nav.barTextForTest)
+        slideSpace(120f)
+        assertEquals("a long slide to the right stops at the end", nav.barTextForTest.length, nav.cursorForTest)
+    }
+
+    @Test fun aTapOnTheSpaceKeyStillTypesASpaceAndSoDoesATinyWiggle() {
+        openKeyboardWith(null)
+        nav.pressKeyForTest("a")
+        val (x, y) = nav.keyCenterForTest("space")!!
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, x, y); nav.touchKeysForTest(MotionEvent.ACTION_UP, x, y); idle(20)
+        assertEquals("a ", nav.barTextForTest)
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, x, y); nav.touchKeysForTest(MotionEvent.ACTION_MOVE, x + 4f * d, y); nav.touchKeysForTest(MotionEvent.ACTION_UP, x + 5f * d, y); idle(20)
+        assertEquals("a wiggle under the slide distance is still a space", "a  ", nav.barTextForTest)
+        assertEquals(3, nav.cursorForTest)
+    }
+
+    @Test fun slidingOverTheSpaceKeyMovesThePagesOwnCaretAndTheNextLettersGoThere() {
+        val f = FakeField(); openKeyboardWith(f)
+        nav.pressKeyForTest("a"); nav.pressKeyForTest("b")
+        slideSpace(-30f)
+        assertTrue("the page's caret moved left: ${f.log}", f.moved in -3..-1)
+        assertEquals("nothing was typed by the slide", listOf("+a", "+b", "cursor${f.moved}"), f.log.filter { !it.startsWith("cursor") || it == "cursor${f.moved}" }.let { l -> if (l.size > 3) l.take(3) else l })
+        assertEquals("the bar starts from an empty text again", "", nav.barTextForTest)
+        nav.pressKeyForTest("c")
+        assertEquals("c", nav.barTextForTest); assertEquals("+c", f.log.last())
+        slideSpace(40f)
+        assertTrue("and right again: ${f.moved}", f.moved > -3)
+    }
+
+    @Test fun theSlideOnTheSymbolsPageAndWithAGlideShownWorksToo() {
+        openGlideKeyboard()
+        glideWord("hello")                                // a word in the bar, with the guesses above the keys
+        slideSpace(-25f)
+        assertTrue("the guesses go away when the cursor moves", nav.candidatesForTest.isEmpty())
+        assertEquals("hello ", nav.barTextForTest)
+        nav.pressKeyForTest("\u232b")                    // Backspace now takes ONE character (the glide is no longer the last thing)
+        assertTrue(nav.barTextForTest, nav.barTextForTest.length == "hello ".length - 1)
+    }
+
     // ------------------------------------------------------------------ the shape of a glide is learned (AX1, owner message 38)
 
     private fun exportText(): String { var t = ""; nav.exportLearned { t = it }; return t }
