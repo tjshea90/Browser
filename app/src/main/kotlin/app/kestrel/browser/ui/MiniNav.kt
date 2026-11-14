@@ -169,14 +169,91 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         keyboardShowing = true
         keys.visibility = VISIBLE
         setPanelWidth(PANEL_KEYS_W_DP)
+        pendingWord = null
+        startGlideEngine()
         bar.invalidate(); keys.invalidate()
     }
 
     fun closeKeyboard() {
         if (!keyboardShowing) return
+        confirmGlide()
+        keys.reset()
         keyboardShowing = false
         keys.visibility = GONE
         setPanelWidth(PANEL_W_DP)
+        bar.invalidate()
+    }
+
+    // ------------------------------------------------------------------ glide typing (AT1)
+
+    /** Settings switched glide typing on or off: the strip above the keys appears or goes, and the keys' view changes height by it. */
+    fun setGlideEnabled(on: Boolean) {
+        if (on == glideOn) return
+        glideOn = on
+        val lp = keys.layoutParams
+        lp.height = context.dp(KEYS_H_DP + if (on) STRIP_H_DP else 0)
+        keys.layoutParams = lp
+        keys.reset()
+        if (keyboardShowing) { if (on) startGlideEngine(); keys.invalidate() }
+    }
+
+    /** What menu > Diagnostics shows for it. */
+    fun glideLine(): String = glide?.stats?.line() ?: "Glide typing: " + if (glideOn) "not used yet this run" else "off (Settings)"
+
+    private fun startGlideEngine() {
+        if (!glideOn) return
+        if (glide == null) {
+            glide = glideFactory?.invoke() ?: GlideTyping({ try { context.assets.open("glide/en.klx").use { it.readBytes() } } catch (e: Exception) { null } }, glideExec)
+            ownWords = UserWords.parse(l.navGlideWords())
+        }
+        prepareGlide()
+        if (!hostsAsked) { hostsAsked = true; l.navGlideHosts { hosts -> post { siteWords = hosts.mapNotNull { UserWords.wordOfHost(it) }.distinct().take(300); pushOwnWords() } } }
+        else pushOwnWords()
+    }
+
+    /** The decoder needs the real key positions: they are known once the keys view has a size (and again when it changes). */
+    internal fun prepareGlide() {
+        val g = glide ?: return
+        val k = keys.glideKeys() ?: return
+        g.prepare(k, l.navGlideHabit(), mergedWords())
+    }
+
+    private fun mergedWords(): UserWords {
+        val m = UserWords.parse(ownWords.serialize())
+        for (w in siteWords) m.add(w)
+        return m
+    }
+
+    private fun pushOwnWords() { glide?.ownWords(mergedWords()) }
+
+    /** The glide that was just put in stays: the decoder learns from it where this thumb lands (before the next glide is decoded: they share one thread, in order). */
+    private fun confirmGlide() {
+        val w = pendingWord ?: return
+        pendingWord = null
+        val g = glide ?: return
+        g.stats.onKept()
+        g.accepted(w) { h -> post { l.navGlideHabitChanged(h) } }
+    }
+
+    private fun glideDone(res: GlideResult) {
+        val g = glide ?: return
+        if (!keyboardShowing) return
+        val best = res.candidates.firstOrNull()
+        if (best == null) { keys.showNoWord(); return }
+        model.commitGlide(best.text)
+        pendingWord = best.text
+        keys.showCandidates(res.candidates.map { it.text })
+        bar.invalidate()
+    }
+
+    /** A candidate in the strip was tapped: it replaces the word the glide put in. */
+    private fun pickCandidate(word: String) {
+        val g = glide
+        if (!model.swapGlide(word)) return
+        pendingWord = null
+        g?.stats?.onPicked()
+        g?.accepted(word) { h -> post { l.navGlideHabitChanged(h) } }
+        keys.showCandidates(keys.candidateTexts().let { list -> listOf(word) + list.filter { it != word } }.take(3))
         bar.invalidate()
     }
 
@@ -189,9 +266,18 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     }
 
     private fun typed(key: Key) {
+        when (key) {
+            Key.Backspace -> if (model.glideActive) { pendingWord = null; glide?.stats?.onUndone() } // right after a glide: the word was wrong
+            Key.Shift, Key.ToLetters -> {}                                                       // the text does not change
+            else -> confirmGlide()                                                                // typing on, the symbols page or Go: the glided word stays
+        }
         when (val r = model.press(key)) {
-            is KeyResult.Submit -> { closeKeyboard(); l.navSubmit(r.text) }
-            KeyResult.None -> { bar.invalidate(); keys.invalidate() }
+            is KeyResult.Submit -> {
+                val typedWords = model.plainWords()
+                if (typedWords.isNotEmpty()) glide?.learnTyped(typedWords, ownWords) { text -> post { l.navGlideWordsChanged(text) } }
+                closeKeyboard(); l.navSubmit(r.text)
+            }
+            KeyResult.None -> { if (!model.glideActive) keys.clearCandidates(); bar.invalidate(); keys.invalidate() }
         }
     }
 
