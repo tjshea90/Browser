@@ -19,3 +19,9 @@ adlab.*##+js(set, entityOk, true)
 /r/clip.mp4$media,redirect=noopmp4-1s,domain=adlab.test
 /r/frame.html$subdocument,redirect=noopframe,domain=adlab.test
 /r/plain.js$script,domain=adlab.test
+! AW1e: rewriting what the page receives, and the small defusers
+adlab.test##+js(trusted-replace-fetch-response, '"adPlacements"', '"no_ads"', /r/player.json)
+adlab.test##+js(trusted-replace-xhr-response, '"adSlots"', '"no_slots"', /r/player.json)
+adlab.test##+js(nobab)
+adlab.test##+js(popads-dummy)
+adlab.test##+js(href-sanitizer, a#lnk, ?url)
