@@ -19,6 +19,27 @@ class BuildReport {
     /** RX3-B1: how many of the stored scriptlet calls are `trusted-*` ones, and per list how many `trusted-*` lines an untrusted list tried (they were skipped). */
     @JvmField var trustedScriptlets = 0
     @JvmField val untrustedByList = LinkedHashMap<String, Int>()
+    /** RX3-Y1: the scriptlet names no code of ours implements, with how many list lines used each (so Diagnostics can say what is still missing). */
+    @JvmField val unsupportedNames = HashMap<String, Int>()
+
+    /** The most used unsupported names, most first. */
+    fun topUnsupported(n: Int): List<Pair<String, Int>> = unsupportedNames.entries.sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key }).take(n).map { it.key to it.value }
+
+    /** One plain line for Diagnostics: what the last compile did with the scriptlet lines of the lists. */
+    fun scriptletSummary(): String {
+        val unsupported = skipped[Skip.SCRIPTLET_UNSUPPORTED.ordinal]
+        val untrusted = skipped[Skip.SCRIPTLET_UNTRUSTED.ordinal]
+        if (scriptlets == 0 && unsupported == 0 && untrusted == 0) return "Scriptlets in the lists: none"
+        val sb = StringBuilder("Scriptlets in the lists: ").append(scriptlets).append(" calls stored (").append(trustedScriptlets).append(" of them trusted-only)")
+        if (unsupported > 0) {
+            sb.append("; skipped: ").append(unsupported).append(" not supported (")
+            val top = topUnsupported(6)
+            for ((i, e) in top.withIndex()) { if (i > 0) sb.append(", "); sb.append(e.first.ifEmpty { "?" }).append(' ').append(e.second) }
+            sb.append(')')
+        } else if (untrusted > 0) sb.append("; skipped")
+        if (untrusted > 0) sb.append(if (unsupported > 0) ", " else ": ").append(untrusted).append(" from lists that are not trusted")
+        return sb.toString()
+    }
     @JvmField val skipped = IntArray(Skip.values().size)
 
     fun skippedCount(s: Skip): Int = skipped[s.ordinal]
@@ -138,6 +159,7 @@ class FilterSetBuilder {
         if (c == null) {
             report.skipped[parser.skip.ordinal]++
             if (parser.skip == Skip.SCRIPTLET_UNTRUSTED) report.untrustedByList[currentList] = (report.untrustedByList[currentList] ?: 0) + 1
+            if (parser.skip == Skip.SCRIPTLET_UNSUPPORTED && report.unsupportedNames.size < 400) report.unsupportedNames[parser.lastScriptlet] = (report.unsupportedNames[parser.lastScriptlet] ?: 0) + 1
             return
         }
         if (c.exception) {

@@ -150,6 +150,15 @@ internal object ScriptletRules {
      */
     private fun isTrustedName(canonicalName: String): Boolean = canonicalName.startsWith("trusted-")
 
+    /** The name of the call in [inner] as the list wrote it, lower case and without a `.js` suffix ("" when there is none): for the account of what was not understood. */
+    fun nameOf(inner: String): String {
+        val parts = splitArgs(inner) ?: return ""
+        if (parts.isEmpty()) return ""
+        var n = parts[0].trim().lowercase()
+        if (n.endsWith(".js")) n = n.substring(0, n.length - 3)
+        return n.take(48)
+    }
+
     /** True when the call in [inner] is one of OUR trusted-only scriptlets (so a skip is "not trusted", not "unsupported"). */
     fun needsTrust(inner: String): Boolean {
         val parts = splitArgs(inner) ?: return false

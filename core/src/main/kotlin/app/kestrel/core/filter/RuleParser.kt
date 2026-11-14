@@ -191,6 +191,9 @@ internal class RuleParser {
      * Parses `[domains]##selector` and `[domains]#@#selector`. Returns null (with [skip] set) for the unsupported procedural / HTML-filtering / CSS-injection forms and unsafe selectors. `+js(...)` scriptlet
      * calls (AW1b) need domains and are stored in their own form ([ScriptletRules]). Domains may be entity domains (`site.*`, AW1d) and may carry `~site.com` exclusions.
      */
+    /** The name of the last scriptlet call parsed (even when it was skipped): the build report counts what could not be used by name. */
+    var lastScriptlet = ""
+
     fun parseCosmetic(line: String, trusted: Boolean = false): CosmeticRule? {
         skip = Skip.NONE
         val i = line.indexOf('#')
@@ -212,6 +215,7 @@ internal class RuleParser {
         if (selector.startsWith("+js(")) {
             if (!selector.endsWith(")")) return fail2(Skip.SCRIPTLET_UNSUPPORTED)
             val inner = selector.substring(4, selector.length - 1)
+            lastScriptlet = ScriptletRules.nameOf(inner)
             selector = (if (inner.isBlank()) (if (exception) ScriptletRules.ALL_STORED else null) else ScriptletRules.encode(inner, trusted))
                 ?: return fail2(if (!trusted && ScriptletRules.needsTrust(inner)) Skip.SCRIPTLET_UNTRUSTED else Skip.SCRIPTLET_UNSUPPORTED)
             scriptlet = true

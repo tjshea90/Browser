@@ -317,4 +317,20 @@ class ScriptletRulesTest {
         assertNull("the trusted-only names stay closed to a list that is not trusted", ScriptletRules.encode("trusted-edit-inbound-object, JSON.stringify, 0, [?.a]", trusted = false))
         assertNull(ScriptletRules.encode("trusted-prevent-dom-bypass, Node.prototype.appendChild, fetch", trusted = false))
     }
+
+    @Test fun theBuildReportNamesWhatItCouldNotUseSoDiagnosticsCanSayIt() {
+        val b = FilterSetBuilder()
+        b.addAbpList("ubo-test", Category.ADS, sequenceOf(
+            "a.com##+js(nowoif)", "b.com##+js(trusted-replace-fetch-response, /a/, b, /api)",
+            "c.com##+js(xml-prune, //x)", "d.com##+js(xml-prune, //y)", "e.com##+js(XML-Prune.js, //z)", "f.com##+js(trusted-create-html, a, b)", "g.com##+js(set, only)",
+        ), trusted = true)
+        b.addAbpList("easy-test", Category.ADS, sequenceOf("h.com##+js(trusted-set-cookie, a, b)", "i.com##+js(trusted-set-cookie, c, d)", "j.com##+js(aopr, x)"))
+        assertEquals(listOf("xml-prune" to 3, "set" to 1, "trusted-create-html" to 1), b.report.topUnsupported(5).sortedWith(compareByDescending<Pair<String, Int>> { it.second }.thenBy { it.first }))
+        val line = b.report.scriptletSummary()
+        assertTrue(line, line.startsWith("Scriptlets in the lists: 3 calls stored (1 of them trusted-only)"))
+        assertTrue(line, line.contains("skipped: 5 not supported (xml-prune 3, "))
+        assertTrue(line, line.contains("2 from lists that are not trusted"))
+        assertTrue("one line, plain ASCII", line.none { it == '\n' || it.code > 126 })
+        assertEquals("a list with no scriptlets at all says so", "Scriptlets in the lists: none", FilterSetBuilder().let { it.addAbpList("x", Category.ADS, sequenceOf("||a.example^")); it.report.scriptletSummary() })
+    }
 }
