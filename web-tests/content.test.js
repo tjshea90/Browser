@@ -502,7 +502,23 @@ test('scriptlets: when the page library says it is ready after our answer, the c
   assert.equal((await page.evaluate(() => window.__sl)).length, 2);
   await page.evaluate(() => document.dispatchEvent(new CustomEvent('__kst_sl_n_v1', { detail: '3:1' })));
   const rep = await page.evaluate(() => window.__msgs.filter((m) => m.k === 'sl'));
-  assert.deepEqual(rep, [{ k: 'sl', r: '3:1', h: 'site.example' }]);
+  assert.deepEqual(rep, [{ k: 'sl', r: '3:1', h: 'site.example', f: 1 }]);
+});
+
+test('scriptlets: the report of an EARLY run (before the CSS answer exists) reaches the extension; only the first report of a page counts the page', async () => {
+  const page = await open('<div>a</div>', [(a) => {
+    window.__sl = [];
+    document.addEventListener('__kst_sl_v1', (e) => window.__sl.push(String(e.detail)), true);
+    // the extension's own answer is slow: the library of the page has already run the early calls and reported
+    window.browser.runtime.sendMessage = (m) => { window.__msgs.push(m); return new Promise(() => {}); };
+    setTimeout(() => {
+      document.dispatchEvent(new CustomEvent('__kst_sl_n_v1', { detail: '4:0:1' }));
+      document.dispatchEvent(new CustomEvent('__kst_sl_n_v1', { detail: '1:0:0' }));
+    }, 50);
+  }, null]);
+  await page.waitForTimeout(300);
+  const rep = await page.evaluate(() => window.__msgs.filter((m) => m.k === 'sl'));
+  assert.deepEqual(rep, [{ k: 'sl', r: '4:0:1', h: 'site.example', f: 1 }, { k: 'sl', r: '1:0:0', h: 'site.example', f: 0 }]);
 });
 
 test('scriptlets: an answer without the comment sends nothing, and a broken comment never breaks the page', async () => {

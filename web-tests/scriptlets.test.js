@@ -247,14 +247,51 @@ test('abort-on-stack-trace: only a read made under a function with the needle in
 test('robustness: bad calls and bad JSON are ignored, one failing call does not stop the others, the same calls run once, the page is told how it went', async () => {
   const page = await open([['no-such-scriptlet', 'x'], 'not even an array', ['set', 'good', 'true'], ['nostif', '[unclosed'], ['aopr']], '<script>window.__g = window.good</script>');
   assert.equal(await ev(page, () => window.__g), true);
-  assert.deepEqual(await ev(page, () => window.__n), ['3:2']);
+  assert.deepEqual(await ev(page, () => window.__n), ['3:2:1'], 'ran:threw:before any page script');
   const bad = await open('{{{', '<script>window.__x = 1</script>');
   assert.equal(await ev(bad, () => window.__x), 1);
   assert.deepEqual(await ev(bad, () => window.__n), []);
   // the same payload sent again (a second answer for the same page) is not run twice
   const twice = await open([['set', 'once', '1']], '');
   await twice.evaluate(() => document.dispatchEvent(new CustomEvent('__kst_sl_v1', { detail: '[["set","once","1"]]' })));
-  assert.deepEqual(await ev(twice, () => window.__n), ['1:0']);
+  assert.deepEqual(await ev(twice, () => window.__n), ['1:0:1']);
+});
+
+test('early delivery: every CALL runs once however it is sent; a message with only known calls reports nothing, one with a new call reports just that one', async () => {
+  const page = await open([['set', 'a', '1'], ['set', 'b', '2']], '<script>window.__a = window.a; window.__b = window.b</script>');
+  assert.deepEqual(await ev(page, () => window.__n), ['2:0:1']);
+  await page.evaluate(() => {
+    document.dispatchEvent(new CustomEvent('__kst_sl_v1', { detail: '[["set","b","2"],["set","a","1"]]' })); // all known (the late hand-off after an early run)
+    document.dispatchEvent(new CustomEvent('__kst_sl_v1', { detail: '[["set","b","2"],["set","c","3"]]' })); // one new
+  });
+  assert.deepEqual(await ev(page, () => window.__n), ['2:0:1', '1:0:0']);
+  assert.equal(await ev(page, () => window.c), 3);
+});
+
+test('early delivery: the report says whether the calls ran before the first script of the page', async () => {
+  const early = await open([['nowoif']], '<script>window.__x = 1</script>');
+  assert.deepEqual(await ev(early, () => window.__n), ['1:0:1']);
+  // the same calls arriving after the page's own scripts were parsed (the late hand-off) are marked as late
+  const context = await browser.newContext();
+  await context.route('https://**/*', (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><html><head><title>t</title><script>window.__first = 1</script></head><body></body></html>' }));
+  const late = await context.newPage();
+  await late.addInitScript({ content: LIB });
+  await late.addInitScript(() => { window.__n = []; document.addEventListener('__kst_sl_n_v1', (e) => window.__n.push(String(e.detail)), true); });
+  await late.goto('https://site.example/');
+  await late.evaluate(() => document.dispatchEvent(new CustomEvent('__kst_sl_v1', { detail: '[["nowoif"]]' })));
+  assert.deepEqual(await ev(late, () => window.__n), ['1:0:0']);
+});
+
+test('early delivery: a page that fires our event over and over cannot make the library run more than 300 distinct calls', async () => {
+  const page = await open(null, '');
+  await page.evaluate(() => {
+    for (let i = 0; i < 20; i++) {
+      const calls = []; for (let j = 0; j < 60; j++) calls.push(['set', 'v' + i + '_' + j, '1']);
+      document.dispatchEvent(new CustomEvent('__kst_sl_v1', { detail: JSON.stringify(calls) }));
+    }
+  });
+  const ran = (await ev(page, () => window.__n)).map((r) => parseInt(r.split(':')[0], 10)).reduce((a, b) => a + b, 0);
+  assert.equal(ran, 300);
 });
 
 test('nothing leaks onto the page: one marker property, no globals added by the library', async () => {
