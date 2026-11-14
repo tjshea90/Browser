@@ -147,7 +147,7 @@ function jwskip() {
     var b = document.createElement('div'); b.className = 'jw-skip jw-reset'; b.style.cssText = 'position:absolute;right:4px;bottom:4px;width:80px;height:30px;background:#333';
     ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function (n) { b.addEventListener(n, function (e) { if (b.classList.contains('jw-skippable')) seen.push(n + (e.isTrusted ? '(trusted)' : '')); }); });
     var pressed = false;
-    b.addEventListener('click', function () { if (b.classList.contains('jw-skippable')) pressed = true; });
+    b.addEventListener('click', function () { if (b.classList.contains('jw-skippable')) { pressed = true; r.classList.remove('jw-flag-ads'); v.pause(); } });   // a real player ends the ad here
     r.appendChild(b);
     var t0 = Date.now();
     return v.play().catch(function () {}).then(function () { return sleep(1500); }).then(function () {

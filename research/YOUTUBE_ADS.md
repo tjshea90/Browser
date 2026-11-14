@@ -70,5 +70,17 @@ IMA's own sdkloader file holds no UI class names (the UI is loaded later in fram
 ### 6.3 What is NOT known
 A real ad from these players was never seen (the sandbox gets none): the mocks only prove the script does what this section says when the class names above appear. Whether Gecko 160 lets a content script set `playbackRate` / `muted` / `currentTime` on a page's video and dispatch mouse events to the player's own listeners is shown on the emulator lab (see section 6.4 when it exists) and otherwise by the owner's Diagnostics line on the tablet.
 
-### 6.4 Emulator proof
-(pending: lab page `/playerlab` in tools/sitelab/guardlab.py, see TASKS RX3-G7)
+### 6.4 Emulator proof (2026-11-14; Android 10 x86_64 emulator, GeckoView 160 debug build, software rendering: NOT the tablet, timings only show the order of magnitude)
+Lab: `tools/sitelab/guardlab.py` page `/playerlab` (five mock players on one page, every ad a REAL 12 s silent media element, driven by the page itself) + `tools/emu/playerlab_emu.py` (cold start from a link, prints what the page measured and the app's Health lines).
+| Scenario | Without the skipper the ad takes | Measured in the real engine | Verdict |
+| :- | :- | :- | :- |
+| ordinary video, no ad words | - | never at 16x in 163 samples, still playing | untouched |
+| JW-style root with `jw-flag-ads` (first ever ad of the page, 2.8 s to the first fast sample = the first question to the app on a slow emulator) | 12000 ms | warm-up ad 3423 ms; the next JW ad 886 ms (first fast sample after 485 ms) | fast-forwarded |
+| Video.js-style: `vjs-ad-loading` only, then `vjs-ad-playing` | 12000 ms | waiting state: 0 of 9 samples at 16x; the ad 780 ms | waiting ignored, ad skipped |
+| Google-IMA-style: ad video inside `.ima-ad-container`, the film video beside it | 12000 ms | ad 1137 ms; the film video: 0 of 15 samples at 16x, still playing | only the ad touched |
+| JW-style `.jw-skip` that becomes `.jw-skippable` after 1.5 s | never ends (the lab loops it) | pressed by the script 4012 ms after the ad began, never before it was skippable; the page's listeners got pointerdown, mousedown, pointerup, mouseup, click | pressed once |
+App side (Health, same run): `ad skippers: asked 1, allowed 1, reports 6` in the extension line, `ads report-in ... kept`, `playerads report ads=2 skipped=1 ... jumps=1`: the numbers reach the app and the Diagnostics line "Other players' ads". The `gaveUp=1 an ad was still showing after 15 s` in the same run is the lab's last scenario, which leaves its ad class on after the click (fixed in the lab since).
+What this proves: in Gecko 160 a content script sees a video's `play`, watches the ancestors' class, sets `playbackRate`, `muted` and `currentTime` on a page's video, and its dispatched mouse events reach the page's own listeners. It does NOT prove what a real JW / Video.js / IMA ad does (none was available), nor the tablet's speed.
+### 6.5 Two defects the emulator found before release (both fixed, both with a test)
+1. The first version followed at most 4 videos per page; in the lab the ad video was the 5th to play and was ignored (ad took 13102 ms). Now 12, and a video that is paused or ended is forgotten first (`web-tests/players.test.js` "a page with many videos" fails with the old cap).
+2. The report relay named the page only from the tab map, which does not know the FIRST page after a cold start (or a restored tab nobody navigated); the app then dropped every report as "private or unknown page". This also hid the YouTube skipper's numbers in alpha41. The relay now falls back to the top frame's own address (`background.test.js` RX3-G7). Frames of such a tab still name no page and are dropped (the safe side).
