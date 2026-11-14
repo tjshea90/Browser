@@ -71,7 +71,7 @@ Work order: M (process) and R (research, in parallel) -> A (speed, freeze, secur
 - [ ] OWNER UI-2: look. Default: "CERE" (slate neutrals + one cere-yellow accent, flat, chamfered corners; research/UI_BENCHMARK.md section 6). Alternatives: RUFOUS (safer, warm), STOOP (HUD style).
 - [ ] OWNER UI-3: landscape tabs. Default: tab strip on top. Alternative: a 56 dp left tab rail.
 - [ ] OWNER SEC-1: private release key (the public dev key lets anyone sign an update to the owner's app): needs GitHub secrets + a reviewer-gated environment; research/SECURITY.md B1-B3. Needs the owner at github.com.
-- [ ] OWNER LIC-1: project licence (research recommends GPLv3-or-later because the filter lists and uBO scriptlets are GPL) and the default of a labelled YouTube-ads switch (YouTube forbids circumventing its ads).
+- [ ] OWNER LIC-1: project licence (research recommends GPLv3-or-later because the filter lists and uBO scriptlets are GPL) and the default of a labelled YouTube-ads switch (YouTube forbids circumventing its ads). - YouTube part DECIDED by the owner 2026-11-14 (INBOX): YouTube ads blocked and skipped, default ON; the project-licence part stays open.
 - [~] OWNER TEST-1 (owner 2026-11-11: "So far I like alpha 3." - no freeze reported yet, not explicitly confirmed): alpha3 on the tablet: type for a while (address bar, Claude.ai, forms): does the screen still freeze? If yes: Menu > Diagnostics > Refresh screen, then Copy/Share the report.
 
 ## Owner request 3, 2026-11-11 (verbatim in INBOX.md; "So far I like alpha 3.") - work order: UI shell (N2-N5) -> updater (N1) -> alpha4 -> downloads (N6) -> alpha5 -> the rest (N7)
