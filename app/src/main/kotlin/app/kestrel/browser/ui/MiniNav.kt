@@ -319,6 +319,12 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     internal fun pressKeyForTest(label: String): Boolean = keys.pressLabel(label)
     internal fun pressBarForTest() = bar.tap()
     internal fun pressToggleForTest() = toggle.tap()
+    /** Tests: a finger on the keys view (pixels of that view), the way the screen would send it. */
+    internal fun touchKeysForTest(action: Int, x: Float, y: Float) = keys.touch(action, x, y)
+    internal fun keyCenterForTest(label: String): Pair<Float, Float>? = keys.centerOf(label)
+    internal fun chipCenterForTest(i: Int): Pair<Float, Float>? = keys.chipCenter(i)
+    internal val candidatesForTest: List<String> get() = keys.candidateTexts()
+    internal val keysHeightForTest: Int get() = keys.layoutParams.height
     /** Tests: a finger goes down and up on a button (so it lights up and acts), the way a touch would. */
     internal fun tapNavForTest(which: String) {
         val b = when (which) { "back" -> back; "home" -> home; else -> forward }
@@ -482,23 +488,56 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         override fun performClick(): Boolean { tap(); return super.performClick() }
     }
 
-    /** The keys, drawn and hit-tested by one view (no view per key). A key lights up in the accent for [FLASH_MS] when pressed; Backspace repeats while held. */
+    /**
+     * The keys, drawn and hit-tested by one view (no view per key). A key lights up in the accent for [FLASH_MS] when pressed; Backspace repeats while held. With glide typing on, a strip of guesses sits
+     * above the keys, and a finger that slides off the letter it went down on draws a word: a neon trail follows it, and on lift the path goes to the decoder.
+     */
     private inner class KeysView(ctx: Context) : View(ctx) {
         var onKey: ((Key) -> Unit)? = null
         private val handler = Handler(Looper.getMainLooper())
         private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+        private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
         private val text = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; typeface = Typeface.DEFAULT }
         private val box = RectF()
         private var rowsFor = -1
         private var rows: List<List<KeySpec>> = emptyList()
-        private var rects: List<List<RectF>> = emptyList()
-        private var rectsW = -1; private var rectsH = -1
+        private var rects: List<List<KeyBox>> = emptyList()
+        private var rectsW = -1; private var rectsH = -1; private var rectsTop = -1f
         private var down: KeySpec? = null
         private var litKey: KeySpec? = null
         private val unlight = Runnable { litKey = null; invalidate() }
         private val repeat = object : Runnable { override fun run() { down?.key?.let { onKey?.invoke(it) }; handler.postDelayed(this, REPEAT_MS) } }
 
+        // ---- glide
+        private var armed = false                 // the finger went down on a letter: it may turn into a glide
+        private var gliding = false
+        private var glideDown: KeySpec? = null
+        private var downBox: KeyBox? = null
+        private var gx = FloatArray(256); private var gy = FloatArray(256); private var gn = 0
+        private var fadeStart = 0L
+        private var cands: List<String> = emptyList()
+        private var noWordUntil = 0L
+        private var stripDown = -1
+        private val chipRects = ArrayList<RectF>()
+        private val trail = Path()
+        private val trailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
+        private val fadeStep = object : Runnable {
+            override fun run() {
+                if (SystemClock.uptimeMillis() - fadeStart < TRAIL_FADE_MS) { invalidate(); postOnAnimation(this) } else { gn = 0; fadeStart = 0L; invalidate() }
+            }
+        }
+        private val noWordOff = Runnable { noWordUntil = 0L; invalidate() }
+
         init { contentDescription = "Keyboard"; isClickable = true }
+
+        /** Everything in flight stops (the keyboard closed, or glide typing was switched). */
+        fun reset() {
+            handler.removeCallbacks(repeat); handler.removeCallbacks(unlight); handler.removeCallbacks(noWordOff); removeCallbacks(fadeStep)
+            down = null; litKey = null; armed = false; gliding = false; gn = 0; fadeStart = 0L; cands = emptyList(); noWordUntil = 0L; stripDown = -1
+            invalidate()
+        }
+
+        private fun stripPx() = if (glideOn) context.dpf(STRIP_H_DP.toFloat()) else 0f
 
         private fun rowsNow(): List<List<KeySpec>> {
             val k = (if (model.symbols) 1 else 0) or (if (model.shift) 2 else 0)
@@ -508,20 +547,19 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
         private fun layoutKeys() {
             val rs = rowsNow()
-            if (rectsW == width && rectsH == height && rects.isNotEmpty()) return
-            rectsW = width; rectsH = height
-            val gap = context.dpf(3f)
-            val rowH = (height - gap * (rs.size - 1)) / rs.size
-            val out = ArrayList<List<RectF>>()
-            for ((i, row) in rs.withIndex()) {
-                val total = row.sumOf { it.weight.toDouble() }.toFloat()
-                val unit = (width - gap * (row.size - 1)) / total
-                var x = 0f
-                val line = ArrayList<RectF>()
-                for (k in row) { val w = k.weight * unit; line.add(RectF(x, i * (rowH + gap), x + w, i * (rowH + gap) + rowH)); x += w + gap }
-                out.add(line)
-            }
-            rects = out
+            val top = stripPx()
+            if (rectsW == width && rectsH == height && rectsTop == top && rects.isNotEmpty()) return
+            val sizeChanged = rectsW != width || rectsH != height || rectsTop != top
+            rectsW = width; rectsH = height; rectsTop = top
+            rects = MiniKeyboardGeometry.boxes(rs, width.toFloat(), height.toFloat(), context.dpf(3f), top)
+            if (sizeChanged && glideOn && glide != null) post { prepareGlide() } // the decoder needs the real key positions
+        }
+
+        /** The 26 letter keys' centres as laid out now (the same function that draws them), for the decoder. */
+        fun glideKeys(): GlideKeys? {
+            if (width <= 0 || height <= 0) return null
+            val letters = MiniKeyboardLayout.rows(false)
+            return try { GlideKeys.from(letters, MiniKeyboardGeometry.boxes(letters, width.toFloat(), height.toFloat(), context.dpf(3f), stripPx())) } catch (e: IllegalArgumentException) { null }
         }
 
         private fun keyAt(x: Float, y: Float): KeySpec? {
@@ -530,20 +568,139 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             // between two keys: the nearest one in that row, so a thumb that lands on a gap still types
             for ((i, row) in rects.withIndex()) if (y >= row[0].top - context.dpf(1.5f) && y <= row[0].bottom + context.dpf(1.5f)) {
                 var best: KeySpec? = null; var bestD = Float.MAX_VALUE
-                for ((j, r) in row.withIndex()) { val k = rows[i][j]; if (k.key == null) continue; val d = Math.abs(x - r.centerX()); if (d < bestD) { bestD = d; best = k } }
+                for ((j, r) in row.withIndex()) { val k = rows[i][j]; if (k.key == null) continue; val d = Math.abs(x - r.centerX); if (d < bestD) { bestD = d; best = k } }
                 return best
             }
             return null
         }
 
+        private fun boxOf(k: KeySpec?): KeyBox? {
+            if (k == null) return null
+            for ((i, row) in rows.withIndex()) for ((j, s) in row.withIndex()) if (s === k) return rects[i][j]
+            return null
+        }
+
+        private fun isLetter(k: KeySpec?): Boolean { val c = (k?.key as? Key.Ch)?.text ?: return false; return c.length == 1 && c[0].lowercaseChar() in 'a'..'z' }
+
+        private fun pitch(): Float = if (rects.isNotEmpty() && rects[0].size > 1) rects[0][1].centerX - rects[0][0].centerX else context.dpf(29f)
+
         private fun light(k: KeySpec?) { litKey = k; invalidate(); handler.removeCallbacks(unlight); if (k != null) handler.postDelayed(unlight, FLASH_MS) }
+
+        // ------------------------------------------------------------------ the strip of guesses
+
+        fun showCandidates(list: List<String>) { cands = list; noWordUntil = 0L; invalidate() }
+        fun clearCandidates() { if (cands.isNotEmpty() || noWordUntil != 0L) { cands = emptyList(); noWordUntil = 0L; invalidate() } }
+        fun showNoWord() { cands = emptyList(); noWordUntil = SystemClock.uptimeMillis() + NO_WORD_MS; handler.removeCallbacks(noWordOff); handler.postDelayed(noWordOff, NO_WORD_MS); invalidate() }
+        fun candidateTexts(): List<String> = cands
+
+        private fun chipAt(x: Float, y: Float): Int {
+            if (y >= stripPx() || cands.isEmpty()) return -1
+            val gap = context.dpf(3f)
+            for ((i, r) in chipRects.withIndex()) if (x >= r.left - gap / 2 && x < r.right + gap / 2) return i
+            return -1
+        }
+
+        private fun drawStrip(c: Canvas) {
+            val h = stripPx(); if (h <= 0f) return
+            val gap = context.dpf(3f)
+            chipRects.clear()
+            val now = SystemClock.uptimeMillis()
+            text.textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 13f, resources.displayMetrics)
+            val fm = text.fontMetrics
+            val list = cands
+            if (list.isEmpty()) {
+                val miss = now < noWordUntil
+                val msg = if (miss) "no word fits - try again" else if (model.symbols) "" else "slide over the letters to type a word"
+                if (msg.isEmpty()) return
+                text.color = if (miss) pal.accent else pal.muted
+                text.textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 12f, resources.displayMetrics)
+                c.drawText(TextUtils.ellipsize(msg, text, width - context.dpf(8f), TextUtils.TruncateAt.END).toString(), width / 2f, (h - gap) / 2f - (fm.ascent + fm.descent) / 2f, text)
+                return
+            }
+            val n = list.size
+            val cw = (width - gap * (n - 1)) / n
+            val r = context.dpf(6f)
+            for ((i, w) in list.withIndex()) {
+                val rect = RectF(i * (cw + gap), 0f, i * (cw + gap) + cw, h - gap)
+                chipRects.add(rect)
+                fill.color = if (i == stripDown) (pal.accent and 0x00FFFFFF) or 0xAA000000.toInt() else 0xFF0E171E.toInt()
+                c.drawRoundRect(rect, r, r, fill)
+                line.strokeWidth = context.dpf(if (i == 0) 1.2f else 1f); line.color = if (i == 0) pal.accent else pal.deep
+                box.set(rect); box.inset(context.dpf(0.6f), context.dpf(0.6f))
+                c.drawRoundRect(box, r, r, line)
+                text.color = if (i == stripDown) pal.accentHi else if (i == 0) pal.accentHi else pal.fg
+                c.drawText(TextUtils.ellipsize(w, text, cw - context.dpf(8f), TextUtils.TruncateAt.END).toString(), rect.centerX(), rect.centerY() - (fm.ascent + fm.descent) / 2f, text)
+            }
+        }
+
+        // ------------------------------------------------------------------ the trail
+
+        private fun addPoint(x: Float, y: Float) {
+            if (gn == gx.size) { if (gn >= MAX_TRAIL_POINTS) return; gx = gx.copyOf(gn * 2); gy = gy.copyOf(gn * 2) }
+            gx[gn] = x; gy[gn] = y; gn++
+        }
+
+        private fun addMotion(e: MotionEvent) {
+            for (h in 0 until e.historySize) addPoint(e.getHistoricalX(h), e.getHistoricalY(h))
+            addPoint(e.x, e.y)
+        }
+
+        private fun pathPitches(): Float {
+            var len = 0f
+            for (i in 1 until gn) len += Math.hypot((gx[i] - gx[i - 1]).toDouble(), (gy[i] - gy[i - 1]).toDouble()).toFloat()
+            return len / pitch()
+        }
+
+        private fun drawTrail(c: Canvas) {
+            if (gn < 2) return
+            val alpha = if (gliding || fadeStart == 0L) 1f else (1f - (SystemClock.uptimeMillis() - fadeStart).toFloat() / TRAIL_FADE_MS).coerceIn(0f, 1f)
+            if (alpha <= 0f) return
+            trail.reset(); trail.moveTo(gx[0], gy[0])
+            for (i in 1 until gn) trail.lineTo(gx[i], gy[i])
+            trailPaint.strokeWidth = context.dpf(8f); trailPaint.color = (pal.accent and 0x00FFFFFF) or ((80 * alpha).toInt() shl 24); c.drawPath(trail, trailPaint)
+            trailPaint.strokeWidth = context.dpf(2.5f); trailPaint.color = (pal.accentHi and 0x00FFFFFF) or ((240 * alpha).toInt() shl 24); c.drawPath(trail, trailPaint)
+        }
+
+        private fun leftTheKey(x: Float, y: Float): Boolean {
+            val b = downBox ?: return false
+            val slop = pitch() * GLIDE_SLOP
+            return x < b.left - slop || x > b.right + slop || y < b.top - slop || y > b.bottom + slop
+        }
+
+        private fun beginGlide() {
+            gliding = true
+            glideDown = down
+            down = null
+            handler.removeCallbacks(repeat); handler.removeCallbacks(unlight)
+            litKey = null
+            removeCallbacks(fadeStep); fadeStart = 0L
+        }
+
+        private fun endGlide() {
+            gliding = false; armed = false
+            if (pathPitches() < MIN_GLIDE_PITCHES) { // a tap that slid a little: the key it went down on
+                val k = glideDown
+                gn = 0; glideDown = null; invalidate()
+                if (k?.key != null) { light(k); onKey?.invoke(k.key!!) }
+                return
+            }
+            glideDown = null
+            fadeStart = SystemClock.uptimeMillis(); postOnAnimation(fadeStep)
+            val g = glide
+            if (g == null) return
+            confirmGlide() // the glide before this one stays: learn from it first (one thread, in order)
+            g.decode(gx, gy, gn, model.previousWord()) { res -> post { glideDone(res) } }
+        }
+
+        // ------------------------------------------------------------------ draw and touch
 
         override fun onDraw(c: Canvas) {
             layoutKeys()
             val r = context.dpf(6f)
             for ((i, row) in rows.withIndex()) for ((j, k) in row.withIndex()) {
                 val key = k.key ?: continue
-                box.set(rects[i][j])
+                val kb = rects[i][j]
+                box.set(kb.left, kb.top, kb.right, kb.bottom)
                 val isLit = k === litKey
                 val special = key !is Key.Ch || k.label.length > 1
                 fill.color = when {
@@ -559,22 +716,48 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                 val fm = text.fontMetrics
                 c.drawText(k.label, box.centerX(), box.centerY() - (fm.ascent + fm.descent) / 2f, text)
             }
+            drawStrip(c)
+            drawTrail(c)
         }
 
         override fun onTouchEvent(e: MotionEvent): Boolean {
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                    layoutKeys()
+                    armed = false; gliding = false; stripDown = -1
+                    if (glideOn && e.y < stripPx()) { stripDown = chipAt(e.x, e.y); invalidate(); return true } // a guess in the strip was touched
+                    removeCallbacks(fadeStep); gn = 0; fadeStart = 0L
                     down = keyAt(e.x, e.y); light(down)
                     if (down?.key === Key.Backspace) { onKey?.invoke(Key.Backspace); handler.postDelayed(repeat, REPEAT_FIRST_MS) }
+                    if (glideOn && !model.symbols && isLetter(down)) { armed = true; downBox = boxOf(down); addPoint(e.x, e.y) }
                 }
-                MotionEvent.ACTION_MOVE -> { val k = keyAt(e.x, e.y); if (k !== down) { down = k; handler.removeCallbacks(repeat); light(k) } }
+                MotionEvent.ACTION_MOVE -> {
+                    if (stripDown >= 0) return true
+                    if (armed) {
+                        addMotion(e)
+                        if (!gliding && leftTheKey(e.x, e.y)) beginGlide()
+                        if (gliding) { invalidate(); return true }
+                    }
+                    val k = keyAt(e.x, e.y); if (k !== down) { down = k; handler.removeCallbacks(repeat); light(k) }
+                }
                 MotionEvent.ACTION_UP -> {
+                    if (stripDown >= 0) {
+                        val i = chipAt(e.x, e.y); val was = stripDown; stripDown = -1; invalidate()
+                        if (i == was && i in cands.indices) pickCandidate(cands[i])
+                        return true
+                    }
+                    if (gliding) { addMotion(e); endGlide(); return true }
+                    armed = false
                     val k = keyAt(e.x, e.y)
                     handler.removeCallbacks(repeat)
                     if (k != null && k === down && k.key !== Key.Backspace) { light(k); onKey?.invoke(k.key!!) }
-                    down = null
+                    down = null; gn = 0
                 }
-                MotionEvent.ACTION_CANCEL -> { handler.removeCallbacks(repeat); down = null }
+                MotionEvent.ACTION_CANCEL -> {
+                    handler.removeCallbacks(repeat); down = null; armed = false; stripDown = -1
+                    if (gliding) { gliding = false; fadeStart = SystemClock.uptimeMillis(); postOnAnimation(fadeStep) }
+                }
             }
             return true
         }
@@ -585,6 +768,18 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             light(k); onKey?.invoke(k.key!!)
             return true
         }
+
+        /** Tests: the centre of the key labelled [label] in this view's pixels. */
+        fun centerOf(label: String): Pair<Float, Float>? {
+            layoutKeys()
+            for ((i, row) in rows.withIndex()) for ((j, k) in row.withIndex()) if (k.label == label && k.key != null) return rects[i][j].centerX to rects[i][j].centerY
+            return null
+        }
+
+        /** Tests: the centre of the i-th guess in the strip. */
+        fun chipCenter(i: Int): Pair<Float, Float>? { val r = chipRects.getOrNull(i) ?: return null; return r.centerX() to r.centerY() }
+
+        fun touch(action: Int, x: Float, y: Float) { val t = SystemClock.uptimeMillis(); val e = MotionEvent.obtain(t, t, action, x, y, 0); dispatchTouchEvent(e); e.recycle() }
 
         override fun performClick(): Boolean = super.performClick()
     }
@@ -603,5 +798,14 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         const val NAV_H_DP = 42
         const val BAR_H_DP = 34
         const val KEYS_H_DP = 161
+        /** The strip of guesses above the keys (glide typing on). */
+        const val STRIP_H_DP = 30
+        /** A finger that leaves the key it went down on by this many pitches has started a glide. */
+        const val GLIDE_SLOP = 0.18f
+        /** A path shorter than this (in key pitches) is a tap that slid a little, not a glide. */
+        const val MIN_GLIDE_PITCHES = 1.2f
+        const val TRAIL_FADE_MS = 260L
+        const val NO_WORD_MS = 1500L
+        private const val MAX_TRAIL_POINTS = 4096
     }
 }
