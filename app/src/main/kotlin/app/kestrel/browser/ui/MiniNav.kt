@@ -44,6 +44,9 @@ import java.util.concurrent.Executors
  * OFF (the system's animation scale would make a system animator jump straight to its end; the neon glow already works the same way, see [Neon]). Android's own keyboard cannot be moved by an app, so the
  * keyboard here is the app's own ([KeysView] over [MiniKeyboardModel] in the core module). The page below keeps every touch outside the panel's own views.
  *
+ * AU1 (owner message 35: "make the top right slide down box ... have no visible button at all"): the small tab is gone. A long press on the invisible square in the top right corner of the page ([HotCorner])
+ * slides the panel open, and a long press on the same square (it sits ABOVE the open panel) slides it closed; [toggle] is what that calls.
+ *
  * Glide typing (AT1, owner message 34: "glide typing like Gboard ... make the glide word predictions accurate"): a finger that slides off the key it went down on draws a word over the letters;
  * on lift the core decoder (core/input/glide) turns the path into words, the best goes into the bar with a space after it and the next two show in a strip above the keys.
  */

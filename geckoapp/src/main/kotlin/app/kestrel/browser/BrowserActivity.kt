@@ -161,6 +161,27 @@ open class BrowserActivity : Activity(), DockListener {
             }
         }
     }
+    /** AU1: the browser itself is in front (no screen, sheet, tab grid or full-screen video over the page): the only time the invisible corner acts. */
+    private fun browserInFront(): Boolean =
+        !fullscreenOn && tabGrid.visibility != View.VISIBLE && !sheet.isShowing && listOf<View?>(downloadsView, diagView, settingsView, listPanel).none { it != null && it.parent === root }
+
+    private val hotCornerHost = object : app.kestrel.browser.ui.HotCorner.Host {
+        override fun zone(): IntArray? {
+            if (!::miniNav.isInitialized || !miniNav.available || !browserInFront()) return null
+            val loc = IntArray(2); content.getLocationInWindow(loc)
+            val s = dp(app.kestrel.browser.ui.HotCorner.SIZE_DP)
+            return intArrayOf(loc[0] + content.width - s, loc[1], loc[0] + content.width, loc[1] + s)
+        }
+        override fun fired(downTime: Long, x: Float, y: Float) {
+            // the page was given the touch-down: tell it the touch is over, so its own long press (context menu, text selection) never starts
+            val cancel = android.view.MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), android.view.MotionEvent.ACTION_CANCEL, x, y, 0)
+            window.superDispatchTouchEvent(cancel); cancel.recycle()
+            root.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            miniNav.toggle()
+        }
+    }
+    private val hotCorner by lazy { app.kestrel.browser.ui.HotCorner(Io.main, touchSlop.toFloat(), hotCornerHost) }
+
     private lateinit var restoreOverlay: RestoreOverlay // over the page view while a page whose engine process died comes back (last preview instead of white)
     private var restoringTab: Tab? = null
     // ---- the last look (EY-1, research/REVIEW-EXTERNAL-2.md section 3.3): the page as it was left, sharp, in the first frame of a start while the live page loads under it. It rides on the restoring cover
@@ -390,6 +411,7 @@ open class BrowserActivity : Activity(), DockListener {
      * must never share frames with our glow. [lastTouchAt] also keeps the post-load preview capture (a GPU read-back) away from a scroll in progress.
      */
     override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        if (hotCorner.observe(ev)) return true // AU1: the long press in the corner already fired: the page has been told the touch is over and must not see the rest of it
         when (ev.actionMasked) {
             android.view.MotionEvent.ACTION_DOWN -> {
                 Neon.touching(true)
@@ -528,7 +550,7 @@ open class BrowserActivity : Activity(), DockListener {
         app.kestrel.browser.diag.DebugProps.get(this, "debug.kestrel.chipms")?.toLongOrNull()?.let { blockedChip.lifetimeMs = it.coerceIn(200L, 60_000L) } // emulator rig only: a release build always gets null
         content.addView(blockedChip, FrameLayout.LayoutParams(dp(app.kestrel.browser.ui.BlockedChip.TOUCH_DP), dp(app.kestrel.browser.ui.BlockedChip.TOUCH_DP), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(6) })
         miniNav = app.kestrel.browser.ui.MiniNav(this, pal, miniNavListener)
-        content.addView(miniNav, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply { topMargin = dp(4); rightMargin = dp(6) })
+        content.addView(miniNav, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply { topMargin = 0; rightMargin = dp(6) })
         miniNav.available = prefs.miniNavToggle
         miniNav.setGlideEnabled(prefs.glideTyping)
         miniNav.setOpen(prefs.miniNavOpen, animate = false, notify = false)
