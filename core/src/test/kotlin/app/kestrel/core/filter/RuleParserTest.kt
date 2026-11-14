@@ -67,7 +67,11 @@ class RuleParserTest {
         assertEquals(1, r.exclude!!.size)
         assertEquals(Hash.h64("a.com"), r.include!![0])
         assertEquals(Hash.h64("b.com"), r.exclude!![0])
-        assertEquals(Skip.ENTITY_DOMAIN, skipOf("||e.com^\$domain=google.*"))
+        // AW1d: `site.*` is understood (hashed as written); a star anywhere else still is not
+        val ent = net("||e.com^\$domain=google.*|~mail.google.*")!!
+        assertEquals(Hash.h64("google.*"), ent.include!![0]); assertEquals(Hash.h64("mail.google.*"), ent.exclude!![0])
+        assertEquals(Skip.ENTITY_DOMAIN, skipOf("||e.com^\$domain=*.google.com"))
+        assertEquals(Skip.ENTITY_DOMAIN, skipOf("||e.com^\$domain=google.*.uk"))
     }
 
     @Test

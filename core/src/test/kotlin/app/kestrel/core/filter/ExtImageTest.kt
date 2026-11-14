@@ -40,6 +40,9 @@ class ExtImageTest {
         "||redir.test^\$script,redirect=noopjs", "||redir.test/pix^\$image,redirect=1x1.gif", "/redir-path/*.js\$script,redirect=noopjs:10", "||ro.test^\$script", "||ro.test^\$redirect-rule=noopjs",
         "||ro2.test^\$redirect-rule=noopjs", "||impr.test^\$important,redirect=noopmp4-1s", "||excr.test^\$redirect=noopjs", "@@||excr.test/ok^", "||unk.test^\$redirect=no-such-resource",
         "||ruk.test^\$redirect-rule=no-such-resource", "||dr.test^\$script,redirect=noopjs", "||dr.test/b^\$script,redirect=nooptext", "||ro3.test/p^\$redirect-rule=1x1.gif", "||ro3.test^\$image",
+        // AW1d: `$domain=site.*` - any public suffix (the page hosts of this corpus include news.site.co.uk, img.site.co.uk, user.github.io, www.ck, foo.ck, x.y.kobe.jp ...)
+        "/ent-a.js\$script,domain=site.*", "/ent-b.js\$domain=github.*|other.example", "/ent-c.js\$domain=site.*|~news.site.*", "/ent-d.js\$domain=~site.*", "/ent-e.js\$domain=user.*", "/ent-f.js\$domain=example.*|~www.example.*",
+        "/ent-g.js\$domain=foo.*", "/ent-h.js\$domain=y.kobe.*", "/ent-i.js\$domain=a.*|b.*",
     )
 
     private val hosts = listOf(
@@ -169,13 +172,14 @@ class ExtImageTest {
             }
         }
         // AW1c: the stand-in cases with EVERY request type, with and without a page (the random draws above would only hit a few of them)
-        for (u in standInUrls) for (t in types) for (page in listOf<String?>(null, "page.example")) {
+        for (u in standInUrls) for (t in types) for (page in listOf<String?>(null, "page.example", "news.site.co.uk", "site.com", "www.site.org", "user.github.io", "foo.ck", "x.y.kobe.jp", "www.example.com", "www.example.org", "a.b.example.co.uk", "localhost", "1.2.3.4")) {
             sb.append(u).append('\t').append(t).append('\t').append(page ?: "").append('\t').append(fs.check(u, page, t, psl)).append('\n')
         }
         return sb.toString()
     }
 
     private val standInUrls = listOf(
+        "https://x.net/ent-a.js", "https://x.net/ent-b.js", "https://x.net/ent-c.js", "https://x.net/ent-d.js", "https://x.net/ent-e.js", "https://x.net/ent-f.js", "https://x.net/ent-g.js", "https://x.net/ent-h.js", "https://x.net/ent-i.js",
         "https://redir.test/a.js", "https://redir.test/pix/a.gif", "https://x.net/redir-path/lib.js", "https://x.net/redir-path/lib.js?v=2", "https://ro.test/a.js", "https://ro.test/a.gif", "https://ro2.test/a.js",
         "https://impr.test/v.mp4", "https://excr.test/a.js", "https://excr.test/ok/a.js", "https://unk.test/a.js", "https://ruk.test/a.js", "https://dr.test/b/x.js", "https://dr.test/a.js", "https://ro3.test/p/x.gif",
         "https://ro3.test/q/x.gif",

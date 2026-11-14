@@ -224,12 +224,35 @@ var KestrelEngine = (function () {
               if (dot < 0) break;
               start = dot + 1;
             }
+            pushEntityHashes(h, a);
           }
           if (h) { lastHashHost = h; lastHashes = a; }
         }
         cPageHashes = a;
       }
       return a;
+    }
+    // AW1d: an entry `site.*` of $domain= matches the page whatever the public suffix: for "www.site.co.uk" the hashes of "www.site.*" and "site.*" (the labels before the public suffix, each
+    // suffix of them followed by ".*"); exactly CosmeticIndex.entityKeys
+    function pushEntityHashes(h, a) {
+      if (h.length === 0 || h.indexOf(':') >= 0) return;
+      var numeric = true;
+      for (var i = 0; i < h.length; i++) { var c = h.charCodeAt(i); if (c !== 46 && (c < 48 || c > 57)) { numeric = false; break; } }
+      if (numeric) return;
+      var site = siteOf(h);
+      if (site === null || site === undefined) return;
+      var dot = site.indexOf('.');
+      if (dot <= 0) return;
+      var prefixEnd = h.length - (site.length - dot - 1) - 1; // the host without ".<public suffix>"
+      if (prefixEnd <= 0 || prefixEnd > h.length) return;
+      var start = 0;
+      for (;;) {
+        var key = h.substring(start, prefixEnd) + '.*';
+        h64(key, 0, key.length); a.push(hHi, hLo);
+        var d = h.indexOf('.', start);
+        if (d < 0 || d + 1 >= prefixEnd) break;
+        start = d + 1;
+      }
     }
     function pageHas(a, hi, lo) { for (var k = 0; k < a.length; k += 2) if (a[k] === hi && a[k + 1] === lo) return true; return false; }
 
