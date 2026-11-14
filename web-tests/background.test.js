@@ -1029,3 +1029,70 @@ test('stand-ins: the Diagnostics numbers count the files answered with a stand-i
   await h.flushTimers();
   assert.match(h.of('st').map((m) => m.w).join(' | '), /2 blocked files answered with a stand-in/);
 });
+
+// ---------------------------------------------------------------- RX3-BK1 / RX3-BK2 (research/REVIEW-EXTERNAL-3.md section 3): the Back lab's signals and the place question
+
+test('RX3-BK2: the place question of a reloaded page is relayed to the app and its answer comes back; frames and senders without a tab get nothing', async () => {
+  const h = harness((m) => (m.k === 'bk' ? (m.p === PAGE ? '1200' : null) : standardApp()(m)));
+  const r = h.message({ k: 'bk', p: PAGE }, 1, PAGE, 0);
+  assert.ok(isPromise(r), 'an answer is promised to the page');
+  assert.equal(await r, '1200');
+  assert.equal(await h.message({ k: 'bk', p: 'https://other.test/' }, 1, PAGE, 0), '', 'nothing armed for that page, or a reply that is not text: an empty answer');
+  assert.equal(h.message({ k: 'bk', p: PAGE }, 1, PAGE, 3), undefined, 'an iframe never asks');
+  assert.equal(h.message({ k: 'bk', p: PAGE }, -1, PAGE, 0), undefined, 'not from a tab');
+  assert.equal(h.of('bk')[0].p, PAGE);
+});
+
+test('RX3-BK1: the show report is forwarded with its five fields only, from the top frame only', async () => {
+  const h = harness(standardApp());
+  h.message({ k: 'bf', p: PAGE, ps: 1, nt: 'back_forward', ts: 4096.7, y: 640.2, junk: 'x'.repeat(5000) }, 1, PAGE, 0);
+  h.message({ k: 'bf', p: PAGE, ps: 0, nt: 'back_forward', ts: 1, y: 0 }, 1, PAGE, 2); // a frame
+  await tick(20);
+  eq(h.of('bf'), [{ k: 'bf', p: PAGE, ps: 1, nt: 'back_forward', ts: 4096, y: 640 }]);
+});
+
+test('RX3-BK1: a main page that forbids caching (Cache-Control: no-store) is reported once; other responses and other pages are not', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '5' });
+  const res = (type, url, id, headers) => h.listeners.headers({ tabId: 1, frameId: 0, type, url, statusCode: 200, requestId: id, responseHeaders: headers });
+  res('main_frame', PAGE, '5', [{ name: 'Content-Type', value: 'text/html' }, { name: 'Cache-Control', value: 'private, No-Store, max-age=0' }]);
+  res('xmlhttprequest', 'https://example.com/api', '6', [{ name: 'Cache-Control', value: 'no-store' }]);            // a sub-resource: not the page
+  res('main_frame', 'https://example.com/ok', '7', [{ name: 'Cache-Control', value: 'max-age=60' }]);               // cacheable: nothing to say
+  res('main_frame', 'https://example.com/old', '3', [{ name: 'Cache-Control', value: 'no-store' }]);                // an answer for a document the tab already left
+  await tick(20);
+  eq(h.of('ns').map((m) => m.p), [PAGE]);
+});
+
+test('RX3-BK1: a page left with requests still pending is reported once with how many; a page that finished is not', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '5' });
+  for (let i = 0; i < 5; i++) h.req('script', PLAIN + '?' + i, PAGE);
+  h.listeners.completed({ tabId: 1, requestId: '6', type: 'script', url: PLAIN + '?0', statusCode: 200 });
+  h.listeners.completed({ tabId: 1, requestId: '7', type: 'script', url: PLAIN + '?1', statusCode: 200 });
+  h.listeners.error({ tabId: 1, requestId: '8', type: 'script', url: PLAIN + '?2', error: 'NS_BINDING_ABORTED' });   // an aborted request is no longer pending either
+  h.mainFrame('https://example.com/next', { requestId: '20' });
+  await tick(20);
+  const p = h.of('pend');
+  assert.equal(p.length, 1);
+  assert.equal(p[0].n, 2);
+  assert.equal(p[0].p, PAGE);
+  // the next page finishes everything it started: leaving it says nothing
+  h.req('script', PLAIN + '?z', 'https://example.com/next');
+  h.listeners.completed({ tabId: 1, requestId: '21', type: 'script', url: PLAIN + '?z', statusCode: 200 });
+  h.mainFrame('https://example.com/third', { requestId: '30' });
+  await tick(20);
+  assert.equal(h.of('pend').length, 1);
+});
+
+test('RX3-BK1: an answer to a request of the page the tab already left does not count as one of the new page', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '5' });
+  h.req('script', PLAIN + '?a', PAGE);
+  h.mainFrame('https://example.com/next', { requestId: '20' });
+  h.req('script', PLAIN + '?b', 'https://example.com/next');
+  h.listeners.completed({ tabId: 1, requestId: '6', type: 'script', url: PLAIN + '?a', statusCode: 200 }); // belongs to the old document (id 6 < 20)
+  h.mainFrame('https://example.com/third', { requestId: '30' });
+  await tick(20);
+  const p = h.of('pend');
+  assert.equal(p.filter((m) => m.p === 'https://example.com/next')[0].n, 1, 'the late answer of the old page did not hide the new page\'s own pending request');
+});
