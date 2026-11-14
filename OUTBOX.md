@@ -1941,3 +1941,36 @@
 ## 2026-11-14T19:08:23Z
 > Understood: all four are approved, plus YouTube ad skipping and blocking. I'll also add the Back-button request and make the file say exactly what the other session must do and where to save things. I'll start with what the other session changed, since the start-up sync merged its newest checkpoint into my tree, so I can re-verify my line references against the current code.
 <!-- sha:23c113a9061a -->
+
+## 2026-11-14T19:24:07Z
+> I've rewritten the file as v2, and it replaces the first one. It's still a read-only review: I changed nothing in the repo and didn't touch the other session's branch. I ran nothing on your tablet. I only read code, plus the public uBlock Origin list data, which I copied into a folder next to the repo, not inside it.
+>
+> **What the file now tells the other session to do:** the top of the file is a "START HERE" block with ten exact steps.
+> - It saves the file as `research/REVIEW-EXTERNAL-3.md`, in the repo.
+> - It pastes the task list at the end of `TASKS.md`, quoting your words, before any code.
+> - It runs the checkpoint command with the exact text to use.
+> - It finishes its current long-press panel work (AY1–AY5) and ships alpha40 first.
+> - It then does your Back request, then YouTube, then everything else, in a set order.
+> - It names which research file each kind of finding goes into.
+> - It includes a short, plain-words message for the other session to send you.
+>
+> All you do is upload the file; there's nothing else to tell it.
+>
+> **Your decisions are recorded as approved:** the extra tracker lists, the stricter pop-up and redirect wall, pausing the glow during video, ad skipping in video players by default, and YouTube ad blocking and skipping. The YouTube answer also closes the YouTube part of the open licence question (LIC-1).
+>
+> **New Back-button section** (your request, in your words):
+> - **How Back works today:** the engine keeps recent pages in memory, so Back is instant when it can use them. When it can't, the app puts a saved picture over the page until the page first paints. The app never checks that the scroll position came back.
+> - **Why Back often reloads:** the engine can't keep pages that were still loading when you left, pages that tell the browser not to store them, or video-player pages. On a slow hotspot the first group is probably common, but that's a guess until it's measured.
+> - **What the file asks for:** first, measure why Back reloads. Then remember the scroll position for each history entry. Then keep the picture up until the page is both painted and back at its place, and ask the page to scroll if the engine didn't.
+> - **One honest limit:** pages that forbid storing can't be cached, so for those the best possible is the exact saved view instantly with the loaded page landing at the same place.
+> - **One question I left open:** whether Back may be made instant for such pages on sites you pick. Doing so keeps a copy of them on the tablet. Nothing gets built until you answer.
+>
+> **New YouTube section:** I read the live YouTube rules from today's uBlock Origin lists and compared them with what the app can run.
+> - **Desktop YouTube:** of 34 rules that apply, the app drops 9. Those include the parts that answer YouTube's "fake buffering" enforcement.
+> - **Mobile YouTube (what this tablet gets by default):** of 11 rules, the app drops 1.
+> - **What the file asks for:** finish the missing rule types (for trusted lists only), add a built-in ad skipper that works even when the lists lag, and build a test lab. Real YouTube was never reached from here, so the file says plainly that it may still warn or limit playback.
+>
+> I also corrected one description of how the cold-start picture hides, and updated every code reference to the latest code. The start-up sync had pulled the other session's newest work into my own branch.
+>
+> The one thing still waiting on you is the Back question above.
+<!-- sha:713c03f96a39 -->
