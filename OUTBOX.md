@@ -1659,3 +1659,26 @@
 >
 > Next I'll add a memory-per-process line to Diagnostics. Then I'll wait for what you find on the tablet.
 <!-- sha:f23ef84c6210 -->
+
+## 2026-11-14T03:06:43Z
+> Glide typing for the mini keyboard is built and tested, but it isn't on your tablet yet. Alpha34 is still building on GitHub (about 8 minutes). When the build is green I'll record the release and send you the download link.
+>
+> What I've checked so far, all in simulation or on the emulator, not on your tablet:
+> - **Real finger on the emulator:** I injected a real touch path over the keys. Gliding "hello" typed `hello ` with guesses `hello | help | jello`, and "world" after it typed `hello world `. Tapping a guess swapped the word, one Backspace removed the whole word, and a glowing trail showed mid-glide.
+> - **Simulated finger:** a typical thumb gets the right word first about 91% of the time and within the three guesses about 97%. A sloppy thumb gets about 81% and 93%. With the previous word known, a typical thumb gets about 97% first. That simulated thumb is my own model, not recorded data from a real thumb.
+> - **Tests and lint:** all of them pass, including the page-script tests.
+>
+> How it behaves:
+> - Slide over a word's letters and lift. The word is typed with a space, and the two next-best guesses show above the keys.
+> - A plain tap still types a letter.
+> - It learns how your thumb lands beside the keys, the words you type that it didn't know, and the names of sites you visit, so a name like doraby can be glided.
+> - Settings > Appearance turns it off.
+>
+> One thing the tablet will settle: on the emulator each glide took 0.7 to 1.7 seconds, but that emulator has no hardware acceleration. My estimate for the tablet is 15 to 30 ms, which I haven't measured.
+>
+> Questions for you:
+> - Spanish: the word list is English only, so a Spanish word will glide into the nearest English word. Do you type Spanish words (pelisjuanita.com is Spanish)? If yes, I'd add a Spanish list.
+> - Bigger keyboard: widening the keyboard by a quarter gains about 2 points of first-guess accuracy for a loose finger. Want a "larger mini keyboard" setting?
+>
+> After a day of use, paste Menu > Diagnostics > Copy. Its new "Glide typing" line shows how often the first guess was kept, swapped or deleted.
+<!-- sha:633372788832 -->
