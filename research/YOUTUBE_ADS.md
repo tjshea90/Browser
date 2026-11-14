@@ -47,3 +47,28 @@ Result with `dQw4w9WgXcQ`:
 | www.youtube.com | 28 calls (incl. the 3.5 KB `rpnt`, 4 `trusted-edit-inbound-object`, 2 `trusted-prevent-dom-bypass`, `trusted-replace-*`) | 28 : 0 : 1 | OK | playing, 14.8 s | none |
 What it shows: the real list lines compile (31 lines, all accepted), every call of the real payloads runs on the real sites without throwing, early, and the player still plays. What it cannot show: the rules REMOVING real ads. A signed-out headless visitor gets no ad slots (the answers seen held none), and the page answers a baseline load with YouTube's bot challenge page ("solveSimpleChallenge is not defined") or a sign-in demand for some videos and sessions, so a before/after comparison was not possible; the baseline numbers are therefore not claimed. Chromium is not Gecko.
 Still open for RX3-Y3: emulator lab pages for the JSON edit engine in Gecko (the rules can be exercised on a lab host with `host##+js(json-edit-fetch-response, ...)` lines), a selector table filled from a real ad, and the owner's Diagnostics lines (`YouTube ads`, `YouTube scriptlet calls loaded`, the scriptlet line).
+
+## 6. RX3-G7 - the ad skipper for video players other than YouTube (alpha42)
+Row: RX3-G7 (owner: "yes to all four", part (d) skip ads inside video players by default). File: `geckoapp/src/main/assets/kestrel-shields/players.js` (isolated world, every http(s) page and frame, `document_start`, `exclude_matches` the three YouTube host families that `youtube.js` owns). Tests: `web-tests/players.test.js` (13, real headless Chromium, mock players), `web-tests/background.test.js` (manifest + report relay), core `AdSkipStatsTest`.
+
+### 6.1 The class names, READ in the players' own public source (2026-11-14), not remembered
+The review listed `jw-flag-ads`, `vjs-ad-playing`, `vjs-ad-loading`, `ima-ad-container`, `plyr--ad`. The sources (jsdelivr / the JW CDN, kept outside the repo) say:
+| Player (version read) | What its source does while an ad plays | Used by players.js |
+| :- | :- | :- |
+| Video.js + videojs-contrib-ads 7.5.2 | `player.addClass('vjs-ad-playing')` in `startLinearAdMode`, removed when the ad ends; `vjs-ad-loading` while it WAITS for the ad (no ad stream yet); `vjs-ad-content-resuming` while the film comes back | `vjs-ad-playing` = an ad. The other two are waiting states: ignored (nothing to skip, and muting the film then would be wrong) |
+| JW Player 8.33.1 | adds `jw-flag-ads` to its root when the instream (ad) is set up, removes `jw-flag-ads` and `jw-flag-ads-hide-controls` when it ends; the skip button is a `div.jw-skip` that gets `jw-skippable` once the wait is over; its click is wired through the player's own UI helper | `jw-flag-ads` = an ad; press `.jw-skip.jw-skippable` (pointerdown, mousedown, pointerup, mouseup, click: the helper may listen to the up event) |
+| Google IMA through videojs-ima 2.3.0 | the ad container is `div.ima-ad-container` (absolute, z-index 1111); the SDK's own ad UI (skip, learn more) is Google's and mostly sits in cross-origin frames | a `<video>` INSIDE `ima-ad-container` is the ad. Its skip button cannot be reached |
+| Plyr 3.7.8 | NO state class on the root: the ads plugin gives IMA a `div.plyr__ads` container (`classNames.ads`). `plyr--ad` from the review does not exist | a `<video>` inside `plyr__ads` is the ad |
+IMA's own sdkloader file holds no UI class names (the UI is loaded later in frames), so `videoAdUi*` names from memory were NOT used.
+
+### 6.2 What it does, and what it refuses to do
+- No work until a `<video>` fires `play`; then only the `class` attribute of its ancestors (8 levels, never body) is watched, one observer, no polling. The app (the `guard` question) is asked only the first time an ad word shows: a page without ad words never causes a message. Answer must carry `skip === true` (Settings row on AND Shields up for the site).
+- While an ad word shows AND the element holds a stream that is NOT the film (a hosted ad video, or a finite stream whose length differs from the film's remembered length by more than 0.5 s; a live stream counts as the film): mute, 16x, move an ad stream shorter than 3 minutes to its last 0.1 s after 300 ms, press the skip button. Loop 250 ms, 15 s at most. When the stream is still the film nothing is touched (the class can arrive before the ad stream). Sound and speed are put back at the end unless the page changed them.
+- Five ads in a row still showing after 15 s switch it off for that frame. Reports are numbers plus a few words with `w:'p'`; Diagnostics has its own line "Other players' ads: ...".
+- A known soft spot of the YouTube skipper (youtube.js) that this script does NOT share: youtube.js applies mute and 16x as soon as the ad class shows, even if the element still holds the film. YouTube sets the class and loads the ad stream together and the film is paused then, so it is judged harmless; if Diagnostics ever shows "gave up" on YouTube, apply the same "not the film" test there (row RX3-Y4 area).
+
+### 6.3 What is NOT known
+A real ad from these players was never seen (the sandbox gets none): the mocks only prove the script does what this section says when the class names above appear. Whether Gecko 160 lets a content script set `playbackRate` / `muted` / `currentTime` on a page's video and dispatch mouse events to the player's own listeners is shown on the emulator lab (see section 6.4 when it exists) and otherwise by the owner's Diagnostics line on the tablet.
+
+### 6.4 Emulator proof
+(pending: lab page `/playerlab` in tools/sitelab/guardlab.py, see TASKS RX3-G7)
