@@ -151,6 +151,34 @@ class ScriptletRulesTest {
         assertTrue(p.all { it.code in 0x20..0x7e })
     }
 
+    @Test fun theTextReplacingAndTheSmallDefusersAreUnderstood() {
+        val fs = set(
+            "youtube.com##+js(trusted-rpfr, '\"adPlacements\"', '\"no_ads\"', player?)",
+            "youtube.com##+js(trusted-replace-xhr-response, /\"adPlacements.*?(\"adSlots\"|\"adBreakHeartbeatParams\")/gms, \$1, /\\/player(?:\\?.+)?\$/)",
+            "x.com##+js(trusted-replace-fetch-response, /a\\,b/g, , /api)",
+            "bab.example##+js(nobab)", "fab.example##+js(nofab)", "pop.example##+js(popads-dummy)", "raf.example##+js(norafif, exoframe)", "raf2.example##+js(no-requestAnimationFrame-if, exoframe)",
+            "link.example##+js(href-sanitizer, a[href*=\"&url=\"], &url)", "link2.example##+js(href-sanitizer, a[href^=\"https://x/\"], ?url -base64)",
+        )
+        fun names(h: String) = fs.scriptletsFor(h).map { ScriptletRules.decode(it)!! }
+        val yt = names("youtube.com")
+        assertEquals(listOf("trusted-replace-fetch-response", "trusted-replace-xhr-response"), yt.map { it.name })
+        assertEquals(listOf("\"adPlacements\"", "\"no_ads\"", "player?"), yt[0].args)
+        assertEquals("the regular expression keeps its flags and its group reference", "/\"adPlacements.*?(\"adSlots\"|\"adBreakHeartbeatParams\")/gms", yt[1].args[0])
+        assertEquals(\$"1".length, yt[1].args[1].length); assertEquals("\$1", yt[1].args[1])
+        assertEquals(listOf("/a,b/g", "", "/api"), names("x.com")[0].args)
+        assertEquals(listOf("nobab"), names("bab.example").map { it.name }); assertEquals(listOf("nobab"), names("fab.example").map { it.name })
+        assertEquals(listOf("popads-dummy"), names("pop.example").map { it.name })
+        assertEquals(listOf("norafif"), names("raf.example").map { it.name }); assertEquals(listOf("norafif"), names("raf2.example").map { it.name })
+        assertEquals(listOf("href-sanitizer"), names("link.example").map { it.name })
+        assertEquals(listOf("a[href^=\"https://x/\"]", "?url -base64"), names("link2.example")[0].args)
+    }
+
+    @Test fun theNewNamesNeedTheirArgumentsToMeanSomething() {
+        val fs = set("a.com##+js(norafif)", "b.com##+js(href-sanitizer)", "c.com##+js(trusted-rpfr)", "d.com##+js(trusted-rpfr, /x/g)", "e.com##+js(trusted-replace-xhr-response, , y)")
+        for (h in listOf("a.com", "b.com", "c.com", "e.com")) assertTrue("$h: a call that would act on everything is not stored", fs.scriptletsFor(h).isEmpty())
+        assertTrue("one argument is not enough for a replacement", fs.scriptletsFor("d.com").isEmpty())
+    }
+
     @Test fun theBuildReportCountsWhatItTookAndWhatItSkipped() {
         val b = FilterSetBuilder()
         b.addAbpList("t", Category.ADS, sequenceOf("a.com##+js(nowoif)", "a.com##+js(aopr, x)", "##+js(nowoif)", "a.com##+js(unknown-one, x)", "a.com##+js(set, only)"))

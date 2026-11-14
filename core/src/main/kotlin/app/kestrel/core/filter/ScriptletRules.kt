@@ -46,6 +46,11 @@ internal object ScriptletRules {
         "noeval" to Need.NONE, "noeval-if" to Need.ONE,
         "no-fetch-if" to Need.ONE, "no-xhr-if" to Need.ONE,
         "json-prune" to Need.ONE, "json-prune-fetch-response" to Need.ONE, "json-prune-xhr-response" to Need.ONE,
+        // AW1e: the text of an answer rewritten (pattern, replacement - may be empty -, which requests); how current lists cut the ad fields out of a video player's data and a feed's sponsored entries
+        "trusted-replace-fetch-response" to Need.TWO, "trusted-replace-xhr-response" to Need.TWO,
+        "nobab" to Need.NONE, "popads-dummy" to Need.NONE,       // BlockAdBlock / FuckAdBlock say "no blocker"; a pop-under network's globals exist and are empty
+        "norafif" to Need.ONE,                                    // requestAnimationFrame callbacks that hold the needle (without one it would stop every animation)
+        "href-sanitizer" to Need.ONE,                             // selector, [source]: a redirector link points at its target
         "ra" to Need.ONE, "rc" to Need.ONE,
         "rmnt" to Need.TWO, "rpnt" to Need.TWO,  // node name, text
         "nowebrtc" to Need.NONE,
@@ -64,6 +69,7 @@ internal object ScriptletRules {
         "silent-noeval" to "noeval", "no-eval" to "noeval",
         "remove-attr" to "ra", "remove-class" to "rc", "remove-node-text" to "rmnt", "replace-node-text" to "rpnt",
         "no-webrtc" to "nowebrtc", "cookie-remover" to "remove-cookie",
+        "trusted-rpfr" to "trusted-replace-fetch-response", "nofab" to "nobab", "bab-defuser" to "nobab", "no-requestanimationframe-if" to "norafif",
     )
 
     /** The canonical name for a name written in a list (case-insensitive, an old `.js` suffix allowed), or null when it is not one of ours. */
