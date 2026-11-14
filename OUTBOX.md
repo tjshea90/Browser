@@ -1502,3 +1502,12 @@
 ## 2026-11-14T00:31:13Z
 > Waiting for the clean-start Diagnostics check; the emulator is the only thing running.
 <!-- sha:5229903bd36e -->
+
+## 2026-11-14T00:46:29Z
+> Alpha33 is built and tested here, and its GitHub build is still running (the first checks passed). Test results:
+> - Unit tests: 819 in `core`, 223 in `app`.
+> - Lint and the Gecko compile: clean.
+> - Page-script tests: 150 of 150 pass.
+>
+> When the run is green I'll record the release and send you the link and the full answer to your last few messages.
+<!-- sha:234f9ace80d6 -->
