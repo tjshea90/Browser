@@ -82,7 +82,9 @@ class MiniKeyboardModel {
         when (key) {
             is Key.Ch -> {
                 val t = if (shift && key.text.length == 1) key.text.uppercase() else key.text
-                text = if (allSelected) t else (text + t).take(MAX_CHARS)
+                // right after a glide the word has a space after it: a full stop, a comma, a slash, ".com" ... closes the word instead of standing after the space ("doraby" ".com" = "doraby.com")
+                val glideSpace = !allSelected && glideTail?.endsWith(" ") == true && text.endsWith(" ") && key.text in CLOSES_WORD
+                text = if (allSelected) t else ((if (glideSpace) text.dropLast(1) else text) + t).take(MAX_CHARS)
                 allSelected = false
                 shift = false
                 glideTail = null
@@ -158,5 +160,9 @@ class MiniKeyboardModel {
     /** Plain words in what is typed (for the words the keyboard remembers): letters only, three to 24 of them. */
     fun plainWords(): List<String> = text.split(' ').map { it.lowercase() }.filter { w -> w.length in 3..24 && w.all { it in 'a'..'z' } }
 
-    companion object { const val MAX_CHARS = 2048 }
+    companion object {
+        const val MAX_CHARS = 2048
+        /** Keys that join the word before them: right after a glide they take away the space the glide added. */
+        val CLOSES_WORD: Set<String> = setOf(".", ",", "?", "!", ":", ";", "/", ".com", ")", "'", "-", "_", "@", "%")
+    }
 }

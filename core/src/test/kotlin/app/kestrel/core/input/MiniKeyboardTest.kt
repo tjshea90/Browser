@@ -190,5 +190,37 @@ class MiniKeyboardTest {
         for (c in "doraby.com/movie") m.press(Key.Ch(c.toString()))
         assertTrue(m.typedPairs().isEmpty())
     }
+
+    // ------------------------------------------------------------------ smart spacing after a glide (AV3b)
+
+    @Test fun aGlidedWordThenDotComIsOneAddressNotTwoWords() {
+        val m = MiniKeyboardModel(); m.open("")
+        m.commitGlide("doraby"); assertEquals("doraby ", m.text)
+        m.press(Key.Ch(".com"))
+        assertEquals("doraby.com", m.text)
+    }
+
+    @Test fun punctuationAfterAGlideTakesAwayItsSpaceAndTheNextGlideAddsOneBack() {
+        val m = MiniKeyboardModel(); m.open("")
+        m.commitGlide("hello"); m.press(Key.Ch(","))
+        assertEquals("hello,", m.text)
+        m.commitGlide("world"); assertEquals("hello, world ", m.text)
+        m.press(Key.Ch("!")); assertEquals("hello, world!", m.text)
+    }
+
+    @Test fun aSpaceTypedByHandIsNotEatenAndNeitherIsLetterTyping() {
+        val m = MiniKeyboardModel(); m.open("")
+        for (c in "go ") m.press(Key.Ch(c.toString()))
+        m.press(Key.Ch(".")); assertEquals("go .", m.text) // a space the person typed stays
+        val n = MiniKeyboardModel(); n.open("")
+        n.commitGlide("hello"); n.press(Key.Ch("w")); assertEquals("hello w", n.text) // a letter after a glide keeps the space
+    }
+
+    @Test fun aGlideThenSlashOrApostropheJoinsTheWord() {
+        val m = MiniKeyboardModel(); m.open("")
+        m.commitGlide("movie"); m.press(Key.Ch("/")); assertEquals("movie/", m.text)
+        val n = MiniKeyboardModel(); n.open("")
+        n.commitGlide("don"); n.press(Key.Ch("'")); n.press(Key.Ch("t")); assertEquals("don't", n.text)
+    }
 }
 
