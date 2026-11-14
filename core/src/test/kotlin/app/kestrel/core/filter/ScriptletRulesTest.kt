@@ -164,7 +164,7 @@ class ScriptletRulesTest {
         assertEquals(listOf("trusted-replace-fetch-response", "trusted-replace-xhr-response"), yt.map { it.name })
         assertEquals(listOf("\"adPlacements\"", "\"no_ads\"", "player?"), yt[0].args)
         assertEquals("the regular expression keeps its flags and its group reference", "/\"adPlacements.*?(\"adSlots\"|\"adBreakHeartbeatParams\")/gms", yt[1].args[0])
-        assertEquals(\$"1".length, yt[1].args[1].length); assertEquals("\$1", yt[1].args[1])
+        assertEquals("\$1", yt[1].args[1])
         assertEquals(listOf("/a,b/g", "", "/api"), names("x.com")[0].args)
         assertEquals(listOf("nobab"), names("bab.example").map { it.name }); assertEquals(listOf("nobab"), names("fab.example").map { it.name })
         assertEquals(listOf("popads-dummy"), names("pop.example").map { it.name })
