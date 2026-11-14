@@ -134,4 +134,18 @@ class MediaRankTest {
         val r = MediaRank.rank(listOf(hero))
         assertEquals(listOf(hero.url), urls(r.main))
     }
+
+    // ---- RX3-V2: an address nobody has seen (only in the page's text) goes under "Other files"
+
+    @Test fun anAddressFoundOnlyInTheTextIsTuckedAwayNextToARealVideo() {
+        val link = MediaCandidate("https://cdn.example/teaser.mp4", MediaKind.FILE, "", -1, page).also { it.fromMarkup = true }
+        val film = file("https://cdn.example/film.mp4", 300 * MB)
+        val r = MediaRank.rank(listOf(link, film))
+        assertEquals(listOf(film.url), urls(r.main)); assertEquals(listOf(link.url), urls(r.other))
+    }
+
+    @Test fun aLoneUnverifiedAddressStaysOnTopSoTheSheetIsNeverEmpty() {
+        val link = MediaCandidate("https://cdn.example/teaser.mp4", MediaKind.FILE, "", -1, page).also { it.fromMarkup = true }
+        assertEquals(listOf(link.url), urls(MediaRank.rank(listOf(link)).main))
+    }
 }

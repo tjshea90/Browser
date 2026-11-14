@@ -25,6 +25,13 @@ class MediaCandidate(
     var label: String? = null
     /** Somebody showed interest in it (the page's player reported it, it was long-pressed, opened in the sheet or downloaded): it is never pushed out of a full list and never hidden as a preview ([MediaList]). */
     var touched = false
+    /** RX3-V2: found only in the page's text (a link, an og tag, a string in a script): never requested, so nobody has seen what it is. See [verified]. */
+    var fromMarkup = false
+    /**
+     * RX3-V2: worth counting for the dock badge. Seen on the wire (a request really happened, with a media type) = yes; found only in the page's text = not until somebody played it (a player
+     * reported it), the owner showed interest, or its length is known and at least [MediaList.MIN_FILE]. Unverified entries are still offered, under "Other files".
+     */
+    val verified: Boolean get() = touched || !fromMarkup || (kind == MediaKind.FILE && length >= MediaList.MIN_FILE)
     /** RX3-V1: what the page's own element says it is for ([VideoRole]); null = no element said anything yet (or an older extension). The latest report wins. */
     var role: VideoRole? = null
     /** The OWNER showed interest (long-pressed, opened in the sheet, downloaded): it counts and shows whatever the page's element says it is. */
@@ -98,7 +105,7 @@ class MediaList(private val max: Int = 48) {
     fun hasStream(): Boolean = items.any { it.kind != MediaKind.FILE }
 
     fun usableCount(): Int {
-        if (countVersion != version) { countCache = usableUnsorted().count { !it.decoy }; countVersion = version }
+        if (countVersion != version) { countCache = usableUnsorted().count { !it.decoy && it.verified }; countVersion = version }
         return countCache
     }
 
@@ -144,6 +151,20 @@ class MediaList(private val max: Int = 48) {
         if (c.durationMs >= 60_000) v += 20
         if (c.viaHeaders != null) v += 5
         return v * 100 - index
+    }
+
+    /** A one-byte Range request (or anything else) told the length of a file that was only found in the page's text. @return true if the list changed. */
+    fun setLength(url: String, bytes: Long): Boolean {
+        val c = find(url) ?: return false
+        if (bytes < 0 || c.length == bytes) return false
+        c.length = bytes; version++
+        return true
+    }
+
+    /** RX3-V2: up to [n] addresses found only in the page's text, newest first, worth one cheap check - but only when the page has nothing verified yet. */
+    fun unverifiedToCheck(n: Int): List<MediaCandidate> {
+        if (items.any { it.verified && !it.decoy }) return emptyList()
+        return items.filter { !it.verified && it.kind == MediaKind.FILE }.take(n)
     }
 
     /** Somebody showed interest in this address (long-pressed, opened in the sheet, downloaded): it is kept when the list is full and shown even when it looks like a preview. @return true if that changed the list. */
