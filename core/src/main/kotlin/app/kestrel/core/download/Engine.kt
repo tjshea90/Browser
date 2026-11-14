@@ -766,7 +766,9 @@ class Engine(
     private fun waitOutOutage(job: Job, now: Long): Boolean {
         val rec = job.rec
         synchronized(lock) {
-            if (!(rec.done > 0 && rec.canContinue(readable(job))) || job.alive > 1) return false // a fresh download (a typo in the address, a dead host) fails fast as before
+            if (!(rec.done > 0 && rec.canContinue(readable(job)))) return false                // a fresh download (a typo in the address, a dead host) fails fast as before
+            // RX3-D1: with several connections this used to give up at once (`alive > 1`), so a dip that hit them all ended a download in FAILED. Now it waits unless a connection is still moving bytes (then this one is a lone failure)
+            if (job.alive > 1 && rec.segs.any { it.worker && now - it.lastAt < cfg.refusedFreshMs }) return false
             if (job.outageSince == 0L) job.outageSince = now
             job.outageProbes++
             job.resumeAt = now + Backoff.delayMs(job.outageProbes - 1, cfg.outageBaseMs, cfg.outageCapMs, 0L, rnd)

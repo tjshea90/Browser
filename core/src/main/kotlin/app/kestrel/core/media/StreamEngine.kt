@@ -192,6 +192,8 @@ class StreamEngine(
     interface Listener { fun onChanged(id: Long) }
 
     private class Stopped : RuntimeException(null, null, false, false)
+    /** RX3-D1: a part ran out of tries at the transport level and no byte arrived for a while: the whole download waits ([doTick] looks again with a growing pause). */
+    private class Outage : RuntimeException(null, null, false, false)
     /** [restartRaw]: not a failure of the download but of the MP4 writer: the job starts over the old way (joined .ts, converted at the end if possible). */
     private class Failed(val reason: Reason, val detail: Int = 0, val restartRaw: Boolean = false, val why: String? = null) : RuntimeException(why, null, false, false)
     /** The MP4 writer broke in the middle of a segment (a bug, or data it cannot handle). */
@@ -220,6 +222,13 @@ class StreamEngine(
         val drain = ReentrantLock()
         val keys = HashMap<Int, ByteArray>()
         @Volatile var lastBytesAt = 0L
+        /** RX3-D1: some byte of this download arrived since this job object exists; with [StreamRec.next] and the staged parts it says "this is not a fresh download from a dead host". */
+        @Volatile var gotBytes = false
+        /** RX3-D1: the download is waiting out an outage: since when (0 = no outage), how many looks it has had, and when to look again. A byte arriving clears them. */
+        @Volatile var outage = false
+        @Volatile var outageSince = 0L
+        @Volatile var outageProbes = 0
+        @Volatile var resumeAt = 0L
         var lastCkpt = 0L
         var running = false             // a supervisor thread exists for this job
         var restartAfterStop = false
@@ -466,6 +475,22 @@ class StreamEngine(
     fun resumeAll() = control.execute { for (j in snapshotJobs()) if (synchronized(lock) { j.rec.state.let { it == DlState.PAUSED_USER || it == DlState.PAUSED_SYSTEM || it == DlState.WAITING_NETWORK } }) requeue(j, wipe = false) }
     fun pauseAllSystem() = control.execute { for (j in snapshotJobs()) if (synchronized(lock) { j.rec.state.active }) requestStop(j, DlState.PAUSED_SYSTEM) }
 
+    /** RX3-D1: called about once a second by the download service: an outage that has lasted long enough looks again, one that lasted half an hour ends as STALLED (the staged parts stay, Retry continues). */
+    fun tick() = control.execute { doTick() }
+    private fun doTick() {
+        val now = clock.now()
+        for (j in snapshotJobs()) {
+            if (synchronized(lock) { j.rec.state } != DlState.WAITING_NETWORK) continue
+            val at = synchronized(lock) { j.resumeAt }
+            if (at == 0L) continue                                                        // waiting because the network is off: onNetwork brings it back
+            val gaveUp = synchronized(lock) { j.outageSince != 0L && now - j.outageSince >= cfg.outageGiveUpMs }
+            if (gaveUp) {
+                synchronized(lock) { j.resumeAt = 0L; j.outageSince = 0L; j.outageProbes = 0; j.rec.state = DlState.FAILED; j.rec.reason = Reason.STALLED; j.rec.detail = 0; j.rec.finished = now; j.rec.updated = now }
+                persist(j.rec); changed(j.rec.id)
+            } else if (net.online && now >= at) { synchronized(lock) { j.resumeAt = 0L }; requeue(j, wipe = false) }
+        }
+    }
+
     /** The network changed ([NetGate.online] has the new value). */
     fun onNetwork() = control.execute {
         for (j in snapshotJobs()) {
@@ -645,7 +670,16 @@ class StreamEngine(
                     val wipe = synchronized(lock) { val w = job.wipeAfterStop; job.restartAfterStop = false; job.wipeAfterStop = false; rec.state = DlState.QUEUED; w }
                     if (wipe) { synchronized(lock) { resetProgress(job) }; wipeStaging(job) }
                 }
-                else -> synchronized(lock) { rec.state = outcome; if (outcome == DlState.FAILED) rec.finished = clock.now() }
+                else -> synchronized(lock) {
+                    rec.state = outcome; if (outcome == DlState.FAILED) rec.finished = clock.now()
+                    if (outcome == DlState.WAITING_NETWORK && job.outage) {          // RX3-D1: look again after a growing pause (10 s doubling to 60 s), give up after 30 minutes without a byte
+                        val now = clock.now()
+                        if (job.outageSince == 0L) job.outageSince = now
+                        job.outageProbes++
+                        job.resumeAt = now + Backoff.delayMs(job.outageProbes - 1, cfg.outageBaseMs, cfg.outageCapMs, 0L, rnd)
+                    }
+                    job.outage = false
+                }
             }
             synchronized(lock) { rec.updated = clock.now() }
             persist(rec)
@@ -929,6 +963,7 @@ class StreamEngine(
                 }
             }
         } catch (e: Stopped) { /* the supervisor knows */
+        } catch (e: Outage) { synchronized(lock) { if (job.failure == null && !job.stop) { job.outage = true; job.stopState = DlState.WAITING_NETWORK; job.stop = true; for (r in job.responses) try { r.abort() } catch (x: Exception) { /* ignore */ } } }
         } catch (e: Failed) { synchronized(lock) { if (job.failure == null) job.failure = e; job.stop = true; for (r in job.responses) try { r.abort() } catch (x: Exception) { /* ignore */ } }
         } catch (e: MuxBroken) { synchronized(lock) { if (job.failure == null) job.failure = Failed(Reason.UNSUPPORTED, 0, restartRaw = true, why = e.cause?.toString() ?: e.message); job.stop = true; for (r in job.responses) try { r.abort() } catch (x: Exception) { /* ignore */ } }
         } catch (e: SinkException) { synchronized(lock) { if (job.failure == null) job.failure = Failed(e.reason); job.stop = true }
@@ -1097,12 +1132,12 @@ class StreamEngine(
                     FetchException.Kind.BAD_URL -> throw Failed(Reason.BAD_URL)
                     else -> {}
                 }
-                if (++tries >= MAX_TRIES) throw Failed(Reason.NETWORK)
+                if (++tries >= MAX_TRIES) { exhausted(job); tries = 0 }
                 backoff(job, tries)
             } catch (e: Retry) {
                 if (count) job.inflight.addAndGet(-ctr[0])
                 if (job.stop) throw Stopped()
-                if (++tries >= MAX_TRIES) throw Failed(if (e.status > 0) Reason.HTTP else Reason.NETWORK, e.status)
+                if (++tries >= MAX_TRIES) { if (e.status > 0) throw Failed(Reason.HTTP, e.status); exhausted(job); tries = 0 }
                 backoff(job, tries, e.retryAfterMs)
             } catch (e: Denied) {
                 if (count) job.inflight.addAndGet(-ctr[0])
@@ -1128,10 +1163,21 @@ class StreamEngine(
                 if (count) job.inflight.addAndGet(-ctr[0])
                 if (job.stop) throw Stopped()
                 if (e is java.io.FileNotFoundException || e.message?.contains("ENOSPC") == true || e.message?.contains("No space") == true) throw Failed(Reason.NO_SPACE)
-                if (++tries >= MAX_TRIES) throw Failed(Reason.NETWORK)
+                if (++tries >= MAX_TRIES) { exhausted(job); tries = 0 }
                 backoff(job, tries)
             }
         }
+    }
+
+    /**
+     * RX3-D1: a part used up its tries without any HTTP answer (a reset, a timeout, no route). A download that never got a byte fails fast (a typo in the address, a dead host); one that did and whose
+     * bytes stopped for [Config.outageQuietMs] WAITS ([Outage]: the hotspot lost its upstream, the tablet still sees the hotspot, so the network gate stays "online"); while other parts still bring bytes
+     * this part just gets another round.
+     */
+    private fun exhausted(job: Job) {
+        val had = synchronized(lock) { job.rec.next > 0 || job.stagedCount > 0 || job.gotBytes }
+        if (!had) throw Failed(Reason.NETWORK)
+        if (clock.now() - job.lastBytesAt >= cfg.outageQuietMs) throw Outage()
     }
 
     /** Bytes in front of a part's media that are not media (a tiny picture a server wrote before a transport stream, see [SegmentPrefix]); looks at the first 4 KB only. */
@@ -1216,7 +1262,7 @@ class StreamEngine(
                     if (len > limit) len = limit.toInt()
                     if (len > 0) {
                         out.write(buf, off, len); got += len; limit -= len
-                        if (count) { job.inflight.addAndGet(len.toLong()); ctr[0] += len; job.meter.add(len, clock.now()); job.lastBytesAt = clock.now() }
+                        if (count) { job.inflight.addAndGet(len.toLong()); ctr[0] += len; job.meter.add(len, clock.now()); job.lastBytesAt = clock.now(); job.gotBytes = true; if (job.outageProbes != 0) { job.outageSince = 0L; job.outageProbes = 0; job.resumeAt = 0L } }
                     }
                 }
             } finally { job.responses.remove(resp); try { resp.close() } catch (e: Exception) { /* ignore */ } }
