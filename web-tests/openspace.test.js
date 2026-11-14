@@ -97,6 +97,15 @@ test('a selection that was there already does not hide a press on blank space (o
   assert.equal((await opens(page)).length, 1, 'the word is still selected, and a press on blank space below is still open space');
 });
 
+test('a selection that the engine CLEARS because the press is elsewhere (found on the emulator) does not hide the press on blank space', async () => {
+  const clearOnBlank = () => { document.addEventListener('contextmenu', (e) => { const t = document.getElementById('t'); if (t && t.contains(e.target)) return; setTimeout(() => window.getSelection().removeAllRanges(), 50); }); };
+  const page = await open(`<p id="t" style="margin:0;padding:20px;width:300px">some words of a paragraph</p><div style="height:600px"></div>`, [selectWord, clearOnBlank].map((f) => '(' + f.toString() + ')()').join(';'));
+  await press(page, [[50, 30]]);
+  assert.deepEqual(await opens(page), [], 'the word is selected');
+  await press(page, [[100, 400]]);
+  assert.equal((await opens(page)).length, 1, 'the blank press cleared that selection, and it is still open space');
+});
+
 test('a press on the text that is selected already is still the selection\'s, even though nothing changes', async () => {
   const page = await open(`<p id="t" style="margin:0;padding:20px;width:300px">some words of a paragraph</p><div style="height:600px"></div>`, selectWord);
   await press(page, [[50, 30]]);
