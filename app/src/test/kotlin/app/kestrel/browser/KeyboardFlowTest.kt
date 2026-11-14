@@ -66,7 +66,7 @@ class KeyboardFlowTest {
         assertTrue("the result was ours", flow.onResult(KeyboardFlow.REQ_IMPORT, Activity.RESULT_OK, file(text)))
         await("the imported message") { said.isNotEmpty() }
         assertEquals("Import what the keyboard learned?", asked!!.first)
-        assertTrue(asked!!.second, asked!!.second.contains("2 words") && asked!!.second.contains("1 word pairs") && asked!!.second.contains("thumb habit") && asked!!.second.contains("importing the same file again changes nothing"))
+        assertTrue(asked!!.second, asked!!.second.contains("2 words") && asked!!.second.contains("1 word pair,") && asked!!.second.contains("thumb habit") && asked!!.second.contains("importing the same file again changes nothing"))
         assertEquals(listOf(text), imported)
         assertTrue(said.single(), said.single().startsWith("Imported: 2 words"))
     }

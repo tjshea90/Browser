@@ -33,15 +33,16 @@ object LearnedExport {
     class Summary(val words: Int, val pairs: Int, val triples: Int, val corrections: Int, val shapes: Int, val shapeWords: Int, val ownWords: Int, val hasHabit: Boolean, val complete: Boolean) {
         fun describe(): String {
             val parts = ArrayList<String>()
-            parts.add("$words words")
-            if (pairs > 0) parts.add("$pairs word pairs")
-            if (triples > 0) parts.add("$triples three-word phrases")
-            if (corrections > 0) parts.add("$corrections corrections")
-            if (shapes > 0) parts.add("$shapes glide shapes for $shapeWords words")
-            if (ownWords > 0) parts.add("$ownWords own words")
+            parts.add(count(words, "word", "words"))
+            if (pairs > 0) parts.add(count(pairs, "word pair", "word pairs"))
+            if (triples > 0) parts.add(count(triples, "three-word phrase", "three-word phrases"))
+            if (corrections > 0) parts.add(count(corrections, "correction", "corrections"))
+            if (shapes > 0) parts.add(count(shapes, "glide shape", "glide shapes") + " for " + count(shapeWords, "word", "words"))
+            if (ownWords > 0) parts.add(count(ownWords, "own word", "own words"))
             if (hasHabit) parts.add("your thumb habit")
             return parts.joinToString(", ") + if (complete) "" else " (the file seems cut off; what could be read is used)"
         }
+        private fun count(n: Int, one: String, many: String) = if (n == 1) "1 $one" else "$n $many"
     }
 
     class Parsed(val model: PersonalModel, val habit: FloatArray?, val ownWords: List<Pair<String, Int>>, val summary: Summary)
