@@ -235,3 +235,23 @@ What was left undone (section 13 "Not done" and X5): scriptlets, `redirect=` sta
 3. The late hand-off through the CSS answer stays as the fallback (a lost race, a first visit that was faster than the registration, about:blank frames of a host without script). The library runs each CALL once (dedup per call, not per message), so both paths together never run a call twice, and it keeps cumulative counters so the report is not lost whichever path ran first; `content.js` listens for the report from document start.
 4. Not done on purpose: a scriptlet table inside the extension (+1.6 MB in every extension process, a KEX version bump and new differential tests, for a lookup that costs one local message once per host).
 
+**Emulator proof (2026-11-14, Android 10 x86_64 AVD, debug build; `tools/sitelab/adlab.py`, lab rules `tools/sitelab/adlab-rules.txt`, the same page under two names, rules only for `adlab.test`)**
+
+| check | control.test (no rules) | adlab.test (early delivery) |
+| :- | :- | :- |
+| anti-adblock wall (`set adblockDetected false`) | SHOWN | hidden |
+| "please whitelist us" box (`nostif nagBox`) | SHOWN | not shown |
+| 8 s countdown (`nano-stb countdown * 0.02`) | opened after 8,036 ms | 407 ms |
+| bait script inserted by the page (`rmnt script adbait`) | RAN | did not run |
+| player JSON with ad fields (`json-prune-fetch-response`) | adPlacements=2 adSlots=1 | 0 and 0, video kept |
+| pop-under click listener (`aeld click popunder`), two taps | RAN (page marked) | never ran |
+| entity rule `adlab.*##+js(set entityOk true)` | no | applied |
+| element hiding `.ad-box` | visible | hidden |
+| beacon fetch to the ad host (`no-fetch-if`) | blocked by the network rule | stub answer, nothing reached the server |
+
+Diagnostics Blocker line after the runs: `scriptlets on, 4 pages ran 36 calls, 3 before the page's first script, 1 sites set up early (1 kept, 5 asks)`.
+
+What the runs taught (all fixed): (1) the first build registered `*://host/*` and Firefox answered `Permission denied to register a content script` (the Diagnostics line carried the error text: `early error: ...`): explicit `http://host/*` + `https://host/*` are accepted; (2) a lab needle that also occurs in the page's own check timer (`nag`) silenced the check itself: needles must be specific, in the lab and in the lists; (3) a page cannot see an EARLY report (it fires before the page's first script), only a late one.
+
+Limits, said plainly: this is an emulator on localhost, not the tablet over the hotspot, and not a real anti-adblock site. The first load after a cold start of the app runs before the lists are in (generation 0): nothing is registered then and the late hand-off does what it can. The first visit to a site that is faster than one local message plus one registration is covered only by the late hand-off.
+
