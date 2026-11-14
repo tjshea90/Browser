@@ -172,6 +172,9 @@ open class BrowserActivity : Activity(), DockListener {
         }
         override fun navKeyboardChanged(showing: Boolean) { if (showing) hideKeyboard() } // the system keyboard goes down while the mini one is up
         override fun navPrivateTab(): Boolean = current?.isPrivateTab == true
+        // where the person put the panel and how big the keyboard is (AV1)
+        override fun navGeometry(): IntArray? = prefs.miniGeom
+        override fun navGeometryChanged(g: IntArray?) { prefs.miniGeom = g }
         override fun navGlideHosts(done: (List<String>) -> Unit) {
             val d = db ?: return
             Io.exec {
@@ -191,6 +194,7 @@ open class BrowserActivity : Activity(), DockListener {
             val s = dp(app.kestrel.browser.ui.HotCorner.SIZE_DP)
             return intArrayOf(loc[0] + content.width - s, loc[1], loc[0] + content.width, loc[1] + s)
         }
+        override fun covers(x: Float, y: Float): Boolean = ::miniNav.isInitialized && miniNav.coversWindowPoint(x, y)
         override fun fired(downTime: Long, x: Float, y: Float) {
             // the page was given the touch-down: tell it the touch is over, so its own long press (context menu, text selection) never starts
             val cancel = android.view.MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), android.view.MotionEvent.ACTION_CANCEL, x, y, 0)
@@ -569,7 +573,7 @@ open class BrowserActivity : Activity(), DockListener {
         app.kestrel.browser.diag.DebugProps.get(this, "debug.kestrel.chipms")?.toLongOrNull()?.let { blockedChip.lifetimeMs = it.coerceIn(200L, 60_000L) } // emulator rig only: a release build always gets null
         content.addView(blockedChip, FrameLayout.LayoutParams(dp(app.kestrel.browser.ui.BlockedChip.TOUCH_DP), dp(app.kestrel.browser.ui.BlockedChip.TOUCH_DP), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(6) })
         miniNav = app.kestrel.browser.ui.MiniNav(this, pal, miniNavListener)
-        content.addView(miniNav, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply { topMargin = 0; rightMargin = dp(6) })
+        content.addView(miniNav, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) // the whole page area, not clickable itself: the panel places itself in it (AV1)
         miniNav.available = prefs.miniNavToggle
         miniNav.setGlideEnabled(prefs.glideTyping)
         miniNav.setOpen(prefs.miniNavOpen, animate = false, notify = false)
@@ -1745,6 +1749,7 @@ open class BrowserActivity : Activity(), DockListener {
             if (::miniNav.isInitialized) miniNav.forgetLearned() else Io.exec { try { java.io.File(applicationContext.filesDir, "glide_personal.txt").delete() } catch (e: Exception) { } }
             toast("The keyboard forgot what it learned")
         }
+        override fun resetMiniGeometry() { prefs.miniGeom = null; if (::miniNav.isInitialized) miniNav.resetGeometry(); toast("The mini keyboard is back under the top right corner") }
         override fun resetSiteShields() { Shields.clearAll(); toast("Per-site Shields reset") }
         override fun backupNow() { backup.backupNow() }
         override fun restoreFromFile() { backup.restoreFromFile() }

@@ -112,6 +112,10 @@ class Prefs private constructor(ctx: Context) {
     var miniNavToggle: Boolean get() = bool("mini_nav_toggle", true); set(v) = put("mini_nav_toggle", v)
     /** AT1: glide typing on the mini keyboard (slide over the letters of a word instead of tapping each one). */
     var glideTyping: Boolean get() = bool("glide_typing", true); set(v) = put("glide_typing", v)
+    /** AV1: where the person put the mini panel and how big the keyboard is (distance from the right edge, from the top, keyboard width, height of the keys, in dp); null = docked at the first size. */
+    var miniGeom: IntArray?
+        get() = sp.getString("mini_geom", null)?.split(',')?.mapNotNull { it.trim().toIntOrNull() }?.takeIf { it.size == 4 }?.toIntArray()
+        set(v) { if (v == null || v.size != 4) sp.edit().remove("mini_geom").apply() else put("mini_geom", v.joinToString(",")) }
     /** AT1: how this thumb lands beside the key it aims at (in key pitches, x then y), learned from the words that were kept. */
     var glideHabit: FloatArray get() = floatArrayOf(sp.getFloat("glide_bx", 0f), sp.getFloat("glide_by", 0f)); set(v) { if (v.size == 2) sp.edit().putFloat("glide_bx", v[0]).putFloat("glide_by", v[1]).apply() }
     /** AT1: words typed letter by letter that the word list does not have ("word count" per line), so they can be glided next time. */

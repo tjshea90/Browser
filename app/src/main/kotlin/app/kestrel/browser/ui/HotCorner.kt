@@ -20,6 +20,8 @@ class HotCorner(private val handler: Handler, private val slopPx: Float, private
         fun zone(): IntArray?
         /** The long press happened: open or close the panel and tell the page its touch is over ([downTime], [x], [y] are the touch's). */
         fun fired(downTime: Long, x: Float, y: Float)
+        /** True when the window point is on something that must not start the long press (the open panel, which can sit over the square once it has been moved). */
+        fun covers(x: Float, y: Float): Boolean = false
     }
 
     private var armed = false
@@ -39,7 +41,7 @@ class HotCorner(private val handler: Handler, private val slopPx: Float, private
             MotionEvent.ACTION_DOWN -> {
                 disarm(); swallow = false
                 val z = host.zone()
-                if (z != null && ev.x >= z[0] && ev.x < z[2] && ev.y >= z[1] && ev.y < z[3]) {
+                if (z != null && ev.x >= z[0] && ev.x < z[2] && ev.y >= z[1] && ev.y < z[3] && !host.covers(ev.x, ev.y)) {
                     armed = true; downX = ev.x; downY = ev.y; lastX = ev.x; lastY = ev.y; downTime = ev.downTime
                     handler.postDelayed(fire, longPressMs)
                 }
