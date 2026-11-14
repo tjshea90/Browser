@@ -10,7 +10,7 @@ class GlideStats {
     private var loadMs = -1L; private var loadWords = 0; private var warmMs = -1L
     private var habitX = 0f; private var habitY = 0f
     private var own = 0
-    private var learnedWords = 0; private var learnedPairs = 0; private var learnedTop = 0
+    private var learnedWords = 0; private var learnedPairs = 0; private var learnedTop = 0; private var learnedCorrections = 0; private var learnedTriples = 0
 
     @Synchronized fun onDecoded(millis: Long, found: Boolean) { glides++; if (!found) noMatch++; ms += millis; if (millis > msMax) msMax = millis; if (found) pending = true }
     /** Whatever the person did next that was not a correction: the word stays. */
@@ -21,7 +21,7 @@ class GlideStats {
     @Synchronized fun onWarm(millis: Long) { warmMs = millis }
     @Synchronized fun onHabit(xDp: Float, yDp: Float) { habitX = xDp; habitY = yDp }
     @Synchronized fun onOwnWords(n: Int) { own = n }
-    @Synchronized fun onLearned(words: Int, pairs: Int) { learnedWords = words; learnedPairs = pairs }
+    @Synchronized fun onLearned(words: Int, pairs: Int, corrections: Int = 0, triples: Int = 0) { learnedWords = words; learnedPairs = pairs; learnedCorrections = corrections; learnedTriples = triples }
     /** A word the person had used before was the keyboard's first guess for this glide. */
     @Synchronized fun onLearnedTop() { learnedTop++ }
 
@@ -41,6 +41,7 @@ class GlideStats {
         sb.append("; thumb habit x %.1f y %.1f dp".format(habitX, habitY))
         if (own > 0) sb.append("; own words $own")
         if (learnedWords > 0 || learnedTop > 0) sb.append("; learned $learnedWords words and $learnedPairs word pairs from your typing, a learned word was the first guess $learnedTop times")
+        if (learnedCorrections > 0 || learnedTriples > 0) sb.append("; $learnedCorrections corrections and $learnedTriples three-word phrases remembered")
         return sb.toString()
     }
 }
@@ -142,7 +143,7 @@ class GlideTyping(
                     if (bytes != null) { main = LexiconFile.read(bytes); stats.onLoaded((System.nanoTime() - t0) / 1_000_000, main!!.size) }
                     loading = false
                 }
-                if (!personalLoaded) { personalLoaded = true; try { loadPersonal()?.let { personal = PersonalModel.parse(it) } } catch (e: Exception) { /* a damaged file is just forgotten */ }; stats.onLearned(personal.wordCount, personal.pairCount) }
+                if (!personalLoaded) { personalLoaded = true; try { loadPersonal()?.let { personal = PersonalModel.parse(it) } } catch (e: Exception) { /* a damaged file is just forgotten */ }; stats.onLearned(personal.wordCount, personal.pairCount, personal.confusionCount, personal.tripleCount) }
                 keys = k
                 decoder = GlideDecoder(k).also { it.biasX = bx; it.biasY = by; it.personal = personal }
                 if (own != null) setOwn(own)
@@ -185,14 +186,14 @@ class GlideTyping(
     }
 
     /** Decode the path of [count] touch points; [done] is called on the executor's thread. */
-    fun decode(xs: FloatArray, ys: FloatArray, count: Int, prev: String?, done: (GlideResult) -> Unit) {
+    fun decode(xs: FloatArray, ys: FloatArray, count: Int, prev: String?, prev2: String? = null, done: (GlideResult) -> Unit) {
         val px = xs.copyOf(count); val py = ys.copyOf(count)
         executor.execute {
             val d = decoder; val m = main
             if (d == null || m == null) { done(GlideResult(emptyList(), 0)); return@execute }
             val t0 = System.nanoTime()
             val lexicons = ArrayList<GlideLexicon>(2); lexicons.add(m); userLex?.let { lexicons.add(it) }
-            val r = try { d.decode(px, py, count, lexicons, prev, 3) } catch (e: Exception) { emptyList() }
+            val r = try { d.decode(px, py, count, lexicons, prev, 3, prev2) } catch (e: Exception) { emptyList() }
             val ms = (System.nanoTime() - t0) / 1_000_000
             stats.onDecoded(ms, r.isNotEmpty())
             if (r.isNotEmpty() && personal.weightOf(r[0].text) > 0f) stats.onLearnedTop()
@@ -214,11 +215,12 @@ class GlideTyping(
      * The person's own choice: [word] was meant (after [prev] when known). [weight] 1 = it was kept or typed, 3 = the person CHOSE it over the keyboard's first guess (or replaced a deleted word by it). The next
      * glides lean towards it; the table is saved now and then, and at [saveLearned].
      */
-    fun learn(prev: String?, word: String, weight: Float) {
+    fun learn(prev: String?, word: String, weight: Float, prev2: String? = null, guessed: String? = null) {
         executor.execute {
-            personal.add(prev, word, weight)
+            personal.add(prev, word, weight, prev2)
+            if (guessed != null) personal.addConfusion(guessed, word) // the keyboard guessed [guessed] and the person meant [word]: a correction
             personalDirty = true
-            stats.onLearned(personal.wordCount, personal.pairCount)
+            stats.onLearned(personal.wordCount, personal.pairCount, personal.confusionCount, personal.tripleCount)
             val now = System.nanoTime() / 1_000_000
             if (now - lastSaveAt > SAVE_EVERY_MS) saveNow()
         }
@@ -237,7 +239,7 @@ class GlideTyping(
     /** Settings > "Forget what the keyboard learned": the own words, the pairs and the thumb habit are gone. */
     fun forgetAll(done: () -> Unit = {}) {
         executor.execute {
-            personal.clear(); personalDirty = false; stats.onLearned(0, 0)
+            personal.clear(); personalDirty = false; stats.onLearned(0, 0, 0, 0)
             userLex = null; bx = 0f; by = 0f; habitX = 0f; habitY = 0f
             decoder?.let { it.biasX = 0f; it.biasY = 0f }
             stats.onHabit(0f, 0f)
