@@ -257,10 +257,10 @@ var assistAsked = 0, assistSent = 0, assistFail = ''; // RX3-G3: how often a fra
 function assistText() { return assistAsked ? ' | assist ' + assistSent + '/' + assistAsked + (assistFail ? ' (' + assistFail + ')' : '') : ''; }
 var guardBlocked = 0;
 function trimMap(m, max) { while (m.size > max) m.delete(m.keys().next().value); }
-function guardAnswer(host, topHost) {
+function guardAnswer(host, topHost) { // on: the pop-up guard applies; skip (RX3-Y2): the ad skipper may run (flag 8: the Settings row and the site's Shields switch)
   var f = cfgFlags.get(host);
-  if (f !== undefined) return Promise.resolve({ on: (f & 1) !== 0, top: topHost || host });
-  return askCfg(host).then(function () { return { on: ((cfgFlags.get(host) || 0) & 1) !== 0, top: topHost || host }; });
+  if (f !== undefined) return Promise.resolve({ on: (f & 1) !== 0, top: topHost || host, skip: (f & 8) !== 0 });
+  return askCfg(host).then(function () { var g = cfgFlags.get(host) || 0; return { on: (g & 1) !== 0, top: topHost || host, skip: (g & 8) !== 0 }; });
 }
 browser.runtime.onMessage.addListener(function (m, sender) {
   if (!m) return undefined;
@@ -821,6 +821,16 @@ browser.runtime.onMessage.addListener(function (m, sender) {
 browser.runtime.onMessage.addListener(function (m, sender) {
   if (!m || m.k !== 'bk' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
   return send({ k: 'bk', p: String(m.p || '').slice(0, 600) }).then(function (r) { return typeof r === 'string' ? r : ''; }, function () { return ''; });
+});
+
+// RX3-Y2: the YouTube ad skipper (youtube.js) reports NUMBERS: ads seen, skipped, skip buttons pressed, overlays closed, dialogs removed, jumps, give-ups and the last problem in a few words. Never an address.
+// The page of the tab goes along so that the app can drop the report of a private tab.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'yts' || !sender || !sender.tab) return undefined;
+  function n(v) { v = v | 0; return v > 0 && v < 1000 ? v : 0; }
+  var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || '';
+  send({ k: 'yts', a: n(m.a), s: n(m.s), c: n(m.c), o: n(m.o), d: n(m.d), f: n(m.f), g: n(m.g), r: String(m.r || '').slice(0, 60), p: String(page).slice(0, 300) }).catch(function () {});
+  return undefined;
 });
 
 // RX3-BK1: what kind of show a Back / Forward was (content.js, top frame): kept by the engine or loaded again, what the page's file cost, where the page was. Numbers and the address; nothing else.
