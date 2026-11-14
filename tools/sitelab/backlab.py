@@ -18,7 +18,7 @@ The driver is tools/emu/back_emu.py.
 """
 import http.server, sys, time, urllib.parse
 
-HEAD = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+HEAD = r"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>%(name)s</title>
 <style>
  body { font: 18px sans-serif; margin: 0; background: #fff; color: #111 }

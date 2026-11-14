@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Runs the Back lab (tools/sitelab/backlab.py) on the Android emulator: RX3-BK1 / RX3-BK2, research/BACK_SCROLL.md.
 
-  python3 -I tools/emu/back_emu.py round <case> [--port 8089] [--log <lab logfile>] [--keep-open]
+  python3 -u -I tools/emu/back_emu.py round <case> [--port 8089] [--log <lab logfile>] [--place 1800]
   cases: static | nostore | dynamic | loading | mse
 
-One round = open /back-<case> in the debug build, scroll down until the page reports y >= 1500, tap a link (every block is one), wait for /back-next, press Back, and report:
+One round = open /back-<case>?y=<place> in the debug build (the page scrolls itself there), tap a link (every block is one), wait for /back-next, press Back, and report:
   * the page's OWN view (ground truth, from the lab's logfile): was the show `persisted` (the engine's back/forward cache), the navigation type, the scroll place at +500 ms and +2000 ms after the
     show compared with the place it was left at, and whether the server saw a new GET for the page (= loaded again from the network),
   * the app's view (Health lines read with `adb logcat -s KestrelHealth`, debug builds only): back-arm, back-picture, the press line `kind=... y=a/b`, cover-hide ... y=a/b.
@@ -56,24 +56,19 @@ def health(pattern):
     return [ln.split("KestrelHealth:", 1)[-1].strip() for ln in out.splitlines() if re.search(pattern, ln)]
 
 
-def round_(case, port, log, keep_open=False):
-    url = "http://localhost:%d/back-%s" % (port, case)
+def round_(case, port, log, place=1800):
+    url = "http://localhost:%d/back-%s?y=%d" % (port, case, place)
     adb("reverse", "tcp:%d" % port, "tcp:%d" % port)
     adb("logcat", "-c")
     off0 = size(log)
     shell("am start -a android.intent.action.VIEW -d %s -p %s" % (url, PKG))
     first = wait_for(lambda: [l for l in lines_since(log, off0) if "pageshow back-%s" % case in l], 300, "the first show of /back-" + case)
-    print("opened:", first[0])
-    # scroll down until the page itself says it is at y >= 1500 (CSS px)
-    for i in range(16):
-        shell("input swipe 300 780 300 220 300")
-        time.sleep(1.4)
-        y = last_y(lines_since(log, off0), case)
-        if y >= 1500:
-            break
-    time.sleep(1.8)  # the page's 300 ms scroll report reaches the app
+    print("opened:", first[0], flush=True)
+    # the page scrolls ITSELF to ?y=<place> (see backlab.py: `input swipe` does not scroll a software-rendered emulator reliably); wait until it reports being there
+    wait_for(lambda: last_y(lines_since(log, off0), case) >= place - 4, 120, "the page at y=%d" % place)
+    time.sleep(2.5)  # the page's 300 ms scroll report reaches the app, and the app has seen it
     left_at = last_y(lines_since(log, off0), case)
-    print("scrolled to y=%d, tapping a link" % left_at)
+    print("page is at y=%d, tapping a link" % left_at, flush=True)
     shell("input tap 300 480")
     wait_for(lambda: [l for l in lines_since(log, off0) if "pageshow back-next" in l], 300, "/back-next")
     time.sleep(2.0)
@@ -107,4 +102,5 @@ if __name__ == "__main__":
         print(__doc__); sys.exit(2)
     port = int(a[a.index("--port") + 1]) if "--port" in a else 8089
     log = a[a.index("--log") + 1] if "--log" in a else "backlab.log"
-    round_(a[1], port, log)
+    place = int(a[a.index("--place") + 1]) if "--place" in a else 1800
+    round_(a[1], port, log, place)
