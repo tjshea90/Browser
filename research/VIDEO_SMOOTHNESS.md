@@ -63,3 +63,9 @@ How to read it:
 * No engine pref changed in this round: the tablet's own numbers show decode, drawing and scrolling are fine, and no measurement points at a pref.
 * The CPU line is the measuring tool; it costs nothing while the browser is in the background and five file reads every 5 s in front (the busy-thread look is one extra second only while a process is above 70 %).
 * WebView build (Kestrel Light): has no Diagnostics screen; the line is Kestrel's (GeckoView) only.
+
+## RX3-S1 - the glow holds still while a video plays (alpha43, 2026-11-14)
+`NeonRules` (core/session, pure): busy = heavy page load OR keyboard up OR keyboard coming OR the front tab's video plays. The video flag comes from GeckoView's `MediaSession.Delegate` (`GeckoSession.setMediaSessionDelegate`, `TabDelegates`): PLAY sets it, PAUSE / STOP / DEACTIVATED clear it, ACTIVATED alone does not (a video that was blocked from starting must not freeze the glow). `Tab.gecko.videoPlaying`, `BrowserActivity.videoStateChanged` -> `updateNeonBusy`; the existing `Neon.busy` does the rest (the 100 ms redraw stops).
+Emulator proof (Android 10 x86_64, GeckoView 160, NOT the tablet): lab `/playlab` (tools/sitelab/guardlab.py) plays a real audible 440 Hz tone after a tap, pauses after 6 s, plays again, pauses again; the app's Health lines: `neon video playing=true front=true` at the play, `playing=false` at the pause, true, false - matching the page's own play / pause events within a second.
+KNOWN LIMIT: the engine opens a media session only for AUDIBLE media (a muted autoplay video, a silent clip, an animated loop opens none), so the glow keeps pulsing next to those. The V3 row (`vid ev:'played'` from the page's `playing` events) can feed the same flag later if the owner still sees it on muted video.
+NOT measured: the parent process CPU on the tablet with and without a playing video (the review's own open question); the Diagnostics "CPU by process" line is the place to look.
