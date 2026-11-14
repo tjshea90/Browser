@@ -791,19 +791,149 @@ class MiniNavTest {
         assertTrue("left and bottom edges inside (${o.toList()})", o[0] >= 0 && o[3] <= 900 && o[2] <= 600)
     }
 
-    @Test fun droppingTheGripNearTheCornerDocksAgainAndSoDoesADoubleTap() {
+    // ------------------------------------------------------------------ a floating panel, picked up by a long press (AY4, owner message 39) and shown under the finger (AY2)
+
+    private fun ev(down: Long, at: Long, action: Int, x: Float, y: Float): MotionEvent = MotionEvent.obtain(down, at, action, x, y, 0)
+
+    /** A finger that goes down at (x, y), stays there for [holdMs] by the events' own clock, moves to (x1, y1) in steps and lifts. */
+    private fun holdAndDrag(x: Float, y: Float, holdMs: Long, x1: Float, y1: Float, steps: Int = 6, startAt: Long = SystemClock.uptimeMillis()) {
+        nav.dispatchTouchEvent(ev(startAt, startAt, MotionEvent.ACTION_DOWN, x, y))
+        nav.dispatchTouchEvent(ev(startAt, startAt + holdMs, MotionEvent.ACTION_MOVE, x, y))   // still there: by the clock of the events the long press has happened (the timer need not have run)
+        for (i in 1..steps) nav.dispatchTouchEvent(ev(startAt, startAt + holdMs + i * 16L, MotionEvent.ACTION_MOVE, x + (x1 - x) * i / steps, y + (y1 - y) * i / steps))
+        nav.dispatchTouchEvent(ev(startAt, startAt + holdMs + (steps + 1) * 16L, MotionEvent.ACTION_UP, x1, y1))
+        relayout()
+    }
+
+    @Test fun droppingTheGripNearTheCornerKeepsThePanelWhereItWasPutAndIsNotSnappedBack() {
         openPanel()
         val (gx, gy) = gripPoint()
         dragFromTo(gx, gy, gx - 20f * d, gy + 15f * d)
-        assertFalse("close to the corner: docked again", nav.isDetached); assertNull("nothing to remember: ${rec.geom?.toList()}", rec.geom)
-        dragFromTo(gx, gy, gx - 200f * d, gy + 300f * d)
-        assertTrue(nav.isDetached)
-        val (tx, ty) = gripPoint()
+        assertTrue("floating: close to the corner it still stays where it was put", nav.isDetached)
+        assertTrue("saved: ${rec.geom?.toList()}", rec.geom != null && Math.abs(rec.geom!![0] - 26) <= 3 && Math.abs(rec.geom!![1] - 87) <= 3)
+        assertTrue("a drag does not close it", nav.isOpen)
+    }
+
+    @Test fun aTapOnTheGripClosesThePanel() {
+        openPanel()
+        val (gx, gy) = gripPoint()
         val t0 = SystemClock.uptimeMillis()
-        nav.dispatchTouchEvent(MotionEvent.obtain(t0, t0, MotionEvent.ACTION_DOWN, tx, ty, 0)); nav.dispatchTouchEvent(MotionEvent.obtain(t0, t0 + 40, MotionEvent.ACTION_UP, tx, ty, 0))
-        assertTrue("one tap is not enough", nav.isDetached)
-        nav.dispatchTouchEvent(MotionEvent.obtain(t0 + 120, t0 + 120, MotionEvent.ACTION_DOWN, tx, ty, 0)); nav.dispatchTouchEvent(MotionEvent.obtain(t0 + 120, t0 + 160, MotionEvent.ACTION_UP, tx, ty, 0))
-        assertFalse("a double tap on the grip docks it", nav.isDetached)
+        nav.dispatchTouchEvent(ev(t0, t0, MotionEvent.ACTION_DOWN, gx, gy)); nav.dispatchTouchEvent(ev(t0, t0 + 50, MotionEvent.ACTION_UP, gx, gy))
+        assertFalse("a tap on the grip closes it", nav.isOpen)
+        assertEquals(listOf(true, false), rec.opened)
+        idle(400); assertFalse("and it slid away", nav.panelShownForTest)
+    }
+
+    @Test fun aLongPressOnThePanelPicksItUpAndTheFingerCarriesItAndItStaysWhereItIsPut() {
+        openPanel()
+        val (bx, by) = nav.barPointForTest()
+        holdAndDrag(bx, by, 450L, bx - 30f * d, by + 25f * d)
+        val g = nav.geometryForTest()
+        assertEquals("30 dp further from the right edge", 6f + 30f, g[0], 3f); assertEquals("25 dp lower", 72f + 25f, g[1], 3f)
+        assertTrue("it floats: not snapped back to the corner", nav.isDetached)
+        assertTrue("saved: ${rec.geom?.toList()}", rec.geom != null && Math.abs(rec.geom!![0] - 36) <= 3 && Math.abs(rec.geom!![1] - 97) <= 3)
+        assertFalse("put down again: not lit", nav.liftedForTest)
+        assertFalse("the bar under the finger was not pressed: no keyboard", nav.keyboardShowing)
+        assertTrue("still open", nav.isOpen)
+    }
+
+    @Test fun aLongPressOnAButtonPicksUpInsteadOfPressingItAndAShortTapStillPressesIt() {
+        openPanel()
+        val (x, y) = nav.buttonPointForTest("back")
+        holdAndDrag(x, y, 450L, x - 40f * d, y + 40f * d)
+        assertTrue("no Back: ${rec.calls}", rec.calls.isEmpty()); assertTrue(nav.isDetached)
+        val (x2, y2) = nav.buttonPointForTest("back")
+        val t = SystemClock.uptimeMillis()
+        nav.dispatchTouchEvent(ev(t, t, MotionEvent.ACTION_DOWN, x2, y2)); nav.dispatchTouchEvent(ev(t, t + 60, MotionEvent.ACTION_UP, x2, y2))
+        assertEquals("a short tap acts as ever", listOf("back"), rec.calls)
+    }
+
+    @Test fun aLongPressThatNeverMovesLightsTheOutlineAndDoesNothingElse() {
+        openPanel()
+        val (x, y) = nav.buttonPointForTest("home")
+        val t = SystemClock.uptimeMillis()
+        nav.dispatchTouchEvent(ev(t, t, MotionEvent.ACTION_DOWN, x, y)); nav.dispatchTouchEvent(ev(t, t + 450, MotionEvent.ACTION_MOVE, x, y))
+        assertTrue("in the finger", nav.liftedForTest)
+        nav.dispatchTouchEvent(ev(t, t + 520, MotionEvent.ACTION_UP, x, y))
+        assertFalse(nav.liftedForTest); assertTrue("Home was not pressed: ${rec.calls}", rec.calls.isEmpty()); assertFalse("and the panel did not move", nav.isDetached)
+    }
+
+    @Test fun aFingerThatMovesBeforeTheLongPressTimeIsNeverAPickUpNotEvenWhenTheTimerWouldHaveRun() {
+        openPanel()
+        val (x, y) = nav.barPointForTest()
+        dragFromTo(x, y, x - 80f * d, y + 80f * d)
+        assertFalse("the bar is not a grip: a quick drag across it moves nothing", nav.isDetached)
+        idle(MiniNav.PICK_MS + 200)
+        assertFalse("and the waiting timer was taken away", nav.liftedForTest); assertFalse(nav.isDetached)
+    }
+
+    @Test fun theTimerPicksThePanelUpWhileTheFingerIsStillDown() {
+        openPanel()
+        val (x, y) = nav.barPointForTest()
+        val t = SystemClock.uptimeMillis()
+        nav.dispatchTouchEvent(ev(t, t, MotionEvent.ACTION_DOWN, x, y))
+        assertFalse("not yet", nav.liftedForTest)
+        idle(MiniNav.PICK_MS + 60)
+        assertTrue("the timer picked it up", nav.liftedForTest)
+        nav.dispatchTouchEvent(ev(t, t + 520, MotionEvent.ACTION_MOVE, x - 50f * d, y + 10f * d)); nav.dispatchTouchEvent(ev(t, t + 540, MotionEvent.ACTION_UP, x - 50f * d, y + 10f * d)); relayout()
+        assertEquals("carried 50 dp to the left", 6f + 50f, nav.geometryForTest()[0], 3f); assertFalse(nav.liftedForTest)
+    }
+
+    @Test fun aLongPressOnTheKeysIsTheKeysOwnAndNeverPicksThePanelUp() {
+        openPanel(); nav.pressBarForTest(); relayout()
+        val (x, y) = nav.keyPointForTest("q")!!
+        val t = SystemClock.uptimeMillis()
+        nav.dispatchTouchEvent(ev(t, t, MotionEvent.ACTION_DOWN, x, y))
+        idle(MiniNav.HOLD_MS + MiniNav.PICK_MS + 100)
+        assertFalse("not picked up", nav.liftedForTest)
+        nav.dispatchTouchEvent(ev(t, t + 1000, MotionEvent.ACTION_UP, x, y))
+        assertFalse(nav.isDetached)
+        assertEquals("the key's own long press: the digit on it", "1", nav.barTextForTest)
+    }
+
+    @Test fun withTheKeyboardOpenTheButtonsAndTheBarStillPickThePanelUp() {
+        openPanel(); nav.pressBarForTest(); relayout()
+        val (x, y) = nav.buttonPointForTest("forward")
+        holdAndDrag(x, y, 450L, x - 60f * d, y + 90f * d)
+        assertTrue(nav.isDetached); assertTrue("the keyboard stays open while it is carried", nav.keyboardShowing)
+        val o = nav.outlineForTest()
+        assertTrue("inside the page: ${o.toList()}", o[0] >= 0 && o[2] <= 600 && o[1] >= 0 && o[3] <= 900)
+    }
+
+    @Test fun aSecondFingerEndsTheWaitForALongPress() {
+        openPanel()
+        val (x, y) = nav.barPointForTest()
+        val t = SystemClock.uptimeMillis()
+        nav.dispatchTouchEvent(ev(t, t, MotionEvent.ACTION_DOWN, x, y))
+        nav.dispatchTouchEvent(ev(t, t + 100, MotionEvent.ACTION_POINTER_DOWN, x, y))
+        idle(MiniNav.PICK_MS + 200)
+        assertFalse(nav.liftedForTest)
+    }
+
+    @Test fun showAtPutsThePanelUnderTheFingerAndKeepsItInsideThePage() {
+        val loc = IntArray(2); nav.getLocationInWindow(loc)
+        nav.showAt(loc[0] + 300f, loc[1] + 200f); relayout()
+        assertTrue(nav.isOpen); assertTrue(nav.panelShownForTest); assertEquals("no slide: it is just there", 0f, nav.panelOffsetForTest, 0.5f)
+        val o = nav.outlineForTest()
+        assertEquals("centred on the finger", 300f, (o[0] + o[2]) / 2f, 4f)
+        assertEquals("a little below it", 200f + MiniNav.SHOW_BELOW_DP * d, o[1].toFloat(), 4f)
+        assertTrue("remembered: ${rec.geom?.toList()}", rec.geom != null)
+        nav.showAt(loc[0] + 5f, loc[1] + 890f); relayout()
+        val e = nav.outlineForTest()
+        assertTrue("bottom left: still inside the page ${e.toList()}", e[0] >= 0 && e[2] <= 600 && e[1] >= 0 && e[3] <= 900)
+        nav.showAt(loc[0] + 598f, loc[1] + 2f); relayout()
+        val f = nav.outlineForTest()
+        assertTrue("top right: still inside the page ${f.toList()}", f[0] >= 0 && f[2] <= 600 && f[1] >= 0 && f[3] <= 900)
+        assertEquals("shown once, never closed", listOf(true), rec.opened)
+    }
+
+    @Test fun showAtWhileItIsOpenMovesItThereAndTheKeyboardStaysOpen() {
+        openPanel(); nav.pressBarForTest(); relayout()
+        val loc = IntArray(2); nav.getLocationInWindow(loc)
+        nav.showAt(loc[0] + 280f, loc[1] + 300f); relayout()
+        assertTrue(nav.keyboardShowing); assertTrue(nav.isOpen)
+        val o = nav.outlineForTest()
+        assertEquals("centred on the finger (the wide panel)", 280f, (o[0] + o[2]) / 2f, 6f)
+        assertTrue("moved: ${o.toList()}", nav.isDetached)
     }
 
     @Test fun aCornerDragResizesTheKeyboardAndItKeepsTypingAndGliding() {
