@@ -85,6 +85,9 @@ class MediaList(private val max: Int = 48) {
     private var version = 0
     private var countVersion = -1
     private var countCache = 0
+    /** True when this page loaded a stream playlist (HLS or DASH): it holds a video player, and a page with one cannot enter the engine's back/forward cache (RX3-BK2). */
+    fun hasStream(): Boolean = items.any { it.kind != MediaKind.FILE }
+
     fun usableCount(): Int {
         if (countVersion != version) { countCache = usableUnsorted().size; countVersion = version }
         return countCache

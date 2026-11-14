@@ -152,6 +152,9 @@ class BackLab(private val log: (String) -> Unit = {}) {
         if (loading || stream || noStoreKeys.contains(k)) notKeptKeys.add(k) else notKeptKeys.remove(k)
     }
 
+    /** The extension saw [n] requests still open when [url] was left: a page with open requests cannot enter the engine's back/forward cache, whatever the engine said about its load. */
+    fun pending(url: String, n: Int) { if (n <= 0) return; val k = BackScrollRules.keyOf(url); if (k.isNotEmpty()) notKeptKeys.add(k) }
+
     /** True when Back to [url] will certainly have to load it again (so its picture goes up at once). */
     fun notKept(url: String): Boolean { val k = BackScrollRules.keyOf(url); return notKeptKeys.contains(k) || noStoreKeys.contains(k) }
 

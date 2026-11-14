@@ -128,6 +128,17 @@ class BackLabTest {
         assertTrue(lab.notKept("https://a.test/n80"))
     }
 
+    @Test fun aPageLeftWithRequestsStillOpenIsKnownNotToBeKeptWhateverTheLeaveSaid() {
+        val lab = BackLab {}
+        lab.left("https://a.test/feed", loading = false)       // the engine said the page had finished loading when it was left
+        assertFalse(lab.notKept("https://a.test/feed"))
+        lab.pending("https://a.test/feed#x", 3)                // but the extension saw 3 requests still open when the next page began
+        assertTrue(lab.notKept("https://a.test/feed"))
+        lab.pending("https://a.test/other", 0)                 // nothing open: nothing to remember
+        lab.pending("", 5)
+        assertFalse(lab.notKept("https://a.test/other"))
+    }
+
     // ---- the Diagnostics line
 
     @Test fun theLineSaysPlainlyWhatHappened() {
