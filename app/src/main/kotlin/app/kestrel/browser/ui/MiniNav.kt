@@ -69,6 +69,9 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         fun navGlideWordsChanged(text: String) {}
         /** The host names of the sites visited (asked when the keyboard opens; answer on any thread): names like doraby join the words that can be glided. */
         fun navGlideHosts(done: (List<String>) -> Unit) {}
+        /** What the keyboard learned from the person's choices and typing (AU2), as the engine wrote it; read and written on the glide thread (any thread is fine). */
+        fun navGlideLearned(): String? = null
+        fun navGlideLearnedSave(text: String) {}
     }
 
     private val model = MiniKeyboardModel()
@@ -88,6 +91,9 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private var ownWords = UserWords()
     private var siteWords = emptyList<String>()
     private var pendingWord: String? = null     // the word the last glide put in: kept when the next thing is not a correction
+    private var pendingPrev: String? = null     // the word before it (the language's context for what is learned)
+    private var lastGlidePrev: String? = null   // the word before the glide that is being decoded
+    private var afterUndo = false               // a glided word was just deleted: the next word that is kept is the one meant instead
     /** Tests: where the engine comes from (the real one reads the shipped word list). */
     internal var glideFactory: (() -> GlideTyping)? = null
 
@@ -181,6 +187,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     fun closeKeyboard() {
         if (!keyboardShowing) return
         confirmGlide()
+        glide?.saveLearned()
         keys.reset()
         keyboardShowing = false
         keys.visibility = GONE
@@ -201,13 +208,20 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         if (keyboardShowing) { if (on) startGlideEngine(); keys.invalidate() }
     }
 
+    /** Settings > "Forget what the keyboard learned": the own words, the learned word habits and the thumb habit are gone (the activity has cleared what is stored). */
+    fun forgetLearned() {
+        ownWords = UserWords(); siteWords = emptyList(); pendingWord = null; afterUndo = false
+        glide?.forgetAll()
+        post { pushOwnWords() }
+    }
+
     /** What menu > Diagnostics shows for it. */
     fun glideLine(): String = glide?.stats?.line() ?: "Glide typing: " + if (glideOn) "not used yet this run" else "off (Settings)"
 
     private fun startGlideEngine() {
         if (!glideOn) return
         if (glide == null) {
-            glide = glideFactory?.invoke() ?: GlideTyping({ try { context.assets.open("glide/en.klx").use { it.readBytes() } } catch (e: Exception) { null } }, glideExec)
+            glide = glideFactory?.invoke() ?: GlideTyping({ try { context.assets.open("glide/en.klx").use { it.readBytes() } } catch (e: Exception) { null } }, glideExec, loadPersonal = { l.navGlideLearned() }, savePersonal = { l.navGlideLearnedSave(it) })
             ownWords = UserWords.parse(l.navGlideWords())
         }
         prepareGlide()
@@ -243,6 +257,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         val g = glide ?: return
         g.stats.onKept()
         g.accepted(w) { h -> post { l.navGlideHabitChanged(h) } }
+        g.learn(pendingPrev, w, if (afterUndo) 3f else 1f) // kept: the keyboard hears it (a word that replaced a deleted one counts more: the person had to correct)
+        afterUndo = false
     }
 
     private fun glideDone(res: GlideResult) {
@@ -252,6 +268,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         if (best == null) { keys.showNoWord(); return }
         model.commitGlide(best.text)
         pendingWord = best.text
+        pendingPrev = lastGlidePrev
         keys.showCandidates(res.candidates.map { it.text })
         bar.invalidate()
     }
@@ -261,8 +278,10 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         val g = glide
         if (!model.swapGlide(word)) return
         pendingWord = null
+        afterUndo = false
         g?.stats?.onPicked()
         g?.accepted(word) { h -> post { l.navGlideHabitChanged(h) } }
+        g?.learn(pendingPrev, word, 3f) // the person CHOSE this word over the keyboard's first guess: it counts three times
         keys.showCandidates(keys.candidateTexts().let { list -> listOf(word) + list.filter { it != word } }.take(3))
         bar.invalidate()
     }
@@ -277,14 +296,18 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
     private fun typed(key: Key) {
         when (key) {
-            Key.Backspace -> if (model.glideActive) { pendingWord = null; glide?.stats?.onUndone() } // right after a glide: the word was wrong
+            Key.Backspace -> if (model.glideActive) { pendingWord = null; afterUndo = true; glide?.stats?.onUndone() } // right after a glide: the word was wrong
             Key.Shift, Key.ToLetters -> {}                                                       // the text does not change
-            else -> confirmGlide()                                                                // typing on, the symbols page or Go: the glided word stays
+            else -> { confirmGlide(); if (key is Key.Ch) afterUndo = false }                     // typing on, the symbols page or Go: the glided word stays
         }
         when (val r = model.press(key)) {
             is KeyResult.Submit -> {
-                val typedWords = model.plainWords()
-                if (typedWords.isNotEmpty()) glide?.learnTyped(typedWords, ownWords) { text -> post { l.navGlideWordsChanged(text) } }
+                val g = glide
+                if (g != null) {
+                    val typedWords = model.plainWords()
+                    if (typedWords.isNotEmpty()) g.learnTyped(typedWords, ownWords) { text -> post { l.navGlideWordsChanged(text) } }
+                    for ((prev, w) in model.typedPairs()) g.learn(prev, w, 1f) // what was typed letter by letter (the glided words were learned when they were kept)
+                }
                 closeKeyboard(); l.navSubmit(r.text)
             }
             KeyResult.None -> { if (!model.glideActive) keys.clearCandidates(); bar.invalidate(); keys.invalidate() }
@@ -667,7 +690,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             if (g == null) return
             prepareGlide() // the key positions as they are now (a no-op when nothing changed since the keyboard opened)
             confirmGlide() // the glide before this one stays: learn from it first (one thread, in order)
-            g.decode(gx, gy, gn, model.previousWord()) { res -> post { glideDone(res) } }
+            lastGlidePrev = model.previousWord()
+            g.decode(gx, gy, gn, lastGlidePrev) { res -> post { glideDone(res) } }
         }
 
         // ------------------------------------------------------------------ draw and touch
