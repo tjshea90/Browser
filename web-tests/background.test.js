@@ -820,15 +820,14 @@ test('page report: a page whose main request this script never saw (a cold start
 
 // ---------------------------------------------------------------- AW1b+: the scriptlet calls of a site are registered BEFORE its document runs
 // The app answers `sc` with "<list generation>:<json>". The extension turns a non-empty answer into a page-world script for the exact host, registered after the library's own.
-const SITE = 'https://site.example/';
-const CALLS = '[["set","adblockDetected","false"],["nostif","nag"]]';
+const SLSITE = 'https://site.example/';
+const SLCALLS = '[["set","adblockDetected","false"],["nostif","nag"]]';
 function scHarness(answers, extra) {
   const regs = [];
   const app = (m) => (m.k === 'sc' ? (answers[m.h] !== undefined ? answers[m.h] : '1:') : standardApp()(m));
   const h = harness(app, Object.assign({ scripts: { list: regs } }, extra || {}));
   return { h, regs, answers };
 }
-const siteRegs = (regs) => regs.filter((r) => r.opts.matches && r.opts.matches[0].indexOf('site.example') >= 0 || (r.opts.matches && r.opts.matches[0].indexOf('embed.example') >= 0));
 /** what a registered one-liner does in the page: the events it dispatches on the document */
 function runCode(code) {
   const got = [];
@@ -839,8 +838,8 @@ function runCode(code) {
 }
 
 test('early scriptlets: the first navigation to a site asks the app, does not wait for it, and registers a page-world script after the library', async () => {
-  const { h, regs } = scHarness({ 'site.example': '1:' + CALLS });
-  const r = h.mainFrame(SITE);
+  const { h, regs } = scHarness({ 'site.example': '1:' + SLCALLS });
+  const r = h.mainFrame(SLSITE);
   assert.ok(!isPromise(r), 'a site seen for the first time never holds its request up');
   eq(r, {});
   await until(() => regs.length === 2, 'the site script');
@@ -848,7 +847,7 @@ test('early scriptlets: the first navigation to a site asks the app, does not wa
   const o = regs[1].opts;
   eq(o.matches, ['*://site.example/*']);
   assert.equal(o.runAt, 'document_start'); assert.equal(o.world, 'MAIN'); assert.equal(o.allFrames, true); assert.equal(o.matchAboutBlank, true); assert.equal(o.matchOriginAsFallback, true);
-  eq(runCode(o.js[0].code), [['__kst_sl_v1', CALLS]]);   // the exact text arrives, quotes and all
+  eq(runCode(o.js[0].code), [['__kst_sl_v1', SLCALLS]]);   // the exact text arrives, quotes and all
   assert.equal(h.of('sc').length, 1);
   assert.equal(h.of('sc')[0].h, 'site.example');
 });
@@ -856,17 +855,17 @@ test('early scriptlets: the first navigation to a site asks the app, does not wa
 test('early scriptlets: the script text is a harmless one-liner whatever the calls contain', async () => {
   const nasty = '[["rpnt","script","</script><!--\\u002a/ \\" \\\\ \'x\'"]]';
   const { h, regs } = scHarness({ 'site.example': '1:' + nasty });
-  h.mainFrame(SITE);
+  h.mainFrame(SLSITE);
   await until(() => regs.length === 2, 'the site script');
   eq(runCode(regs[1].opts.js[0].code), [['__kst_sl_v1', nasty]]);
   assert.ok(!/\n/.test(regs[1].opts.js[0].code));
 });
 
 test('early scriptlets: a site that already has a script waits for the app before its next document, and an unchanged answer registers nothing again', async () => {
-  const { h, regs } = scHarness({ 'site.example': '1:' + CALLS });
-  h.mainFrame(SITE);
+  const { h, regs } = scHarness({ 'site.example': '1:' + SLCALLS });
+  h.mainFrame(SLSITE);
   await until(() => regs.length === 2, 'the site script');
-  const again = h.mainFrame(SITE);
+  const again = h.mainFrame(SLSITE);
   assert.ok(isPromise(again), 'a reload after a Shields or Settings switch must be clean: the answer is awaited');
   eq(await again, {});
   assert.equal(h.of('sc').length, 2);
@@ -875,23 +874,23 @@ test('early scriptlets: a site that already has a script waits for the app befor
 });
 
 test('early scriptlets: Shields or the Settings switch turned off (empty answer) unregisters the script BEFORE the next document starts', async () => {
-  const { h, regs, answers } = scHarness({ 'site.example': '1:' + CALLS });
-  h.mainFrame(SITE);
+  const { h, regs, answers } = scHarness({ 'site.example': '1:' + SLCALLS });
+  h.mainFrame(SLSITE);
   await until(() => regs.length === 2, 'the site script');
   answers['site.example'] = '1:';
-  eq(await h.mainFrame(SITE), {});
+  eq(await h.mainFrame(SLSITE), {});
   assert.equal(regs[1].gone, true, 'the stale script is gone by the time the request is allowed');
   assert.equal(regs.length, 2);
-  assert.ok(!isPromise(h.mainFrame(SITE)), 'nothing registered any more: no wait, and the empty answer is remembered for a while');
+  assert.ok(!isPromise(h.mainFrame(SLSITE)), 'nothing registered any more: no wait, and the empty answer is remembered for a while');
   assert.equal(h.of('sc').length, 2);
 });
 
 test('early scriptlets: changed calls (a list update) replace the registration, the old one is removed', async () => {
-  const { h, regs, answers } = scHarness({ 'site.example': '1:' + CALLS });
-  h.mainFrame(SITE);
+  const { h, regs, answers } = scHarness({ 'site.example': '1:' + SLCALLS });
+  h.mainFrame(SLSITE);
   await until(() => regs.length === 2, 'the site script');
   answers['site.example'] = '1:[["nowoif"]]';
-  await h.mainFrame(SITE);
+  await h.mainFrame(SLSITE);
   assert.equal(regs.length, 3);
   assert.equal(regs[1].gone, true); assert.equal(regs[2].gone, false);
   eq(runCode(regs[2].opts.js[0].code), [['__kst_sl_v1', '[["nowoif"]]']]);
@@ -900,8 +899,8 @@ test('early scriptlets: changed calls (a list update) replace the registration, 
 test('early scriptlets: a new list generation drops every early script (they are asked for again on the next visit)', async () => {
   let gen = 1;
   const regs = [];
-  const h = harness((m) => (m.k === 'sc' ? gen + ':' + CALLS : (m.k === 'cfg' ? `1:${gen}:${ID}` : standardApp()(m))), { scripts: { list: regs } });
-  h.mainFrame(SITE);
+  const h = harness((m) => (m.k === 'sc' ? gen + ':' + SLCALLS : (m.k === 'cfg' ? `1:${gen}:${ID}` : standardApp()(m))), { scripts: { list: regs } });
+  h.mainFrame(SLSITE);
   await until(() => regs.length === 2, 'the site script');
   gen = 2;
   h.mainFrame('https://other.example/');
@@ -909,24 +908,24 @@ test('early scriptlets: a new list generation drops every early script (they are
 });
 
 test('early scriptlets: while the app\'s lists are loading (generation 0) nothing is registered and nothing is remembered', async () => {
-  const { h, regs, answers } = scHarness({ 'site.example': '0:' + CALLS });
-  h.mainFrame(SITE);
+  const { h, regs, answers } = scHarness({ 'site.example': '0:' + SLCALLS });
+  h.mainFrame(SLSITE);
   await until(() => h.of('sc').length === 1, 'the question');
   await tick(20);
   assert.equal(regs.length, 1, 'only the library');
-  answers['site.example'] = '1:' + CALLS;
-  h.mainFrame(SITE);
+  answers['site.example'] = '1:' + SLCALLS;
+  h.mainFrame(SLSITE);
   await until(() => regs.length === 2, 'the script once the lists are in');
   assert.equal(h.of('sc').length, 2, 'asked again at once');
 });
 
 test('early scriptlets: "nothing here" is remembered for a minute, then asked again', async () => {
   const { h, regs } = scHarness({});
-  h.mainFrame(SITE); await until(() => h.of('sc').length === 1, 'the question'); await tick(20);
-  h.mainFrame(SITE); h.mainFrame(SITE); await tick(20);
+  h.mainFrame(SLSITE); await until(() => h.of('sc').length === 1, 'the question'); await tick(20);
+  h.mainFrame(SLSITE); h.mainFrame(SLSITE); await tick(20);
   assert.equal(h.of('sc').length, 1, 'no new question within the minute');
   h.clock.now += 61000;
-  h.mainFrame(SITE); await until(() => h.of('sc').length === 2, 'the question after the minute');
+  h.mainFrame(SLSITE); await until(() => h.of('sc').length === 2, 'the question after the minute');
   assert.equal(regs.length, 1);
 });
 
@@ -956,23 +955,23 @@ test('early scriptlets: at most 40 sites are kept, the least recently used one i
 });
 
 test('early scriptlets: a registration the browser refuses, an app that cannot answer and a library that could not be registered never break a request', async () => {
-  const refuse = scHarness({ 'site.example': '1:' + CALLS }, { scripts: { list: [], fail: (o) => o.matches && o.matches[0] === '*://site.example/*' } });
-  eq(refuse.h.mainFrame(SITE), {});
+  const refuse = scHarness({ 'site.example': '1:' + SLCALLS }, { scripts: { list: [], fail: (o) => o.matches && o.matches[0] === '*://site.example/*' } });
+  eq(refuse.h.mainFrame(SLSITE), {});
   await until(() => refuse.h.of('sc').length === 1, 'the question'); await tick(20);
-  eq(refuse.h.mainFrame(SITE), {});                            // remembered as "nothing" for a while: no wait, no second question
+  eq(refuse.h.mainFrame(SLSITE), {});                            // remembered as "nothing" for a while: no wait, no second question
   const broken = harness((m) => { if (m.k === 'sc') throw new Error('app down'); return standardApp()(m); }, { scripts: { list: [] } });
-  eq(broken.mainFrame(SITE), {});
+  eq(broken.mainFrame(SLSITE), {});
   await tick(20);
-  eq(broken.mainFrame(SITE), {});
+  eq(broken.mainFrame(SLSITE), {});
   const noLib = harness(standardApp(), { scripts: { list: [], fail: (o) => o.js && o.js[0].file === 'scriptlets-main.js' } });
-  eq(noLib.mainFrame(SITE), {});
+  eq(noLib.mainFrame(SLSITE), {});
   await tick(20);
   assert.equal(noLib.of('sc').length, 0, 'without the library there is nothing to hand the calls to: no question either');
 });
 
 test('early scriptlets: the numbers for Diagnostics say how many pages ran calls and how many of them before the page\'s first script', async () => {
-  const { h, regs } = scHarness({ 'site.example': '1:' + CALLS });
-  h.mainFrame(SITE);
+  const { h, regs } = scHarness({ 'site.example': '1:' + SLCALLS });
+  h.mainFrame(SLSITE);
   await until(() => regs.length === 2, 'the site script');
   h.message({ k: 'sl', r: '4:1:1', h: 'site.example', f: 1 }, 1);
   h.message({ k: 'sl', r: '2:0:0', h: 'site.example', f: 0 }, 1);  // more calls of the same page: the page is not counted twice
