@@ -2170,7 +2170,14 @@ open class BrowserActivity : Activity(), DockListener {
             tapAgeMs = now - tab.lastTapAt,
             tapHref = tab.lastTapHref,
             uri = uri,
+            adHost = listedAdHost(from, to),
         )
+    }
+
+    /** RX3-G6: is [host] (a destination the page wants to jump to, third-party to [pageHost]) one the block lists name as an ad or tracker host? Host rules only: one hash lookup, no page address, no query. */
+    private fun listedAdHost(pageHost: String, host: String): Boolean {
+        val fs = app.kestrel.browser.shield.Engine.peek() ?: return false
+        return try { app.kestrel.core.filter.Verdict.isBlocked(fs.check("https://$host/", pageHost, app.kestrel.core.filter.RequestType.SCRIPT)) } catch (e: Exception) { false }
     }
 
     /**

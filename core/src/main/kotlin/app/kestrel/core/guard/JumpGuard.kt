@@ -23,9 +23,18 @@ object JumpGuard {
      * @param tapAgeMs age of the last tap report
      * @param tapHref address of the link the tap was on, "" when it was not on a link
      * @param uri where the page wants to go
+     * @param adHost (RX3-G6) the destination host is one the block lists name as an ad or tracker host. Such a jump is stopped at ANY delay (play, wait 5 s, the page jumps to an ad), unless a recent real tap
+     *   was on a link to exactly this address: nothing a person taps leads to an ad network's own host by itself, and sign-in providers are not on ad lists.
      */
-    fun decide(crossSite: Boolean, touchAgeMs: Long, tapArrived: Boolean, tapAgeMs: Long, tapHref: String, uri: String): Verdict {
+    fun decide(crossSite: Boolean, touchAgeMs: Long, tapArrived: Boolean, tapAgeMs: Long, tapHref: String, uri: String, adHost: Boolean = false): Verdict {
         if (!crossSite) return Verdict.ALLOW
+        if (adHost) {
+            if (touchAgeMs <= TAP_WINDOW_MS) {
+                if (!tapArrived) return Verdict.WAIT
+                if (tapAgeMs <= TAP_WINDOW_MS && tapHref.isNotEmpty() && sameAddress(tapHref, uri)) return Verdict.ALLOW
+            }
+            return Verdict.STOP
+        }
         if (touchAgeMs > TAP_WINDOW_MS) return Verdict.ALLOW // nobody touched the screen lately: not a tap-triggered jump (other rules are not this guard's business)
         if (!tapArrived) return Verdict.WAIT
         if (tapAgeMs > TAP_WINDOW_MS) return Verdict.ALLOW
