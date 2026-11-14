@@ -18,6 +18,9 @@ class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int 
     private val recent = HashMap<String, Float>()       // word -> how often and how LATELY it was used (every use of any word fades all of them a little: a short memory next to the long one)
     private var total = 0f
 
+    /** What this person's glides LOOK like for the words they meant (AX1): kept, saved, faded and forgotten together with the rest of what was learned. */
+    val patterns = PatternMemory()
+
     val wordCount: Int @Synchronized get() = words.size
     val pairCount: Int @Synchronized get() = pairs.size
     val isEmpty: Boolean @Synchronized get() = words.isEmpty()
@@ -107,7 +110,7 @@ class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int 
         return Math.min(MAX_PAIR_TRUST, n / (n + PAIR_HALF))
     }
 
-    @Synchronized fun clear() { words.clear(); pairs.clear(); pairTotals.clear(); triples.clear(); tripleTotals.clear(); confusions.clear(); recent.clear(); total = 0f }
+    @Synchronized fun clear() { words.clear(); pairs.clear(); pairTotals.clear(); triples.clear(); tripleTotals.clear(); confusions.clear(); recent.clear(); total = 0f; patterns.clear() }
 
     // ------------------------------------------------------------------ keeping it small
 
@@ -139,6 +142,7 @@ class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int 
         while (t.hasNext()) { val e = t.next(); e.setValue(e.value * 0.5f); if (e.value < 0.2f) t.remove() }
         val c = confusions.entries.iterator()
         while (c.hasNext()) { val e = c.next(); e.setValue(e.value * 0.7f); if (e.value < 0.2f) c.remove() } // a correction is remembered a little longer than a word count
+        patterns.decay()
         rebuildTotals()
     }
 
@@ -151,7 +155,7 @@ class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int 
 
     // ------------------------------------------------------------------ saving
 
-    /** One line per entry: `w word weight`, `p previous word weight`, `t second-last last word weight`, `c guessed meant weight` and `r word recency` (a file written before AV2 has only the first two kinds). */
+    /** One line per entry: `w word weight`, `p previous word weight`, `t second-last last word weight`, `c guessed meant weight`, `r word recency` and `s word confirmations u0 v0 ... u15 v15` (the shape of this person's glides for the word, AX1; a file written before AV2 has only the first two kinds, and an older keyboard skips the lines it does not know). */
     @Synchronized fun serialize(): String {
         val sb = StringBuilder(words.size * 16 + pairs.size * 24 + triples.size * 32 + confusions.size * 24 + recent.size * 16)
         for ((k, v) in words) sb.append("w ").append(k).append(' ').append("%.2f".format(v)).append('\n')
@@ -159,6 +163,7 @@ class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int 
         for ((k, v) in triples) sb.append("t ").append(k).append(' ').append("%.2f".format(v)).append('\n')
         for ((k, v) in confusions) sb.append("c ").append(k).append(' ').append("%.2f".format(v)).append('\n')
         for ((k, v) in recent) sb.append("r ").append(k).append(' ').append("%.3f".format(v)).append('\n')
+        sb.append(patterns.serialize())
         return sb.toString()
     }
 
@@ -203,6 +208,7 @@ class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int 
             synchronized(m) {
                 for (line in text.lineSequence()) {
                     val p = line.trim().split(' ')
+                    if (p.size > 3 && p[0] == "s") { m.patterns.parseLine(p); continue } // a shape's last number may be zero or negative: it is not a weight
                     val v = p.lastOrNull()?.toFloatOrNull() ?: continue
                     if (v <= 0f) continue
                     when {
