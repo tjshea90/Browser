@@ -1,21 +1,22 @@
-# CHECKPOINT 2177 — read me first, then TASKS.md
+# CHECKPOINT 2178 — read me first, then TASKS.md
 
-**Written:** 2026-11-14T16:05:58Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `75df685` (this checkpoint is the commit after it)
+**Written:** 2026-11-14T16:06:37Z · **tests:** 1 RED: test_handoff.sh (0 green)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `4bd8519` (this checkpoint is the commit after it)
 
 ## Just done
-AW1d DONE (network $domain=site.* entity domains in Kotlin + engine.js, differential 100% on the mini corpus and 67,655 real-list requests, ENTITY_DOMAIN skips 279 -> 37, emulator proof), AW1e/AW1f/AW1g ticked with evidence; DefaultListsRegressionTest has the new safety guards; full suites green (core all, app 291, lint 0 errors, web-tests 223/223); HANDOFF.md + research 14.3/14.4 written; default.kfs 6,643 KB
+pre-ship: alpha37 (includes alpha36): Better ad blocking. 1) A site now gets its own anti-ad fixes BEFORE the page's own scripts run, so 'turn off your ad blocker' walls, countdown timers, pop-up openers and ad scripts are stopped at the start instead of after the page has already shown them. These are the fixes the blocking lists have for each site. Settings > Fix ad and anti-adblock scripts switches points 1 to 3 off. 2) When an ad file is blocked, the page gets a harmless empty stand-in of the same kind where the lists say so (an empty script, a 1x1 picture, a silent clip, an ad library that answers 'no ad available'), so a video player that waits for its ad code starts the video instead of hanging. 3) For some video players and news feeds the ad part of the data they download is cut out before the page reads it (the way the lists handle YouTube-style players), links on link-shortener pages point at the real target, and the common 'ad blocker detected' scripts are told there is no blocker. 4) Blocking rules for whole families of sites (one name with any ending, like yts.*) now work, and the lists' Quick fixes list is added (it refreshes daily with the others). 5) Menu > Diagnostics > Blocker line now says how many pages ran fixes, how many of them before the page's own scripts, and how many blocked files got a stand-in. Not tried on the real tablet or on real sites yet, only on a test page on the emulator: if a site breaks, switch Shields off for that site or turn the Settings switch off.
 
 ## Do this next
-AW1h SHIP alpha37: bump geckoapp/build.gradle.kts versionCode 138 / versionName 0.3.0-alpha37, write the ASCII plain-words release note (what the owner sees: pop-up walls and countdowns fixed before the page runs, blocked ad files answered so players start, YouTube-style ad data rewritten, link-shortener links point at the target, entity-domain rules, Quick fixes list; the Settings switch Fix ad and anti-adblock scripts controls it; Diagnostics numbers; NOT run on the tablet or on real sites), bash ship.sh gecko "note" (gates: handoff self-test, ext manifest 1.0.138), dispatch android.yml (mcp__github__actions_run_trigger owner tjshea90 repo Browser ref ccr-a57c163e-mtq8js inputs app=gecko full_build=true note), wait for run + tag, get_release_by_tag, bash tools/record-release.sh <tag> note, claim.sh AW1h --done and AW1i --done, answer the owner in plain words (AW1i repeated message 37; re-list open items: Diagnostics paste for Glide typing + Mini keyboard in page fields, AI1c Doraby/Cloudflare wording + page report, choppy-video link, scroll/Back feel, Proton Mail numbers + keyboard test, scheduled GitHub ad-list build yes/no, private signing key SEC-1, network lab results/LIC-1/UI-3/P2b, AS1 stored libraries yes/no, AS2 per-process memory line); heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN is disabled
+ship.sh gates and releases this (gecko)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M geckoapp/build.gradle.kts
 
 ## Last ten checkpoints
 ```
+  4bd8519 ckpt 2177: AW1d DONE (network $domain=site.* entity domains in Kotlin + engine.js, diffe
   7e29314 ckpt 2165: AW1e BUILT and EMULATOR-PROVEN (Gecko 160 lab): trusted-replace-fetch-respons
   7cfc54d ckpt 2154: AW1c DONE and EMULATOR-PROVEN (Gecko 160): data: stand-ins for script/image/x
   41441d2 ckpt 2148: AW1c BUILT (not yet emulator-proven): engine.js mirrors FilterSet.check for $
@@ -25,8 +26,4 @@ AW1h SHIP alpha37: bump geckoapp/build.gradle.kts versionCode 138 / versionName 
   476faa3 ckpt 2095: AW1b step 1 DONE (core): ScriptletRules (uBO argument syntax, 23 canonical na
   d580e95 ckpt 2088: AW1a done: blocker mapped and the plan written to research/ADBLOCK_ENGINE.md 
   cdd4e9d ckpt 2086: owner message 37 written into TASKS (AW1 finish the ad blocking: scriptlets, 
-  aba038a ckpt 2083: heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN DISABLED (update_trigger enabled=fals
 ```
-
-(11 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
