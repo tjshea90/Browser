@@ -289,21 +289,113 @@ try {
 } catch (e) { guardState = 'page guard FAILED: ' + (e && e.message); }
 
 // ---------------------------------------------------------------- scriptlets (AW1b)
-// scriptlets-main.js (registered here, runs inside every page and frame like the guard) holds our own implementations of the list's scriptlets. content.js hands it the calls the lists have for the page's
-// site (they arrive in the CSS answer); it tells us how many ran. Only counted here, for Diagnostics.
-var slState = 'scriptlets: starting', slPages = 0, slCalls = 0, slBad = 0;
+// scriptlets-main.js (registered here, runs inside every page and frame like the guard) holds our own implementations of the list's scriptlets. The calls the lists have for a site reach it two ways:
+//  1. EARLY (below): the moment a document of that site starts to load, its calls are registered as a tiny page-world script that runs BEFORE the page's own scripts (a page that checks for a blocker while
+//     it parses, sets a flag in its first inline script or inserts a bait script is only caught this way);
+//  2. LATE (content.js): the calls ride in the CSS answer and are handed over once it arrives - the fallback when the race above was lost.
+// The library runs each call once, so both together never run a call twice, and it tells us how many ran (and whether that was before the page's first script). Only counted here, for Diagnostics.
+var slState = 'scriptlets: starting', slPages = 0, slCalls = 0, slBad = 0, slEarlyPages = 0;
+var slEarlySet = 0, slEarlyAsks = 0, slEarlyFail = '';
+var slFailed = false;      // the library itself could not be registered: nothing below is worth doing
 browser.runtime.onMessage.addListener(function (m, sender) {
   if (!m || m.k !== 'sl' || !sender || !sender.tab) return undefined;
-  var p = String(m.r || '').split(':');
-  slPages++; slCalls += parseInt(p[0], 10) || 0; slBad += parseInt(p[1], 10) || 0;
+  var p = String(m.r || '').split(':'); // "<calls run>:<calls that threw>:<1 = before the page's first script>" (only what is new since the last report of that document)
+  slCalls += parseInt(p[0], 10) || 0; slBad += parseInt(p[1], 10) || 0;
+  if (m.f) { slPages++; if (p[2] === '1') slEarlyPages++; } // the first report of a document counts the page
   markStats();
   return undefined;
 });
+var slLib = null; // promise of the library's registration (resolves true/false): the per-host scripts are registered after it so they run after it
 try {
-  browser.contentScripts.register({
+  slLib = browser.contentScripts.register({
     matches: ['http://*/*', 'https://*/*'], js: [{ file: 'scriptlets-main.js' }], runAt: 'document_start', allFrames: true, matchAboutBlank: true, matchOriginAsFallback: true, world: 'MAIN',
-  }).then(function () { slState = 'scriptlets on'; }, function (e) { slState = 'scriptlets FAILED: ' + (e && e.message); });
-} catch (e) { slState = 'scriptlets FAILED: ' + (e && e.message); }
+  }).then(function () { slState = 'scriptlets on'; return true; }, function (e) { slState = 'scriptlets FAILED: ' + (e && e.message); slFailed = true; return false; });
+} catch (e) { slState = 'scriptlets FAILED: ' + (e && e.message); slFailed = true; }
+
+// Early delivery. A host's script is a one-liner in the page world that hands the calls to the library with the same DOM event content.js uses. It is registered for the exact host (every frame of it, and the
+// about:blank / srcdoc frames it creates), kept for the most recent SL_MAX hosts and dropped when the lists change.
+//  - A host seen for the first time does NOT hold its request up: the answer (one local message and one registration) beats the document's first bytes over a hotspot (DNS, TCP and TLS come first), and when
+//    it does not the late hand-off still runs the calls a moment later.
+//  - A host that already has a script waits (at most SL_WAIT_MS) for the app's answer before its next document starts: a Shields switch or the Settings switch may have changed, and a reload after a switch
+//    must be clean. The wait is one local message, only for hosts that have calls.
+var slReg = new Map();     // host -> { reg, payload }, least recently used first
+var slWait = new Map();    // host -> promise of the question and the registration in flight
+var slNone = new Map();    // host -> when the app last said "nothing to run here" (asked again after SL_TTL, or when the lists change)
+var SL_MAX = 40, SL_TTL = 60000, SL_WAIT_MS = 250;
+function slCode(payload) {
+  return '(function(){try{document.dispatchEvent(new CustomEvent("__kst_sl_v1",{detail:' + JSON.stringify(payload) + '}))}catch(e){}})()';
+}
+function slDrop(entry) { try { entry.reg.unregister().then(noop, noop); } catch (e) { /* already gone */ } }
+function slReset() { // the lists changed (or the app restarted its engine): every remembered answer is stale
+  slNone.clear();
+  slReg.forEach(slDrop);
+  slReg.clear();
+}
+function slRemember(host) { // "no calls here" is remembered for a while; the map stays small
+  slNone.delete(host);
+  if (slNone.size >= 300) slNone.delete(slNone.keys().next().value);
+  slNone.set(host, Date.now());
+}
+function slSet(host, payload, gen) {
+  var cur = slReg.get(host);
+  if (!payload) {
+    if (gen > 0) slRemember(host);
+    if (!cur) return Promise.resolve();
+    slReg.delete(host);
+    slDrop(cur);
+    return Promise.resolve();
+  }
+  slNone.delete(host);
+  if (cur && cur.payload === payload) return Promise.resolve();
+  return (slLib || Promise.resolve(true)).then(function (ok) {
+    if (ok === false) return undefined;
+    return browser.contentScripts.register({
+      matches: ['*://' + host + '/*'], js: [{ code: slCode(payload) }], runAt: 'document_start', allFrames: true, matchAboutBlank: true, matchOriginAsFallback: true, world: 'MAIN',
+    }).then(function (reg) {
+      slEarlySet++;
+      var old = slReg.get(host);
+      slReg.delete(host);
+      slReg.set(host, { reg: reg, payload: payload });
+      if (old) slDrop(old);
+      while (slReg.size > SL_MAX) { var k = slReg.keys().next().value; var e = slReg.get(k); slReg.delete(k); if (e) slDrop(e); }
+    });
+  }).catch(function (e) { slEarlyFail = String((e && e.message) || e).slice(0, 80); slRemember(host); }); // a host the browser refuses as a match pattern is not asked about again for a while
+}
+function slAsk(host) {
+  var w = slWait.get(host);
+  if (w) return w;
+  slEarlyAsks++;
+  var done = function () { slWait.delete(host); };
+  w = send({ k: 'sc', h: host }).then(function (r) {
+    var s = (typeof r === 'string') ? r : '', c = s.indexOf(':');
+    var gen = c > 0 ? (parseInt(s.slice(0, c), 10) || 0) : 0;
+    if (gen > 0) noteGeneration(gen);
+    return slSet(host, gen > 0 ? s.slice(c + 1) : '', gen); // generation 0 = the app's lists are still loading: no calls yet and nothing remembered
+  }, function () { return slSet(host, '', 0); }).then(done, done);
+  slWait.set(host, w);
+  return w;
+}
+/** Called when a document of [host] is about to be requested. Returns a promise the request must wait for, or null. */
+function slBefore(host) {
+  if (slFailed) return null;
+  var cur = slReg.get(host);
+  if (cur) {
+    slReg.delete(host); slReg.set(host, cur); // most recently used
+    return Promise.race([slAsk(host), later(SL_WAIT_MS)]);
+  }
+  var t = slNone.get(host);
+  if (t !== undefined && Date.now() - t < SL_TTL) return null;
+  slAsk(host); // not awaited
+  return null;
+}
+/** A frame's own site: after the network decision (a cancelled frame never loads, so it gets nothing). */
+function slFrame(d, r) {
+  if (slFailed) return r;
+  var fh = pageHost(d.url);
+  if (!fh) return r;
+  var after = function (v) { if (v && v.cancel) return v; var w = slBefore(fh); return w ? w.then(function () { return v; }) : v; };
+  return (r && typeof r.then === 'function') ? r.then(after) : after(r);
+}
 
 // ---------------------------------------------------------------- the request listener
 var hostOfPage = new Map(); // page URL -> host (every request of a page names the same page)
