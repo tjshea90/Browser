@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Does the ad skipper for OTHER video players (players.js, RX3-G7, research/YOUTUBE_ADS.md section 6) work in the REAL engine?
 
-  python3 -u -I tools/emu/playerlab_emu.py [--port 8090] [--log <guardlab logfile>] [--wait 240] [--path /playerlab] [--grep "playerads|ytads|ext-state"]
+  python3 -u -I tools/emu/playerlab_emu.py [--port 8090] [--log <guardlab logfile>] [--wait 240] [--path /playerlab] [--grep "playerads|ytads|ext-state"] [--tap X,Y]
 
 Start the lab server first (python3 -B -I tools/sitelab/guardlab.py 8090 <logfile>) and install the debug APK (./gradlew :geckoapp:assembleDebug -PgeckoAbi=x86_64; after a change to the extension's files without a
 version change run `adb shell pm clear app.kestrel.browser.gecko.debug` first: a built-in extension is installed again only when its manifest version changes, and the first start after a clear takes about 70 s).
@@ -35,6 +35,7 @@ if __name__ == "__main__":
     wait = int(a[a.index("--wait") + 1]) if "--wait" in a else 240
     path = a[a.index("--path") + 1] if "--path" in a else "/playerlab"
     grep = a[a.index("--grep") + 1] if "--grep" in a else r"playerads|ytads|ext-state"
+    tap = a[a.index("--tap") + 1] if "--tap" in a else ""
     adb("reverse", "tcp:%d" % port, "tcp:%d" % port)
     adb("shell", "am force-stop " + PKG)
     time.sleep(3)
@@ -43,7 +44,11 @@ if __name__ == "__main__":
     t0 = time.time()
     adb("shell", "am start -a android.intent.action.VIEW -d http://localhost:%d%s -p %s" % (port, path, PKG))
     print("cold start from a link at 0 s; waiting up to %d s for the five scenarios" % wait, flush=True)
+    tapped = False
     while time.time() - t0 < wait:
+        if tap and not tapped and any(" load " in l for l in lines_since(log, off)):
+            time.sleep(4)   # the page has settled
+            adb("shell", "input tap " + tap.replace(",", " ")); tapped = True; print("tapped %s at %.0f s" % (tap, time.time() - t0), flush=True)
         if any(" DONE " in l or l.endswith(" DONE") or "DONE " in l for l in lines_since(log, off)):
             break
         time.sleep(3)

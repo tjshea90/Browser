@@ -14,6 +14,8 @@
               Content-Range. The app's Health lines "media verify asked=N" and "media verified length=... counted=N of M" show that only the big one ends up counted for the badge.
   /hls-lab    RX3-V5: a page that asks for three stream playlists (the segments are never requested): /live.m3u8 (no end list), /short.m3u8 (a 12 s clip) and /film.m3u8 (2 minutes with an advertising
               break marked by CUE-OUT / CUE-IN). The app's Health lines "media look live=.. length=..s advertising=..s in N breaks counted=N of M" show what the early look found.
+  /playlab    RX3-S1: ONE real, audible 440 Hz tone (/tone.wav, 30 s) in a <video>; a tap anywhere starts it (the app refuses audible autoplay without a tap), the page pauses it after 6 s, plays it again 3 s later,
+              pauses it after 6 s more and ends with DONE. The app's Health lines "neon video playing=true/false front=true" show the glow being held while it plays.
   /playerlab  RX3-G7: five mock video players on one page, driven by the page itself (no touch needed): an ordinary video (no ad words), a JW-style player (jw-flag-ads on its root), a Video.js-style player
               (vjs-ad-loading, then vjs-ad-playing), a Google-IMA-style host (the ad video inside .ima-ad-container) and a JW-style ad with a skip button (.jw-skip, .jw-skippable). Each ad is a REAL 12 s silent
               media element. The log says how long the ad took (about 12000 ms = not skipped, a few hundred = fast-forwarded), at what speed it ran, and which events the skip button got. Ends with a DONE line.
@@ -219,6 +221,35 @@ def hls_playlist(kind):
         out += "#EXTINF:6.0,\n/seg/film%d.ts\n" % i
     return out + "#EXT-X-ENDLIST\n"
 
+def tone_wav(seconds=30):
+    """A real tone (440 Hz, 8-bit mono, 8 kHz, about 30 % of full scale): unlike silence the engine counts it as audible, so the media session of the page really starts."""
+    import math
+    n = 8000 * seconds
+    hdr = b"RIFF" + struct.pack("<I", 36 + n) + b"WAVEfmt " + struct.pack("<IHHIIHH", 16, 1, 1, 8000, 8000, 1, 8) + b"data" + struct.pack("<I", n)
+    return hdr + bytes(128 + int(40 * math.sin(2 * math.pi * 440 * i / 8000)) for i in range(n))
+
+
+TONE = tone_wav(30)
+
+PLAYLAB = b"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>playlab</title></head>
+<body style="margin:0;font:18px sans-serif"><video id="v" src="/tone.wav" style="width:300px;height:80px;background:#222" preload="auto"></video>
+<div id="go" style="position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,160,0,.35);font-size:28px;padding:40px">TAP ANYWHERE to start the tone</div>
+<script>
+function L(k, v) { try { var x = new XMLHttpRequest(); x.open('GET', '/log?kind=' + encodeURIComponent(k) + '&v=' + encodeURIComponent(v) + '&t=' + Date.now()); x.send(); } catch (e) {} }
+var v = document.getElementById('v'), go = document.getElementById('go');
+['play', 'pause', 'ended'].forEach(function (n) { v.addEventListener(n, function () { L('media', n); }); });
+L('load', 'playlab');
+go.addEventListener('click', function () {
+  go.style.display = 'none';
+  v.play().then(function () { L('started', 'by the tap'); }, function (e) { L('refused', String(e)); });
+  setTimeout(function () { v.pause(); }, 6000);
+  setTimeout(function () { v.play().then(function () { L('started', 'again'); }, function (e) { L('refused-again', String(e)); }); }, 9000);
+  setTimeout(function () { v.pause(); }, 15000);
+  setTimeout(function () { L('DONE', 'play, pause, play, pause'); }, 18000);
+});
+</script></body></html>
+"""
+
 POPAD = b"""<!doctype html><meta charset=utf-8><title>an ad</title><body style="font:20px sans-serif;margin:24px">popad: this is the ad page. If you can see it, the pop-up was NOT stopped.</body>"""
 
 
@@ -272,6 +303,12 @@ class H(http.server.BaseHTTPRequestHandler):
         if u.path in ("/live.m3u8", "/short.m3u8", "/film.m3u8"):
             self._write("GET " + u.path)
             return self._send(200, hls_playlist(u.path[1:].split(".")[0]).encode(), "application/vnd.apple.mpegurl")
+        if u.path == "/playlab":
+            self._write("GET /playlab")
+            return self._send(200, PLAYLAB)
+        if u.path == "/tone.wav":
+            self._write("GET /tone.wav")
+            return self._send(200, TONE, "audio/wav")
         if u.path == "/popad":
             self._write("GET /popad %s   <- the pop-up was NOT stopped" % q.get("n", ["?"])[0])
             return self._send(200, POPAD)
