@@ -335,6 +335,10 @@
         var els = document.elementsFromPoint ? document.elementsFromPoint(e.clientX, e.clientY) : [e.target];
         for (var i = 0; i < els.length && i < 10; i++) if (interactive(els[i])) return;
         var before = window.getSelection ? String(window.getSelection()) : ''; // the engine selects the word AFTER this event: what was selected already must not hide a press on blank space
+        if (before && window.getSelection().rangeCount) { // ... but a press ON the text that is selected belongs to that selection (the engine would select the same word again and nothing would change)
+          var rs = window.getSelection().getRangeAt(0).getClientRects();
+          for (var j = 0; j < rs.length && j < 60; j++) { var q = rs[j]; if (e.clientX >= q.left - 4 && e.clientX <= q.right + 4 && e.clientY >= q.top - 4 && e.clientY <= q.bottom + 4) return; }
+        }
         setTimeout(function () {
           try {
             var sel = window.getSelection ? String(window.getSelection()) : '';

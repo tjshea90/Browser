@@ -97,6 +97,13 @@ test('a selection that was there already does not hide a press on blank space (o
   assert.equal((await opens(page)).length, 1, 'the word is still selected, and a press on blank space below is still open space');
 });
 
+test('a press on the text that is selected already is still the selection\'s, even though nothing changes', async () => {
+  const page = await open(`<p id="t" style="margin:0;padding:20px;width:300px">some words of a paragraph</p><div style="height:600px"></div>`, selectWord);
+  await press(page, [[50, 30]]);
+  await press(page, [[60, 30]]);
+  assert.deepEqual(await opens(page), []);
+});
+
 test('a context menu event a page makes up itself is never believed', async () => {
   const page = await open(`<div style="height:600px"></div>`);
   await page.evaluate(() => document.body.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 50, clientY: 50 })));
