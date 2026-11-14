@@ -139,7 +139,7 @@ test('RX3-G3: the frame never presses on a button, a link or a form control, how
 });
 
 test('RX3-G3: with the guard off for the site nothing is assisted and nothing is sent', async () => {
-  const page = await open(FRAME + LAYER_AD, embedOf('<video src="https://player.example/clip.mp4" style="width:400px;height:300px"></video>'), { off: true });
+  const page = await open(FRAME + LAYER_AD, Object.assign(embedOf('<video src="https://player.example/clip.mp4" style="width:400px;height:300px"></video>'), { off: true }));
   await settle(900);
   const popup = page.waitForEvent('popup', { timeout: 3000 });
   await page.mouse.click(100, 100);
