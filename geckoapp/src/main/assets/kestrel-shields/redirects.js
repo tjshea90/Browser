@@ -269,7 +269,7 @@
     w.isAdBlockActive = false;
   }
 
-  function js(fn) { return '(' + fn.toString() + ')();'; }
+  function js(fn) { return 'try{(' + fn.toString() + ')();}catch(e){}'; } // never an error in the page, whatever state the page left the names in
 
   // ------------------------------------------------------------------ the table (index = id; names as in core RedirectResources.FILES)
   var SCRIPT = ['script'], DATA = ['xmlhttprequest', 'other'], IMAGE = ['image', 'imageset'], MEDIA = ['media'], FRAME = ['sub_frame', 'object'], STYLE = ['stylesheet'];
