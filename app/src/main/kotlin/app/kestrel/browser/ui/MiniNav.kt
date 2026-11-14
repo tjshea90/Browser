@@ -271,6 +271,43 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         post { pushOwnWords() }
     }
 
+    /**
+     * Settings > "Export what the keyboard learned" (AX1): the text of the export file (see [LearnedExport]). With the keyboard open this run, the live model answers (on the glide thread); otherwise the
+     * saved files are read. [done] may run on any thread; call this off the UI thread.
+     */
+    fun exportLearned(done: (String) -> Unit) {
+        val g = glide
+        if (g != null) { g.exportText(null, ownWords, done); return }
+        done(LearnedExport.write(PersonalModel.parse(l.navGlideLearned() ?: ""), l.navGlideHabit(), UserWords.parse(l.navGlideWords())))
+    }
+
+    /**
+     * Settings > "Import what the keyboard learned": the words, pairs, corrections and shapes of an export file are added to what is learned (the same file twice changes nothing). [done] gets what the file
+     * held, or null when it is not an export of this keyboard. May run on any thread; call this off the UI thread.
+     */
+    fun importLearned(text: String, done: (LearnedExport.Summary?) -> Unit) {
+        val g = glide
+        if (g != null) {
+            g.importText(text, false, ownWords, { h -> post { l.navGlideHabitChanged(h) } }) { sum ->
+                if (sum != null) post { l.navGlideWordsChanged(ownWords.serialize()); pushOwnWords() }
+                done(sum)
+            }
+            return
+        }
+        // the keyboard was not opened this run: the saved files are brought together without starting the engine
+        val parsed = LearnedExport.read(text)
+        if (parsed == null) { done(null); return }
+        val mine = PersonalModel.parse(l.navGlideLearned() ?: "")
+        mine.mergeFrom(parsed.model)
+        l.navGlideLearnedSave(mine.serialize())
+        val own = UserWords.parse(l.navGlideWords())
+        for ((w, n) in parsed.ownWords) if (!own.contains(w)) own.add(w, n)
+        l.navGlideWordsChanged(own.serialize())
+        val h = l.navGlideHabit()
+        if (parsed.habit != null && (h == null || Math.abs(h[0]) + Math.abs(h[1]) < 0.01f)) l.navGlideHabitChanged(parsed.habit)
+        done(parsed.summary)
+    }
+
     /** What menu > Diagnostics shows for it. */
     fun glideLine(): String = glide?.stats?.line() ?: "Glide typing: " + if (glideOn) "not used yet this run" else "off (Settings)"
 
