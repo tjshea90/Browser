@@ -1,13 +1,15 @@
-# CHECKPOINT 2343 — read me first, then TASKS.md
+# CHECKPOINT 2344 — read me first, then TASKS.md
 
-**Written:** 2026-11-14T21:29:43Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/new-session-7d9rxz` · **builds on:** `ee766db9` (this checkpoint is the commit after it)
+**Written:** 2026-11-14T21:36:54Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/new-session-7d9rxz` · **builds on:** `2bca742e` (this checkpoint is the commit after it)
 
 ## Just done
-RX3-G1 DONE (guard+library declared in the manifest, world MAIN; emulator-proven: page-world marker at the first script, about:blank frames covered, dynamic registrations removed, handoff gate + tests), RX3-G2 DONE (web tests), RX3-Y1 DONE for the mechanics (caps 4096/8192 trusted, 64 calls/32000 chars, json-edit family + trusted-edit-inbound-object + trusted-prevent-dom-bypass, JSON edit engine in scriptlets-main.js with 19 web tests, scriptlet accounting line in Diagnostics) - NOT yet proven on real YouTube. Version bumped to alpha41 (gecko code 142, manifest 1.0.142) in the working tree (NOT shipped). GUARD_FIRST_PAGE.md, GUARD_HARDENING.md, YOUTUBE_ADS.md section 3, BACK_SCROLL.md written. G3 relay in the REAL engine is still UNPROVEN: the emulator assist lab (/assist-parent with a cross-origin frame) showed the layer tap and the refused pop-up but NO 'child play() called': added assist counters (background.js assistText in the st state line, ShieldsBridge logs 'shields ext-state' to Health) and re-running the lab
+gated kestrel-g-v0.3.0-alpha41 (gecko code 142) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
 
 ## Do this next
-(1) read scratchpad assist2.out (lab re-run after pm clear): look for the 'shields ext-state' Health line, it ends with ' | assist <sent>/<asked> (<reason>)': reason 'tabs.sendMessage is not there' means GeckoView has no tabs.sendMessage -> redesign the relay (candidates: browser.tabs.sendMessage absent -> use a port: the child content.js opens runtime.connect and the background keeps ports per frameId, or content.js broadcasts through the background to all frames with an address match); 'frame not found among N' means the frameParent table lacked the sub_frame (the iframe request may not reach onBeforeRequest as sub_frame with parentFrameId); no assist line at all means the parent content.js never sent it (check press recording / elementsFromPoint). (2) fix, re-run web tests (assist.test.js models the relay), rebuild x86_64 (-PgeckoAbi=x86_64), pm clear, run scratchpad assist_run.sh. (3) THEN tick RX3-G3, run the whole gate: ./gradlew :core:test :app:testDebugUnitTest, cd web-tests && npm test, bash tools/test_handoff.sh, then ship alpha41: bash ship.sh gecko note (version already bumped), dispatch android.yml (app=gecko full_build=true ref claude/new-session-7d9rxz), record-release after green; owner note must say: Back scroll + Back lab, trusted-only scriptlets, forged-tap fix, frame-assist channel, guard from the first page, JSON-edit engine; NOT run on the tablet
+TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref claude/new-session-7d9rxz, inputs {"app":"gecko","full_build":"true","note":"alpha41: Back remembers your place on each page and counts how Back behaves (Back lab), lists can only rewrite pages if they are the uBlock lists, a page can no longer fake your tap or click inside frames it embeds, the pop-up guard is in place from the very first page, the lists' full YouTube rules run (JSON edit engine). Emulator-tested, not run on the tablet."}.
+When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha41), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha41 "alpha41: Back remembers your place on each page and counts how Back behaves (Back lab), lists can only rewrite pages if they are the uBlock lists, a page can no longer fake your tap or click inside frames it embeds, the pop-up guard is in place from the very first page, the lists' full YouTube rules run (JSON edit engine). Emulator-tested, not run on the tablet."
+NEVER ship kestrel-g-v0.3.0-alpha41 twice (check BUILDLOG.md and the Releases first).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +18,7 @@ RX3-G1 DONE (guard+library declared in the manifest, world MAIN; emulator-proven
 
 ## Last ten checkpoints
 ```
+  14a6a198 ckpt 2343: RX3-G1 DONE (guard+library declared in the manifest, world MAIN; emulator-pr
   e462351b ckpt 2342: RX3-G3 DONE (script side): the cross-frame postMessage assist channel is gon
   279f3b45 ckpt 2341: RX3-BK1/BK2 first emulator proof (static case): page left at y=1800, Back re
   8888c78b ckpt 2340: RX3-BK1/BK2 Kotlin wiring DONE and COMPILES (geckoapp + app debug): ShieldsB
@@ -25,8 +28,7 @@ RX3-G1 DONE (guard+library declared in the manifest, world MAIN; emulator-proven
   094aed9b ckpt 2337: alpha40 RELEASED AND RECORDED: kestrel-g-v0.3.0-alpha40 (gecko code 141, run
   e2056d0c ckpt 2333: alpha40 (gecko code 141) gated, pushed and the android.yml run DISPATCHED (a
   13e4374a ckpt 2325: gated kestrel-g-v0.3.0-alpha40 (gecko code 141) and pushed it: handoff self-
-  917a3327 ckpt 2320: AY2 final: content.js treats only a NEW non-empty selection as text (emulato
 ```
 
-(32 automatic checkpoint(s) since the last deliberate one — the
+(5 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
