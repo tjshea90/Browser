@@ -1559,3 +1559,17 @@
 >
 > Sources: [Google "Web" filter guide](https://geotoolbox.ai/blog/how-to-turn-off-ai-overviews), [IONOS on Google without AI](https://www.ionos.com/digitalguide/online-marketing/search-engine-marketing/google-search-without-ai/), [Kioxia on flash garbage collection](https://kioxia.com/content/dam/kioxia/en-us/business/memory/mlc-nand/asset/KIOXIA_Efficient_Garbage_Collection_Operations_Tech_Brief.pdf), [Performance drop without discards](https://embeddedcomputing.com/technology/processing/performance-drop-without-discards)
 <!-- sha:52487ae6a506 -->
+
+## 2026-11-14T00:49:26Z
+> **Not unless the tablet is plugged in and left alone.** Android runs that background compile only when it is charging and the screen has been off and untouched for a while, usually about an hour. It also only runs about once a day. It doesn't have to be overnight or fully charged, because any long idle charge counts. If the tablet is never plugged in with the screen off for that long, the compile basically never happens. It also stops as soon as you pick the tablet up or unplug it. This is how stock Android 10 works. Your tablet's maker may have changed it, and I haven't checked on the tablet itself.
+>
+> **Does that matter?** Very little. The compile only speeds up the app's own interface code. It doesn't touch the engine that loads and draws pages, which Mozilla already compiled. The project's own notes call the gain small. So there's no need to change your charging habits for this.
+>
+> If you ever want it, there are two ways:
+> - Charge it with the screen off for an hour or two sometime, day or night.
+> - With your cable, one command compiles the app right away. The result is lost every time the app updates.
+>
+> Want me to give you that command?
+>
+> Source: [Android's description of the background compile job](https://android.googlesource.com/platform/art/+show/refs/tags/android-security-14.0.0_r24/libartservice/service/README.md) (Android 14 version).
+<!-- sha:6eadb43d5499 -->
