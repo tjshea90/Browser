@@ -182,6 +182,7 @@ object GlideEval {
             missLimit2 = a["missLimit2"]?.toFloat() ?: d.missLimit2, keep = a["keep"]?.toInt() ?: d.keep, quickEnds = a["quickEnds"]?.toFloat() ?: d.quickEnds,
             quickPrior = a["quickPrior"]?.toFloat() ?: d.quickPrior, shapeW = a["shapeW"]?.toFloat() ?: d.shapeW, endW = a["endW"]?.toFloat() ?: d.endW,
             lmW = a["lmW"]?.toFloat() ?: d.lmW, confGain = a["confGain"]?.toFloat() ?: d.confGain, confCap = a["confCap"]?.toFloat() ?: d.confCap, confMaxGap = a["confMaxGap"]?.toFloat() ?: d.confMaxGap, lmA = a["lmA"]?.toFloat() ?: d.lmA, lmMin = a["lmMin"]?.toFloat() ?: d.lmMin, lmMax = a["lmMax"]?.toFloat() ?: d.lmMax, bigramMix = a["bigramMix"]?.toFloat() ?: d.bigramMix, minLength = a["minLength"]?.toFloat() ?: d.minLength, slack = a["slack"]?.toInt() ?: d.slack, biasKeep = a["biasKeep"]?.toInt() ?: d.biasKeep, biasGain = a["biasGain"]?.toFloat() ?: d.biasGain, biasW = a["biasW"]?.toFloat() ?: d.biasW, maxPerLetter = a["maxPerLetter"]?.toFloat() ?: d.maxPerLetter,
+            patGain = a["patGain"]?.toFloat() ?: d.patGain, patCap = a["patCap"]?.toFloat() ?: d.patCap, patMaxGap = a["patMaxGap"]?.toFloat() ?: d.patMaxGap,
         )
     }
 

@@ -75,6 +75,9 @@ class PatternMemory(private val capWords: Int = 1200, private val capPatterns: I
     private class Pat(val pts: FloatArray, var n: Float)
     private val byWord = HashMap<String, ArrayList<Pat>>()
     private var count = 0
+    /** How wide "looks like" is, and how close two shapes must be to become one: the constants, changeable only by the tuning lab. */
+    internal var sigma = SIGMA
+    internal var mergeD = MERGE_D
 
     val isEmpty: Boolean @Synchronized get() = byWord.isEmpty()
     val wordCount: Int @Synchronized get() = byWord.size
@@ -87,7 +90,7 @@ class PatternMemory(private val capWords: Int = 1200, private val capPatterns: I
         val list = byWord.getOrPut(w) { ArrayList(2) }
         var nearest: Pat? = null; var nd = Float.MAX_VALUE
         for (p in list) { val d = Fingerprint.distance(p.pts, print); if (d < nd) { nd = d; nearest = p } }
-        if (nearest != null && (nd <= MERGE_D || (list.size >= perWord && nd <= MERGE_D * 2f))) {
+        if (nearest != null && (nd <= mergeD || (list.size >= perWord && nd <= mergeD * 2f))) {
             val n0 = nearest.n; val n1 = n0 + weight
             for (i in print.indices) nearest.pts[i] = (nearest.pts[i] * n0 + print[i] * weight) / n1
             nearest.n = Math.min(n1, MAX_N)
@@ -131,7 +134,7 @@ class PatternMemory(private val capWords: Int = 1200, private val capPatterns: I
     }
 
     /** How much a shape at [d] key units counts: 1 on top of it, about 0.6 at 0.45, about 0.13 at 0.9, nothing much beyond. */
-    fun similarity(d: Float): Float { val z = d / SIGMA; return Math.exp((-0.5f * z * z).toDouble()).toFloat() }
+    fun similarity(d: Float): Float { val z = d / sigma; return Math.exp((-0.5f * z * z).toDouble()).toFloat() }
 
     @Synchronized fun clear() { byWord.clear(); count = 0 }
 
