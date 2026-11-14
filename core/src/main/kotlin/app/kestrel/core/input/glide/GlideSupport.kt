@@ -11,6 +11,7 @@ class GlideStats {
     private var habitX = 0f; private var habitY = 0f
     private var own = 0
     private var learnedWords = 0; private var learnedPairs = 0; private var learnedTop = 0; private var learnedCorrections = 0; private var learnedTriples = 0
+    private var shapes = 0; private var shapeWords = 0; private var shapeLifts = 0; private var shapeFlips = 0
     private var previews = 0; private var previewMs = 0L; private var shown = 0; private var shownMs = 0L; private var shownMax = 0L
     private var retries = 0
 
@@ -23,7 +24,9 @@ class GlideStats {
     @Synchronized fun onWarm(millis: Long) { warmMs = millis }
     @Synchronized fun onHabit(xDp: Float, yDp: Float) { habitX = xDp; habitY = yDp }
     @Synchronized fun onOwnWords(n: Int) { own = n }
-    @Synchronized fun onLearned(words: Int, pairs: Int, corrections: Int = 0, triples: Int = 0) { learnedWords = words; learnedPairs = pairs; learnedCorrections = corrections; learnedTriples = triples }
+    @Synchronized fun onLearned(words: Int, pairs: Int, corrections: Int = 0, triples: Int = 0, shapes: Int = 0, shapeWords: Int = 0) { learnedWords = words; learnedPairs = pairs; learnedCorrections = corrections; learnedTriples = triples; this.shapes = shapes; this.shapeWords = shapeWords }
+    /** A remembered glide shape lifted a word in this glide; [flipped]: it changed which word came first. */
+    @Synchronized fun onShape(flipped: Boolean) { shapeLifts++; if (flipped) shapeFlips++ }
     /** A live preview was decoded while the finger was still moving. */
     @Synchronized fun onPreview(millis: Long) { previews++; previewMs += millis }
     /** The word appeared [millis] after the finger lifted (the decode plus the wait for its turn plus drawing). */
@@ -52,6 +55,7 @@ class GlideStats {
         if (own > 0) sb.append("; own words $own")
         if (learnedWords > 0 || learnedTop > 0) sb.append("; learned $learnedWords words and $learnedPairs word pairs from your typing, a learned word was the first guess $learnedTop times")
         if (learnedCorrections > 0 || learnedTriples > 0) sb.append("; $learnedCorrections corrections and $learnedTriples three-word phrases remembered")
+        if (shapes > 0 || shapeLifts > 0) sb.append("; $shapes glide shapes of $shapeWords words remembered, a remembered shape helped $shapeLifts times and changed the first guess $shapeFlips times")
         if (retries > 0) sb.append("; a deleted word came up first again and went to second place $retries times")
         return sb.toString()
     }
@@ -141,6 +145,9 @@ class GlideTyping(
     private var personalLoaded = false
     private var personalDirty = false
     private var lastSaveAt = 0L
+    private var lastPrint: FloatArray? = null     // the shape of the last real glide (executor thread): what a kept, picked or corrected word is remembered with
+    private var deletedPrint: FloatArray? = null  // the shape of the glide whose word was just deleted: what the word typed in its place may have been meant by
+    private var deletedGuess: String? = null
 
     /** The best-known state of the thumb habit in pitches (read on the executor thread; copied out for saving). */
     @Volatile var habitX = 0f; private set
@@ -161,7 +168,7 @@ class GlideTyping(
                     if (bytes != null) { main = LexiconFile.read(bytes); stats.onLoaded((System.nanoTime() - t0) / 1_000_000, main!!.size) }
                     loading = false
                 }
-                if (!personalLoaded) { personalLoaded = true; try { loadPersonal()?.let { personal = PersonalModel.parse(it) } } catch (e: Exception) { /* a damaged file is just forgotten */ }; stats.onLearned(personal.wordCount, personal.pairCount, personal.confusionCount, personal.tripleCount) }
+                if (!personalLoaded) { personalLoaded = true; try { loadPersonal()?.let { personal = PersonalModel.parse(it) } } catch (e: Exception) { /* a damaged file is just forgotten */ }; stats.onLearned(personal.wordCount, personal.pairCount, personal.confusionCount, personal.tripleCount, personal.patterns.patternCount, personal.patterns.wordCount) }
                 keys = k
                 decoder = GlideDecoder(k).also { it.biasX = bx; it.biasY = by; it.personal = personal }
                 previewDecoder = GlideDecoder(k).also { it.biasX = bx; it.biasY = by; it.personal = personal }
@@ -216,6 +223,8 @@ class GlideTyping(
             val ms = (System.nanoTime() - t0) / 1_000_000
             stats.onDecoded(ms, r.isNotEmpty())
             if (r.isNotEmpty() && personal.weightOf(r[0].text) > 0f) stats.onLearnedTop()
+            lastPrint = d.lastPrint
+            if (d.lastPatternLifted) stats.onShape(d.lastPatternFlipped)
             done(GlideResult(r, ms))
         }
     }
@@ -258,14 +267,76 @@ class GlideTyping(
      * The person's own choice: [word] was meant (after [prev] when known). [weight] 1 = it was kept or typed, 3 = the person CHOSE it over the keyboard's first guess (or replaced a deleted word by it). The next
      * glides lean towards it; the table is saved now and then, and at [saveLearned].
      */
-    fun learn(prev: String?, word: String, weight: Float, prev2: String? = null, guessed: String? = null, guessedWeight: Float = 1f) {
+    fun learn(prev: String?, word: String, weight: Float, prev2: String? = null, guessed: String? = null, guessedWeight: Float = 1f, fromGlide: Boolean = false, afterUndo: Boolean = false) {
         executor.execute {
             personal.add(prev, word, weight, prev2)
             if (guessed != null) personal.addConfusion(guessed, word, guessedWeight) // the keyboard guessed [guessed] and the person meant [word]: a correction
+            if (fromGlide) learnShape(word, weight, guessed != null, afterUndo)
             personalDirty = true
-            stats.onLearned(personal.wordCount, personal.pairCount, personal.confusionCount, personal.tripleCount)
+            stats.onLearned(personal.wordCount, personal.pairCount, personal.confusionCount, personal.tripleCount, personal.patterns.patternCount, personal.patterns.wordCount)
             val now = System.nanoTime() / 1_000_000
             if (now - lastSaveAt > SAVE_EVERY_MS) saveNow()
+        }
+    }
+
+    /**
+     * The shape of the glide that just put [word] in is remembered for it (AX1). A correction ([corrected]: a pick from the strip, or a glide that replaced a deleted one) makes the words that were
+     * drawn like this before less sure; after a deletion the shape of the DELETED glide is remembered for [word] too when it could have been meant for it (the first try was just sloppier).
+     * Runs on the executor's thread.
+     */
+    private fun learnShape(word: String, weight: Float, corrected: Boolean, afterUndo: Boolean) {
+        val pr = lastPrint
+        if (pr != null) { personal.patterns.add(word, pr, weight); personal.patterns.contradict(word, pr, if (corrected) 2f else 0.7f) }
+        if (afterUndo) shapeOfDeleted(word)
+    }
+
+    /** The deleted glide's shape is [word]'s too when the word could have been drawn like that (the straight line through its letters is not far from it). */
+    private fun shapeOfDeleted(word: String): Boolean {
+        val dp = deletedPrint ?: return false
+        deletedPrint = null; deletedGuess = null
+        val k = keys ?: return false
+        val ideal = Fingerprint.ofWord(word, k) ?: return false
+        if (Fingerprint.distance(ideal, dp) > FIT_D) return false
+        personal.patterns.add(word, dp, 3f); personal.patterns.contradict(word, dp, 2f)
+        return true
+    }
+
+    /** The glided word was deleted (Backspace right after the glide): its shape waits for the word that is typed instead ([retyped], or the next glide that is kept). */
+    fun glideDeleted(guess: String?) { executor.execute { deletedPrint = lastPrint; deletedGuess = guess } }
+
+    /** [word] was typed letter by letter after a glided word was deleted: if the deleted glide could have meant it, its shape is remembered for it (the person corrected the keyboard's guess). */
+    fun retyped(word: String) {
+        executor.execute {
+            if (shapeOfDeleted(word)) {
+                personalDirty = true
+                stats.onLearned(personal.wordCount, personal.pairCount, personal.confusionCount, personal.tripleCount, personal.patterns.patternCount, personal.patterns.wordCount)
+                if (System.nanoTime() / 1_000_000 - lastSaveAt > SAVE_EVERY_MS) saveNow()
+            }
+        }
+    }
+
+    /** What the keyboard has learned, as the one text it is saved and exported as (see [LearnedExport]); null before anything was loaded or learned. For the Settings export (any thread: it runs on the executor and hands the text to [done]). */
+    fun exportText(habit: FloatArray?, own: UserWords?, done: (String) -> Unit) {
+        executor.execute { done(LearnedExport.write(personal, habit ?: floatArrayOf(bx, by), own)) }
+    }
+
+    /**
+     * An export file was picked (Settings > Import): its words, pairs, corrections and shapes are ADDED to what is learned ([replace] false) or replace it, and the thumb habit and own words come along. [done] gets
+     * a one-line description of what was read, or null when the text is not an export of this keyboard. Runs on the executor's thread.
+     */
+    fun importText(text: String, replace: Boolean, own: UserWords, habit: (FloatArray) -> Unit, done: (LearnedExport.Summary?) -> Unit) {
+        executor.execute {
+            val parsed = LearnedExport.read(text)
+            if (parsed == null) { done(null); return@execute }
+            if (replace) personal.clear()
+            personal.mergeFrom(parsed.model)
+            for ((w, n) in parsed.ownWords) own.add(w, n)
+            if (parsed.habit != null) { bx = parsed.habit[0]; by = parsed.habit[1]; habitX = bx; habitY = by; decoder?.let { it.biasX = bx; it.biasY = by }; habit(floatArrayOf(bx, by)); keys?.let { stats.onHabit(bx * it.pitch, by * it.pitch) } }
+            setOwn(own)
+            personalDirty = true
+            stats.onLearned(personal.wordCount, personal.pairCount, personal.confusionCount, personal.tripleCount, personal.patterns.patternCount, personal.patterns.wordCount)
+            saveNow()
+            done(parsed.summary)
         }
     }
 
@@ -282,7 +353,7 @@ class GlideTyping(
     /** Settings > "Forget what the keyboard learned": the own words, the pairs and the thumb habit are gone. */
     fun forgetAll(done: () -> Unit = {}) {
         executor.execute {
-            personal.clear(); personalDirty = false; stats.onLearned(0, 0, 0, 0)
+            personal.clear(); personalDirty = false; lastPrint = null; deletedPrint = null; deletedGuess = null; stats.onLearned(0, 0, 0, 0)
             userLex = null; bx = 0f; by = 0f; habitX = 0f; habitY = 0f
             decoder?.let { it.biasX = 0f; it.biasY = 0f }
             stats.onHabit(0f, 0f)
@@ -308,5 +379,9 @@ class GlideTyping(
         }
     }
 
-    companion object { private const val SAVE_EVERY_MS = 30_000L }
+    companion object {
+        private const val SAVE_EVERY_MS = 30_000L
+        /** A deleted glide can have meant the word typed in its place when the straight line through that word's letters is within this many key units of it (a careful glide is about 0.3 away, a sloppy one 0.6 to 0.9, another word more than 1.3). */
+        const val FIT_D = 1.15f
+    }
 }
