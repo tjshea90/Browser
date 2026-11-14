@@ -73,6 +73,7 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
     // scratch for the careful pass: prefix sums of squared distance to each segment, and two DP rows
     private val pre = FloatArray(MAX_LETTERS * (n + 1))
     private var fPrev = FloatArray(n); private var fCur = FloatArray(n)
+    private var gestureLen = 0f
     private val letters = IntArray(MAX_LETTERS)
     // the survivors of the quick pass (a small max-heap by quick score, kept as parallel arrays)
     private val heapScore = FloatArray(p.keep); private val heapLex = IntArray(p.keep); private val heapId = IntArray(p.keep); private var heapN = 0
@@ -151,6 +152,7 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
         var len = 0f
         for (i in 1 until m) len += Math.sqrt(d2(px[i] - px[i - 1], py[i] - py[i - 1]).toDouble()).toFloat()
         if (len < p.minLength) return false
+        gestureLen = len
         var seg = 1; var segStart = 0f
         var segLen = Math.sqrt(d2(px[1] - px[0], py[1] - py[0]).toDouble()).toFloat()
         for (k in 0 until n) {
@@ -231,6 +233,7 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
             }
         }
         val inf = Float.MAX_VALUE / 4
+        val shapeScale = gestureLen / n // every sample stands for this many pitches of path
         // first letter near the start of the path
         val k0 = letters[0]
         for (i in 0 until n) fPrev[i] = if (i <= p.slack) p.endW * visit(k0, i) else inf
@@ -245,7 +248,7 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
                 for (a in j - 1 until i) {
                     val fa = fPrev[a]
                     if (fa >= inf) continue
-                    val c = fa + p.shapeW * (pre[base + i] - pre[base + a]) * (m.toFloat() / n) // how far the path strays between the two letters: the mean over all steps, times the letters, so it counts like one more letter's distance
+                    val c = fa + p.shapeW * (pre[base + i] - pre[base + a]) * shapeScale // how far the path strays between the two letters, summed along the path: a stretch of one pitch that is one pitch off the line costs about one letter's miss
                     if (c < best) best = c
                 }
                 fCur[i] = if (best >= inf) inf else best + w * visit(kj, i)
