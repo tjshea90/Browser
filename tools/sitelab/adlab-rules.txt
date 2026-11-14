@@ -1,0 +1,12 @@
+! Lab rules for tools/sitelab/adlab.py (AW1): adlab.test gets everything, control.test nothing.
+||ads.adlab.test^
+adlab.test##.ad-box
+adlab.test##+js(set, adblockDetected, false)
+adlab.test##+js(nostif, nag)
+adlab.test##+js(nano-stb, countdown, *, 0.02)
+adlab.test##+js(aeld, click, popunder)
+adlab.test##+js(json-prune-fetch-response, adPlacements adSlots, , propsToMatch, /player.json)
+adlab.test##+js(rmnt, script, adbait)
+adlab.test##+js(no-fetch-if, ads.adlab.test)
+adlab.test##+js(nowoif)
+adlab.*##+js(set, entityOk, true)
