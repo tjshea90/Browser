@@ -1,13 +1,13 @@
-# CHECKPOINT 2244 — read me first, then TASKS.md
+# CHECKPOINT 2258 — read me first, then TASKS.md
 
-**Written:** 2026-11-14T17:13:16Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `3cb1a74` (this checkpoint is the commit after it)
+**Written:** 2026-11-14T17:49:56Z · **tests:** 1 RED: test_handoff.sh (0 green)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `4e55154` (this checkpoint is the commit after it)
 
 ## Just done
-AX1: remembered-word injection added (the lab found that for words seen 6+ times 78-93% of the remaining misses were words the quick pass never kept among its 200: GlideDecoder.injectRemembered puts up to 48 words that have a shape looking like the glide into the careful pass; decode 3.4 ms vs 3.3 ms with 577 words remembered). Final lab numbers (GlideHabitEval, simulated hands): for/1.0 key hairpin, normal hand: old keyboard ~85% flat for 30 glides, with shapes 80 -> 90 -> 97 -> 95 -> 100 from the 5th glide on; long mixed use 3000 glides: no habit 91-95 -> 94-98; habit 10 dp 79-87 -> 85-94; habit 16 dp 50-63 -> 60-81; spoiled first guesses 1-7 vs mended 124-521. Tests: core full suite + MiniNavTest(72) + KeyboardFlowTest(9) + app lint green before injection; GlideShapeLearningTest(7) PatternMemoryTest GlideSupportTest green after. New tools/emu/glide_emu.py (real multi-point touches on the emulator). x86_64 debug APK rebuilding for the emulator proof
+pre-ship: alpha39 (includes alpha38): The keyboard now learns the SHAPE of your glides, so your sloppy patterns stop coming out as the wrong word. Example: you glide for and the finger turns on the i, and the keyboard types fir (I reproduced exactly that on the emulator). Now when you tap for in the strip, or delete the word and type the right one, the keyboard remembers what that glide looked like and gives for the next time you draw it, even sloppily: on a simulated hand it is right about 90 percent of the time after one correction and every time from the fifth. It also keeps the words you write most, and it now always considers the words you write often even when a sloppy glide drifts far from their letters. Shapes it learned wrongly fade when you correct them. Nothing is learned in private tabs or password fields. New in Settings: Export what the keyboard learned saves everything it learned (words, word pairs, corrections, glide shapes, thumb habit) as one plain text file in Downloads, and Import what the keyboard learned brings such a file back; the file format is written down in docs/KEYBOARD-EXPORT.md in the repository so a future system keyboard can read it. Export before you uninstall: what the keyboard learned is deleted with the app. Tried on the emulator with real multi-point touches (glide, pick, export, forget, import, restart the app); not tried on your tablet, and how closely a real thumb repeats its own shapes only your Menu > Diagnostics line (glide shapes remembered, how often one helped) can say.
 
 ## Do this next
-1) wait for apk2.log EXIT 0, adb install -r geckoapp/build/outputs/apk/debug/geckoapp-debug.apk, run tools/sitelab/fieldlab.py 8001 /tmp/fieldlab.log (emulator reaches it as http://10.0.2.2:8001/), adb reverse not needed; open the page, focus field 'free', long press the top right corner (adb: python3 -I tools/emu/glide_emu.py longpress 580 80), tap the bar, glide for with o=-1.0 (glide_emu.py glide for o=-1.0), read the strip with a screenshot, pick for, carry on, glide again and read the server log; then Settings > Export (file in Downloads) and Forget + Import (SAF picker via glide_emu.py taptext) 2) run full :core:test :app:testDebugUnitTest :app:lintDebug again 3) research/GLIDE_TYPING.md section 11 + HANDOFF.md + TASKS ticks (AX1a-e) 4) bump versionCode/versionName (alpha39), bash ship.sh gecko note, dispatch android.yml, record-release after green, answer the owner in plain words (what it learns, the for/fir lab numbers, export file location and format, system keyboard = separate app, NOT run on the tablet)
+ship.sh gates and releases this (gecko)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ AX1: remembered-word injection added (the lab found that for words seen 6+ times
 
 ## Last ten checkpoints
 ```
+  899e135 ckpt 2244: AX1: remembered-word injection added (the lab found that for words seen 6+ ti
   54435a1 ckpt 2232: AX1 core built and tested: Fingerprint + PatternMemory (core/input/glide/Patt
   2383c78 ckpt 2206: alpha38 RELEASED AND RECORDED (run 43616372537 green, tag kestrel-g-v0.3.0-al
   2d5a35b ckpt 2201: alpha38 DISPATCHED (AX2 fix: passkey API off + crash note): android.yml run_w
@@ -25,8 +26,7 @@ AX1: remembered-word injection added (the lab found that for words seen 6+ times
   ac84c28 ckpt 2190: owner message 38 written into TASKS (AX1 keyboard learns sloppy glide pattern
   3d38f35 ckpt 2185: alpha37 RELEASED AND RECORDED: kestrel-g-v0.3.0-alpha37 (gecko code 138), and
   aef75f4 ckpt 2180: alpha37 DISPATCHED: android.yml run 43613953896 (run_number 88, app=gecko ful
-  551bd7e ckpt 2179: gated kestrel-g-v0.3.0-alpha37 (gecko code 138) and pushed it: handoff self-t
 ```
 
-(11 automatic checkpoint(s) since the last deliberate one — the
+(13 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
