@@ -15,6 +15,7 @@ import android.text.TextPaint
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.animation.AccelerateInterpolator
@@ -1082,6 +1083,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
         private fun beginGlide() {
             lastPreviewAt = SystemClock.uptimeMillis(); lastPreviewN = 0 // the first live guess comes a moment into the glide
+            clearHold()
             gliding = true
             glideDown = pressedKey
             down = null
@@ -1123,7 +1125,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                 fill.color = when {
                     isLit -> (pal.accent and 0x00FFFFFF) or 0xAA000000.toInt()
                     key === Key.Go -> pal.accent
-                    key === Key.Shift && model.shift -> pal.deep
+                    key === Key.Shift && model.shift -> if (model.shiftLock) pal.accent else pal.deep
                     special -> 0xFF16232C.toInt()
                     else -> 0xFF0E171E.toInt()
                 }
@@ -1156,6 +1158,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                     if (glideUsable() && e.y < stripPx()) { stripDown = chipAt(e.x, e.y); invalidate(); return true } // a guess in the strip was touched
                     removeCallbacks(fadeStep); gn = 0; fadeStart = 0L
                     down = keyAt(e.x, e.y); light(down)
+                    clearHold(); if (isBubbleKey(down)) { bubbleKey = down; bubbleText = down!!.label }
+                    if (down != null) { haptic(); if (altOf(down) != null) handler.postDelayed(hold, HOLD_MS) }
                     if (down?.key === Key.Backspace) { onKey?.invoke(Key.Backspace); handler.postDelayed(repeat, REPEAT_FIRST_MS) }
                     if (glideUsable() && !model.symbols && isLetter(down)) { armed = true; pressedKey = down; downBox = boxOf(down); addPoint(e.x, e.y) }
                 }
@@ -1167,7 +1171,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                         if (gliding) { invalidate(); maybePreview() }
                         return true
                     }
-                    val k = keyAt(e.x, e.y); if (k !== down) { down = k; handler.removeCallbacks(repeat); light(k) }
+                    val k = keyAt(e.x, e.y); if (k !== down) { down = k; handler.removeCallbacks(repeat); clearHold(); if (isBubbleKey(k)) { bubbleKey = k; bubbleText = k!!.label }; light(k) }
                 }
                 MotionEvent.ACTION_UP -> {
                     if (stripDown >= 0) {
@@ -1177,19 +1181,21 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                     }
                     if (gliding) { addMotion(e); endGlide(); return true }
                     handler.removeCallbacks(repeat)
-                    if (armed) { // a tap on a letter types the letter it went down on, even when the finger drifted a little
+                    val alt = holdAlt; clearHold(); invalidate()
+                    if (armed) { // a tap on a letter types the letter it went down on, even when the finger drifted a little (held: its digit)
                         armed = false
                         val pk = pressedKey; pressedKey = null
-                        if (pk?.key != null) { light(pk); onKey?.invoke(pk.key!!) }
+                        if (alt != null) { light(pk); onKey?.invoke(Key.Ch(alt)) }
+                        else if (pk?.key != null) { light(pk); onKey?.invoke(pk.key!!) }
                         down = null; gn = 0
                         return true
                     }
                     val k = keyAt(e.x, e.y)
-                    if (k != null && k === down && k.key !== Key.Backspace) { light(k); onKey?.invoke(k.key!!) }
+                    if (k != null && k === down && k.key !== Key.Backspace) { light(k); onKey?.invoke(if (alt != null) Key.Ch(alt) else k.key!!) }
                     down = null; gn = 0
                 }
                 MotionEvent.ACTION_CANCEL -> {
-                    handler.removeCallbacks(repeat); down = null; armed = false; pressedKey = null; stripDown = -1
+                    handler.removeCallbacks(repeat); clearHold(); down = null; armed = false; pressedKey = null; stripDown = -1; invalidate()
                     if (gliding) { gliding = false; fadeStart = SystemClock.uptimeMillis(); postOnAnimation(fadeStep) }
                 }
             }
@@ -1267,6 +1273,10 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         /** The live guess while gliding: at most this often, and only after this many new touch points. */
         const val PREVIEW_MS = 110L
         const val PREVIEW_POINTS = 4
+        /** Holding a top-row letter this long types its digit. */
+        const val HOLD_MS = 420L
+        private const val TOP_ROW = "qwertyuiop"
+        private const val DIGITS = "1234567890"
         private const val MAX_TRAIL_POINTS = 4096
     }
 }
