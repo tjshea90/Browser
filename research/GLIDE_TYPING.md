@@ -231,3 +231,79 @@ A learned feature-weight re-ranker (no keyboard evidence, drift risk); changing 
 * What was NOT run: a real thumb, the real tablet's speed and feel (the tablet's Diagnostics line "word shown N ms after the lift" and "live preview N times, avg M ms" are the real answer), the haptic tick (the emulator has no vibrator), a long session of learning from real words.
 * One oddity, said plainly: on the very first run after installing, the emulator once stopped redrawing the panel for a while (its frame counter stood still while the page kept updating and keys kept typing); four later repeats of the same steps, and a restart, did not show it again. It is recorded here because it could not be explained, not because it was seen on the tablet.
 
+## 11. Learning the SHAPE of this person's glides (AX1, owner message 38, 2026-11-14)
+
+> "Make sure the browser keyboard actively learns the words I use most and the words I use most depending on the pattern drawn even if it is sloppy, for example, I often type the word "for" yet Gboard often
+> inputs the word fir, simply because the letter I is close on the keyboard to the letter o. But 99% of the time I make that pattern, I'm trying to type the word "for". I don't think Gboard learns because I always
+> change fir to for but it still glide types fir. I want this keyboard to learn intuitively and see which words I use most and which words I'm trying to type based on the glide pattern and my corrections to the words
+> it inputs. Make it save this learned data in an exportable format because if the keyboard is good I will make it my system keyboard for all apps and I want to import what it learned"
+
+All numbers below are from the SIMULATED hand (`GestureSim`, seeded; the lab is `core/src/test/.../GlideHabitEval.kt`, see its header for the command lines). They say what the code does with a hand that behaves as the owner describes
+(the same sloppy shape for a word every time); how real that is, only the tablet's Diagnostics line can say.
+
+### 11.1 Why "fir" (or "fur") keeps coming back with the learning of alpha36-38 (AX1a)
+* The shipped list already protects "for" from "fir" itself (ln P(for) = -4.57, ln P(fir) = -12.42). A hand whose "o" lands k keys toward "i" (200 glides each, normal finger, nothing learned): `for` first / `fir` first / another word first: k=0.0 197/0/3, k=0.4 191/4/5, k=0.6 186/7/7, k=0.8 176/8/16, k=1.0 161/10/29, k=1.2 144/3/53. So when it goes wrong it is increasingly NOT "fir" but "fur" (u is next to i), "fit", "fire", "due".
+* The correction memory of alpha36 (`PersonalModel.confusions`) is keyed by the PAIR "guessed -> meant": each wrong word is a separate pair that has to be corrected on its own, a lift is at most 1.6 and only for words within 0.9 per letter of the first guess. With the same hand repeating "for" 30 times and the person correcting every miss (40 hands), first guess right % of hands, glides 1..30: `80 77 82 85 82 92 82 75 87 85 82 85 80 80 80 80 75 85 95 92 87 77 87 87 90 82 90 82 92 85` for k=1.0: it does not learn, the wrong word changes every time (fur 91, fir 27, fit 24, fire 22, due 16 first guesses over the 1200 glides). That is the owner's "I always change fir to for but it still glide types fir".
+* Nothing in the old learning looked at what the glide LOOKED like. That is what was added.
+
+### 11.2 What it learns now (all on the tablet; `files/glide_personal.txt`, new line kind `s`)
+| Event | Word | Shape of the glide (16 points in KEY units) |
+| :- | :- | :- |
+| a glide that was kept | +1 (as before) | remembered for that word, +1 confirmation; shapes of OTHER words that look like it lose 0.7 x how alike |
+| a guess picked from the strip | +3 | remembered for the picked word, +3; the shapes of the words it looks like (the wrong guess first) lose 2 x how alike |
+| a glided word deleted, then another glide or the word typed letter by letter (first word after the deletion, at least two letters, within 30 s) | +3 / +1 | the DELETED glide's shape is remembered for the replacement when the straight line through its letters is within 1.15 keys of that shape (a different word typed is not taken), +3; the replacement glide's own shape too |
+| Forget what the keyboard learned | all gone, shapes too | |
+
+* A shape is 16 points spaced evenly along the path, in key widths right of the centre of Q and rows below it, so it does not depend on the keyboard's size (the keyboard can be dragged to another size) and can be read by another keyboard with the same layout.
+* Per word up to 4 shapes (clusters: two shapes within 0.3 keys are one, with a running mean and the sum of their confirmations, at most 12); at most 3000 shapes for 1200 words; everything halves when the model's total weight passes 6000 (the same decay as the words).
+* The decoder (`GlideDecoder.applyPatterns`): a candidate whose remembered shapes look like this glide gets `2.5 x ln(1 + evidence)` added to its score, at most 4.5; evidence = sum over its shapes of confirmations x exp(-0.5 (d / 0.35)^2), d = how far apart the shapes are in key units; only for candidates whose own path fit is within 2.2 per letter of the best's (a shape settles a sloppy glide, it does not make a word the finger never went near). Shape lifts come before the correction memory of alpha36.
+* The lab found that for words the person writes often most of the REMAINING misses (93 % at a mild habit, 78 % at a strong one) were words the quick pass never kept among its 200 survivors, so no lift could help. `injectRemembered` now puts up to 48 words whose shapes look like the glide (evidence at least 0.3, first and last letter near where the finger went down and lifted, every letter visited) into the careful pass. Decode time with 577 words remembered: 3.4 ms against 3.3 ms without (laptop core).
+* Tuning sweep (patGain 1.7 / 3 / 5 x sigma 0.35 / 0.5 / 0.7, 3000 glides, habits 0 / 10 / 16 dp): the narrowest sigma spoiled the fewest correct first guesses; the gain changes little. Chosen: sigma 0.35, gain 2.5, cap 4.5.
+
+### 11.3 Measured (simulated hand, seeded)
+How fast it learns: the same hand repeats "for" 30 times; after each glide the person does what a person does (keeps a right word, picks the word from the strip, or types it). First guess right, % of 40 hands, glides 1 to 12 (it stays at the last value afterwards):
+
+| hand | | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 |
+| :- | :- | -: | -: | -: | -: | -: | -: | -: | -: | -: | -: | -: | -: |
+| normal, o lands 1.0 key toward i | old keyboard | 80 | 77 | 82 | 85 | 82 | 92 | 82 | 75 | 87 | 85 | 82 | 85 |
+| | with shapes | 80 | 90 | 97 | 95 | 100 | 100 | 100 | 95 | 100 | 100 | 100 | 100 |
+| normal, 1.2 keys | old keyboard | 80 | 77 | 75 | 70 | 55 | 67 | 70 | 77 | 75 | 67 | 70 | 77 |
+| | with shapes | 80 | 85 | 92 | 95 | 95 | 97 | 97 | 97 | 95 | 100 | 100 | 97 |
+| calm (aim 5 dp), 1.0 key | old keyboard | 60 | 70 | 70 | 85 | 80 | 80 | 72 | 85 | 87 | 80 | 95 | 67 |
+| | with shapes | 60 | 90 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
+
+(The calm hand is the owner's story: the same shape every time, so the old keyboard gives the same wrong word; with shapes one correction fixes the next glide and two corrections settle it.)
+
+A long mixed stretch of use (3000 glides: 70 % from 40 own phrases of 150 favourite words, the rest everyday words; every word has its OWN fixed hand habit of the stated size per letter on top of the finger's scatter). First guess right, %, six stretches of 500:
+
+| hand and habit | learning | 1 | 2 | 3 | 4 | 5 | 6 | words written 6+ times |
+| :- | :- | -: | -: | -: | -: | -: | -: | -: |
+| normal, none | nothing | 81.0 | 80.4 | 79.6 | 82.4 | 81.4 | 80.6 | 78.0 |
+| | words, pairs, corrections (alpha38) | 91.0 | 94.2 | 94.6 | 94.6 | 92.2 | 94.2 | 94.6 |
+| | + shapes | 94.2 | 97.2 | 98.2 | 98.2 | 97.6 | 98.2 | 99.9 |
+| normal, 10 dp | nothing | 63.2 | 61.2 | 64.2 | 63.6 | 60.0 | 62.2 | 58.4 |
+| | alpha38 | 78.4 | 83.0 | 85.6 | 84.4 | 83.0 | 86.2 | 86.8 |
+| | + shapes | 85.0 | 92.0 | 94.0 | 93.2 | 94.4 | 94.2 | 98.4 |
+| normal, 16 dp | nothing | 34.8 | 39.4 | 39.4 | 38.2 | 37.2 | 37.6 | 34.3 |
+| | alpha38 | 48.2 | 60.2 | 59.2 | 61.6 | 57.8 | 60.2 | 61.6 |
+| | + shapes | 60.4 | 75.4 | 76.2 | 78.0 | 78.2 | 80.8 | 84.6 |
+| calm, 16 dp | nothing | 45.8 | 45.8 | 46.0 | 45.0 | 44.0 | 45.6 | 42.0 |
+| | alpha38 | 60.8 | 67.4 | 66.8 | 68.4 | 65.0 | 70.4 | 70.0 |
+| | + shapes | 73.2 | 84.0 | 83.2 | 85.0 | 82.2 | 88.0 | 90.8 |
+| calm, 24 dp | nothing | 12.4 | 15.4 | 15.6 | 13.4 | 13.8 | 13.8 | 12.2 |
+| | alpha38 | 19.2 | 25.2 | 26.0 | 25.6 | 24.4 | 26.2 | 26.2 |
+| | + shapes | 25.0 | 35.0 | 34.8 | 33.0 | 32.6 | 35.6 | 36.5 |
+
+First guesses the shapes mended against what they spoiled (each glide also decoded without them): no habit 124 / 7, 10 dp 271 / 4, 16 dp 521 / 2 (normal hand); calm 16 dp 506 / 1, calm 24 dp 255 / 1. Words written only once or twice gain little (nothing to remember yet): 89.6 against 89.7 % at no habit, 75.1 against 73.9 % at 10 dp.
+The unit tests keep the claims: `GlideShapeLearningTest` (a habitual word that the old keyboard keeps missing is right at least 96 % of glides 7-30 after the corrections; one correction fixes the next glide in 80 % of the cases; the memory never costs accuracy; a shape cannot bring in a word the finger never went near; an empty memory changes nothing; the injection and its speed), `PatternMemoryTest`, `LearnedExportTest`, `GlideSupportTest`, `MiniNavTest`.
+
+### 11.4 Reading it honestly
+* The simulated hand repeats ITS OWN shape for each word exactly as the owner says theirs does ("99 % of the time I make that pattern, I'm trying to type for"). A real thumb may be less repeatable; the gain then shrinks towards the "no habit" rows (still positive, never negative in the lab). The tablet's Diagnostics line now says how many shapes of how many words were remembered, how often a remembered shape helped and how often it changed the first guess.
+* A shape belongs to a WORD: "forget" does not inherit from "for". The owner's most written words are the ones that benefit first, as asked.
+* Not done: a per-key thumb offset map (the shapes cover what it would catch for the words written often; a single global thumb habit stays as it was), learning from words typed in other apps (this keyboard lives in the browser), a system keyboard (below).
+
+### 11.5 Privacy and size
+Nothing is learned in a private tab or a password field (the same gate as the words; `MiniNavTest.nothingAboutTheShapeIsLearnedInAPrivateTab`), Forget wipes shapes with the words, the tables are bounded and fade, no network. The learned file is not part of Back up & restore (a backup is plain text in Downloads); the new Export button is the way to take it along.
+
+### 11.6 Export and import (AX1d)
+Settings > Export what the keyboard learned writes `Kestrel keyboard learning <date>.txt` into Downloads with one tap (no picker, no permission, survives uninstalling); Import what the keyboard learned reads such a file with the system file picker, shows what it holds and ADDS it (the larger count wins per entry, so the same file twice changes nothing; the thumb habit is taken only while this keyboard has none). The format is written down in `docs/KEYBOARD-EXPORT.md` (version 1, plain ASCII lines, unknown lines skipped, bounded and finite numbers only) with an example that a unit test reads. The core classes are pure Kotlin without Android types, so a system keyboard (an Android input method) built on the same `core` would read the file with `LearnedExport.read`.
