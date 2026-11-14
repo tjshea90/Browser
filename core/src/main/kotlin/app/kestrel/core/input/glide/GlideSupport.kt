@@ -77,9 +77,9 @@ class UserWords(private val cap: Int = 800) {
     @Synchronized fun serialize(): String = counts.entries.joinToString("\n") { "${it.key} ${it.value}" }
 
     companion object {
-        /** A word a finger can draw: lowercase letters, three to 24, with at least two different letters in a row. */
+        /** A word a finger can draw: lowercase letters, three to 24, with at least two different letters in a row, none of them three times in a row ("awwww" is noise). */
         fun glideable(w: String): Boolean {
-            if (w.length !in 3..24 || !w.all { it in 'a'..'z' }) return false
+            if (w.length !in 3..24 || !w.all { it in 'a'..'z' } || PersonalModel.stretched(w)) return false
             for (i in 1 until w.length) if (w[i] != w[i - 1]) return true
             return false
         }
