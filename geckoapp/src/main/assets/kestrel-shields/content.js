@@ -140,16 +140,21 @@
       }, function () {});
     } catch (e) { /* never break the page */ }
   }
-  // AW1b: the scriptlet calls of this site ride in the CSS answer as a comment right after the markers. They are handed to scriptlets-main.js, which runs in the page itself (world MAIN), by a DOM
-  // event: it cannot reach the extension and we cannot reach the page's world. The library says when it is up (READY: it may come after our answer) and how many calls ran (REPORT).
+  // AW1b: the scriptlet calls of this site reach the page-world library (scriptlets-main.js, world MAIN) two ways: EARLY, as a script the extension registered for the site before the document started
+  // (background.js, it runs ahead of the page's own scripts), and LATE, from here: they ride in the CSS answer as a comment right after the markers and are handed over by a DOM event (the library
+  // cannot reach the extension and we cannot reach the page's world). The library runs every call once, so the second delivery is harmless; it says when it is up (READY: it may come after our answer)
+  // and how many calls were new (REPORT). We listen for the report from document start, because the early run happens before the CSS answer exists.
+  var slFirst = 1;
+  try {
+    document.addEventListener('__kst_sl_n_v1', function (e) {
+      try { browser.runtime.sendMessage({ k: 'sl', r: String(e.detail).slice(0, 20), h: location.hostname, f: slFirst }).catch(function () {}); slFirst = 0; } catch (x) { /* ignore */ }
+    }, true);
+  } catch (e) { /* never break the page */ }
   function startScriptlets(json, host) {
     try {
-      var SL = '__kst_sl_v1', READY = '__kst_sl_ready_v1', REPORT = '__kst_sl_n_v1';
+      var SL = '__kst_sl_v1', READY = '__kst_sl_ready_v1';
       function send() { try { document.dispatchEvent(new CustomEvent(SL, { detail: json })); } catch (e) { /* ignore */ } }
       document.addEventListener(READY, send, true);
-      document.addEventListener(REPORT, function (e) {
-        try { browser.runtime.sendMessage({ k: 'sl', r: String(e.detail).slice(0, 20), h: host }).catch(function () {}); } catch (x) { /* ignore */ }
-      }, true);
       send();
     } catch (e) { /* never break the page */ }
   }
