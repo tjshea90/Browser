@@ -99,6 +99,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private var siteWords = emptyList<String>()
     private var pendingWord: String? = null     // the word the last glide put in: kept when the next thing is not a correction
     private var pendingPrev: String? = null     // the word before it (the language's context for what is learned)
+    private var pendingWeight = 1f              // 3 when the person CHOSE it from the strip: learned (like a kept glide) only when the next thing is not a Backspace
     private var lastGlidePrev: String? = null   // the word before the glide that is being decoded
     private var afterUndo = false               // a glided word was just deleted: the next word that is kept is the one meant instead
     /** Tests: where the engine comes from (the real one reads the shipped word list). */
@@ -294,7 +295,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         val g = glide ?: return
         g.stats.onKept()
         g.accepted(w) { h -> post { l.navGlideHabitChanged(h) } }
-        if (learnAllowed()) g.learn(pendingPrev, w, if (afterUndo) 3f else 1f) // kept: the keyboard hears it (a word that replaced a deleted one counts more: the person had to correct)
+        if (learnAllowed()) g.learn(pendingPrev, w, maxOf(pendingWeight, if (afterUndo) 3f else 1f)) // kept: the keyboard hears it (a word the person chose, or one that replaced a deleted one, counts more)
+        pendingWeight = 1f
         afterUndo = false
     }
 
@@ -307,7 +309,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         val before = model.text
         model.commitGlide(best.text)
         pageField?.let { sendEdit(it, before) }
-        pendingWord = best.text
+        pendingWord = best.text; pendingWeight = 1f
         pendingPrev = lastGlidePrev
         keys.showCandidates(res.candidates.map { it.text })
         bar.invalidate()
@@ -320,11 +322,10 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         val before = model.text
         if (!model.swapGlide(word)) return
         pageField?.let { sendEdit(it, before) }
-        pendingWord = null
+        pendingWord = word; pendingWeight = 3f // the person CHOSE this word over the keyboard's first guess: it counts three times, once it is kept (a Backspace right after takes it back)
         afterUndo = false
         g?.stats?.onPicked()
         g?.accepted(word) { h -> post { l.navGlideHabitChanged(h) } }
-        if (learnAllowed()) g?.learn(pendingPrev, word, 3f) // the person CHOSE this word over the keyboard's first guess: it counts three times
         keys.showCandidates(keys.candidateTexts().let { list -> listOf(word) + list.filter { it != word } }.take(3))
         bar.invalidate()
     }

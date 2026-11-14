@@ -507,5 +507,26 @@ class MiniNavTest {
         rec.field = null; nav.pressBarForTest(); idle(20)
         assertTrue(nav.fieldLine(), nav.fieldLine().contains("1 times for the address bar"))
     }
+
+    @Test fun aGuessThePersonPickedCountsOnceItIsKeptAndNotWhenTheyDeleteItRightAway() {
+        openGlideKeyboard()
+        glideWord("hello")
+        val (x, y) = nav.chipCenterForTest(1)!!
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, x, y); nav.touchKeysForTest(MotionEvent.ACTION_UP, x, y)
+        assertFalse("picked, but not yet kept: nothing learned so far: ${nav.glideLine()}", nav.glideLine().contains("learned"))
+        nav.pressKeyForTest("\u232b")   // Backspace right after the pick: it was wrong too
+        nav.closeKeyboard(); idle(20)
+        assertFalse("a picked word that was deleted at once is not learned: ${nav.glideLine()}", nav.glideLine().contains("learned"))
+    }
+
+    @Test fun aGuessThePersonPickedIsLearnedWhenTheyCarryOnTyping() {
+        openGlideKeyboard()
+        glideWord("hello")
+        val (x, y) = nav.chipCenterForTest(1)!!
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, x, y); nav.touchKeysForTest(MotionEvent.ACTION_UP, x, y)
+        glideWord("world")               // carrying on keeps the picked word
+        nav.closeKeyboard(); idle(20)
+        assertTrue("the kept words were learned: ${nav.glideLine()}", nav.glideLine().contains("learned 2 words"))
+    }
 }
 
