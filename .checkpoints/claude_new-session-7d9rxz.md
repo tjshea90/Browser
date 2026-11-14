@@ -1,13 +1,15 @@
-# CHECKPOINT 2346 — read me first, then TASKS.md
+# CHECKPOINT 2347 — read me first, then TASKS.md
 
-**Written:** 2026-11-14T21:53:33Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/new-session-7d9rxz` · **builds on:** `2d54bbb9` (this checkpoint is the commit after it)
+**Written:** 2026-11-14T21:53:57Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/new-session-7d9rxz` · **builds on:** `79518152` (this checkpoint is the commit after it)
 
 ## Just done
-first alpha41 run FAILED on GitHub: core ProxyLinkTest.theRenewalKeepsItOpenPastTheFirstArming (the known flaky FLK1: two courier clients with one key, the phone's replay guard rejects an identical signature in the same ms) - fixed in the TEST (one shared client, 8 clean runs); nothing was published (no tag). RX3-Y2 skipper DONE on the mechanics: youtube.js (+ manifest entry, background guard answer carries skip, yts relay), Settings row 'Skip ads inside video players' default on, page-config flag 8, Diagnostics line 'YouTube ads', core AdSkipStats (7 tests), web-tests/youtube.test.js 14 pass on a mock player built from the LIVE markup (player and video verified on the real mobile and desktop site; ad class names / skip selectors NOT verified: the sandbox gets no ads). Local gates equal to CI pass: :core:test :tools:build :app:testDebugUnitTest :app:lintRelease, web suite 313/313
+gated kestrel-g-v0.3.0-alpha41 (gecko code 142) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
 
 ## Do this next
-RE-SHIP alpha41 (same version, nothing was published): bash ship.sh gecko "<note incl. YouTube skipper>" (scratchpad note41b.txt), then dispatch android.yml (app=gecko full_build=true ref claude/new-session-7d9rxz) with the same note, WAIT for the tag kestrel-g-v0.3.0-alpha41 + conclusion success + get_release_by_tag APK, ONLY THEN bash tools/record-release.sh kestrel-g-v0.3.0-alpha41 "<note>"; answer the owner in plain words with the Release link. After that: RX3-Y3 (tools/sitelab/yt_live.js live check + selector table in research/YOUTUBE_ADS.md), RX3-G7 generic players (content.js: observe a player container class only after a video fired play; ad-state words jw-flag-ads vjs-ad-playing vjs-ad-loading ima-ad-container plyr--ad; never on the YouTube hosts), then Wave B: V1, V2, V5, D1, G4, G5, G6, S1, B2
+TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref claude/new-session-7d9rxz, inputs {"app":"gecko","full_build":"true","note":"alpha41: Back remembers your place on each page and counts how Back behaves (Back lab); YouTube ad skipping (mutes and fast-forwards ads, presses Skip, closes banners, removes the ad-blocker box; one switch in Settings, on by default) and the lists' full YouTube rules; lists can only rewrite pages if they are the uBlock lists; a page can no longer fake your tap or click inside frames it embeds; the pop-up guard is there from the very first page. Tested on the emulator and in test browsers, not on your tablet."}.
+When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha41), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha41 "alpha41: Back remembers your place on each page and counts how Back behaves (Back lab); YouTube ad skipping (mutes and fast-forwards ads, presses Skip, closes banners, removes the ad-blocker box; one switch in Settings, on by default) and the lists' full YouTube rules; lists can only rewrite pages if they are the uBlock lists; a page can no longer fake your tap or click inside frames it embeds; the pop-up guard is there from the very first page. Tested on the emulator and in test browsers, not on your tablet."
+NEVER ship kestrel-g-v0.3.0-alpha41 twice (check BUILDLOG.md and the Releases first).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +18,7 @@ RE-SHIP alpha41 (same version, nothing was published): bash ship.sh gecko "<note
 
 ## Last ten checkpoints
 ```
+  79518152 ckpt 2346: first alpha41 run FAILED on GitHub: core ProxyLinkTest.theRenewalKeepsItOpen
   d6379d16 ckpt 2345: alpha41 (gecko code 142, manifest 1.0.142) GATED, PUSHED and the android.yml
   836d9546 ckpt 2344: gated kestrel-g-v0.3.0-alpha41 (gecko code 142) and pushed it: handoff self-
   14a6a198 ckpt 2343: RX3-G1 DONE (guard+library declared in the manifest, world MAIN; emulator-pr
@@ -25,8 +28,4 @@ RE-SHIP alpha41 (same version, nothing was published): bash ship.sh gecko "<note
   687414dd ckpt 2339: owner message 40 (a screenshot, no words: YouTube Movies and TV page 'Video 
   2d3b6a3a ckpt 2338: RX3-BK1/BK2 core logic DONE and green: core/session/BackScroll.kt (ScrollMem
   13adf44e ckpt 2334: saved research/REVIEW-EXTERNAL-3.md (v2, byte-identical copy of the owner's 
-  094aed9b ckpt 2337: alpha40 RELEASED AND RECORDED: kestrel-g-v0.3.0-alpha40 (gecko code 141, run
 ```
-
-(10 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
