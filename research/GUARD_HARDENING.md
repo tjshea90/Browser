@@ -20,5 +20,10 @@ Now:
 - Residual risk, said plainly: a malicious page can still put a transparent layer over a frame so that the owner's own tap lands on the layer, and then fake a refusal; the assist would replay that one tap into the frame (non-control elements only). It needs a real tap of the owner on that spot, within 2 s, at most five times per press. Before this change it needed nothing.
 - Proof: `web-tests/assist.test.js` (9 tests: the old tag posted into a frame does nothing, a forged go without a press sends nothing, a stale press sends nothing, the five-per-press cap and the place coming from the press, the legitimate player-in-frame cases from AP1 ported, never on a button or link, guard off, only the extension channel), `guard.test.js` (the guard says "go" and posts nothing), `background.test.js` (4 relay tests). Emulator proof of `tabs.sendMessage` in GeckoView: see section 3.
 
-## 3. Emulator check of the relay in GeckoView 160
-(see below, filled in by the run of tools/sitelab/guardlab.py pages /assist-parent and /assist-child)
+## 3. Emulator check of the relay in GeckoView 160 (2026-11-14; Android 10 x86_64 emulator, debug build; NOT the tablet)
+Lab: `tools/sitelab/guardlab.py` pages `/assist-parent` (a cross-origin frame, the same server under the host name 127.0.0.1, holding a real tiny silent media element, with a transparent layer over it that opens an ad on a tap) and `/assist-child`. A REAL tap (`adb shell input tap`) on the layer:
+- the layer's handler ran and called `window.open` to the other host: refused, no request reached the server, the blocked-pop-up chip was shown;
+- the extension's state line (Diagnostics, and Health `shields ext-state`) read `assist 1/1`, then `assist 2/2`: the parent's content.js asked, the background found the child frame in its table and `browser.tabs.sendMessage(tabId, msg, {frameId})` RESOLVED: **GeckoView 160 supports it**;
+- the frame logged `child play event: the video STARTED`: the frame's own content.js started the video with the engine's native `play()`.
+Two lab lessons worth keeping: (1) the ad address of the lab layer must be cross-site, else the guard rightly allows it after a real tap (same-site windows are allowed); (2) a content script's `video.play()` goes through the engine's own wrappers, so a page script that stubs `HTMLMediaElement.prototype.play` cannot see it (the unit tests share one world, so they can): observe the media element's `play` event instead.
+Not run: a real movie site with a player frame on the tablet.
