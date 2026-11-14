@@ -81,7 +81,27 @@ class VideoFlow(private val a: BrowserActivity) {
     /** Called on the Shields worker thread. */
     fun seen(c: MediaCandidate) = Io.ui {
         val t = tabOf(c.page) ?: return@ui
-        if (t.media.add(c)) a.refreshDownloadButton()
+        if (t.media.add(c)) { a.refreshDownloadButton(); if (c.fromMarkup) verifySoon(t) }
+    }
+
+    // ---- RX3-V2 (research/FINDER_LAB.md section 2): an address found only in the page's text was never requested; on a page with nothing verified, up to three of them get ONE cheap question at idle
+    private val verifyPending = HashSet<Int>()
+    private fun verifySoon(t: Tab) {
+        if (!verifyPending.add(t.id)) return
+        Io.main.postDelayed({ verifyNow(t, 0) }, 2_500)
+    }
+    /** "How big are you?" as a one-byte Range request (the answer is the end of Content-Range). Never while the page is still loading, never for a tab that moved on, at most three per check. */
+    private fun verifyNow(t: Tab, tries: Int) {
+        if (t.loading && tries < 6) { Io.main.postDelayed({ verifyNow(t, tries + 1) }, 2_000); return }
+        verifyPending.remove(t.id)
+        if (t.isNewTab || t.loading) return
+        var asked = 0
+        for (c in t.media.unverifiedToCheck(3)) {
+            if (c.length >= 0 || !sized.add(c.key)) continue
+            asked++
+            DownloadController.fetchBytes(a, c.url, 0L, 0L, requestHeaders(t, c), 1, t.isPrivateTab, onTotal = { n -> if (t.media.setLength(c.url, n)) { a.refreshDownloadButton(); refresh(t) } }) { }
+        }
+        if (asked > 0) Health.log("media", "verify", "asked=$asked counted=${t.media.usableCount()} of ${t.media.size}")
     }
 
     /** "tab id|document|address" already read, so a player that asks for the same playlist again does not make us read it again. Per DOCUMENT: another server (another document) that asks for the same address is news ([gone] forgets the replaced document's entries, [clearTab] a tab's). */
@@ -164,7 +184,7 @@ class VideoFlow(private val a: BrowserActivity) {
         for (c in ranked.main + listOfNotNull(ranked.exact)) { // only what is on top is looked into: a few hundred KB each, never the files tucked away
             if (c.kind == MediaKind.FILE && !c.audioOnly && (c.knownHeight == 0 || c.durationMs == 0L) && looksMp4(c) && probed.add(c.key)) probe(tab, c, 0L, 256 * 1024, 0)
             // a file found in the page's own markup has not been requested yet, so nobody has seen its length: one byte asked for gives it back as "Content-Range: bytes 0-0/TOTAL"
-            else if (c.kind == MediaKind.FILE && c.length <= 0 && sized.add(c.key)) DownloadController.fetchBytes(a, c.url, 0L, 0L, requestHeaders(tab, c), 1, tab.isPrivateTab, onTotal = { n -> if (c.length <= 0) { c.length = n; refresh(tab) } }) { }
+            else if (c.kind == MediaKind.FILE && c.length <= 0 && sized.add(c.key)) DownloadController.fetchBytes(a, c.url, 0L, 0L, requestHeaders(tab, c), 1, tab.isPrivateTab, onTotal = { n -> if (c.length <= 0) { tab.media.setLength(c.url, n); a.refreshDownloadButton(); refresh(tab) } }) { }
         }
     }
 
