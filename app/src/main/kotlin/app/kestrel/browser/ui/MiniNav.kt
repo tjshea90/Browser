@@ -73,7 +73,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         /** What the keyboard learned from the person's choices and typing (AU2), as the engine wrote it; read and written on the glide thread (any thread is fine). */
         fun navGlideLearned(): String? = null
         fun navGlideLearnedSave(text: String) {}
-        /** AU3: the text field of the web page that has focus right now, or null (none, or this build has no page fields). Asked when the keyboard opens and before every key. */
+        /** AU3: the text pageField of the web page that has focus right now, or null (none, or this build has no page fields). Asked when the keyboard opens and before every key. */
         fun navPageField(): PageField? = null
         /** AU3: the keyboard opened or closed (while it is open the system keyboard must stay down). */
         fun navKeyboardChanged(showing: Boolean) {}
@@ -105,11 +105,11 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     internal var glideFactory: (() -> GlideTyping)? = null
 
     // ---- typing into the page's own text field (AU3)
-    private var field: PageField? = null         // the page field the keys go into (null: the bar is the address / search bar)
+    private var pageField: PageField? = null         // the page field the keys go into (null: the bar is the address / search bar)
     private var fieldIdentity = 0                // which field it is: another number means the text typed so far belongs to a field that is gone
     private var learnedText: String? = null      // the text whose words were already handed to the keyboard's memory (closing after Enter must not count them twice)
-    /** The keyboard is open and its keys go into a text field of the page. */
-    val typesIntoPage: Boolean get() = keyboardShowing && field != null
+    /** The keyboard is open and its keys go into a text pageField of the page. */
+    val typesIntoPage: Boolean get() = keyboardShowing && pageField != null
 
     /** The panel is shown (sliding in counts as shown). */
     var isOpen = false; private set
@@ -190,7 +190,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     fun openKeyboard() {
         if (!isOpen || keyboardShowing) return
         val f = l.navPageField()              // a text field of the page has focus: the keys go there, from an empty text (the address is not selected)
-        field = f; fieldIdentity = f?.identity ?: 0; learnedText = null
+        pageField = f; fieldIdentity = f?.identity ?: 0; learnedText = null
         model.open(if (f != null) "" else address)
         keyboardShowing = true
         keys.visibility = VISIBLE
@@ -205,23 +205,23 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     fun closeKeyboard() {
         if (!keyboardShowing) return
         confirmGlide()
-        if (field != null) learnFromText()     // typed into a page field: there is no Go to wait for
+        if (pageField != null) learnFromText()     // typed into a page field: there is no Go to wait for
         glide?.saveLearned()
         keys.reset()
         keyboardShowing = false
-        field = null
+        pageField = null
         keys.visibility = GONE
         setPanelWidth(PANEL_W_DP)
         barMode()
         l.navKeyboardChanged(false)
     }
 
-    /** The activity tells the panel that the page's focused field changed (focus moved, a field appeared or went away): the keys follow it. */
+    /** The activity tells the panel that the page's focused pageField changed (focus moved, a pageField appeared or went away): the keys follow it. */
     fun pageFieldChanged() { if (keyboardShowing) syncField() }
 
     /** The bar's description says where the keys go. */
     private fun barMode() {
-        bar.contentDescription = if (!keyboardShowing) "Address. Tap to type a new one." else if (field != null) "Typing into the text field of the page. Tap to close the keyboard." else "Address. Tap to close the keyboard."
+        bar.contentDescription = if (!keyboardShowing) "Address. Tap to type a new one." else if (pageField != null) "Typing into the text field of the page. Tap to close the keyboard." else "Address. Tap to close the keyboard."
         bar.invalidate()
     }
 
@@ -299,7 +299,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         syncField()
         val before = model.text
         model.commitGlide(best.text)
-        field?.let { sendEdit(it, before) }
+        pageField?.let { sendEdit(it, before) }
         pendingWord = best.text
         pendingPrev = lastGlidePrev
         keys.showCandidates(res.candidates.map { it.text })
@@ -312,7 +312,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         syncField()
         val before = model.text
         if (!model.swapGlide(word)) return
-        field?.let { sendEdit(it, before) }
+        pageField?.let { sendEdit(it, before) }
         pendingWord = null
         afterUndo = false
         g?.stats?.onPicked()
@@ -332,7 +332,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
     private fun typed(key: Key) {
         syncField() // the page's field may have changed or gone since the last key
-        val f = field
+        val f = pageField
         when (key) {
             Key.Backspace -> if (model.glideActive) { pendingWord = null; afterUndo = true; glide?.stats?.onUndone() } // right after a glide: the word was wrong
             Key.Shift, Key.ToLetters -> {}                                                       // the text does not change
@@ -355,24 +355,24 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     // ------------------------------------------------------------------ typing into the page's own text field (AU3)
 
     /**
-     * The page's focused field may have changed since the keys last went somewhere. The same field: carry on. Another field, or one that appeared: the keys go there, from an empty text. A field that is gone
-     * (the page moved on, something else took focus): the bar is the address / search bar again. What was typed into a field that is left behind counts for the keyboard's memory.
+     * The page's focused pageField may have changed since the keys last went somewhere. The same pageField: carry on. Another pageField, or one that appeared: the keys go there, from an empty text. A pageField that is gone
+     * (the page moved on, something else took focus): the bar is the address / search bar again. What was typed into a pageField that is left behind counts for the keyboard's memory.
      */
     private fun syncField() {
         if (!keyboardShowing) return
         val f = l.navPageField()
-        val was = field
+        val was = pageField
         if (f == null && was == null) return
-        if (f != null && was != null && f.identity == fieldIdentity) { field = f; return } // the same field (a fresh object: its type may have changed)
+        if (f != null && was != null && f.identity == fieldIdentity) { pageField = f; return } // the same field (a fresh object: its type may have changed)
         if (was != null) { confirmGlide(); learnFromText() }
-        field = f; fieldIdentity = f?.identity ?: 0
+        pageField = f; fieldIdentity = f?.identity ?: 0
         learnedText = null
         model.open(if (f != null) "" else address)
         pendingWord = null; afterUndo = false
         keys.clearCandidates(); barMode(); keys.invalidate()
     }
 
-    /** The text model changed from [before]: the same change goes into the page's field (what was taken off the end, what was added). */
+    /** The text model changed from [before]: the same change goes into the page's pageField (what was taken off the end, what was added). */
     private fun sendEdit(f: PageField, before: String, backspace: Boolean = false) {
         var e = TextEdit.between(before, model.text)
         if (backspace && e.isEmpty) e = TextEdit(1, "") // nothing typed here is left to take off: the field's own text goes
@@ -380,7 +380,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         if (e.insert.isNotEmpty()) f.insert(e.insert)
     }
 
-    /** Go in a page field presses Enter there; a field whose Enter submits (a search box) closes the keyboard, a text area stays open with an empty text for the next line. */
+    /** Go in a page pageField presses Enter there; a pageField whose Enter submits (a search box) closes the keyboard, a text area stays open with an empty text for the next line. */
     private fun fieldGo(f: PageField) {
         learnFromText()
         f.enter()
@@ -388,10 +388,10 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         else { model.open(""); learnedText = null; keys.clearCandidates(); bar.invalidate(); keys.invalidate() }
     }
 
-    /** Nothing is learned from a private tab or a password field. */
+    /** Nothing is learned from a private tab or a password pageField. */
     private fun learnAllowed(): Boolean {
         if (l.navPrivateTab()) return false
-        val f = field ?: return true
+        val f = pageField ?: return true
         return !f.password && !f.privateTab
     }
 
@@ -406,8 +406,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         for ((prev, w) in model.typedPairs()) g.learn(prev, w, 1f) // what was typed letter by letter (the glided words were learned when they were kept)
     }
 
-    /** Glide typing works unless the page field is a password (the guesses would show it on the screen). */
-    private fun glideUsable(): Boolean = glideOn && field?.password != true
+    /** Glide typing works unless the page pageField is a password (the guesses would show it on the screen). */
+    private fun glideUsable(): Boolean = glideOn && pageField?.password != true
 
     // ------------------------------------------------------------------ the slide (its own clock: independent of Android's animation scale)
 
@@ -484,8 +484,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
         private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = ctx.dpf(1.2f) }
         private val box = RectF()
-        var dim = false; set(v) { if (field != v) { field = v; invalidate() } }
-        var active = false; set(v) { if (field != v) { field = v; invalidate() } }
+        var dim = false; set(v) { if (pageField != v) { pageField = v; invalidate() } }
+        var active = false; set(v) { if (pageField != v) { pageField = v; invalidate() } }
 
         init { contentDescription = desc; isClickable = true }
 
@@ -527,7 +527,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         init { contentDescription = "Address. Tap to type a new one."; isClickable = true }
 
         /** What the bar shows right now (also read by the tests). */
-        fun shownText(): String = if (!keyboardShowing) display(address) else if (field?.password == true) "\u2022".repeat(model.text.length) else model.text
+        fun shownText(): String = if (!keyboardShowing) display(address) else if (pageField?.password == true) "\u2022".repeat(model.text.length) else model.text
 
         private fun display(url: String) = url.removePrefix("https://").removePrefix("http://").removePrefix("www.").removeSuffix("/")
 
@@ -542,7 +542,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             c.drawRoundRect(box, r, r, fill); c.drawRoundRect(box, r, r, line)
             val pad = context.dpf(10f)
             var avail = (w - 2 * pad).coerceAtLeast(1f)
-            if (keyboardShowing && field != null) { // the keys go into the page: a small tag says so
+            if (keyboardShowing && pageField != null) { // the keys go into the page: a small tag says so
                 tag.color = pal.accent
                 val tw0 = tag.measureText("page")
                 c.drawText("page", w - pad - tw0, (h - (tag.fontMetrics.ascent + tag.fontMetrics.descent)) / 2f, tag)
@@ -553,7 +553,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             val base = (h - (fm.ascent + fm.descent)) / 2f
             if (raw.isEmpty()) {
                 text.color = pal.muted
-                c.drawText(TextUtils.ellipsize(if (keyboardShowing) (if (field != null) "type into the page" else "type an address or search") else "Search or type a URL", text, avail, TextUtils.TruncateAt.END).toString(), pad, base, text)
+                c.drawText(TextUtils.ellipsize(if (keyboardShowing) (if (pageField != null) "type into the page" else "type an address or search") else "Search or type a URL", text, avail, TextUtils.TruncateAt.END).toString(), pad, base, text)
                 if (keyboardShowing) drawCaret(c, pad, h)
                 return
             }
