@@ -12,7 +12,7 @@ import java.util.Random
 class SimNoise(
     /** Standard deviation of where the finger aims, per letter, in dp. */
     val aimDp: Float,
-    /** 0 = the path passes through the aim points, 1 = it cuts every corner like a smoothing spline. */
+    /** How far before and after a letter the finger starts rounding the corner, in dp (the finger slows down and swings round the letter, so a sharp turn is cut by about a quarter of this). */
     val cut: Float,
     /** Standard deviation of a shift of the whole path, in dp. */
     val biasDp: Float,
@@ -23,11 +23,11 @@ class SimNoise(
     val name: String,
 ) {
     companion object {
-        val CALM = SimNoise(5f, 0.35f, 2f, 0.8f, 2f, "calm (aim 5 dp)")
-        val NORMAL = SimNoise(8f, 0.5f, 3f, 1.2f, 3f, "normal (aim 8 dp)")
-        val SLOPPY = SimNoise(11f, 0.6f, 4.5f, 1.6f, 4f, "sloppy (aim 11 dp)")
-        val BAD = SimNoise(14f, 0.7f, 6f, 2f, 5f, "bad (aim 14 dp)")
-        fun aim(dp: Float) = SimNoise(dp, 0.5f, dp * 0.4f, dp * 0.15f, dp * 0.4f, "aim $dp dp")
+        val CALM = SimNoise(5f, 8f, 2f, 0.8f, 2f, "calm (aim 5 dp)")
+        val NORMAL = SimNoise(8f, 14f, 3f, 1.2f, 3f, "normal (aim 8 dp)")
+        val SLOPPY = SimNoise(11f, 20f, 4.5f, 1.6f, 4f, "sloppy (aim 11 dp)")
+        val BAD = SimNoise(14f, 26f, 6f, 2f, 5f, "bad (aim 14 dp)")
+        fun aim(dp: Float) = SimNoise(dp, dp * 1.7f, dp * 0.4f, dp * 0.15f, dp * 0.4f, "aim $dp dp")
     }
 }
 
@@ -46,28 +46,27 @@ class GestureSim(private val keys: GlideKeys, private val rnd: Random) {
             px[j] = keys.cx[ls[j]] + rnd.nextGaussian().toFloat() * noise.aimDp + bx
             py[j] = keys.cy[ls[j]] + rnd.nextGaussian().toFloat() * noise.aimDp + by
         }
-        // a dense curve through / near the aim points
+        // a dense curve: straight between the aim points, with every corner rounded by a quadratic curve that starts and ends [cut] dp from the corner
         val dense = ArrayList<FloatArray>()
         val m = ls.size
-        fun cp(i: Int) = i.coerceIn(0, m - 1)
         if (m == 2) {
             val bow = rnd.nextGaussian().toFloat() * noise.aimDp * 0.5f
             val dx = px[1] - px[0]; val dy = py[1] - py[0]; val len = Math.hypot(dx.toDouble(), dy.toDouble()).toFloat().coerceAtLeast(1f)
             for (s in 0..40) { val t = s / 40f; val off = bow * 4f * t * (1f - t); dense.add(floatArrayOf(px[0] + dx * t - dy / len * off, py[0] + dy * t + dx / len * off)) }
         } else {
-            for (j in 0 until m - 1) for (s in 0 until 40) {
-                val t = s / 40f; val t2 = t * t; val t3 = t2 * t
-                val a = cp(j - 1); val b = cp(j); val c = cp(j + 1); val d = cp(j + 2)
-                val out = FloatArray(2)
-                for (ax in 0..1) {
-                    val P = if (ax == 0) px else py
-                    val cr = 0.5f * ((2 * P[b]) + (-P[a] + P[c]) * t + (2 * P[a] - 5 * P[b] + 4 * P[c] - P[d]) * t2 + (-P[a] + 3 * P[b] - 3 * P[c] + P[d]) * t3)
-                    val bs = ((P[a] + 4 * P[b] + P[c]) + (-3 * P[a] + 3 * P[c]) * t + (3 * P[a] - 6 * P[b] + 3 * P[c]) * t2 + (-P[a] + 3 * P[b] - 3 * P[c] + P[d]) * t3) / 6f
-                    out[ax] = (1f - noise.cut) * cr + noise.cut * bs
-                }
-                dense.add(out)
+            fun len(a: Int, b: Int) = Math.hypot((px[b] - px[a]).toDouble(), (py[b] - py[a]).toDouble()).toFloat().coerceAtLeast(1e-3f)
+            var curX = px[0]; var curY = py[0]
+            dense.add(floatArrayOf(curX, curY))
+            for (j in 1 until m - 1) {
+                val inL = len(j - 1, j); val outL = len(j, j + 1)
+                val r = minOf(noise.cut, 0.45f * inL, 0.45f * outL)
+                val ex = px[j] + (px[j - 1] - px[j]) / inL * r; val ey = py[j] + (py[j - 1] - py[j]) / inL * r
+                val xx = px[j] + (px[j + 1] - px[j]) / outL * r; val xy = py[j] + (py[j + 1] - py[j]) / outL * r
+                for (s in 1..20) { val t = s / 20f; dense.add(floatArrayOf(curX + (ex - curX) * t, curY + (ey - curY) * t)) }
+                for (s in 1..12) { val t = s / 12f; val u = 1f - t; dense.add(floatArrayOf(u * u * ex + 2 * u * t * px[j] + t * t * xx, u * u * ey + 2 * u * t * py[j] + t * t * xy)) }
+                curX = xx; curY = xy
             }
-            dense.add(floatArrayOf(px[m - 1], py[m - 1]))
+            for (s in 1..20) { val t = s / 20f; dense.add(floatArrayOf(curX + (px[m - 1] - curX) * t, curY + (py[m - 1] - curY) * t)) }
         }
         // arc length of the dense curve
         val cum = FloatArray(dense.size)
