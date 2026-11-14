@@ -322,7 +322,7 @@
         for (var i = 0; i < fetchRules.length; i++) {
           var r = fetchRules[i];
           if (!allHit(r.n, vals)) continue;
-          if (!r.prune && !r.re) return Promise.resolve(emptyResponse(vals.url));
+          if (!r.prune && !r.re && !r.edit) return Promise.resolve(emptyResponse(vals.url));
           (edits = edits || []).push(r);
         }
       } catch (e) { /* ignore */ }
@@ -349,6 +349,7 @@
       try {
         if (r.re) { var nt = cur.replace(r.re, r.rep); if (nt !== cur) { cur = nt; changed = true; } }
         else if (r.prune) { var obj = nParse(cur); if (pruneObject(obj, r.prune.paths, r.prune.needles)) { cur = nStringify(obj); changed = true; } }
+        else if (r.edit) { var eo = nParse(cur); if (jqRun(eo, r.edit)) { cur = nStringify(eo); changed = true; } }
       } catch (e) { /* this rule does not suit this text: the next one may */ }
     }
     return changed ? cur : null;
@@ -375,7 +376,7 @@
           for (var i = 0; i < xhrRules.length; i++) {
             var r = xhrRules[i];
             if (!allHit(r.n, vals)) continue;
-            if (!r.prune && !r.re) { fakeXhr(this, info.url); return undefined; }
+            if (!r.prune && !r.re && !r.edit) { fakeXhr(this, info.url); return undefined; }
             (edits = edits || []).push(r);
           }
           if (edits) editedXhr(this, edits);
@@ -447,23 +448,31 @@
     return any;
   }
   var pruneRules = [], parseWrapped = false;
-  function jsonPrune(prune, needle) {
-    var ex = pairs(arguments, 2);
-    pruneRules.push({ paths: pathsOf(prune), needles: pathsOf(needle), stack: ex.stack ? pattern(ex.stack) : null });
+  // one JSON.parse wrapper for every rule that works on parsed JSON: prune rules (RX: json-prune) and edit rules (RX3-Y1: json-edit)
+  function ensureParseHook() {
     if (parseWrapped) return;
     parseWrapped = true;
-    JSON.parse = function () {
+    JSON.parse = function (src) {
       var r = nParse.apply(this, arguments);
       try {
         var st = null;
         for (var i = 0; i < pruneRules.length; i++) {
           var p = pruneRules[i];
           if (p.stack) { if (st === null) { try { st = new Error().stack || ''; } catch (e) { st = ''; } } if (!hit(p.stack, st)) continue; }
-          pruneObject(r, p.paths, p.needles);
+          if (p.edit) {
+            if (typeof src === 'string') { if (p.first && src.indexOf(p.first) < 0) continue; if (p.matches && !hit(p.matches, src)) continue; } // cheap checks on the text first: most JSON on a page is none of our business
+            else if (p.matches) continue;
+            jqRun(r, p.edit);
+          } else pruneObject(r, p.paths, p.needles);
         }
       } catch (e) { /* ignore */ }
       return r;
     };
+  }
+  function jsonPrune(prune, needle) {
+    var ex = pairs(arguments, 2);
+    pruneRules.push({ paths: pathsOf(prune), needles: pathsOf(needle), stack: ex.stack ? pattern(ex.stack) : null });
+    ensureParseHook();
   }
   function jsonPruneFetch(prune, needle) {
     var ex = pairs(arguments, 2);
@@ -476,6 +485,269 @@
     var n = ex.propsToMatch ? parseNeedles(ex.propsToMatch) : [];
     xhrRules.push({ n: n, prune: { paths: pathsOf(prune), needles: pathsOf(needle) } });
     wrapXhr();
+  }
+
+  // ---- the JSON edit language (RX3-Y1): `json-edit`, `json-edit-fetch-response`, `json-edit-xhr-response` and their `trusted-` forms apply a QUERY to parsed JSON.
+  // Written from the behaviour the public uBlock Origin wiki documents and from the shapes of the real list lines (88 of them in the lists the app downloads); nothing is copied from it.
+  //   steps    ..name  a key at any depth below     .name  a child     .*  every child     ./regex/  children whose key matches     [?test]  keep only the nodes that pass the test
+  //   test     .a.b  has that property     .a.b=="x"  equals (text, number, true, false, null)     *=  contains     ^=  starts with     $=  ends with     =/re/flags  matches
+  //            (the path of a test may use ..name and .*: any value found counts)
+  //   action   none: delete the node (an array item is cut out)     =<json>  set it     +=<object>  merge into it     =repl({"regex":"..","replacement":".."})  regex-replace in a text
+  //   a leading `$` and `v2:` are accepted. Only the trusted forms may set, merge or replace; the others only delete. Work is bounded (nodes visited, depth); nothing here throws into the page.
+  var JQ_MAXN = 120000, JQ_DEPTH = 60;
+  function jqIsKeyEnd(s, i) {
+    var c = s.charAt(i);
+    return c === '' || c === '.' || c === '[' || c === '=' || ((c === '+' || c === '*' || c === '^' || c === '$') && s.charAt(i + 1) === '=');
+  }
+  // one key at s[i]: `*` (every child), `/regex/flags`, or a plain name -> { any } | { re } | { k }, and where it ends
+  function jqKey(s, i) {
+    var c = s.charAt(i);
+    if (c === '*') return { any: true, end: i + 1 };
+    if (c === '/') {
+      var j = i + 1;
+      while (j < s.length) { if (s.charAt(j) === '\\') { j += 2; continue; } if (s.charAt(j) === '/') break; j++; }
+      if (j >= s.length) return null;
+      var f = j + 1, fl = '';
+      while (f < s.length && /[a-z]/.test(s.charAt(f))) { fl += s.charAt(f); f++; }
+      var re; try { re = new nRegExp(s.slice(i + 1, j), fl.replace(/[gy]/g, '')); } catch (e) { return null; }
+      return { re: re, end: f };
+    }
+    var k = i;
+    while (k < s.length && !jqIsKeyEnd(s, k)) k++;
+    return k === i ? null : { k: s.slice(i, k), end: k };
+  }
+  function jqMatchBracket(s, i) { // the `]` that closes the `[` at s[i], skipping quoted text and a /regex/ right after `=`
+    var depth = 0, q = '';
+    for (var j = i; j < s.length; j++) {
+      var c = s.charAt(j);
+      if (q) { if (c === '\\') { j++; continue; } if (c === q) q = ''; continue; }
+      if (c === '"' || c === "'") { q = c; continue; }
+      if (c === '/' && s.charAt(j - 1) === '=') {
+        var k = j + 1;
+        while (k < s.length) { if (s.charAt(k) === '\\') { k += 2; continue; } if (s.charAt(k) === '/') break; k++; }
+        if (k >= s.length) return -1;
+        j = k; continue;
+      }
+      if (c === '[') depth++;
+      else if (c === ']') { depth--; if (depth === 0) return j; }
+    }
+    return -1;
+  }
+  function jqValue(t) { // what stands after an operator: "text", 'text', /re/flags, true, false, null, a number, or a bare word
+    t = t.trim();
+    var c = t.charAt(0), n = t.length;
+    if ((c === '"' || c === "'") && n >= 2 && t.charAt(n - 1) === c) {
+      if (c === '"') { try { return { v: nParse(t) }; } catch (e) { return { v: t.slice(1, n - 1) }; } }
+      return { v: t.slice(1, n - 1).replace(/\\'/g, "'") };
+    }
+    var m = /^\/(.+)\/([a-z]*)$/.exec(t);
+    if (m) { try { return { re: new nRegExp(m[1], m[2].replace(/[gy]/g, '')) }; } catch (e) { return null; } }
+    if (t === 'true') return { v: true };
+    if (t === 'false') return { v: false };
+    if (t === 'null') return { v: null };
+    if (/^-?\d+(\.\d+)?$/.test(t)) return { v: parseFloat(t) };
+    return t === '' ? null : { v: t };
+  }
+  function jqPredicate(t) { // the text between `[?` and `]`
+    var i = 0, steps = [];
+    while (i < t.length && t.charAt(i) === '.') {
+      var deep = t.charAt(i + 1) === '.';
+      i += deep ? 2 : 1;
+      var r = jqKey(t, i);
+      if (!r) return null;
+      steps.push({ t: deep ? 'deep' : 'child', k: r.k, re: r.re, any: r.any });
+      i = r.end;
+    }
+    if (!steps.length) return null;
+    if (i >= t.length) return { path: steps, op: '' };
+    var two = t.substr(i, 2), op;
+    if (two === '==' || two === '*=' || two === '^=' || two === '$=') { op = two; i += 2; }
+    else if (t.charAt(i) === '=') { op = '='; i += 1; }
+    else return null;
+    var val = jqValue(t.slice(i));
+    return val ? { path: steps, op: op, val: val } : null;
+  }
+  function jqJson(t) { try { return { v: nParse(String(t).trim()) }; } catch (e) { return null; } }
+  function jqAction(t) { // t starts at `=` or `+=`
+    var m;
+    if (t.indexOf('+=') === 0) { var o = jqJson(t.slice(2)); return (o && isObj(o.v) && !Array.isArray(o.v)) ? { k: 'merge', v: o.v } : null; }
+    var rest = t.slice(1).trim();
+    if ((m = /^repl\(([\s\S]*)\)$/.exec(rest))) {
+      var spec = jqJson(m[1]);
+      if (!spec || !isObj(spec.v) || typeof spec.v.regex !== 'string') return null;
+      var rm = /^\/(.+)\/([a-z]*)$/.exec(spec.v.regex), re;
+      try { re = rm ? new nRegExp(rm[1], rm[2]) : new nRegExp(spec.v.regex); } catch (e) { return null; }
+      return { k: 'repl', re: re, rep: String(spec.v.replacement === undefined ? '' : spec.v.replacement) };
+    }
+    var lit = jqJson(rest);
+    return lit ? { k: 'set', v: lit.v } : null;
+  }
+  function jqCompile(q, trusted) { // the query as steps and an action, or null when it is not understood (or changes values without a trusted list)
+    try {
+      var s = String(q), i = 0, n = s.length, steps = [], act = null;
+      if (s.indexOf('v2:') === 0) i = 3;
+      if (s.charAt(i) === '$') i++;
+      while (i < n) {
+        var c = s.charAt(i);
+        if (c === '.') {
+          var deep = s.charAt(i + 1) === '.';
+          i += deep ? 2 : 1;
+          var r = jqKey(s, i);
+          if (!r) return null;
+          steps.push({ t: deep ? 'deep' : 'child', k: r.k, re: r.re, any: r.any });
+          i = r.end;
+        } else if (c === '[') {
+          var j = jqMatchBracket(s, i);
+          if (j < 0 || s.charAt(i + 1) !== '?') return null;
+          var pr = jqPredicate(s.slice(i + 2, j));
+          if (!pr) return null;
+          steps.push({ t: 'filter', p: pr });
+          i = j + 1;
+        } else if (c === '=' || (c === '+' && s.charAt(i + 1) === '=')) {
+          act = jqAction(s.slice(i));
+          if (!act) return null;
+          i = n;
+        } else return null;
+      }
+      if (!steps.length && !act) return null;
+      if (act && !trusted) return null;
+      return { steps: steps, act: act };
+    } catch (e) { return null; }
+  }
+  function jqKeyOk(st, key) { return st.any ? true : (st.re ? st.re.test(key) : key === st.k); }
+  function jqChildren(rec, st, out, ctx) {
+    var v = rec.v;
+    if (!isObj(v) || typeof v === 'function') return;
+    var ks; try { ks = keys(v); } catch (e) { return; }
+    for (var i = 0; i < ks.length; i++) { if (--ctx.n < 0) return; if (jqKeyOk(st, ks[i])) out.push({ p: v, k: ks[i], v: v[ks[i]] }); }
+  }
+  function jqDeep(v, st, out, ctx, depth) {
+    if (!isObj(v) || typeof v === 'function' || depth > JQ_DEPTH || ctx.n < 0) return;
+    var ks; try { ks = keys(v); } catch (e) { return; }
+    for (var i = 0; i < ks.length; i++) {
+      if (--ctx.n < 0) return;
+      var key = ks[i], child = v[key];
+      if (jqKeyOk(st, key)) out.push({ p: v, k: key, v: child });
+      jqDeep(child, st, out, ctx, depth + 1);
+    }
+  }
+  function jqStep(recs, st, ctx) {
+    var out = [];
+    for (var i = 0; i < recs.length && ctx.n >= 0; i++) {
+      var r = recs[i];
+      if (st.t === 'child') jqChildren(r, st, out, ctx);
+      else if (st.t === 'deep') jqDeep(r.v, st, out, ctx, 0);
+      else if (jqTest(r.v, st.p, ctx)) out.push(r);
+    }
+    return out;
+  }
+  function jqCompare(v, pr) {
+    var a = pr.val;
+    if (a.re) return a.re.test(typeof v === 'string' ? v : String(v));
+    if (pr.op === '==' || pr.op === '=') return v === a.v;
+    var s = typeof v === 'string' ? v : ((v === null || v === undefined || typeof v === 'object') ? '' : String(v)), t = String(a.v);
+    if (pr.op === '*=') return s.indexOf(t) >= 0;
+    if (pr.op === '^=') return s.indexOf(t) === 0;
+    return t.length <= s.length && s.lastIndexOf(t) === s.length - t.length; // $=
+  }
+  function jqTest(node, pr, ctx) {
+    var recs = [{ p: null, k: null, v: node }];
+    for (var i = 0; i < pr.path.length && recs.length; i++) recs = jqStep(recs, pr.path[i], ctx);
+    if (!recs.length) return false;
+    if (!pr.op) return true;
+    for (var j = 0; j < recs.length; j++) if (jqCompare(recs[j].v, pr)) return true;
+    return false;
+  }
+  function jqClone(v) { try { return isObj(v) ? nParse(nStringify(v)) : v; } catch (e) { return v; } }
+  function jqRun(root, q) { // true when something changed
+    if (!isObj(root) || !q) return false;
+    var ctx = { n: JQ_MAXN }, recs = [{ p: null, k: null, v: root }], i, r, changed = false;
+    for (i = 0; i < q.steps.length && recs.length; i++) recs = jqStep(recs, q.steps[i], ctx);
+    var act = q.act;
+    for (i = recs.length - 1; i >= 0; i--) { // from the last match to the first: cutting array items out never shifts the ones still to come
+      r = recs[i];
+      try {
+        if (!act) {
+          if (r.p === null) continue;
+          if (Array.isArray(r.p)) { var at = +r.k; if (r.p[at] === r.v) { r.p.splice(at, 1); changed = true; } }
+          else if (hasOwn.call(r.p, r.k)) { delete r.p[r.k]; changed = true; }
+        } else if (act.k === 'set') {
+          if (r.p !== null && r.p[r.k] !== act.v) { r.p[r.k] = jqClone(act.v); changed = true; }
+        } else if (act.k === 'merge') {
+          if (isObj(r.v) && !Array.isArray(r.v)) { var mk = keys(act.v); for (var m = 0; m < mk.length; m++) r.v[mk[m]] = jqClone(act.v[mk[m]]); changed = true; }
+        } else if (act.k === 'repl') {
+          if (r.p !== null && typeof r.v === 'string') { var nv = r.v.replace(act.re, act.rep); if (nv !== r.v) { r.p[r.k] = nv; changed = true; } }
+        }
+      } catch (e) { /* a frozen or odd node: the next one may be fine */ }
+    }
+    return changed;
+  }
+  // (query, [propsToMatch | name, value ...]): the second argument on its own is the request needle (an empty one is skipped); `propsToMatch`, `matches` and `stack` come as name, value pairs
+  function editArgs(a) {
+    var o = { q: String(a[0] === undefined ? '' : a[0]), props: '', matches: '' }, i = 1;
+    if (a.length > 1) { var x = String(a[1]); if (x !== 'propsToMatch' && x !== 'matches' && x !== 'stack') { o.props = x; i = 2; } }
+    for (; i < a.length; i += 2) {
+      var nm = String(a[i]), val = i + 1 < a.length ? String(a[i + 1]) : '';
+      if (nm === 'propsToMatch') o.props = val; else if (nm === 'matches') o.matches = val;
+    }
+    return o;
+  }
+  function firstKey(q) { for (var i = 0; i < q.steps.length; i++) { var st = q.steps[i]; if ((st.t === 'child' || st.t === 'deep') && st.k) return st.k; } return ''; }
+  function jsonEdit(trusted) { // JSON.parse results; `matches` is a needle for the TEXT that was parsed
+    return function () {
+      var o = editArgs(arguments), q = jqCompile(o.q, trusted);
+      if (!q) return;
+      pruneRules.push({ edit: q, matches: o.matches ? pattern(o.matches) : null, first: firstKey(q), stack: null });
+      ensureParseHook();
+    };
+  }
+  function jsonEditFetch(trusted) { // the answer to a matching fetch; a rule without a request needle would parse every answer of the page, so it is not accepted
+    return function () {
+      var o = editArgs(arguments), q = jqCompile(o.q, trusted);
+      if (!q || !o.props) return;
+      fetchRules.push({ n: parseNeedles(o.props), edit: q });
+      wrapFetch();
+    };
+  }
+  function jsonEditXhr(trusted) {
+    return function () {
+      var o = editArgs(arguments), q = jqCompile(o.q, trusted);
+      if (!q || !o.props) return;
+      xhrRules.push({ n: parseNeedles(o.props), edit: q });
+      wrapXhr();
+    };
+  }
+  // trusted-edit-inbound-object (path, index, query): what the page hands to a function (JSON.stringify: the body of a request it builds) is edited just before the function runs
+  function editInbound(path, idx, query) {
+    var parts = chainOf(path), q = jqCompile(query, true), at = parseInt(idx, 10) || 0;
+    if (!parts || !q || at < 0 || at > 9) return;
+    var owner = window, i;
+    for (i = 0; i < parts.length - 1; i++) { try { owner = owner[parts[i]]; } catch (e) { return; } if (!isObj(owner)) return; }
+    var prop = parts[parts.length - 1], orig;
+    try { orig = owner[prop]; } catch (e) { return; }
+    if (typeof orig !== 'function') return;
+    var wrapped = function () {
+      try { var a = arguments[at]; if (isObj(a)) jqRun(a, q); } catch (e) { /* never break the call */ }
+      return orig.apply(this, arguments);
+    };
+    try { owner[prop] = wrapped; } catch (e) { /* ignore */ }
+  }
+  // trusted-prevent-dom-bypass (method, prop): a frame the page inserts with the method cannot hand the page an untouched `fetch` / `Request` (a fresh frame has its own, which would skip every fix above)
+  function preventDomBypass(path, prop) {
+    var parts = chainOf(path);
+    if (!parts || !prop) return;
+    var owner = window, i;
+    for (i = 0; i < parts.length - 1; i++) { try { owner = owner[parts[i]]; } catch (e) { return; } if (!isObj(owner)) return; }
+    var name = parts[parts.length - 1], orig;
+    try { orig = owner[name]; } catch (e) { return; }
+    if (typeof orig !== 'function') return;
+    function fix(node) {
+      try {
+        var list = (node && node.tagName === 'IFRAME') ? [node] : (node && node.querySelectorAll ? node.querySelectorAll('iframe') : []);
+        for (var j = 0; j < list.length && j < 8; j++) { var w = list[j].contentWindow; if (w && typeof window[prop] === 'function') w[prop] = window[prop]; }
+      } catch (e) { /* a frame of another origin: its own fetch is not ours to give away */ }
+    }
+    try { owner[name] = function (node) { var r = orig.apply(this, arguments); fix(node); return r; }; } catch (e) { /* ignore */ }
   }
 
   // ---- DOM work: remove-attr / remove-class / remove-node-text / replace-node-text
@@ -752,6 +1024,10 @@
     'noeval': function () { noEval(''); }, 'noeval-if': noEval,
     'no-fetch-if': noFetch, 'no-xhr-if': noXhr,
     'json-prune': jsonPrune, 'json-prune-fetch-response': jsonPruneFetch, 'json-prune-xhr-response': jsonPruneXhr,
+    'json-edit': jsonEdit(false), 'trusted-json-edit': jsonEdit(true),
+    'json-edit-fetch-response': jsonEditFetch(false), 'trusted-json-edit-fetch-response': jsonEditFetch(true),
+    'json-edit-xhr-response': jsonEditXhr(false), 'trusted-json-edit-xhr-response': jsonEditXhr(true),
+    'trusted-edit-inbound-object': editInbound, 'trusted-prevent-dom-bypass': preventDomBypass,
     'trusted-replace-fetch-response': replaceFetch, 'trusted-replace-xhr-response': replaceXhr,
     'nobab': noBab, 'popads-dummy': popadsDummy, 'href-sanitizer': hrefSanitizer,
     'norafif': function (n, d) { noTimer('requestAnimationFrame', n, d); },
@@ -772,7 +1048,7 @@
     if (!calls || typeof calls.length !== 'number') return;
     var ok = 0, bad = 0, early = 0;
     try { early = (document.readyState === 'loading' && document.scripts.length === 0) ? 1 : 0; } catch (e) { /* ignore */ }
-    for (var i = 0; i < calls.length && i < 60 && total < 300; i++) {
+    for (var i = 0; i < calls.length && i < 70 && total < 300; i++) {
       var c = calls[i];
       if (!c || typeof c.length !== 'number' || typeof c[0] !== 'string') { bad++; continue; }
       var key = '';
@@ -786,7 +1062,7 @@
   }
   document.addEventListener(EVENT, function (e) {
     var d = e && e.detail;
-    if (typeof d !== 'string' || d.length > 20000) return;
+    if (typeof d !== 'string' || d.length > 40000) return; // the Kotlin side sends at most 32,000 characters per host
     run(d);
   }, true);
   try { document.dispatchEvent(new CustomEvent(READY)); } catch (e) { /* ignore */ }
