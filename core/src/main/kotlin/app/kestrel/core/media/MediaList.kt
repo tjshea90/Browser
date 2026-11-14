@@ -25,6 +25,12 @@ class MediaCandidate(
     var label: String? = null
     /** Somebody showed interest in it (the page's player reported it, it was long-pressed, opened in the sheet or downloaded): it is never pushed out of a full list and never hidden as a preview ([MediaList]). */
     var touched = false
+    /** RX3-V1: what the page's own element says it is for ([VideoRole]); null = no element said anything yet (or an older extension). The latest report wins. */
+    var role: VideoRole? = null
+    /** The OWNER showed interest (long-pressed, opened in the sheet, downloaded): it counts and shows whatever the page's element says it is. */
+    var interest = false
+    /** Decoration or an advertisement by the page's own account, and the owner has not said otherwise: not counted, tucked under "Other files", the first to go from a full list. */
+    val decoy: Boolean get() = (role == VideoRole.DECOR || role == VideoRole.AD) && !interest
     /**
      * What the browser itself sent when it loaded this address (the extension saw the request): its Referer and Origin. A video server that checks "who is asking" wants exactly these (the embedded
      * PLAYER's address, not the page the player sits in), so the downloads repeat them. "" = not seen (an address found in the page's markup, or a long-pressed element).
@@ -89,7 +95,7 @@ class MediaList(private val max: Int = 48) {
     fun hasStream(): Boolean = items.any { it.kind != MediaKind.FILE }
 
     fun usableCount(): Int {
-        if (countVersion != version) { countCache = usableUnsorted().size; countVersion = version }
+        if (countVersion != version) { countCache = usableUnsorted().count { !it.decoy }; countVersion = version }
         return countCache
     }
 
@@ -126,6 +132,7 @@ class MediaList(private val max: Int = 48) {
 
     /** What an entry is worth keeping: playlists and manifests, anything somebody showed interest in, big and long files, a playlist that was really read. Equal worth: the newer stays. */
     private fun value(c: MediaCandidate, index: Int): Int {
+        if (c.decoy) return -1_000_000 - index                      // RX3-V1: a hover preview or an ad goes before anything else
         var v = 0
         if (c.kind != MediaKind.FILE) v += 100
         if (c.touched) v += 80
@@ -138,20 +145,23 @@ class MediaList(private val max: Int = 48) {
     /** Somebody showed interest in this address (long-pressed, opened in the sheet, downloaded): it is kept when the list is full and shown even when it looks like a preview. @return true if that changed the list. */
     fun touch(url: String): Boolean {
         val c = find(url) ?: return false
-        if (c.touched) return false
-        c.touched = true; version++
+        if (c.touched && c.interest) return false
+        c.touched = true; c.interest = true; version++
         return true
     }
 
     /** What the page's own `<video>` / `<source>` told us about a URL (picture size, length in time, the label it shows). */
-    fun applyInfo(url: String, width: Int, height: Int, durationMs: Long, label: String?): Boolean {
+    fun applyInfo(url: String, width: Int, height: Int, durationMs: Long, label: String?, role: VideoRole? = null): Boolean {
         val c = items.firstOrNull { it.key == MediaCandidate.keyOf(url) } ?: return false
         var changed = false
         if (width > 0 && c.width != width) { c.width = width; changed = true }
         if (height > 0 && c.height != height) { c.height = height; changed = true }
         if (durationMs > 0 && c.durationMs != durationMs) { c.durationMs = durationMs; changed = true }
         if (!label.isNullOrBlank() && c.label != label) { c.label = label.trim().take(24); changed = true }
-        if (!c.touched) { c.touched = true; changed = true } // the page itself reported it (a player started it): that makes it a real video
+        // RX3-V1: the page's element says what it is for. A player (or a report without facts, as before) makes it a real video; decoration and ads do not, however long or sharp they are. The latest report wins.
+        if (role != null && c.role != role) { c.role = role; changed = true }
+        if (role == null || role == VideoRole.PLAYER) { if (!c.touched) { c.touched = true; changed = true } }
+        else if (!c.interest && c.touched) { c.touched = false; changed = true }
         if (changed) version++
         return changed
     }
@@ -166,7 +176,7 @@ class MediaList(private val max: Int = 48) {
         return items.filter { c ->
             when {
                 c.kind != MediaKind.FILE -> true
-                c.touched || c.durationMs >= 20_000 || c.knownHeight >= 480 -> true // played, long, or sharp: never hidden as a preview or an ad
+                c.touched || (!c.decoy && (c.durationMs >= 20_000 || c.knownHeight >= 480)) -> true // played, long, or sharp: never hidden as a preview or an ad (unless the page itself calls it decoration or an ad)
                 c.length in 0 until MIN_FILE -> false
                 hasStream && c.length in 0 until MIN_WITH_STREAM -> false
                 else -> true

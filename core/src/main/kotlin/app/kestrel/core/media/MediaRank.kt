@@ -65,12 +65,14 @@ object MediaRank {
 
     private fun byRank(all: List<MediaCandidate>): Result {
         val files = all.filter { it.kind == MediaKind.FILE && !it.audioOnly }
-        val ref = files.filter { it.length > 0 }.maxByOrNull { it.length }
+        val real = files.filter { !it.decoy }                                   // RX3-V1: a big hero loop or ad must not make the real video look small
+        val ref = real.filter { it.length > 0 }.maxByOrNull { it.length }
         val biggest = ref?.length ?: -1L
-        val topFrame = files.filter { it.frame.isEmpty() }.maxOfOrNull { it.length } ?: -1L
+        val topFrame = real.filter { it.frame.isEmpty() }.maxOfOrNull { it.length } ?: -1L
         val hasVideo = all.any { it.kind != MediaKind.FILE || !it.audioOnly }
         val main = ArrayList<MediaCandidate>(); val other = ArrayList<MediaCandidate>()
         for (c in all) {
+            if (c.decoy) { other.add(c); continue }                              // RX3-V1: the page's own element says decoration or advertisement; the fallback below keeps the sheet from being empty
             if (c.kind != MediaKind.FILE) { main.add(c); continue }
             // a lower quality of the biggest file is small by nature (a 360p is a tenth of a 1080p): never junk because of its size
             if (ref != null && c !== ref && sameVideo(ref, c)) main.add(c)
