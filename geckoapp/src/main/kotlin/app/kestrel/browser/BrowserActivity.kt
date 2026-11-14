@@ -2456,12 +2456,15 @@ open class BrowserActivity : Activity(), DockListener {
         b.show()
     }
 
+    /**
+     * A script on a page has been running for a long time (AY1, owner message 39: "I see this prompt ... too much. Automatically have the browser wait without showing a prompt. If it is waiting too long I
+     * will close the tab myself"): the answer is always WAIT and nothing is shown. The engine asks again after the next interval if the script is still busy, and every answer is counted for Diagnostics
+     * (`gecko.slowScript.waited`) so a page that keeps the engine busy is visible there.
+     */
     internal fun askSlowScript(tab: Tab): GeckoResult<SlowScriptResponse> {
-        val r = GeckoResult<SlowScriptResponse>()
-        askYesNo("This page is slow", "A script on this page is taking very long. Stop it?", "Stop it", "Wait") { stop ->
-            r.complete(if (stop) SlowScriptResponse.STOP else SlowScriptResponse.CONTINUE)
-        }
-        return r
+        val n = Health.count("gecko.slowScript.waited")
+        if (n == 1 || n % 20 == 0) Health.log("gecko", "slow-script-waited", "n=$n " + tab.url.take(60))
+        return GeckoResult.fromValue(SlowScriptResponse.CONTINUE)
     }
 
     // ================================================================== downloads, external links, long-press
