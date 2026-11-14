@@ -204,3 +204,30 @@ For a normal finger the right word is missing from the careful pass in 1.4 % of 
 ### Not done, on purpose (see the table in `research/GLIDE_RESEARCH.md`)
 A learned feature-weight re-ranker (no keyboard evidence, drift risk); changing the PREVIOUS word when the next one is typed (surprising edits); tap-offsets per key cluster for glides (no evidence for glides); a replay file of the owner's real glides (personal data in a public repository: the Diagnostics counters are the honest number); speed-aware weights (rare-word bias); case learning.
 
+## 10. Polish and responsiveness (AV3, owner message 36, 2026-11-14)
+
+> "Polish the keyboard and make it as responsive as possible and able to learn and constantly improve so that it accurately predicts the words I'm typing"
+
+| Change | What the person sees | How it is kept cheap |
+| :- | :- | :- |
+| Live guess while gliding | the strip shows the best words for the path so far (the first one is what would be typed if the finger lifted now), updating as the finger moves | its own thread and its own decoder instance (a preview never touches the real decoder's state and never holds up the real decode on the lift); at most one preview at a time, not more often than every 110 ms and not for every touch point (4 new points at least) |
+| Word on the lift | the word is typed as soon as the finger lifts; Diagnostics says how long that took ("word shown N ms after the lift") | the lift's decode goes first; live previews that are still running are simply not waited for |
+| Key preview | the key under the finger is drawn large above it (the thumb covers the key itself); a top-row key has no room above, so its bubble sits over the strip | drawn in the keys view's own draw, no new view, no animation |
+| Hold a top-row letter | after 0.42 s the large bubble turns into its digit (small digit hints sit in the corner of every top-row key); lifting types the digit | a timer, no extra view |
+| Caps lock | double tap on Shift: the key fills with the accent colour, letters and glided words come out in capitals until Shift is tapped again | state in the core model, tested without a screen |
+| Page-field row | typing into a page's text field: the bottom row is `123 , . space ' ? Go` (the address row with slash and .com is kept for the address bar) | one more layout in the core, tested |
+| Smart spacing | a glide puts a space after its word; a dot, comma, slash, `.com`, apostrophe, hyphen ... right after it takes that space away again ("doraby" then ".com" = "doraby.com") | core model |
+| Key vibration | short tick on each key press, a setting (default on, follows the system's touch feedback) | system haptics, no timer |
+| Text size | the letters grow and shrink with the key (the keyboard can be resized, section AV1 in `research/MINI_NAV.md`) | one multiplication per key per draw |
+
+### Emulator proof (2026-11-14, Android 10 x86_64 emulator without hardware acceleration, real touches through the Linux input device, lab page `tools/sitelab/fieldlab.py` whose server log shows what the page's field received)
+* Page-field row, digit hints and the four corner marks: picture of the open keyboard in a focused page text field shows `123 , . space ' ? Go`, small digits on the top row, the bar says "type into the page".
+* Live guess: a picture taken with the finger still down half-way through the glide for "hello" shows the strip already holding `her | he | hd`; after the lift the word `hello ` is in the page field (server log: `input id=free value=hello `) and the strip shows `hello | help | jello`. Diagnostics: `live preview 32 times` over 8 glides.
+* Held digit: a picture during a 3 s hold on W shows the large "2" bubble over the strip above the key; the lift typed `2` into the page (log `... h2`); a hold on Q typed `1`.
+* Caps lock: two quick taps on Shift fill the key with the accent colour and all letters are capitals; the glide for "world" typed `WORLD ` into the page; one tap on Shift unlocked it.
+* Retry: glided "to", deleted it with one Backspace, glided the same path again within seconds: the page received `too` and the strip read `too | to | trio` (the deleted word second); Diagnostics: `a deleted word came up first again and went to second place 1 times`.
+* Diagnostics now reads: `Glide typing: 8 glides: best word kept 3 (42 %), another candidate picked 0, deleted right away 4; decode avg 490 ms, worst 709 ms; word shown 524 ms after the lift (worst 718 ms); live preview 32 times, avg 670 ms; ...; learned 2 words and 1 word pairs from your typing ... ; a deleted word came up first again and went to second place 1 times` (these times are the emulator's software drawing and slow CPU, not the tablet's).
+* Unit tests with real pixels (native graphics, `MiniNavLookTest`): the bubble is painted above a pressed key, through the panel's own touch dispatch too, and the digit bubble over the strip; it is gone after the lift.
+* What was NOT run: a real thumb, the real tablet's speed and feel (the tablet's Diagnostics line "word shown N ms after the lift" and "live preview N times, avg M ms" are the real answer), the haptic tick (the emulator has no vibrator), a long session of learning from real words.
+* One oddity, said plainly: on the very first run after installing, the emulator once stopped redrawing the panel for a while (its frame counter stood still while the page kept updating and keys kept typing); four later repeats of the same steps, and a restart, did not show it again. It is recorded here because it could not be explained, not because it was seen on the tablet.
+
