@@ -9,9 +9,9 @@ import org.junit.Test
 
 /** AW1b: which `+js(...)` lines are understood, how a call is stored, filed for its sites (entity domains, exceptions, exclusions) and sent to the page. */
 class ScriptletRulesTest {
-    private fun enc(inner: String) = ScriptletRules.encode(inner)
+    private fun enc(inner: String) = ScriptletRules.encode(inner, trusted = true)
     private fun call(inner: String) = ScriptletRules.decode(enc(inner)!!)!!
-    private fun set(vararg lines: String): FilterSet { val b = FilterSetBuilder(); b.addAbpList("t", Category.ADS, lines.asSequence()); return b.build(1L) }
+    private fun set(vararg lines: String): FilterSet { val b = FilterSetBuilder(); b.addAbpList("t", Category.ADS, lines.asSequence(), trusted = true); return b.build(1L) }
     private fun names(fs: FilterSet, host: String) = fs.scriptletsFor(host).map { ScriptletRules.decode(it)!!.name }
 
     @Test fun namesAndAliasesFoldToOneCanonicalName() {
@@ -192,5 +192,64 @@ class ScriptletRulesTest {
         val back = FilterSetCodec.read(FilterSetCodec.write(fs))
         assertEquals(fs.scriptletsFor("example.com"), back.scriptletsFor("example.com"))
         assertEquals(listOf("nowoif"), back.scriptletsFor("www.lookcam.co.uk").map { ScriptletRules.decode(it)!!.name })
+    }
+
+    // ---- RX3-B1 (research/REVIEW-EXTERNAL-3.md part B): trusted-* scriptlets only from lists whose maintainers also write the scriptlets
+
+    private val mixed = arrayOf(
+        "bank.example##+js(trusted-replace-fetch-response, /balance/g, 0, /api)",
+        "bank.example##+js(trusted-replace-xhr-response, /x/g, y, /api)",
+        "bank.example##+js(trusted-rpfr, /z/g, w)",
+        "bank.example##+js(trusted-set-cookie, a, b)",
+        "bank.example##+js(trusted-set-local-storage-item, k, v)",
+        "bank.example##+js(nowoif)",
+        "bank.example##+js(set-cookie, consent, yes)",
+    )
+
+    @Test fun aListThatIsNotTrustedCannotRewriteAnswersOrSetCookiesOnlyOrdinaryScriptletsPass() {
+        val b = FilterSetBuilder(); b.addAbpList("easylist-like", Category.ADS, mixed.asSequence())
+        assertEquals(listOf("nowoif", "set-cookie"), names(b.build(1L), "bank.example"))
+        assertEquals("every trusted-* line is skipped for ITS OWN reason, not as 'unsupported'", 5, b.report.skippedCount(Skip.SCRIPTLET_UNTRUSTED))
+        assertEquals(0, b.report.skippedCount(Skip.SCRIPTLET_UNSUPPORTED))
+        assertEquals(5, b.report.untrustedByList["easylist-like"])
+        assertEquals(0, b.report.trustedScriptlets)
+    }
+
+    @Test fun aTrustedListKeepsEveryOneOfThem() {
+        val b = FilterSetBuilder(); b.addAbpList("ubo-quick-fixes", Category.ADS, mixed.asSequence(), trusted = true)
+        assertEquals(7, b.build(1L).scriptletsFor("bank.example").size)
+        assertEquals(0, b.report.skippedCount(Skip.SCRIPTLET_UNTRUSTED))
+        assertEquals(5, b.report.trustedScriptlets)
+        assertTrue(b.report.untrustedByList.isEmpty())
+    }
+
+    @Test fun theAliasOfATrustedNameIsGatedToo() {
+        assertNull(ScriptletRules.encode("trusted-rpfr, /x/g, y", trusted = false))
+        assertNotNull(ScriptletRules.encode("trusted-rpfr, /x/g, y", trusted = true))
+        assertEquals("trusted-replace-fetch-response", ScriptletRules.decode(ScriptletRules.encode("trusted-rpfr, /x/g, y", trusted = true)!!)!!.name)
+    }
+
+    @Test fun ordinaryNamesDoNotNeedTrustAndAnUnknownNameIsStillJustUnsupported() {
+        assertNotNull(ScriptletRules.encode("set-cookie, a, b", trusted = false))
+        assertNotNull(ScriptletRules.encode("json-prune, adPlacements", trusted = false))
+        assertTrue(ScriptletRules.needsTrust("trusted-set-cookie, a, b"))
+        assertTrue(ScriptletRules.needsTrust("trusted-rpfr, /x/g, y"))
+        assertFalse(ScriptletRules.needsTrust("set-cookie, a, b"))
+        assertFalse("a trusted-* name we do not implement is unsupported, not 'untrusted'", ScriptletRules.needsTrust("trusted-click-element, button"))
+        assertFalse(ScriptletRules.needsTrust(""))
+    }
+
+    @Test fun anExceptionLineFromAnUntrustedListCannotSwitchATrustedCallOff() {
+        val b = FilterSetBuilder()
+        b.addAbpList("ubo-quick-fixes", Category.ADS, sequenceOf("yt.example##+js(trusted-replace-fetch-response, /ad/g, x, /player)"), trusted = true)
+        b.addAbpList("fanboy-like", Category.ANNOYANCE, sequenceOf("yt.example#@#+js(trusted-replace-fetch-response, /ad/g, x, /player)"))
+        assertEquals(listOf("trusted-replace-fetch-response"), names(b.build(1L), "yt.example"))
+        assertEquals(1, b.report.skippedCount(Skip.SCRIPTLET_UNTRUSTED))
+    }
+
+    @Test fun addAbpLineOnItsOwnIsUntrustedByDefault() {
+        val b = FilterSetBuilder()
+        b.addAbpLine("a.example##+js(trusted-set-cookie, a, b)", Category.ADS)
+        assertTrue(b.build(1L).scriptletsFor("a.example").isEmpty())
     }
 }
