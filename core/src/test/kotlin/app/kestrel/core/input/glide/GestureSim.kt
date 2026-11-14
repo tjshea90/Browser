@@ -21,7 +21,11 @@ class SimNoise(
     /** Amplitude of a slow drift, in dp. */
     val wobbleDp: Float,
     val name: String,
+    /** How far this thumb habitually lands from where it aims, in dp: the same way every time (direction drawn once per simulated person). */
+    val userBiasDp: Float = 0f,
 ) {
+    fun withUserBias(dp: Float) = SimNoise(aimDp, cut, biasDp, jitterDp, wobbleDp, "$name + habit $dp dp", dp)
+
     companion object {
         val CALM = SimNoise(5f, 8f, 2f, 0.8f, 2f, "calm (aim 5 dp)")
         val NORMAL = SimNoise(8f, 14f, 3f, 1.2f, 3f, "normal (aim 8 dp)")
@@ -33,6 +37,7 @@ class SimNoise(
 
 class GestureSim(private val keys: GlideKeys, private val rnd: Random) {
     class Path(val xs: FloatArray, val ys: FloatArray)
+    private var habitX = Float.NaN; private var habitY = 0f
 
     /** The touch points of one glide over [word]'s letters (px of the keyboard view), or null when the word has fewer than two different letters in a row. */
     fun path(word: String, noise: SimNoise): Path? {
@@ -40,7 +45,8 @@ class GestureSim(private val keys: GlideKeys, private val rnd: Random) {
         val ls = ArrayList<Int>()
         for (b in k) if (ls.isEmpty() || ls.last() != b.toInt()) ls.add(b.toInt())
         if (ls.size < 2) return null
-        val bx = rnd.nextGaussian().toFloat() * noise.biasDp; val by = rnd.nextGaussian().toFloat() * noise.biasDp
+        if (habitX.isNaN()) { val a = rnd.nextDouble() * 2 * Math.PI; habitX = (Math.cos(a) * noise.userBiasDp).toFloat(); habitY = (Math.sin(a) * noise.userBiasDp).toFloat() }
+        val bx = rnd.nextGaussian().toFloat() * noise.biasDp + habitX; val by = rnd.nextGaussian().toFloat() * noise.biasDp + habitY
         val px = FloatArray(ls.size); val py = FloatArray(ls.size)
         for (j in ls.indices) {
             px[j] = keys.cx[ls[j]] + rnd.nextGaussian().toFloat() * noise.aimDp + bx

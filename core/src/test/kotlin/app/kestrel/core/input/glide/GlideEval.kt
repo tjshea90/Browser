@@ -68,7 +68,7 @@ object GlideEval {
         fun lengths(): String = byLen.toSortedMap().entries.joinToString("  ") { (l, a) -> "len$l:%.0f/%.0f%%(n=%d)".format(100.0 * a[1] / a[0], 100.0 * a[2] / a[0], a[0]) }
     }
 
-    fun run(lex: BinaryLexicon, keys: GlideKeys, params: GlideParams, noise: SimNoise, picks: List<Pick>, seed: Long, extra: List<GlideLexicon> = emptyList(), debug: Int = 0, trace: String? = null): Result {
+    fun run(lex: BinaryLexicon, keys: GlideKeys, params: GlideParams, noise: SimNoise, picks: List<Pick>, seed: Long, extra: List<GlideLexicon> = emptyList(), debug: Int = 0, trace: String? = null, learn: Boolean = false): Result {
         var shown = 0
         val sim = GestureSim(keys, Random(seed))
         val dec = GlideDecoder(keys, params)
@@ -95,6 +95,7 @@ object GlideEval {
                 println("    MISS '%s' (prior %.1f, cost %.3f, survived=%b) -> %s".format(word, lex.logProb(pk.id), tc, word in surv, c.joinToString(" | ") { "%s cost %.3f prior %.1f".format(it.text, it.cost, it.prior) }))
             }
             val key = String(GlideLetters.keyOf(word))
+            if (learn && c.any { String(GlideLetters.keyOf(it.text)) == key }) dec.learnFrom(lex, pk.id) // the person accepted this word (top choice or picked from the strip)
             if (trace != null && word == trace) { for (cand in listOf(word) + c.map { it.text }) { val ci = lex.idOf(cand); if (ci >= 0) println("    TRACE $cand: " + dec.debugTrace(lex, ci)) } }
             if (c.isNotEmpty() && String(GlideLetters.keyOf(c[0].text)) == key) { t1++; a[1]++ }
             if (c.any { String(GlideLetters.keyOf(it.text)) == key }) { t3++; a[2]++ }
@@ -110,11 +111,13 @@ object GlideEval {
             samples = a["samples"]?.toInt() ?: d.samples, endReach2 = a["endReach2"]?.toFloat() ?: d.endReach2, visitCap = a["visitCap"]?.toFloat() ?: d.visitCap,
             missLimit2 = a["missLimit2"]?.toFloat() ?: d.missLimit2, keep = a["keep"]?.toInt() ?: d.keep, quickEnds = a["quickEnds"]?.toFloat() ?: d.quickEnds,
             quickPrior = a["quickPrior"]?.toFloat() ?: d.quickPrior, shapeW = a["shapeW"]?.toFloat() ?: d.shapeW, endW = a["endW"]?.toFloat() ?: d.endW,
-            lmW = a["lmW"]?.toFloat() ?: d.lmW, lmA = a["lmA"]?.toFloat() ?: d.lmA, lmMin = a["lmMin"]?.toFloat() ?: d.lmMin, lmMax = a["lmMax"]?.toFloat() ?: d.lmMax, bigramMix = a["bigramMix"]?.toFloat() ?: d.bigramMix, minLength = a["minLength"]?.toFloat() ?: d.minLength, slack = a["slack"]?.toInt() ?: d.slack,
+            lmW = a["lmW"]?.toFloat() ?: d.lmW, lmA = a["lmA"]?.toFloat() ?: d.lmA, lmMin = a["lmMin"]?.toFloat() ?: d.lmMin, lmMax = a["lmMax"]?.toFloat() ?: d.lmMax, bigramMix = a["bigramMix"]?.toFloat() ?: d.bigramMix, minLength = a["minLength"]?.toFloat() ?: d.minLength, slack = a["slack"]?.toInt() ?: d.slack, biasKeep = a["biasKeep"]?.toInt() ?: d.biasKeep, biasGain = a["biasGain"]?.toFloat() ?: d.biasGain, biasW = a["biasW"]?.toFloat() ?: d.biasW,
         )
     }
 
-    fun noiseFrom(a: Map<String, String>): SimNoise = when (val n = a["noise"] ?: "normal") {
+    fun noiseFrom(a: Map<String, String>): SimNoise = (a["ubias"]?.toFloat()?.let { u -> noiseFrom0(a["noise"] ?: "normal").withUserBias(u) }) ?: noiseFrom0(a["noise"] ?: "normal")
+
+    private fun noiseFrom0(name: String): SimNoise = when (val n = name) {
         "calm" -> SimNoise.CALM; "normal" -> SimNoise.NORMAL; "sloppy" -> SimNoise.SLOPPY; "bad" -> SimNoise.BAD
         else -> if (n.startsWith("c:")) { val v = n.removePrefix("c:").split(':').map { it.toFloat() }; SimNoise(v[0], v[1], v[2], v[3], v[4], "custom aim ${v[0]} cut ${v[1]} bias ${v[2]} jitter ${v[3]} wobble ${v[4]}") } else SimNoise.aim(n.removePrefix("aim").toFloat())
     }
@@ -129,8 +132,8 @@ object GlideEval {
         val rnd = Random(seed * 7919)
         val picks = when (a["pop"] ?: "freq") { "rank" -> rankPick(lex, n, rnd); "ctx" -> contextPick(lex, n, rnd); else -> frequencyPick(lex, n, rnd) }
         for (nm in (a["noise"] ?: "calm,normal,sloppy,bad").split(',')) {
-            val noise = noiseFrom(mapOf("noise" to nm))
-            val r = run(lex, keys, paramsFrom(a), noise, picks, seed, debug = a["dbg"]?.toInt() ?: 0, trace = a["trace"])
+            val noise = noiseFrom(a + mapOf("noise" to nm))
+            val r = run(lex, keys, paramsFrom(a), noise, picks, seed, debug = a["dbg"]?.toInt() ?: 0, trace = a["trace"], learn = a["learn"] == "1")
             println("${noise.name}: $r")
             if (a["lens"] != null) println("    ${r.lengths()}")
         }
