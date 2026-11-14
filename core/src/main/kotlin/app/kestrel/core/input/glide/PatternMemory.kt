@@ -173,7 +173,7 @@ class PatternMemory(private val capWords: Int = 1200, private val capPatterns: I
     @Synchronized fun serialize(): String {
         val sb = StringBuilder(count * 150)
         for ((w, list) in byWord) for (p in list) {
-            sb.append("s ").append(w).append(' ').append("%.2f".format(p.n))
+            sb.append("s ").append(w).append(' ').append(PersonalModel.f2(p.n))
             for (x in p.pts) sb.append(' ').append(Math.round(x * 10f))
             sb.append('\n')
         }

@@ -54,7 +54,7 @@ object LearnedExport {
         sb.append("# What the Kestrel keyboard learned from your typing: your words, word pairs, corrections and the shapes of your glides.\n")
         sb.append("# It lists words you typed. Keep this file private. Format: docs/KEYBOARD-EXPORT.md in the Kestrel repository.\n")
         var entries = 0
-        if (habit != null && habit.size == 2 && !habit[0].isNaN() && !habit[1].isNaN()) { sb.append("habit %.3f %.3f\n".format(java.util.Locale.ROOT, habit[0], habit[1])); entries++ }
+        if (habit != null && habit.size == 2 && !habit[0].isNaN() && !habit[1].isNaN()) { sb.append("habit ").append(PersonalModel.f3(habit[0])).append(' ').append(PersonalModel.f3(habit[1])).append('\n'); entries++ }
         if (own != null) for (line in own.serialize().lineSequence()) { val p = line.trim().split(' '); if (p.size == 2 && p[1].toIntOrNull() != null) { sb.append("own ").append(p[0]).append(' ').append(p[1]).append('\n'); entries++ } }
         for (line in body.lineSequence()) { if (line.isBlank()) continue; sb.append(line).append('\n'); entries++ }
         sb.append("end ").append(entries).append('\n')

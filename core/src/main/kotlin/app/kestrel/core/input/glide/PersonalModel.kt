@@ -178,11 +178,11 @@ class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int 
     /** One line per entry: `w word weight`, `p previous word weight`, `t second-last last word weight`, `c guessed meant weight`, `r word recency` and `s word confirmations u0 v0 ... u15 v15` (the shape of this person's glides for the word, AX1; a file written before AV2 has only the first two kinds, and an older keyboard skips the lines it does not know). */
     @Synchronized fun serialize(): String {
         val sb = StringBuilder(words.size * 16 + pairs.size * 24 + triples.size * 32 + confusions.size * 24 + recent.size * 16)
-        for ((k, v) in words) sb.append("w ").append(k).append(' ').append("%.2f".format(v)).append('\n')
-        for ((k, v) in pairs) sb.append("p ").append(k).append(' ').append("%.2f".format(v)).append('\n')
-        for ((k, v) in triples) sb.append("t ").append(k).append(' ').append("%.2f".format(v)).append('\n')
-        for ((k, v) in confusions) sb.append("c ").append(k).append(' ').append("%.2f".format(v)).append('\n')
-        for ((k, v) in recent) sb.append("r ").append(k).append(' ').append("%.3f".format(v)).append('\n')
+        for ((k, v) in words) sb.append("w ").append(k).append(' ').append(f2(v)).append('\n')
+        for ((k, v) in pairs) sb.append("p ").append(k).append(' ').append(f2(v)).append('\n')
+        for ((k, v) in triples) sb.append("t ").append(k).append(' ').append(f2(v)).append('\n')
+        for ((k, v) in confusions) sb.append("c ").append(k).append(' ').append(f2(v)).append('\n')
+        for ((k, v) in recent) sb.append("r ").append(k).append(' ').append(f3(v)).append('\n')
         sb.append(patterns.serialize())
         return sb.toString()
     }
@@ -222,6 +222,10 @@ class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int 
             for (i in 1 until w.length) { if (w[i] == w[i - 1]) { run++; if (run >= 3) return true } else run = 1 }
             return false
         }
+
+        /** Numbers in the file are always written with a dot, whatever the tablet's language is (a comma would make the file unreadable, and an exported one unportable). */
+        internal fun f2(v: Float): String = String.format(java.util.Locale.ROOT, "%.2f", v)
+        internal fun f3(v: Float): String = String.format(java.util.Locale.ROOT, "%.3f", v)
 
         /** The largest weight a line may carry (a damaged or hostile file cannot make one word overwhelm the model). */
         const val MAX_WEIGHT = 100_000f
