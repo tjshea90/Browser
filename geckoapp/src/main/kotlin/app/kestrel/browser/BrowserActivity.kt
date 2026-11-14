@@ -203,6 +203,7 @@ open class BrowserActivity : Activity(), DockListener {
         val t = current ?: return false
         if (homeShown(t) || t.error != null || t.session == null) return false
         if (!t.url.startsWith("http://", ignoreCase = true) && !t.url.startsWith("https://", ignoreCase = true)) return false
+        if (t.url.substringBefore('#').substringBefore('?').endsWith(".pdf", ignoreCase = true)) return false // the engine's own PDF viewer is not a page the extension runs in
         val slow = t.slowScriptAt
         if (slow != 0L && SystemClock.uptimeMillis() - slow < SLOW_PAGE_MS) return false
         return true
