@@ -238,4 +238,17 @@ class GlideSupportTest {
         val t = exported(b)
         assertTrue(t.lines().any { it.startsWith("w hello ") }); assertFalse(t.lines().any { it.startsWith("w good ") })
     }
+
+    @Test fun anExportAndAnImportUseWhatIsSavedEvenBeforeTheEngineWasPrepared() {
+        val saved = PersonalModel().also { it.add(null, "hello", 4f) }.serialize()
+        var stored: String? = null
+        val g = GlideTyping({ null }, direct, loadPersonal = { saved }, savePersonal = { stored = it })
+        var t = ""; g.exportText(null, null) { t = it }
+        assertTrue(t, t.lines().any { it.startsWith("w hello 4.00") })
+        // an import adds to what is on disk: it never replaces it with an empty table that was not loaded yet
+        val file = LearnedExport.write(PersonalModel().also { it.add(null, "world", 2f) }, null, null)
+        val g2 = GlideTyping({ null }, direct, loadPersonal = { saved }, savePersonal = { stored = it })
+        g2.importText(file, false, UserWords(), { }) { }
+        assertTrue(stored!!, stored!!.contains("w hello 4.00") && stored!!.contains("w world 2.00"))
+    }
 }

@@ -143,6 +143,14 @@ class GlideTyping(
     private var lastUserWords = 0
     private var personal = PersonalModel()
     private var personalLoaded = false
+
+    /** What was saved is read once, before anything is learned, exported or imported (on the executor's thread): an import must add to what is on disk, not replace it with an empty table that was never loaded. */
+    private fun ensurePersonal() {
+        if (personalLoaded) return
+        personalLoaded = true
+        try { loadPersonal()?.let { personal = PersonalModel.parse(it) } } catch (e: Exception) { /* a damaged file is just forgotten */ }
+        stats.onLearned(personal.wordCount, personal.pairCount, personal.confusionCount, personal.tripleCount, personal.patterns.patternCount, personal.patterns.wordCount)
+    }
     private var personalDirty = false
     private var lastSaveAt = 0L
     private var lastPrint: FloatArray? = null     // the shape of the last real glide (executor thread): what a kept, picked or corrected word is remembered with
@@ -168,7 +176,7 @@ class GlideTyping(
                     if (bytes != null) { main = LexiconFile.read(bytes); stats.onLoaded((System.nanoTime() - t0) / 1_000_000, main!!.size) }
                     loading = false
                 }
-                if (!personalLoaded) { personalLoaded = true; try { loadPersonal()?.let { personal = PersonalModel.parse(it) } } catch (e: Exception) { /* a damaged file is just forgotten */ }; stats.onLearned(personal.wordCount, personal.pairCount, personal.confusionCount, personal.tripleCount, personal.patterns.patternCount, personal.patterns.wordCount) }
+                ensurePersonal()
                 keys = k
                 decoder = GlideDecoder(k).also { it.biasX = bx; it.biasY = by; it.personal = personal }
                 previewDecoder = GlideDecoder(k).also { it.biasX = bx; it.biasY = by; it.personal = personal }
@@ -269,6 +277,7 @@ class GlideTyping(
      */
     fun learn(prev: String?, word: String, weight: Float, prev2: String? = null, guessed: String? = null, guessedWeight: Float = 1f, fromGlide: Boolean = false, afterUndo: Boolean = false) {
         executor.execute {
+            ensurePersonal()
             personal.add(prev, word, weight, prev2)
             if (guessed != null) personal.addConfusion(guessed, word, guessedWeight) // the keyboard guessed [guessed] and the person meant [word]: a correction
             if (fromGlide) learnShape(word, weight, guessed != null, afterUndo)
@@ -315,9 +324,9 @@ class GlideTyping(
         }
     }
 
-    /** What the keyboard has learned, as the one text it is saved and exported as (see [LearnedExport]); null before anything was loaded or learned. For the Settings export (any thread: it runs on the executor and hands the text to [done]). */
+    /** What the keyboard has learned, as the text of the export file (see [LearnedExport]), for the Settings export: it is built on the executor's thread and handed to [done] there. [habit] null = the thumb habit the engine holds now. */
     fun exportText(habit: FloatArray?, own: UserWords?, done: (String) -> Unit) {
-        executor.execute { done(LearnedExport.write(personal, habit ?: floatArrayOf(bx, by), own)) }
+        executor.execute { ensurePersonal(); done(LearnedExport.write(personal, habit ?: floatArrayOf(bx, by), own)) }
     }
 
     /**
@@ -328,6 +337,7 @@ class GlideTyping(
         executor.execute {
             val parsed = LearnedExport.read(text)
             if (parsed == null) { done(null); return@execute }
+            ensurePersonal()
             if (replace) personal.clear()
             personal.mergeFrom(parsed.model)
             for ((w, n) in parsed.ownWords) if (!own.contains(w)) own.add(w, n)
