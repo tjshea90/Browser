@@ -67,6 +67,10 @@ class GlideParams(
     val maxPerLetter: Float = 3.4f,
     /** A correction the person made before (the keyboard guessed A, they meant B) lifts B by this many nats times ln(1 + how often) when A is the first guess again (AV2). 0 = no learning from corrections. */
     val confGain: Float = 0.9f,
+    /** The lift from a correction never exceeds this many nats, however often it was made (a habit helps decide a near-tie, it never overrules the finger). */
+    val confCap: Float = 1.6f,
+    /** ... and only for a word whose path fit is close to the first guess's: its cost per letter may be at most this much higher (pitch squared). A correction settles lookalike words, not a clear miss. */
+    val confMaxGap: Float = 0.9f,
 )
 
 class GlideCandidate(val text: String, val score: Float, val cost: Float, val prior: Float, val letters: Int = 1) {
