@@ -967,6 +967,7 @@ test('early scriptlets: a registration the browser refuses, an app that cannot a
   await tick(20);
   eq(broken.mainFrame(SLSITE), {});
   const noLib = harness(standardApp(), { scripts: { list: [], fail: (o) => o.js && o.js[0].file === 'scriptlets-main.js' } });
+  await tick(20);                                               // the refusal of the library's registration arrives
   eq(noLib.mainFrame(SLSITE), {});
   await tick(20);
   assert.equal(noLib.of('sc').length, 0, 'without the library there is nothing to hand the calls to: no question either');
