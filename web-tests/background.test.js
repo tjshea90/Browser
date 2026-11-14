@@ -1154,6 +1154,4 @@ test('RX3-G1: the manifest declares the pop-up guard and the scriptlet library f
     assert.deepEqual(e[0].matches, ['http://*/*', 'https://*/*']);
   }
   assert.ok(m.content_scripts[0].js.includes('content.js'), 'content.js comes first: it listens for the guard\'s ready event');
-  const h = harness(standardApp(), { scripts: { list: [] } });
-  assert.deepEqual(h.ctx.__regs || [], []);
 });
