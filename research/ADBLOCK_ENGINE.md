@@ -255,3 +255,27 @@ What the runs taught (all fixed): (1) the first build registered `*://host/*` an
 
 Limits, said plainly: this is an emulator on localhost, not the tablet over the hotspot, and not a real anti-adblock site. The first load after a cold start of the app runs before the lists are in (generation 0): nothing is registered then and the late hand-off does what it can. The first visit to a site that is faster than one local message plus one registration is covered only by the late hand-off.
 
+### 14.2 `$redirect=` stand-ins (AW1c), built and proven (2026-11-14)
+
+**What it does.** A rule such as `/r/tag.js$script,redirect=noopjs` no longer only cancels the file: the extension answers with a harmless file of the same kind (an empty script, a 1x1 gif, `{}`, a silent mp3 / one-second blank mp4, an IMA SDK that answers "no ad", GPT / GTM / GA / adsbygoogle / Fingerprint2 / BlockAdBlock / apstag / chartbeat / prebid shims), so a player that waits for its ad SDK starts the video and a page that calls a tracker's function does not throw. `redirect-rule=` picks the stand-in for a request ANOTHER rule blocks and blocks nothing itself. A stand-in is only used when it suits the request type (a script for a picture is not): then the request is cancelled as before. Unknown resource names: a `redirect=` rule stays a plain block rule, a `redirect-rule=` rule is skipped.
+
+**Pieces.** Kotlin `FilterSet.check` carries the resource id in verdict bits 8-12 (rule words: bits 22-26 id, bit 27 redirect-only); `engine.js` mirrors it (differential corpus `web-tests/fixtures/mini.corpus.tsv` has an exhaustive stand-in block over every request type; on the REAL lists `web-tests/real-diff.js` compares 66,761 requests: 0 mismatches, stand-in verdicts 257/513/1537/... included); `redirects.js` holds the 22 resources (table checked against `RedirectResources.FILES` through `mini.redirects.tsv`); `background.js` `standIn()` answers `{redirectUrl: data:...}` when flag 4 of the page configuration is set (Shields up for the page AND Settings switch "Fix ad and anti-adblock scripts", the same switch as the scriptlets); Diagnostics counts "N blocked files answered with a stand-in".
+
+**Decision: `data:` URLs, not `moz-extension://` pages.** A redirected request's final address is readable by the page (fetch `response.url`); an extension address carries the per-profile random id, a tracking handle that is the same on every site. `data:` URLs carry nothing. Cost: a page whose CSP forbids `data:` scripts sees a blocked load (as before the feature) and a CORS-mode script / fetch redirect to a data: address might be refused by a browser; Gecko 160 accepted all of the cases below.
+
+**Emulator proof (Gecko 160, Android 10 x86_64, lab page `tools/sitelab/adlab.py`, the same files are REAL on `control.test` and logged as `REAL /r/...` when they reach the server; on `adlab.test` NO such line appears):**
+
+| file | rule | adlab.test | control.test |
+| :- | :- | :- | :- |
+| `<script src=/r/tag.js>` | `redirect=noopjs` | load fired, the real file did not run | load fired, the REAL file ran |
+| `<script src=/r/plain.js>` | plain block | error (blocked) | load fired |
+| `<script src=/r/ima.js>` + an ad request | `redirect=google-ima.js` | `adError 1009` (the player's own error path) | script ran, no google.ima |
+| `new Image()` `/r/pixel.gif` | `redirect=1x1.gif` | loaded 1x1 | loaded 1x1 (the real gif) |
+| XHR `/r/data.json` | `redirect=noopjson` | status 200 text `{}` | status 200, the real text |
+| `fetch('/r/data.json?f=1')` | `redirect=noopjson` | text `{}` | the real text |
+| `<video src=/r/clip.mp4>` | `redirect=noopmp4-1s` | metadata, duration 1 | error 4 (the lab serves a 404) |
+| `<iframe src=/r/frame.html>` | `redirect=noopframe` | load fired, content not readable (a data: frame is its own origin) | load fired, the real content |
+
+Lab lesson: ABP syntax anchors `||host/path` right after the host, so such a rule does NOT match an address that has a port (`host:8001/path`); the lab uses path rules with `domain=`. Real sites rarely have a port.
+
+**Not run:** the real tablet; the stand-ins against real sites' own scripts (the IMA / GPT / GA shapes are written from the public API surface and tested against the calls pages make, not against Google's real SDK); the Diagnostics counter on the emulator (the screen did not open on the slow emulator; the counter is unit-tested in `background.test.js`).
