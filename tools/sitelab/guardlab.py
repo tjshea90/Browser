@@ -17,6 +17,14 @@ function L(k, v) { try { var x = new XMLHttpRequest(); x.open('GET', '/log?kind=
 // the guard and the scriptlet library each leave a marker in the page world: is the guard in THIS document, from its very first script on? (RX3-G1)
 L('first-script', 'guard in the page world: ' + (window.__kstGuard === 1 ? 'YES' : 'no') + ', scriptlet library: ' + (window.__kstSL === 1 ? 'YES' : 'no'));
 L('load', 'fakeplay');
+// an about:blank frame the page creates itself (the "iframe race": a script makes a frame and calls the frame's window.open before anything could have been injected into it)
+try {
+  var f = document.createElement('iframe'); f.style.cssText = 'width:10px;height:10px'; document.body.appendChild(f);
+  var fw = f.contentWindow, early = fw.__kstGuard === 1;
+  var fr = null; try { fr = fw.open('/popad?n=frame', '_blank'); } catch (e) {}
+  L('blank-frame', 'guard marker in the frame right after it was created: ' + (early ? 'YES' : 'no') + ', its window.open returned ' + (fr ? 'a window object' : 'null'));
+  setTimeout(function () { L('blank-frame-later', 'guard marker in the frame now: ' + (fw.__kstGuard === 1 ? 'YES' : 'no')); }, 2000);
+} catch (e) { L('blank-frame', 'error ' + e); }
 [300, 3000, 8000, 15000].forEach(function (ms, i) {
   setTimeout(function () {
     var w = null, err = '';
