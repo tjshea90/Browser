@@ -466,3 +466,51 @@ test('page problems: our own injected elements and a page without problems repor
   await page.waitForTimeout(300);
   assert.deepEqual(await jserr(page), []);
 });
+
+// ---------------------------------------------------------------- AW1b: the scriptlet calls that ride in the CSS answer
+// The fake app answers `css` with the markers, then the calls comment, then CSS. A fake page-side library stands in for scriptlets-main.js (its own tests are in scriptlets.test.js): it records the event
+// it gets, says READY when asked to and reports back how many calls ran.
+const slPre = (answer) => [(a) => {
+  window.__sl = [];
+  window.__cssAnswer = a;
+  document.addEventListener('__kst_sl_v1', (e) => window.__sl.push(String(e.detail)), true);
+  const real = window.browser.runtime.sendMessage;
+  window.browser.runtime.sendMessage = (m) => { window.__msgs.push(m); return Promise.resolve(m.k === 'css' ? window.__cssAnswer : undefined); };
+}, answer];
+
+test('scriptlets: the calls are cut out of the CSS, handed to the page library by an event, and the CSS that is left is injected', async () => {
+  const calls = '[["nowoif"],["set","adsOn","false"]]';
+  const page = await open('<div class="x">a</div>', slPre('/*kg*//*kp*//*ks' + calls + '*/.x{display:none!important}'));
+  await page.waitForTimeout(300);
+  assert.deepEqual(await page.evaluate(() => window.__sl), [calls]);
+  const css = await page.evaluate(() => Array.from(document.querySelectorAll('style[data-kestrel="1"]')).map((s) => s.textContent));
+  assert.deepEqual(css, ['/*kg*//*kp*/.x{display:none!important}'], 'the comment never reaches the style sheet, the other markers stay in front');
+  assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.x')).display), 'none');
+});
+
+test('scriptlets: a site that has only scriptlets gets no style element at all', async () => {
+  const page = await open('<div>a</div>', slPre('/*ks[["nowoif"]]*/'));
+  await page.waitForTimeout(300);
+  assert.deepEqual(await page.evaluate(() => window.__sl), ['[["nowoif"]]']);
+  assert.equal(await page.evaluate(() => document.querySelectorAll('style[data-kestrel]').length), 0);
+});
+
+test('scriptlets: when the page library says it is ready after our answer, the calls are sent again; its report goes to the extension', async () => {
+  const page = await open('<div>a</div>', slPre('/*ks[["nowoif"]]*/'));
+  await page.waitForTimeout(200);
+  await page.evaluate(() => document.dispatchEvent(new CustomEvent('__kst_sl_ready_v1')));
+  assert.equal((await page.evaluate(() => window.__sl)).length, 2);
+  await page.evaluate(() => document.dispatchEvent(new CustomEvent('__kst_sl_n_v1', { detail: '3:1' })));
+  const rep = await page.evaluate(() => window.__msgs.filter((m) => m.k === 'sl'));
+  assert.deepEqual(rep, [{ k: 'sl', r: '3:1', h: 'site.example' }]);
+});
+
+test('scriptlets: an answer without the comment sends nothing, and a broken comment never breaks the page', async () => {
+  const none = await open('<div>a</div>', slPre('.x{display:none!important}'));
+  await none.waitForTimeout(200);
+  assert.deepEqual(await none.evaluate(() => window.__sl), []);
+  const broken = await open('<div class="x">a</div>', slPre('/*ks[["nowoif"]'));
+  await broken.waitForTimeout(200);
+  assert.deepEqual(await broken.evaluate(() => window.__sl), []);
+  assert.equal(await broken.evaluate(() => document.body.textContent), 'a');
+});
