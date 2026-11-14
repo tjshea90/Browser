@@ -9,7 +9,8 @@ var KestrelEngine = (function () {
     GRAM_KEY: 13, GRAM_START: 14, GRAM_LEN: 15, GRAM_IDS: 16, NO_TOKEN: 17, PSL_RULES: 18, PSL_WILD: 19, PSL_EXC: 20 };
 
   // Bits (FilterSet.kt `Bits`) and request types (RequestType.kt)
-  var TYPES = 0x1FFF, PARTY_SHIFT = 13, B_IMPORTANT = 1 << 15, B_EXCEPTION = 1 << 16, CAT_SHIFT = 17, LEFT_HOST = 1 << 19, LEFT_ANCHOR = 1 << 20, RIGHT_ANCHOR = 1 << 21;
+  var TYPES = 0x1FFF, PARTY_SHIFT = 13, B_IMPORTANT = 1 << 15, B_EXCEPTION = 1 << 16, CAT_SHIFT = 17, LEFT_HOST = 1 << 19, LEFT_ANCHOR = 1 << 20, RIGHT_ANCHOR = 1 << 21,
+      REDIRECT_SHIFT = 22, B_REDIRECT_ONLY = 1 << 27; // AW1c: 5 bits name the stand-in resource of a $redirect= rule, bit 27 marks a $redirect-rule= (picks the stand-in for something else's block, blocks nothing itself)
   var T = { DOCUMENT: 1, SUBDOCUMENT: 2, STYLESHEET: 4, SCRIPT: 8, IMAGE: 16, FONT: 32, MEDIA: 64, XHR: 128, WEBSOCKET: 256, PING: 512, OBJECT: 1024, OTHER: 2048 };
   var MIN_TOKEN = 3, MAX_TOKEN_LEN = 64, MAX_GRAM_EVALS = 3000, MAX_URL = 2048, MAX_HOSTPORT = 300, MAX_USERINFO = 256;
   var STAR = 42, CARET = 94;
@@ -204,7 +205,7 @@ var KestrelEngine = (function () {
 
     // ---- per-check context (one check at a time: JS is single-threaded and check() never re-enters)
     var cUrl = '', cHost = '', cHostStart = 0, cHostEnd = 0, cPageHost = null, cTypeMask = 0, cThird = false;
-    var cBlocked = false, cImportant = false, cExcepted = false, cCategory = 0, cEvals = 0, cPageHashes = null;
+    var cBlocked = false, cImportant = false, cExcepted = false, cCategory = 0, cEvals = 0, cPageHashes = null, cRedirect = 0, cRedirectOnly = 0;
     var seen = new Int32Array(64), nSeen = 0;
 
     var lastHashHost = null, lastHashes = null; // every request of a page names the same page host: its suffix hashes are computed once, not once per request
@@ -270,7 +271,7 @@ var KestrelEngine = (function () {
       if (trimmed !== he) { s = s.substring(0, trimmed) + s.substring(he); he = trimmed; }
       cUrl = s; cHost = s.substring(hs, he); cHostStart = hs; cHostEnd = he; cPageHost = pageHost; cTypeMask = mask;
       cThird = mask !== T.DOCUMENT && pageHost !== null && pageHost !== undefined && !isSameSite(cHost, pageHost);
-      cBlocked = false; cImportant = false; cExcepted = false; cCategory = 0; cEvals = 0; cPageHashes = null;
+      cBlocked = false; cImportant = false; cExcepted = false; cCategory = 0; cEvals = 0; cPageHashes = null; cRedirect = 0; cRedirectOnly = 0;
       return true;
     }
 
@@ -294,6 +295,8 @@ var KestrelEngine = (function () {
             var f = flags[idx];
             if (flagsApply(f)) {
               if (exception) { cExcepted = true; return; }
+              var rdh = (f >>> REDIRECT_SHIFT) & 31;
+              if (rdh !== 0 && cRedirect === 0) cRedirect = rdh;
               cBlocked = true;
               cCategory = (f >>> CAT_SHIFT) & 3;
               if ((f & B_IMPORTANT) !== 0) { cImportant = true; return; }
@@ -425,16 +428,25 @@ var KestrelEngine = (function () {
       if (party === 1 && !cThird) return;
       if (party === 2 && cThird) return;
       var isExc = (w & B_EXCEPTION) !== 0;
-      if (isExc) { if (cExcepted) return; } else if (cBlocked && (w & B_IMPORTANT) === 0) return;
+      var rd = (w >>> REDIRECT_SHIFT) & 31, redirOnly = (w & B_REDIRECT_ONLY) !== 0;
+      if (isExc) { if (cExcepted) return; }
+      else if (redirOnly) { if (cRedirectOnly !== 0) return; }
+      else if (cBlocked && (w & B_IMPORTANT) === 0 && (rd === 0 || cRedirect !== 0)) return; // already blocked: only a rule that can still name the stand-in is worth looking at
       var d = dom[id];
       if (d !== 0 && !domainOk(d - 1)) return;
       if (!matchPattern(id, w)) return;
       if (isExc) cExcepted = true;
-      else { cBlocked = true; cCategory = (w >>> CAT_SHIFT) & 3; if ((w & B_IMPORTANT) !== 0) cImportant = true; }
+      else if (redirOnly) cRedirectOnly = rd;
+      else {
+        if (rd !== 0 && cRedirect === 0) cRedirect = rd;
+        if (!cBlocked || (w & B_IMPORTANT) !== 0) cCategory = (w >>> CAT_SHIFT) & 3;
+        cBlocked = true;
+        if ((w & B_IMPORTANT) !== 0) cImportant = true;
+      }
     }
 
     /**
-     * Verdict word exactly as FilterSet.check: 0 none; 1 block (| category << 2); 2 excepted; 16 = $important.
+     * Verdict word exactly as FilterSet.check: 0 none; 1 block (| category << 2); 2 excepted; 16 = $important; bits 8-12 = the stand-in resource to answer a block with (AW1c, 0 = just cancel).
      * @param url full request URL; @param pageHost lower-case host of the top-level page or null; @param mask request-type bits (typeMask())
      */
     function check(url, pageHost, mask) {
@@ -442,9 +454,10 @@ var KestrelEngine = (function () {
       scanHosts(hostHash, hostFlags, false);
       if (!cImportant) scanPatterns();
       if (!cBlocked) return 0;
-      if (cImportant) return 1 | 16 | (cCategory << 2);
+      var stand = (cRedirect !== 0 ? cRedirect : cRedirectOnly) << 8;
+      if (cImportant) return 1 | 16 | (cCategory << 2) | stand;
       if (!cExcepted) scanHosts(excHash, excFlags, true);
-      return cExcepted ? 2 : (1 | (cCategory << 2));
+      return cExcepted ? 2 : (1 | (cCategory << 2) | stand);
     }
 
     /** Runs a few dozen representative checks so the script engine has compiled every path before the first real request (a cold first check is slow on a small CPU). */
