@@ -1682,3 +1682,34 @@
 >
 > After a day of use, paste Menu > Diagnostics > Copy. Its new "Glide typing" line shows how often the first guess was kept, swapped or deleted.
 <!-- sha:633372788832 -->
+
+## 2026-11-14T03:12:55Z
+> Glide typing is out as alpha34, and I've started on your three new requests (invisible corner, a learning keyboard, typing into a page field). Alpha34 built and published on GitHub with all checks green and the signing certificate verified, and it installs over alpha33. The APK is 93.9 MB (1.3 MB more than alpha33, mostly the word list).
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha34
+>
+> **Your message 34 (glide typing)**
+> - **How it works:** slide over a word's letters and lift. The word is typed with a space and two other guesses show above the keys. Tapping a guess swaps it in, and one Backspace removes the whole word.
+> - **Learning so far:** it learns how your thumb lands beside the keys, the words you type that it didn't know, and the names of sites you visit.
+> - **Tested:** I tried it on the emulator with a real multi-point touch path. "hello" then "world" typed correctly, and the swap and Backspace worked. A simulated thumb gets the right word first about 91% of the time and in the top three about 97%.
+> - **Not tested on your tablet:** a real thumb and the real speed. The emulator took 0.7 to 1.7 seconds per glide because it has no hardware acceleration; I estimate 15 to 30 ms on the tablet.
+>
+> Questions from last time:
+> - Spanish words: do you want a Spanish word list added?
+> - Wider keyboard: do you want a setting for a wider mini keyboard?
+>
+> **Your message 35 (three new requests)**
+> 1. **Invisible corner instead of the button:** I'm building this first. The visible tab is already gone in my working copy. A long press in an invisible 12 mm square at the top right opens the panel, and the panel hangs just below that square. A long press on the same square, which sits above the open panel, slides it closed. Short taps and drags there still go to the page. I read "long press above the open panel" as that same square; tell me if you meant something else.
+> 2. **Learning from your choices:** the keyboard will learn from the words you pick when it guesses wrong, from the words you keep, and from the words and word pairs you type. It saves this only on your tablet.
+> 3. **Typing into a page field:** when a text field on a website is already open, the mini keyboard will type into that field instead of searching Google. Your pasted Diagnostics (current page `google.com/search?q=hey`) shows the problem you meant.
+>
+> Your Diagnostics also showed a cold start reaching the engine in about 1 second, which is good.
+>
+> Still open from you:
+> 1. After using the glide, paste Menu > Diagnostics > Copy. It will have a new "Glide typing" line.
+> 2. The Spanish and wider-keyboard answers above.
+> 3. The "incompatible browser / Cloudflare" site wording, a Doraby page report, the choppy-video link, and how scrolling and Back feel.
+> 4. Your yes or no on the scheduled GitHub ad-list build, and your private signing key.
+>
+> Next I'll finish the corner long press, then the learning, then typing into page fields, and ship them together as alpha35.
+<!-- sha:7c096b6c2f60 -->
