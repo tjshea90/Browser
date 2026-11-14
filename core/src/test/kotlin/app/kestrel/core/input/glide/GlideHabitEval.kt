@@ -67,7 +67,7 @@ object GlideHabitEval {
     }
 
 
-    class HabitCurve(val blocks: List<Double>, val favouriteBlocks: List<Double>, val shapes: Int, val shapeWords: Int, val flips: Int, val good: Int, val bad: Int, val glides: Int, val early: Double, val late: Double, val lateMissRecall: Int = 0, val lateMissRank: Int = 0)
+    class HabitCurve(val blocks: List<Double>, val favouriteBlocks: List<Double>, val shapes: Int, val shapeWords: Int, val flips: Int, val good: Int, val bad: Int, val glides: Int, val early: Double, val late: Double, val lateMissRecall: Int = 0, val lateMissRank: Int = 0, val msShapes: Double = 0.0, val msPlain: Double = 0.0)
 
     /**
      * A long stretch of use by a person whose hand has a habit for every word it writes ([habitDp] dp of fixed shift per letter, on top of the finger's scatter): 70 % of what they write comes from
@@ -89,18 +89,21 @@ object GlideHabitEval {
         val lexicons = listOf<GlideLexicon>(lex)
         val hits = IntArray(blocks); val seen = IntArray(blocks); val favHits = IntArray(blocks); val favSeen = IntArray(blocks)
         val times = HashMap<String, Int>(); var eHit = 0; var eSeen = 0; var lHit = 0; var lSeen = 0; var missRecall = 0; var missRank = 0
-        var done = 0; var flips = 0; var good = 0; var bad = 0
+        var done = 0; var flips = 0; var good = 0; var bad = 0; var nsShapes = 0L; var nsPlain = 0L; var nDec = 0
         while (done < glides) {
             val q: List<String> = if (rnd.nextInt(100) < habitPercent) phrases[rnd.nextInt(phrases.size)] else List(1 + rnd.nextInt(3)) { base[rnd.nextInt(base.size)] }
             var prev: String? = null; var prev2: String? = null
             for (w in q) {
                 if (done >= glides) break
                 val path = hand.path(w) ?: continue
+                val t0 = System.nanoTime()
                 val c = dec.decode(path.xs, path.ys, path.xs.size, lexicons, prev, 3, prev2)
+                val t1 = System.nanoTime(); nsShapes += t1 - t0; nDec++
                 val key = keyOf(w)
                 val first = c.isNotEmpty() && keyOf(c[0].text) == key
                 if (shapes) {
                     val c0 = plain.decode(path.xs, path.ys, path.xs.size, lexicons, prev, 3, prev2)
+                    nsPlain += System.nanoTime() - t1
                     val first0 = c0.isNotEmpty() && keyOf(c0[0].text) == key
                     if (dec.lastPatternFlipped) flips++
                     if (first && !first0) good++
@@ -128,7 +131,7 @@ object GlideHabitEval {
                 prev2 = prev; prev = w; done++
             }
         }
-        return HabitCurve(List(blocks) { 100.0 * hits[it] / seen[it].coerceAtLeast(1) }, List(blocks) { 100.0 * favHits[it] / favSeen[it].coerceAtLeast(1) }, model?.patterns?.patternCount ?: 0, model?.patterns?.wordCount ?: 0, flips, good, bad, glides, 100.0 * eHit / eSeen.coerceAtLeast(1), 100.0 * lHit / lSeen.coerceAtLeast(1), missRecall, missRank)
+        return HabitCurve(List(blocks) { 100.0 * hits[it] / seen[it].coerceAtLeast(1) }, List(blocks) { 100.0 * favHits[it] / favSeen[it].coerceAtLeast(1) }, model?.patterns?.patternCount ?: 0, model?.patterns?.wordCount ?: 0, flips, good, bad, glides, 100.0 * eHit / eSeen.coerceAtLeast(1), 100.0 * lHit / lSeen.coerceAtLeast(1), missRecall, missRank, nsShapes / 1e6 / nDec.coerceAtLeast(1), nsPlain / 1e6 / nDec.coerceAtLeast(1))
     }
 
     @JvmStatic fun main(args: Array<String>) {
@@ -160,7 +163,7 @@ object GlideHabitEval {
                 for ((label, w, sh) in listOf(Triple("nothing learned          ", false, false), Triple("words/pairs/corrections ", true, false), Triple("+ glide shapes          ", true, true))) {
                     if (a["only"] != null && a["only"] != (if (sh) "shapes" else if (w) "words" else "none")) continue
                     val c = habitCurve(lex, keys, noise, g, nb, w, sh, hd, a["seed"]?.toLong() ?: 3L, GlideEval.paramsFrom(a), a["sigma"]?.toFloat() ?: PatternMemory.SIGMA, a["merge"]?.toFloat() ?: PatternMemory.MERGE_D)
-                    println("   $label " + c.blocks.joinToString(" ") { "%.1f".format(it) } + "  (" + c.favouriteBlocks.joinToString(" ") { "%.0f".format(it) } + ")  words seen 1-2 times: %.1f %%, 6+ times: %.1f %%".format(c.early, c.late) + if (sh) "   shapes kept ${c.shapes} for ${c.shapeWords} words, changed the first guess ${c.flips} times (mended ${c.good}, spoiled ${c.bad}); words seen 6+ times that were wrong: not among the ${GlideParams().keep} candidates ${c.lateMissRecall}, ranked below the first ${c.lateMissRank}" else "")
+                    println("   $label " + c.blocks.joinToString(" ") { "%.1f".format(it) } + "  (" + c.favouriteBlocks.joinToString(" ") { "%.0f".format(it) } + ")  words seen 1-2 times: %.1f %%, 6+ times: %.1f %%".format(c.early, c.late) + if (sh) "   shapes kept ${c.shapes} for ${c.shapeWords} words, changed the first guess ${c.flips} times (mended ${c.good}, spoiled ${c.bad}); words seen 6+ times that were wrong: not among the ${GlideParams().keep} candidates ${c.lateMissRecall}, ranked below the first ${c.lateMissRank}; decode avg %.1f ms with the memory, %.1f ms without".format(c.msShapes, c.msPlain) else "")
                 }
             }
             return
