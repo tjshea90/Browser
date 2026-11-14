@@ -67,7 +67,7 @@ class MiniNavTest {
         frame = FrameLayout(activity)
         activity.setContentView(frame)
         nav = MiniNav(activity, Pal(activity), rec)
-        frame.addView(nav, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END))
+        frame.addView(nav, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) // like the activity: the whole page area
         relayout()
     }
 
