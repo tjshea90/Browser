@@ -1,13 +1,13 @@
-# CHECKPOINT 2033 — read me first, then TASKS.md
+# CHECKPOINT 2038 — read me first, then TASKS.md
 
-**Written:** 2026-11-14T04:59:04Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `1df9a5d` (this checkpoint is the commit after it)
+**Written:** 2026-11-14T05:04:49Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `65054b3` (this checkpoint is the commit after it)
 
 ## Just done
-AV2/AV3 core: PersonalModel now remembers corrections (guessed -> meant), the last TWO words, and a short recency memory (all saved, old files still load); decoder uses them (confGain, prev2, recentMass); smart spacing after a glide (doraby + .com = doraby.com, punctuation closes the word); MiniNav sends two-word context, learns corrections from picks (1.0) and deletions (0.5), takes words from visited page titles; panel padding bug (inset background reset it) fixed; tests: core glide 44, MiniKeyboardTest 25, MiniNavTest 56 all pass. Simulation (normal finger, 70 % own phrases): learning 90.3/94.0/94.7/93.7/95.0/96.3 baseline; corrections +0.3, two-word and recency ~0 on this synthetic person (it repeats a small phrase set), numbers in scratchpad abl.txt
+AV3a live guess while gliding (GlideTyping.preview on its own thread with its own decoder, strip shows it, Diagnostics 'word shown N ms after the lift' + 'live preview'); AV1 proven on the emulator (grip drag detaches, corner drag resizes, glide works on the resized keyboard, drag near the corner docks, size kept); lift position applied at the end of a drag
 
 ## Do this next
-(1) emulator proof of AV1 with the fixed padding build: scratchpad emu helpers, install x86_64 apk (adb install) then drag grip / corners with input swipe, screenshots; (2) when the research agent ab679ad8ef33678f3 reports: write research/GLIDE_RESEARCH.md; (3) then AV3a live word while gliding (GlideTyping.decodePreview + strip), key preview bubble, caps lock, long-press alternates; (4) per-key thumb centres only if research supports; ship alpha36
+AV3b: shift lock (double tap Shift), field-mode bottom row with comma/apostrophe/question mark, long-press digits on the top row, key preview bubble; then emulator proof, docs (research/MINI_NAV.md AV1 section, GLIDE_TYPING.md), research agent report -> research/GLIDE_RESEARCH.md, ship alpha36
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ AV2/AV3 core: PersonalModel now remembers corrections (guessed -> meant), the la
 
 ## Last ten checkpoints
 ```
+  06a225c ckpt 2033: AV2/AV3 core: PersonalModel now remembers corrections (guessed -> meant), the
   411b5fb ckpt 2020: AV1 code: MiniNav panel geometry (grip drag detaches/moves with dock snap + d
   2287b4e ckpt 2013: owner message 36 written into TASKS (AV1 resize+detach the mini keyboard, AV2
   d4f48f8 ckpt 2010: alpha35 (kestrel-g-v0.3.0-alpha35, code 136) released and RECORDED: run 43556
@@ -25,8 +26,7 @@ AV2/AV3 core: PersonalModel now remembers corrections (guessed -> meant), the la
   21e5616 ckpt 1998: AU1+AU2+AU3 verified on the emulator (corner long press, page-field typing: l
   95be9ed ckpt 1994: AU3 verified on the JVM side: core 876/877 (the one failure is a download tim
   85e6e7a ckpt 1990: AU3 code: TextEdit (core, 7 tests), PageField interface + MiniNav field mode 
-  4ad5eb4 ckpt 1979: AU3 research written (research/MINI_NAV.md): GeckoView 160 input path read fr
 ```
 
-(12 automatic checkpoint(s) since the last deliberate one — the
+(4 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
