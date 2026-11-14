@@ -455,4 +455,5 @@ A question, not an order: answer it in plain words with a TESTED recipe, then le
   - [ ] AW1f false-positive safety: tests on the real lists (DefaultListsRegressionTest + a fixture corpus of normal pages that must keep working), the per-site Shields switch still undoes everything, a "scriptlets off" switch in Diagnostics
   - [ ] AW1g measure on the emulator with a lab page (tools/sitelab): ads, pop-ups, anti-adblock wall, player waiting for ima3, each blocked / neutralised; Diagnostics "Blocker" line grows (scriptlets injected, redirects served, handler p50/p95 us) so the owner's paste shows it on the tablet
   - [ ] AW1h ship (alpha37 or later), answer the owner in plain words incl. what was NOT run on the tablet and the yes/no questions (scheduled list build, video-ad switch default)
+  - [ ] AW1i the owner sent the same words again at 2026-11-14T15:04Z (INBOX): "Work on improving the ad blocking that you didn't finish before" - same request as 37, nothing new to add; AW1 is the answer. Reply in plain words when AW1h ships: what works now (scriptlets proven on the emulator), what is still open, what was NOT run on the tablet
 
