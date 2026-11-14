@@ -28,8 +28,13 @@ object MiniKeyboardLayout {
     private val go = KeySpec("Go", Key.Go, 2f)
     private val back = KeySpec("⌫", Key.Backspace, 1.5f)
 
-    /** The four rows of [symbols] (false = letters); with [shift] the letters are upper case. */
-    fun rows(symbols: Boolean, shift: Boolean = false): List<List<KeySpec>> {
+    private val comma = KeySpec(",", Key.Ch(","), 1f)
+    private val apostrophe = KeySpec("'", Key.Ch("'"), 1f)
+    private val question = KeySpec("?", Key.Ch("?"), 1f)
+    private val spaceShort = KeySpec("space", Key.Ch(" "), 2.5f)
+
+    /** The four rows of [symbols] (false = letters); with [shift] the letters are upper case; [forField] (typing into a page's text field) puts a comma, an apostrophe and a question mark on the letters page where the address keys (slash and .com) are for the address bar. */
+    fun rows(symbols: Boolean, shift: Boolean = false, forField: Boolean = false): List<List<KeySpec>> {
         if (symbols) return listOf(
             chars("1234567890"),
             chars("-_:?=&%#@+"),
@@ -41,7 +46,8 @@ object MiniKeyboardLayout {
             letters("qwertyuiop"),
             listOf(KeySpec("", null, 0.5f)) + letters("asdfghjkl") + KeySpec("", null, 0.5f),
             listOf(KeySpec("⇧", Key.Shift, 1.5f)) + letters("zxcvbnm") + back,
-            listOf(KeySpec("123", Key.ToSymbols, 1.5f), slash, dot, space, dotCom, go),
+            if (forField) listOf(KeySpec("123", Key.ToSymbols, 1.5f), comma, dot, spaceShort, apostrophe, question, go)
+            else listOf(KeySpec("123", Key.ToSymbols, 1.5f), slash, dot, space, dotCom, go),
         )
     }
 }
@@ -62,6 +68,8 @@ class MiniKeyboardModel {
     var allSelected = false; private set
     var symbols = false; private set
     var shift = false; private set
+    /** Caps lock (a double tap on Shift): every letter and glided word comes out in capitals until Shift is tapped again. */
+    var shiftLock = false; private set
     /** What the last glide added (a space before it when one was needed, the word, a space after it): ONE Backspace takes all of it away, and a candidate from the strip can replace it. */
     private var glideTail: String? = null
     /** The words glides put in (in order): they were learned when they were kept, so [typedPairs] leaves them out. */
@@ -73,10 +81,13 @@ class MiniKeyboardModel {
         text = current.take(MAX_CHARS)
         allSelected = text.isNotEmpty()
         symbols = false
-        shift = false
+        shift = false; shiftLock = false
         glideTail = null
         glided.clear()
     }
+
+    /** Shift was tapped twice quickly: caps lock on. */
+    fun lockShift() { shiftLock = true; shift = true }
 
     fun press(key: Key): KeyResult {
         when (key) {
@@ -86,7 +97,7 @@ class MiniKeyboardModel {
                 val glideSpace = !allSelected && glideTail?.endsWith(" ") == true && text.endsWith(" ") && key.text in CLOSES_WORD
                 text = if (allSelected) t else ((if (glideSpace) text.dropLast(1) else text) + t).take(MAX_CHARS)
                 allSelected = false
-                shift = false
+                shift = shiftLock
                 glideTail = null
             }
             Key.Backspace -> {
@@ -97,8 +108,8 @@ class MiniKeyboardModel {
                 allSelected = false
                 glideTail = null
             }
-            Key.Shift -> shift = !shift
-            Key.ToSymbols -> { symbols = true; shift = false; glideTail = null }
+            Key.Shift -> if (shiftLock) { shiftLock = false; shift = false } else shift = !shift
+            Key.ToSymbols -> { symbols = true; shift = shiftLock; glideTail = null }
             Key.ToLetters -> symbols = false
             Key.Go -> { val t = text.trim(); if (t.isNotEmpty()) return KeyResult.Submit(t) }
         }
@@ -108,7 +119,7 @@ class MiniKeyboardModel {
     /** A glide ended on [word]: it goes in after what is there, with a space after it (and one before it when the text does not end in one); the first thing typed replaces a selected address. Shift makes it start with a capital. */
     fun commitGlide(word: String) {
         if (word.isEmpty()) return
-        val w = if (shift) word.replaceFirstChar { it.uppercase() } else word
+        val w = if (shiftLock) word.uppercase() else if (shift) word.replaceFirstChar { it.uppercase() } else word
         val base = if (allSelected) "" else text
         val tail = (if (base.isNotEmpty() && !base.endsWith(' ')) " " else "") + w + " "
         if (base.length + tail.length > MAX_CHARS) return
@@ -116,7 +127,7 @@ class MiniKeyboardModel {
         glideTail = tail
         glided.add(w.lowercase())
         allSelected = false
-        shift = false
+        shift = shiftLock
     }
 
     /** The candidate [word] from the strip replaces the word the last glide put in. False when the last thing was not a glide. */
@@ -124,8 +135,9 @@ class MiniKeyboardModel {
         val tail = glideTail ?: return false
         if (!text.endsWith(tail)) { glideTail = null; return false }
         val lead = if (tail.startsWith(" ")) " " else ""
-        val capital = tail.trimStart().firstOrNull()?.isUpperCase() == true
-        val w = if (capital) word.replaceFirstChar { it.uppercase() } else word
+        val shown = tail.trim()
+        val capital = shown.firstOrNull()?.isUpperCase() == true
+        val w = if (shown.length > 1 && shown.all { it.isUpperCase() }) word.uppercase() else if (capital) word.replaceFirstChar { it.uppercase() } else word
         val newTail = lead + w + " "
         text = text.removeSuffix(tail) + newTail
         glideTail = newTail
