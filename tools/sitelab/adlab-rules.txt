@@ -2,7 +2,7 @@
 ||ads.adlab.test^
 adlab.test##.ad-box
 adlab.test##+js(set, adblockDetected, false)
-adlab.test##+js(nostif, nag)
+adlab.test##+js(nostif, nagBox)
 adlab.test##+js(nano-stb, countdown, *, 0.02)
 adlab.test##+js(aeld, click, popunder)
 adlab.test##+js(json-prune-fetch-response, adPlacements adSlots, , propsToMatch, /player.json)

@@ -8,12 +8,12 @@ defuses it, and the adlab page shows what the browser's blocking does about it.
 
 The page plays the tricks real sites play and writes one line per check into its own text (for a picture or a uiautomator dump) and into the log (/log?...):
   wall      an anti-adblock wall that appears when the page's bait variable says "blocked"          -> defused by  set, adblockDetected, false
-  nag       a "please whitelist us" box shown by a timer                                             -> defused by  nostif, nag
+  nag       a "please whitelist us" box shown by a timer                                             -> defused by  nostif, nagBox
   countdown a "wait 8 seconds" button that opens after a timer                                       -> sped up by  nano-stb, countdown, *, 0.02
   popunder  a click listener that would open an ad window (it marks the page instead)                -> removed by  aeld, click, popunder
   player    a player config fetched as JSON that carries ad placements                               -> cut by      json-prune-fetch-response, adPlacements adSlots, , propsToMatch, /player.json
   bait      a script the page inserts that holds a detector                                          -> emptied by  rmnt, script, adbait
-  beacon    a request to ads.adlab.test                                                              -> answered by no-fetch-if (and blocked as a network request by the list)
+  beacon    a request to ads.adlab.test                                                              -> answered by no-fetch-if (a stub answer, nothing leaves) or blocked by the list; a LEAK is a 'BEACON reached the server' line in the log
   opener    window.open from a timer (an ad tab)                                                     -> answered by nowoif
   entity    set, entityOk, true  for  adlab.*  (an entity rule: any suffix)
   banner    an element the list hides                                                                -> .ad-box
@@ -47,7 +47,7 @@ PAGE = r"""<!doctype html>
  // wall: the page's own detector decides "blocked" because the bait never loaded
  window.adblockDetected = true;
  // nag + countdown + popunder
- setTimeout(function nag() { document.getElementById('nag').style.display = 'block'; }, 700);
+ setTimeout(function nagBox() { document.getElementById('nag').style.display = 'block'; }, 700);
  var t0 = Date.now();
  setTimeout(function countdown() { var b = document.getElementById('cd'); b.disabled = false; b.textContent = 'GO'; say('countdown', 'opened after ' + (Date.now() - t0) + ' ms'); }, 8000);
  window.__pop = 0;
