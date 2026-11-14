@@ -591,8 +591,8 @@ class MiniNavTest {
         assertEquals("no space was typed", "hello", nav.barTextForTest)
         assertTrue("the cursor moved left: ${nav.cursorForTest}", nav.cursorForTest in 1..3)
         val at = nav.cursorForTest
-        nav.pressKeyForTest("X")
-        assertEquals("typing goes in at the cursor", "hello".substring(0, at) + "X" + "hello".substring(at), nav.barTextForTest)
+        nav.pressKeyForTest("x")
+        assertEquals("typing goes in at the cursor", "hello".substring(0, at) + "x" + "hello".substring(at), nav.barTextForTest)
         slideSpace(120f)
         assertEquals("a long slide to the right stops at the end", nav.barTextForTest.length, nav.cursorForTest)
     }
