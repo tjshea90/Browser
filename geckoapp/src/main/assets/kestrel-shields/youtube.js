@@ -178,6 +178,6 @@
       window.addEventListener('popstate', onNav, false);
     }
 
-    browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { if (r && r.skip === true) start(); }, function () { /* the app is not answering: nothing is done */ });
+    browser.runtime.sendMessage({ k: 'guard', h: location.hostname, s: 1 }).then(function (r) { if (r && r.skip === true) start(); }, function () { /* the app is not answering: nothing is done */ });
   } catch (e) { /* never break the page */ }
 })();

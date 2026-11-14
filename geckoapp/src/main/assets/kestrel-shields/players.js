@@ -22,7 +22,7 @@
     if (/(^|\.)(youtube\.com|youtube-nocookie\.com|youtubekids\.com)$/i.test(String(location.hostname))) return;
     window.__kstPL = 1;
     var T = (window.__kstPLcfg && typeof window.__kstPLcfg === 'object') ? window.__kstPLcfg : {}; // the tests shorten the clocks; in the real extension a page's globals are not visible here
-    var LOOP = T.loopMs || 250, MAXMS = T.maxMs || 15000, GIVEUP = T.fails || 5, FLUSH = T.flushMs || 3000, LEVELS = 8, MAXVIDEOS = 4;
+    var LOOP = T.loopMs || 250, MAXMS = T.maxMs || 15000, GIVEUP = T.fails || 5, FLUSH = T.flushMs || 3000, LEVELS = 8, MAXVIDEOS = 12;
     var STATE = ['jw-flag-ads', 'vjs-ad-playing'];       // on an ancestor while an ad plays
     var HOST = ['ima-ad-container', 'plyr__ads'];        // a video inside one of these is the ad itself
     var SKIP = ['.jw-skip.jw-skippable'];                // JW Player: the skip button element gets jw-skippable when skipping is allowed
@@ -46,7 +46,7 @@
       if (ask === 1) return;
       ask = 1;
       try {
-        browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) {
+        browser.runtime.sendMessage({ k: 'guard', h: location.hostname, s: 1 }).then(function (r) {
           if (r && r.skip === true) { ask = 2; var w = waiting; waiting = []; for (var i = 0; i < w.length; i++) w[i](); } else { ask = 3; waiting = []; }
         }, function () { ask = 3; waiting = []; /* the app is not answering: nothing is done */ });
       } catch (e) { ask = 3; waiting = []; }
@@ -89,19 +89,25 @@
         while (n && n.nodeType === 1 && i < LEVELS && n !== document.body && n !== document.documentElement) { t.obs.observe(n, { attributes: true, attributeFilter: ['class'] }); n = n.parentNode; i++; }
       } catch (e) { /* ignore */ }
     }
+    function drop(i) { trackers[i].dead = true; trackers[i].obs.disconnect(); trackers.splice(i, 1); }
     function track(v) {
       var t = find(v);
       if (t) return t;
-      for (var i = trackers.length - 1; i >= 0; i--) if (!document.contains(trackers[i].v)) { trackers[i].obs.disconnect(); trackers.splice(i, 1); }
-      if (trackers.length >= MAXVIDEOS) return null;
-      t = { v: v, obs: null, active: null, given: false, mainDur: 0 };
+      for (var i = trackers.length - 1; i >= 0; i--) if (!document.contains(trackers[i].v)) drop(i);
+      if (trackers.length >= MAXVIDEOS) { // a feed with many videos: forget the oldest one that is not in an ad and not playing; when all of them play, the newest is not followed
+        var k = -1;
+        for (var j = 0; j < trackers.length; j++) if (!trackers[j].active && (trackers[j].v.paused || trackers[j].v.ended)) { k = j; break; }
+        if (k < 0) return null;
+        drop(k);
+      }
+      t = { v: v, obs: null, active: null, given: false, mainDur: 0, dead: false };
       t.obs = new MutationObserver(function () { check(t); });
       v.addEventListener('durationchange', function () { filmLength(t); }, true);
       trackers.push(t);
       return t;
     }
     function filmLength(t) { // the length of the film itself: remembered while no ad shows
-      try { var d = t.v.duration; if (!adNow(t) && isFinite(d) && d > 0) t.mainDur = d; } catch (e) { /* ignore */ }
+      try { var d = t.v.duration; if (!t.dead && !adNow(t) && isFinite(d) && d > 0) t.mainDur = d; } catch (e) { /* ignore */ }
     }
 
     function check(t) {

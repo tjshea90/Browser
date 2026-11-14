@@ -148,7 +148,7 @@ function markStats() { // lazy timer: nothing is scheduled while no request is b
 function reportStats(force) {
   if (!force && !statsDirty) return;
   statsDirty = false;
-  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, w: (guardState + ', ' + guardBlocked + ' blocked' + assistText() + ' | ' + slState + (slPages ? ', ' + slPages + ' pages ran ' + slCalls + ' calls' + (slBad ? ' (' + slBad + ' failed)' : '') + ', ' + slEarlyPages + ' before the page\'s first script' : '') + (slEarlySet ? ', ' + slEarlySet + ' sites set up early (' + slReg.size + ' kept, ' + slEarlyAsks + ' asks)' : '') + (standIns ? ', ' + standIns + ' blocked files answered with a stand-in' : '') + (slEarlyFail ? ', early error: ' + slEarlyFail : '') + ' | ' + stats.last).slice(0, 400) }).catch(function () {});
+  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, w: (guardState + ', ' + guardBlocked + ' blocked' + assistText() + skipText() + ' | ' + slState + (slPages ? ', ' + slPages + ' pages ran ' + slCalls + ' calls' + (slBad ? ' (' + slBad + ' failed)' : '') + ', ' + slEarlyPages + ' before the page\'s first script' : '') + (slEarlySet ? ', ' + slEarlySet + ' sites set up early (' + slReg.size + ' kept, ' + slEarlyAsks + ' asks)' : '') + (standIns ? ', ' + standIns + ' blocked files answered with a stand-in' : '') + (slEarlyFail ? ', early error: ' + slEarlyFail : '') + ' | ' + stats.last).slice(0, 400) }).catch(function () {});
 }
 
 // ---------------------------------------------------------------- the page report (Diagnostics > Page report)
@@ -255,6 +255,8 @@ function legacy(d, page) {
 var guardState = 'page guard: starting';
 var assistAsked = 0, assistSent = 0, assistFail = ''; // RX3-G3: how often a frame player was asked to start, how often the relay reached it, and why not
 function assistText() { return assistAsked ? ' | assist ' + assistSent + '/' + assistAsked + (assistFail ? ' (' + assistFail + ')' : '') : ''; }
+var skipAsked = 0, skipYes = 0, skipReports = 0; // RX3-Y2 / RX3-G7: how often the ad skippers (youtube.js, players.js) asked whether they may run, how often the answer was yes, how many of their reports reached the app
+function skipText() { return (skipAsked || skipReports) ? ' | ad skippers: asked ' + skipAsked + ', allowed ' + skipYes + ', reports ' + skipReports : ''; }
 var guardBlocked = 0;
 function trimMap(m, max) { while (m.size > max) m.delete(m.keys().next().value); }
 function guardAnswer(host, topHost) { // on: the pop-up guard applies; skip (RX3-Y2): the ad skipper may run (flag 8: the Settings row and the site's Shields switch)
@@ -267,7 +269,9 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   var tabId = (sender && sender.tab) ? sender.tab.id : -1;
   if (m.k === 'guard') {
     var top = tabId >= 0 ? tabTop.get(tabId) : null;
-    return guardAnswer((top && pageHost(top)) || m.h, (top && pageHost(top)) || '');
+    var gh = (top && pageHost(top)) || m.h;
+    if (m.s !== 1) return guardAnswer(gh, (top && pageHost(top)) || '');
+    return guardAnswer(gh, (top && pageHost(top)) || '').then(function (r) { skipAsked++; if (r && r.skip === true) skipYes++; statsDirty = true; return r; });
   }
   if (m.k === 'dom') { // a media address found in the page itself (content.js): handed to the app like a sniffed one, marked so the app can drop ad networks
     var fid = sender ? sender.frameId : 0;
@@ -828,6 +832,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
 browser.runtime.onMessage.addListener(function (m, sender) {
   if (!m || m.k !== 'yts' || !sender || !sender.tab) return undefined;
   function n(v) { v = v | 0; return v > 0 && v < 1000 ? v : 0; }
+  skipReports++; statsDirty = true;
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || '';
   send({ k: 'yts', w: m.w === 'p' ? 'p' : 'y', a: n(m.a), s: n(m.s), c: n(m.c), o: n(m.o), d: n(m.d), f: n(m.f), g: n(m.g), r: String(m.r || '').slice(0, 60), p: String(page).slice(0, 300) }).catch(function () {});
   return undefined;
