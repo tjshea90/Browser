@@ -23,17 +23,24 @@ internal object ScriptletRules {
     const val MARKER_END = "*" + "/"
 
     const val MAX_ARGS = 10
+    /** What one call of a list that is NOT trusted may hold: one argument, all arguments together. */
     const val MAX_ARG = 500
     const val MAX_TOTAL = 1500
-    /** A host's calls beyond these are dropped (a page that matches dozens of rules is a list gone wrong, and the payload rides on every answer). */
-    const val MAX_CALLS = 40
-    const val MAX_PAYLOAD = 16_000
+    /**
+     * RX3-Y1: a trusted list's calls (the uBlock Origin lists, whose maintainers also write the scriptlet semantics) may be longer: the lists' own YouTube answer holds a script of about 3.5 KB that
+     * the page runs. Injecting page code from a list is only acceptable from those lists, so the larger limits go with the trust flag, never alone.
+     */
+    const val MAX_ARG_TRUSTED = 4096
+    const val MAX_TOTAL_TRUSTED = 8192
+    /** A host's calls beyond these are dropped (a page that matches dozens of rules is a list gone wrong, and the payload rides on every answer). 64 and 32,000: YouTube's desktop site alone has about 33 calls of about 7 KB. */
+    const val MAX_CALLS = 64
+    const val MAX_PAYLOAD = 32_000
 
     fun isStored(s: String): Boolean = s.isNotEmpty() && s[0] == PREFIX
 
     class Call(val name: String, val args: List<String>)
 
-    private enum class Need { NONE, ONE, TWO, ONE_OF_TWO }
+    private enum class Need { NONE, ONE, TWO, THREE, ONE_OF_TWO }
 
     /** canonical name -> how many arguments make the call meaningful. A call that would act on EVERYTHING when its arguments are empty (every listener, every timer, every fetch) must name something. */
     private val NEED = mapOf(
@@ -56,6 +63,11 @@ internal object ScriptletRules {
         "nowebrtc" to Need.NONE,
         "set-cookie" to Need.TWO, "trusted-set-cookie" to Need.TWO, "remove-cookie" to Need.ONE,
         "set-local-storage-item" to Need.TWO, "trusted-set-local-storage-item" to Need.TWO, "set-session-storage-item" to Need.TWO,
+        // RX3-Y1: the JSON edit family (a query over the parsed JSON of the page: delete, set, merge, regex-replace) and the two guards that keep it from being bypassed
+        "json-edit" to Need.ONE, "json-edit-fetch-response" to Need.ONE, "json-edit-xhr-response" to Need.ONE,
+        "trusted-json-edit" to Need.ONE, "trusted-json-edit-fetch-response" to Need.ONE, "trusted-json-edit-xhr-response" to Need.ONE,
+        "trusted-edit-inbound-object" to Need.THREE,                 // function path (JSON.stringify), argument index, query: what the page hands to a function is edited before the function runs
+        "trusted-prevent-dom-bypass" to Need.TWO,                    // method path, what must not slip through (fetch, Request): a frame inserted by the page cannot hand it an untouched copy
     )
 
     private val ALIAS = mapOf(
@@ -148,7 +160,9 @@ internal object ScriptletRules {
 
     /** The stored form of the text inside `+js(` ... `)`, or null when it is not a call we understand (or needs a trusted list and [trusted] is false). */
     fun encode(inner: String, trusted: Boolean): String? {
-        if (inner.length > MAX_TOTAL) return null
+        val maxArg = if (trusted) MAX_ARG_TRUSTED else MAX_ARG
+        val maxTotal = if (trusted) MAX_TOTAL_TRUSTED else MAX_TOTAL
+        if (inner.length > maxTotal) return null
         val parts = splitArgs(inner) ?: return null
         if (parts.isEmpty()) return null
         val name = canonical(parts[0]) ?: return null
@@ -157,17 +171,18 @@ internal object ScriptletRules {
         if (args.size > MAX_ARGS) return null
         var total = 0
         for (a in args) {
-            if (a.length > MAX_ARG) return null
+            if (a.length > maxArg) return null
             for (c in a) if (c.code < 0x20 || c.code == 0x7f) return null
             total += a.length
         }
-        if (total > MAX_TOTAL) return null
+        if (total > maxTotal) return null
         // the arguments that make the call mean something (see NEED)
         fun arg(i: Int) = args.getOrNull(i)?.isNotEmpty() == true
         val ok = when (NEED.getValue(name)) {
             Need.NONE -> true
             Need.ONE -> arg(0)
             Need.TWO -> arg(0) && args.size >= 2
+            Need.THREE -> arg(0) && arg(1) && arg(2)
             Need.ONE_OF_TWO -> arg(0) || arg(1)
         }
         if (!ok) return null

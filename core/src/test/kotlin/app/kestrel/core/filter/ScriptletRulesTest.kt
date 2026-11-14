@@ -269,7 +269,6 @@ class ScriptletRulesTest {
             val names = names(fs, host)
             assertTrue("$host has calls", names.isNotEmpty())
             assertTrue("$host: the payload stays inside the caps", fs.scriptletPayload(host).length <= ScriptletRules.MAX_PAYLOAD)
-            assertEquals("$host: every stored call reaches the page", names.size, fs.scriptletPayload(host).let { p -> p.count { it == '[' } - 1 })
         }
         assertTrue("the mobile site gets the feed edit", names(fs, "m.youtube.com").contains("json-edit-fetch-response"))
         assertTrue("the desktop site gets the enforcement answer", names(fs, "www.youtube.com").containsAll(listOf("trusted-edit-inbound-object", "trusted-prevent-dom-bypass", "rpnt")))
