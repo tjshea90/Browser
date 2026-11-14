@@ -125,13 +125,14 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
     /** The last decode: a remembered shape lifted at least one word / changed which word came first (for the Diagnostics line and the tests). */
     var lastPatternLifted = false; private set
     var lastPatternFlipped = false; private set
+    private val injected = ArrayList<String>()  // the remembered words the last decode put among the survivors on top of the quick pass's own
 
     /**
      * [xs]/[ys] are the first [count] touch points in view pixels. [prev] is the word before (lowercase letters) or null. Returns up to [max] words, best first; empty when the path is a tap or
      * nothing fits.
      */
     fun decode(xs: FloatArray, ys: FloatArray, count: Int, lexicons: List<GlideLexicon>, prev: String?, max: Int = 3, prev2: String? = null): List<GlideCandidate> {
-        lastCandidates = 0; lastPatternLifted = false; lastPatternFlipped = false
+        lastCandidates = 0; lastPatternLifted = false; lastPatternFlipped = false; injected.clear()
         lastPrint = if (p.patGain > 0f) Fingerprint.of(xs, ys, count, keys) else null
         if (count < 2 || !resample(xs, ys, count)) return emptyList()
         // the path moved by the learned habit; everything after judges this one
@@ -322,7 +323,7 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
                 val score = quickScore(lex, id, startD[f] + endD[l])
                 if (score.isNaN()) break
                 if (heapN >= p.keep + MAX_INJECT) return // room for this many extra, no more
-                heapPush(score, li, id)
+                heapPush(score, li, id); injected.add(w)
                 break
             }
         }
@@ -487,7 +488,8 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
         if (p.patGain <= 0f || out.isEmpty() || pm.isEmpty) return
         var bestPer = Float.MAX_VALUE
         for (c in out) if (c.perLetter < bestPer) bestPer = c.perLetter
-        val firstBefore = out[0].text
+        // the word that would have come first without the memory: the best of the candidates the quick pass found by itself
+        val firstBefore = out.firstOrNull { injected.isEmpty() || it.text !in injected }?.text ?: out[0].text
         var changed = false
         for (i in out.indices) {
             val c = out[i]
@@ -497,7 +499,9 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
             val lift = Math.min(p.patCap, p.patGain * Math.log(1.0 + e).toFloat())
             out[i] = GlideCandidate(c.text, c.score + lift, c.cost, c.prior, c.letters); changed = true
         }
-        if (changed) { out.sortByDescending { it.score }; lastPatternLifted = true; lastPatternFlipped = out[0].text != firstBefore }
+        if (changed) out.sortByDescending { it.score }
+        lastPatternLifted = changed || injected.isNotEmpty()
+        lastPatternFlipped = out[0].text != firstBefore
     }
 
     /**
