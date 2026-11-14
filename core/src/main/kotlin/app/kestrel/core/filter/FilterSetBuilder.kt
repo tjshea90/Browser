@@ -16,6 +16,9 @@ class BuildReport {
     @JvmField var cosmeticExceptions = 0
     @JvmField var queryRules = 0
     @JvmField var scriptlets = 0
+    /** RX3-B1: how many of the stored scriptlet calls are `trusted-*` ones, and per list how many `trusted-*` lines an untrusted list tried (they were skipped). */
+    @JvmField var trustedScriptlets = 0
+    @JvmField val untrustedByList = LinkedHashMap<String, Int>()
     @JvmField val skipped = IntArray(Skip.values().size)
 
     fun skippedCount(s: Skip): Int = skipped[s.ordinal]
@@ -51,15 +54,23 @@ class FilterSetBuilder {
     private val cosGeneric = LinkedHashSet<String>()
     private val cosGenericExc = LinkedHashSet<String>()
 
+    private var trustedList = false
+    private var currentList = ""
+
     private val queryRules = ArrayList<QueryRule>()
     private val queryBad = HashSet<Long>()
 
     // ------------------------------------------------------------------ input
 
-    /** Adblock Plus / uBlock Origin / Brave syntax. */
-    fun addAbpList(name: String, category: Int, lines: Sequence<String>) {
+    /**
+     * Adblock Plus / uBlock Origin / Brave syntax. [trusted] (RX3-B1): the list's maintainers also write the scriptlet semantics (the uBlock Origin lists, our own seeds), so its `trusted-*` scriptlets
+     * may be used; false for every other list, and for [addAbpLine] on its own.
+     */
+    fun addAbpList(name: String, category: Int, lines: Sequence<String>, trusted: Boolean = false) {
         listNames.add(name)
-        for (l in lines) addAbpLine(l, category)
+        val wasTrusted = trustedList; val wasName = currentList
+        trustedList = trusted; currentList = name
+        try { for (l in lines) addAbpLine(l, category) } finally { trustedList = wasTrusted; currentList = wasName }
     }
 
     /** hosts-file (`0.0.0.0 domain`) or one-domain-per-line lists. */
@@ -123,14 +134,18 @@ class FilterSetBuilder {
     }
 
     private fun addCosmetic(line: String) {
-        val c = parser.parseCosmetic(line)
-        if (c == null) { report.skipped[parser.skip.ordinal]++; return }
+        val c = parser.parseCosmetic(line, trustedList)
+        if (c == null) {
+            report.skipped[parser.skip.ordinal]++
+            if (parser.skip == Skip.SCRIPTLET_UNTRUSTED) report.untrustedByList[currentList] = (report.untrustedByList[currentList] ?: 0) + 1
+            return
+        }
         if (c.exception) {
             report.cosmeticExceptions++
             if (c.domains.isEmpty()) cosGenericExc.add(c.selector)
             else for (d in c.domains) cosExc.getOrPut(Hash.h64(d)) { LinkedHashSet() }.add(c.selector)
         } else {
-            if (ScriptletRules.isStored(c.selector)) report.scriptlets++
+            if (ScriptletRules.isStored(c.selector)) { report.scriptlets++; if (ScriptletRules.decode(c.selector)?.name?.startsWith("trusted-") == true) report.trustedScriptlets++ }
             if (c.domains.isEmpty()) {
                 if (cosGeneric.add(c.selector)) report.cosmeticGeneric++
             } else {

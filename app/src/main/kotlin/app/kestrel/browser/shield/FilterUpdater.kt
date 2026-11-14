@@ -17,7 +17,8 @@ import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
-class ListSource(val id: String, val url: String, val category: Int)
+/** [trusted] (RX3-B1): the list's maintainers also write the scriptlet semantics, so its `trusted-*` scriptlets (they rewrite a site's own answers, set cookies) may be used. False unless said otherwise. */
+class ListSource(val id: String, val url: String, val category: Int, val trusted: Boolean = false)
 
 /** Where the lists come from. HTTPS only. One host family where possible so a single TLS connection can serve several lists. */
 object FilterSources {
@@ -25,14 +26,14 @@ object FilterSources {
     val DEFAULT = listOf(
         ListSource("easylist", "https://easylist.to/easylist/easylist.txt", Category.ADS),
         ListSource("easyprivacy", "https://easylist.to/easylist/easyprivacy.txt", Category.PRIVACY),
-        ListSource("ubo-filters", UBO + "filters.min.txt", Category.ADS),
-        ListSource("ubo-privacy", UBO + "privacy.min.txt", Category.PRIVACY),
+        ListSource("ubo-filters", UBO + "filters.min.txt", Category.ADS, trusted = true),
+        ListSource("ubo-privacy", UBO + "privacy.min.txt", Category.PRIVACY, trusted = true),
         // AdGuard/uBO "URL Tracking Protection": $removeparam rules for top-level navigations (AA3-3b), ~177 KB, no minified edition exists
-        ListSource("ubo-removeparam", UBO + "privacy-removeparam.txt", Category.PRIVACY),
-        ListSource("ubo-badware", UBO + "badware.min.txt", Category.MALWARE),
-        ListSource("ubo-unbreak", UBO + "unbreak.min.txt", Category.ADS),
+        ListSource("ubo-removeparam", UBO + "privacy-removeparam.txt", Category.PRIVACY, trusted = true),
+        ListSource("ubo-badware", UBO + "badware.min.txt", Category.MALWARE, trusted = true),
+        ListSource("ubo-unbreak", UBO + "unbreak.min.txt", Category.ADS, trusted = true),
         // AW1e: "Quick fixes" - the sites' newest ad / anti-adblock changes (YouTube-style player data, news-site walls), refreshed by uBO every few hours; ~86 KB, a 304 when nothing changed
-        ListSource("ubo-quick-fixes", UBO + "quick-fixes.min.txt", Category.ADS),
+        ListSource("ubo-quick-fixes", UBO + "quick-fixes.min.txt", Category.ADS, trusted = true),
         ListSource("easylist-cookies", "https://secure.fanboy.co.nz/fanboy-cookiemonster.txt", Category.ANNOYANCE),
     )
 }
@@ -196,7 +197,7 @@ object FilterUpdater {
         // ---- compile from the cached sources and install atomically
         val builder = FilterSetBuilder()
         try {
-            for (s in sources) File(srcDir, s.id + ".txt").bufferedReader(Charsets.UTF_8).use { r -> builder.addAbpList(s.id, s.category, r.lineSequence()) }
+            for (s in sources) File(srcDir, s.id + ".txt").bufferedReader(Charsets.UTF_8).use { r -> builder.addAbpList(s.id, s.category, r.lineSequence(), s.trusted) }
         } catch (oom: OutOfMemoryError) {
             return Result.Failed("Not enough memory to build the lists; kept the current ones")
         }
