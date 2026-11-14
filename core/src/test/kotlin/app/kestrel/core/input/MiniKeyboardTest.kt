@@ -222,5 +222,35 @@ class MiniKeyboardTest {
         val n = MiniKeyboardModel(); n.open("")
         n.commitGlide("don"); n.press(Key.Ch("'")); n.press(Key.Ch("t")); assertEquals("don't", n.text)
     }
+
+    // ------------------------------------------------------------------ caps lock and the page-field bottom row (AV3b)
+
+    @Test fun capsLockKeepsLettersAndGlidedWordsInCapitalsUntilShiftIsTappedAgain() {
+        val m = MiniKeyboardModel(); m.open("")
+        m.press(Key.Shift); m.lockShift()
+        assertTrue(m.shift && m.shiftLock)
+        m.press(Key.Ch("a")); m.press(Key.Ch("b"))
+        assertEquals("AB", m.text); assertTrue("still locked after typing", m.shift && m.shiftLock)
+        m.commitGlide("hello"); assertEquals("AB HELLO ", m.text)
+        m.swapGlide("help"); assertEquals("a guess from the strip keeps the capitals", "AB HELP ", m.text)
+        m.press(Key.Shift)
+        assertFalse(m.shift || m.shiftLock)
+        m.press(Key.Ch("c")); assertEquals("AB HELP c", m.text)
+    }
+
+    @Test fun oneTapOnShiftIsStillForOneLetterOnly() {
+        val m = MiniKeyboardModel(); m.open("")
+        m.press(Key.Shift); m.press(Key.Ch("a")); m.press(Key.Ch("b"))
+        assertEquals("Ab", m.text); assertFalse(m.shiftLock)
+    }
+
+    @Test fun theLettersPageGetsACommaAnApostropheAndAQuestionMarkWhenTypingIntoAPageField() {
+        val address = MiniKeyboardLayout.rows(false)[3].map { it.label }
+        assertTrue(address.contains("/") && address.contains(".com"))
+        val field = MiniKeyboardLayout.rows(false, forField = true)[3]
+        assertEquals(listOf("123", ",", ".", "space", "'", "?", "Go"), field.map { it.label })
+        assertEquals(MiniKeyboardLayout.ROW_UNITS, field.sumOf { it.weight.toDouble() }.toFloat(), 0.01f)
+        assertEquals("the letters above are the same", MiniKeyboardLayout.rows(false)[0].map { it.label }, MiniKeyboardLayout.rows(false, forField = true)[0].map { it.label })
+    }
 }
 
