@@ -102,7 +102,6 @@ def layout(b, glide=True):
 
 def path_points(word, keys, shifts=None, step_px=5.0):
     """Straight lines between the centres of the word's letters; shifts = {letter: (dx, dy)} in key widths moves where the finger lands for that letter."""
-    pitch = keys["p"][0] - keys["o"][0]; pitch = -pitch if pitch < 0 else pitch
     pitch = (keys["p"][0] - keys["q"][0]) / 9.0
     cs = []
     for ch in word:
@@ -132,14 +131,18 @@ def inject(points, per_chunk=4, pause=0.03, track=1):
         chunks.append(b)
     x, y = raw(points[-1])
     chunks.append(_ev(3, 0x35, x) + _ev(3, 0x36, y) + _ev(0, 0, 0) + _ev(3, 0x39, -1) + _ev(0, 0, 0))
+    # one file, one push, one shell: the chunks are cut out of it by event number (an input_event is 24 bytes) with `dd`, a short pause between them
+    blob = b"".join(chunks)
     with tempfile.TemporaryDirectory() as td:
-        script = ["set -e"]
-        for i, c in enumerate(chunks):
-            f = os.path.join(td, "c%d.bin" % i); open(f, "wb").write(c)
-            adb("push", f, "/data/local/tmp/kg_c%d.bin" % i)
-            script.append("cat /data/local/tmp/kg_c%d.bin > %s; sleep %s" % (i, path, pause))
-        script.append("rm -f /data/local/tmp/kg_c*.bin")
-        shell("; ".join(script))
+        f = os.path.join(td, "kg.bin"); open(f, "wb").write(blob)
+        adb("push", f, "/data/local/tmp/kg.bin")
+    cmds = []; at = 0
+    for c in chunks:
+        n = len(c) // 24
+        cmds.append("dd if=/data/local/tmp/kg.bin of=%s bs=24 skip=%d count=%d 2>/dev/null; sleep %s" % (path, at, n, pause))
+        at += n
+    cmds.append("rm -f /data/local/tmp/kg.bin")
+    shell("; ".join(cmds))
 
 def glide(word, shifts=None, keys=None):
     keys = keys or layout(keyboard_bounds())
