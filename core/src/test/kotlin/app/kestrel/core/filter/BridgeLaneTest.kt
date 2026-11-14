@@ -14,7 +14,8 @@ class BridgeLaneTest {
     }
 
     @Test fun everythingElseIsQuick() {
-        for (k in listOf("req", "cfg", "cnt", "st", "pop", "media", "vid", "nope")) assertEquals(k, BridgeLane.QUICK, BridgeLane.of("{\"k\":\"$k\",\"u\":\"https://a.example/\"}"))
+        // "sc" (the scriptlet calls of a host, asked before its document loads) is a cheap lookup that must never queue behind the slow first build of the generic hiding set
+        for (k in listOf("req", "cfg", "cnt", "st", "pop", "media", "vid", "sc", "nope")) assertEquals(k, BridgeLane.QUICK, BridgeLane.of("{\"k\":\"$k\",\"u\":\"https://a.example/\"}"))
     }
 
     @Test fun aKindThatOnlyStartsLikeAnotherIsNotMistakenForIt() {
