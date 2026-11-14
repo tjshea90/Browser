@@ -1439,3 +1439,54 @@
 >
 > The full report with sources is at `/tmp/claude-0/-home-user-Browser/3ffc23c1-bccc-579d-b684-db627ad5b4a9/scratchpad/GECKO_ENGINE_OPTIMIZATION.md`. If you want, I can turn it into a private page you can paste to the other session, or commit it to `research/` once that's safe.
 <!-- sha:532d7f6a075d -->
+## 2026-11-13T23:37:05Z
+> Storage tidy (AO4) and the video size estimates (AO2) are done and tested. The CPU-by-process Diagnostics line (AO1) is built, but its on-screen check isn't finished. That emulator check is waiting on the rebuilt app to install, and the full test suite plus lint are running in the background. When they finish I'll check the CPU line on the emulator, tick AO1, and ship alpha33.
+<!-- sha:3abec246d40f -->
+
+## 2026-11-13T23:37:23Z
+> Both jobs are still running: the emulator CPU check and the full test suite with lint. I'll pick up as soon as either reports back.
+<!-- sha:986a213631e9 -->
+
+## 2026-11-13T23:42:09Z
+> Home-restore fix status: the session file now records "Home was showing", and a restored Home tab loads nothing behind it. It compiles and its session tests pass. I'm building it into the emulator now to prove the open page → Home → close → reopen sequence, then I'll re-run the full suite and ship alpha33.
+<!-- sha:e98976976859 -->
+
+## 2026-11-13T23:42:41Z
+> Waiting on the install and the emulator run. Nothing else is running that could disturb it.
+<!-- sha:ee9deda89b8e -->
+
+## 2026-11-13T23:57:58Z
+> The Home-restore fix and the two new features (blocked-page icon, top-right panel) are built and unit-tested. I'm now waiting on the emulator Home-restore check to finish, then I'll run the visual check of the icon and panel.
+<!-- sha:9417c957f59c -->
+
+## 2026-11-14T00:02:42Z
+> Waiting for the emulator run to reach the panel steps; I'll read its screenshots when it finishes.
+<!-- sha:76ba27628259 -->
+
+## 2026-11-14T00:09:28Z
+> Waiting for the last steps of the emulator script (the pop-up icon part); then I'll debug the panel toggle.
+<!-- sha:9a2e76bbda7e -->
+
+## 2026-11-14T00:13:04Z
+> Waiting for the restarted app to finish loading its page; then I'll retest the panel toggle with screenshots taken inside the device.
+<!-- sha:4261e1513eb4 -->
+
+## 2026-11-14T00:18:16Z
+> Waiting for the lab page to finish loading on the emulator; then I'll press its fake play button and tap the new blocked-page icon within its one second.
+<!-- sha:2465a4bc5e7b -->
+
+## 2026-11-14T00:20:39Z
+> Waiting on the install and the icon check; I'll look at its screenshots when it finishes.
+<!-- sha:f171a37c08ac -->
+
+## 2026-11-14T00:21:08Z
+> Waiting for the icon check to finish; nothing else is running on the emulator.
+<!-- sha:e3bf565c626f -->
+
+## 2026-11-14T00:24:44Z
+> The icon check is rerunning with the app already warm, because the first run came right after a cold start, when Shields is not yet active on the page. Waiting for it to finish.
+<!-- sha:77f6538cc7a0 -->
+
+## 2026-11-14T00:27:42Z
+> Status: the blocked-page icon and the top-right panel are both proven on the emulator and ticked. I'm doing one last emulator check that the new Diagnostics lines show on screen, then I'll run the full test suite and ship alpha33.
+<!-- sha:b8c2b206b2a0 -->

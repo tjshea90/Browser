@@ -138,7 +138,16 @@ open class BrowserActivity : Activity(), DockListener {
     private lateinit var home: HomeView
     private lateinit var errorView: ErrorView
     private lateinit var pullChip: PullChip // the pull-down-to-refresh indicator, over the page
-    private lateinit var noticeBar: app.kestrel.browser.ui.NoticeBar // "Blocked a pop-up ... Open", over the bottom of the page
+    private lateinit var blockedChip: app.kestrel.browser.ui.BlockedChip // AR1: a page was blocked: one very small icon at the bottom middle for one second; a press opens the page in a new tab
+    private lateinit var miniNav: app.kestrel.browser.ui.MiniNav          // AR2: the one-hand navigation panel (Back, Home, Forward, an address bar with its own keyboard) at the top right
+
+    private val miniNavListener = object : app.kestrel.browser.ui.MiniNav.Listener {
+        override fun navBack() { val t = current; if (t != null && (t.canGoBack || !t.isNewTab || t.showHome || t.parentId != 0L)) handleBack() } // never sends the whole app to the background from this small panel
+        override fun navHome() { if (!homeShown()) onHome() }
+        override fun navForward() { current?.let { goForward(it) } }
+        override fun navSubmit(text: String) { current?.let { navigate(it, text) } }
+        override fun navOpenChanged(open: Boolean) { prefs.miniNavOpen = open }
+    }
     private lateinit var restoreOverlay: RestoreOverlay // over the page view while a page whose engine process died comes back (last preview instead of white)
     private var restoringTab: Tab? = null
     // ---- the last look (EY-1, research/REVIEW-EXTERNAL-2.md section 3.3): the page as it was left, sharp, in the first frame of a start while the live page loads under it. It rides on the restoring cover
@@ -250,7 +259,7 @@ open class BrowserActivity : Activity(), DockListener {
             val text = try { sessionFile().takeIf { it.isFile }?.readText() } catch (e: Exception) { null }
             val session = SessionCodec.decode(text)
             if (prefs.preconnect && launch == null && session != null) { // the page that was in front loads at once: warm its origin while the engine starts (EX-2 B)
-                session.tabs.firstOrNull { it.id == session.selectedId }?.url?.let { u -> GeckoEngine.warmOrigin(u)?.let { GeckoEngine.warmAtStart(it) } }
+                session.tabs.firstOrNull { it.id == session.selectedId && !it.homeOverPage }?.url?.let { u -> GeckoEngine.warmOrigin(u)?.let { GeckoEngine.warmAtStart(it) } } // not when Home was in front: that page does not load
             }
             // each regular tab's saved engine state (Back stack + scroll position) is read here, off the UI thread; it is parsed only when the tab is opened
             val states = HashMap<Long, String>()
@@ -287,7 +296,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onResume() {
         super.onResume()
-        Health.log("life", "resume"); Health.startWatchdog(); Health.watchFrames(window)
+        Health.log("life", "resume"); Health.startWatchdog(); Health.watchFrames(window); app.kestrel.browser.diag.CpuMeter.start(packageName)
         flushStateWanted = false
         warmFrontOrigin()
         app.kestrel.browser.net.WifiBoost.set(this, prefs.labWifiBoost) // Network lab: Wi-Fi kept out of power save while the browser is on screen (EX-7)
@@ -349,7 +358,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onStop() {
         super.onStop()
-        Health.log("life", "stop"); Health.stopWatchdog(); Health.unwatchFrames(window)
+        Health.log("life", "stop"); Health.stopWatchdog(); Health.unwatchFrames(window); app.kestrel.browser.diag.CpuMeter.stop()
         current?.session?.setActive(false) // stops rendering and throttles the page: saves battery and mobile data
         Io.fast { NetworkMonitor.stop() }
         Neon.foreground(false)
@@ -483,8 +492,6 @@ open class BrowserActivity : Activity(), DockListener {
         content.addView(restoreOverlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) // above the page, below Home / error screens
         pullChip = PullChip(this, pal)
         content.addView(pullChip, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
-        noticeBar = app.kestrel.browser.ui.NoticeBar(this)
-        content.addView(noticeBar, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(12); leftMargin = dp(12); rightMargin = dp(12) })
         geckoView.pull = pullListener
         geckoView.pullEnabled = {
             val t = current
@@ -503,6 +510,14 @@ open class BrowserActivity : Activity(), DockListener {
         content.addView(errorView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         home.visibility = View.GONE
         errorView.visibility = View.GONE
+        // above Home and the error screens (so they show there too), below the find bar, sheets and every full screen
+        blockedChip = app.kestrel.browser.ui.BlockedChip(this)
+        app.kestrel.browser.diag.DebugProps.get(this, "debug.kestrel.chipms")?.toLongOrNull()?.let { blockedChip.lifetimeMs = it.coerceIn(200L, 60_000L) } // emulator rig only: a release build always gets null
+        content.addView(blockedChip, FrameLayout.LayoutParams(dp(app.kestrel.browser.ui.BlockedChip.TOUCH_DP), dp(app.kestrel.browser.ui.BlockedChip.TOUCH_DP), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(6) })
+        miniNav = app.kestrel.browser.ui.MiniNav(this, pal, miniNavListener)
+        content.addView(miniNav, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply { topMargin = dp(4); rightMargin = dp(6) })
+        miniNav.available = prefs.miniNavToggle
+        miniNav.setOpen(prefs.miniNavOpen, animate = false, notify = false)
         findBar = FindBar(this, pal, object : FindBar.Listener {
             override fun query(q: String) { findIn(q, false) }
             override fun next(forward: Boolean) { findIn(findBar.input.text.toString(), !forward) }
@@ -565,6 +580,7 @@ open class BrowserActivity : Activity(), DockListener {
         val sel = try {
             sessionFile().takeIf { it.isFile && it.length() < 262_144 }?.readText()?.let { SessionCodec.decode(it) }?.let { s -> s.tabs.firstOrNull { it.id == s.selectedId } ?: s.tabs.lastOrNull() }
         } catch (e: Exception) { null } ?: return
+        if (sel.homeOverPage) { Health.log("tabs", "early-cover-skipped", "left on Home"); return } // AQ1: the Home screen is the page that was in front: no picture of the site, no "Opening ..."
         if (!sel.url.startsWith("http")) return
         Health.log("tabs", "early-cover", UrlParts.hostOf(sel.url) ?: "")
         // EY-1: the page as it was left, sharp, in this very first frame (the read and decode are about 20 ms on this CPU; the start-up timeline's "look" mark says so)
@@ -599,6 +615,7 @@ open class BrowserActivity : Activity(), DockListener {
             // Replace the placeholder tab. Nothing is loaded here except the selected tab (lazy: no network at startup).
             for (t in tabs.toList()) { try { t.session?.close() } catch (e: Exception) { /* ignore */ }; t.session = null }
             tabs.clear()
+            current = null // the placeholder tab is gone and nothing "comes back" from it: show() would otherwise clear the Home flag of the tab that was left on Home (AQ1)
             for (r in session.tabs) {
                 val t = Tab(r.id)
                 t.url = if (r.url == "about:blank") "" else r.url
@@ -606,6 +623,7 @@ open class BrowserActivity : Activity(), DockListener {
                 t.parentId = r.parentId
                 t.desktop = r.desktopSite
                 t.lastActive = r.lastActiveMillis
+                t.showHome = r.homeOverPage && t.url.isNotEmpty() // AQ1: the app was left on the Home screen: it comes back to Home, the page stays this tab's address and loads when Back is pressed
                 if (t.url.isNotEmpty()) t.pendingLoad = t.url
                 states[r.id]?.let { t.gecko.stateJson = it; t.gecko.stateWrittenUrl = t.url }
                 tabs.add(t)
@@ -669,7 +687,7 @@ open class BrowserActivity : Activity(), DockListener {
         skinPrivate = priv
         GeckoEngine.setFrontPrivate(priv, prefs) // the link look-ups of the Network lab pause while a private tab is in front
         pal = if (priv) palPrivate else palRegular
-        dock.applyPal(pal); home.applyPal(pal); suggestions.setPal(pal); sheet.applyPal(pal); progress.setColors(pal.accent, pal.accentHi); restoreOverlay.setPal(pal); pullChip.setPal(pal)
+        dock.applyPal(pal); home.applyPal(pal); miniNav.applyPal(pal); suggestions.setPal(pal); sheet.applyPal(pal); progress.setColors(pal.accent, pal.accentHi); restoreOverlay.setPal(pal); pullChip.setPal(pal)
         @Suppress("DEPRECATION") run {
             window.statusBarColor = if (priv) pal.chromeBg else pal.windowBg
             window.navigationBarColor = pal.chromeBg
@@ -717,7 +735,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     private fun attachContent(tab: Tab) {
-        if (!tab.isNewTab) {
+        if (!tab.isNewTab && !(tab.showHome && tab.session == null)) { // AQ1: a tab restored on Home has no engine session yet and gets none until Back: nothing loads behind the Home screen at start
             val s = ensureSession(tab)
             if (geckoView.session !== s) { geckoView.releaseSession(); geckoView.setSession(s) }
         }
@@ -1042,6 +1060,7 @@ open class BrowserActivity : Activity(), DockListener {
         t.showHome = true
         attachContent(t)
         updateUi()
+        scheduleSave() // AQ1: the session file says "on Home" at once, not only when the app next goes to the background
     }
 
     /** The + button opens a tab of the CURRENT kind: private mode stays private until you pick a regular tab in the tab list. */
@@ -1308,7 +1327,7 @@ open class BrowserActivity : Activity(), DockListener {
      */
     private fun warmFrontOrigin() {
         val t = current ?: return
-        if (pausedAt == 0L || SystemClock.uptimeMillis() - pausedAt < 5_000 || t.isNewTab) return
+        if (pausedAt == 0L || SystemClock.uptimeMillis() - pausedAt < 5_000 || t.isNewTab || t.showHome) return
         preconnect(t.url, app.kestrel.core.net.WarmPolicy.Kind.RESUME)
     }
 
@@ -1581,6 +1600,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(GeckoEngine.videoPolicyText)
         out.add(app.kestrel.browser.diag.StorageInfo.text)
         out.add(app.kestrel.browser.diag.StorageTidy.line(applicationContext))
+        out.add(app.kestrel.browser.diag.CpuMeter.line())
         out.add(ShieldsBridge.statsLine())
         out.add(ShieldsBridge.pageReports.text(System.currentTimeMillis()))
         current?.takeIf { !it.isNewTab }?.let { t -> val b = ArrayList(t.engineBlocks); out.add("Firefox's own tracking protection, this page: " + (if (t.session?.settings?.useTrackingProtection == false) "OFF (Shields are down for this site); " else "on; ") + if (b.isEmpty()) "blocked nothing" else "blocked ${b.size}: " + b.take(12).joinToString("; ") + " (a page that is missing pictures or buttons: switch Shields off for this site from the shield icon)") }
@@ -1651,6 +1671,7 @@ open class BrowserActivity : Activity(), DockListener {
         override fun prefsChanged() {
             for (t in tabs) { t.shields = Shields.effective(prefs, t.topHost); syncEngineProtection(t) }
             GeckoEngine.applyPrefs(applicationContext)
+            miniNav.available = prefs.miniNavToggle && !fullscreenOn
             app.kestrel.browser.net.WifiBoost.set(this@BrowserActivity, prefs.labWifiBoost) // the Network lab switch takes effect at once (the browser is on screen: this is its Settings)
             app.kestrel.browser.download.PageProxy.refresh()                                // "Keep the phone helper under Fast Wi-Fi" may have changed what applies
             Io.exec { UpdateJob.schedule(applicationContext) } // the update schedule may have changed
@@ -1732,7 +1753,7 @@ open class BrowserActivity : Activity(), DockListener {
         val keep = tabs.filter { !it.isPrivateTab } // private tabs are never written anywhere
         if (keep.isEmpty() || !sessionRestored) return
         val sel = current?.takeIf { !it.isPrivateTab }?.id ?: keep.last().id
-        val records = keep.map { TabRecord(it.id, withoutUserinfo(it.url).ifEmpty { "about:blank" }, it.title, it.lastActive, it.parentId, it.desktop) }
+        val records = keep.map { TabRecord(it.id, withoutUserinfo(it.url).ifEmpty { "about:blank" }, it.title, it.lastActive, it.parentId, it.desktop, it.homeOverPage) }
         val text = SessionCodec.encode(Session(records, sel))
         val f = sessionFile()
         // The engine's own state of each tab (history + scroll position) goes next to the addresses, so a swipe-away or a process kill restores more than the last address.
@@ -1801,6 +1822,7 @@ open class BrowserActivity : Activity(), DockListener {
         val canBack = t?.canGoBack == true || (t != null && t.parentId != 0L && tabs.any { it.id == t.parentId })
         val priv = t?.isPrivateTab == true
         dock.bind(t, tabs.count { it.isPrivateTab == priv }, canBack || (t != null && (!t.isNewTab || t.showHome)), homeShown(t))
+        miniNav.sync(canBack || (t != null && (!t.isNewTab || t.showHome)), t?.canGoForward == true, homeShown(t), if (t == null || homeShown(t) || !t.url.startsWith("http")) "" else t.url)
         val p = if (t?.loading == true) t.progress else 0
         if (progress.progress != p) progress.progress = p
         updateNeonBusy()
@@ -1861,7 +1883,7 @@ open class BrowserActivity : Activity(), DockListener {
      */
     internal fun onPopupBlocked(pageUrl: String, kind: String, url: String) {
         // attribution by the exact page address first (several tabs can be on the same host), then by host, then the tab in front
-        val tab = (if (pageUrl.isNotEmpty()) tabOfTouch(pageUrl, kind) ?: tabWithUrl(pageUrl) ?: tabForPage(pageUrl) else null) ?: current ?: return
+        val tab = (if (pageUrl.isNotEmpty()) tabOfTouch(pageUrl, kind) ?: current?.takeIf { it.url.substringBefore('#') == pageUrl.substringBefore('#') } ?: tabWithUrl(pageUrl) ?: tabForPage(pageUrl) else null) ?: current ?: return // the same address may be open in several tabs: the one in front is the one the owner tapped in
         if (kind == "tap") { tab.lastTapAt = SystemClock.uptimeMillis(); tab.lastTapHref = url; return } // a real tap in the page, and the link it was on: the jump guard's evidence
         if (kind == "vmenu") { // a long press on a video or audio element, taken by the page script before the site's own player menu could appear (owner request X14)
             if (tab === current && !isFinishing) video.longPress(tab, url.takeIf { it.startsWith("http", true) }, null) { link -> val t = newTabInternal(tab, tab.isPrivateTab); show(t); navigateTo(t, link) }
@@ -1872,12 +1894,10 @@ open class BrowserActivity : Activity(), DockListener {
         shieldCountChanged(tab)
         Health.count("guard.$kind")
         if (tab !== current) return
-        val host = UrlParts.hostOf(url) ?: url.take(40)
-        val what = if (kind == "redirect") "Stopped a jump to $host" else "Blocked a pop-up ($host)"
-        val canOpen = url.startsWith("http://") || url.startsWith("https://")
-        noticeBar.show(pal, what, if (canOpen) "Open" else null, 7000L) {
-            if (kind == "redirect") loadInTab(tab, url) else { val t = newTabInternal(tab, tab.isPrivateTab); show(t); navigate(t, url) }
-        }
+        // AR1: one very small icon at the bottom middle for one second (a second block keeps it and the newest address wins); a press opens the blocked address in a NEW tab, nothing asked.
+        // A forced redirect is opened the same way: the page the owner is on stays where it is.
+        Health.log("guard", "chip-show", "$kind ${UrlParts.hostOf(url) ?: url.take(40)}")
+        blockedChip.show(pal, url) { link -> Health.log("guard", "chip-open", UrlParts.hostOf(link) ?: link.take(40)); val t = newTabInternal(tab, tab.isPrivateTab); show(t); navigate(t, link) }
     }
 
     /**
@@ -2103,6 +2123,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** @return true if the back press did something. */
     private fun handleBack(): Boolean {
+        if (::miniNav.isInitialized && miniNav.onBackPressed()) return true // the small keyboard closes first
         if (sheet.isShowing) { sheet.dismiss(); return true }
         if (downloadsView?.parent != null) { closeDownloads(); return true }
         if (diagView?.parent != null) { closeDiagnostics(); return true }
@@ -2112,7 +2133,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (findBar.visibility == View.VISIBLE) { closeFind(); return true }
         if (suggestions.visibility == View.VISIBLE || home.suggest.visibility == View.VISIBLE || typing()) { hideSuggestions(); clearUrlFocus(); updateUi(); return true }
         val t = current ?: return false
-        if (t.showHome && !t.isNewTab) { t.showHome = false; attachContent(t); updateUi(); return true } // Home laid over a page: Back returns to the page
+        if (t.showHome && !t.isNewTab) { t.showHome = false; attachContent(t); updateUi(); scheduleSave(); return true } // Home laid over a page: Back returns to the page
         if (t.error != null) {
             t.error = null
             if (t.canGoBack && t.session != null) { attachContent(t); goBack(t) } else if (t.parentId != 0L && tabs.any { it.id == t.parentId }) doCloseTab(t) else showNewTabPage(t)
@@ -2148,6 +2169,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     internal fun fullScreenChanged(on: Boolean) {
         fullscreenOn = on
+        miniNav.available = !on && prefs.miniNavToggle
         dock.visibility = if (on) View.GONE else View.VISIBLE
         progress.visibility = if (on) View.GONE else View.VISIBLE
         applyImmersive(on)

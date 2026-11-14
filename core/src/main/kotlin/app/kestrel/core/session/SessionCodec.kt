@@ -8,6 +8,11 @@ data class TabRecord(
     val lastActiveMillis: Long,
     val parentId: Long, // 0 = none; closing a child returns to its parent
     val desktopSite: Boolean,
+    /**
+     * The Home screen was laid over this tab's page when the session was saved (the Home button). The app then comes back to Home, not to the page: the page stays the tab's address, one Back away
+     * (AQ1, owner 2026-11-13: "I pressed home ... closed and opened it again and it loaded doraby.com. it should have opened the home page").
+     */
+    val homeOverPage: Boolean = false,
 )
 
 data class Session(val tabs: List<TabRecord>, val selectedId: Long)
@@ -17,8 +22,11 @@ data class Session(val tabs: List<TabRecord>, val selectedId: Long)
  * forgiving anyway: a damaged line costs one tab, never the whole session, and nothing here can throw.
  *
  *   KSESSION 1 <selectedId>
- *   <id> \t <lastActive> \t <parent> \t <desktop 0|1> \t <url> \t <title>      one line per tab, tab-separated;
+ *   <id> \t <lastActive> \t <parent> \t <flags> \t <url> \t <title>           one line per tab, tab-separated;
  *                                                                              '%', TAB, LF and CR are escaped as %XX
+ *
+ * <flags> is "0" or "1" (desktop site), followed by "H" when the Home screen was laid over the page (AQ1). One field, so the line keeps its six fields: an older app that reads a newer file still
+ * finds every tab (it reads "1H" as "not desktop"), and a newer app reads older files ("0" / "1") as "not on Home".
  */
 object SessionCodec {
     const val MAX_TABS = 100
@@ -28,7 +36,7 @@ object SessionCodec {
         append(HEADER).append(" 1 ").append(session.selectedId).append('\n')
         for (t in session.tabs.take(MAX_TABS)) {
             append(t.id).append('\t').append(t.lastActiveMillis).append('\t').append(t.parentId).append('\t')
-                .append(if (t.desktopSite) '1' else '0').append('\t').append(esc(t.url)).append('\t').append(esc(t.title)).append('\n')
+                .append(if (t.desktopSite) '1' else '0').append(if (t.homeOverPage) "H" else "").append('\t').append(esc(t.url)).append('\t').append(esc(t.title)).append('\n')
         }
     }
 
@@ -49,7 +57,7 @@ object SessionCodec {
             val parent = f[2].toLongOrNull() ?: continue
             val url = unesc(f[4]) ?: continue
             if (!acceptableUrl(url) || !seen.add(id)) continue
-            tabs.add(TabRecord(id, url, (unesc(f[5]) ?: "").take(200), last, parent, f[3] == "1"))
+            tabs.add(TabRecord(id, url, (unesc(f[5]) ?: "").take(200), last, parent, f[3].startsWith("1"), homeOverPage = f[3].contains('H') && url != "about:blank"))
         }
         return Session(tabs, if (tabs.any { it.id == selected }) selected else (tabs.lastOrNull()?.id ?: 0L))
     }

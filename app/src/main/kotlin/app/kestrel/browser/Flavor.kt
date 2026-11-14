@@ -26,6 +26,9 @@ object Flavor {
     /** The pop-up and forced-redirect guard runs in the Gecko extension only (Gecko build): Settings shows its switch. */
     @JvmField var hasPopupGuard = false
 
+    /** The one-hand mini navigation panel (top right) exists in the Gecko build: Settings shows its switch. */
+    @JvmField var hasMiniNav = false
+
     /** The browser engine bundled in this build ("160.0", empty on the WebView build, whose engine is the system's) and where Mozilla lists the newest one; the daily look tells the owner when a newer one exists. */
     @JvmField var engineVersion = ""
     @JvmField var engineMetaUrl = ""
