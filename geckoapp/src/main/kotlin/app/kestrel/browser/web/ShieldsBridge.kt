@@ -175,8 +175,9 @@ class ShieldsBridge(
         val gen = snap?.generation ?: 0
         if (host.isEmpty()) return "0:" + gen + "::0"
         val s = Shields.effective(prefs(), host)
-        // flags for the page, a bit field: 1 = the pop-up and redirect guard applies (it follows the Shields master switch and its own setting), 2 = video and social embeds wait for a tap (EX-10)
-        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0)
+        // flags for the page, a bit field: 1 = the pop-up and redirect guard applies (it follows the Shields master switch and its own setting), 2 = video and social embeds wait for a tap (EX-10),
+        // 4 = harmless stand-ins may answer blocked files (`$redirect=` rules, AW1c; follows Shields and the Settings switch "Fix ad and anti-adblock scripts", like the scriptlets)
+        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0)
         val on = s.shieldsUp && s.blockAds && snap?.fs?.isPageAllowed(host) != true
         return (if (on) "1:" else "0:") + gen + ":" + (if (snap != null) contentId(snap) else "") + ":" + guard
     }

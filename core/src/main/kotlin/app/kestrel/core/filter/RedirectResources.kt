@@ -3,13 +3,14 @@ package app.kestrel.core.filter
 /**
  * The neutered stand-ins a `$redirect=` rule can name (AW1c). A rule `||ads.example/tag.js$script,redirect=noopjs` does not only block the file: the page gets a harmless file of the same kind instead, so
  * scripts and players that wait for it (a video player waiting for an ad SDK, a page that calls a tracker's function) carry on instead of hanging or throwing. The files live in the extension
- * (geckoapp/.../kestrel-shields/res/, our own code; the table of ids is `redirects.js` and is checked against [FILES] by web-tests/redirects.test.js).
+ * (geckoapp/.../kestrel-shields/redirects.js, our own code, answered as `data:` URLs; its table of ids is checked against [FILES] by web-tests/redirects.test.js through the fixture
+ * `mini.redirects.tsv` that ExtImageTest writes).
  *
  * A rule names a resource by one of the names the lists use ([idOf]; a `:10` priority suffix is ignored). A `redirect=` rule whose resource we do not have is still a block rule (that is what it was
  * written for); a `redirect-rule=` rule whose resource we do not have is skipped (it only ever changes HOW something already blocked is answered).
  */
 object RedirectResources {
-    /** id -> file in the extension's res/ folder; index 0 = none. Never reorder, only append: the extension indexes its table with the same numbers and the rule words carry them. */
+    /** id -> the resource's name in the extension's table (redirects.js); index 0 = none. Never reorder, only append: the extension indexes its table with the same numbers and the rule words carry them. */
     val FILES: Array<String> = arrayOf(
         "", "noop.js", "noop.txt", "noop.html", "noop.css", "noop.json", "1x1.gif", "2x2.png", "3x2.png", "32x32.png",
         "noop-0.1s.mp3", "noop-1s.mp4", "google-ima.js", "googletagservices_gpt.js", "googletagmanager_gtm.js", "google-analytics_analytics.js",

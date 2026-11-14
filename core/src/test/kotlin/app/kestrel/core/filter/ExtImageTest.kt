@@ -263,6 +263,20 @@ class ExtImageTest {
         check("mini.hash.tsv", hashVectors().toByteArray(Charsets.UTF_8))
         check("mini.psl.tsv", pslVectors().toByteArray(Charsets.UTF_8))
         check("mini.host.tsv", hostVectors().toByteArray(Charsets.UTF_8))
+        check("mini.redirects.tsv", redirectTable().toByteArray(Charsets.UTF_8))
+    }
+
+    /** AW1c: the ids the rule words carry and the names behind them; web-tests/redirects.test.js checks redirects.js against it. */
+    private fun redirectTable(): String {
+        val sb = StringBuilder()
+        for ((i, f) in RedirectResources.FILES.withIndex()) sb.append(i).append('\t').append(f).append('\n')
+        // the names the lists use for them, one per line: "name<TAB>id"
+        for ((n, id) in listOf("noopjs" to 1, "nooptext" to 2, "empty" to 2, "noopframe" to 3, "noopcss" to 4, "noopjson" to 5, "1x1.gif" to 6, "2x2.png" to 7, "3x2.png" to 8, "32x32.png" to 9,
+            "noopmp3-0.1s" to 10, "noopmp4-1s" to 11, "google-ima.js" to 12, "googletagservices_gpt.js" to 13, "googletagmanager_gtm.js" to 14, "google-analytics_analytics.js" to 15,
+            "googlesyndication_adsbygoogle.js" to 16, "noopvast-2.0" to 17, "fingerprint2.js" to 18, "nobab.js" to 19, "amazon_apstag.js" to 20, "chartbeat.js" to 21, "prebid-ads.js" to 22)) {
+            sb.append("name:").append(n).append('\t').append(RedirectResources.idOf(n)).append('\t').append(id).append('\n')
+        }
+        return sb.toString()
     }
 
     @Test
