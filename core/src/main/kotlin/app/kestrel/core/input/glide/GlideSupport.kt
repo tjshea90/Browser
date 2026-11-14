@@ -330,8 +330,9 @@ class GlideTyping(
             if (parsed == null) { done(null); return@execute }
             if (replace) personal.clear()
             personal.mergeFrom(parsed.model)
-            for ((w, n) in parsed.ownWords) own.add(w, n)
-            if (parsed.habit != null) { bx = parsed.habit[0]; by = parsed.habit[1]; habitX = bx; habitY = by; decoder?.let { it.biasX = bx; it.biasY = by }; habit(floatArrayOf(bx, by)); keys?.let { stats.onHabit(bx * it.pitch, by * it.pitch) } }
+            for ((w, n) in parsed.ownWords) if (!own.contains(w)) own.add(w, n)
+            // the thumb habit of a file is taken only while this keyboard has not learned one of its own (what it learned here is newer than any file)
+            if (parsed.habit != null && Math.abs(bx) + Math.abs(by) < 0.01f) { bx = parsed.habit[0]; by = parsed.habit[1]; habitX = bx; habitY = by; decoder?.let { it.biasX = bx; it.biasY = by }; habit(floatArrayOf(bx, by)); keys?.let { stats.onHabit(bx * it.pitch, by * it.pitch) } }
             setOwn(own)
             personalDirty = true
             stats.onLearned(personal.wordCount, personal.pairCount, personal.confusionCount, personal.tripleCount, personal.patterns.patternCount, personal.patterns.wordCount)

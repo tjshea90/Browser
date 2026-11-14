@@ -67,19 +67,21 @@ class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int 
     val tripleCount: Int @Synchronized get() = triples.size
 
     /**
-     * Adds everything [other] learned to this (an imported file, AX1): counts add up, the short memory keeps the larger value, shapes merge like learned ones. A file cannot grow the tables past
-     * their caps: the usual trimming runs afterwards.
+     * Brings everything [other] learned into this (an imported file, AX1). A count that is in both stays the LARGER of the two, so importing the same file twice changes nothing, and a file made on
+     * another device only adds what this one has not seen (or saw less often); the short memory keeps the larger value; shapes merge like learned ones. A file cannot grow the tables past their
+     * caps: the usual trimming runs afterwards.
      */
     @Synchronized fun mergeFrom(other: PersonalModel) {
         if (other === this) return
         synchronized(other) {
-            for ((k, v) in other.words) { words[k] = (words[k] ?: 0f) + v; total += v }
-            for ((k, v) in other.pairs) pairs[k] = (pairs[k] ?: 0f) + v
-            for ((k, v) in other.triples) triples[k] = (triples[k] ?: 0f) + v
-            for ((k, v) in other.confusions) confusions[k] = (confusions[k] ?: 0f) + v
+            for ((k, v) in other.words) words[k] = Math.max(words[k] ?: 0f, v)
+            for ((k, v) in other.pairs) pairs[k] = Math.max(pairs[k] ?: 0f, v)
+            for ((k, v) in other.triples) triples[k] = Math.max(triples[k] ?: 0f, v)
+            for ((k, v) in other.confusions) confusions[k] = Math.max(confusions[k] ?: 0f, v)
             for ((k, v) in other.recent) recent[k] = Math.max(recent[k] ?: 0f, v)
             patterns.mergeFrom(other.patterns)
         }
+        total = 0f; for (v in words.values) total += v
         rebuildTotals()
         if (words.size > capWords || pairs.size > capPairs || triples.size > capTriples) trim()
         if (confusions.size > capConfusions) { val cut = confusions.values.sorted()[confusions.size - capConfusions]; val it = confusions.entries.iterator(); while (it.hasNext() && confusions.size > capConfusions) { val e = it.next(); if (e.value < cut) it.remove() } }

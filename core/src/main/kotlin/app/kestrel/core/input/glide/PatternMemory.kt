@@ -197,10 +197,18 @@ class PatternMemory(private val capWords: Int = 1200, private val capPatterns: I
         return true
     }
 
-    /** Adds the shapes of [other] to these (an import): the same merging as when one is learned, so a file imported twice does not double what it holds more than the confirmations cap allows. */
+    /**
+     * Brings the shapes of [other] into these (an import): a shape that is already here (within [mergeD]) keeps the larger of the two confirmation counts and does not move, so importing the same file
+     * twice changes nothing; a new shape is added like a learned one.
+     */
     @Synchronized fun mergeFrom(other: PatternMemory) {
         val copy = other.snapshot()
-        for ((w, list) in copy) for ((pts, n) in list) add(w, pts, n)
+        for ((w, list) in copy) for ((pts, n) in list) {
+            val mine = byWord[w]
+            var near: Pat? = null
+            if (mine != null) for (p in mine) if (Fingerprint.distance(p.pts, pts) <= mergeD) { near = p; break }
+            if (near != null) near.n = Math.max(near.n, Math.min(n, MAX_N)) else add(w, pts, n)
+        }
     }
 
     private fun snapshot(): List<Pair<String, List<Pair<FloatArray, Float>>>> = synchronized(this) { byWord.map { (w, l) -> w to l.map { it.pts.copyOf() to it.n } } }
