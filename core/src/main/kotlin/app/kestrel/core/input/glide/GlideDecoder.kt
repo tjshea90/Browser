@@ -76,7 +76,7 @@ class GlideParams(
      * more than [patCap]. Only for words whose own path fit is within [patMaxGap] (pitch squared per letter) of the best fit's: a remembered shape settles a sloppy glide, it does not make a word
      * the finger never went near. [patGain] 0 = no pattern learning.
      */
-    val patGain: Float = 1.7f,
+    val patGain: Float = 2.5f,
     val patCap: Float = 4.5f,
     val patMaxGap: Float = 2.2f,
 )

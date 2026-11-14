@@ -133,7 +133,7 @@ class PatternMemory(private val capWords: Int = 1200, private val capPatterns: I
         for (w in dead) byWord.remove(w)
     }
 
-    /** How much a shape at [d] key units counts: 1 on top of it, about 0.6 at 0.45, about 0.13 at 0.9, nothing much beyond. */
+    /** How much a shape at [d] key units counts: 1 on top of it, about 0.85 at 0.2, about 0.5 at 0.4, about 0.07 at 0.8, nothing much beyond. */
     fun similarity(d: Float): Float { val z = d / sigma; return Math.exp((-0.5f * z * z).toDouble()).toFloat() }
 
     @Synchronized fun clear() { byWord.clear(); count = 0 }
@@ -214,8 +214,8 @@ class PatternMemory(private val capWords: Int = 1200, private val capPatterns: I
     private fun snapshot(): List<Pair<String, List<Pair<FloatArray, Float>>>> = synchronized(this) { byWord.map { (w, l) -> w to l.map { it.pts.copyOf() to it.n } } }
 
     companion object {
-        /** How wide "looks like" is (key units): the typical difference between two glides of the same word by the same hand is about 0.25 to 0.4. */
-        const val SIGMA = 0.5f
+        /** How wide "looks like" is (key units): two glides of the same word by the same hand differ by about 0.25 to 0.4 (the lab's sweep of 0.35 / 0.5 / 0.7: the narrowest spoiled the fewest correct first guesses). */
+        const val SIGMA = 0.35f
         /** Two shapes this close are one (their average is kept, with both confirmations). */
         const val MERGE_D = 0.3f
         /** A shape counts at most this many confirmations. */

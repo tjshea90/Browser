@@ -305,8 +305,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         val own = UserWords.parse(l.navGlideWords())
         for ((w, n) in parsed.ownWords) if (!own.contains(w)) own.add(w, n)
         l.navGlideWordsChanged(own.serialize())
-        val h = l.navGlideHabit()
-        if (parsed.habit != null && (h == null || Math.abs(h[0]) + Math.abs(h[1]) < 0.01f)) l.navGlideHabitChanged(parsed.habit)
+        val h = l.navGlideHabit(); val ph = parsed.habit
+        if (ph != null && (h == null || Math.abs(h[0]) + Math.abs(h[1]) < 0.01f)) l.navGlideHabitChanged(ph)
         done(parsed.summary)
     }
 
