@@ -42,6 +42,8 @@ class MiniNavTest {
         override fun navGlideHabitChanged(habit: FloatArray) { habits.add(habit) }
         override fun navGlideWordsChanged(text: String) { savedWords.add(text) }
         override fun navGlideHosts(done: (List<String>) -> Unit) { done(listOf("www.doraby.com", "pelisjuanita.com", "10.0.2.2")) }
+        var titles: List<String> = emptyList()
+        override fun navGlideTitles(done: (List<String>) -> Unit) { done(titles) }
         var geom: IntArray? = null; var geomSaves = 0
         override fun navGeometry(): IntArray? = geom
         override fun navGeometryChanged(g: IntArray?) { geom = g; geomSaves++ }
@@ -679,6 +681,41 @@ class MiniNavTest {
         nav2.setOpen(true, animate = false); relayout()
         assertTrue(nav2.isDetached && nav2.isResized)
         assertEquals(floatArrayOf(120f, 250f, 280f, 140f).toList(), nav2.geometryForTest().toList())
+    }
+
+    // ------------------------------------------------------------------ learning from corrections, titles and smart spacing (AV2, AV3)
+
+    @Test fun aGuessThePersonPickedIsRememberedAsACorrectionOnceItIsKept() {
+        openGlideKeyboard()
+        glideWord("hello")
+        val (x, y) = nav.chipCenterForTest(1)!!
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, x, y); nav.touchKeysForTest(MotionEvent.ACTION_UP, x, y)
+        assertFalse("not yet kept: ${nav.glideLine()}", nav.glideLine().contains("corrections"))
+        glideWord("world")                          // carrying on keeps the picked word
+        nav.closeKeyboard(); idle(20)
+        assertTrue("one correction (the keyboard guessed hello, they meant the other): ${nav.glideLine()}", nav.glideLine().contains("1 corrections"))
+    }
+
+    @Test fun aDeletedGuessAndADifferentWordAfterItIsAlsoACorrection() {
+        openGlideKeyboard()
+        glideWord("hello"); nav.pressKeyForTest("\u232b")
+        glideWord("world")
+        nav.closeKeyboard(); idle(20)
+        assertTrue(nav.glideLine(), nav.glideLine().contains("1 corrections"))
+    }
+
+    @Test fun theWordsOfVisitedPageTitlesCanBeGlided() {
+        rec.titles = listOf("Zorgon Returns (2024) - watch online", "Zorgon Returns - Doraby")
+        openGlideKeyboard(); idle(50)
+        glideWord("zorgon")
+        assertEquals("a name that is on no list but was on a page you visited", "zorgon ", nav.barTextForTest)
+    }
+
+    @Test fun aGlideThenDotComIsOneAddress() {
+        openGlideKeyboard()
+        glideWord("hello")
+        assertTrue(nav.pressKeyForTest(".com"))
+        assertEquals("hello.com", nav.barTextForTest)
     }
 }
 
