@@ -32,6 +32,16 @@ class MediaCandidate(
      * reported it), the owner showed interest, or its length is known and at least [MediaList.MIN_FILE]. Unverified entries are still offered, under "Other files".
      */
     val verified: Boolean get() = touched || !fromMarkup || (kind == MediaKind.FILE && length >= MediaList.MIN_FILE)
+    /** RX3-V5: the early look at this stream's playlist happened. [live] and [drm] streams cannot be saved; [adMs] / [adBreaks] are the advertising its markers or foreign runs give away. */
+    var looked = false
+    var live = false
+    var drm = false
+    var adMs = 0L
+    var adBreaks = 0
+    /** RX3-V5: a stream whose playlist was read and that cannot be saved (live, protected) or is only a clip (under 20 s: an ad, a preview) is not offered to the badge. Before the look nothing is known and it counts as before. */
+    val unfit: Boolean get() = kind != MediaKind.FILE && looked && (live || drm || (durationMs in 1 until MediaList.MIN_STREAM_MS))
+    /** What the dock badge counts: not decoration or an advertisement, not an address nobody has seen, not a stream that cannot be saved. */
+    fun counts(): Boolean = !decoy && verified && !unfit
     /** RX3-V1: what the page's own element says it is for ([VideoRole]); null = no element said anything yet (or an older extension). The latest report wins. */
     var role: VideoRole? = null
     /** The OWNER showed interest (long-pressed, opened in the sheet, downloaded): it counts and shows whatever the page's element says it is. */
@@ -105,7 +115,7 @@ class MediaList(private val max: Int = 48) {
     fun hasStream(): Boolean = items.any { it.kind != MediaKind.FILE }
 
     fun usableCount(): Int {
-        if (countVersion != version) { countCache = usableUnsorted().count { !it.decoy && it.verified }; countVersion = version }
+        if (countVersion != version) { countCache = usableUnsorted().count { it.counts() }; countVersion = version }
         return countCache
     }
 
@@ -160,6 +170,19 @@ class MediaList(private val max: Int = 48) {
         c.length = bytes; version++
         return true
     }
+
+    /** RX3-V5: what the early look at a stream's playlist found. @return true if the list changed. */
+    fun applyStream(url: String, live: Boolean, drm: Boolean, durationMs: Long, adMs: Long, breaks: Int): Boolean {
+        val c = find(url) ?: return false
+        c.looked = true; c.live = live; c.drm = drm
+        if (durationMs > 0) c.durationMs = durationMs
+        c.adMs = adMs; c.adBreaks = breaks
+        version++
+        return true
+    }
+
+    /** RX3-V5: up to [n] stream playlists nobody has read yet, newest first. */
+    fun streamsToLook(n: Int): List<MediaCandidate> = items.filter { it.kind != MediaKind.FILE && !it.looked }.take(n)
 
     /** RX3-V2: up to [n] addresses found only in the page's text, newest first, worth one cheap check - but only when the page has nothing verified yet. */
     fun unverifiedToCheck(n: Int): List<MediaCandidate> {
@@ -230,6 +253,8 @@ class MediaList(private val max: Int = 48) {
     companion object {
         const val MIN_FILE = 100L * 1024
         const val MIN_WITH_STREAM = 4L * 1024 * 1024
+        /** A stream shorter than this is a clip (an advertisement, a preview), not something to save. */
+        const val MIN_STREAM_MS = 20_000L
         private const val PENDING_MAX = 32
     }
 }

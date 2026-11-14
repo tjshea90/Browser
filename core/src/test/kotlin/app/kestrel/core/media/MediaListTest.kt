@@ -236,6 +236,40 @@ class MediaListTest {
         assertTrue(l.unverifiedToCheck(3).isEmpty())                       // a page that has a verified video needs no checking
     }
 
+    // ---- RX3-V5: the early look at a stream's playlist says whether it can be saved and how long it is
+
+    @Test fun aLiveOrProtectedOrVeryShortStreamIsNotCountedOnceItsPlaylistWasRead() {
+        val l = MediaList()
+        l.add(hls("https://c.test/live.m3u8")); l.add(hls("https://c.test/drm.m3u8")); l.add(hls("https://c.test/ad.m3u8")); l.add(hls("https://c.test/film.m3u8"))
+        assertEquals(4, l.usableCount())                                                                          // nobody has looked yet: as before
+        assertTrue(l.applyStream("https://c.test/live.m3u8", live = true, drm = false, durationMs = 0, adMs = 0, breaks = 0))
+        l.applyStream("https://c.test/drm.m3u8", live = false, drm = true, durationMs = 3_600_000, adMs = 0, breaks = 0)
+        l.applyStream("https://c.test/ad.m3u8", live = false, drm = false, durationMs = 15_000, adMs = 0, breaks = 0)
+        l.applyStream("https://c.test/film.m3u8", live = false, drm = false, durationMs = 5_400_000, adMs = 90_000, breaks = 2)
+        assertEquals(listOf("https://c.test/film.m3u8"), l.usable().filter { it.counts() }.map { it.url })
+        assertEquals(1, l.usableCount())
+        assertEquals(90_000L, l.find("https://c.test/film.m3u8")!!.adMs); assertEquals(2, l.find("https://c.test/film.m3u8")!!.adBreaks)
+        assertEquals(4, l.size)                                                                                   // nothing is deleted: the sheet still lists them and says why they cannot be saved
+    }
+
+    @Test fun aStreamWhosePlaylistWasReadAndIsALongRecordingStillCountsAndAnUnreadOneKeepsCounting() {
+        val l = MediaList()
+        l.add(hls("https://c.test/a.m3u8")); l.add(hls("https://c.test/b.m3u8"))
+        l.applyStream("https://c.test/a.m3u8", live = false, drm = false, durationMs = 20_000, adMs = 0, breaks = 0)    // exactly 20 s: not under the limit
+        assertEquals(2, l.usableCount())
+        assertFalse(l.applyStream("https://c.test/unknown.m3u8", live = true, drm = false, durationMs = 0, adMs = 0, breaks = 0)) // a stream the list does not hold changes nothing
+    }
+
+    @Test fun streamsToLookAtAreTheNewestUnreadOnesAtMostThree() {
+        val l = MediaList()
+        for (i in 1..5) l.add(hls("https://c.test/s$i.m3u8"))
+        assertEquals(listOf("s5", "s4", "s3"), l.streamsToLook(3).map { it.url.substringAfterLast('/').substringBefore('.') })
+        l.applyStream("https://c.test/s5.m3u8", live = false, drm = false, durationMs = 60_000, adMs = 0, breaks = 0)
+        assertEquals(listOf("s4", "s3", "s2"), l.streamsToLook(3).map { it.url.substringAfterLast('/').substringBefore('.') })      // a looked-at one is not asked again
+        l.add(file("https://c.test/film.mp4", 80_000_000))
+        assertEquals(3, l.streamsToLook(3).size)                                                                  // files are never looked at here
+    }
+
     @Test fun aFullListEvictsDecoysBeforeAnythingElse() {
         val l = MediaList(max = 4)
         played(l, file("https://c.test/film.mp4", 80_000_000), VideoRole.PLAYER, durMs = 3_600_000)
