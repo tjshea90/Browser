@@ -35,6 +35,8 @@ import app.kestrel.core.input.TextEdit
 import app.kestrel.core.input.glide.GlideKeys
 import app.kestrel.core.input.glide.GlideResult
 import app.kestrel.core.input.glide.GlideTyping
+import app.kestrel.core.input.glide.LearnedExport
+import app.kestrel.core.input.glide.PersonalModel
 import app.kestrel.core.input.glide.UserWords
 import java.util.concurrent.Executors
 

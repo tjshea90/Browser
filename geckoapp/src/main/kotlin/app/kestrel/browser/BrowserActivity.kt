@@ -1738,6 +1738,16 @@ open class BrowserActivity : Activity(), DockListener {
     }
     private val backup by lazy { app.kestrel.browser.ui.BackupFlow(this, backupHost) }
 
+    /** Settings > Export / Import what the keyboard learned (AX1): the file flow is shared with nothing else; the keyboard itself answers what is in it and takes what is in a file. */
+    private val keyboardHost = object : app.kestrel.browser.ui.KeyboardFlow.Host {
+        override fun isPrivateWindow() = isPrivate
+        override fun exportText(done: (String) -> Unit) { if (::miniNav.isInitialized) miniNav.exportLearned(done) else done("") }
+        override fun importText(text: String, done: (app.kestrel.core.input.glide.LearnedExport.Summary?) -> Unit) { if (::miniNav.isInitialized) miniNav.importLearned(text, done) else done(null) }
+        override fun say(message: String) { Toast.makeText(this@BrowserActivity, message, Toast.LENGTH_LONG).show() }
+        override fun ask(title: String, message: String, yes: String, no: String, result: (Boolean) -> Unit) { askYesNo(title, message, yes, no, result) }
+    }
+    private val keyboardFlow by lazy { app.kestrel.browser.ui.KeyboardFlow(this, keyboardHost) }
+
     private val settingsListener = object : SettingsListener {
         override fun closeSettings() { this@BrowserActivity.closeSettings() }
         override fun prefsChanged() {
@@ -1761,6 +1771,8 @@ open class BrowserActivity : Activity(), DockListener {
         override fun resetSiteShields() { Shields.clearAll(); toast("Per-site Shields reset") }
         override fun backupNow() { backup.backupNow() }
         override fun restoreFromFile() { backup.restoreFromFile() }
+        override fun exportKeyboard() { keyboardFlow.exportNow() }
+        override fun importKeyboard() { keyboardFlow.importFromFile() }
         override fun updateFiltersNow() {
             toast("Checking the filter lists…")
             // own thread: compiling the lists can take several seconds on this CPU and must not hold up history writes on the IO thread
@@ -2342,6 +2354,7 @@ open class BrowserActivity : Activity(), DockListener {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (backup.onResult(requestCode, resultCode, data)) return
+        if (keyboardFlow.onResult(requestCode, resultCode, data)) return
         if (requestCode == REQ_FILE) {
             val cb = pendingFilePick
             pendingFilePick = null
