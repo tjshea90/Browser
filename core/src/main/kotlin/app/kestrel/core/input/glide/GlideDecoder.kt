@@ -65,6 +65,8 @@ class GlideParams(
     val biasW: Float = 3.0f,
     /** A word whose path is further than this from the finger's (squared pitches per letter) is no answer: a glide that fits nothing says so instead of typing the nearest word. */
     val maxPerLetter: Float = 3.4f,
+    /** A correction the person made before (the keyboard guessed A, they meant B) lifts B by this many nats times ln(1 + how often) when A is the first guess again (AV2). 0 = no learning from corrections. */
+    val confGain: Float = 0.9f,
 )
 
 class GlideCandidate(val text: String, val score: Float, val cost: Float, val prior: Float, val letters: Int = 1) {
@@ -110,7 +112,7 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
      * [xs]/[ys] are the first [count] touch points in view pixels. [prev] is the word before (lowercase letters) or null. Returns up to [max] words, best first; empty when the path is a tap or
      * nothing fits.
      */
-    fun decode(xs: FloatArray, ys: FloatArray, count: Int, lexicons: List<GlideLexicon>, prev: String?, max: Int = 3): List<GlideCandidate> {
+    fun decode(xs: FloatArray, ys: FloatArray, count: Int, lexicons: List<GlideLexicon>, prev: String?, max: Int = 3, prev2: String? = null): List<GlideCandidate> {
         lastCandidates = 0
         if (count < 2 || !resample(xs, ys, count)) return emptyList()
         // the path moved by the learned habit; everything after judges this one
@@ -147,7 +149,7 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
         for (h in 0 until heapN) {
             val lex = lexicons[heapLex[h]]; val id = heapId[h]
             costs[h] = careful(lex, id)
-            priors[h] = prior(lex, id, ids[heapLex[h]], prev)
+            priors[h] = prior(lex, id, ids[heapLex[h]], prev, prev2)
             val per = costs[h] / distinctLetters(lex, id)
             if (per < bestPer) bestPer = per
         }
@@ -173,6 +175,7 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
             out.add(GlideCandidate(lex.text(id), -costs[h] + lm * priors[h], costs[h], priors[h], letters))
         }
         out.sortByDescending { it.score }
+        applyCorrections(out)
         val seen = HashSet<String>()
         val res = ArrayList<GlideCandidate>(max)
         for (c in out) { if (seen.add(c.text)) res.add(c); if (res.size >= max) break }
@@ -399,20 +402,41 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
      * ln P(word | the word before): the word's own share (plus what the person's own use adds), mixed with the pair's share when the pair is known (the shipped list's, and the person's own pairs
      * weighted by how often the person wrote something after that word).
      */
-    private fun prior(lex: GlideLexicon, id: Int, prevId: Int, prevText: String?): Float {
+    private fun prior(lex: GlideLexicon, id: Int, prevId: Int, prevText: String?, prev2Text: String? = null): Float {
         val pm = personal?.takeIf { !it.isEmpty }
         var pu = Math.exp(lex.logProb(id).toDouble())
         var text: String? = null
-        if (pm != null) { text = lex.text(id); pu += pm.unigramMass(text, lex.totalCount()) }
+        if (pm != null) { text = lex.text(id); pu += pm.unigramMass(text, lex.totalCount()) + pm.recentMass(text, lex.totalCount()) }
         var pb = 0.0
         var known = false
         if (prevId >= 0) { val b = lex.bigramLogProb(prevId, id); known = true; if (!b.isNaN()) pb = Math.exp(b.toDouble()) }
         if (pm != null && prevText != null) {
             val lam = pm.pairWeight(prevText)
             if (lam > 0f) { val w = text ?: lex.text(id); pb = (1.0 - lam) * pb + lam * pm.pairProb(prevText, w); known = true }
+            if (prev2Text != null) { // the last TWO words: what the person wrote after this pair before
+                val lt = pm.tripleWeight(prev2Text, prevText)
+                if (lt > 0f) { val w = text ?: lex.text(id); pb = (1.0 - lt) * pb + lt * pm.tripleProb(prev2Text, prevText, w); known = true }
+            }
         }
         if (!known) return Math.log(pu).toFloat()
         return Math.log((1.0 - p.bigramMix) * pu + p.bigramMix * pb).toFloat()
+    }
+
+    /**
+     * What the person corrected before (AV2): when the best word is one the keyboard got wrong for them earlier and the word they then meant is among the other candidates, that word gets a lift
+     * of [GlideParams.confGain] times ln(1 + how often). Only the pair "guessed the first, meant the second" counts, so one correction never makes a common word worse everywhere.
+     */
+    private fun applyCorrections(out: ArrayList<GlideCandidate>) {
+        val pm = personal ?: return
+        if (p.confGain <= 0f || out.size < 2 || pm.confusionCount == 0) return
+        val top = out[0].text
+        var changed = false
+        for (i in 1 until out.size) {
+            val c = out[i]
+            val n = pm.confusionWeight(top, c.text)
+            if (n > 0f) { out[i] = GlideCandidate(c.text, c.score + p.confGain * Math.log(1.0 + n).toFloat(), c.cost, c.prior, c.letters); changed = true }
+        }
+        if (changed) out.sortByDescending { it.score }
     }
 
     companion object {
