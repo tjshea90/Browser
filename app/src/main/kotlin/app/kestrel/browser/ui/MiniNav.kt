@@ -75,7 +75,6 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private val forward = NavButton(ctx, R.drawable.ic_forward, "Forward") { l.navForward() }
     private val bar = BarView(ctx)
     private val keys = KeysView(ctx)
-    private val toggle = ToggleView(ctx)
     private var address = ""
     private var anim: Runnable? = null
 
@@ -93,14 +92,15 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     var isOpen = false; private set
     var keyboardShowing = false; private set
 
-    /** False hides the toggle and the panel altogether (full-screen video; Settings can switch the feature off). */
+    /** False hides the panel altogether (full-screen video; Settings can switch the feature off). */
     var available = true
         set(v) { field = v; visibility = if (v) VISIBLE else GONE }
 
-    private val topGap = ctx.dp(TOGGLE_H_DP + 2)
+    /** The panel hangs below the invisible long-press square of [HotCorner] (that square is "above the open panel" and closes it again). */
+    private val topGap = ctx.dp(HotCorner.SIZE_DP)
 
     init {
-        isClickable = false // a touch outside the toggle and the panel belongs to the page below
+        isClickable = false // a touch outside the panel belongs to the page below
         panel.orientation = LinearLayout.VERTICAL
         panel.isClickable = true
         panel.setPadding(ctx.dp(6), ctx.dp(6), ctx.dp(6), ctx.dp(6))
@@ -112,7 +112,6 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         keys.visibility = GONE
         panel.visibility = GONE
         addView(panel, LayoutParams(ctx.dp(PANEL_W_DP), LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply { topMargin = topGap })
-        addView(toggle, LayoutParams(ctx.dp(TOGGLE_W_DP), ctx.dp(TOGGLE_H_DP), Gravity.TOP or Gravity.END))
         keys.onKey = { key -> typed(key) }
         applyColors()
     }
@@ -141,11 +140,13 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
     // ------------------------------------------------------------------ show, hide, the keyboard
 
-    /** Shows or hides the panel; [animate] false jumps (the start of the app). The toggle is always there. */
+    /** Shows or hides the panel with a long press on the invisible corner (AU1): the other state. */
+    fun toggle() { setOpen(!isOpen, true) }
+
+    /** Shows or hides the panel; [animate] false jumps (the start of the app). */
     fun setOpen(open: Boolean, animate: Boolean = true, notify: Boolean = true) {
         if (open == isOpen) return
         isOpen = open
-        toggle.invalidate()
         cancelAnim()
         if (open) {
             val wasVisible = panel.visibility == VISIBLE // reopened while it was still sliding away: carry on from where it is
@@ -317,14 +318,14 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
     private fun applyColors() {
         panel.background = chamferSurface(context, 0xF2000000.toInt(), 8f, strokeColor = pal.deep, strokeDp = 1f, pressable = false)
-        for (v in listOf<View>(back, home, forward, bar, keys, toggle)) v.invalidate()
+        for (v in listOf<View>(back, home, forward, bar, keys)) v.invalidate()
     }
 
     // ------------------------------------------------------------------ for tests
 
     internal fun pressKeyForTest(label: String): Boolean = keys.pressLabel(label)
     internal fun pressBarForTest() = bar.tap()
-    internal fun pressToggleForTest() = toggle.tap()
+    internal fun pressToggleForTest() = toggle()
     /** Tests: a finger on the keys view (pixels of that view), the way the screen would send it. */
     internal fun touchKeysForTest(action: Int, x: Float, y: Float) = keys.touch(action, x, y)
     internal fun keyCenterForTest(label: String): Pair<Float, Float>? = keys.centerOf(label)
@@ -447,45 +448,6 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> { flash(); isPressed = true }
                 MotionEvent.ACTION_UP -> { isPressed = false; if (inside(e)) { if (keyboardShowing) closeKeyboard() else openKeyboard() } }
-                MotionEvent.ACTION_CANCEL -> isPressed = false
-            }
-            return true
-        }
-
-        override fun performClick(): Boolean { tap(); return super.performClick() }
-    }
-
-    /** The small tab at the very top right that shows or hides the panel. */
-    private inner class ToggleView(ctx: Context) : LitView(ctx) {
-        private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
-        private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = ctx.dpf(1f) }
-        private val chevron = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = ctx.dpf(2f); strokeCap = Paint.Cap.SQUARE; strokeJoin = Paint.Join.MITER }
-        private val box = RectF()
-        private val path = Path()
-
-        init { contentDescription = "Mini navigation panel"; isClickable = true }
-
-        fun tap() { flash(); setOpen(!isOpen, true) }
-
-        override fun onDraw(c: Canvas) {
-            val w = width.toFloat(); val h = height.toFloat(); val r = context.dpf(7f)
-            box.set(context.dpf(4f), 0f, w, h - context.dpf(2f))
-            fill.color = if (lit) (pal.accent and 0x00FFFFFF) or 0x77000000 else 0xB3000000.toInt()
-            line.color = if (lit) pal.accent else pal.deep
-            c.drawRoundRect(box, r, r, fill); c.drawRoundRect(box, r, r, line)
-            chevron.color = if (lit) pal.accentHi else pal.muted
-            val cx = (box.left + box.right) / 2f; val cy = (box.top + box.bottom) / 2f
-            val a = context.dpf(5f); val b = context.dpf(2.5f)
-            path.reset()
-            if (isOpen) { path.moveTo(cx - a, cy + b); path.lineTo(cx, cy - b); path.lineTo(cx + a, cy + b) } // an arrow up: hide
-            else { path.moveTo(cx - a, cy - b); path.lineTo(cx, cy + b); path.lineTo(cx + a, cy - b) }        // an arrow down: show
-            c.drawPath(path, chevron)
-        }
-
-        override fun onTouchEvent(e: MotionEvent): Boolean {
-            when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> { flash(); isPressed = true }
-                MotionEvent.ACTION_UP -> { isPressed = false; if (inside(e)) setOpen(!isOpen, true) }
                 MotionEvent.ACTION_CANCEL -> isPressed = false
             }
             return true
@@ -810,8 +772,6 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         const val FLASH_MS = 130L
         private const val REPEAT_FIRST_MS = 380L
         private const val REPEAT_MS = 70L
-        const val TOGGLE_W_DP = 44
-        const val TOGGLE_H_DP = 26
         const val PANEL_W_DP = 176
         const val PANEL_KEYS_W_DP = 304
         const val NAV_W_DP = 52
