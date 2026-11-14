@@ -593,6 +593,16 @@ The app is blocking ads and redirects from video sites well right now when I pre
 Use the icon on the left side in this photo. Rename the app Kestrel instead of Kestrel G
 ```
 
+## 2026-11-13T23:37:25Z
+```
+I accidentally pressed stop, continue where you left off 
+I opened the browser and pressed home to go to the home page, then closed and opened it again and it loaded doraby.com. it should have opened the home page because that was the last page open
+```
+
+## 2026-11-13T23:42:44Z
+```
+When Kestrel blocks a pop up, instead of the notification on the bottom, put a very small icon in the bottom middle that is not distracting that symbolizes a page blocked, and have it disappear in one second. If I press the icon before it disappears, it still open the blocked page in a new tab without any further prompts. 
+My tablet screen is big, and I sometimes browse with one hand only at the top of the tablet. Make a small quick menu at the top right corner of the screen that is black in color that has a back button on the left, home button in the middle, a forward button on the right, and a bar underneath which when I press it, it selects everything in the url bar and puts a small floating keyboard (or docked to the top right) at the top right of the screen so I can type in the next url to go to using my right hand thumb at the top of the tablet. The buttons at the top should be small and not distracting, they should be designed for my thumb to tap each button at the top right of the tablet screen. There should be a small toggle at the top right of the screen to display or hide this mini navigation panel. If I toggle it on, there should be a quick, smooth animation of the mini panel sliding down from the top of the screen, and if I toggle it off, a quick smooth animation of it sliding back up to hide. When I press any button or the bar on the bottom to open the keyboard, it should indicate that I pressed the button with a very quick light up neon blue of the button that matches the neon blue in the rest of the app. 
 ## 2026-11-13T23:23:56Z
 ```
 Without writing to the repo or interfering with the other Claude account working on it, research If it is possible to optimize the underlying gecko browser engine for the hardware I have, such as removing unnecessary elements, shrinking the size, making the engine more efficient for my hardware
@@ -1073,16 +1083,6 @@ Without writing to the repo or interfering with the other Claude account working
   
   Not read: crash_helper_common/src/lib.rs (IO_TIMEOUT value), platform/linux.rs (set_socket_default_flags, blocking mode), the caller of OOPInit and any Android Java helper-service code, and the Mozilla crash helper binary itself. Platform/macos.rs and windows.rs were not needed.
 </agent-message>
-## 2026-11-13T23:37:25Z
-```
-I accidentally pressed stop, continue where you left off 
-I opened the browser and pressed home to go to the home page, then closed and opened it again and it loaded doraby.com. it should have opened the home page because that was the last page open
-```
-
-## 2026-11-13T23:42:44Z
-```
-When Kestrel blocks a pop up, instead of the notification on the bottom, put a very small icon in the bottom middle that is not distracting that symbolizes a page blocked, and have it disappear in one second. If I press the icon before it disappears, it still open the blocked page in a new tab without any further prompts. 
-My tablet screen is big, and I sometimes browse with one hand only at the top of the tablet. Make a small quick menu at the top right corner of the screen that is black in color that has a back button on the left, home button in the middle, a forward button on the right, and a bar underneath which when I press it, it selects everything in the url bar and puts a small floating keyboard (or docked to the top right) at the top right of the screen so I can type in the next url to go to using my right hand thumb at the top of the tablet. The buttons at the top should be small and not distracting, they should be designed for my thumb to tap each button at the top right of the tablet screen. There should be a small toggle at the top right of the screen to display or hide this mini navigation panel. If I toggle it on, there should be a quick, smooth animation of the mini panel sliding down from the top of the screen, and if I toggle it off, a quick smooth animation of it sliding back up to hide. When I press any button or the bar on the bottom to open the keyboard, it should indicate that I pressed the button with a very quick light up neon blue of the button that matches the neon blue in the rest of the app. 
 ```
 
 ## 2026-11-14T00:31:38Z
