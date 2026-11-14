@@ -192,4 +192,64 @@ class MediaListFramesTest {
         assertEquals(0, l.usableCount())
         assertTrue(l.isEmpty())
     }
+
+    // ---- RX3-V1: what the page's own element says it is for
+
+    private fun played(l: MediaList, c: MediaCandidate, role: VideoRole?, durMs: Long = 25_000, h: Int = 720) { l.add(c); l.applyInfo(c.url, h * 16 / 9, h, durMs, null, role) }
+
+    @Test fun aHoverPreviewOrHeroLoopThatReportedItselfDoesNotCountEvenWhenSharpAndLong() {
+        val l = MediaList()
+        played(l, file("https://c.test/hero.mp4", 6_000_000), VideoRole.DECOR, durMs = 90_000, h = 1080)        // long and sharp: the old exemptions would have kept it
+        assertTrue(l.usable().isEmpty())
+        played(l, file("https://c.test/film.mp4", 900_000_000), VideoRole.PLAYER, durMs = 5_400_000, h = 1080)
+        assertEquals(listOf("https://c.test/film.mp4"), l.usable().map { it.url })
+        assertEquals(2, l.size)                                                                                   // nothing is deleted: the hero loop is still in the list for "Other files"
+    }
+
+    @Test fun aPreRollAdFlaggedByThePageLeavesTheBadge() {
+        val l = MediaList()
+        played(l, file("https://ads.test/pre.mp4", 9_000_000), VideoRole.AD, durMs = 30_000)
+        assertTrue(l.usable().isEmpty())
+    }
+
+    @Test fun aDecoyDoesNotGetTheRealVideoBonusButOneWithoutFactsDoes() {
+        val l = MediaList()
+        played(l, file("https://c.test/loop.mp4", 6_000_000), VideoRole.DECOR)
+        played(l, file("https://c.test/old.mp4", 6_000_000), null)                                              // an old extension / a report without facts: the old rule (a player reported it)
+        assertEquals(listOf("https://c.test/old.mp4"), l.usable().map { it.url })
+    }
+
+    @Test fun theOwnerShowingInterestBringsADecoyBack() {
+        val l = MediaList()
+        played(l, file("https://c.test/loop.mp4", 6_000_000), VideoRole.DECOR)
+        assertTrue(l.usable().isEmpty())
+        assertTrue(l.touch("https://c.test/loop.mp4"))                                                           // long-pressed, opened or downloaded
+        assertEquals(listOf("https://c.test/loop.mp4"), l.usable().map { it.url })
+    }
+
+    @Test fun theLatestReportWinsSoAPreviewThatTurnsIntoAPlayerCounts() {
+        val l = MediaList()
+        played(l, file("https://c.test/clip.mp4", 6_000_000), VideoRole.DECOR)
+        assertTrue(l.usable().isEmpty())
+        l.applyInfo("https://c.test/clip.mp4", 1280, 720, 25_000, null, VideoRole.PLAYER)                        // unmuted, controls shown: now it is a player
+        assertEquals(listOf("https://c.test/clip.mp4"), l.usable().map { it.url })
+    }
+
+    @Test fun aStreamAlsoLosesItsPlaceWhenItIsDecoration() {
+        val l = MediaList()
+        l.add(hls("https://c.test/hero.m3u8")); l.applyInfo("https://c.test/hero.m3u8", 1280, 720, 40_000, null, VideoRole.DECOR)
+        assertTrue(l.usable().isEmpty())
+    }
+
+    @Test fun aFullListEvictsDecoysBeforeAnythingElse() {
+        val l = MediaList(max = 4)
+        played(l, file("https://c.test/film.mp4", 80_000_000), VideoRole.PLAYER, durMs = 3_600_000)
+        played(l, file("https://c.test/loop1.mp4", 6_000_000), VideoRole.DECOR)
+        played(l, file("https://c.test/loop2.mp4", 6_000_000), VideoRole.DECOR)
+        l.add(file("https://c.test/plain.mp4", 8_000_000))
+        l.add(file("https://c.test/new.mp4", 9_000_000))                                                         // one too many: a decoy goes, not the film and not the plain file
+        val urls = l.all().map { it.url }
+        assertTrue(urls.contains("https://c.test/film.mp4")); assertTrue(urls.contains("https://c.test/plain.mp4")); assertTrue(urls.contains("https://c.test/new.mp4"))
+        assertEquals(1, urls.count { it.contains("loop") })
+    }
 }
