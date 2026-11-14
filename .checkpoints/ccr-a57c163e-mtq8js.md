@@ -1,21 +1,22 @@
-# CHECKPOINT 2198 — read me first, then TASKS.md
+# CHECKPOINT 2199 — read me first, then TASKS.md
 
-**Written:** 2026-11-14T16:32:20Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `0da6df3` (this checkpoint is the commit after it)
+**Written:** 2026-11-14T16:33:23Z · **tests:** 1 RED: test_handoff.sh (0 green)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `3495b5b` (this checkpoint is the commit after it)
 
 ## Just done
-AX2 root cause found, reproduced and fixed: GeckoView's Android WebAuthn needs Google Play services (NoClassDefFoundError WebAuthnTokenManager.<clinit>) so a secure page that only ASKS about passkeys (a bank login widget) closed the whole app; security.webauth.webauthn=false in gecko-prefs.txt (config v8, check-gecko-prefs passes, Diagnostics read-back), emulator before/after on http://localhost:8001/wa; CrashNote.kt (uncaught-exception note + engine crash report lines in Diagnostics, 5 tests incl. a pin that the pref stays false); research/CRASH_PASSKEYS.md; not yet released
+pre-ship: alpha38 (includes alpha37): Fixes the app closing on some bank pages. Pages such as the Ally Invest help pages (www.ally.com/help/invest/dividend-reinvestment/) ask the browser whether passkeys (signing in with a fingerprint or the screen lock) are available. Firefox's passkey code needs Google services, which this tablet does not have, so the whole app closed. Passkeys are now switched off inside the engine: the page simply does not see them and offers the password. I made the app close on the emulator the same way and checked that it no longer closes there; not tried on your tablet or on the real Ally page. Also new: if the app ever closes by itself again, the next Menu > Diagnostics starts with a line EARLIER CRASH that says what it was (and lists the engine's own crash reports if it left any): please paste it.
 
 ## Do this next
-AX2b: run the full suites + lint, then fold AX2 into the alpha38 release together with AX1 (keyboard): either ship AX2 alone first (small, urgent: the owner's app closes) then AX1 - DECISION: ship AX2 alone as alpha38 right after AX1a's research is written? No: ship AX2 first as alpha38 (versionCode 139) as soon as the suites pass, AX1 follows as alpha39; for AX1 start with AX1a (read GlideDecoder / PersonalModel / MiniNav learning, build the sloppy for/fir case in the simulator, measure corrections needed, research/GLIDE_TYPING.md section 11); heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN is disabled
+ship.sh gates and releases this (gecko)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M geckoapp/build.gradle.kts
 
 ## Last ten checkpoints
 ```
+  3495b5b ckpt 2198: AX2 root cause found, reproduced and fixed: GeckoView's Android WebAuthn need
   ac84c28 ckpt 2190: owner message 38 written into TASKS (AX1 keyboard learns sloppy glide pattern
   3d38f35 ckpt 2185: alpha37 RELEASED AND RECORDED: kestrel-g-v0.3.0-alpha37 (gecko code 138), and
   aef75f4 ckpt 2180: alpha37 DISPATCHED: android.yml run 43613953896 (run_number 88, app=gecko ful
@@ -25,8 +26,4 @@ AX2b: run the full suites + lint, then fold AX2 into the alpha38 release togethe
   7e29314 ckpt 2165: AW1e BUILT and EMULATOR-PROVEN (Gecko 160 lab): trusted-replace-fetch-respons
   7cfc54d ckpt 2154: AW1c DONE and EMULATOR-PROVEN (Gecko 160): data: stand-ins for script/image/x
   41441d2 ckpt 2148: AW1c BUILT (not yet emulator-proven): engine.js mirrors FilterSet.check for $
-  8085098 ckpt 2130: AW1b DONE and EMULATOR-PROVEN: early delivery works (lab adlab.test vs contro
 ```
-
-(7 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
