@@ -12,6 +12,7 @@ class GlideStats {
     private var own = 0
     private var learnedWords = 0; private var learnedPairs = 0; private var learnedTop = 0; private var learnedCorrections = 0; private var learnedTriples = 0
     private var previews = 0; private var previewMs = 0L; private var shown = 0; private var shownMs = 0L; private var shownMax = 0L
+    private var retries = 0
 
     @Synchronized fun onDecoded(millis: Long, found: Boolean) { glides++; if (!found) noMatch++; ms += millis; if (millis > msMax) msMax = millis; if (found) pending = true }
     /** Whatever the person did next that was not a correction: the word stays. */
@@ -29,6 +30,8 @@ class GlideStats {
     @Synchronized fun onShown(millis: Long) { shown++; shownMs += millis; if (millis > shownMax) shownMax = millis }
     /** A word the person had used before was the keyboard's first guess for this glide. */
     @Synchronized fun onLearnedTop() { learnedTop++ }
+    /** The glide was a retry of a deleted word that came up first again: the deleted word was moved to second place. */
+    @Synchronized fun onRetryDemoted() { retries++ }
 
     @Synchronized fun line(): String {
         if (loadMs < 0 && glides == 0) return "Glide typing: not used yet this run"
@@ -49,6 +52,7 @@ class GlideStats {
         if (own > 0) sb.append("; own words $own")
         if (learnedWords > 0 || learnedTop > 0) sb.append("; learned $learnedWords words and $learnedPairs word pairs from your typing, a learned word was the first guess $learnedTop times")
         if (learnedCorrections > 0 || learnedTriples > 0) sb.append("; $learnedCorrections corrections and $learnedTriples three-word phrases remembered")
+        if (retries > 0) sb.append("; a deleted word came up first again and went to second place $retries times")
         return sb.toString()
     }
 }
