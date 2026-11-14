@@ -938,7 +938,7 @@ test('early scriptlets: a frame of another site is asked about after the network
   h.mainFrame(PAGE);
   await h.req('script', PLAIN, PAGE);                       // the page's configuration is in
   const frame = (url) => h.listeners.before({ type: 'sub_frame', url, tabId: 1, frameId: 5, parentFrameId: 0, documentUrl: PAGE, frameAncestors: [{ url: PAGE, frameId: 0 }] });
-  eq(await frame('https://ads.example.com/f.html'), { cancel: true });
+  eq(await frame(AD), { cancel: true });
   assert.equal(h.of('sc').filter((m) => m.h === 'ads.example.com').length, 0, 'a cancelled frame is not asked about');
   eq(await frame('https://embed.example/player'), {});
   await until(() => mine().some((r) => r.opts.matches[0] === '*://embed.example/*'), 'the frame site script');

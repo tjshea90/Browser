@@ -366,7 +366,9 @@ function slAsk(host) {
   if (w) return w;
   slEarlyAsks++;
   var done = function () { slWait.delete(host); };
-  w = send({ k: 'sc', h: host }).then(function (r) {
+  var q;
+  try { q = send({ k: 'sc', h: host }); } catch (e) { q = Promise.reject(e); } // never let a failing message reach the request that triggered it
+  w = q.then(function (r) {
     var s = (typeof r === 'string') ? r : '', c = s.indexOf(':');
     var gen = c > 0 ? (parseInt(s.slice(0, c), 10) || 0) : 0;
     if (gen > 0) noteGeneration(gen);
