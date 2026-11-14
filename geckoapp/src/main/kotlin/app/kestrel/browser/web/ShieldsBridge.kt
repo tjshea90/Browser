@@ -93,6 +93,7 @@ class ShieldsBridge(
                     "vid" -> { onVid(m); "" }
                     "scroll" -> { pageScrolled(m.optString("p"), m.optInt("y")); "" }
                     "warm" -> { warmLink(m.optString("o"), m.optString("p"), m.optString("w")); "" }
+                    "os" -> { openSpace(m.optString("p")); "" }
                     "rep" -> { onPageReport(m); "" }
                     else -> ""
                 }
