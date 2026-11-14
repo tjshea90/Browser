@@ -65,6 +65,8 @@ class MiniNavTest {
         override fun insert(text: String) { this.text.append(text); log.add("+$text") }
         override fun deleteBefore(count: Int) { this.text.setLength(maxOf(0, this.text.length - count)); log.add("-$count") }
         override fun enter() { log.add("enter") }
+        var moved = 0
+        override fun moveCursor(delta: Int) { moved += delta; log.add("cursor$delta") }
     }
 
     private lateinit var activity: Activity
