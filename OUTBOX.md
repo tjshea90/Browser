@@ -1813,3 +1813,38 @@
 >
 > I have nothing more to build until you write. The alpha36 answer above still stands, with the release link and the open items. The next useful thing from you is the Diagnostics paste ("Glide typing" and "Mini keyboard in page fields" lines) after a few days of use on the tablet. If you send a new request, I write it into `TASKS.md` in your words before touching any code.
 <!-- sha:059350ade97d -->
+
+## 2026-11-14T16:17:16Z
+> Alpha37 is out. It fixes the ad blocking I hadn't finished, but I tested it only on a lab page on the emulator, not on your tablet or any real site.
+>
+> Install from this page (it installs over the old Kestrel G):
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha37
+>
+> **What changed**
+> - **Fixes run before the page does.** Before, a site's fixes arrived after its own scripts had already shown the "turn off your ad blocker" wall, started the countdown or opened the pop-up. On the emulator the fixes took about a second to arrive and the page was already done by then. They now run first, and the lab page shows the effect: wall gone, 8-second countdown down to under 1 second, pop-up listener never ran, ad data removed from the video player's data.
+> - **Blocked ad files are answered, not just dropped.** Where the lists say so, a blocked ad script, picture, clip or ad library gets a harmless empty stand-in. A video player that waits for its ad code then starts the video instead of hanging.
+> - **More of the lists' fixes work.** I added fixes that cut the ad part out of what video players and feeds receive, the "ad blocker detected" scripts, and links on link-shortener pages (they now point at the real target). Rules for whole families of sites (one name with any ending, like yts.*) work too. The lists' "Quick fixes" list is added and refreshes daily.
+> - **One Settings switch, "Fix ad and anti-adblock scripts", turns off everything above.** It is on by default, and it also pauses for any site where you switch Shields off. Its text now says what it does. Menu > Diagnostics > Blocker line shows how many pages ran fixes, how many before the page's own scripts, and how many blocked files got a stand-in.
+>
+> **What I could not test**
+> - I did not try it on your tablet or on real sites such as YouTube. YouTube changes its ads often, and the lists use several tricks there; I run only the ones I understand, so ads may still appear.
+> - The first page after the app starts, before the lists have loaded, and the very first visit to a new site can be a little late. A later copy of the fixes covers those.
+> - The emulator's Diagnostics screen would not open for me once, so the counters were read twice, but the screen was not exercised further.
+>
+> **Two questions, yes or no**
+> 1. Do you want a separate switch for the video-site fixes? I merged them into the one switch.
+> 2. Do you want a scheduled GitHub job that builds the ad lists daily? It would use your GitHub minutes, so I have not built it.
+>
+> **Still open from you**
+> - Diagnostics paste after some use (Glide typing and Mini keyboard in page fields lines).
+> - Doraby / "incompatible browser" wording and the page report.
+> - The choppy-video link.
+> - How scrolling and Back feel.
+> - Proton Mail numbers and the keyboard test.
+> - Stored libraries yes or no, and the signing key.
+> - The network lab results and the optional extras: licence, landscape tabs, Cromite comparison.
+> - The per-process memory line is not built yet.
+>
+> You sent the same words again at 15:04, so I treated it as the same request.
+<!-- sha:590cc0ddab8c -->
