@@ -4,7 +4,8 @@
 Serves one page with the kinds of field a real site has and writes everything the page's fields receive to <logfile>, one line per event, so a test can prove from the SERVER side what the keyboard put
 into the page (not only what a screenshot shows):
 
-  /            the page: a search form (Enter submits), a stand-alone text input, a search input without a form, a text area, a password input
+  /            the page: a search form (Enter submits), a stand-alone text input, a search input without a form, a text area, a password input,
+               a link in the top right corner (a tap there must reach the page, a long press must not) and a tall block at the end (a drag must scroll)
   /search?q=x  where the form goes (proves Enter submitted it)
   /log?...     the page's own script reports each `input` event ("input id=q value=hello") and each Enter key ("key id=q Enter")
 
@@ -23,6 +24,7 @@ PAGE = b"""<!doctype html>
  button { font-size: 18px; padding: 8px 16px; margin-left: 6px }
  pre { background: #eef; padding: 8px; font-size: 14px; white-space: pre-wrap }
 </style></head><body>
+<a id="corner" href="/search?q=cornerlink" style="position:absolute;top:0;right:0;width:76px;height:76px;background:#fd8;display:block;text-align:center;line-height:76px;font-size:14px;text-decoration:none;color:#000">corner</a>
 <h2>Field lab</h2>
 <form action="/search" method="get">
  <label for="q">1. Search form (Enter submits)</label>
@@ -38,6 +40,7 @@ PAGE = b"""<!doctype html>
 <input type="password" id="pw" placeholder="password">
 <h3>What the fields hold</h3>
 <pre id="out">(nothing typed yet)</pre>
+<div style="height:1400px;background:linear-gradient(#fff,#cfc)">(page continues: scroll test)</div>
 <script>
  var ids = ['q', 'free', 's2', 'ta', 'pw'];
  function show() { var t = ''; for (var i = 0; i < ids.length; i++) t += ids[i] + ' = [' + document.getElementById(ids[i]).value + ']\\n'; document.getElementById('out').textContent = t; }
