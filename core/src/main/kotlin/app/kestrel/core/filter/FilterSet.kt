@@ -154,6 +154,12 @@ class FilterSet internal constructor(
         return cosmetic.cssFor(pageHost, includeGeneric && (flags and SITE_GENERICHIDE) == 0, genericLimit, tokenMode, scriptlets)
     }
 
+    /** AW1b: the CSS comment that carries the scriptlet calls of [pageHost] to the page script (what [cosmeticCss] puts after its markers when asked), or "" when the site has none; for the app when element hiding is off but scriptlets are on. */
+    fun scriptletComment(pageHost: String): String {
+        val payload = ScriptletRules.payload(scriptletsFor(pageHost))
+        return if (payload.isEmpty()) "" else ScriptletRules.MARKER_START + payload + ScriptletRules.MARKER_END
+    }
+
     /** AW1b: the scriptlet calls of [pageHost] in stored form (see [ScriptletRules]), under the same `$elemhide` / `$document` exceptions as [cosmeticCss] (tests and Diagnostics; the page gets them inside the CSS answer). */
     fun scriptletsFor(pageHost: String): List<String> {
         if (cosmetic.isEmpty) return emptyList()

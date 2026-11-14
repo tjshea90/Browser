@@ -140,11 +140,30 @@
       }, function () {});
     } catch (e) { /* never break the page */ }
   }
+  // AW1b: the scriptlet calls of this site ride in the CSS answer as a comment right after the markers. They are handed to scriptlets-main.js, which runs in the page itself (world MAIN), by a DOM
+  // event: it cannot reach the extension and we cannot reach the page's world. The library says when it is up (READY: it may come after our answer) and how many calls ran (REPORT).
+  function startScriptlets(json, host) {
+    try {
+      var SL = '__kst_sl_v1', READY = '__kst_sl_ready_v1', REPORT = '__kst_sl_n_v1';
+      function send() { try { document.dispatchEvent(new CustomEvent(SL, { detail: json })); } catch (e) { /* ignore */ } }
+      document.addEventListener(READY, send, true);
+      document.addEventListener(REPORT, function (e) {
+        try { browser.runtime.sendMessage({ k: 'sl', r: String(e.detail).slice(0, 20), h: host }).catch(function () {}); } catch (x) { /* ignore */ }
+      }, true);
+      send();
+    } catch (e) { /* never break the page */ }
+  }
   try {
     var host = location.hostname;
     if (!host) return;
     var top = window.top === window;
     browser.runtime.sendMessage({ k: 'css', h: host, top: top }).then(function (css) {
+      if (!css) return;
+      var ks = css.indexOf('/*ks');
+      if (ks >= 0 && ks <= 12) { // cut the calls out before the CSS is injected: a comment of a few KB is not something a style sheet should carry
+        var end = css.indexOf('*/', ks);
+        if (end > ks) { startScriptlets(css.slice(ks + 4, end), host); css = css.slice(0, ks) + css.slice(end + 2); }
+      }
       if (!css) return;
       inject(css, '1');
       if (top && css.indexOf('/*kg*/') === 0) startTokens(host);

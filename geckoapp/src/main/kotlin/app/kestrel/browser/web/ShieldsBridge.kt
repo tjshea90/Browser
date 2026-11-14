@@ -232,11 +232,14 @@ class ShieldsBridge(
     private fun cosmeticCss(host: String, top: Boolean): String {
         if (host.isEmpty()) return ""
         val fs = Engine.peek() ?: return ""
-        val s = Shields.effective(prefs(), host)
-        if (!s.shieldsUp || !s.blockAds || !s.cosmetic) return ""
+        val p = prefs()
+        val s = Shields.effective(p, host)
+        if (!s.shieldsUp || !s.blockAds) return ""
+        val scripts = p.shieldScripts // AW1b: the site's scriptlet calls ride in this answer (a comment after the markers); the Shields switches of the site and the master switch decide, element hiding being off does not
+        if (!s.cosmetic) return if (scripts) fs.scriptletComment(host) else ""
         // D2: the generic selectors that name a class or an id are not sent up front; the page sends its classes and ids ([genericCss]) when this CSS starts with the marker
-        val css = fs.cosmeticCss(host, includeGeneric = top, tokenMode = true)
-        if (cssLogged < 40) { cssLogged++; app.kestrel.browser.diag.Health.log("cosmetic", "css", "$host top=$top len=${css.length} tokens=${css.startsWith(app.kestrel.core.filter.FilterSet.COSMETIC_TOKEN_MARKER)}") }
+        val css = fs.cosmeticCss(host, includeGeneric = top, tokenMode = true, scriptlets = scripts)
+        if (cssLogged < 40) { cssLogged++; app.kestrel.browser.diag.Health.log("cosmetic", "css", "$host top=$top len=${css.length} tokens=${css.startsWith(app.kestrel.core.filter.FilterSet.COSMETIC_TOKEN_MARKER)} scriptlets=${css.contains("/" + "*ks")}") }
         return css
     }
     private var cssLogged = 0

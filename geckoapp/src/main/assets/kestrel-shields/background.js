@@ -148,7 +148,7 @@ function markStats() { // lazy timer: nothing is scheduled while no request is b
 function reportStats(force) {
   if (!force && !statsDirty) return;
   statsDirty = false;
-  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, w: (guardState + ', ' + guardBlocked + ' blocked | ' + stats.last).slice(0, 400) }).catch(function () {});
+  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, w: (guardState + ', ' + guardBlocked + ' blocked | ' + slState + (slPages ? ', ' + slPages + ' pages ran ' + slCalls + ' calls' + (slBad ? ' (' + slBad + ' failed)' : '') : '') + ' | ' + stats.last).slice(0, 400) }).catch(function () {});
 }
 
 // ---------------------------------------------------------------- the page report (Diagnostics > Page report)
@@ -287,6 +287,23 @@ try {
     matches: ['http://*/*', 'https://*/*'], js: [{ file: 'guard-main.js' }], runAt: 'document_start', allFrames: true, matchAboutBlank: true, matchOriginAsFallback: true, world: 'MAIN',
   }).then(function () { guardState = 'page guard on'; }, function (e) { guardState = 'page guard FAILED: ' + (e && e.message); });
 } catch (e) { guardState = 'page guard FAILED: ' + (e && e.message); }
+
+// ---------------------------------------------------------------- scriptlets (AW1b)
+// scriptlets-main.js (registered here, runs inside every page and frame like the guard) holds our own implementations of the list's scriptlets. content.js hands it the calls the lists have for the page's
+// site (they arrive in the CSS answer); it tells us how many ran. Only counted here, for Diagnostics.
+var slState = 'scriptlets: starting', slPages = 0, slCalls = 0, slBad = 0;
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'sl' || !sender || !sender.tab) return undefined;
+  var p = String(m.r || '').split(':');
+  slPages++; slCalls += parseInt(p[0], 10) || 0; slBad += parseInt(p[1], 10) || 0;
+  markStats();
+  return undefined;
+});
+try {
+  browser.contentScripts.register({
+    matches: ['http://*/*', 'https://*/*'], js: [{ file: 'scriptlets-main.js' }], runAt: 'document_start', allFrames: true, matchAboutBlank: true, matchOriginAsFallback: true, world: 'MAIN',
+  }).then(function () { slState = 'scriptlets on'; }, function (e) { slState = 'scriptlets FAILED: ' + (e && e.message); });
+} catch (e) { slState = 'scriptlets FAILED: ' + (e && e.message); }
 
 // ---------------------------------------------------------------- the request listener
 var hostOfPage = new Map(); // page URL -> host (every request of a page names the same page)
