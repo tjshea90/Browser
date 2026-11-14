@@ -170,6 +170,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         keys.visibility = VISIBLE
         setPanelWidth(PANEL_KEYS_W_DP)
         pendingWord = null
+        preparedFor = ""
         startGlideEngine()
         bar.invalidate(); keys.invalidate()
     }
@@ -211,10 +212,15 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         else pushOwnWords()
     }
 
-    /** The decoder needs the real key positions: they are known once the keys view has a size (and again when it changes). */
+    private var preparedFor = ""
+
+    /** The decoder needs the real key positions: they are known once the keys view has a size (and again when it changes). Cheap when nothing changed. */
     internal fun prepareGlide() {
         val g = glide ?: return
         val k = keys.glideKeys() ?: return
+        val tag = "${keys.width}x${keys.height}"
+        if (tag == preparedFor) return
+        preparedFor = tag
         g.prepare(k, l.navGlideHabit(), mergedWords())
     }
 
@@ -689,6 +695,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             fadeStart = SystemClock.uptimeMillis(); postOnAnimation(fadeStep)
             val g = glide
             if (g == null) return
+            prepareGlide() // the key positions as they are now (a no-op when nothing changed since the keyboard opened)
             confirmGlide() // the glide before this one stays: learn from it first (one thread, in order)
             g.decode(gx, gy, gn, model.previousWord()) { res -> post { glideDone(res) } }
         }
