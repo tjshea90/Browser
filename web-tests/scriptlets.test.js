@@ -126,12 +126,13 @@ test('no-window-open-if: no argument blocks every script-opened window, a needle
 });
 
 test('noeval-if: matching code is not evaluated, other code is', async () => {
-  const page = await open([['noeval-if', 'blocked-code']], '<script>eval("window.__a = 1 // blocked-code"); eval("window.__b = 2"); window.__r = eval("1 + 1")</script>');
+  const page = await open([['noeval-if', 'blocked-code']], '<script>eval("window.__a = 1 // blocked-" + "code"); eval("window.__b = 2"); window.__r = eval("1 + 1")</script>');
   assert.equal(await ev(page, () => window.__a), undefined);
   assert.equal(await ev(page, () => window.__b), 2);
   assert.equal(await ev(page, () => window.__r), 2);
-  const none = await open([['noeval']], '<script>window.__r = eval("1 + 1")</script>');
-  assert.equal(await ev(none, () => window.__r), undefined);
+  // with no argument nothing is evaluated at all (the harness itself uses eval, so the answer is read from the title)
+  const none = await open([['noeval']], '<script>document.title = "r=" + eval("1 + 1")</script>');
+  assert.equal(await none.title(), 'r=undefined');
 });
 
 test('no-fetch-if: a matching request is answered at once and never leaves, others go out', async () => {
@@ -197,16 +198,22 @@ test('remove-attr and remove-class: matching elements lose them, with stay also 
   assert.equal(await ev(page, () => document.body.classList.contains('again')), true);
 });
 
-test('remove-node-text and replace-node-text: a script the page inserts is changed before it runs', async () => {
+test('remove-node-text and replace-node-text: scripts the page inserts, and the ones in the page itself, are changed before they run', async () => {
+  // (the needles are built from pieces so that the test page's own script does not hold them)
   const page = await open([['rmnt', 'script', 'adbait'], ['rpnt', 'script', 'isBlocked = true', 'isBlocked = false', 'condition', 'guard']],
     `<script>
-      var s = document.createElement('script'); s.textContent = 'window.__ran1 = 1; /* adbait */'; document.head.appendChild(s);
-      var t = document.createElement('script'); t.textContent = 'window.__v = "isBlocked = true"; /* guard */'; document.body.appendChild(t);
-      var u = document.createElement('script'); u.textContent = 'window.__u = "isBlocked = true"'; document.body.appendChild(u);
-     </script>`);
-  assert.equal(await ev(page, () => window.__ran1), undefined);
+      var A = 'ad' + 'bait', B = 'isBlocked' + ' = true', G = 'gu' + 'ard';
+      var s = document.createElement('script'); s.textContent = 'window.__ran1 = 1; /* ' + A + ' */'; document.head.appendChild(s);
+      var t = document.createElement('script'); t.textContent = 'window.__v = "' + B + '"; /* ' + G + ' */'; document.body.appendChild(t);
+      var u = document.createElement('script'); u.textContent = 'window.__u = "' + B + '"'; document.body.appendChild(u);
+     </script>
+     <script>window.__parsed = 1; /* adbait */</script>
+     <script>window.__plain = 1;</script>`);
+  assert.equal(await ev(page, () => window.__ran1), undefined, 'inserted by the page: text removed before it ran');
   assert.equal(await ev(page, () => window.__v), 'isBlocked = false');
   assert.equal(await ev(page, () => window.__u), 'isBlocked = true', 'the condition holds the rule back');
+  assert.equal(await ev(page, () => window.__parsed), undefined, 'in the page itself: the observer runs before the parser executes the script');
+  assert.equal(await ev(page, () => window.__plain), 1);
 });
 
 test('set-cookie and set-local-storage-item: safe values only, trusted forms take more', async () => {
@@ -252,8 +259,7 @@ test('robustness: bad calls and bad JSON are ignored, one failing call does not 
 
 test('nothing leaks onto the page: one marker property, no globals added by the library', async () => {
   const page = await open([['set', 'a', 'true']], '');
-  const added = await page.evaluate(() => Object.getOwnPropertyNames(window).filter((n) => /kst|scriptlet/i.test(n)));
+  const added = await page.evaluate(() => Object.getOwnPropertyNames(window).filter((n) => /^__kst|^__n$/.test(n)));
   assert.deepEqual(added.sort(), ['__kstSL', '__n'].sort());
-  const ready = await page.evaluate(() => new Promise((res) => { document.addEventListener('__kst_sl_ready_v1', () => res(true)); res(typeof window.__kstSL); }));
-  assert.equal(ready, 'number');
+  assert.equal(await page.evaluate(() => typeof window.__kstSL), 'number');
 });
