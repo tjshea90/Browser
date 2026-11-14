@@ -7,7 +7,7 @@ class GlideStats {
     private var glides = 0; private var noMatch = 0; private var kept = 0; private var picked = 0; private var undone = 0
     private var ms = 0L; private var msMax = 0L
     private var pending = false
-    private var loadMs = -1L; private var loadWords = 0
+    private var loadMs = -1L; private var loadWords = 0; private var warmMs = -1L
     private var habitX = 0f; private var habitY = 0f
     private var own = 0
 
@@ -17,6 +17,7 @@ class GlideStats {
     @Synchronized fun onPicked() { if (pending) { picked++; pending = false } }
     @Synchronized fun onUndone() { if (pending) { undone++; pending = false } }
     @Synchronized fun onLoaded(millis: Long, words: Int) { loadMs = millis; loadWords = words }
+    @Synchronized fun onWarm(millis: Long) { warmMs = millis }
     @Synchronized fun onHabit(xDp: Float, yDp: Float) { habitX = xDp; habitY = yDp }
     @Synchronized fun onOwnWords(n: Int) { own = n }
 
@@ -32,6 +33,7 @@ class GlideStats {
             sb.append("; decode avg ${ms / glides} ms, worst $msMax ms")
         }
         if (loadMs >= 0) sb.append("; word list $loadWords words ready after $loadMs ms")
+        if (warmMs >= 0) sb.append(", first decode (warm-up) $warmMs ms")
         sb.append("; thumb habit x %.1f y %.1f dp".format(habitX, habitY))
         if (own > 0) sb.append("; own words $own")
         return sb.toString()
@@ -127,8 +129,31 @@ class GlideTyping(private val loadMain: () -> ByteArray?, private val executor: 
                 decoder = GlideDecoder(k).also { it.biasX = bx; it.biasY = by }
                 if (own != null) setOwn(own)
                 ready = main != null
+                if (!warmed && ready) { warmed = true; warmUp(k) }
             } catch (e: Exception) { loading = false; ready = false }
         }
+    }
+
+    private var warmed = false
+
+    /**
+     * One glide of "the" is decoded and thrown away while the keyboard opens: the runtime compiles the decoder's hot loops on the first run (and runs them slowly until then), so the person's first
+     * real glide does not pay for that. How long it took goes into the Diagnostics line.
+     */
+    private fun warmUp(k: GlideKeys) {
+        val d = decoder ?: return
+        val m = main ?: return
+        val t0 = System.nanoTime()
+        val xs = ArrayList<Float>(); val ys = ArrayList<Float>()
+        val seq = "the"
+        for (i in 0 until seq.length - 1) {
+            val a = seq[i] - 'a'; val b = seq[i + 1] - 'a'
+            for (s in 0 until 12) { val t = s / 12f; xs.add(k.cx[a] + (k.cx[b] - k.cx[a]) * t); ys.add(k.cy[a] + (k.cy[b] - k.cy[a]) * t) }
+        }
+        xs.add(k.cx[seq.last() - 'a']); ys.add(k.cy[seq.last() - 'a'])
+        try { repeat(2) { d.decode(xs.toFloatArray(), ys.toFloatArray(), xs.size, listOf(m), null, 3) } } catch (e: Exception) { /* a warm-up must never matter */ }
+        d.biasX = bx; d.biasY = by
+        stats.onWarm((System.nanoTime() - t0) / 2 / 1_000_000)
     }
 
     /** The person's own words changed. */

@@ -32,7 +32,7 @@ class GlideKeys(val cx: FloatArray, val cy: FloatArray, val pitch: Float, val ke
 /** Every number the decoder is tuned by, in one place (the accuracy test and the tuning run read and change them). Distances are in key pitches, costs in pitch squared. */
 class GlideParams(
     /** Points the finger path is resampled to. */
-    val samples: Int = 64,
+    val samples: Int = 48,
     /** A word's first / last letter must lie within this many pitches (squared here) of where the finger went down / lifted. */
     val endReach2: Float = 3.2f,
     /** A letter further than this (squared pitches) from the whole path counts as this much, so one missed key does not rule a word out alone. */
@@ -40,7 +40,7 @@ class GlideParams(
     /** A letter further than this from the path (squared) was not visited at all: the word is dropped. */
     val missLimit2: Float = 6.0f,
     /** How many words go from the quick pass to the careful one. */
-    val keep: Int = 250,
+    val keep: Int = 200,
     val quickEnds: Float = 0.7f,
     val quickPrior: Float = 0.12f,
     /** The careful pass: weight of the path between two letters straying from the straight line, and of the first / last letter. */
@@ -59,7 +59,7 @@ class GlideParams(
     /** First / last letter may be matched this many samples away from the very end of the path. */
     val slack: Int = 1,
     /** A thumb lands a little beside where it aims, the same way along the whole path: the best [biasKeep] words are judged a second time with the path moved by [biasGain] of its mean offset from the word's letters. */
-    val biasKeep: Int = 60,
+    val biasKeep: Int = 40,
     val biasGain: Float = 0.8f,
     /** Cost of each pitch squared of that move, so a word cannot buy a good fit by sliding the whole path. */
     val biasW: Float = 3.0f,
