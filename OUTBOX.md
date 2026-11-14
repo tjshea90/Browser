@@ -1498,3 +1498,7 @@
 ## 2026-11-14T00:29:22Z
 > Waiting for the Diagnostics screen check to finish on the emulator; then the full test run and the release.
 <!-- sha:5da169992d6b -->
+
+## 2026-11-14T00:31:13Z
+> Waiting for the clean-start Diagnostics check; the emulator is the only thing running.
+<!-- sha:5229903bd36e -->
