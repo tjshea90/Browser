@@ -73,6 +73,8 @@ import app.kestrel.browser.update.UpdateManager
 import app.kestrel.browser.update.UpdateNotifier
 import app.kestrel.browser.ui.LastLook
 import app.kestrel.browser.ui.ThumbStore
+import app.kestrel.core.session.BackLab
+import app.kestrel.core.session.BackScrollRules
 import app.kestrel.core.session.LastLookMeta
 import app.kestrel.core.session.LastLookRules
 import app.kestrel.browser.ui.BottomDock
@@ -380,7 +382,7 @@ open class BrowserActivity : Activity(), DockListener {
                 GeckoEngine.runtime(this)
                 GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
                 GeckoEngine.warmUp(this)
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l -> video.info(p, u, w, h, d, l) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l -> video.info(p, u, w, h, d, l) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }))
                 Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
             }
         }
@@ -987,7 +989,7 @@ open class BrowserActivity : Activity(), DockListener {
     // Most Back presses are answered by the engine's own back/forward cache and are instant. A page that forbids caching (webmail, banking, anything with Cache-Control: no-store) or one the
     // cache no longer holds is LOADED again; until it paints, a recent picture of it covers the page area. The picture is taken at the moment the page is left (as the owner last saw it).
     private var lastLeaveShotAt = 0L
-    private class BackArm(val tab: Tab, val fromUrl: String, val picture: android.graphics.Bitmap)
+    private class BackArm(val tab: Tab, val fromUrl: String, val picture: android.graphics.Bitmap, val savedY: Int)
     private var backTarget: BackArm? = null
     private var backBusyUntil = 0L
     private val backPictureShow = Runnable {
@@ -999,7 +1001,8 @@ open class BrowserActivity : Activity(), DockListener {
         val stillThere = BackPictures.keyOf(t.url) == BackPictures.keyOf(b.fromUrl)
         if (t !== current || t.error != null || t.showHome || restoringTab != null || !stillThere) { Health.log("tabs", "back-picture-skipped", "same-page=$stillThere cover=${restoringTab != null}"); return@Runnable }
         Health.count("back.picture"); Health.log("tabs", "back-picture", "tab=${t.id}")
-        showRestoring(t, false, "", b.picture, 0x33) // stays until the page paints, its load ends or an error replaces it (20 s at most): taking it away earlier would show the page the owner just left again
+        showRestoring(t, false, "", b.picture, 0x33) // stays until the page is painted AND back at its place (backCheck, 20 s at most): taking it away earlier would show the page the owner just left, or the top of this one
+        backCover = BackCover(t, b.savedY)
     }
 
     internal fun goBack(t: Tab) { armBackPicture(t, -1); t.session?.goBack() }
@@ -1014,15 +1017,20 @@ open class BrowserActivity : Activity(), DockListener {
         if (i !in 0 until st.size) { Health.log("tabs", "back-arm", "index $i of ${st.size}"); return }
         val url = st[i].uri ?: return
         val pic = BackPictures.get(t.id, url)
-        Health.log("tabs", "back-arm", "tab=${t.id} to=${UrlParts.hostOf(url)} picture=${pic != null} pictures=${BackPictures.size()}")
+        val savedY = t.scrollByUrl.get(url)
+        val notKept = !t.isPrivateTab && backLab.notKept(url)
+        Health.log("tabs", "back-arm", "tab=${t.id} to=${UrlParts.hostOf(url)} picture=${pic != null} pictures=${BackPictures.size()} y=${savedY ?: -1} notKept=$notKept")
         // a second Back within two seconds: the engine's history index has not moved yet, so the page this one leads to is not known from here - show nothing rather than the wrong picture
         val now = SystemClock.uptimeMillis()
         val rapid = now < backBusyUntil
         backBusyUntil = now + 2_000
         if (rapid) { if (restoringTab === t) hideRestoring("second-back"); return }
+        // RX3-BK2: the place this page was left at is armed for the page's own question (its content script asks once the engine loaded it again); RX3-BK1: the lab counts the press (never for a private tab)
+        t.backPlace = BackScrollRules.arm(t.scrollByUrl, url, now)
+        if (!t.isPrivateTab) { backLab.press(now, url, delta > 0, savedY ?: -1); Io.main.removeCallbacks(backLabClose) }
         if (pic == null) return
-        backTarget = BackArm(t, t.url, pic)
-        Io.main.postDelayed(backPictureShow, 150) // a cache hit is done by then; a page that has to load shows its picture
+        backTarget = BackArm(t, t.url, pic, savedY ?: 0)
+        Io.main.postDelayed(backPictureShow, BackScrollRules.pictureDelayMs(notKept)) // a cache hit is done by then; a page that has to load shows its picture (at once when the engine cannot have kept it)
     }
 
     /** A navigation of the page in front is about to start (called before the engine loads [toUrl]): take its picture now, the way it is on screen, for a later Back. */
@@ -1030,11 +1038,50 @@ open class BrowserActivity : Activity(), DockListener {
         // Not required: that the page has finished loading. What is on screen when the user leaves is what Back should show (a page that is still loading, or keeps loading for ever, is the common case on a slow link).
         if (tab !== current || tab.isNewTab || tab.error != null || tab.showHome || !tab.url.startsWith("http")) { Health.log("tabs", "leave-skip", "loading=${tab.loading}"); return }
         if (BackPictures.keyOf(toUrl) == BackPictures.keyOf(tab.url)) return // a reload or a #fragment: the same page
+        if (!tab.isPrivateTab) backLab.left(tab.url, tab.loading, tab.media.hasStream()) // RX3-BK2: whether the engine can have kept the page that is being left (still loading, a stream player, no-store)
         val now = SystemClock.uptimeMillis()
         if (now - lastLeaveShotAt < 1500) return // a chain of redirects or quick taps: one picture is enough
         lastLeaveShotAt = now
         Health.log("tabs", "leave-shot", "tab=${tab.id} from=${UrlParts.hostOf(tab.url)}")
         captureThumb(tab, forBack = true)
+    }
+
+    // ---------------------------------------------------------------- RX3-BK1 / RX3-BK2: Back keeps the place (research/REVIEW-EXTERNAL-3.md section 3, research/BACK_SCROLL.md)
+    /** What every Back / Forward press turned out to be (kept by the engine, loaded again from the cache or the network, time to the first paint, whether the place was reached). UI thread; never fed from a private tab. */
+    private val backLab = BackLab { Health.log("back", "press", it) }
+    private class BackCover(val tab: Tab, val savedY: Int) { var paintAt = 0L }
+    private var backCover: BackCover? = null
+    private val backCheckTick = Runnable { backCheck("tick") }
+    private val backLabClose = Runnable { backLab.finish(SystemClock.uptimeMillis()) }
+
+    /** The back picture is up and the page painted: it goes once the page is at the place it was left at (1.5 s after the paint at the latest). */
+    private fun backPainted() {
+        val c = backCover ?: return
+        if (c.paintAt == 0L) c.paintAt = SystemClock.uptimeMillis()
+        backCheck("paint")
+    }
+
+    private fun backCheck(why: String) {
+        val c = backCover ?: return
+        val painted = c.paintAt != 0L
+        val since = if (painted) SystemClock.uptimeMillis() - c.paintAt else 0L
+        if (BackScrollRules.coverGoes(painted, c.savedY, c.tab.scrollY, since)) { hideRestoring("back-$why y=${c.tab.scrollY}/${c.savedY} after=${since}ms"); return }
+        if (painted) { Io.main.removeCallbacks(backCheckTick); Io.main.postDelayed(backCheckTick, maxOf(50L, LastLookRules.AFTER_PAINT_MS - since)) } // the engine may paint before it has scrolled: look again at the latest 1500 ms after the paint
+    }
+
+    /** A page the engine loaded again for Back / Forward asked where the owner left it (worker thread): the armed place as text, or "" when nothing is armed for that page. Reads immutable values only. */
+    private fun backPlaceFor(page: String): String {
+        val now = SystemClock.uptimeMillis()
+        var y = -1
+        try { for (t in tabs.toTypedArray()) { val p = t.backPlace?.placeFor(page, now) ?: -1; if (p > 0) { y = p; break } } } catch (e: Exception) { /* the list changed under us: no answer, the engine's own place stands */ }
+        return if (y > 0) y.toString() else ""
+    }
+
+    /** The content script of the page in front reported a Back / Forward show (UI thread). */
+    private fun onBackShown(page: String, kept: Boolean, navType: String, transfer: Long, y: Int) {
+        if (backLab.openKey() != BackScrollRules.keyOf(page)) return
+        backLab.pageshow(SystemClock.uptimeMillis(), page, kept, navType, transfer, y)
+        Io.main.removeCallbacks(backLabClose); Io.main.postDelayed(backLabClose, BackLab.CLOSE_AFTER_MS)
     }
 
     private fun hasLiveChild(t: Tab) = tabs.any { it.parentId == t.id && it.session != null }
@@ -1749,6 +1796,7 @@ open class BrowserActivity : Activity(), DockListener {
         val ver = try { Class.forName("org.mozilla.geckoview.BuildConfig").getField("MOZ_APP_VERSION").get(null) } catch (e: Exception) { "?" }
         out.addAll(StartTimeline.lines())
         out.add("Last look (the saved picture of the page, EY-1): " + (if (prefs.lastLook) "on" else "off") + ", ${LastLook.count(applicationContext)} stored, shown at start ${Health.counter("look.start")}, shown after a revive ${Health.counter("look.revive")}, taken ${Health.counter("look.saved")}, hidden ${Health.counter("look.hide")}")
+        out.add(backLab.stats.line())
         out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null }} of ${tabs.size} tabs (the memory budget keeps up to ${liveBudget()} ready, MemAvailable ${Health.memAvailableMb()} MB, setting ${listOf("automatic", "few", "many")[prefs.tabsKept]}); current ${current?.url?.take(60) ?: "-"}")
         out.add("Network: ${GeckoEngine.networkProfile} (VPN active: ${NetworkMonitor.vpn}, LinkMeter tunnel recognised: ${NetworkMonitor.fastTunnel}, downloads yield to a loading page at ${DownloadController.pageYieldKBps} KB/s)")
         out.add(app.kestrel.browser.download.DownloadService.wifiLockLine() + ". " + app.kestrel.browser.net.WifiBoost.line())
@@ -2196,7 +2244,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     private fun hideRestoring(why: String = "") {
         if (restoringTab != null) Health.log("tabs", "cover-hide", "tab=${restoringTab?.id} why=$why")
-        Io.main.removeCallbacks(restoreTimeout)
+        Io.main.removeCallbacks(restoreTimeout); Io.main.removeCallbacks(backCheckTick); backCover = null
         if (lookTab != null) { Health.count("look.hide"); Health.log("tabs", "look-hide", "tab=${lookTab?.id} why=$why") }
         restoringTab = null
         restoreOverlay.hide()
@@ -2240,9 +2288,13 @@ open class BrowserActivity : Activity(), DockListener {
      * The page (top frame) says where it is scrolled (UI thread; the page sends it 300 ms after its last scroll and once after its load, so a place the engine restored by itself is reported too). While a look is
      * up this is the live page moving to its place; otherwise it arms the "settled" capture (700 ms after the last scroll in all).
      */
-    private fun lookScrolled(tab: Tab, y: Int) {
+    private fun lookScrolled(tab: Tab, y: Int, page: String) {
+        tab.scrollByUrl.put(page, y) // RX3-BK2: where the owner is on this page. The key is the report's OWN address, so a late report of the page that was just left never lands on the next page
+        if (!LastLookRules.samePage(page, tab.url)) return // a late report of another page: not the place of the page in front
         tab.scrollY = y
+        if (backLab.openKey() == BackScrollRules.keyOf(page)) backLab.scrolled(SystemClock.uptimeMillis(), y) // RX3-BK1
         if (tab !== current) return
+        if (backCover?.tab === tab) { backCheck("scroll"); return }
         if (lookTab === tab) { lookCheck("scroll"); return }
         if (!prefs.lastLook) return
         lookScrollAt = SystemClock.uptimeMillis() - LastLookRules.PAGE_DEBOUNCE_MS
@@ -2282,7 +2334,8 @@ open class BrowserActivity : Activity(), DockListener {
     /** The engine painted real content for [tab] (called from ContentDelegate.onFirstContentfulPaint). */
     internal fun firstPaint(tab: Tab) {
         if (tab === current) StartTimeline.mark("paint")
-        if (tab === restoringTab) { if (tab === lookTab) lookPainted() else hideRestoring("first-paint") }
+        if (backLab.openKey() == BackScrollRules.keyOf(tab.url)) backLab.painted(SystemClock.uptimeMillis()) // RX3-BK1: the press this paint belongs to
+        if (tab === restoringTab) { if (tab === lookTab) lookPainted() else if (tab === backCover?.tab) backPainted() else hideRestoring("first-paint") }
     }
 
     // ================================================================== back handling (works on Android 10 and on 16's predictive back)

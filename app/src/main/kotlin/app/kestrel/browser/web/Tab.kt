@@ -59,6 +59,10 @@ class Tab(@JvmField val id: Long) {
     var thumb: Bitmap? = null // small snapshot of the page for the tab grid (RGB_565, about 240 px wide); never written to disk for a private tab
     var thumbAt = 0L // uptime millis of that snapshot
     var scrollY = 0 // where the page is scrolled, as the engine last said (Gecko build; the last look keeps it with the picture); UI thread
+    /** RX3-BK2: where each page of this tab was when the owner left it (CSS px as the page reports them; RAM only, dies with the tab, never written to disk); UI thread. */
+    val scrollByUrl = app.kestrel.core.session.ScrollMemory()
+    /** RX3-BK2: the place armed for the page a Back / Forward press leads to; the page asks for it after the engine loaded it again. Immutable, so the bridge's worker thread may read it. */
+    @Volatile @JvmField var backPlace: app.kestrel.core.session.BackTarget? = null
     /** When the engine last said a script of this page has been running for a long time (AY1: waited for without asking); 0 = never on this page. A page stuck like that cannot answer a long press, the touch detector does. */
     @Volatile var slowScriptAt = 0L
     var dialogCount = 0 // JS alert/confirm/prompt count for this page load (spam guard)

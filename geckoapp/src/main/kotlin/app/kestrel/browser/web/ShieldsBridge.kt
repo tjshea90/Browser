@@ -51,6 +51,14 @@ class ShieldsBridge(
     private val pageScrolled: (String, Int) -> Unit = { _, _ -> },
     /** A long press landed on OPEN space of the page (no link, picture, video, field or text under the finger; AY2): the page's address. Worker thread. */
     private val openSpace: (String) -> Unit = {},
+    /** RX3-BK2: a page the engine loaded again for Back / Forward asks where the owner left it (the page's address). The answer is the place in CSS pixels as text, or "" when nothing is armed for that page. Worker thread: reads only immutable values. */
+    private val backPlace: (String) -> String = { "" },
+    /** RX3-BK1: a Back / Forward show: the page's address, kept by the engine's cache, the navigation type, the bytes its file cost (0 = from cache), the place at the show. Worker thread. */
+    private val backShown: (String, Boolean, String, Long, Int) -> Unit = { _, _, _, _, _ -> },
+    /** RX3-BK1: the main response of this page said Cache-Control: no-store, so no cache may keep it. Worker thread. */
+    private val noStore: (String) -> Unit = {},
+    /** RX3-BK1: the page that was just left still had this many requests open (the page's address, the count). Worker thread. */
+    private val leftPending: (String, Int) -> Unit = { _, _ -> },
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -96,6 +104,10 @@ class ShieldsBridge(
                     "scroll" -> { pageScrolled(m.optString("p"), m.optInt("y")); "" }
                     "warm" -> { warmLink(m.optString("o"), m.optString("p"), m.optString("w")); "" }
                     "os" -> { openSpace(m.optString("p")); "" }
+                    "bk" -> backPlace(m.optString("p"))
+                    "bf" -> { backShown(m.optString("p"), m.optInt("ps") == 1, m.optString("nt"), m.optLong("ts"), m.optInt("y")); "" }
+                    "ns" -> { noStore(m.optString("p")); "" }
+                    "pend" -> { leftPending(m.optString("p"), m.optInt("n")); "" }
                     "rep" -> { onPageReport(m); "" }
                     else -> ""
                 }
