@@ -1974,3 +1974,54 @@
 >
 > The one thing still waiting on you is the Back question above.
 <!-- sha:713c03f96a39 -->
+
+## 2026-11-14T19:56:07Z
+> Kestrel G alpha40 is out. It has all four of your requests. I tried each one on the emulator with real touches; none has been tried on your tablet yet.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha40
+>
+> **What changed**
+> 1. **No more "This page is slow" prompt.** Kestrel now waits by itself and shows nothing. I tested it with a page that runs a script for 50 seconds. The engine asked after about 30 seconds, Kestrel answered "wait" on its own, and the page finished. Menu > Diagnostics counts how often it waited. If a page is stuck too long, you close its tab.
+> 2. **Long press an open spot and the panel appears under your finger.**
+>    - It comes up anywhere on a page.
+>    - A link still gives its own options, a picture gives the picture options, and text selects the word.
+>    - Buttons, fields and clickable boxes are left alone.
+>    - The top-right corner is no longer special.
+>    - **To close the panel, tap the little bar on top of it.** Settings > Mini navigation panel still switches the whole feature off.
+> 3. **The panel floats.** Long press it (buttons, address bar or frame, not the keys) and drag. It stays where you let go, with no jump back to the corner. The keys keep their own long press, so holding a top-row letter still types its digit.
+> 4. **Slide on the space key to move the text cursor.** It works in the address bar and in a web page's text field. A quick tap still types a space.
+>
+> **Found and fixed on the emulator.**
+> - A long press on blank space did nothing when a word was already selected on the page.
+> - The neon glows could stay frozen after a long press that opened the panel.
+>
+> **Not tried on your tablet.**
+> - How the long-press time (400 ms for picking up the panel) and the slide distance feel under your thumb.
+> - A PDF.
+> - A page inside a frame that has no address of its own. The panel won't open there.
+>
+> **Still waiting on you:**
+> - Do you want the keyboard as a separate system keyboard app for all your apps? It would start from your exported file. Yes or no.
+> - Tell me how the long press and the slide feel on the tablet, and I'll adjust the timings.
+<!-- sha:852bd53074ff -->
+
+## 2026-11-14T20:00:34Z
+> The handoff save is running in the background. I'll confirm the saved paths once it finishes. The alpha40 answer above stands.
+<!-- sha:e2264f7b91c8 -->
+
+## 2026-11-14T20:00:52Z
+> The handoff is saved, committed and pushed, so a new session can resume from it. The `generate_handoff_manifest` tool reported no warnings.
+>
+> - **Latest:** `.handoff/handoff.md` and `.handoff/handoff.json`
+> - **Archive:** `.handoff/handoffs/2026-11-14/handoff-2026-11-14T20-00-32-265Z.md` and the matching `.json`
+> - **Memory docs:** `CLAUDE.md` and `AGENTS.md`, each with a refreshed "Session Learnings" section
+>
+> The subagent's first call was rejected by the tool's validation, so nothing was saved then. It resent the call once and that one succeeded.
+>
+> **What the next session finds**
+> - alpha38, alpha39 and alpha40 are released and recorded, and the owner has their answer with the Release link.
+> - Still open: the owner's yes/no on a separate system keyboard app (AX1g), and their feedback from the tablet on the long-press feel.
+> - One change is in the code but not in alpha40: the stuck-page window for the fallback long-press detector went from 60 to 30 seconds. It ships with the next release, which needs versionCode 142.
+>
+> A new session starts with `bash tools/resume.sh`, then reads `CHECKPOINT.md` "Do this next".
+<!-- sha:cb3448a4dc9d -->
