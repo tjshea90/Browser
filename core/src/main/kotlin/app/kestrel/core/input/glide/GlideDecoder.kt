@@ -32,7 +32,7 @@ class GlideKeys(val cx: FloatArray, val cy: FloatArray, val pitch: Float, val ke
 /** Every number the decoder is tuned by, in one place (the accuracy test and the tuning run read and change them). Distances are in key pitches, costs in pitch squared. */
 class GlideParams(
     /** Points the finger path is resampled to. */
-    val samples: Int = 48,
+    val samples: Int = 64,
     /** A word's first / last letter must lie within this many pitches (squared here) of where the finger went down / lifted. */
     val endReach2: Float = 3.2f,
     /** A letter further than this (squared pitches) from the whole path counts as this much, so one missed key does not rule a word out alone. */
@@ -40,24 +40,24 @@ class GlideParams(
     /** A letter further than this from the path (squared) was not visited at all: the word is dropped. */
     val missLimit2: Float = 6.0f,
     /** How many words go from the quick pass to the careful one. */
-    val keep: Int = 150,
+    val keep: Int = 250,
     val quickEnds: Float = 0.7f,
     val quickPrior: Float = 0.12f,
     /** The careful pass: weight of the path between two letters straying from the straight line, and of the first / last letter. */
-    val shapeW: Float = 1.0f,
-    val endW: Float = 2.0f,
+    val shapeW: Float = 2.0f,
+    val endW: Float = 3.0f,
     /** The language: nats of word probability that are worth one unit of path cost. */
-    val lmW: Float = 0.30f,
+    val lmW: Float = 0.50f,
     /** The language weight is not fixed: a clean glide (every candidate fits well) trusts the path, a sloppy one trusts the language. It is [lmA] times the best fit's cost per letter, kept between [lmMin] and [lmMax]; [lmA] 0 = always [lmW]. */
-    val lmA: Float = 0f,
-    val lmMin: Float = 0.15f,
+    val lmA: Float = 1.5f,
+    val lmMin: Float = 0.12f,
     val lmMax: Float = 1.2f,
     /** How much of the probability comes from the word before (when the pair is known). */
     val bigramMix: Float = 0.4f,
     /** A path shorter than this many pitches is a tap, not a glide. */
     val minLength: Float = 1.2f,
     /** First / last letter may be matched this many samples away from the very end of the path. */
-    val slack: Int = 2,
+    val slack: Int = 1,
 )
 
 class GlideCandidate(val text: String, val score: Float, val cost: Float, val prior: Float)
