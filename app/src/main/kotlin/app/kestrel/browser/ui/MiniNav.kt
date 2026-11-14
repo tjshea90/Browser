@@ -655,6 +655,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     // ------------------------------------------------------------------ for tests
 
     internal fun pressKeyForTest(label: String): Boolean = keys.pressLabel(label)
+    /** Tests: where the cursor is in the address bar's text, and the text before and after it. */
+    internal val cursorForTest: Int get() = model.cursor
     internal fun pressBarForTest() = bar.tap()
     internal fun pressToggleForTest() = toggle()
     /** Tests: a finger on the keys view (pixels of that view), the way the screen would send it. */
@@ -778,7 +780,21 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                 if (keyboardShowing) drawCaret(c, pad, h)
                 return
             }
-            val shown = TextUtils.ellipsize(raw, text, avail - if (keyboardShowing) context.dpf(4f) else 0f, if (keyboardShowing) TextUtils.TruncateAt.START else TextUtils.TruncateAt.END).toString()
+            val room = avail - if (keyboardShowing) context.dpf(4f) else 0f
+            val at = if (keyboardShowing && !model.allSelected) model.cursor.coerceIn(0, raw.length) else raw.length
+            if (keyboardShowing && at < raw.length && text.measureText(raw) > room) { // the cursor was moved into a text that is too long for the bar: keep the cursor in view with the words around it
+                val after = raw.substring(at)
+                val afterRoom = Math.min(text.measureText(after), room / 3f)
+                val preShown = TextUtils.ellipsize(raw.substring(0, at), text, room - afterRoom, TextUtils.TruncateAt.START).toString()
+                val postShown = TextUtils.ellipsize(after, text, afterRoom, TextUtils.TruncateAt.END).toString()
+                val pw = text.measureText(preShown)
+                text.color = pal.fg
+                c.drawText(preShown, pad, base, text)
+                c.drawText(postShown, pad + pw + context.dpf(3f), base, text)
+                drawCaret(c, pad + pw + context.dpf(1.5f), h)
+                return
+            }
+            val shown = TextUtils.ellipsize(raw, text, room, if (keyboardShowing) TextUtils.TruncateAt.START else TextUtils.TruncateAt.END).toString()
             val tw = text.measureText(shown)
             if (keyboardShowing && model.allSelected) { // "selects everything": the whole address lit, the way a selection looks
                 fill.color = (pal.accent and 0x00FFFFFF) or 0x77000000
@@ -786,7 +802,11 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             }
             text.color = pal.fg
             c.drawText(shown, pad, base, text)
-            if (keyboardShowing && !model.allSelected) drawCaret(c, pad + tw + context.dpf(1.5f), h)
+            if (keyboardShowing && !model.allSelected) {
+                if (at < raw.length && !shown.startsWith("\u2026")) { // the cursor is inside a text that fits: the caret stands where it is
+                    drawCaret(c, pad + text.measureText(raw.substring(0, at)) + context.dpf(1.5f), h)
+                } else drawCaret(c, pad + tw + context.dpf(1.5f), h)
+            }
         }
 
         private fun drawCaret(c: Canvas, x: Float, h: Float) {
