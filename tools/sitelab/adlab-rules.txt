@@ -25,3 +25,5 @@ adlab.test##+js(trusted-replace-xhr-response, '"adSlots"', '"no_slots"', /r/stre
 adlab.test##+js(nobab)
 adlab.test##+js(popads-dummy)
 adlab.test##+js(href-sanitizer, a#lnk, ?url)
+! AW1d: a network rule for every site called adlab, whatever the ending (control.test is not one)
+/r/ent.js$script,domain=adlab.*
