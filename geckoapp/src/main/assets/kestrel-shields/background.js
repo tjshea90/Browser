@@ -19,7 +19,7 @@ var MODE_OFF = 0, MODE_ON = 1, MODE_LEGACY = 2;
 // ---------------------------------------------------------------- per-page configuration ("cfg"): one question per main-frame navigation
 var cfgMode = new Map();   // page host -> MODE_*
 var cfgAt = new Map();     // page host -> when the answer arrived
-var cfgFlags = new Map();  // page host -> flags from the app (1 = the pop-up and redirect guard applies)
+var cfgFlags = new Map();  // page host -> flags from the app (1 = the pop-up and redirect guard applies, 2 = embeds wait for a tap, 4 = stand-ins for blocked files and scriptlets are allowed)
 var cfgWait = new Map();   // page host -> promise of the answer being fetched
 var CFG_MAX = 300;
 var CFG_TTL = 60000;       // a Shields switch changed in Settings reaches pages that are already open within this time (a switch on the page itself reloads it at once)
@@ -148,7 +148,7 @@ function markStats() { // lazy timer: nothing is scheduled while no request is b
 function reportStats(force) {
   if (!force && !statsDirty) return;
   statsDirty = false;
-  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, w: (guardState + ', ' + guardBlocked + ' blocked | ' + slState + (slPages ? ', ' + slPages + ' pages ran ' + slCalls + ' calls' + (slBad ? ' (' + slBad + ' failed)' : '') + ', ' + slEarlyPages + ' before the page\'s first script' : '') + (slEarlySet ? ', ' + slEarlySet + ' sites set up early (' + slReg.size + ' kept, ' + slEarlyAsks + ' asks)' : '') + (slEarlyFail ? ', early error: ' + slEarlyFail : '') + ' | ' + stats.last).slice(0, 400) }).catch(function () {});
+  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, w: (guardState + ', ' + guardBlocked + ' blocked | ' + slState + (slPages ? ', ' + slPages + ' pages ran ' + slCalls + ' calls' + (slBad ? ' (' + slBad + ' failed)' : '') + ', ' + slEarlyPages + ' before the page\'s first script' : '') + (slEarlySet ? ', ' + slEarlySet + ' sites set up early (' + slReg.size + ' kept, ' + slEarlyAsks + ' asks)' : '') + (standIns ? ', ' + standIns + ' blocked files answered with a stand-in' : '') + (slEarlyFail ? ', early error: ' + slEarlyFail : '') + ' | ' + stats.last).slice(0, 400) }).catch(function () {});
 }
 
 // ---------------------------------------------------------------- the page report (Diagnostics > Page report)
@@ -466,6 +466,20 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   return Promise.resolve(true);
 });
 
+// AW1c: the verdict word carries the number of a stand-in resource (bits 8-12, redirects.js); the app lets the extension use them while the Settings switch "Fix ad and anti-adblock scripts" and Shields
+// are on for the page (flag 4 of the page configuration). A stand-in that does not suit the kind of request (a script for a picture) is not used: the request is cancelled as before.
+var standIns = 0;
+function standIn(v, d, host) {
+  var id = (v >>> 8) & 31;
+  if (id === 0 || ((cfgFlags.get(host) || 0) & 4) === 0 || typeof KestrelRedirects === 'undefined') return null;
+  try {
+    var u = KestrelRedirects.urlFor(id, d.type);
+    if (u === null) return null;
+    standIns++; markStats();
+    return { redirectUrl: u };
+  } catch (e) { return null; }
+}
+
 function decide(d, page, host, mode) {
   var gate = embedGate(d, page, host);
   if (gate !== null) return gate;
@@ -477,7 +491,11 @@ function decide(d, page, host, mode) {
       var us = (performance.now() - t0) * 1000;
       stats.checks++; stats.us += us; if (us > stats.maxUs) stats.maxUs = us; if (us > 2000) stats.slow++;
       markStats();
-      if ((v & 1) !== 0) { countBlock(page, (v >>> 2) & 3); logBlocked(d); return { cancel: true }; }
+      if ((v & 1) !== 0) {
+        countBlock(page, (v >>> 2) & 3); logBlocked(d);
+        var stand = standIn(v, d, host); // AW1c: a rule that names a harmless stand-in (an empty script, a 1x1 picture ...) gets it answered instead of a bare cancel, so players and pages that wait for the file go on
+        return stand !== null ? stand : { cancel: true };
+      }
       return {};
     } catch (e) {
       stats.errors++; stats.last = 'check failed: ' + (e && e.message); markStats();
