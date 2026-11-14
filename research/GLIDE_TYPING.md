@@ -10,7 +10,7 @@
   finger drifts a little inside the key. Slides that start on Shift / 123 / space / .com / Go / Backspace are not glides.
 * A glide that fits nothing says "no word fits - try again" in the strip instead of typing the nearest word.
 * The keyboard learns (all local, nothing leaves the tablet): how THIS thumb lands beside the key it aims at, the words typed letter by letter that the word list lacks (remembered when Go is pressed),
-  and the names of the sites visited (host names such as doraby become glideable words).
+  and the names of the sites visited (host names such as doraby become glideable words). From alpha35 it also learns the person's own words and word pairs from what is kept, picked and typed (section 8).
 * Settings > Appearance > "Glide typing on the mini keyboard" (default on). Menu > Diagnostics has a "Glide typing:" line: glides, how often the best word was kept / another guess was picked / the word was deleted
   right away, decode time, the learned thumb habit in dp, own-word count. THAT line is what turns "feels accurate" into a number on the tablet.
 
@@ -117,3 +117,43 @@ With the warm-up decode (second run of the build): `Glide typing: 1 glides; deco
 instead of 1.6-1.9 s (the emulator's runtime compiled the decoder during the warm-up).
 Not run: any real thumb, the real tablet's speed (the emulator's 1.6 s per decode is software emulation; see section 4), the owner's feel for the key size.
 
+## 8. Learning from THIS person (AU2, owner message 35, 2026-11-14)
+
+> "make the new glide type keyboard learn from my typing. I can choose words that I meant to type if it predicts incorrectly, and over time it will become more accurate by learning my more common word patterns"
+
+### What it learns (all on the tablet, never sent anywhere: `files/glide_personal.txt`, one line per entry)
+| Event | Word weight | Pair weight (word before -> this word) |
+| :- | -: | -: |
+| a glide that was kept (not deleted right away) | +1 | +1 |
+| a guess picked from the strip instead of the first one | +3 | +3 |
+| a glide deleted, then the right word glided or typed in its place | the replacement +3, the deleted word nothing | +3 |
+| words typed letter by letter, counted when Go is pressed (glided words were counted when kept; an address such as `doraby.com/movie` is never learned) | +1 each | +1 for neighbours typed letter by letter |
+
+`PersonalModel` (core): lowercase a-z and the apostrophe only, 2 to 24 letters; at most 4000 words and 8000 pairs (the least used tenth goes first); when the total weight passes 6000 everything halves and what fell under a fifth of a use is forgotten, so old habits fade.
+
+### How it changes the answer
+The decoder's language prior was `ln( (1 - mix) * P(word) + mix * P(word | word before) )` with the shipped list. With a person model:
+* `P(word)` gets extra mass: every use is worth 2e7 occurrences on the list's scale (the list totals about 5.4e11), up to 200 uses. One use makes a word about as likely as the 10 000th commonest; ten uses the 1 500th; a hundred the 150th. A word the list lacks becomes glideable once it was typed (the older "own words" list does the same).
+* `P(word | before)` is mixed with the person's own pair share, trusted more the more often the word before was seen: `n / (n + 4)`, never more than 70 %. So "best" -> "pizza" typed or picked a few times makes "pizza" the likely word after "best" even when its shape is close to another.
+* Nothing can take over: both boosts have a ceiling; one pick cannot outweigh a clear gesture (the path cost still decides first; the language only weighs in when two words fit).
+
+### Measured (simulated person; seeded; `GlideEval curve=1`, `PersonalModelTest`)
+The person writes 70 % of what they glide from their own phrases of 2 to 4 words and has 150 favourite words outside the 20 000 commonest. 1800 glides in six stretches of 300; first guess right, %:
+
+| finger | | stretch 1 | 2 | 3 | 4 | 5 | 6 |
+| :- | :- | -: | -: | -: | -: | -: | -: |
+| normal (aim 8 dp) | without learning | 86.3 | 90.7 | 84.0 | 85.7 | 87.7 | 85.7 |
+| | with learning | 93.0 | 96.7 | 94.3 | 95.3 | 97.0 | 95.0 |
+| | own favourites, with | 93.8 | 98.5 | 95.6 | 97.3 | 98.3 | 96.6 |
+| sloppy (aim 11 dp) | without learning | 71.7 | 76.0 | 71.3 | 69.0 | 71.7 | 67.0 |
+| | with learning | 81.0 | 86.7 | 87.7 | 85.3 | 90.3 | 89.3 |
+| | own favourites, with | 81.9 | 89.1 | 88.9 | 89.6 | 92.1 | 90.2 |
+
+Weaker habits (30 % own phrases, 60 favourites; the model knew 793 words and 637 pairs at the end): normal 87.7 .. 91.7 without against 90.0 .. 96.3 with learning; sloppy 73.7 .. 80.3 against 82.3 .. 89.0; the favourite words themselves 61.7 .. 75.6 without against 85.2 .. 95.1 with.
+
+Reading: most of the gain arrives inside the first 300 glides (a pick counts three times), after that the model keeps the lead; a sloppier finger gains more because it leans on the language more. The test `learningMakesAPersonWithHabitsMoreAccurateOverTime` keeps at least +3 points overall and +5 points on the person's own words in the last third.
+What the simulation cannot say: how much a REAL person repeats words and phrases (70 % own phrases is an assumption, 30 % a cautious one), and how a real thumb's mistakes cluster. The tablet's Diagnostics "Glide typing" line now ends with `learned N words and M word pairs from your typing, a learned word was the first guess K times`; THAT is the real count.
+
+### Keeping and forgetting it
+Saved at most every 30 seconds while typing, when the keyboard closes and when the browser stops (temp file, then rename, so a cut-off never leaves a half file). Settings > Privacy and security > "Forget what the keyboard learned" deletes the table, the thumb habit and the own-word list in one press.
+Not part of Back up & restore: that file is plain text in Downloads which any app can read, and this table is a list of what the person typed. It re-learns in about 300 glides (above), so an uninstall costs little.

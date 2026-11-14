@@ -1,21 +1,23 @@
-# CHECKPOINT 1965 — read me first, then TASKS.md
+# CHECKPOINT 1978 — read me first, then TASKS.md
 
-**Written:** 2026-11-14T03:12:44Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `b737cdb` (this checkpoint is the commit after it)
+**Written:** 2026-11-14T03:23:33Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `f8a2fb0` (this checkpoint is the commit after it)
 
 ## Just done
-alpha34 SHIPPED AND RECORDED (run 43549663530 green, Release kestrel-g-v0.3.0-alpha34, APK 93,857,868 B). AT1 ticked. AU1 in progress in the tree: ToggleView removed from MiniNav (toggle() instead), new ui/HotCorner.kt (invisible 72 dp square observed in BrowserActivity.dispatchTouchEvent, long press 380 ms, cancels the page's touch, toggles the panel; the panel hangs below the square), Settings row relabelled; compiles.
+AU2 learning keyboard: PersonalModel tests (11) + MiniKeyboard typedPairs tests + research/GLIDE_TYPING.md section 8 (simulated gain: normal 86->95, sloppy 72->89 % first guess) + TASKS AU2a-d ticked; AU1 hot corner code + HotCornerTest done
 
 ## Do this next
-AU1: update MiniNavTest (the toggle tests use nav.pressToggleForTest() = toggle(), check they still pass) + new HotCornerTest (Robolectric: long press in the square fires once, a tap or a drag does not, a second finger cancels, an event outside the square never arms, the rest of the touch is swallowed after firing, zone()==null disables) ; then emulator proof with a stationary swipe (adb shell input swipe x y x y 700) at the top right corner, screenshots; then AU2 (PersonalModel), AU3 (page text field). Version for this batch = alpha35 (versionCode 136) - bump only when shipping. The owner has NOT yet been told that alpha34 is out (interim answer is next).
+AU3 first: write research/MINI_NAV.md page-field section after reading GeckoView 160 SessionTextInput (restartInput/showSoftInput/hideSoftInput) from the aar under scratchpad/aar; then BrowserActivity: wrap session.textInput.delegate, track field focus, route MiniNav typed/glided text via geckoView.onCreateInputConnection(EditorInfo()) commitText/deleteSurroundingText/Enter; then MiniNavTest + one emulator session for AU1+AU2+AU3 on a lab page under tools/sitelab; then bump versionCode 136 / alpha35 and ship
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+    M  TASKS.md
+    M  research/GLIDE_TYPING.md
 
 ## Last ten checkpoints
 ```
+  a2b40ea ckpt 1965: alpha34 SHIPPED AND RECORDED (run 43549663530 green, Release kestrel-g-v0.3.0
   937563e ckpt 1958: Owner message 35 written into TASKS (AU1 invisible long-press corner instead 
   7898087 ckpt 1954: alpha34 (gecko code 135) DISPATCHED: android.yml run 43549663530 (run #85, st
   0a7c905 ckpt 1953: gated kestrel-g-v0.3.0-alpha34 (gecko code 135) and pushed it: handoff self-t
@@ -25,8 +27,7 @@ AU1: update MiniNavTest (the toggle tests use nav.pressToggleForTest() = toggle(
   7aca167 ckpt 1925: AT1c/d: tests written and green: LexiconFileTest 6, GlideDecoderTest 15 (tiny
   5ae6905 ckpt 1920: AT1b/c/d first cut works: MIT symspell word list compiled to geckoapp/src/mai
   b547793 ckpt 1898: Owner message 34 written into TASKS (AT1 glide typing on the mini keyboard, b
-  307f5cf ckpt 1883: alpha33 SHIPPED AND RECORDED: run 43536066565 green (all jobs success, pref c
 ```
 
-(5 automatic checkpoint(s) since the last deliberate one — the
+(12 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
