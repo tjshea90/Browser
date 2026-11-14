@@ -46,6 +46,8 @@ async function open(body, opts) {
     const frame = page.frames().find((f) => f !== page.mainFrame() && f.url().replace(/#.*$/, '') === want);
     if (frame) await frame.evaluate((mm) => { (window.__listeners || []).forEach((f) => f(mm, {})); }, m);
   });
+  // the guard belongs in the page world, where there is no extension API (it stays inert wherever `browser.runtime` exists): it is loaded BEFORE the fake API below, which stands for the isolated world of content.js
+  await page.addInitScript({ content: GUARD });
   await page.addInitScript((cfg) => {
     window.__msgs = []; window.__listeners = [];
     window.browser = { runtime: {
@@ -59,7 +61,6 @@ async function open(body, opts) {
     } };
   }, { off: !!opts.off });
   await page.addInitScript({ content: CONTENT });
-  await page.addInitScript({ content: GUARD });
   await page.goto('https://movie.example/');
   return page;
 }
