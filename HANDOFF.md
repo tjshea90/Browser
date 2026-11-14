@@ -41,6 +41,14 @@ The single entry point for a new Claude session or account. After this, in order
 `core/` pure Kotlin (filter engine, URL/omnibox, HTTPS policy, session codec) - `app/` Android UI + data + shield (+ `src/webview` engine code) - `geckoapp/` Gecko engine code + the
 built-in "Kestrel Shields" WebExtension - `tools/` also holds the Gradle JVM CLI that compiles filter lists (`.kfs`) next to the shell tooling - `web-tests/` - `docs/`. Details: `docs/ARCHITECTURE.md`.
 
+Where the owner-visible features of alpha30-33 live (each has a research note with the decisions and the test list; read it before touching the code):
+- Home restored as the last page: `core/session/SessionCodec.kt` (flag `H`) + gecko `BrowserActivity.restore()` / `attachContent` guard - `research/COLD_START.md` (AQ1). Last-page picture at start: `LastLook*` - same file (EY-1).
+- Blocked-page icon (1 s, press opens a new tab): `app/ui/BlockedChip.kt`, `BrowserActivity.onPopupBlocked` - `research/MINI_NAV.md` (AR1).
+- One-hand top-right panel + its own keyboard: `app/ui/MiniNav.kt`, `core/input/MiniKeyboard.kt`, own-clock animation (Android animators are OFF on the owner's tablet) - `research/MINI_NAV.md` (AR2).
+- Storage tidy: `app/diag/StorageTidy.kt`, `core/update/ApkFiles.kt`, `UpdateManager.sweepFiles` - `research/UPDATE_STORAGE.md` (AO4). Video size estimates: `core/media/SizeEstimate.kt` - `research/VIDEO_SIZES.md` (AO2).
+- "CPU by process" Diagnostics line: `app/diag/CpuMeter.kt`, `core/diag/CpuUse.kt` - `research/VIDEO_SMOOTHNESS.md` (AO1). One-press play through fake layers: `assets/kestrel-shields/guard-main.js` (AP1).
+- Emulator rig for all of the above (AVD, adb root/run-as, lab servers `tools/sitelab/`): section 3 and `research/DIAG_TOOLS.md`; the uiautomator `text` attribute of a long Diagnostics text is ONE node - grep the raw dump, do not cut it.
+
 ## 5. Decisions already made - do not redo
 Engine choice (two builds), Google default search, hotspot rules, signing with the pinned public dev key, no GMS, no AndroidX in the WebView build, the review findings S1-S13/C1-C9: `BRIEF.md`, `docs/handoff/REVIEW-2026-11-11.md`.
 
