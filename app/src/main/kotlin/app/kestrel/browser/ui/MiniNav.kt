@@ -1311,6 +1311,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         const val HOLD_MS = 420L
         /** A glide within this long after a deleted glide that gives the deleted word first again is a retry (the deleted word moves to second place), when the next candidate fits the path about as well (cost per letter, pitch squared). */
         const val RETRY_MS = 6000L
+        /** A word typed letter by letter this soon after a glided word was deleted is taken as what the deleted glide meant (AX1). */
+        const val RETYPE_MS = 30_000L
         const val RETRY_GAP = 1.5f
         private const val TOP_ROW = "qwertyuiop"
         private const val DIGITS = "1234567890"
