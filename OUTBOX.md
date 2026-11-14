@@ -1490,3 +1490,20 @@
 ## 2026-11-14T00:27:42Z
 > Status: the blocked-page icon and the top-right panel are both proven on the emulator and ticked. I'm doing one last emulator check that the new Diagnostics lines show on screen, then I'll run the full test suite and ship alpha33.
 <!-- sha:b8c2b206b2a0 -->
+
+## 2026-11-14T00:33:03Z
+> **It would only help storage. It would not make the browser faster.**
+>
+> - **Speed:** Pages would load and scroll exactly the same.
+>   - **The change:** Android currently keeps two copies of the browser engine's biggest files on your tablet, one packed and one unpacked. The change would drop the second copy, and the engine itself would be identical.
+>   - **The gain:** about 73 MB freed, roughly 4% of your 1.6 GB free.
+>   - **The cost:** each update download would be about 65 MB bigger, a couple of extra minutes on your hotspot.
+>   - **Start-up:** the one thing I can't predict is how fast the browser opens right after an update. It could be slightly faster or slower.
+>   - **Other options:** I found nothing that would make the engine itself faster on your tablet. Mozilla's own version is already tuned for it, and one I built would run slower. The remaining speed work is in settings and memory handling, which the other session is already doing.
+> - **Safety:** your bookmarks, history and settings aren't touched by this. The risk is that Kestrel G fails to start on your tablet, and you'd then reinstall the previous version. Mozilla uses this method for Firefox on most phones, as far as I can tell from their bug tracker. Your tablet is unusual, though (32-bit, Android 10 Go).
+> - **Confidence:** no, not yet. I think it will probably work, but I haven't tested it anywhere. I can't test it here, because there's no tablet or emulator in this sandbox. The way to find out is to test it on a computer-simulated tablet first, and only then on yours.
+>
+> **Nothing has been changed.** I checked both versions of the code, and the setting is untouched. The other session merged my notes and filed them as a finished question plus one waiting to-do, "AS1". That item says it won't be tried on your tablet until you say yes. It also marked my message copies as automatic, so there's nothing for you to clean up.
+>
+> My advice is to skip it unless running out of storage becomes a problem again. If you do want it, the next step is to have the other session test it on the simulated tablet first. Do you want to skip it, or have it tested there first?
+<!-- sha:971e8f5b0b20 -->
