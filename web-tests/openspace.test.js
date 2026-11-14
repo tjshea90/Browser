@@ -89,7 +89,7 @@ test('a press on text is the engine\'s (it selects the word), not open space; bl
   assert.equal((await opens(page)).length, 1, 'blank space below the text is open space');
 });
 
-test('a selection that was there already does not hide a press on blank space (only a CHANGE of the selection means the engine selected a word)', async () => {
+test('a selection that was there already and stays does not hide a press on blank space (only a NEW selection means the engine selected a word)', async () => {
   const page = await open(`<p id="t" style="margin:0;padding:20px;width:300px">some words of a paragraph</p><div style="height:600px"></div>`, selectWord);
   await press(page, [[50, 30]]);
   assert.deepEqual(await opens(page), [], 'the word is selected');
