@@ -147,4 +147,71 @@ class PersonalModelTest {
         assertTrue("own favourites in the last third: ${on.favouriteBlocks.last()} % against ${off.favouriteBlocks.last()} %", on.favouriteBlocks.last() >= off.favouriteBlocks.last() + 5.0)
         assertTrue("it knows what was used", on.known > 100 && on.pairs > 50)
     }
+
+    // ------------------------------------------------------------------ AV2: corrections, the last two words, the short memory
+
+    private fun ambiguous(): Triple<ArrayLexicon, GlideDecoder, GestureSim.Path> {
+        // "world" is the commoner word; the path is drawn for "wield" (i and o, e and r are neighbours): find a finger that makes the keyboard guess "world"
+        val lex = ArrayLexicon(listOf("world" to 900_000_000L, "wield" to 40_000_000L, "word" to 500_000_000L, "the" to 20_000_000_000L), 5.4e11)
+        val dec = GlideDecoder(keys)
+        for (seed in 1L..300L) {
+            val p = GestureSim(keys, Random(seed)).path("wield", SimNoise.NORMAL) ?: continue
+            val r = dec.decode(p.xs, p.ys, p.xs.size, listOf(lex), null, 3)
+            if (r.size >= 2 && r[0].text == "world" && r.any { it.text == "wield" }) return Triple(lex, dec, p)
+        }
+        error("no seed makes the keyboard guess world for a wield path")
+    }
+
+    @Test fun aCorrectionLiftsWhatThePersonMeantWhenThatGuessComesUpAgainAndOnlyThen() {
+        val (lex, dec, p) = ambiguous()
+        val pm = PersonalModel(); repeat(3) { pm.addConfusion("world", "wield") }
+        dec.personal = pm
+        assertEquals("the person meant wield every time the keyboard guessed world: now wield is first", "wield", dec.decode(p.xs, p.ys, p.xs.size, listOf(lex), null, 3)[0].text)
+        val other = PersonalModel(); repeat(3) { other.addConfusion("word", "wield") } // a correction of ANOTHER guess does not change this one
+        dec.personal = other
+        assertEquals("world", dec.decode(p.xs, p.ys, p.xs.size, listOf(lex), null, 3)[0].text)
+        dec.personal = PersonalModel().also { it.addConfusion("world", "wield", 0.0f) }
+        assertEquals("a correction with no weight is nothing", "world", dec.decode(p.xs, p.ys, p.xs.size, listOf(lex), null, 3)[0].text)
+    }
+
+    @Test fun theLastTwoWordsCanDecideBetweenTwoWordsThatLookAlike() {
+        val (lex, dec, p) = ambiguous()
+        val pm = PersonalModel(); repeat(8) { pm.add("whole", "wield", 1f, "the") }
+        dec.personal = pm
+        assertEquals("the whole wield", "wield", dec.decode(p.xs, p.ys, p.xs.size, listOf(lex), "whole", 3, "the")[0].text)
+        assertEquals("after another pair of words nothing changes", "world", dec.decode(p.xs, p.ys, p.xs.size, listOf(lex), "big", 3, "a")[0].text)
+        assertEquals("with only one word before, the three-word habit is not used", "world", dec.decode(p.xs, p.ys, p.xs.size, listOf(lex), "whole", 3, null)[0].text)
+    }
+
+    @Test fun aWordUsedJustNowIsLikelierThanOneUsedLongAgoAndItFades() {
+        val total = 5.4e11
+        val m = PersonalModel(); m.add(null, "doraby")
+        val fresh = m.recentMass("doraby", total)
+        assertTrue("used just now", fresh > 0.0)
+        repeat(300) { m.add(null, "other" + ('a' + it % 20) + ('a' + it / 20)) }
+        val faded = m.recentMass("doraby", total)
+        assertTrue("300 other words later: $fresh -> $faded", faded < fresh * 0.2)
+        val off = PersonalModel(recency = false); off.add(null, "doraby")
+        assertEquals("with the short memory off there is none", 0.0, off.recentMass("doraby", total), 0.0)
+    }
+
+    @Test fun correctionsTriplesAndRecencySurviveSavingAndAnOldFileStillLoads() {
+        val m = PersonalModel()
+        m.add("best", "pizza", 3f, "the"); m.add("best", "pizza", 1f, "the"); m.addConfusion("world", "wield", 2f)
+        val back = PersonalModel.parse(m.serialize())
+        assertEquals(m.confusionWeight("world", "wield"), back.confusionWeight("world", "wield"), 0.01f)
+        assertEquals(m.tripleProb("the", "best", "pizza"), back.tripleProb("the", "best", "pizza"), 0.01f)
+        assertTrue(back.tripleWeight("the", "best") > 0f)
+        assertTrue(back.recentMass("pizza", 5.4e11) > 0.0)
+        val old = PersonalModel.parse("w hello 3.00\nw world 1.00\np hello world 2.00\n") // a file from before AV2
+        assertEquals(2, old.wordCount); assertEquals(1, old.pairCount); assertEquals(0, old.confusionCount)
+        assertEquals(0, PersonalModel.parse("c a a 3.0\nc x\nt a b 2.0\n").confusionCount) // a correction of a word by itself and a broken line are nothing
+    }
+
+    @Test fun theEngineCountsCorrectionsAndSaysSo() {
+        val bytes = LexiconFile.build(listOf("the" to 530_000_000_000L, "hello" to 500_000_000L, "world" to 900_000_000L).map { LexiconFile.Entry(it.first, it.second) }, emptyList())
+        val g = GlideTyping({ bytes }, direct); g.prepare(keys, null, null)
+        g.learn("big", "wield", 3f, "a", "world")
+        assertTrue(g.stats.line(), g.stats.line().contains("1 corrections and 1 three-word phrases remembered"))
+    }
 }
