@@ -500,7 +500,7 @@ A question, not an order: answer it in plain words with a TESTED recipe, then le
   - [ ] RX3-G7 skip ads inside other video players (generic: observe a player's class only after a video in it fired play; ad-state words; same actions as Y2)
   - [ ] RX3-G2 tap evidence recorded by content.js with isTrusted listeners; the DOM-event relay may forward only open/click/overlay/form/redirect; web tests for a forged tap
   - [ ] RX3-G3 remove the postMessage assist channel (cross-frame click injection); assist hop through content.js + background tabs.sendMessage; the 13 AP1 web tests still pass
-  - [ ] RX3-G1 guard-main.js and scriptlets-main.js active on the very first page after a cold start (manifest world MAIN, or scripting API with persistAcrossSessions, or exportFunction from content.js); proof /fakeplay as first page after force-stop; handoff test that the manifest lists the guard
+  - [~] RX3-G1 guard-main.js and scriptlets-main.js active on the very first page after a cold start (manifest world MAIN, or scripting API with persistAcrossSessions, or exportFunction from content.js); proof /fakeplay as first page after force-stop; handoff test that the manifest lists the guard {claude/new-session-7d9rxz 2026-11-14T21:28Z}
   - [ ] RX3-G4 neutralize invisible fake layers over a player before the press (outside the player's subtree); web tests incl. negatives
   - [ ] RX3-G5 core PopupGuard (tap evidence, AUTH hosts mirrored, WAIT 150 ms) used by BrowserActivity.refusePopup; strict while the guard is not ready; needs G2
   - [ ] RX3-G6 scripted jump to a listed ad host stopped after any delay unless the tap was on that very link; JumpGuardTest cases; /slowjump lab
