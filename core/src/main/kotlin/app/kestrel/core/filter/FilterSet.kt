@@ -244,7 +244,7 @@ class FilterSet internal constructor(
                         if (exception) { ctx.excepted = true; return }
                         val rd = (f ushr Bits.REDIRECT_SHIFT) and 31
                         if (rd != 0 && ctx.redirect == 0) ctx.redirect = rd
-                        if (!ctx.blocked || (f and Bits.IMPORTANT) != 0) ctx.category = (f ushr Bits.CAT_SHIFT) and 3
+                        ctx.category = (f ushr Bits.CAT_SHIFT) and 3 // as before AW1c: with several matching host rules the last one decides (engine.js does the same)
                         ctx.blocked = true
                         if ((f and Bits.IMPORTANT) != 0) { ctx.important = true; return }
                     }
