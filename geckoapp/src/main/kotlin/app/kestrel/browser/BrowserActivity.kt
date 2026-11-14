@@ -147,6 +147,19 @@ open class BrowserActivity : Activity(), DockListener {
         override fun navForward() { current?.let { goForward(it) } }
         override fun navSubmit(text: String) { current?.let { navigate(it, text) } }
         override fun navOpenChanged(open: Boolean) { prefs.miniNavOpen = open }
+        // glide typing on the mini keyboard (AT1): the switch, the thumb habit it learned, the words typed that the word list lacked, and the names of the sites visited
+        override fun navGlideEnabled() = prefs.glideTyping
+        override fun navGlideHabit(): FloatArray? = prefs.glideHabit
+        override fun navGlideHabitChanged(habit: FloatArray) { prefs.glideHabit = habit }
+        override fun navGlideWords(): String = prefs.glideWords
+        override fun navGlideWordsChanged(text: String) { prefs.glideWords = text }
+        override fun navGlideHosts(done: (List<String>) -> Unit) {
+            val d = db ?: return
+            Io.exec {
+                val hosts = try { (d.history(300) + d.bookmarks()).mapNotNull { e -> try { java.net.URI(e.url).host } catch (ex: Exception) { null } }.distinct() } catch (ex: Exception) { emptyList() }
+                runOnUiThread { done(hosts) }
+            }
+        }
     }
     private lateinit var restoreOverlay: RestoreOverlay // over the page view while a page whose engine process died comes back (last preview instead of white)
     private var restoringTab: Tab? = null
@@ -517,6 +530,7 @@ open class BrowserActivity : Activity(), DockListener {
         miniNav = app.kestrel.browser.ui.MiniNav(this, pal, miniNavListener)
         content.addView(miniNav, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply { topMargin = dp(4); rightMargin = dp(6) })
         miniNav.available = prefs.miniNavToggle
+        miniNav.setGlideEnabled(prefs.glideTyping)
         miniNav.setOpen(prefs.miniNavOpen, animate = false, notify = false)
         findBar = FindBar(this, pal, object : FindBar.Listener {
             override fun query(q: String) { findIn(q, false) }

@@ -512,6 +512,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         private var armed = false                 // the finger went down on a letter: it may turn into a glide
         private var gliding = false
         private var glideDown: KeySpec? = null
+        private var pressedKey: KeySpec? = null   // the letter the finger went down on (what a tap that drifts a little still types)
         private var downBox: KeyBox? = null
         private var gx = FloatArray(256); private var gy = FloatArray(256); private var gn = 0
         private var fadeStart = 0L
@@ -669,7 +670,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
         private fun beginGlide() {
             gliding = true
-            glideDown = down
+            glideDown = pressedKey
             down = null
             handler.removeCallbacks(repeat); handler.removeCallbacks(unlight)
             litKey = null
@@ -730,14 +731,15 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                     removeCallbacks(fadeStep); gn = 0; fadeStart = 0L
                     down = keyAt(e.x, e.y); light(down)
                     if (down?.key === Key.Backspace) { onKey?.invoke(Key.Backspace); handler.postDelayed(repeat, REPEAT_FIRST_MS) }
-                    if (glideOn && !model.symbols && isLetter(down)) { armed = true; downBox = boxOf(down); addPoint(e.x, e.y) }
+                    if (glideOn && !model.symbols && isLetter(down)) { armed = true; pressedKey = down; downBox = boxOf(down); addPoint(e.x, e.y) }
                 }
                 MotionEvent.ACTION_MOVE -> {
                     if (stripDown >= 0) return true
-                    if (armed) {
+                    if (armed) { // a letter: nothing happens until the finger leaves its key (a glide) or lifts (a tap)
                         addMotion(e)
                         if (!gliding && leftTheKey(e.x, e.y)) beginGlide()
-                        if (gliding) { invalidate(); return true }
+                        if (gliding) invalidate()
+                        return true
                     }
                     val k = keyAt(e.x, e.y); if (k !== down) { down = k; handler.removeCallbacks(repeat); light(k) }
                 }
@@ -748,14 +750,20 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                         return true
                     }
                     if (gliding) { addMotion(e); endGlide(); return true }
-                    armed = false
-                    val k = keyAt(e.x, e.y)
                     handler.removeCallbacks(repeat)
+                    if (armed) { // a tap on a letter types the letter it went down on, even when the finger drifted a little
+                        armed = false
+                        val pk = pressedKey; pressedKey = null
+                        if (pk?.key != null) { light(pk); onKey?.invoke(pk.key!!) }
+                        down = null; gn = 0
+                        return true
+                    }
+                    val k = keyAt(e.x, e.y)
                     if (k != null && k === down && k.key !== Key.Backspace) { light(k); onKey?.invoke(k.key!!) }
                     down = null; gn = 0
                 }
                 MotionEvent.ACTION_CANCEL -> {
-                    handler.removeCallbacks(repeat); down = null; armed = false; stripDown = -1
+                    handler.removeCallbacks(repeat); down = null; armed = false; pressedKey = null; stripDown = -1
                     if (gliding) { gliding = false; fadeStart = SystemClock.uptimeMillis(); postOnAnimation(fadeStep) }
                 }
             }
