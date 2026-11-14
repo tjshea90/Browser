@@ -580,6 +580,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     /** Tests: a finger on the keys view (pixels of that view), the way the screen would send it. */
     internal fun touchKeysForTest(action: Int, x: Float, y: Float) = keys.touch(action, x, y)
     internal fun keyCenterForTest(label: String): Pair<Float, Float>? = keys.centerOf(label)
+    internal fun keysViewForTest(): View = keys
     internal fun chipCenterForTest(i: Int): Pair<Float, Float>? = keys.chipCenter(i)
     internal val candidatesForTest: List<String> get() = keys.candidateTexts()
     internal val keysHeightForTest: Int get() = keys.layoutParams.height
