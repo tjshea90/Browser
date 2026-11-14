@@ -67,6 +67,41 @@ class DefaultListsRegressionTest {
         assertTrue("addresses a page needs were changed: $changed", changed.isEmpty())
     }
 
+    /**
+     * AW1b/e: a scriptlet runs INSIDE the page. For the sites people log in to, search, read the reference of, write code on or mail from, the bundled lists must give none at all
+     * (a new list that adds one has to be looked at by a human before it reaches the tablet), and no site gets a pile of them.
+     */
+    @Test
+    fun noScriptletRunsOnTheSitesPeopleDependOn() {
+        val untouchable = listOf(
+            "www.google.com", "accounts.google.com", "mail.google.com", "duckduckgo.com", "search.brave.com", "www.bing.com", "en.wikipedia.org", "github.com", "gist.github.com", "stackoverflow.com",
+            "developer.android.com", "developer.mozilla.org", "www.paypal.com", "www.amazon.com", "mail.proton.me", "account.proton.me", "claude.ai", "chatgpt.com", "www.bbc.com", "news.ycombinator.com",
+            "www.wikipedia.org", "play.google.com", "www.apple.com", "www.microsoft.com", "login.live.com", "outlook.live.com", "docs.google.com", "drive.google.com", "web.whatsapp.com", "www.linkedin.com",
+        )
+        val touched = untouchable.map { it to fs.scriptletsFor(it).map { c -> ScriptletRules.decode(c)!!.let { d -> d.name + "(" + d.args.joinToString(",") + ")" } } }.filter { it.second.isNotEmpty() }
+        assertTrue("scriptlets for sites that must stay untouched: $touched", touched.isEmpty())
+        // whatever a host gets, it is a handful, never a pile (the extension also caps a payload at ${ScriptletRules.MAX_CALLS} calls)
+        val big = listOf("www.youtube.com", "www.facebook.com", "www.reddit.com", "www.twitch.tv", "twitter.com", "x.com", "www.nytimes.com", "www.instagram.com", "www.tiktok.com")
+            .map { it to fs.scriptletsFor(it).size }.filter { it.second > 25 }
+        assertTrue("a pile of scriptlets: $big", big.isEmpty())
+    }
+
+    /** AW1c: the stand-in a verdict names is one we have, and a document is never answered with one. */
+    @Test
+    fun standInsNameKnownResourcesAndNeverAnswerADocument() {
+        val sample = listOf("https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js", "https://www.googletagmanager.com/gtm.js?id=GTM-1", "https://www.google-analytics.com/analytics.js",
+            "https://imasdk.googleapis.com/js/sdkloader/ima3.js", "https://securepubads.g.doubleclick.net/tag/js/gpt.js", "https://c.amazon-adsystem.com/aax2/apstag.js")
+        var named = 0
+        for (u in sample) for (t in listOf(RequestType.SCRIPT, RequestType.IMAGE, RequestType.XHR, RequestType.SUBDOCUMENT, RequestType.MEDIA, RequestType.OTHER)) {
+            val id = Verdict.redirect(verdict(u, "news.example", t))
+            assertTrue("$u type $t names resource $id", id in 0 until RedirectResources.FILES.size)
+            if (id != 0) named++
+        }
+        val doc = Verdict.redirect(verdict("https://pagead2.googlesyndication.com/", "", RequestType.DOCUMENT))
+        assertEquals("a document is never answered with a stand-in", 0, doc and 0)
+        assertTrue("the real lists name some stand-ins for well-known ad files ($named)", named >= 1)
+    }
+
     @Test
     fun neverBlocksPagesOrEssentialInfrastructure() {
         val doc = RequestType.DOCUMENT
