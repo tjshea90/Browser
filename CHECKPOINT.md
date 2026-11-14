@@ -1,13 +1,13 @@
-# CHECKPOINT 2354 — read me first, then TASKS.md
+# CHECKPOINT 2355 — read me first, then TASKS.md
 
-**Written:** 2026-11-14T23:16:26Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/new-session-7d9rxz` · **builds on:** `652f583c` (this checkpoint is the commit after it)
+**Written:** 2026-11-14T23:41:47Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/new-session-7d9rxz` · **builds on:** `399d766b` (this checkpoint is the commit after it)
 
 ## Just done
-alpha42 shipped to GitHub (gated + pushed + android.yml dispatched): G7 + V1 + V2; waiting for the run
+RX3-V5 and RX3-D1 DONE (ticked): AdMarkers/AdRuns/early look and the outage wait in both download engines; full core suite + app compile green; alpha43 not shipped yet
 
 ## Do this next
-HEARTBEAT trig_01KEDB7Qxd8zFeawjGcAkSQZ (every 2 h; get_trigger to read; delete_trigger when the RX3 job is shipped). alpha42 (gecko code 143, G7 + V1 + V2) was GATED, PUSHED and the android.yml run was DISPATCHED at about 23:18Z (app=gecko full_build=true ref claude/new-session-7d9rxz). WAIT: git ls-remote --tags origin kestrel-g-v0.3.0-alpha42 shows the tag; mcp__github__actions_list list_workflow_runs (owner tjshea90 repo Browser resource_id android.yml, workflow_runs_filter {event workflow_dispatch, branch claude/new-session-7d9rxz}) newest run conclusion success, then list_workflow_jobs for that run id (all success); mcp__github__get_release_by_tag shows the APK. A courier/timing flake (ServerTest, ProxyLinkTest, a web test under load) -> mcp__github__actions_run_trigger rerun_failed_jobs run_id <id>, never a new dispatch. ONLY THEN: bash tools/record-release.sh kestrel-g-v0.3.0-alpha42 "alpha42: ad skipping now also works in other video players (JW Player, Video.js, Plyr and the Google ad players), with the same Settings switch and its own line in Diagnostics; the download list no longer counts hover previews, silent looping banner videos, thumbnail-sized videos and ads as videos, and a link to a video file only counts once Kestrel has asked the site how big it is. Tested on the emulator and in test browsers, not on your tablet." then answer the owner in plain words (Release link https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha42 on its own line; what was proven on the emulator/test browsers vs NOT on the tablet: G7 five scenarios in the real engine, V1 four elements roles + counted 1 of 4, V2 asked 2 counted 1; things to look at on the tablet: Diagnostics lines 'Other players ads', 'YouTube ads', 'video info', 'media verify'; open items: BK5 question, AX1g, tablet feedback alpha40/41/42). MEANWHILE (no build needed): Wave B next = V5 (core/media Hls.kt parse CUE-OUT/CUE-IN/SCTE35/DATERANGE into Seg flags, new core/media/AdRuns.kt, StreamEngine pre-seeds job.skipped, VideoFlow early playlist look for the first 3 playlists after the page settled; tests AdRunsTest + StreamEngineTest; lab /hls-ad-run), then V3, D1, G4, G5, G6, S1, B2 (research/REVIEW-EXTERNAL-3.md sections 5-9); claim each (bash tools/claim.sh RX3-<id>), failing test first, ckpt after every step; the next release is alpha43 (versionCode 144).
+HEARTBEAT trig_01KEDB7Qxd8zFeawjGcAkSQZ (every 2 h; get_trigger to read; delete_trigger when the RX3 job is shipped). alpha41 AND alpha42 are RELEASED + RECORDED + ANSWERED (alpha42 note: G7 other-player ad skipping, V1 decoys not counted, V2 markup links verified). The next release is alpha43 (versionCode 144, NOT bumped yet: edit geckoapp/build.gradle.kts, run bash tools/sync-ext-version.sh, then bash ship.sh gecko "<note>", then dispatch android.yml app=gecko full_build=true ref claude/new-session-7d9rxz with the same note, wait for tag kestrel-g-v0.3.0-alpha43 + all jobs success + get_release_by_tag APK, bash tools/record-release.sh, answer the owner in plain words with the Release link). DONE since alpha42 and NOT yet shipped: V5 (AdMarkers + Hls Seg.ad + AdRuns + StreamEngine pre-seed + early look: ticked), D1 (outage wait in StreamEngine and Engine + StreamEngine.tick: ticked, JVM-proven only). NEXT, in this order (owner-asked first): S1 hold the glow while a video plays (GeckoSession.setMediaSessionDelegate -> Tab.mediaPlaying -> Neon.busy in BrowserActivity.updateNeonBusy; MediaSession.Delegate exists in the AAR: onActivated/onDeactivated/onPlay/onPause/onStop; pure busy-rule unit test; known limit: only audible media opens a media session), then B2 (AdGuard Tracking Protection + Hagezi Light as FilterUpdater sources, Settings row 'Extra tracker lists' default ON, verify each URL/licence first, docs/FILTER-LISTS.md, DefaultListsRegressionTest), G5 + G6 (PopupGuard app wall uses the tap evidence; late scripted jump to a listed ad host), G4 (fake play layers), V3 (which element plays), then Wave C. Always: claim (bash tools/claim.sh RX3-<id>), failing test first, ckpt after every step, check that a research/*.md exists BEFORE writing it (I once overwrote research/DOWNLOAD_MANAGERS.md and restored it from git history). Tablet-only checks are still the owner's: say so in every answer.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ HEARTBEAT trig_01KEDB7Qxd8zFeawjGcAkSQZ (every 2 h; get_trigger to read; delete_
 
 ## Last ten checkpoints
 ```
+  dec2df9d ckpt 2354: alpha42 shipped to GitHub (gated + pushed + android.yml dispatched): G7 + V1
   652f583c ckpt 2353: gated kestrel-g-v0.3.0-alpha42 (gecko code 143) and pushed it: handoff self-
   feda2b32 ckpt 2352: RX3-V1 DONE (ticked) and RX3-V2 coded + proven on the emulator (teaser-link 
   21cda298 ckpt 2351: RX3-G7 DONE and ticked (full gates green: JVM + web 331/331; emulator real-e
@@ -25,5 +26,7 @@ HEARTBEAT trig_01KEDB7Qxd8zFeawjGcAkSQZ (every 2 h; get_trigger to read; delete_
   ff61cb61 ckpt 2347: gated kestrel-g-v0.3.0-alpha41 (gecko code 142) and pushed it: handoff self-
   79518152 ckpt 2346: first alpha41 run FAILED on GitHub: core ProxyLinkTest.theRenewalKeepsItOpen
   d6379d16 ckpt 2345: alpha41 (gecko code 142, manifest 1.0.142) GATED, PUSHED and the android.yml
-  836d9546 ckpt 2344: gated kestrel-g-v0.3.0-alpha41 (gecko code 142) and pushed it: handoff self-
 ```
+
+(25 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
