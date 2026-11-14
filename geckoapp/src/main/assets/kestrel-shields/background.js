@@ -823,13 +823,13 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   return send({ k: 'bk', p: String(m.p || '').slice(0, 600) }).then(function (r) { return typeof r === 'string' ? r : ''; }, function () { return ''; });
 });
 
-// RX3-Y2: the YouTube ad skipper (youtube.js) reports NUMBERS: ads seen, skipped, skip buttons pressed, overlays closed, dialogs removed, jumps, give-ups and the last problem in a few words. Never an address.
+// RX3-Y2 / RX3-G7: the YouTube ad skipper (youtube.js; w 'y') and the one for other players (players.js; w 'p') report NUMBERS: ads seen, skipped, skip buttons pressed, overlays closed, dialogs removed, jumps, give-ups and the last problem in a few words. Never an address.
 // The page of the tab goes along so that the app can drop the report of a private tab.
 browser.runtime.onMessage.addListener(function (m, sender) {
   if (!m || m.k !== 'yts' || !sender || !sender.tab) return undefined;
   function n(v) { v = v | 0; return v > 0 && v < 1000 ? v : 0; }
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || '';
-  send({ k: 'yts', a: n(m.a), s: n(m.s), c: n(m.c), o: n(m.o), d: n(m.d), f: n(m.f), g: n(m.g), r: String(m.r || '').slice(0, 60), p: String(page).slice(0, 300) }).catch(function () {});
+  send({ k: 'yts', w: m.w === 'p' ? 'p' : 'y', a: n(m.a), s: n(m.s), c: n(m.c), o: n(m.o), d: n(m.d), f: n(m.f), g: n(m.g), r: String(m.r || '').slice(0, 60), p: String(page).slice(0, 300) }).catch(function () {});
   return undefined;
 });
 
