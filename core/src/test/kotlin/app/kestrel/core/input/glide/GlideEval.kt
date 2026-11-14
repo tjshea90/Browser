@@ -126,7 +126,7 @@ object GlideEval {
      */
     class Curve(val blocks: List<Double>, val favouriteBlocks: List<Double>, val known: Int, val pairs: Int)
 
-    fun learningCurve(lex: BinaryLexicon, keys: GlideKeys, params: GlideParams, noise: SimNoise, glides: Int, blocks: Int, learn: Boolean, seed: Long, habitPercent: Int = 70, favourites: Int = 150): Curve {
+    fun learningCurve(lex: BinaryLexicon, keys: GlideKeys, params: GlideParams, noise: SimNoise, glides: Int, blocks: Int, learn: Boolean, seed: Long, habitPercent: Int = 70, favourites: Int = 150, corrections: Boolean = true, burst: Int = 0, twoWords: Boolean = true): Curve {
         val rnd = Random(seed * 31 + 7)
         val sim = GestureSim(keys, Random(seed))
         val dec = GlideDecoder(keys, params)
@@ -139,14 +139,19 @@ object GlideEval {
         val base = frequencyPick(lex, 4000, Random(seed * 13), 3).map { lex.text(it.id) }
         val lexicons = listOf<GlideLexicon>(lex)
         val hits = IntArray(blocks); val seen = IntArray(blocks); val favHits = IntArray(blocks); val favSeen = IntArray(blocks)
+        // topics (burst > 0): the person works on one subject for [burst] glides, and then another: the words of that subject come back again and again for a while
+        val topics = List(10) { List(14) { (fav + base.take(300))[rnd.nextInt(fav.size + 300)] } }
+        var topic = 0
         var done = 0
         while (done < glides) {
-            val q: List<String> = if (rnd.nextInt(100) < habitPercent) phrases[rnd.nextInt(phrases.size)] else List(1 + rnd.nextInt(3)) { base[rnd.nextInt(base.size)] }
-            var prev: String? = null
+            if (burst > 0 && done % burst == 0) topic = rnd.nextInt(topics.size)
+            val q: List<String> = if (burst > 0 && rnd.nextInt(100) < 55) List(2 + rnd.nextInt(3)) { topics[topic][rnd.nextInt(topics[topic].size)] }
+                else if (rnd.nextInt(100) < habitPercent) phrases[rnd.nextInt(phrases.size)] else List(1 + rnd.nextInt(3)) { base[rnd.nextInt(base.size)] }
+            var prev: String? = null; var prev2: String? = null
             for (w in q) {
                 if (done >= glides) break
                 val path = sim.path(w, noise) ?: continue
-                val c = dec.decode(path.xs, path.ys, path.xs.size, lexicons, prev, 3)
+                val c = dec.decode(path.xs, path.ys, path.xs.size, lexicons, prev, 3, if (twoWords) prev2 else null)
                 val b = (done * blocks / glides).coerceAtMost(blocks - 1)
                 val key = String(GlideLetters.keyOf(w))
                 val first = c.isNotEmpty() && String(GlideLetters.keyOf(c[0].text)) == key
@@ -154,8 +159,9 @@ object GlideEval {
                 seen[b]++; if (first) hits[b]++
                 if (w in fav) { favSeen[b]++; if (first) favHits[b]++ }
                 // what the person did, and so what the keyboard learned
-                model?.add(prev, w, if (first) 1f else if (inThree) 3f else 1f)
-                prev = w; done++
+                model?.add(prev, w, if (first) 1f else if (inThree) 3f else 1f, if (twoWords) prev2 else null)
+                if (model != null && corrections && !first && inThree && c.isNotEmpty()) model.addConfusion(c[0].text, w) // the person picked the word they meant over the keyboard's first guess
+                prev2 = prev; prev = w; done++
             }
         }
         return Curve(List(blocks) { 100.0 * hits[it] / seen[it].coerceAtLeast(1) }, List(blocks) { 100.0 * favHits[it] / favSeen[it].coerceAtLeast(1) }, model?.wordCount ?: 0, model?.pairCount ?: 0)
@@ -169,7 +175,7 @@ object GlideEval {
             samples = a["samples"]?.toInt() ?: d.samples, endReach2 = a["endReach2"]?.toFloat() ?: d.endReach2, visitCap = a["visitCap"]?.toFloat() ?: d.visitCap,
             missLimit2 = a["missLimit2"]?.toFloat() ?: d.missLimit2, keep = a["keep"]?.toInt() ?: d.keep, quickEnds = a["quickEnds"]?.toFloat() ?: d.quickEnds,
             quickPrior = a["quickPrior"]?.toFloat() ?: d.quickPrior, shapeW = a["shapeW"]?.toFloat() ?: d.shapeW, endW = a["endW"]?.toFloat() ?: d.endW,
-            lmW = a["lmW"]?.toFloat() ?: d.lmW, lmA = a["lmA"]?.toFloat() ?: d.lmA, lmMin = a["lmMin"]?.toFloat() ?: d.lmMin, lmMax = a["lmMax"]?.toFloat() ?: d.lmMax, bigramMix = a["bigramMix"]?.toFloat() ?: d.bigramMix, minLength = a["minLength"]?.toFloat() ?: d.minLength, slack = a["slack"]?.toInt() ?: d.slack, biasKeep = a["biasKeep"]?.toInt() ?: d.biasKeep, biasGain = a["biasGain"]?.toFloat() ?: d.biasGain, biasW = a["biasW"]?.toFloat() ?: d.biasW, maxPerLetter = a["maxPerLetter"]?.toFloat() ?: d.maxPerLetter,
+            lmW = a["lmW"]?.toFloat() ?: d.lmW, confGain = a["confGain"]?.toFloat() ?: d.confGain, lmA = a["lmA"]?.toFloat() ?: d.lmA, lmMin = a["lmMin"]?.toFloat() ?: d.lmMin, lmMax = a["lmMax"]?.toFloat() ?: d.lmMax, bigramMix = a["bigramMix"]?.toFloat() ?: d.bigramMix, minLength = a["minLength"]?.toFloat() ?: d.minLength, slack = a["slack"]?.toInt() ?: d.slack, biasKeep = a["biasKeep"]?.toInt() ?: d.biasKeep, biasGain = a["biasGain"]?.toFloat() ?: d.biasGain, biasW = a["biasW"]?.toFloat() ?: d.biasW, maxPerLetter = a["maxPerLetter"]?.toFloat() ?: d.maxPerLetter,
         )
     }
 
@@ -194,8 +200,9 @@ object GlideEval {
             for (nm in (a["noise"] ?: "normal,sloppy").split(',')) {
                 val noise = noiseFrom(a + mapOf("noise" to nm))
                 val hp = a["habit"]?.toInt() ?: 70; val fv = a["favs"]?.toInt() ?: 150
-                val off = learningCurve(lex, keys, paramsFrom(a), noise, g, nb, false, seed, hp, fv)
-                val on = learningCurve(lex, keys, paramsFrom(a), noise, g, nb, true, seed, hp, fv)
+                val conf = (a["confs"] ?: "1") == "1"; val burst = a["burst"]?.toInt() ?: 0; val two = (a["two"] ?: "1") == "1"
+                val off = learningCurve(lex, keys, paramsFrom(a), noise, g, nb, false, seed, hp, fv, conf, burst, two)
+                val on = learningCurve(lex, keys, paramsFrom(a), noise, g, nb, true, seed, hp, fv, conf, burst, two)
                 println("${noise.name}, a person who writes $hp percent of what they type from their own phrases, $g glides in $nb stretches (first guess right, %):")
                 println("   without learning: " + off.blocks.joinToString(" ") { "%.1f".format(it) } + "   own favourites: " + off.favouriteBlocks.joinToString(" ") { "%.1f".format(it) })
                 println("   with learning:    " + on.blocks.joinToString(" ") { "%.1f".format(it) } + "   own favourites: " + on.favouriteBlocks.joinToString(" ") { "%.1f".format(it) } + "   (knows ${on.known} words, ${on.pairs} pairs)")
