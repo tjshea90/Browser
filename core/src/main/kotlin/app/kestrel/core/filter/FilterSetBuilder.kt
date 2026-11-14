@@ -91,10 +91,10 @@ class FilterSetBuilder {
 
         var types = r.types
         if (category == Category.MALWARE && types == RequestType.ALL_SUBRESOURCES) types = RequestType.ALL // also block the page itself
-        val host = if (r.include == null && r.exclude == null) parser.hostOnlyPattern(r.leftHost, r.leftAnchor, r.rightAnchor, r.pattern) else null
+        val host = if (r.include == null && r.exclude == null && !r.redirectOnly) parser.hostOnlyPattern(r.leftHost, r.leftAnchor, r.rightAnchor, r.pattern) else null // a `$redirect-rule=` rule always goes to the pattern table
         // A bare "||host" without '^' also matches "host.evil.com": only the '^' form is a pure host rule.
         if (host != null && r.pattern.endsWith("^")) {
-            val flags = Bits.pack(types, r.party, r.important, category)
+            val flags = Bits.withRedirect(Bits.pack(types, r.party, r.important, category), r.redirect, false)
             if (r.exception) { addException(Hash.h64(host), flags, r.key); report.hostExceptions++ }
             else { addHost(Hash.h64(host), flags, r.key); report.hostRules++ }
             return
@@ -154,7 +154,7 @@ class FilterSetBuilder {
 
     private fun copyWithTypes(r: NetRule, types: Int) = NetRule(
         r.pattern, r.exception, r.leftHost, r.leftAnchor, r.rightAnchor, types, r.party, r.important, r.include, r.exclude,
-        r.badfilter, r.siteFlags, r.key,
+        r.badfilter, r.siteFlags, r.key, r.redirect, r.redirectOnly,
     )
 
     private fun addHost(h: Long, f: Int, key: Long) {
@@ -222,7 +222,7 @@ class FilterSetBuilder {
             val r = list[i].r
             val p = r.pattern
             for (k in p.indices) bytes[offs[i] + k] = p[k].code.toByte()
-            var w = Bits.pack(r.types, r.party, r.important, list[i].category)
+            var w = Bits.withRedirect(Bits.pack(r.types, r.party, r.important, list[i].category), r.redirect, r.redirectOnly)
             if (r.exception) w = w or Bits.EXCEPTION
             if (r.leftHost) w = w or Bits.LEFT_HOST
             if (r.leftAnchor) w = w or Bits.LEFT_ANCHOR

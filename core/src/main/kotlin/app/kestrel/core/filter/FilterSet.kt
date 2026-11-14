@@ -17,6 +17,9 @@ object Verdict {
 
     @JvmStatic fun isBlocked(v: Int): Boolean = (v and BLOCK) != 0
     @JvmStatic fun category(v: Int): Int = (v ushr 2) and 3
+    /** AW1c: the stand-in resource ([RedirectResources]) to answer a blocked request with, 0 = just cancel it. */
+    const val REDIRECT_SHIFT = 8
+    @JvmStatic fun redirect(v: Int): Int = (v ushr REDIRECT_SHIFT) and 31
 }
 
 /** Bit layout shared by host-rule flags and pattern-rule meta words. */
@@ -29,9 +32,14 @@ internal object Bits {
     const val LEFT_HOST = 1 shl 19
     const val LEFT_ANCHOR = 1 shl 20
     const val RIGHT_ANCHOR = 1 shl 21
+    const val REDIRECT_SHIFT = 22 // 5 bits: the stand-in resource of a `$redirect=` rule (AW1c)
+    const val REDIRECT_ONLY = 1 shl 27 // `$redirect-rule=`: picks the stand-in for a request something else blocks, blocks nothing itself
 
     fun pack(types: Int, party: Int, important: Boolean, category: Int): Int =
         (types and TYPES) or (party shl PARTY_SHIFT) or (if (important) IMPORTANT else 0) or (category shl CAT_SHIFT)
+
+    fun withRedirect(word: Int, redirect: Int, only: Boolean): Int =
+        word or ((redirect and 31) shl REDIRECT_SHIFT) or (if (only) REDIRECT_ONLY else 0)
 }
 
 /** Sorted-hash table of pure `||host^` rules: 12 bytes per rule, binary-searched. Duplicate hashes allowed. */
@@ -109,6 +117,8 @@ class FilterSet internal constructor(
         @JvmField var blocked = false
         @JvmField var important = false
         @JvmField var excepted = false
+        @JvmField var redirect = 0 // AW1c: the first blocking rule that names a stand-in
+        @JvmField var redirectOnly = 0 // the first `$redirect-rule=` that matched (used only when something else blocks)
         @JvmField var category = 0
         @JvmField var evals = 0 // rule evaluations so far (work accounting, see MAX_GRAM_EVALS)
         private var pageHashes: LongArray? = null
@@ -135,9 +145,10 @@ class FilterSet internal constructor(
         scanHosts(hosts, ctx, exception = false)
         if (!ctx.important) scanPatterns(ctx)
         if (!ctx.blocked) return Verdict.NONE
-        if (ctx.important) return Verdict.BLOCK or Verdict.IMPORTANT or (ctx.category shl 2)
+        val stand = (if (ctx.redirect != 0) ctx.redirect else ctx.redirectOnly) shl Verdict.REDIRECT_SHIFT
+        if (ctx.important) return Verdict.BLOCK or Verdict.IMPORTANT or (ctx.category shl 2) or stand
         if (!ctx.excepted) scanHosts(hostExceptions, ctx, exception = true)
-        return if (ctx.excepted) Verdict.EXCEPTED else Verdict.BLOCK or (ctx.category shl 2)
+        return if (ctx.excepted) Verdict.EXCEPTED else Verdict.BLOCK or (ctx.category shl 2) or stand
     }
 
     /** True if a `@@||host^$document` rule says Shields must be off for pages on [pageHost]. */
@@ -228,8 +239,10 @@ class FilterSet internal constructor(
                     val f = t.flags[idx]
                     if (flagsApply(f, ctx)) {
                         if (exception) { ctx.excepted = true; return }
+                        val rd = (f ushr Bits.REDIRECT_SHIFT) and 31
+                        if (rd != 0 && ctx.redirect == 0) ctx.redirect = rd
+                        if (!ctx.blocked || (f and Bits.IMPORTANT) != 0) ctx.category = (f ushr Bits.CAT_SHIFT) and 3
                         ctx.blocked = true
-                        ctx.category = (f ushr Bits.CAT_SHIFT) and 3
                         if ((f and Bits.IMPORTANT) != 0) { ctx.important = true; return }
                     }
                     idx++
@@ -324,15 +337,22 @@ class FilterSet internal constructor(
         if (party == 1 && !ctx.thirdParty) return
         if (party == 2 && ctx.thirdParty) return
         val isExc = (w and Bits.EXCEPTION) != 0
-        if (isExc) { if (ctx.excepted) return } else if (ctx.blocked && (w and Bits.IMPORTANT) == 0) return
+        val rd = (w ushr Bits.REDIRECT_SHIFT) and 31
+        val redirOnly = (w and Bits.REDIRECT_ONLY) != 0
+        if (isExc) { if (ctx.excepted) return }
+        else if (redirOnly) { if (ctx.redirectOnly != 0) return }
+        else if (ctx.blocked && (w and Bits.IMPORTANT) == 0 && (rd == 0 || ctx.redirect != 0)) return // already blocked: only a rule that can still name the stand-in is worth looking at
         val d = t.dom[id]
         if (d != 0 && !domainOk(t.domPool, d - 1, ctx)) return
         if (!matchPattern(t, id, w, ctx)) return
         if (isExc) {
             ctx.excepted = true
+        } else if (redirOnly) {
+            ctx.redirectOnly = rd
         } else {
+            if (rd != 0 && ctx.redirect == 0) ctx.redirect = rd
+            if (!ctx.blocked || (w and Bits.IMPORTANT) != 0) ctx.category = (w ushr Bits.CAT_SHIFT) and 3
             ctx.blocked = true
-            ctx.category = (w ushr Bits.CAT_SHIFT) and 3
             if ((w and Bits.IMPORTANT) != 0) ctx.important = true
         }
     }

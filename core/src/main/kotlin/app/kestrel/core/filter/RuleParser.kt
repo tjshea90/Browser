@@ -20,6 +20,8 @@ internal class NetRule(
     @JvmField val badfilter: Boolean,
     @JvmField val siteFlags: Int, // SITE_* for @@||host^$document / $elemhide / $generichide
     @JvmField val key: Long, // canonical-text hash, used to apply $badfilter
+    @JvmField val redirect: Int = 0, // AW1c: id of the stand-in resource ([RedirectResources]) a `$redirect=` / `$redirect-rule=` rule names, 0 = none
+    @JvmField val redirectOnly: Boolean = false, // `$redirect-rule=`: blocks nothing by itself, only picks the stand-in for a request that something else blocks
 )
 
 internal class CosmeticRule(
@@ -62,6 +64,8 @@ internal class RuleParser {
         var important = false
         var badfilter = false
         var siteFlags = 0
+        var redirect = 0
+        var redirectOnly = false
         var include: ArrayList<Long>? = null
         var exclude: ArrayList<Long>? = null
         val canonicalOpts = StringBuilder()
@@ -84,6 +88,12 @@ internal class RuleParser {
                     "all" -> types = RequestType.ALL
                     "elemhide", "ehide" -> siteFlags = siteFlags or SITE_ELEMHIDE
                     "generichide", "ghide" -> siteFlags = siteFlags or SITE_GENERICHIDE
+                    "redirect", "redirect-rule" -> {
+                        if (value == null || neg || exception) return fail(Skip.UNSUPPORTED_OPTION) // `@@...$redirect=` cancels a stand-in: not understood, the stand-in simply stays
+                        val id = RedirectResources.idOf(value)
+                        if (name == "redirect-rule") { if (id == 0) return fail(Skip.UNSUPPORTED_OPTION); redirectOnly = true }
+                        redirect = id // `redirect=` with a resource we do not have is a plain block rule (id 0)
+                    }
                     "domain" -> {
                         if (value == null || neg) return fail(Skip.BAD_SYNTAX)
                         for (d in value.split('|')) {
@@ -149,7 +159,7 @@ internal class RuleParser {
             pattern = s, exception = exception, leftHost = leftHost, leftAnchor = leftAnchor, rightAnchor = rightAnchor,
             types = finalTypes, party = party, important = important,
             include = include?.toLongArray(), exclude = exclude?.toLongArray(),
-            badfilter = badfilter, siteFlags = siteFlags, key = Hash.h64(canon),
+            badfilter = badfilter, siteFlags = siteFlags, key = Hash.h64(canon), redirect = redirect, redirectOnly = redirectOnly,
         )
     }
 
