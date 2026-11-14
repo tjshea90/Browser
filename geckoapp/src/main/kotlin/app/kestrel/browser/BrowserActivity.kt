@@ -2725,8 +2725,8 @@ open class BrowserActivity : Activity(), DockListener {
         private const val REQ_PERM = 1002
         private const val PULL_ARM_DP = 64f // chip travel at which letting go reloads (about 107 dp of finger travel)
         private const val PULL_MAX_DP = 84f
-        /** A page that said a script has been running a long time cannot answer a long press for this long: the touch detector takes over (AY2). */
-        private const val SLOW_PAGE_MS = 60_000L
+        /** A page that said a script has been running a long time cannot answer a long press: the touch detector takes over (AY2). The engine asks again every 20 s while the script runs, so a stuck page keeps this fresh, and a page whose script finished is normal again after this long. */
+        private const val SLOW_PAGE_MS = 30_000L
         /** A long press that the page reports this long after the finger lifted is still the press that was just made (the page's answer takes a moment on a slow page). */
         private const val OPEN_SPACE_FRESH_MS = 2_000L
     }
