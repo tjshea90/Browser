@@ -64,6 +64,8 @@ class MiniKeyboardModel {
     var shift = false; private set
     /** What the last glide added (a space before it when one was needed, the word, a space after it): ONE Backspace takes all of it away, and a candidate from the strip can replace it. */
     private var glideTail: String? = null
+    /** The words glides put in (in order): they were learned when they were kept, so [typedPairs] leaves them out. */
+    private val glided = ArrayList<String>()
     /** True while the last thing that happened was a glide (the candidate strip is showing for it). */
     val glideActive: Boolean get() = glideTail != null
 
@@ -73,6 +75,7 @@ class MiniKeyboardModel {
         symbols = false
         shift = false
         glideTail = null
+        glided.clear()
     }
 
     fun press(key: Key): KeyResult {
@@ -86,7 +89,9 @@ class MiniKeyboardModel {
             }
             Key.Backspace -> {
                 val tail = glideTail
-                text = if (allSelected) "" else if (tail != null && text.endsWith(tail)) text.removeSuffix(tail) else text.dropLast(1)
+                val whole = tail != null && !allSelected && text.endsWith(tail)
+                if (whole && glided.isNotEmpty()) glided.removeAt(glided.size - 1)
+                text = if (allSelected) "" else if (whole) text.removeSuffix(tail!!) else text.dropLast(1)
                 allSelected = false
                 glideTail = null
             }
@@ -107,6 +112,7 @@ class MiniKeyboardModel {
         if (base.length + tail.length > MAX_CHARS) return
         text = base + tail
         glideTail = tail
+        glided.add(w.lowercase())
         allSelected = false
         shift = false
     }
@@ -121,6 +127,7 @@ class MiniKeyboardModel {
         val newTail = lead + w + " "
         text = text.removeSuffix(tail) + newTail
         glideTail = newTail
+        if (glided.isNotEmpty()) glided[glided.size - 1] = w.lowercase()
         return true
     }
 
@@ -130,6 +137,22 @@ class MiniKeyboardModel {
         val tok = text.trimEnd().substringAfterLast(' ')
         if (tok.isEmpty() || tok.length > 24 || !tok.all { it.isLetter() || it == '\'' }) return null
         return tok.lowercase()
+    }
+
+    /** (the word before, the word) for every plain word of the text that was typed letter by letter: what the person writes, for the keyboard to learn (glided words were learned when they were kept). */
+    fun typedPairs(): List<Pair<String?, String>> {
+        val glidedLeft = HashMap<String, Int>()
+        for (g in glided) glidedLeft[g] = (glidedLeft[g] ?: 0) + 1
+        val out = ArrayList<Pair<String?, String>>()
+        var prev: String? = null
+        for (tok in text.split(' ')) {
+            val w = tok.lowercase()
+            if (w.length !in 2..24 || !w.all { it in 'a'..'z' || it == '\'' } || w.startsWith("'") || w.endsWith("'")) { prev = null; continue }
+            val left = glidedLeft[w]
+            if (left != null && left > 0) { glidedLeft[w] = left - 1; prev = w; continue }
+            out.add(prev to w); prev = w
+        }
+        return out
     }
 
     /** Plain words in what is typed (for the words the keyboard remembers): letters only, three to 24 of them. */
