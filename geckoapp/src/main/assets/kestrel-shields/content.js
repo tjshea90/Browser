@@ -296,14 +296,17 @@
         browser.runtime.sendMessage({ k: 'pop', d: 'tap|' + href.slice(0, 600), p: location.href }).catch(function () {});
       } catch (x) { /* ignore */ }
     }
-    window.addEventListener('click', realTap, true);
-    // A page that cancels the click still gets its tap counted through the pointer events. A tap is the PRIMARY button, up within 400 ms and within 12 px of where it went down: a long press, a right click, a drag
-    // and a swipe are not taps (a swipe that scrolls ends in pointercancel anyway).
+    // A tap is the PRIMARY button, up within 500 ms (Android's long press, which opens the menu, starts there) and within 12 px of where it went down: a long press, a right click, a drag and a swipe are no
+    // taps. The click of a mouse or a finger follows the same rule (a keyboard click has no press before it); a page that cancels the click still gets its tap counted through pointerup.
     var down = { t: 0, x: 0, y: 0 };
     window.addEventListener('pointerdown', function (e) { if (e.isTrusted) { down.t = Date.now(); down.x = e.clientX; down.y = e.clientY; } }, { capture: true, passive: true });
+    window.addEventListener('click', function (e) {
+      if (e.detail > 0 && down.t && Date.now() - down.t > 500) return;
+      realTap(e);
+    }, true);
     window.addEventListener('pointerup', function (e) {
       if (!e.isTrusted || e.button !== 0 || !down.t) return;
-      if (Date.now() - down.t > 400 || Math.abs(e.clientX - down.x) > 12 || Math.abs(e.clientY - down.y) > 12) return;
+      if (Date.now() - down.t > 500 || Math.abs(e.clientX - down.x) > 12 || Math.abs(e.clientY - down.y) > 12) return;
       realTap(e);
     }, { capture: true, passive: true });
     browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { wanted = !(r && r.on === false); topHost = (r && r.top) ? String(r.top) : ''; push(); }, function () {});
