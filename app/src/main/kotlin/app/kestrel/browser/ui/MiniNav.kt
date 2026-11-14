@@ -1151,6 +1151,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         private const val ZONE_BODY = 1
         private const val ZONE_GRIP = 2
         private const val ZONE_CORNER0 = 3
+        internal const val ZONE_GRIP_FOR_TEST = 2
+        internal const val ZONE_CORNER_FOR_TEST = 3
         const val NAV_W_DP = 52
         const val NAV_H_DP = 42
         const val BAR_H_DP = 34

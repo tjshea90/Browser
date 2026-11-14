@@ -3,6 +3,7 @@ package app.kestrel.browser.ui
 import android.animation.ValueAnimator
 import android.app.Activity
 import android.os.Looper
+import android.os.SystemClock
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -41,6 +42,9 @@ class MiniNavTest {
         override fun navGlideHabitChanged(habit: FloatArray) { habits.add(habit) }
         override fun navGlideWordsChanged(text: String) { savedWords.add(text) }
         override fun navGlideHosts(done: (List<String>) -> Unit) { done(listOf("www.doraby.com", "pelisjuanita.com", "10.0.2.2")) }
+        var geom: IntArray? = null; var geomSaves = 0
+        override fun navGeometry(): IntArray? = geom
+        override fun navGeometryChanged(g: IntArray?) { geom = g; geomSaves++ }
         var field: PageField? = null; var privateTab = false; val keyboard = ArrayList<Boolean>()
         override fun navPageField(): PageField? = field
         override fun navKeyboardChanged(showing: Boolean) { keyboard.add(showing) }
@@ -527,6 +531,147 @@ class MiniNavTest {
         glideWord("world")               // carrying on keeps the picked word
         nav.closeKeyboard(); idle(20)
         assertTrue("the kept words were learned: ${nav.glideLine()}", nav.glideLine().contains("learned 2 words"))
+    }
+
+    // ------------------------------------------------------------------ resize and detach (AV1)
+
+    private val d: Float get() = activity.resources.displayMetrics.density
+
+    /** A finger that goes down, moves in [steps] steps and lifts: through the real dispatch of the page area, as the activity hands it on. */
+    private fun dragFromTo(x0: Float, y0: Float, x1: Float, y1: Float, steps: Int = 8, startAt: Long = SystemClock.uptimeMillis()): Boolean {
+        val down = nav.dispatchTouchEvent(MotionEvent.obtain(startAt, startAt, MotionEvent.ACTION_DOWN, x0, y0, 0))
+        for (i in 1..steps) nav.dispatchTouchEvent(MotionEvent.obtain(startAt, startAt + i * 16L, MotionEvent.ACTION_MOVE, x0 + (x1 - x0) * i / steps, y0 + (y1 - y0) * i / steps, 0))
+        nav.dispatchTouchEvent(MotionEvent.obtain(startAt, startAt + (steps + 1) * 16L, MotionEvent.ACTION_UP, x1, y1, 0))
+        relayout()
+        return down
+    }
+
+    private fun gripPoint(): Pair<Float, Float> { val o = nav.outlineForTest(); return (o[0] + o[2]) / 2f to o[1] - MiniNav.BAND_DP * d / 2f }
+    private fun cornerPoint(right: Boolean, bottom: Boolean): Pair<Float, Float> { val o = nav.outlineForTest(); return (if (right) o[2] - 2f else o[0] + 2f) to (if (bottom) o[3] - 2f else o[1] + 2f) }
+    private fun openPanel() { nav.setOpen(true, animate = false); relayout() }
+
+    @Test fun thePanelStartsDockedUnderTheCornerWhereItAlwaysWas() {
+        openPanel()
+        val o = nav.outlineForTest()
+        assertEquals("6 dp from the right edge", 600f - 6f * d, o[2].toFloat(), 1.5f)
+        assertEquals("under the 72 dp square of the corner", 72f * d, o[1].toFloat(), 1.5f)
+        assertFalse(nav.isDetached); assertFalse(nav.isResized)
+    }
+
+    @Test fun theGripMovesThePanelAndItIsSavedAndTheKeyboardOpensWhereItWasLeft() {
+        openPanel()
+        val (gx, gy) = gripPoint()
+        assertEquals("a touch on the grip is the panel's", MiniNav.ZONE_GRIP_FOR_TEST, nav.zoneForTest(gx, gy))
+        dragFromTo(gx, gy, gx - 150f * d, gy + 260f * d)
+        val g = nav.geometryForTest()
+        assertEquals("150 dp further from the right edge", 6f + 150f, g[0], 3f); assertEquals("260 dp lower", 72f + 260f, g[1], 3f)
+        assertTrue(nav.isDetached)
+        assertTrue("saved: ${rec.geom?.toList()}", rec.geom != null && Math.abs(rec.geom!![0] - 156) <= 3 && Math.abs(rec.geom!![1] - 332) <= 3)
+        val o = nav.outlineForTest()
+        assertEquals(600f - 156f * d, o[2].toFloat(), 4f); assertEquals(332f * d, o[1].toFloat(), 4f)
+        nav.pressBarForTest(); relayout()
+        val k = nav.outlineForTest()
+        assertEquals("the keyboard grows to the left and down from the same right edge and top", o[2].toFloat(), k[2].toFloat(), 2f); assertEquals(o[1].toFloat(), k[1].toFloat(), 2f)
+        assertTrue("wider than the closed panel", k[2] - k[0] > o[2] - o[0])
+    }
+
+    @Test fun thePanelCannotBeDraggedOffTheScreen() {
+        openPanel()
+        val (gx, gy) = gripPoint()
+        dragFromTo(gx, gy, gx + 2000f, gy - 2000f)
+        var o = nav.outlineForTest()
+        assertTrue("right edge inside (${o.toList()})", o[2] <= 600 && o[0] >= 0 && o[1] >= 0)
+        val (hx, hy) = gripPoint()
+        dragFromTo(hx, hy, hx - 3000f, hy + 5000f)
+        o = nav.outlineForTest()
+        assertTrue("left and bottom edges inside (${o.toList()})", o[0] >= 0 && o[3] <= 900 && o[2] <= 600)
+    }
+
+    @Test fun droppingTheGripNearTheCornerDocksAgainAndSoDoesADoubleTap() {
+        openPanel()
+        val (gx, gy) = gripPoint()
+        dragFromTo(gx, gy, gx - 20f * d, gy + 15f * d)
+        assertFalse("close to the corner: docked again", nav.isDetached); assertNull("nothing to remember: ${rec.geom?.toList()}", rec.geom)
+        dragFromTo(gx, gy, gx - 200f * d, gy + 300f * d)
+        assertTrue(nav.isDetached)
+        val (tx, ty) = gripPoint()
+        val t0 = SystemClock.uptimeMillis()
+        nav.dispatchTouchEvent(MotionEvent.obtain(t0, t0, MotionEvent.ACTION_DOWN, tx, ty, 0)); nav.dispatchTouchEvent(MotionEvent.obtain(t0, t0 + 40, MotionEvent.ACTION_UP, tx, ty, 0))
+        assertTrue("one tap is not enough", nav.isDetached)
+        nav.dispatchTouchEvent(MotionEvent.obtain(t0 + 120, t0 + 120, MotionEvent.ACTION_DOWN, tx, ty, 0)); nav.dispatchTouchEvent(MotionEvent.obtain(t0 + 120, t0 + 160, MotionEvent.ACTION_UP, tx, ty, 0))
+        assertFalse("a double tap on the grip docks it", nav.isDetached)
+    }
+
+    @Test fun aCornerDragResizesTheKeyboardAndItKeepsTypingAndGliding() {
+        openGlideKeyboard(); relayout()
+        val before = nav.keysSizeForTest()
+        val (cx, cy) = cornerPoint(right = false, bottom = true)
+        assertEquals("the bottom left corner", MiniNav.ZONE_CORNER_FOR_TEST + 2, nav.zoneForTest(cx - 6f, cy + 6f))
+        dragFromTo(cx - 6f, cy + 6f, cx - 6f - 60f * d, cy + 6f + 40f * d)
+        val after = nav.keysSizeForTest()
+        assertEquals("60 dp wider (the left edge moved, the right edge stayed)", before[0] + 60f * d, after[0].toFloat(), 3f)
+        assertEquals("40 dp taller", before[1] + 40f * d, after[1].toFloat(), 3f)
+        assertTrue("saved: ${rec.geom?.toList()}", rec.geom != null && Math.abs(rec.geom!![2] - 364) <= 3 && Math.abs(rec.geom!![3] - 201) <= 3)
+        assertTrue(nav.isResized); assertFalse("a corner drag does not move the panel", nav.isDetached)
+        idle(50)
+        glideWord("hello")
+        assertEquals("the decoder took the new key positions: the glide types the word", "hello ", nav.barTextForTest)
+        nav.pressKeyForTest("w"); assertEquals("hello w", nav.barTextForTest)
+    }
+
+    @Test fun theRightCornersMoveTheRightEdgeAndTheTopCornersTheTop() {
+        openPanel(); nav.pressBarForTest(); relayout()
+        val o0 = nav.outlineForTest()
+        val (cx, cy) = cornerPoint(right = true, bottom = false)
+        dragFromTo(cx + 6f, cy - 6f, cx + 6f - 30f * d, cy - 6f + 30f * d)   // the top right corner dragged in and down: narrower and shorter from the top
+        val o1 = nav.outlineForTest()
+        assertEquals("the right edge moved in by 30", o0[2] - 30f * d, o1[2].toFloat(), 3f); assertEquals("the left edge stayed", o0[0].toFloat(), o1[0].toFloat(), 3f)
+        assertEquals("the top moved down by 30", o0[1] + 30f * d, o1[1].toFloat(), 3f); assertEquals("the bottom stayed", o0[3].toFloat(), o1[3].toFloat(), 4f)
+    }
+
+    @Test fun theKeyboardKeepsAUsableSizeWhateverTheFingerDoes() {
+        openPanel(); nav.pressBarForTest(); relayout()
+        var (cx, cy) = cornerPoint(right = false, bottom = true)
+        dragFromTo(cx - 6f, cy + 6f, cx - 6f + 3000f, cy + 6f - 3000f)         // crushed
+        var k = nav.geometryForTest()
+        assertTrue("not smaller than the minimum: ${k.toList()}", k[2] >= MiniNav.MIN_KEYS_W_DP && k[3] >= MiniNav.MIN_KEYS_H_DP)
+        cx = nav.outlineForTest()[0].toFloat(); cy = nav.outlineForTest()[3].toFloat()
+        dragFromTo(cx - 6f, cy + 6f, cx - 6f - 3000f, cy + 6f + 3000f)         // stretched
+        k = nav.geometryForTest(); val o = nav.outlineForTest()
+        assertTrue("on screen and not past the maximum: ${k.toList()} ${o.toList()}", k[2] <= MiniNav.MAX_KEYS_W_DP && k[3] <= MiniNav.MAX_KEYS_H_DP && o[0] >= 0 && o[3] <= 900)
+    }
+
+    @Test fun cornersCanOnlyBeGrabbedWhileTheKeyboardIsOpenAndTheBandIsThePages() {
+        openPanel()
+        val (cx, cy) = cornerPoint(right = true, bottom = true)
+        assertEquals("closed keyboard: the corner is just the panel's frame", 1, nav.zoneForTest(cx - 2f, cy - 2f))
+        val o = nav.outlineForTest()
+        assertEquals("the transparent band away from the grip and the corners belongs to the page", 0, nav.zoneForTest(o[0] + 20f, o[1] - 8f))
+        val t0 = SystemClock.uptimeMillis()
+        assertFalse("and a touch there is not taken", nav.dispatchTouchEvent(MotionEvent.obtain(t0, t0, MotionEvent.ACTION_DOWN, o[0] + 20f, o[1] - 8f, 0)))
+        nav.pressBarForTest(); relayout()
+        val (kx, ky) = cornerPoint(right = true, bottom = true)
+        assertEquals("open keyboard: the bottom right corner can be grabbed", MiniNav.ZONE_CORNER_FOR_TEST + 3, nav.zoneForTest(kx + 8f, ky + 8f))
+        assertEquals("but the Go key just inside the frame is a key", 1, nav.zoneForTest(kx - 14f * d, ky - 14f * d))
+    }
+
+    @Test fun resetPutsThePanelBackInTheCornerAtTheFirstSize() {
+        openPanel(); nav.pressBarForTest(); relayout()
+        val (gx, gy) = gripPoint(); dragFromTo(gx, gy, gx - 100f * d, gy + 200f * d)
+        val (cx, cy) = cornerPoint(right = false, bottom = true); dragFromTo(cx - 6f, cy + 6f, cx - 6f - 40f * d, cy + 6f + 30f * d)
+        assertTrue(nav.isDetached && nav.isResized)
+        nav.resetGeometry(); relayout()
+        assertFalse(nav.isDetached); assertFalse(nav.isResized); assertNull(rec.geom)
+        assertEquals(600f - 6f * d, nav.outlineForTest()[2].toFloat(), 2f)
+    }
+
+    @Test fun whereThePanelWasLeftIsRememberedAcrossStarts() {
+        val rec2 = Rec(); rec2.geom = intArrayOf(120, 250, 280, 140)
+        val nav2 = MiniNav(activity, Pal(activity), rec2)
+        frame.addView(nav2, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)); relayout()
+        nav2.setOpen(true, animate = false); relayout()
+        assertTrue(nav2.isDetached && nav2.isResized)
+        assertEquals(floatArrayOf(120f, 250f, 280f, 140f).toList(), nav2.geometryForTest().toList())
     }
 }
 

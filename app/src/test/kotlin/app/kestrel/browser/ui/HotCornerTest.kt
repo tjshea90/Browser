@@ -22,7 +22,9 @@ class HotCornerTest {
     private class FakeHost : HotCorner.Host {
         var zone: IntArray? = intArrayOf(500, 0, 572, 72)
         val fired = ArrayList<FloatArray>()
+        var covered = false
         override fun zone(): IntArray? = zone
+        override fun covers(x: Float, y: Float): Boolean = covered
         override fun fired(downTime: Long, x: Float, y: Float) { fired.add(floatArrayOf(downTime.toFloat(), x, y)) }
     }
 
@@ -77,6 +79,13 @@ class HotCornerTest {
         corner.observe(evAt(MotionEvent.ACTION_DOWN, 540f, 30f, t))
         assertFalse("a lift 120 ms after the touch-down", corner.observe(evAt(MotionEvent.ACTION_UP, 540f, 30f, t + 120)))
         assertTrue(host.fired.isEmpty())
+    }
+
+    @Test fun aLongPressOnTheOpenPanelIsNotTheCornersEvenWhenThePanelSitsOverTheSquare() {
+        host.covered = true
+        assertFalse(down(540f, 30f)); idle(2000)
+        assertTrue("nothing fired", host.fired.isEmpty())
+        assertFalse(up(540f, 30f))
     }
 
     @Test fun aTapNeverFiresAndEveryEventGoesToThePage() {
