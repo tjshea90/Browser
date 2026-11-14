@@ -718,6 +718,7 @@
         else return null;
         if (b64) v = window.atob(v.replace(/-/g, '+').replace(/_/g, '/'));
         if (uri) v = decodeURIComponent(v);
+        if (!v) return null; // nothing to point at (an address that was sanitized already has no parameter any more): never "the empty address", which would be this very page
         var u = new nURL(v, location.href);
         return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : null; // only ever an ordinary web address
       } catch (e) { return null; }

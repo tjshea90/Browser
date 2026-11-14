@@ -395,4 +395,9 @@ test('href-sanitizer: a redirector link points at its target (query parameter, b
   await page.evaluate(() => { const a = document.createElement('a'); a.id = 'f'; a.href = 'https://go.example/out?url=https%3A%2F%2Ftarget.example%2Flate'; document.body.appendChild(a); });
   await settle(250);
   assert.equal(await page.evaluate(() => document.getElementById('f').href), 'https://target.example/late');
+  // a later change of the page runs the sanitizer again over every link: the ones that were done must stay as they are (they have no parameter left to read)
+  await page.evaluate(() => { document.body.appendChild(document.createElement('div')); });
+  await settle(250);
+  const again = await page.evaluate(() => ['a', 'b', 'c', 'f'].map((i) => document.getElementById(i).href));
+  assert.deepEqual(again, ['https://target.example/a', 'https://target.example/page?x=1', 'https://target.example/from-text', 'https://target.example/late']);
 });
