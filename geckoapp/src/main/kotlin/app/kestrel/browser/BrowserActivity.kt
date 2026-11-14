@@ -1615,6 +1615,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(app.kestrel.browser.diag.StorageInfo.text)
         out.add(app.kestrel.browser.diag.StorageTidy.line(applicationContext))
         out.add(app.kestrel.browser.diag.CpuMeter.line())
+        if (::miniNav.isInitialized) out.add(miniNav.glideLine())
         out.add(ShieldsBridge.statsLine())
         out.add(ShieldsBridge.pageReports.text(System.currentTimeMillis()))
         current?.takeIf { !it.isNewTab }?.let { t -> val b = ArrayList(t.engineBlocks); out.add("Firefox's own tracking protection, this page: " + (if (t.session?.settings?.useTrackingProtection == false) "OFF (Shields are down for this site); " else "on; ") + if (b.isEmpty()) "blocked nothing" else "blocked ${b.size}: " + b.take(12).joinToString("; ") + " (a page that is missing pictures or buttons: switch Shields off for this site from the shield icon)") }
@@ -1686,6 +1687,7 @@ open class BrowserActivity : Activity(), DockListener {
             for (t in tabs) { t.shields = Shields.effective(prefs, t.topHost); syncEngineProtection(t) }
             GeckoEngine.applyPrefs(applicationContext)
             miniNav.available = prefs.miniNavToggle && !fullscreenOn
+            miniNav.setGlideEnabled(prefs.glideTyping)
             app.kestrel.browser.net.WifiBoost.set(this@BrowserActivity, prefs.labWifiBoost) // the Network lab switch takes effect at once (the browser is on screen: this is its Settings)
             app.kestrel.browser.download.PageProxy.refresh()                                // "Keep the phone helper under Fast Wi-Fi" may have changed what applies
             Io.exec { UpdateJob.schedule(applicationContext) } // the update schedule may have changed
