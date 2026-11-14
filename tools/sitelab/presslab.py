@@ -69,6 +69,9 @@ class H(http.server.BaseHTTPRequestHandler):
         if u.path == "/page2":
             self._write("navigated page2")
             return self._send(200, b"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width, initial-scale=1'><title>Page two</title><body style='font:20px sans-serif;margin:16px'><h2>Page two</h2><p><a href='/'>back to the press lab</a></p></body>")
+        if u.path == "/busy":  # AY1: a script that runs for 50 s, so the engine asks (after 20 s) whether to stop it; the app must answer "wait" without showing anything
+            self._write("busy page served")
+            return self._send(200, b"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width, initial-scale=1'><title>Busy page</title><body style='font:20px sans-serif;margin:16px'><h2>Busy page</h2><p>This page runs a script for 50 seconds.</p><script>setTimeout(function(){var end=Date.now()+50000;while(Date.now()<end){}document.title='Busy page finished';},800);</script></body>")
         if u.path == "/log":
             self._write("%s %s" % (q.get("kind", ["?"])[0], q.get("v", [""])[0]))
             return self._send(204)
