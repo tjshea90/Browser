@@ -3,6 +3,8 @@ package app.kestrel.core.filter
 /** Why a line was not turned into a rule (surfaced in the build report so list coverage is measurable). */
 enum class Skip {
     NONE, EMPTY, REGEX, UNSUPPORTED_OPTION, NON_ASCII, BAD_SYNTAX, ENTITY_DOMAIN, COSMETIC_UNSUPPORTED, COSMETIC_EXCLUSIONS, COSMETIC_UNSAFE, SCRIPTLET_UNSUPPORTED,
+    /** RX3-B1: a `trusted-*` scriptlet (it rewrites a site's own answers or sets cookies) in a list that is not trusted. */
+    SCRIPTLET_UNTRUSTED,
 }
 
 /** A parsed network rule in normalised form (see FilterSetBuilder for how it is stored). */
@@ -189,7 +191,7 @@ internal class RuleParser {
      * Parses `[domains]##selector` and `[domains]#@#selector`. Returns null (with [skip] set) for the unsupported procedural / HTML-filtering / CSS-injection forms and unsafe selectors. `+js(...)` scriptlet
      * calls (AW1b) need domains and are stored in their own form ([ScriptletRules]). Domains may be entity domains (`site.*`, AW1d) and may carry `~site.com` exclusions.
      */
-    fun parseCosmetic(line: String): CosmeticRule? {
+    fun parseCosmetic(line: String, trusted: Boolean = false): CosmeticRule? {
         skip = Skip.NONE
         val i = line.indexOf('#')
         if (i < 0) return fail2(Skip.BAD_SYNTAX)
@@ -210,7 +212,8 @@ internal class RuleParser {
         if (selector.startsWith("+js(")) {
             if (!selector.endsWith(")")) return fail2(Skip.SCRIPTLET_UNSUPPORTED)
             val inner = selector.substring(4, selector.length - 1)
-            selector = (if (inner.isBlank()) (if (exception) ScriptletRules.ALL_STORED else null) else ScriptletRules.encode(inner)) ?: return fail2(Skip.SCRIPTLET_UNSUPPORTED)
+            selector = (if (inner.isBlank()) (if (exception) ScriptletRules.ALL_STORED else null) else ScriptletRules.encode(inner, trusted))
+                ?: return fail2(if (!trusted && ScriptletRules.needsTrust(inner)) Skip.SCRIPTLET_UNTRUSTED else Skip.SCRIPTLET_UNSUPPORTED)
             scriptlet = true
         } else {
             val st = CosmeticSelectors.splitStyle(selector)

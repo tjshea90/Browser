@@ -131,12 +131,28 @@ internal object ScriptletRules {
         return out
     }
 
-    /** The stored form of the text inside `+js(` ... `)`, or null when it is not a call we understand. */
-    fun encode(inner: String): String? {
+    /**
+     * RX3-B1: the scriptlets that rewrite what a site's own API answers or set cookies and storage by script (`trusted-*` and their aliases) run only from lists whose maintainers also write the scriptlet
+     * semantics (the uBlock Origin lists), the way uBlock Origin itself honours them. A list that is not trusted cannot use them: a poisoned update of a third-party list must not be able to change what a
+     * bank's page receives. Measured 2026-11-14: EasyList, EasyPrivacy and Fanboy's cookie list hold NO such line, so nothing they do today is lost (research/ADBLOCK_ENGINE.md section 15).
+     */
+    private fun needsTrust(canonicalName: String): Boolean = canonicalName.startsWith("trusted-")
+
+    /** True when the call in [inner] is one of OUR trusted-only scriptlets (so a skip is "not trusted", not "unsupported"). */
+    fun needsTrust(inner: String): Boolean {
+        val parts = splitArgs(inner) ?: return false
+        if (parts.isEmpty()) return false
+        val name = canonical(parts[0]) ?: return false
+        return needsTrust(name)
+    }
+
+    /** The stored form of the text inside `+js(` ... `)`, or null when it is not a call we understand (or needs a trusted list and [trusted] is false). */
+    fun encode(inner: String, trusted: Boolean): String? {
         if (inner.length > MAX_TOTAL) return null
         val parts = splitArgs(inner) ?: return null
         if (parts.isEmpty()) return null
         val name = canonical(parts[0]) ?: return null
+        if (!trusted && needsTrust(name)) return null
         val args = parts.subList(1, parts.size).toMutableList()
         if (args.size > MAX_ARGS) return null
         var total = 0
