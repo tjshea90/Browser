@@ -1,13 +1,13 @@
-# CHECKPOINT 2266 — read me first, then TASKS.md
+# CHECKPOINT 2270 — read me first, then TASKS.md
 
-**Written:** 2026-11-14T18:00:29Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `8b3b740` (this checkpoint is the commit after it)
+**Written:** 2026-11-14T18:21:13Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `d4a0028` (this checkpoint is the commit after it)
 
 ## Just done
-alpha39 RELEASED AND RECORDED: kestrel-g-v0.3.0-alpha39 (gecko code 140, run 43623337064 green, APK in the Release, BUILDLOG.md line pushed); AX1 + AX1a-f ticked (AX1g = system keyboard app, OWNER YES/NO, not started). Owner answer for message 38 (keyboard part) given in plain words with the Release link. In the tree but NOT in alpha39: GlideTyping.ensurePersonal (export/import/learn load the saved file first; test anExportAndAnImportUseWhatIsSavedEvenBeforeTheEngineWasPrepared), KeyboardFlow empty-text guard + export file written on the IO thread, KEYBOARD-EXPORT.md shortlist note - they ship with the next release
+owner message 39 written into TASKS (AY1 no slow-page prompt, AY2 long press anywhere on an open space opens the panel under the finger / link options for links, AY3 space-bar cursor drag, AY4 floating panel moved by long press + drag, AY5 ship); AX1 answer for alpha39 was given
 
 ## Do this next
-NOTHING is in flight. Wait for the owner: (1) AX1g yes/no: a separate small system-keyboard app reusing :core and importing the export file; (2) the Diagnostics paste after real use (Glide typing line: glide shapes remembered / helped / changed the first guess; Mini keyboard in page fields line; EARLIER CRASH line if the app closes); (3) AI1c Doraby/Cloudflare, choppy video link, scroll/Back feel, Proton Mail numbers, ad-list schedule yes/no, video-site ad switch yes/no, SEC-1 private signing key, network lab results, LIC-1/UI-3/P2b, AS1 yes/no. Optional while idle: AW2 (more scriptlets only if ads still get through), FLK1 (flaky ProxyLinkTest), per-key thumb map (not needed per the lab), shape-injection tuning on real Diagnostics numbers. Any next release: bump geckoapp/build.gradle.kts versionCode 141, bash ship.sh gecko note, dispatch, record
+START AY1: grep -rn 'onSlowScript\|This page is slow' geckoapp app --include=*.kt; answer GeckoResult.fromValue(SlowScriptResponse.CONTINUE) with no dialog, count it for Diagnostics, unit test; then AY2a: find out on the emulator (x86_64 debug APK, tools/emu/glide_emu.py, fieldlab/adlab pages) what a long press on blank space / a link / an image / text delivers (GeckoView onContextMenu fires only for links+media; test a content-script contextmenu listener in geckoapp/src/main/assets/kestrel-shields/content.js); read MiniNav.kt HotCorner/PanelLayout/KeysView touch code and BrowserActivity dispatchTouchEvent first
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ NOTHING is in flight. Wait for the owner: (1) AX1g yes/no: a separate small syst
 
 ## Last ten checkpoints
 ```
+  44a36fb ckpt 2266: alpha39 RELEASED AND RECORDED: kestrel-g-v0.3.0-alpha39 (gecko code 140, run 
   418e420 ckpt 2260: alpha39 DISPATCHED (AX1: glide shapes + export/import): android.yml run_workf
   db0854d ckpt 2259: gated kestrel-g-v0.3.0-alpha39 (gecko code 140) and pushed it: handoff self-t
   4c766a1 ckpt 2258: pre-ship: alpha39 (includes alpha38): The keyboard now learns the SHAPE of yo
@@ -25,8 +26,7 @@ NOTHING is in flight. Wait for the owner: (1) AX1g yes/no: a separate small syst
   2d5a35b ckpt 2201: alpha38 DISPATCHED (AX2 fix: passkey API off + crash note): android.yml run_w
   da5124b ckpt 2200: gated kestrel-g-v0.3.0-alpha38 (gecko code 139) and pushed it: handoff self-t
   b72f9b2 ckpt 2199: pre-ship: alpha38 (includes alpha37): Fixes the app closing on some bank page
-  3495b5b ckpt 2198: AX2 root cause found, reproduced and fixed: GeckoView's Android WebAuthn need
 ```
 
-(4 automatic checkpoint(s) since the last deliberate one — the
+(3 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
