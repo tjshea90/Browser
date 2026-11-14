@@ -1,6 +1,7 @@
 package app.kestrel.core.media
 
 import app.kestrel.core.download.Action
+import app.kestrel.core.download.Backoff
 import app.kestrel.core.download.Clock
 import app.kestrel.core.download.Config
 import app.kestrel.core.download.DEST_PUBLIC
