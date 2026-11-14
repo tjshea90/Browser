@@ -1937,3 +1937,7 @@
 > - May the glow pause while a video plays?
 > - Should generic in-player ad skipping be on by default, with YouTube left out?
 <!-- sha:bbdbc54c3701 -->
+
+## 2026-11-14T19:08:23Z
+> Understood: all four are approved, plus YouTube ad skipping and blocking. I'll also add the Back-button request and make the file say exactly what the other session must do and where to save things. I'll start with what the other session changed, since the start-up sync merged its newest checkpoint into my tree, so I can re-verify my line references against the current code.
+<!-- sha:23c113a9061a -->
