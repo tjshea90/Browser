@@ -159,6 +159,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         section("Filter lists")
         info("Status", l.filterStatus())
         button("Update now", "Downloads only what changed (usually a few MB at most)") { l.updateFiltersNow() }
+        toggle("Extra tracker lists", "Adds AdGuard Tracking Protection and HaGeZi Light to the blocking lists: more cookie-sync and tracker requests are stopped (about 3 MB more to download the first time, a little more memory). A page that stops working: turn Shields off for that site. Switching it starts the update now.", prefs.extraTrackerLists) { prefs.extraTrackerLists = it; l.updateFiltersNow() }
         choice("Ad-blocking lists: update", listOf("Every day (recommended)", "Every week", "Only when I tap Update"), prefs.updatePolicy) { prefs.updatePolicy = it }
         toggle("Only on unmetered networks", "A hotspot counts as metered, so leave this off if you want updates over it", prefs.updateUnmeteredOnly) { prefs.updateUnmeteredOnly = it }
 
