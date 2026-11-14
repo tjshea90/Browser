@@ -42,7 +42,7 @@ async function open(body, opts) {
   await page.waitForFunction(() => window.__msgs.some((m) => m.k === 'vid'), null, { timeout: 8000 });
   return page;
 }
-const vid = (page) => page.evaluate(() => window.__msgs.filter((m) => m.k === 'vid')[0]);
+const vid = async (page) => { const m = await page.evaluate(() => window.__msgs.filter((x) => x.k === 'vid')[0]); assert.ok(Number.isInteger(m.f), 'the report carries the facts: ' + JSON.stringify(m)); return m; };
 const SRC = 'src="https://cdn.example/clip.wav"';
 
 test('a hover preview: muted, looping, autoplaying, no controls, visible, with its rendered size', async () => {

@@ -193,13 +193,51 @@
       } catch (x) { /* ignore */ }
       return '';
     }
+    // RX3-V1 (research/FINDER_LAB.md section 1): what this element is FOR. Facts only, as small whole numbers; the app decides (core VideoRoleRules). muted 1, loop 2, autoplay 4, controls 8, visible 16, ad 32.
+    // controls = the attribute OR a known player's own control bar around the element; ad = an ancestor (8 levels, never body) whose class or id holds ad / ads / advert / advertisement / adslot as a WHOLE word
+    // (split at every character that is not a letter or digit: ad-container, banner-ad, adslot-3, jw-flag-ads, vjs-ad-playing, ima-ad-container, plyr__ads, ad-showing; not address, headline, download, shadow).
+    var OWN_CONTROLS = ['jwplayer', 'video-js', 'plyr', 'mejs__container', 'flowplayer', 'shaka-video-container', 'html5-video-player', 'fp-player'];
+    var AD_WORDS = { ad: 1, ads: 1, advert: 1, advertisement: 1, adslot: 1 };
+    function hasAdWord(s) {
+      if (!s || typeof s !== 'string') return false;
+      var t = s.toLowerCase().split(/[^a-z0-9]+/);
+      for (var i = 0; i < t.length; i++) if (AD_WORDS[t[i]] === 1) return true;
+      return false;
+    }
+    function factsOf(v) {
+      var f = 0, controls = !!v.controls, ad = false;
+      try {
+        if (v.muted) f |= 1;
+        if (v.loop) f |= 2;
+        if (v.autoplay) f |= 4;
+        var n = v.parentNode, i = 0;
+        while (n && n.nodeType === 1 && i < 8 && n !== document.body && n !== document.documentElement) {
+          var cl = n.classList;
+          if (cl && !controls) for (var k = 0; k < OWN_CONTROLS.length; k++) if (cl.contains(OWN_CONTROLS[k])) { controls = true; break; }
+          if (!ad) ad = hasAdWord(n.getAttribute('class')) || hasAdWord(n.id);
+          n = n.parentNode; i++;
+        }
+        if (controls) f |= 8;
+        if (ad) f |= 32;
+        var r = v.getBoundingClientRect(), rw = Math.round(r.width), rh = Math.round(r.height), vp = 0;
+        var cs = window.getComputedStyle(v);
+        if (rw > 0 && rh > 0 && cs.visibility !== 'hidden' && cs.display !== 'none') f |= 16;
+        if (r.width > 0 && r.height > 0) {
+          var vw = window.innerWidth || document.documentElement.clientWidth || 0, vh = window.innerHeight || document.documentElement.clientHeight || 0;
+          var ix = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0)), iy = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+          vp = Math.max(0, Math.min(100, Math.round(100 * ix * iy / (r.width * r.height))));
+        }
+        return { f: f, rw: Math.max(0, Math.min(20000, rw)), rh: Math.max(0, Math.min(20000, rh)), vp: vp };
+      } catch (e) { return { f: f, rw: 0, rh: 0, vp: 0 }; }
+    }
     function report(v) {
       var src = v.currentSrc || v.src || '';
       if (!src || src.indexOf('http') !== 0) return;
       var key = src + '|' + v.videoHeight + '|' + Math.round(v.duration || 0);
       if (sent[key]) return;
       sent[key] = true;
-      browser.runtime.sendMessage({ k: 'vid', u: src, w: v.videoWidth || 0, h: v.videoHeight || 0, d: isFinite(v.duration) ? v.duration : 0, l: labelOf(v, src), p: location.href }).catch(function () {});
+      var x = factsOf(v);
+      browser.runtime.sendMessage({ k: 'vid', u: src, w: v.videoWidth || 0, h: v.videoHeight || 0, d: isFinite(v.duration) ? v.duration : 0, l: labelOf(v, src), p: location.href, f: x.f, rw: x.rw, rh: x.rh, vp: x.vp }).catch(function () {});
     }
     document.addEventListener('loadedmetadata', function (e) { var t = e.target; if (t && (t.tagName === 'VIDEO' || t.tagName === 'AUDIO')) report(t); }, true);
   } catch (e) { /* never break the page */ }
