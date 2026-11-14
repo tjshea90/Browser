@@ -156,6 +156,16 @@ class GlideTyping(private val loadMain: () -> ByteArray?, private val executor: 
         }
     }
 
+    /** Words the person typed letter by letter that the shipped list does not know are remembered; [saved] gets the text to store (it runs on the executor's thread). */
+    fun learnTyped(words: List<String>, own: UserWords, saved: (String) -> Unit) {
+        executor.execute {
+            val m = main
+            var changed = false
+            for (w in words) { if (m != null && m.idOf(w) >= 0) continue; own.add(w); changed = true }
+            if (changed) { setOwn(own); saved(own.serialize()) }
+        }
+    }
+
     /** The person kept [word] (the best candidate, or one picked from the strip) for the glide decoded last: the decoder learns where their finger lands. [habit] gets the new habit in pitches. */
     fun accepted(word: String, habit: (FloatArray) -> Unit) {
         executor.execute {

@@ -110,6 +110,12 @@ class Prefs private constructor(ctx: Context) {
     var miniNavOpen: Boolean get() = bool("mini_nav_open", false); set(v) = put("mini_nav_open", v)
     /** AR2: the small toggle for that panel is on screen at all (Settings can remove it from the page's top right corner). */
     var miniNavToggle: Boolean get() = bool("mini_nav_toggle", true); set(v) = put("mini_nav_toggle", v)
+    /** AT1: glide typing on the mini keyboard (slide over the letters of a word instead of tapping each one). */
+    var glideTyping: Boolean get() = bool("glide_typing", true); set(v) = put("glide_typing", v)
+    /** AT1: how this thumb lands beside the key it aims at (in key pitches, x then y), learned from the words that were kept. */
+    var glideHabit: FloatArray get() = floatArrayOf(sp.getFloat("glide_bx", 0f), sp.getFloat("glide_by", 0f)); set(v) { if (v.size == 2) sp.edit().putFloat("glide_bx", v[0]).putFloat("glide_by", v[1]).apply() }
+    /** AT1: words typed letter by letter that the word list does not have ("word count" per line), so they can be glided next time. */
+    var glideWords: String get() = sp.getString("glide_words", "") ?: ""; set(v) = put("glide_words", v)
 
     /** 0 weekly, 1 monthly, 2 manual. */
     var updatePolicy: Int get() = sp.getInt("upd_policy", 0); set(v) = put("upd_policy", v)
