@@ -1902,3 +1902,38 @@
 > - Network lab results.
 > - Optional: the licence note (LIC-1), landscape tabs (UI-3), and the Cromite comparison (P2b).
 <!-- sha:d535dc644105 -->
+
+## 2026-11-14T18:59:42Z
+> The review is finished and the findings file is attached to this chat. It's a read-only read of the code and the earlier research; I ran no builds, tests, emulator or tablet.
+>
+> I didn't change the repo, claim any `TASKS.md` item or run a checkpoint, so nothing touched the other session's branch. The repo's save hooks may log this chat to `INBOX.md` and `OUTBOX.md`, but only on my own branch.
+>
+> **File:** `/tmp/claude-0/-home-user-Browser/f5388cff-fd98-5e81-857a-8317253cf149/scratchpad/REVIEW-EXTERNAL-3.md` (64 KB, plain text). Upload it to the other session and tell it to save it as `research/REVIEW-EXTERNAL-3.md`, then work from section 12. It follows the same layout as the earlier outside reviews: each row has file and line evidence, a proof step and a status. Rows are marked new, already queued or already known. Section 12 is a block you can paste straight into `TASKS.md`.
+>
+> The most important findings:
+>
+> - **First press plays (ask 6):** the pop-up guard has three weaknesses.
+>   - It isn't active on the first page after a cold start.
+>   - A web page can fake the "real tap" evidence the redirect guard trusts.
+>   - Any page that embeds another site can make the extension click inside that embedded frame.
+>   - The current "press through the fake layer" fix only acts after an ad has already been refused, so the first press still fails.
+> - **False videos and ads (ask 2):** any video that reports its length is treated as a real video, so ads, hover previews and muted loops get through. Entries found in page markup with unknown size always count towards the Save-video badge. Ad breaks inside saved HLS videos are only removed after downloading, and only when the codec changes.
+> - **Download manager (ask 3):** an HLS video download fails after roughly 30 seconds to 2 minutes of dead hotspot upstream while Wi-Fi stays connected. The single-file engine only waits it out when it has one connection. Each row has a test to write first.
+> - **Security and blocking (ask 5):**
+>   - `trusted-*` scriptlets run from every list, including a single-maintainer host.
+>   - AdGuard Tracking and Hagezi Light were recommended by earlier research but never added; the gain is mostly fewer tracker requests, with a small byte saving.
+> - **Speed, RAM and hotspot (asks 1, 4, 7):**
+>   - The tablet measured the ad blocker at 723 µs per request, against a design target of 50 µs.
+>   - The glow animation keeps redrawing while a video plays.
+>   - A page-wide mutation watcher has no time limit.
+>   - The back/forward cache is fixed at 6 pages even though one kill takes down every tab.
+>   - On the capped hotspot, several smoothness settings spend bandwidth on content you may never scroll to.
+>
+> **Limits:** every `[R]` item is code I read, not behaviour I observed. Three Gecko-specific ideas are marked as unverified in the file (the guard registration option, adjusting the back/forward cache live, the media-session hook), and each names the test that decides it. The tablet numbers I quote are from an earlier build (alpha27), and I didn't review the WebView build.
+>
+> **Your four yes/no questions (section 11 of the file):**
+> - May the extra tracker lists be added with a Settings switch, even though logged-in pages weren't tested?
+> - Should pop-ups be stopped more strictly, so a legitimate one sometimes needs a tap on the blocked icon?
+> - May the glow pause while a video plays?
+> - Should generic in-player ad skipping be on by default, with YouTube left out?
+<!-- sha:bbdbc54c3701 -->
