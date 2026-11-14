@@ -1755,3 +1755,53 @@
 >
 > **Also:** one download-timing test failed once while the machine was busy and passed on its own and on GitHub, so it is flaky under load, not a real failure.
 <!-- sha:ace49aaa2fbd -->
+
+## 2026-11-14T06:01:29Z
+> alpha36 is out. It has everything from your last message: a keyboard you can resize and move, the Gboard and Samsung research, more learning from your corrections, and the polish. I tested it on the emulator with real touches, but not on your tablet.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha36
+>
+> **Resize and move.**
+> - Drag one of the small corner marks on the open keyboard to make it bigger or smaller. The letters grow with it, and glide typing follows the new key positions.
+> - Drag the thin bar on top of the panel to move it anywhere on the screen.
+> - Let go near the top right corner, or double tap that bar, and it docks back.
+> - Size and place are remembered. Settings has a button to reset them.
+> - The invisible long press in the top right corner still shows and hides the panel wherever it is.
+>
+> **Gboard and Samsung research.** Both match your swipe against a word list and pick the likeliest word using the words around it. The biggest published gain comes from learning your own words. Nothing published shows them learning from corrections, and Samsung publishes almost nothing, so I copied what is proven and added correction learning with limits. English only, no Spanish. The full report is in the repo at `research/GLIDE_RESEARCH.md`.
+>
+> **It now learns more from you.**
+> - It remembers "I guessed one word, you meant another" and prefers your word next time the two look alike.
+> - It learns your last two words, words you used a moment ago, and the titles of pages you visit and bookmark.
+> - A word you delete and then glide again goes to second place instead of coming up first again.
+> - Typed noise like "awwww" is never learned.
+> - Nothing is learned in private tabs or password fields. Settings > "Forget what the keyboard learned" wipes it all.
+>
+> **Polish.**
+> - While you glide, the strip already shows the word it thinks you mean.
+> - The key under your finger shows large above it.
+> - Holding a top-row letter types its number.
+> - Double tap Shift for caps lock.
+> - In a page's text field the bottom row has comma, apostrophe and question mark.
+> - A dot, comma or ".com" right after a glided word joins it with no gap.
+> - There is a key vibration setting, on by default.
+>
+> **Honest numbers.** In my simulated test the old learning already got about 95% right on the first guess for a person with set habits, so the new parts add less than one point there. Whether it really improves for you will show in your Diagnostics paste.
+>
+> **Tested and not tested.**
+> - On the emulator with real touches I saw: the mid-glide guess, the big key preview, caps lock, held numbers, the deleted-word rule (it typed "too" with "to" second), and the page-field row.
+> - Not tested: your tablet, a real thumb, real speed, and the vibration, which the emulator can't do.
+> - Once the emulator stopped redrawing the panel for a while and I couldn't explain it. If the keyboard ever looks frozen but still types, tell me.
+>
+> **What I need.** After a few days, paste Menu > Diagnostics, the "Glide typing" and "Mini keyboard in page fields" lines.
+>
+> **Still open from before:**
+> - Whether Doraby still shows "incompatible browser" or the Cloudflare message, plus a page report if it does.
+> - The link of the choppy video.
+> - How scrolling and Back feel.
+> - Proton Mail numbers and a keyboard test on it.
+> - Yes or no on a scheduled GitHub ad-list build.
+> - Yes or no on stored libraries (+65 MB download, 73 MB storage).
+> - Decisions on the private signing key, licence, landscape tabs and the Cromite comparison.
+> - I have not built the per-process memory line in Diagnostics.
+<!-- sha:048c560aeaa7 -->
