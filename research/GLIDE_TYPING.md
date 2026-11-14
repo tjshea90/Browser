@@ -157,3 +157,7 @@ What the simulation cannot say: how much a REAL person repeats words and phrases
 ### Keeping and forgetting it
 Saved at most every 30 seconds while typing, when the keyboard closes and when the browser stops (temp file, then rename, so a cut-off never leaves a half file). Settings > Privacy and security > "Forget what the keyboard learned" deletes the table, the thumb habit and the own-word list in one press.
 Not part of Back up & restore: that file is plain text in Downloads which any app can read, and this table is a list of what the person typed. It re-learns in about 300 glides (above), so an uninstall costs little.
+
+### Emulator proof of the learning (2026-11-14)
+Typed "hello" letter by letter, glided "world", picked the second guess "wield" from the strip, deleted it with one Backspace, pressed Go in a page field. The learned file on the emulator then held `w wield 3.00`, `w hello 1.00`, `p hello wield 3.00` (a pick counts 3 with its pair; a word typed letter by letter counts 1; the glided "world" that was swapped away is not learned). After restarting the app, Menu > Diagnostics said `learned 2 words and 1 word pairs from your typing`: the table survives a restart. A guess that was picked and then deleted at once (Backspace right after the pick) is NOT learned (unit-tested: `MiniNavTest`). Not measured on the emulator: the ranking effect itself (simulated in section 8; the tablet's "a learned word was the first guess N times" counts it for real).
+
