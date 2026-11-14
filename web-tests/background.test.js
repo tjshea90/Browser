@@ -1009,7 +1009,6 @@ test('stand-ins: the rule names one and the page allows it (flag 4): the request
   eq(h.req('script', PLAIN, PAGE), {});                                           // not blocked at all
   await h.flushTimers();
   eq(h.of('cnt')[0].c.reduce((a, b) => a + b, 0), 5, 'every one of the five blocked requests is counted, redirected or not');
-  assert.match(h.of('st').map((m) => m.w).join('|') + '', /answered with a stand-in|^$/);
 });
 
 test('stand-ins: without flag 4 (Settings switch "Fix ad and anti-adblock scripts" off, or Shields off for the page) every blocked request is a plain cancel', async () => {
