@@ -86,7 +86,6 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private var ownWords = UserWords()
     private var siteWords = emptyList<String>()
     private var pendingWord: String? = null     // the word the last glide put in: kept when the next thing is not a correction
-    private var hostsAsked = false
     /** Tests: where the engine comes from (the real one reads the shipped word list). */
     internal var glideFactory: (() -> GlideTyping)? = null
 
@@ -208,8 +207,9 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             ownWords = UserWords.parse(l.navGlideWords())
         }
         prepareGlide()
-        if (!hostsAsked) { hostsAsked = true; l.navGlideHosts { hosts -> post { siteWords = hosts.mapNotNull { UserWords.wordOfHost(it) }.distinct().take(300); pushOwnWords() } } }
-        else pushOwnWords()
+        pushOwnWords()
+        // the names of the sites visited so far (asked at every opening: a site visited a minute ago can be glided now)
+        l.navGlideHosts { hosts -> post { siteWords = hosts.mapNotNull { UserWords.wordOfHost(it) }.distinct().take(300); pushOwnWords() } }
     }
 
     private var preparedFor = ""

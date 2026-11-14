@@ -117,7 +117,7 @@ class GlideTyping(private val loadMain: () -> ByteArray?, private val executor: 
     fun prepare(k: GlideKeys, habit: FloatArray?, own: UserWords?) {
         executor.execute {
             try {
-                if (habit != null && habit.size == 2) { bx = habit[0]; by = habit[1] }
+                if (decoder == null && habit != null && habit.size == 2) { bx = habit[0]; by = habit[1] } // the saved habit starts the engine; later it keeps what it learned itself
                 if (main == null && !loading) {
                     loading = true
                     val t0 = System.nanoTime()
