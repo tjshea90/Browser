@@ -3,6 +3,7 @@ package app.kestrel.core.input.glide
 import app.kestrel.core.input.MiniKeyboardGeometry
 import app.kestrel.core.input.MiniKeyboardLayout
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -155,7 +156,7 @@ class GlideSupportTest {
         return GlideTyping({ bytes }, direct).also { it.prepare(keys, null, null) }
     }
 
-    private fun glideOf(g: GlideTyping, word: String, seed: Long = 3): List<GlideCandidate> {
+    private fun glideOf(g: GlideTyping, word: String, seed: Long = 1): List<GlideCandidate> {
         val p = GestureSim(keys, Random(seed)).path(word, SimNoise.CALM)!!
         var out: List<GlideCandidate> = emptyList()
         g.decode(p.xs, p.ys, p.xs.size, null) { out = it.candidates }
@@ -200,14 +201,14 @@ class GlideSupportTest {
 
     @Test fun aCorrectionMakesWhatWasGuessedLessSureForTheSameShape() {
         val g = shapeEngine()
-        val first = glideOf(g, "word", 7).first().text
-        g.learn(null, first, 1f, fromGlide = true) // kept: its shape is remembered
-        assertTrue(exported(g).lines().any { it.startsWith("s $first ") })
+        glideOf(g, "word", 7)
+        g.learn(null, "word", 1f, fromGlide = true) // kept as "word": its shape is remembered
+        assertTrue(exported(g).lines().any { it.startsWith("s word ") })
         glideOf(g, "word", 7)                       // the same path again, and now the person says it was another word
-        g.learn(null, "world", 3f, guessed = first, guessedWeight = 1f, fromGlide = true)
+        g.learn(null, "world", 3f, guessed = "word", guessedWeight = 1f, fromGlide = true)
         val lines = exported(g).lines()
         assertTrue(lines.any { it.startsWith("s world 3.00 ") })
-        assertFalse("the guessed word's shape for that glide is gone: $lines", lines.any { it.startsWith("s $first ") })
+        assertFalse("the guessed word's shape for that glide is gone: $lines", lines.any { it.startsWith("s word ") })
     }
 
     @Test fun anExportFileIsTakenInAndTheThumbHabitOfThisKeyboardStays() {
