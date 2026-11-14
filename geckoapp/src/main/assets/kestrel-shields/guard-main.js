@@ -11,6 +11,7 @@
 (function () {
   var CFG_EVENT = '__kst_cfg_v1', POP_EVENT = '__kst_pop_v1', READY_EVENT = '__kst_ready_v1';
   try {
+    if (typeof browser !== 'undefined' && browser && browser.runtime) return; // RX3-G1: declared in the manifest as well; a copy that ever ran in the isolated world (extension API present) must do nothing there
     if (window.__kstGuard) return;
     Object.defineProperty(window, '__kstGuard', { value: 1 });
   } catch (e) { return; }

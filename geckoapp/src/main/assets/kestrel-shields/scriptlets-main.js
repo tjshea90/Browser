@@ -8,6 +8,7 @@
 (function () {
   var EVENT = '__kst_sl_v1', READY = '__kst_sl_ready_v1', REPORT = '__kst_sl_n_v1';
   try {
+    if (typeof browser !== 'undefined' && browser && browser.runtime) return; // RX3-G1: declared in the manifest as well; a copy that ever ran in the isolated world (extension API present) must do nothing there
     if (window.__kstSL) return;
     Object.defineProperty(window, '__kstSL', { value: 1 });
   } catch (e) { return; }

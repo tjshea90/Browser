@@ -287,7 +287,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   return undefined;
 });
 try {
-  browser.contentScripts.register({
+  if (false) browser.contentScripts.register({ // EXPERIMENT-G1: dynamic registration of the guard switched off, only the manifest copy can be in the page
     matches: ['http://*/*', 'https://*/*'], js: [{ file: 'guard-main.js' }], runAt: 'document_start', allFrames: true, matchAboutBlank: true, matchOriginAsFallback: true, world: 'MAIN',
   }).then(function () { guardState = 'page guard on'; }, function (e) { guardState = 'page guard FAILED: ' + (e && e.message); });
 } catch (e) { guardState = 'page guard FAILED: ' + (e && e.message); }
