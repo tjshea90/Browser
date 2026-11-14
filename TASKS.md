@@ -516,7 +516,7 @@ A question, not an order: answer it in plain words with a TESTED recipe, then le
   - [ ] RX3-D3 HLS start-up: workers start while the mux decision is made
   - [ ] RX3-B2 AdGuard Tracking Protection + Hagezi Light as separate sources, Settings row "Extra tracker lists" default ON; regression test with the owner's sites; pick pop-up lists by replaying blocked-popup hosts; docs/FILTER-LISTS.md
   - [ ] RX3-B3 signed list bundle (SECURITY B20), priority raised
-  - [ ] RX3-S1 hold the glow pulse while a video plays (GeckoSession MediaSession delegate); CPU line before/after
+  - [~] RX3-S1 hold the glow pulse while a video plays (GeckoSession MediaSession delegate); CPU line before/after {claude/new-session-7d9rxz 2026-11-14T23:42Z}
   - [ ] RX3-S2 extension listener counters, then restrict onErrorOccurred/onCompleted types and the onBeforeSendHeaders scope
   - [ ] RX3-S3 time budget and stop for the class/id token MutationObserver (content.js D2); web test; Proton Mail A/B
   - [ ] RX3-S4 blocker histogram with cold/warm split; trigger on average x requests; bucket report; then the cuts in section 9
