@@ -110,6 +110,12 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private var learnedText: String? = null      // the text whose words were already handed to the keyboard's memory (closing after Enter must not count them twice)
     /** The keyboard is open and its keys go into a text field of the page. */
     val typesIntoPage: Boolean get() = keyboardShowing && pageField != null
+    private var fieldOpenings = 0; private var addressOpenings = 0; private var fieldSent = 0; private var fieldEnters = 0; private var lastFieldLabel = "-"
+
+    /** What menu > Diagnostics shows for typing into page fields: whether the keyboard found a field, what kind it was, how much went in. */
+    fun fieldLine(): String =
+        if (fieldOpenings + addressOpenings == 0) "Mini keyboard in page fields: not opened yet this run"
+        else "Mini keyboard in page fields: opened $fieldOpenings times with a page field focused (last: $lastFieldLabel; $fieldSent characters sent, Enter pressed $fieldEnters times) and $addressOpenings times for the address bar"
 
     /** The panel is shown (sliding in counts as shown). */
     var isOpen = false; private set
@@ -191,6 +197,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         if (!isOpen || keyboardShowing) return
         val f = l.navPageField()              // a text field of the page has focus: the keys go there, from an empty text (the address is not selected)
         pageField = f; fieldIdentity = f?.identity ?: 0; learnedText = null
+        if (f != null) { fieldOpenings++; lastFieldLabel = f.label } else addressOpenings++
         model.open(if (f != null) "" else address)
         keyboardShowing = true
         keys.visibility = VISIBLE
@@ -366,6 +373,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         if (f != null && was != null && f.identity == fieldIdentity) { pageField = f; return } // the same field (a fresh object: its type may have changed)
         if (was != null) { confirmGlide(); learnFromText() }
         pageField = f; fieldIdentity = f?.identity ?: 0
+        if (f != null) { fieldOpenings++; lastFieldLabel = f.label }
         learnedText = null
         model.open(if (f != null) "" else address)
         pendingWord = null; afterUndo = false
@@ -377,13 +385,13 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         var e = TextEdit.between(before, model.text)
         if (backspace && e.isEmpty) e = TextEdit(1, "") // nothing typed here is left to take off: the field's own text goes
         if (e.remove > 0) f.deleteBefore(e.remove)
-        if (e.insert.isNotEmpty()) f.insert(e.insert)
+        if (e.insert.isNotEmpty()) { f.insert(e.insert); fieldSent += e.insert.length }
     }
 
     /** Go in a page field presses Enter there; a field whose Enter submits (a search box) closes the keyboard, a text area stays open with an empty text for the next line. */
     private fun fieldGo(f: PageField) {
         learnFromText()
-        f.enter()
+        f.enter(); fieldEnters++
         if (f.enterSubmits) closeKeyboard()
         else { model.open(""); learnedText = null; keys.clearCandidates(); bar.invalidate(); keys.invalidate() }
     }

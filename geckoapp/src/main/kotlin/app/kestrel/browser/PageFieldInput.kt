@@ -65,7 +65,7 @@ class PageFieldInput(
         val info = EditorInfo()
         val ic = try { session.textInput.onCreateInputConnection(info) } catch (e: Exception) { null } ?: return null
         if (info.inputType == InputType.TYPE_NULL) return null
-        return Field(ic, info, focusCount).also { cached = it }
+        return Field(ic, info, focusCount).also { cached = it; app.kestrel.browser.diag.Health.log("field", "focused", it.label) } // one line per field that gets the keys (the Diagnostics event list shows what kind it was)
     }
 
     private class Field(private val ic: InputConnection, info: EditorInfo, override val identity: Int) : PageField {

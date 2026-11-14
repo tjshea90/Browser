@@ -497,5 +497,15 @@ class MiniNavTest {
         nav.closeKeyboard()
         assertTrue(nav.barDescriptionForTest.contains("Address"))
     }
+
+    @Test fun theLineForDiagnosticsCountsFieldAndAddressOpeningsAndWhatWasSent() {
+        assertTrue(nav.fieldLine(), nav.fieldLine().contains("not opened yet"))
+        val f = FakeField(); openKeyboardWith(f)
+        nav.pressKeyForTest("h"); nav.pressKeyForTest("i"); nav.pressKeyForTest("Go")
+        val line = nav.fieldLine()
+        assertTrue(line, line.contains("opened 1 times with a page field focused") && line.contains("2 characters sent") && line.contains("Enter pressed 1 times") && line.contains("last: test") && line.contains("0 times for the address bar"))
+        rec.field = null; nav.pressBarForTest(); idle(20)
+        assertTrue(nav.fieldLine(), nav.fieldLine().contains("1 times for the address bar"))
+    }
 }
 
