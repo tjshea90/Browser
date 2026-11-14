@@ -64,7 +64,7 @@ class GlideParams(
     /** Cost of each pitch squared of that move, so a word cannot buy a good fit by sliding the whole path. */
     val biasW: Float = 3.0f,
     /** A word whose path is further than this from the finger's (squared pitches per letter) is no answer: a glide that fits nothing says so instead of typing the nearest word. */
-    val maxPerLetter: Float = 2.6f,
+    val maxPerLetter: Float = 3.4f,
 )
 
 class GlideCandidate(val text: String, val score: Float, val cost: Float, val prior: Float, val letters: Int = 1) {
