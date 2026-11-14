@@ -40,6 +40,10 @@ PAGE = r"""<!doctype html>
 <script>
  var R = {}; function say(k, v) { R[k] = v; try { new Image().src = '/log?k=' + k + '&v=' + encodeURIComponent(v) + '&h=__HOST__&t=' + Date.now(); } catch (e) {} paint(); }
  function paint() { var s = ''; for (var k in R) s += k + ': ' + R[k] + '\n'; var o = document.getElementById('out'); if (o) o.textContent = s; }
+ // timing: when did the browser's scriptlets run, compared with this script (the library reports "<ran>:<failed>" on the document when it has run its calls)
+ var T0 = Math.round(performance.now()); var TS = Date.now();
+ document.addEventListener('__kst_sl_n_v1', function (e) { say('timing', 'scriptlets ran (' + e.detail + ') ' + (Date.now() - TS) + ' ms after the first page script (page script at ' + T0 + ' ms)'); }, true);
+ document.addEventListener('DOMContentLoaded', function () { say('dcl', (Date.now() - TS) + ' ms after the first page script'); }, true);
  // wall: the page's own detector decides "blocked" because the bait never loaded
  window.adblockDetected = true;
  // nag + countdown + popunder
