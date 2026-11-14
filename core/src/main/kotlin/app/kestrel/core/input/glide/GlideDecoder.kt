@@ -212,7 +212,7 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
 
     // ------------------------------------------------------------------ careful pass
 
-    /** The cost of the path as the word [id]: where the finger was at each letter and how far the path strays between letters. Lower is better. */
+    /** The cost of the path as the word [id]: where the finger was at each letter and how far the path strays between letters, added up over the letters (more letters = more evidence). Lower is better. */
     private fun careful(lex: GlideLexicon, id: Int): Float {
         val len = lex.length(id)
         var m = 0; var prevL = -1
@@ -231,8 +231,6 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
             }
         }
         val inf = Float.MAX_VALUE / 4
-        // the weights of the letters add up to this: the two end letters count [endW], the others 1 (the final cost is the average over them)
-        val wTotal = (m - 2) + 2f * p.endW
         // first letter near the start of the path
         val k0 = letters[0]
         for (i in 0 until n) fPrev[i] = if (i <= p.slack) p.endW * visit(k0, i) else inf
@@ -247,7 +245,7 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
                 for (a in j - 1 until i) {
                     val fa = fPrev[a]
                     if (fa >= inf) continue
-                    val c = fa + p.shapeW * (pre[base + i] - pre[base + a]) * (wTotal / n) // how far the path strays between the two letters, as an average over all steps of the path
+                    val c = fa + p.shapeW * (pre[base + i] - pre[base + a]) * (m.toFloat() / n) // how far the path strays between the two letters: the mean over all steps, times the letters, so it counts like one more letter's distance
                     if (c < best) best = c
                 }
                 fCur[i] = if (best >= inf) inf else best + w * visit(kj, i)
@@ -256,7 +254,7 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
         }
         var best = inf
         for (i in 0 until n) if (fPrev[i] < best) best = fPrev[i]
-        return best / wTotal
+        return best
     }
 
     private fun visit(k: Int, i: Int): Float { val d = d2(qx[i] - kx[k], qy[i] - ky[k]); return if (d < p.visitCap) d else p.visitCap }
