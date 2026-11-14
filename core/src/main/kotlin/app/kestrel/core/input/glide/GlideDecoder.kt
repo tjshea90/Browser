@@ -132,6 +132,45 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
     /** The words that went through to the careful pass in the last decode (for the accuracy tests). */
     internal fun survivorTexts(lexicons: List<GlideLexicon>): List<String> = (0 until heapN).map { lexicons[heapLex[it]].text(heapId[it]) }
 
+    /** Debug: where the careful pass put every letter of word [id] on the path, and what it cost (visit, shape). */
+    internal fun debugTrace(lex: GlideLexicon, id: Int): String {
+        val len = lex.length(id)
+        var m = 0; var prevL = -1
+        for (i in 0 until len) { val l = lex.letter(id, i); if (l != prevL) { letters[m++] = l; prevL = l } }
+        val ls = (0 until m).map { letters[it] }
+        // brute-force the same DP with back pointers
+        val INF = Float.MAX_VALUE / 4
+        val f = Array(m) { FloatArray(n) { INF } }; val from = Array(m) { IntArray(n) { -1 } }
+        val shapeScale = gestureLen / n
+        fun seg(j: Int, a: Int, b: Int): Float {
+            val ax = kx[ls[j]]; val ay = ky[ls[j]]; val bx = kx[ls[j + 1]]; val by = ky[ls[j + 1]]
+            val vx = bx - ax; val vy = by - ay; val vv = vx * vx + vy * vy
+            var sum = 0f
+            for (i in a until b) {
+                var t = if (vv > 0f) ((qx[i] - ax) * vx + (qy[i] - ay) * vy) / vv else 0f
+                t = t.coerceIn(0f, 1f)
+                val dx = qx[i] - (ax + vx * t); val dy = qy[i] - (ay + vy * t); sum += dx * dx + dy * dy
+            }
+            return sum * shapeScale * p.shapeW
+        }
+        for (i in 0..p.slack) f[0][i] = p.endW * visit(ls[0], i)
+        for (j in 1 until m) for (i in j until n) {
+            if (j == m - 1 && i < n - 1 - p.slack) continue
+            val w = if (j == m - 1) p.endW else 1f
+            for (a in j - 1 until i) { if (f[j - 1][a] >= INF) continue; val c = f[j - 1][a] + seg(j - 1, a, i); if (c + w * visit(ls[j], i) < f[j][i]) { f[j][i] = c + w * visit(ls[j], i); from[j][i] = a } }
+        }
+        var bi = 0; for (i in 0 until n) if (f[m - 1][i] < f[m - 1][bi]) bi = i
+        val idx = IntArray(m); var cur = bi
+        for (j in m - 1 downTo 0) { idx[j] = cur; cur = if (j > 0) from[j][cur] else 0 }
+        val sb = StringBuilder("total %.3f  len=%.1f pitches  ".format(f[m - 1][bi], gestureLen))
+        for (j in 0 until m) {
+            val v = visit(ls[j], idx[j])
+            val sh = if (j < m - 1) seg(j, idx[j], idx[j + 1]) else 0f
+            sb.append("%c@%d(v=%.2f%s) ".format('a' + ls[j], idx[j], v, if (j < m - 1) ", shape=%.2f".format(sh) else ""))
+        }
+        return sb.toString()
+    }
+
     /** The careful-pass cost of word [id] for the path decoded last (for the accuracy tests and the tuning). */
     internal fun debugCost(lex: GlideLexicon, id: Int): Float = careful(lex, id)
     internal fun debugPrior(lex: GlideLexicon, id: Int, prev: String?): Float = prior(lex, id, prevIds(listOf(lex), prev)[0])
