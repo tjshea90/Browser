@@ -91,8 +91,10 @@ def round_(case, port, log, place=1800):
     for l in health(r"back|cover-|look-"):
         print("   ", l)
     verdict = "KEPT by the engine's cache" if persisted else ("loaded again FROM THE NETWORK" if got else "loaded again, answered by a cache")
-    ok = (y2000 is not None and abs(y2000 - left_at) <= 4)
-    print("RESULT %-9s left_at=%-5d +500ms=%-5s +2000ms=%-5s place_kept=%-5s %s (wall %d ms incl. adb)" % (case, left_at, y500, y2000, ok, verdict, ms_show))
+    final = last_y(after, case) if any("scrolled back-%s" % case in l for l in after) else None
+    place = final if final is not None else y2000   # the last scroll the page reported (the +500/+2000 ms timers can run late on a stalled emulator)
+    ok = (place is not None and abs(place - left_at) <= 4)
+    print("RESULT %-9s left_at=%-5d +500ms=%-5s +2000ms=%-5s last_scroll=%-5s place_kept=%-5s %s (wall %d ms incl. adb)" % (case, left_at, y500, y2000, final, ok, verdict, ms_show))
     return dict(case=case, left_at=left_at, y500=y500, y2000=y2000, ok=ok, persisted=persisted, network=got)
 
 
