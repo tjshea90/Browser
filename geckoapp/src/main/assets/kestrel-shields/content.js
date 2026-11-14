@@ -220,6 +220,50 @@
     }
     window.addEventListener('scroll', function () { if (!timer) timer = setTimeout(report, 300); }, { passive: true });
     window.addEventListener('load', function () { if (!timer) timer = setTimeout(report, 800); }, false);
+    // RX3-BK2: the page is being left (a link, Back, a typed address): its place goes to the app NOW, not 300 ms after the last scroll, so that the next Back knows where the owner left it.
+    window.addEventListener('pagehide', function () { if (timer) { clearTimeout(timer); timer = 0; } report(); }, false);
+  } catch (e) { /* never break the page */ }
+})();
+
+// RX3-BK1 / RX3-BK2 (research/REVIEW-EXTERNAL-3.md section 3; top frame only). Back and Forward: (1) tell the app what kind of show this was (the engine's cache, or loaded again, and what the page's file cost)
+// so the real hit rate is measured (the Back lab); (2) when the engine loaded the page again, ask the app for the place the owner left it at and scroll there if the engine did not get there (pages that change
+// height after the load, pages that restore their own place). Five looks in 3 s, each acts only when the page is more than 4 px off, none once the owner touched the page. One question per page load, a number back.
+(function () {
+  try {
+    if (window.top !== window) return;
+    var touched = false, asked = false, evs = ['touchstart', 'wheel', 'keydown', 'mousedown'], i;
+    function drop() { for (var j = 0; j < evs.length; j++) window.removeEventListener(evs[j], touch, true); }
+    function touch() { touched = true; drop(); }
+    for (i = 0; i < evs.length; i++) window.addEventListener(evs[i], touch, { capture: true, passive: true });
+    function place() { return Math.round(window.pageYOffset || (document.documentElement && document.documentElement.scrollTop) || 0); }
+    function moveTo(y) {
+      try { window.scrollTo({ top: y, left: 0, behavior: 'instant' }); } catch (e) { try { window.scrollTo(0, y); } catch (e2) { /* ignore */ } }
+    }
+    function pull() {
+      if (asked) { drop(); return; }
+      asked = true;
+      browser.runtime.sendMessage({ k: 'bk', p: location.href }).then(function (r) {
+        var y = parseInt(r, 10), at = [0, 250, 700, 1500, 3000], n = 0;
+        if (!(y > 0) || touched) { drop(); return; }
+        (function look() {
+          if (touched) return;
+          var room = (document.documentElement ? document.documentElement.scrollHeight : 0) - window.innerHeight;
+          var lastLook = n === at.length - 1;
+          if (Math.abs(place() - y) > 4 && (room >= y - 4 || lastLook)) moveTo(y);
+          n++;
+          if (n < at.length) setTimeout(look, at[n] - at[n - 1]); else drop();
+        })();
+      }, function () { drop(); });
+    }
+    window.addEventListener('pageshow', function (e) {
+      try {
+        var kept = !!(e && e.persisted), nt = '', ts = 0;
+        try { var nav = performance.getEntriesByType('navigation')[0]; if (nav) { nt = String(nav.type || ''); ts = Math.round(nav.transferSize || 0); } } catch (x) { /* an older engine */ }
+        if (!kept && nt !== 'back_forward') { drop(); return; } // a normal visit: nothing to report, nothing to ask
+        browser.runtime.sendMessage({ k: 'bf', p: location.href, ps: kept ? 1 : 0, nt: nt, ts: kept ? 0 : ts, y: place() }).catch(function () {});
+        if (kept) drop(); else pull();
+      } catch (x) { /* never break the page */ }
+    }, false);
   } catch (e) { /* never break the page */ }
 })();
 
