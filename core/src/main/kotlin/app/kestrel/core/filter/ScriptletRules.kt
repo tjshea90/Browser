@@ -18,9 +18,9 @@ internal object ScriptletRules {
     /** `site#@#+js()`: every scriptlet is off for the site. */
     const val ALL_STORED = "\u0005*"
 
-    /** In the CSS answer of a host that has scriptlets: `/*ks` JSON `*` `/` (a CSS comment: harmless to anything that does not know it). The page script cuts it out and hands the JSON to the page-world library. */
-    const val MARKER_START = "/*ks"
-    const val MARKER_END = "*/"
+    /** In the CSS answer of a host that has scriptlets: a CSS comment that opens with these characters, holds the JSON of the calls and closes with [MARKER_END] (harmless to anything that does not know it). The page script cuts it out and hands the JSON to the page-world library. */
+    const val MARKER_START = "/" + "*ks"
+    const val MARKER_END = "*" + "/"
 
     const val MAX_ARGS = 10
     const val MAX_ARG = 500
