@@ -31,7 +31,7 @@ fun main(args: Array<String>) {
         i++
     }
     if (out == null || specs.isEmpty()) {
-        System.err.println("usage: ListCompiler --out FILE [--psl-in IN --psl-out OUT] abp|hosts:<ads|privacy|malware|annoyance>:<file> ...")
+        System.err.println("usage: ListCompiler --out FILE [--psl-in IN --psl-out OUT] abp|abp-trusted|hosts:<ads|privacy|malware|annoyance>:<file> ...  (abp-trusted: the uBlock Origin lists, whose trusted-* scriptlets may be used; RX3-B1)")
         exitProcess(2)
     }
 
@@ -56,6 +56,7 @@ fun main(args: Array<String>) {
         val t0 = System.nanoTime()
         when (parts[0]) {
             "abp" -> b.addAbpList(file.name, category, linesOf(file))
+            "abp-trusted" -> b.addAbpList(file.name, category, linesOf(file), trusted = true)
             "hosts" -> b.addHostsList(file.name, category, linesOf(file))
             else -> error("unknown format ${parts[0]}")
         }
