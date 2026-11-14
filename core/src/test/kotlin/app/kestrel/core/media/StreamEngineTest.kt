@@ -142,8 +142,11 @@ class StreamEngineTest {
         h.await(id, "some progress") { it != null && it.done >= 3 * 30_000L }
         killAll(h, 16)                                                              // every part now ends in a connection reset, like a dead upstream
         h.await(id, "waiting, not failed") { it?.state == DlState.WAITING_NETWORK }
-        Thread.sleep(250)
-        assertEquals("still waiting", DlState.WAITING_NETWORK, h.view(id)!!.state)
+        // the ladder is tiny here (40-80 ms), so the job looks again several times in the next 400 ms: it is sometimes RUNNING, never FAILED
+        val seen = HashSet<DlState>(); val end = System.currentTimeMillis() + 400
+        while (System.currentTimeMillis() < end) { h.view(id)?.let { seen.add(it.state) }; Thread.sleep(3) }
+        assertFalse("never failed: $seen", seen.contains(DlState.FAILED)); assertFalse(seen.contains(DlState.COMPLETED))
+        assertTrue("waited again after looking: $seen", seen.contains(DlState.WAITING_NETWORK))
         h.cdn.failFirst.clear()
         val v = h.completed(id)
         assertArrayEquals(expected, h.out(v))
