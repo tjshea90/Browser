@@ -108,4 +108,40 @@ class GlideSupportTest {
         g.prepare(keys, null, null)
         assertTrue(!g.ready)
     }
+
+    @Test fun aLivePreviewGuessesFromThePathSoFarWithoutCountingAGlideOrDisturbingTheRealDecode() {
+        val bytes = LexiconFile.build(listOf("the" to 530_000_000_000L, "hello" to 500_000_000L, "help" to 400_000_000L, "world" to 900_000_000L).map { LexiconFile.Entry(it.first, it.second) }, emptyList())
+        val g = GlideTyping({ bytes }, direct, previewExecutor = direct)
+        g.prepare(keys, null, null)
+        val sim = GestureSim(keys, Random(5))
+        val p = sim.path("hello", SimNoise.CALM)!!
+        var previewed: List<String> = emptyList()
+        g.preview(p.xs, p.ys, p.xs.size * 3 / 4, null) { previewed = it.candidates.map { c -> c.text } } // three quarters of the path: the finger is still going
+        assertTrue("a guess from the path so far: $previewed", previewed.isNotEmpty())
+        assertTrue("a preview is not a glide: ${g.stats.line()}", !g.stats.line().contains("glides") && g.stats.line().contains("live preview 1 times"))
+        var real: List<String> = emptyList()
+        g.decode(p.xs, p.ys, p.xs.size, null) { real = it.candidates.map { c -> c.text } }
+        assertEquals("the whole path still gives hello first", "hello", real[0])
+        var moreThanOne = 0
+        repeat(5) { g.preview(p.xs, p.ys, p.xs.size / 2, null) { moreThanOne++ } }
+        assertEquals("on a direct executor every call runs to its end before the next", 5, moreThanOne)
+    }
+
+    @Test fun onlyOneLivePreviewRunsAtATimeTheRestAreDropped() {
+        val bytes = LexiconFile.build(listOf("the" to 530_000_000_000L, "hello" to 500_000_000L).map { LexiconFile.Entry(it.first, it.second) }, emptyList())
+        val queued = ArrayList<Runnable>()
+        val slow = Executor { queued.add(it) }
+        val g = GlideTyping({ bytes }, direct, previewExecutor = slow)
+        g.prepare(keys, null, null)
+        val p = GestureSim(keys, Random(5)).path("hello", SimNoise.CALM)!!
+        var done = 0
+        g.preview(p.xs, p.ys, p.xs.size, null) { done++ }
+        g.preview(p.xs, p.ys, p.xs.size, null) { done++ } // the first has not run yet: dropped
+        g.preview(p.xs, p.ys, p.xs.size, null) { done++ }
+        assertEquals(1, queued.size)
+        queued[0].run()
+        assertEquals(1, done)
+        g.preview(p.xs, p.ys, p.xs.size, null) { done++ } // free again
+        assertEquals(2, queued.size)
+    }
 }

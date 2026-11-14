@@ -717,5 +717,21 @@ class MiniNavTest {
         assertTrue(nav.pressKeyForTest(".com"))
         assertEquals("hello.com", nav.barTextForTest)
     }
+
+    @Test fun aLiveGuessShowsInTheStripWhileTheFingerIsStillGliding() {
+        openGlideKeyboard()
+        val pts = fingerPath("hello")
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, pts.first().first, pts.first().second)
+        val half = pts.size / 2
+        for (q in pts.subList(1, half)) nav.touchKeysForTest(MotionEvent.ACTION_MOVE, q.first, q.second)
+        idle(300)                                                             // time passes while the finger moves on
+        for (q in pts.subList(half, pts.size - 1)) nav.touchKeysForTest(MotionEvent.ACTION_MOVE, q.first, q.second)
+        idle(50)
+        assertTrue("before the lift the strip already shows guesses: ${nav.candidatesForTest}", nav.candidatesForTest.isNotEmpty())
+        assertEquals("but nothing is typed yet", "", nav.barTextForTest.trim().let { if (it.startsWith("http")) "" else it })
+        nav.touchKeysForTest(MotionEvent.ACTION_UP, pts.last().first, pts.last().second); idle(20)
+        assertEquals("hello ", nav.barTextForTest)
+        assertTrue(nav.glideLine(), nav.glideLine().contains("live preview") && nav.glideLine().contains("word shown"))
+    }
 }
 
