@@ -275,9 +275,29 @@
     var wanted = true, topHost = '';
     function push() { try { document.dispatchEvent(new CustomEvent(CFG, { detail: wanted ? '1|' + topHost : '0' })); } catch (e) { /* ignore */ } }
     document.addEventListener(READY, push, true); // the page-side script may come up after our first answer
+    // What the page-side guard may REPORT through this event: it refused something. A `tap` (the evidence that lets a jump through) or a `vmenu` arriving through it is never believed: any script of the
+    // page can dispatch the same event itself (RX3-G2). The owner's real taps are recorded below, here in the isolated world, from trusted events only.
+    var KINDS = { open: 1, click: 1, overlay: 1, form: 1, redirect: 1 };
     document.addEventListener(POP, function (e) {
-      try { browser.runtime.sendMessage({ k: 'pop', d: String(e.detail).slice(0, 700), p: location.href }).catch(function () {}); } catch (x) { /* ignore */ }
+      try {
+        var d = String(e.detail).slice(0, 700), c = d.indexOf('|'), kind = c > 0 ? d.slice(0, c) : d;
+        if (!Object.prototype.hasOwnProperty.call(KINDS, kind)) return;
+        browser.runtime.sendMessage({ k: 'pop', d: d, p: location.href }).catch(function () {});
+      } catch (x) { /* ignore */ }
     }, true);
+    var lastTapHref = null, lastTapAt = 0;
+    function anchorHref(el) { try { for (var n = el; n && n !== document; n = n.parentNode) if (n.tagName === 'A' && n.href) return String(n.href); } catch (x) { /* ignore */ } return ''; }
+    function realTap(e) {
+      try {
+        if (!e.isTrusted) return; // a script's own click or pointer event is no tap
+        var href = anchorHref(e.target), now = Date.now();
+        if (lastTapHref === href && now - lastTapAt < 700) return; // the pointerup of a tap and the click that follows it are one tap
+        lastTapHref = href; lastTapAt = now;
+        browser.runtime.sendMessage({ k: 'pop', d: 'tap|' + href.slice(0, 600), p: location.href }).catch(function () {});
+      } catch (x) { /* ignore */ }
+    }
+    window.addEventListener('click', realTap, true);
+    window.addEventListener('pointerup', realTap, { capture: true, passive: true }); // a page that cancels the click still gets its tap counted; a swipe that scrolls ends in pointercancel, never here
     browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { wanted = !(r && r.on === false); topHost = (r && r.top) ? String(r.top) : ''; push(); }, function () {});
   } catch (e) { /* never break the page */ }
 })();

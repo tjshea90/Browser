@@ -125,7 +125,7 @@
   }
   function onClick(e) {
     var a = anchorOf(e.target);
-    if (e.isTrusted) note('tap', a ? absolute(a.href) : ''); // the extension needs to know what the last real tap was on, to tell a user's link from a script's redirect
+    // (the app learns what the last real tap was on from content.js, in the isolated world: this page-side script cannot be believed about taps, RX3-G2)
     if (!e.isTrusted) {
       // a script "clicked" a link: it may not open a window, and may not move the page to another site, unless a real tap on that very link just happened
       if (!on || !a) return;
