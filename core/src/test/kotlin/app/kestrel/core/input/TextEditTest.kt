@@ -9,7 +9,7 @@ class TextEditTest {
 
     @Test fun typingAddsToTheEnd() { assertEquals(0 to "c", edit("ab", "abc")); assertEquals(0 to ".com", edit("doraby", "doraby.com")) }
     @Test fun backspaceTakesOffTheEnd() { assertEquals(1 to "", edit("abc", "ab")); assertEquals(7 to "", edit("hello world ", "hello")) }
-    @Test fun aSwappedWordReplacesTheTail() { assertEquals(6 to "wield ", edit("hello world ", "hello wield ")) }
+    @Test fun aSwappedWordReplacesTheTail() { assertEquals(5 to "ield ", edit("hello world ", "hello wield ")) // the shortest edit: only what differs }
     @Test fun nothingChangedIsEmpty() { assertTrue(TextEdit.between("same", "same").isEmpty); assertTrue(TextEdit.between("", "").isEmpty) }
     @Test fun aFreshTextIsAllInsert() { assertEquals(0 to "hi", edit("", "hi")); assertEquals(2 to "", edit("hi", "")) }
     @Test fun aCapitalLetterReplacesNothingBeforeIt() { assertEquals(0 to "A", edit("", "A")); assertEquals(1 to "B", edit("A", "B")) }
