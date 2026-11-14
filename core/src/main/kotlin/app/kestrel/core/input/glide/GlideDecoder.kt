@@ -224,15 +224,15 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
             }
         }
         val inf = Float.MAX_VALUE / 4
+        // the weights of the letters add up to this: the two end letters count [endW], the others 1 (the final cost is the average over them)
+        val wTotal = (m - 2) + 2f * p.endW
         // first letter near the start of the path
         val k0 = letters[0]
         for (i in 0 until n) fPrev[i] = if (i <= p.slack) p.endW * visit(k0, i) else inf
-        var wSum = p.endW
         for (j in 1 until m) {
             val kj = letters[j]
             val last = j == m - 1
             val w = if (last) p.endW else 1f
-            wSum += w
             val base = (j - 1) * (n + 1)
             for (i in 0 until n) {
                 if (i < j || (last && i < n - 1 - p.slack)) { fCur[i] = inf; continue }
@@ -240,7 +240,7 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
                 for (a in j - 1 until i) {
                     val fa = fPrev[a]
                     if (fa >= inf) continue
-                    val c = fa + p.shapeW * (pre[base + i] - pre[base + a]) / n * m // path between the two letters, averaged over the whole word
+                    val c = fa + p.shapeW * (pre[base + i] - pre[base + a]) * (wTotal / n) // how far the path strays between the two letters, as an average over all steps of the path
                     if (c < best) best = c
                 }
                 fCur[i] = if (best >= inf) inf else best + w * visit(kj, i)
@@ -249,7 +249,7 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
         }
         var best = inf
         for (i in 0 until n) if (fPrev[i] < best) best = fPrev[i]
-        return best / wSum
+        return best / wTotal
     }
 
     private fun visit(k: Int, i: Int): Float { val d = d2(qx[i] - kx[k], qy[i] - ky[k]); return if (d < p.visitCap) d else p.visitCap }

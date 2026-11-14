@@ -120,8 +120,6 @@ class BinaryLexicon internal constructor(
         return sb.toString()
     }
 
-    private fun keyAt(id: Int) = blob.copyOfRange(off[id], off[id + 1])
-
     /** The first id whose key is >= [key] (alphabetical), len.size when none. */
     private fun lowerBound(key: ByteArray): Int {
         var lo = 0; var hi = len.size
