@@ -2,6 +2,8 @@ package app.kestrel.browser.ui
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.drawable.InsetDrawable
+import android.view.ViewConfiguration
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -79,10 +81,13 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         fun navKeyboardChanged(showing: Boolean) {}
         /** The tab in front is a private one: the keyboard learns nothing there. */
         fun navPrivateTab(): Boolean = false
+        /** AV1: where the person put the panel and how big they made the keyboard: the panel's distance from the right edge and from the top, the keyboard's width and the height of its rows of keys, all in dp; null = docked under the corner at the first size. */
+        fun navGeometry(): IntArray? = null
+        fun navGeometryChanged(g: IntArray?) {}
     }
 
     private val model = MiniKeyboardModel()
-    private val panel = LinearLayout(ctx)
+    private val panel = PanelLayout(ctx)
     private val back = NavButton(ctx, R.drawable.ic_back, "Back") { l.navBack() }
     private val home = NavButton(ctx, R.drawable.ic_home, "Home") { l.navHome() }
     private val forward = NavButton(ctx, R.drawable.ic_forward, "Forward") { l.navForward() }
@@ -126,14 +131,12 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     var available = true
         set(v) { field = v; visibility = if (v) VISIBLE else GONE }
 
-    /** The panel hangs below the invisible long-press square of [HotCorner] (that square is "above the open panel" and closes it again). */
-    private val topGap = ctx.dp(HotCorner.SIZE_DP)
-
     init {
         isClickable = false // a touch outside the panel belongs to the page below
         panel.orientation = LinearLayout.VERTICAL
         panel.isClickable = true
-        panel.setPadding(ctx.dp(6), ctx.dp(6), ctx.dp(6), ctx.dp(6))
+        val edge = ctx.dp(PANEL_PAD_DP) + ctx.dp(BAND_DP) // the frame inside the outline plus the transparent band around it (where the grip and the corner marks are)
+        panel.setPadding(edge, edge, edge, edge)
         val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
         for (b in listOf(back, home, forward)) row.addView(b, LinearLayout.LayoutParams(ctx.dp(NAV_W_DP), ctx.dp(NAV_H_DP)))
         panel.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -141,9 +144,10 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         panel.addView(keys, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ctx.dp(KEYS_H_DP)).apply { topMargin = ctx.dp(4) })
         keys.visibility = GONE
         panel.visibility = GONE
-        addView(panel, LayoutParams(ctx.dp(PANEL_W_DP), LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply { topMargin = topGap })
+        addView(panel, LayoutParams(ctx.dp(PANEL_W_DP) + 2 * ctx.dp(BAND_DP), LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END))
         keys.onKey = { key -> typed(key) }
         applyColors()
+        loadGeometry()
     }
 
     // ------------------------------------------------------------------ what the host tells the panel
@@ -182,12 +186,12 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         if (open) {
             val wasVisible = panel.visibility == VISIBLE // reopened while it was still sliding away: carry on from where it is
             panel.visibility = VISIBLE
-            panel.measure(MeasureSpec.makeMeasureSpec(panelWidth(), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
-            val hidden = -(panel.measuredHeight + topGap).toFloat()
+            panel.measure(MeasureSpec.makeMeasureSpec((panel.layoutParams as LayoutParams).width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
+            val hidden = -(panelTopPx() + panel.measuredHeight).toFloat()
             if (animate) slide(if (wasVisible) panel.translationY else hidden, 0f, DecelerateInterpolator(2f)) {} else panel.translationY = 0f
         } else {
             if (keyboardShowing) closeKeyboard()
-            val hidden = -(panel.height.coerceAtLeast(panel.measuredHeight) + topGap).toFloat()
+            val hidden = -(panelTopPx() + panel.height.coerceAtLeast(panel.measuredHeight)).toFloat()
             if (animate) slide(panel.translationY, hidden, AccelerateInterpolator(1.4f)) { panel.visibility = GONE; panel.translationY = 0f }
             else { panel.visibility = GONE; panel.translationY = 0f }
         }
@@ -202,7 +206,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         model.open(if (f != null) "" else address)
         keyboardShowing = true
         keys.visibility = VISIBLE
-        setPanelWidth(PANEL_KEYS_W_DP)
+        applyGeometry()
         pendingWord = null
         preparedFor = ""
         startGlideEngine()
@@ -219,7 +223,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         keyboardShowing = false
         pageField = null
         keys.visibility = GONE
-        setPanelWidth(PANEL_W_DP)
+        applyGeometry()
         barMode()
         l.navKeyboardChanged(false)
     }
@@ -239,9 +243,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     fun setGlideEnabled(on: Boolean) {
         if (on == glideOn) return
         glideOn = on
-        val lp = keys.layoutParams
-        lp.height = context.dp(KEYS_H_DP + if (on) STRIP_H_DP else 0)
-        keys.layoutParams = lp
+        applyGeometry()
         keys.reset()
         if (keyboardShowing) { if (on) startGlideEngine(); keys.invalidate() }
     }
@@ -272,6 +274,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
     /** The decoder needs the real key positions: they are known once the keys view has a size (and again when it changes). Cheap when nothing changed. */
     internal fun prepareGlide() {
+        if (resizing) return
         val g = glide ?: return
         val k = keys.glideKeys() ?: return
         val tag = "${keys.width}x${keys.height}"
@@ -330,12 +333,84 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         bar.invalidate()
     }
 
-    private fun panelWidth() = context.dp(if (keyboardShowing) PANEL_KEYS_W_DP else PANEL_W_DP)
+    // ------------------------------------------------------------------ where the panel is and how big its keyboard is (AV1, owner message 36)
 
-    private fun setPanelWidth(dp: Int) {
+    private val density: Float get() = resources.displayMetrics.density
+    // the panel's OUTLINE in dp: its distance from the right edge and from the top of the page area, the width it has while the keyboard is open, and the height of the rows of keys
+    private var gRight = DOCK_RIGHT_DP.toFloat(); private var gTop = HotCorner.SIZE_DP.toFloat()
+    private var gW = PANEL_KEYS_W_DP.toFloat(); private var gH = KEYS_H_DP.toFloat()
+    private var availWdp = 100000f; private var availHdp = 100000f   // the page area, known once it has been measured
+    private var resizing = false                                      // a corner is being dragged: the decoder is told the key positions when it is over, not at every frame
+
+    /** The panel has been moved away from the corner it starts in. */
+    val isDetached: Boolean get() = Math.abs(gRight - DOCK_RIGHT_DP) > 0.5f || Math.abs(gTop - HotCorner.SIZE_DP) > 0.5f
+    /** The keyboard has another size than the first one. */
+    val isResized: Boolean get() = Math.abs(gW - PANEL_KEYS_W_DP) > 0.5f || Math.abs(gH - KEYS_H_DP) > 0.5f
+
+    private fun outlineW(): Float = if (keyboardShowing) gW else PANEL_W_DP.toFloat()
+    private fun outlineH(): Float = 12f + NAV_H_DP + 4f + BAR_H_DP + (if (keyboardShowing) 4f + gH + (if (glideOn) STRIP_H_DP else 0) else 0f)
+    private fun maxW(): Float = Math.max(MIN_KEYS_W_DP, Math.min(MAX_KEYS_W_DP, availWdp - 4f))
+    private fun maxH(): Float = Math.max(MIN_KEYS_H_DP, Math.min(MAX_KEYS_H_DP, availHdp - (12f + NAV_H_DP + 4f + BAR_H_DP + 4f + (if (glideOn) STRIP_H_DP else 0)) - 2f * BAND_DP))
+    /** Where the outline is shown: what was asked for, kept inside the page area (the stored place is not changed by this: a screen that is smaller for a moment must not move the panel for good). */
+    private fun effRight(): Float = gRight.coerceIn(MIN_RIGHT_DP, Math.max(MIN_RIGHT_DP, availWdp - outlineW() - MIN_RIGHT_DP))
+    private fun effTop(): Float = gTop.coerceIn(BAND_DP.toFloat(), Math.max(BAND_DP.toFloat(), availHdp - outlineH() - 4f))
+
+    private fun panelTopPx(): Int = (panel.layoutParams as LayoutParams).topMargin
+
+    /** The place and the size in the layout parameters: called whenever the geometry, the keyboard or the page area changes. */
+    private fun placePanel() {
+        val bandPx = context.dp(BAND_DP)
         val lp = panel.layoutParams as LayoutParams
-        lp.width = context.dp(dp)
-        panel.layoutParams = lp
+        lp.width = Math.round(outlineW() * density) + 2 * bandPx
+        lp.rightMargin = Math.round(effRight() * density) - bandPx
+        lp.topMargin = Math.round(effTop() * density) - bandPx
+        lp.gravity = Gravity.TOP or Gravity.END
+        val klp = keys.layoutParams as LinearLayout.LayoutParams
+        klp.height = Math.round((gH + if (glideOn) STRIP_H_DP else 0) * density)
+    }
+
+    private fun applyGeometry() { placePanel(); panel.requestLayout(); requestLayout(); panel.invalidate() }
+
+    override fun onMeasure(widthSpec: Int, heightSpec: Int) {
+        availWdp = MeasureSpec.getSize(widthSpec) / density; availHdp = MeasureSpec.getSize(heightSpec) / density
+        placePanel() // the page area is known now: the margins follow it (no requestLayout: this IS the layout)
+        super.onMeasure(widthSpec, heightSpec)
+    }
+
+    private fun loadGeometry() {
+        val g = l.navGeometry()
+        if (g != null && g.size == 4) {
+            gRight = g[0].toFloat(); gTop = g[1].toFloat()
+            gW = g[2].toFloat().coerceIn(MIN_KEYS_W_DP, MAX_KEYS_W_DP); gH = g[3].toFloat().coerceIn(MIN_KEYS_H_DP, MAX_KEYS_H_DP)
+        }
+        placePanel()
+    }
+
+    private fun saveGeometry() {
+        l.navGeometryChanged(if (!isDetached && !isResized) null else intArrayOf(Math.round(gRight), Math.round(gTop), Math.round(gW), Math.round(gH)))
+    }
+
+    /** What was stored is brought inside the page area (after a drag). */
+    private fun clampStored() {
+        gW = gW.coerceIn(MIN_KEYS_W_DP, maxW()); gH = gH.coerceIn(MIN_KEYS_H_DP, maxH())
+        gRight = effRight(); gTop = effTop()
+    }
+
+    /** Back under the corner it starts in; the size stays (a double tap on the grip does this). */
+    fun dock() { gRight = DOCK_RIGHT_DP.toFloat(); gTop = HotCorner.SIZE_DP.toFloat(); applyGeometry(); saveGeometry() }
+
+    /** Settings > "Reset the mini keyboard's size and position": the corner and the first size. */
+    fun resetGeometry() {
+        gRight = DOCK_RIGHT_DP.toFloat(); gTop = HotCorner.SIZE_DP.toFloat(); gW = PANEL_KEYS_W_DP.toFloat(); gH = KEYS_H_DP.toFloat()
+        applyGeometry(); l.navGeometryChanged(null); keys.invalidate()
+        if (keyboardShowing) post { prepareGlide() }
+    }
+
+    /** True when the window point is on the panel (the activity does not treat a long press there as the corner's). */
+    fun coversWindowPoint(x: Float, y: Float): Boolean {
+        if (!isOpen || panel.visibility != VISIBLE) return false
+        val loc = IntArray(2); panel.getLocationInWindow(loc)
+        return x >= loc[0] && x < loc[0] + panel.width && y >= loc[1] && y < loc[1] + panel.height
     }
 
     private fun typed(key: Key) {
@@ -447,7 +522,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     // ------------------------------------------------------------------ colours
 
     private fun applyColors() {
-        panel.background = chamferSurface(context, 0xF2000000.toInt(), 8f, strokeColor = pal.deep, strokeDp = 1f, pressable = false)
+        panel.background = InsetDrawable(chamferSurface(context, 0xF2000000.toInt(), 8f, strokeColor = pal.deep, strokeDp = 1f, pressable = false), context.dp(BAND_DP))
         for (v in listOf<View>(back, home, forward, bar, keys)) v.invalidate()
     }
 
@@ -471,6 +546,11 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     internal val barTextForTest: String get() = bar.shownText()
     internal val typesIntoPageForTest: Boolean get() = typesIntoPage
     internal val barDescriptionForTest: String get() = bar.contentDescription.toString()
+    /** Tests: the outline of the panel in this view's pixels (left, top, right, bottom), and where its grip and corners are. */
+    internal fun outlineForTest(): IntArray { val b = context.dp(BAND_DP); return intArrayOf(panel.left + b, panel.top + b, panel.right - b, panel.bottom - b) }
+    internal fun geometryForTest(): FloatArray = floatArrayOf(gRight, gTop, gW, gH)
+    internal fun keysSizeForTest(): IntArray = intArrayOf(keys.width, keys.height)
+    internal fun zoneForTest(x: Float, y: Float): Int = panel.zoneAt(x - panel.left, y - panel.top)
     internal val selectedForTest: Boolean get() = keyboardShowing && model.allSelected
     internal val panelShownForTest: Boolean get() = panel.visibility == VISIBLE
     internal val panelOffsetForTest: Float get() = panel.translationY
@@ -596,6 +676,138 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     }
 
     /**
+     * The panel (AV1, owner message 36: "resizeable by dragging corners ... able to detach and I can move it around the screen"). Its OUTLINE is what the person sees; around it is a transparent band that belongs to the
+     * page, except for two things drawn and grabbed there: the GRIP (a short bar in the middle of the top edge: drag it and the panel leaves the corner and follows the finger; let go near the corner or double tap it and
+     * the panel docks again) and, while the keyboard is open, the four CORNERS (drag one to change the keyboard's width and height). The keys, the buttons and the bar are inside the outline's frame and are never taken by a drag.
+     */
+    private inner class PanelLayout(ctx: Context) : LinearLayout(ctx) {
+        private val bandPx = ctx.dp(BAND_DP)
+        private val padPx = ctx.dp(PANEL_PAD_DP)
+        private val zonePx = ctx.dpf(CORNER_ZONE_DP.toFloat())
+        private val gripHalfPx = ctx.dpf(GRIP_ZONE_HALF_DP.toFloat())
+        private val slop = ViewConfiguration.get(ctx).scaledTouchSlop
+        private var mode = DRAG_NONE
+        private var corner = 0                       // bit 0: right side, bit 1: bottom
+        private var downRawX = 0f; private var downRawY = 0f; private var downAt = 0L; private var moved = false
+        private var right0 = 0f; private var top0 = 0f; private var w0 = 0f; private var h0 = 0f
+        private var lastTapAt = 0L
+        private val mark = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
+        private val markPath = Path()
+
+        init { setWillNotDraw(false); isClickable = true }
+
+        /** 0 = the band (the page's), 1 = the panel itself, 2 = the grip, 3..6 = a corner. */
+        internal fun zoneAt(x: Float, y: Float): Int {
+            val w = width.toFloat(); val h = height.toFloat(); val b = bandPx.toFloat(); val inner = b + padPx
+            if (x >= inner && x <= w - inner && y >= inner && y <= h - inner) return ZONE_BODY
+            if (keyboardShowing) for (c in 0..3) {
+                val cx = if (c and 1 != 0) w - b else b
+                val cy = if (c and 2 != 0) h - b else b
+                if (Math.abs(x - cx) <= zonePx && Math.abs(y - cy) <= zonePx) return ZONE_CORNER0 + c
+            }
+            if (y <= inner && Math.abs(x - w / 2f) <= gripHalfPx) return ZONE_GRIP
+            return if (x >= b && x <= w - b && y >= b && y <= h - b) ZONE_BODY else ZONE_NONE
+        }
+
+        override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+            if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
+                mode = DRAG_NONE
+                when (val z = zoneAt(ev.x, ev.y)) {
+                    ZONE_NONE -> return false   // the transparent band: the page keeps this touch
+                    ZONE_BODY -> {}
+                    ZONE_GRIP -> begin(ev, DRAG_MOVE, 0)
+                    else -> begin(ev, DRAG_SIZE, z - ZONE_CORNER0)
+                }
+                if (mode != DRAG_NONE) return true
+            } else if (mode != DRAG_NONE) { drag(ev); return true }
+            return super.dispatchTouchEvent(ev)
+        }
+
+        private fun begin(ev: MotionEvent, m: Int, c: Int) {
+            parent?.requestDisallowInterceptTouchEvent(true)
+            cancelAnim(); panel.translationY = if (isOpen) 0f else panel.translationY
+            mode = m; corner = c; moved = false
+            downRawX = ev.rawX; downRawY = ev.rawY; downAt = ev.eventTime
+            right0 = effRight(); top0 = effTop(); w0 = gW; h0 = gH
+            gRight = right0; gTop = top0
+            if (m == DRAG_SIZE) resizing = true
+            invalidate()
+        }
+
+        private fun drag(ev: MotionEvent) {
+            val dx = (ev.rawX - downRawX) / density; val dy = (ev.rawY - downRawY) / density
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_MOVE -> {
+                    if (!moved && Math.hypot((ev.rawX - downRawX).toDouble(), (ev.rawY - downRawY).toDouble()) > slop) moved = true
+                    if (!moved) return
+                    if (mode == DRAG_MOVE) moveBy(dx, dy) else sizeBy(dx, dy)
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> finish(ev)
+            }
+        }
+
+        private fun moveBy(dx: Float, dy: Float) {
+            gRight = (right0 - dx).coerceIn(MIN_RIGHT_DP, Math.max(MIN_RIGHT_DP, availWdp - outlineW() - MIN_RIGHT_DP))
+            gTop = (top0 + dy).coerceIn(BAND_DP.toFloat(), Math.max(BAND_DP.toFloat(), availHdp - outlineH() - 4f))
+            applyGeometry()
+        }
+
+        private fun sizeBy(dx: Float, dy: Float) {
+            val right = corner and 1 != 0; val bottom = corner and 2 != 0
+            // width: a right corner moves the right edge (the left edge stays), a left corner moves the left edge (the right edge stays)
+            var nw = if (right) w0 + dx else w0 - dx
+            val roomW = if (right) w0 + right0 - MIN_RIGHT_DP else availWdp - right0 - 2f
+            nw = nw.coerceIn(MIN_KEYS_W_DP, Math.max(MIN_KEYS_W_DP, Math.min(maxW(), roomW)))
+            gRight = if (right) right0 - (nw - w0) else right0
+            // height: a bottom corner moves the bottom edge (the top stays), a top corner moves the top edge (the bottom stays)
+            var nh = if (bottom) h0 + dy else h0 - dy
+            val chrome = outlineH() - gH
+            val roomH = if (bottom) availHdp - top0 - chrome - 4f else h0 + (top0 - BAND_DP)
+            nh = nh.coerceIn(MIN_KEYS_H_DP, Math.max(MIN_KEYS_H_DP, Math.min(maxH(), roomH)))
+            gTop = if (bottom) top0 else top0 + (h0 - nh)
+            gW = nw; gH = nh
+            applyGeometry()
+        }
+
+        private fun finish(ev: MotionEvent) {
+            val tap = !moved && ev.eventTime - downAt < ViewConfiguration.getTapTimeout() + 150
+            val m = mode
+            mode = DRAG_NONE
+            if (m == DRAG_MOVE) {
+                if (tap) { if (ev.eventTime - lastTapAt < DOUBLE_TAP_MS) { lastTapAt = 0L; dock() } else lastTapAt = ev.eventTime }
+                else if (Math.abs(gRight - DOCK_RIGHT_DP) <= SNAP_DP && Math.abs(gTop - HotCorner.SIZE_DP) <= SNAP_DP) dock() // let go near the corner: it docks again
+            }
+            clampStored()
+            if (m == DRAG_SIZE) { resizing = false; preparedFor = ""; post { prepareGlide() } }
+            applyGeometry(); saveGeometry(); invalidate()
+        }
+
+        override fun onDraw(c: Canvas) {
+            super.onDraw(c)
+            val w = width.toFloat(); val h = height.toFloat(); val b = bandPx.toFloat()
+            val grabbing = mode != DRAG_NONE
+            // the grip: a short bar in the middle of the band above the outline (dim while docked, lit when the panel is detached or being dragged)
+            mark.strokeWidth = context.dpf(3.5f)
+            mark.color = if (grabbing && mode == DRAG_MOVE) pal.accentHi else if (isDetached) pal.accent else pal.deep
+            val gy = b * 0.5f
+            c.drawLine(w / 2f - context.dpf(GRIP_W_DP / 2f), gy, w / 2f + context.dpf(GRIP_W_DP / 2f), gy, mark)
+            if (!keyboardShowing) return
+            // corner marks: an L hugging the outside of each corner of the outline
+            mark.strokeWidth = context.dpf(2.5f)
+            val arm = context.dpf(12f); val off = context.dpf(3f)
+            for (k in 0..3) {
+                val right = k and 1 != 0; val bottom = k and 2 != 0
+                val cx = if (right) w - b + off else b - off
+                val cy = if (bottom) h - b + off else b - off
+                val dx = if (right) -arm else arm; val dy = if (bottom) -arm else arm
+                mark.color = if (grabbing && mode == DRAG_SIZE && corner == k) pal.accentHi else if (isResized) pal.accent else pal.deep
+                markPath.reset(); markPath.moveTo(cx, cy + dy); markPath.lineTo(cx, cy); markPath.lineTo(cx + dx, cy)
+                c.drawPath(markPath, mark)
+            }
+        }
+    }
+
+    /**
      * The keys, drawn and hit-tested by one view (no view per key). A key lights up in the accent for [FLASH_MS] when pressed; Backspace repeats while held. With glide typing on, a strip of guesses sits
      * above the keys, and a finger that slides off the letter it went down on draws a word: a neon trail follows it, and on lift the path goes to the decoder.
      */
@@ -660,7 +872,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             rects = MiniKeyboardGeometry.boxes(rs, width.toFloat(), height.toFloat(), context.dpf(3f), top)
         }
 
-        override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) { super.onSizeChanged(w, h, ow, oh); if (glideOn && glide != null) post { prepareGlide() } } // the decoder needs the real key positions
+        override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) { super.onSizeChanged(w, h, ow, oh); if (glideOn && glide != null && !resizing) post { prepareGlide() } } // the decoder needs the real key positions
 
         /** The 26 letter keys' centres as laid out now (the same function that draws them), for the decoder. */
         fun glideKeys(): GlideKeys? {
@@ -827,7 +1039,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                 }
                 c.drawRoundRect(box, r, r, fill)
                 text.color = when { isLit -> pal.accentHi; key === Key.Go -> pal.accentOn; else -> pal.fg }
-                text.textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, if (k.label.length > 1) 12f else 16f, resources.displayMetrics)
+                val keyScale = Math.min((kb.right - kb.left) / context.dpf(29.5f), (kb.bottom - kb.top) / context.dpf(38f)).coerceIn(0.75f, 1.8f) // the label grows and shrinks with the key
+                text.textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, (if (k.label.length > 1) 12f else 16f) * keyScale, resources.displayMetrics)
                 val fm = text.fontMetrics
                 c.drawText(k.label, box.centerX(), box.centerY() - (fm.ascent + fm.descent) / 2f, text)
             }
@@ -914,6 +1127,30 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         private const val REPEAT_MS = 70L
         const val PANEL_W_DP = 176
         const val PANEL_KEYS_W_DP = 304
+        /** The frame inside the outline, and the transparent band around the outline that carries the grip and the corner marks. */
+        const val PANEL_PAD_DP = 6
+        const val BAND_DP = 16
+        /** Where the panel starts: this far from the right edge, under the invisible corner. */
+        const val DOCK_RIGHT_DP = 6
+        const val MIN_RIGHT_DP = 2f
+        const val MIN_KEYS_W_DP = 232f
+        const val MAX_KEYS_W_DP = 620f
+        const val MIN_KEYS_H_DP = 100f
+        const val MAX_KEYS_H_DP = 320f
+        /** The corner you can grab (the square around the outline's corner, not the keys inside the frame). */
+        const val CORNER_ZONE_DP = 26
+        const val GRIP_W_DP = 44
+        const val GRIP_ZONE_HALF_DP = 56
+        /** Let go this close to the dock and the panel docks again. */
+        const val SNAP_DP = 40
+        const val DOUBLE_TAP_MS = 350L
+        private const val DRAG_NONE = 0
+        private const val DRAG_MOVE = 1
+        private const val DRAG_SIZE = 2
+        private const val ZONE_NONE = 0
+        private const val ZONE_BODY = 1
+        private const val ZONE_GRIP = 2
+        private const val ZONE_CORNER0 = 3
         const val NAV_W_DP = 52
         const val NAV_H_DP = 42
         const val BAR_H_DP = 34
