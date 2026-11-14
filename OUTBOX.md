@@ -1620,3 +1620,42 @@
 >
 > Source: [Android's description of the background compile job](https://android.googlesource.com/platform/art/+show/refs/tags/android-security-14.0.0_r24/libartservice/service/README.md) (Android 14 version).
 <!-- sha:6eadb43d5499 -->
+
+## 2026-11-14T01:26:45Z
+> Kestrel alpha33 is built, signed and published. The GitHub build passed all its checks, and the signing certificate on this exact APK is the one your tablet already trusts, so it installs over alpha32. The APK is 92.6 MB, about the same as alpha32. In the browser, Menu > Updates should offer it, or open this link on the tablet:
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha33
+>
+> Everything below was checked on the emulator and with automated tests only. Nothing has run on your tablet yet.
+>
+> **Your requests (messages 29 to 33)**
+>
+> 1. **Opens on Home when Home was last (31):**
+>    - **Cause:** the saved session remembered the page's web address but not that Home was in front, so the page loaded again.
+>    - **Fix:** it now saves "Home was showing", and Home comes back with nothing loading behind it. Back or the tab list still takes you to the page.
+>    - **Emulator:** I opened a page, pressed Home, closed and reopened, and got Home with no page load.
+> 2. **"I accidentally pressed stop" (31):** I carried on from where it stopped. Everything had been saved, so nothing was lost.
+> 3. **Blocked-page icon (32):**
+>    - **What it does:** it replaces the bottom bar. A very small, quiet icon appears at the bottom middle and is gone one second after the latest block. Pressing it opens the blocked page in a new tab, with no question.
+>    - **Forced redirects:** if a page tried to send the tab you are on somewhere else, that address opens in a new tab too, and your page stays put.
+>    - **Emulator:** the icon showed and a press opened a new tab (3 tabs became 4). I stretched the one second for that test only, so the real one-second timing is untested.
+> 4. **One-hand panel (32):**
+>    - **Toggle:** a small tab sits at the top right. Pressing it slides a black panel down with Back, Home and Forward, and an address bar under them.
+>    - **Address bar and keyboard:** pressing the bar selects the whole address and opens a small keyboard under the panel at the top right. The app draws that keyboard itself, because Android won't let an app move or shrink the normal one.
+>    - **Keys:** letters, a 123 page with the address symbols, a .com key, shift, backspace (hold to repeat) and Go. Go opens the address, or searches Google like the normal bar.
+>    - **Animation and feedback:** every button, the bar and each key lights neon blue for a split second. The slide uses its own timing, so it works with Android animations off.
+>    - **Settings:** Settings > Appearance turns the tab off.
+>    - **Limit:** the Kestrel Light build has no panel.
+> 5. **Smoothness (29, item 1):**
+>    - **Hardware is fine:** your tablet's hardware decoders and graphics were measured earlier and are fine. H.264, VP9 and H.265 decode in hardware with 0 of 150 pictures dropped. The screen draws about 65 frames a second.
+>    - **Likely cause:** lag on real sites most likely comes from the page's own scripts. They run on one thread of a processor that is 3 to 5 times slower than a recent phone. The 5
+> [... 4553 characters omitted ...]
+> iagnostics > Copy and paste it. It will show the "App:" line (to confirm alpha33), the "Cold start" timings and the three new lines.
+> 2. The exact words of the "incompatible browser / Cloudflare" site, a page report from a Doraby watch page after you press play, and whether the vidsrc movie saves now.
+> 3. The choppy-video link, how scrolling and Back feel, and the Proton Mail numbers and keyboard test. For a laggy movie site, say whether Settings > Video & page animation > Calm pages helps.
+> 4. Yes or no on the scheduled GitHub ad-list build, and your private signing key.
+> 5. The network lab results, and the optional items: licence, landscape tabs, and the Cromite comparison.
+> 6. New: your yes or no on the stored libraries, and how the one-second icon and the mini panel feel on the tablet.
+>
+> Next I'll add a memory-per-process line to Diagnostics. Then I'll wait for what you find on the tablet.
+<!-- sha:f23ef84c6210 -->
