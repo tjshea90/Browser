@@ -158,6 +158,7 @@ object GlideHabitEval {
             for (hd in (a["habit"] ?: "0,10,16").split(',').map { it.toFloat() }) {
                 println("%s, every word has its own fixed hand habit of %.0f dp per letter; %d glides in %d stretches; first guess right, %% (own favourite words in brackets):".format(noise.name, hd, g, nb))
                 for ((label, w, sh) in listOf(Triple("nothing learned          ", false, false), Triple("words/pairs/corrections ", true, false), Triple("+ glide shapes          ", true, true))) {
+                    if (a["only"] != null && a["only"] != (if (sh) "shapes" else if (w) "words" else "none")) continue
                     val c = habitCurve(lex, keys, noise, g, nb, w, sh, hd, a["seed"]?.toLong() ?: 3L, GlideEval.paramsFrom(a), a["sigma"]?.toFloat() ?: PatternMemory.SIGMA, a["merge"]?.toFloat() ?: PatternMemory.MERGE_D)
                     println("   $label " + c.blocks.joinToString(" ") { "%.1f".format(it) } + "  (" + c.favouriteBlocks.joinToString(" ") { "%.0f".format(it) } + ")  words seen 1-2 times: %.1f %%, 6+ times: %.1f %%".format(c.early, c.late) + if (sh) "   shapes kept ${c.shapes} for ${c.shapeWords} words, changed the first guess ${c.flips} times (mended ${c.good}, spoiled ${c.bad})" else "")
                 }
