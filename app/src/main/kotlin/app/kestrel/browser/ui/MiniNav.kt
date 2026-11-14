@@ -102,6 +102,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private var glideOn = false
     private var glide: GlideTyping? = null
     private val glideExec by lazy { Executors.newSingleThreadExecutor { r -> Thread(r, "kestrel-glide").apply { isDaemon = true } } }
+    private val previewExec by lazy { Executors.newSingleThreadExecutor { r -> Thread(r, "kestrel-glide-preview").apply { isDaemon = true; priority = Thread.NORM_PRIORITY - 1 } } }
     private var ownWords = UserWords()
     private var siteWords = emptyList<String>()
     private var pendingWord: String? = null     // the word the last glide put in: kept when the next thing is not a correction
@@ -113,6 +114,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private var pendingWeight = 1f              // 3 when the person CHOSE it from the strip: learned (like a kept glide) only when the next thing is not a Backspace
     private var lastGlidePrev: String? = null   // the word before the glide that is being decoded
     private var lastGlidePrev2: String? = null  // and the one before that
+    private var liftAt = 0L                     // when the finger lifted: the time until the word is on screen is counted
     private var titleCounts = emptyMap<String, Int>() // words of the titles of visited pages
     private var afterUndo = false               // a glided word was just deleted: the next word that is kept is the one meant instead
     /** Tests: where the engine comes from (the real one reads the shipped word list). */
@@ -268,7 +270,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private fun startGlideEngine() {
         if (!glideOn) return
         if (glide == null) {
-            glide = glideFactory?.invoke() ?: GlideTyping({ try { context.assets.open("glide/en.klx").use { it.readBytes() } } catch (e: Exception) { null } }, glideExec, loadPersonal = { l.navGlideLearned() }, savePersonal = { l.navGlideLearnedSave(it) })
+            glide = glideFactory?.invoke() ?: GlideTyping({ try { context.assets.open("glide/en.klx").use { it.readBytes() } } catch (e: Exception) { null } }, glideExec, loadPersonal = { l.navGlideLearned() }, savePersonal = { l.navGlideLearnedSave(it) }, previewExecutor = previewExec)
             ownWords = UserWords.parse(l.navGlideWords())
         }
         prepareGlide()
@@ -317,8 +319,15 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         afterUndo = false
     }
 
+    /** A live guess for the glide that is still going on: the strip shows it (the first one is the word that would be typed if the finger lifted now). */
+    private fun previewDone(res: GlideResult) {
+        if (!keyboardShowing || !keys.isGliding) return
+        if (res.candidates.isEmpty()) keys.clearCandidates() else keys.showCandidates(res.candidates.map { it.text })
+    }
+
     private fun glideDone(res: GlideResult) {
         val g = glide ?: return
+        if (liftAt != 0L) { g.stats.onShown(SystemClock.uptimeMillis() - liftAt); liftAt = 0L }
         if (!keyboardShowing) return
         val best = res.candidates.firstOrNull()
         if (best == null) { keys.showNoWord(); return }
@@ -1014,7 +1023,21 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             return x < b.left - slop || x > b.right + slop || y < b.top - slop || y > b.bottom + slop
         }
 
+        val isGliding: Boolean get() = gliding
+        private var lastPreviewAt = 0L; private var lastPreviewN = 0
+
+        /** While the finger is still gliding, now and then (not faster than the decoder, not for every touch point) ask for a live guess of the path so far. */
+        private fun maybePreview() {
+            val g = glide ?: return
+            val now = SystemClock.uptimeMillis()
+            if (now - lastPreviewAt < PREVIEW_MS || gn - lastPreviewN < PREVIEW_POINTS) return
+            lastPreviewAt = now; lastPreviewN = gn
+            val two = model.previousTwo()
+            g.preview(gx, gy, gn, two.second, two.first) { res -> post { previewDone(res) } }
+        }
+
         private fun beginGlide() {
+            lastPreviewAt = SystemClock.uptimeMillis(); lastPreviewN = 0 // the first live guess comes a moment into the glide
             gliding = true
             glideDown = pressedKey
             down = null
@@ -1038,6 +1061,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             prepareGlide() // the key positions as they are now (a no-op when nothing changed since the keyboard opened)
             confirmGlide() // the glide before this one stays: learn from it first (one thread, in order)
             val two = model.previousTwo(); lastGlidePrev = two.second; lastGlidePrev2 = two.first
+            liftAt = SystemClock.uptimeMillis()
             g.decode(gx, gy, gn, lastGlidePrev, lastGlidePrev2) { res -> post { glideDone(res) } }
         }
 
@@ -1087,7 +1111,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                     if (armed) { // a letter: nothing happens until the finger leaves its key (a glide) or lifts (a tap)
                         addMotion(e)
                         if (!gliding && leftTheKey(e.x, e.y)) beginGlide()
-                        if (gliding) invalidate()
+                        if (gliding) { invalidate(); maybePreview() }
                         return true
                     }
                     val k = keyAt(e.x, e.y); if (k !== down) { down = k; handler.removeCallbacks(repeat); light(k) }
@@ -1187,6 +1211,9 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         const val MIN_GLIDE_PITCHES = 1.2f
         const val TRAIL_FADE_MS = 260L
         const val NO_WORD_MS = 1500L
+        /** The live guess while gliding: at most this often, and only after this many new touch points. */
+        const val PREVIEW_MS = 110L
+        const val PREVIEW_POINTS = 4
         private const val MAX_TRAIL_POINTS = 4096
     }
 }

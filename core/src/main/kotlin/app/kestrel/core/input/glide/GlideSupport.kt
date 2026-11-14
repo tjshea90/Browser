@@ -11,6 +11,7 @@ class GlideStats {
     private var habitX = 0f; private var habitY = 0f
     private var own = 0
     private var learnedWords = 0; private var learnedPairs = 0; private var learnedTop = 0; private var learnedCorrections = 0; private var learnedTriples = 0
+    private var previews = 0; private var previewMs = 0L; private var shown = 0; private var shownMs = 0L; private var shownMax = 0L
 
     @Synchronized fun onDecoded(millis: Long, found: Boolean) { glides++; if (!found) noMatch++; ms += millis; if (millis > msMax) msMax = millis; if (found) pending = true }
     /** Whatever the person did next that was not a correction: the word stays. */
@@ -22,6 +23,10 @@ class GlideStats {
     @Synchronized fun onHabit(xDp: Float, yDp: Float) { habitX = xDp; habitY = yDp }
     @Synchronized fun onOwnWords(n: Int) { own = n }
     @Synchronized fun onLearned(words: Int, pairs: Int, corrections: Int = 0, triples: Int = 0) { learnedWords = words; learnedPairs = pairs; learnedCorrections = corrections; learnedTriples = triples }
+    /** A live preview was decoded while the finger was still moving. */
+    @Synchronized fun onPreview(millis: Long) { previews++; previewMs += millis }
+    /** The word appeared [millis] after the finger lifted (the decode plus the wait for its turn plus drawing). */
+    @Synchronized fun onShown(millis: Long) { shown++; shownMs += millis; if (millis > shownMax) shownMax = millis }
     /** A word the person had used before was the keyboard's first guess for this glide. */
     @Synchronized fun onLearnedTop() { learnedTop++ }
 
@@ -36,6 +41,8 @@ class GlideStats {
             if (noMatch > 0) sb.append(", no word fitted $noMatch")
             sb.append("; decode avg ${ms / glides} ms, worst $msMax ms")
         }
+        if (shown > 0) sb.append("; word shown ${shownMs / shown} ms after the lift (worst $shownMax ms)")
+        if (previews > 0) sb.append("; live preview $previews times, avg ${previewMs / previews} ms")
         if (loadMs >= 0) sb.append("; word list $loadWords words ready after $loadMs ms")
         if (warmMs >= 0) sb.append(", first decode (warm-up) $warmMs ms")
         sb.append("; thumb habit x %.1f y %.1f dp".format(habitX, habitY))
@@ -114,10 +121,14 @@ class GlideTyping(
     private val loadPersonal: () -> String? = { null },
     /** Stores what was learned (on the executor's thread). */
     private val savePersonal: (String) -> Unit = {},
+    /** Where the live previews are decoded (the finger is still moving): another thread than [executor], so a preview never holds up the real decode when the finger lifts. */
+    private val previewExecutor: Executor = executor,
 ) {
-    private var main: BinaryLexicon? = null
-    private var userLex: ArrayLexicon? = null
-    private var decoder: GlideDecoder? = null
+    @Volatile private var main: BinaryLexicon? = null
+    @Volatile private var userLex: ArrayLexicon? = null
+    @Volatile private var decoder: GlideDecoder? = null
+    @Volatile private var previewDecoder: GlideDecoder? = null // its own scratch space: the real decoder's state (the path of the last glide) is never touched by a preview
+    private val previewBusy = java.util.concurrent.atomic.AtomicBoolean(false)
     private var keys: GlideKeys? = null
     private var bx = 0f; private var by = 0f
     private var loading = false
@@ -149,6 +160,7 @@ class GlideTyping(
                 if (!personalLoaded) { personalLoaded = true; try { loadPersonal()?.let { personal = PersonalModel.parse(it) } } catch (e: Exception) { /* a damaged file is just forgotten */ }; stats.onLearned(personal.wordCount, personal.pairCount, personal.confusionCount, personal.tripleCount) }
                 keys = k
                 decoder = GlideDecoder(k).also { it.biasX = bx; it.biasY = by; it.personal = personal }
+                previewDecoder = GlideDecoder(k).also { it.biasX = bx; it.biasY = by; it.personal = personal }
                 if (own != null) setOwn(own)
                 ready = main != null
                 if (!warmed && ready) { warmed = true; warmUp(k) }
@@ -201,6 +213,30 @@ class GlideTyping(
             stats.onDecoded(ms, r.isNotEmpty())
             if (r.isNotEmpty() && personal.weightOf(r[0].text) > 0f) stats.onLearnedTop()
             done(GlideResult(r, ms))
+        }
+    }
+
+    /**
+     * A live guess while the finger is still on the glass (AV3a): the path so far is decoded as if it ended here, on [previewExecutor], one at a time (a call while one is running is dropped: the finger
+     * is faster than the decoder). [done] gets the guesses on that thread. Nothing is counted as a glide and nothing is learned.
+     */
+    fun preview(xs: FloatArray, ys: FloatArray, count: Int, prev: String?, prev2: String? = null, done: (GlideResult) -> Unit) {
+        if (!ready || count < 3) return
+        if (!previewBusy.compareAndSet(false, true)) return
+        val px = xs.copyOf(count); val py = ys.copyOf(count)
+        previewExecutor.execute {
+            try {
+                val d = previewDecoder; val m = main
+                if (d != null && m != null) {
+                    decoder?.let { d.biasX = it.biasX; d.biasY = it.biasY }
+                    val t0 = System.nanoTime()
+                    val lexicons = ArrayList<GlideLexicon>(2); lexicons.add(m); userLex?.let { lexicons.add(it) }
+                    val r = try { d.decode(px, py, count, lexicons, prev, 3, prev2) } catch (e: Exception) { emptyList() }
+                    val ms = (System.nanoTime() - t0) / 1_000_000
+                    stats.onPreview(ms)
+                    done(GlideResult(r, ms))
+                }
+            } finally { previewBusy.set(false) }
         }
     }
 
