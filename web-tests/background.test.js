@@ -848,7 +848,7 @@ test('early scriptlets: the first navigation to a site asks the app, does not wa
   const lib = regs.findIndex((x) => x.opts.js[0].file === 'scriptlets-main.js');
   assert.ok(lib >= 0 && lib < regs.indexOf(mine()[0]), 'the library is registered first: scripts of one extension run in registration order');
   const o = mine()[0].opts;
-  eq(o.matches, ['*://site.example/*']);
+  eq(o.matches, ['http://site.example/*', 'https://site.example/*']);
   assert.equal(o.runAt, 'document_start'); assert.equal(o.world, 'MAIN'); assert.equal(o.allFrames, true); assert.equal(o.matchAboutBlank, true); assert.equal(o.matchOriginAsFallback, true);
   eq(runCode(o.js[0].code), [['__kst_sl_v1', SLCALLS]]);   // the exact text arrives, quotes and all
   assert.equal(h.of('sc').length, 1);
@@ -941,7 +941,7 @@ test('early scriptlets: a frame of another site is asked about after the network
   eq(await frame(AD), { cancel: true });
   assert.equal(h.of('sc').filter((m) => m.h === 'ads.example.com').length, 0, 'a cancelled frame is not asked about');
   eq(await frame('https://embed.example/player'), {});
-  await until(() => mine().some((r) => r.opts.matches[0] === '*://embed.example/*'), 'the frame site script');
+  await until(() => mine().some((r) => r.opts.matches[0] === 'http://embed.example/*'), 'the frame site script');
   assert.equal(h.of('sc').filter((m) => m.h === 'embed.example').length, 1);
   // a second frame of the same site within the minute trusts the answer it has
   eq(await frame('https://embed.example/player2'), {});
@@ -958,7 +958,7 @@ test('early scriptlets: at most 40 sites are kept, the least recently used one i
 });
 
 test('early scriptlets: a registration the browser refuses, an app that cannot answer and a library that could not be registered never break a request', async () => {
-  const refuse = scHarness({ 'site.example': '1:' + SLCALLS }, { scripts: { list: [], fail: (o) => o.matches && o.matches[0] === '*://site.example/*' } });
+  const refuse = scHarness({ 'site.example': '1:' + SLCALLS }, { scripts: { list: [], fail: (o) => o.matches && o.matches[0] === 'http://site.example/*' } });
   eq(refuse.h.mainFrame(SLSITE), {});
   await until(() => refuse.h.of('sc').length === 1, 'the question'); await tick(20);
   eq(refuse.h.mainFrame(SLSITE), {});                            // remembered as "nothing" for a while: no wait, no second question
