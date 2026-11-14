@@ -153,6 +153,16 @@ open class BrowserActivity : Activity(), DockListener {
         override fun navGlideHabitChanged(habit: FloatArray) { prefs.glideHabit = habit }
         override fun navGlideWords(): String = prefs.glideWords
         override fun navGlideWordsChanged(text: String) { prefs.glideWords = text }
+        // what the keyboard learned from the person's choices and typing (AU2): one small text file in the app's own storage, never sent anywhere
+        private val learnedFile get() = java.io.File(applicationContext.filesDir, "glide_personal.txt")
+        override fun navGlideLearned(): String? = try { learnedFile.takeIf { it.exists() }?.readText(Charsets.UTF_8) } catch (e: Exception) { null }
+        override fun navGlideLearnedSave(text: String) {
+            try {
+                val f = learnedFile; val tmp = java.io.File(f.parentFile, f.name + ".tmp")
+                if (text.isEmpty()) { f.delete(); return }
+                tmp.writeText(text, Charsets.UTF_8); if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+            } catch (e: Exception) { /* the next change tries again */ }
+        }
         override fun navGlideHosts(done: (List<String>) -> Unit) {
             val d = db ?: return
             Io.exec {
@@ -1717,6 +1727,11 @@ open class BrowserActivity : Activity(), DockListener {
         override fun clearBrowsingData() { this@BrowserActivity.clearBrowsingData() }
         override fun lastLookOff() { val c = applicationContext; if (lookTab != null) hideRestoring("look-off"); Io.exec { LastLook.clearAll(c) } }
         override fun tidyStorage() { runStorageTidy(true) }
+        override fun forgetGlide() {
+            prefs.glideWords = ""; prefs.glideHabit = floatArrayOf(0f, 0f)
+            if (::miniNav.isInitialized) miniNav.forgetLearned() else Io.exec { try { java.io.File(applicationContext.filesDir, "glide_personal.txt").delete() } catch (e: Exception) { } }
+            toast("The keyboard forgot what it learned")
+        }
         override fun resetSiteShields() { Shields.clearAll(); toast("Per-site Shields reset") }
         override fun backupNow() { backup.backupNow() }
         override fun restoreFromFile() { backup.restoreFromFile() }

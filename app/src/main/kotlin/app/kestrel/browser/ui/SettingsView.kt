@@ -20,6 +20,8 @@ interface SettingsListener {
     fun lastLookOff() {}
     /** Settings > "Tidy storage now" (AO4): run the storage tidy now and say what it freed. */
     fun tidyStorage() {}
+    /** Settings > "Forget what the keyboard learned" (AU2): the glide keyboard's own words, word habits and thumb habit are deleted. */
+    fun forgetGlide() {}
     fun resetSiteShields()
     fun updateFiltersNow()
     fun resetDataCounter()
@@ -66,6 +68,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         toggle("Show the last page right away", "When the browser opens it shows a picture of the page you left, sharp, while the real page loads under it. The picture stays on this tablet. Turn this off and the pictures are deleted.", prefs.lastLook) { prefs.lastLook = it; if (!it) l.lastLookOff() }
         button("Clear browsing data now", "Cookies, cache, history, site permissions") { confirm("Clear all browsing data?", "Cookies, cache, history and saved logins will be deleted. Bookmarks are kept.") { l.clearBrowsingData() } }
         button("Tidy storage now", "Deletes old update files and installers, cache older than 3 weeks, old crash reports, stopped downloads older than 2 weeks and pictures of closed tabs. It also happens by itself about once a day. Nothing you are using is touched.") { l.tidyStorage() }
+        if (app.kestrel.browser.Flavor.hasMiniNav) button("Forget what the keyboard learned", "The mini keyboard's glide typing learns from the words you pick, keep and type, and how your thumb lands: it stays on this tablet. This deletes all of it; it starts learning again from the next word.") { confirm("Forget what the keyboard learned?", "Your own words, word habits and thumb habit for glide typing will be deleted.") { l.forgetGlide() } }
         button("Reset per-site Shields", "Forget the choices you made in the Shields panel") { confirm("Reset per-site Shields?", "Every site goes back to the defaults above.") { l.resetSiteShields() } }
 
         section("Data saver (off: this hotspot is unmetered)")
