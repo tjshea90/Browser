@@ -1,3 +1,23 @@
+    /**
+     * ln P(word | the word before): the word's own share (plus what the person's own use adds), mixed with the pair's share when the pair is known (the shipped list's, and the person's own pairs
+     * weighted by how often the person wrote something after that word).
+     */
+    private fun prior(lex: GlideLexicon, id: Int, prevId: Int, prevText: String?): Float {
+        val pm = personal?.takeIf { !it.isEmpty }
+        var pu = Math.exp(lex.logProb(id).toDouble())
+        var text: String? = null
+        if (pm != null) { text = lex.text(id); pu += pm.unigramMass(text, lex.totalCount()) }
+        var pb = 0.0
+        var known = false
+        if (prevId >= 0) { val b = lex.bigramLogProb(prevId, id); known = true; if (!b.isNaN()) pb = Math.exp(b.toDouble()) }
+        if (pm != null && prevText != null) {
+            val lam = pm.pairWeight(prevText)
+            if (lam > 0f) { val w = text ?: lex.text(id); pb = (1.0 - lam) * pb + lam * pm.pairProb(prevText, w); known = true }
+        }
+        if (!known) return Math.log(pu).toFloat()
+        return Math.log((1.0 - p.bigramMix) * pu + p.bigramMix * pb).toFloat()
+    }
+
 package app.kestrel.core.input.glide
 
 import app.kestrel.core.input.Key
@@ -96,6 +116,9 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
     // the survivors of the quick pass (a small max-heap by quick score, kept as parallel arrays)
     private val heapScore = FloatArray(p.keep); private val heapLex = IntArray(p.keep); private val heapId = IntArray(p.keep); private var heapN = 0
 
+    /** What the person's own words and pairs add to the language (AU2); null = nothing learned yet. Set by whoever owns the model; read on the decode thread. */
+    @Volatile var personal: PersonalModel? = null
+
     /** The offset the learned finger habit adds to every path (pitches): what the finger usually lands beside the key it aims at. Set by [learnFrom]. */
     var biasX = 0f; var biasY = 0f
 
@@ -144,7 +167,7 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
         for (h in 0 until heapN) {
             val lex = lexicons[heapLex[h]]; val id = heapId[h]
             costs[h] = careful(lex, id)
-            priors[h] = prior(lex, id, ids[heapLex[h]])
+            priors[h] = prior(lex, id, ids[heapLex[h]], prev)
             val per = costs[h] / distinctLetters(lex, id)
             if (per < bestPer) bestPer = per
         }

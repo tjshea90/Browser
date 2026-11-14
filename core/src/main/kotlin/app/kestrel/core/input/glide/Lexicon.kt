@@ -23,6 +23,8 @@ interface GlideLexicon {
     fun idOf(word: String): Int
     /** ln P(word [id] follows word [prevId] in THIS lexicon), or NaN when the pair is not known. */
     fun bigramLogProb(prevId: Int, id: Int): Float
+    /** The scale of [logProb]: what all the counts of the list add up to (the person's own counts are put on the same scale). */
+    fun totalCount(): Double
 }
 
 object GlideLetters {
@@ -50,6 +52,7 @@ class ArrayLexicon(entries: List<Pair<String, Long>>, scaleTotal: Double = 0.0) 
     private val lp: FloatArray
     private val byText = HashMap<String, Int>()
     private val buckets = HashMap<Int, IntArray>()
+    private val scale: Double
 
     init {
         val merged = LinkedHashMap<String, Long>()
@@ -58,6 +61,7 @@ class ArrayLexicon(entries: List<Pair<String, Long>>, scaleTotal: Double = 0.0) 
         keys = Array(texts.size) { GlideLetters.keyOf(texts[it]) }
         // [scaleTotal] puts the probabilities on the scale of another list (the person's own words are weighed against the shipped list, not against each other)
         val total = if (scaleTotal > 0.0) scaleTotal else merged.values.sum().toDouble().coerceAtLeast(1.0)
+        scale = total
         lp = FloatArray(texts.size) { Math.log(merged[texts[it]]!! / total).toFloat() }
         val lists = HashMap<Int, ArrayList<Int>>()
         for (i in texts.indices) {
@@ -76,6 +80,7 @@ class ArrayLexicon(entries: List<Pair<String, Long>>, scaleTotal: Double = 0.0) 
     override fun bucket(first: Int, last: Int): IntArray = buckets[first * 26 + last] ?: EMPTY
     override fun idOf(word: String) = byText[word] ?: -1
     override fun bigramLogProb(prevId: Int, id: Int) = Float.NaN
+    override fun totalCount() = scale
 
     companion object { val EMPTY = IntArray(0) }
 }
@@ -163,6 +168,8 @@ class BinaryLexicon internal constructor(
         }
         return Float.NaN
     }
+
+    override fun totalCount() = totalCount
 
     val bigramCount: Int get() = biId.size
 
