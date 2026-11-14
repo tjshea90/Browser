@@ -1805,3 +1805,11 @@
 > - Decisions on the private signing key, licence, landscape tabs and the Cromite comparison.
 > - I have not built the per-process memory line in Diagnostics.
 <!-- sha:048c560aeaa7 -->
+
+## 2026-11-14T06:02:16Z
+> Both notifications were old wake-ups from my own "Kestrel resume heartbeat" schedule. They fired at 02:17 and 04:17 UTC, while this session was already working. They were stale, because alpha36 was already built and recorded by the time I read them. Nothing needed redoing.
+>
+> Since the work is finished and nothing is left to resume, I disabled that heartbeat (`trig_01LLoVKsjuTUaDn61UGP1pBN`). Letting it keep waking me every two hours would only use up your usage. It is only disabled, not deleted, so a later session can turn it back on. The checkpoint at `CHECKPOINT.md` says all of this and says to wait for you.
+>
+> I have nothing more to build until you write. The alpha36 answer above still stands, with the release link and the open items. The next useful thing from you is the Diagnostics paste ("Glide typing" and "Mini keyboard in page fields" lines) after a few days of use on the tablet. If you send a new request, I write it into `TASKS.md` in your words before touching any code.
+<!-- sha:059350ade97d -->
