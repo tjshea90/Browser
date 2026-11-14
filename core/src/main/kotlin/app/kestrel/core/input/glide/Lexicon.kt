@@ -163,6 +163,9 @@ class BinaryLexicon internal constructor(
 
     val bigramCount: Int get() = biId.size
 
+    /** The words known to follow word [prevId] (for the accuracy tests, which need typical contexts). */
+    fun successors(prevId: Int): IntArray = biId.copyOfRange(biOff[prevId], biOff[prevId + 1])
+
     companion object { const val SCALE = 128f }
 }
 
