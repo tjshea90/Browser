@@ -23,3 +23,11 @@ dependencies {
     implementation(project(":core"))
     testImplementation(libs.junit)
 }
+
+// AT1: compile the glide-typing word list (docs/DICTIONARY.md): gradlew :tools:glideLexicon --args="--out ... --words ... --pairs ... --extra ..."
+tasks.register<JavaExec>("glideLexicon") {
+    group = "kestrel"
+    description = "Compile the glide-typing word list"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("app.kestrel.tools.GlideLexiconCompilerKt")
+}
