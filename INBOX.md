@@ -1175,3 +1175,11 @@ Work on improving the ad blocking that you didn't finish before
 ```
 Work on improving the ad blocking that you didn't finish before
 ```
+
+## 2026-11-14T16:17:22Z
+```
+Make sure the browser keyboard actively learns the words I use most and the words I use most depending on the pattern drawn even if it is sloppy, for example, I often type the word "for" yet Gboard often inputs the word for, simply because the letter I is close on the keyboard to the letter o. But 99% of the time I make that pattern, I'm trying to type the word "for". I don't think Gboard learns because I always change fir to for but it still glide types fir. I want this keyboard to learn intuitively and see which words I use most and which words I'm trying to type based on the glide pattern and my corrections to the words it inputs. Make it save this learned data in an exportable format because if the keyboard is good I will make it my system keyboard for all apps and I want to import what it learned
+Kestrel keeps crashing while loading this page. The entire app closes. 
+
+https://www.ally.com/help/invest/dividend-reinvestment/
+```
