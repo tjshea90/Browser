@@ -694,6 +694,16 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         val t = SystemClock.uptimeMillis()
         for (a in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) { val e = MotionEvent.obtain(t, t, a, 5f, 5f, 0); b.dispatchTouchEvent(e); e.recycle() }
     }
+    /** Tests: where a finger goes to touch the bar, a button or a key, in this view's pixels. */
+    internal fun barPointForTest(): Pair<Float, Float> = pointInPanel(bar)
+    internal fun buttonPointForTest(which: String): Pair<Float, Float> = pointInPanel(when (which) { "back" -> back; "home" -> home; else -> forward })
+    internal fun keyPointForTest(label: String): Pair<Float, Float>? { val c = keys.centerOf(label) ?: return null; return (panel.left + keys.left + c.first) to (panel.top + keys.top + c.second) }
+    private fun pointInPanel(v: View): Pair<Float, Float> {
+        var x = v.width / 2f; var y = v.height / 2f; var p: View = v
+        while (p !== panel) { x += p.left; y += p.top; p = p.parent as View }
+        return (panel.left + x) to (panel.top + y)
+    }
+    internal val liftedForTest: Boolean get() = lifted
     internal val barTextForTest: String get() = bar.shownText()
     internal val typesIntoPageForTest: Boolean get() = typesIntoPage
     internal val bubbleForTest: String? get() = keys.bubbleTextForTest()
