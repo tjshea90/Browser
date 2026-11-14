@@ -110,17 +110,27 @@ test('a swipe that scrolls the page is not a tap', async () => {
   assert.deepEqual(await taps(page), []);
 });
 
-test('a long press, a right click and a drag are not taps', async () => {
+test('a long press with a finger is not a tap', async () => {
   const page = await open({ touch: true });
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 50, y: 50 }] });
   await page.waitForTimeout(700);                                  // held: a long press (the page's menu), not a tap
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  await page.mouse.click(50, 50, { button: 'right' });             // a right click
-  await page.mouse.move(40, 150); await page.mouse.down(); await page.mouse.move(200, 190, { steps: 4 }); await page.mouse.up();   // a drag across 160 px
-  assert.deepEqual((await taps(page)).filter((t) => t.indexOf('shop.example') > 0 && false), []);
+  await page.waitForTimeout(100);
+  assert.deepEqual(await taps(page), []);
+});
+
+test('a right click is not a tap', async () => {
+  const page = await open();
+  await page.mouse.click(50, 50, { button: 'right' });
+  assert.deepEqual(await taps(page), []);
+});
+
+test('a drag that starts on a link and ends elsewhere is not a tap on the link', async () => {
+  const page = await open();
+  await page.mouse.move(40, 50); await page.mouse.down(); await page.mouse.move(200, 190, { steps: 4 }); await page.mouse.up();
   const t = await taps(page);
-  assert.ok(!t.includes('tap|https://shop.example/item'), 'the long press and the right click on the link were no taps: ' + JSON.stringify(t));
+  assert.ok(!t.includes('tap|https://shop.example/item'), JSON.stringify(t));
 });
 
 test('two different links tapped in a row are two reports; the same link twice within a blink is one', async () => {
