@@ -286,11 +286,10 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   }
   return undefined;
 });
-try {
-  if (false) browser.contentScripts.register({ // EXPERIMENT-G1: dynamic registration of the guard switched off, only the manifest copy can be in the page
-    matches: ['http://*/*', 'https://*/*'], js: [{ file: 'guard-main.js' }], runAt: 'document_start', allFrames: true, matchAboutBlank: true, matchOriginAsFallback: true, world: 'MAIN',
-  }).then(function () { guardState = 'page guard on'; }, function (e) { guardState = 'page guard FAILED: ' + (e && e.message); });
-} catch (e) { guardState = 'page guard FAILED: ' + (e && e.message); }
+// RX3-G1: guard-main.js is DECLARED in manifest.json (content_scripts, world MAIN, document_start, every frame, about:blank frames too), not registered here at run time. A script registered from this page exists only
+// after this page has started and its promise resolved, so a document that began before that (the first page after a cold start, opened from a link) had no pop-up guard. Proven on the emulator
+// 2026-11-14 (research/GUARD_FIRST_PAGE.md): with ONLY the manifest copy, the page-world marker is there at the page's first script, and an about:blank frame made by the page has it too.
+guardState = 'page guard: declared in the manifest (page world, every frame, from the first script)';
 
 // ---------------------------------------------------------------- scriptlets (AW1b)
 // scriptlets-main.js (registered here, runs inside every page and frame like the guard) holds our own implementations of the list's scriptlets. The calls the lists have for a site reach it two ways:
@@ -309,12 +308,10 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   markStats();
   return undefined;
 });
-var slLib = null; // promise of the library's registration (resolves true/false): the per-host scripts are registered after it so they run after it
-try {
-  slLib = browser.contentScripts.register({
-    matches: ['http://*/*', 'https://*/*'], js: [{ file: 'scriptlets-main.js' }], runAt: 'document_start', allFrames: true, matchAboutBlank: true, matchOriginAsFallback: true, world: 'MAIN',
-  }).then(function () { slState = 'scriptlets on'; return true; }, function (e) { slState = 'scriptlets FAILED: ' + (e && e.message); slFailed = true; return false; });
-} catch (e) { slState = 'scriptlets FAILED: ' + (e && e.message); slFailed = true; }
+// RX3-G1: the library is DECLARED in manifest.json like the guard (page world, document_start, every frame): it is there before this page has run a line, and the per-host scripts registered below always
+// run after it (scripts declared in the manifest come first). slLib stays null: nothing to wait for.
+var slLib = null;
+slState = 'scriptlets: declared in the manifest (page world, every frame)';
 
 // Early delivery. A host's script is a one-liner in the page world that hands the calls to the library with the same DOM event content.js uses. It is registered for the exact host (every frame of it, and the
 // about:blank / srcdoc frames it creates), kept for the most recent SL_MAX hosts and dropped when the lists change.

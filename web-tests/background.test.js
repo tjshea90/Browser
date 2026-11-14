@@ -846,8 +846,7 @@ test('early scriptlets: the first navigation to a site asks the app, does not wa
   assert.ok(!isPromise(r), 'a site seen for the first time never holds its request up');
   eq(r, {});
   await until(() => mine().length === 1, 'the site script');
-  const lib = regs.findIndex((x) => x.opts.js[0].file === 'scriptlets-main.js');
-  assert.ok(lib >= 0 && lib < regs.indexOf(mine()[0]), 'the library is registered first: scripts of one extension run in registration order');
+  assert.equal(regs.findIndex((x) => x.opts.js && x.opts.js[0].file === 'scriptlets-main.js'), -1, 'the library and the guard are declared in the manifest (RX3-G1): nothing of them is registered at run time');
   const o = mine()[0].opts;
   eq(o.matches, ['http://site.example/*', 'https://site.example/*']);
   assert.equal(o.runAt, 'document_start'); assert.equal(o.world, 'MAIN'); assert.equal(o.allFrames, true); assert.equal(o.matchAboutBlank, true); assert.equal(o.matchOriginAsFallback, true);
@@ -967,11 +966,6 @@ test('early scriptlets: a registration the browser refuses, an app that cannot a
   eq(broken.mainFrame(SLSITE), {});
   await tick(20);
   eq(broken.mainFrame(SLSITE), {});
-  const noLib = harness(standardApp(), { scripts: { list: [], fail: (o) => o.js && o.js[0].file === 'scriptlets-main.js' } });
-  await tick(20);                                               // the refusal of the library's registration arrives
-  eq(noLib.mainFrame(SLSITE), {});
-  await tick(20);
-  assert.equal(noLib.of('sc').length, 0, 'without the library there is nothing to hand the calls to: no question either');
 });
 
 test('early scriptlets: the numbers for Diagnostics say how many pages ran calls and how many of them before the page\'s first script', async () => {
@@ -1148,4 +1142,18 @@ test('RX3-G3: nothing is relayed for a sender without a tab, a place that is not
   h.message({ k: 'assist', x: 10, y: 10, s: 'https://player.example/embed' }, 1, 'https://example.com/next', 0);
   await tick(20);
   assert.equal(h.tabMsgs.length, 0);
+});
+
+test('RX3-G1: the manifest declares the pop-up guard and the scriptlet library for the page world, every frame, from the first moment; nothing registers them at run time', () => {
+  const m = JSON.parse(fs.readFileSync(path.join(SHIELDS, 'manifest.json'), 'utf8'));
+  for (const f of ['guard-main.js', 'scriptlets-main.js']) {
+    const e = m.content_scripts.filter((c) => c.js.includes(f));
+    assert.equal(e.length, 1, f + ' is declared once');
+    assert.equal(e[0].world, 'MAIN'); assert.equal(e[0].run_at, 'document_start'); assert.equal(e[0].all_frames, true);
+    assert.equal(e[0].match_about_blank, true); assert.equal(e[0].match_origin_as_fallback, true);
+    assert.deepEqual(e[0].matches, ['http://*/*', 'https://*/*']);
+  }
+  assert.ok(m.content_scripts[0].js.includes('content.js'), 'content.js comes first: it listens for the guard\'s ready event');
+  const h = harness(standardApp(), { scripts: { list: [] } });
+  assert.deepEqual(h.ctx.__regs || [], []);
 });
