@@ -81,4 +81,80 @@ class MiniKeyboardTest {
         assertTrue(bottom.any { it.key === Key.ToSymbols } && bottomSym.any { it.key === Key.ToLetters })
         assertTrue(bottom.any { it.key === Key.Go } && bottomSym.any { it.key === Key.Go })
     }
+
+    // ------------------------------------------------------------------ glide typing (AT1e)
+
+    @Test fun aGlideAddsTheWordAndASpaceAndTheFirstOneReplacesTheSelectedAddress() {
+        val m = MiniKeyboardModel(); m.open("old.example.com/page")
+        assertTrue(m.allSelected)
+        m.commitGlide("hello")
+        assertEquals("hello ", m.text); assertFalse(m.allSelected); assertTrue(m.glideActive)
+        m.commitGlide("world")
+        assertEquals("hello world ", m.text)
+    }
+
+    @Test fun aGlideAfterTypedLettersGetsASpaceBeforeIt() {
+        val m = MiniKeyboardModel(); m.open("")
+        m.press(Key.Ch("a")); m.press(Key.Ch("b"))
+        m.commitGlide("cat")
+        assertEquals("ab cat ", m.text)
+        assertEquals("cat", m.previousWord()) // the text ends in a space: the word before the next glide is the last one
+    }
+
+    @Test fun oneBackspaceTakesTheWholeGlidedWordAway() {
+        val m = MiniKeyboardModel(); m.open("")
+        m.commitGlide("hello"); m.commitGlide("world")
+        m.press(Key.Backspace)
+        assertEquals("hello ", m.text); assertFalse(m.glideActive)
+        m.press(Key.Backspace) // the glide is over: now it deletes a letter at a time
+        assertEquals("hello", m.text)
+        // with a separator space added by the glide, that goes too
+        m.open(""); m.press(Key.Ch("a")); m.commitGlide("cat"); m.press(Key.Backspace)
+        assertEquals("a", m.text)
+    }
+
+    @Test fun aTypedLetterEndsTheGlideSoBackspaceIsNormalAgain() {
+        val m = MiniKeyboardModel(); m.open("")
+        m.commitGlide("hello"); m.press(Key.Ch("x"))
+        assertFalse(m.glideActive)
+        m.press(Key.Backspace)
+        assertEquals("hello ", m.text)
+    }
+
+    @Test fun aCandidateFromTheStripReplacesTheGlidedWord() {
+        val m = MiniKeyboardModel(); m.open("")
+        m.commitGlide("hello"); m.commitGlide("word")
+        assertTrue(m.swapGlide("world"))
+        assertEquals("hello world ", m.text); assertTrue(m.glideActive)
+        assertTrue(m.swapGlide("wood"))
+        assertEquals("hello wood ", m.text)
+        m.press(Key.Ch("z"))
+        assertFalse("only a glide can be swapped", m.swapGlide("nope"))
+        assertEquals("hello wood z", m.text)
+    }
+
+    @Test fun shiftMakesAGlidedWordStartWithACapitalAndTheSwapKeepsIt() {
+        val m = MiniKeyboardModel(); m.open("")
+        m.press(Key.Shift); m.commitGlide("paris")
+        assertEquals("Paris ", m.text); assertFalse(m.shift)
+        assertTrue(m.swapGlide("parts"))
+        assertEquals("Parts ", m.text)
+    }
+
+    @Test fun theWordBeforeIsOnlyAPlainWord() {
+        val m = MiniKeyboardModel()
+        m.open("Hello"); assertNull("selected address: nothing before", m.previousWord())
+        m.press(Key.Backspace); m.press(Key.Ch("H")); m.press(Key.Ch("i")); assertEquals("hi", m.previousWord())
+        m.open(""); m.press(Key.Ch("a")); m.press(Key.Ch(".")); m.press(Key.Ch("c")); assertNull("an address is not a word", m.previousWord())
+        m.open(""); m.press(Key.Ch("d")); m.press(Key.Ch("o")); m.press(Key.Ch("n")); m.press(Key.Ch("'")); m.press(Key.Ch("t")); assertEquals("don't", m.previousWord())
+    }
+
+    @Test fun plainWordsAreWhatTheKeyboardMayRemember() {
+        val m = MiniKeyboardModel(); m.open("")
+        m.commitGlide("Hello"); m.commitGlide("dorabyy"); m.press(Key.Ch("x")); m.press(Key.Ch("1"))
+        m.open(""); for (c in "my site. doraby9 abc a-b ok") m.press(Key.Ch(c.toString()))
+        assertEquals(listOf("abc"), m.plainWords().filter { it == "abc" }) // 'my', 'ok' are too short; 'site.' and 'doraby9' have other characters
+        assertEquals(listOf("abc"), m.plainWords())
+    }
 }
+
