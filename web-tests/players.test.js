@@ -140,6 +140,7 @@ test('JW Player: the skip button is pressed once it says skippable, not before',
   await page.waitForTimeout(450);
   assert.equal((await state(page)).clicks, 0, 'not pressed while it is not skippable');
   await waitFor(page, () => window.__skipClicks === 1 && window.__ended === 1);
+  await page.waitForTimeout(500);
   const s = await state(page);
   assert.equal(s.clicks, 1);
   assert.equal(sum(s.msgs, 'c'), 1, 'one skip button pressed'); assert.equal(sum(s.msgs, 's'), 1);
