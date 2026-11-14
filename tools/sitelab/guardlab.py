@@ -16,6 +16,10 @@
               break marked by CUE-OUT / CUE-IN). The app's Health lines "media look live=.. length=..s advertising=..s in N breaks counted=N of M" show what the early look found.
   /playlab    RX3-S1: ONE real, audible 440 Hz tone (/tone.wav, 30 s) in a <video>; a tap anywhere starts it (the app refuses audible autoplay without a tap), the page pauses it after 6 s, plays it again 3 s later,
               pauses it after 6 s more and ends with DONE. The app's Health lines "neon video playing=true/false front=true" show the glow being held while it plays.
+  /slowjump   RX3-G6: with NO tap at all, 5 s after it loaded the page sends its own tab to a host the block lists name (https://doubleclick.net/). Before RX3-G6 a jump with no recent touch was always allowed;
+              now the app stops it and shows the blocked icon (Health: "guard app-wall stopped a jump to doubleclick.net").
+  /layer-link RX3-G5: a transparent layer over the page: a tap on it makes the page click a hidden <a target=_blank> to another site (an ad). The app's new-window wall now needs a tap ON a link to exactly
+              that address: Health "guard app-wall stopped a new window to ..." (or the page guard's own "chip-show open", whichever refused it first).
   /playerlab  RX3-G7: five mock video players on one page, driven by the page itself (no touch needed): an ordinary video (no ad words), a JW-style player (jw-flag-ads on its root), a Video.js-style player
               (vjs-ad-loading, then vjs-ad-playing), a Google-IMA-style host (the ad video inside .ima-ad-container) and a JW-style ad with a skip button (.jw-skip, .jw-skippable). Each ad is a REAL 12 s silent
               media element. The log says how long the ad took (about 12000 ms = not skipped, a few hundred = fast-forwarded), at what speed it ran, and which events the skip button got. Ends with a DONE line.
@@ -250,6 +254,29 @@ go.addEventListener('click', function () {
 </script></body></html>
 """
 
+SLOWJUMP = b"""<!doctype html><html><head><meta charset="utf-8"><title>slowjump</title></head><body style="font:18px sans-serif;margin:12px"><p>slowjump: no tap, 5 s, then this page sends its own tab to an ad host.</p>
+<script>
+function L(k, v) { try { var x = new XMLHttpRequest(); x.open('GET', '/log?kind=' + encodeURIComponent(k) + '&v=' + encodeURIComponent(v) + '&t=' + Date.now()); x.send(); } catch (e) {} }
+L('load', 'slowjump');
+setTimeout(function () { L('jump', 'location = https://doubleclick.net/'); location = 'https://doubleclick.net/'; }, 5000);
+setTimeout(function () { L('still-here', 'the page is still showing after 9 s (the jump was refused)'); }, 9000);
+setTimeout(function () { L('DONE', 'slowjump'); }, 10000);
+</script></body></html>
+"""
+
+LAYERLINK = b"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>layer-link</title></head><body style="font:18px sans-serif;margin:12px"><p>layer-link: tap anywhere.</p>
+<div id="layer" style="position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(200,0,0,.2)"></div>
+<script>
+function L(k, v) { try { var x = new XMLHttpRequest(); x.open('GET', '/log?kind=' + encodeURIComponent(k) + '&v=' + encodeURIComponent(v) + '&t=' + Date.now()); x.send(); } catch (e) {} }
+L('load', 'layer-link');
+document.getElementById('layer').addEventListener('click', function () {
+  L('layer-click', 'the layer got the tap and clicks a hidden target=_blank link to another site');
+  var a = document.createElement('a'); a.href = 'http://127.0.0.1:%PORT%/popad?n=layer-link'; a.target = '_blank'; a.style.display = 'none'; document.body.appendChild(a); a.click();
+});
+setTimeout(function () { L('DONE', 'layer-link'); }, 14000);
+</script></body></html>
+"""
+
 POPAD = b"""<!doctype html><meta charset=utf-8><title>an ad</title><body style="font:20px sans-serif;margin:24px">popad: this is the ad page. If you can see it, the pop-up was NOT stopped.</body>"""
 
 
@@ -309,6 +336,12 @@ class H(http.server.BaseHTTPRequestHandler):
         if u.path == "/tone.wav":
             self._write("GET /tone.wav")
             return self._send(200, TONE, "audio/wav")
+        if u.path == "/slowjump":
+            self._write("GET /slowjump")
+            return self._send(200, SLOWJUMP)
+        if u.path == "/layer-link":
+            self._write("GET /layer-link")
+            return self._send(200, LAYERLINK.replace(b"%PORT%", str(self.server.server_address[1]).encode()))
         if u.path == "/popad":
             self._write("GET /popad %s   <- the pop-up was NOT stopped" % q.get("n", ["?"])[0])
             return self._send(200, POPAD)
