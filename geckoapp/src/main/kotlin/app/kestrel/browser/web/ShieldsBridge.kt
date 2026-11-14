@@ -83,6 +83,7 @@ class ShieldsBridge(
                     "cnt" -> { counts(m); "" }
                     "st" -> { stats = EngineStats.from(m); "" }
                     "pop" -> { onPop(m); "" }
+                    "sc" -> scriptletCalls(m.optString("h"))
                     "css" -> cosmeticCss(m.optString("h"), m.optBoolean("top", true))
                     "gen" -> genericCss(m.optString("h"), m.optJSONArray("t"))
                     "proc" -> proceduralRules(m.optString("h"))
