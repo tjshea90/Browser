@@ -1974,3 +1974,33 @@
 >
 > The one thing still waiting on you is the Back question above.
 <!-- sha:713c03f96a39 -->
+
+## 2026-11-14T19:56:07Z
+> Kestrel G alpha40 is out. It has all four of your requests. I tried each one on the emulator with real touches; none has been tried on your tablet yet.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha40
+>
+> **What changed**
+> 1. **No more "This page is slow" prompt.** Kestrel now waits by itself and shows nothing. I tested it with a page that runs a script for 50 seconds. The engine asked after about 30 seconds, Kestrel answered "wait" on its own, and the page finished. Menu > Diagnostics counts how often it waited. If a page is stuck too long, you close its tab.
+> 2. **Long press an open spot and the panel appears under your finger.**
+>    - It comes up anywhere on a page.
+>    - A link still gives its own options, a picture gives the picture options, and text selects the word.
+>    - Buttons, fields and clickable boxes are left alone.
+>    - The top-right corner is no longer special.
+>    - **To close the panel, tap the little bar on top of it.** Settings > Mini navigation panel still switches the whole feature off.
+> 3. **The panel floats.** Long press it (buttons, address bar or frame, not the keys) and drag. It stays where you let go, with no jump back to the corner. The keys keep their own long press, so holding a top-row letter still types its digit.
+> 4. **Slide on the space key to move the text cursor.** It works in the address bar and in a web page's text field. A quick tap still types a space.
+>
+> **Found and fixed on the emulator.**
+> - A long press on blank space did nothing when a word was already selected on the page.
+> - The neon glows could stay frozen after a long press that opened the panel.
+>
+> **Not tried on your tablet.**
+> - How the long-press time (400 ms for picking up the panel) and the slide distance feel under your thumb.
+> - A PDF.
+> - A page inside a frame that has no address of its own. The panel won't open there.
+>
+> **Still waiting on you:**
+> - Do you want the keyboard as a separate system keyboard app for all your apps? It would start from your exported file. Yes or no.
+> - Tell me how the long press and the slide feel on the tablet, and I'll adjust the timings.
+<!-- sha:852bd53074ff -->
