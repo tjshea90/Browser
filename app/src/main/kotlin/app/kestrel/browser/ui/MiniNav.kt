@@ -525,7 +525,6 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         private var cands: List<String> = emptyList()
         private var noWordUntil = 0L
         private var stripDown = -1
-        private val chipRects = ArrayList<RectF>()
         private val trail = Path()
         private val trailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
         private val fadeStep = object : Runnable {
@@ -556,11 +555,11 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             val rs = rowsNow()
             val top = stripPx()
             if (rectsW == width && rectsH == height && rectsTop == top && rects.isNotEmpty()) return
-            val sizeChanged = rectsW != width || rectsH != height || rectsTop != top
             rectsW = width; rectsH = height; rectsTop = top
             rects = MiniKeyboardGeometry.boxes(rs, width.toFloat(), height.toFloat(), context.dpf(3f), top)
-            if (sizeChanged && glideOn && glide != null) post { prepareGlide() } // the decoder needs the real key positions
         }
+
+        override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) { super.onSizeChanged(w, h, ow, oh); if (glideOn && glide != null) post { prepareGlide() } } // the decoder needs the real key positions
 
         /** The 26 letter keys' centres as laid out now (the same function that draws them), for the decoder. */
         fun glideKeys(): GlideKeys? {
@@ -600,17 +599,25 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         fun showNoWord() { cands = emptyList(); noWordUntil = SystemClock.uptimeMillis() + NO_WORD_MS; handler.removeCallbacks(noWordOff); handler.postDelayed(noWordOff, NO_WORD_MS); invalidate() }
         fun candidateTexts(): List<String> = cands
 
+        /** The boxes of the guesses in the strip (computed from the strip's size, so touches work before the first draw too). */
+        private fun chipBoxes(): List<RectF> {
+            val h = stripPx(); val n = cands.size
+            if (h <= 0f || n == 0 || width <= 0) return emptyList()
+            val gap = context.dpf(3f)
+            val cw = (width - gap * (n - 1)) / n
+            return List(n) { i -> RectF(i * (cw + gap), 0f, i * (cw + gap) + cw, h - gap) }
+        }
+
         private fun chipAt(x: Float, y: Float): Int {
             if (y >= stripPx() || cands.isEmpty()) return -1
             val gap = context.dpf(3f)
-            for ((i, r) in chipRects.withIndex()) if (x >= r.left - gap / 2 && x < r.right + gap / 2) return i
+            for ((i, r) in chipBoxes().withIndex()) if (x >= r.left - gap / 2 && x < r.right + gap / 2) return i
             return -1
         }
 
         private fun drawStrip(c: Canvas) {
             val h = stripPx(); if (h <= 0f) return
             val gap = context.dpf(3f)
-            chipRects.clear()
             val now = SystemClock.uptimeMillis()
             text.textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 13f, resources.displayMetrics)
             val fm = text.fontMetrics
@@ -624,12 +631,10 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                 c.drawText(TextUtils.ellipsize(msg, text, width - context.dpf(8f), TextUtils.TruncateAt.END).toString(), width / 2f, (h - gap) / 2f - (fm.ascent + fm.descent) / 2f, text)
                 return
             }
-            val n = list.size
-            val cw = (width - gap * (n - 1)) / n
             val r = context.dpf(6f)
+            val boxes = chipBoxes()
             for ((i, w) in list.withIndex()) {
-                val rect = RectF(i * (cw + gap), 0f, i * (cw + gap) + cw, h - gap)
-                chipRects.add(rect)
+                val rect = boxes[i]; val cw = rect.width()
                 fill.color = if (i == stripDown) (pal.accent and 0x00FFFFFF) or 0xAA000000.toInt() else 0xFF0E171E.toInt()
                 c.drawRoundRect(rect, r, r, fill)
                 line.strokeWidth = context.dpf(if (i == 0) 1.2f else 1f); line.color = if (i == 0) pal.accent else pal.deep
@@ -792,7 +797,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         }
 
         /** Tests: the centre of the i-th guess in the strip. */
-        fun chipCenter(i: Int): Pair<Float, Float>? { val r = chipRects.getOrNull(i) ?: return null; return r.centerX() to r.centerY() }
+        fun chipCenter(i: Int): Pair<Float, Float>? { val r = chipBoxes().getOrNull(i) ?: return null; return r.centerX() to r.centerY() }
 
         fun touch(action: Int, x: Float, y: Float) { val t = SystemClock.uptimeMillis(); val e = MotionEvent.obtain(t, t, action, x, y, 0); dispatchTouchEvent(e); e.recycle() }
 

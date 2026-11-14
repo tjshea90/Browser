@@ -4,11 +4,16 @@ import android.animation.ValueAnimator
 import android.app.Activity
 import android.os.Looper
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
+import app.kestrel.core.input.glide.GlideTyping
+import app.kestrel.core.input.glide.LexiconFile
+import java.util.concurrent.Executor
 import android.widget.FrameLayout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -32,6 +37,10 @@ class MiniNavTest {
         override fun navForward() { calls.add("forward") }
         override fun navSubmit(text: String) { calls.add("go:$text") }
         override fun navOpenChanged(open: Boolean) { opened.add(open) }
+        val habits = ArrayList<FloatArray>(); val savedWords = ArrayList<String>()
+        override fun navGlideHabitChanged(habit: FloatArray) { habits.add(habit) }
+        override fun navGlideWordsChanged(text: String) { savedWords.add(text) }
+        override fun navGlideHosts(done: (List<String>) -> Unit) { done(listOf("www.doraby.com", "pelisjuanita.com", "10.0.2.2")) }
     }
 
     private lateinit var activity: Activity
@@ -189,4 +198,142 @@ class MiniNavTest {
         // the panel is small and sits in the corner; the rest of MiniNav's area must stay the page's
         assertFalse("MiniNav itself is not clickable", nav.isClickable)
     }
+
+    // ------------------------------------------------------------------ glide typing (AT1e)
+
+    private val glideBytes = LexiconFile.build(
+        listOf("hello" to 500L, "help" to 800L, "held" to 300L, "hell" to 300L, "world" to 900L, "word" to 1200L, "the" to 9000L, "she" to 2000L, "good" to 2000L, "to" to 7000L, "go" to 2500L)
+            .map { LexiconFile.Entry(it.first, it.second) },
+        emptyList(),
+    )
+
+    private fun openGlideKeyboard() {
+        nav.glideFactory = { GlideTyping({ glideBytes }, Executor { it.run() }) }
+        nav.setGlideEnabled(true)
+        nav.setOpen(true, animate = false); relayout()
+        nav.pressBarForTest(); relayout(); idle(50)
+    }
+
+    /** A finger path over the letters of [word]: straight from key centre to key centre, a touch every few pixels. */
+    private fun fingerPath(word: String): List<Pair<Float, Float>> {
+        val centres = ArrayList<Pair<Float, Float>>()
+        for (ch in word) { val c = nav.keyCenterForTest(ch.toString()) ?: error("no key $ch"); if (centres.isEmpty() || centres.last() != c) centres.add(c) }
+        val out = ArrayList<Pair<Float, Float>>(); out.add(centres[0])
+        for (i in 1 until centres.size) {
+            val (ax, ay) = centres[i - 1]; val (bx, by) = centres[i]
+            val steps = Math.max(2, (Math.hypot((bx - ax).toDouble(), (by - ay).toDouble()) / 4).toInt())
+            for (s in 1..steps) out.add(ax + (bx - ax) * s / steps to ay + (by - ay) * s / steps)
+        }
+        return out
+    }
+
+    private fun glideWord(word: String) {
+        val pts = fingerPath(word)
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, pts.first().first, pts.first().second)
+        for (p in pts.drop(1).dropLast(1)) nav.touchKeysForTest(MotionEvent.ACTION_MOVE, p.first, p.second)
+        nav.touchKeysForTest(MotionEvent.ACTION_UP, pts.last().first, pts.last().second)
+        idle(20)
+    }
+
+    private fun tapKey(label: String, dx: Float = 0f) {
+        val (x, y) = nav.keyCenterForTest(label)!!
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, x, y)
+        if (dx != 0f) nav.touchKeysForTest(MotionEvent.ACTION_MOVE, x + dx / 2, y)
+        nav.touchKeysForTest(MotionEvent.ACTION_UP, x + dx, y)
+        idle(20)
+    }
+
+    @Test fun aGlideTypesTheWordWithASpaceAndShowsTheOtherGuessesAboveTheKeys() {
+        openGlideKeyboard()
+        assertEquals(Math.round(161f * 1f) + 30, nav.keysHeightForTest) // the strip adds its height
+        glideWord("hello")
+        assertEquals("hello ", nav.barTextForTest)
+        assertEquals("hello", nav.candidatesForTest.firstOrNull())
+        assertTrue(nav.candidatesForTest.size in 2..3)
+    }
+
+    @Test fun theFirstGlideReplacesTheSelectedAddressAndTheNextOnesFollowIt() {
+        nav.sync(true, false, false, "https://doraby.com/movie/")
+        openGlideKeyboard()
+        assertTrue(nav.selectedForTest)
+        glideWord("world")
+        assertEquals("world ", nav.barTextForTest)
+        glideWord("hello")
+        assertEquals("world hello ", nav.barTextForTest)
+    }
+
+    @Test fun aPlainTapStillTypesALetterAndSoDoesATapThatDriftsALittle() {
+        openGlideKeyboard()
+        tapKey("h"); assertEquals("h", nav.barTextForTest)
+        tapKey("e", dx = 3f); assertEquals("a drift inside the key is still the key that was pressed", "he", nav.barTextForTest)
+        assertTrue("no glide happened: no guesses", nav.candidatesForTest.isEmpty())
+    }
+
+    @Test fun aGlideAfterTypedLettersStartsANewWord() {
+        openGlideKeyboard()
+        tapKey("a")
+        glideWord("world")
+        assertEquals("a world ", nav.barTextForTest)
+    }
+
+    @Test fun oneBackspaceRightAfterAGlideRemovesTheWholeWordAndIsCounted() {
+        openGlideKeyboard()
+        glideWord("hello"); glideWord("world")
+        assertTrue(nav.pressKeyForTest("⌫"))
+        assertEquals("hello ", nav.barTextForTest)
+        assertTrue("the guesses go with the word", nav.candidatesForTest.isEmpty())
+        assertTrue(nav.glideLine(), nav.glideLine().contains("deleted right away 1"))
+        assertTrue(nav.pressKeyForTest("⌫"))
+        assertEquals("hello", nav.barTextForTest) // now a letter at a time
+    }
+
+    @Test fun aGuessInTheStripReplacesTheWordAndIsCounted() {
+        openGlideKeyboard()
+        glideWord("word")
+        val second = nav.candidatesForTest.getOrNull(1)
+        // the path of "word" can also be "world": whichever the second guess is, tapping it swaps the word
+        assertNotNull("a second guess", second)
+        val (cx, cy) = nav.chipCenterForTest(1)!!
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, cx, cy); nav.touchKeysForTest(MotionEvent.ACTION_UP, cx, cy); idle(20)
+        assertEquals("$second ", nav.barTextForTest)
+        assertEquals(second, nav.candidatesForTest.first()) // the picked one leads the strip now
+        assertTrue(nav.glideLine(), nav.glideLine().contains("another candidate picked 1"))
+    }
+
+    @Test fun aPathThatMakesNoWordTypesNothingAndSaysSo() {
+        openGlideKeyboard()
+        val (px, py) = nav.keyCenterForTest("p")!!; val (mx, my) = nav.keyCenterForTest("z")!!
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, px, py)
+        for (s in 1..20) nav.touchKeysForTest(MotionEvent.ACTION_MOVE, px + (mx - px) * s / 20, py + (my - py) * s / 20)
+        nav.touchKeysForTest(MotionEvent.ACTION_UP, mx, my); idle(20)
+        assertEquals("", nav.barTextForTest)
+        assertTrue(nav.candidatesForTest.isEmpty())
+        assertTrue(nav.glideLine(), nav.glideLine().contains("no word fitted 1"))
+    }
+
+    @Test fun withGlideTypingOffThereIsNoStripAndASlideTypesNothing() {
+        nav.setGlideEnabled(false)
+        nav.setOpen(true, animate = false); relayout(); nav.pressBarForTest(); relayout()
+        assertEquals(161, nav.keysHeightForTest)
+        val (hx, hy) = nav.keyCenterForTest("h")!!; val (ox, oy) = nav.keyCenterForTest("o")!!
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, hx, hy); nav.touchKeysForTest(MotionEvent.ACTION_MOVE, ox, oy); nav.touchKeysForTest(MotionEvent.ACTION_UP, ox, oy)
+        assertEquals("", nav.barTextForTest)
+        assertTrue(nav.glideLine().contains("off"))
+    }
+
+    @Test fun wordsTypedLetterByLetterAreRememberedAfterGoButKnownOnesAreNot() {
+        openGlideKeyboard()
+        for (ch in "kestrel") tapKey(ch.toString())
+        tapKey(".com"); // not a plain word: the dot ends it
+        nav.pressKeyForTest("Go")
+        idle(50)
+        assertTrue("saved: ${rec.savedWords}", rec.savedWords.isNotEmpty() && rec.savedWords.last().contains("kestrel"))
+    }
+
+    @Test fun theLineForDiagnosticsSaysWhenItWasNotUsed() {
+        assertTrue(nav.glideLine().contains("off"))
+        openGlideKeyboard()
+        assertTrue(nav.glideLine().contains("word list") || nav.glideLine().contains("not used yet"))
+    }
 }
+
