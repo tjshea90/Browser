@@ -1,23 +1,22 @@
-# CHECKPOINT 2179 — read me first, then TASKS.md
+# CHECKPOINT 2180 — read me first, then TASKS.md
 
-**Written:** 2026-11-14T16:08:08Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `ec2ea4b` (this checkpoint is the commit after it)
+**Written:** 2026-11-14T16:08:45Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `551bd7e` (this checkpoint is the commit after it)
 
 ## Just done
-gated kestrel-g-v0.3.0-alpha37 (gecko code 138) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
+alpha37 DISPATCHED: android.yml run 43613953896 (run_number 88, app=gecko full_build=true, ref ccr-a57c163e-mtq8js, head 551bd7e): builds, signs, verifies the certificate, creates tag kestrel-g-v0.3.0-alpha37 and the Release (about 9 minutes like run 87)
 
 ## Do this next
-TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref ccr-a57c163e-mtq8js, inputs {"app":"gecko","full_build":"true","note":"alpha37 (includes alpha36): Better ad blocking. 1) A site now gets its own anti-ad fixes BEFORE the page's own scripts run, so 'turn off your ad blocker' walls, countdown timers, pop-up openers and ad scripts are stopped at the start instead of after the page has already shown them. These are the fixes the blocking lists have for each site. Settings > Fix ad and anti-adblock scripts switches points 1 to 3 off. 2) When an ad file is blocked, the page gets a harmless empty stand-in of the same kind where the lists say so (an empty script, a 1x1 picture, a silent clip, an ad library that answers 'no ad available'), so a video player that waits for its ad code starts the video instead of hanging. 3) For some video players and news feeds the ad part of the data they download is cut out before the page reads it (the way the lists handle YouTube-style players), links on link-shortener pages point at the real target, and the common 'ad blocker detected' scripts are told there is no blocker. 4) Blocking rules for whole families of sites (one name with any ending, like yts.*) now work, and the lists' Quick fixes list is added (it refreshes daily with the others). 5) Menu > Diagnostics > Blocker line now says how many pages ran fixes, how many of them before the page's own scripts, and how many blocked files got a stand-in. Not tried on the real tablet or on real sites yet, only on a test page on the emulator: if a site breaks, switch Shields off for that site or turn the Settings switch off."}.
-When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha37), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha37 "alpha37 (includes alpha36): Better ad blocking. 1) A site now gets its own anti-ad fixes BEFORE the page's own scripts run, so 'turn off your ad blocker' walls, countdown timers, pop-up openers and ad scripts are stopped at the start instead of after the page has already shown them. These are the fixes the blocking lists have for each site. Settings > Fix ad and anti-adblock scripts switches points 1 to 3 off. 2) When an ad file is blocked, the page gets a harmless empty stand-in of the same kind where the lists say so (an empty script, a 1x1 picture, a silent clip, an ad library that answers 'no ad available'), so a video player that waits for its ad code starts the video instead of hanging. 3) For some video players and news feeds the ad part of the data they download is cut out before the page reads it (the way the lists handle YouTube-style players), links on link-shortener pages point at the real target, and the common 'ad blocker detected' scripts are told there is no blocker. 4) Blocking rules for whole families of sites (one name with any ending, like yts.*) now work, and the lists' Quick fixes list is added (it refreshes daily with the others). 5) Menu > Diagnostics > Blocker line now says how many pages ran fixes, how many of them before the page's own scripts, and how many blocked files got a stand-in. Not tried on the real tablet or on real sites yet, only on a test page on the emulator: if a site breaks, switch Shields off for that site or turn the Settings switch off."
-NEVER ship kestrel-g-v0.3.0-alpha37 twice (check BUILDLOG.md and the Releases first).
+WAIT for the run (background loop: git ls-remote --tags origin until kestrel-g-v0.3.0-alpha37 appears, then mcp__github__actions_get get_workflow_run 43613953896 until completed/success; get_job_logs answers 404 until the job ends), then mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha37 (APK asset present), then bash tools/record-release.sh kestrel-g-v0.3.0-alpha37 with the SAME note as in the ship output / CHECKPOINT (the alpha37 note text starting 'alpha37 (includes alpha36): Better ad blocking.'), then bash tools/claim.sh AW1h --done and AW1i --done with the run id, then answer the owner in plain words and list the open items; NEVER ship alpha37 twice; heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN is disabled
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M geckoapp/src/main/assets/kestrel-shields/manifest.json
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  551bd7e ckpt 2179: gated kestrel-g-v0.3.0-alpha37 (gecko code 138) and pushed it: handoff self-t
   ec2ea4b ckpt 2178: pre-ship: alpha37 (includes alpha36): Better ad blocking. 1) A site now gets 
   4bd8519 ckpt 2177: AW1d DONE (network $domain=site.* entity domains in Kotlin + engine.js, diffe
   7e29314 ckpt 2165: AW1e BUILT and EMULATOR-PROVEN (Gecko 160 lab): trusted-replace-fetch-respons
@@ -27,5 +26,4 @@ NEVER ship kestrel-g-v0.3.0-alpha37 twice (check BUILDLOG.md and the Releases fi
   3529f3d ckpt 2127: AW1b+ early scriptlet delivery BUILT: lab proved the late race (calls ran 100
   26045f2 ckpt 2103: AW1b step 2 DONE: scriptlets-main.js (our own library, 28 scriptlets) + web-t
   476faa3 ckpt 2095: AW1b step 1 DONE (core): ScriptletRules (uBO argument syntax, 23 canonical na
-  d580e95 ckpt 2088: AW1a done: blocker mapped and the plan written to research/ADBLOCK_ENGINE.md 
 ```
