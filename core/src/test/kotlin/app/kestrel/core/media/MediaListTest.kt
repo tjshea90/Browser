@@ -166,6 +166,27 @@ class MediaListTest {
         assertEquals(listOf("https://c.test/master.m3u8"), l.usable().map { it.url })
     }
 
+    @Test fun whatTheElementSaidBeforeTheFileWasSeenIsKeptForIt() {            // the page reports on loadedmetadata, the extension on the response: either can come first (seen on the emulator)
+        val l = MediaList()
+        assertFalse(l.applyInfo("https://c.test/hero.mp4", 1280, 720, 90_000, "HD", VideoRole.DECOR))   // nothing to apply it to yet
+        assertFalse(l.applyInfo("https://c.test/film.mp4", 1280, 720, 5_400_000, null, VideoRole.PLAYER))
+        l.add(file("https://c.test/hero.mp4", 6_000_000)); l.add(file("https://c.test/film.mp4", 900_000_000))
+        assertEquals(1, l.usableCount())
+        assertEquals(VideoRole.DECOR, l.find("https://c.test/hero.mp4")!!.role); assertEquals("HD", l.find("https://c.test/hero.mp4")!!.label)
+        assertTrue(l.find("https://c.test/film.mp4")!!.touched); assertEquals(720, l.find("https://c.test/film.mp4")!!.height)
+    }
+
+    @Test fun keptInfoIsBoundedAndForgottenWithTheList() {
+        val l = MediaList()
+        for (i in 0 until 100) l.applyInfo("https://c.test/x$i.mp4", 0, 0, 1000, null, VideoRole.DECOR)
+        l.add(file("https://c.test/x0.mp4", 6_000_000)); l.add(file("https://c.test/x99.mp4", 6_000_000))
+        assertEquals(null, l.find("https://c.test/x0.mp4")!!.role)                  // the oldest were dropped: at most a few dozen are kept
+        assertEquals(VideoRole.DECOR, l.find("https://c.test/x99.mp4")!!.role)
+        l.applyInfo("https://c.test/y.mp4", 0, 0, 1000, null, VideoRole.DECOR); l.clear()
+        l.add(file("https://c.test/y.mp4", 6_000_000))
+        assertEquals(null, l.find("https://c.test/y.mp4")!!.role)                   // a new page: what was said about the old page's files is gone
+    }
+
     @Test fun aFullListEvictsDecoysBeforeAnythingElse() {
         val l = MediaList(max = 4)
         played(l, file("https://c.test/film.mp4", 80_000_000), VideoRole.PLAYER, durMs = 3_600_000)

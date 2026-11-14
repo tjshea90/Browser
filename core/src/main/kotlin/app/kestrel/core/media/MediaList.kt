@@ -64,12 +64,15 @@ class MediaCandidate(
 /** What a tab has seen, newest first. The same URL is one entry however many Range requests the player made. */
 class MediaList(private val max: Int = 48) {
     private val items = ArrayList<MediaCandidate>()
+    /** What a page's element said about a file the sniffer has not reported yet (the element reports on loadedmetadata, the extension on the response: either can come first). Bounded; applied when the file is added. */
+    private class Said(val width: Int, val height: Int, val durationMs: Long, val label: String?, val role: VideoRole?)
+    private val pending = LinkedHashMap<String, Said>()
 
     val size: Int get() = items.size
     fun isEmpty(): Boolean = items.isEmpty()
     /** The candidate for exactly this address (the #fragment aside), or null. */
     fun find(url: String): MediaCandidate? = MediaCandidate.keyOf(url).let { k -> items.firstOrNull { it.key == k } }
-    fun clear() { items.clear(); version++ }
+    fun clear() { items.clear(); pending.clear(); version++ }
     /** The addresses of everything in the list (for forgetting what was learned about them). */
     fun keys(): List<String> = items.map { it.key }
 
@@ -115,6 +118,7 @@ class MediaList(private val max: Int = 48) {
             return changed
         }
         items.add(0, c)
+        pending.remove(c.key)?.let { applyTo(c, it.width, it.height, it.durationMs, it.label, it.role) }
         while (items.size > max) removeLeastValuable()
         version++
         return true
@@ -152,7 +156,19 @@ class MediaList(private val max: Int = 48) {
 
     /** What the page's own `<video>` / `<source>` told us about a URL (picture size, length in time, the label it shows). */
     fun applyInfo(url: String, width: Int, height: Int, durationMs: Long, label: String?, role: VideoRole? = null): Boolean {
-        val c = items.firstOrNull { it.key == MediaCandidate.keyOf(url) } ?: return false
+        val key = MediaCandidate.keyOf(url)
+        val c = items.firstOrNull { it.key == key }
+        if (c == null) { // the file has not been reported yet: what the element said waits for it
+            pending[key] = Said(width, height, durationMs, label, role)
+            while (pending.size > PENDING_MAX) pending.remove(pending.keys.first())
+            return false
+        }
+        val changed = applyTo(c, width, height, durationMs, label, role)
+        if (changed) version++
+        return changed
+    }
+
+    private fun applyTo(c: MediaCandidate, width: Int, height: Int, durationMs: Long, label: String?, role: VideoRole?): Boolean {
         var changed = false
         if (width > 0 && c.width != width) { c.width = width; changed = true }
         if (height > 0 && c.height != height) { c.height = height; changed = true }
@@ -162,7 +178,6 @@ class MediaList(private val max: Int = 48) {
         if (role != null && c.role != role) { c.role = role; changed = true }
         if (role == null || role == VideoRole.PLAYER) { if (!c.touched) { c.touched = true; changed = true } }
         else if (!c.interest && c.touched) { c.touched = false; changed = true }
-        if (changed) version++
         return changed
     }
 
@@ -194,6 +209,7 @@ class MediaList(private val max: Int = 48) {
     companion object {
         const val MIN_FILE = 100L * 1024
         const val MIN_WITH_STREAM = 4L * 1024 * 1024
+        private const val PENDING_MAX = 32
     }
 }
 
