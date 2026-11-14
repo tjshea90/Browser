@@ -148,7 +148,7 @@ function markStats() { // lazy timer: nothing is scheduled while no request is b
 function reportStats(force) {
   if (!force && !statsDirty) return;
   statsDirty = false;
-  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, w: (guardState + ', ' + guardBlocked + ' blocked | ' + slState + (slPages ? ', ' + slPages + ' pages ran ' + slCalls + ' calls' + (slBad ? ' (' + slBad + ' failed)' : '') : '') + ' | ' + stats.last).slice(0, 400) }).catch(function () {});
+  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, w: (guardState + ', ' + guardBlocked + ' blocked | ' + slState + (slPages ? ', ' + slPages + ' pages ran ' + slCalls + ' calls' + (slBad ? ' (' + slBad + ' failed)' : '') + ', ' + slEarlyPages + ' before the page\'s first script' : '') + (slEarlySet ? ', ' + slEarlySet + ' sites set up early (' + slReg.size + ' kept, ' + slEarlyAsks + ' asks)' : '') + (slEarlyFail ? ', early error: ' + slEarlyFail : '') + ' | ' + stats.last).slice(0, 400) }).catch(function () {});
 }
 
 // ---------------------------------------------------------------- the page report (Diagnostics > Page report)
@@ -484,7 +484,7 @@ function decide(d, page, host, mode) {
   return legacy(d, page);
 }
 
-browser.webRequest.onBeforeRequest.addListener(function (d) {
+function onRequest(d) {
   if (d.type === 'sub_frame') frameNavigates(d);
   if (d.type === 'main_frame') {
     navId.set(d.tabId, Number(d.requestId) || 0); frameParent.delete(d.tabId); mediaFrames.delete(d.tabId);
@@ -493,7 +493,8 @@ browser.webRequest.onBeforeRequest.addListener(function (d) {
     newLog(d.tabId, d.url); reportLater(d.tabId); // the page report starts here (4 s after the last news it goes to the app)
     var h = pageHost(d.url);
     if (h) { cfgMode.delete(h); cfgAt.delete(h); cssCache.delete('t|' + h); askCfg(h); } // a Shields switch may have changed: ask again. Not awaited - the answer beats the document's first bytes over a hotspot
-    return {};
+    var sw = h ? slBefore(h) : null; // AW1b+: the site's scriptlet calls are registered before its document starts (a site that already has them waits for the app's answer, see slBefore)
+    return sw ? sw.then(function () { return {}; }) : {};
   }
   var page = topPage(d);
   if (!page) return {};
@@ -506,6 +507,10 @@ browser.webRequest.onBeforeRequest.addListener(function (d) {
   if (mode === undefined) return askCfg(host).then(function (m) { return decide(d, page, host, m); }); // asked once per page, before its first sub-resource is judged
   if (Date.now() - cfgAt.get(host) > CFG_TTL) askCfg(host); // refresh in the background; this request still uses the answer we have
   return decide(d, page, host, mode);
+}
+browser.webRequest.onBeforeRequest.addListener(function (d) {
+  var r = onRequest(d);
+  return d.type === 'sub_frame' ? slFrame(d, r) : r; // AW1b+: a frame's own site gets its scriptlet calls registered before the frame's document starts
 }, { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] }, ['blocking']);
 
 // ---------------------------------------------------------------- element hiding: still asked of the app, once per frame, answered from a cache for repeat visits
@@ -517,7 +522,7 @@ browser.webRequest.onBeforeRequest.addListener(function (d) {
 var cssCache = new Map(), cssWait = new Map();
 var CSS_TTL = 60000, CSS_MAX = 200;
 var cssGen = 0; // the app's list generation as of the last page configuration (0 = not loaded yet)
-function noteGeneration(g) { g = g > 0 ? g : 0; if (g !== cssGen) { cssGen = g; cssCache.clear(); } }
+function noteGeneration(g) { g = g > 0 ? g : 0; if (g !== cssGen) { cssGen = g; cssCache.clear(); slReset(); } }
 browser.runtime.onMessage.addListener(function (m) {
   if (!m || m.k !== 'css' || !m.h) return undefined;
   var key = (m.top ? 't|' : 'f|') + m.h; // the top document and an iframe of the same host get different CSS
