@@ -1,7 +1,7 @@
 # The glide-typing word list: sources, licence, how it is made (AT1)
 
 The mini keyboard's glide typing (owner message 34) needs a list of words with how common each one is, and which words follow which. It ships as ONE binary file,
-`geckoapp/src/main/assets/glide/en.klx` (about 2.7 MB; only the Kestrel / GeckoView build has the mini keyboard, so only its APK carries the file).
+`geckoapp/src/main/assets/glide/en.klx` (about 2.7 MB; only the Kestrel / GeckoView build has the mini keyboard, so only its APK carries the file). The licence text travels with it as `assets/glide/LICENSE.txt` (in the APK from alpha35; alpha34's APK carries the file but the notice is only in this repository).
 
 ## What is in it
 
