@@ -36,7 +36,7 @@
     var neg = false;
     if (s.length > 1 && s.charAt(0) === '!') { neg = true; s = s.slice(1); }
     if (s === '') return { all: true, neg: neg };
-    var m = /^\/(.+)\/([a-z]*)$/.exec(s), re;
+    var m = /^\/(.+)\/([gimsuy]*)$/.exec(s), re;
     try {
       if (m) re = new nRegExp(m[1], (m[2] || '').replace(/[gy]/g, ''));
       else re = new nRegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), (flags || '').replace(/[gy]/g, ''));
@@ -51,7 +51,7 @@
   // like pattern() but the regular expression keeps its g flag (replace-all): for replace-node-text
   function replacer(s) {
     s = (s === undefined || s === null) ? '' : String(s);
-    var m = /^\/(.+)\/([a-z]*)$/.exec(s);
+    var m = /^\/(.+)\/([gimsuy]*)$/.exec(s);
     try {
       if (m) { var f = (m[2] || '').replace(/[gy]/g, ''); return new nRegExp(m[1], f.indexOf('g') < 0 ? f + 'g' : f); }
       return new nRegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
@@ -190,7 +190,7 @@
   }
 
   // ---- timers: no-setTimeout-if / no-setInterval-if turn a matching callback into nothing; adjust-setTimeout / adjust-setInterval run it sooner (countdowns)
-  var timerRules = { setTimeout: [], setInterval: [] }, timerWrapped = {};
+  var timerRules = { setTimeout: [], setInterval: [], requestAnimationFrame: [] }, timerWrapped = {};
   function delayOk(spec, d) {
     if (spec === undefined || spec === null || spec === '' || spec === '*') return true;
     var s = String(spec), neg = s.charAt(0) === '!';
@@ -315,30 +315,42 @@
     if (fetchWrapped || typeof nFetch !== 'function') return;
     fetchWrapped = true;
     window.fetch = function (input, init) {
-      var vals = null, prune = null;
+      var vals = null, edits = null;
       try {
         vals = fetchValues(input, init);
         for (var i = 0; i < fetchRules.length; i++) {
           var r = fetchRules[i];
           if (!allHit(r.n, vals)) continue;
-          if (!r.prune) return Promise.resolve(emptyResponse(vals.url));
-          prune = r.prune; break;
+          if (!r.prune && !r.re) return Promise.resolve(emptyResponse(vals.url));
+          (edits = edits || []).push(r);
         }
       } catch (e) { /* ignore */ }
       var p = nFetch.apply(this, arguments);
-      if (!prune) return p;
+      if (!edits) return p;
       return p.then(function (resp) {
         try {
           return resp.clone().text().then(function (t) {
-            var obj = null; try { obj = nParse(t); } catch (e) { return resp; }
-            if (!pruneObject(obj, prune.paths, prune.needles)) return resp;
-            var nr = new nResponse(nStringify(obj), { status: resp.status, statusText: resp.statusText, headers: resp.headers });
+            var out = editText(t, edits);
+            if (out === null) return resp;
+            var nr = new nResponse(out, { status: resp.status, statusText: resp.statusText, headers: resp.headers });
             try { defProp(nr, 'url', { value: resp.url }); } catch (e) { /* ignore */ }
             return nr;
           }, function () { return resp; });
         } catch (e) { return resp; }
       });
     };
+  }
+  // the text of an answer through every rule that matched its request, in turn: a prune rule cuts JSON properties, a replace rule rewrites text. null = nothing changed.
+  function editText(t, rules) {
+    var cur = t, changed = false;
+    for (var i = 0; i < rules.length; i++) {
+      var r = rules[i];
+      try {
+        if (r.re) { var nt = cur.replace(r.re, r.rep); if (nt !== cur) { cur = nt; changed = true; } }
+        else if (r.prune) { var obj = nParse(cur); if (pruneObject(obj, r.prune.paths, r.prune.needles)) { cur = nStringify(obj); changed = true; } }
+      } catch (e) { /* this rule does not suit this text: the next one may */ }
+    }
+    return changed ? cur : null;
   }
   var xhrRules = [], xhrWrapped = false;
   function noXhr(needles) {
@@ -358,13 +370,14 @@
         if (info) {
           var vals = { url: info.url, method: info.method };
           if (body !== undefined && body !== null && typeof body === 'string') vals.body = body;
+          var edits = null;
           for (var i = 0; i < xhrRules.length; i++) {
             var r = xhrRules[i];
             if (!allHit(r.n, vals)) continue;
-            if (!r.prune) { fakeXhr(this, info.url); return undefined; }
-            prunedXhr(this, r.prune);
-            break;
+            if (!r.prune && !r.re) { fakeXhr(this, info.url); return undefined; }
+            (edits = edits || []).push(r);
           }
+          if (edits) editedXhr(this, edits);
         }
       } catch (e) { /* ignore */ }
       return xhrSend.apply(this, arguments);
@@ -381,7 +394,7 @@
       for (var i = 0; i < names.length; i++) { try { x.dispatchEvent(new Event(names[i])); } catch (e) { /* ignore */ } }
     }, 1);
   }
-  function prunedXhr(x, prune) { // the answer is cut when it is read, whatever the order of the page's own handlers
+  function editedXhr(x, rules) { // the answer is edited when it is read, whatever the order of the page's own handlers
     var cache = null, done = false;
     function build() {
       if (done) return;
@@ -389,14 +402,16 @@
       try {
         var rt = x.responseType || '', raw = rt === 'json' ? x.response : (rt === '' || rt === 'text' ? x.responseText : null);
         if (raw === null || raw === undefined) return;
-        var obj = typeof raw === 'string' ? nParse(raw) : raw;
-        if (pruneObject(obj, prune.paths, prune.needles)) cache = { obj: obj, text: typeof raw === 'string' ? nStringify(obj) : null };
+        var out = editText(typeof raw === 'string' ? raw : nStringify(raw), rules);
+        if (out === null) return;
+        cache = { text: out, obj: null };
+        if (rt === 'json') { try { cache.obj = nParse(out); } catch (e) { cache = null; } } // an edit that breaks the JSON leaves the answer as it was
       } catch (e) { /* ignore */ }
     }
     var protoDesc = (function () { var p = XHR.prototype; return { r: getDesc(p, 'response'), t: getDesc(p, 'responseText') }; })();
     try {
-      defProp(x, 'response', { configurable: true, get: function () { if (x.readyState === 4) build(); var v = protoDesc.r.get.call(x); return (cache && x.responseType === 'json') ? cache.obj : (cache && cache.text !== null && (x.responseType === '' || x.responseType === 'text') ? cache.text : v); } });
-      defProp(x, 'responseText', { configurable: true, get: function () { if (x.readyState === 4) build(); var v = protoDesc.t.get.call(x); return (cache && cache.text !== null) ? cache.text : v; } });
+      defProp(x, 'response', { configurable: true, get: function () { if (x.readyState === 4) build(); var v = protoDesc.r.get.call(x); return (cache && x.responseType === 'json') ? cache.obj : (cache && (x.responseType === '' || x.responseType === 'text') ? cache.text : v); } });
+      defProp(x, 'responseText', { configurable: true, get: function () { if (x.readyState === 4) build(); var v = protoDesc.t.get.call(x); return cache ? cache.text : v; } });
     } catch (e) { /* ignore */ }
   }
 
@@ -634,6 +649,97 @@
     } catch (e) { /* storage may be off (a sandboxed frame) */ }
   }
 
+
+  // ---- trusted-replace-fetch-response / trusted-replace-xhr-response: the TEXT of the answer to a matching request is rewritten (a pattern replaced everywhere, `$1` ... work in the replacement).
+  // How current lists cut the ad fields out of a video player's data, or a feed's sponsored entries. The third argument says which requests (an address needle or `prop:value` pairs, as no-fetch-if).
+  function replaceFetch(pat, rep, props) {
+    var re = replacer(pat);
+    if (!re) return;
+    fetchRules.push({ n: parseNeedles(props), prune: null, re: re, rep: rep === undefined ? '' : String(rep) });
+    wrapFetch();
+  }
+  function replaceXhr(pat, rep, props) {
+    var re = replacer(pat);
+    if (!re) return;
+    xhrRules.push({ n: parseNeedles(props), prune: null, re: re, rep: rep === undefined ? '' : String(rep) });
+    wrapXhr();
+  }
+
+  // ---- nobab (also the "fab" family): BlockAdBlock / FuckAdBlock answer "no ad blocker" to everything that asks. The names are accessors the page can write to but not replace.
+  function noBab() {
+    function Bab() {
+      var t = this;
+      t.d = []; t.n = []; t.ok = false;
+      nSetTimeout(function () { t.check(); }, 0);
+    }
+    Bab.prototype.onDetected = function (f) { if (typeof f === 'function') this.d.push(f); return this; };
+    Bab.prototype.onNotDetected = function (f) {
+      if (typeof f !== 'function') return this;
+      if (this.ok) nSetTimeout(f, 0); else this.n.push(f);
+      return this;
+    };
+    Bab.prototype.on = function (detected, f) { return detected ? this.onDetected(f) : this.onNotDetected(f); };
+    Bab.prototype.check = function () {
+      var t = this, list = t.n;
+      t.ok = true; t.n = [];
+      nSetTimeout(function () { for (var i = 0; i < list.length; i++) { try { list[i](); } catch (e) { /* ignore */ } } }, 0);
+      return true;
+    };
+    Bab.prototype.emitEvent = function () { return this.check(); };
+    Bab.prototype.clearEvent = function () { this.d = []; this.n = []; };
+    Bab.prototype.setOption = function () { return this; };
+    var inst = new Bab();
+    function fixed(name, value) {
+      try { defProp(window, name, { configurable: true, get: function () { return value; }, set: noop }); } catch (e) { /* ignore */ }
+    }
+    fixed('BlockAdBlock', Bab); fixed('FuckAdBlock', Bab); fixed('SniffAdBlock', Bab);
+    fixed('blockAdBlock', inst); fixed('fuckAdBlock', inst); fixed('sniffAdBlock', inst);
+  }
+
+  // ---- popads-dummy: the globals a pop-under network's script looks for exist and are empty
+  function popadsDummy() {
+    var names = ['PopAds', 'popns'];
+    for (var i = 0; i < names.length; i++) {
+      try { delete window[names[i]]; } catch (e) { /* ignore */ }
+      (function (n) { try { defProp(window, n, { configurable: true, get: function () { return {}; }, set: noop }); } catch (e) { /* ignore */ } })(names[i]);
+    }
+  }
+
+  // ---- href-sanitizer: a link that goes through a redirector (`?url=<target>`) points at the target itself. source: `text` (the link text), `?name` / `&name` (a query parameter), optional `-base64` / `-uri`
+  function hrefSanitizer(selector, source) {
+    var spec = String(source === undefined || source === '' ? 'text' : source).trim().split(/\s+/), src = spec[0] || 'text';
+    var b64 = spec.indexOf('-base64') >= 0, uri = spec.indexOf('-uri') >= 0;
+    var nURL = window.URL;
+    function target(a) {
+      var v = '';
+      try {
+        if (src === 'text') v = String(a.textContent || '').trim();
+        else if (src.charAt(0) === '?' || src.charAt(0) === '&') v = new nURL(a.href, location.href).searchParams.get(src.slice(1)) || '';
+        else return null;
+        if (b64) v = window.atob(v.replace(/-/g, '+').replace(/_/g, '/'));
+        if (uri) v = decodeURIComponent(v);
+        var u = new nURL(v, location.href);
+        return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : null; // only ever an ordinary web address
+      } catch (e) { return null; }
+    }
+    function run() {
+      var list;
+      try { list = document.querySelectorAll(selector); } catch (e) { return; }
+      for (var i = 0; i < list.length && i < 400; i++) {
+        var a = list[i];
+        if (!a || a.tagName !== 'A') continue;
+        var t = target(a);
+        if (t && a.href !== t) { try { a.setAttribute('href', t); } catch (e) { /* ignore */ } }
+      }
+    }
+    var pending = false;
+    function soon() { if (pending) return; pending = true; nSetTimeout(function () { pending = false; run(); }, 50); }
+    ready(function () {
+      run();
+      try { new MutationObserver(soon).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] }); } catch (e) { /* ignore */ }
+    });
+  }
+
   // ---- the table of calls (canonical names, see ScriptletRules.kt)
   var LIB = {
     'set': setConstant, 'aopr': abortRead, 'aopw': abortWrite, 'acs': abortScript, 'aost': abortStack,
@@ -644,6 +750,9 @@
     'noeval': function () { noEval(''); }, 'noeval-if': noEval,
     'no-fetch-if': noFetch, 'no-xhr-if': noXhr,
     'json-prune': jsonPrune, 'json-prune-fetch-response': jsonPruneFetch, 'json-prune-xhr-response': jsonPruneXhr,
+    'trusted-replace-fetch-response': replaceFetch, 'trusted-replace-xhr-response': replaceXhr,
+    'nobab': noBab, 'popads-dummy': popadsDummy, 'href-sanitizer': hrefSanitizer,
+    'norafif': function (n, d) { noTimer('requestAnimationFrame', n, d); },
     'ra': removeAttr, 'rc': removeClass, 'rmnt': removeNodeText, 'rpnt': replaceNodeText,
     'nowebrtc': noWebrtc,
     'set-cookie': setCookie, 'trusted-set-cookie': trustedSetCookie, 'remove-cookie': removeCookie,
