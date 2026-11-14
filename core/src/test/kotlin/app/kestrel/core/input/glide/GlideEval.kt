@@ -110,7 +110,7 @@ object GlideEval {
             samples = a["samples"]?.toInt() ?: d.samples, endReach2 = a["endReach2"]?.toFloat() ?: d.endReach2, visitCap = a["visitCap"]?.toFloat() ?: d.visitCap,
             missLimit2 = a["missLimit2"]?.toFloat() ?: d.missLimit2, keep = a["keep"]?.toInt() ?: d.keep, quickEnds = a["quickEnds"]?.toFloat() ?: d.quickEnds,
             quickPrior = a["quickPrior"]?.toFloat() ?: d.quickPrior, shapeW = a["shapeW"]?.toFloat() ?: d.shapeW, endW = a["endW"]?.toFloat() ?: d.endW,
-            lmW = a["lmW"]?.toFloat() ?: d.lmW, bigramMix = a["bigramMix"]?.toFloat() ?: d.bigramMix, minLength = a["minLength"]?.toFloat() ?: d.minLength, slack = a["slack"]?.toInt() ?: d.slack,
+            lmW = a["lmW"]?.toFloat() ?: d.lmW, lmA = a["lmA"]?.toFloat() ?: d.lmA, lmMin = a["lmMin"]?.toFloat() ?: d.lmMin, lmMax = a["lmMax"]?.toFloat() ?: d.lmMax, bigramMix = a["bigramMix"]?.toFloat() ?: d.bigramMix, minLength = a["minLength"]?.toFloat() ?: d.minLength, slack = a["slack"]?.toInt() ?: d.slack,
         )
     }
 

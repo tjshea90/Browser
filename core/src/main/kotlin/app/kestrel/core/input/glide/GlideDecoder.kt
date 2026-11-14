@@ -48,6 +48,10 @@ class GlideParams(
     val endW: Float = 2.0f,
     /** The language: nats of word probability that are worth one unit of path cost. */
     val lmW: Float = 0.30f,
+    /** The language weight is not fixed: a clean glide (every candidate fits well) trusts the path, a sloppy one trusts the language. It is [lmA] times the best fit's cost per letter, kept between [lmMin] and [lmMax]; [lmA] 0 = always [lmW]. */
+    val lmA: Float = 0f,
+    val lmMin: Float = 0.15f,
+    val lmMax: Float = 1.2f,
     /** How much of the probability comes from the word before (when the pair is known). */
     val bigramMix: Float = 0.4f,
     /** A path shorter than this many pitches is a tap, not a glide. */
@@ -78,8 +82,9 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
     // the survivors of the quick pass (a small max-heap by quick score, kept as parallel arrays)
     private val heapScore = FloatArray(p.keep); private val heapLex = IntArray(p.keep); private val heapId = IntArray(p.keep); private var heapN = 0
 
-    /** Last decode's cost of the best candidate, for the diagnostics and the tests. */
+    /** How many words the last decode looked at closely, and the language weight it used (for the diagnostics and the tests). */
     var lastCandidates = 0; private set
+    var lastLm = 0f; private set
 
     /**
      * [xs]/[ys] are the first [count] touch points in view pixels. [prev] is the word before (lowercase letters) or null. Returns up to [max] words, best first; empty when the path is a tap or
@@ -115,12 +120,21 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
 
         // ---- careful pass, then the language
         val ids = prevIds(lexicons, prev)
+        val costs = FloatArray(heapN); val per = FloatArray(heapN)
+        var bestPer = Float.MAX_VALUE
+        for (h in 0 until heapN) {
+            val lex = lexicons[heapLex[h]]; val id = heapId[h]
+            costs[h] = careful(lex, id)
+            per[h] = costs[h] / distinctLetters(lex, id)
+            if (per[h] < bestPer) bestPer = per[h]
+        }
+        val lm = if (p.lmA > 0f) (p.lmA * bestPer).coerceIn(p.lmMin, p.lmMax) else p.lmW
+        lastLm = lm
         val out = ArrayList<GlideCandidate>(heapN)
         for (h in 0 until heapN) {
             val lex = lexicons[heapLex[h]]; val id = heapId[h]
-            val cost = careful(lex, id)
             val prior = prior(lex, id, ids[heapLex[h]])
-            out.add(GlideCandidate(lex.text(id), -cost + p.lmW * prior, cost, prior))
+            out.add(GlideCandidate(lex.text(id), -costs[h] + lm * prior, costs[h], prior))
         }
         out.sortByDescending { it.score }
         val seen = HashSet<String>()
@@ -174,6 +188,8 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
     /** The careful-pass cost of word [id] for the path decoded last (for the accuracy tests and the tuning). */
     internal fun debugCost(lex: GlideLexicon, id: Int): Float = careful(lex, id)
     internal fun debugPrior(lex: GlideLexicon, id: Int, prev: String?): Float = prior(lex, id, prevIds(listOf(lex), prev)[0])
+
+    private fun distinctLetters(lex: GlideLexicon, id: Int): Int { var m = 0; var p0 = -1; for (i in 0 until lex.length(id)) { val l = lex.letter(id, i); if (l != p0) { m++; p0 = l } }; return maxOf(m, 1) }
 
     private fun d2(dx: Float, dy: Float) = dx * dx + dy * dy
 
