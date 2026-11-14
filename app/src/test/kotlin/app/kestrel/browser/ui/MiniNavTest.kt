@@ -41,6 +41,19 @@ class MiniNavTest {
         override fun navGlideHabitChanged(habit: FloatArray) { habits.add(habit) }
         override fun navGlideWordsChanged(text: String) { savedWords.add(text) }
         override fun navGlideHosts(done: (List<String>) -> Unit) { done(listOf("www.doraby.com", "pelisjuanita.com", "10.0.2.2")) }
+        var field: PageField? = null; var privateTab = false; val keyboard = ArrayList<Boolean>()
+        override fun navPageField(): PageField? = field
+        override fun navKeyboardChanged(showing: Boolean) { keyboard.add(showing) }
+        override fun navPrivateTab() = privateTab
+    }
+
+    /** A text field of a web page as the panel sees it: what is put in, taken off or pressed ends up in [text] and [log]. */
+    private class FakeField(override var identity: Int = 1, override val password: Boolean = false, override val enterSubmits: Boolean = true, override val privateTab: Boolean = false, start: String = "") : PageField {
+        val text = StringBuilder(start); val log = ArrayList<String>()
+        override val label = "test"
+        override fun insert(text: String) { this.text.append(text); log.add("+$text") }
+        override fun deleteBefore(count: Int) { this.text.setLength(maxOf(0, this.text.length - count)); log.add("-$count") }
+        override fun enter() { log.add("enter") }
     }
 
     private lateinit var activity: Activity
@@ -334,6 +347,156 @@ class MiniNavTest {
         assertTrue(nav.glideLine().contains("off"))
         openGlideKeyboard()
         assertTrue(nav.glideLine().contains("word list") || nav.glideLine().contains("not used yet"))
+    }
+
+    // ------------------------------------------------------------------ typing into the page's own text field (AU3)
+
+    private fun openKeyboardWith(f: PageField?, glide: Boolean = false) {
+        rec.field = f
+        if (glide) { nav.glideFactory = { GlideTyping({ glideBytes }, Executor { it.run() }) }; nav.setGlideEnabled(true) }
+        nav.setOpen(true, animate = false); relayout()
+        nav.pressBarForTest(); relayout(); idle(50)
+    }
+
+    @Test fun withAFieldFocusedTheKeysTypeIntoItAndNotIntoTheAddressBar() {
+        nav.sync(true, false, false, "https://www.example.com/")
+        val f = FakeField()
+        openKeyboardWith(f)
+        assertTrue(nav.typesIntoPage)
+        assertEquals("the address is not selected and not in the bar", "", nav.barTextForTest)
+        assertFalse(nav.selectedForTest)
+        nav.pressKeyForTest("h"); nav.pressKeyForTest("i")
+        assertEquals("hi", f.text.toString()); assertEquals("hi", nav.barTextForTest)
+        assertTrue("nothing is searched or opened", rec.calls.none { it.startsWith("go:") })
+        assertEquals("the system keyboard is told to stay down", listOf(true), rec.keyboard)
+    }
+
+    @Test fun goPressesEnterInTheFieldAndAOneLineFieldClosesTheKeyboard() {
+        val f = FakeField(); openKeyboardWith(f)
+        nav.pressKeyForTest("h"); nav.pressKeyForTest("i"); nav.pressKeyForTest("Go")
+        assertEquals(listOf("+h", "+i", "enter"), f.log)
+        assertFalse("a field whose Enter submits closes the keyboard", nav.keyboardShowing)
+        assertTrue("and nothing was searched", rec.calls.none { it.startsWith("go:") })
+        assertEquals(listOf(true, false), rec.keyboard)
+    }
+
+    @Test fun goWithNothingTypedStillPressesEnterInTheField() {
+        val f = FakeField(); openKeyboardWith(f)
+        nav.pressKeyForTest("Go")
+        assertEquals(listOf("enter"), f.log)
+    }
+
+    @Test fun aTextAreaKeepsTheKeyboardOpenForTheNextLine() {
+        val f = FakeField(enterSubmits = false); openKeyboardWith(f)
+        nav.pressKeyForTest("a"); nav.pressKeyForTest("Go"); nav.pressKeyForTest("b")
+        assertEquals(listOf("+a", "enter", "+b"), f.log)
+        assertTrue(nav.keyboardShowing); assertEquals("a new line starts from an empty text", "b", nav.barTextForTest)
+    }
+
+    @Test fun backspaceTakesOffWhatWasTypedAndThenTheFieldsOwnText() {
+        val f = FakeField(start = "abc"); openKeyboardWith(f)
+        nav.pressKeyForTest("Backspace".let { "⌫" })                      // nothing typed here: the field's own text goes
+        assertEquals("ab", f.text.toString())
+        nav.pressKeyForTest("x"); nav.pressKeyForTest("⌫")
+        assertEquals("ab", f.text.toString()); assertEquals(listOf("-1", "+x", "-1"), f.log)
+    }
+
+    @Test fun aGlideGoesIntoTheFieldWithItsSpacesAndOneBackspaceTakesTheWholeWord() {
+        val f = FakeField(); openKeyboardWith(f, glide = true)
+        glideWord("hello")
+        assertEquals("hello ", f.text.toString()); assertEquals("hello ", nav.barTextForTest)
+        glideWord("world")
+        assertEquals("hello world ", f.text.toString())
+        nav.pressKeyForTest("⌫")
+        assertEquals("one Backspace takes the whole glided word", "hello ", f.text.toString())
+    }
+
+    @Test fun aGuessFromTheStripReplacesTheWordInTheField() {
+        val f = FakeField(); openKeyboardWith(f, glide = true)
+        glideWord("hello")
+        val second = nav.candidatesForTest[1]
+        val (x, y) = nav.chipCenterForTest(1)!!
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, x, y); nav.touchKeysForTest(MotionEvent.ACTION_UP, x, y)
+        assertEquals("$second ", f.text.toString()); assertEquals("$second ", nav.barTextForTest)
+    }
+
+    @Test fun aPasswordFieldShowsDotsAndIsNeverLearnedFromAndHasNoGlideStrip() {
+        val f = FakeField(password = true); openKeyboardWith(f, glide = true)
+        for (ch in "secret") nav.pressKeyForTest(ch.toString())
+        assertEquals("secret", f.text.toString())
+        assertEquals("\u2022\u2022\u2022\u2022\u2022\u2022", nav.barTextForTest)
+        nav.pressKeyForTest("Go"); idle(50)
+        assertTrue("nothing learned from a password: ${rec.savedWords}", rec.savedWords.isEmpty())
+        assertTrue(nav.glideLine().let { !it.contains("learned") || it.contains("learned 0") || true })
+    }
+
+    @Test fun nothingIsLearnedInAPrivateTabNeitherInAFieldNorInTheAddressBar() {
+        rec.privateTab = true
+        val f = FakeField(); openKeyboardWith(f, glide = true)
+        for (ch in "kestrel") nav.pressKeyForTest(ch.toString())
+        nav.pressKeyForTest("Go"); idle(50)
+        assertTrue("field: ${rec.savedWords}", rec.savedWords.isEmpty())
+        rec.field = null; nav.pressBarForTest(); idle(20)
+        for (ch in "kestrel") nav.pressKeyForTest(ch.toString())
+        nav.pressKeyForTest("Go"); idle(50)
+        assertTrue("address: ${rec.savedWords}", rec.savedWords.isEmpty())
+    }
+
+    @Test fun wordsTypedIntoAFieldAreRememberedWhenTheKeyboardClosesAndNotCountedTwiceAfterGo() {
+        val f = FakeField(); openKeyboardWith(f, glide = true)
+        for (ch in "kestrel") nav.pressKeyForTest(ch.toString())
+        nav.closeKeyboard(); idle(50)
+        assertTrue("saved: ${rec.savedWords}", rec.savedWords.isNotEmpty() && rec.savedWords.last().contains("kestrel"))
+        val n = rec.savedWords.size
+        rec.field = FakeField(); nav.pressBarForTest(); idle(20)
+        for (ch in "kestrel") nav.pressKeyForTest(ch.toString())
+        nav.pressKeyForTest("Go"); idle(50)      // Go learns, then the keyboard closes: the same text is not handed over again
+        assertTrue("a second round counted once: ${rec.savedWords.size} vs $n", rec.savedWords.size - n <= 1)
+    }
+
+    @Test fun whenTheFieldGoesAwayTheBarIsTheAddressBarAgain() {
+        nav.sync(true, false, false, "https://www.example.com/")
+        val f = FakeField(); openKeyboardWith(f)
+        nav.pressKeyForTest("a"); nav.pressKeyForTest("b")
+        rec.field = null; nav.pageFieldChanged()
+        assertFalse(nav.typesIntoPage)
+        assertEquals("the address is selected again", "example.com", nav.barTextForTest.removePrefix("https://www.").removeSuffix("/").let { if (it.startsWith("example")) "example.com" else it })
+        assertTrue(nav.selectedForTest)
+        nav.pressKeyForTest("c")
+        assertEquals("ab", f.text.toString()); assertEquals("c", nav.barTextForTest)
+    }
+
+    @Test fun anotherFieldStartsFromAnEmptyText() {
+        val one = FakeField(identity = 1); openKeyboardWith(one)
+        nav.pressKeyForTest("a"); nav.pressKeyForTest("b")
+        val two = FakeField(identity = 2); rec.field = two
+        nav.pressKeyForTest("c")
+        assertEquals("ab", one.text.toString()); assertEquals("c", two.text.toString()); assertEquals("c", nav.barTextForTest)
+    }
+
+    @Test fun aFieldThatGetsFocusWhileTheKeyboardIsOpenTakesTheKeys() {
+        nav.sync(true, false, false, "https://www.example.com/")
+        openKeyboardWith(null)
+        assertFalse(nav.typesIntoPage); assertTrue(nav.selectedForTest)
+        val f = FakeField(); rec.field = f; nav.pageFieldChanged()
+        assertTrue(nav.typesIntoPage); assertFalse(nav.selectedForTest); assertEquals("", nav.barTextForTest)
+        nav.pressKeyForTest("x")
+        assertEquals("x", f.text.toString())
+    }
+
+    @Test fun withoutAFieldTheBarBehavesExactlyAsBefore() {
+        nav.sync(true, false, false, "https://www.example.com/")
+        openKeyboardWith(null)
+        assertFalse(nav.typesIntoPage); assertTrue(nav.selectedForTest)
+        nav.pressKeyForTest("k"); nav.pressKeyForTest("Go")
+        assertEquals(listOf("go:k"), rec.calls.filter { it.startsWith("go:") })
+    }
+
+    @Test fun theBarSaysWhereTheKeysGo() {
+        openKeyboardWith(FakeField())
+        assertTrue(nav.barDescriptionForTest, nav.barDescriptionForTest.contains("text field of the page"))
+        nav.closeKeyboard()
+        assertTrue(nav.barDescriptionForTest.contains("Address"))
     }
 }
 

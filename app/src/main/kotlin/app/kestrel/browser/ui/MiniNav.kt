@@ -461,6 +461,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     }
     internal val barTextForTest: String get() = bar.shownText()
     internal val typesIntoPageForTest: Boolean get() = typesIntoPage
+    internal val barDescriptionForTest: String get() = bar.contentDescription.toString()
     internal val selectedForTest: Boolean get() = keyboardShowing && model.allSelected
     internal val panelShownForTest: Boolean get() = panel.visibility == VISIBLE
     internal val panelOffsetForTest: Float get() = panel.translationY
