@@ -17,6 +17,16 @@ The page plays the tricks real sites play and writes one line per check into its
   opener    window.open from a timer (an ad tab)                                                     -> answered by nowoif
   entity    set, entityOk, true  for  adlab.*  (an entity rule: any suffix)
   banner    an element the list hides                                                                -> .ad-box
+ AW1c: blocked files that are answered with a harmless stand-in instead of a bare cancel (rules `$redirect=` in adlab-rules.txt; every one of these files is REAL on the control page and its request
+ shows up in the log as "REAL /r/...": on the adlab page none of those lines may appear, the request is answered inside the browser)
+  rscript   <script src=/r/tag.js>       redirect=noopjs               -> onload fires, the real file (window.__realTag) never ran
+  rplain    <script src=/r/plain.js>     blocked, no stand-in          -> onerror
+  rima      <script src=/r/ima.js>       redirect=google-ima.js        -> google.ima is there, an ad request answers adError 1009
+  rimage    new Image().src=/r/pixel.gif redirect=1x1.gif              -> loads 1x1
+  rxhr      XMLHttpRequest /r/data.json  redirect=noopjson             -> status 200, '{}'
+  rfetch    fetch /r/data.json?f=1       redirect=noopjson             -> '{}'
+  rmedia    <video src=/r/clip.mp4>      redirect=noopmp4-1s           -> loadedmetadata (the control page's file is a 404)
+  rframe    <iframe src=/r/frame.html>   redirect=noopframe            -> load fires, the frame is empty
 """
 import http.server, sys, urllib.parse, time, json
 
@@ -68,6 +78,17 @@ PAGE = r"""<!doctype html>
    }, 1500);
    fetch('/player.json').then(function (r) { return r.json(); }).then(function (j) { say('player', 'adPlacements=' + (j.adPlacements ? j.adPlacements.length : 0) + ' adSlots=' + (j.adSlots ? j.adSlots.length : 0) + ' video=' + j.video); }, function (e) { say('player', 'failed ' + e); });
    fetch('http://ads.adlab.test:__PORT__/beacon').then(function (r) { return r.text(); }).then(function (t) { say('beacon', 'answered ' + t.length + ' chars'); }, function (e) { say('beacon', 'did not leave (blocked)'); });
+   // AW1c: stand-ins
+   var s1 = document.createElement('script'); s1.onload = function () { say('rscript', 'load fired' + (window.__realTag ? ', the REAL file ran' : ', the real file did not run')); }; s1.onerror = function () { say('rscript', 'error (blocked, no stand-in)'); }; s1.src = '/r/tag.js'; document.head.appendChild(s1);
+   var s2 = document.createElement('script'); s2.onload = function () { say('rplain', 'load fired (not blocked)'); }; s2.onerror = function () { say('rplain', 'error (blocked)'); }; s2.src = '/r/plain.js'; document.head.appendChild(s2);
+   var s3 = document.createElement('script');
+   s3.onload = function () { try { var l = new google.ima.AdsLoader(new google.ima.AdDisplayContainer(document.body, document.createElement('video'))); l.addEventListener('adError', function (e) { say('rima', 'adError ' + e.getError().getErrorCode()); }); l.requestAds(new google.ima.AdsRequest()); } catch (e) { say('rima', 'script loaded, no google.ima (' + (window.__realIma ? 'the REAL file ran' : 'nothing ran') + ')'); } };
+   s3.onerror = function () { say('rima', 'error (blocked, no stand-in)'); }; s3.src = '/r/ima.js'; document.head.appendChild(s3);
+   var im = new Image(); im.onload = function () { say('rimage', 'loaded ' + im.naturalWidth + 'x' + im.naturalHeight); }; im.onerror = function () { say('rimage', 'error (blocked, no stand-in)'); }; im.src = '/r/pixel.gif';
+   var x = new XMLHttpRequest(); x.open('GET', '/r/data.json'); x.onload = function () { say('rxhr', 'status ' + x.status + ' text ' + x.responseText); }; x.onerror = function () { say('rxhr', 'error (blocked, no stand-in)'); }; x.send();
+   fetch('/r/data.json?f=1').then(function (r) { return r.text(); }).then(function (t) { say('rfetch', 'text ' + t); }, function (e) { say('rfetch', 'error ' + e); });
+   var v = document.createElement('video'); v.muted = true; v.onloadedmetadata = function () { say('rmedia', 'metadata, duration ' + v.duration); }; v.onerror = function () { say('rmedia', 'error (blocked or 404)'); }; v.src = '/r/clip.mp4'; document.body.appendChild(v);
+   var fr = document.createElement('iframe'); fr.onload = function () { var d = ''; try { d = ', body text "' + fr.contentDocument.body.textContent + '"'; } catch (e) { d = ', not readable'; } say('rframe', 'load fired' + d); }; fr.src = '/r/frame.html'; document.body.appendChild(fr);
    setTimeout(function () { var w = window.open('/popup', '_blank'); say('opener', w ? ('window.open returned ' + (w.closed === false ? 'a stand-in' : 'a window')) : 'window.open returned null'); }, 2200);
  });
 </script></body></html>
@@ -102,6 +123,15 @@ class H(http.server.BaseHTTPRequestHandler):
         if u.path == "/popup":
             self._write("POPUP opened host=%s" % host)
             return self._send(200, b"<!doctype html><title>popup</title><h1>an ad window opened</h1>")
+        if u.path.startswith("/r/"):
+            self._write("REAL %s host=%s (this request reached the server: nothing answered it inside the browser)" % (u.path, host))
+            if u.path == "/r/tag.js": return self._send(200, b"window.__realTag = 1;", "text/javascript")
+            if u.path == "/r/plain.js": return self._send(200, b"window.__realPlain = 1;", "text/javascript")
+            if u.path == "/r/ima.js": return self._send(200, b"window.__realIma = 1;", "text/javascript")
+            if u.path == "/r/pixel.gif": return self._send(200, b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;", "image/gif")
+            if u.path == "/r/data.json": return self._send(200, b'{"real":true,"padding":"xxxxxxxxxxxxxxxx"}', "application/json")
+            if u.path == "/r/frame.html": return self._send(200, b"<!doctype html><title>real</title><body>REAL FRAME</body>")
+            return self._send(404)
         if u.path == "/log":
             self._write("check %s = %s (%s)" % (q.get("k", ["?"])[0], q.get("v", [""])[0], q.get("h", ["?"])[0]))
             return self._send(204)
