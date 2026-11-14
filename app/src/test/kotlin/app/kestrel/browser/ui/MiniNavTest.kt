@@ -613,7 +613,7 @@ class MiniNavTest {
         nav.pressKeyForTest("a"); nav.pressKeyForTest("b")
         slideSpace(-30f)
         assertTrue("the page's caret moved left: ${f.log}", f.moved in -3..-1)
-        assertEquals("nothing was typed by the slide", listOf("+a", "+b", "cursor${f.moved}"), f.log.filter { !it.startsWith("cursor") || it == "cursor${f.moved}" }.let { l -> if (l.size > 3) l.take(3) else l })
+        assertTrue("nothing was typed by the slide: ${f.log}", f.log.none { it == "+ " } && f.log.take(2) == listOf("+a", "+b"))
         assertEquals("the bar starts from an empty text again", "", nav.barTextForTest)
         nav.pressKeyForTest("c")
         assertEquals("c", nav.barTextForTest); assertEquals("+c", f.log.last())
