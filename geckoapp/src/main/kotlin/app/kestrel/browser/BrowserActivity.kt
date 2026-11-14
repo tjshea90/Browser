@@ -1018,8 +1018,9 @@ open class BrowserActivity : Activity(), DockListener {
         val url = st[i].uri ?: return
         val pic = BackPictures.get(t.id, url)
         val savedY = t.scrollByUrl.get(url)
-        val notKept = !t.isPrivateTab && backLab.notKept(url)
-        Health.log("tabs", "back-arm", "tab=${t.id} to=${UrlParts.hostOf(url)} picture=${pic != null} pictures=${BackPictures.size()} y=${savedY ?: -1} notKept=$notKept")
+        val why = if (t.isPrivateTab) "" else backLab.notKeptWhy(url)
+        val notKept = why.isNotEmpty()
+        Health.log("tabs", "back-arm", "tab=${t.id} to=${UrlParts.hostOf(url)} picture=${pic != null} pictures=${BackPictures.size()} y=${savedY ?: -1} notKept=${why.ifEmpty { "no" }}")
         // a second Back within two seconds: the engine's history index has not moved yet, so the page this one leads to is not known from here - show nothing rather than the wrong picture
         val now = SystemClock.uptimeMillis()
         val rapid = now < backBusyUntil
@@ -1055,10 +1056,10 @@ open class BrowserActivity : Activity(), DockListener {
     private val backLabClose = Runnable { backLab.finish(SystemClock.uptimeMillis()) }
 
     /** The back picture is up and the page painted: it goes once the page is at the place it was left at (1.5 s after the paint at the latest). */
-    private fun backPainted() {
+    private fun backPainted(why: String = "paint") {
         val c = backCover ?: return
         if (c.paintAt == 0L) c.paintAt = SystemClock.uptimeMillis()
-        backCheck("paint")
+        backCheck(why)
     }
 
     private fun backCheck(why: String) {
@@ -1077,8 +1078,13 @@ open class BrowserActivity : Activity(), DockListener {
         return if (y > 0) y.toString() else ""
     }
 
+    /** The engine committed [url] in the tab (UI thread): the first sighting of the target's address after a press is the lab's "address showed" time. */
+    internal fun backLocated(url: String) { if (backLab.openKey() == BackScrollRules.keyOf(url)) backLab.located(SystemClock.uptimeMillis()) }
+
     /** The content script of the page in front reported a Back / Forward show (UI thread). */
     private fun onBackShown(page: String, kept: Boolean, navType: String, transfer: Long, y: Int) {
+        // the engine's cache restored the page: it is up and at its exact place, and a picture put up for it (the guess "cannot have been kept" was wrong) goes at once. A kept page has no first paint to wait for
+        if (kept) backCover?.let { c -> if (BackScrollRules.keyOf(c.tab.url) == BackScrollRules.keyOf(page)) hideRestoring("back-kept") }
         if (backLab.openKey() != BackScrollRules.keyOf(page)) return
         backLab.pageshow(SystemClock.uptimeMillis(), page, kept, navType, transfer, y)
         Io.main.removeCallbacks(backLabClose); Io.main.postDelayed(backLabClose, BackLab.CLOSE_AFTER_MS)
@@ -2169,7 +2175,10 @@ open class BrowserActivity : Activity(), DockListener {
     internal fun pageFinished(tab: Tab, real: Boolean = true) {
         if (tab === current) StartTimeline.mark("stop")
         flushCounters()
-        if (real && tab === restoringTab) hideRestoring("page-stop") // the load ended (a page that never reported its first paint must not keep the preview up)
+        if (real && tab === restoringTab) {
+            // the load ended (a page that never reported its first paint must not keep the preview up). The back cover (RX3-BK2) counts the end of the load as the paint and then still waits for the place: it never goes at the end of the load alone
+            if (tab === backCover?.tab) backPainted("stop") else hideRestoring("page-stop")
+        }
         // A failed or blocked load is not a visit (typos and malware URLs would otherwise fill history and the top sites).
         if (!tab.isPrivateTab && tab.error == null && tab.url.startsWith("http")) { val u = withoutUserinfo(tab.url); val ti = tab.title; Io.exec { db?.recordVisit(u, ti) } }
         scheduleSave()

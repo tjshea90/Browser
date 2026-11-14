@@ -41,6 +41,10 @@ addEventListener('pageshow', function (e) {
   L('pageshow', PAGE + ' persisted=' + e.persisted + ' nav=' + nav + ' y=' + Math.round(window.scrollY));
   [500, 2000].forEach(function (ms) { setTimeout(function () { L('y+' + ms, PAGE + ' ' + Math.round(window.scrollY) + ' h=' + document.documentElement.scrollHeight); }, ms); });
 });
+// ?y=<place>: the page scrolls ITSELF there once, 300 ms after a normal visit (nav = navigate), later for a page that grows; never on a Back (nav = back_forward), so it cannot hide what Back does.
+// (`adb input swipe` does not scroll a software-rendered emulator reliably; a programmatic scroll leaves the same place in the engine's history entry.)
+var AUTO = parseInt((location.search.match(/[?&]y=(\d+)/) || [])[1] || '0', 10);
+if (AUTO && nav === 'navigate') setTimeout(function () { window.scrollTo(0, AUTO); L('autoscroll', PAGE + ' to ' + AUTO + ' now ' + Math.round(window.scrollY)); }, %(auto_delay)d);
 var st; addEventListener('scroll', function () { clearTimeout(st); st = setTimeout(function () { L('scrolled', PAGE + ' ' + Math.round(window.scrollY)); }, 350); }, { passive: true });
 addEventListener('pagehide', function (e) { L('pagehide', PAGE + ' persisted=' + e.persisted + ' y=' + Math.round(window.scrollY)); });
 %(extra_script)s
@@ -52,9 +56,9 @@ def block(i, nxt):
     return '<div class="blk" id="b%d"><a href="%s">block %d - tap to go on</a></div>' % (i, nxt, i)
 
 
-def tall(name, n=70, extra_body="", extra_script="", nxt="/back-next"):
+def tall(name, n=70, extra_body="", extra_script="", nxt="/back-next", auto_delay=300):
     blocks = "\n".join(block(i, "%s?from=%s" % (nxt, name)) for i in range(1, n + 1))
-    return (HEAD % dict(name=name, name_js=repr(name), blocks=blocks, extra_body=extra_body, extra_script=extra_script)).encode()
+    return (HEAD % dict(name=name, name_js=repr(name), blocks=blocks, extra_body=extra_body, extra_script=extra_script, auto_delay=auto_delay)).encode()
 
 
 DYNAMIC_SCRIPT = """
@@ -74,7 +78,7 @@ try { var ms = new MediaSource(); document.getElementById('v').src = URL.createO
 PAGES = {
     "/back-static": (lambda: tall("back-static"), "max-age=600"),
     "/back-nostore": (lambda: tall("back-nostore"), "no-store"),
-    "/back-dynamic": (lambda: tall("back-dynamic", n=8, extra_script=DYNAMIC_SCRIPT), "no-store"),
+    "/back-dynamic": (lambda: tall("back-dynamic", n=8, extra_script=DYNAMIC_SCRIPT, auto_delay=1300), "no-store"),
     "/back-loading": (lambda: tall("back-loading", extra_body='<img src="/slow?s=90" width="1" height="1" alt="">'), "max-age=600"),
     "/back-mse": (lambda: tall("back-mse", n=40, extra_body=MSE_BODY, extra_script=MSE_SCRIPT), "max-age=600"),
 }
