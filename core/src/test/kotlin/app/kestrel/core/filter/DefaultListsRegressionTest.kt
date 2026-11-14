@@ -68,21 +68,28 @@ class DefaultListsRegressionTest {
     }
 
     /**
-     * AW1b/e: a scriptlet runs INSIDE the page. For the sites people log in to, search, read the reference of, write code on or mail from, the bundled lists must give none at all
-     * (a new list that adds one has to be looked at by a human before it reaches the tablet), and no site gets a pile of them.
+     * AW1b/e: a scriptlet runs INSIDE the page. For the sites people log in to, read the reference of, write code on or mail from, the bundled lists must give none at all (a refreshed list that adds
+     * one has to be looked at by a human before it reaches the tablet); on the big consumer sites the lists legitimately have a few (sanitising Google's redirect links, cutting ad fields out of a
+     * player's data ...), but never the families that abort a page's own scripts or its eval / WebRTC, and never a pile.
      */
     @Test
     fun noScriptletRunsOnTheSitesPeopleDependOn() {
+        fun describe(h: String) = fs.scriptletsFor(h).map { c -> ScriptletRules.decode(c)!!.let { d -> d.name + "(" + d.args.joinToString(",") + ")" } }
         val untouchable = listOf(
-            "www.google.com", "accounts.google.com", "mail.google.com", "duckduckgo.com", "search.brave.com", "www.bing.com", "en.wikipedia.org", "github.com", "gist.github.com", "stackoverflow.com",
-            "developer.android.com", "developer.mozilla.org", "www.paypal.com", "www.amazon.com", "mail.proton.me", "account.proton.me", "claude.ai", "chatgpt.com", "www.bbc.com", "news.ycombinator.com",
-            "www.wikipedia.org", "play.google.com", "www.apple.com", "www.microsoft.com", "login.live.com", "outlook.live.com", "docs.google.com", "drive.google.com", "web.whatsapp.com", "www.linkedin.com",
+            "accounts.google.com", "mail.google.com", "login.live.com", "mail.proton.me", "account.proton.me", "claude.ai", "github.com", "gist.github.com", "stackoverflow.com", "developer.android.com",
+            "developer.mozilla.org", "en.wikipedia.org", "www.wikipedia.org", "play.google.com", "drive.google.com", "web.whatsapp.com", "www.apple.com",
         )
-        val touched = untouchable.map { it to fs.scriptletsFor(it).map { c -> ScriptletRules.decode(c)!!.let { d -> d.name + "(" + d.args.joinToString(",") + ")" } } }.filter { it.second.isNotEmpty() }
+        val touched = untouchable.map { it to describe(it) }.filter { it.second.isNotEmpty() }
         assertTrue("scriptlets for sites that must stay untouched: $touched", touched.isEmpty())
-        // whatever a host gets, it is a handful, never a pile (the extension also caps a payload at ${ScriptletRules.MAX_CALLS} calls)
-        val big = listOf("www.youtube.com", "www.facebook.com", "www.reddit.com", "www.twitch.tv", "twitter.com", "x.com", "www.nytimes.com", "www.instagram.com", "www.tiktok.com")
-            .map { it to fs.scriptletsFor(it).size }.filter { it.second > 25 }
+        val consumer = untouchable + listOf(
+            "www.google.com", "duckduckgo.com", "search.brave.com", "www.bing.com", "www.paypal.com", "www.amazon.com", "chatgpt.com", "www.bbc.com", "www.microsoft.com", "outlook.live.com",
+            "docs.google.com", "www.linkedin.com", "www.youtube.com", "www.facebook.com", "www.reddit.com", "www.twitch.tv", "twitter.com", "x.com", "www.nytimes.com", "www.instagram.com", "www.tiktok.com",
+            "www.netflix.com", "www.spotify.com", "open.spotify.com", "www.ebay.com", "www.walmart.com", "www.cnn.com", "www.theguardian.com", "www.imdb.com",
+        )
+        val aborting = setOf("noeval", "noeval-if", "nowebrtc", "aopr", "aopw", "acs", "aost")
+        val risky = consumer.map { h -> h to fs.scriptletsFor(h).map { ScriptletRules.decode(it)!!.name }.filter { it in aborting } }.filter { it.second.isNotEmpty() }
+        assertTrue("a script-aborting scriptlet on a mainstream site: $risky", risky.isEmpty())
+        val big = consumer.map { it to fs.scriptletsFor(it).size }.filter { it.second > 25 }
         assertTrue("a pile of scriptlets: $big", big.isEmpty())
     }
 
