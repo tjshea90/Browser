@@ -1094,3 +1094,8 @@ I don't much understand what you explained. Would this speed up and optimize the
 ```
 There isn't anything outside the box that might speed up the browser?
 ```
+
+## 2026-11-14T00:47:34Z
+```
+I don't charge my tablet overnight. Does it still do the overnight compile of the app
+```
