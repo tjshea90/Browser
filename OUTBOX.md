@@ -1536,3 +1536,7 @@
 >
 > My advice is to skip it unless running out of storage becomes a problem again. If you do want it, the next step is to have the other session test it on the simulated tablet first. Do you want to skip it, or have it tested there first?
 <!-- sha:971e8f5b0b20 -->
+
+## 2026-11-14T00:43:40Z
+> The earlier answer only covered what the engine itself can do. Before I list unconventional ideas, I'm checking the repo and the engine package, so I don't suggest something that already exists or can't work.
+<!-- sha:b31c3d72f7c8 -->
