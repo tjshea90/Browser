@@ -1434,3 +1434,7 @@
 ## 2026-11-13T23:57:58Z
 > The Home-restore fix and the two new features (blocked-page icon, top-right panel) are built and unit-tested. I'm now waiting on the emulator Home-restore check to finish, then I'll run the visual check of the icon and panel.
 <!-- sha:9417c957f59c -->
+
+## 2026-11-14T00:02:42Z
+> Waiting for the emulator run to reach the panel steps; I'll read its screenshots when it finishes.
+<!-- sha:76ba27628259 -->
