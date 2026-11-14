@@ -652,23 +652,30 @@
     'set-session-storage-item': function (k, v) { storageItem('sessionStorage', k, v, false); }
   };
 
-  var seen = {};
+  // Every CALL runs once per document, however often and however it is sent (the early script of the site, the hand-off from content.js after the CSS answer, a page that fires our event itself).
+  // A report goes out for the calls that are new: "<ran>:<threw>:<1 when no script of the page had been parsed yet>".
+  var seen = {}, total = 0;
   function run(json) {
     var calls;
     try { calls = nParse(String(json)); } catch (e) { return; }
     if (!calls || typeof calls.length !== 'number') return;
-    var ok = 0, bad = 0;
-    for (var i = 0; i < calls.length && i < 60; i++) {
+    var ok = 0, bad = 0, early = 0;
+    try { early = (document.readyState === 'loading' && document.scripts.length === 0) ? 1 : 0; } catch (e) { /* ignore */ }
+    for (var i = 0; i < calls.length && i < 60 && total < 300; i++) {
       var c = calls[i];
-      if (!c || typeof c.length !== 'number' || typeof c[0] !== 'string' || !hasOwn.call(LIB, c[0])) { bad++; continue; }
+      if (!c || typeof c.length !== 'number' || typeof c[0] !== 'string') { bad++; continue; }
+      var key = '';
+      for (var j = 0; j < c.length && j < 12; j++) key += String(c[j]) + '\u0006';
+      if (hasOwn.call(seen, key)) continue;
+      seen[key] = 1; total++;
+      if (!hasOwn.call(LIB, c[0])) { bad++; continue; }
       try { LIB[c[0]].apply(null, Array.prototype.slice.call(c, 1)); ok++; } catch (e) { bad++; }
     }
-    try { document.dispatchEvent(new CustomEvent(REPORT, { detail: ok + ':' + bad })); } catch (e) { /* ignore */ }
+    if (ok + bad > 0) { try { document.dispatchEvent(new CustomEvent(REPORT, { detail: ok + ':' + bad + ':' + early })); } catch (e) { /* ignore */ } }
   }
   document.addEventListener(EVENT, function (e) {
     var d = e && e.detail;
-    if (typeof d !== 'string' || d.length > 20000 || seen[d]) return;
-    seen[d] = 1; // the same calls are run once, however often they are sent
+    if (typeof d !== 'string' || d.length > 20000) return;
     run(d);
   }, true);
   try { document.dispatchEvent(new CustomEvent(READY)); } catch (e) { /* ignore */ }
