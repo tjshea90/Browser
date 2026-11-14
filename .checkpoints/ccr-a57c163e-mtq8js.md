@@ -1,23 +1,22 @@
-# CHECKPOINT 1953 — read me first, then TASKS.md
+# CHECKPOINT 1954 — read me first, then TASKS.md
 
-**Written:** 2026-11-14T03:04:01Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `e1dd191` (this checkpoint is the commit after it)
+**Written:** 2026-11-14T03:04:39Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `0a7c905` (this checkpoint is the commit after it)
 
 ## Just done
-gated kestrel-g-v0.3.0-alpha34 (gecko code 135) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
+alpha34 (gecko code 135) DISPATCHED: android.yml run 43549663530 (run #85, started 2026-11-14T03:04:10Z) on ccr-a57c163e-mtq8js, full_build=true. Local gates all green first (core, app incl. 23 MiniNavTest, 68 glide/keyboard tests, gecko compile, lint, web-tests 150/150).
 
 ## Do this next
-TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref ccr-a57c163e-mtq8js, inputs {"app":"gecko","full_build":"true","note":"alpha34 (includes alpha33): Glide typing on the mini keyboard (the small keyboard in the top right panel). Slide your finger over the letters of a word without lifting it, then lift: the word is typed with a space after it, a glowing trail follows your finger, and the two next-best guesses show above the keys (tap one to swap it in). One Backspace right after a glide removes the whole word. Tapping single letters works as before. The keyboard learns how your thumb lands beside the keys, the words you type that it did not know, and the names of the sites you visit (so a name like doraby can be glided). It uses a built-in list of 83,000 English words and how often words follow each other (free MIT-licensed data, about 1.4 MB packed). Settings > Appearance > Glide typing on the mini keyboard switches it off. Menu > Diagnostics has a new Glide typing line (how many glides, how often the first guess was kept, swapped or deleted, and speed): please paste it after you have used it. Tested with a simulated finger (a typical finger gets the right word first about 91 percent of the time and within the three guesses 97 percent) and with a real multi-point touch on the emulator; NOT yet tried on your tablet. English words only."}.
-When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha34), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha34 "alpha34 (includes alpha33): Glide typing on the mini keyboard (the small keyboard in the top right panel). Slide your finger over the letters of a word without lifting it, then lift: the word is typed with a space after it, a glowing trail follows your finger, and the two next-best guesses show above the keys (tap one to swap it in). One Backspace right after a glide removes the whole word. Tapping single letters works as before. The keyboard learns how your thumb lands beside the keys, the words you type that it did not know, and the names of the sites you visit (so a name like doraby can be glided). It uses a built-in list of 83,000 English words and how often words follow each other (free MIT-licensed data, about 1.4 MB packed). Settings > Appearance > Glide typing on the mini keyboard switches it off. Menu > Diagnostics has a new Glide typing line (how many glides, how often the first guess was kept, swapped or deleted, and speed): please paste it after you have used it. Tested with a simulated finger (a typical finger gets the right word first about 91 percent of the time and within the three guesses 97 percent) and with a real multi-point touch on the emulator; NOT yet tried on your tablet. English words only."
-NEVER ship kestrel-g-v0.3.0-alpha34 twice (check BUILDLOG.md and the Releases first).
+WAIT for run 43549663530 (about 8 min): git ls-remote --tags origin kestrel-g-v0.3.0-alpha34 shows the tag when the publish step runs; mcp__github__actions_list list_workflow_jobs 43549663530 filter all must show every job success (build-gecko incl. pref check + publish); mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha34 shows the APK; THEN bash tools/record-release.sh kestrel-g-v0.3.0-alpha34 "$(cat scratchpad/alpha34_note.txt)" (scratchpad = /tmp/claude-0/-home-user-Browser/30a5aa00-41c9-5bd3-87d1-b10052a52d84/scratchpad, file alpha34_note.txt; if lost: the note is in this commit message). NEVER dispatch alpha34 twice. Then: bash tools/claim.sh AT1 --done with evidence (emulator proof screenshots glide_d/e/f/g/trail, Diagnostics line, tests), answer the owner in plain words (glide feature, SIMULATED accuracy table, key-size finding, NOT run on the tablet, questions: Spanish list AT2, bigger keyboard option, paste the Glide typing Diagnostics line; re-list open items), ckpt. Heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN refreshed earlier.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M geckoapp/src/main/assets/kestrel-shields/manifest.json
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  0a7c905 ckpt 1953: gated kestrel-g-v0.3.0-alpha34 (gecko code 135) and pushed it: handoff self-t
   eedfd73 ckpt 1949: AT1h emulator proof DONE with a real multi-point finger (sendevent-style bina
   58ae170 ckpt 1945: AT1e-g DONE and green: glide typing in the mini keyboard (KeysView glide vs t
   54eae48 ckpt 1931: AT1e core half done and green (45 tests in core input): MiniKeyboardModel.com
@@ -27,8 +26,4 @@ NEVER ship kestrel-g-v0.3.0-alpha34 twice (check BUILDLOG.md and the Releases fi
   307f5cf ckpt 1883: alpha33 SHIPPED AND RECORDED: run 43536066565 green (all jobs success, pref c
   79e5865 ckpt 1877: alpha33 (gecko code 134) DISPATCHED: android.yml run 43536066565 (run #84, st
   f11808c ckpt 1876: gated kestrel-g-v0.3.0-alpha33 (gecko code 134) and pushed it: handoff self-t
-  cc028b28 ckpt 1875: AO1 ticked in TASKS (emulator Diagnostics screen shows the CPU by process, S
 ```
-
-(3 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
