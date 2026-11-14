@@ -420,6 +420,23 @@ class EngineTest {
         assertArrayEquals(data, h.sink(v).bytes)
     }
 
+    @Test(timeout = 60_000) fun anOutageThatHitsEveryConnectionOfAParallelDownloadWaitsInsteadOfFailing() {   // RX3-D1: the hotspot loses its upstream for a minute; 2-3 connections used to end in FAILED
+        val data = testBytes(10 * MiB, 27)
+        val s = FakeServer(data).also { it.chunkDelayMs = 2; it.probeWindow = 1L shl 20 }
+        val c = Config(maxActive = 2, parallel = true, maxConnsPerDownload = 3, maxConnsTotal = 6, windowBytes = 1L shl 20, minGrowRemaining = 1L shl 20, minGrowEtaSec = 0,
+            rampMs = 0, evalMs = 25, growGain = 0.0, checkpointMs = 40, checkpointBytes = 1L shl 20, stallMs = 60_000, backoffBaseMs = 1, backoffCapMs = 4, maxFails = 3,
+            outageBaseMs = 40, outageCapMs = 80, outageGiveUpMs = 60_000, refusedEvidenceMs = 200)
+        val h = H(s, c); val id = h.enqueue()
+        h.await(id, "two connections at work") { it != null && it.connections >= 2 && it.done > 2L * MiB }
+        s.down = true                                                                 // the upstream dies for every connection; the tablet still sees the hotspot (net.online stays true)
+        h.await(id, "waiting, not failed") { it?.state == DlState.WAITING_NETWORK }
+        Thread.sleep(250)
+        assertEquals("still waiting", DlState.WAITING_NETWORK, h.view(id)!!.state)
+        s.down = false
+        val v = h.completed(id)
+        assertArrayEquals(data, h.sink(v).bytes)
+    }
+
     @Test(timeout = 60_000) fun theIdleTimeBetweenWindowsIsMeasuredForDiagnostics() {
         val data = testBytes(6 * MiB, 3)
         val s = FakeServer(data).also { it.probeWindow = 1L shl 20 } // windowed replies, like Firefox's fetcher: the engine asks again after each window
