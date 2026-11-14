@@ -66,6 +66,60 @@ object GlideHabitEval {
         return out
     }
 
+
+    class HabitCurve(val blocks: List<Double>, val favouriteBlocks: List<Double>, val shapes: Int, val shapeWords: Int, val flips: Int, val glides: Int)
+
+    /**
+     * A long stretch of use by a person whose hand has a habit for every word it writes ([habitDp] dp of fixed shift per letter, on top of the finger's scatter): 70 % of what they write comes from
+     * their own phrases, the rest from everyday words. What the keyboard learns is switched on step by step: [words] the word / pair / correction memory of alpha36-38, [shapes] the new glide
+     * shapes. First guess right, in [blocks] equal stretches.
+     */
+    fun habitCurve(lex: BinaryLexicon, keys: GlideKeys, noise: SimNoise, glides: Int, blocks: Int, words: Boolean, shapes: Boolean, habitDp: Float, seed: Long, habitPercent: Int = 70, favourites: Int = 150): HabitCurve {
+        val rnd = Random(seed * 31 + 7)
+        val hand = Hand(keys, noise, seed, habitDp)
+        val dec = GlideDecoder(keys, if (shapes) GlideParams() else GlideParams(patGain = 0f))
+        val model = if (words || shapes) PersonalModel() else null
+        dec.personal = model
+        val ranked = (0 until lex.size).filter { distinctLetters(lex.text(it)) >= 3 }.sortedByDescending { lex.logProb(it) }.drop(1500).take(13500)
+        val fav = List(favourites) { lex.text(ranked[rnd.nextInt(ranked.size)]) }.distinct()
+        val phrases = List(40) { val n = 2 + rnd.nextInt(2); List(n) { fav[rnd.nextInt(fav.size)] } }
+        val base = GlideEval.frequencyPick(lex, 4000, Random(seed * 13), 3).map { lex.text(it.id) }
+        val lexicons = listOf<GlideLexicon>(lex)
+        val hits = IntArray(blocks); val seen = IntArray(blocks); val favHits = IntArray(blocks); val favSeen = IntArray(blocks)
+        var done = 0; var flips = 0
+        while (done < glides) {
+            val q: List<String> = if (rnd.nextInt(100) < habitPercent) phrases[rnd.nextInt(phrases.size)] else List(1 + rnd.nextInt(3)) { base[rnd.nextInt(base.size)] }
+            var prev: String? = null; var prev2: String? = null
+            for (w in q) {
+                if (done >= glides) break
+                val path = hand.path(w) ?: continue
+                val c = dec.decode(path.xs, path.ys, path.xs.size, lexicons, prev, 3, prev2)
+                if (dec.lastPatternFlipped) flips++
+                val b = (done * blocks / glides).coerceAtMost(blocks - 1)
+                val key = keyOf(w)
+                val first = c.isNotEmpty() && keyOf(c[0].text) == key
+                val inThree = c.any { keyOf(it.text) == key }
+                seen[b]++; if (first) hits[b]++
+                if (w in fav) { favSeen[b]++; if (first) favHits[b]++ }
+                val print = dec.lastPrint
+                if (words) {
+                    model!!.add(prev, w, if (first) 1f else if (inThree) 3f else 1f, prev2)
+                    if (!first && inThree && c.isNotEmpty()) model.addConfusion(c[0].text, w)
+                }
+                if (shapes && model != null && print != null) {
+                    if (first) { model.patterns.add(w, print, 1f); model.patterns.contradict(w, print, 0.7f) }
+                    else if (inThree) { model.patterns.add(w, print, 3f); model.patterns.contradict(w, print, 2f) }
+                    else { // deleted, typed letter by letter: the shape is kept when the word could have been drawn like that
+                        val ideal = Fingerprint.ofWord(w, keys)
+                        if (ideal != null && Fingerprint.distance(ideal, print) <= GlideTyping.FIT_D) { model.patterns.add(w, print, 3f); model.patterns.contradict(w, print, 2f) }
+                    }
+                }
+                prev2 = prev; prev = w; done++
+            }
+        }
+        return HabitCurve(List(blocks) { 100.0 * hits[it] / seen[it].coerceAtLeast(1) }, List(blocks) { 100.0 * favHits[it] / favSeen[it].coerceAtLeast(1) }, model?.patterns?.patternCount ?: 0, model?.patterns?.wordCount ?: 0, flips, glides)
+    }
+
     @JvmStatic fun main(args: Array<String>) {
         val a = GlideEval.parse(args.filter { it.contains('=') }.toTypedArray())
         val lex = GlideEval.loadLexicon()
@@ -85,6 +139,17 @@ object GlideHabitEval {
                     for ((i, o) in r.withIndex()) { if (o.firstRight) right[i]++ else wrongNames.merge(o.first, 1, Int::plus) }
                 }
                 println("  shapes %s: ".format(if (on) "ON " else "off") + right.joinToString(" ") { "%3d".format(100 * it / trials) } + "   wrong first guesses: " + wrongNames.entries.sortedByDescending { it.value }.take(5).joinToString { "${it.key} ${it.value}" })
+            }
+            return
+        }
+        if (args.contains("curve")) {
+            val g = a["glides"]?.toInt() ?: 3000; val nb = a["blocks"]?.toInt() ?: 6
+            for (hd in (a["habit"] ?: "0,10,16").split(',').map { it.toFloat() }) {
+                println("%s, every word has its own fixed hand habit of %.0f dp per letter; %d glides in %d stretches; first guess right, %% (own favourite words in brackets):".format(noise.name, hd, g, nb))
+                for ((label, w, sh) in listOf(Triple("nothing learned          ", false, false), Triple("words/pairs/corrections ", true, false), Triple("+ glide shapes          ", true, true))) {
+                    val c = habitCurve(lex, keys, noise, g, nb, w, sh, hd, a["seed"]?.toLong() ?: 3L)
+                    println("   $label " + c.blocks.joinToString(" ") { "%.1f".format(it) } + "  (" + c.favouriteBlocks.joinToString(" ") { "%.0f".format(it) } + ")" + if (sh) "   shapes kept ${c.shapes} for ${c.shapeWords} words, changed the first guess ${c.flips} times" else "")
+                }
             }
             return
         }
