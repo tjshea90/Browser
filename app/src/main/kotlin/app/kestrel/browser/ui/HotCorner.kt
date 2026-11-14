@@ -9,7 +9,8 @@ import android.view.MotionEvent
  *
  * It only WATCHES: the activity shows it every touch event before the page gets it, and the page gets them all (a tap on a link, a scroll or a pinch that starts in the corner works as it always did).
  * Only when a finger has stayed down inside the square, nearly still, for [LONG_PRESS_MS] does it act: the host is told, the host tells the page its touch is over (so the page's own long press menu
- * never starts: ours is shorter than the engine's), and the rest of that touch is kept away from the page.
+ * never starts: ours is shorter than the engine's), and the rest of that touch is kept away from the page. The time is the touch's OWN clock as well as a timer: when the UI thread is busy and the
+ * events reach us late (all at once), the timestamps of the move or the lift still say the finger was down long enough (found on the emulator: a late long press was taken for a tap and followed the link under it).
  *
  * The square is the host's to place ([Host.zone]): the panel sits right below it, so the same square is "above the open panel" and closes it again.
  */
@@ -46,9 +47,13 @@ class HotCorner(private val handler: Handler, private val slopPx: Float, private
             MotionEvent.ACTION_POINTER_DOWN -> disarm() // a second finger: a pinch, not a long press
             MotionEvent.ACTION_MOVE -> {
                 lastX = ev.x; lastY = ev.y
-                if (armed && (Math.abs(ev.x - downX) > slopPx || Math.abs(ev.y - downY) > slopPx)) disarm() // it moved: a scroll or a drag
+                if (armed) {
+                    if (Math.abs(ev.x - downX) > slopPx || Math.abs(ev.y - downY) > slopPx) disarm() // it moved: a scroll or a drag
+                    else if (ev.eventTime - downTime >= longPressMs) fire.run()                        // the events were held up (a busy UI thread): the finger HAS been down long enough
+                }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (armed && ev.actionMasked == MotionEvent.ACTION_UP && ev.eventTime - downTime >= longPressMs) { lastX = ev.x; lastY = ev.y; fire.run() } // same: the lift says how long the finger was down
                 disarm()
                 val was = swallow
                 swallow = false

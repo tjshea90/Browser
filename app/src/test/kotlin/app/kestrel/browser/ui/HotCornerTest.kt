@@ -54,6 +54,31 @@ class HotCornerTest {
         assertFalse(up(100f, 400f))
     }
 
+    private fun evAt(action: Int, x: Float, y: Float, eventTime: Long): MotionEvent = MotionEvent.obtain(t, eventTime, action, x, y, 0)
+
+    @Test fun aLongPressWhoseEventsReachUsLateStillFiresFromTheTimestampOfTheLift() {
+        // a busy UI thread: the whole touch arrives at once, nothing has idled, but the lift says the finger was down for 500 ms
+        assertFalse(corner.observe(evAt(MotionEvent.ACTION_DOWN, 540f, 30f, t)))
+        assertTrue("the lift (500 ms after the touch-down) is the long press and is ours", corner.observe(evAt(MotionEvent.ACTION_UP, 540f, 30f, t + 500)))
+        assertEquals(1, host.fired.size)
+        assertFalse("the next touch is the page's", down(100f, 400f))
+    }
+
+    @Test fun aLongPressWhoseMovesReachUsLateFiresFromTheTimestampOfTheMove() {
+        corner.observe(evAt(MotionEvent.ACTION_DOWN, 540f, 30f, t))
+        assertFalse("an early move: nothing yet", corner.observe(evAt(MotionEvent.ACTION_MOVE, 541f, 30f, t + 100)))
+        assertTrue("a move 450 ms in fires and is ours", corner.observe(evAt(MotionEvent.ACTION_MOVE, 541f, 31f, t + 450)))
+        assertEquals(1, host.fired.size)
+        assertTrue(corner.observe(evAt(MotionEvent.ACTION_UP, 541f, 31f, t + 600)))
+        assertEquals("once", 1, host.fired.size)
+    }
+
+    @Test fun aLateLiftOfAShortTouchIsStillATap() {
+        corner.observe(evAt(MotionEvent.ACTION_DOWN, 540f, 30f, t))
+        assertFalse("a lift 120 ms after the touch-down", corner.observe(evAt(MotionEvent.ACTION_UP, 540f, 30f, t + 120)))
+        assertTrue(host.fired.isEmpty())
+    }
+
     @Test fun aTapNeverFiresAndEveryEventGoesToThePage() {
         assertFalse(down(540f, 30f)); idle(120); assertFalse(up(540f, 30f)); idle(2000)
         assertTrue(host.fired.isEmpty())
