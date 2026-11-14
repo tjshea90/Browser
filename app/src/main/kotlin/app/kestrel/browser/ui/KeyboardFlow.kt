@@ -35,6 +35,7 @@ class KeyboardFlow(private val a: Activity, private val host: Host) {
         Io.exec {
             // the keyboard's own thread answers with the text; the file is written on the IO thread, not on the one that decodes glides
             host.exportText { text ->
+                if (text.isBlank()) { Io.ui { host.say("The keyboard is not ready yet. Try again in a moment.") }; return@exportText }
                 Io.exec {
                     val message = try {
                         val name = save(text)
