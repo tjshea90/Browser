@@ -51,6 +51,8 @@ class ShieldsBridge(
     private val pageScrolled: (String, Int) -> Unit = { _, _ -> },
     /** A long press landed on OPEN space of the page (no link, picture, video, field or text under the finger; AY2): the page's address. Worker thread. */
     private val openSpace: (String) -> Unit = {},
+    /** RX3-Y2: the YouTube ad skipper reports numbers (ads seen, skipped, ...) and the page of its tab: the whole message (a, s, c, o, d, f, g, r, p). Worker thread. */
+    private val adSkips: (JSONObject) -> Unit = {},
     /** RX3-BK2: a page the engine loaded again for Back / Forward asks where the owner left it (the page's address). The answer is the place in CSS pixels as text, or "" when nothing is armed for that page. Worker thread: reads only immutable values. */
     private val backPlace: (String) -> String = { "" },
     /** RX3-BK1: a Back / Forward show: the page's address, kept by the engine's cache, the navigation type, the bytes its file cost (0 = from cache), the place at the show. Worker thread. */
@@ -105,6 +107,7 @@ class ShieldsBridge(
                     "scroll" -> { pageScrolled(m.optString("p"), m.optInt("y")); "" }
                     "warm" -> { warmLink(m.optString("o"), m.optString("p"), m.optString("w")); "" }
                     "os" -> { openSpace(m.optString("p")); "" }
+                    "yts" -> { adSkips(m); "" }
                     "bk" -> backPlace(m.optString("p"))
                     "bf" -> { backShown(m.optString("p"), m.optInt("ps") == 1, m.optString("nt"), m.optLong("ts"), m.optInt("y")); "" }
                     "ns" -> { noStore(m.optString("p")); "" }
@@ -192,8 +195,9 @@ class ShieldsBridge(
         if (host.isEmpty()) return "0:" + gen + "::0"
         val s = Shields.effective(prefs(), host)
         // flags for the page, a bit field: 1 = the pop-up and redirect guard applies (it follows the Shields master switch and its own setting), 2 = video and social embeds wait for a tap (EX-10),
-        // 4 = harmless stand-ins may answer blocked files (`$redirect=` rules, AW1c; follows Shields and the Settings switch "Fix ad and anti-adblock scripts", like the scriptlets)
-        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0)
+        // 4 = harmless stand-ins may answer blocked files (`$redirect=` rules, AW1c; follows Shields and the Settings switch "Fix ad and anti-adblock scripts", like the scriptlets),
+        // 8 = the ad skipper may run in video players (RX3-Y2; follows Shields and the Settings switch "Skip ads inside video players")
+        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0)
         val on = s.shieldsUp && s.blockAds && snap?.fs?.isPageAllowed(host) != true
         return (if (on) "1:" else "0:") + gen + ":" + (if (snap != null) contentId(snap) else "") + ":" + guard
     }

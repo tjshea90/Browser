@@ -382,7 +382,7 @@ open class BrowserActivity : Activity(), DockListener {
                 GeckoEngine.runtime(this)
                 GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
                 GeckoEngine.warmUp(this)
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l -> video.info(p, u, w, h, d, l) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l -> video.info(p, u, w, h, d, l) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onAdSkips(m) } }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }))
                 Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
             }
         }
@@ -1044,6 +1044,14 @@ open class BrowserActivity : Activity(), DockListener {
         lastLeaveShotAt = now
         Health.log("tabs", "leave-shot", "tab=${tab.id} from=${UrlParts.hostOf(tab.url)}")
         captureThumb(tab, forBack = true)
+    }
+
+    // ---------------------------------------------------------------- RX3-Y2: the YouTube ad skipper's numbers (youtube.js reports differences; never an address; private tabs are dropped before)
+    private val adSkipStats = app.kestrel.core.media.AdSkipStats()
+    private fun onAdSkips(m: org.json.JSONObject) {
+        adSkipStats.add(m.optInt("a"), m.optInt("s"), m.optInt("c"), m.optInt("o"), m.optInt("d"), m.optInt("f"), m.optInt("g"), m.optString("r"))
+        Health.count("ytads.reports")
+        Health.log("ytads", "report", "ads=${m.optInt("a")} skipped=${m.optInt("s")} buttons=${m.optInt("c")} overlays=${m.optInt("o")} dialogs=${m.optInt("d")} jumps=${m.optInt("f")} gaveUp=${m.optInt("g")} ${m.optString("r")}".trim())
     }
 
     // ---------------------------------------------------------------- RX3-BK1 / RX3-BK2: Back keeps the place (research/REVIEW-EXTERNAL-3.md section 3, research/BACK_SCROLL.md)
@@ -1805,6 +1813,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.addAll(StartTimeline.lines())
         out.add("Last look (the saved picture of the page, EY-1): " + (if (prefs.lastLook) "on" else "off") + ", ${LastLook.count(applicationContext)} stored, shown at start ${Health.counter("look.start")}, shown after a revive ${Health.counter("look.revive")}, taken ${Health.counter("look.saved")}, hidden ${Health.counter("look.hide")}")
         out.add(backLab.stats.line())
+        out.add(adSkipStats.line() + if (prefs.skipVideoAds) "" else " (the Settings switch is off)")
         out.add(app.kestrel.browser.shield.ScriptletSummary.read(applicationContext).ifEmpty { "Scriptlets in the lists: no compile report yet (the bundled lists are used until the first update)" })
         Engine.peek()?.let { fs -> out.add("YouTube scriptlet calls loaded: www.youtube.com " + fs.scriptletsFor("www.youtube.com").size + ", m.youtube.com " + fs.scriptletsFor("m.youtube.com").size) }
         out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null }} of ${tabs.size} tabs (the memory budget keeps up to ${liveBudget()} ready, MemAvailable ${Health.memAvailableMb()} MB, setting ${listOf("automatic", "few", "many")[prefs.tabsKept]}); current ${current?.url?.take(60) ?: "-"}")
