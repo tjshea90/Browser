@@ -65,6 +65,11 @@ sealed class KeyResult {
  */
 class MiniKeyboardModel {
     var text = ""; private set
+    /**
+     * Where typing goes in [text] (AY3, owner message 39: "make the navigation panel keyboard space key able to move the text cursor if I press and hold it then move my finger left or right"): at the end
+     * until [moveCursor] puts it elsewhere. Typing, Backspace and glided words all work at the cursor.
+     */
+    var cursor = 0; private set
     var allSelected = false; private set
     var symbols = false; private set
     var shift = false; private set
@@ -79,6 +84,7 @@ class MiniKeyboardModel {
 
     fun open(current: String) {
         text = current.take(MAX_CHARS)
+        cursor = text.length
         allSelected = text.isNotEmpty()
         symbols = false
         shift = false; shiftLock = false
@@ -89,22 +95,35 @@ class MiniKeyboardModel {
     /** Shift was tapped twice quickly: caps lock on. */
     fun lockShift() { shiftLock = true; shift = true }
 
+    /** The text before the cursor and the text after it. */
+    private fun before() = text.substring(0, cursor)
+    private fun after() = text.substring(cursor)
+
     fun press(key: Key): KeyResult {
         when (key) {
             is Key.Ch -> {
                 val t = if (shift && key.text.length == 1) key.text.uppercase() else key.text
-                // right after a glide the word has a space after it: a full stop, a comma, a slash, ".com" ... closes the word instead of standing after the space ("doraby" ".com" = "doraby.com")
-                val glideSpace = !allSelected && glideTail?.endsWith(" ") == true && text.endsWith(" ") && key.text in CLOSES_WORD
-                text = if (allSelected) t else ((if (glideSpace) text.dropLast(1) else text) + t).take(MAX_CHARS)
+                if (allSelected) { text = t; cursor = t.length }
+                else {
+                    // right after a glide the word has a space after it: a full stop, a comma, a slash, ".com" ... closes the word instead of standing after the space ("doraby" ".com" = "doraby.com")
+                    val b = before()
+                    val glideSpace = glideTail?.endsWith(" ") == true && b.endsWith(" ") && key.text in CLOSES_WORD
+                    val head = if (glideSpace) b.dropLast(1) else b
+                    text = (head + t + after()).take(MAX_CHARS)
+                    cursor = (head.length + t.length).coerceAtMost(text.length)
+                }
                 allSelected = false
                 shift = shiftLock
                 glideTail = null
             }
             Key.Backspace -> {
                 val tail = glideTail
-                val whole = tail != null && !allSelected && text.endsWith(tail)
+                val b = before()
+                val whole = tail != null && !allSelected && b.endsWith(tail)
                 if (whole && glided.isNotEmpty()) glided.removeAt(glided.size - 1)
-                text = if (allSelected) "" else if (whole) text.removeSuffix(tail!!) else text.dropLast(1)
+                if (allSelected) { text = ""; cursor = 0 }
+                else if (whole) { val nb = b.removeSuffix(tail!!); text = nb + after(); cursor = nb.length }
+                else if (cursor > 0) { val nb = b.dropLast(1); text = nb + after(); cursor = nb.length }
                 allSelected = false
                 glideTail = null
             }
@@ -116,14 +135,35 @@ class MiniKeyboardModel {
         return KeyResult.None
     }
 
-    /** A glide ended on [word]: it goes in after what is there, with a space after it (and one before it when the text does not end in one); the first thing typed replaces a selected address. Shift makes it start with a capital. */
+    /**
+     * The cursor moves [delta] characters (negative = left; one step of the finger sliding over the space key is one character). A selected address is first collapsed to the end the finger went towards;
+     * the glide that was just typed stops being "the last thing" (Backspace takes one character from now on). True when something changed.
+     */
+    fun moveCursor(delta: Int): Boolean {
+        if (delta == 0) return false
+        if (allSelected) { allSelected = false; cursor = if (delta < 0) 0 else text.length; glideTail = null; return true }
+        var n = (cursor.toLong() + delta).coerceIn(0L, text.length.toLong()).toInt()
+        // never between the two halves of one character (an emoji is two chars)
+        if (n in 1 until text.length && Character.isHighSurrogate(text[n - 1]) && Character.isLowSurrogate(text[n])) n += if (delta < 0) -1 else 1
+        if (n == cursor) return false
+        cursor = n
+        glideTail = null
+        return true
+    }
+
+    /** The page's own text field took the caret somewhere else (the cursor was moved there): what was typed so far no longer sits before it, so the keyboard starts from an empty text again. */
+    fun restartText() { text = ""; cursor = 0; allSelected = false; glideTail = null; glided.clear() }
+
+    /** A glide ended on [word]: it goes in at the cursor, with a space after it (and one before it when the text does not end in one there); the first thing typed replaces a selected address. Shift makes it start with a capital. */
     fun commitGlide(word: String) {
         if (word.isEmpty()) return
         val w = if (shiftLock) word.uppercase() else if (shift) word.replaceFirstChar { it.uppercase() } else word
-        val base = if (allSelected) "" else text
+        val base = if (allSelected) "" else before()
+        val rest = if (allSelected) "" else after()
         val tail = (if (base.isNotEmpty() && !base.endsWith(' ')) " " else "") + w + " "
-        if (base.length + tail.length > MAX_CHARS) return
-        text = base + tail
+        if (base.length + tail.length + rest.length > MAX_CHARS) return
+        text = base + tail + rest
+        cursor = base.length + tail.length
         glideTail = tail
         glided.add(w.lowercase())
         allSelected = false
@@ -133,22 +173,25 @@ class MiniKeyboardModel {
     /** The candidate [word] from the strip replaces the word the last glide put in. False when the last thing was not a glide. */
     fun swapGlide(word: String): Boolean {
         val tail = glideTail ?: return false
-        if (!text.endsWith(tail)) { glideTail = null; return false }
+        val b = before()
+        if (!b.endsWith(tail)) { glideTail = null; return false }
         val lead = if (tail.startsWith(" ")) " " else ""
         val shown = tail.trim()
         val capital = shown.firstOrNull()?.isUpperCase() == true
         val w = if (shown.length > 1 && shown.all { it.isUpperCase() }) word.uppercase() else if (capital) word.replaceFirstChar { it.uppercase() } else word
         val newTail = lead + w + " "
-        text = text.removeSuffix(tail) + newTail
+        val nb = b.removeSuffix(tail) + newTail
+        text = nb + after()
+        cursor = nb.length
         glideTail = newTail
         if (glided.isNotEmpty()) glided[glided.size - 1] = w.lowercase()
         return true
     }
 
-    /** The word before the place a glide would go, lowercase, for the language (null when there is none or it is not a plain word: an address, a number). */
+    /** The word before the place a glide would go (the cursor), lowercase, for the language (null when there is none or it is not a plain word: an address, a number). */
     fun previousWord(): String? {
         if (allSelected) return null
-        val tok = text.trimEnd().substringAfterLast(' ')
+        val tok = before().trimEnd().substringAfterLast(' ')
         if (tok.isEmpty() || tok.length > 24 || !tok.all { it.isLetter() || it == '\'' }) return null
         return tok.lowercase()
     }
@@ -156,7 +199,7 @@ class MiniKeyboardModel {
     /** The two words before the place a glide would go, (second last, last), lowercase: the language's context. Both null when the last thing is not a plain word; the first null when only one word precedes. */
     fun previousTwo(): Pair<String?, String?> {
         if (allSelected) return null to null
-        val toks = text.trimEnd().split(' ')
+        val toks = before().trimEnd().split(' ')
         fun plain(t: String): String? = if (t.isNotEmpty() && t.length <= 24 && t.all { it.isLetter() || it == '\'' }) t.lowercase() else null
         val last = toks.lastOrNull()?.let { plain(it) } ?: return null to null
         val second = if (toks.size >= 2) plain(toks[toks.size - 2]) else null
