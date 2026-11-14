@@ -229,6 +229,23 @@ class ShieldsBridge(
         blockedOnTab(t)
     }
 
+    /**
+     * `sc` (AW1b+): "<list generation>:<json>" - the scriptlet calls of [host] for the extension to register BEFORE a document of that host loads, so they run ahead of the page's own scripts (the
+     * copy that rides in the CSS answer arrives after the page has started and stays as the fallback). The json is empty when the host has no calls, the Settings switch or the site's Shields are off,
+     * or the lists allow-list the page. Generation 0 = the lists are still loading: the extension remembers nothing about that answer.
+     */
+    private fun scriptletCalls(host: String): String {
+        val snap = Engine.snapshot()
+        val gen = snap?.generation ?: 0
+        val fs = snap?.fs
+        if (host.isEmpty() || fs == null) return "$gen:"
+        val p = prefs()
+        if (!p.shieldScripts) return "$gen:"
+        val s = Shields.effective(p, host)
+        if (!s.shieldsUp || !s.blockAds || fs.isPageAllowed(host)) return "$gen:"
+        return "$gen:" + fs.scriptletPayload(host)
+    }
+
     /** Element-hiding CSS for a frame of [host]. Only the top document gets the big generic set (up to 1,200 selectors); an iframe, usually an ad itself, gets the rules written for its own site. */
     private fun cosmeticCss(host: String, top: Boolean): String {
         if (host.isEmpty()) return ""
