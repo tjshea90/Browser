@@ -31,6 +31,8 @@ object FilterSources {
         ListSource("ubo-removeparam", UBO + "privacy-removeparam.txt", Category.PRIVACY),
         ListSource("ubo-badware", UBO + "badware.min.txt", Category.MALWARE),
         ListSource("ubo-unbreak", UBO + "unbreak.min.txt", Category.ADS),
+        // AW1e: "Quick fixes" - the sites' newest ad / anti-adblock changes (YouTube-style player data, news-site walls), refreshed by uBO every few hours; ~86 KB, a 304 when nothing changed
+        ListSource("ubo-quick-fixes", UBO + "quick-fixes.min.txt", Category.ADS),
         ListSource("easylist-cookies", "https://secure.fanboy.co.nz/fanboy-cookiemonster.txt", Category.ANNOYANCE),
     )
 }

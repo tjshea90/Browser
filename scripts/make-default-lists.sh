@@ -26,6 +26,7 @@ abp:privacy:$U/filters/privacy.txt \
 abp:privacy:$U/filters/privacy-removeparam.txt \
 abp:malware:$U/filters/badware.txt \
 abp:ads:$U/filters/unbreak.txt \
+abp:ads:$U/filters/quick-fixes.txt \
 abp:annoyance:$U/thirdparties/easylist/easylist-cookies.txt" 2>&1 | grep -v '^Picked up' | cut -c1-220 | tail -14
 
 cp "$R/build/lists/default.kfs" "$R/app/src/main/assets/filters/default.kfs"

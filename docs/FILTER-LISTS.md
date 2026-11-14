@@ -10,6 +10,7 @@ first page load even offline, and refreshes it itself (daily since alpha16, cond
 | EasyList – Cookie Notices | annoyance (mostly cosmetic) | easylist.to | same |
 | uBlock filters (main + included 2020-2026 + general) | ads | github.com/uBlockOrigin/uAssets | GPLv3 |
 | uBlock filters – Privacy (+ resource-abuse) | trackers | uAssets | GPLv3 |
+| uBlock filters – Quick fixes (`quick-fixes.txt`, AW1e) | ads: the newest site-specific ad and anti-adblock fixes, many of them scriptlets | uAssets | GPLv3 |
 | AdGuard/uBO – URL Tracking Protection (`privacy-removeparam.txt`) | `$removeparam` rules for top-level navigations (AA3-3b) | uAssets (forked from AdGuard's TrackParamFilter) | GPLv3 (<https://github.com/uBlockOrigin/uAssets/blob/master/LICENSE>) |
 | uBlock filters – Badware risks | malware / phishing (also blocks the page itself) | uAssets | GPLv3 |
 | uBlock filters – Unbreak | exceptions (`@@`, `$badfilter`) that keep sites working | uAssets | GPLv3 |
