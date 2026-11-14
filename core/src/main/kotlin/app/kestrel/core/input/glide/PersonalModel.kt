@@ -180,15 +180,22 @@ class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int 
         /** A word as CONTEXT for the next one: like [norm] but one letter is enough ("a", "i" come before many words). */
         fun ctx(word: String): String? {
             val w = word.lowercase()
-            if (w.length !in 1..24 || !w.all { it in 'a'..'z' || it == '\'' } || w.startsWith("'") || w.endsWith("'")) return null
+            if (w.length !in 1..24 || !w.all { it in 'a'..'z' || it == '\'' } || w.startsWith("'") || w.endsWith("'") || stretched(w)) return null
             return w
         }
 
-        /** A word as the model keeps it: lowercase letters (and the apostrophe of a contraction), 2 to 24 long; null when it is not a word. */
+        /** A word as the model keeps it: lowercase letters (and the apostrophe of a contraction), 2 to 24 long; null when it is not a word (or is typed noise such as "awwww"). */
         fun norm(word: String): String? {
             val w = word.lowercase()
-            if (w.length !in 2..24 || !w.all { it in 'a'..'z' || it == '\'' } || w.startsWith("'") || w.endsWith("'")) return null
+            if (w.length !in 2..24 || !w.all { it in 'a'..'z' || it == '\'' } || w.startsWith("'") || w.endsWith("'") || stretched(w)) return null
             return w
+        }
+
+        /** True when one letter stands three or more times in a row ("awwww", "sooooo", "hmmm"): typed noise or a stretched word, never learned (AV2: the keyboard must not fill with them). */
+        fun stretched(w: String): Boolean {
+            var run = 1
+            for (i in 1 until w.length) { if (w[i] == w[i - 1]) { run++; if (run >= 3) return true } else run = 1 }
+            return false
         }
 
         fun parse(text: String, capWords: Int = 4000, capPairs: Int = 8000): PersonalModel {
