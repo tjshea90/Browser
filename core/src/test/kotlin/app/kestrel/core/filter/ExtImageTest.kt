@@ -142,11 +142,6 @@ class ExtImageTest {
             if (rnd.nextInt(12) == 0) sb.append('#').append(pick(words))
             out.add(sb.toString() to 2)
         }
-        // AW1c: every stand-in case once more with all request types and pages
-        out.addAll(listOf(
-            "https://redir.example/a.js", "https://redir.example/pix/a.gif", "https://x.net/redir-path/lib.js", "https://x.net/redir-path/lib.js?v=2", "https://ro.example/a.js", "https://ro.example/a.gif", "https://ro2.example/a.js",
-            "https://impr.example/v.mp4", "https://excr.example/a.js", "https://excr.example/ok/a.js", "https://unk.example/a.js", "https://ruk.example/a.js", "https://dr.example/b/x.js", "https://dr.example/a.js", "https://ro3.example/p/x.gif",
-        ).map { it to 8 })
         // shapes that are not ordinary: non-network schemes, empty/odd hosts, hostile lengths
         out.addAll(listOf(
             "data:text/plain,hello", "blob:https://example.com/1", "about:blank", "file:///etc/hosts", "javascript:void(0)", "ftp://ads.example.com/x", "https://", "https:///x", "https://:80/x",
@@ -173,8 +168,18 @@ class ExtImageTest {
                 sb.append(u).append('\t').append(t).append('\t').append(page ?: "").append('\t').append(fs.check(u, page, t, psl)).append('\n')
             }
         }
+        // AW1c: the stand-in cases with EVERY request type, with and without a page (the random draws above would only hit a few of them)
+        for (u in standInUrls) for (t in types) for (page in listOf<String?>(null, "page.example")) {
+            sb.append(u).append('\t').append(t).append('\t').append(page ?: "").append('\t').append(fs.check(u, page, t, psl)).append('\n')
+        }
         return sb.toString()
     }
+
+    private val standInUrls = listOf(
+        "https://redir.example/a.js", "https://redir.example/pix/a.gif", "https://x.net/redir-path/lib.js", "https://x.net/redir-path/lib.js?v=2", "https://ro.example/a.js", "https://ro.example/a.gif", "https://ro2.example/a.js",
+        "https://impr.example/v.mp4", "https://excr.example/a.js", "https://excr.example/ok/a.js", "https://unk.example/a.js", "https://ruk.example/a.js", "https://dr.example/b/x.js", "https://dr.example/a.js", "https://ro3.example/p/x.gif",
+        "https://ro3.example/q/x.gif",
+    )
 
     private fun hashVectors(): String {
         val sb = StringBuilder()

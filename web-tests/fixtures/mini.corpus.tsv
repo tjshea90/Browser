@@ -2335,205 +2335,501 @@ ws://media.example/ad/collect.png	32	www.ck	2
 ws://media.example/ad/collect.png	1024	foo.ck	2
 http://news.site.co.uk/analytics/api.gif	1	city.kobe.jp	0
 http://news.site.co.uk/analytics/api.gif	64	a.b.c.example.org	1
-https://redir.example/a.js	64		2
-https://redir.example/a.js	8	other.co.uk	2
-https://redir.example/a.js	32	city.kobe.jp	2
-https://redir.example/a.js	1	www.ck	0
-https://redir.example/a.js	16	news.site.co.uk	2
-https://redir.example/a.js	256	example.com	2
-https://redir.example/a.js	1	foo.ck	0
-https://redir.example/a.js	64	news.site.co.uk	2
-https://redir.example/pix/a.gif	8		2
-https://redir.example/pix/a.gif	256	www.example.com	2
-https://redir.example/pix/a.gif	256	page.example	2
-https://redir.example/pix/a.gif	256	1.2.3.4	2
-https://redir.example/pix/a.gif	2	b.com	2
-https://redir.example/pix/a.gif	128	track.net	2
-https://redir.example/pix/a.gif	4	other.co.uk	2
-https://redir.example/pix/a.gif	1	other.github.io	0
-https://x.net/redir-path/lib.js	4	x.y.kobe.jp	0
-https://x.net/redir-path/lib.js	16		0
-https://x.net/redir-path/lib.js	8	foo.ck	257
-https://x.net/redir-path/lib.js	8	1.2.3.4	257
-https://x.net/redir-path/lib.js	512	a.b.c.example.org	0
-https://x.net/redir-path/lib.js	16	track.net	0
-https://x.net/redir-path/lib.js	2184		257
-https://x.net/redir-path/lib.js	2184	city.kobe.jp	257
-https://x.net/redir-path/lib.js?v=2	2	track.net	0
-https://x.net/redir-path/lib.js?v=2	2184	a.b.c.example.org	257
-https://x.net/redir-path/lib.js?v=2	64	1.2.3.4	0
-https://x.net/redir-path/lib.js?v=2	32	page.example	0
-https://x.net/redir-path/lib.js?v=2	128	example.com	0
-https://x.net/redir-path/lib.js?v=2	2	other.co.uk	0
-https://x.net/redir-path/lib.js?v=2	1024	x.y.kobe.jp	0
-https://x.net/redir-path/lib.js?v=2	2184		257
-https://ro.example/a.js	32		2
-https://ro.example/a.js	128	www.ck	2
-https://ro.example/a.js	128	b.com	2
-https://ro.example/a.js	128	www.example.com	2
-https://ro.example/a.js	4	other.co.uk	2
-https://ro.example/a.js	1	other.co.uk	0
-https://ro.example/a.js	512	page.example	2
-https://ro.example/a.js	2184	b.com	2
-https://ro.example/a.gif	2184	tracker.example	2
-https://ro.example/a.gif	256	a.b.c.example.org	2
-https://ro.example/a.gif	128	city.kobe.jp	2
-https://ro.example/a.gif	512	track.net	2
-https://ro.example/a.gif	1	example.com	0
-https://ro.example/a.gif	32	a.b.c.example.org	2
-https://ro.example/a.gif	1024	b.com	2
-https://ro.example/a.gif	1024	track.net	2
-https://ro2.example/a.js	64	tracker.example	2
-https://ro2.example/a.js	64	1.2.3.4	2
-https://ro2.example/a.js	256	user.github.io	2
-https://ro2.example/a.js	1	a.b.c.example.org	0
-https://ro2.example/a.js	128	www.ck	2
-https://ro2.example/a.js	8	a.com	2
-https://ro2.example/a.js	16	www.ck	2
-https://ro2.example/a.js	512	news.site.co.uk	2
-https://impr.example/v.mp4	2184	news.site.co.uk	2833
-https://impr.example/v.mp4	1	localhost	0
-https://impr.example/v.mp4	2184		2833
-https://impr.example/v.mp4	8	www.ck	2833
-https://impr.example/v.mp4	128		2833
-https://impr.example/v.mp4	512	page.example	2833
-https://impr.example/v.mp4	256	x.y.kobe.jp	2833
-https://impr.example/v.mp4	2	page.example	2833
-https://excr.example/a.js	256	1.2.3.4	2
-https://excr.example/a.js	2048	www.example.com	2
-https://excr.example/a.js	2	1.2.3.4	2
-https://excr.example/a.js	256		2
-https://excr.example/a.js	2	1.2.3.4	2
-https://excr.example/a.js	4	x.y.kobe.jp	2
-https://excr.example/a.js	256	other.github.io	2
-https://excr.example/a.js	1024	www.ck	2
-https://excr.example/ok/a.js	4	other.co.uk	2
-https://excr.example/ok/a.js	16	news.site.co.uk	2
-https://excr.example/ok/a.js	1	other.co.uk	0
-https://excr.example/ok/a.js	8	track.net	2
-https://excr.example/ok/a.js	8	localhost	2
-https://excr.example/ok/a.js	1024	localhost	2
-https://excr.example/ok/a.js	2048	news.site.co.uk	2
-https://excr.example/ok/a.js	512	user.github.io	2
-https://unk.example/a.js	2048		2
-https://unk.example/a.js	2048	www.example.com	2
-https://unk.example/a.js	4	track.net	2
-https://unk.example/a.js	512	example.com	2
-https://unk.example/a.js	2048	localhost	2
-https://unk.example/a.js	1024	foo.ck	2
-https://unk.example/a.js	512	example.com	2
-https://unk.example/a.js	256	example.com	2
-https://ruk.example/a.js	256	tracker.example	2
-https://ruk.example/a.js	256	example.com	2
-https://ruk.example/a.js	16		2
-https://ruk.example/a.js	2184	track.net	2
-https://ruk.example/a.js	2	b.com	2
-https://ruk.example/a.js	4	x.y.kobe.jp	2
-https://ruk.example/a.js	1	page.example	0
-https://ruk.example/a.js	2184	a.com	2
-https://dr.example/b/x.js	64	1.2.3.4	2
-https://dr.example/b/x.js	1	track.net	0
-https://dr.example/b/x.js	2	track.net	2
-https://dr.example/b/x.js	2	www.ck	2
-https://dr.example/b/x.js	4	b.com	2
-https://dr.example/b/x.js	16	a.com	2
-https://dr.example/b/x.js	8	localhost	2
-https://dr.example/b/x.js	2	1.2.3.4	2
-https://dr.example/a.js	2	b.com	2
-https://dr.example/a.js	4		2
-https://dr.example/a.js	512	a.b.c.example.org	2
-https://dr.example/a.js	64	news.site.co.uk	2
-https://dr.example/a.js	1024	1.2.3.4	2
-https://dr.example/a.js	1024	news.site.co.uk	2
-https://dr.example/a.js	2	a.b.c.example.org	2
-https://dr.example/a.js	64	localhost	2
-https://ro3.example/p/x.gif	2184	city.kobe.jp	2
-https://ro3.example/p/x.gif	1	1.2.3.4	0
-https://ro3.example/p/x.gif	256	user.github.io	2
-https://ro3.example/p/x.gif	2	other.co.uk	2
-https://ro3.example/p/x.gif	1	track.net	0
-https://ro3.example/p/x.gif	2	track.net	2
-https://ro3.example/p/x.gif	256		2
-https://ro3.example/p/x.gif	1024	x.y.kobe.jp	2
-data:text/plain,hello	2184	example.com	0
-data:text/plain,hello	2	example.com	0
-data:text/plain,hello	8	www.ck	0
-data:text/plain,hello	8	b.com	0
-blob:https://example.com/1	8	example.com	0
-blob:https://example.com/1	2184	other.github.io	0
-blob:https://example.com/1	2184	other.co.uk	0
-blob:https://example.com/1	4	www.ck	0
-about:blank	8	example.com	0
-about:blank	2	example.com	0
-about:blank	2184	localhost	0
-about:blank	2184	other.github.io	0
-file:///etc/hosts	2184		0
-file:///etc/hosts	2184	news.site.co.uk	0
-file:///etc/hosts	2	track.net	0
-file:///etc/hosts	32	localhost	0
-javascript:void(0)	32		0
-javascript:void(0)	64	www.example.com	0
-javascript:void(0)	1024	example.com	0
-javascript:void(0)	1024	user.github.io	0
-ftp://ads.example.com/x	512	city.kobe.jp	0
-ftp://ads.example.com/x	2	track.net	0
-ftp://ads.example.com/x	1	localhost	0
-ftp://ads.example.com/x	16	tracker.example	0
-https://	2	b.com	0
-https://	2048	www.example.com	0
-https://	2	foo.ck	0
-https://	16	www.ck	0
-https:///x	2048	a.com	0
-https:///x	1024	example.com	0
-https:///x	8	other.co.uk	0
-https:///x	1	1.2.3.4	0
-https://:80/x	256	www.ck	0
-https://:80/x	2	tracker.example	0
-https://:80/x	4	a.com	0
-https://:80/x	256	localhost	0
-https://[::1]:8080/ads/x	2	www.ck	5
-https://[::1]:8080/ads/x	2048	x.y.kobe.jp	5
-https://[::1]:8080/ads/x	2184	user.github.io	5
-https://[::1]:8080/ads/x	2	b.com	5
-https://[2001:db8::1]/banner/1	2048	x.y.kobe.jp	1
-https://[2001:db8::1]/banner/1	2048	x.y.kobe.jp	1
-https://[2001:db8::1]/banner/1	2	foo.ck	1
-https://[2001:db8::1]/banner/1	16	tracker.example	2
-https://ads.example.com./x.js	256	a.b.c.example.org	2
-https://ads.example.com./x.js	1024	localhost	2
-https://ads.example.com./x.js	64	www.example.com	1
-https://ads.example.com./x.js	16	www.example.com	1
-https://ads.example.com..	1024	city.kobe.jp	1
-https://ads.example.com..	2184	user.github.io	1
-https://ads.example.com..	2048	b.com	1
-https://ads.example.com..	1024		1
-HTTPS://ADS.EXAMPLE.COM/X.JS	2048	a.b.c.example.org	2
-HTTPS://ADS.EXAMPLE.COM/X.JS	512	example.com	1
-HTTPS://ADS.EXAMPLE.COM/X.JS	256	www.ck	2
-HTTPS://ADS.EXAMPLE.COM/X.JS	32	localhost	2
-https://ads.example.com:/x	8	news.site.co.uk	1
-https://ads.example.com:/x	2048	user.github.io	1
-https://ads.example.com:/x	8	user.github.io	1
-https://ads.example.com:/x	256		1
-https://ads.example.com:99999/x	1024	localhost	1
-https://ads.example.com:99999/x	512	www.ck	1
-https://ads.example.com:99999/x	2	www.example.com	1
-https://ads.example.com:99999/x	16	city.kobe.jp	1
-https://ads.example.com@evil.example/x	2048	other.github.io	2
-https://ads.example.com@evil.example/x	2	tracker.example	2
-https://ads.example.com@evil.example/x	2048	a.com	2
-https://ads.example.com@evil.example/x	2		2
-https://evil.example@ads.example.com/x	2048	x.y.kobe.jp	1
+data:text/plain,hello	64		0
+data:text/plain,hello	8	other.co.uk	0
+data:text/plain,hello	32	city.kobe.jp	0
+data:text/plain,hello	1	www.ck	0
+blob:https://example.com/1	16	news.site.co.uk	0
+blob:https://example.com/1	256	example.com	0
+blob:https://example.com/1	1	foo.ck	0
+blob:https://example.com/1	64	news.site.co.uk	0
+about:blank	8		0
+about:blank	256	www.example.com	0
+about:blank	256	page.example	0
+about:blank	256	1.2.3.4	0
+file:///etc/hosts	2	b.com	0
+file:///etc/hosts	128	track.net	0
+file:///etc/hosts	4	other.co.uk	0
+file:///etc/hosts	1	other.github.io	0
+javascript:void(0)	4	x.y.kobe.jp	0
+javascript:void(0)	16		0
+javascript:void(0)	8	foo.ck	0
+javascript:void(0)	8	1.2.3.4	0
+ftp://ads.example.com/x	512	a.b.c.example.org	0
+ftp://ads.example.com/x	16	track.net	0
+ftp://ads.example.com/x	2184		0
+ftp://ads.example.com/x	2184	city.kobe.jp	0
+https://	2	track.net	0
+https://	2184	a.b.c.example.org	0
+https://	64	1.2.3.4	0
+https://	32	page.example	0
+https:///x	128	example.com	0
+https:///x	2	other.co.uk	0
+https:///x	1024	x.y.kobe.jp	0
+https:///x	2184		0
+https://:80/x	32		0
+https://:80/x	128	www.ck	0
+https://:80/x	128	b.com	0
+https://:80/x	128	www.example.com	0
+https://[::1]:8080/ads/x	4	other.co.uk	5
+https://[::1]:8080/ads/x	1	other.co.uk	0
+https://[::1]:8080/ads/x	512	page.example	5
+https://[::1]:8080/ads/x	2184	b.com	5
+https://[2001:db8::1]/banner/1	2184	tracker.example	1
+https://[2001:db8::1]/banner/1	256	a.b.c.example.org	1
+https://[2001:db8::1]/banner/1	128	city.kobe.jp	1
+https://[2001:db8::1]/banner/1	512	track.net	1
+https://ads.example.com./x.js	1	example.com	0
+https://ads.example.com./x.js	32	a.b.c.example.org	2
+https://ads.example.com./x.js	1024	b.com	2
+https://ads.example.com./x.js	1024	track.net	2
+https://ads.example.com..	64	tracker.example	1
+https://ads.example.com..	64	1.2.3.4	1
+https://ads.example.com..	256	user.github.io	1
+https://ads.example.com..	1	a.b.c.example.org	0
+HTTPS://ADS.EXAMPLE.COM/X.JS	128	www.ck	2
+HTTPS://ADS.EXAMPLE.COM/X.JS	8	a.com	2
+HTTPS://ADS.EXAMPLE.COM/X.JS	16	www.ck	2
+HTTPS://ADS.EXAMPLE.COM/X.JS	512	news.site.co.uk	2
+https://ads.example.com:/x	2184	news.site.co.uk	1
+https://ads.example.com:/x	1	localhost	0
+https://ads.example.com:/x	2184		1
+https://ads.example.com:/x	8	www.ck	1
+https://ads.example.com:99999/x	128		1
+https://ads.example.com:99999/x	512	page.example	1
+https://ads.example.com:99999/x	256	x.y.kobe.jp	1
+https://ads.example.com:99999/x	2	page.example	1
+https://ads.example.com@evil.example/x	256	1.2.3.4	2
+https://ads.example.com@evil.example/x	2048	www.example.com	2
+https://ads.example.com@evil.example/x	2	1.2.3.4	2
+https://ads.example.com@evil.example/x	256		2
+https://evil.example@ads.example.com/x	2	1.2.3.4	1
 https://evil.example@ads.example.com/x	4	x.y.kobe.jp	1
-https://evil.example@ads.example.com/x	2	example.com	1
-https://evil.example@ads.example.com/x	8		1
-https://a@b@ads.example.com/x	1024	a.com	1
-https://a@b@ads.example.com/x	64	other.co.uk	1
-https://a@b@ads.example.com/x	128	track.net	1
-https://a@b@ads.example.com/x	8		1
-https://jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj@ads.example.com/x.js	32	a.b.c.example.org	2
-https://ads.example.com/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/banner/1	8	track.net	1
-https://x.net/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/ads/y/img	1	localhost	0
-https://hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh.example/x	2184	example.com	2
-https://x.net/?event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/pixel.gif	128	user.github.io	2
-https://x.net/qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq/banner/	1024		0
+https://evil.example@ads.example.com/x	256	other.github.io	1
+https://evil.example@ads.example.com/x	1024	www.ck	1
+https://a@b@ads.example.com/x	4	other.co.uk	1
+https://a@b@ads.example.com/x	16	news.site.co.uk	1
+https://a@b@ads.example.com/x	1	other.co.uk	0
+https://a@b@ads.example.com/x	8	track.net	1
+https://jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj@ads.example.com/x.js	8	localhost	2
+https://ads.example.com/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/banner/1	1024	localhost	1
+https://x.net/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/e/ads/y/img	2048	news.site.co.uk	0
+https://hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh.example/x	512	user.github.io	2
+https://x.net/?event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/event/pixel.gif	2048		2
+https://x.net/qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq/banner/	2048	www.example.com	0
+https://redir.example/a.js	8		2
+https://redir.example/a.js	8	page.example	2
+https://redir.example/a.js	16		2
+https://redir.example/a.js	16	page.example	2
+https://redir.example/a.js	128		2
+https://redir.example/a.js	128	page.example	2
+https://redir.example/a.js	4		2
+https://redir.example/a.js	4	page.example	2
+https://redir.example/a.js	2		2
+https://redir.example/a.js	2	page.example	2
+https://redir.example/a.js	2184		2
+https://redir.example/a.js	2184	page.example	2
+https://redir.example/a.js	1		0
+https://redir.example/a.js	1	page.example	0
+https://redir.example/a.js	256		2
+https://redir.example/a.js	256	page.example	2
+https://redir.example/a.js	2048		2
+https://redir.example/a.js	2048	page.example	2
+https://redir.example/a.js	64		2
+https://redir.example/a.js	64	page.example	2
+https://redir.example/a.js	32		2
+https://redir.example/a.js	32	page.example	2
+https://redir.example/a.js	512		2
+https://redir.example/a.js	512	page.example	2
+https://redir.example/a.js	1024		2
+https://redir.example/a.js	1024	page.example	2
+https://redir.example/pix/a.gif	8		2
+https://redir.example/pix/a.gif	8	page.example	2
+https://redir.example/pix/a.gif	16		2
+https://redir.example/pix/a.gif	16	page.example	2
+https://redir.example/pix/a.gif	128		2
+https://redir.example/pix/a.gif	128	page.example	2
+https://redir.example/pix/a.gif	4		2
+https://redir.example/pix/a.gif	4	page.example	2
+https://redir.example/pix/a.gif	2		2
+https://redir.example/pix/a.gif	2	page.example	2
+https://redir.example/pix/a.gif	2184		2
+https://redir.example/pix/a.gif	2184	page.example	2
+https://redir.example/pix/a.gif	1		0
+https://redir.example/pix/a.gif	1	page.example	0
+https://redir.example/pix/a.gif	256		2
+https://redir.example/pix/a.gif	256	page.example	2
+https://redir.example/pix/a.gif	2048		2
+https://redir.example/pix/a.gif	2048	page.example	2
+https://redir.example/pix/a.gif	64		2
+https://redir.example/pix/a.gif	64	page.example	2
+https://redir.example/pix/a.gif	32		2
+https://redir.example/pix/a.gif	32	page.example	2
+https://redir.example/pix/a.gif	512		2
+https://redir.example/pix/a.gif	512	page.example	2
+https://redir.example/pix/a.gif	1024		2
+https://redir.example/pix/a.gif	1024	page.example	2
+https://x.net/redir-path/lib.js	8		257
+https://x.net/redir-path/lib.js	8	page.example	257
+https://x.net/redir-path/lib.js	16		0
+https://x.net/redir-path/lib.js	16	page.example	0
+https://x.net/redir-path/lib.js	128		0
+https://x.net/redir-path/lib.js	128	page.example	0
+https://x.net/redir-path/lib.js	4		0
+https://x.net/redir-path/lib.js	4	page.example	0
+https://x.net/redir-path/lib.js	2		0
+https://x.net/redir-path/lib.js	2	page.example	0
+https://x.net/redir-path/lib.js	2184		257
+https://x.net/redir-path/lib.js	2184	page.example	257
+https://x.net/redir-path/lib.js	1		0
+https://x.net/redir-path/lib.js	1	page.example	0
+https://x.net/redir-path/lib.js	256		0
+https://x.net/redir-path/lib.js	256	page.example	0
+https://x.net/redir-path/lib.js	2048		0
+https://x.net/redir-path/lib.js	2048	page.example	0
+https://x.net/redir-path/lib.js	64		0
+https://x.net/redir-path/lib.js	64	page.example	0
+https://x.net/redir-path/lib.js	32		0
+https://x.net/redir-path/lib.js	32	page.example	0
+https://x.net/redir-path/lib.js	512		0
+https://x.net/redir-path/lib.js	512	page.example	0
+https://x.net/redir-path/lib.js	1024		0
+https://x.net/redir-path/lib.js	1024	page.example	0
+https://x.net/redir-path/lib.js?v=2	8		257
+https://x.net/redir-path/lib.js?v=2	8	page.example	257
+https://x.net/redir-path/lib.js?v=2	16		0
+https://x.net/redir-path/lib.js?v=2	16	page.example	0
+https://x.net/redir-path/lib.js?v=2	128		0
+https://x.net/redir-path/lib.js?v=2	128	page.example	0
+https://x.net/redir-path/lib.js?v=2	4		0
+https://x.net/redir-path/lib.js?v=2	4	page.example	0
+https://x.net/redir-path/lib.js?v=2	2		0
+https://x.net/redir-path/lib.js?v=2	2	page.example	0
+https://x.net/redir-path/lib.js?v=2	2184		257
+https://x.net/redir-path/lib.js?v=2	2184	page.example	257
+https://x.net/redir-path/lib.js?v=2	1		0
+https://x.net/redir-path/lib.js?v=2	1	page.example	0
+https://x.net/redir-path/lib.js?v=2	256		0
+https://x.net/redir-path/lib.js?v=2	256	page.example	0
+https://x.net/redir-path/lib.js?v=2	2048		0
+https://x.net/redir-path/lib.js?v=2	2048	page.example	0
+https://x.net/redir-path/lib.js?v=2	64		0
+https://x.net/redir-path/lib.js?v=2	64	page.example	0
+https://x.net/redir-path/lib.js?v=2	32		0
+https://x.net/redir-path/lib.js?v=2	32	page.example	0
+https://x.net/redir-path/lib.js?v=2	512		0
+https://x.net/redir-path/lib.js?v=2	512	page.example	0
+https://x.net/redir-path/lib.js?v=2	1024		0
+https://x.net/redir-path/lib.js?v=2	1024	page.example	0
+https://ro.example/a.js	8		2
+https://ro.example/a.js	8	page.example	2
+https://ro.example/a.js	16		2
+https://ro.example/a.js	16	page.example	2
+https://ro.example/a.js	128		2
+https://ro.example/a.js	128	page.example	2
+https://ro.example/a.js	4		2
+https://ro.example/a.js	4	page.example	2
+https://ro.example/a.js	2		2
+https://ro.example/a.js	2	page.example	2
+https://ro.example/a.js	2184		2
+https://ro.example/a.js	2184	page.example	2
+https://ro.example/a.js	1		0
+https://ro.example/a.js	1	page.example	0
+https://ro.example/a.js	256		2
+https://ro.example/a.js	256	page.example	2
+https://ro.example/a.js	2048		2
+https://ro.example/a.js	2048	page.example	2
+https://ro.example/a.js	64		2
+https://ro.example/a.js	64	page.example	2
+https://ro.example/a.js	32		2
+https://ro.example/a.js	32	page.example	2
+https://ro.example/a.js	512		2
+https://ro.example/a.js	512	page.example	2
+https://ro.example/a.js	1024		2
+https://ro.example/a.js	1024	page.example	2
+https://ro.example/a.gif	8		2
+https://ro.example/a.gif	8	page.example	2
+https://ro.example/a.gif	16		2
+https://ro.example/a.gif	16	page.example	2
+https://ro.example/a.gif	128		2
+https://ro.example/a.gif	128	page.example	2
+https://ro.example/a.gif	4		2
+https://ro.example/a.gif	4	page.example	2
+https://ro.example/a.gif	2		2
+https://ro.example/a.gif	2	page.example	2
+https://ro.example/a.gif	2184		2
+https://ro.example/a.gif	2184	page.example	2
+https://ro.example/a.gif	1		0
+https://ro.example/a.gif	1	page.example	0
+https://ro.example/a.gif	256		2
+https://ro.example/a.gif	256	page.example	2
+https://ro.example/a.gif	2048		2
+https://ro.example/a.gif	2048	page.example	2
+https://ro.example/a.gif	64		2
+https://ro.example/a.gif	64	page.example	2
+https://ro.example/a.gif	32		2
+https://ro.example/a.gif	32	page.example	2
+https://ro.example/a.gif	512		2
+https://ro.example/a.gif	512	page.example	2
+https://ro.example/a.gif	1024		2
+https://ro.example/a.gif	1024	page.example	2
+https://ro2.example/a.js	8		2
+https://ro2.example/a.js	8	page.example	2
+https://ro2.example/a.js	16		2
+https://ro2.example/a.js	16	page.example	2
+https://ro2.example/a.js	128		2
+https://ro2.example/a.js	128	page.example	2
+https://ro2.example/a.js	4		2
+https://ro2.example/a.js	4	page.example	2
+https://ro2.example/a.js	2		2
+https://ro2.example/a.js	2	page.example	2
+https://ro2.example/a.js	2184		2
+https://ro2.example/a.js	2184	page.example	2
+https://ro2.example/a.js	1		0
+https://ro2.example/a.js	1	page.example	0
+https://ro2.example/a.js	256		2
+https://ro2.example/a.js	256	page.example	2
+https://ro2.example/a.js	2048		2
+https://ro2.example/a.js	2048	page.example	2
+https://ro2.example/a.js	64		2
+https://ro2.example/a.js	64	page.example	2
+https://ro2.example/a.js	32		2
+https://ro2.example/a.js	32	page.example	2
+https://ro2.example/a.js	512		2
+https://ro2.example/a.js	512	page.example	2
+https://ro2.example/a.js	1024		2
+https://ro2.example/a.js	1024	page.example	2
+https://impr.example/v.mp4	8		2833
+https://impr.example/v.mp4	8	page.example	2833
+https://impr.example/v.mp4	16		2833
+https://impr.example/v.mp4	16	page.example	2833
+https://impr.example/v.mp4	128		2833
+https://impr.example/v.mp4	128	page.example	2833
+https://impr.example/v.mp4	4		2833
+https://impr.example/v.mp4	4	page.example	2833
+https://impr.example/v.mp4	2		2833
+https://impr.example/v.mp4	2	page.example	2833
+https://impr.example/v.mp4	2184		2833
+https://impr.example/v.mp4	2184	page.example	2833
+https://impr.example/v.mp4	1		0
+https://impr.example/v.mp4	1	page.example	0
+https://impr.example/v.mp4	256		2833
+https://impr.example/v.mp4	256	page.example	2833
+https://impr.example/v.mp4	2048		2833
+https://impr.example/v.mp4	2048	page.example	2833
+https://impr.example/v.mp4	64		2833
+https://impr.example/v.mp4	64	page.example	2833
+https://impr.example/v.mp4	32		2833
+https://impr.example/v.mp4	32	page.example	2833
+https://impr.example/v.mp4	512		2833
+https://impr.example/v.mp4	512	page.example	2833
+https://impr.example/v.mp4	1024		2833
+https://impr.example/v.mp4	1024	page.example	2833
+https://excr.example/a.js	8		2
+https://excr.example/a.js	8	page.example	2
+https://excr.example/a.js	16		2
+https://excr.example/a.js	16	page.example	2
+https://excr.example/a.js	128		2
+https://excr.example/a.js	128	page.example	2
+https://excr.example/a.js	4		2
+https://excr.example/a.js	4	page.example	2
+https://excr.example/a.js	2		2
+https://excr.example/a.js	2	page.example	2
+https://excr.example/a.js	2184		2
+https://excr.example/a.js	2184	page.example	2
+https://excr.example/a.js	1		0
+https://excr.example/a.js	1	page.example	0
+https://excr.example/a.js	256		2
+https://excr.example/a.js	256	page.example	2
+https://excr.example/a.js	2048		2
+https://excr.example/a.js	2048	page.example	2
+https://excr.example/a.js	64		2
+https://excr.example/a.js	64	page.example	2
+https://excr.example/a.js	32		2
+https://excr.example/a.js	32	page.example	2
+https://excr.example/a.js	512		2
+https://excr.example/a.js	512	page.example	2
+https://excr.example/a.js	1024		2
+https://excr.example/a.js	1024	page.example	2
+https://excr.example/ok/a.js	8		2
+https://excr.example/ok/a.js	8	page.example	2
+https://excr.example/ok/a.js	16		2
+https://excr.example/ok/a.js	16	page.example	2
+https://excr.example/ok/a.js	128		2
+https://excr.example/ok/a.js	128	page.example	2
+https://excr.example/ok/a.js	4		2
+https://excr.example/ok/a.js	4	page.example	2
+https://excr.example/ok/a.js	2		2
+https://excr.example/ok/a.js	2	page.example	2
+https://excr.example/ok/a.js	2184		2
+https://excr.example/ok/a.js	2184	page.example	2
+https://excr.example/ok/a.js	1		0
+https://excr.example/ok/a.js	1	page.example	0
+https://excr.example/ok/a.js	256		2
+https://excr.example/ok/a.js	256	page.example	2
+https://excr.example/ok/a.js	2048		2
+https://excr.example/ok/a.js	2048	page.example	2
+https://excr.example/ok/a.js	64		2
+https://excr.example/ok/a.js	64	page.example	2
+https://excr.example/ok/a.js	32		2
+https://excr.example/ok/a.js	32	page.example	2
+https://excr.example/ok/a.js	512		2
+https://excr.example/ok/a.js	512	page.example	2
+https://excr.example/ok/a.js	1024		2
+https://excr.example/ok/a.js	1024	page.example	2
+https://unk.example/a.js	8		2
+https://unk.example/a.js	8	page.example	2
+https://unk.example/a.js	16		2
+https://unk.example/a.js	16	page.example	2
+https://unk.example/a.js	128		2
+https://unk.example/a.js	128	page.example	2
+https://unk.example/a.js	4		2
+https://unk.example/a.js	4	page.example	2
+https://unk.example/a.js	2		2
+https://unk.example/a.js	2	page.example	2
+https://unk.example/a.js	2184		2
+https://unk.example/a.js	2184	page.example	2
+https://unk.example/a.js	1		0
+https://unk.example/a.js	1	page.example	0
+https://unk.example/a.js	256		2
+https://unk.example/a.js	256	page.example	2
+https://unk.example/a.js	2048		2
+https://unk.example/a.js	2048	page.example	2
+https://unk.example/a.js	64		2
+https://unk.example/a.js	64	page.example	2
+https://unk.example/a.js	32		2
+https://unk.example/a.js	32	page.example	2
+https://unk.example/a.js	512		2
+https://unk.example/a.js	512	page.example	2
+https://unk.example/a.js	1024		2
+https://unk.example/a.js	1024	page.example	2
+https://ruk.example/a.js	8		2
+https://ruk.example/a.js	8	page.example	2
+https://ruk.example/a.js	16		2
+https://ruk.example/a.js	16	page.example	2
+https://ruk.example/a.js	128		2
+https://ruk.example/a.js	128	page.example	2
+https://ruk.example/a.js	4		2
+https://ruk.example/a.js	4	page.example	2
+https://ruk.example/a.js	2		2
+https://ruk.example/a.js	2	page.example	2
+https://ruk.example/a.js	2184		2
+https://ruk.example/a.js	2184	page.example	2
+https://ruk.example/a.js	1		0
+https://ruk.example/a.js	1	page.example	0
+https://ruk.example/a.js	256		2
+https://ruk.example/a.js	256	page.example	2
+https://ruk.example/a.js	2048		2
+https://ruk.example/a.js	2048	page.example	2
+https://ruk.example/a.js	64		2
+https://ruk.example/a.js	64	page.example	2
+https://ruk.example/a.js	32		2
+https://ruk.example/a.js	32	page.example	2
+https://ruk.example/a.js	512		2
+https://ruk.example/a.js	512	page.example	2
+https://ruk.example/a.js	1024		2
+https://ruk.example/a.js	1024	page.example	2
+https://dr.example/b/x.js	8		2
+https://dr.example/b/x.js	8	page.example	2
+https://dr.example/b/x.js	16		2
+https://dr.example/b/x.js	16	page.example	2
+https://dr.example/b/x.js	128		2
+https://dr.example/b/x.js	128	page.example	2
+https://dr.example/b/x.js	4		2
+https://dr.example/b/x.js	4	page.example	2
+https://dr.example/b/x.js	2		2
+https://dr.example/b/x.js	2	page.example	2
+https://dr.example/b/x.js	2184		2
+https://dr.example/b/x.js	2184	page.example	2
+https://dr.example/b/x.js	1		0
+https://dr.example/b/x.js	1	page.example	0
+https://dr.example/b/x.js	256		2
+https://dr.example/b/x.js	256	page.example	2
+https://dr.example/b/x.js	2048		2
+https://dr.example/b/x.js	2048	page.example	2
+https://dr.example/b/x.js	64		2
+https://dr.example/b/x.js	64	page.example	2
+https://dr.example/b/x.js	32		2
+https://dr.example/b/x.js	32	page.example	2
+https://dr.example/b/x.js	512		2
+https://dr.example/b/x.js	512	page.example	2
+https://dr.example/b/x.js	1024		2
+https://dr.example/b/x.js	1024	page.example	2
+https://dr.example/a.js	8		2
+https://dr.example/a.js	8	page.example	2
+https://dr.example/a.js	16		2
+https://dr.example/a.js	16	page.example	2
+https://dr.example/a.js	128		2
+https://dr.example/a.js	128	page.example	2
+https://dr.example/a.js	4		2
+https://dr.example/a.js	4	page.example	2
+https://dr.example/a.js	2		2
+https://dr.example/a.js	2	page.example	2
+https://dr.example/a.js	2184		2
+https://dr.example/a.js	2184	page.example	2
+https://dr.example/a.js	1		0
+https://dr.example/a.js	1	page.example	0
+https://dr.example/a.js	256		2
+https://dr.example/a.js	256	page.example	2
+https://dr.example/a.js	2048		2
+https://dr.example/a.js	2048	page.example	2
+https://dr.example/a.js	64		2
+https://dr.example/a.js	64	page.example	2
+https://dr.example/a.js	32		2
+https://dr.example/a.js	32	page.example	2
+https://dr.example/a.js	512		2
+https://dr.example/a.js	512	page.example	2
+https://dr.example/a.js	1024		2
+https://dr.example/a.js	1024	page.example	2
+https://ro3.example/p/x.gif	8		2
+https://ro3.example/p/x.gif	8	page.example	2
+https://ro3.example/p/x.gif	16		2
+https://ro3.example/p/x.gif	16	page.example	2
+https://ro3.example/p/x.gif	128		2
+https://ro3.example/p/x.gif	128	page.example	2
+https://ro3.example/p/x.gif	4		2
+https://ro3.example/p/x.gif	4	page.example	2
+https://ro3.example/p/x.gif	2		2
+https://ro3.example/p/x.gif	2	page.example	2
+https://ro3.example/p/x.gif	2184		2
+https://ro3.example/p/x.gif	2184	page.example	2
+https://ro3.example/p/x.gif	1		0
+https://ro3.example/p/x.gif	1	page.example	0
+https://ro3.example/p/x.gif	256		2
+https://ro3.example/p/x.gif	256	page.example	2
+https://ro3.example/p/x.gif	2048		2
+https://ro3.example/p/x.gif	2048	page.example	2
+https://ro3.example/p/x.gif	64		2
+https://ro3.example/p/x.gif	64	page.example	2
+https://ro3.example/p/x.gif	32		2
+https://ro3.example/p/x.gif	32	page.example	2
+https://ro3.example/p/x.gif	512		2
+https://ro3.example/p/x.gif	512	page.example	2
+https://ro3.example/p/x.gif	1024		2
+https://ro3.example/p/x.gif	1024	page.example	2
+https://ro3.example/q/x.gif	8		2
+https://ro3.example/q/x.gif	8	page.example	2
+https://ro3.example/q/x.gif	16		2
+https://ro3.example/q/x.gif	16	page.example	2
+https://ro3.example/q/x.gif	128		2
+https://ro3.example/q/x.gif	128	page.example	2
+https://ro3.example/q/x.gif	4		2
+https://ro3.example/q/x.gif	4	page.example	2
+https://ro3.example/q/x.gif	2		2
+https://ro3.example/q/x.gif	2	page.example	2
+https://ro3.example/q/x.gif	2184		2
+https://ro3.example/q/x.gif	2184	page.example	2
+https://ro3.example/q/x.gif	1		0
+https://ro3.example/q/x.gif	1	page.example	0
+https://ro3.example/q/x.gif	256		2
+https://ro3.example/q/x.gif	256	page.example	2
+https://ro3.example/q/x.gif	2048		2
+https://ro3.example/q/x.gif	2048	page.example	2
+https://ro3.example/q/x.gif	64		2
+https://ro3.example/q/x.gif	64	page.example	2
+https://ro3.example/q/x.gif	32		2
+https://ro3.example/q/x.gif	32	page.example	2
+https://ro3.example/q/x.gif	512		2
+https://ro3.example/q/x.gif	512	page.example	2
+https://ro3.example/q/x.gif	1024		2
+https://ro3.example/q/x.gif	1024	page.example	2
