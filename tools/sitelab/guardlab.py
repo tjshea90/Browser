@@ -14,12 +14,14 @@ FAKEPLAY = b"""<!doctype html><html><head><meta charset="utf-8"><meta name="view
 <body style="font:20px sans-serif;margin:16px"><p>fakeplay: tries to open a pop-up by script, with no tap, four times.</p>
 <script>
 function L(k, v) { try { var x = new XMLHttpRequest(); x.open('GET', '/log?kind=' + encodeURIComponent(k) + '&v=' + encodeURIComponent(v) + '&t=' + Date.now()); x.send(); } catch (e) {} }
+// the guard and the scriptlet library each leave a marker in the page world: is the guard in THIS document, from its very first script on? (RX3-G1)
+L('first-script', 'guard in the page world: ' + (window.__kstGuard === 1 ? 'YES' : 'no') + ', scriptlet library: ' + (window.__kstSL === 1 ? 'YES' : 'no'));
 L('load', 'fakeplay');
 [300, 3000, 8000, 15000].forEach(function (ms, i) {
   setTimeout(function () {
     var w = null, err = '';
     try { w = window.open('/popad?n=' + (i + 1), '_blank'); } catch (e) { err = String(e); }
-    L('attempt', (i + 1) + ' at ' + ms + ' ms: window.open returned ' + (w ? 'a window object' : 'null') + (err ? ' error ' + err : ''));
+    L('attempt', (i + 1) + ' at ' + ms + ' ms: guard marker ' + (window.__kstGuard === 1 ? 'YES' : 'no') + ', window.open returned ' + (w ? 'a window object' : 'null') + (err ? ' error ' + err : ''));
   }, ms);
 });
 </script></body></html>
