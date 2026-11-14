@@ -53,8 +53,6 @@ window.__startAd = function (o) {
   var r = root(), v = vid();
   window.__mainTime = v.currentTime;
   FAM.before.forEach(function (c) { r.classList.add(c); });
-  FAM.before.forEach(function (c) { r.classList.remove(c); });
-  FAM.during.forEach(function (c) { r.classList.add(c); });
   function done() {
     FAM.during.forEach(function (c) { r.classList.remove(c); });
     FAM.after.forEach(function (c) { r.classList.add(c); });
@@ -62,14 +60,20 @@ window.__startAd = function (o) {
     if (o.unmuteAtEnd) v.muted = false;
     window.__ended++; v.play();
   }
-  if (!o.stuck && !o.filmStays) { v.loop = false; v.src = o.src || AD; v.play(); v.onended = done; }
-  if (o.fakeDuration) Object.defineProperty(v, 'duration', { configurable: true, get: function () { return o.fakeDuration; } });
-  if (o.skipAfterMs) setTimeout(function () {
-    var b = document.createElement('div'); b.className = 'jw-skip jw-reset'; b.style.cssText = 'position:absolute;right:4px;bottom:4px;width:80px;height:30px;background:#000';
-    b.addEventListener('click', function () { if (!b.classList.contains('jw-skippable')) return; window.__skipClicks++; b.remove(); done(); });
-    r.appendChild(b);
-    setTimeout(function () { b.classList.add('jw-skippable'); }, o.skippableAfterMs || 300);
-  }, o.skipAfterMs);
+  function go() {
+    FAM.before.forEach(function (c) { r.classList.remove(c); });
+    FAM.during.forEach(function (c) { r.classList.add(c); });
+    if (o.stuckAd) { v.loop = true; v.src = o.src || AD; v.play(); }
+    else if (!o.filmStays) { v.loop = false; v.src = o.src || AD; v.play(); v.onended = done; }
+    if (o.fakeDuration) Object.defineProperty(v, 'duration', { configurable: true, get: function () { return o.fakeDuration; } });
+    if (o.skipAfterMs) setTimeout(function () {
+      var b = document.createElement('div'); b.className = 'jw-skip jw-reset'; b.style.cssText = 'position:absolute;right:4px;bottom:4px;width:80px;height:30px;background:#000';
+      b.addEventListener('click', function () { if (!b.classList.contains('jw-skippable')) return; window.__skipClicks++; b.remove(); done(); });
+      r.appendChild(b);
+      setTimeout(function () { b.classList.add('jw-skippable'); }, o.skippableAfterMs || 300);
+    }, o.skipAfterMs);
+  }
+  setTimeout(go, FAM.before.length ? 150 : 0);
 };
 window.__startHosted = function () {
   var a = document.getElementById('adv');
@@ -178,7 +182,7 @@ test('an ordinary page video (no ad words anywhere) is left alone and nothing is
 
 test('the Settings switch off: the app is asked, and nothing at all is done', async () => {
   const page = await open({ fam: FAMILY.jw, skip: false, timing: { loopMs: 40 } });
-  await page.evaluate(() => window.__startAd({ stuck: true }));
+  await page.evaluate(() => window.__startAd({ stuckAd: true, fakeDuration: 400 }));
   await page.waitForTimeout(900);
   const s = await state(page);
   assert.equal(s.muted, false); assert.equal(s.rate, 1);
@@ -189,7 +193,7 @@ test('the Settings switch off: the app is asked, and nothing at all is done', as
 
 test('on the YouTube hosts this script does nothing (youtube.js owns them)', async () => {
   const page = await open({ fam: FAMILY.jw, url: 'https://www.youtube.com/watch?v=mock', timing: { loopMs: 40 } });
-  await page.evaluate(() => window.__startAd({ stuck: true }));
+  await page.evaluate(() => window.__startAd({ stuckAd: true, fakeDuration: 400 }));
   await page.waitForTimeout(900);
   const s = await state(page);
   assert.equal(s.muted, false); assert.equal(s.rate, 1); assert.deepEqual(s.msgs, []);
@@ -204,14 +208,14 @@ test('while the stream is still the film (the ad class came first) the film is n
   await page.waitForTimeout(1200);
   const s = await state(page);
   assert.ok(s.t < t0 + 3, 'the film was not thrown to its end: ' + t0 + ' -> ' + s.t);
-  assert.equal(sum(s.msgs, 'f'), 0);
+  assert.equal(sum(s.msgs, 'f'), 0); assert.equal(s.muted, false, 'not muted either'); assert.equal(s.rate, 1, 'not sped up either');
   await page.context().close();
 });
 
 test('an ad that will not end is given up after the time limit, the film is put back, and repeated ones switch it off', async () => {
   const page = await open({ fam: FAMILY.jw, timing: { loopMs: 40, maxMs: 350, fails: 2 } });
   for (let i = 0; i < 2; i++) {
-    await page.evaluate(() => window.__startAd({ stuck: true }));
+    await page.evaluate(() => window.__startAd({ stuckAd: true, fakeDuration: 400 }));
     await page.waitForTimeout(700);
     await page.evaluate(() => { const r = document.getElementById('player'); r.classList.remove('jw-flag-ads', 'jw-flag-ads-hide-controls'); });
     await page.waitForTimeout(250);
