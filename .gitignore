@@ -36,3 +36,7 @@ node_modules/
 dist/*.apk
 dist/*.sha256
 geckoapp/build/
+
+# python bytecode (tools/emu, tools/sitelab helpers)
+__pycache__/
+*.pyc
