@@ -73,7 +73,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         /** What the keyboard learned from the person's choices and typing (AU2), as the engine wrote it; read and written on the glide thread (any thread is fine). */
         fun navGlideLearned(): String? = null
         fun navGlideLearnedSave(text: String) {}
-        /** AU3: the text pageField of the web page that has focus right now, or null (none, or this build has no page fields). Asked when the keyboard opens and before every key. */
+        /** AU3: the text field of the web page that has focus right now, or null (none, or this build has no page fields). Asked when the keyboard opens and before every key. */
         fun navPageField(): PageField? = null
         /** AU3: the keyboard opened or closed (while it is open the system keyboard must stay down). */
         fun navKeyboardChanged(showing: Boolean) {}
@@ -108,7 +108,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private var pageField: PageField? = null         // the page field the keys go into (null: the bar is the address / search bar)
     private var fieldIdentity = 0                // which field it is: another number means the text typed so far belongs to a field that is gone
     private var learnedText: String? = null      // the text whose words were already handed to the keyboard's memory (closing after Enter must not count them twice)
-    /** The keyboard is open and its keys go into a text pageField of the page. */
+    /** The keyboard is open and its keys go into a text field of the page. */
     val typesIntoPage: Boolean get() = keyboardShowing && pageField != null
 
     /** The panel is shown (sliding in counts as shown). */
@@ -216,7 +216,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         l.navKeyboardChanged(false)
     }
 
-    /** The activity tells the panel that the page's focused pageField changed (focus moved, a pageField appeared or went away): the keys follow it. */
+    /** The activity tells the panel that the page's focused field changed (focus moved, a field appeared or went away): the keys follow it. */
     fun pageFieldChanged() { if (keyboardShowing) syncField() }
 
     /** The bar's description says where the keys go. */
@@ -355,8 +355,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     // ------------------------------------------------------------------ typing into the page's own text field (AU3)
 
     /**
-     * The page's focused pageField may have changed since the keys last went somewhere. The same pageField: carry on. Another pageField, or one that appeared: the keys go there, from an empty text. A pageField that is gone
-     * (the page moved on, something else took focus): the bar is the address / search bar again. What was typed into a pageField that is left behind counts for the keyboard's memory.
+     * The page's focused field may have changed since the keys last went somewhere. The same field: carry on. Another field, or one that appeared: the keys go there, from an empty text. A field that is gone
+     * (the page moved on, something else took focus): the bar is the address / search bar again. What was typed into a field that is left behind counts for the keyboard's memory.
      */
     private fun syncField() {
         if (!keyboardShowing) return
@@ -372,7 +372,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         keys.clearCandidates(); barMode(); keys.invalidate()
     }
 
-    /** The text model changed from [before]: the same change goes into the page's pageField (what was taken off the end, what was added). */
+    /** The text model changed from [before]: the same change goes into the page's field (what was taken off the end, what was added). */
     private fun sendEdit(f: PageField, before: String, backspace: Boolean = false) {
         var e = TextEdit.between(before, model.text)
         if (backspace && e.isEmpty) e = TextEdit(1, "") // nothing typed here is left to take off: the field's own text goes
@@ -380,7 +380,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         if (e.insert.isNotEmpty()) f.insert(e.insert)
     }
 
-    /** Go in a page pageField presses Enter there; a pageField whose Enter submits (a search box) closes the keyboard, a text area stays open with an empty text for the next line. */
+    /** Go in a page field presses Enter there; a field whose Enter submits (a search box) closes the keyboard, a text area stays open with an empty text for the next line. */
     private fun fieldGo(f: PageField) {
         learnFromText()
         f.enter()
@@ -388,7 +388,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         else { model.open(""); learnedText = null; keys.clearCandidates(); bar.invalidate(); keys.invalidate() }
     }
 
-    /** Nothing is learned from a private tab or a password pageField. */
+    /** Nothing is learned from a private tab or a password field. */
     private fun learnAllowed(): Boolean {
         if (l.navPrivateTab()) return false
         val f = pageField ?: return true
@@ -406,7 +406,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         for ((prev, w) in model.typedPairs()) g.learn(prev, w, 1f) // what was typed letter by letter (the glided words were learned when they were kept)
     }
 
-    /** Glide typing works unless the page pageField is a password (the guesses would show it on the screen). */
+    /** Glide typing works unless the page field is a password (the guesses would show it on the screen). */
     private fun glideUsable(): Boolean = glideOn && pageField?.password != true
 
     // ------------------------------------------------------------------ the slide (its own clock: independent of Android's animation scale)
@@ -484,8 +484,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
         private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = ctx.dpf(1.2f) }
         private val box = RectF()
-        var dim = false; set(v) { if (pageField != v) { pageField = v; invalidate() } }
-        var active = false; set(v) { if (pageField != v) { pageField = v; invalidate() } }
+        var dim = false; set(v) { if (field != v) { field = v; invalidate() } }
+        var active = false; set(v) { if (field != v) { field = v; invalidate() } }
 
         init { contentDescription = desc; isClickable = true }
 
