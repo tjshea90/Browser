@@ -50,7 +50,9 @@ class ScriptletRulesTest {
     }
 
     @Test fun limitsAndControlCharactersAreRefused() {
-        assertNull(enc("set, a, " + "x".repeat(501)))
+        assertNull("a list that is not trusted: 500 characters at most per argument", ScriptletRules.encode("set, a, " + "x".repeat(501), trusted = false))
+        assertNotNull("a trusted list: up to 4096 (RX3-Y1)", enc("set, a, " + "x".repeat(501)))
+        assertNull(enc("set, a, " + "x".repeat(ScriptletRules.MAX_ARG_TRUSTED + 1)))
         assertNull(enc("aopr, " + (1..11).joinToString(",") { "a$it" }))
         assertNull(enc("aopr, a\u0001b"))
         assertNull(enc("aopr, a\u0006b"))
