@@ -311,7 +311,7 @@
 // Long press on OPEN space (AY2, owner message 39: "make it so I can long press anywhere in the browser and it will show up under where I long pressed, but only if I am long pressing an open space. If I'm
 // long pressing a link, give me the options for that link, not the navigation panel"). The engine's own long press reaches the page as a trusted `contextmenu` event on whatever is under the finger (blank
 // space too: found on the emulator, research/MINI_NAV.md section AY2). It is told to the app only when nothing there could have an action of its own: no link, picture, video, form control, editable text,
-// widget role or pointer cursor in the stack of elements under the finger, and the engine did NOT select a word 200 ms later (the press was on text: the selection belongs to the person). The app puts the
+// widget role or pointer cursor in the stack of elements under the finger, and the engine did NOT change the selection 200 ms later (it selects the word under the finger: the press was on text, the selection belongs to the person). The app puts the
 // panel where the finger is; nothing about the page is sent, only that the press was on open space.
 (function () {
   try {
@@ -334,10 +334,11 @@
         if (!e.isTrusted) return;
         var els = document.elementsFromPoint ? document.elementsFromPoint(e.clientX, e.clientY) : [e.target];
         for (var i = 0; i < els.length && i < 10; i++) if (interactive(els[i])) return;
+        var before = window.getSelection ? String(window.getSelection()) : ''; // the engine selects the word AFTER this event: what was selected already must not hide a press on blank space
         setTimeout(function () {
           try {
             var sel = window.getSelection ? String(window.getSelection()) : '';
-            if (sel.length > 0) return; // the engine selected a word: the press was on text
+            if (sel !== before) return; // the engine selected a word: the press was on text
             browser.runtime.sendMessage({ k: 'os', p: location.href }).catch(function () {});
           } catch (x) { /* never break the page */ }
         }, 200);
