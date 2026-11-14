@@ -1438,3 +1438,7 @@
 ## 2026-11-14T00:02:42Z
 > Waiting for the emulator run to reach the panel steps; I'll read its screenshots when it finishes.
 <!-- sha:76ba27628259 -->
+
+## 2026-11-14T00:09:28Z
+> Waiting for the last steps of the emulator script (the pop-up icon part); then I'll debug the panel toggle.
+<!-- sha:9a2e76bbda7e -->
