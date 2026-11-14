@@ -894,15 +894,20 @@ class MiniNavTest {
         openPanel(); nav.pressBarForTest(); relayout()
         val (x, y) = nav.keyPointForTest("q")!!
         val sb = StringBuilder()
-        val t = SystemClock.uptimeMillis()
-        nav.dispatchTouchEvent(ev(t, t, MotionEvent.ACTION_DOWN, x, y))
-        sb.append("bubble0=" + nav.bubbleForTest + " lifted=" + nav.liftedForTest)
-        idle(MiniNav.HOLD_MS + 100)
-        sb.append(" bubble1=" + nav.bubbleForTest + " lifted=" + nav.liftedForTest)
-        idle(MiniNav.PICK_MS + 100)
-        sb.append(" bubble2=" + nav.bubbleForTest + " lifted=" + nav.liftedForTest + " showing=" + nav.keyboardShowing)
-        nav.dispatchTouchEvent(ev(t, t + 1000, MotionEvent.ACTION_UP, x, y))
-        sb.append(" textAfterUp=[" + nav.barTextForTest + "] showing=" + nav.keyboardShowing + " now=" + SystemClock.uptimeMillis() + " t=" + t)
+        var t = SystemClock.uptimeMillis()
+        nav.dispatchTouchEvent(ev(t, t, MotionEvent.ACTION_DOWN, x, y)); idle(100)
+        nav.dispatchTouchEvent(ev(t, t + 100, MotionEvent.ACTION_UP, x, y))
+        sb.append("B(100ms)=[" + nav.barTextForTest + "] ")
+        t = SystemClock.uptimeMillis()
+        nav.dispatchTouchEvent(ev(t, t, MotionEvent.ACTION_DOWN, x, y)); idle(500)
+        sb.append("bubble=" + nav.bubbleForTest + " ")
+        nav.dispatchTouchEvent(ev(t, t + 500, MotionEvent.ACTION_UP, x, y))
+        sb.append("A(500ms)=[" + nav.barTextForTest + "] ")
+        // the keys view directly
+        val (kx, ky) = nav.keyCenterForTest("w")!!
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, kx, ky); idle(500)
+        nav.touchKeysForTest(MotionEvent.ACTION_UP, kx, ky)
+        sb.append("C(direct,500ms)=[" + nav.barTextForTest + "]")
         throw AssertionError(sb.toString())
     }
 
