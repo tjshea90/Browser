@@ -28,8 +28,8 @@ The page plays the tricks real sites play and writes one line per check into its
   rmedia    <video src=/r/clip.mp4>      redirect=noopmp4-1s           -> loadedmetadata (the control page's file is a 404)
   rframe    <iframe src=/r/frame.html>   redirect=noopframe            -> load fires, the frame is empty
  AW1e: scriptlets that rewrite what the page receives or defuse small things
-  rrepfetch fetch /r/player.json?f=1     trusted-replace-fetch-response  -> the field "adPlacements" arrives renamed "no_ads"
-  rrepxhr   XHR   /r/player.json?x=1     trusted-replace-xhr-response    -> the field "adSlots" arrives renamed "no_slots"
+  rrepfetch fetch /r/stream.json?f=1     trusted-replace-fetch-response  -> the field "adPlacements" arrives renamed "no_ads"
+  rrepxhr   XHR   /r/stream.json?x=1     trusted-replace-xhr-response    -> the field "adSlots" arrives renamed "no_slots"
   rbab      typeof BlockAdBlock          nobab                         -> 'function' (a stub that says "no ad blocker"), 'undefined' on the control page
   rbabcb    new BlockAdBlock().onNotDetected(fn)                         -> fn is called
   rpopads   typeof window.PopAds         popads-dummy                  -> 'object'
@@ -96,8 +96,8 @@ PAGE = r"""<!doctype html>
    var x = new XMLHttpRequest(); x.open('GET', '/r/data.json'); x.onload = function () { say('rxhr', 'status ' + x.status + ' text ' + x.responseText); }; x.onerror = function () { say('rxhr', 'error (blocked, no stand-in)'); }; x.send();
    fetch('/r/data.json?f=1').then(function (r) { return r.text(); }).then(function (t) { say('rfetch', 'text ' + t); }, function (e) { say('rfetch', 'error ' + e); });
    var v = document.createElement('video'); v.muted = true; v.onloadedmetadata = function () { say('rmedia', 'metadata, duration ' + v.duration); }; v.onerror = function () { say('rmedia', 'error (blocked or 404 or undecodable): ' + (v.error ? v.error.code + ' ' + String(v.error.message).slice(0, 80) : '?')); }; v.src = '/r/clip.mp4'; document.body.appendChild(v);
-   fetch('/r/player.json?f=1').then(function (r) { return r.text(); }).then(function (t) { say('rrepfetch', t.indexOf('"no_ads"') >= 0 ? 'ad field renamed: ' + t : 'unchanged: ' + t); }, function (e) { say('rrepfetch', 'error ' + e); });
-   var x2 = new XMLHttpRequest(); x2.open('GET', '/r/player.json?x=1'); x2.onload = function () { say('rrepxhr', x2.responseText.indexOf('"no_slots"') >= 0 ? 'ad field renamed: ' + x2.responseText : 'unchanged: ' + x2.responseText); }; x2.onerror = function () { say('rrepxhr', 'error'); }; x2.send();
+   fetch('/r/stream.json?f=1').then(function (r) { return r.text(); }).then(function (t) { say('rrepfetch', t.indexOf('"no_ads"') >= 0 ? 'ad field renamed: ' + t : 'unchanged: ' + t); }, function (e) { say('rrepfetch', 'error ' + e); });
+   var x2 = new XMLHttpRequest(); x2.open('GET', '/r/stream.json?x=1'); x2.onload = function () { say('rrepxhr', x2.responseText.indexOf('"no_slots"') >= 0 ? 'ad field renamed: ' + x2.responseText : 'unchanged: ' + x2.responseText); }; x2.onerror = function () { say('rrepxhr', 'error'); }; x2.send();
    say('rbab', typeof window.BlockAdBlock);
    try { new window.BlockAdBlock({ checkOnLoad: true }).onNotDetected(function () { say('rbabcb', 'no-blocker callback called'); }); } catch (e) { say('rbabcb', 'no BlockAdBlock on this page'); }
    say('rpopads', typeof window.PopAds);
@@ -138,13 +138,13 @@ class H(http.server.BaseHTTPRequestHandler):
             self._write("POPUP opened host=%s" % host)
             return self._send(200, b"<!doctype html><title>popup</title><h1>an ad window opened</h1>")
         if u.path.startswith("/r/"):
-            if u.path != "/r/player.json": self._write("REAL %s host=%s (this request reached the server: nothing answered it inside the browser)" % (u.path, host))
+            if u.path != "/r/stream.json": self._write("REAL %s host=%s (this request reached the server: nothing answered it inside the browser)" % (u.path, host))
             if u.path == "/r/tag.js": return self._send(200, b"window.__realTag = 1;", "text/javascript")
             if u.path == "/r/plain.js": return self._send(200, b"window.__realPlain = 1;", "text/javascript")
             if u.path == "/r/ima.js": return self._send(200, b"window.__realIma = 1;", "text/javascript")
             if u.path == "/r/pixel.gif": return self._send(200, b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;", "image/gif")
             if u.path == "/r/data.json": return self._send(200, b'{"real":true,"padding":"xxxxxxxxxxxxxxxx"}', "application/json")
-            if u.path == "/r/player.json": return self._send(200, b'{"video":"movie.mp4","adPlacements":[{"a":1}],"adSlots":["x"],"keep":"yes"}', "application/json")
+            if u.path == "/r/stream.json": return self._send(200, b'{"video":"movie.mp4","adPlacements":[{"a":1}],"adSlots":["x"],"keep":"yes"}', "application/json")
             if u.path == "/r/frame.html": return self._send(200, b"<!doctype html><title>real</title><body>REAL FRAME</body>")
             return self._send(404)
         if u.path == "/log":
