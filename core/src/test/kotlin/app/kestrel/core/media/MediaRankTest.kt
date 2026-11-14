@@ -148,4 +148,14 @@ class MediaRankTest {
         val link = MediaCandidate("https://cdn.example/teaser.mp4", MediaKind.FILE, "", -1, page).also { it.fromMarkup = true }
         assertEquals(listOf(link.url), urls(MediaRank.rank(listOf(link)).main))
     }
+
+    // ---- RX3-V5: a stream whose playlist was read and cannot be saved (live, protected) or is a clip goes under "Other files"
+
+    @Test fun aLiveStreamAndAnAdClipGoUnderOtherFilesNextToTheRealOne() {
+        val live = hls("https://cdn.example/live.m3u8").also { it.looked = true; it.live = true }
+        val clip = hls("https://cdn.example/ad.m3u8").also { it.looked = true; it.durationMs = 15_000 }
+        val film = hls("https://cdn.example/film.m3u8").also { it.looked = true; it.durationMs = 5_400_000 }
+        val r = MediaRank.rank(listOf(live, clip, film))
+        assertEquals(listOf(film.url), urls(r.main)); assertEquals(setOf(live.url, clip.url), urls(r.other).toSet())
+    }
 }
