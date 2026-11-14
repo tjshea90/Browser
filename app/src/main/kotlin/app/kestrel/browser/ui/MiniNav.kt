@@ -194,8 +194,24 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
     // ------------------------------------------------------------------ show, hide, the keyboard
 
-    /** Shows or hides the panel with a long press on the invisible corner (AU1): the other state. */
+    /** Shows or hides the panel: the other state. */
     fun toggle() { setOpen(!isOpen, true) }
+
+    /**
+     * A long press on open space (AY2, owner message 39): the panel appears UNDER the finger, [xWin] / [yWin] being the finger's place in the window; kept inside the page area. When it was open somewhere
+     * else it moves there. The place is remembered like any other the person moved it to.
+     */
+    fun showAt(xWin: Float, yWin: Float) {
+        val loc = IntArray(2); getLocationInWindow(loc)
+        val d = density
+        val xdp = (xWin - loc[0]) / d; val ydp = (yWin - loc[1]) / d
+        val w = outlineW()
+        gRight = (availWdp - (xdp + w / 2f)).coerceIn(MIN_RIGHT_DP, Math.max(MIN_RIGHT_DP, availWdp - w - MIN_RIGHT_DP))
+        gTop = (ydp + SHOW_BELOW_DP).coerceIn(BAND_DP.toFloat(), Math.max(BAND_DP.toFloat(), availHdp - outlineH() - 4f))
+        clampStored()
+        if (isOpen) { applyGeometry(); saveGeometry() }
+        else { setOpen(true, animate = false); applyGeometry(); saveGeometry() }
+    }
 
     /** Shows or hides the panel; [animate] false jumps (the start of the app). */
     fun setOpen(open: Boolean, animate: Boolean = true, notify: Boolean = true) {
@@ -1363,6 +1379,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     companion object {
         const val SLIDE_MS = 200L
         /** Sliding over the space key: the finger must move this far sideways before it is a cursor slide and not a space, and every step of this width moves the cursor one character. */
+        /** A long press shows the panel with its top edge this far below the finger. */
+        const val SHOW_BELOW_DP = 26f
         const val SLIDE_START_DP = 10f
         const val SLIDE_STEP_DP = 11f
         /** How long a pressed button, key or bar stays lit. */
