@@ -101,7 +101,7 @@ internal class RuleParser {
                             if (dom.isEmpty()) continue
                             var ex = false
                             if (dom.startsWith("~")) { ex = true; dom = dom.substring(1) }
-                            if (dom.indexOf('*') >= 0) return fail(Skip.ENTITY_DOMAIN)
+                            if (dom.indexOf('*') >= 0 && !isEntity(dom)) return fail(Skip.ENTITY_DOMAIN) // AW1d: `site.*` is understood (any public suffix); a star anywhere else is not
                             val hash = Hash.h64(dom.trimEnd('.'))
                             if (ex) (exclude ?: ArrayList<Long>().also { exclude = it }).add(hash)
                             else (include ?: ArrayList<Long>().also { include = it }).add(hash)

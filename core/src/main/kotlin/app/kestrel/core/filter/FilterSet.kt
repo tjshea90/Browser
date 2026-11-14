@@ -113,6 +113,7 @@ class FilterSet internal constructor(
         @JvmField val pageHost: String?,
         @JvmField val typeMask: Int,
         @JvmField val thirdParty: Boolean,
+        @JvmField val psl: Psl,
     ) {
         @JvmField var blocked = false
         @JvmField var important = false
@@ -123,10 +124,13 @@ class FilterSet internal constructor(
         @JvmField var evals = 0 // rule evaluations so far (work accounting, see MAX_GRAM_EVALS)
         private var pageHashes: LongArray? = null
 
+        /** The hashes a `$domain=` entry is compared with: the page host and every parent suffix, then (AW1d) its entity keys `www.site.*`, `site.*` for entries such as `site.*`. */
         fun pageSuffixHashes(): LongArray {
             var a = pageHashes
             if (a == null) {
                 a = suffixHashes(pageHost)
+                val ph = pageHost
+                if (ph != null) { val e = CosmeticIndex.entityKeys(ph, psl); if (e != null) a = a + e }
                 pageHashes = a
             }
             return a
@@ -533,7 +537,7 @@ class FilterSet internal constructor(
             }
             val host = s.substring(hs, he)
             val third = typeMask != RequestType.DOCUMENT && pageHost != null && !psl.isSameSite(host, pageHost)
-            return Ctx(s, host, hs, he, pageHost, typeMask, third)
+            return Ctx(s, host, hs, he, pageHost, typeMask, third, psl)
         }
 
         private fun allDigits(s: String, from: Int, to: Int): Boolean {

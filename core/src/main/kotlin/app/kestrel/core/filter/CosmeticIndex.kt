@@ -217,12 +217,12 @@ internal class CosmeticIndex(
 
     companion object {
         /** `www.site.*` and `site.*` for `www.site.co.uk` (the labels before the public suffix, each suffix of them followed by `.*`), hashed like the entity entries of the lists; null for an address that has no public suffix (an IP). */
-        internal fun entityKeys(host: String): LongArray? {
+        internal fun entityKeys(host: String, psl: Psl = Psl.default): LongArray? {
             if (host.isEmpty() || host.indexOf(':') >= 0) return null
             var allNumeric = true
             for (c in host) if (c != '.' && c !in '0'..'9') { allNumeric = false; break }
             if (allNumeric) return null
-            val site = Psl.default.siteOf(host) ?: return null
+            val site = psl.siteOf(host) ?: return null
             val dot = site.indexOf('.')
             if (dot <= 0) return null
             val prefixEnd = host.length - (site.length - dot - 1) - 1 // host without ".<public suffix>"
