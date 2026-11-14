@@ -113,5 +113,7 @@ bounds from a uiautomator dump of the view named "Keyboard", key centres from th
 * "hello" -> bar `hello ` + strip `hello | help | jello`; "world" after it -> `hello world ` + `world | wield | worlds`; a tap on the second guess swapped it (`hello wield `, strip led by `wield`); ONE Backspace
   removed the whole `wield ` (`hello `, strip back to the hint). A picture half-way through a glide shows the neon trail over the keys.
 * Menu > Diagnostics: `Glide typing: 2 glides: best word kept 1 (50 %), another candidate picked 1, deleted right away 0; decode avg 1607 ms, worst 1880 ms; word list 82971 words ready after 743 ms; thumb habit x 0.7 y -0.0 dp`.
+With the warm-up decode (second run of the build): `Glide typing: 1 glides; decode avg 676 ms, worst 676 ms; word list 82971 words ready after 1899 ms, first decode (warm-up) 5077 ms` - the first real glide took 0.68 s
+instead of 1.6-1.9 s (the emulator's runtime compiled the decoder during the warm-up).
 Not run: any real thumb, the real tablet's speed (the emulator's 1.6 s per decode is software emulation; see section 4), the owner's feel for the key size.
 
