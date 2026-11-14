@@ -37,17 +37,19 @@ class PatternMemoryTest {
         val bigger = GlideEval.keysFor(450f, 120f) // wider and flatter, as the keyboard can be dragged to
         val a = Fingerprint.ofWord("for", keys)!!; val b = Fingerprint.ofWord("for", bigger)!!
         assertTrue("distance ${Fingerprint.distance(a, b)}", Fingerprint.distance(a, b) < 0.08f)
-        // and a glide, not just the ideal line
-        val g = GestureSim(keys, Random(4)).path("for", SimNoise.CALM)!!
-        val sx = bigger.cx['q' - 'a'] / keys.cx['q' - 'a']
-        assertNotNull(Fingerprint.of(g.xs, g.ys, g.xs.size, keys))
-        assertTrue(sx > 0f)
+        // a drawn glide, moved onto the other keyboard the way the finger would have moved over it: the same numbers
+        val g = glide("for", SimNoise.NORMAL, 4)
+        val rowA = (keys.cy['z' - 'a'] - keys.cy['q' - 'a']) / 2f; val rowB = (bigger.cy['z' - 'a'] - bigger.cy['q' - 'a']) / 2f
+        val xs2 = FloatArray(g.xs.size) { bigger.cx['q' - 'a'] + (g.xs[it] - keys.cx['q' - 'a']) * bigger.pitch / keys.pitch }
+        val ys2 = FloatArray(g.ys.size) { bigger.cy['q' - 'a'] + (g.ys[it] - keys.cy['q' - 'a']) * rowB / rowA }
+        val onA = Fingerprint.of(g.xs, g.ys, g.xs.size, keys)!!; val onB = Fingerprint.of(xs2, ys2, xs2.size, bigger)!!
+        assertTrue("distance ${Fingerprint.distance(onA, onB)}", Fingerprint.distance(onA, onB) < 0.01f)
     }
 
     @Test fun twoGlidesOfTheSameWordAreCloserThanGlidesOfTwoWords() {
         val sameA = print("for", SimNoise.NORMAL, 1); val sameB = print("for", SimNoise.NORMAL, 2)
-        val other = print("fur", SimNoise.NORMAL, 3)
-        assertTrue("same word ${Fingerprint.distance(sameA, sameB)} vs other ${Fingerprint.distance(sameA, other)}", Fingerprint.distance(sameA, sameB) < Fingerprint.distance(sameA, other) + 0.2f)
+        val other = print("the", SimNoise.NORMAL, 3)
+        assertTrue("same word ${Fingerprint.distance(sameA, sameB)} vs other ${Fingerprint.distance(sameA, other)}", Fingerprint.distance(sameA, sameB) < Fingerprint.distance(sameA, other))
         assertEquals(0f, Fingerprint.distance(sameA, sameA), 1e-6f)
         assertEquals(Fingerprint.distance(sameA, other), Fingerprint.distance(other, sameA), 1e-6f)
     }
