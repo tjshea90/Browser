@@ -1,21 +1,22 @@
-# CHECKPOINT 2165 — read me first, then TASKS.md
+# CHECKPOINT 2177 — read me first, then TASKS.md
 
-**Written:** 2026-11-14T15:47:54Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `efc02b9` (this checkpoint is the commit after it)
+**Written:** 2026-11-14T16:05:58Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `75df685` (this checkpoint is the commit after it)
 
 ## Just done
-AW1e BUILT and EMULATOR-PROVEN (Gecko 160 lab): trusted-replace-fetch-response / trusted-replace-xhr-response (text rewritten in the answer: adPlacements -> no_ads, adSlots -> no_slots, all matching rules apply in turn), nobab/nofab (BlockAdBlock/FuckAdBlock stub accessors, callback fired), popads-dummy, norafif, href-sanitizer (?url, -base64, text; bug found on the emulator: a finished link was re-read without its parameter and pointed at the page itself -> empty target rejected, test strengthened); /api/graphql-style needles are addresses not /regex/flags (flags only gimsuy); quick-fixes list added to make-default-lists.sh + FilterUpdater (quick-fixes.min.txt) + docs; default.kfs 6,617 KB with 12,330 scriptlet rules (SCRIPTLET_UNSUPPORTED 594 -> 500); Settings text of the switch says what it does now (also stand-ins, video-player data, terms may forbid); web-tests scriptlets 34/34, Kotlin ScriptletRulesTest +2
+AW1d DONE (network $domain=site.* entity domains in Kotlin + engine.js, differential 100% on the mini corpus and 67,655 real-list requests, ENTITY_DOMAIN skips 279 -> 37, emulator proof), AW1e/AW1f/AW1g ticked with evidence; DefaultListsRegressionTest has the new safety guards; full suites green (core all, app 291, lint 0 errors, web-tests 223/223); HANDOFF.md + research 14.3/14.4 written; default.kfs 6,643 KB
 
 ## Do this next
-run the FULL suites with cleanTest (./gradlew :core:cleanTest :core:test :app:testDebugUnitTest :app:lintDebug :geckoapp:compileDebugKotlin --offline, web-tests npm test, real-diff.js on a fresh KESTREL_REAL_DIFF dir) and fix what the new lists/scriptlets break; then AW1f (false-positive safety: DefaultListsRegressionTest corpus of mainstream hosts + payload sanity), AW1g (Diagnostics wording), research/ADBLOCK_ENGINE.md 14.3 for AW1e, AW1d (network entity domains, 279 rules, optional), AW1h ship alpha37: bump geckoapp versionCode 138 / 0.3.0-alpha37 (extension manifest 1.0.138 via ship.sh), bash ship.sh gecko note, dispatch android.yml, wait, record-release, answer the owner (AW1i: repeated message 37); the emulator is running (lab server 8001 + adb reverse + debug.kestrel.pref1 set; 'System UI isn't responding' dialog: tap Wait); heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN is disabled
+AW1h SHIP alpha37: bump geckoapp/build.gradle.kts versionCode 138 / versionName 0.3.0-alpha37, write the ASCII plain-words release note (what the owner sees: pop-up walls and countdowns fixed before the page runs, blocked ad files answered so players start, YouTube-style ad data rewritten, link-shortener links point at the target, entity-domain rules, Quick fixes list; the Settings switch Fix ad and anti-adblock scripts controls it; Diagnostics numbers; NOT run on the tablet or on real sites), bash ship.sh gecko "note" (gates: handoff self-test, ext manifest 1.0.138), dispatch android.yml (mcp__github__actions_run_trigger owner tjshea90 repo Browser ref ccr-a57c163e-mtq8js inputs app=gecko full_build=true note), wait for run + tag, get_release_by_tag, bash tools/record-release.sh <tag> note, claim.sh AW1h --done and AW1i --done, answer the owner in plain words (AW1i repeated message 37; re-list open items: Diagnostics paste for Glide typing + Mini keyboard in page fields, AI1c Doraby/Cloudflare wording + page report, choppy-video link, scroll/Back feel, Proton Mail numbers + keyboard test, scheduled GitHub ad-list build yes/no, private signing key SEC-1, network lab results/LIC-1/UI-3/P2b, AS1 stored libraries yes/no, AS2 per-process memory line); heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN is disabled
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  7e29314 ckpt 2165: AW1e BUILT and EMULATOR-PROVEN (Gecko 160 lab): trusted-replace-fetch-respons
   7cfc54d ckpt 2154: AW1c DONE and EMULATOR-PROVEN (Gecko 160): data: stand-ins for script/image/x
   41441d2 ckpt 2148: AW1c BUILT (not yet emulator-proven): engine.js mirrors FilterSet.check for $
   8085098 ckpt 2130: AW1b DONE and EMULATOR-PROVEN: early delivery works (lab adlab.test vs contro
@@ -25,8 +26,7 @@ run the FULL suites with cleanTest (./gradlew :core:cleanTest :core:test :app:te
   d580e95 ckpt 2088: AW1a done: blocker mapped and the plan written to research/ADBLOCK_ENGINE.md 
   cdd4e9d ckpt 2086: owner message 37 written into TASKS (AW1 finish the ad blocking: scriptlets, 
   aba038a ckpt 2083: heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN DISABLED (update_trigger enabled=fals
-  5375332 ckpt 2081: alpha36 RELEASED AND RECORDED: kestrel-g-v0.3.0-alpha36 (gecko code 137), run
 ```
 
-(10 automatic checkpoint(s) since the last deliberate one — the
+(11 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
