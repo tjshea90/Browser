@@ -131,8 +131,8 @@ test('RX3-Y1: actions: delete (default), set, merge, repl, on trusted forms; the
   assert.equal(await parsed(edit('$..adTimeout=0'), '{"a":{"adTimeout":9}}'), '{"a":{"adTimeout":0}}');
   assert.equal(await parsed(edit('[?.type=="ads"].visibility.status="hidden"'), '{"type":"ads","visibility":{"status":"shown"}}'), '{"type":"ads","visibility":{"status":"hidden"}}');
   assert.equal(await parsed(edit('[?.type=="ads"].visibility.status="hidden"'), '{"type":"post","visibility":{"status":"shown"}}'), '{"type":"post","visibility":{"status":"shown"}}', 'a root that fails the test is untouched');
-  assert.equal(await parsed(edit('v2:$.param_stores.*./^interstitial_/.value.shouldShow=false'), '{"param_stores":{"interstitial_a":{"value":{"shouldShow":true}},"other":{"value":{"shouldShow":true}}}}'),
-    '{"param_stores":{"interstitial_a":{"value":{"shouldShow":false}},"other":{"value":{"shouldShow":true}}}}', 'the v2:$ prefix and a regex key (nytimes shape)');
+  assert.equal(await parsed(edit('v2:$.param_stores.*./^interstitial_/.value.shouldShow=false'), '{"param_stores":{"store1":{"interstitial_a":{"value":{"shouldShow":true}},"other":{"value":{"shouldShow":true}}}}}'),
+    '{"param_stores":{"store1":{"interstitial_a":{"value":{"shouldShow":false}},"other":{"value":{"shouldShow":true}}}}}', 'the v2:$ prefix and a regex key one level below .* (nytimes shape)');
   assert.equal(await parsed(edit('.u=repl({"regex":"(?:#reloadxhr)?$","replacement":"#reloadxhr"})'), '{"u":"https://x/y"}'), '{"u":"https://x/y#reloadxhr"}');
   assert.equal(await parsed(edit('.u=repl({"regex":"/; (adunit|channel)\\\\b/","replacement":""})'), '{"u":"Mozilla; channel more"}'), '{"u":"Mozilla more"}', 'the /regex/ form (list shape)');
 });
