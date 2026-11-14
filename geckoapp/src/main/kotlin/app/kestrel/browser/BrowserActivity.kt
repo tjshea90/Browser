@@ -163,6 +163,15 @@ open class BrowserActivity : Activity(), DockListener {
                 tmp.writeText(text, Charsets.UTF_8); if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
             } catch (e: Exception) { /* the next change tries again */ }
         }
+        // typing into the page's own text field (AU3)
+        override fun navPageField(): app.kestrel.browser.ui.PageField? {
+            val t = current ?: return null
+            val ses = t.session ?: return null
+            if (geckoView.session !== ses || homeShown(t) || t.error != null || !browserInFront() || currentFocus is android.widget.EditText) return null // a field of the browser's own (address bar, find bar) has the keyboard
+            return t.gecko.fieldInput?.probe()
+        }
+        override fun navKeyboardChanged(showing: Boolean) { if (showing) hideKeyboard() } // the system keyboard goes down while the mini one is up
+        override fun navPrivateTab(): Boolean = current?.isPrivateTab == true
         override fun navGlideHosts(done: (List<String>) -> Unit) {
             val d = db ?: return
             Io.exec {
@@ -811,6 +820,10 @@ open class BrowserActivity : Activity(), DockListener {
         s.promptDelegate = d
         s.permissionDelegate = d
         s.contentBlockingDelegate = d
+        // AU3: the mini keyboard types into the page's own text field: this wrapper keeps the system keyboard down while the mini one is up and tells the panel when a field gains or loses focus
+        val input = PageFieldInput(s, s.textInput.delegate, held = { ::miniNav.isInitialized && miniNav.keyboardShowing }, changed = { Io.main.post { if (::miniNav.isInitialized) miniNav.pageFieldChanged() } })
+        s.textInput.delegate = input
+        tab.gecko.fieldInput = input
         return s
     }
 

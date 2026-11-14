@@ -13,6 +13,8 @@ interface PageField {
     val enterSubmits: Boolean
     /** A private tab: the keyboard learns nothing from it. */
     val privateTab: Boolean
+    /** What kind of field it is, in a few words, for Diagnostics (for example "text, Enter = search"). */
+    val label: String
     /** Puts [text] in at the caret (what the system keyboard does when it commits text). */
     fun insert(text: String)
     /** Takes [count] characters off before the caret (Backspace). */
