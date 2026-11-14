@@ -66,6 +66,26 @@ class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int 
     val confusionCount: Int @Synchronized get() = confusions.size
     val tripleCount: Int @Synchronized get() = triples.size
 
+    /**
+     * Adds everything [other] learned to this (an imported file, AX1): counts add up, the short memory keeps the larger value, shapes merge like learned ones. A file cannot grow the tables past
+     * their caps: the usual trimming runs afterwards.
+     */
+    @Synchronized fun mergeFrom(other: PersonalModel) {
+        if (other === this) return
+        synchronized(other) {
+            for ((k, v) in other.words) { words[k] = (words[k] ?: 0f) + v; total += v }
+            for ((k, v) in other.pairs) pairs[k] = (pairs[k] ?: 0f) + v
+            for ((k, v) in other.triples) triples[k] = (triples[k] ?: 0f) + v
+            for ((k, v) in other.confusions) confusions[k] = (confusions[k] ?: 0f) + v
+            for ((k, v) in other.recent) recent[k] = Math.max(recent[k] ?: 0f, v)
+            patterns.mergeFrom(other.patterns)
+        }
+        rebuildTotals()
+        if (words.size > capWords || pairs.size > capPairs || triples.size > capTriples) trim()
+        if (confusions.size > capConfusions) { val cut = confusions.values.sorted()[confusions.size - capConfusions]; val it = confusions.entries.iterator(); while (it.hasNext() && confusions.size > capConfusions) { val e = it.next(); if (e.value < cut) it.remove() } }
+        if (total > DECAY_AT) decay()
+    }
+
     /** How much the person uses [word] (0 when never). */
     @Synchronized fun weightOf(word: String): Float = words[norm(word) ?: return 0f] ?: 0f
 
@@ -203,20 +223,28 @@ class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int 
             return false
         }
 
+        /** The largest weight a line may carry (a damaged or hostile file cannot make one word overwhelm the model). */
+        const val MAX_WEIGHT = 100_000f
+
+        /**
+         * Reads what [serialize] wrote (or an export file's body). Every kind of line is bounded by its table's cap and every number must be finite and positive, so a damaged or hand-made file can
+         * fill the tables only as far as the person's own use could.
+         */
         fun parse(text: String, capWords: Int = 4000, capPairs: Int = 8000): PersonalModel {
             val m = PersonalModel(capWords, capPairs)
             synchronized(m) {
+                var nw = 0; var np = 0; var nt = 0; var nc = 0; var nr = 0
                 for (line in text.lineSequence()) {
                     val p = line.trim().split(' ')
                     if (p.size > 3 && p[0] == "s") { m.patterns.parseLine(p); continue } // a shape's last number may be zero or negative: it is not a weight
                     val v = p.lastOrNull()?.toFloatOrNull() ?: continue
-                    if (v <= 0f) continue
+                    if (!(v > 0f) || v > MAX_WEIGHT) continue
                     when {
-                        p.size == 3 && p[0] == "w" -> { val w = norm(p[1]) ?: continue; m.words[w] = v; m.total += v }
-                        p.size == 4 && p[0] == "p" -> { val a = ctx(p[1]) ?: continue; val b = norm(p[2]) ?: continue; m.pairs["$a $b"] = v }
-                        p.size == 5 && p[0] == "t" -> { val a = ctx(p[1]) ?: continue; val b = ctx(p[2]) ?: continue; val c = norm(p[3]) ?: continue; m.triples["$a $b $c"] = v }
-                        p.size == 4 && p[0] == "c" -> { val a = norm(p[1]) ?: continue; val b = norm(p[2]) ?: continue; if (a != b) m.confusions["$a $b"] = v }
-                        p.size == 3 && p[0] == "r" -> { val w = norm(p[1]) ?: continue; m.recent[w] = v }
+                        p.size == 3 && p[0] == "w" -> { if (nw >= m.capWords) continue; val w = norm(p[1]) ?: continue; m.words[w] = v; m.total += v; nw++ }
+                        p.size == 4 && p[0] == "p" -> { if (np >= m.capPairs) continue; val a = ctx(p[1]) ?: continue; val b = norm(p[2]) ?: continue; m.pairs["$a $b"] = v; np++ }
+                        p.size == 5 && p[0] == "t" -> { if (nt >= m.capTriples) continue; val a = ctx(p[1]) ?: continue; val b = ctx(p[2]) ?: continue; val c = norm(p[3]) ?: continue; m.triples["$a $b $c"] = v; nt++ }
+                        p.size == 4 && p[0] == "c" -> { if (nc >= m.capConfusions) continue; val a = norm(p[1]) ?: continue; val b = norm(p[2]) ?: continue; if (a != b) { m.confusions["$a $b"] = v; nc++ } }
+                        p.size == 3 && p[0] == "r" -> { if (nr >= m.capWords) continue; val w = norm(p[1]) ?: continue; m.recent[w] = v; nr++ }
                     }
                 }
                 m.rebuildTotals()
