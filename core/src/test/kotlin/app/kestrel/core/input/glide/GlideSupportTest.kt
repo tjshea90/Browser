@@ -144,4 +144,97 @@ class GlideSupportTest {
         g.preview(p.xs, p.ys, p.xs.size, null) { done++ } // free again
         assertEquals(2, queued.size)
     }
+
+    // ------------------------------------------------------------------ AX1: the shape of a glide is learned from what the person does next
+
+    private fun shapeEngine(): GlideTyping {
+        val bytes = LexiconFile.build(
+            listOf("hello" to 500L, "help" to 800L, "held" to 300L, "hell" to 300L, "world" to 900L, "word" to 1200L, "the" to 9000L, "she" to 2000L, "good" to 2000L, "for" to 8000L, "fur" to 600L).map { LexiconFile.Entry(it.first, it.second) },
+            emptyList(),
+        )
+        return GlideTyping({ bytes }, direct).also { it.prepare(keys, null, null) }
+    }
+
+    private fun glideOf(g: GlideTyping, word: String, seed: Long = 3): List<GlideCandidate> {
+        val p = GestureSim(keys, Random(seed)).path(word, SimNoise.CALM)!!
+        var out: List<GlideCandidate> = emptyList()
+        g.decode(p.xs, p.ys, p.xs.size, null) { out = it.candidates }
+        return out
+    }
+
+    private fun exported(g: GlideTyping): String { var t = ""; g.exportText(null, null) { t = it }; return t }
+
+    @Test fun aKeptGlideLeavesItsShapeAndForgetRemovesIt() {
+        val g = shapeEngine()
+        val c = glideOf(g, "world")
+        assertEquals("world", c.first().text)
+        g.learn(null, "world", 1f, fromGlide = true)
+        val text = exported(g)
+        assertTrue(text, text.lines().any { it.startsWith("s world 1.00 ") })
+        assertTrue(g.stats.line(), g.stats.line().contains("1 glide shapes of 1 words remembered"))
+        g.forgetAll()
+        assertFalse(exported(g).lines().any { it.startsWith("s ") })
+        assertFalse(g.stats.line().contains("glide shapes"))
+    }
+
+    @Test fun aWordTypedLetterByLetterHasNoShape() {
+        val g = shapeEngine()
+        glideOf(g, "world")
+        g.learn(null, "good", 1f) // typed, not glided (fromGlide stays false): the last glide's shape does not belong to it
+        assertFalse(exported(g).lines().any { it.startsWith("s ") })
+    }
+
+    @Test fun aDeletedGlideAndTheWordTypedInItsPlaceKeepTheShapeOnlyWhenItCouldHaveMeantIt() {
+        val g = shapeEngine()
+        glideOf(g, "world"); g.glideDeleted("word")
+        g.retyped("world")
+        assertTrue(exported(g).lines().any { it.startsWith("s world 3.00 ") })
+        // another word that this path never could have drawn: nothing is remembered for it
+        glideOf(g, "she"); g.glideDeleted("the")
+        g.retyped("good")
+        assertFalse(exported(g).lines().any { it.startsWith("s good ") })
+        // and a word typed without a deleted glide before it has no shape to take
+        g.retyped("hello")
+        assertFalse(exported(g).lines().any { it.startsWith("s hello ") })
+    }
+
+    @Test fun aCorrectionMakesWhatWasGuessedLessSureForTheSameShape() {
+        val g = shapeEngine()
+        val first = glideOf(g, "word", 7).first().text
+        g.learn(null, first, 1f, fromGlide = true) // kept: its shape is remembered
+        assertTrue(exported(g).lines().any { it.startsWith("s $first ") })
+        glideOf(g, "word", 7)                       // the same path again, and now the person says it was another word
+        g.learn(null, "world", 3f, guessed = first, guessedWeight = 1f, fromGlide = true)
+        val lines = exported(g).lines()
+        assertTrue(lines.any { it.startsWith("s world 3.00 ") })
+        assertFalse("the guessed word's shape for that glide is gone: $lines", lines.any { it.startsWith("s $first ") })
+    }
+
+    @Test fun anExportFileIsTakenInAndTheThumbHabitOfThisKeyboardStays() {
+        val a = shapeEngine(); glideOf(a, "world"); a.learn(null, "world", 3f, fromGlide = true)
+        var file = ""; a.exportText(floatArrayOf(0.2f, 0.1f), UserWords().also { it.add("doraby", 2) }) { file = it }
+        val b = shapeEngine()
+        val own = UserWords(); var summary: LearnedExport.Summary? = null; var habit: FloatArray? = null
+        b.importText(file, false, own, { habit = it }) { summary = it }
+        assertNotNull(summary); assertTrue(own.contains("doraby"))
+        assertEquals(0.2f, habit!![0], 0.001f) // this keyboard had no habit of its own yet
+        assertTrue(exported(b).lines().any { it.startsWith("s world ") })
+        // a second keyboard that already has a habit keeps it
+        var habit2: FloatArray? = null
+        b.importText(file, false, own, { habit2 = it }) { }
+        assertNull(habit2)
+        // something that is not an export is refused and changes nothing
+        var bad: LearnedExport.Summary? = summary
+        b.importText("not an export", false, own, { }) { bad = it }
+        assertNull(bad)
+    }
+
+    @Test fun replacingStartsFromTheFile() {
+        val a = shapeEngine(); a.learn(null, "hello", 5f)
+        var file = ""; a.exportText(null, null) { file = it }
+        val b = shapeEngine(); b.learn(null, "good", 7f)
+        b.importText(file, true, UserWords(), { }) { }
+        val t = exported(b)
+        assertTrue(t.lines().any { it.startsWith("w hello ") }); assertFalse(t.lines().any { it.startsWith("w good ") })
+    }
 }
