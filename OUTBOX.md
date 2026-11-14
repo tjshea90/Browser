@@ -1462,3 +1462,7 @@
 ## 2026-11-14T00:24:44Z
 > The icon check is rerunning with the app already warm, because the first run came right after a cold start, when Shields is not yet active on the page. Waiting for it to finish.
 <!-- sha:77f6538cc7a0 -->
+
+## 2026-11-14T00:27:42Z
+> Status: the blocked-page icon and the top-right panel are both proven on the emulator and ticked. I'm doing one last emulator check that the new Diagnostics lines show on screen, then I'll run the full test suite and ship alpha33.
+<!-- sha:b8c2b206b2a0 -->
