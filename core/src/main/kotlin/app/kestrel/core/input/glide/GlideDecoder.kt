@@ -63,9 +63,14 @@ class GlideParams(
     val biasGain: Float = 0.8f,
     /** Cost of each pitch squared of that move, so a word cannot buy a good fit by sliding the whole path. */
     val biasW: Float = 3.0f,
+    /** A word whose path is further than this from the finger's (squared pitches per letter) is no answer: a glide that fits nothing says so instead of typing the nearest word. */
+    val maxPerLetter: Float = 2.0f,
 )
 
-class GlideCandidate(val text: String, val score: Float, val cost: Float, val prior: Float)
+class GlideCandidate(val text: String, val score: Float, val cost: Float, val prior: Float, val letters: Int = 1) {
+    /** How far the path was from the word, per letter (pitch squared): the smaller the better. */
+    val perLetter: Float get() = cost / letters
+}
 
 /**
  * Turns a finger path over the letter keys into words (AT1). The path is cut into equal steps; every word whose first and last letter are near where the finger went down and lifted is
@@ -160,7 +165,9 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
         val out = ArrayList<GlideCandidate>(heapN)
         for (h in 0 until heapN) {
             val lex = lexicons[heapLex[h]]; val id = heapId[h]
-            out.add(GlideCandidate(lex.text(id), -costs[h] + lm * priors[h], costs[h], priors[h]))
+            val letters = distinctLetters(lex, id)
+            if (costs[h] / letters > p.maxPerLetter) continue
+            out.add(GlideCandidate(lex.text(id), -costs[h] + lm * priors[h], costs[h], priors[h], letters))
         }
         out.sortByDescending { it.score }
         val seen = HashSet<String>()

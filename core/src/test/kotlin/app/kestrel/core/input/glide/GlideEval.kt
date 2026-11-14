@@ -62,7 +62,22 @@ object GlideEval {
 
     private fun distinct(lex: GlideLexicon, id: Int): Int { var m = 0; var p = -1; for (i in 0 until lex.length(id)) { val l = lex.letter(id, i); if (l != p) { m++; p = l } }; return m }
 
+    /** Paths that are not a word at all: a random wiggle over the keyboard. */
+    fun garbage(keys: GlideKeys, rnd: Random): GestureSim.Path {
+        val m = 3 + rnd.nextInt(6)
+        val xs = ArrayList<Float>(); val ys = ArrayList<Float>()
+        var px = keys.cx[rnd.nextInt(26)]; var py = keys.cy[rnd.nextInt(26)]
+        for (j in 0 until m) {
+            val tx = keys.cx[rnd.nextInt(26)]; val ty = keys.cy[rnd.nextInt(26)]
+            for (s in 0..12) { xs.add(px + (tx - px) * s / 12f + rnd.nextGaussian().toFloat() * 2f); ys.add(py + (ty - py) * s / 12f + rnd.nextGaussian().toFloat() * 2f) }
+            px = tx; py = ty
+        }
+        return GestureSim.Path(xs.toFloatArray(), ys.toFloatArray())
+    }
+
     class Result(val n: Int, val top1: Int, val top3: Int, val recall: Int, val millis: Double, val worstMillis: Double, val byLen: Map<Int, IntArray>) {
+        /** Cost per letter of the right answer when it was first (sorted), for choosing the point where a glide counts as "no word". */
+        var hitCosts: List<Float> = emptyList()
         fun pct(x: Int) = 100.0 * x / n
         override fun toString() = "n=$n top1=%.1f%% top3=%.1f%% recall=%.1f%% decode avg %.2f ms worst %.1f ms".format(pct(top1), pct(top3), pct(recall), millis, worstMillis)
         fun lengths(): String = byLen.toSortedMap().entries.joinToString("  ") { (l, a) -> "len$l:%.0f/%.0f%%(n=%d)".format(100.0 * a[1] / a[0], 100.0 * a[2] / a[0], a[0]) }
@@ -74,6 +89,7 @@ object GlideEval {
         val dec = GlideDecoder(keys, params)
         val lexicons = listOf<GlideLexicon>(lex) + extra
         var t1 = 0; var t3 = 0; var rec = 0; var n = 0; var nanos = 0L; var worst = 0L
+        val hitCosts = ArrayList<Float>()
         val byLen = HashMap<Int, IntArray>()
         for (pk in picks) {
             val word = lex.text(pk.id)
@@ -97,10 +113,10 @@ object GlideEval {
             val key = String(GlideLetters.keyOf(word))
             if (learn && c.any { String(GlideLetters.keyOf(it.text)) == key }) dec.learnFrom(lex, pk.id) // the person accepted this word (top choice or picked from the strip)
             if (trace != null && word == trace) { for (cand in listOf(word) + c.map { it.text }) { val ci = lex.idOf(cand); if (ci >= 0) println("    TRACE $cand: " + dec.debugTrace(lex, ci)) } }
-            if (c.isNotEmpty() && String(GlideLetters.keyOf(c[0].text)) == key) { t1++; a[1]++ }
+            if (c.isNotEmpty() && String(GlideLetters.keyOf(c[0].text)) == key) { t1++; a[1]++; hitCosts.add(c[0].perLetter) }
             if (c.any { String(GlideLetters.keyOf(it.text)) == key }) { t3++; a[2]++ }
         }
-        return Result(n, t1, t3, rec, nanos / 1e6 / n, worst / 1e6, byLen)
+        return Result(n, t1, t3, rec, nanos / 1e6 / n, worst / 1e6, byLen).also { it.hitCosts = hitCosts.sorted() }
     }
 
     fun parse(args: Array<String>): Map<String, String> = args.mapNotNull { a -> a.split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }.toMap()
@@ -111,7 +127,7 @@ object GlideEval {
             samples = a["samples"]?.toInt() ?: d.samples, endReach2 = a["endReach2"]?.toFloat() ?: d.endReach2, visitCap = a["visitCap"]?.toFloat() ?: d.visitCap,
             missLimit2 = a["missLimit2"]?.toFloat() ?: d.missLimit2, keep = a["keep"]?.toInt() ?: d.keep, quickEnds = a["quickEnds"]?.toFloat() ?: d.quickEnds,
             quickPrior = a["quickPrior"]?.toFloat() ?: d.quickPrior, shapeW = a["shapeW"]?.toFloat() ?: d.shapeW, endW = a["endW"]?.toFloat() ?: d.endW,
-            lmW = a["lmW"]?.toFloat() ?: d.lmW, lmA = a["lmA"]?.toFloat() ?: d.lmA, lmMin = a["lmMin"]?.toFloat() ?: d.lmMin, lmMax = a["lmMax"]?.toFloat() ?: d.lmMax, bigramMix = a["bigramMix"]?.toFloat() ?: d.bigramMix, minLength = a["minLength"]?.toFloat() ?: d.minLength, slack = a["slack"]?.toInt() ?: d.slack, biasKeep = a["biasKeep"]?.toInt() ?: d.biasKeep, biasGain = a["biasGain"]?.toFloat() ?: d.biasGain, biasW = a["biasW"]?.toFloat() ?: d.biasW,
+            lmW = a["lmW"]?.toFloat() ?: d.lmW, lmA = a["lmA"]?.toFloat() ?: d.lmA, lmMin = a["lmMin"]?.toFloat() ?: d.lmMin, lmMax = a["lmMax"]?.toFloat() ?: d.lmMax, bigramMix = a["bigramMix"]?.toFloat() ?: d.bigramMix, minLength = a["minLength"]?.toFloat() ?: d.minLength, slack = a["slack"]?.toInt() ?: d.slack, biasKeep = a["biasKeep"]?.toInt() ?: d.biasKeep, biasGain = a["biasGain"]?.toFloat() ?: d.biasGain, biasW = a["biasW"]?.toFloat() ?: d.biasW, maxPerLetter = a["maxPerLetter"]?.toFloat() ?: d.maxPerLetter,
         )
     }
 
@@ -131,11 +147,19 @@ object GlideEval {
         val seed = a["seed"]?.toLong() ?: 1L
         val rnd = Random(seed * 7919)
         val picks = when (a["pop"] ?: "freq") { "rank" -> rankPick(lex, n, rnd); "ctx" -> contextPick(lex, n, rnd); else -> frequencyPick(lex, n, rnd) }
+        if (a["garbage"] != null) {
+            val dec = GlideDecoder(keys, paramsFrom(a)); val rnd2 = Random(5)
+            val costs = ArrayList<Float>(); var none = 0; val total = 800
+            repeat(total) { val g = garbage(keys, rnd2); val c = dec.decode(g.xs, g.ys, g.xs.size, listOf(lex), null, 1); if (c.isEmpty()) none++ else costs.add(c[0].perLetter) }
+            costs.sort()
+            println("garbage paths: %d of %d got no word at all; for the rest the best word's cost per letter: min %.2f p10 %.2f median %.2f".format(none, total, costs.firstOrNull() ?: 0f, if (costs.isEmpty()) 0f else costs[costs.size / 10], if (costs.isEmpty()) 0f else costs[costs.size / 2]))
+        }
         for (nm in (a["noise"] ?: "calm,normal,sloppy,bad").split(',')) {
             val noise = noiseFrom(a + mapOf("noise" to nm))
             val r = run(lex, keys, paramsFrom(a), noise, picks, seed, debug = a["dbg"]?.toInt() ?: 0, trace = a["trace"], learn = a["learn"] == "1")
             println("${noise.name}: $r")
             if (a["lens"] != null) println("    ${r.lengths()}")
+            if (a["costs"] != null) { val h = r.hitCosts; if (h.isNotEmpty()) println("    cost per letter of the right word: median %.2f  p90 %.2f  p99 %.2f  max %.2f".format(h[h.size / 2], h[h.size * 9 / 10], h[h.size * 99 / 100], h.last())) }
         }
     }
 }
