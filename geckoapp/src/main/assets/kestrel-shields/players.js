@@ -22,7 +22,7 @@
     if (/(^|\.)(youtube\.com|youtube-nocookie\.com|youtubekids\.com)$/i.test(String(location.hostname))) return;
     window.__kstPL = 1;
     var T = (window.__kstPLcfg && typeof window.__kstPLcfg === 'object') ? window.__kstPLcfg : {}; // the tests shorten the clocks; in the real extension a page's globals are not visible here
-    var LOOP = T.loopMs || 250, MAXMS = T.maxMs || 15000, GIVEUP = T.fails || 5, LEVELS = 8, MAXVIDEOS = 4;
+    var LOOP = T.loopMs || 250, MAXMS = T.maxMs || 15000, GIVEUP = T.fails || 5, FLUSH = T.flushMs || 3000, LEVELS = 8, MAXVIDEOS = 4;
     var STATE = ['jw-flag-ads', 'vjs-ad-playing'];       // on an ancestor while an ad plays
     var HOST = ['ima-ad-container', 'plyr__ads'];        // a video inside one of these is the ad itself
     var SKIP = ['.jw-skip.jw-skippable'];                // JW Player: the skip button element gets jw-skippable when skipping is allowed
@@ -30,7 +30,7 @@
     var trackers = [], off = false, failsInRow = 0, ask = 0, waiting = [];
     var pend = { a: 0, s: 0, c: 0, o: 0, d: 0, f: 0, g: 0, r: '' }, sendTimer = 0;
 
-    function mark(k) { if (k) pend[k]++; if (!sendTimer) sendTimer = setTimeout(flush, 3000); }
+    function mark(k) { if (k) pend[k]++; if (!sendTimer) sendTimer = setTimeout(flush, FLUSH); }
     function flush() {
       sendTimer = 0;
       var m = { k: 'yts', w: 'p', a: pend.a, s: pend.s, c: pend.c, o: pend.o, d: pend.d, f: pend.f, g: pend.g, r: pend.r };

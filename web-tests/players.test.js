@@ -26,6 +26,7 @@ function wav(seconds) {
   return 'data:audio/wav;base64,' + Buffer.concat([h, Buffer.alloc(n, 0x80)]).toString('base64');
 }
 const MAIN = wav(20), AD12 = wav(12);
+const FAST = { loopMs: 40, flushMs: 100 };   // the clocks of the script, shortened
 
 // the player families whose ad state is a class on the player root
 const FAMILY = {
@@ -103,13 +104,13 @@ const sum = (msgs, k) => msgs.filter((m) => m.k === 'yts').reduce((n, m) => n + 
 const state = (page) => page.evaluate(() => { const v = document.querySelector('#player video, #content'); return { muted: v.muted, rate: v.playbackRate, t: v.currentTime, paused: v.paused, msgs: window.__msgs, ended: window.__ended, clicks: window.__skipClicks }; });
 
 test('Video.js: an ad is muted, sped up and moved to its end, then the film comes back as it was', async () => {
-  const page = await open({ fam: FAMILY.videojs, timing: { loopMs: 40 } });
+  const page = await open({ fam: FAMILY.videojs, timing: FAST });
   await page.waitForTimeout(500);
   const before = await state(page);
   assert.equal(before.msgs.length, 0, 'nothing is sent before an ad shows: ' + JSON.stringify(before.msgs));
   await page.evaluate(() => window.__startAd());
   await waitFor(page, () => window.__ended === 1);
-  await page.waitForTimeout(600);
+  await page.waitForTimeout(700);
   const s = await state(page);
   assert.equal(s.muted, false, 'the film is not left muted');
   assert.equal(s.rate, 1, 'the film is not left sped up');
@@ -123,7 +124,7 @@ test('Video.js: an ad is muted, sped up and moved to its end, then the film come
 });
 
 test('Video.js: vjs-ad-loading alone (waiting for an ad) and the resuming class change nothing', async () => {
-  const page = await open({ fam: FAMILY.videojs, timing: { loopMs: 40 } });
+  const page = await open({ fam: FAMILY.videojs, timing: FAST });
   await page.evaluate(() => { const r = document.getElementById('player'); r.classList.add('vjs-ad-loading'); });
   await page.waitForTimeout(900);
   await page.evaluate(() => { const r = document.getElementById('player'); r.classList.remove('vjs-ad-loading'); r.classList.add('vjs-ad-content-resuming'); });
@@ -134,8 +135,8 @@ test('Video.js: vjs-ad-loading alone (waiting for an ad) and the resuming class 
 });
 
 test('JW Player: the skip button is pressed once it says skippable, not before', async () => {
-  const page = await open({ fam: FAMILY.jw, timing: { loopMs: 40 } });
-  await page.evaluate(() => window.__startAd({ fakeDuration: 400, skipAfterMs: 100, skippableAfterMs: 700 }));
+  const page = await open({ fam: FAMILY.jw, timing: FAST });
+  await page.evaluate(() => window.__startAd({ stuckAd: true, fakeDuration: 400, skipAfterMs: 100, skippableAfterMs: 700 }));
   await page.waitForTimeout(450);
   assert.equal((await state(page)).clicks, 0, 'not pressed while it is not skippable');
   await waitFor(page, () => window.__skipClicks === 1 && window.__ended === 1);
@@ -149,9 +150,10 @@ test('JW Player: the skip button is pressed once it says skippable, not before',
 });
 
 test('JW Player: an ad stream is moved to its end', async () => {
-  const page = await open({ fam: FAMILY.jw, timing: { loopMs: 40 } });
+  const page = await open({ fam: FAMILY.jw, timing: FAST });
   await page.evaluate(() => window.__startAd());
   await waitFor(page, () => window.__ended === 1);
+  await page.waitForTimeout(500);
   const s = await state(page);
   assert.equal(sum(s.msgs, 'f'), 1); assert.equal(sum(s.msgs, 's'), 1);
   await page.context().close();
@@ -159,7 +161,7 @@ test('JW Player: an ad stream is moved to its end', async () => {
 
 for (const [name, cls] of [['Google IMA container', 'ima-ad-container'], ['Plyr ads container', 'plyr__ads']]) {
   test(name + ': the ad video inside it is sped through, the film video beside it is never touched', async () => {
-    const page = await open({ html: HOSTED(cls), timing: { loopMs: 40 } });
+    const page = await open({ html: HOSTED(cls), timing: FAST });
     await page.waitForTimeout(400);
     await page.evaluate(() => window.__startHosted());
     await waitFor(page, () => window.__ended === 1);
@@ -173,7 +175,7 @@ for (const [name, cls] of [['Google IMA container', 'ima-ad-container'], ['Plyr 
 }
 
 test('an ordinary page video (no ad words anywhere) is left alone and nothing is sent', async () => {
-  const page = await open({ html: '<div class="post video-wrapper"><div class="inner"><video id="content" style="width:400px;height:240px" loop></video></div></div><div id="player"></div>', timing: { loopMs: 40 } });
+  const page = await open({ html: '<div class="post video-wrapper"><div class="inner"><video id="content" style="width:400px;height:240px" loop></video></div></div><div id="player"></div>', timing: FAST });
   await page.waitForTimeout(1200);
   const r = await page.evaluate(() => { const c = document.getElementById('content'); return { muted: c.muted, rate: c.playbackRate, playing: !c.paused, msgs: window.__msgs }; });
   assert.equal(r.playing, true); assert.equal(r.muted, false); assert.equal(r.rate, 1); assert.deepEqual(r.msgs, []);
@@ -181,7 +183,7 @@ test('an ordinary page video (no ad words anywhere) is left alone and nothing is
 });
 
 test('the Settings switch off: the app is asked, and nothing at all is done', async () => {
-  const page = await open({ fam: FAMILY.jw, skip: false, timing: { loopMs: 40 } });
+  const page = await open({ fam: FAMILY.jw, skip: false, timing: FAST });
   await page.evaluate(() => window.__startAd({ stuckAd: true, fakeDuration: 400 }));
   await page.waitForTimeout(900);
   const s = await state(page);
@@ -192,7 +194,7 @@ test('the Settings switch off: the app is asked, and nothing at all is done', as
 });
 
 test('on the YouTube hosts this script does nothing (youtube.js owns them)', async () => {
-  const page = await open({ fam: FAMILY.jw, url: 'https://www.youtube.com/watch?v=mock', timing: { loopMs: 40 } });
+  const page = await open({ fam: FAMILY.jw, url: 'https://www.youtube.com/watch?v=mock', timing: FAST });
   await page.evaluate(() => window.__startAd({ stuckAd: true, fakeDuration: 400 }));
   await page.waitForTimeout(900);
   const s = await state(page);
@@ -201,7 +203,7 @@ test('on the YouTube hosts this script does nothing (youtube.js owns them)', asy
 });
 
 test('while the stream is still the film (the ad class came first) the film is not moved', async () => {
-  const page = await open({ fam: FAMILY.jw, timing: { loopMs: 40 } });
+  const page = await open({ fam: FAMILY.jw, timing: FAST });
   await page.waitForTimeout(500);
   const t0 = (await state(page)).t;
   await page.evaluate(() => window.__startAd({ filmStays: true }));
@@ -213,14 +215,14 @@ test('while the stream is still the film (the ad class came first) the film is n
 });
 
 test('an ad that will not end is given up after the time limit, the film is put back, and repeated ones switch it off', async () => {
-  const page = await open({ fam: FAMILY.jw, timing: { loopMs: 40, maxMs: 350, fails: 2 } });
+  const page = await open({ fam: FAMILY.jw, timing: Object.assign({}, FAST, { maxMs: 350, fails: 2 }) });
   for (let i = 0; i < 2; i++) {
     await page.evaluate(() => window.__startAd({ stuckAd: true, fakeDuration: 400 }));
     await page.waitForTimeout(700);
     await page.evaluate(() => { const r = document.getElementById('player'); r.classList.remove('jw-flag-ads', 'jw-flag-ads-hide-controls'); });
     await page.waitForTimeout(250);
   }
-  await page.waitForTimeout(3300);
+  await page.waitForTimeout(600);
   const s = await state(page);
   assert.equal(s.muted, false); assert.equal(s.rate, 1);
   assert.ok(sum(s.msgs, 'g') >= 2, 'given up on twice: ' + JSON.stringify(s.msgs.filter((m) => m.k === 'yts')));
@@ -229,7 +231,7 @@ test('an ad that will not end is given up after the time limit, the film is put 
 });
 
 test('what the page itself changed while the ad ran is left as the page has it', async () => {
-  const page = await open({ fam: FAMILY.jw, timing: { loopMs: 40 } });
+  const page = await open({ fam: FAMILY.jw, timing: FAST });
   await page.evaluate(() => window.__startAd({ unmuteAtEnd: true }));
   await waitFor(page, () => window.__ended === 1);
   await page.waitForTimeout(300);
@@ -238,12 +240,12 @@ test('what the page itself changed while the ad ran is left as the page has it',
 });
 
 test('the reports carry numbers and a few words, never an address', async () => {
-  const page = await open({ fam: FAMILY.videojs, timing: { loopMs: 40 } });
+  const page = await open({ fam: FAMILY.videojs, timing: FAST });
   await page.evaluate(() => window.__startAd());
   await waitFor(page, () => window.__ended === 1);
-  await page.waitForTimeout(3300);
+  await page.waitForTimeout(500);
   const msgs = (await state(page)).msgs;
-  const text = JSON.stringify(msgs);
+  const text = JSON.stringify(msgs.filter((x) => x.k === 'yts'));   // the guard question carries the page's host name, as it always has; the reports must not
   assert.ok(!/https?:|example|data:/i.test(text), 'no address in: ' + text);
   for (const m of msgs.filter((x) => x.k === 'yts')) assert.deepEqual(Object.keys(m).sort(), ['a', 'c', 'd', 'f', 'g', 'k', 'o', 'r', 's', 'w'].sort());
   await page.context().close();
