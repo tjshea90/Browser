@@ -2008,3 +2008,20 @@
 ## 2026-11-14T20:00:34Z
 > The handoff save is running in the background. I'll confirm the saved paths once it finishes. The alpha40 answer above stands.
 <!-- sha:e2264f7b91c8 -->
+
+## 2026-11-14T20:00:52Z
+> The handoff is saved, committed and pushed, so a new session can resume from it. The `generate_handoff_manifest` tool reported no warnings.
+>
+> - **Latest:** `.handoff/handoff.md` and `.handoff/handoff.json`
+> - **Archive:** `.handoff/handoffs/2026-11-14/handoff-2026-11-14T20-00-32-265Z.md` and the matching `.json`
+> - **Memory docs:** `CLAUDE.md` and `AGENTS.md`, each with a refreshed "Session Learnings" section
+>
+> The subagent's first call was rejected by the tool's validation, so nothing was saved then. It resent the call once and that one succeeded.
+>
+> **What the next session finds**
+> - alpha38, alpha39 and alpha40 are released and recorded, and the owner has their answer with the Release link.
+> - Still open: the owner's yes/no on a separate system keyboard app (AX1g), and their feedback from the tablet on the long-press feel.
+> - One change is in the code but not in alpha40: the stuck-page window for the fallback long-press detector went from 60 to 30 seconds. It ships with the next release, which needs versionCode 142.
+>
+> A new session starts with `bash tools/resume.sh`, then reads `CHECKPOINT.md` "Do this next".
+<!-- sha:cb3448a4dc9d -->
