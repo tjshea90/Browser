@@ -156,5 +156,39 @@ class MiniKeyboardTest {
         assertEquals(listOf("abc"), m.plainWords().filter { it == "abc" }) // 'my', 'ok' are too short; 'site.' and 'doraby9' have other characters
         assertEquals(listOf("abc"), m.plainWords())
     }
+
+    // ------------------------------------------------------------------ what the keyboard may learn from typing (AU2)
+
+    @Test fun onlyTheWordsTypedLetterByLetterAreLeftToLearnAtGo() {
+        val m = MiniKeyboardModel(); m.open("")
+        m.commitGlide("best")           // learned when it was kept
+        for (c in "pizza") m.press(Key.Ch(c.toString()))
+        m.press(Key.Ch(" "))
+        m.commitGlide("near")
+        for (c in "me") m.press(Key.Ch(c.toString()))
+        assertEquals("best pizza near me", m.text)
+        assertEquals(listOf<Pair<String?, String>>("best" to "pizza", "near" to "me"), m.typedPairs())
+    }
+
+    @Test fun aDeletedGlideIsNoLongerCountedAsGlided() {
+        val m = MiniKeyboardModel(); m.open("")
+        m.commitGlide("wrong"); m.press(Key.Backspace)
+        for (c in "right") m.press(Key.Ch(c.toString()))
+        assertEquals(listOf<Pair<String?, String>>(null to "right"), m.typedPairs())
+    }
+
+    @Test fun aSwappedGlideIsTheOneThatIsCounted() {
+        val m = MiniKeyboardModel(); m.open("")
+        m.commitGlide("word"); m.swapGlide("world")
+        for (c in "peace") m.press(Key.Ch(c.toString()))
+        assertEquals(listOf<Pair<String?, String>>("world" to "peace"), m.typedPairs().map { it.first to it.second }.filter { it.second == "peace" })
+        assertEquals(1, m.typedPairs().size)
+    }
+
+    @Test fun anAddressIsNotWhatTheKeyboardLearnsFrom() {
+        val m = MiniKeyboardModel(); m.open("")
+        for (c in "doraby.com/movie") m.press(Key.Ch(c.toString()))
+        assertTrue(m.typedPairs().isEmpty())
+    }
 }
 
