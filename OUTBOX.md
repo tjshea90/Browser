@@ -1713,3 +1713,45 @@
 >
 > Next I'll finish the corner long press, then the learning, then typing into page fields, and ship them together as alpha35.
 <!-- sha:7c096b6c2f60 -->
+
+## 2026-11-14T04:31:22Z
+> Kestrel G alpha35 is released with all three things you asked for in message 35. I tested them on the emulator with real touches and a test web page, but **not on your tablet**, so your Gboard and real sites may behave differently.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha35
+>
+> Update through Menu > Updates, or open the link on the tablet and tap the APK.
+>
+> **1. No visible button; hold the top right corner**
+> - The little tab is gone. Hold your finger on the top right corner of the page for about half a second (an invisible square about 12 mm wide) and the panel slides down. Hold the same corner again and it slides back up.
+> - A quick tap or a drag there still goes to the page, so links under that corner still work.
+> - On the emulator, a hold opened and closed the panel without touching the link under it.
+> - I found one weakness and fixed it: when the screen was badly lagging, a hold could be mistaken for a tap. It now also uses the touch's own timestamps.
+> - A quick tap that lands exactly while the page is frozen for about half a second could still toggle the panel. That only showed on the slow emulator.
+>
+> **2. The keyboard learns from you**
+> - It learns words you keep, words you pick from the guess strip (counted three times), and words you type.
+> - Your own words and word pairs rise to the top over time. A simulated person with habits went from about 86% right on the first guess to about 95%. That is a simulation, not a measurement of you.
+> - It stays on the tablet in a small file and is never sent anywhere. Settings > Privacy & security > "Forget what the keyboard learned" wipes it (it asks first; I tested it).
+> - Nothing is learned in private tabs or password fields. A guess you pick and then delete right away is not learned.
+> - On the emulator the learned file was written, survived an app restart, and was wiped by the Forget button.
+>
+> **3. Typing goes into the page's own field**
+> - If a web page's text field has the cursor, opening the mini keyboard now types into that field instead of searching Google. The system keyboard goes down, and the bar says "type into the page" with a small "page" tag.
+> - It works for letters, glided words, picking a guess, and Backspace. Go presses Enter, so a search box submits; in a multi-line box Go starts a new line and the keyboard stays open. Passwords show as dots.
+> - On the emulator, a search form got "hello world", a guess swap and a whole-word delete. Go submitted the form and Google was not searched. Tapping another field while the keyboard was open moved the typing there.
+> - With no field open the bar works as before. To type an address while a field has the cursor, tap the page outside the field first, or use the main address bar.
+>
+> **Not tested on the tablet:** Gboard itself, the tablet's real speed, real sites with their own key handling, rich-text editors (like Proton Mail's message body), and password managers.
+>
+> **What I need from you:** use it for a day, then paste Menu > Diagnostics > Copy. There are two lines to look at: "Glide typing" (it now says what it learned) and the new "Mini keyboard in page fields".
+>
+> **Still open from before:**
+> - Spanish word list and a larger-keyboard option (your yes or no).
+> - The Doraby / "incompatible browser" Cloudflare wording and a page report.
+> - The choppy-video link, scroll and Back feel, and the Proton Mail numbers and keyboard test.
+> - Scheduled GitHub ad-list build (yes or no) and a private signing key.
+> - Network lab results, and the optional items (licence, landscape tabs, Cromite comparison).
+> - The stored-libraries decision, and the per-process memory line, which is still unbuilt.
+>
+> **Also:** one download-timing test failed once while the machine was busy and passed on its own and on GitHub, so it is flaky under load, not a real failure.
+<!-- sha:ace49aaa2fbd -->
