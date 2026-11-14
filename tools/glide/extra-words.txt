@@ -151,11 +151,9 @@ crunchyroll 60000000
 crypto 60000000
 dailymotion 60000000
 doordash 60000000
-doraby 60000000
 ethereum 60000000
 fifa 60000000
 firefox 60000000
-fmovies 60000000
 forbes 60000000
 fortnite 60000000
 funimation 60000000
@@ -171,7 +169,6 @@ iphone 60000000
 kayak 60000000
 kestrel 60000000
 kindle 60000000
-kissanime 60000000
 lowes 60000000
 medium 60000000
 minecraft 60000000
@@ -183,10 +180,8 @@ nintendo 60000000
 pandora 60000000
 paramount 60000000
 peacock 60000000
-pelisjuanita 60000000
 playstation 60000000
 premier 60000000
-putlocker 60000000
 reuters 60000000
 roblox 60000000
 samsung 60000000
@@ -195,7 +190,6 @@ shein 60000000
 shopify 60000000
 shouldn't 60000000
 siri 60000000
-solarmovies 60000000
 substack 60000000
 techcrunch 60000000
 temu 60000000
@@ -205,7 +199,6 @@ ubereats 60000000
 uefa 60000000
 venmo 60000000
 vevo 60000000
-vidsrc 60000000
 washingtonpost 60000000
 we'll 60000000
 who's 60000000
