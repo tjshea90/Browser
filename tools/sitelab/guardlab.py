@@ -10,6 +10,8 @@
   /assist-child   the frame's page (served for the host 127.0.0.1).
   /finderlab  RX3-V1: four real media elements the page itself describes differently (a muted looping hero, a player with controls, a player inside an ad box, a thumbnail-sized player); the app's Health lines
               "video info role=... counted=N of M" say what it decided. Ends with a DONE line once all four loaded their metadata. /clip1.wav .. /clip4.wav: the same 20 s silent audio under four addresses.
+  /teaser-link  RX3-V2: a page with nothing but two LINKS to video files and no player: /teaser.mp4 (30 KB, a preview) and /bigfile.mp4 (700 KB, a real one); both answer a one-byte Range request with
+              Content-Range. The app's Health lines "media verify asked=N" and "media verified length=... counted=N of M" show that only the big one ends up counted for the badge.
   /playerlab  RX3-G7: five mock video players on one page, driven by the page itself (no touch needed): an ordinary video (no ad words), a JW-style player (jw-flag-ads on its root), a Video.js-style player
               (vjs-ad-loading, then vjs-ad-playing), a Google-IMA-style host (the ad video inside .ima-ad-container) and a JW-style ad with a skip button (.jw-skip, .jw-skippable). Each ad is a REAL 12 s silent
               media element. The log says how long the ad took (about 12000 ms = not skipped, a few hundred = fast-forwarded), at what speed it ran, and which events the skip button got. Ends with a DONE line.
@@ -185,6 +187,13 @@ L('load', 'finderlab');
 </script></body></html>
 """
 
+TEASERLINK = b"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>teaser-link</title></head>
+<body style="margin:8px;font:18px sans-serif"><p>teaser-link: links only, nothing plays.</p>
+<p><a href="/teaser.mp4">watch the teaser</a></p><p><a href="/bigfile.mp4">the big file</a></p>
+<script>try { var x = new XMLHttpRequest(); x.open('GET', '/log?kind=load&v=teaser-link'); x.send(); } catch (e) {}</script></body></html>
+"""
+SIZES = {"/teaser.mp4": 30000, "/bigfile.mp4": 700000}
+
 POPAD = b"""<!doctype html><meta charset=utf-8><title>an ad</title><body style="font:20px sans-serif;margin:24px">popad: this is the ad page. If you can see it, the pop-up was NOT stopped.</body>"""
 
 
@@ -218,6 +227,20 @@ class H(http.server.BaseHTTPRequestHandler):
         if u.path.startswith("/clip") and u.path.endswith(".wav"):
             self._write("GET " + u.path)
             return self._send(200, base64.b64decode(WAV20.split(",", 1)[1]), "audio/wav")
+        if u.path == "/teaser-link":
+            self._write("GET /teaser-link")
+            return self._send(200, TEASERLINK)
+        if u.path in SIZES:
+            total = SIZES[u.path]
+            rng = self.headers.get("Range", "")
+            self._write("GET %s Range=%s" % (u.path, rng or "-"))
+            if rng.startswith("bytes="):
+                a, _, b = rng[6:].partition("-")
+                lo = int(a or 0); hi = min(int(b) if b else total - 1, total - 1)
+                body = b"\x00" * (hi - lo + 1)
+                self.send_response(206); self.send_header("Content-Type", "video/mp4"); self.send_header("Content-Range", "bytes %d-%d/%d" % (lo, hi, total))
+                self.send_header("Content-Length", str(len(body))); self.send_header("Accept-Ranges", "bytes"); self.end_headers(); self.wfile.write(body); return
+            return self._send(200, b"\x00" * total, "video/mp4")
         if u.path == "/popad":
             self._write("GET /popad %s   <- the pop-up was NOT stopped" % q.get("n", ["?"])[0])
             return self._send(200, POPAD)

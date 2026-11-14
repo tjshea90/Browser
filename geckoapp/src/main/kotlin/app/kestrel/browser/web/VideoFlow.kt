@@ -99,7 +99,7 @@ class VideoFlow(private val a: BrowserActivity) {
         for (c in t.media.unverifiedToCheck(3)) {
             if (c.length >= 0 || !sized.add(c.key)) continue
             asked++
-            DownloadController.fetchBytes(a, c.url, 0L, 0L, requestHeaders(t, c), 1, t.isPrivateTab, onTotal = { n -> if (t.media.setLength(c.url, n)) { a.refreshDownloadButton(); refresh(t) } }) { }
+            DownloadController.fetchBytes(a, c.url, 0L, 0L, requestHeaders(t, c), 1, t.isPrivateTab, onTotal = { n -> if (t.media.setLength(c.url, n)) { a.refreshDownloadButton(); refresh(t); Health.log("media", "verified", "length=${n / 1024} KB counted=${t.media.usableCount()} of ${t.media.size}") } }) { }
         }
         if (asked > 0) Health.log("media", "verify", "asked=$asked counted=${t.media.usableCount()} of ${t.media.size}")
     }
