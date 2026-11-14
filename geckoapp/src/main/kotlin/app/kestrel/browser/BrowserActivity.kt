@@ -1026,8 +1026,7 @@ open class BrowserActivity : Activity(), DockListener {
         val rapid = now < backBusyUntil
         backBusyUntil = now + 2_000
         if (rapid) { if (restoringTab === t) hideRestoring("second-back"); return }
-        // RX3-BK2: the place this page was left at is armed for the page's own question (its content script asks once the engine loaded it again); RX3-BK1: the lab counts the press (never for a private tab)
-        t.backPlace = BackScrollRules.arm(t.scrollByUrl, url, now)
+        // RX3-BK1: the lab counts the press (never for a private tab). The place itself is answered from the tab's memory when the page asks (backPlaceFor): it does not depend on this press having found its target
         if (!t.isPrivateTab) { backLab.press(now, url, delta > 0, savedY ?: -1); Io.main.removeCallbacks(backLabClose) }
         if (pic == null) return
         backTarget = BackArm(t, t.url, pic, savedY ?: 0)
@@ -1070,11 +1069,14 @@ open class BrowserActivity : Activity(), DockListener {
         if (painted) { Io.main.removeCallbacks(backCheckTick); Io.main.postDelayed(backCheckTick, maxOf(50L, LastLookRules.AFTER_PAINT_MS - since)) } // the engine may paint before it has scrolled: look again at the latest 1500 ms after the paint
     }
 
-    /** A page the engine loaded again for Back / Forward asked where the owner left it (worker thread): the armed place as text, or "" when nothing is armed for that page. Reads immutable values only. */
+    /**
+     * A page the engine loaded again for a history move (its content script asks only then) asks where the owner left it (worker thread): the place this tab's memory holds for the page's own address, as text,
+     * or "" when it holds none (then the engine's own place stands). It does not depend on the app's copy of the engine's history, which can lag behind a quick Back.
+     */
     private fun backPlaceFor(page: String): String {
-        val now = SystemClock.uptimeMillis()
         var y = -1
-        try { for (t in tabs.toTypedArray()) { val p = t.backPlace?.placeFor(page, now) ?: -1; if (p > 0) { y = p; break } } } catch (e: Exception) { /* the list changed under us: no answer, the engine's own place stands */ }
+        try { for (t in tabs.toTypedArray()) { val p = t.scrollByUrl.get(page) ?: -1; if (p > 0) { y = p; break } } } catch (e: Exception) { /* the list changed under us: no answer, the engine's own place stands */ }
+        if (y > 0) Health.count("back.pull")
         return if (y > 0) y.toString() else ""
     }
 

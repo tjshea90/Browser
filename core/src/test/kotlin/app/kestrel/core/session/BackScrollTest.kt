@@ -47,22 +47,14 @@ class BackScrollTest {
         assertNull(m.get("https://a.test/")); assertEquals(0, m.size)
     }
 
-    // ---- the place the page may ask for after Back (the content script's pull)
-
-    @Test fun theArmedPlaceIsOnlyAnsweredForThatPageAndOnlyForTenSeconds() {
-        val t = BackTarget("https://a.test/story", 1800, until = 11_000L)
-        assertEquals(1800, t.placeFor("https://a.test/story", 5_000L))
-        assertEquals(1800, t.placeFor("https://a.test/story#c", 11_000L))   // the fragment does not matter, the last moment still counts
-        assertEquals(-1, t.placeFor("https://a.test/story", 11_001L))      // expired
-        assertEquals(-1, t.placeFor("https://evil.test/story", 5_000L))    // another page never learns the place
-        assertEquals(-1, t.placeFor("https://a.test/story?x=1", 5_000L))
-    }
-
-    @Test fun aTargetIsBuiltFromTheMemoryAndExpiresAfterTheTimeToLive() {
-        val m = ScrollMemory(); m.put("https://a.test/story", 700)
-        val t = BackScrollRules.arm(m, "https://a.test/story#x", now = 1_000L)
-        assertEquals(700, t.y); assertEquals(1_000L + BackScrollRules.TARGET_TTL_MS, t.until)
-        assertEquals(0, BackScrollRules.arm(m, "https://unknown.test/", now = 0L).y)   // no memory: the top, which is what the cover already assumed
+    @Test fun theMemoryMayBeReadFromAnotherThreadWhileItIsWritten() {
+        val m = ScrollMemory()
+        val errors = java.util.concurrent.atomic.AtomicInteger()
+        val writer = Thread { try { for (i in 0 until 20_000) m.put("https://a.test/p${i % 50}", i) } catch (e: Throwable) { errors.incrementAndGet() } }
+        val reader = Thread { try { for (i in 0 until 20_000) { m.get("https://a.test/p${i % 50}"); m.size } } catch (e: Throwable) { errors.incrementAndGet() } }
+        writer.start(); reader.start(); writer.join(); reader.join()
+        assertEquals("no ConcurrentModificationException, no corruption", 0, errors.get())
+        assertTrue(m.size <= BackScrollRules.MEMORY)
     }
 
     // ---- when the cover goes
