@@ -1,23 +1,3 @@
-    /**
-     * ln P(word | the word before): the word's own share (plus what the person's own use adds), mixed with the pair's share when the pair is known (the shipped list's, and the person's own pairs
-     * weighted by how often the person wrote something after that word).
-     */
-    private fun prior(lex: GlideLexicon, id: Int, prevId: Int, prevText: String?): Float {
-        val pm = personal?.takeIf { !it.isEmpty }
-        var pu = Math.exp(lex.logProb(id).toDouble())
-        var text: String? = null
-        if (pm != null) { text = lex.text(id); pu += pm.unigramMass(text, lex.totalCount()) }
-        var pb = 0.0
-        var known = false
-        if (prevId >= 0) { val b = lex.bigramLogProb(prevId, id); known = true; if (!b.isNaN()) pb = Math.exp(b.toDouble()) }
-        if (pm != null && prevText != null) {
-            val lam = pm.pairWeight(prevText)
-            if (lam > 0f) { val w = text ?: lex.text(id); pb = (1.0 - lam) * pb + lam * pm.pairProb(prevText, w); known = true }
-        }
-        if (!known) return Math.log(pu).toFloat()
-        return Math.log((1.0 - p.bigramMix) * pu + p.bigramMix * pb).toFloat()
-    }
-
 package app.kestrel.core.input.glide
 
 import app.kestrel.core.input.Key
@@ -415,13 +395,24 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
         return ids
     }
 
-    /** ln P(word | the word before): the word's own share, mixed with the pair's share when the pair is known. */
-    private fun prior(lex: GlideLexicon, id: Int, prevId: Int): Float {
-        val u = lex.logProb(id)
-        if (prevId < 0) return u
-        val b = lex.bigramLogProb(prevId, id)
-        if (b.isNaN()) return u + Math.log((1.0 - p.bigramMix)).toFloat()
-        return Math.log((1.0 - p.bigramMix) * Math.exp(u.toDouble()) + p.bigramMix * Math.exp(b.toDouble())).toFloat()
+    /**
+     * ln P(word | the word before): the word's own share (plus what the person's own use adds), mixed with the pair's share when the pair is known (the shipped list's, and the person's own pairs
+     * weighted by how often the person wrote something after that word).
+     */
+    private fun prior(lex: GlideLexicon, id: Int, prevId: Int, prevText: String?): Float {
+        val pm = personal?.takeIf { !it.isEmpty }
+        var pu = Math.exp(lex.logProb(id).toDouble())
+        var text: String? = null
+        if (pm != null) { text = lex.text(id); pu += pm.unigramMass(text, lex.totalCount()) }
+        var pb = 0.0
+        var known = false
+        if (prevId >= 0) { val b = lex.bigramLogProb(prevId, id); known = true; if (!b.isNaN()) pb = Math.exp(b.toDouble()) }
+        if (pm != null && prevText != null) {
+            val lam = pm.pairWeight(prevText)
+            if (lam > 0f) { val w = text ?: lex.text(id); pb = (1.0 - lam) * pb + lam * pm.pairProb(prevText, w); known = true }
+        }
+        if (!known) return Math.log(pu).toFloat()
+        return Math.log((1.0 - p.bigramMix) * pu + p.bigramMix * pb).toFloat()
     }
 
     companion object {
