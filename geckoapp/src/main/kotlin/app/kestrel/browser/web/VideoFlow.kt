@@ -126,6 +126,7 @@ class VideoFlow(private val a: BrowserActivity) {
         // RX3-V1: a hover preview, a hero loop or an ad that loaded its metadata is not "a video the owner may want": the page's own element says what it is for
         val role = if (facts == null) null else app.kestrel.core.media.VideoRoleRules.decide(facts, durationMs)
         t.media.applyInfo(url, width, height, durationMs, label, role)
+        app.kestrel.browser.diag.Health.log("video", "info", "role=${role ?: "none"} length=${durationMs / 1000}s counted=${t.media.usableCount()} of ${t.media.size}")   // no address
         a.refreshDownloadButton()
     }
 

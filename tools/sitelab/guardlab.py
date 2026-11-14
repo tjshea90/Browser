@@ -8,6 +8,8 @@
               A real tap on the layer: the pop-up is refused, and the assist asks the frame (through the extension, never through a message the page could send) to start its video:
               the frame logs "child play event: the video STARTED" (a real tiny silent media element, the page listens for its play event). Without the assist the log has no such line.
   /assist-child   the frame's page (served for the host 127.0.0.1).
+  /finderlab  RX3-V1: four real media elements the page itself describes differently (a muted looping hero, a player with controls, a player inside an ad box, a thumbnail-sized player); the app's Health lines
+              "video info role=... counted=N of M" say what it decided. Ends with a DONE line once all four loaded their metadata. /clip1.wav .. /clip4.wav: the same 20 s silent audio under four addresses.
   /playerlab  RX3-G7: five mock video players on one page, driven by the page itself (no touch needed): an ordinary video (no ad words), a JW-style player (jw-flag-ads on its root), a Video.js-style player
               (vjs-ad-loading, then vjs-ad-playing), a Google-IMA-style host (the ad video inside .ima-ad-container) and a JW-style ad with a skip button (.jw-skip, .jw-skippable). Each ad is a REAL 12 s silent
               media element. The log says how long the ad took (about 12000 ms = not skipped, a few hundred = fast-forwarded), at what speed it ran, and which events the skip button got. Ends with a DONE line.
@@ -164,6 +166,25 @@ plain().then(warm).then(jw).then(vjs).then(ima).then(jwskip).then(function () { 
 </script></body></html>
 """
 
+FINDERLAB = b"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>finderlab</title></head>
+<body style="margin:8px;font:16px sans-serif">
+<p>finderlab: four media elements, each described differently by the page itself.</p>
+<video id="hero" src="/clip1.wav" muted loop autoplay preload="auto" style="width:300px;height:100px;background:#222"></video>
+<video id="film" src="/clip2.wav" controls preload="auto" style="width:300px;height:140px;background:#222"></video>
+<div class="sidebar ad-slot"><video id="ad" src="/clip3.wav" controls preload="auto" style="width:300px;height:120px;background:#522"></video></div>
+<video id="tiny" src="/clip4.wav" controls preload="auto" style="width:120px;height:60px;background:#225"></video>
+<script>
+function L(k, v) { try { var x = new XMLHttpRequest(); x.open('GET', '/log?kind=' + encodeURIComponent(k) + '&v=' + encodeURIComponent(v) + '&t=' + Date.now()); x.send(); } catch (e) {} }
+var ids = ['hero', 'film', 'ad', 'tiny'], got = 0;
+ids.forEach(function (id) {
+  var v = document.getElementById(id);
+  function done() { got++; L('metadata', id + ' loaded (' + got + ' of 4)'); if (got === 4) setTimeout(function () { L('DONE', 'all four loaded their metadata'); }, 6000); }
+  if (v.readyState >= 1) done(); else v.addEventListener('loadedmetadata', done, { once: true });
+});
+L('load', 'finderlab');
+</script></body></html>
+"""
+
 POPAD = b"""<!doctype html><meta charset=utf-8><title>an ad</title><body style="font:20px sans-serif;margin:24px">popad: this is the ad page. If you can see it, the pop-up was NOT stopped.</body>"""
 
 
@@ -191,6 +212,12 @@ class H(http.server.BaseHTTPRequestHandler):
         if u.path == "/playerlab":
             self._write("GET /playerlab")
             return self._send(200, PLAYERLAB.replace(b"%WAV12%", WAV12.encode()).replace(b"%WAV20%", WAV20.encode()))
+        if u.path == "/finderlab":
+            self._write("GET /finderlab")
+            return self._send(200, FINDERLAB)
+        if u.path.startswith("/clip") and u.path.endswith(".wav"):
+            self._write("GET " + u.path)
+            return self._send(200, base64.b64decode(WAV20.split(",", 1)[1]), "audio/wav")
         if u.path == "/popad":
             self._write("GET /popad %s   <- the pop-up was NOT stopped" % q.get("n", ["?"])[0])
             return self._send(200, POPAD)
