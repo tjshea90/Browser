@@ -1442,3 +1442,7 @@
 ## 2026-11-14T00:09:28Z
 > Waiting for the last steps of the emulator script (the pop-up icon part); then I'll debug the panel toggle.
 <!-- sha:9a2e76bbda7e -->
+
+## 2026-11-14T00:13:04Z
+> Waiting for the restarted app to finish loading its page; then I'll retest the panel toggle with screenshots taken inside the device.
+<!-- sha:4261e1513eb4 -->
