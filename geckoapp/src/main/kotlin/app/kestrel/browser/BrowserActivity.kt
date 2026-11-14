@@ -1805,6 +1805,8 @@ open class BrowserActivity : Activity(), DockListener {
         out.addAll(StartTimeline.lines())
         out.add("Last look (the saved picture of the page, EY-1): " + (if (prefs.lastLook) "on" else "off") + ", ${LastLook.count(applicationContext)} stored, shown at start ${Health.counter("look.start")}, shown after a revive ${Health.counter("look.revive")}, taken ${Health.counter("look.saved")}, hidden ${Health.counter("look.hide")}")
         out.add(backLab.stats.line())
+        out.add(app.kestrel.browser.shield.ScriptletSummary.read(applicationContext).ifEmpty { "Scriptlets in the lists: no compile report yet (the bundled lists are used until the first update)" })
+        Engine.peek()?.let { fs -> out.add("YouTube scriptlet calls loaded: www.youtube.com " + fs.scriptletsFor("www.youtube.com").size + ", m.youtube.com " + fs.scriptletsFor("m.youtube.com").size) }
         out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null }} of ${tabs.size} tabs (the memory budget keeps up to ${liveBudget()} ready, MemAvailable ${Health.memAvailableMb()} MB, setting ${listOf("automatic", "few", "many")[prefs.tabsKept]}); current ${current?.url?.take(60) ?: "-"}")
         out.add("Network: ${GeckoEngine.networkProfile} (VPN active: ${NetworkMonitor.vpn}, LinkMeter tunnel recognised: ${NetworkMonitor.fastTunnel}, downloads yield to a loading page at ${DownloadController.pageYieldKBps} KB/s)")
         out.add(app.kestrel.browser.download.DownloadService.wifiLockLine() + ". " + app.kestrel.browser.net.WifiBoost.line())

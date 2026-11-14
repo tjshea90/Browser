@@ -17,6 +17,13 @@ import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
+/** RX3-Y1: the one-line account of what the last list compile did with the scriptlet lines (stored, trusted-only, skipped and why). Diagnostics only: a missing file is fine. */
+object ScriptletSummary {
+    private fun file(ctx: android.content.Context) = File(File(ctx.filesDir, "filters"), "scriptlets.txt")
+    fun write(ctx: android.content.Context, text: String) { try { file(ctx).writeText(text) } catch (e: Exception) { /* Diagnostics only */ } }
+    fun read(ctx: android.content.Context): String = try { file(ctx).takeIf { it.isFile }?.readText()?.trim().orEmpty() } catch (e: Exception) { "" }
+}
+
 /** [trusted] (RX3-B1): the list's maintainers also write the scriptlet semantics, so its `trusted-*` scriptlets (they rewrite a site's own answers, set cookies) may be used. False unless said otherwise. */
 class ListSource(val id: String, val url: String, val category: Int, val trusted: Boolean = false)
 
@@ -212,6 +219,7 @@ object FilterUpdater {
         tmp.writeBytes(data)
         if (!tmp.renameTo(compiled)) { compiled.delete(); tmp.renameTo(compiled) }
         pending.delete()
+        ScriptletSummary.write(ctx, builder.report.scriptletSummary()) // RX3-Y1: what this compile did with the scriptlet lines, for Diagnostics
         Engine.swap(fs, "updated list")
         return Result.Updated("Updated: $summary, ${"%,d".format(fs.meta.totalNetwork)} network rules")
     }
