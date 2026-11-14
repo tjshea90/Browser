@@ -176,8 +176,7 @@ class PersonalModelTest {
 
     @Test fun theLastTwoWordsCanDecideBetweenTwoWordsThatLookAlike() {
         val (lex, dec, p) = ambiguous()
-        val pm = PersonalModel(); repeat(8) { pm.add("whole", "wield", 1f, "the") }
-        dec.personal = pm
+        dec.personal = PersonalModel.parse("w unrelated 1.00\nt the whole wield 8.00\n") // only a habit of three words: the word itself was never counted
         assertEquals("the whole wield", "wield", dec.decode(p.xs, p.ys, p.xs.size, listOf(lex), "whole", 3, "the")[0].text)
         assertEquals("after another pair of words nothing changes", "world", dec.decode(p.xs, p.ys, p.xs.size, listOf(lex), "big", 3, "a")[0].text)
         assertEquals("with only one word before, the three-word habit is not used", "world", dec.decode(p.xs, p.ys, p.xs.size, listOf(lex), "whole", 3, null)[0].text)

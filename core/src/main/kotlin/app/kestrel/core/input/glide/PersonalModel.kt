@@ -28,12 +28,12 @@ class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int 
         if (weight <= 0f) return
         words[w] = (words[w] ?: 0f) + weight
         total += weight
-        val p = prev?.let { norm(it) }
+        val p = prev?.let { ctx(it) }
         if (p != null) {
             val k = "$p $w"
             pairs[k] = (pairs[k] ?: 0f) + weight
             pairTotals[p] = (pairTotals[p] ?: 0f) + weight
-            val p2 = prev2?.let { norm(it) }
+            val p2 = prev2?.let { ctx(it) }
             if (p2 != null) {
                 val t = "$p2 $p $w"
                 triples[t] = (triples[t] ?: 0f) + weight
@@ -177,6 +177,13 @@ class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int 
         const val MAX_TRIPLE_TRUST = 0.8f
         const val TRIPLE_HALF = 3f
 
+        /** A word as CONTEXT for the next one: like [norm] but one letter is enough ("a", "i" come before many words). */
+        fun ctx(word: String): String? {
+            val w = word.lowercase()
+            if (w.length !in 1..24 || !w.all { it in 'a'..'z' || it == '\'' } || w.startsWith("'") || w.endsWith("'")) return null
+            return w
+        }
+
         /** A word as the model keeps it: lowercase letters (and the apostrophe of a contraction), 2 to 24 long; null when it is not a word. */
         fun norm(word: String): String? {
             val w = word.lowercase()
@@ -193,8 +200,8 @@ class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int 
                     if (v <= 0f) continue
                     when {
                         p.size == 3 && p[0] == "w" -> { val w = norm(p[1]) ?: continue; m.words[w] = v; m.total += v }
-                        p.size == 4 && p[0] == "p" -> { val a = norm(p[1]) ?: continue; val b = norm(p[2]) ?: continue; m.pairs["$a $b"] = v }
-                        p.size == 5 && p[0] == "t" -> { val a = norm(p[1]) ?: continue; val b = norm(p[2]) ?: continue; val c = norm(p[3]) ?: continue; m.triples["$a $b $c"] = v }
+                        p.size == 4 && p[0] == "p" -> { val a = ctx(p[1]) ?: continue; val b = norm(p[2]) ?: continue; m.pairs["$a $b"] = v }
+                        p.size == 5 && p[0] == "t" -> { val a = ctx(p[1]) ?: continue; val b = ctx(p[2]) ?: continue; val c = norm(p[3]) ?: continue; m.triples["$a $b $c"] = v }
                         p.size == 4 && p[0] == "c" -> { val a = norm(p[1]) ?: continue; val b = norm(p[2]) ?: continue; if (a != b) m.confusions["$a $b"] = v }
                         p.size == 3 && p[0] == "r" -> { val w = norm(p[1]) ?: continue; m.recent[w] = v }
                     }
