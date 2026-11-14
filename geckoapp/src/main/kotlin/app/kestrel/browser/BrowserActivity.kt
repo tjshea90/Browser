@@ -259,6 +259,14 @@ open class BrowserActivity : Activity(), DockListener {
     private var pressSwallow = false
     private var pressOnPanel = false // the touch went down on the mini panel: the page never saw it, so no answer from the page can be about it
 
+    /** True while the rest of a touch that showed the panel (AY2) is being kept from the page; the touch's end ends it, and so does the start of the next touch. */
+    private fun pressSwallowing(ev: android.view.MotionEvent): Boolean {
+        if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN) pressSwallow = false
+        if (!pressSwallow) return false
+        if (ev.actionMasked == android.view.MotionEvent.ACTION_UP || ev.actionMasked == android.view.MotionEvent.ACTION_CANCEL) { pressSwallow = false; pressActive = false; pressEndAt = SystemClock.uptimeMillis() }
+        return true
+    }
+
     internal fun onOpenSpace(page: String) {
         if (!::miniNav.isInitialized || !miniNav.available || !prefs.miniNavToggle || !browserInFront()) return
         val t = current ?: return
@@ -506,9 +514,14 @@ open class BrowserActivity : Activity(), DockListener {
      * must never share frames with our glow. [lastTouchAt] also keeps the post-load preview capture (a GPU read-back) away from a scroll in progress.
      */
     override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
-        if (hotCorner.observe(ev)) return true // AU1: the long press in the corner already fired: the page has been told the touch is over and must not see the rest of it
-        if (pressSwallow) { // AY2: the panel was shown for this press: the page has been told the touch is over
-            if (ev.actionMasked == android.view.MotionEvent.ACTION_UP || ev.actionMasked == android.view.MotionEvent.ACTION_CANCEL) { pressSwallow = false; pressActive = false; pressEndAt = SystemClock.uptimeMillis() }
+        // AU1 / AY2: a long press that showed the panel has told the page its touch is over: the page must not see the rest of it
+        val cornerOurs = hotCorner.observe(ev)
+        val pressOurs = pressSwallowing(ev)
+        if (cornerOurs || pressOurs) {
+            if (ev.actionMasked == android.view.MotionEvent.ACTION_UP || ev.actionMasked == android.view.MotionEvent.ACTION_CANCEL) { // the touch ends here: the glows are let go as after any touch (they were held still when the finger went down)
+                lastTouchAt = SystemClock.uptimeMillis()
+                Io.main.removeCallbacks(touchRelease); Io.main.postDelayed(touchRelease, 350L)
+            }
             return true
         }
         when (ev.actionMasked) {
