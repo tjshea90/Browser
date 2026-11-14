@@ -498,7 +498,7 @@ A question, not an order: answer it in plain words with a TESTED recipe, then le
   - [ ] RX3-Y4 refresh quick-fixes when the first YouTube page of the day starts and the data is older than 8 h; Diagnostics "YouTube rules from <date>"
   - [ ] RX3-Y5 Settings text, Diagnostics "YouTube ads" line, plain answer to the owner (may warn or limit playback)
   - [ ] RX3-G7 skip ads inside other video players (generic: observe a player's class only after a video in it fired play; ad-state words; same actions as Y2)
-  - [ ] RX3-G2 tap evidence recorded by content.js with isTrusted listeners; the DOM-event relay may forward only open/click/overlay/form/redirect; web tests for a forged tap
+  - [~] RX3-G2 tap evidence recorded by content.js with isTrusted listeners; the DOM-event relay may forward only open/click/overlay/form/redirect; web tests for a forged tap {claude/new-session-7d9rxz 2026-11-14T21:29Z}
   - [ ] RX3-G3 remove the postMessage assist channel (cross-frame click injection); assist hop through content.js + background tabs.sendMessage; the 13 AP1 web tests still pass
   - [~] RX3-G1 guard-main.js and scriptlets-main.js active on the very first page after a cold start (manifest world MAIN, or scripting API with persistAcrossSessions, or exportFunction from content.js); proof /fakeplay as first page after force-stop; handoff test that the manifest lists the guard {claude/new-session-7d9rxz 2026-11-14T21:28Z}
   - [ ] RX3-G4 neutralize invisible fake layers over a player before the press (outside the player's subtree); web tests incl. negatives
