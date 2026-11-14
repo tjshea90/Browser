@@ -350,7 +350,8 @@ function slSet(host, payload, gen) {
   return (slLib || Promise.resolve(true)).then(function (ok) {
     if (ok === false) return undefined;
     return browser.contentScripts.register({
-      matches: ['http://' + host + '/*', 'https://' + host + '/*'], js: [{ code: slCode(payload) }], // explicit schemes: Firefox refuses the '*' scheme here ("Permission denied to register a content script") although http://*/* and https://*/* are granted runAt: 'document_start', allFrames: true, matchAboutBlank: true, matchOriginAsFallback: true, world: 'MAIN',
+      // explicit schemes: Firefox refuses the '*' scheme here ("Permission denied to register a content script") although http://*/* and https://*/* are granted
+      matches: ['http://' + host + '/*', 'https://' + host + '/*'], js: [{ code: slCode(payload) }], runAt: 'document_start', allFrames: true, matchAboutBlank: true, matchOriginAsFallback: true, world: 'MAIN',
     }).then(function (reg) {
       slEarlySet++;
       var old = slReg.get(host);
