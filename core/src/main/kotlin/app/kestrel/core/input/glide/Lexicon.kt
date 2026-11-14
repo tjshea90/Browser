@@ -44,7 +44,7 @@ object GlideLetters {
 }
 
 /** A small lexicon held in plain arrays: the words the person typed or the sites they visit, and the lists the tests build. No bigrams. */
-class ArrayLexicon(entries: List<Pair<String, Long>>) : GlideLexicon {
+class ArrayLexicon(entries: List<Pair<String, Long>>, scaleTotal: Double = 0.0) : GlideLexicon {
     private val texts: Array<String>
     private val keys: Array<ByteArray>
     private val lp: FloatArray
@@ -56,7 +56,8 @@ class ArrayLexicon(entries: List<Pair<String, Long>>) : GlideLexicon {
         for ((w, c) in entries) { if (GlideLetters.keyOf(w).isEmpty() || c <= 0L) continue; merged[w] = maxOf(c, merged[w] ?: 0L) }
         texts = merged.keys.toTypedArray()
         keys = Array(texts.size) { GlideLetters.keyOf(texts[it]) }
-        val total = merged.values.sum().toDouble().coerceAtLeast(1.0)
+        // [scaleTotal] puts the probabilities on the scale of another list (the person's own words are weighed against the shipped list, not against each other)
+        val total = if (scaleTotal > 0.0) scaleTotal else merged.values.sum().toDouble().coerceAtLeast(1.0)
         lp = FloatArray(texts.size) { Math.log(merged[texts[it]]!! / total).toFloat() }
         val lists = HashMap<Int, ArrayList<Int>>()
         for (i in texts.indices) {
@@ -92,6 +93,8 @@ class BinaryLexicon internal constructor(
     private val biOff: IntArray,
     private val biId: IntArray,
     private val biLp: ShortArray,
+    /** The sum of all the counts the list was made from: the scale of the probabilities (a word with this many occurrences would have probability 1). */
+    val totalCount: Double,
 ) : GlideLexicon {
     private val off = IntArray(len.size + 1)
     private val buckets: Array<IntArray>
@@ -172,7 +175,7 @@ class BinaryLexicon internal constructor(
 /**
  * The file format ("KGL1", big-endian) and the code that writes it from plain text lists, so what the compile tool writes and what the tablet reads are tested together.
  *
- *   "KGL1" | n | blobLen | nDisplay | nPairs | len[n] bytes | blob (letters 0..25) | logProb[n] shorts (1/128 nat) | display: (id int, len byte, utf8) x nDisplay |
+ *   "KGL1" | n | blobLen | nDisplay | nPairs | totalCount (long) | len[n] bytes | blob (letters 0..25) | logProb[n] shorts (1/128 nat) | display: (id int, len byte, utf8) x nDisplay |
  *   pairOff[n+1] ints | pairId[nPairs] ints | pairLogProb[nPairs] shorts (ln P(second | first) over the listed pairs)
  */
 object LexiconFile {
@@ -212,7 +215,7 @@ object LexiconFile {
 
         val out = java.io.ByteArrayOutputStream(blobLen + n * 4 + ps.size * 6 + 4096)
         val d = java.io.DataOutputStream(out)
-        d.writeInt(MAGIC); d.writeInt(n); d.writeInt(blobLen); d.writeInt(display.size); d.writeInt(ps.size)
+        d.writeInt(MAGIC); d.writeInt(n); d.writeInt(blobLen); d.writeInt(display.size); d.writeInt(ps.size); d.writeLong(best.values.sum())
         for (p in keyed) d.writeByte(p.second.size)
         for (p in keyed) d.write(p.second)
         for (p in keyed) d.writeShort(q(Math.log(best[p.first]!! / total)).toInt())
@@ -227,7 +230,7 @@ object LexiconFile {
     fun read(bytes: ByteArray): BinaryLexicon {
         val b = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN)
         require(b.int == MAGIC) { "not a glide word list" }
-        val n = b.int; val blobLen = b.int; val nDisplay = b.int; val nPairs = b.int
+        val n = b.int; val blobLen = b.int; val nDisplay = b.int; val nPairs = b.int; val total = b.long.toDouble()
         val len = ByteArray(n); b.get(len)
         val blob = ByteArray(blobLen); b.get(blob)
         val lp = ShortArray(n); b.asShortBuffer().get(lp); b.position(b.position() + n * 2)
@@ -236,6 +239,6 @@ object LexiconFile {
         val pairOff = IntArray(n + 1); b.asIntBuffer().get(pairOff); b.position(b.position() + (n + 1) * 4)
         val pairId = IntArray(nPairs); b.asIntBuffer().get(pairId); b.position(b.position() + nPairs * 4)
         val pairLp = ShortArray(nPairs); b.asShortBuffer().get(pairLp)
-        return BinaryLexicon(len, blob, lp, dIds, dTexts, pairOff, pairId, pairLp)
+        return BinaryLexicon(len, blob, lp, dIds, dTexts, pairOff, pairId, pairLp, total)
     }
 }
