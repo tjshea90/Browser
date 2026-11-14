@@ -346,7 +346,7 @@ function slSet(host, payload, gen) {
     return Promise.resolve();
   }
   slNone.delete(host);
-  if (cur && cur.payload === payload) return Promise.resolve();
+  if (cur && cur.payload === payload) { cur.at = Date.now(); return Promise.resolve(); }
   return (slLib || Promise.resolve(true)).then(function (ok) {
     if (ok === false) return undefined;
     return browser.contentScripts.register({
@@ -355,7 +355,7 @@ function slSet(host, payload, gen) {
       slEarlySet++;
       var old = slReg.get(host);
       slReg.delete(host);
-      slReg.set(host, { reg: reg, payload: payload });
+      slReg.set(host, { reg: reg, payload: payload, at: Date.now() });
       if (old) slDrop(old);
       while (slReg.size > SL_MAX) { var k = slReg.keys().next().value; var e = slReg.get(k); slReg.delete(k); if (e) slDrop(e); }
     });
@@ -375,12 +375,13 @@ function slAsk(host) {
   slWait.set(host, w);
   return w;
 }
-/** Called when a document of [host] is about to be requested. Returns a promise the request must wait for, or null. */
-function slBefore(host) {
+/** Called when a document of [host] is about to be requested. Returns a promise the request must wait for, or null. A frame trusts an answer younger than SL_TTL (a switch on the page itself reloads the MAIN frame, which always asks). */
+function slBefore(host, frame) {
   if (slFailed) return null;
   var cur = slReg.get(host);
   if (cur) {
     slReg.delete(host); slReg.set(host, cur); // most recently used
+    if (frame && Date.now() - cur.at < SL_TTL) return null;
     return Promise.race([slAsk(host), later(SL_WAIT_MS)]);
   }
   var t = slNone.get(host);
@@ -393,7 +394,7 @@ function slFrame(d, r) {
   if (slFailed) return r;
   var fh = pageHost(d.url);
   if (!fh) return r;
-  var after = function (v) { if (v && v.cancel) return v; var w = slBefore(fh); return w ? w.then(function () { return v; }) : v; };
+  var after = function (v) { if (v && v.cancel) return v; var w = slBefore(fh, true); return w ? w.then(function () { return v; }) : v; };
   return (r && typeof r.then === 'function') ? r.then(after) : after(r);
 }
 
