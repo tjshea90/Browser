@@ -1,13 +1,13 @@
-# CHECKPOINT 2075 — read me first, then TASKS.md
+# CHECKPOINT 2081 — read me first, then TASKS.md
 
-**Written:** 2026-11-14T05:52:20Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `edcc148` (this checkpoint is the commit after it)
+**Written:** 2026-11-14T06:01:01Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-a57c163e-mtq8js` · **builds on:** `83f72f8` (this checkpoint is the commit after it)
 
 ## Just done
-alpha36 DISPATCHED: android.yml run 43563546964 (run_number 87, app=gecko full_build=true, ref ccr-a57c163e-mtq8js, queued 05:51Z); ship.sh gate passed (EXIT 0)
+alpha36 RELEASED AND RECORDED: kestrel-g-v0.3.0-alpha36 (gecko code 137), run 43563546964 green, APK 93.9 MB, BUILDLOG line written; TASKS AV1/AV2/AV3/AV3d ticked; owner message 36 about to be answered in plain words
 
 ## Do this next
-wait for run 43563546964 to be green AND tag kestrel-g-v0.3.0-alpha36 (git ls-remote --tags origin), then mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha36, then bash tools/record-release.sh kestrel-g-v0.3.0-alpha36 with the note in scratchpad alpha36_note.txt (same text as the dispatch note in ckpt 2074 commit message), then claim.sh AV2 AV3 AV3d --done, then answer the owner message 36 in plain words and re-list open items; NEVER ship alpha36 twice
+answer the owner (message 36) with the Release link on its own line, what was and was NOT run on the tablet, and the open items; then keep the heartbeat trig_01LLoVKsjuTUaDn61UGP1pBN until 24 h of owner silence (then delete_trigger); next owner work waits for their Diagnostics paste (Glide typing + Mini keyboard in page fields lines) and any new message
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ wait for run 43563546964 to be green AND tag kestrel-g-v0.3.0-alpha36 (git ls-re
 
 ## Last ten checkpoints
 ```
+  104a302 ckpt 2075: alpha36 DISPATCHED: android.yml run 43563546964 (run_number 87, app=gecko ful
   edcc148 ckpt 2074: gated kestrel-g-v0.3.0-alpha36 (gecko code 137) and pushed it: handoff self-t
   d44b251 ckpt 2073: version bump 137 / 0.3.0-alpha36 for the release of AV1-AV3 (resize/detach, l
   eac3369 ckpt 2061: AV3 EMULATOR-PROVEN (page-field row, live guess mid-glide her|he|hd, held dig
@@ -25,5 +26,7 @@ wait for run 43563546964 to be green AND tag kestrel-g-v0.3.0-alpha36 (git ls-re
   7defb68 ckpt 2038: AV3a live guess while gliding (GlideTyping.preview on its own thread with its
   06a225c ckpt 2033: AV2/AV3 core: PersonalModel now remembers corrections (guessed -> meant), the
   411b5fb ckpt 2020: AV1 code: MiniNav panel geometry (grip drag detaches/moves with dock snap + d
-  2287b4e ckpt 2013: owner message 36 written into TASKS (AV1 resize+detach the mini keyboard, AV2
 ```
+
+(4 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
