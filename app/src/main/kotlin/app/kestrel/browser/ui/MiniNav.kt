@@ -121,6 +121,9 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private var liftAt = 0L                     // when the finger lifted: the time until the word is on screen is counted
     private var titleCounts = emptyMap<String, Int>() // words of the titles of visited pages
     private var afterUndo = false               // a glided word was just deleted: the next word that is kept is the one meant instead
+    private var retypeWatch = false             // a glided word was just deleted: if the person types the word letter by letter instead, the deleted glide's shape is remembered for it (AX1)
+    private var retypeLetters = 0               // how many letters were typed since
+    private var retypeAt = 0L                   // when the word was deleted
     /** Tests: where the engine comes from (the real one reads the shipped word list). */
     internal var glideFactory: (() -> GlideTyping)? = null
 
@@ -263,7 +266,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
     /** Settings > "Forget what the keyboard learned": the own words, the learned word habits and the thumb habit are gone (the activity has cleared what is stored). */
     fun forgetLearned() {
-        ownWords = UserWords(); siteWords = emptyList(); pendingWord = null; afterUndo = false
+        ownWords = UserWords(); siteWords = emptyList(); pendingWord = null; afterUndo = false; retypeWatch = false
         glide?.forgetAll()
         post { pushOwnWords() }
     }
@@ -317,7 +320,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         if (learnAllowed()) {
             // kept: the keyboard hears it (a word the person chose, or one that replaced a deleted one, counts more); a correction remembers what it was picked over (a pick) or put in the place of (a deletion)
             val guessed = pendingGuessed ?: if (afterUndo) lastDeleted else null
-            g.learn(pendingPrev, w, maxOf(pendingWeight, if (afterUndo) 3f else 1f), pendingPrev2, guessed?.takeIf { it != w }, if (pendingGuessed != null) 1f else 0.5f)
+            g.learn(pendingPrev, w, maxOf(pendingWeight, if (afterUndo) 3f else 1f), pendingPrev2, guessed?.takeIf { it != w }, if (pendingGuessed != null) 1f else 0.5f, fromGlide = true, afterUndo = afterUndo)
         }
         pendingWeight = 1f; pendingGuessed = null
         afterUndo = false
@@ -342,6 +345,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             g.stats.onRetryDemoted()
         }
         val best = cands[0]
+        retypeWatch = false // a new glide: its own confirmation handles the deleted one
         syncField()
         val before = model.text
         model.commitGlide(best.text)
@@ -461,18 +465,24 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         }
         val f = pageField
         when (key) {
-            Key.Backspace -> if (model.glideActive) { lastDeleted = pendingWord ?: topGuess; deletedAt = SystemClock.uptimeMillis(); pendingWord = null; pendingGuessed = null; afterUndo = true; glide?.stats?.onUndone() } // right after a glide: the word was wrong
+            Key.Backspace -> if (model.glideActive) { // right after a glide: the word was wrong
+                lastDeleted = pendingWord ?: topGuess; deletedAt = SystemClock.uptimeMillis(); pendingWord = null; pendingGuessed = null; afterUndo = true; glide?.stats?.onUndone()
+                if (learnAllowed()) { glide?.glideDeleted(lastDeleted); retypeWatch = true; retypeLetters = 0; retypeAt = deletedAt } // its shape waits for the word that comes instead
+            }
             Key.Shift, Key.ToLetters -> {}                                                       // the text does not change
             else -> { confirmGlide(); if (key is Key.Ch) afterUndo = false }                     // typing on, the symbols page or Go: the glided word stays
         }
+        if (retypeWatch && key is Key.Ch && key.text.length == 1 && key.text[0].isLetter()) retypeLetters++
         if (f != null && key === Key.Go) { fieldGo(f); return }
         val before = model.text
         when (val r = model.press(key)) {
             is KeyResult.Submit -> {
+                finishRetype()
                 learnFromText() // what was typed letter by letter is remembered (the glided words were learned when they were kept)
                 closeKeyboard(); l.navSubmit(r.text)
             }
             KeyResult.None -> {
+                if (retypeWatch && key is Key.Ch && key.text == " ") finishRetype()
                 if (f != null) sendEdit(f, before, key === Key.Backspace)
                 if (!model.glideActive) keys.clearCandidates(); bar.invalidate(); keys.invalidate()
             }
@@ -496,7 +506,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         if (f != null) { fieldOpenings++; lastFieldLabel = f.label }
         learnedText = null
         model.open(if (f != null) "" else address)
-        pendingWord = null; afterUndo = false
+        pendingWord = null; afterUndo = false; retypeWatch = false
         keys.clearCandidates(); barMode(); keys.invalidate()
     }
 
@@ -510,10 +520,22 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
     /** Go in a page field presses Enter there; a field whose Enter submits (a search box) closes the keyboard, a text area stays open with an empty text for the next line. */
     private fun fieldGo(f: PageField) {
+        finishRetype()
         learnFromText()
         f.enter(); fieldEnters++
         if (f.enterSubmits) closeKeyboard()
         else { model.open(""); learnedText = null; keys.clearCandidates(); bar.invalidate(); keys.invalidate() }
+    }
+
+    /**
+     * The person deleted a glided word and typed another one letter by letter: the word just typed (at the space or Go) may be what the deleted glide meant, and the keyboard remembers the glide's
+     * shape for it when the straight line through the word's letters is not far from it (AX1). Only the first word after the deletion, only within [RETYPE_MS], only after at least two letters.
+     */
+    private fun finishRetype() {
+        if (!retypeWatch) return
+        retypeWatch = false
+        if (retypeLetters < 2 || SystemClock.uptimeMillis() - retypeAt > RETYPE_MS || !learnAllowed()) return
+        model.previousWord()?.let { glide?.retyped(it) }
     }
 
     /** Nothing is learned from a private tab or a password field. */
