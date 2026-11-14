@@ -505,7 +505,7 @@ A question, not an order: answer it in plain words with a TESTED recipe, then le
   - [ ] RX3-G5 core PopupGuard (tap evidence, AUTH hosts mirrored, WAIT 150 ms) used by BrowserActivity.refusePopup; strict while the guard is not ready; needs G2
   - [ ] RX3-G6 scripted jump to a listed ad host stopped after any delay unless the tap was on that very link; JumpGuardTest cases; /slowjump lab
   - [~] RX3-V1 core VideoRole (PLAYER/DECOR/AD) from element facts; applyInfo touches only PLAYER; flags override the display exemptions; MediaListTest + lab pages {claude/new-session-7d9rxz 2026-11-14T22:48Z}
-  - [ ] RX3-V2 verified flag: badge counts only wire-verified or visible-element or player-reported entries; at most 3 one-byte checks per page with no other evidence
+  - [~] RX3-V2 verified flag: badge counts only wire-verified or visible-element or player-reported entries; at most 3 one-byte checks per page with no other evidence {claude/new-session-7d9rxz 2026-11-14T23:05Z}
   - [ ] RX3-V3 playing-element signal and duration-jump ad rule; primary video first in MediaRank
   - [ ] RX3-V4 blob:/MSE players matched to playlists by duration and height; playlists under 60 s next to a 5 min one go to Other
   - [ ] RX3-V5 early look at new playlists (live/DRM/short/CUE markers) + core AdRuns (markers, foreign registrable domain, dominant run) pre-seeding job.skipped; note "Left out m:ss of advertising"
