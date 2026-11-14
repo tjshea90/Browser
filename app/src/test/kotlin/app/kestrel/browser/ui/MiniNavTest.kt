@@ -39,8 +39,8 @@ class MiniNavTest {
         override fun navSubmit(text: String) { calls.add("go:$text") }
         override fun navOpenChanged(open: Boolean) { opened.add(open) }
         val habits = ArrayList<FloatArray>(); val savedWords = ArrayList<String>()
-        override fun navGlideHabitChanged(habit: FloatArray) { habits.add(habit) }
-        override fun navGlideWordsChanged(text: String) { savedWords.add(text) }
+        override fun navGlideHabitChanged(habit: FloatArray) { habits.add(habit); this.habit = habit }
+        override fun navGlideWordsChanged(text: String) { savedWords.add(text); wordsText = text }
         override fun navGlideHosts(done: (List<String>) -> Unit) { done(listOf("www.doraby.com", "pelisjuanita.com", "10.0.2.2")) }
         var titles: List<String> = emptyList()
         override fun navGlideTitles(done: (List<String>) -> Unit) { done(titles) }
@@ -51,6 +51,11 @@ class MiniNavTest {
         override fun navPageField(): PageField? = field
         override fun navKeyboardChanged(showing: Boolean) { keyboard.add(showing) }
         override fun navPrivateTab() = privateTab
+        var learnedText: String? = null; var wordsText = ""; var habit: FloatArray? = null
+        override fun navGlideLearned(): String? = learnedText
+        override fun navGlideLearnedSave(text: String) { learnedText = text.ifEmpty { null } }
+        override fun navGlideWords(): String = wordsText
+        override fun navGlideHabit(): FloatArray? = habit
     }
 
     /** A text field of a web page as the panel sees it: what is put in, taken off or pressed ends up in [text] and [log]. */
@@ -562,6 +567,105 @@ class MiniNavTest {
         glideWord("world")               // carrying on keeps the picked word
         nav.closeKeyboard(); idle(20)
         assertTrue("the kept words were learned: ${nav.glideLine()}", nav.glideLine().contains("learned 2 words"))
+    }
+
+    // ------------------------------------------------------------------ the shape of a glide is learned (AX1, owner message 38)
+
+    private fun exportText(): String { var t = ""; nav.exportLearned { t = it }; return t }
+    private fun shapeLines(text: String) = text.lines().filter { it.startsWith("s ") }
+
+    @Test fun aKeptGlideIsRememberedWithItsShapeAndGoesIntoTheExportFile() {
+        openGlideKeyboard()
+        glideWord("hello")
+        nav.closeKeyboard(); idle(20) // the word stays: its shape is learned
+        val text = exportText()
+        assertTrue(text, text.startsWith("KESTREL-KEYBOARD-LEARNING 1\n"))
+        assertTrue(text, shapeLines(text).any { it.startsWith("s hello 1.00 ") })
+        assertTrue(nav.glideLine(), nav.glideLine().contains("1 glide shapes of 1 words remembered"))
+    }
+
+    @Test fun aGuessPickedFromTheStripKeepsTheShapeUnderThePickedWord() {
+        openGlideKeyboard()
+        glideWord("hello")
+        val picked = nav.candidatesForTest[1]
+        val (x, y) = nav.chipCenterForTest(1)!!
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, x, y); nav.touchKeysForTest(MotionEvent.ACTION_UP, x, y)
+        glideWord("world")               // carrying on keeps the picked word
+        nav.closeKeyboard(); idle(20)
+        val lines = shapeLines(exportText())
+        assertTrue("the picked word's shape counts three times: $lines", lines.any { it.startsWith("s $picked 3.00 ") })
+        assertFalse("the guess that was not wanted has none: $lines", lines.any { it.startsWith("s hello ") })
+    }
+
+    @Test fun aDeletedGlideAndTheWordTypedLetterByLetterInItsPlaceKeepTheShape() {
+        openGlideKeyboard()
+        glideWord("world")
+        nav.pressKeyForTest("\u232b")                    // it was wrong ...
+        for (ch in "world") nav.pressKeyForTest(ch.toString())   // ... and this is what they meant, typed
+        nav.pressKeyForTest("space"); idle(20)
+        val lines = shapeLines(exportText())
+        assertTrue("$lines", lines.any { it.startsWith("s world 3.00 ") })
+    }
+
+    @Test fun aDifferentWordTypedAfterADeletionIsNotWhatTheDeletedGlideMeant() {
+        openGlideKeyboard()
+        glideWord("world")
+        nav.pressKeyForTest("\u232b")
+        for (ch in "good") nav.pressKeyForTest(ch.toString())
+        nav.pressKeyForTest("space"); idle(20)
+        assertTrue(shapeLines(exportText()).toString(), shapeLines(exportText()).isEmpty())
+    }
+
+    @Test fun twoLettersAreNeededAndOnlyTheFirstWordCountsAndNotMuchLater() {
+        openGlideKeyboard()
+        glideWord("world"); nav.pressKeyForTest("\u232b")
+        nav.pressKeyForTest("w"); nav.pressKeyForTest("space")    // one letter is not a word
+        for (ch in "world") nav.pressKeyForTest(ch.toString())
+        nav.pressKeyForTest("space"); idle(20)
+        assertTrue("the watch ended at the first space", shapeLines(exportText()).isEmpty())
+        glideWord("world"); nav.pressKeyForTest("\u232b")
+        idle(MiniNav.RETYPE_MS + 1000)
+        for (ch in "world") nav.pressKeyForTest(ch.toString())
+        nav.pressKeyForTest("space"); idle(20)
+        assertTrue("much later it is a new thought", shapeLines(exportText()).isEmpty())
+    }
+
+    @Test fun nothingAboutTheShapeIsLearnedInAPrivateTab() {
+        rec.privateTab = true
+        openGlideKeyboard()
+        glideWord("hello"); glideWord("world"); nav.closeKeyboard(); idle(20)
+        assertTrue(shapeLines(exportText()).toString(), shapeLines(exportText()).isEmpty())
+    }
+
+    @Test fun forgettingWipesTheShapesAndAnImportBringsThemBack() {
+        openGlideKeyboard()
+        glideWord("hello"); nav.closeKeyboard(); idle(20)
+        val file = exportText()
+        assertTrue(shapeLines(file).isNotEmpty())
+        nav.forgetLearned(); idle(20)
+        assertTrue(shapeLines(exportText()).isEmpty())
+        var summary: app.kestrel.core.input.glide.LearnedExport.Summary? = null
+        nav.importLearned(file) { summary = it }; idle(50)
+        assertNotNull(summary)
+        assertTrue(shapeLines(exportText()).any { it.startsWith("s hello ") })
+        var bad: app.kestrel.core.input.glide.LearnedExport.Summary? = summary
+        nav.importLearned("not an export") { bad = it }
+        assertNull(bad)
+    }
+
+    @Test fun exportAndImportWorkWithoutOpeningTheKeyboardThisRun() {
+        // the keyboard was never opened: the saved files are read and written directly
+        val a = app.kestrel.core.input.glide.PersonalModel(); a.add(null, "hello", 4f)
+        rec.learnedText = a.serialize(); rec.wordsText = "doraby 3"; rec.habit = floatArrayOf(0.1f, 0.2f)
+        val out = exportText()
+        val back = app.kestrel.core.input.glide.LearnedExport.read(out)!!
+        assertEquals(4f, back.model.weightOf("hello"), 0.01f); assertEquals(0.1f, back.habit!![0], 0.001f); assertEquals(listOf("doraby" to 3), back.ownWords)
+        rec.learnedText = null; rec.wordsText = ""; rec.habit = null
+        var summary: app.kestrel.core.input.glide.LearnedExport.Summary? = null
+        nav.importLearned(out) { summary = it }
+        assertNotNull(summary)
+        assertEquals(4f, app.kestrel.core.input.glide.PersonalModel.parse(rec.learnedText!!).weightOf("hello"), 0.01f)
+        assertTrue(rec.wordsText, rec.wordsText.contains("doraby")); assertEquals(0.1f, rec.habit!![0], 0.001f)
     }
 
     // ------------------------------------------------------------------ resize and detach (AV1)
