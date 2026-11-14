@@ -207,6 +207,36 @@ class PersonalModelTest {
         assertEquals(0, PersonalModel.parse("c a a 3.0\nc x\nt a b 2.0\n").confusionCount) // a correction of a word by itself and a broken line are nothing
     }
 
+    @Test fun typedNoiseWithALetterRepeatedThreeTimesIsNeverLearned() {
+        for (w in listOf("awwww", "sooooo", "hmmm", "yessss")) assertTrue("$w is stretched", PersonalModel.stretched(w))
+        for (w in listOf("aaron", "bookkeeper", "success", "committee", "coffee", "ill")) assertFalse("$w is a real word", PersonalModel.stretched(w))
+        val m = PersonalModel()
+        m.add("big", "awwww"); m.add("awwww", "pizza"); m.add(null, "sooooo")
+        assertEquals("the noise itself is not kept", 0f, m.weightOf("awwww"), 0f)
+        assertEquals("... and not as the word before another one", 0f, m.pairProb("awwww", "pizza"), 0f)
+        assertEquals(1f, m.weightOf("pizza"), 0f)
+        assertEquals(1, m.wordCount)
+        m.addConfusion("hello", "hellooo"); assertEquals(0, m.confusionCount)
+        assertEquals("a file written before the rule is cleaned when it is read", 1, PersonalModel.parse("w awwww 4.00\nw hello 2.00\n").wordCount)
+        assertFalse("the glide word list does not take it either", UserWords.glideable("awwww")); assertTrue(UserWords.glideable("hello"))
+        val u = UserWords(); u.add("awwww"); u.add("sooooo"); u.add("doraby"); assertEquals(1, u.size)
+    }
+
+    @Test fun aHabitSettlesNearTiesNoMatterHowOftenItWasMadeButNeverOverrulesAClearlyBetterFit() {
+        val lex = ArrayLexicon(listOf("world" to 900_000_000L, "wield" to 40_000_000L, "word" to 500_000_000L, "the" to 20_000_000_000L), 5.4e11)
+        // a clean path for "world"; the person once corrected a thousand guesses of "world" to "wield": the old rule would now type "wield" for a path that is plainly "world"
+        val p = GestureSim(keys, Random(3)).path("world", SimNoise.CALM)!!
+        val pm = PersonalModel(); repeat(1000) { pm.addConfusion("world", "wield") }
+        val old = GlideDecoder(keys, GlideParams(confCap = 99f, confMaxGap = 99f)); old.personal = pm
+        val now = GlideDecoder(keys); now.personal = pm
+        assertEquals("precondition: without the guard a thousand corrections win", "wield", old.decode(p.xs, p.ys, p.xs.size, listOf(lex), null, 3)[0].text)
+        assertEquals("with the guard the finger still decides", "world", now.decode(p.xs, p.ys, p.xs.size, listOf(lex), null, 3)[0].text)
+        // ... while the real near tie is still settled by the habit, however large the count
+        val (lex2, dec, p2) = ambiguous()
+        dec.personal = PersonalModel().also { m -> repeat(10_000) { m.addConfusion("world", "wield") } }
+        assertEquals("wield", dec.decode(p2.xs, p2.ys, p2.xs.size, listOf(lex2), null, 3)[0].text)
+    }
+
     @Test fun theEngineCountsCorrectionsAndSaysSo() {
         val bytes = LexiconFile.build(listOf("the" to 530_000_000_000L, "hello" to 500_000_000L, "world" to 900_000_000L).map { LexiconFile.Entry(it.first, it.second) }, emptyList())
         val g = GlideTyping({ bytes }, direct); g.prepare(keys, null, null)

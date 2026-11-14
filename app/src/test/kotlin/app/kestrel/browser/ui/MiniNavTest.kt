@@ -306,6 +306,35 @@ class MiniNavTest {
         assertEquals("hello", nav.barTextForTest) // now a letter at a time
     }
 
+    @Test fun aDeletedWordThatComesUpFirstAgainOnARetryGoesToSecondPlace() {
+        openGlideKeyboard()
+        glideWord("hello")
+        assertEquals("hello", nav.candidatesForTest.first())
+        nav.pressKeyForTest("\u232b")                 // it was wrong for this person ...
+        assertEquals("", nav.barTextForTest)
+        glideWord("hello")                             // ... and they glide it once more: the same word again is not what they want
+        val strip = nav.candidatesForTest
+        assertTrue("the next guess leads: $strip", strip.size >= 2 && strip[0] != "hello")
+        assertEquals("the deleted word stays in the strip, second", "hello", strip[1])
+        assertEquals("${strip[0]} ", nav.barTextForTest)
+        assertTrue(nav.glideLine(), nav.glideLine().contains("went to second place 1 times"))
+        val (x, y) = nav.chipCenterForTest(1)!!        // they did mean it after all: one tap brings it back
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, x, y); nav.touchKeysForTest(MotionEvent.ACTION_UP, x, y); idle(20)
+        assertEquals("hello ", nav.barTextForTest)
+    }
+
+    @Test fun aGlideLongAfterTheDeletionOrOfAnotherWordIsNotARetry() {
+        openGlideKeyboard()
+        glideWord("hello"); nav.pressKeyForTest("\u232b")
+        idle(MiniNav.RETRY_MS + 500)                   // much later: a new thought
+        glideWord("hello")
+        assertEquals("hello", nav.candidatesForTest.first()); assertEquals("hello ", nav.barTextForTest)
+        nav.pressKeyForTest("\u232b")
+        glideWord("world")                             // another word right after a deletion: nothing to demote
+        assertEquals("world", nav.candidatesForTest.first())
+        assertFalse(nav.glideLine(), nav.glideLine().contains("second place"))
+    }
+
     @Test fun aGuessInTheStripReplacesTheWordAndIsCounted() {
         openGlideKeyboard()
         glideWord("word")
