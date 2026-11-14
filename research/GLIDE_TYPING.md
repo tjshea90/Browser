@@ -100,8 +100,8 @@ guess) cut reversals far too much and made the yardstick unrealistically hard; t
 
 ## 6. Limits and decisions
 
-* English only. The owner also visits Spanish-language sites; a Spanish list (accents shown, typed on plain letters) is a follow-up that needs the owner's yes (asked in the answer; TASKS AT2).
-* No live preview while the finger is still moving (Gboard shows one); decoding on lift keeps the decoder simple and cheap on the A53.
+* English only. The owner decided (message 36, 2026-11-14): "Do not include Spanish." (TASKS AT2 is closed.)
+* A live guess while the finger is still moving was added in AV3a (section 10); the final decode still happens on the lift.
 * Space, symbols and Go are not part of a glide; a glide that starts on them is not a glide. Glide on the symbol page is off (the strip shows nothing there).
 * Capital letters: only through Shift (an address bar is lower case).
 
@@ -160,3 +160,47 @@ Not part of Back up & restore: that file is plain text in Downloads which any ap
 
 ### Emulator proof of the learning (2026-11-14)
 Typed "hello" letter by letter, glided "world", picked the second guess "wield" from the strip, deleted it with one Backspace, pressed Go in a page field. The learned file on the emulator then held `w wield 3.00`, `w hello 1.00`, `p hello wield 3.00` (a pick counts 3 with its pair; a word typed letter by letter counts 1; the glided "world" that was swapped away is not learned). After restarting the app, Menu > Diagnostics said `learned 2 words and 1 word pairs from your typing`: the table survives a restart. A guess that was picked and then deleted at once (Backspace right after the pick) is NOT learned (unit-tested: `MiniNavTest`). Not measured on the emulator: the ranking effect itself (simulated in section 8; the tablet's "a learned word was the first guess N times" counts it for real). Settings > Privacy and security > Forget what the keyboard learned (asks first: Cancel / Clear): after Clear the learned file and the stored word habit and thumb habit were gone on the emulator.
+
+## 9. Research and the second round of learning (AV2, owner message 36, 2026-11-14)
+
+> "research Google gboard and Samsung keyboard because i like how their glide typing works, but they often predict the wrong word and i want this app's keyboard to continuously learn and improve glide typing based on the words i actually type. Do not include Spanish."
+
+The research is in `research/GLIDE_RESEARCH.md` (public sources only, 15 ranked ideas, each with the evidence quality; the table at its top says what was done with each). The short version:
+* Gboard and Samsung decode a glide against the same kind of word list this keyboard uses and rely on a language model for the rest. Their published gains from learning the PERSON are in the language model (a personal word cache cut errors 19 % in a Google simulation) and in where a thumb lands on TAPS (small gains). Nothing published shows a glide ranker that learns from corrections: that part is ours to measure on the tablet.
+* So the learning stays what it was (a bounded personal word and pair model) and gets five careful additions. Each one can only help decide between words whose paths fit about equally; none can overrule the finger.
+
+| Addition | What it does | Guard |
+| :- | :- | :- |
+| Corrections | the keyboard remembers "guessed A, meant B" (a pick from the strip counts 1, a deletion followed by another word counts 0.5). When A is first again and B is among the others, B gets a lift of 0.9 x ln(1 + times) | the lift is at most 1.6 (`GlideParams.confCap`), and only for a word whose path fits within 0.9 pitch squared per letter of the first guess's (`confMaxGap`) |
+| Last TWO words | "the whole" -> "wield" is learned as a three-word habit, mixed like the word pair; trust `n / (n + 3)`, never more than 80 % | needs the same two words before; one word before never uses it |
+| Short memory | a word used in the last hundred or so words is likelier (every use of any word fades all the recent ones by 0.8 %); counts like 1.5e7 occurrences per use, at most 6 | fades by itself; off in the unit tests that need a plain model |
+| Retry | a word deleted right after the glide that typed it is the wrong word for this person: if the very next glide (within 6 seconds) gives the same word first again, the next guess goes first and the deleted word stays second in the strip. The replacement then counts as a correction | only when the next guess fits the path about as well (`RETRY_GAP` 1.5); one tap on the strip brings the deleted word back; Diagnostics counts it |
+| Page words | the words of the titles of pages visited and bookmarked, and the site names, join the glideable words (a name such as "doraby" can be glided) | local, bounded (1400), nothing from private tabs |
+
+Nothing is learned in a private tab or in a password field (`IME_FLAG_NO_PERSONALIZED_LEARNING` and the field type are honoured), a guess that was picked and deleted at once is not learned, and a word with one letter three times in a row ("awwww", "sooooo") is never learned or added to the glideable words (typed noise polluted other keyboards' lists).
+
+### Measured (simulated person as in section 8; `GlideEval curve=1`; first guess right, %, six stretches of 300 glides, normal finger)
+| What is switched on | 1 | 2 | 3 | 4 | 5 | 6 |
+| :- | -: | -: | -: | -: | -: | -: |
+| nothing learned | 86.7 | 84.0 | 87.3 | 82.3 | 85.3 | 83.3 |
+| words and pairs (section 8) | 90.3 | 94.0 | 94.7 | 93.7 | 95.0 | 96.3 |
+| + corrections | 90.3 | 94.0 | 95.0 | 94.0 | 95.3 | 96.3 |
+| + last two words | 90.3 | 94.0 | 95.0 | 94.0 | 95.3 | 96.3 |
+| + short memory | 91.0 | 94.0 | 95.0 | 94.0 | 95.3 | 96.3 |
+| (topic bursts, 80 glides on one subject) pairs only / + short memory | 94.7 .. 98.3 / 95.0 .. 98.3 | | | | | |
+
+Honest reading: on this simulated person the word-and-pair model already reaches about 95 %, so the new parts add 0.3 to 0.7 points at most; capping the correction and guarding it by path fit changed nothing in the curve (same numbers with and without), so the guard costs no accuracy. They stay because a real person's language has structure the simulation lacks (the same two words after each other, one subject for a while, the same wrong neighbour word again and again) and because they are bounded. The honest measure is the tablet's Diagnostics line, which now also says how many corrections and three-word phrases were remembered and how often a deleted word came up first again.
+
+### Candidate recall (does the right word reach the careful pass?) `GlideEval gaps=1`, 3000 words, 200 survivors of the quick pass
+| finger | first guess right | right word in the first 3 | right word among the 200 careful candidates |
+| :- | -: | -: | -: |
+| calm (aim 5 dp) | 96.2 | 99.0 | 99.1 |
+| normal (aim 8 dp) | 90.5 | 96.9 | 98.6 |
+| sloppy (aim 11 dp) | 80.9 | 92.9 | 97.7 |
+| bad (aim 14 dp) | 66.3 | 80.4 | 93.2 |
+
+For a normal finger the right word is missing from the careful pass in 1.4 % of glides, so recall is not the main loss (the main loss is the order of near-equal words). Widening the list to 300 would give +0.3 points first guess for +1.1 ms per decode (laptop), 450: +0.5 points for +2.6 ms; kept at 200 until the tablet's "word shown N ms after the lift" says there is room. When the right word was second or third, its path fit the glide almost as well as the first guess's: extra cost per letter vs the first guess, normal finger: 10th percentile -0.81, median -0.12, 90th percentile 0.27, largest 1.02 (sloppy: median -0.05, 90th 0.75). That is why a near-tie guard of 0.9 keeps about 90-95 % of the cases a correction may settle.
+
+### Not done, on purpose (see the table in `research/GLIDE_RESEARCH.md`)
+A learned feature-weight re-ranker (no keyboard evidence, drift risk); changing the PREVIOUS word when the next one is typed (surprising edits); tap-offsets per key cluster for glides (no evidence for glides); a replay file of the owner's real glides (personal data in a public repository: the Diagnostics counters are the honest number); speed-aware weights (rare-word bias); case learning.
+
