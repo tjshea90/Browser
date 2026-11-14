@@ -7,6 +7,7 @@ import app.kestrel.browser.diag.Health
 import app.kestrel.browser.ui.VideoPanel
 import app.kestrel.browser.download.DownloadController
 import app.kestrel.browser.net.NetworkMonitor
+import app.kestrel.core.media.AdRuns
 import app.kestrel.core.media.Dash
 import app.kestrel.core.media.Hls
 import app.kestrel.core.media.MediaCandidate
@@ -28,6 +29,7 @@ import app.kestrel.core.url.UrlParts
  */
 class VideoFlow(private val a: BrowserActivity) {
     /** One quality of an HLS stream, ready to download. */
+    private companion object { const val LOOKS_PER_PAGE = 6 }
     private class StreamPick(val label: String, val url: String, val text: String?, val estimate: Long, val audioUrl: String?, val audioOnly: Boolean, val container: String, val repId: String? = null, val audioRepId: String? = null, val ext: String? = null, val headers: Map<String, String>? = null, val cand: MediaCandidate? = null)
     private sealed class Loaded {
         object Loading : Loaded()
@@ -55,10 +57,10 @@ class VideoFlow(private val a: BrowserActivity) {
     }
 
     /** What the tab's list held is gone (a new page): the list is emptied and everything learned about its entries is forgotten, so the same address on the next page is read afresh. UI thread. */
-    fun clearTab(tab: Tab) { val keys = tab.media.keys(); tab.media.clear(); forget(keys); val p = tab.id.toString() + "|"; maybeAsked.removeAll { it.startsWith(p) } }
+    fun clearTab(tab: Tab) { val keys = tab.media.keys(); tab.media.clear(); forget(keys); looks.remove(tab.id); val p = tab.id.toString() + "|"; maybeAsked.removeAll { it.startsWith(p) } }
 
     private fun forget(keys: List<String>) {
-        for (k in keys) { streamInfo.remove(k); probed.remove(k); sized.remove(k); childUrls.remove(k)?.forEach { children.remove(it) } }
+        for (k in keys) { lookedKeys.remove(k); streamInfo.remove(k); probed.remove(k); sized.remove(k); childUrls.remove(k)?.forEach { children.remove(it) } }
     }
 
     /**
@@ -81,7 +83,46 @@ class VideoFlow(private val a: BrowserActivity) {
     /** Called on the Shields worker thread. */
     fun seen(c: MediaCandidate) = Io.ui {
         val t = tabOf(c.page) ?: return@ui
-        if (t.media.add(c)) { a.refreshDownloadButton(); if (c.fromMarkup) verifySoon(t) }
+        if (t.media.add(c)) { a.refreshDownloadButton(); if (c.fromMarkup) verifySoon(t); if (c.kind == MediaKind.HLS) lookSoon(t) }
+    }
+
+    // ---- RX3-V5 (research/FINDER_LAB.md section 3): the early look. A stream playlist the page asked for is read at idle (a few KB: the master and its lowest quality) so that live, protected and clip-sized streams
+    // stop counting for the badge and the advertising the playlist gives away is known before anybody opens the sheet. The first few playlists of a page only; never while the page loads.
+    private val lookPending = HashSet<Long>()
+    private val looks = HashMap<Long, Int>()                 // tab id -> playlists looked at on this page
+    private val lookedKeys = HashSet<String>()
+    private fun lookSoon(t: Tab) {
+        if ((looks[t.id] ?: 0) >= LOOKS_PER_PAGE || !lookPending.add(t.id)) return
+        Io.main.postDelayed({ lookNow(t, 0) }, 3_000)
+    }
+    private fun lookNow(t: Tab, tries: Int) {
+        if (t.loading && tries < 6) { Io.main.postDelayed({ lookNow(t, tries + 1) }, 2_000); return }
+        lookPending.remove(t.id)
+        if (t.isNewTab || t.loading) return
+        for (c in t.media.streamsToLook(3)) {
+            val n = looks[t.id] ?: 0
+            if (n >= LOOKS_PER_PAGE) break
+            if (c.kind != MediaKind.HLS || !lookedKeys.add(c.key)) continue
+            looks[t.id] = n + 1
+            fetchPlaylist(t, c, c.url, { Hls.parse(it, c.url) != null }) { text, _ ->
+                when (val pl = text?.let { Hls.parse(it, c.url) }) {
+                    is Hls.MediaPlaylist -> noteLook(t, c, pl.media)
+                    is Hls.MasterPlaylist -> {
+                        val vs = pl.master.variants
+                        val probe = vs.filter { !it.audioOnly }.minByOrNull { it.bandwidth } ?: vs.minByOrNull { it.bandwidth }
+                        if (probe != null) DownloadController.fetchText(a, probe.url, requestHeaders(t, c), 1, t.isPrivateTab) { txt -> (txt?.let { Hls.parse(it, probe.url) } as? Hls.MediaPlaylist)?.media?.let { noteLook(t, c, it) } }
+                    }
+                    null -> {}
+                }
+            }
+        }
+    }
+    private fun noteLook(t: Tab, c: MediaCandidate, media: Hls.Media) {
+        val ads = AdRuns.find(media)
+        val live = media.problem == Hls.Problem.LIVE
+        val drm = media.problem == Hls.Problem.DRM || media.problem == Hls.Problem.SAMPLE_AES
+        if (t.media.applyStream(c.url, live, drm, media.durationMs, ads.skippedMs, ads.breaks)) { a.refreshDownloadButton(); refresh(t) }
+        Health.log("media", "look", "live=$live drm=$drm length=${media.durationMs / 1000}s advertising=${ads.skippedMs / 1000}s in ${ads.breaks} breaks counted=${t.media.usableCount()} of ${t.media.size}")
     }
 
     // ---- RX3-V2 (research/FINDER_LAB.md section 2): an address found only in the page's text was never requested; on a page with nothing verified, up to three of them get ONE cheap question at idle
