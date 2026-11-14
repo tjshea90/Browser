@@ -147,7 +147,6 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         addView(panel, LayoutParams(ctx.dp(PANEL_W_DP) + 2 * ctx.dp(BAND_DP), LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END))
         keys.onKey = { key -> typed(key) }
         applyColors()
-        loadGeometry()
     }
 
     // ------------------------------------------------------------------ what the host tells the panel
@@ -341,6 +340,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private var gW = PANEL_KEYS_W_DP.toFloat(); private var gH = KEYS_H_DP.toFloat()
     private var availWdp = 100000f; private var availHdp = 100000f   // the page area, known once it has been measured
     private var resizing = false                                      // a corner is being dragged: the decoder is told the key positions when it is over, not at every frame
+    init { loadGeometry() } // after the fields above: Kotlin runs initialisers in the order they are written, an earlier init block would be overwritten by their defaults
 
     /** The panel has been moved away from the corner it starts in. */
     val isDetached: Boolean get() = Math.abs(gRight - DOCK_RIGHT_DP) > 0.5f || Math.abs(gTop - HotCorner.SIZE_DP) > 0.5f
@@ -690,7 +690,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         private var corner = 0                       // bit 0: right side, bit 1: bottom
         private var downRawX = 0f; private var downRawY = 0f; private var downAt = 0L; private var moved = false
         private var right0 = 0f; private var top0 = 0f; private var w0 = 0f; private var h0 = 0f
-        private var lastTapAt = 0L
+        private var lastTapAt = -1L
         private val mark = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
         private val markPath = Path()
 
@@ -774,7 +774,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             val m = mode
             mode = DRAG_NONE
             if (m == DRAG_MOVE) {
-                if (tap) { if (ev.eventTime - lastTapAt < DOUBLE_TAP_MS) { lastTapAt = 0L; dock() } else lastTapAt = ev.eventTime }
+                if (tap) { if (lastTapAt >= 0L && ev.eventTime - lastTapAt < DOUBLE_TAP_MS) { lastTapAt = -1L; dock() } else lastTapAt = ev.eventTime }
                 else if (Math.abs(gRight - DOCK_RIGHT_DP) <= SNAP_DP && Math.abs(gTop - HotCorner.SIZE_DP) <= SNAP_DP) dock() // let go near the corner: it docks again
             }
             clampStored()
