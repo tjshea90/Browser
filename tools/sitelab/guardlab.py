@@ -6,13 +6,23 @@
   /popad      the page an ad would open; it only exists to be requested.
   /assist-parent  RX3-G3: a page with a cross-origin frame (the same server under another host name: 127.0.0.1) holding a "player", and a transparent layer over it that opens an ad when TAPPED.
               A real tap on the layer: the pop-up is refused, and the assist asks the frame (through the extension, never through a message the page could send) to start its video:
-              the frame logs "child play() called" (a stub counts the call: no media file is needed). Without the assist the log has no such line.
+              the frame logs "child play event: the video STARTED" (a real tiny silent media element, the page listens for its play event). Without the assist the log has no such line.
   /assist-child   the frame's page (served for the host 127.0.0.1).
 
 Used as the FIRST page after a force-stop (a cold start from a link: the extension may not be active yet) and as a later page, to see whether the guard was there from the very first document.
 Nothing here is part of the app. Reach it with `adb reverse tcp:<port> tcp:<port>` and http://localhost:<port>/fakeplay. The driver is tools/emu/firstpage_emu.py.
 """
-import http.server, sys, time, urllib.parse
+import base64, http.server, struct, sys, time, urllib.parse
+
+
+def silent_wav():
+    """One second of 8-bit mono silence as a data: address: a media element that REALLY plays in the engine, with no codec or file needed."""
+    n = 8000
+    hdr = b"RIFF" + struct.pack("<I", 36 + n) + b"WAVEfmt " + struct.pack("<IHHIIHH", 16, 1, 1, 8000, 8000, 1, 8) + b"data" + struct.pack("<I", n)
+    return "data:audio/wav;base64," + base64.b64encode(hdr + b"\x80" * n).decode()
+
+
+WAV = silent_wav()
 
 FAKEPLAY = b"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>fakeplay</title></head>
 <body style="font:20px sans-serif;margin:16px"><p>fakeplay: tries to open a pop-up by script, with no tap, four times.</p>
@@ -52,11 +62,11 @@ document.getElementById('layer').addEventListener('click', function () { L('laye
 """
 
 ASSIST_CHILD = b"""<!doctype html><html><head><meta charset="utf-8"><title>assist-child</title></head>
-<body style="margin:0;background:#111;color:#eee;font:18px sans-serif"><video id="v" src="http://127.0.0.1:%PORT%/clip.mp4" style="width:100%;height:380px;background:#000" muted></video>
+<body style="margin:0;background:#111;color:#eee;font:18px sans-serif"><video id="v" src="%WAV%" style="width:100%;height:380px;background:#000" muted loop></video>
 <script>
 function L(k, v) { try { var x = new XMLHttpRequest(); x.open('GET', '/log?kind=' + encodeURIComponent(k) + '&v=' + encodeURIComponent(v) + '&t=' + Date.now()); x.send(); } catch (e) {} }
-// no media file is needed: the call to play() is what the assist must make
-HTMLMediaElement.prototype.play = function () { L('child', 'child play() called'); return Promise.resolve(); };
+// a real, tiny, silent media element: the assist's own play() call makes the engine fire a play event that THIS page can see (a stubbed play() could not be seen: the extension's calls go through the engine's own wrappers)
+document.getElementById('v').addEventListener('play', function () { L('child', 'child play event: the video STARTED'); });
 L('load', 'assist-child first-script guard=' + (window.__kstGuard === 1 ? 'YES' : 'no') + ' host=' + location.host);
 </script></body></html>
 """
@@ -93,7 +103,7 @@ class H(http.server.BaseHTTPRequestHandler):
             return self._send(200, ASSIST_PARENT.replace(b"%PORT%", str(self.server.server_address[1]).encode()))
         if u.path == "/assist-child":
             self._write("GET /assist-child (host %s)" % self.headers.get("Host", "?"))
-            return self._send(200, ASSIST_CHILD.replace(b"%PORT%", str(self.server.server_address[1]).encode()))
+            return self._send(200, ASSIST_CHILD.replace(b"%PORT%", str(self.server.server_address[1]).encode()).replace(b"%WAV%", WAV.encode()))
         if u.path == "/clip.mp4":
             return self._send(404)
         if u.path == "/log":
