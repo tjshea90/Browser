@@ -120,6 +120,8 @@ import org.mozilla.geckoview.SlowScriptResponse
 import org.mozilla.geckoview.StorageController
 import java.io.File
 
+private typealias PopupVerdict = app.kestrel.core.guard.PopupGuard.Verdict
+
 /**
  * The browser window: owns the tab list, swaps what is shown (new-tab page / WebView / error screen), and implements everything the
  * per-tab WebView clients need from the UI. [MainActivity] is the normal window; [PrivateActivity] runs in its own process.
@@ -2187,13 +2189,12 @@ open class BrowserActivity : Activity(), DockListener {
      * (the tap report is still on its way through the extension: ask again for at most [app.kestrel.core.guard.PopupGuard.WAIT_MS]). A `$popup` rule of the lists stops it in every case.
      */
     internal fun judgePopup(tab: Tab, uri: String): app.kestrel.core.guard.PopupGuard.Verdict {
-        val V = app.kestrel.core.guard.PopupGuard.Verdict
-        if (!prefs.blockPopups) return V.ALLOW
+        if (!prefs.blockPopups) return PopupVerdict.ALLOW
         val host = tab.topHost
-        if (!Shields.effective(prefs, host).shieldsUp) return V.ALLOW
-        val to = UrlParts.hostOf(uri) ?: return V.ALLOW
+        if (!Shields.effective(prefs, host).shieldsUp) return PopupVerdict.ALLOW
+        val to = UrlParts.hostOf(uri) ?: return PopupVerdict.ALLOW
         val fs = Engine.peek()
-        if (fs != null && Verdict.isBlocked(fs.check(uri, host, RequestType.POPUP))) return V.STOP
+        if (fs != null && Verdict.isBlocked(fs.check(uri, host, RequestType.POPUP))) return PopupVerdict.STOP
         // (the engine's own "user gesture" flag is false for a window.open inside a tap on some pages, so the app's own record of the last finger touch decides)
         val now = SystemClock.uptimeMillis()
         return app.kestrel.core.guard.PopupGuard.decide(
