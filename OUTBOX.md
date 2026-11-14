@@ -1902,3 +1902,75 @@
 > - Network lab results.
 > - Optional: the licence note (LIC-1), landscape tabs (UI-3), and the Cromite comparison (P2b).
 <!-- sha:d535dc644105 -->
+
+## 2026-11-14T18:59:42Z
+> The review is finished and the findings file is attached to this chat. It's a read-only read of the code and the earlier research; I ran no builds, tests, emulator or tablet.
+>
+> I didn't change the repo, claim any `TASKS.md` item or run a checkpoint, so nothing touched the other session's branch. The repo's save hooks may log this chat to `INBOX.md` and `OUTBOX.md`, but only on my own branch.
+>
+> **File:** `/tmp/claude-0/-home-user-Browser/f5388cff-fd98-5e81-857a-8317253cf149/scratchpad/REVIEW-EXTERNAL-3.md` (64 KB, plain text). Upload it to the other session and tell it to save it as `research/REVIEW-EXTERNAL-3.md`, then work from section 12. It follows the same layout as the earlier outside reviews: each row has file and line evidence, a proof step and a status. Rows are marked new, already queued or already known. Section 12 is a block you can paste straight into `TASKS.md`.
+>
+> The most important findings:
+>
+> - **First press plays (ask 6):** the pop-up guard has three weaknesses.
+>   - It isn't active on the first page after a cold start.
+>   - A web page can fake the "real tap" evidence the redirect guard trusts.
+>   - Any page that embeds another site can make the extension click inside that embedded frame.
+>   - The current "press through the fake layer" fix only acts after an ad has already been refused, so the first press still fails.
+> - **False videos and ads (ask 2):** any video that reports its length is treated as a real video, so ads, hover previews and muted loops get through. Entries found in page markup with unknown size always count towards the Save-video badge. Ad breaks inside saved HLS videos are only removed after downloading, and only when the codec changes.
+> - **Download manager (ask 3):** an HLS video download fails after roughly 30 seconds to 2 minutes of dead hotspot upstream while Wi-Fi stays connected. The single-file engine only waits it out when it has one connection. Each row has a test to write first.
+> - **Security and blocking (ask 5):**
+>   - `trusted-*` scriptlets run from every list, including a single-maintainer host.
+>   - AdGuard Tracking and Hagezi Light were recommended by earlier research but never added; the gain is mostly fewer tracker requests, with a small byte saving.
+> - **Speed, RAM and hotspot (asks 1, 4, 7):**
+>   - The tablet measured the ad blocker at 723 µs per request, against a design target of 50 µs.
+>   - The glow animation keeps redrawing while a video plays.
+>   - A page-wide mutation watcher has no time limit.
+>   - The back/forward cache is fixed at 6 pages even though one kill takes down every tab.
+>   - On the capped hotspot, several smoothness settings spend bandwidth on content you may never scroll to.
+>
+> **Limits:** every `[R]` item is code I read, not behaviour I observed. Three Gecko-specific ideas are marked as unverified in the file (the guard registration option, adjusting the back/forward cache live, the media-session hook), and each names the test that decides it. The tablet numbers I quote are from an earlier build (alpha27), and I didn't review the WebView build.
+>
+> **Your four yes/no questions (section 11 of the file):**
+> - May the extra tracker lists be added with a Settings switch, even though logged-in pages weren't tested?
+> - Should pop-ups be stopped more strictly, so a legitimate one sometimes needs a tap on the blocked icon?
+> - May the glow pause while a video plays?
+> - Should generic in-player ad skipping be on by default, with YouTube left out?
+<!-- sha:bbdbc54c3701 -->
+
+## 2026-11-14T19:08:23Z
+> Understood: all four are approved, plus YouTube ad skipping and blocking. I'll also add the Back-button request and make the file say exactly what the other session must do and where to save things. I'll start with what the other session changed, since the start-up sync merged its newest checkpoint into my tree, so I can re-verify my line references against the current code.
+<!-- sha:23c113a9061a -->
+
+## 2026-11-14T19:24:07Z
+> I've rewritten the file as v2, and it replaces the first one. It's still a read-only review: I changed nothing in the repo and didn't touch the other session's branch. I ran nothing on your tablet. I only read code, plus the public uBlock Origin list data, which I copied into a folder next to the repo, not inside it.
+>
+> **What the file now tells the other session to do:** the top of the file is a "START HERE" block with ten exact steps.
+> - It saves the file as `research/REVIEW-EXTERNAL-3.md`, in the repo.
+> - It pastes the task list at the end of `TASKS.md`, quoting your words, before any code.
+> - It runs the checkpoint command with the exact text to use.
+> - It finishes its current long-press panel work (AY1–AY5) and ships alpha40 first.
+> - It then does your Back request, then YouTube, then everything else, in a set order.
+> - It names which research file each kind of finding goes into.
+> - It includes a short, plain-words message for the other session to send you.
+>
+> All you do is upload the file; there's nothing else to tell it.
+>
+> **Your decisions are recorded as approved:** the extra tracker lists, the stricter pop-up and redirect wall, pausing the glow during video, ad skipping in video players by default, and YouTube ad blocking and skipping. The YouTube answer also closes the YouTube part of the open licence question (LIC-1).
+>
+> **New Back-button section** (your request, in your words):
+> - **How Back works today:** the engine keeps recent pages in memory, so Back is instant when it can use them. When it can't, the app puts a saved picture over the page until the page first paints. The app never checks that the scroll position came back.
+> - **Why Back often reloads:** the engine can't keep pages that were still loading when you left, pages that tell the browser not to store them, or video-player pages. On a slow hotspot the first group is probably common, but that's a guess until it's measured.
+> - **What the file asks for:** first, measure why Back reloads. Then remember the scroll position for each history entry. Then keep the picture up until the page is both painted and back at its place, and ask the page to scroll if the engine didn't.
+> - **One honest limit:** pages that forbid storing can't be cached, so for those the best possible is the exact saved view instantly with the loaded page landing at the same place.
+> - **One question I left open:** whether Back may be made instant for such pages on sites you pick. Doing so keeps a copy of them on the tablet. Nothing gets built until you answer.
+>
+> **New YouTube section:** I read the live YouTube rules from today's uBlock Origin lists and compared them with what the app can run.
+> - **Desktop YouTube:** of 34 rules that apply, the app drops 9. Those include the parts that answer YouTube's "fake buffering" enforcement.
+> - **Mobile YouTube (what this tablet gets by default):** of 11 rules, the app drops 1.
+> - **What the file asks for:** finish the missing rule types (for trusted lists only), add a built-in ad skipper that works even when the lists lag, and build a test lab. Real YouTube was never reached from here, so the file says plainly that it may still warn or limit playback.
+>
+> I also corrected one description of how the cold-start picture hides, and updated every code reference to the latest code. The start-up sync had pulled the other session's newest work into my own branch.
+>
+> The one thing still waiting on you is the Back question above.
+<!-- sha:713c03f96a39 -->

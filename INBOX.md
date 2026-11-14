@@ -1188,3 +1188,22 @@ https://www.ally.com/help/invest/dividend-reinvestment/
 ```
 I see this prompt in the attached screenshot too much. Automatically have the browser wait without showing a prompt. If it is waiting too long I will close the tab myself. For the top right corner navigation panel, make it so I can long press anywhere in the browser and it will show up under where I long pressed, but only if I am long pressing an open space. If I'm long pressing a link, give me the options for that link, not the navigation panel. If it doesn't already do so, make the navigation panel keyboard space key able to move the text cursor if I press and hold it then move my finger left or right, just like other keyboard apps do. Make the navigation panel a floating panel which I can move around easily by long pressing it and dragging it around
 ```
+
+## 2026-11-14T18:35:50Z
+```
+Without interfering with the other claude account working on this repo, do a read only review of the browser app so far. Look for: 
+1) ways to improve the coding for speed and efficiency of the app and web page loading and video playback
+2) ways to improve video finding on web pages for the video downloader and reduce false videos and advertisements showing up in the downloads list 
+3) ways to improve or speed up the download manager
+4) ways to decrease ram usage and make the app more lightweight without sacrificing any speed or function
+5) ways to improve ad blocking, tracker blocking, and security without making websites break
+6) ways to improve true video finding on websites so the video plays the first time I press play instead of redirecting or showing advertisements or pop ups
+7) ways to improve the hotspot connection settings and speed and efficiency in the browser app
+
+Put your findings in a file which I can upload to another Claude session to work on and optimize the output file for another Claude session to understand and work on
+```
+
+## 2026-11-14T19:06:44Z
+```
+Yes to all four, and include YouTube ad skipping and blocking. Redo the file with these permissions, and add a request for the other Claude session to make it so when I press back to go to the last web page, it automatically goes back to the last scroll position I was at on that web page, and it should load immediately because it should be cached. Finally, make the file itself tell the other claude session exactly what to do, including where to save the research file
+```
