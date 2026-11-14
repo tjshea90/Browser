@@ -1,13 +1,13 @@
-# CHECKPOINT 2342 — read me first, then TASKS.md
+# CHECKPOINT 2343 — read me first, then TASKS.md
 
-**Written:** 2026-11-14T20:56:19Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/new-session-7d9rxz` · **builds on:** `c142ffbc` (this checkpoint is the commit after it)
+**Written:** 2026-11-14T21:29:43Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/new-session-7d9rxz` · **builds on:** `ee766db9` (this checkpoint is the commit after it)
 
 ## Just done
-RX3-G3 DONE (script side): the cross-frame postMessage assist channel is gone; the parent guard only dispatches a parameterless '__kst_assist_v1' event, content.js decides from its own trusted press (fresh 2 s, max 5, frame and place worked out from the press), background relays to the ONE child frame via tabs.sendMessage (frameDoc map + frameParent), the child's content.js plays its video or presses through (never on a/button/input/form...); assist.test.js 9 + guard + background 72 + all related web suites pass. Back lab: 5 emulator cases measured (static kept exact; nostore from network, engine restored 1800; dynamic NOT restored by the engine (0) = the pull case; loading page (hanging img) STILL KEPT by Gecko; mse reloaded from cache). Found app bug: armBackPicture saw a stale session state (index -1 of 1) so nothing was armed -> pull answered empty; fixed by answering from the tab's own thread-safe ScrollMemory (no arming, BackTarget removed). Rebuilt x86_64 APK installed, dynamic round re-running
+RX3-G1 DONE (guard+library declared in the manifest, world MAIN; emulator-proven: page-world marker at the first script, about:blank frames covered, dynamic registrations removed, handoff gate + tests), RX3-G2 DONE (web tests), RX3-Y1 DONE for the mechanics (caps 4096/8192 trusted, 64 calls/32000 chars, json-edit family + trusted-edit-inbound-object + trusted-prevent-dom-bypass, JSON edit engine in scriptlets-main.js with 19 web tests, scriptlet accounting line in Diagnostics) - NOT yet proven on real YouTube. Version bumped to alpha41 (gecko code 142, manifest 1.0.142) in the working tree (NOT shipped). GUARD_FIRST_PAGE.md, GUARD_HARDENING.md, YOUTUBE_ADS.md section 3, BACK_SCROLL.md written. G3 relay in the REAL engine is still UNPROVEN: the emulator assist lab (/assist-parent with a cross-origin frame) showed the layer tap and the refused pop-up but NO 'child play() called': added assist counters (background.js assistText in the st state line, ShieldsBridge logs 'shields ext-state' to Health) and re-running the lab
 
 ## Do this next
-(1) read scratchpad back-dynamic2.out: expect +500/+2000 ms = 1800 and Health back.pull counted; if the place is still 0 debug content.js pull() on the emulator (the 'bk' message path: content -> background -> ShieldsBridge 'bk'); (2) write research/BACK_SCROLL.md with ALL numbers (table of 5 cases, device emulator x86_64 API 29 NOT the tablet, build alpha41-dev debug, date 2026-11-14, honest limits: emulator stalls make show/pagehide ms meaningless; the page-stop 24 s lag) and the open owner question BK5; (3) claim.sh --done RX3-BK1 and RX3-BK2 only for what is proven, keep tablet part [~]; (4) tick RX3-G2 and RX3-G3 with their web-test evidence; (5) RX3-G1 next (guard on first page: manifest content_scripts world MAIN for guard-main.js and scriptlets-main.js, then test on emulator /fakeplay as first page after force-stop); then Y1/Y2/Y3/G7
+(1) read scratchpad assist2.out (lab re-run after pm clear): look for the 'shields ext-state' Health line, it ends with ' | assist <sent>/<asked> (<reason>)': reason 'tabs.sendMessage is not there' means GeckoView has no tabs.sendMessage -> redesign the relay (candidates: browser.tabs.sendMessage absent -> use a port: the child content.js opens runtime.connect and the background keeps ports per frameId, or content.js broadcasts through the background to all frames with an address match); 'frame not found among N' means the frameParent table lacked the sub_frame (the iframe request may not reach onBeforeRequest as sub_frame with parentFrameId); no assist line at all means the parent content.js never sent it (check press recording / elementsFromPoint). (2) fix, re-run web tests (assist.test.js models the relay), rebuild x86_64 (-PgeckoAbi=x86_64), pm clear, run scratchpad assist_run.sh. (3) THEN tick RX3-G3, run the whole gate: ./gradlew :core:test :app:testDebugUnitTest, cd web-tests && npm test, bash tools/test_handoff.sh, then ship alpha41: bash ship.sh gecko note (version already bumped), dispatch android.yml (app=gecko full_build=true ref claude/new-session-7d9rxz), record-release after green; owner note must say: Back scroll + Back lab, trusted-only scriptlets, forged-tap fix, frame-assist channel, guard from the first page, JSON-edit engine; NOT run on the tablet
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ RX3-G3 DONE (script side): the cross-frame postMessage assist channel is gone; t
 
 ## Last ten checkpoints
 ```
+  e462351b ckpt 2342: RX3-G3 DONE (script side): the cross-frame postMessage assist channel is gon
   279f3b45 ckpt 2341: RX3-BK1/BK2 first emulator proof (static case): page left at y=1800, Back re
   8888c78b ckpt 2340: RX3-BK1/BK2 Kotlin wiring DONE and COMPILES (geckoapp + app debug): ShieldsB
   687414dd ckpt 2339: owner message 40 (a screenshot, no words: YouTube Movies and TV page 'Video 
@@ -25,8 +26,7 @@ RX3-G3 DONE (script side): the cross-frame postMessage assist channel is gone; t
   e2056d0c ckpt 2333: alpha40 (gecko code 141) gated, pushed and the android.yml run DISPATCHED (a
   13e4374a ckpt 2325: gated kestrel-g-v0.3.0-alpha40 (gecko code 141) and pushed it: handoff self-
   917a3327 ckpt 2320: AY2 final: content.js treats only a NEW non-empty selection as text (emulato
-  097f61f2 ckpt 2312: AY1, AY3, AY4 ticked with evidence (emulator proof of long press matrix, pic
 ```
 
-(9 automatic checkpoint(s) since the last deliberate one — the
+(32 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
