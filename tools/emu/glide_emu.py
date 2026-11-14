@@ -9,6 +9,8 @@ records (needs `adb root`, which the emulator allows). Everything here is a help
   python3 -I tools/emu/glide_emu.py glide for o=-1.0     ... with the finger landing one key LEFT of 'o' (letter=dx[,dy] in key widths): a sloppy habit
   python3 -I tools/emu/glide_emu.py tap 300 400          tap (screen pixels)
   python3 -I tools/emu/glide_emu.py longpress 580 80     long press (screen pixels, 800 ms): the invisible top right corner opens / closes the panel
+  python3 -I tools/emu/glide_emu.py holddrag 300 300 200 500 [ms]   finger down, still for ms (default 800), then dragged to the second point and lifted (AY4: pick the panel up and carry it)
+  python3 -I tools/emu/glide_emu.py slide 300 400 120 [ms]   finger down, still for ms (default 150), then moved sideways by dx pixels in small steps and lifted (AY3: slide over the space key)
   python3 -I tools/emu/glide_emu.py shot out.png         screenshot (keep it OUT of the repository: the repo is public)
   python3 -I tools/emu/glide_emu.py taptext "Settings"   tap the first view whose text or description contains this
 
@@ -116,7 +118,7 @@ def path_points(word, keys, shifts=None, step_px=5.0):
 
 def _ev(t, c, v): return struct.pack("<qqHHi", 0, 0, t, c, v)
 
-def inject(points, per_chunk=4, pause=0.03, track=1):
+def inject(points, per_chunk=4, pause=0.03, track=1, hold=0.0):
     """Press, move through the points, lift: one chunk of touch events every `pause` seconds (the app batches what arrives within a frame)."""
     path, mx, my = touch_device(); sw, sh = screen_size()
     def raw(p): return int(round(p[0] / sw * mx)), int(round(p[1] / sh * my))
@@ -137,9 +139,10 @@ def inject(points, per_chunk=4, pause=0.03, track=1):
         f = os.path.join(td, "kg.bin"); open(f, "wb").write(blob)
         adb("push", f, "/data/local/tmp/kg.bin")
     cmds = []; at = 0
-    for c in chunks:
+    for idx, c in enumerate(chunks):
         n = len(c) // 24
         cmds.append("dd if=/data/local/tmp/kg.bin of=%s bs=24 skip=%d count=%d 2>/dev/null; sleep %s" % (path, at, n, pause))
+        if idx == 0 and hold > 0: cmds.append("sleep %s" % hold) # the finger stays down and still
         at += n
     cmds.append("rm -f /data/local/tmp/kg.bin")
     shell("; ".join(cmds))
@@ -147,6 +150,13 @@ def inject(points, per_chunk=4, pause=0.03, track=1):
 def glide(word, shifts=None, keys=None):
     keys = keys or layout(keyboard_bounds())
     inject(path_points(word, keys, shifts))
+
+def line(x0, y0, x1, y1, step_px=8.0):
+    n = max(2, int(((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5 / step_px))
+    return [(x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n) for i in range(n + 1)]
+
+def holddrag(x0, y0, x1, y1, ms=800): inject(line(x0, y0, x1, y1), per_chunk=2, pause=0.05, hold=ms / 1000.0)
+def slide(x, y, dx, ms=150): inject(line(x, y, x + dx, y, 6.0), per_chunk=2, pause=0.05, hold=ms / 1000.0)
 
 def tap(x, y): shell("input tap %d %d" % (x, y))
 def longpress(x, y, ms=800): shell("input swipe %d %d %d %d %d" % (x, y, x, y, ms))
@@ -176,6 +186,8 @@ if __name__ == "__main__":
         for c in sorted(k): print(c, "%.0f %.0f" % k[c])
     elif a[0] == "glide": glide(a[1], parse_shifts(a[2:]))
     elif a[0] == "tap": tap(int(a[1]), int(a[2]))
+    elif a[0] == "holddrag": holddrag(int(a[1]), int(a[2]), int(a[3]), int(a[4]), int(a[5]) if len(a) > 5 else 800)
+    elif a[0] == "slide": slide(int(a[1]), int(a[2]), int(a[3]), int(a[4]) if len(a) > 4 else 150)
     elif a[0] == "longpress": longpress(int(a[1]), int(a[2]))
     elif a[0] == "shot": shot(a[1])
     elif a[0] == "taptext": print("tapped" if taptext(a[1]) else "not found")
