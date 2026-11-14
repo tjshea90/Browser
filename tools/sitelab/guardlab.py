@@ -207,17 +207,17 @@ setTimeout(function () { L('DONE', 'asked for all three'); }, 6000);
 """
 
 def hls_playlist(kind):
-    head = "#EXTM3U\\n#EXT-X-VERSION:3\\n#EXT-X-TARGETDURATION:6\\n#EXT-X-MEDIA-SEQUENCE:0\\n"
+    head = "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:6\n#EXT-X-MEDIA-SEQUENCE:0\n"
     if kind == "live":
-        return head + "".join("#EXTINF:6.0,\\n/seg/live%d.ts\\n" % i for i in range(4))
+        return head + "".join("#EXTINF:6.0,\n/seg/live%d.ts\n" % i for i in range(4))
     if kind == "short":
-        return head + "#EXT-X-PLAYLIST-TYPE:VOD\\n" + "".join("#EXTINF:6.0,\\n/seg/short%d.ts\\n" % i for i in range(2)) + "#EXT-X-ENDLIST\\n"
-    out = head + "#EXT-X-PLAYLIST-TYPE:VOD\\n"
+        return head + "#EXT-X-PLAYLIST-TYPE:VOD\n" + "".join("#EXTINF:6.0,\n/seg/short%d.ts\n" % i for i in range(2)) + "#EXT-X-ENDLIST\n"
+    out = head + "#EXT-X-PLAYLIST-TYPE:VOD\n"
     for i in range(20):
-        if i == 10: out += "#EXT-X-CUE-OUT:DURATION=12\\n"
-        if i == 12: out += "#EXT-X-CUE-IN\\n"
-        out += "#EXTINF:6.0,\\n/seg/film%d.ts\\n" % i
-    return out + "#EXT-X-ENDLIST\\n"
+        if i == 10: out += "#EXT-X-CUE-OUT:DURATION=12\n"
+        if i == 12: out += "#EXT-X-CUE-IN\n"
+        out += "#EXTINF:6.0,\n/seg/film%d.ts\n" % i
+    return out + "#EXT-X-ENDLIST\n"
 
 POPAD = b"""<!doctype html><meta charset=utf-8><title>an ad</title><body style="font:20px sans-serif;margin:24px">popad: this is the ad page. If you can see it, the pop-up was NOT stopped.</body>"""
 
