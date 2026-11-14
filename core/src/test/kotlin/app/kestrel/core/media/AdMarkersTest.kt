@@ -16,7 +16,7 @@ class AdMarkersTest {
     @Test fun aRealSpliceInsertOutIsReadWithItsBreakDuration() {
         val s = AdMarkers.scte35(REAL_OUT)
         assertNotNull(s); assertTrue(s!!.out)
-        assertEquals(60_291L, s.durationMs)                                       // 5426421 / 90 ticks per ms
+        assertEquals(60_293L, s.durationMs)                                       // 5426421 ticks of 90 kHz = 60.29 s
     }
 
     @Test fun theSameSpliceWithTheOutFlagClearedIsAReturnToTheProgram() {
