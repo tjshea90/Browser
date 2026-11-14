@@ -46,7 +46,8 @@ How a keyboard uses them (what Kestrel does; another keyboard is free to do it d
 1. Cut the new glide into the same 16 points. For every candidate word that has shapes, take the distance `d` to each shape: the root of the mean squared distance of the 16 points, in key units.
 2. Evidence for the word = the sum over its shapes of `min(n, 12) * exp(-0.5 * (d / 0.35)^2)`.
 3. Lift the word's score by `2.5 * ln(1 + evidence)`, at most 4.5, and only when the word's own fit to the path is within 2.2 (key pitch squared, per letter) of the best candidate's.
-4. Learning: when a word is kept, add its glide's shape (confirmations +1); when the person picks a word from the strip or types a word in place of a deleted glide that the word could have
+4. A word that has a shape looking like the glide (evidence at least 0.3, first and last letter where the finger went down and lifted) is always among the candidates, even when its letters score below the usual shortlist: a sloppy habit moves the path away from the letters of the words the person writes every day.
+5. Learning: when a word is kept, add its glide's shape (confirmations +1); when the person picks a word from the strip or types a word in place of a deleted glide that the word could have
    been drawn as, add it with +3. A new shape within 0.3 of a stored one of the same word is merged into it (running mean), otherwise stored; the weakest shape of a word makes room. Every OTHER
    word whose stored shapes look like the glide (similarity above 0.3) then loses 2 x similarity confirmations on a correction (0.7 on a kept glide); a shape under a third of a confirmation goes.
 
