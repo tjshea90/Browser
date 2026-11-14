@@ -734,7 +734,7 @@
     }
     var pending = false;
     function soon() { if (pending) return; pending = true; nSetTimeout(function () { pending = false; run(); }, 50); }
-    ready(function () {
+    whenReady(function () {
       run();
       try { new MutationObserver(soon).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] }); } catch (e) { /* ignore */ }
     });
