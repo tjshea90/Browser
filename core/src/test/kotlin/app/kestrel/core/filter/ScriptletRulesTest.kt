@@ -131,6 +131,26 @@ class ScriptletRulesTest {
         assertEquals("", fs.cosmeticCss("example.com", tokenMode = true, scriptlets = true))
     }
 
+    @Test fun thePayloadForTheEarlyScriptIsTheSameJsonAsTheOneInTheCssAnswer() {
+        val fs = set("example.com##+js(set, adblockDetected, false)", "example.com##+js(nostif, nag)", "example.com##.ad", "other.org##+js(nowoif)", "off.com##+js(nowoif)", "@@||off.com^\$document")
+        val p = fs.scriptletPayload("example.com")
+        assertEquals("[[\"set\",\"adblockDetected\",\"false\"],[\"nostif\",\"nag\"]]", p)
+        assertEquals("a subdomain gets the calls of its parent", p, fs.scriptletPayload("www.example.com"))
+        assertTrue("the late copy in the CSS answer carries exactly this text", fs.cosmeticCss("example.com", tokenMode = true, scriptlets = true).contains("/*ks$p*/"))
+        assertEquals("[[\"nowoif\"]]", fs.scriptletPayload("other.org"))
+        assertEquals("a host with no calls", "", fs.scriptletPayload("nothing.example"))
+        assertEquals("an allow-listed page gets none", "", fs.scriptletPayload("off.com"))
+        assertEquals("", fs.scriptletPayload(""))
+    }
+
+    @Test fun thePayloadNeverHoldsAStarOrANonAsciiCharacterSoItCanSitInAJsStringAndInACssComment() {
+        val fs = set("example.com##+js(rpnt, script, /a*b\\.c/, \"x*y\")", "example.com##+js(set, name, café)")
+        val p = fs.scriptletPayload("example.com")
+        assertTrue(p, p.isNotEmpty())
+        assertFalse(p.contains('*'))
+        assertTrue(p.all { it.code in 0x20..0x7e })
+    }
+
     @Test fun theBuildReportCountsWhatItTookAndWhatItSkipped() {
         val b = FilterSetBuilder()
         b.addAbpList("t", Category.ADS, sequenceOf("a.com##+js(nowoif)", "a.com##+js(aopr, x)", "##+js(nowoif)", "a.com##+js(unknown-one, x)", "a.com##+js(set, only)"))
