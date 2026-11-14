@@ -166,4 +166,54 @@ class HlsTest {
         assertEquals("http://plain.example.com/x.ts", Hls.resolve(b, "http://plain.example.com/x.ts"))
         assertEquals("https://cdn.example.com/a/b/with space.ts", Hls.resolve(b, "with space.ts"))   // URI rejects the space: the fallback keeps it
     }
+
+    // ---- RX3-V5: advertising markers in a media playlist
+
+    private fun vod(vararg lines: String) = media("#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXT-X-PLAYLIST-TYPE:VOD\n" + lines.joinToString("\n") + "\n#EXT-X-ENDLIST\n")
+    private fun ads(m: Hls.Media) = m.segments.map { it.ad }
+
+    @Test fun cueOutAndCueInMarkTheSegmentsBetweenThemAsAdvertising() {
+        val m = vod("#EXTINF:6,", "f0.ts", "#EXTINF:6,", "f1.ts", "#EXT-X-CUE-OUT:DURATION=12", "#EXTINF:6,", "a0.ts", "#EXTINF:6,", "a1.ts", "#EXT-X-CUE-IN", "#EXTINF:6,", "f2.ts")
+        assertEquals(listOf(false, false, true, true, false), ads(m))
+    }
+
+    @Test fun aBreakWithAKnownDurationEndsByItselfWhenNoCueInComes() {
+        val m = vod("#EXTINF:6,", "f0.ts", "#EXT-X-CUE-OUT:12", "#EXTINF:6,", "a0.ts", "#EXTINF:6,", "a1.ts", "#EXTINF:6,", "f1.ts", "#EXTINF:6,", "f2.ts")
+        assertEquals(listOf(false, true, true, false, false), ads(m))
+    }
+
+    @Test fun aBreakWithNoDurationAndNoCueInEndsAfterThreeMinutesAtMost() {
+        val lines = ArrayList<String>(); lines.add("#EXT-X-CUE-OUT")
+        for (i in 0 until 40) { lines.add("#EXTINF:6,"); lines.add("s$i.ts") }                // 240 s
+        val m = vod(*lines.toTypedArray())
+        assertEquals(30, ads(m).count { it })                                                    // 180 s of 6 s segments, then it is taken for a mistake
+        assertFalse(ads(m).last())
+    }
+
+    @Test fun cueOutContKeepsTheBreakGoingAndCountsDownTheTimeLeft() {
+        val m = vod("#EXT-X-CUE-OUT-CONT:ElapsedTime=6.0,Duration=18.0", "#EXTINF:6,", "a1.ts", "#EXTINF:6,", "a2.ts", "#EXTINF:6,", "f0.ts")
+        assertEquals(listOf(true, true, false), ads(m))
+    }
+
+    @Test fun aSpliceInsertOutInAnScte35LineStartsABreakAndItsDurationEndsIt() {
+        val m = vod("#EXTINF:6,", "f0.ts", "#EXT-OATCLS-SCTE35:/DAvAAAAAAAA///wFAVIAACPf+/+c2nALv4AUsz1AAAAAAAKAAhDVUVJAAABNWLwC/g=",
+            "#EXTINF:30,", "a0.ts", "#EXTINF:30,", "a1.ts", "#EXTINF:6,", "f1.ts")
+        assertEquals(listOf(false, true, true, false), ads(m))                                    // 60.29 s: two 30 s segments, the next one is the film
+    }
+
+    @Test fun aDateRangeWithScte35OutStartsABreakUntilItsDuration() {
+        val m = vod("#EXTINF:6,", "f0.ts", "#EXT-X-DATERANGE:ID=\"ad1\",START-DATE=\"2026-11-14T10:00:00Z\",DURATION=12.0,SCTE35-OUT=0xFC002F00", "#EXTINF:6,", "a0.ts", "#EXTINF:6,", "a1.ts", "#EXTINF:6,", "f1.ts")
+        assertEquals(listOf(false, true, true, false), ads(m))
+    }
+
+    @Test fun aDateRangeThatIsAnInterstitialAssetLeavesThisPlaylistsSegmentsAlone() {
+        val m = vod("#EXT-X-DATERANGE:ID=\"i1\",CLASS=\"com.apple.hls.interstitial\",START-DATE=\"2026-11-14T10:00:00Z\",X-ASSET-URI=\"https://ads.example/a.m3u8\"", "#EXTINF:6,", "f0.ts", "#EXTINF:6,", "f1.ts")
+        assertEquals(listOf(false, false), ads(m))                                                // the advertising is a separate asset, not part of these segments
+    }
+
+    @Test fun aPlaylistWithoutMarkersHasNoAdvertisingAndEveryOtherTagStillParses() {
+        val m = vod("#EXT-X-DISCONTINUITY", "#EXTINF:6,", "f0.ts", "#EXT-X-ASSET:CAID=0x1", "#EXT-X-SPLICEPOINT:1", "#EXTINF:6,", "f1.ts")
+        assertEquals(listOf(false, false), ads(m)); assertEquals(1, m.discontinuities)
+    }
+}
 }
