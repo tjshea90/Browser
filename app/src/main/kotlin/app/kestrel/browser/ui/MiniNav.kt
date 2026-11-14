@@ -86,6 +86,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         /** AV1: where the person put the panel and how big they made the keyboard: the panel's distance from the right edge and from the top, the keyboard's width and the height of its rows of keys, all in dp; null = docked under the corner at the first size. */
         fun navGeometry(): IntArray? = null
         fun navGeometryChanged(g: IntArray?) {}
+        /** A short tick on every key press (the system's touch feedback setting still applies; a tablet without a vibrator has none). */
+        fun navKeyHaptics(): Boolean = true
     }
 
     private val model = MiniKeyboardModel()
@@ -439,8 +441,15 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         return x >= loc[0] && x < loc[0] + panel.width && y >= loc[1] && y < loc[1] + panel.height
     }
 
+    private var lastShiftAt = 0L
+
     private fun typed(key: Key) {
         syncField() // the page's field may have changed or gone since the last key
+        if (key === Key.Shift) { // Shift tapped twice quickly: caps lock
+            val now = SystemClock.uptimeMillis()
+            if (model.shift && !model.shiftLock && lastShiftAt > 0L && now - lastShiftAt < DOUBLE_TAP_MS) { model.lockShift(); lastShiftAt = 0L; bar.invalidate(); keys.invalidate(); return }
+            lastShiftAt = now
+        }
         val f = pageField
         when (key) {
             Key.Backspace -> if (model.glideActive) { lastDeleted = pendingWord ?: topGuess; pendingWord = null; pendingGuessed = null; afterUndo = true; glide?.stats?.onUndone() } // right after a glide: the word was wrong
@@ -869,6 +878,9 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         private var cands: List<String> = emptyList()
         private var noWordUntil = 0L
         private var stripDown = -1
+        private var bubbleKey: KeySpec? = null; private var bubbleText = ""   // the key under the finger, shown large above it (a thumb covers the key itself)
+        private var holdAlt: String? = null                                   // the finger stayed on a key: what it types now is its alternate (a digit on the top row)
+        private val hold = Runnable { holdFired() }
         private val trail = Path()
         private val trailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
         private val fadeStep = object : Runnable {
@@ -882,16 +894,16 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
         /** Everything in flight stops (the keyboard closed, or glide typing was switched). */
         fun reset() {
-            handler.removeCallbacks(repeat); handler.removeCallbacks(unlight); handler.removeCallbacks(noWordOff); removeCallbacks(fadeStep)
-            down = null; litKey = null; armed = false; gliding = false; gn = 0; fadeStart = 0L; cands = emptyList(); noWordUntil = 0L; stripDown = -1
+            handler.removeCallbacks(repeat); handler.removeCallbacks(unlight); handler.removeCallbacks(noWordOff); handler.removeCallbacks(hold); removeCallbacks(fadeStep)
+            down = null; litKey = null; armed = false; gliding = false; gn = 0; fadeStart = 0L; cands = emptyList(); noWordUntil = 0L; stripDown = -1; bubbleKey = null; holdAlt = null
             invalidate()
         }
 
         private fun stripPx() = if (glideOn) context.dpf(STRIP_H_DP.toFloat()) else 0f
 
         private fun rowsNow(): List<List<KeySpec>> {
-            val k = (if (model.symbols) 1 else 0) or (if (model.shift) 2 else 0)
-            if (k != rowsFor) { rowsFor = k; rows = MiniKeyboardLayout.rows(model.symbols, model.shift); rectsW = -1 }
+            val k = (if (model.symbols) 1 else 0) or (if (model.shift) 2 else 0) or (if (pageField != null) 4 else 0)
+            if (k != rowsFor) { rowsFor = k; rows = MiniKeyboardLayout.rows(model.symbols, model.shift, pageField != null); rectsW = -1 }
             return rows
         }
 
@@ -935,6 +947,38 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         private fun pitch(): Float = if (rects.isNotEmpty() && rects[0].size > 1) rects[0][1].centerX - rects[0][0].centerX else context.dpf(29f)
 
         private fun light(k: KeySpec?) { litKey = k; invalidate(); handler.removeCallbacks(unlight); if (k != null) handler.postDelayed(unlight, FLASH_MS) }
+
+        private fun isBubbleKey(k: KeySpec?): Boolean { val c = (k?.key as? Key.Ch)?.text ?: return false; return c.length == 1 && c != " " }
+        /** The digit a top-row letter types when it is held (null for every other key, and on the symbols page). */
+        private fun altOf(k: KeySpec?): String? {
+            if (model.symbols || k == null) return null
+            val i = TOP_ROW.indexOf(k.label.lowercase())
+            return if (k.label.length == 1 && i >= 0) DIGITS.substring(i, i + 1) else null
+        }
+        private fun haptic() { if (l.navKeyHaptics()) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) }
+        private fun holdFired() {
+            val k = pressedKey ?: down ?: return
+            if (gliding) return
+            val alt = altOf(k) ?: return
+            holdAlt = alt; bubbleKey = k; bubbleText = alt; invalidate(); haptic()
+        }
+        private fun clearHold() { handler.removeCallbacks(hold); holdAlt = null; bubbleKey = null }
+
+        private fun drawBubble(c: Canvas) {
+            val k = bubbleKey ?: return
+            val kb = boxOf(k) ?: return
+            val gap = context.dpf(3f); val room = kb.top - gap
+            if (room < context.dpf(24f)) return // the top row of a keyboard without the strip has no room above it
+            val w = Math.max((kb.right - kb.left) * 1.45f, context.dpf(38f)); val h = Math.min(context.dpf(46f), room)
+            var left = (kb.left + kb.right) / 2f - w / 2f; if (left < 0f) left = 0f; if (left + w > width) left = width - w
+            box.set(left, kb.top - gap - h, left + w, kb.top - gap)
+            val r = context.dpf(8f)
+            fill.color = 0xFF0C161D.toInt(); c.drawRoundRect(box, r, r, fill)
+            line.strokeWidth = context.dpf(1.4f); line.color = pal.accent; c.drawRoundRect(box, r, r, line)
+            text.color = pal.accentHi; text.textSize = h * 0.55f
+            val fm = text.fontMetrics
+            c.drawText(bubbleText, box.centerX(), box.centerY() - (fm.ascent + fm.descent) / 2f, text)
+        }
 
         // ------------------------------------------------------------------ the strip of guesses
 
@@ -1089,8 +1133,17 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                 text.textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, (if (k.label.length > 1) 12f else 16f) * keyScale, resources.displayMetrics)
                 val fm = text.fontMetrics
                 c.drawText(k.label, box.centerX(), box.centerY() - (fm.ascent + fm.descent) / 2f, text)
+                if (i == 0 && !model.symbols && k.label.length == 1) { // the digit a held top-row letter types, small in its corner
+                    val d = TOP_ROW.indexOf(k.label.lowercase())
+                    if (d >= 0) {
+                        text.color = pal.muted; text.textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 8.5f * keyScale, resources.displayMetrics)
+                        val hf = text.fontMetrics
+                        c.drawText(DIGITS.substring(d, d + 1), box.right - context.dpf(5f) * keyScale, box.top + context.dpf(3f) - hf.ascent, text)
+                    }
+                }
             }
             drawStrip(c)
+            drawBubble(c)
             drawTrail(c)
         }
 
