@@ -152,6 +152,7 @@ object Health {
             val procs = am.runningAppProcesses?.filter { it.processName.startsWith(ctx.packageName) }?.joinToString(", ") { it.processName.removePrefix(ctx.packageName).ifEmpty { "main" } + "#" + it.pid }
             sb.append("Processes: ").append(procs ?: "?").append('\n')
         } catch (e: Exception) { /* ignore */ }
+        try { CrashNote.reportLines(ctx).forEach { sb.append(it).append('\n') } } catch (e: Exception) { /* a report must never fail */ } // AX2: what the LAST run left behind if it crashed
         engineFacts.forEach { sb.append(it).append('\n') }
         PageTimes.lines().forEach { sb.append(it).append('\n') }
         try { app.kestrel.browser.download.PhoneBridge.diagLines(ctx).forEach { sb.append(it).append('\n') } } catch (e: Exception) { /* a report must never fail */ }
