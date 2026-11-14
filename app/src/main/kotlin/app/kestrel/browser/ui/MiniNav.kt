@@ -22,10 +22,17 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import app.kestrel.browser.R
 import app.kestrel.core.input.Key
+import app.kestrel.core.input.KeyBox
 import app.kestrel.core.input.KeyResult
 import app.kestrel.core.input.KeySpec
+import app.kestrel.core.input.MiniKeyboardGeometry
 import app.kestrel.core.input.MiniKeyboardLayout
 import app.kestrel.core.input.MiniKeyboardModel
+import app.kestrel.core.input.glide.GlideKeys
+import app.kestrel.core.input.glide.GlideResult
+import app.kestrel.core.input.glide.GlideTyping
+import app.kestrel.core.input.glide.UserWords
+import java.util.concurrent.Executors
 
 /**
  * The one-hand mini navigation panel (AR2, owner message 32: "My tablet screen is big, and I sometimes browse with one hand only at the top of the tablet. Make a small quick menu at the top right corner of the screen
@@ -36,6 +43,9 @@ import app.kestrel.core.input.MiniKeyboardModel
  * Everything is drawn by a few small views (no ripple, no animator objects): the panel slides with its own clock and the lit state of a pressed button is a timer, because the owner runs Android with animations turned
  * OFF (the system's animation scale would make a system animator jump straight to its end; the neon glow already works the same way, see [Neon]). Android's own keyboard cannot be moved by an app, so the
  * keyboard here is the app's own ([KeysView] over [MiniKeyboardModel] in the core module). The page below keeps every touch outside the panel's own views.
+ *
+ * Glide typing (AT1, owner message 34: "glide typing like Gboard ... make the glide word predictions accurate"): a finger that slides off the key it went down on draws a word over the letters;
+ * on lift the core decoder (core/input/glide) turns the path into words, the best goes into the bar with a space after it and the next two show in a strip above the keys.
  */
 class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : FrameLayout(ctx) {
     interface Listener {
@@ -46,6 +56,16 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         fun navSubmit(text: String)
         /** The panel was shown or hidden (remember it). */
         fun navOpenChanged(open: Boolean)
+        /** Glide typing is switched on in Settings. */
+        fun navGlideEnabled(): Boolean = false
+        /** The thumb habit saved earlier (key pitches, x then y), and where to save the new one. */
+        fun navGlideHabit(): FloatArray? = null
+        fun navGlideHabitChanged(habit: FloatArray) {}
+        /** The words typed letter by letter that the word list did not have ("word count" per line), and where to save the new list. */
+        fun navGlideWords(): String = ""
+        fun navGlideWordsChanged(text: String) {}
+        /** The host names of the sites visited (asked when the keyboard opens; answer on any thread): names like doraby join the words that can be glided. */
+        fun navGlideHosts(done: (List<String>) -> Unit) {}
     }
 
     private val model = MiniKeyboardModel()
@@ -58,6 +78,17 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private val toggle = ToggleView(ctx)
     private var address = ""
     private var anim: Runnable? = null
+
+    // ---- glide typing (AT1)
+    private var glideOn = false
+    private var glide: GlideTyping? = null
+    private val glideExec by lazy { Executors.newSingleThreadExecutor { r -> Thread(r, "kestrel-glide").apply { isDaemon = true } } }
+    private var ownWords = UserWords()
+    private var siteWords = emptyList<String>()
+    private var pendingWord: String? = null     // the word the last glide put in: kept when the next thing is not a correction
+    private var hostsAsked = false
+    /** Tests: where the engine comes from (the real one reads the shipped word list). */
+    internal var glideFactory: (() -> GlideTyping)? = null
 
     /** The panel is shown (sliding in counts as shown). */
     var isOpen = false; private set
