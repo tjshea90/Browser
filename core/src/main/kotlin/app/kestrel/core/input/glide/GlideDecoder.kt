@@ -158,6 +158,7 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
                 }
             }
         }
+        injectRemembered(lexicons, startD, endD)
         lastCandidates = heapN
         if (heapN == 0) return emptyList()
 
@@ -275,22 +276,56 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
     // ------------------------------------------------------------------ quick pass
 
     private fun quick(lex: GlideLexicon, li: Int, id: Int, ends: Float) {
+        val score = quickScore(lex, id, ends)
+        if (score.isNaN()) return
+        if (heapN < p.keep) { heapPush(score, li, id) }
+        else if (score < heapScore[0]) { heapReplaceTop(score, li, id) }
+    }
+
+    /** The quick score of word [id] (lower is better), or NaN when a letter of it was not visited at all. */
+    private fun quickScore(lex: GlideLexicon, id: Int, ends: Float): Float {
         val len = lex.length(id)
-        if (len < 2 || len > MAX_LETTERS) return
+        if (len < 2 || len > MAX_LETTERS) return Float.NaN
         var cov = 0f; var m = 0; var prevL = -1
         for (i in 0 until len) {
             val l = lex.letter(id, i)
             if (l == prevL) continue
             prevL = l
             val d = dKey[l]
-            if (d > p.missLimit2) return
+            if (d > p.missLimit2) return Float.NaN
             cov += if (d < p.visitCap) d else p.visitCap
             m++
         }
-        if (m < 2) return
-        val score = cov / m + p.quickEnds * ends * 0.5f - p.quickPrior * lex.logProb(id) // lower is better
-        if (heapN < p.keep) { heapPush(score, li, id) }
-        else if (score < heapScore[0]) { heapReplaceTop(score, li, id) }
+        if (m < 2) return Float.NaN
+        return cov / m + p.quickEnds * ends * 0.5f - p.quickPrior * lex.logProb(id) // lower is better
+    }
+
+    /**
+     * The words this person has drawn before get a place among the survivors of the quick pass whatever their score (AX1): a sloppy habit moves the path off the word's letters, the quick pass ranks
+     * thousands of words by how well they cover it, and the word the person writes every day can fall just below the 200 it keeps. Only words whose first and last letter are where the finger went down and
+     * lifted, and whose letters were all visited (the same checks as the quick pass), and only when the memory has a shape of the word that looks like THIS glide.
+     */
+    private fun injectRemembered(lexicons: List<GlideLexicon>, startD: FloatArray, endD: FloatArray) {
+        val pm = personal?.patterns ?: return
+        val print = lastPrint ?: return
+        if (p.patGain <= 0f || pm.isEmpty) return
+        for (w in pm.words()) {
+            val f = w[0] - 'a'; val l = w[w.length - 1] - 'a'
+            if (f !in 0..25 || l !in 0..25 || startD[f] > p.endReach2 || endD[l] > p.endReach2) continue
+            if (pm.evidence(w, print) < INJECT_MIN) continue
+            for ((li, lex) in lexicons.withIndex()) {
+                val id = lex.idOf(w)
+                if (id < 0) continue
+                var there = false
+                for (h in 0 until heapN) if (heapLex[h] == li && heapId[h] == id) { there = true; break }
+                if (there) break
+                val score = quickScore(lex, id, startD[f] + endD[l])
+                if (score.isNaN()) break
+                if (heapN < p.keep) heapPush(score, li, id)
+                else heapReplaceTop(score, li, id) // the worst survivor makes room
+                break
+            }
+        }
     }
 
     // a max-heap on the quick score (the worst survivor sits on top and is replaced by a better word)
@@ -488,6 +523,8 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
 
     companion object {
         const val MAX_LETTERS = 24
+        /** A remembered word is put among the survivors of the quick pass when its shapes look like the glide at least this much (confirmations x closeness). */
+        const val INJECT_MIN = 0.3f
         /** The learned habit never moves a path by more than this many pitches. */
         const val MAX_BIAS = 0.6f
     }

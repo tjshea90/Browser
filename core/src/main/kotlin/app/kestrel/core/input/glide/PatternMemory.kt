@@ -75,6 +75,7 @@ class PatternMemory(private val capWords: Int = 1200, private val capPatterns: I
     private class Pat(val pts: FloatArray, var n: Float)
     private val byWord = HashMap<String, ArrayList<Pat>>()
     private var count = 0
+    @Volatile private var wordsCache: Array<String>? = null
     /** How wide "looks like" is, and how close two shapes must be to become one: the constants, changeable only by the tuning lab. */
     internal var sigma = SIGMA
     internal var mergeD = MERGE_D
@@ -85,6 +86,7 @@ class PatternMemory(private val capWords: Int = 1200, private val capPatterns: I
 
     /** [word] was meant by a glide of this [print] ([weight]: 1 it was kept, 3 the person chose or retyped it). Near-identical shapes are merged into one with a running mean. */
     @Synchronized fun add(word: String, print: FloatArray, weight: Float = 1f) {
+        wordsCache = null
         val w = PersonalModel.norm(word) ?: return
         if (print.size != 2 * Fingerprint.K || weight <= 0f || print.any { it.isNaN() }) return
         val list = byWord.getOrPut(w) { ArrayList(2) }
@@ -103,6 +105,12 @@ class PatternMemory(private val capWords: Int = 1200, private val capPatterns: I
         if (count > capPatterns || byWord.size > capWords) trim()
     }
 
+    /** The words that have shapes (a cached copy: the decoder asks on every glide). */
+    fun words(): Array<String> {
+        wordsCache?.let { return it }
+        return synchronized(this) { wordsCache ?: byWord.keys.toTypedArray().also { wordsCache = it } }
+    }
+
     /** The shapes of [word] counted by how much they look like [print]: the sum of (how often confirmed x how close), 0 when the word has no shape or none is close. */
     @Synchronized fun evidence(word: String, print: FloatArray): Float {
         val list = byWord[word] ?: return 0f
@@ -116,6 +124,7 @@ class PatternMemory(private val capWords: Int = 1200, private val capPatterns: I
      * Shapes that fall under a third of a confirmation are forgotten.
      */
     @Synchronized fun contradict(meant: String, print: FloatArray, amount: Float = 2f) {
+        wordsCache = null
         val m = PersonalModel.norm(meant)
         val dead = ArrayList<String>()
         for ((w, list) in byWord) {
@@ -136,10 +145,11 @@ class PatternMemory(private val capWords: Int = 1200, private val capPatterns: I
     /** How much a shape at [d] key units counts: 1 on top of it, about 0.85 at 0.2, about 0.5 at 0.4, about 0.07 at 0.8, nothing much beyond. */
     fun similarity(d: Float): Float { val z = d / sigma; return Math.exp((-0.5f * z * z).toDouble()).toFloat() }
 
-    @Synchronized fun clear() { byWord.clear(); count = 0 }
+    @Synchronized fun clear() { byWord.clear(); count = 0; wordsCache = null }
 
     /** Old habits fade: every shape counts half, the ones that fell under a third of a confirmation are forgotten. */
     @Synchronized fun decay() {
+        wordsCache = null
         val dead = ArrayList<String>()
         for ((w, list) in byWord) {
             val it = list.iterator()
@@ -185,6 +195,7 @@ class PatternMemory(private val capWords: Int = 1200, private val capPatterns: I
 
     /** One `s` line ([tokens] already split); false when it is not a usable shape. */
     @Synchronized fun parseLine(tokens: List<String>): Boolean {
+        wordsCache = null
         if (tokens.size != 3 + 2 * Fingerprint.K || tokens[0] != "s") return false
         val w = PersonalModel.norm(tokens[1]) ?: return false
         val n = tokens[2].toFloatOrNull() ?: return false
@@ -202,6 +213,7 @@ class PatternMemory(private val capWords: Int = 1200, private val capPatterns: I
      * twice changes nothing; a new shape is added like a learned one.
      */
     @Synchronized fun mergeFrom(other: PatternMemory) {
+        wordsCache = null
         val copy = other.snapshot()
         for ((w, list) in copy) for ((pts, n) in list) {
             val mine = byWord[w]
