@@ -121,9 +121,11 @@ class VideoFlow(private val a: BrowserActivity) {
     }
 
     /** Called on the Shields worker thread. */
-    fun info(page: String, url: String, width: Int, height: Int, durationMs: Long, label: String?) = Io.ui {
+    fun info(page: String, url: String, width: Int, height: Int, durationMs: Long, label: String?, facts: app.kestrel.core.media.VideoFacts? = null) = Io.ui {
         val t = tabOf(page) ?: return@ui
-        t.media.applyInfo(url, width, height, durationMs, label)
+        // RX3-V1: a hover preview, a hero loop or an ad that loaded its metadata is not "a video the owner may want": the page's own element says what it is for
+        val role = if (facts == null) null else app.kestrel.core.media.VideoRoleRules.decide(facts, durationMs)
+        t.media.applyInfo(url, width, height, durationMs, label, role)
         a.refreshDownloadButton()
     }
 

@@ -781,7 +781,11 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
 // What the page's own <video> says about the file it plays (picture size, length, the label next to a <source>): relayed by content.js.
 browser.runtime.onMessage.addListener(function (m) {
   if (!m || m.k !== 'vid' || !m.u) return undefined;
-  send({ k: 'vid', u: m.u, w: m.w | 0, h: m.h | 0, d: Math.round((m.d || 0) * 1000), l: m.l || '', p: m.p || '' }).catch(function () {});
+  // RX3-V1: what the element is for (content.js factsOf): small whole numbers, clamped here again because the message comes from a web page's frame
+  function ci(v, max) { v = v | 0; return v < 0 ? 0 : (v > max ? max : v); }
+  var o = { k: 'vid', u: m.u, w: m.w | 0, h: m.h | 0, d: Math.round((m.d || 0) * 1000), l: m.l || '', p: m.p || '' };
+  if (typeof m.f === 'number') { o.f = ci(m.f, 63); o.rw = ci(m.rw, 20000); o.rh = ci(m.rh, 20000); o.vp = ci(m.vp, 100); }
+  send(o).catch(function () {});
   return undefined;
 });
 

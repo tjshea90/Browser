@@ -1181,6 +1181,19 @@ test('RX3-G7: a report from the top frame of a tab whose page the extension neve
   assert.equal(got[1].p, '', 'a frame says nothing: the app then drops the report like one from a private tab');
 });
 
+test('RX3-V1: the video report carries the element facts as clamped whole numbers; a report without them (an older script) stays as it was', async () => {
+  const h = harness(standardApp());
+  h.message({ k: 'vid', u: 'https://cdn.example/a.mp4', w: 1280, h: 720, d: 25.4, l: '', p: PAGE, f: 27, rw: 300.7, rh: 170, vp: 80 }, 1, PAGE, 0);
+  h.message({ k: 'vid', u: 'https://cdn.example/b.mp4', w: 640, h: 360, d: 90, l: '720p', p: PAGE, f: 9999, rw: -4, rh: 99999999, vp: 5000 }, 1, PAGE, 0);
+  h.message({ k: 'vid', u: 'https://cdn.example/c.mp4', w: 640, h: 360, d: 90, l: '', p: PAGE }, 1, PAGE, 0);
+  await tick(20);
+  const got = h.of('vid');
+  assert.equal(got.length, 3);
+  assert.deepEqual([got[0].f, got[0].rw, got[0].rh, got[0].vp, got[0].d], [27, 300, 170, 80, 25400]);
+  assert.deepEqual([got[1].f, got[1].rw, got[1].rh, got[1].vp], [63, 0, 20000, 100]);
+  assert.equal('f' in got[2], false, 'no facts were sent, none are invented');
+});
+
 test('RX3-G1: the manifest declares the pop-up guard and the scriptlet library for the page world, every frame, from the first moment; nothing registers them at run time', () => {
   const m = JSON.parse(fs.readFileSync(path.join(SHIELDS, 'manifest.json'), 'utf8'));
   for (const f of ['guard-main.js', 'scriptlets-main.js']) {
