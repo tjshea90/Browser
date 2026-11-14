@@ -108,7 +108,7 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
     private val letters = IntArray(MAX_LETTERS)
     private var gestureLen = 0f
     // the survivors of the quick pass (a small max-heap by quick score, kept as parallel arrays)
-    private val heapScore = FloatArray(p.keep); private val heapLex = IntArray(p.keep); private val heapId = IntArray(p.keep); private var heapN = 0
+    private val heapScore = FloatArray(p.keep + MAX_INJECT); private val heapLex = IntArray(p.keep + MAX_INJECT); private val heapId = IntArray(p.keep + MAX_INJECT); private var heapN = 0
 
     /** What the person's own words and pairs add to the language (AU2); null = nothing learned yet. Set by whoever owns the model; read on the decode thread. */
     @Volatile var personal: PersonalModel? = null
@@ -321,8 +321,8 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
                 if (there) break
                 val score = quickScore(lex, id, startD[f] + endD[l])
                 if (score.isNaN()) break
-                if (heapN < p.keep) heapPush(score, li, id)
-                else heapReplaceTop(score, li, id) // the worst survivor makes room
+                if (heapN >= p.keep + MAX_INJECT) return // room for this many extra, no more
+                heapPush(score, li, id)
                 break
             }
         }
@@ -523,6 +523,8 @@ class GlideDecoder(private val keys: GlideKeys, private val p: GlideParams = Gli
 
     companion object {
         const val MAX_LETTERS = 24
+        /** At most this many remembered words are added to the careful pass on top of the survivors of the quick pass. */
+        const val MAX_INJECT = 48
         /** A remembered word is put among the survivors of the quick pass when its shapes look like the glide at least this much (confirmations x closeness). */
         const val INJECT_MIN = 0.3f
         /** The learned habit never moves a path by more than this many pitches. */
