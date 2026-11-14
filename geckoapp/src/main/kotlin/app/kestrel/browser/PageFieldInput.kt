@@ -89,6 +89,14 @@ class PageFieldInput(
 
         override fun enter() { run { key(KeyEvent.KEYCODE_ENTER, KeyEvent.FLAG_EDITOR_ACTION) } }
 
+        /** The caret moves one character per arrow key, as a hardware keyboard's arrows do it (AY3). A slide never sends more than [MAX_STEPS] at once. */
+        override fun moveCursor(delta: Int) {
+            if (delta == 0) return
+            val code = if (delta < 0) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
+            val n = Math.min(Math.abs(delta), MAX_STEPS)
+            run { repeat(n) { key(code, 0) } }
+        }
+
         private fun run(op: () -> Unit) { handler.post { try { op() } catch (e: Exception) { android.util.Log.w("PageField", "input failed: " + e) } } }
 
         /** A key press as a keyboard's soft key makes it: the page sees the same key events a hardware keyboard sends (a search box submits, a selection is deleted). */
@@ -100,6 +108,7 @@ class PageFieldInput(
         }
 
         private companion object {
+            const val MAX_STEPS = 64
             fun isPassword(inputType: Int): Boolean {
                 val cls = inputType and InputType.TYPE_MASK_CLASS
                 val v = inputType and InputType.TYPE_MASK_VARIATION

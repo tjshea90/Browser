@@ -21,4 +21,6 @@ interface PageField {
     fun deleteBefore(count: Int)
     /** Presses Enter in the field. */
     fun enter()
+    /** Moves the caret [delta] characters (negative = left), the way the arrow keys do (AY3: the space key slid left or right). */
+    fun moveCursor(delta: Int)
 }

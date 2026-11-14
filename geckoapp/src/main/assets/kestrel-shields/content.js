@@ -308,6 +308,44 @@
   } catch (e) { /* never break the page */ }
 })();
 
+// Long press on OPEN space (AY2, owner message 39: "make it so I can long press anywhere in the browser and it will show up under where I long pressed, but only if I am long pressing an open space. If I'm
+// long pressing a link, give me the options for that link, not the navigation panel"). The engine's own long press reaches the page as a trusted `contextmenu` event on whatever is under the finger (blank
+// space too: found on the emulator, research/MINI_NAV.md section AY2). It is told to the app only when nothing there could have an action of its own: no link, picture, video, form control, editable text,
+// widget role or pointer cursor in the stack of elements under the finger, and the engine did NOT select a word 200 ms later (the press was on text: the selection belongs to the person). The app puts the
+// panel where the finger is; nothing about the page is sent, only that the press was on open space.
+(function () {
+  try {
+    var TAGS = { IMG: 1, PICTURE: 1, VIDEO: 1, AUDIO: 1, CANVAS: 1, OBJECT: 1, EMBED: 1, IFRAME: 1, INPUT: 1, TEXTAREA: 1, SELECT: 1, OPTION: 1, BUTTON: 1, LABEL: 1, SUMMARY: 1, DETAILS: 0 };
+    var ROLES = /^(link|button|checkbox|radio|menuitem|menuitemcheckbox|menuitemradio|tab|switch|slider|spinbutton|textbox|searchbox|combobox|listbox|option|treeitem|gridcell)$/i;
+    function interactive(el) {
+      var t = el.tagName ? String(el.tagName).toUpperCase() : '';
+      if (!t) return false;
+      if (t === 'A' || t === 'AREA') { if (el.hasAttribute('href')) return true; }
+      else if (TAGS[t] === 1) return true;
+      if (el.isContentEditable) return true;
+      var r = el.getAttribute ? el.getAttribute('role') : null;
+      if (r && ROLES.test(r)) return true;
+      if (el.hasAttribute && (el.hasAttribute('onclick') || (el.hasAttribute('tabindex') && el.tabIndex >= 0))) return true;
+      try { if (window.getComputedStyle(el).cursor === 'pointer') return true; } catch (x) { /* a node without style */ }
+      return false;
+    }
+    window.addEventListener('contextmenu', function (e) {
+      try {
+        if (!e.isTrusted) return;
+        var els = document.elementsFromPoint ? document.elementsFromPoint(e.clientX, e.clientY) : [e.target];
+        for (var i = 0; i < els.length && i < 10; i++) if (interactive(els[i])) return;
+        setTimeout(function () {
+          try {
+            var sel = window.getSelection ? String(window.getSelection()) : '';
+            if (sel.length > 0) return; // the engine selected a word: the press was on text
+            browser.runtime.sendMessage({ k: 'os', p: location.href }).catch(function () {});
+          } catch (x) { /* never break the page */ }
+        }, 200);
+      } catch (x) { /* never break the page */ }
+    }, true);
+  } catch (e) { /* never break the page */ }
+})();
+
 // A field tapped in the lower half of the screen stayed hidden behind the keyboard until the first letter was typed (research/TYPING.md): Firefox shrinks only the VISIBLE area when the keyboard opens (the page's
 // layout keeps its size, so nothing is laid out again, which is why typing stays cheap) and scrolls to the caret when a key is typed, not when the field is tapped. When the visible area shrinks while a text field
 // has the focus and the field is no longer inside it, bring the field into view. Costs one listener per page and does nothing unless the keyboard opened.

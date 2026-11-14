@@ -49,6 +49,8 @@ class ShieldsBridge(
     private val mediaGone: (String, List<String>) -> Unit = { _, _ -> },
     /** The page (top frame) says where it is scrolled: the page's address and the place in CSS pixels (EY-1, the saved view). Worker thread. */
     private val pageScrolled: (String, Int) -> Unit = { _, _ -> },
+    /** A long press landed on OPEN space of the page (no link, picture, video, field or text under the finger; AY2): the page's address. Worker thread. */
+    private val openSpace: (String) -> Unit = {},
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -93,6 +95,7 @@ class ShieldsBridge(
                     "vid" -> { onVid(m); "" }
                     "scroll" -> { pageScrolled(m.optString("p"), m.optInt("y")); "" }
                     "warm" -> { warmLink(m.optString("o"), m.optString("p"), m.optString("w")); "" }
+                    "os" -> { openSpace(m.optString("p")); "" }
                     "rep" -> { onPageReport(m); "" }
                     else -> ""
                 }

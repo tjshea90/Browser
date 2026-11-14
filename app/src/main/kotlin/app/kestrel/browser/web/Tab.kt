@@ -59,6 +59,8 @@ class Tab(@JvmField val id: Long) {
     var thumb: Bitmap? = null // small snapshot of the page for the tab grid (RGB_565, about 240 px wide); never written to disk for a private tab
     var thumbAt = 0L // uptime millis of that snapshot
     var scrollY = 0 // where the page is scrolled, as the engine last said (Gecko build; the last look keeps it with the picture); UI thread
+    /** When the engine last said a script of this page has been running for a long time (AY1: waited for without asking); 0 = never on this page. A page stuck like that cannot answer a long press, the touch detector does. */
+    @Volatile var slowScriptAt = 0L
     var dialogCount = 0 // JS alert/confirm/prompt count for this page load (spam guard)
     var dialogsSuppressed = false
     /** Videos, audio files and stream playlists this page has loaded (Gecko build: filled by the Shields extension's sniffer); cleared when a new page starts. UI thread only. */

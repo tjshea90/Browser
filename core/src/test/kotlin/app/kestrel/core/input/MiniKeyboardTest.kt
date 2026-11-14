@@ -252,5 +252,81 @@ class MiniKeyboardTest {
         assertEquals(MiniKeyboardLayout.ROW_UNITS, field.sumOf { it.weight.toDouble() }.toFloat(), 0.01f)
         assertEquals("the letters above are the same", MiniKeyboardLayout.rows(false)[0].map { it.label }, MiniKeyboardLayout.rows(false, forField = true)[0].map { it.label })
     }
+
+    // ------------------------------------------------------------------ the cursor (AY3, owner message 39: slide the space key to move the text cursor)
+
+    @Test fun theCursorStartsAtTheEndAndTypingStillAppends() {
+        val m = MiniKeyboardModel(); m.open("")
+        assertEquals(0, m.cursor)
+        typed(m, "abc"); assertEquals(3, m.cursor); assertEquals("abc", m.text)
+        m.open("https://doraby.com/"); assertEquals("an opened address has the cursor at its end", 19, m.cursor)
+    }
+
+    @Test fun movingTheCursorMakesTypingAndBackspaceWorkThere() {
+        val m = MiniKeyboardModel(); m.open("")
+        typed(m, "helo")
+        assertTrue(m.moveCursor(-2)); assertEquals(2, m.cursor)
+        typed(m, "l"); assertEquals("hello", m.text); assertEquals(3, m.cursor)
+        m.press(Key.Backspace); assertEquals("helo", m.text); assertEquals(2, m.cursor)
+        assertTrue(m.moveCursor(10)); assertEquals("it stops at the end", 4, m.cursor)
+        assertFalse("nothing moved", m.moveCursor(1))
+        assertTrue(m.moveCursor(-10)); assertEquals("and at the start", 0, m.cursor)
+        m.press(Key.Backspace); assertEquals("Backspace at the start takes nothing", "helo", m.text)
+        assertFalse(m.moveCursor(0))
+    }
+
+    @Test fun aSelectedAddressIsCollapsedToTheEndTheFingerWentTowards() {
+        val m = MiniKeyboardModel(); m.open("https://a.example/")
+        assertTrue(m.moveCursor(-3)); assertFalse(m.allSelected); assertEquals(0, m.cursor)
+        typed(m, "x"); assertEquals("xhttps://a.example/", m.text)
+        m.open("https://a.example/"); assertTrue(m.moveCursor(2)); assertFalse(m.allSelected); assertEquals(m.text.length, m.cursor)
+        typed(m, "y"); assertEquals("https://a.example/y", m.text)
+    }
+
+    @Test fun aGlidedWordGoesInAtTheCursorAndBackspaceTakesItWholeAgain() {
+        val m = MiniKeyboardModel(); m.open("")
+        typed(m, "hello world")
+        m.moveCursor(-5)
+        assertEquals(6, m.cursor)
+        m.commitGlide("big")
+        assertEquals("hello big world", m.text); assertEquals(10, m.cursor)
+        assertTrue(m.glideActive)
+        assertTrue(m.swapGlide("pig")); assertEquals("hello pig world", m.text); assertEquals(10, m.cursor)
+        m.press(Key.Backspace); assertEquals("one Backspace takes the whole glided word", "hello world", m.text); assertEquals(6, m.cursor)
+    }
+
+    @Test fun movingTheCursorEndsTheGlideSoBackspaceTakesOneCharacter() {
+        val m = MiniKeyboardModel(); m.open("")
+        typed(m, "a"); m.commitGlide("hello")
+        assertEquals("a hello ", m.text); assertTrue(m.glideActive)
+        m.moveCursor(-1)
+        assertFalse("the glide is no longer the last thing", m.glideActive)
+        m.press(Key.Backspace); assertEquals("a hell ", m.text)
+    }
+
+    @Test fun theWordBeforeIsTheOneBeforeTheCursor() {
+        val m = MiniKeyboardModel(); m.open("")
+        typed(m, "one two three")
+        m.moveCursor(-6)                              // "one two| three"
+        assertEquals("two", m.previousWord())
+        assertEquals("one" to "two", m.previousTwo())
+    }
+
+    @Test fun theCursorNeverStopsBetweenTheHalvesOfOneCharacter() {
+        val m = MiniKeyboardModel(); m.open("")
+        m.press(Key.Ch("a")); m.press(Key.Ch("\uD83D\uDE00")); m.press(Key.Ch("b"))
+        assertEquals(4, m.cursor)
+        m.moveCursor(-1); assertEquals(3, m.cursor)
+        m.moveCursor(-1); assertEquals("the emoji is one step", 1, m.cursor)
+        m.moveCursor(1); assertEquals("and one step back over it", 3, m.cursor)
+    }
+
+    @Test fun restartingTheTextForAPageFieldStartsEmptyAndKeepsTheKeyboardPage() {
+        val m = MiniKeyboardModel(); m.open("")
+        m.press(Key.ToSymbols); typed(m, "abc"); m.commitGlide("word")
+        m.restartText()
+        assertEquals("", m.text); assertEquals(0, m.cursor); assertFalse(m.glideActive); assertTrue("the symbols page stays", m.symbols)
+        typed(m, "x"); assertEquals("x", m.text); assertEquals(1, m.cursor)
+    }
 }
 

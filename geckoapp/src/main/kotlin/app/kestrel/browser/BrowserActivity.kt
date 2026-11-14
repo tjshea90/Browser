@@ -195,21 +195,84 @@ open class BrowserActivity : Activity(), DockListener {
     private fun browserInFront(): Boolean =
         !fullscreenOn && tabGrid.visibility != View.VISIBLE && !sheet.isShowing && listOf<View?>(downloadsView, diagView, settingsView, listPanel).none { it != null && it.parent === root }
 
+    /**
+     * A web page whose scripts can answer: its own long press tells open space from a link, a picture or text (AY2, content.js), so the touch detector below stays out of the way. Home, an error screen, a
+     * page the extension does not run in, and a page stuck in a slow script (it cannot answer anything) use the detector.
+     */
+    private fun pageAnswersLongPress(): Boolean {
+        val t = current ?: return false
+        if (homeShown(t) || t.error != null || t.session == null) return false
+        if (!t.url.startsWith("http://", ignoreCase = true) && !t.url.startsWith("https://", ignoreCase = true)) return false
+        val slow = t.slowScriptAt
+        if (slow != 0L && SystemClock.uptimeMillis() - slow < SLOW_PAGE_MS) return false
+        return true
+    }
+
+    /**
+     * The window point is on something of the app's own that acts on a press or a long press: the open mini panel, Home's search box, its Go button and its suggestions, a button of the error screen.
+     * Not open space (AY2): the touch detector leaves it alone.
+     */
+    private fun ownActionAt(x: Float, y: Float): Boolean {
+        if (::miniNav.isInitialized && miniNav.coversWindowPoint(x, y)) return true
+        val t = current ?: return false
+        if (homeShown(t)) return ownViewAt(home, x, y)
+        if (t.error != null) return ownViewAt(errorView, x, y)
+        return false
+    }
+
+    /** A clickable, long-clickable or editable view below [root] (not [root] itself: Home and the error screen swallow touches as a whole) is under the window point. */
+    private fun ownViewAt(root: android.view.ViewGroup, x: Float, y: Float): Boolean {
+        val loc = IntArray(2)
+        for (i in 0 until root.childCount) {
+            val c = root.getChildAt(i)
+            if (c.visibility != View.VISIBLE) continue
+            c.getLocationInWindow(loc)
+            if (x < loc[0] || x >= loc[0] + c.width || y < loc[1] || y >= loc[1] + c.height) continue
+            if (c is android.widget.EditText || c.isClickable || c.isLongClickable) return true
+            if (c is android.view.ViewGroup && ownViewAt(c, x, y)) return true
+        }
+        return false
+    }
+
     private val hotCornerHost = object : app.kestrel.browser.ui.HotCorner.Host {
         override fun zone(): IntArray? {
-            if (!::miniNav.isInitialized || !miniNav.available || !browserInFront()) return null
+            if (!::miniNav.isInitialized || !miniNav.available || !browserInFront() || pageAnswersLongPress()) return null
             val loc = IntArray(2); content.getLocationInWindow(loc)
-            val s = dp(app.kestrel.browser.ui.HotCorner.SIZE_DP)
-            return intArrayOf(loc[0] + content.width - s, loc[1], loc[0] + content.width, loc[1] + s)
+            return intArrayOf(loc[0], loc[1], loc[0] + content.width, loc[1] + content.height) // the whole page area: a long press anywhere puts the panel under the finger
         }
-        override fun covers(x: Float, y: Float): Boolean = ::miniNav.isInitialized && miniNav.coversWindowPoint(x, y)
+        override fun covers(x: Float, y: Float): Boolean = ownActionAt(x, y)
         override fun fired(downTime: Long, x: Float, y: Float) {
             // the page was given the touch-down: tell it the touch is over, so its own long press (context menu, text selection) never starts
             val cancel = android.view.MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), android.view.MotionEvent.ACTION_CANCEL, x, y, 0)
             window.superDispatchTouchEvent(cancel); cancel.recycle()
             root.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-            miniNav.toggle()
+            miniNav.showAt(x, y)
         }
+    }
+
+    // ---- a long press on OPEN space of a web page puts the panel under the finger (AY2, owner message 39). The page's own script tells the app that the press was on open space (content.js, message "os");
+    // the app remembers where the finger went down.
+    private var pressActive = false
+    private var pressX = 0f; private var pressY = 0f; private var pressDownTime = 0L; private var pressEndAt = 0L
+    private var pressMovedFar = false
+    private var pressSwallow = false
+    private var pressOnPanel = false // the touch went down on the mini panel: the page never saw it, so no answer from the page can be about it
+
+    internal fun onOpenSpace(page: String) {
+        if (!::miniNav.isInitialized || !miniNav.available || !prefs.miniNavToggle || !browserInFront()) return
+        val t = current ?: return
+        val h = UrlParts.hostOf(page)
+        if (h == null || t.topHost != h) return // the press was on another tab's page
+        val now = SystemClock.uptimeMillis()
+        if (pressMovedFar || (!pressActive && now - pressEndAt > OPEN_SPACE_FRESH_MS)) return // not the press that was just made
+        if (pressActive) { // the finger is still down: the page's touch is over (nothing is clicked or selected when it lifts), and the rest of it is ours
+            val cancel = android.view.MotionEvent.obtain(pressDownTime, now, android.view.MotionEvent.ACTION_CANCEL, pressX, pressY, 0)
+            window.superDispatchTouchEvent(cancel); cancel.recycle()
+            pressSwallow = true
+        }
+        root.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+        Health.count("panel.openSpace")
+        miniNav.showAt(pressX, pressY)
     }
     private val hotCorner by lazy { app.kestrel.browser.ui.HotCorner(Io.main, touchSlop.toFloat(), hotCornerHost) }
 
@@ -308,7 +371,7 @@ open class BrowserActivity : Activity(), DockListener {
                 GeckoEngine.runtime(this)
                 GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
                 GeckoEngine.warmUp(this)
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l -> video.info(p, u, w, h, d, l) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y) } } }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l -> video.info(p, u, w, h, d, l) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }))
                 Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
             }
         }
@@ -443,16 +506,27 @@ open class BrowserActivity : Activity(), DockListener {
      */
     override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
         if (hotCorner.observe(ev)) return true // AU1: the long press in the corner already fired: the page has been told the touch is over and must not see the rest of it
+        if (pressSwallow) { // AY2: the panel was shown for this press: the page has been told the touch is over
+            if (ev.actionMasked == android.view.MotionEvent.ACTION_UP || ev.actionMasked == android.view.MotionEvent.ACTION_CANCEL) { pressSwallow = false; pressActive = false; pressEndAt = SystemClock.uptimeMillis() }
+            return true
+        }
         when (ev.actionMasked) {
             android.view.MotionEvent.ACTION_DOWN -> {
+                pressOnPanel = ::miniNav.isInitialized && miniNav.coversWindowPoint(ev.x, ev.y)
+                pressActive = !pressOnPanel; pressX = ev.x; pressY = ev.y; pressDownTime = ev.downTime; pressMovedFar = false
+                if (pressOnPanel) pressEndAt = 0L
                 Neon.touching(true)
                 lastTouchAt = SystemClock.uptimeMillis()
                 downX = ev.x; downY = ev.y; dragged = false
                 Io.main.removeCallbacks(touchRelease)
             }
             android.view.MotionEvent.ACTION_POINTER_DOWN -> dragged = true // a pinch is a gesture too
-            android.view.MotionEvent.ACTION_MOVE -> if (!dragged && (Math.abs(ev.x - downX) > touchSlop || Math.abs(ev.y - downY) > touchSlop)) dragged = true
+            android.view.MotionEvent.ACTION_MOVE -> {
+                if (!dragged && (Math.abs(ev.x - downX) > touchSlop || Math.abs(ev.y - downY) > touchSlop)) dragged = true
+                if (!pressMovedFar && (Math.abs(ev.x - pressX) > touchSlop * 3 || Math.abs(ev.y - pressY) > touchSlop * 3)) pressMovedFar = true
+            }
             android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                pressActive = false; if (!pressOnPanel) pressEndAt = SystemClock.uptimeMillis()
                 lastTouchAt = SystemClock.uptimeMillis()
                 // a swipe may leave a fling running (hold the glow still for it); a plain tap leaves nothing behind, so the glow comes back almost at once
                 Io.main.removeCallbacks(touchRelease); Io.main.postDelayed(touchRelease, if (dragged) 1500L else 350L)
@@ -2462,6 +2536,7 @@ open class BrowserActivity : Activity(), DockListener {
      * (`gecko.slowScript.waited`) so a page that keeps the engine busy is visible there.
      */
     internal fun askSlowScript(tab: Tab): GeckoResult<SlowScriptResponse> {
+        tab.slowScriptAt = SystemClock.uptimeMillis()
         val n = Health.count("gecko.slowScript.waited")
         if (n == 1 || n % 20 == 0) Health.log("gecko", "slow-script-waited", "n=$n " + (if (tab.isPrivateTab) "private tab" else tab.url.take(60)))
         return GeckoResult.fromValue(SlowScriptResponse.CONTINUE)
@@ -2636,5 +2711,9 @@ open class BrowserActivity : Activity(), DockListener {
         private const val REQ_PERM = 1002
         private const val PULL_ARM_DP = 64f // chip travel at which letting go reloads (about 107 dp of finger travel)
         private const val PULL_MAX_DP = 84f
+        /** A page that said a script has been running a long time cannot answer a long press for this long: the touch detector takes over (AY2). */
+        private const val SLOW_PAGE_MS = 60_000L
+        /** A long press that the page reports this long after the finger lifted is still the press that was just made (the page's answer takes a moment on a slow page). */
+        private const val OPEN_SPACE_FRESH_MS = 2_000L
     }
 }

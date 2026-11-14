@@ -160,6 +160,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         tab.resetPageCounters()
         a.pageStarted(tab) // a new page: what the old one played is no longer on offer
         tab.dialogCount = 0
+        tab.slowScriptAt = 0L
         tab.dialogsSuppressed = false
         // A new real navigation clears a previous error screen (but not the blank backdrop we load behind one).
         if (tab.error != null && !url.startsWith("data:") && !url.startsWith("about:")) { tab.error = null; a.errorChanged(tab) }

@@ -12,13 +12,17 @@ import android.view.MotionEvent
  * never starts: ours is shorter than the engine's), and the rest of that touch is kept away from the page. The time is the touch's OWN clock as well as a timer: when the UI thread is busy and the
  * events reach us late (all at once), the timestamps of the move or the lift still say the finger was down long enough (found on the emulator: a late long press was taken for a tap and followed the link under it).
  *
- * The square is the host's to place ([Host.zone]): the panel sits right below it, so the same square is "above the open panel" and closes it again.
+ * The square is the host's to place ([Host.zone]).
+ *
+ * AY2 (owner message 39: "make it so I can long press anywhere in the browser and it will show up under where I long pressed, but only if I am long pressing an open space"): the square is now the WHOLE page area, and
+ * only for a page whose own script cannot tell open space from a link (Home, an error screen, a page the extension does not run in, a page stuck in a slow script). A normal page tells the app itself (content.js,
+ * "os"), because only the page knows what is under the finger; this detector would also fire on links. [Host.covers] keeps it away from what has its own long press (the open panel, Home's search box).
  */
 class HotCorner(private val handler: Handler, private val slopPx: Float, private val host: Host, private val longPressMs: Long = LONG_PRESS_MS) {
     interface Host {
         /** The square in window pixels (left, top, right, bottom), or null when it must not act now (a video full screen, a menu over the page, the feature switched off). */
         fun zone(): IntArray?
-        /** The long press happened: open or close the panel and tell the page its touch is over ([downTime], [x], [y] are the touch's). */
+        /** The long press happened: show the panel under the finger and tell the page its touch is over ([downTime], [x], [y] are the touch's). */
         fun fired(downTime: Long, x: Float, y: Float)
         /** True when the window point is on something that must not start the long press (the open panel, which can sit over the square once it has been moved). */
         fun covers(x: Float, y: Float): Boolean = false

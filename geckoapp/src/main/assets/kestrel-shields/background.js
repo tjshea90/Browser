@@ -771,6 +771,16 @@ browser.runtime.onMessage.addListener(function (m) {
   return undefined;
 });
 
+// AY2 (owner message 39): the content script saw a long press on OPEN space; the app shows its navigation panel under the finger. The message names the page the tab is on (a frame never names the page by
+// its own address), nothing else.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'os') return undefined;
+  var tabId = (sender && sender.tab) ? sender.tab.id : -1;
+  var page = (tabId >= 0 && tabTop.get(tabId)) || String(m.p || '');
+  send({ k: 'os', p: page.slice(0, 600) }).catch(function () {});
+  return undefined;
+});
+
 // EY-1: the page's scroll place from the content script (top frame), for the app's saved view of the page. A number and the page address; nothing else.
 browser.runtime.onMessage.addListener(function (m, sender) {
   if (!m || m.k !== 'scroll' || typeof m.y !== 'number' || !isFinite(m.y) || !sender || !sender.tab || sender.frameId !== 0) return undefined;
