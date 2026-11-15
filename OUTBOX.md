@@ -2041,3 +2041,40 @@
 > - the stronger slow-engine emulator scene, which has to wait for the compatibility run to finish because they share the lab
 > - the owner-only GitHub steps (private signing key, protected `release` environment)
 <!-- sha:ed06d93199a5 -->
+
+## 2026-11-15T23:17:41Z
+> Here is an interim answer to your message 49. alpha54 is out, and the new video player is in progress.
+>
+> **alpha54 (install over the old one):**
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha54
+>
+> **What the audit found, one cause per observation:**
+> - **A tap doesn't hide the controls.** Kestrel's own bar only restarted its hide timer when you tapped, so it never toggled. Sites that draw their own controls (Yahoo's player) don't hide them on a tap by default either.
+> - **Pulling up the navigation bar covered the controls (alpha50).** That was the bar sliding over the page. Since alpha51 the bars stay and the page sits between them, which is why the controls now show in both orientations.
+> - **The "4 seconds" length.** Players show the length the page reports. For a streamed video that number grows as it downloads (4 s, 8 s, …), and an ad has its own short length. The new player will only show a length once it has stayed the same for 2 seconds and isn't smaller than what has been played or buffered. Until then it shows just the position.
+> - **The stretched picture on first full screen.** The engine sized the full-screen page to the whole screen height instead of the space between the bars. Turning fixed it by accident. alpha52 added the correction, and the new player will also keep the picture whole.
+> - **Rotation slow and buggy.** The engine hands the new size to the page seconds late on your tablet. alpha53 waits for the page, and alpha54 fixes three bugs an independent review found in that:
+>   - On Yahoo Finance and YouTube the black cover could stay up for the full 7 seconds on every turn.
+>   - The first manual turn after full screen began turned the screen twice.
+>   - A touch ending the wait counted as a failure.
+> - **The video is slow and laggy.** Kestrel's own scripts measured at no cost earlier. The usual causes are the page's own scripts and ads on a slow CPU, and the 5 Mbit/s hotspot. I can't see your tablet's CPU from here.
+>
+> **What I'm building now (alpha55):**
+> - Kestrel's own full-screen controls, drawn by the app over the video instead of inside the page, so the page can't hide or lay them out wrongly.
+> - **Tap:** each tap toggles the controls, and they hide by themselves 3.5 seconds after play starts.
+> - **Double-tap:** double-tapping a side jumps 10 seconds, and double-tapping the middle plays or pauses.
+> - **Controls:** a seek bar with times, mute, and an exit-full-screen button.
+> - **Rotation:** the controls disappear during a rotation and come back after.
+> - **Page buttons:** a site's own buttons, such as "Skip ad", keep working.
+> - **Setting:** Settings has a new row, "Full-screen video controls": Kestrel's (default) or The page's own.
+> - **Progress:** the page script has 12 browser tests, the rules have unit tests, and the Android view is written. I'm connecting it now and will prove it on the emulator with pictures before releasing.
+>
+> **What I have not run:** none of this has run on your tablet.
+>
+> **Still open:**
+> - the player build above
+> - your tablet test of alpha54 and then alpha55
+> - the 2-hour site-compatibility run, which is still running on the emulator
+> - the owner-only GitHub steps (private signing key, protected `release` environment)
+<!-- sha:efd2cdceb2f7 -->
