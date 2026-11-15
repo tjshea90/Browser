@@ -797,17 +797,20 @@ open class BrowserActivity : Activity(), DockListener {
         root.addView(fullscreen, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         setContentView(root)
 
-        // Edge-to-edge safe: Android 15+ draws behind the system bars for targetSdk 35+; Android 10 reports zero insets here.
+        // Edge-to-edge safe: Android 15+ draws behind the system bars for targetSdk 35+; Android 10 reports the real insets here.
+        // FSB1 (owner message 46, with screenshots): the padding ALWAYS follows the real insets, also while a page is full screen. A system that hides its bars reports zero, so the picture is full-bleed; the
+        // owner's tablet KEEPS both bars in full screen, reports their size, and the page is laid out above the navigation bar, so a player's controls are never under it. (alpha48 zeroed the padding while a page
+        // was full screen and, on Android 10, also asked for the LAYOUT_* flags: right only where the bars really go away; there the controls sat under the visible navigation bar.)
         root.setOnApplyWindowInsetsListener { v, insets ->
-            if (fullscreenOn) { // FS1: a full-screen picture is full-bleed (the emulator lab's screenshot showed a 51 px black strip where the hidden navigation bar's space was kept, sideways)
-                v.setPadding(0, 0, 0, 0)
-                if (Build.VERSION.SDK_INT >= 30) WindowInsets.CONSUMED else @Suppress("DEPRECATION") insets.consumeSystemWindowInsets()
-            } else if (Build.VERSION.SDK_INT >= 30) {
+            if (Build.VERSION.SDK_INT >= 30) {
+                val bars = insets.getInsets(WindowInsets.Type.systemBars())
                 val i = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout() or (if (urlTyping) 0 else WindowInsets.Type.ime()))
                 v.setPadding(i.left, i.top, i.right, i.bottom)
+                barsSeen(bars.left, bars.top, bars.right, bars.bottom)
                 WindowInsets.CONSUMED
             } else {
                 @Suppress("DEPRECATION") v.setPadding(insets.systemWindowInsetLeft, insets.systemWindowInsetTop, insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
+                @Suppress("DEPRECATION") barsSeen(insets.systemWindowInsetLeft, insets.systemWindowInsetTop, insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
                 @Suppress("DEPRECATION") insets.consumeSystemWindowInsets()
             }
         }
