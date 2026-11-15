@@ -55,8 +55,8 @@ test('FB2: a touch during the turn is the person taking over: the video stays pa
 test('FB2: a change of size that keeps the shape (a keyboard, a toolbar) is not a turn: nothing is paused, nothing is sent', async () => {
   const page = await open(VIDEO(), { turn: true });
   await PLAYING(page);
-  await page.setViewportSize({ width: 500, height: 500 }); await wait(page, 400);
-  await page.setViewportSize({ width: 500, height: 300 }); await wait(page, 600);
+  await page.setViewportSize({ width: 500, height: 520 }); await wait(page, 400);     // (a keyboard in portrait: the window stays taller than wide)
+  await page.setViewportSize({ width: 500, height: 510 }); await wait(page, 600);
   assert.equal(await paused(page), false);
   assert.deepEqual(await turns(page), []);
   await page.context().close();
@@ -74,13 +74,13 @@ test('FB2: a video that was paused stays paused (nothing is ever started that we
 
 test('FB2: a video inside a web component\'s shadow root is paused and played again too (the Yahoo player is one)', async () => {
   const body = '<div id="host" style="position:absolute;left:20px;top:100px;width:400px;height:240px"></div><script>var root = document.getElementById("host").attachShadow({ mode: "open" });'
-    + 'root.innerHTML = \'<video id="v" src="https://cdn.example/film.wav" preload="auto" muted style="width:400px;height:240px"></video>\'; window.__deep = function () { return root.getElementById("v"); };</script>';
+    + 'root.innerHTML = \'<video id="v" src="https://cdn.example/film.wav" preload="auto" muted style="width:400px;height:240px"></video>\'; window.__deepV = function () { return root.getElementById("v"); };</script>';
   const page = await open(body, { turn: true });
-  await page.evaluate(async () => { const v = window.__deep(); await v.play(); });
+  await page.evaluate(async () => { const v = window.__deepV(); await v.play(); });
   await page.setViewportSize({ width: 800, height: 500 }); await wait(page, 150);
-  assert.equal(await page.evaluate(() => window.__deep().paused), true);
+  assert.equal(await page.evaluate(() => window.__deepV().paused), true);
   await wait(page, 1000);
-  assert.equal(await page.evaluate(() => window.__deep().paused), false);
+  assert.equal(await page.evaluate(() => window.__deepV().paused), false);
   await page.context().close();
 });
 
