@@ -102,10 +102,10 @@ test('an ad word further than 8 levels away, or on the body, is not counted', as
 
 test('a small box and a box below the fold report their size and how much of them is in view', async () => {
   const page = await open(`<video ${SRC} controls style="width:100px;height:50px"></video><div style="height:2000px"></div><video id="low" ${SRC.replace('clip', 'clip2')} controls style="width:300px;height:200px"></video>`);
-  const all = await page.evaluate(() => window.__msgs.filter((m) => m.k === 'vid'));
-  assert.equal(all[0].rw, 100); assert.equal(all[0].rh, 50); assert.equal(all[0].vp, 100);
   await page.waitForFunction(() => window.__msgs.filter((m) => m.k === 'vid').length >= 2, null, { timeout: 8000 });
-  const low = await page.evaluate(() => window.__msgs.filter((m) => m.k === 'vid')[1]);
+  const all = await page.evaluate(() => window.__msgs.filter((m) => m.k === 'vid'));        // (the two files load at the same time: their reports come in either order)
+  const small = all.find((m) => m.u.endsWith('/clip.wav')), low = all.find((m) => m.u.endsWith('/clip2.wav'));
+  assert.equal(small.rw, 100); assert.equal(small.rh, 50); assert.equal(small.vp, 100);
   assert.equal(low.vp, 0, 'far below the visible part of the page');
   await page.context().close();
 });
