@@ -43,7 +43,12 @@ async function open(body, o) {
   const context = await browser.newContext({ hasTouch: true, viewport: { width: 500, height: 700 } });
   await context.route('https://**/*', (r) => {
     const u = new URL(r.request().url());
-    if (u.hostname === 'cdn.example' && u.pathname === '/film.wav') return r.fulfill({ contentType: 'audio/wav', body: FILM });
+    if (u.hostname === 'cdn.example' && u.pathname === '/film.wav') {                   // a file server that answers byte ranges, as every real one does (without them the film is not seekable)
+      const rg = /bytes=(\d+)-(\d*)/.exec(r.request().headers().range || '');
+      if (!rg) return r.fulfill({ contentType: 'audio/wav', headers: { 'accept-ranges': 'bytes' }, body: FILM });
+      const a = +rg[1], b = rg[2] ? Math.min(+rg[2], FILM.length - 1) : FILM.length - 1;
+      return r.fulfill({ status: 206, contentType: 'audio/wav', headers: { 'accept-ranges': 'bytes', 'content-range': `bytes ${a}-${b}/${FILM.length}` }, body: FILM.subarray(a, b + 1) });
+    }
     if (u.hostname === 'movie.example' && u.pathname === '/') return r.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><title>movie</title></head><body style="margin:0">${body}</body></html>` });
     if (u.hostname === 'player.example') return r.fulfill({ contentType: 'text/html', body: `<!doctype html><html><body style="margin:0">${o.frameBody || ''}</body></html>` });
     return r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>other</title>other' });
