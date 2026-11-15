@@ -56,6 +56,7 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
     private var touched = false
     private var confirmed = false
     private var confirmedAt = 0L
+    private var heard = 0                 // reports of the page since this turn began (any: right or wrong size)
     private var nudged = false
     private var hinted = false
 
@@ -90,7 +91,9 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
         if (!active && !TurnSettle.worthIt(turn, h.fullscreen(), playing)) return
         turns++
         val t = h.now()
-        if (!active) { active = true; startedAt = t; touched = false; confirmed = false; confirmedAt = 0L; nudged = false; hinted = false }
+        // a turn while one goes on is a new turn for the clocks (review of alpha53: a rotation at 6.9 s of the first one got 0.1 s of cover, and a touch counted from the first): the video is paused once
+        if (!active) { active = true; touched = false; hinted = false }
+        startedAt = t; confirmedAt = 0L; nudged = false; heard = 0
         lastChangeAt = t
         confirmed = false                                                  // a new turn (or one more while it goes on): the page has to say it has the new size again
         h.cover(true, false)
@@ -109,6 +112,7 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
     /** ROT2: the full-screen page reported its viewport; [matchesView] = it is the view's size now. Only a matching report that comes after the last size change confirms the turn. */
     fun pageReported(matchesView: Boolean) {
         if (!active) return
+        heard++
         if (matchesView) { if (!confirmed) { confirmed = true; confirmedAt = h.now() } } else confirmed = false
     }
 
@@ -117,7 +121,7 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
         if (!active) return
         touched = true
         val n = h.now()
-        if (TurnSettle.touchEnds(n - startedAt)) { h.cancelSchedule(); finish(n, h.expectsPageReport()) }
+        if (TurnSettle.touchEnds(n - startedAt)) { h.cancelSchedule(); finish(n, h.expectsPageReport(), byTouch = true) }
     }
 
     /** The app left the screen: everything goes at once and nothing is played. */
@@ -136,7 +140,7 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
     fun tick() {
         if (!active) return
         val n = h.now()
-        val expects = h.expectsPageReport()
+        val expects = h.expectsPageReport() && !(heard == 0 && n - startedAt >= TurnSettle.SILENT_MS)       // a page that said nothing at all for 3 s is not reporting: the old rule
         if (TurnSettle.settled(n - lastChangeAt, n - startedAt, expects, confirmed)) { finish(n, expects); return }
         if (expects && !confirmed && !nudged && TurnSettle.nudgeDue(n - lastChangeAt)) {
             nudged = true; nudges++
@@ -147,14 +151,14 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
         h.schedule(TurnSettle.TICK_MS)
     }
 
-    private fun finish(n: Long, expects: Boolean = false) {
+    private fun finish(n: Long, expects: Boolean = false, byTouch: Boolean = false) {
         active = false
         lastMs = n - startedAt
         h.cover(false, true)
         if (hinted) { hinted = false; h.hint(false) }
         if (expects) {
             if (confirmed && confirmedAt > 0L) { val lag = confirmedAt - startedAt; lagTurns++; lagLastMs = lag; if (lag > lagWorstMs) lagWorstMs = lag }
-            else gaveUp++
+            else if (!byTouch) gaveUp++
         }
         val p = paused; paused = null
         var resumed = false
@@ -165,7 +169,7 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
             } else skippedResume++
         }
         last = "settled after $lastMs ms" + (if (p == null) ", nothing was paused" else if (resumed) ", the video was paused and played again" else ", the video was paused and left paused (touched=$touched)") +
-            (if (expects) (if (confirmed) ", the page had the new size after ${confirmedAt - startedAt} ms" else ", the page never said it had the new size (gave up)") else "")
+            (if (expects) (if (confirmed) ", the page had the new size after ${confirmedAt - startedAt} ms" else if (byTouch) ", ended by a touch before the page had the new size" else ", the page never said it had the new size (gave up)") else "")
         h.log("turn-settled", last)
     }
 

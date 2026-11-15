@@ -59,6 +59,7 @@
     }
     function finish() {
       var s = state; state = null;
+      landscape = landscapeNow();                         // (review of alpha53: a turn and back inside one window left the first shape here, and the next unrelated resize then looked like a flip)
       try { clearInterval(s.timer); } catch (e) { /* ignore */ }
       try { nudging = true; window.dispatchEvent(new Event('resize')); } catch (e) { /* no synthetic events */ } finally { nudging = false; }
       setTimeout(function () {

@@ -589,7 +589,7 @@ open class BrowserActivity : Activity(), DockListener {
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
         val landscape = newConfig.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-        try { turnSettler.configChanged(landscape) } catch (e: Throwable) { Health.log("fullscreen", "turn-settler-failed", e.toString().take(80)) } // ROT1: pause the video and cover the page BEFORE the engine re-lays out
+        try { turnSettler.configChanged(landscape) } catch (e: Throwable) { Health.log("fullscreen", "turn-settler-failed", e.toString().take(80)); try { turnSettler.abandon() } catch (x: Throwable) { /* nothing more to do */ } } // ROT1: pause the video and cover the page BEFORE the engine re-lays out (a failure must never leave the cover up)
         GeckoEngine.runtimeOrNull()?.let { try { it.orientationChanged() } catch (e: Throwable) { Health.log("fullscreen", "orientation-notify-failed", e.toString().take(80)) } }
         Health.log("life", "config", "orientation=${if (landscape) "landscape" else "portrait"} fullscreen=$fullscreenOn")
         if (fullscreenOn) { Io.main.removeCallbacks(rehideAfterTurn); Io.main.postDelayed(rehideAfterTurn, 150L) } // FSB1: a turn can bring the bars back on some systems
@@ -777,7 +777,7 @@ open class BrowserActivity : Activity(), DockListener {
         val rotateButton = app.kestrel.browser.web.FullscreenTurner.RotateButton(this) // FS1: shows for a moment after a touch while a page is full screen
         content.addView(rotateButton, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.START or Gravity.CENTER_VERTICAL).apply { leftMargin = dp(12) })
         fsTurner.attachButton(rotateButton)
-        val cover = FrameLayout(this).apply { setBackgroundColor(0xFF000000.toInt()); visibility = View.GONE; alpha = 0f; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO } // ROT1: topmost in the page area, takes no touch
+        val cover = FrameLayout(this).apply { setBackgroundColor(0xFF000000.toInt()); visibility = View.GONE; alpha = 0f; isClickable = true; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO } // ROT1: topmost in the page area; it takes the touch (review of alpha53: the tap that ends a long wait must not reach the page nobody can see)
         // ROT2: a small ring after about a second, so a black screen that waits for the engine does not look frozen
         val ring = android.widget.ProgressBar(this).apply { isIndeterminate = true; visibility = View.GONE; indeterminateTintList = android.content.res.ColorStateList.valueOf(0xFF9A9A9A.toInt()) }
         cover.addView(ring, FrameLayout.LayoutParams(dp(34), dp(34), Gravity.CENTER))
@@ -945,7 +945,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     /** A new page began in [tab]: what the old page offered to save is no longer on offer (TabDelegates.onPageStart). */
-    internal fun pageStarted(tab: Tab) { video.clearTab(tab); tab.scrollY = 0 }
+    internal fun pageStarted(tab: Tab) { video.clearTab(tab); tab.scrollY = 0; tab.gecko.vpOk = false } // (a new page has not told its size yet: the turn wait needs the proof again)
 
     internal fun newTabAndShow(privateTab: Boolean = false): Tab { val t = newTabInternal(null, privateTab); show(t); focusUrlBar(); return t }
 
@@ -1262,13 +1262,20 @@ open class BrowserActivity : Activity(), DockListener {
 
     /**
      * The tab a page's viewport report came from. Two tabs can hold the same address (lab run 43766649065: the same lab page opened again, a restored tab plus the same link): the FIRST one in the list is the wrong one
-     * then, and the report of the full-screen page was credited to it and lost. So: the full-screen tab, else the tab in front, when their address is the page's; else the first tab with that address.
+     * then, and the report of the full-screen page was credited to it and lost. So: the full-screen tab, else the tab in front, when their address is the page's; else the first tab with that address; else (review of
+     * alpha53, a single-page site such as m.youtube.com or finance.yahoo.com: the address the extension knows is the one the page was LOADED with, the tab's address follows pushState, so they differ) the full-screen
+     * or front tab of the same host. The report carries at most 300 characters of the address: both sides are cut the same way.
      */
     private fun tabOfReport(pageUrl: String): Tab? {
-        val u = pageUrl.substringBefore('#')
+        val u = pageUrl.substringBefore('#').take(300)
         if (u.isEmpty()) return null
-        fun same(t: Tab?) = t != null && t.url.substringBefore('#') == u
-        return (if (fullscreenOn) fullscreenTab?.takeIf { same(it) } else null) ?: current?.takeIf { same(it) } ?: tabWithUrl(u)
+        fun same(t: Tab?) = t != null && t.url.substringBefore('#').take(300) == u
+        (if (fullscreenOn) fullscreenTab?.takeIf { same(it) } else null)?.let { return it }
+        current?.takeIf { same(it) }?.let { return it }
+        tabs.firstOrNull { same(it) }?.let { return it }
+        val host = UrlParts.hostOf(u) ?: return null
+        fun sameHost(t: Tab?) = t != null && UrlParts.hostOf(t.url) == host
+        return (if (fullscreenOn) fullscreenTab?.takeIf { sameHost(it) } else null) ?: current?.takeIf { sameHost(it) }
     }
 
     internal fun onPageViewport(m: org.json.JSONObject) {
@@ -1279,24 +1286,28 @@ open class BrowserActivity : Activity(), DockListener {
         val matches = Math.abs(pw - vw) <= 3 && Math.abs(ph - vh) <= 3
         // ROT2: the evidence that this page can say when it has a turn's new size: it reports and its viewport is the view's (a page whose viewport never is, in desktop mode or zoomed, is not waited for)
         if (matches) tab.gecko.vpOk = true else if (!turnSettler.turning) tab.gecko.vpOk = false
+        val quiet = tab.isPrivateTab                                           // a private tab keeps no counter and no log line of its page (the numbers still drive the turn)
         if (!fullscreenOn || fullscreenTab !== tab) {                          // the rest is for the page that IS full screen
-            if (matches) vpIdleMatch++ else { vpIdleMiss++; vpIdleLast = "page ${pw}x$ph, view ${vw}x$vh" }
+            if (!quiet) { if (matches) vpIdleMatch++ else { vpIdleMiss++; vpIdleLast = "page ${pw}x$ph, view ${vw}x$vh" } }
             return
         }
-        vpChecks++
+        if (!quiet) vpChecks++
         turnSettler.pageReported(matches)                                     // ROT2: a turn waits for this (the cover stays until the page has the new size)
         if (matches) {
-            if (vpTries > 0 || vpLast.startsWith("no ")) Health.log("fullscreen", "viewport", "right: page ${pw}x$ph, view ${vw}x$vh")
-            vpLast = "right (page ${pw}x$ph = view ${vw}x$vh)"; vpTries = 0
+            if (!quiet && (vpTries > 0 || vpLast.startsWith("no "))) Health.log("fullscreen", "viewport", "right: page ${pw}x$ph, view ${vw}x$vh")
+            if (!quiet) vpLast = "right (page ${pw}x$ph = view ${vw}x$vh)"
+            vpTries = 0
             return
         }
-        vpMismatches++
-        vpLast = "WRONG (page ${pw}x$ph, view ${vw}x$vh)" + (if (turnSettler.turning) " while the screen turns" else "")
+        if (!quiet) { vpMismatches++; vpLast = "WRONG (page ${pw}x$ph, view ${vw}x$vh)" + (if (turnSettler.turning) " while the screen turns" else "") }
         if (turnSettler.turning) return                                       // ROT2: the engine is still handing the turn's size to the page: the turn waits (and nudges once if it takes long)
+        // the race the nudge cures leaves ONE axis wrong (the display height against the view's); a page whose viewport is off on both axes by more than a tenth (desktop mode, a page with no viewport meta: a
+        // 980 px wide layout) is not that, and a size change would only flicker (review of alpha53)
+        if (Math.abs(pw - vw) > vw / 10 && Math.abs(ph - vh) > vh / 10) { if (!quiet) Health.log("fullscreen", "viewport", "not the display race (both axes off): page ${pw}x$ph, view ${vw}x$vh"); return }
         val now = SystemClock.uptimeMillis()
-        if (vpTries >= 3 || now - vpLastResyncAt < 1200L) { Health.log("fullscreen", "viewport", "still wrong: page ${pw}x$ph, view ${vw}x$vh (tries $vpTries)"); return }
-        vpTries++; vpLastResyncAt = now; vpResyncs++
-        Health.log("fullscreen", "viewport", "mismatch: page ${pw}x$ph, view ${vw}x$vh: the engine is given a real size change (try $vpTries)")
+        if (vpTries >= 3 || now - vpLastResyncAt < 1200L) { if (!quiet) Health.log("fullscreen", "viewport", "still wrong: page ${pw}x$ph, view ${vw}x$vh (tries $vpTries)"); return }
+        vpTries++; vpLastResyncAt = now; if (!quiet) vpResyncs++
+        if (!quiet) Health.log("fullscreen", "viewport", "mismatch: page ${pw}x$ph, view ${vw}x$vh: the engine is given a real size change (try $vpTries)")
         resyncEngineSize()
     }
 

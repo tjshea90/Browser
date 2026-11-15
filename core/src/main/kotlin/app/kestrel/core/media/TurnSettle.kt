@@ -30,6 +30,9 @@ object TurnSettle {
     /** ROT2: the page has not caught up this long after the view's last size change: the engine is given one real size change (the 1 px nudge of FB4). */
     const val NUDGE_AFTER_MS = 2500L
 
+    /** ROT2 (review of alpha53): a page that told its size before but has said NOTHING this long into a turn is not reporting (its report was dropped, its script is gone): the old rule decides. */
+    const val SILENT_MS = 3000L
+
     /** ROT2: after this long a small progress ring shows on the cover. */
     const val HINT_AFTER_MS = 900L
 
