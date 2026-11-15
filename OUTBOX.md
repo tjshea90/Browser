@@ -1737,3 +1737,7 @@
 ## 2026-11-15T17:09:07Z
 > Waiting on two things: the third video-controls lab run (now on Yahoo's video page) and the local ship gates for alpha48.
 <!-- sha:7c260ffa049c -->
+
+## 2026-11-15T17:12:12Z
+> The ship gates are re-running after a one-line fix for a rare crash in the Courier server's shutdown code that kept failing the tests. The third lab run is also going.
+<!-- sha:d171cba405f7 -->
