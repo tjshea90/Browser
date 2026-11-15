@@ -1790,3 +1790,7 @@
 > 3. **Your GitHub steps:** a protected `release` environment, the "pin actions to a full commit" policy, and the private signing key last.
 > 4. **Not started:** cold-start speed, startup profile, the 250 ms wait, repeated page checks, and what Shields-off really lifts. Several need your tablet's Diagnostics numbers.
 <!-- sha:ac91cb85b1b3 -->
+
+## 2026-11-15T18:08:31Z
+> Status: alpha48 is released and the Release link is above. I'm now waiting on two things: the one-hour browsing soak in the lab (it ends around 18:35) and a second independent review of the new video-bar code. I'll fix anything real from either.
+<!-- sha:56ffb546efcb -->
