@@ -231,7 +231,7 @@ test('RW1: a decorative film under a link, a button or a picture: the link\'s lo
   await wait(page, 1100);                                                          // (a tap within a second of a long press is that press's release: RW5)
   await tapAt(page, 300, 300); await wait(page, 350);                              // an empty spot of the layer over the film
   assert.ok(await barInfo(page), 'a bare spot of the layer still brings up the bar');
-  await page.mouse.click(300, 320, { button: 'right' }); await wait(page, 350);
+  await page.mouse.click(300, 200, { button: 'right' }); await wait(page, 350);   // (above the bar, which covers the bottom of the picture)
   assert.equal((await msgs(page, 'pop')).filter((m) => m.d.startsWith('vmenu|')).length, 1, 'and its long press is the video menu');
   await page.context().close();
 });
