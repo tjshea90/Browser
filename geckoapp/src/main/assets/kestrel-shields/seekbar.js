@@ -57,7 +57,7 @@
     }
 
     // ---- what is a seek bar
-    var BAD = /volume|bright|contrast|zoom|speed|caption|subtitle|quality|loading|loader|spinner|upload|download|lesson|course|wizard|battery|sponsor|advert|ytp-ad|(^|[\s_-])(vol|rate|ad|ads)([\s_-]|$)/i;
+    var BAD = /volume|bright|contrast|zoom|speed|caption|subtitle|quality|loading|loader|spinner|upload|download|lesson|course|wizard|battery|sponsor|advert|ytp-ad|pagination|swiper|carousel|slick|bullet|stepper|stories|story|(^|[\s_-])(vol|rate|ad|ads|step)([\s_-]|$)/i;
     var GOOD = /progress|seek|scrub|timeline|time-?bar|slider|playhead/i;
     function sig(el) {
       var c = el.className;
@@ -93,7 +93,7 @@
     /** The <video> a bar belongs to: it lies over the picture or right beside it, and is at least half as wide as it (a volume slider is not). */
     function videoFor(r, vids) {
       var best = null, gapBest = 1e9;
-      for (var i = 0; i < vids.length && i < 12; i++) {
+      for (var i = 0; i < vids.length && i < 40; i++) {
         var vr = vids[i].getBoundingClientRect();
         if (vr.width < 120 || vr.height < 68) continue;
         var ov = Math.min(r.right, vr.right) - Math.max(r.left, vr.left);
@@ -119,7 +119,7 @@
     function noteUnknown(x, y, list, vids) {
       var t = now(), i, vr, el, r, inside = false;
       if (t - unkAt < 1000 || unkN >= 8) return;
-      for (i = 0; i < vids.length && i < 12 && !inside; i++) {
+      for (i = 0; i < vids.length && i < 40 && !inside; i++) {
         vr = vids[i].getBoundingClientRect();
         inside = vr.width >= 120 && vr.height >= 68 && x >= vr.left && x <= vr.right && y >= vr.top + 0.55 * vr.height && y <= vr.bottom + 32;
       }
