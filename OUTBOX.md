@@ -1668,3 +1668,44 @@
 >
 > Web tests (418) and the Kotlin unit tests are green. I'll ship alpha48 once run 5 and the review are in, and I'll answer you in plain words then.
 <!-- sha:5a3683f0fb9e -->
+
+## 2026-11-15T16:48:47Z
+> Status: the last guard tests pass. The lab run for your video controls and long press is queued (the old hour run was cancelled so it doesn't block it). Next I read its screenshots and fix whatever the real Firefox engine shows.
+>
+> 📌 **Chat checkpoint: 🟡 Yellow**
+>
+> **Goal:** Kestrel, the owner's light Android browser for a 2 GB Android 10 Go tablet on a 5 Mbit/s hotspot. Current asks (owner messages 43 and 44): full-screen video rotation, an emulator lab with a one-hour soak, a Yahoo Finance video with no controls, and a long press on a video opening download options instead of the floating panel.
+>
+> **Decisions made:**
+> - Kestrel draws its own bar on a tapped video that has no controls (Settings "Video controls": Automatic, Always, Off).
+> - A long press on a video opens the Save video sheet, also for players inside shadow roots.
+> - All nine review findings (RV1–RV9) are fixed before shipping alpha48 (code 149).
+>
+> **Changed / rejected:**
+> - "Back does not leave full screen" was a lab artifact (Android's "Viewing full screen" box ate the key), not an app bug.
+> - Run 109, the old one-hour run, was cancelled.
+> - nytimes, espn, twitch and YouTube home were dropped from the soak (they killed the emulated phone).
+>
+> **Key details:**
+> - Branch `ccr-b3c2484c-sbew36`, last ckpt 2399 (commit 4e233ebe).
+> - Lab `vc` suite is queued via android.yml app=lab.
+> - Heartbeat trigger `trig_01Y8CFHKVb6hmQmEEM78p6gv`.
+> - Release note draft is in the scratchpad (`note48.txt`).
+> - Release flow: `ship.sh gecko` → dispatch android.yml → `record-release.sh` after green.
+>
+> **Done so far:** web tests 430 and videobar 13 pass; Kotlin tests pass; HANDOFF and research notes updated.
+>
+> **Open / next steps:**
+> 1. Read the `vc` lab run and fix what it shows.
+> 2. Dispatch the hotspot hour run.
+> 3. Ship alpha48 and send the Release link.
+> 4. Answer the owner in plain words.
+> 5. Delete the heartbeat trigger.
+>
+> **Rules to remember:** ckpt after every step; write owner requests into TASKS before code; no `push:` workflow trigger; no APKs or keys in the repo; ASCII only; say what was not run on the tablet; re-list open items (RX4-V2: keep sound playing when the screen is off?).
+>
+> ⚠️ **Health:** One compaction so far and many large logs; CHECKPOINT.md in the repo is the authoritative state.
+>
+> 💡 This chat is getting long. Consider `/amhandoff` at the next good stopping point.
+> 💡 The code word is off in this chat. Type `/amcodeword` and I'll start every reply with 'Yes Boss!', so you'll notice if I start losing track.
+<!-- sha:fa68c188dfb6 -->
