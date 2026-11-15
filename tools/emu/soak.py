@@ -974,6 +974,7 @@ class Soak:
         self.ph.a.sh("wm dismiss-keyguard")
         self.ph.setting("system", "accelerometer_rotation", 0)
         self.ph.setting("system", "user_rotation", 0)
+        self.ph.setting("secure", "immersive_mode_confirmations", "confirmed")   # Android's one-time "Viewing full screen" box would sit over the picture in every screenshot
         size = self.ph.a.sh("wm size")
         m = re.search(r"(\d+)x(\d+)", size)
         if m:
