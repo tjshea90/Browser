@@ -49,6 +49,7 @@ jobs:
       SUITE: ${{ inputs.suite }}
       MINUTES: ${{ inputs.minutes }}
       NET: ${{ inputs.net }}
+      EMU_RAM: ${{ inputs.suite == 'compat' && '4096' || '2048' }} # the compat suite loads a hundred heavy sites: the tablet's 2 GB plus the software GPU starved the emulated phone's own system (lab run 43747605584: it was killed three times)
       AVD_NAME: kestrel29x64
       PKG: app.kestrel.browser.gecko.debug
       ANDROID_AVD_HOME: /home/runner/.android/avd # avdmanager and the emulator must agree where the virtual device lives (newer tools may choose another folder)
@@ -90,7 +91,7 @@ jobs:
           python3 -I - "$CFG" <<'PY'
           import sys
           p = sys.argv[1]
-          want = {"hw.lcd.width": "600", "hw.lcd.height": "1024", "hw.lcd.density": "170", "hw.ramSize": "2048", "vm.heapSize": "128", "hw.cpu.ncore": "2",
+          want = {"hw.lcd.width": "600", "hw.lcd.height": "1024", "hw.lcd.density": "170", "hw.ramSize": os.environ.get("EMU_RAM", "2048"), "vm.heapSize": "128", "hw.cpu.ncore": "2",
                   "disk.dataPartition.size": "6G", "hw.gpu.enabled": "yes", "hw.gpu.mode": "swiftshader_indirect", "hw.keyboard": "yes", "hw.mainKeys": "no",
                   "hw.accelerometer": "yes", "hw.sensors.orientation": "yes", "showDeviceFrame": "no", "hw.initialOrientation": "portrait"}
           lines = [l for l in open(p).read().splitlines() if l.split("=")[0].strip() not in want and not l.startswith("skin.")]

@@ -328,9 +328,12 @@ def health_events(lines, layer=None, ev=None):
 
 def crash_lines(lines):
     found = []
-    for ln in lines:
+    for i, ln in enumerate(lines):
         for rx, what in CRASH_PATTERNS:
             if rx.search(ln):
+                # "FATAL EXCEPTION" is printed for ANY process: com.android.phone dying with the system (DeadSystemException) and `svc` shell commands lit up lab run 43747605584; only the app's own counts
+                if what == "java crash" and not any("Process: app.kestrel" in l2 for l2 in lines[i:i + 4]):
+                    break
                 found.append((what, ln.strip()[:240]))
                 break
         else:
@@ -1489,6 +1492,7 @@ class Soak:
     def compat_round(self, minutes):
         budget = minutes * 60 * 0.46
         self.ph.measure_on(); time.sleep(2)
+        self.ph.debug("nolook"); time.sleep(2)               # the page's picture read-back (Last look) stalls the UI thread for seconds on the emulator's software GL (lab run 43747605584: an ANR on Yahoo): off for the compat runs
         done = []
         t_start = time.time()
         self.shields_mode = "on"
@@ -1501,8 +1505,7 @@ class Soak:
                     done.append((name, url, scrolls, dwell))
             except Exception as e:
                 self.issue("low", "tooling", "compat scene %s raised %r" % (name, e))
-            if (i + 1) % 8 == 0:
-                self.ph.debug("closetabs"); time.sleep(3)
+            self.ph.debug("closetabs"); time.sleep(2)             # every VIEW intent opens a new tab: eight heavy pages in eight tabs killed the emulator's system process (run 43747605584)
             if i % 12 == 11:
                 self.dump_diag("compat%d" % (i + 1))
         hosts = []
@@ -1520,8 +1523,7 @@ class Soak:
                 self.load_page(name, url, scrolls, dwell, timeout=50, kind="page")
             except Exception as e:
                 self.issue("low", "tooling", "compat scene (shields off) %s raised %r" % (name, e))
-            if (i + 1) % 8 == 0:
-                self.ph.debug("closetabs"); time.sleep(3)
+            self.ph.debug("closetabs"); time.sleep(2)
         self.quiet_issues = False; self.shields_mode = "on"
         self.ph.shields("on", hosts); time.sleep(2)
 

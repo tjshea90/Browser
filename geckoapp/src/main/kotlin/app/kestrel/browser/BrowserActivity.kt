@@ -654,6 +654,7 @@ open class BrowserActivity : Activity(), DockListener {
                 }, 2500L)
             }
             "clearcache" -> Io.main.post { try { GeckoEngine.runtime(this).storageController.clearData(StorageController.ClearFlags.ALL_CACHES); Health.log("lab", "clearcache", "done") } catch (e: Exception) { Health.log("lab", "clearcache-failed", e.toString().take(80)) } } // LAB2: both Shields passes start from a cold cache
+            "nolook" -> { prefs.lastLook = false; Health.log("lab", "nolook", "last look off") } // LAB2: the emulator's software GL makes the picture read-back stall the UI thread for seconds (an ANR on Yahoo in run 43747605584)
             "measure" -> { prefs.measureScroll = true; Health.log("lab", "measure", "on") } // LAB2: the scroll-gap counters on real pages are on for the whole run
             "shields" -> { // LAB2: "<on|off>|host,host,...": Shields down (or back to the default) for these sites, as if the person had turned the site's Shields switch (compatibility A/B)
                 val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg")
