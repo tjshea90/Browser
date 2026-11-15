@@ -15,7 +15,7 @@ dumpsys and the files in /sdcard/Download. The report is OUT/report.md (also pri
 Honest limits (also written into the report): x86_64 + software GL is not the tablet's Mali GPU; the JIT is faster; absolute times mean nothing, only "did it load / play / finish /
 crash" and comparisons inside one run do. A site that is down or blocks this runner is reported as UPSTREAM, not as an app fault.
 """
-import argparse, collections, json, os, random, re, shlex, shutil, struct, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request
+import argparse, collections, itertools, json, os, random, re, shlex, shutil, struct, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 
 T0 = time.time()
@@ -1444,7 +1444,7 @@ class Soak:
                         t0 = time.time()
                         samples = []
                         shot_taken = False
-                        while time.time() - t0 < 9.0:
+                        while time.time() - t0 < (0.2 if self.a.selftest else 9.0):
                             lk = self.ph.look()
                             dt = round(time.time() - t0, 1)
                             if lk is None:
