@@ -20,6 +20,8 @@
               now the app stops it and shows the blocked icon (Health: "guard app-wall stopped a jump to propellerads.com").
   /layer-link RX3-G5: a transparent layer over the page: a tap on it makes the page click a hidden <a target=_blank> to another site (an ad). The app's new-window wall now needs a tap ON a link to exactly
               that address: Health "guard app-wall stopped a new window to ..." (or the page guard's own "chip-show open", whichever refused it first).
+  /fake-layer RX3-G4: a <video> (each click on it is logged) and over it an INVISIBLE full-screen layer whose click handler opens an ad window. One real tap on the video: with the guard's fake-layer switch-off
+              the video gets the click and the layer none ("video-click" only); without it the layer takes the first tap ("layer-click", the ad is refused) and the video plays on the second try.
   /playerlab  RX3-G7: five mock video players on one page, driven by the page itself (no touch needed): an ordinary video (no ad words), a JW-style player (jw-flag-ads on its root), a Video.js-style player
               (vjs-ad-loading, then vjs-ad-playing), a Google-IMA-style host (the ad video inside .ima-ad-container) and a JW-style ad with a skip button (.jw-skip, .jw-skippable). Each ad is a REAL 12 s silent
               media element. The log says how long the ad took (about 12000 ms = not skipped, a few hundred = fast-forwarded), at what speed it ran, and which events the skip button got. Ends with a DONE line.
@@ -277,6 +279,19 @@ setTimeout(function () { L('DONE', 'layer-link'); }, 14000);
 </script></body></html>
 """
 
+FAKELAYER = b"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>fake-layer</title></head>
+<body style="margin:0;font:18px sans-serif"><video id="v" style="position:absolute;left:10px;top:60px;width:300px;height:200px;background:#246" src="/tone.wav" preload="auto"></video>
+<div id="layer" style="position:fixed;left:0;top:0;width:100%;height:100%;opacity:0"></div>
+<script>
+function L(k, v) { try { var x = new XMLHttpRequest(); x.open('GET', '/log?kind=' + encodeURIComponent(k) + '&v=' + encodeURIComponent(v) + '&t=' + Date.now()); x.send(); } catch (e) {} }
+var v = document.getElementById('v'), layer = document.getElementById('layer');
+v.addEventListener('click', function () { L('video-click', 'the video got the click'); v.play().catch(function () {}); });
+layer.addEventListener('click', function () { L('layer-click', 'the invisible layer got the click and opens an ad'); window.open('http://127.0.0.1:%PORT%/popad?n=fake-layer', '_blank'); });
+L('load', 'fake-layer');
+setTimeout(function () { L('DONE', 'fake-layer'); }, 14000);
+</script></body></html>
+"""
+
 POPAD = b"""<!doctype html><meta charset=utf-8><title>an ad</title><body style="font:20px sans-serif;margin:24px">popad: this is the ad page. If you can see it, the pop-up was NOT stopped.</body>"""
 
 
@@ -342,6 +357,9 @@ class H(http.server.BaseHTTPRequestHandler):
         if u.path == "/layer-link":
             self._write("GET /layer-link")
             return self._send(200, LAYERLINK.replace(b"%PORT%", str(self.server.server_address[1]).encode()))
+        if u.path == "/fake-layer":
+            self._write("GET /fake-layer")
+            return self._send(200, FAKELAYER.replace(b"%PORT%", str(self.server.server_address[1]).encode()))
         if u.path == "/popad":
             self._write("GET /popad %s   <- the pop-up was NOT stopped" % q.get("n", ["?"])[0])
             return self._send(200, POPAD)
