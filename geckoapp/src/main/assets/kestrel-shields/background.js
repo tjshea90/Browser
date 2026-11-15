@@ -153,7 +153,7 @@ function lstTimed(slot, fn) {
 function lstText() {
   var out = [], names = [['req', 'req'], ['rcv', 'rcv'], ['snd', 'snd'], ['cmp', 'done'], ['err', 'err']];
   for (var i = 0; i < names.length; i++) { var s = LST[names[i][0]]; if (s[0] > 0) out.push(names[i][1] + ' ' + s[0] + ' (' + Math.round(s[1]) + ' us)'); }
-  return out.length ? ' | listeners: ' + out.join(', ') : '';
+  return out.join(', ');
 }
 var statsDirty = false, statsTimer = 0;
 function markStats() { // lazy timer: nothing is scheduled while no request is being judged (a permanent interval would wake the page on an idle tablet)
@@ -163,7 +163,7 @@ function markStats() { // lazy timer: nothing is scheduled while no request is b
 function reportStats(force) {
   if (!force && !statsDirty) return;
   statsDirty = false;
-  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, w: (guardState + ', ' + guardBlocked + ' blocked' + assistText() + skipText() + ' | ' + slState + (slPages ? ', ' + slPages + ' pages ran ' + slCalls + ' calls' + (slBad ? ' (' + slBad + ' failed)' : '') + ', ' + slEarlyPages + ' before the page\'s first script' : '') + (slEarlySet ? ', ' + slEarlySet + ' sites set up early (' + slReg.size + ' kept, ' + slEarlyAsks + ' asks)' : '') + (standIns ? ', ' + standIns + ' blocked files answered with a stand-in' : '') + (slEarlyFail ? ', early error: ' + slEarlyFail : '') + ' | ' + stats.last).slice(0, 400) }).catch(function () {});
+  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, lt: lstText(), w: (guardState + ', ' + guardBlocked + ' blocked' + assistText() + skipText() + ' | ' + slState + (slPages ? ', ' + slPages + ' pages ran ' + slCalls + ' calls' + (slBad ? ' (' + slBad + ' failed)' : '') + ', ' + slEarlyPages + ' before the page\'s first script' : '') + (slEarlySet ? ', ' + slEarlySet + ' sites set up early (' + slReg.size + ' kept, ' + slEarlyAsks + ' asks)' : '') + (standIns ? ', ' + standIns + ' blocked files answered with a stand-in' : '') + (slEarlyFail ? ', early error: ' + slEarlyFail : '') + ' | ' + stats.last).slice(0, 400) }).catch(function () {});
 }
 
 // ---------------------------------------------------------------- the page report (Diagnostics > Page report)

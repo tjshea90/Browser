@@ -1213,10 +1213,11 @@ test('RX3-S2: the numbers for Diagnostics say how often each web request listene
   h.mainFrame('https://example.com/next', { requestId: '2' });
   h.listeners.headers({ tabId: 1, frameId: 0, type: 'main_frame', url: PAGE, statusCode: 200, requestId: '1', responseHeaders: [] });
   await h.flushTimers();
-  const w = h.of('st').map((m) => m.w).join(' | ');
-  assert.match(w, /listeners: .*req 2 \(\d+ us\)/, w);
-  assert.match(w, /rcv 1 \(\d+ us\)/, w);
-  assert.doesNotMatch(w, /snd \d/, 'a listener that never ran is not mentioned');
+  const lt = h.of('st').map((m) => m.lt).join(' | ');
+  assert.match(lt, /req 2 \(\d+ us\)/, lt);
+  assert.match(lt, /rcv 1 \(\d+ us\)/, lt);
+  assert.doesNotMatch(lt, /snd \d/, 'a listener that never ran is not mentioned');
+  assert.doesNotMatch(h.of('st').map((m) => m.w).join(' | '), /us\)/, 'the numbers change at every report: they stay out of the text the app logs when it changes');
 });
 
 test('RX3-G1: the manifest declares the pop-up guard and the scriptlet library for the page world, every frame, from the first moment; nothing registers them at run time', () => {
