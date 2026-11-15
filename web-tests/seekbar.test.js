@@ -64,7 +64,7 @@ test('YS1: the page seeks itself on pointerup (to a chapter start) - no second s
   assert.equal(await page.evaluate(() => window.__seeks), 1);
   const r = await report(page);
   assert.deepEqual({ t: r.t, s: r.s, f: r.f }, { t: 1, s: 1, f: 0 });
-  assert.equal((await msgs(page, 'guard')).length, 0, 'the app is not even asked when the page did its job');
+  assert.equal((await msgs(page, 'guard')).length, 1, 'the app was asked once, at the touch, so that its answer is there in time (and nothing came of it)');
   await page.context().close();
 });
 

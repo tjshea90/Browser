@@ -21,7 +21,7 @@
     var TAP_MS = T.tapMs || 900;     // a finger that stays longer than this is a long press (the mini panel's), not a tap
     var DRAG_MS = T.dragMs || 8000;  // a slide along the bar that takes longer is not a seek
     var SLOP = T.slop || 14;         // CSS px a finger may drift during a tap
-    var FLUSH = T.flushMs || 3000, KEEP = T.keepMs || 60000, REASK = T.reaskMs || 30000, LATE = T.lateMs || 4000;   // LATE: an answer of the app that comes this long after the finger went up is too late (the person has moved on)
+    var FLUSH = T.flushMs || 3000, KEEP = T.keepMs || 60000, REASK = T.reaskMs || 30000, LATE = T.lateMs || 6000;   // LATE: an answer of the app that comes this long after the finger went up is too late (the person has moved on)
     var STACK = 14;                  // how deep the stack of elements under the finger is looked at
 
     var g = null;                    // the gesture in progress: { id, t0, x, y, bar, video }
@@ -44,7 +44,7 @@
       try { browser.runtime.sendMessage(m).catch(function () {}); } catch (e) { /* ignore */ }
     }
 
-    // The app is asked when a bar was tapped and the page did not move the video. Its answer carries `seek`; nothing is done unless it is exactly true.
+    // The app is asked when the finger lands on a bar (so that the answer is there by the time the page's own moment is over); once a minute at most per page. Its answer carries `seek`; nothing is done unless it is exactly true.
     function askApp(cb) {
       var t = now();
       if (ask === 2 && t - askAt < KEEP) { cb(true); return; }
@@ -173,7 +173,10 @@
         var vids = document.getElementsByTagName('video');
         if (!vids.length) return;                                             // most pages end here
         var hit = findBar(e.clientX, e.clientY, vids);
-        if (hit) g = { id: e.pointerId, t0: now(), x: e.clientX, y: e.clientY, bar: hit.bar, video: hit.video };
+        if (hit) {
+          g = { id: e.pointerId, t0: now(), x: e.clientX, y: e.clientY, bar: hit.bar, video: hit.video };
+          askApp(function () { /* the answer is only fetched now, so that it is there when the page's moment is over (a busy tablet answers slowly) */ });
+        }
       } catch (x) { g = null; }
     }
     function onUp(e) {
