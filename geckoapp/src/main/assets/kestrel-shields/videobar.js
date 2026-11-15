@@ -119,7 +119,11 @@ var KestrelVB = (typeof KestrelVB !== 'undefined' && KestrelVB) || (function () 
         if (!TOP) relay('tap');                                   // maybe this frame lies over a video of the page above it
       });
     }
+    var relayedAt = 0;
     function relay(kind) {
+      var now = Date.now();
+      if (now - relayedAt < 1500) return;                         // a banner frame that is tapped over and over must not make the page above it look for videos every time
+      relayedAt = now;
       try { browser.runtime.sendMessage({ k: 'ft', t: kind, w: window.innerWidth, h: window.innerHeight }).catch(function () {}); } catch (e) { /* nobody listens */ }
     }
     window.addEventListener('pointerdown', function (e) { down = e.isTrusted ? { x: e.clientX, y: e.clientY, t: Date.now(), id: e.pointerId } : null; }, { capture: true, passive: true });
