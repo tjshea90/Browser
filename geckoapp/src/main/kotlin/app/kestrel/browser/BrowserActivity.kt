@@ -2497,6 +2497,8 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** @return true if the back press did something. */
     private fun handleBack(): Boolean {
+        // FS1: Back leaves full screen first, like every video player (it used to go back in the page's history, which only left full screen by leaving the page)
+        if (fullscreenOn) { try { current?.session?.exitFullScreen() } catch (e: Exception) { Health.log("fullscreen", "exit-failed", e.toString().take(80)) }; return true }
         if (::miniNav.isInitialized && miniNav.onBackPressed()) return true // the small keyboard closes first
         if (sheet.isShowing) { sheet.dismiss(); return true }
         if (downloadsView?.parent != null) { closeDownloads(); return true }

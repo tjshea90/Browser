@@ -122,6 +122,7 @@ class OwnerRulesTest {
         assertTrue(fs, fs.contains("fsTurner.enter()") && fs.contains("fsTurner.exit()"))
         assertTrue("a page's screen.orientation.lock() has somebody who answers it", act.contains("OrientationController.OrientationDelegate") && act.contains("fsTurner.siteLocked(orientation)") && act.contains("fsTurner.siteUnlocked()"))
         assertTrue("a finger lifted in full screen shows the rotate button", act.contains("if (fullscreenOn) fsTurner.touched()"))
+        assertTrue("Back leaves full screen before anything else", body(act, "private fun handleBack(): Boolean {").lines().drop(1).first { it.isNotBlank() && !it.trim().startsWith("//") }.contains("if (fullscreenOn)"))
         assertTrue("Diagnostics shows the numbers", act.contains("out.add(fsTurner.line())"))
         val turner = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/FullscreenTurner.kt")
         assertTrue("the turner really asks Android to turn the screen", turner.contains("a.requestedOrientation = o"))
