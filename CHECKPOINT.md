@@ -1,13 +1,13 @@
-# CHECKPOINT 2438 — read me first, then TASKS.md
+# CHECKPOINT 2439 — read me first, then TASKS.md
 
-**Written:** 2026-11-15T21:50:46Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `d6516ea1` (this checkpoint is the commit after it)
+**Written:** 2026-11-15T21:58:42Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `df7a0a2a` (this checkpoint is the commit after it)
 
 ## Just done
-ROT2 coded (owner message 48): TurnSettle PAGE_CAP/NUDGE/HINT + settled(expectsPage, pageConfirmed), TurnSettleMachine pageReported/nudge/hint/lag stats, TurnSettler host + BrowserActivity (vpOk evidence per tab, cover FrameLayout with progress ring, onPageViewport feeds the turn), turn.js one report 1 s after the page is up (f=0) + debounce 200; tests: core media tests, OwnerRulesTest guard, turn.test.js 10/10; Kotlin compile green; full npm test + all Kotlin suites NOT yet run
+ROT2 complete in the tree and green: all Kotlin suites EXIT 0, npm test 453 pass; lab driver: slow_turn scene (CPU hogs, screen reads, wait on/off via debug turnwait), look()/start_hogs, landscape verdict fix, viewport lines in the report; second fsy run (43764095142, Yahoo own full-screen button) read: the live Yahoo player goes full screen in the emulator, controls above the bar in portrait and landscape, cover black in a portrait turn
 
 ## Do this next
-1) run all Kotlin suites + npm test; 2) lab scene slow_turn in tools/emu/soak.py (CPU hogs on the emulator during turns, red strip + black-cover sampling at +0.6..6.5 s) and a verdict (never a stale layout visible: either the cover or the right layout); 3) fix lab verdict false positive for landscape (emulator puts the nav bar at the SIDE in landscape: red strip legitimately ends at y=599); 4) dispatch lab fsy, read, ship alpha53 (versionCode 154), answer ANS48; the second fsy run (Yahoo pictures) should already be done: read its artifact too
+dispatch lab fsy (android.yml app=lab lab_suite=fsy lab_minutes=10 lab_net=full) on this commit, read report.md section 'A turn under a slow engine' (wait on must show no stale run, wait off should show the symptom; if the hogs show nothing raise them to 5-6), then bump geckoapp/build.gradle.kts to versionCode 154 / 0.3.0-alpha53, note file in scratchpad, bash ship.sh gecko, dispatch android.yml app=gecko, record-release after green, answer ANS48 in plain words
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ ROT2 coded (owner message 48): TurnSettle PAGE_CAP/NUDGE/HINT + settled(expectsP
 
 ## Last ten checkpoints
 ```
+  359fe757 ckpt 2438: ROT2 coded (owner message 48): TurnSettle PAGE_CAP/NUDGE/HINT + settled(expe
   bd7e42fd ckpt 2437: owner message 48 (two screenshots of a turn: the page keeps the previous ori
   ac2107ef ckpt 2436: alpha52 RELEASED and recorded (run 43763812046 green, APK in the Release, BU
   1e089300 ckpt 2435: alpha52 shipped to GitHub (gates green, pushed): release run 43763812046 (an
@@ -25,8 +26,7 @@ ROT2 coded (owner message 48): TurnSettle PAGE_CAP/NUDGE/HINT + settled(expectsP
   9780732e ckpt 2431: lab run 43760546128 (fsy, first clean run, alpha51 code) read: Keep mode put
   e9464a7e ckpt 2430: alpha51 gated and queued (FB1 bars kept by default + Settings row, FB2/FB3 t
   38a628d2 ckpt 2429: gated kestrel-g-v0.3.0-alpha51 (gecko code 152) and pushed it: handoff self-
-  7c27ad91 ckpt 2428: pre-ship: alpha51: full-screen video, second attempt after alpha50 changed n
 ```
 
-(6 automatic checkpoint(s) since the last deliberate one — the
+(5 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
