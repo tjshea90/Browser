@@ -649,7 +649,12 @@
           try {
             var sel = window.getSelection ? String(window.getSelection()) : '';
             if (sel.length > 0 && sel !== before) return; // the engine selected a word: the press was on text (a selection it CLEARED, as it does on a press elsewhere, is not that)
-            browser.runtime.sendMessage({ k: 'os', p: location.href }).catch(function () {});
+            if (window.top === window) { browser.runtime.sendMessage({ k: 'os', p: location.href }).catch(function () {}); return; }
+            // a press inside a FRAME: an ad overlay (Google IMA) lies over a player of the page above and takes every touch. The top frame is asked whether a frame of this size covers a video; only if not is it open space.
+            var asked = false;
+            function openHere() { if (asked) return; asked = true; browser.runtime.sendMessage({ k: 'os', p: location.href }).catch(function () {}); }
+            var lateTimer = setTimeout(openHere, 400);
+            browser.runtime.sendMessage({ k: 'ft', t: 'lp', w: window.innerWidth, h: window.innerHeight }).then(function (r) { if (r && r.video === true) { asked = true; clearTimeout(lateTimer); } else { clearTimeout(lateTimer); openHere(); } }, function () { clearTimeout(lateTimer); openHere(); });
           } catch (x) { /* never break the page */ }
         }, 200);
       } catch (x) { /* never break the page */ }
