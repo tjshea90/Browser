@@ -1210,14 +1210,17 @@ test('RX3-V3: the played report and the element number are relayed as small whol
 test('RX3-S2: the numbers for Diagnostics say how often each web request listener ran and how long it held the thread', async () => {
   const h = harness(standardApp());
   h.mainFrame(PAGE, { requestId: '1' });
-  h.mainFrame('https://example.com/next', { requestId: '2' });
-  h.listeners.headers({ tabId: 1, frameId: 0, type: 'main_frame', url: PAGE, statusCode: 200, requestId: '1', responseHeaders: [] });
+  await ready(h);
+  for (let i = 0; i < 3; i++) h.req('script', PLAIN, PAGE);
+  h.listeners.headers({ statusCode: 200, url: 'https://cdn.example/movie.mp4', tabId: 1, documentUrl: PAGE, requestId: 'r9', responseHeaders: [{ name: 'content-type', value: 'video/mp4' }, { name: 'Content-Length', value: '5000000' }] });
   await h.flushTimers();
-  const lt = h.of('st').map((m) => m.lt).join(' | ');
-  assert.match(lt, /req 2 \(\d+ us\)/, lt);
-  assert.match(lt, /rcv 1 \(\d+ us\)/, lt);
-  assert.doesNotMatch(lt, /snd \d/, 'a listener that never ran is not mentioned');
-  assert.doesNotMatch(h.of('st').map((m) => m.w).join(' | '), /us\)/, 'the numbers change at every report: they stay out of the text the app logs when it changes');
+  const st = h.of('st'), last = st[st.length - 1];
+  assert.ok(last, 'a state message went out');
+  const req = /req (\d+) \((\d+) us\)/.exec(last.lt);
+  assert.ok(req && Number(req[1]) >= 4, 'the request listener ran for the page and for every judged request: ' + last.lt);
+  assert.match(last.lt, /rcv 1 \(\d+ us\)/, last.lt);
+  assert.doesNotMatch(last.lt, /snd \d/, 'a listener that never ran is not mentioned');
+  assert.doesNotMatch(st.map((m) => m.w).join(' | '), /\d+ us\)/, 'the numbers change at every report: they stay out of the text the app logs when it changes');
 });
 
 test('RX3-G1: the manifest declares the pop-up guard and the scriptlet library for the page world, every frame, from the first moment; nothing registers them at run time', () => {
