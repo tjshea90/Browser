@@ -570,6 +570,7 @@ class Soak:
         self.vbar_rows = []
         self.compat_sites_done = []
         self.snd_rows = []
+        self.fsb_results = []
         self.shields_mode = "on"
         self.quiet_issues = False
         self.last_diag = ""
@@ -1636,6 +1637,25 @@ class Soak:
             for kind, how, playing, away, back in self.snd_rows:
                 L.append("| %s | %s | %d | %d | %d |" % (kind, how, playing, away, back))
             L.append("")
+        if self.fsb_results:
+            L.append("## Full screen: the system bars, the turn and the controls (FSB1 / ROT1 / FSC1, owner message 46)")
+            L.append("")
+            L.append("`hidden` = the emulator's system hides its bars as asked; `kept` = the debug switch nohide: the bars stay, like the owner's tablet. The page's red strip must stay visible in every state; `kept` must end above the 52 px navigation bar.")
+            L.append("")
+            L.append("| bars | player box | state | red strip rows (first-last of screen height) | page window w x h | video paused for the turn | turn settled | system bars note |")
+            L.append("| :- | :- | :- | :- | :- | -: | :- | :- |")
+            for r in self.fsb_results:
+                nm = "%s%s" % (r["kind"], " (no controls of its own)" if r["nobar"] else "")
+                if not r["entered"]:
+                    L.append("| %s | %s | did not go full screen | - | - | - | - | - |" % (r["mode"], nm))
+                    continue
+                for st in r["states"]:
+                    red = st["red"]
+                    redtxt = "%d (%d-%d of %d)" % red if red else "no picture"
+                    L.append("| %s | %s | %s | %s | %sx%s | %s%s | %s | %s |" % (r["mode"], nm, st["state"], redtxt, st.get("iw") or "?", st.get("ih") or "?", st["paused"], " (silent clip: no session)" if st["no_session"] else "", (st["settled"] or "-")[:70], (st["bars"] or "-")[:90]))
+                if r["nobar"]:
+                    L.append("| %s | %s | Kestrel's bar after a tap on the full-screen film | %s | | | | |" % (r["mode"], nm, "shown" if r["bar_shown"] else "NOT SHOWN"))
+            L.append("")
         if self.vbar_rows:
             L.append("## Video controls and the long press on a video (VC1 / LP1, owner message 44)")
             L.append("")
@@ -1916,6 +1936,10 @@ class FakeAdb:
                     self._lab({"kind": "video", "name": name, "ev": ev, "w": 640, "h": 360, "ct": 12.0, "total": 300, "dropped": 3, "corrupt": 0})
                 self._health("video info PLAYED el=1 role=main length=24s counted=1 of 1")
                 self._health("page loaded host=%s paint=800ms done=1500ms blocked=0 visit=1 ok=true" % host)
+            elif "/fsbox" in url:
+                self._lab({"kind": "fsb", "ev": "page", "iw": 600, "ih": 886})
+                self._lab({"kind": "fsb", "ev": "fullscreenchange", "fs": "1", "iw": 600, "ih": 1024, "mb": 1024})
+                self._health("page loaded host=%s paint=500ms done=900ms blocked=0 visit=1 ok=true" % host)
             elif url.endswith("/fs"):
                 self._lab({"kind": "fs", "ev": "page", "iw": 600, "ih": 886})
                 self._health("page loaded host=%s paint=500ms done=900ms blocked=0 visit=1 ok=true" % host)
