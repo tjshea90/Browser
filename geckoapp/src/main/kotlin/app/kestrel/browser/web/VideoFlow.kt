@@ -134,7 +134,7 @@ class VideoFlow(private val a: BrowserActivity) {
         val live = problem == Hls.Problem.LIVE
         val drm = problem == Hls.Problem.DRM || problem == Hls.Problem.SAMPLE_AES
         if (t.media.applyStream(c.url, live, drm, durationMs, adMs, breaks, heights)) { a.refreshDownloadButton(); refresh(t) }
-        Health.log("media", "look", "${c.kind} live=$live drm=$drm length=${durationMs / 1000}s heights=${heights.size} advertising=${adMs / 1000}s in $breaks breaks counted=${t.media.usableCount()} of ${t.media.size}")
+        Health.log("media", "look", "${c.kind} live=$live drm=$drm length=${durationMs / 1000}s heights=${heights.size} advertising=${adMs / 1000}s in $breaks breaks counted=${t.media.usableCount()} of ${t.media.size} playing=${t.media.primary()?.let { (it.durationMs / 1000).toString() + "s" } ?: "none"}")
     }
 
     // ---- RX3-V2 (research/FINDER_LAB.md section 2): an address found only in the page's text was never requested; on a page with nothing verified, up to three of them get ONE cheap question at idle
