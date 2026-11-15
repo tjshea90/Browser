@@ -1269,3 +1269,12 @@ I played a video on this site in Kestrel, and the player had no controls at all.
 ```
 Sound should not keep playing if I am not currently on the Kestrel tab. I want Kestrel to be a polished daily browser with web page compatibility for all sites and good speed. Run github runners with emulators matching my hardware setup, but keep in mind that most of the time I have fast wifi on so the 5mbit/s cap is irrelevant most of the time. The emulated runs should log speed, crashes, errors, pages not loading correctly, video playback, smoothness of scrolling, etc. Learn from the emulators to fine tune Kestrel and make it as good as possible
 ```
+
+## 2026-11-15T18:44:53Z
+```
+For video playback: 
+
+1) the Yahoo finance video now has player controls, but when I go to full screen mode it is glitchy because the controls in full screen get covered up by the Android bottom navigation bar (see attached screenshot) 
+2) when I rotate the tablet from portrait to landscape and back, it is laggy and glitchy. It may benefit from pausing the video shortly until the orientation is set
+3) I don't see any video player controls in full screen landscape mode. They either don't exist or they are covered by the Android navigation bar.
+```
