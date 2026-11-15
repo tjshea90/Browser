@@ -15,14 +15,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import glide_emu as g
 
 def _push_and_play(chunks, pause=0.04):
+    """`pause` (seconds) follows every chunk; a list gives one pause per chunk (the device's own clock: no adb round trip between the chunks, so a 100 ms tap really lasts about 100 ms)."""
     path, mx, my = g.touch_device()
     blob = b"".join(chunks)
     with tempfile.TemporaryDirectory() as td:
         f = os.path.join(td, "pe.bin"); open(f, "wb").write(blob); g.adb("push", f, "/data/local/tmp/pe.bin")
     cmds = []; at = 0
-    for c in chunks:
+    for i, c in enumerate(chunks):
         n = len(c) // 24
-        cmds.append("dd if=/data/local/tmp/pe.bin of=%s bs=24 skip=%d count=%d 2>/dev/null; sleep %s" % (path, at, n, pause))
+        cmds.append("dd if=/data/local/tmp/pe.bin of=%s bs=24 skip=%d count=%d 2>/dev/null; sleep %s" % (path, at, n, pause[i] if isinstance(pause, list) else pause))
         at += n
     cmds.append("rm -f /data/local/tmp/pe.bin")
     g.shell("; ".join(cmds))
@@ -51,7 +52,7 @@ def main(a):
         g.longpress(int(a[1]), int(a[2]), int(a[3]) if len(a) > 3 else 800)
     elif cmd == "tap":
         x, y, ms = int(a[1]), int(a[2]), int(a[3]) if len(a) > 3 else 60
-        _push_and_play([down(x, y)]); time.sleep(ms / 1000.0); _push_and_play([up()])
+        _push_and_play([down(x, y), up()], pause=[ms / 1000.0, 0.01])
     elif cmd == "carry":
         x0, y0, x1, y1, out = int(a[1]), int(a[2]), int(a[3]), int(a[4]), a[5]
         _push_and_play([down(x0, y0)]); time.sleep(0.9)                      # the long press: the panel is picked up
