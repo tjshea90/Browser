@@ -788,11 +788,12 @@ class Soak:
             self.ph.a.run("emu", "network", "speed", "5000:5000"); self.ph.a.run("emu", "network", "delay", "none")
         self.sys_pid = self.system_pid()
 
-    def hard_restart(self, where):
+    def hard_restart(self, where, quiet=False):
         """The system keeps dying (a boot loop under load, found in lab run 5: 20 minutes without the app): start the emulator again from a clean disk and install the app again."""
         if not self.a.emu_cmd:
             return False
-        self.issue("high", "emulator", "the emulated phone could not recover after %s: the emulator was started again from a clean disk (a limit of the lab, not of the app)" % where)
+        if not quiet:
+            self.issue("high", "emulator", "the emulated phone could not recover after %s: the emulator was started again from a clean disk (a limit of the lab, not of the app)" % where)
         try:
             self.adb.run("emu", "kill", timeout=30)
         except Exception:
@@ -1908,18 +1909,39 @@ class Soak:
         self.sys_pid = self.system_pid()
         say("screen", self.screen, "| density", self.ph.a.sh("wm density").strip().replace("\n", " "), "| android", self.ph.a.sh("getprop ro.build.version.release").strip())
 
+    def heap_limit_mb(self):
+        """The java heap limit this boot gave the app (the app's own 'start heap' Health line), or None when no line came."""
+        for e in health_events(self.log.since(0), "start", "heap"):
+            m = re.search(r"limit (\d+) MB", e["rest"])
+            if m:
+                return int(m.group(1))
+        return None
+
     def start_app(self):
-        self.log.start()
-        self.ph.a.sh("am force-stop %s" % self.a.pkg)
-        time.sleep(2)
-        t0 = time.time()
-        self.ph.start_app()
-        eng = None
-        while time.time() - t0 < 300:
-            if health_events(self.log.since(0), "engine", "runtime-ready"):
-                eng = time.time() - t0
+        # lab runs 43753283814 and 43775890786: some boots of the emulated phone give EVERY app a 16 MB java heap limit (the usual boot gives 512 MB): the app dies of OutOfMemoryError in a crash loop and the run says
+        # nothing about the app. Such a boot is thrown away (the emulator started again from a clean disk, twice at most) before anything is measured.
+        for attempt in range(3):
+            self.log.stop(); self.log.start()
+            self.ph.a.sh("am force-stop %s" % self.a.pkg)
+            time.sleep(2)
+            t0 = time.time()
+            self.ph.start_app()
+            eng = None
+            while time.time() - t0 < 300:
+                if health_events(self.log.since(0), "engine", "runtime-ready"):
+                    eng = time.time() - t0
+                    break
+                if self.heap_limit_mb() is not None and self.heap_limit_mb() < 64 and time.time() - t0 > 12:
+                    break                                         # (the app is already dying of it: no need to wait for an engine that will not come)
+                time.sleep(3)
+            lim = self.heap_limit_mb()
+            if lim is None or lim >= 64 or attempt == 2 or self.a.selftest:
                 break
-            time.sleep(3)
+            say("this boot of the emulated phone gave the app a %d MB java heap limit (a lottery of the lab's emulator, not the app): starting the emulator again (%d)" % (lim, attempt + 1))
+            self.log.stop()
+            if not self.hard_restart("a %d MB java heap limit at boot" % lim, quiet=True):
+                self.log.start()
+                break
         if eng is None:
             self.issue("high", "start", "the engine did not report 'runtime-ready' within 300 s of the app starting", shot=True)
         else:
