@@ -118,8 +118,14 @@ class OwnerRulesTest {
     // FS1, owner message 43: "make it so if I watch videos in full screen, then rotate the tablet or press a rotate button, the video switches to landscape mode just like regular video player apps."
     @Test fun fullScreenVideoTurnsWithTheTabletAndTheRotateButton() {
         val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
-        val fs = body(act, "internal fun fullScreenChanged(on: Boolean) {")
+        val fs = body(act, "internal fun fullScreenChanged(tab: Tab, on: Boolean) {")
         assertTrue(fs, fs.contains("fsTurner.enter()") && fs.contains("fsTurner.exit()"))
+        // RV2 (independent review): the page that was full screen can vanish without the engine saying so (session closed, killed, hibernated, replaced): the app ends the full screen itself, and Back forces the exit
+        val ends = body(act, "private fun endFullScreenOf(tab: Tab?, why: String) {")
+        assertTrue(ends, ends.contains("fullScreenChanged(ft, false)"))
+        for (spot in listOf("private fun hibernate(tab: Tab) {", "private fun doCloseTab(tab: Tab) {", "private fun showNewTabPage(tab: Tab) {", "internal fun sessionGone(tab: Tab, crashed: Boolean) {", "private fun show(tab: Tab) {"))
+            assertTrue("$spot ends a full screen of its tab", body(act, spot).contains("endFullScreenOf("))
+        assertTrue("Back forces the exit when the engine does not answer", body(act, "private fun handleBack(): Boolean {").contains("endFullScreenOf(ft, \"the engine did not answer Back\")"))
         assertTrue("a page's screen.orientation.lock() has somebody who answers it", act.contains("OrientationController.OrientationDelegate") && act.contains("fsTurner.siteLocked(orientation)") && act.contains("fsTurner.siteUnlocked()"))
         assertTrue("a finger lifted in full screen shows the rotate button", act.contains("if (fullscreenOn) fsTurner.touched()"))
         assertTrue("Back leaves full screen before anything else", body(act, "private fun handleBack(): Boolean {").lines().drop(1).first { it.isNotBlank() && !it.trim().startsWith("//") }.contains("if (fullscreenOn)"))
