@@ -47,7 +47,7 @@ async function open(body, o) {
   await page.addInitScript((cfg) => {
     window.__msgs = [];
     if (window.top === window) { window.__all = []; window.__guardFails = 0; window.__ftDelay = 0; }
-    window.__kstVBcfg = { judge: 80, late: 500, hide: 1100, hidePaused: 1700, drag: 20 };      // (tap stays the app's 450 ms)
+    window.__kstVBcfg = { judge: 80, late: 500, hide: 1100, hidePaused: 1700, drag: 20, stable: 300 };      // (tap stays the app's 450 ms)
     window.__kstTurnCfg = { settle: 300, cap: 1500, tick: 60, nudge: 40 };                       // FB2: the turn guard's clocks, shortened
     window.browser = {
       runtime: {

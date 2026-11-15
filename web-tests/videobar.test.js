@@ -352,3 +352,42 @@ test('FSC1: a page that takes a bare film full screen by itself gets the engine\
   assert.equal(await page.evaluate(() => document.getElementById('v').controls), false, 'back to what the page had');
   await page.context().close();
 });
+
+
+test('VP2: a tap on the film while Kestrel\'s bar is up hides it (every player toggles), and it does not come back by itself', async () => {
+  const page = await open(VIDEO());
+  await tapAt(page, ...CENTRE); await wait(page, 350);
+  assert.ok(await barInfo(page), 'the first tap shows it');
+  await wait(page, 700);                                                       // (the app's real clock is 4 s; the test's 1.1 s: tap before it goes)
+  await tapAt(page, ...CENTRE); await wait(page, 250);
+  assert.equal(await barInfo(page), null, 'the second tap hides it');
+  await wait(page, 900);                                                       // the late second look (500 ms in the test) must not bring it back
+  assert.equal(await barInfo(page), null, 'and it stays hidden');
+  await tapAt(page, ...CENTRE); await wait(page, 350);
+  assert.ok(await barInfo(page), 'the next tap shows it again');
+  await page.context().close();
+});
+
+test('VP5: a Media Source stream whose length is still growing shows no end time; a length that has stayed the same is shown; a plain file shows its length at once', async () => {
+  const page = await open(VIDEO());
+  await tapAt(page, ...CENTRE); await wait(page, 350);
+  assert.equal((await barInfo(page)).dur, '1:00', 'a plain file: its length');
+  await page.evaluate(() => {                                                   // make this film look like a Media Source stream whose length is 4 s so far
+    const v = document.getElementById('v');
+    window.__len = 4;
+    Object.defineProperty(v, 'duration', { get: () => window.__len, configurable: true });
+    Object.defineProperty(v, 'currentSrc', { get: () => 'blob:https://movie.example/abc', configurable: true });
+    window.KestrelVB.dbg().v.dispatchEvent(new Event('durationchange'));
+  });
+  await wait(page, 100);
+  assert.equal((await barInfo(page)).dur, '', 'a length that has just appeared is not believed');
+  await page.evaluate(() => { window.__len = 8; window.KestrelVB.dbg().v.dispatchEvent(new Event('durationchange')); });
+  await wait(page, 100);
+  assert.equal((await barInfo(page)).dur, '', 'and one that keeps growing is not shown');
+  await page.evaluate(() => { window.__len = 65; window.KestrelVB.dbg().v.dispatchEvent(new Event('durationchange')); });
+  await wait(page, 450);                                                        // (the test's stable window is 300 ms)
+  await page.evaluate(() => window.KestrelVB.dbg().v.dispatchEvent(new Event('durationchange')));
+  await wait(page, 100);
+  assert.equal((await barInfo(page)).dur, '1:05', 'the whole length once it has stayed the same');
+  await page.context().close();
+});

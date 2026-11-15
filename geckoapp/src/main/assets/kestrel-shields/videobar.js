@@ -14,7 +14,7 @@ window.KestrelVB = window.KestrelVB || (function () {
     var TOP = window.top === window;
     var SVGNS = 'http://www.w3.org/2000/svg';
     // tap: shorter than the engine's long press (500 ms): a press released at 500-600 ms was a video menu AND a tap, and the bar came up behind the sheet (RW5)
-    var T = { judge: 450, late: 1700, hide: 4000, hidePaused: 8000, drag: 140, tap: 450, pre: 50 };    // the clocks (a test shortens them through window.__kstVBcfg)
+    var T = { judge: 450, late: 1700, hide: 4000, hidePaused: 8000, drag: 140, tap: 450, pre: 50, stable: 2000 };    // the clocks (a test shortens them through window.__kstVBcfg)
     try { if (window.__kstVBcfg) for (var key in window.__kstVBcfg) T[key] = window.__kstVBcfg[key]; } catch (e0) { /* optional */ }
     api.t = T;
 
@@ -148,7 +148,9 @@ window.KestrelVB = window.KestrelVB || (function () {
         if (!v.isConnected) return;
         if (kpOwns()) { if (bar) hide(); return; }
         if (bar) {
-          if (bar.v === v) { if (!late) keep(); return; }
+          // VP2 (owner message 49: "when the controls are showing and I tap the video, the controls should disappear"): a tap on the film whose bar is up HIDES it, like every player (Chromium, Firefox, ExoPlayer, YouTube);
+          // it used to only restart the 4 s clock. The second look (a film that started after a tap) must not bring it back.
+          if (bar.v === v) { if (!late) { if (lateTimer) { clearTimeout(lateTimer); lateTimer = 0; } hide(); } return; }
           hide();                                                  // RW9: a tap on another film while the first one's bar is up: that bar goes, the new film is judged
         }
         if (late && (v.paused || ownFor === v)) return;           // the second look is for a video that started after the tap (an ad that follows the play button); RW10: not for a film that had controls of its own at the first look
@@ -298,10 +300,24 @@ window.KestrelVB = window.KestrelVB || (function () {
       var h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
       return (h ? h + ':' + (m < 10 ? '0' : '') + m : m) + ':' + (s < 10 ? '0' : '') + s;
     }
+    // VP5 (owner message 49: "falsely reported that the video was 4 seconds long when it was over one minute"): a length is shown only when it can be believed (core/player/DurationView, the same rules): finite and
+    // over 0 and under 2^32 (a stand-in for "live"); not smaller than what was played or buffered; and, for a Media Source stream (blob:), the same for T.stable ms (its element length is just what has
+    // been appended so far, 4 s, 8 s ..., until the page sets the whole length; an ad has its own). Until then: only the position, no track.
+    function isMse(v) { try { return !!v.srcObject || String(v.currentSrc || v.src || '').indexOf('blob:') === 0; } catch (e) { return false; } }
     function rangeOf(v) {
       var d = v.duration;
-      if (d > 0 && isFinite(d)) return { a: 0, b: d, live: false };
-      try { var s = v.seekable; if (s && s.length) { var a = s.start(0), b = s.end(s.length - 1); if (b - a > 30) return { a: a, b: b, live: true }; } } catch (e) { /* no range */ }
+      if (d > 0 && isFinite(d) && d < 4294967296) {
+        var t = v.currentTime || 0, buf = 0;
+        try { var br = v.buffered; if (br && br.length) buf = br.end(br.length - 1); } catch (e0) { /* none */ }
+        if (d + 0.75 < Math.max(t, buf)) return null;                              // smaller than what was played or buffered: still growing
+        if (isMse(v)) {
+          var st = v.__kstDur || (v.__kstDur = { d: -1, at: 0 }), now = Date.now();
+          if (st.d !== d) { st.d = d; st.at = now; }
+          if (now - st.at < T.stable) return null;
+        }
+        return { a: 0, b: d, live: false };
+      }
+      try { var s = v.seekable; if (s && s.length) { var a = s.start(0), b = s.end(s.length - 1); if (b - a > 30 && b < 4294967296) return { a: a, b: b, live: true }; } } catch (e) { /* no range */ }
       return null;
     }
     function playIt(v) { try { var p = v.play(); if (p && p.catch) p.catch(function () {}); } catch (e) { /* the page decides */ } }
@@ -437,7 +453,7 @@ window.KestrelVB = window.KestrelVB || (function () {
           b.dur.textContent = rg.live ? 'LIVE' : fmt(rg.b);
         } else {
           b.track.style.visibility = 'hidden';
-          b.cur.textContent = fmt(v.currentTime || 0); b.dur.textContent = 'LIVE';
+          b.cur.textContent = fmt(v.currentTime || 0); b.dur.textContent = (v.duration === Infinity || v.duration >= 4294967296) ? 'LIVE' : '';   // (no length believed yet: only the position)
         }
       } catch (e) { /* never break the page */ }
     }
