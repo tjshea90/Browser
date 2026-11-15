@@ -595,3 +595,14 @@ A question, not an order: answer it in plain words with a TESTED recipe, then le
   - [ ] LP1b a long press anywhere on a video (also under a layer, also while it plays) opens the video download options (the Save video sheet) and never the mini panel; a long press on a blank spot of the page still opens the panel
   - [ ] LP1c tests (web-tests/openspace.test.js: video under an overlay, pointer-events none, poster only, tiny decor video, hidden video) + lab scene
 - [ ] ANS44 answer owner message 44 in plain words (what was found, what was fixed, what was NOT run on the tablet) and re-list the open items
+
+## Independent review of the alpha48 change set (2026-11-15, research/REVIEW_ALPHA48.md): fix before shipping alpha48
+- [ ] RV1 (HIGH) site screen.orientation.lock arrives as an ANDROID constant (6 landscape, 7 portrait, 0 landscape-primary ...) not engine bits: FullscreenTurn.fromSite + tests
+- [ ] RV2 (HIGH) full screen must end when its session dies / is hibernated / closed / replaced: fullscreenTab, fullScreenChanged(false) in sessionGone, hibernate, doCloseTab, showNewTabPage, show; Back exits only for the full-screen tab and forces the exit 600 ms later if the engine did not answer
+- [ ] RV3 (HIGH) a page can spoof "from the updater" (file name + size are public): use the updater's own private download as the proof, never skip the risky-file question
+- [ ] RV4 (MED) a tapped link that redirects is no "page started a download": WebResponse.redirected
+- [ ] RV5 (MED) pendingNav expires (15 s) and Stop clears it
+- [ ] RV6 (MED) openDownload checks on Io.fast, not for media names, one check per download at a time
+- [ ] RV7 (MED) one "page started a download" dialog per tab at a time; the decline is per host and ends with a navigation
+- [ ] RV8 (LOW) requestedOrientation reset in onCreate / onDestroy
+- [ ] RV9 (LOW) read-back back-off per tab; no counters or package-name line for private tabs
