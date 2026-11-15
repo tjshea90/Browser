@@ -1,21 +1,22 @@
-# CHECKPOINT 2372 — read me first, then TASKS.md
+# CHECKPOINT 2373 — read me first, then TASKS.md
 
-**Written:** 2026-11-15T03:24:57Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/new-session-7d9rxz` · **builds on:** `e7845778` (this checkpoint is the commit after it)
+**Written:** 2026-11-15T03:27:28Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/new-session-7d9rxz` · **builds on:** `750729b7` (this checkpoint is the commit after it)
 
 ## Just done
-alpha46 (gecko code 147) RELEASED + RECORDED (run 43671662558 green, APK on the Release, certificate verified, built from c1e9d89b); owner message 41 fully done and ticked (MN1 MN2 MN3 HM1 PT1 SP1 SH1); the answer to the owner is the reply that follows. No heartbeat exists (deleted after alpha45).
+owner message 42 written into TASKS.md as YS1 (+YS1a find why a tap on the YouTube seek bar does not seek in Kestrel, YS1b fix, YS1c buffering from the new place only) before any code. alpha46 released + recorded + answered before this.
 
 ## Do this next
-NOTHING is running or half-done. WAIT for the owner: BK5 (Back instant for no-store pages on chosen sites, YES/NO), AX1g (separate system keyboard app YES/NO), tablet feedback on alpha40-46 (especially: does a long press above the panel close it, the X, Home tab after switching, Private box, the launch picture/glow), ONE Diagnostics copy after a Proton Mail session (Blocker line 'Extension listeners' decides RX3-S2b; the new Health lines 'panel long-press / open-space' show what a long press did to the panel), RX4 (YouTube Movies & TV screenshot: ask for the Desktop site check). Without owner input, doable if asked: RX3-S4 (blocker histogram), RX3-D3, RX3-Y4, a second independent review of content.js/scriptlets-main.js (ask for a review BEFORE shipping page-wide scripts). Release recipe: bump versionCode 148 + versionName, bash tools/sync-ext-version.sh, JVM gates (stop other gradle runs first: overlapping gradle runs produce bogus EXIT 1), bash ship.sh gecko NOTE, dispatch android.yml, record-release.sh AFTER green.
+YS1a: find the cause. Ideas to test (do not assume): (1) the touch/mouse event sequence Gecko Android sends for a tap vs what YouTube's progress bar needs (headless Chromium with hasTouch + mobile UA on the real page through the sandbox proxy shows which events the page listens to; node tools/sitelab/yt_live.js shows how the proxy is used); (2) our page-world guard (guard-main.js onTap/onClick capture listeners, notePress, G4 v1 in alpha44) and content.js press record, youtube.js, scriptlets from the YouTube list lines (set-constant / json-prune / trusted-replace-fetch-response), (3) Gecko prefs in geckoapp gecko-prefs.txt (media / apz / pointer events / double-tap), (4) BrowserActivity.dispatchTouchEvent (ACTION_CANCEL sent to the page by onOpenSpace / HotCorner, pull-to-refresh), (5) a known GeckoView/Firefox Android bug (web search). Then a lab page in tools/sitelab/guardlab.py: a <video> (silent wav 300 s) with a div seek bar that listens like YouTube does and logs; run on the emulator (reboot it: emulator -avd kestrel29x64 -no-window -no-audio -no-snapshot -no-boot-anim -gpu swiftshader_indirect -no-accel; adb root; the lowest multi-touch device is used by tools/emu/glide_emu.py now).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  43ba62e0 ckpt 2372: alpha46 (gecko code 147) RELEASED + RECORDED (run 43671662558 green, APK on 
   ba09cf6f ckpt 2371: alpha46 (gecko code 147) gated (JVM: core, tools, app incl. MiniNavTest 95, 
   c1e9d89b ckpt 2370: gated kestrel-g-v0.3.0-alpha46 (gecko code 147) and pushed it: handoff self-
   95cc5c99 ckpt 2369: pre-ship: alpha46: the floating navigation panel can be closed again: a long
@@ -25,8 +26,7 @@ NOTHING is running or half-done. WAIT for the owner: BK5 (Back instant for no-st
   ebd2f1ef ckpt 2365: alpha45 gated (JVM + web 373/373), pushed and dispatched to GitHub (workflow
   d636a48a ckpt 2364: gated kestrel-g-v0.3.0-alpha45 (gecko code 146) and pushed it: handoff self-
   c8a968e7 ckpt 2363: RX3-V4 coded + unit-proven (not ticked yet): core MediaList.applyBlob/matchB
-  1dea80c7 ckpt 2362: RX3-S2 DONE and ticked (counters only): background.js LST + lstTimed around 
 ```
 
-(1 automatic checkpoint(s) since the last deliberate one — the
+(3 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
