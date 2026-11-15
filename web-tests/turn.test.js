@@ -118,14 +118,23 @@ test('FB3: the extra resize comes once the viewport is still, and a player that 
   await page.context().close();
 });
 
-test('FB4: a full-screen page tells the app the viewport it got, in device pixels, once it has been still; a page that is not full screen says nothing', async () => {
+test('FB4 + ROT2: a page says its viewport once soon after it is up (f = 0), and, once it has been still, in full screen (f = 1), in device pixels; a resize outside full screen says nothing', async () => {
   const page = await open(VIDEO(), { turn: true });
   await wait(page, 600);
-  assert.deepEqual(await msgs(page, 'vpt'), [], 'nothing outside full screen');
+  assert.deepEqual(await msgs(page, 'vpt'), [], 'nothing yet: the one report comes a second after the page is up');
+  await wait(page, 700);
+  const hello = await msgs(page, 'vpt');
+  assert.equal(hello.length, 1, 'the one report of a page that is up: ' + JSON.stringify(hello));
+  assert.deepEqual([hello[0].w, hello[0].h, hello[0].f], [500, 800, 0], JSON.stringify(hello[0]));
+  await page.setViewportSize({ width: 500, height: 790 });                 // a resize outside full screen (a toolbar): nothing is said
+  await wait(page, 500);
+  assert.equal((await msgs(page, 'vpt')).length, 1, 'a resize outside full screen says nothing');
+  await page.setViewportSize({ width: 500, height: 800 });
+  await wait(page, 300);
   await page.evaluate(() => document.getElementById('v').requestFullscreen());
-  await wait(page, 900);
+  await wait(page, 700);
   const m = await msgs(page, 'vpt');
-  assert.ok(m.length >= 1, 'told once the full screen began: ' + JSON.stringify(m));
+  assert.ok(m.length >= 2, 'told once the full screen began: ' + JSON.stringify(m));
   const last = m[m.length - 1];
   assert.deepEqual([last.w, last.h, last.f], [500, 800, 1], JSON.stringify(last));
   await page.context().close();
