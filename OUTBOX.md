@@ -1741,3 +1741,7 @@
 ## 2026-11-15T17:12:12Z
 > The ship gates are re-running after a one-line fix for a rare crash in the Courier server's shutdown code that kept failing the tests. The third lab run is also going.
 <!-- sha:d171cba405f7 -->
+
+## 2026-11-15T17:13:14Z
+> Waiting for the ship gates and the third lab run; I'll read both as they finish.
+<!-- sha:60a58225c5cf -->
