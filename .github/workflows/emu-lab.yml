@@ -89,7 +89,7 @@ jobs:
           CFG="$ANDROID_AVD_HOME/$AVD_NAME.avd/config.ini"
           [ -f "$CFG" ] || { echo "::error::no config.ini at $CFG"; find "$HOME" -name config.ini -path '*avd*' 2>/dev/null | head; exit 1; }
           python3 -I - "$CFG" <<'PY'
-          import sys
+          import os, sys
           p = sys.argv[1]
           want = {"hw.lcd.width": "600", "hw.lcd.height": "1024", "hw.lcd.density": "170", "hw.ramSize": os.environ.get("EMU_RAM", "2048"), "vm.heapSize": "128", "hw.cpu.ncore": "2",
                   "disk.dataPartition.size": "6G", "hw.gpu.enabled": "yes", "hw.gpu.mode": "swiftshader_indirect", "hw.keyboard": "yes", "hw.mainKeys": "no",
