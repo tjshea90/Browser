@@ -578,8 +578,11 @@ open class BrowserActivity : Activity(), DockListener {
     /** FS1: the screen turned (the tablet, the rotate button, a page's lock): the engine is told so `screen.orientation` and a full-screen video's layout follow. The activity handles the change itself (manifest configChanges). */
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
+        val landscape = newConfig.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        try { turnSettler.configChanged(landscape) } catch (e: Throwable) { Health.log("fullscreen", "turn-settler-failed", e.toString().take(80)) } // ROT1: pause the video and cover the page BEFORE the engine re-lays out
         GeckoEngine.runtimeOrNull()?.let { try { it.orientationChanged() } catch (e: Throwable) { Health.log("fullscreen", "orientation-notify-failed", e.toString().take(80)) } }
-        Health.log("life", "config", "orientation=${if (newConfig.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"} fullscreen=$fullscreenOn")
+        Health.log("life", "config", "orientation=${if (landscape) "landscape" else "portrait"} fullscreen=$fullscreenOn")
+        if (fullscreenOn) Io.main.postDelayed({ if (fullscreenOn) { applyImmersive(true); checkBarsSoon() } }, 150L) // FSB1: a turn can bring the bars back on some systems
     }
 
     override fun onDestroy() {
