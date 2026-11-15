@@ -2181,3 +2181,7 @@
 > 3. **Tablet feedback on alpha40 to 45:** especially Back (scroll place and speed), ad skipping, and the download list.
 > 4. **One Diagnostics copy** after a Proton Mail session, so I can read the new "Extension listeners" numbers.
 <!-- sha:01e7e65fcbdf -->
+
+## 2026-11-15T02:18:57Z
+> Yes, this is the first time these have reached me. I'm checking whether an earlier mini-panel message was recorded that I missed, then writing all five requests into the task list in your words before touching any code.
+<!-- sha:b3fc19885441 -->
