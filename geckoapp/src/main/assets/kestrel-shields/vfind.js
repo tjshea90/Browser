@@ -13,7 +13,7 @@ var KestrelVF = (typeof KestrelVF !== 'undefined' && KestrelVF) || (function () 
   // every element with this tag name inside `root`, also inside the shadow roots below it (four levels, [budget.n] elements looked at)
   function collect(root, out, budget, depth, tag) {
     try {
-      var list = root.getElementsByTagName(tag), i;
+      var list = root.querySelectorAll(tag), i;   // (a ShadowRoot has no getElementsByTagName)
       for (i = 0; i < list.length; i++) out.push(list[i]);
       if (depth >= 4) return;
       var all = root.querySelectorAll('*');
