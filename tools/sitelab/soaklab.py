@@ -92,7 +92,7 @@ def page_form():
 REPORTER = """
 <script>
 (function () {
-  var q = new URLSearchParams(location.search), name = %(name)s;
+  var q = new URLSearchParams(location.search), name = %(name)s + (q.get('id') ? '#' + q.get('id') : '');
   function send(ev, extra) {
     var v = document.getElementById('v'), o = { kind: 'video', name: name, ev: ev, t: Date.now() };
     try { o.ct = v.currentTime.toFixed(2); o.rs = v.readyState; o.ns = v.networkState; o.w = v.videoWidth; o.h = v.videoHeight; o.paused = v.paused ? 1 : 0;
@@ -118,11 +118,13 @@ def page_video(name, src):
              "<p style='margin:8px'>%s</p>%s") % (name, src, name, reporter)).encode()
 
 
-def page_fs():
+def page_fs(lock=""):
+    """The full-screen lab (FS1). The buttons sit at fixed fractions of the page height so a script can tap them without reading the screen:
+    full screen at 25.5 %, lock landscape 44.5 %, unlock 63.5 %, exit 82.5 % (tools/emu/soak.py FS_GO ...). ?lock=portrait|landscape makes the page lock the screen by itself the moment it is full screen."""
     reporter = """
 <script>
 (function () {
-  var v = document.getElementById('v');
+  var v = document.getElementById('v'), autolock = %s;
   function send(ev, extra) {
     var o = { kind: 'fs', ev: ev, t: Date.now(), fs: document.fullscreenElement ? 1 : 0, iw: innerWidth, ih: innerHeight };
     try { o.ot = screen.orientation.type; o.oa = screen.orientation.angle; } catch (e) { o.ot = 'none'; }
@@ -130,23 +132,30 @@ def page_fs():
     if (extra) for (var k in extra) o[k] = extra[k];
     try { new Image().src = '/report?' + Object.keys(o).map(function (k) { return k + '=' + encodeURIComponent(o[k]); }).join('&'); } catch (e) {}
   }
-  document.addEventListener('fullscreenchange', function () { send('fullscreenchange'); });
+  function lock(kind, ev) {
+    try { screen.orientation.lock(kind).then(function () { send(ev + '-ok'); }, function (e) { send(ev + '-rejected', { why: String(e).slice(0, 80) }); }); } catch (e) { send(ev + '-threw', { why: String(e).slice(0, 80) }); }
+  }
+  document.addEventListener('fullscreenchange', function () {
+    send('fullscreenchange');
+    if (autolock && document.fullscreenElement) lock(autolock, 'autolock');
+    if (autolock && !document.fullscreenElement) { try { screen.orientation.unlock(); } catch (e) {} }
+  });
   window.addEventListener('resize', function () { send('resize'); });
   try { screen.orientation.addEventListener('change', function () { send('orientationchange'); }); } catch (e) {}
   document.getElementById('go').onclick = function () { send('click-go'); var p = v.requestFullscreen ? v.requestFullscreen() : null; if (p && p.catch) p.catch(function (e) { send('fs-rejected', { why: String(e).slice(0, 60) }); }); };
-  document.getElementById('lock').onclick = function () { send('click-lock'); try { screen.orientation.lock('landscape').then(function () { send('lock-ok'); }, function (e) { send('lock-rejected', { why: String(e).slice(0, 80) }); }); } catch (e) { send('lock-threw', { why: String(e).slice(0, 80) }); } };
+  document.getElementById('lock').onclick = function () { send('click-lock'); lock('landscape', 'lock'); };
   document.getElementById('unlock').onclick = function () { send('click-unlock'); try { screen.orientation.unlock(); send('unlock-ok'); } catch (e) { send('unlock-threw'); } };
   document.getElementById('exit').onclick = function () { send('click-exit'); try { document.exitFullscreen(); } catch (e) {} };
   v.play().catch(function () {});
   send('page');
 })();
-</script>"""
-    return (b"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Full-screen lab</title>"
-            b"<body style='margin:0;background:#112;color:#eee;font:20px sans-serif'><video id=v src='/clip/landscape.mp4' muted autoplay playsinline loop style='width:100%;background:#000'></video>"
-            b"<button id=go style='display:block;width:92%;margin:14px auto;height:84px;font-size:26px'>Go full screen</button>"
-            b"<button id=lock style='display:block;width:92%;margin:14px auto;height:84px;font-size:26px'>Lock landscape</button>"
-            b"<button id=unlock style='display:block;width:92%;margin:14px auto;height:84px;font-size:26px'>Unlock</button>"
-            b"<button id=exit style='display:block;width:92%;margin:14px auto;height:84px;font-size:26px'>Exit full screen</button>" + reporter.encode())
+</script>""" % json.dumps(lock)
+    btn = "display:block;width:92%;margin:1vh auto;height:17vh;font-size:26px"
+    return ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Full-screen lab</title>"
+            "<body style='margin:0;background:#112;color:#eee;font:20px sans-serif;height:100vh;overflow:hidden'>"
+            "<video id=v src='/clip/landscape.mp4' muted autoplay playsinline loop style='display:block;width:100%;height:16vh;object-fit:contain;background:#000'></video>"
+            "<button id=go style='" + btn + "'>Go full screen</button><button id=lock style='" + btn + "'>Lock landscape</button>"
+            "<button id=unlock style='" + btn + "'>Unlock</button><button id=exit style='" + btn + "'>Exit full screen</button>" + reporter).encode()
 
 
 def page_dl():
@@ -247,7 +256,7 @@ class H(http.server.BaseHTTPRequestHandler):
                     return self._file(os.path.join(OUT, CLIPS[name][2]), "video/mp4")
                 return self._send(b"unknown clip", "text/plain", 404)
             if p == "/fs":
-                return self._send(page_fs())
+                return self._send(page_fs((q.get("lock") or [""])[0]))
             if p == "/dl/page":
                 return self._send(page_dl())
             if p.startswith("/dl/") and p.endswith("mb.bin"):
