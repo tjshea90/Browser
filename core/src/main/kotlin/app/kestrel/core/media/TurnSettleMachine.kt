@@ -64,8 +64,11 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
         val before = wasLandscape
         wasLandscape = landscape
         if (before == null) return // nobody told where the screen was: this configuration only says where it is now
+        val turn = TurnSettle.isTurn(before, landscape)
+        if (!turn) return                                                  // (a keyboard, a locale or a dark-mode change that reached the activity)
         val playing = h.frontPlaying()
-        if (!TurnSettle.worthIt(TurnSettle.isTurn(before, landscape), h.fullscreen(), playing)) return
+        // a turn that goes on (the video was paused by us a moment ago, so it no longer "plays") is extended by the next one whatever the page shows
+        if (!active && !TurnSettle.worthIt(turn, h.fullscreen(), playing)) return
         turns++
         val t = h.now()
         if (!active) { active = true; startedAt = t; touched = false }
