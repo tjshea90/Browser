@@ -1181,6 +1181,19 @@ test('RX3-G7: a report from the top frame of a tab whose page the extension neve
   assert.equal(got[1].p, '', 'a frame says nothing: the app then drops the report like one from a private tab');
 });
 
+test('RX4-M0a: a video look is forwarded as clamped whole numbers with the tab page, nothing else (no address of the video); from no tab, nothing', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '9' });
+  h.message({ k: 'vq', t: 400, d: 12, c: 0, s: 15, w: 1280, h: 720, junk: 'x'.repeat(4000), u: 'https://cdn.example/v.mp4', p: 'https://evil.example/' }, 1, PAGE, 0);
+  h.message({ k: 'vq', t: 99999999, d: -5, c: 'x', s: 99999, w: 1e9, h: 'q' }, 1, PAGE, 3);          // a frame of the tab, absurd numbers
+  assert.equal(h.message({ k: 'vq', t: 10 }, -1, PAGE, 0), undefined, 'not from a tab');
+  await tick(20);
+  const got = h.of('vq');
+  assert.equal(got.length, 2);
+  assert.deepEqual(got[0], { k: 'vq', t: 400, d: 12, c: 0, s: 15, w: 1280, h: 720, p: PAGE }, 'only the numbers and the page of the tab');
+  assert.deepEqual(got[1], { k: 'vq', t: 0, d: 0, c: 0, s: 0, w: 0, h: 0, p: PAGE }, 'absurd numbers become 0 and the page is the tab\'s, not the frame\'s');
+});
+
 test('RX3-V1: the video report carries the element facts as clamped whole numbers; a report without them (an older script) stays as it was', async () => {
   const h = harness(standardApp());
   h.message({ k: 'vid', u: 'https://cdn.example/a.mp4', w: 1280, h: 720, d: 25.4, l: '', p: PAGE, f: 27, rw: 300.7, rh: 170, vp: 80 }, 1, PAGE, 0);
