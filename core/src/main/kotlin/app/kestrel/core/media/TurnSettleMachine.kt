@@ -7,6 +7,10 @@ package app.kestrel.core.media
  * One turn, in order: [configChanged] (the screen turned: cover the page, pause the video if the app can) -> [sizeChanged] while the page area is still being laid out -> [tick] every [TurnSettle.TICK_MS]
  * until the area has been still for [TurnSettle.SETTLE_MS] (or [TurnSettle.CAP_MS] since the start) -> the cover fades out and the video plays again only if [TurnSettle.resumeIt] says so. A second turn
  * while one is going extends it (the video is paused once). [touchedScreen] = the person takes over: nothing is played for them. [abandon] = the app left the screen: everything goes, nothing is played.
+ *
+ * ROT2 (owner message 48): when the host says a full-screen page reports its viewport ([Host.expectsPageReport]), the turn is not over until [pageReported] said the page has the view's size
+ * (a later size change takes that back), at the latest [TurnSettle.PAGE_CAP_MS] after the start; after [TurnSettle.NUDGE_AFTER_MS] without it the engine is nudged once ([Host.nudgeEngine]); after
+ * [TurnSettle.HINT_AFTER_MS] the host shows a small progress ring ([Host.hint]). How long the page took is kept for Diagnostics.
  */
 class TurnSettleMachine<T : Any>(private val h: Host<T>) {
     interface Host<T : Any> {
@@ -36,6 +40,12 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
         fun resume(handle: T): Boolean
         /** One line for the event log (never a page address). */
         fun log(event: String, text: String) {}
+        /** ROT2: the full-screen page in front reports its viewport (it has done so before), so its report can say when it has the new size. */
+        fun expectsPageReport(): Boolean = false
+        /** ROT2: give the engine one real size change (the view one pixel shorter for a moment): it has not handed the turn's size to the page. */
+        fun nudgeEngine() {}
+        /** ROT2: a small progress ring on the cover ([show]) while the page takes long to catch up. */
+        fun hint(show: Boolean) {}
     }
 
     private var wasLandscape: Boolean? = null
@@ -44,6 +54,10 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
     private var lastChangeAt = 0L
     private var paused: T? = null
     private var touched = false
+    private var confirmed = false
+    private var confirmedAt = 0L
+    private var nudged = false
+    private var hinted = false
 
     // what Diagnostics says
     var turns = 0; private set
@@ -51,6 +65,11 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
     var resumedCount = 0; private set
     var skippedResume = 0; private set
     var lastMs = 0L; private set
+    var lagTurns = 0; private set          // turns whose page said it had the new size
+    var lagLastMs = 0L; private set        // from the start of the turn to that report
+    var lagWorstMs = 0L; private set
+    var gaveUp = 0; private set            // turns that waited the whole cap for a page that never said it
+    var nudges = 0; private set
     var last = "no turn under a video yet"; private set
 
     /** A turn is going on (the cover is up). */
@@ -71,8 +90,9 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
         if (!active && !TurnSettle.worthIt(turn, h.fullscreen(), playing)) return
         turns++
         val t = h.now()
-        if (!active) { active = true; startedAt = t; touched = false }
+        if (!active) { active = true; startedAt = t; touched = false; confirmed = false; confirmedAt = 0L; nudged = false; hinted = false }
         lastChangeAt = t
+        confirmed = false                                                  // a new turn (or one more while it goes on): the page has to say it has the new size again
         h.cover(true, false)
         if (paused == null) {
             if (TurnSettle.pauseIt(playing, h.frontHasSession())) {
@@ -83,8 +103,14 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
         h.schedule(TurnSettle.TICK_MS)
     }
 
-    /** The page area changed size: the turn is not over while this keeps coming. */
-    fun sizeChanged() { if (active) lastChangeAt = h.now() }
+    /** The page area changed size: the turn is not over while this keeps coming, and a report that came before this change no longer says the page has the view's size. */
+    fun sizeChanged() { if (active) { lastChangeAt = h.now(); confirmed = false } }
+
+    /** ROT2: the full-screen page reported its viewport; [matchesView] = it is the view's size now. Only a matching report that comes after the last size change confirms the turn. */
+    fun pageReported(matchesView: Boolean) {
+        if (!active) return
+        if (matchesView) { if (!confirmed) { confirmed = true; confirmedAt = h.now() } } else confirmed = false
+    }
 
     /** A finger came down: the person takes over. */
     fun touchedScreen() { if (active) touched = true }
@@ -96,6 +122,7 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
         active = false
         paused = null
         h.cover(false, false)
+        if (hinted) { hinted = false; h.hint(false) }
         last = "the app was left during a turn: nothing was played"
         h.log("turn-abandoned", "left the screen during a turn")
     }
@@ -104,13 +131,26 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
     fun tick() {
         if (!active) return
         val n = h.now()
-        if (TurnSettle.settled(n - lastChangeAt, n - startedAt)) finish(n) else h.schedule(TurnSettle.TICK_MS)
+        val expects = h.expectsPageReport()
+        if (TurnSettle.settled(n - lastChangeAt, n - startedAt, expects, confirmed)) { finish(n, expects); return }
+        if (expects && !confirmed && !nudged && TurnSettle.nudgeDue(n - lastChangeAt)) {
+            nudged = true; nudges++
+            h.log("turn-nudge", "the page has not taken the new size ${n - lastChangeAt} ms after the last size change: the engine is given a real size change")
+            h.nudgeEngine()
+        }
+        if (!hinted && TurnSettle.hintDue(n - startedAt)) { hinted = true; h.hint(true) }
+        h.schedule(TurnSettle.TICK_MS)
     }
 
-    private fun finish(n: Long) {
+    private fun finish(n: Long, expects: Boolean = false) {
         active = false
         lastMs = n - startedAt
         h.cover(false, true)
+        if (hinted) { hinted = false; h.hint(false) }
+        if (expects) {
+            if (confirmed && confirmedAt > 0L) { val lag = confirmedAt - startedAt; lagTurns++; lagLastMs = lag; if (lag > lagWorstMs) lagWorstMs = lag }
+            else gaveUp++
+        }
         val p = paused; paused = null
         var resumed = false
         if (p != null) {
@@ -119,10 +159,12 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
                 if (resumed) resumedCount++
             } else skippedResume++
         }
-        last = "settled after $lastMs ms" + (if (p == null) ", nothing was paused" else if (resumed) ", the video was paused and played again" else ", the video was paused and left paused (touched=$touched)")
+        last = "settled after $lastMs ms" + (if (p == null) ", nothing was paused" else if (resumed) ", the video was paused and played again" else ", the video was paused and left paused (touched=$touched)") +
+            (if (expects) (if (confirmed) ", the page had the new size after ${confirmedAt - startedAt} ms" else ", the page never said it had the new size (gave up)") else "")
         h.log("turn-settled", last)
     }
 
     /** One Diagnostics line. */
-    fun line(): String = "Turning under a video: $turns turns met a full-screen page or a playing video, video paused $pausedCount times, played again $resumedCount, left paused $skippedResume; last: $last"
+    fun line(): String = "Turning under a video: $turns turns met a full-screen page or a playing video, video paused $pausedCount times, played again $resumedCount, left paused $skippedResume; " +
+        "the page took ${lagLastMs} ms to have the new size after the last turn (worst $lagWorstMs ms, $lagTurns turns measured, $gaveUp gave up after ${TurnSettle.PAGE_CAP_MS / 1000} s, engine nudged $nudges times); last: $last"
 }

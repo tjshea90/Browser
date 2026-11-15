@@ -11,7 +11,11 @@ package app.kestrel.core.media
  *  - the video is paused only when the engine's media session says it plays and the app holds that session;
  *  - it is played again only when the APP paused it (never one the person paused), it is still paused, the same tab is in front, the app is on screen and nobody touched the screen meanwhile
  *    (a touch during the turn is the person taking over: their play / pause stands);
- *  - the turn is over when the page area stopped changing size for [SETTLE_MS], or at the latest [CAP_MS] after it began (a page that keeps resizing must not keep the picture black for ever).
+ *  - the turn is over when the page area stopped changing size for [SETTLE_MS], or at the latest [CAP_MS] after it began (a page that keeps resizing must not keep the picture black for ever);
+ *  - ROT2 (owner message 48: "The video size and frame is awkward for a few seconds"; two screenshots of a page still laid out for the OLD orientation): the engine hands the new window size to the PAGE later
+ *    than the app's own view changes (about a second on the emulator, a few seconds on the tablet). When the full-screen page reports its viewport (`vpt`, see `kestrel-shields/turn.js`), the cover and the
+ *    pause stay until the page says it HAS the view's new size, not only until the app's own view is still: [PAGE_CAP_MS] is the longest that wait may take, [NUDGE_AFTER_MS] the time after which the engine
+ *    is given one real size change if the page still has not caught up, [HINT_AFTER_MS] the time after which a small progress ring shows on the cover so the black does not look frozen.
  */
 object TurnSettle {
     /** The screen counts as still when no size change of the page area came for this long. */
@@ -19,6 +23,15 @@ object TurnSettle {
 
     /** Never longer than this from the first change, whatever the engine does. */
     const val CAP_MS = 2200L
+
+    /** ROT2: the longest a turn may wait for the page to report that it has the new size (the engine of the tablet needs a few seconds; a hung page must not keep the picture black for ever). */
+    const val PAGE_CAP_MS = 7000L
+
+    /** ROT2: the page has not caught up this long after the view's last size change: the engine is given one real size change (the 1 px nudge of FB4). */
+    const val NUDGE_AFTER_MS = 2500L
+
+    /** ROT2: after this long a small progress ring shows on the cover. */
+    const val HINT_AFTER_MS = 900L
 
     /** The black cover fades out over this long. */
     const val FADE_MS = 160L
@@ -41,4 +54,17 @@ object TurnSettle {
 
     /** The turn is over: still for [SETTLE_MS], or [CAP_MS] since the start. Times in milliseconds. */
     fun settled(sinceLastChangeMs: Long, sinceStartMs: Long): Boolean = sinceLastChangeMs >= SETTLE_MS || sinceStartMs >= CAP_MS
+
+    /**
+     * ROT2: the same, for a full-screen page that reports its viewport ([expectsPage]): still for [SETTLE_MS] AND the page said it has the view's size ([pageConfirmed]); or [PAGE_CAP_MS] since the
+     * start, whatever the page does. A page that does not report is judged by the old rule.
+     */
+    fun settled(sinceLastChangeMs: Long, sinceStartMs: Long, expectsPage: Boolean, pageConfirmed: Boolean): Boolean =
+        if (!expectsPage) settled(sinceLastChangeMs, sinceStartMs) else (sinceLastChangeMs >= SETTLE_MS && pageConfirmed) || sinceStartMs >= PAGE_CAP_MS
+
+    /** ROT2: the page still has not caught up: time to give the engine one real size change. */
+    fun nudgeDue(sinceLastChangeMs: Long): Boolean = sinceLastChangeMs >= NUDGE_AFTER_MS
+
+    /** ROT2: the turn takes long: show the progress ring. */
+    fun hintDue(sinceStartMs: Long): Boolean = sinceStartMs >= HINT_AFTER_MS
 }
