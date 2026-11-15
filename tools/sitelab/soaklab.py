@@ -301,14 +301,12 @@ class H(http.server.BaseHTTPRequestHandler):
             return
         sent = 0
         t0 = time.time()
+        eff = min(rate, RATE) if (rate and RATE) else (rate or RATE)   # the slow download stays slower than the shaped link, never faster
         while sent < n:
             k = min(len(line) * 16, n - sent)
             self.wfile.write((line * 16)[:k])
             sent += k
-            if rate:
-                ahead = sent / float(rate) - (time.time() - t0)
-                if ahead > 0:
-                    time.sleep(ahead)
+            pace(sent, t0, eff)
 
 
 class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
