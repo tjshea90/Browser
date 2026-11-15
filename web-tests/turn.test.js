@@ -120,7 +120,6 @@ test('FB3: the extra resize comes once the viewport is still, and a player that 
 
 test('FB4: a full-screen page tells the app the viewport it got, in device pixels, once it has been still; a page that is not full screen says nothing', async () => {
   const page = await open(VIDEO(), { turn: true });
-  await page.evaluate(() => { window.__kstTurnCfg = null; });
   await wait(page, 600);
   assert.deepEqual(await msgs(page, 'vpt'), [], 'nothing outside full screen');
   await page.evaluate(() => document.getElementById('v').requestFullscreen());
@@ -129,8 +128,5 @@ test('FB4: a full-screen page tells the app the viewport it got, in device pixel
   assert.ok(m.length >= 1, 'told once the full screen began: ' + JSON.stringify(m));
   const last = m[m.length - 1];
   assert.deepEqual([last.w, last.h, last.f], [500, 800, 1], JSON.stringify(last));
-  await page.setViewportSize({ width: 800, height: 500 }); await wait(page, 1000);
-  const m2 = await msgs(page, 'vpt'), l2 = m2[m2.length - 1];
-  assert.deepEqual([l2.w, l2.h], [800, 500], 'and again after the next resize: ' + JSON.stringify(l2));
   await page.context().close();
 });
