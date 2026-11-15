@@ -70,6 +70,10 @@ class ShieldsBridge(
     private val videoQuality: (JSONObject) -> Unit = {},
     /** RX4-M0e: one scroll burst of a real page (only while the Settings switch is on): frames (n), gaps over 50 ms (a), over 100 ms (b), the longest gap in ms (mx) and the page of its tab (p). Worker thread. */
     private val scrollGaps: (JSONObject) -> Unit = {},
+    /** LAB2 (owner message 45): is this a DEBUG build (the emulator lab)? Then pages are asked to send a page-health probe (page-config flag 256). Release builds: always false, the script does nothing. */
+    private val labBuild: () -> Boolean = { false },
+    /** LAB2: the page-health probe of a page (numbers only: text length, images, broken images, frames, videos, size, nodes). Worker thread; only ever sent by a debug build. */
+    private val labProbe: (JSONObject) -> Unit = {},
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -121,6 +125,7 @@ class ShieldsBridge(
                     "vbk" -> { videoBar(m); "" }
                     "vq" -> { videoQuality(m); "" }
                     "sg" -> { scrollGaps(m); "" }
+                    "probe" -> { if (labBuild()) labProbe(m); "" }
                     "bk" -> backPlace(m.optString("p"))
                     "bf" -> { backShown(m.optString("p"), m.optInt("ps") == 1, m.optString("nt"), m.optLong("ts"), m.optInt("y")); "" }
                     "ns" -> { noStore(m.optString("p")); "" }
@@ -213,9 +218,10 @@ class ShieldsBridge(
         // flags for the page, a bit field: 1 = the pop-up and redirect guard applies (it follows the Shields master switch and its own setting), 2 = video and social embeds wait for a tap (EX-10),
         // 4 = harmless stand-ins may answer blocked files (`$redirect=` rules, AW1c; follows Shields and the Settings switch "Fix ad and anti-adblock scripts", like the scriptlets),
         // 8 = the ad skipper may run in video players (RX3-Y2; follows Shields and the Settings switch "Skip ads inside video players"),
+        // 256 = a DEBUG build (the emulator lab): the page sends a page-health probe once it has loaded (LAB2; never set in a release build),
         // 64 = Kestrel's own video bar may show on a tapped video whose page has no controls, 128 = also where the page has some (VC1, videobar.js; follows ONLY the Settings row "Video controls"),
         // 16 = a tap on a video player's bar may move the video when the page does not (YS1, seekbar.js; follows ONLY the Settings switch "Tap the video bar to jump": it is not a Shields feature, a site with Shields off keeps it)
-        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0) or (if (prefs().tapSeek) 16 else 0) or (if (prefs().measureScroll) 32 else 0) or (if (prefs().videoControls != 2) 64 else 0) or (if (prefs().videoControls == 1) 128 else 0)
+        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0) or (if (prefs().tapSeek) 16 else 0) or (if (prefs().measureScroll) 32 else 0) or (if (prefs().videoControls != 2) 64 else 0) or (if (prefs().videoControls == 1) 128 else 0) or (if (labBuild()) 256 else 0)
         val on = s.shieldsUp && s.blockAds && snap?.fs?.isPageAllowed(host) != true
         return (if (on) "1:" else "0:") + gen + ":" + (if (snap != null) contentId(snap) else "") + ":" + guard
     }

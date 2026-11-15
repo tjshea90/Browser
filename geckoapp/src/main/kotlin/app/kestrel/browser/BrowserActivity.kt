@@ -400,7 +400,7 @@ open class BrowserActivity : Activity(), DockListener {
                 }
                 GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
                 GeckoEngine.warmUp(this)
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, labBuild = { labBuild }, labProbe = { m -> onLabProbe(m) }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }))
                 Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
             }
         }
@@ -637,6 +637,13 @@ open class BrowserActivity : Activity(), DockListener {
                     val text = try { Health.report(this, engineFacts(), 400) } catch (e: Throwable) { "dump failed: $e" }
                     Io.exec { try { java.io.File(filesDir, "debug-diag.txt").writeText(text); Health.log("lab", "dump", "${text.length} bytes") } catch (e: Exception) { Health.log("lab", "dump-failed", e.toString().take(80)) } }
                 }, 2500L)
+            }
+            "measure" -> { prefs.measureScroll = true; Health.log("lab", "measure", "on") } // LAB2: the scroll-gap counters on real pages are on for the whole run
+            "shields" -> { // LAB2: "<on|off>|host,host,...": Shields down (or back to the default) for these sites, as if the person had turned the site's Shields switch (compatibility A/B)
+                val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg")
+                val mode = arg.substringBefore('|'); val hosts = arg.substringAfter('|').split(',').map { it.trim() }.filter { it.isNotEmpty() }
+                for (h in hosts) Shields.setOverride(h, if (mode == "off") SiteShields(0, 0).with(ShieldFlag.SHIELDS, false) else SiteShields(0, 0))
+                Io.main.post { for (t in tabs) { t.shields = Shields.effective(prefs, t.topHost); syncEngineProtection(t) }; Health.log("lab", "shields", "$mode ${hosts.size} sites") }
             }
             "closetabs" -> Io.main.post { for (t in tabs.toList()) doCloseTab(t); Health.log("lab", "closetabs", "tabs=${tabs.size}") }
             "answer" -> { // SOAK1: press a button of the question on screen (debug builds only)
@@ -1154,6 +1161,14 @@ open class BrowserActivity : Activity(), DockListener {
     private fun onScrollGaps(m: org.json.JSONObject) {
         val host = UrlParts.hostOf(m.optString("p")) ?: return
         scrollGaps.add(host, m.optInt("n"), m.optInt("a"), m.optInt("b"), m.optInt("mx"))
+        if (labBuild) Health.log("scroll", "burst", "host=$host n=${m.optInt("n")} a=${m.optInt("a")} b=${m.optInt("b")} mx=${m.optInt("mx")}") // the emulator lab reads these per page
+    }
+
+    /** LAB2: a DEBUG build (the emulator lab) asks every page for a page-health probe and mirrors it as one Health line. Never in a release build. */
+    private val labBuild: Boolean by lazy { (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0 }
+    private fun onLabProbe(m: org.json.JSONObject) {
+        if (!labBuild || pageIsPrivate(m.optString("p"))) return
+        Health.log("probe", "page", "host=${m.optString("h").take(60)} t=${m.optInt("t")} im=${m.optInt("im")} ib=${m.optInt("ib")} iv=${m.optInt("iv")} fr=${m.optInt("fr")} vd=${m.optInt("vd")} vp=${m.optInt("vp")} h=${m.optInt("hh")} w=${m.optInt("ww")} iw=${m.optInt("iw")} sc=${m.optInt("sc")} nd=${m.optInt("nd")} rs=${m.optInt("rs")} rd=${m.optString("rd")}")
     }
 
     // ---------------------------------------------------------------- YS1: taps on a video player's bar (seekbar.js reports differences; never an address; private tabs are dropped before)
