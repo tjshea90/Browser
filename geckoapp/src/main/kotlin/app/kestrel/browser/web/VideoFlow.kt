@@ -231,15 +231,15 @@ class VideoFlow(private val a: BrowserActivity) {
         val extras = ArrayList<Pair<String, () -> Unit>>()
         if (direct != null) extras.add("Copy video address" to { a.copyText(direct) })
         if (linkUri != null) extras.add("Open link in new tab" to { a.sheet.dismiss(); onLink(linkUri) })
-        show(tab, direct, extras)
+        show(tab, direct, extras, fromPress = true)
     }
 
-    /** The sheet. [pressedUrl]: the address of the element the owner long-pressed, when known. */
-    fun show(tab: Tab, pressedUrl: String? = null, extras: List<Pair<String, () -> Unit>> = emptyList()) {
+    /** The sheet. [pressedUrl]: the address of the element the owner long-pressed, when known. [fromPress]: it opened because of a long press on a video (the words of the empty answer say so). */
+    fun show(tab: Tab, pressedUrl: String? = null, extras: List<Pair<String, () -> Unit>> = emptyList(), fromPress: Boolean = false) {
         val ranked = MediaRank.rank(candidates(tab, pressedUrl), pressedUrl, tab.media.primary())
         if (ranked.main.isEmpty() && ranked.other.isEmpty()) {
             if (!tab.isPrivateTab) Health.log("video", "sheet-empty")
-            a.toast("No video found on this page yet. Some sites only show it once you press play: press play, then tap this icon again.")
+            a.toast(if (fromPress) "No video file found on this page yet. Some sites only show it once the video plays: press play, then long press the video again." else "No video found on this page yet. Some sites only show it once you press play: press play, then tap this icon again.")
             return
         }
         val p = VideoPanel(a, a.pal, object : VideoPanel.Listener {
