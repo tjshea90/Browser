@@ -22,6 +22,8 @@
               that address: Health "guard app-wall stopped a new window to ..." (or the page guard's own "chip-show open", whichever refused it first).
   /fake-layer RX3-G4: a <video> (each click on it is logged) and over it an INVISIBLE full-screen layer whose click handler opens an ad window. One real tap on the video: with the guard's fake-layer switch-off
               the video gets the click and the layer none ("video-click" only); without it the layer takes the first tap ("layer-click", the ad is refused) and the video plays on the second try.
+  /preroll-main RX3-V3: ONE <video> element plays a 15 s "ad" file (/ad15.wav); after 6.5 s the page gives the same element the 60 s "film" (/film60.wav). The app's Health lines "video info PLAYED el=N ..."
+              show both played reports with the SAME element number and, after the second, the ad marked as an advertisement and not counted: "counted=1 of 2".
   /playerlab  RX3-G7: five mock video players on one page, driven by the page itself (no touch needed): an ordinary video (no ad words), a JW-style player (jw-flag-ads on its root), a Video.js-style player
               (vjs-ad-loading, then vjs-ad-playing), a Google-IMA-style host (the ad video inside .ima-ad-container) and a JW-style ad with a skip button (.jw-skip, .jw-skippable). Each ad is a REAL 12 s silent
               media element. The log says how long the ad took (about 12000 ms = not skipped, a few hundred = fast-forwarded), at what speed it ran, and which events the skip button got. Ends with a DONE line.
@@ -292,6 +294,18 @@ setTimeout(function () { L('DONE', 'fake-layer'); }, 14000);
 </script></body></html>
 """
 
+PREROLL = b"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>preroll-main</title></head>
+<body style="margin:8px;font:18px sans-serif"><video id="v" src="/ad15.wav" muted autoplay controls style="width:300px;height:170px;background:#223"></video>
+<script>
+function L(k, v) { try { var x = new XMLHttpRequest(); x.open('GET', '/log?kind=' + encodeURIComponent(k) + '&v=' + encodeURIComponent(v) + '&t=' + Date.now()); x.send(); } catch (e) {} }
+var v = document.getElementById('v');
+v.addEventListener('playing', function () { L('playing', v.currentSrc.split('/').pop()); });
+L('load', 'preroll-main');
+setTimeout(function () { L('switch', 'the same element gets the film'); v.src = '/film60.wav'; v.muted = true; v.play().catch(function (e) { L('refused', String(e)); }); }, 6500);
+setTimeout(function () { L('DONE', 'preroll-main'); }, 16000);
+</script></body></html>
+"""
+
 POPAD = b"""<!doctype html><meta charset=utf-8><title>an ad</title><body style="font:20px sans-serif;margin:24px">popad: this is the ad page. If you can see it, the pop-up was NOT stopped.</body>"""
 
 
@@ -360,6 +374,12 @@ class H(http.server.BaseHTTPRequestHandler):
         if u.path == "/fake-layer":
             self._write("GET /fake-layer")
             return self._send(200, FAKELAYER.replace(b"%PORT%", str(self.server.server_address[1]).encode()))
+        if u.path == "/preroll-main":
+            self._write("GET /preroll-main")
+            return self._send(200, PREROLL)
+        if u.path in ("/ad15.wav", "/film60.wav"):
+            self._write("GET " + u.path)
+            return self._send(200, base64.b64decode(silent_wav(15 if u.path == "/ad15.wav" else 60).split(",", 1)[1]), "audio/wav")
         if u.path == "/popad":
             self._write("GET /popad %s   <- the pop-up was NOT stopped" % q.get("n", ["?"])[0])
             return self._send(200, POPAD)
