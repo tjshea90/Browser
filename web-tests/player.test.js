@@ -35,7 +35,7 @@ test('VP1: a full-screen film tells the app its state (numbers only); nothing be
   await fullscreen(page);
   const m = await firstState(page);
   assert.equal(m.k, 'vst'); assert.equal(m.d, 60); assert.equal(m.p, 1); assert.equal(m.e, 0); assert.equal(m.ms, 0); assert.equal(m.l, 0); assert.ok(m.rs >= 3, 'ready state ' + m.rs);
-  assert.deepEqual(Object.keys(m).sort(), ['b', 'd', 'e', 'h', 'k', 'l', 'm', 'ms', 'p', 'r', 'rs', 't', 'v', 'w'], 'only numbers: ' + JSON.stringify(m));
+  assert.deepEqual(Object.keys(m).sort(), ['ak', 'b', 'd', 'e', 'h', 'k', 'l', 'm', 'ms', 'p', 'r', 'rs', 't', 'v', 'w'], 'only numbers: ' + JSON.stringify(m));
   await page.context().close();
 });
 
@@ -67,6 +67,19 @@ test('VP1: the commands of the app are done once: play, pause, seek, skip, mute,
   await queue(page, { s: 1, c: [{ a: 'skip', d: 1000 }] });
   await page.waitForFunction(() => document.getElementById('v').currentTime >= 59, null, { timeout: 5000 });
   assert.ok((await film(page)).t <= 60.01, 'a skip never goes past the end');
+  await page.context().close();
+});
+
+test('VP1: a report says which command of the app the page had carried out last (ak), so the app can tell a stale report from one taken after the film did what was asked', async () => {
+  const page = await open(BOX, { player: true, cfg: { kp: true } });
+  await fullscreen(page); await firstState(page);
+  assert.equal((await states(page))[0].ak, 0, 'nothing carried out yet');
+  await queue(page, { s: 1, c: [{ a: 'play', i: 4 }] });
+  await page.waitForFunction(() => window.__msgs.some((m) => m && m.k === 'vst' && m.ak === 4), null, { timeout: 5000 });
+  await queue(page, { s: 1, c: [{ a: 'pause', i: 9 }, { a: 'mute', on: false, i: 10 }] });
+  await page.waitForFunction(() => window.__msgs.some((m) => m && m.k === 'vst' && m.ak === 10), null, { timeout: 5000 });
+  const m = (await states(page)).filter((x) => x.ak === 10)[0];
+  assert.equal(m.p, 1, 'the report that names command 10 shows the film paused'); assert.equal(m.m, 0);
   await page.context().close();
 });
 

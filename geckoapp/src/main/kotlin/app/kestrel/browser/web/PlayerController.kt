@@ -108,7 +108,7 @@ class PlayerController(
                 reports++
                 val len = m.optDouble("d", -1.0)
                 model.onSample(PlayerModel.Sample(m.optDouble("t", 0.0), len, m.optDouble("b", 0.0), m.optInt("p") == 1, m.optInt("e") == 1, m.optInt("m") == 1, m.optInt("v", 100), m.optDouble("r", 1.0),
-                    m.optInt("rs", 4), m.optInt("ms") == 1, m.optInt("l") == 1 || len == -2.0, m.optInt("w"), m.optInt("h"), SystemClock.uptimeMillis()))
+                    m.optInt("rs", 4), m.optInt("ms") == 1, m.optInt("l") == 1 || len == -2.0, m.optInt("w"), m.optInt("h"), SystemClock.uptimeMillis(), m.optInt("ak", 0)))
                 if (reports == 1) Health.log("player", "first-report", "film ${m.optInt("w")}x${m.optInt("h")}, length ${m.optDouble("d")}, ${if (m.optInt("ms") == 1) "media source" else "plain file"}")
             }
             "vtap" -> { taps++; Health.log("player", "tap", "x=${m.optInt("x", 500)}"); model.onTap(m.optInt("x", 500)) }
