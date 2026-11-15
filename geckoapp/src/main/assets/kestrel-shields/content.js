@@ -533,7 +533,7 @@
       } catch (e) { /* ignore */ }
       return undefined;
     });
-    browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { wanted = !(r && r.on === false); topHost = (r && r.top) ? String(r.top) : ''; push(); }, function () {});
+    browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { wanted = !(r && r.on === false); topHost = (r && r.top) ? String(r.top) : ''; push(); if (r && r.lab === true && window.KestrelVF) window.KestrelVF.probe(); }, function () {});
   } catch (e) { /* never break the page */ }
 })();
 

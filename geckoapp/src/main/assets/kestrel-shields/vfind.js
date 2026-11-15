@@ -108,5 +108,30 @@ window.KestrelVF = window.KestrelVF || (function () {
     } catch (e) { /* nobody listens */ }
   }
 
-  return { at: at, all: all, covered: covered, rect: rect, rootOf: rootOf, playing: playing, menu: menu };
+  // LAB2 (owner message 45): the page-health probe of the emulator lab. Only a DEBUG build asks for it (the guard answer carries lab: true); two and a half seconds after the page has loaded it counts what the
+  // page really has: text, pictures (and broken ones), frames, videos, size, nodes, requests. Numbers only. A page that loaded but has no text, only broken pictures or overflows the screen is "not loading correctly".
+  var probed = false;
+  function probe() {
+    if (probed || window.top !== window) return;
+    probed = true;
+    function go() {
+      setTimeout(function () {
+        try {
+          var d = document, b = d.body, imgs = d.images, ib = 0, iv = 0, i, vd = 0, vp = 0, vids = all('video');
+          for (i = 0; i < imgs.length && i < 600; i++) {
+            if (imgs[i].complete && imgs[i].naturalWidth === 0 && (imgs[i].currentSrc || imgs[i].src)) ib++;
+            else if (imgs[i].naturalWidth > 20) iv++;
+          }
+          vd = vids.length; for (i = 0; i < vids.length; i++) if (playing(vids[i])) vp++;
+          var el = d.documentElement, rs = 0;
+          try { rs = performance.getEntriesByType('resource').length; } catch (e1) { /* no timing */ }
+          browser.runtime.sendMessage({ k: 'probe', h: location.hostname, t: b ? (b.innerText || '').length : 0, im: imgs.length, ib: ib, iv: iv, fr: d.getElementsByTagName('iframe').length, vd: vd, vp: vp,
+            hh: el ? el.scrollHeight : 0, ww: el ? el.scrollWidth : 0, iw: window.innerWidth, sc: d.scripts.length, nd: d.getElementsByTagName('*').length, rs: rs, rd: d.readyState }).catch(function () {});
+        } catch (e) { /* never break the page */ }
+      }, 2500);
+    }
+    if (document.readyState === 'complete') go(); else window.addEventListener('load', go);
+  }
+
+  return { at: at, all: all, covered: covered, rect: rect, rootOf: rootOf, playing: playing, menu: menu, probe: probe };
 })();

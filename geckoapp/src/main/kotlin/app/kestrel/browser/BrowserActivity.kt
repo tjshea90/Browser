@@ -642,7 +642,7 @@ open class BrowserActivity : Activity(), DockListener {
             "shields" -> { // LAB2: "<on|off>|host,host,...": Shields down (or back to the default) for these sites, as if the person had turned the site's Shields switch (compatibility A/B)
                 val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg")
                 val mode = arg.substringBefore('|'); val hosts = arg.substringAfter('|').split(',').map { it.trim() }.filter { it.isNotEmpty() }
-                for (h in hosts) Shields.setOverride(h, if (mode == "off") SiteShields(0, 0).with(ShieldFlag.SHIELDS, false) else SiteShields(0, 0))
+                for (h in hosts) Shields.setOverride(h, if (mode == "off") app.kestrel.core.shield.SiteShields(0, 0).with(app.kestrel.core.shield.ShieldFlag.SHIELDS, false) else app.kestrel.core.shield.SiteShields(0, 0))
                 Io.main.post { for (t in tabs) { t.shields = Shields.effective(prefs, t.topHost); syncEngineProtection(t) }; Health.log("lab", "shields", "$mode ${hosts.size} sites") }
             }
             "closetabs" -> Io.main.post { for (t in tabs.toList()) doCloseTab(t); Health.log("lab", "closetabs", "tabs=${tabs.size}") }

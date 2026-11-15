@@ -289,7 +289,7 @@ function skipText() { return (skipAsked || skipReports) ? ' | ad skippers: asked
 var guardBlocked = 0;
 function trimMap(m, max) { while (m.size > max) m.delete(m.keys().next().value); }
 function guardAnswer(host, topHost) { // on: the pop-up guard applies; skip (RX3-Y2): the ad skipper may run (flag 8: the Settings row and the site's Shields switch); seek (YS1): a tap on a player's bar may move the video (flag 16: the Settings row "Tap the video bar to jump" only)
-  function answer(f) { return { on: (f & 1) !== 0, top: topHost || host, skip: (f & 8) !== 0, seek: (f & 16) !== 0, sg: (f & 32) !== 0, vb: (f & 64) !== 0, vba: (f & 128) !== 0 }; } // vb / vba (VC1): Kestrel's own video bar (Automatic or Always / Always only; the Settings row, not a Shields feature)
+  function answer(f) { return { on: (f & 1) !== 0, top: topHost || host, skip: (f & 8) !== 0, seek: (f & 16) !== 0, sg: (f & 32) !== 0, vb: (f & 64) !== 0, vba: (f & 128) !== 0, lab: (f & 256) !== 0 }; } // vb / vba (VC1): Kestrel's own video bar (Automatic or Always / Always only; the Settings row, not a Shields feature)
   var f = cfgFlags.get(host);
   if (f !== undefined) return Promise.resolve(answer(f));
   return askCfg(host).then(function () { return answer(cfgFlags.get(host) || 0); });
@@ -903,6 +903,15 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   var w = m.w | 0, h = m.h | 0;
   if (w < 40 || h < 30 || w > 5000 || h > 5000 || !browser.tabs || typeof browser.tabs.sendMessage !== 'function') return Promise.resolve({ video: false });
   return browser.tabs.sendMessage(sender.tab.id, { k: 'ftq', t: m.t === 'lp' ? 'lp' : 'tap', w: w, h: h }, { frameId: 0 }).then(function (r) { return { video: !!(r && r.video) }; }, function () { return { video: false }; });
+});
+
+// LAB2: a DEBUG build (flag 256 in the guard answer) asks every page for a page-health probe (vfind.js probe()): numbers only, clamped; the page of the tab goes along so that the app drops a private tab's.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'probe' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
+  function n(v) { v = v | 0; return v > 0 ? Math.min(v, 9999999) : 0; }
+  var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || docOf(sender.url);
+  send({ k: 'probe', h: String(m.h || '').replace(/[^A-Za-z0-9.-]/g, '').slice(0, 60), t: n(m.t), im: n(m.im), ib: n(m.ib), iv: n(m.iv), fr: n(m.fr), vd: n(m.vd), vp: n(m.vp), hh: n(m.hh), ww: n(m.ww), iw: n(m.iw), sc: n(m.sc), nd: n(m.nd), rs: n(m.rs), rd: String(m.rd || '').replace(/[^a-z]/g, '').slice(0, 12), p: String(page).slice(0, 300) }).catch(function () {});
+  return undefined;
 });
 
 // VC1: videobar.js reports what Kestrel's own video bar did: it was shown (e 'shown'), the page had controls of its own (e 'own'), the person used it (e 'act', a = play, pause, seek, mute, full). Numbers
