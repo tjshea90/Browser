@@ -13,21 +13,23 @@ window.KestrelVB = window.KestrelVB || (function () {
     if (!VF || !window.addEventListener || !document.createElement) return api;
     var TOP = window.top === window;
     var SVGNS = 'http://www.w3.org/2000/svg';
-    var T = { judge: 450, late: 1700, hide: 4000, hidePaused: 8000, drag: 140, tap: 600 };    // the clocks (a test shortens them through window.__kstVBcfg)
+    // tap: shorter than the engine's long press (500 ms): a press released at 500-600 ms was a video menu AND a tap, and the bar came up behind the sheet (RW5)
+    var T = { judge: 450, late: 1700, hide: 4000, hidePaused: 8000, drag: 140, tap: 450, pre: 50 };    // the clocks (a test shortens them through window.__kstVBcfg)
     try { if (window.__kstVBcfg) for (var key in window.__kstVBcfg) T[key] = window.__kstVBcfg[key]; } catch (e0) { /* optional */ }
     api.t = T;
 
-    var cfg = null, cfgWait = [], bar = null, down = null, judgeTimer = 0, lateTimer = 0;
+    var cfg = null, cfgWait = [], bar = null, down = null, judgeTimer = 0, lateTimer = 0, ownFor = null;
 
     // ------------------------------------------------------------------------------------------ what the app says (once per page)
+    // RW11: an answer that did not come (the background page was busy or gone) is given to the waiting taps as "off" but NOT kept: the next tap asks again
     function ask(cb) {
       if (cfg) { cb(cfg); return; }
       cfgWait.push(cb);
       if (cfgWait.length > 1) return;
-      function done(c) { cfg = c; var w = cfgWait; cfgWait = []; for (var i = 0; i < w.length; i++) { try { w[i](c); } catch (e) { /* never break the page */ } } }
+      function done(c, keep) { if (keep) cfg = c; var w = cfgWait; cfgWait = []; for (var i = 0; i < w.length; i++) { try { w[i](c); } catch (e) { /* never break the page */ } } }
       try {
-        browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { done({ on: !!(r && r.vb === true), always: !!(r && r.vba === true) }); }, function () { done({ on: false, always: false }); });
-      } catch (e) { done({ on: false, always: false }); }
+        browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { done({ on: !!(r && r.vb === true), always: !!(r && r.vba === true) }, !!r); }, function () { done({ on: false, always: false }, false); });
+      } catch (e) { done({ on: false, always: false }, false); }
     }
     function report(e, a) { try { browser.runtime.sendMessage({ k: 'vbk', e: e, a: a || '' }).catch(function () {}); } catch (x) { /* nobody listens */ } }
 
