@@ -130,6 +130,7 @@ window.KestrelVB = window.KestrelVB || (function () {
         if (!TOP) relay('tap');                                   // maybe this frame lies over a video of the page above it
       });
     }
+    var relayedAt = 0;
     function relay(kind) {
       var now = Date.now();
       if (now - relayedAt < 1500) return;                         // a banner frame that is tapped over and over must not make the page above it look for videos every time
