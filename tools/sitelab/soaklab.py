@@ -258,6 +258,8 @@ class H(http.server.BaseHTTPRequestHandler):
         u = urllib.parse.urlparse(self.path)
         p, q = u.path, urllib.parse.parse_qs(u.query)
         try:
+            if DELAY and p not in ("/health", "/report"):
+                time.sleep(DELAY)
             if p == "/":
                 return self._send(index())
             if p == "/health":
