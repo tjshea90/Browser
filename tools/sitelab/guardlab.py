@@ -24,6 +24,9 @@
               the video gets the click and the layer none ("video-click" only); without it the layer takes the first tap ("layer-click", the ad is refused) and the video plays on the second try.
   /preroll-main RX3-V3: ONE <video> element plays a 15 s "ad" file (/ad15.wav); after 8 s of real playback the page gives the same element the 60 s "film" (/film60.wav). The app's Health lines "video info PLAYED el=N ..."
               show both played reports with the SAME element number and, after the second, the ad marked as an advertisement and not counted: "counted=1 of 2".
+  /blob-lab   RX3-V4: a <video> whose source is a blob: address (the page fetched /blob-film.wav, 300 s of silence, and made the address itself), next to two stream playlists the page asked for:
+              /blob-clip.m3u8 (45 s) and /blob-film.m3u8 (300 s). After the early look (about 3 s after the page settled) and 3 s of real playback the app's Health lines say "media look HLS ... length=300s",
+              "video info-blob PLAYED el=1 ... length=300s ... matched=1 counted=1 of 2": the film is matched to the player, the 45 s clip next to it is not counted.
   /playerlab  RX3-G7: five mock video players on one page, driven by the page itself (no touch needed): an ordinary video (no ad words), a JW-style player (jw-flag-ads on its root), a Video.js-style player
               (vjs-ad-loading, then vjs-ad-playing), a Google-IMA-style host (the ad video inside .ima-ad-container) and a JW-style ad with a skip button (.jw-skip, .jw-skippable). Each ad is a REAL 12 s silent
               media element. The log says how long the ad took (about 12000 ms = not skipped, a few hundred = fast-forwarded), at what speed it ran, and which events the skip button got. Ends with a DONE line.
@@ -216,10 +219,35 @@ setTimeout(function () { L('DONE', 'asked for all three'); }, 6000);
 </script></body></html>
 """
 
+BLOBLAB = b"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>blob-lab</title></head>
+<body style="margin:8px;font:18px sans-serif"><p>blob-lab: a player on a blob: address, two playlists.</p>
+<video id="v" muted controls style="width:300px;height:170px"></video>
+<script>
+function L(k, v) { try { var x = new XMLHttpRequest(); x.open('GET', '/log?kind=' + encodeURIComponent(k) + '&v=' + encodeURIComponent(v)); x.send(); } catch (e) {} }
+L('load', 'blob-lab');
+(async function () {
+  try {
+    await (await fetch('/blob-clip.m3u8')).text(); L('got', 'clip playlist (45 s)');
+    await (await fetch('/blob-film.m3u8')).text(); L('got', 'film playlist (300 s)');
+    var b = await (await fetch('/blob-film.wav')).blob();
+    var v = document.getElementById('v');
+    v.addEventListener('playing', function () { L('playing', 'blob element: ' + Math.round(v.duration) + ' s'); });
+    v.src = URL.createObjectURL(b); v.muted = true;
+    var p = v.play(); if (p && p.catch) p.catch(function (e) { L('play-refused', String(e)); });
+    setTimeout(function () { L('DONE', 'blob player playing ' + Math.round(v.currentTime) + ' s of ' + Math.round(v.duration)); }, 9000);
+  } catch (e) { L('error', String(e)); }
+})();
+</script></body></html>
+"""
+
 def hls_playlist(kind):
     head = "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:6\n#EXT-X-MEDIA-SEQUENCE:0\n"
     if kind == "live":
         return head + "".join("#EXTINF:6.0,\n/seg/live%d.ts\n" % i for i in range(4))
+    if kind == "blobclip":
+        return head + "#EXT-X-PLAYLIST-TYPE:VOD\n" + "".join("#EXTINF:5.0,\n/seg/blobclip%d.ts\n" % i for i in range(9)) + "#EXT-X-ENDLIST\n"
+    if kind == "blobfilm":
+        return head + "#EXT-X-PLAYLIST-TYPE:VOD\n" + "".join("#EXTINF:6.0,\n/seg/blobfilm%d.ts\n" % i for i in range(50)) + "#EXT-X-ENDLIST\n"
     if kind == "short":
         return head + "#EXT-X-PLAYLIST-TYPE:VOD\n" + "".join("#EXTINF:6.0,\n/seg/short%d.ts\n" % i for i in range(2)) + "#EXT-X-ENDLIST\n"
     out = head + "#EXT-X-PLAYLIST-TYPE:VOD\n"
@@ -364,6 +392,15 @@ class H(http.server.BaseHTTPRequestHandler):
         if u.path in ("/live.m3u8", "/short.m3u8", "/film.m3u8"):
             self._write("GET " + u.path)
             return self._send(200, hls_playlist(u.path[1:].split(".")[0]).encode(), "application/vnd.apple.mpegurl")
+        if u.path == "/blob-lab":
+            self._write("GET /blob-lab")
+            return self._send(200, BLOBLAB)
+        if u.path in ("/blob-clip.m3u8", "/blob-film.m3u8"):
+            self._write("GET " + u.path)
+            return self._send(200, hls_playlist("blobclip" if "clip" in u.path else "blobfilm").encode(), "application/vnd.apple.mpegurl")
+        if u.path == "/blob-film.wav":
+            self._write("GET /blob-film.wav")
+            return self._send(200, base64.b64decode(silent_wav(300).split(",", 1)[1]), "audio/wav")
         if u.path == "/playlab":
             self._write("GET /playlab")
             return self._send(200, PLAYLAB)
