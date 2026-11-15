@@ -145,17 +145,22 @@ window.KestrelVB = window.KestrelVB || (function () {
     function judge(v, late) {
       try {
         if (!v.isConnected) return;
-        if (bar) { if (bar.v === v && !late) keep(); return; }
-        if (late && v.paused) return;                             // the second look is for a video that started after the tap (an ad that follows the play button)
+        if (bar) {
+          if (bar.v === v) { if (!late) keep(); return; }
+          hide();                                                  // RW9: a tap on another film while the first one's bar is up: that bar goes, the new film is judged
+        }
+        if (late && (v.paused || ownFor === v)) return;           // the second look is for a video that started after the tap (an ad that follows the play button); RW10: not for a film that had controls of its own at the first look
         var r = VF.rect(v);
         if (!r) return;
-        if (!(cfg && cfg.always) && ownControls(v, r)) { if (!late) report('own'); return; }
+        if (!(cfg && cfg.always) && ownControls(v, r)) { if (!late) { ownFor = v; report('own'); } return; }
+        ownFor = null;
         show(v);
       } catch (e) { /* never break the page */ }
     }
     function judgeSoon(v) {
       if (judgeTimer) clearTimeout(judgeTimer);
       if (lateTimer) clearTimeout(lateTimer);
+      ownFor = null;
       judgeTimer = setTimeout(function () { judgeTimer = 0; judge(v, false); }, T.judge);
       lateTimer = setTimeout(function () { lateTimer = 0; judge(v, true); }, T.late);
     }
@@ -164,14 +169,31 @@ window.KestrelVB = window.KestrelVB || (function () {
       var r = bar.wrap.getBoundingClientRect();
       return x >= r.left - 4 && x <= r.right + 4 && y >= r.top - 4 && y <= r.bottom + 4;
     }
+    // RW1: a tap on a link, a field or a button of the page that is not a player control is the person using THAT, not the film behind it. A button named like a player control (play, pause, mute, seek ...)
+    // stays a tap on the film: the page may remove its button once the film runs, and then the film has no control left.
+    function onPageControl(x, y, v) {
+      try {
+        var st = document.elementsFromPoint(x, y);
+        var top = st && st[0];
+        if (!top || top === v || top.tagName === 'VIDEO') return false;
+        for (var n = top, i = 0; n && n.nodeType === 1 && n !== document.body && n !== document.documentElement && i < 8; i++, n = n.parentNode) {
+          var t = n.tagName, role = n.getAttribute('role') || '';
+          if (((t === 'A' || t === 'AREA') && n.hasAttribute('href')) || /^(INPUT|SELECT|TEXTAREA|OPTION|LABEL|SUMMARY)$/.test(t) || /^(link|checkbox|radio|menuitem|tab|switch|textbox|searchbox|combobox|listbox|option)$/i.test(role)) return true;
+          if (t === 'BUTTON' || /^button$/i.test(role)) return !CTRL.test(nameOf(n));
+        }
+      } catch (e) { /* never break the page */ }
+      return false;
+    }
     function tapped(x, y, d) {
       if (insideBar(x, y)) return;
+      if (Date.now() - (VF.pressedAt || 0) < 1000) return;         // RW5: this release ends a long press that already opened the video menu (or the panel)
       ask(function (c) {
         if (!c.on) return;
         var v = (d && d.v) || VF.at(x, y);
         if (v) {
+          if (onPageControl(x, y, v)) return;
           // a page whose controls were showing when the finger came down (a tap on the film hides them again, as on YouTube) has controls of its own: not a reason to draw ours as they fade
-          if (d && d.own && !c.always) { report('own'); return; }
+          if (d && d.own && !c.always) { ownFor = v; report('own'); return; }
           judgeSoon(v);
           return;
         }
@@ -195,21 +217,42 @@ window.KestrelVB = window.KestrelVB || (function () {
       } catch (x) { /* never break the page */ }
       return false;
     }
+    // what the page showed when the finger came down. RW8: not at once (a scroll starts with the same touch and this is a look at the page), but T.pre ms in, and a touch that turns into a scroll
+    // (pointercancel, or a move of more than 12 px) never gets it; a tap that is over before the timer runs gets it at its pointerup, still before any handler of the page sees that.
+    function pre(d) {
+      if (d.looked) return;
+      d.looked = true;
+      try {
+        if (!(cfg && cfg.on && !cfg.always)) return;
+        var v = VF.at(d.x, d.y, 300), r = v ? VF.rect(v) : null;
+        if (v && r) { d.v = v; d.own = ownControls(v, r); }
+      } catch (x) { /* never break the page */ }
+    }
     window.addEventListener('pointerdown', function (e) {
-      down = e.isTrusted ? { x: e.clientX, y: e.clientY, t: Date.now(), id: e.pointerId, v: null, own: false } : null;
-      if (down && cfg && cfg.on && !cfg.always && mayHaveVideo(e)) {
-        try { var v = VF.at(down.x, down.y, 300), r = v ? VF.rect(v) : null; if (v && r) { down.v = v; down.own = ownControls(v, r); } } catch (x) { /* never break the page */ }
-      }
+      if (!e.isTrusted) return;                                    // RW7: a script's own event is nobody's touch
+      if (down && down.timer) clearTimeout(down.timer);
+      var d = { x: e.clientX, y: e.clientY, t: Date.now(), id: e.pointerId, v: null, own: false, looked: false, timer: 0 };
+      down = d;
+      if (cfg && cfg.on && !cfg.always && mayHaveVideo(e)) d.timer = setTimeout(function () { d.timer = 0; if (down === d) pre(d); }, T.pre);
+      else d.looked = true;
     }, { capture: true, passive: true });
-    window.addEventListener('pointercancel', function () { down = null; }, { capture: true, passive: true });
+    window.addEventListener('pointercancel', function (e) {
+      if (!e.isTrusted) return;
+      if (down && down.timer) clearTimeout(down.timer);
+      down = null;
+    }, { capture: true, passive: true });
     window.addEventListener('pointerup', function (e) {
+      if (!e.isTrusted) return;
       var d = down; down = null;
-      if (!d || !e.isTrusted || e.pointerId !== d.id) return;
+      if (!d || e.pointerId !== d.id) return;
+      if (d.timer) { clearTimeout(d.timer); d.timer = 0; }
       if (Date.now() - d.t > T.tap || Math.abs(e.clientX - d.x) > 12 || Math.abs(e.clientY - d.y) > 12) return;
+      pre(d);
       tapped(e.clientX, e.clientY, d);
     }, { capture: true, passive: true });
 
-    // the top frame answers what a frame above a video relayed (the background forwards it): a tap there, or a long press there
+    // the top frame answers what a frame above a video relayed (the background forwards it): a tap there, or a long press there. RW4: for a long press the answer carries the film's web address and the FRAME
+    // sends the video menu itself, but only when it has not told the app "open space" in the meantime (the panel and the sheet must never both open).
     if (TOP) {
       browser.runtime.onMessage.addListener(function (m) {
         if (!m || m.k !== 'ftq') return undefined;
@@ -217,12 +260,15 @@ window.KestrelVB = window.KestrelVB || (function () {
           try {
             var v = VF.covered(m.w | 0, m.h | 0);
             if (!v) { resolve({ video: false }); return; }
-            if (m.t === 'lp') { VF.menu(v); resolve({ video: true }); return; }
+            if (m.t === 'lp') { resolve({ video: true, src: VF.srcOf(v) }); return; }
             ask(function (c) { if (c.on) judgeSoon(v); resolve({ video: true }); });
           } catch (e) { resolve({ video: false }); }
         });
       });
     }
+
+    // RW7: content.js asks whether an element is Kestrel's own bar (a long press on the bar is neither the video menu nor the panel). By identity: the page cannot name any of its elements "the bar".
+    api.isBar = function (el) { return !!bar && el === bar.host; };
 
     // ------------------------------------------------------------------------------------------ the bar
     var PLAY = 'M8 5v14l11-7z', PAUSE = 'M6 19h4V5H6v14zm8-14v14h4V5h-4z';
