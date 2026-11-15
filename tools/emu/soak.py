@@ -1225,8 +1225,10 @@ class Soak:
         self.ph.setting("system", "accelerometer_rotation", 0)    # Android's own rotation lock ON, like the owner's tablet: the app's full-sensor request must still turn the screen
         self.ph.setting("system", "user_rotation", 0)
         results = []
-        for mode in ("hidden", "kept"):
-            self.ph.a.sh("setprop debug.kestrel.nohide %s" % ("1" if mode == "kept" else "0"))
+        for mode in ("keep", "hide"):                       # FB1: the app's Settings choice "System bars in full-screen video": Keep (the default) and Hide
+            self.ph.a.sh("setprop debug.kestrel.nohide 0")
+            self.ph.debug("bars", mode)
+            time.sleep(2)
             for kind, nobar in (("shadow", False), ("light", False), ("shadow", True)):
                 self.ph.physical(0, 9.81, 0)
                 time.sleep(2)
@@ -1276,7 +1278,8 @@ class Soak:
                 self.ph.physical(0, 9.81, 0)
             self.dump_diag("fsb-" + mode)                       # the app's own words about the bars after this mode (diagnostics-fsb-hidden.txt / -kept.txt)
         self.ph.a.sh("setprop debug.kestrel.nohide 0")
-        # verdicts: the red strip must be visible (>= 3 rows) in every state; with the bars KEPT it must end above the system bar (the navigation bar is 52 px tall), with the bars hidden it sits on the very edge
+        self.ph.debug("bars", "keep")
+        # verdicts: the red strip must be visible (>= 3 rows) in every state; with the bars KEPT (the default) it must end above the system bar (the navigation bar is 52 px tall), with the bars hidden it sits on the very edge
         ok = True
         for r in results:
             if not r["entered"]:
@@ -1291,7 +1294,7 @@ class Soak:
                 if count < 3:
                     self.issue("high", "fullscreen-bars", "%s %s %s: the bottom edge of the full-screen page is NOT visible (no red strip): it is under a system bar" % (r["mode"], r["kind"], st["state"]), shot=True)
                     ok = False
-                elif r["mode"] == "kept" and lasty >= height - 40:
+                elif r["mode"] == "keep" and lasty >= height - 40:
                     self.issue("high", "fullscreen-bars", "%s %s %s: the page reaches y=%d of %d: it still extends under the kept navigation bar" % (r["mode"], r["kind"], st["state"], lasty, height))
                     ok = False
             if r["nobar"] and r["bar_shown"] is False:
@@ -1308,6 +1311,7 @@ class Soak:
         w, h = self.screen
         d = 1.0625                                           # 170 dpi
         self.ph.a.sh("setprop debug.kestrel.nohide 0")
+        self.ph.debug("bars", "keep"); time.sleep(2)
         self.ph.setting("system", "accelerometer_rotation", 0); self.ph.setting("system", "user_rotation", 0)
         self.ph.physical(0, 9.81, 0); time.sleep(2)
         lmark = self.log.size()
@@ -1710,7 +1714,7 @@ class Soak:
         if self.fsb_results:
             L.append("## Full screen: the system bars, the turn and the controls (FSB1 / ROT1 / FSC1, owner message 46)")
             L.append("")
-            L.append("`hidden` = the emulator's system hides its bars as asked; `kept` = the debug switch nohide: the bars stay, like the owner's tablet. The page's red strip must stay visible in every state; `kept` must end above the 52 px navigation bar.")
+            L.append("`keep` = Settings > System bars in full-screen video on Keep (the default: the bars stay, the page is laid out between them, like the owner's tablet needs); `hide` = on Hide (this emulator's system really hides them). The page's red strip must stay visible in every state; `keep` must end above the 52 px navigation bar.")
             L.append("")
             L.append("| bars | player box | state | red strip rows (first-last of screen height) | page window w x h | video paused for the turn | turn settled | system bars note |")
             L.append("| :- | :- | :- | :- | :- | -: | :- | :- |")
