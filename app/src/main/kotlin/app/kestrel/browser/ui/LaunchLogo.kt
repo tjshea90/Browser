@@ -20,7 +20,8 @@ import app.kestrel.core.session.LaunchAnim
  * FIRST DRAW (the first frame of the app), not when the view is made: building the screen takes longer than the flourish.
  */
 class LaunchLogo(ctx: Context, private val stretch: Float = 1f, private val onDone: (LaunchLogo) -> Unit) : View(ctx) {   // [stretch] > 1 makes it slower (DEBUG builds only: an emulator proof can catch the frames)
-    private val logo = ctx.getDrawable(R.drawable.ic_launcher_foreground)
+    // mutate(): a vector drawable shares its state (alpha included) with every other drawable made from the same resource - the Home screen's brand mark is one: without this the fade left that mark invisible
+    private val logo = ctx.getDrawable(R.drawable.ic_launcher_foreground)?.mutate()
     private val accent = ctx.getColor(R.color.accent)
     private val coverPaint = Paint()
     private val haloPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -51,7 +52,10 @@ class LaunchLogo(ctx: Context, private val stretch: Float = 1f, private val onDo
         val t = (clock() - startAt).toFloat() / (LaunchAnim.TOTAL_MS * stretch)
         if (t >= 1f) { finished = true; onDone(this); return }
         val w = width.toFloat(); val h = height.toFloat()
-        val cx = w / 2f; val cy = h / 2f
+        // the symbol sits at the centre of the WINDOW, where the launch window drew it (this view starts under the status bar): no jump from one to the other
+        val at = IntArray(2); getLocationInWindow(at)
+        val winH = rootView.height.toFloat().takeIf { it > 0f } ?: (h + at[1])
+        val cx = w / 2f; val cy = winH / 2f - at[1]
         val size = LOGO_DP * resources.displayMetrics.density
 
         val cover = LaunchAnim.cover(t)
