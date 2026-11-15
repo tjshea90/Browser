@@ -22,7 +22,7 @@ on:
         type: string
         default: '60'
       net:
-        description: 'full = the fast link of the runner; hotspot = shaped like the phone hotspot of the owner (5 Mbit/s each way, 60-100 ms delay)'
+        description: 'full = the fast link of the runner; hotspot = shaped like the phone hotspot of the owner (5 Mbit/s each way; no delay: the emulator's delay option made ordinary pages crawl)'
         type: choice
         options: [full, hotspot]
         default: full

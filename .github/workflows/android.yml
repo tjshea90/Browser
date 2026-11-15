@@ -50,7 +50,7 @@ on:
         type: string
         default: '60'
       lab_net:
-        description: 'Only for app = lab: full = the fast link of the runner, hotspot = shaped like the phone hotspot of the owner (5 Mbit/s, 60-100 ms)'
+        description: 'Only for app = lab: full = the fast link of the runner, hotspot = shaped like the phone hotspot of the owner (5 Mbit/s each way)'
         type: choice
         options: [full, hotspot]
         default: full
