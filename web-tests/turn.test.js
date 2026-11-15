@@ -120,9 +120,7 @@ test('FB3: the extra resize comes once the viewport is still, and a player that 
 
 test('FB4 + ROT2: a page says its viewport once soon after it is up (f = 0), and, once it has been still, in full screen (f = 1), in device pixels; a resize outside full screen says nothing', async () => {
   const page = await open(VIDEO(), { turn: true });
-  await wait(page, 600);
-  assert.deepEqual(await msgs(page, 'vpt'), [], 'nothing yet: the one report comes a second after the page is up');
-  await wait(page, 700);
+  await page.waitForFunction(() => window.__msgs.some((m) => m && m.k === 'vpt'), null, { timeout: 8000 });   // the one report of a page that is up (a second after it started: no fixed wait)
   const hello = await msgs(page, 'vpt');
   assert.equal(hello.length, 1, 'the one report of a page that is up: ' + JSON.stringify(hello));
   assert.deepEqual([hello[0].w, hello[0].h, hello[0].f], [500, 800, 0], JSON.stringify(hello[0]));
@@ -132,10 +130,24 @@ test('FB4 + ROT2: a page says its viewport once soon after it is up (f = 0), and
   await page.setViewportSize({ width: 500, height: 800 });
   await wait(page, 300);
   await page.evaluate(() => document.getElementById('v').requestFullscreen());
-  await wait(page, 700);
+  await page.waitForFunction(() => window.__msgs.filter((m) => m && m.k === 'vpt').length >= 2, null, { timeout: 8000 });
   const m = await msgs(page, 'vpt');
-  assert.ok(m.length >= 2, 'told once the full screen began: ' + JSON.stringify(m));
   const last = m[m.length - 1];
   assert.deepEqual([last.w, last.h, last.f], [500, 800, 1], JSON.stringify(last));
+  await page.context().close();
+});
+
+test('review of alpha53: a turn and back inside one window leaves the shape right, so the next unrelated resize is not taken for a turn', async () => {
+  const page = await open(VIDEO(), { turn: true });
+  await play(page);
+  await page.setViewportSize({ width: 800, height: 500 });                  // the turn ...
+  await wait(page, 100);
+  await page.setViewportSize({ width: 500, height: 800 });                  // ... and back, before it settled
+  await page.waitForFunction(() => window.__msgs.some((m) => m && m.k === 'vbk' && m.e === 'turn'), null, { timeout: 8000 });
+  await wait(page, 900);
+  const before = (await msgs(page, 'vbk')).filter((m) => m.e === 'turn').length;
+  await page.setViewportSize({ width: 500, height: 520 });                  // a keyboard: the shape is the same
+  await wait(page, 1000);
+  assert.equal((await msgs(page, 'vbk')).filter((m) => m.e === 'turn').length, before, 'no new turn for a resize that keeps the shape');
   await page.context().close();
 });

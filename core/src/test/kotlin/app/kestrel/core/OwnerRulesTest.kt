@@ -225,7 +225,7 @@ class OwnerRulesTest {
     @Test fun theVideosOfAPageArePausedForATurnWhetherOrNotTheyMakeSound() {
         val dir = "geckoapp/src/main/assets/kestrel-shields/"
         val manifest = source(dir + "manifest.json")
-        assertTrue("turn.js runs in every frame after vfind.js", manifest.contains("\"turn.js\"") && manifest.indexOf("\"vfind.js\", \"videobar.js\", \"turn.js\"".replace(", ", ",\n          ")) >= -1)
+        assertTrue("turn.js runs in every frame after vfind.js", manifest.contains("\"turn.js\"") && manifest.lastIndexOf("\"vfind.js\"", manifest.indexOf("\"turn.js\"")) in 0 until manifest.lastIndexOf("\"videobar.js\"", manifest.indexOf("\"turn.js\"")) && manifest.lastIndexOf("\"videobar.js\"", manifest.indexOf("\"turn.js\"")) < manifest.indexOf("\"turn.js\""))
         val turn = source(dir + "turn.js")
         assertTrue("every video, also inside shadow roots", turn.contains("VF.all('video')"))
         assertTrue("paused when the shape of the window flips, not for a keyboard", turn.contains("if (now === landscape) return;") && turn.contains("vids[i].pause()"))
@@ -271,7 +271,7 @@ class OwnerRulesTest {
         assertTrue("the nudge the turn asks for is the real size change of FB4, and the ring is a view of the cover", act.contains("{ resyncEngineSize() }, { turnHint }") && act.contains("turnCover = cover; turnHint = ring"))
         val machine = source("core/src/main/kotlin/app/kestrel/core/media/TurnSettleMachine.kt")
         assertTrue(machine.contains("TurnSettle.settled(n - lastChangeAt, n - startedAt, expects, confirmed)") && machine.contains("fun pageReported(matchesView: Boolean)"))
-        assertTrue("a size change takes a confirmation back", body(machine, "fun sizeChanged() {").contains("confirmed = false"))
+        assertTrue("a size change takes a confirmation back", machine.contains("fun sizeChanged() { if (active) { lastChangeAt = h.now(); confirmed = false } }"))
         val turn = source("geckoapp/src/main/assets/kestrel-shields/turn.js")
         assertTrue("the top frame says its viewport once soon after the page is up", turn.contains("if (TOP) setTimeout(function () { try { sendViewport(document.fullscreenElement ? 1 : 0); }"))
         assertTrue("a new session forgets that the page reports", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/GeckoTab.kt").contains("g.vpOk = false"))
