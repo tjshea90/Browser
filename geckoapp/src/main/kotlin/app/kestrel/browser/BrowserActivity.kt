@@ -277,7 +277,7 @@ open class BrowserActivity : Activity(), DockListener {
         val h = UrlParts.hostOf(page)
         if (h == null || t.topHost != h) return // the press was on another tab's page
         val now = SystemClock.uptimeMillis()
-        if (pressMovedFar || (!pressActive && now - pressEndAt > OPEN_SPACE_FRESH_MS)) return // not the press that was just made
+        if (pressMovedFar || (!pressActive && now - pressEndAt > OPEN_SPACE_FRESH_MS)) { Health.log("panel", "open-space-dropped", "moved=$pressMovedFar active=$pressActive late=${now - pressEndAt}"); return } // not the press that was just made
         if (pressActive) { // the finger is still down: the page's touch is over (nothing is clicked or selected when it lifts), and the rest of it is ours
             val cancel = android.view.MotionEvent.obtain(pressDownTime, now, android.view.MotionEvent.ACTION_CANCEL, pressX, pressY, 0)
             window.superDispatchTouchEvent(cancel); cancel.recycle()
@@ -285,6 +285,7 @@ open class BrowserActivity : Activity(), DockListener {
         }
         root.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
         Health.count("panel.openSpace")
+        Health.log("panel", "open-space", "x=${pressX.toInt()} y=${pressY.toInt()} finger=$pressActive")
         miniNav.showAt(pressX, pressY)
     }
     private val hotCorner by lazy { app.kestrel.browser.ui.HotCorner(Io.main, touchSlop.toFloat(), hotCornerHost) }

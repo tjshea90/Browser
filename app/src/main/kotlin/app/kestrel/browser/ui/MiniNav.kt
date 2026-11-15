@@ -210,7 +210,9 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
      * else it moves there. The place is remembered like any other the person moved it to.
      */
     fun showAt(xWin: Float, yWin: Float) {
-        if (isAbovePanel(yWin)) { setOpen(false, true); return }   // a second long press ABOVE the open panel closes it (owner message 41)
+        val above = isAbovePanel(yWin)
+        app.kestrel.browser.diag.Health.log("panel", "long-press", "y=${yWin.toInt()} open=$isOpen above=$above") // what a long press on open space did to the panel (Diagnostics)
+        if (above) { setOpen(false, true); return }   // a second long press ABOVE the open panel closes it (owner message 41)
         val loc = IntArray(2); getLocationInWindow(loc)
         val d = density
         val xdp = (xWin - loc[0]) / d; val ydp = (yWin - loc[1]) / d
