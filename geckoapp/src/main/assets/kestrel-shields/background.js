@@ -289,7 +289,7 @@ function skipText() { return (skipAsked || skipReports) ? ' | ad skippers: asked
 var guardBlocked = 0;
 function trimMap(m, max) { while (m.size > max) m.delete(m.keys().next().value); }
 function guardAnswer(host, topHost) { // on: the pop-up guard applies; skip (RX3-Y2): the ad skipper may run (flag 8: the Settings row and the site's Shields switch); seek (YS1): a tap on a player's bar may move the video (flag 16: the Settings row "Tap the video bar to jump" only)
-  function answer(f) { return { on: (f & 1) !== 0, top: topHost || host, skip: (f & 8) !== 0, seek: (f & 16) !== 0 }; }
+  function answer(f) { return { on: (f & 1) !== 0, top: topHost || host, skip: (f & 8) !== 0, seek: (f & 16) !== 0, sg: (f & 32) !== 0 }; }
   var f = cfgFlags.get(host);
   if (f !== undefined) return Promise.resolve(answer(f));
   return askCfg(host).then(function () { return answer(cfgFlags.get(host) || 0); });
@@ -902,6 +902,15 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   function n(v, max) { v = v | 0; return v > 0 && v <= max ? v : 0; }
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || (sender.frameId === 0 ? docOf(sender.url) : '');
   send({ k: 'vq', t: n(m.t, 20000), d: n(m.d, 20000), c: n(m.c, 20000), s: n(m.s, 600), w: n(m.w, 20000), h: n(m.h, 20000), p: String(page).slice(0, 300) }).catch(function () {});
+  return undefined;
+});
+
+// RX4-M0e: content.js (top frame, only while the Settings switch "Measure scrolling on real pages" is on, flag 32) reports one scroll burst as numbers: frames, gaps over 50 ms, gaps over 100 ms, the longest gap.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'sg' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
+  function n(v, max) { v = v | 0; return v > 0 && v <= max ? v : 0; }
+  var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || docOf(sender.url);
+  send({ k: 'sg', n: n(m.n, 5000), a: n(m.a, 5000), b: n(m.b, 5000), mx: n(m.mx, 10000), p: String(page).slice(0, 300) }).catch(function () {});
   return undefined;
 });
 

@@ -107,6 +107,8 @@ class Prefs private constructor(ctx: Context) {
     var fullscreenTurn: Int get() = app.kestrel.core.media.FullscreenTurn.cleanMode(sp.getInt("fs_turn", 0)); set(v) = put("fs_turn", app.kestrel.core.media.FullscreenTurn.cleanMode(v))
     /** Calm pages: sites see "reduce motion" and GIFs play once (the owner's "have no animations", now for pages too). OFF since alpha27: a site that hides its loading symbol from an animation, or whose reduce-motion style leaves one frozen, kept it on screen. */
     var calmPages: Boolean get() = bool("calm_pages", false); set(v) = put("calm_pages", v)
+    /** RX4-M0e: count the late screen updates while a real page scrolls (a frame callback that runs only during a scroll) and show the totals in Diagnostics. OFF: nothing runs. */
+    var measureScroll: Boolean get() = bool("measure_scroll", false); set(v) = put("measure_scroll", v)
 
     /** Kestrel G: double-tap to zoom a page. OFF by default: while it is allowed, Firefox holds every tap on a page wider than the screen (Desktop site, no viewport tag) for about a quarter of a second to see whether a second tap follows (research/REVIEW-EXTERNAL-1.md 3.1, EX-3). Pinch zoom is separate and always works. */
     var doubleTapZoom: Boolean get() = bool("tap_zoom", false); set(v) = put("tap_zoom", v)

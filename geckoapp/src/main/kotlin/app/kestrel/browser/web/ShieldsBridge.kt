@@ -66,6 +66,8 @@ class ShieldsBridge(
     private val leftPending: (String, Int) -> Unit = { _, _ -> },
     /** RX4-M0a: how a playing video did since the page's last look: frames shown (t), dropped (d), corrupt (c), seconds (s), picture width and height (w, h) and the page of its tab (p). Numbers only. Worker thread. */
     private val videoQuality: (JSONObject) -> Unit = {},
+    /** RX4-M0e: one scroll burst of a real page (only while the Settings switch is on): frames (n), gaps over 50 ms (a), over 100 ms (b), the longest gap in ms (mx) and the page of its tab (p). Worker thread. */
+    private val scrollGaps: (JSONObject) -> Unit = {},
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -115,6 +117,7 @@ class ShieldsBridge(
                     "yts" -> { adSkips(m); "" }
                     "sbk" -> { seekTaps(m); "" }
                     "vq" -> { videoQuality(m); "" }
+                    "sg" -> { scrollGaps(m); "" }
                     "bk" -> backPlace(m.optString("p"))
                     "bf" -> { backShown(m.optString("p"), m.optInt("ps") == 1, m.optString("nt"), m.optLong("ts"), m.optInt("y")); "" }
                     "ns" -> { noStore(m.optString("p")); "" }
@@ -208,7 +211,7 @@ class ShieldsBridge(
         // 4 = harmless stand-ins may answer blocked files (`$redirect=` rules, AW1c; follows Shields and the Settings switch "Fix ad and anti-adblock scripts", like the scriptlets),
         // 8 = the ad skipper may run in video players (RX3-Y2; follows Shields and the Settings switch "Skip ads inside video players"),
         // 16 = a tap on a video player's bar may move the video when the page does not (YS1, seekbar.js; follows ONLY the Settings switch "Tap the video bar to jump": it is not a Shields feature, a site with Shields off keeps it)
-        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0) or (if (prefs().tapSeek) 16 else 0)
+        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0) or (if (prefs().tapSeek) 16 else 0) or (if (prefs().measureScroll) 32 else 0)
         val on = s.shieldsUp && s.blockAds && snap?.fs?.isPageAllowed(host) != true
         return (if (on) "1:" else "0:") + gen + ":" + (if (snap != null) contentId(snap) else "") + ":" + guard
     }

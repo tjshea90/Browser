@@ -325,6 +325,40 @@
   } catch (e) { /* never break the page */ }
 })();
 
+// RX4-M0e (research/REVIEW-EXTERNAL-4.md): how smooth is scrolling on REAL pages? Only while the Settings switch "Measure scrolling on real pages" is on (the app's answer to the `guard` question carries `sg`; the
+// switch is OFF by default and nothing below runs without a true answer). A frame callback is requested only from a page's first scroll event until 200 ms after its last one; the frames, the gaps over 50 ms and over
+// 100 ms and the longest gap of the burst go to the app as numbers. The callback makes the page's own thread tick every frame DURING the burst, so the numbers say how well the page keeps up, not how smooth the engine is.
+(function () {
+  try {
+    if (window.top !== window || typeof window.requestAnimationFrame !== 'function') return;
+    var state = 0, asked = false, lastScroll = 0, running = false, last = 0, n = 0, a = 0, b = 0, mx = 0;
+    function ask() {
+      if (asked) return;
+      asked = true;
+      try { browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { state = (r && r.sg === true) ? 2 : 1; }, function () { state = 1; }); } catch (e) { state = 1; }
+    }
+    function flush() {
+      if (n >= 5) browser.runtime.sendMessage({ k: 'sg', n: Math.min(n, 5000), a: Math.min(a, 5000), b: Math.min(b, 5000), mx: Math.min(Math.round(mx), 10000) });
+      n = a = b = mx = 0; last = 0;
+    }
+    function tick(t) {
+      try {
+        if (last) { var d = t - last; n++; if (d > 50) a++; if (d > 100) b++; if (d > mx) mx = d; }
+        last = t;
+        if (performance.now() - lastScroll > 200) { running = false; flush(); return; }   // 200 ms without a scroll event: the burst is over
+        window.requestAnimationFrame(tick);
+      } catch (e) { running = false; }
+    }
+    window.addEventListener('scroll', function () {
+      lastScroll = performance.now();
+      if (state === 0) { ask(); return; }                  // the first scroll only asks; the switch is OFF for almost everybody
+      if (state !== 2 || running) return;
+      running = true; last = 0; n = a = b = mx = 0;
+      window.requestAnimationFrame(tick);
+    }, { passive: true });
+  } catch (e) { /* never break the page */ }
+})();
+
 // EY-1: where the page is scrolled, for the app's saved view of the page (top frame only). The engine's own scroll callbacks do not report the place a restored page scrolls itself to, the page does: a
 // scroll event 300 ms after the last scroll, and once after the load. Passive and debounced: nothing happens per frame. The number is CSS pixels (pageYOffset); the app compares it only with itself.
 (function () {

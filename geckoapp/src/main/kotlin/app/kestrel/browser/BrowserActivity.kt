@@ -397,7 +397,7 @@ open class BrowserActivity : Activity(), DockListener {
                 }
                 GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
                 GeckoEngine.warmUp(this)
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }))
                 Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
             }
         }
@@ -1116,6 +1116,13 @@ open class BrowserActivity : Activity(), DockListener {
         val host = UrlParts.hostOf(m.optString("p")) ?: return
         videoQuality.add(host, m.optInt("t"), m.optInt("d"), m.optInt("c"), m.optInt("s"), m.optInt("w"), m.optInt("h"), SystemClock.uptimeMillis())
         Health.log("video", "quality", "$host frames=${m.optInt("t")} dropped=${m.optInt("d")} corrupt=${m.optInt("c")} secs=${m.optInt("s")} ${m.optInt("w")}x${m.optInt("h")}")
+    }
+
+    // ---------------------------------------------------------------- RX4-M0e: the late screen updates of a scroll burst on a real page (only while the Settings switch is on; private tabs are dropped before)
+    private val scrollGaps = app.kestrel.core.media.ScrollGaps()
+    private fun onScrollGaps(m: org.json.JSONObject) {
+        val host = UrlParts.hostOf(m.optString("p")) ?: return
+        scrollGaps.add(host, m.optInt("n"), m.optInt("a"), m.optInt("b"), m.optInt("mx"))
     }
 
     // ---------------------------------------------------------------- YS1: taps on a video player's bar (seekbar.js reports differences; never an address; private tabs are dropped before)
@@ -1890,6 +1897,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(seekStats.line() + if (prefs.tapSeek) "" else " (the Settings switch is off)")
         out.add(fsTurner.line())
         out.add(videoQuality.line(GeckoEngine.videoPolicyText))
+        out.add(scrollGaps.line(prefs.measureScroll))
         out.add(app.kestrel.browser.shield.ScriptletSummary.read(applicationContext).ifEmpty { "Scriptlets in the lists: no compile report yet (the bundled lists are used until the first update)" })
         Engine.peek()?.let { fs -> out.add("YouTube scriptlet calls loaded: www.youtube.com " + fs.scriptletsFor("www.youtube.com").size + ", m.youtube.com " + fs.scriptletsFor("m.youtube.com").size) }
         out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null }} of ${tabs.size} tabs (the memory budget keeps up to ${liveBudget()} ready, MemAvailable ${Health.memAvailableMb()} MB, setting ${listOf("automatic", "few", "many")[prefs.tabsKept]}); current ${current?.url?.take(60) ?: "-"}")
