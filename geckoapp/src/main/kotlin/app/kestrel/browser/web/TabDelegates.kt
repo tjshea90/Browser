@@ -243,7 +243,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         // The channel starts suspended and resumes on the first read: closing without reading costs no data and frees the connection. The download manager makes its own
         // (Range-capable, resumable) request through the same network stack, with the same cookies.
         try { response.body?.close() } catch (e: Exception) { /* ignore */ }
-        a.download(tab, response.uri, null, header("Content-Disposition"), header("Content-Type")?.substringBefore(';')?.trim(), length)
+        a.download(tab, response.uri, null, header("Content-Disposition"), header("Content-Type")?.substringBefore(';')?.trim(), length, redirected = response.redirected)
     }
 
     override fun onSlowScript(session: GeckoSession, scriptFileName: String): GeckoResult<SlowScriptResponse>? = a.askSlowScript(tab)

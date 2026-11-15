@@ -1347,6 +1347,7 @@ open class BrowserActivity : Activity(), DockListener {
         tab.savedCopyOnce = savedCopy
         tab.prevUrl = tab.url
         tab.pendingNav = url
+        tab.pendingNavAt = SystemClock.uptimeMillis()
         tab.showHome = false
         tab.error = null
         tab.pendingLoad = null
@@ -1461,7 +1462,7 @@ open class BrowserActivity : Activity(), DockListener {
         val t = current ?: return
         if (t.error != null) { retry(t); return }
         val s = t.session ?: return
-        if (t.loading) { s.stop(); t.loading = false; t.progress = 0; updateUi() } else s.reload()
+        if (t.loading) { s.stop(); t.loading = false; t.progress = 0; t.pendingNav = null; updateUi() } else s.reload()
     }
 
     override fun onShields(anchor: View) {
@@ -2855,7 +2856,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     // ================================================================== downloads, external links, long-press
 
-    internal fun download(tab: Tab, url: String, userAgent: String?, contentDisposition: String?, mime: String?, length: Long, nameOverride: String? = null, headers: Map<String, String>? = null) {
+    internal fun download(tab: Tab, url: String, userAgent: String?, contentDisposition: String?, mime: String?, length: Long, nameOverride: String? = null, headers: Map<String, String>? = null, redirected: Boolean = false) {
         val name = nameOverride ?: Downloads.fileName(url, contentDisposition, mime)
         val limit = prefs.dataSaver.confirmDownloadBytes(NetworkMonitor.metered)
         val big = limit >= 0 && (length < 0 || length >= limit)
@@ -2864,9 +2865,9 @@ open class BrowserActivity : Activity(), DockListener {
         // RX4-X2: a download nobody tapped (a timer clicking a hidden link, a redirect to a file) asks first; the owner's own address and own buttons never count as "by itself"
         val now = SystemClock.uptimeMillis()
         val guard = app.kestrel.core.download.DownloadGuardRules.Input(
-            touchAgeMs = if (lastTouchAt == 0L) Long.MAX_VALUE else now - lastTouchAt, ownerNavigation = tab.pendingNav != null, risky = risky, big = big, cleartext = cleartext,
-            fromBlob = url.startsWith("blob:", ignoreCase = true), ownRequest = nameOverride != null || headers != null, declinedAgoMs = autoDownloadDeclinedAt[tab.id]?.let { now - it } ?: Long.MAX_VALUE,
-            touchToPageStartMs = if (tab.gecko.pageStartedAt == 0L || lastTouchAt == 0L) Long.MIN_VALUE else tab.gecko.pageStartedAt - lastTouchAt, pageItself = url == tab.gecko.pageStartUrl)
+            touchAgeMs = if (lastTouchAt == 0L) Long.MAX_VALUE else now - lastTouchAt, ownerNavigation = tab.pendingNav != null && now - tab.pendingNavAt < 15_000L, risky = risky, big = big, cleartext = cleartext,
+            fromBlob = url.startsWith("blob:", ignoreCase = true), ownRequest = nameOverride != null || headers != null, declinedAgoMs = autoDownloadDeclinedAt[declineKey(tab, url)]?.let { now - it } ?: Long.MAX_VALUE,
+            touchToPageStartMs = if (tab.gecko.pageStartedAt == 0L || lastTouchAt == 0L) Long.MIN_VALUE else tab.gecko.pageStartedAt - lastTouchAt, pageItself = url == tab.gecko.pageStartUrl || redirected) // RV4: a tapped link that redirects to the file (a release asset, a drive link) is still the page's own link
         when (app.kestrel.core.download.DownloadGuardRules.decide(guard)) {
             app.kestrel.core.download.DownloadGuardRules.Verdict.GO -> { startDownload(url, userAgent, contentDisposition, mime, tab, nameOverride, headers); leaveDownloadTab(tab); return }
             app.kestrel.core.download.DownloadGuardRules.Verdict.REFUSE_QUIETLY -> {
@@ -2886,14 +2887,22 @@ open class BrowserActivity : Activity(), DockListener {
             if (big) append("\n\nYou're on a metered connection (your phone's hotspot). This may use a lot of mobile data.")
             if (risky) append("\n\nThis type of file can install software or run code. Only continue if you trust the site.")
         }
+        // RV7: one such question per tab at a time: a page that fires file after file would stack a dialog for each; while one is open the rest are refused quietly
+        if (byItself) {
+            if (!autoQuestionTabs.add(tab.id)) { Health.count("download.autoRefused"); toast("Blocked another download this page started by itself"); leaveDownloadTab(tab); return }
+        }
         askYesNo(if (byItself) "A page started a download" else "Download this file?", msg, "Download", "Cancel", { ok ->
+            if (byItself) autoQuestionTabs.remove(tab.id)
             if (ok) startDownload(url, userAgent, contentDisposition, mime, tab, nameOverride, headers)
-            else if (byItself) autoDownloadDeclinedAt[tab.id] = SystemClock.uptimeMillis() // the same page's next self-started downloads are refused quietly for a minute
+            else if (byItself) autoDownloadDeclinedAt[declineKey(tab, url)] = SystemClock.uptimeMillis() // the next self-started downloads of this SITE in this tab are refused quietly for a minute
             leaveDownloadTab(tab)
         })
     }
 
-    private val autoDownloadDeclinedAt = HashMap<Long, Long>()
+    /** RV7: the decline is remembered per tab AND site (the next site opened in the tab starts clean); the tabs that have a "page started a download" question open now. */
+    private val autoDownloadDeclinedAt = HashMap<String, Long>()
+    private val autoQuestionTabs = HashSet<Long>()
+    private fun declineKey(tab: Tab, url: String) = "${tab.id}|${UrlParts.hostOf(url) ?: ""}"
 
     /** A tab whose only "page" was the download link has nothing to show: back to the page it came from, to Home, or closed when a page opened it. */
     private fun leaveDownloadTab(tab: Tab) {
