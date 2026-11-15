@@ -6,10 +6,11 @@
 // The bar is a closed shadow root with `position: fixed` on the document element (above frames and the page's layers), built with DOM calls and CSSOM only (a page's content-security-policy cannot
 // block that), hides after 4 s, and is never drawn on a page that has controls of its own unless the Settings row says "Always". Conservative ES5, passive listeners, no work until a tap.
 // Settings: the answer to the `guard` question carries `vb` (Automatic or Always) and `vba` (Always); nothing is done unless `vb` is exactly true. Numbers go to the app as `vbk` (never an address).
-var KestrelVB = (typeof KestrelVB !== 'undefined' && KestrelVB) || (function () {
+window.KestrelVB = window.KestrelVB || (function () {
   var api = {};
   try {
-    if (typeof KestrelVF === 'undefined' || !window.addEventListener || !document.createElement) return api;
+    var VF = window.KestrelVF;
+    if (!VF || !window.addEventListener || !document.createElement) return api;
     var TOP = window.top === window;
     var SVGNS = 'http://www.w3.org/2000/svg';
     var T = { judge: 450, late: 1700, hide: 4000, hidePaused: 8000, drag: 140, tap: 600 };    // the clocks (a test shortens them through window.__kstVBcfg)
@@ -55,7 +56,7 @@ var KestrelVB = (typeof KestrelVB !== 'undefined' && KestrelVB) || (function () 
       if (rt !== document) roots.push(document);
       try {
         var els = document.elementsFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-        for (var i = 0; i < els.length && i < 24; i++) { var sr = KestrelVF.rootOf(els[i]); if (sr && roots.indexOf(sr) < 0) roots.push(sr); }
+        for (var i = 0; i < els.length && i < 24; i++) { var sr = VF.rootOf(els[i]); if (sr && roots.indexOf(sr) < 0) roots.push(sr); }
       } catch (e) { /* ignore */ }
       return roots;
     }
@@ -93,7 +94,7 @@ var KestrelVB = (typeof KestrelVB !== 'undefined' && KestrelVB) || (function () 
         if (!v.isConnected) return;
         if (bar) { if (bar.v === v) keep(); return; }
         if (late && v.paused) return;                             // the second look is for a video that started after the tap (an ad that follows the play button)
-        var r = KestrelVF.rect(v);
+        var r = VF.rect(v);
         if (!r) return;
         if (!(cfg && cfg.always) && ownControls(v, r)) { if (!late) report('own'); return; }
         show(v);
@@ -114,7 +115,7 @@ var KestrelVB = (typeof KestrelVB !== 'undefined' && KestrelVB) || (function () 
       if (insideBar(x, y)) return;
       ask(function (c) {
         if (!c.on) return;
-        var v = KestrelVF.at(x, y);
+        var v = VF.at(x, y);
         if (v) { judgeSoon(v); return; }
         if (!TOP) relay('tap');                                   // maybe this frame lies over a video of the page above it
       });
@@ -141,9 +142,9 @@ var KestrelVB = (typeof KestrelVB !== 'undefined' && KestrelVB) || (function () 
         if (!m || m.k !== 'ftq') return undefined;
         return new Promise(function (resolve) {
           try {
-            var v = KestrelVF.covered(m.w | 0, m.h | 0);
+            var v = VF.covered(m.w | 0, m.h | 0);
             if (!v) { resolve({ video: false }); return; }
-            if (m.t === 'lp') { KestrelVF.menu(v); resolve({ video: true }); return; }
+            if (m.t === 'lp') { VF.menu(v); resolve({ video: true }); return; }
             ask(function (c) { if (c.on) judgeSoon(v); resolve({ video: true }); });
           } catch (e) { resolve({ video: false }); }
         });
@@ -197,7 +198,7 @@ var KestrelVB = (typeof KestrelVB !== 'undefined' && KestrelVB) || (function () 
     }
     function fullscreenEl() {         // the element that is full screen, also when it sits in a shadow tree (document.fullscreenElement names the host)
       var e = document.fullscreenElement, i = 0;
-      while (e && i++ < 5) { var sr = KestrelVF.rootOf(e); if (sr && sr.fullscreenElement) e = sr.fullscreenElement; else break; }
+      while (e && i++ < 5) { var sr = VF.rootOf(e); if (sr && sr.fullscreenElement) e = sr.fullscreenElement; else break; }
       return e || null;
     }
     function toggleFull(v) {

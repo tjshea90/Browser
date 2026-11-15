@@ -70,14 +70,14 @@ async function open(body, o) {
 const msgs = (page, k) => page.evaluate((kk) => window.__msgs.filter((m) => m && m.k === kk), k);
 /** The bar's state as the test can see it (its shadow tree is closed): null = none, else { left, top, width, height, playing, muted, text }. */
 const barInfo = (page) => page.evaluate(() => {
-  const b = window.KestrelVB && KestrelVB.dbg();
+  const b = window.KestrelVB && window.KestrelVB.dbg();
   if (!b) return null;
   const r = b.wrap.getBoundingClientRect(), t = b.track.getBoundingClientRect();
   return { left: r.left, top: r.top, width: r.width, height: r.height, track: { left: t.left, top: t.top, width: t.width, height: t.height }, paused: b.v.paused, muted: b.v.muted, time: b.v.currentTime, cur: b.cur.textContent, dur: b.dur.textContent, host: b.host.parentNode === document.documentElement ? 'html' : 'other' };
 });
 const tapAt = async (page, x, y) => { await page.touchscreen.tap(x, y); };
 /** Click a part of the bar by name (the bar's buttons are inside a closed shadow root: the test asks the script for the element's centre). */
-const partCentre = (page, name) => page.evaluate((n) => { const b = KestrelVB.dbg(); const el = n === 'play' ? b.playB.el : n === 'mute' ? b.muteB.el : n === 'full' ? b.fullB.el : b.track; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, left: r.left, width: r.width }; }, name);
+const partCentre = (page, name) => page.evaluate((n) => { const b = window.KestrelVB.dbg(); const el = n === 'play' ? b.playB.el : n === 'mute' ? b.muteB.el : n === 'full' ? b.fullB.el : b.track; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, left: r.left, width: r.width }; }, name);
 const filmTime = (page) => page.evaluate(() => (document.getElementById('v') || window.__deepV()).currentTime);
 
 /** A touch that stays where it is for [ms], or slides to (toX, toY): raw touch events through the debugger protocol. */

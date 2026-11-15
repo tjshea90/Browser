@@ -599,7 +599,7 @@
           if (n === 'VIDEO' || n === 'AUDIO') { media = els[i]; break; }
         }
         // LP1 (owner message 44): a video inside a shadow root (finance.yahoo.com's player is one: the point test returns only the shadow HOST) or under a layer with pointer-events: none is not in that list
-        if (!media && typeof KestrelVF !== 'undefined') media = KestrelVF.at(e.clientX, e.clientY);
+        if (!media && window.KestrelVF) media = window.KestrelVF.at(e.clientX, e.clientY);
         if (!media) return;
         var src = media.currentSrc || media.src || '';
         if (!src && !(media.querySelector && media.querySelector('source'))) return;
@@ -639,7 +639,7 @@
         if (e.target && e.target.getAttribute && e.target.getAttribute('data-kestrel-bar')) return; // Kestrel's own video bar (videobar.js)
         var els = document.elementsFromPoint ? document.elementsFromPoint(e.clientX, e.clientY) : [e.target];
         for (var i = 0; i < els.length && i < 10; i++) if (interactive(els[i])) return;
-        if (typeof KestrelVF !== 'undefined' && KestrelVF.at(e.clientX, e.clientY)) return; // LP1: a video here (also in a shadow root, also under a layer that takes no pointer events) has its own menu: never the panel
+        if (window.KestrelVF && window.KestrelVF.at(e.clientX, e.clientY)) return; // LP1: a video here (also in a shadow root, also under a layer that takes no pointer events) has its own menu: never the panel
         var before = window.getSelection ? String(window.getSelection()) : ''; // the engine selects the word AFTER this event, and clears an older selection when the press is elsewhere (found on the emulator): neither may hide a press on blank space
         if (before && window.getSelection().rangeCount) { // ... but a press ON the text that is selected belongs to that selection (the engine would select the same word again and nothing would change)
           var rs = window.getSelection().getRangeAt(0).getClientRects();

@@ -1,8 +1,8 @@
 // VC1 / LP1 (owner message 44, research/VIDEO_CONTROLS.md): finds the videos that the page's own DOM hides from `document.getElementsByTagName('video')` and from `elementsFromPoint`: videos inside
 // shadow roots (finance.yahoo.com's player is a web component: its <video> is not in the document's element list and the point test returns only the shadow HOST), and videos under a layer with
-// pointer-events: none. Content scripts of one extension share one global per frame, so this file only has to be listed before the files that use it (content.js, videobar.js); a second load keeps the first.
+// pointer-events: none. It is published as window.KestrelVF (the content scripts of one extension share the window's expandos in a frame), so the file only has to be listed before the files that use it (content.js, videobar.js); a second load keeps the first.
 // Everything here is read-only, conservative ES5, bounded (a scan stops after a few thousand elements) and does nothing until another script asks.
-var KestrelVF = (typeof KestrelVF !== 'undefined' && KestrelVF) || (function () {
+window.KestrelVF = window.KestrelVF || (function () {
   var MIN_W = 80, MIN_H = 45;      // a video smaller than this (in CSS pixels) is a thumbnail or a decoration: no bar, no menu
   var SCAN = 1500;                 // elements looked at below the elements under a point (a press), more for a whole-document scan
 

@@ -81,7 +81,7 @@ test('VC1 (the owner\'s page): a video inside a web component\'s shadow root, wi
   await tapAt(page, ...CENTRE); await wait(page, 350);
   const b = await barInfo(page);
   assert.ok(b, 'the bar is there');
-  assert.equal(await page.evaluate(() => KestrelVB.dbg().v === window.__deepV()), true, 'it controls the video inside the shadow root');
+  assert.equal(await page.evaluate(() => window.KestrelVB.dbg().v === window.__deepV()), true, 'it controls the video inside the shadow root');
   const play = await partCentre(page, 'play');
   await tapAt(page, play.x, play.y); await wait(page, 300);
   assert.equal((await barInfo(page)).paused, false, 'the play button plays it');
@@ -137,7 +137,7 @@ test('VC1: a FRAME laid over the player (an ad overlay takes every touch): the f
   await page.waitForTimeout(500);
   await tapAt(page, 220, 200); await wait(page, 450);
   assert.ok(await barInfo(page), 'the bar is there although the tap went into the frame');
-  assert.equal(await page.evaluate(() => KestrelVB.dbg().v === window.__deepV()), true);
+  assert.equal(await page.evaluate(() => window.KestrelVB.dbg().v === window.__deepV()), true);
   await page.context().close();
 });
 
