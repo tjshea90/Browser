@@ -1090,7 +1090,8 @@ class Soak:
         self.record({"kind": "vbar", "name": "video-controls", "status": "ok" if all(r[2] == r[1] and r[3] and not r[5] for r in rows) else "failed", "results": [{"page": r[0], "tap": r[2], "expected": r[1], "menu": r[3], "sheet": r[4], "panel": r[5]} for r in rows]})
         self.check_alive("video-controls")
 
-    # ---- the owner's page (message 44): a walk down finance.yahoo.com/quote/TTWO with a picture at every step; whoever reads the report looks at the pictures (the video module comes and goes: it is a test of the live page)
+    # ---- the owner's page (message 44): finance.yahoo.com/quote/TTWO on the real engine. The video module sits about 1000 px down (lab run of 16:54: after four swipes the player filled y 185-455 of the screen);
+    # it comes and goes (a live page), so the tap and the long press are logged as a row of the table, and the pictures show whether the player was there.
     def yahoo_scan(self):
         w, h = self.screen
         lmark = self.log.size()
@@ -1098,12 +1099,31 @@ class Soak:
         t0 = time.time()
         while time.time() - t0 < 90 and not any(e["ev"] in ("loaded", "error") for e in health_events(self.log.since(lmark), "page")):
             time.sleep(2)
-        time.sleep(4)
-        for i in range(14):
-            self.shot("yahoo-%02d" % i)
+        time.sleep(6)
+        for _ in range(4):
             self.ph.swipe(w // 2, int(h * 0.78), w // 2, int(h * 0.30), 450); time.sleep(1.8)
-        ev = [e["ev"] for e in health_events(self.log.since(lmark), "videobar")]
-        self.record({"kind": "yahoo", "name": "yahoo-scan", "status": "ok", "note": "14 pictures taken; videobar events: %s" % (",".join(ev) or "none")})
+        time.sleep(3)
+        self.shot("yahoo-player")
+        tmark = self.log.size()
+        self.ph.tap(w // 2, 320); time.sleep(3)
+        ev = [e["ev"] for e in health_events(self.log.since(tmark), "videobar")]
+        got = "shown" if "shown" in ev else ("own" if "own" in ev else "nothing")
+        self.shot("yahoo-after-tap")
+        lm2 = self.log.size()
+        self.ph.long_press(w // 2, 290, 900); time.sleep(3.5)
+        lines = self.log.since(lm2)
+        menu = bool(health_events(lines, "video", "long-press-menu"))
+        sheet = bool(health_events(lines, "video", "sheet-shown")) or bool(health_events(lines, "video", "sheet-empty"))
+        panel = bool(health_events(lines, "panel", "open-space"))
+        self.shot("yahoo-after-press")
+        self.ph.key("KEYCODE_BACK"); time.sleep(1.5)
+        self.vbar_rows.append(("yahoo-finance (live page: the module comes and goes)", "own or shown", got, menu, sheet, panel))
+        if panel:
+            self.issue("high", "long-press-video", "yahoo-finance: a long press on the page's video player opened the floating panel", shot=True)
+        for i in range(6):
+            self.ph.swipe(w // 2, int(h * 0.78), w // 2, int(h * 0.30), 450); time.sleep(1.8)
+            self.shot("yahoo-walk-%02d" % i)
+        self.record({"kind": "yahoo", "name": "yahoo-scan", "status": "ok", "note": "tap gave %s, long press: menu %s sheet %s panel %s (see the pictures: was the player there?)" % (got, menu, sheet, panel)})
         self.check_alive("yahoo-scan")
 
     def setup_device(self):
