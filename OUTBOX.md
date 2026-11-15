@@ -1849,3 +1849,7 @@
 > 🔴 I'd move to a fresh chat now. Run `/amhandoff` and I'll write a file that brings the new chat fully up to speed.
 > 💡 The code word is off in this chat. Type `/amcodeword` and I'll start every reply with 'Yes Boss!', so you'll notice if I start losing track.
 <!-- sha:3230fc3d5e8f -->
+
+## 2026-11-15T18:35:34Z
+> Waiting for the sound run (about 18:44) and the reviewer's report.
+<!-- sha:69a7d11712e5 -->
