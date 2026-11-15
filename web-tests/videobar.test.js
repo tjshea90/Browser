@@ -124,8 +124,8 @@ test('VC1: the bar goes away by itself after a few seconds, a slide (a scroll) i
   assert.equal(await barInfo(page), null, 'a slide is not a tap');
   await tapAt(page, ...CENTRE); await wait(page, 350);
   assert.ok(await barInfo(page));
-  await wait(page, 1600);
-  assert.equal(await barInfo(page), null, 'hidden again');
+  await wait(page, 1500);
+  assert.equal(await barInfo(page), null, 'hidden again (a paused film keeps it 1.7 s in the test, 8 s in the app)');
   await page.evaluate(() => { const v = document.getElementById('v'); v.style.width = '60px'; v.style.height = '34px'; });
   await tapAt(page, 40, 117); await wait(page, 350);
   assert.equal(await barInfo(page), null, 'a thumbnail');
