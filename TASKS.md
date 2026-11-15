@@ -607,6 +607,20 @@ A question, not an order: answer it in plain words with a TESTED recipe, then le
 - [x] RV8 (CODED 2026-11-15; Kotlin suite EXIT 0) (LOW) requestedOrientation reset in onCreate / onDestroy
 - [x] RV9 (CODED 2026-11-15; Kotlin suite EXIT 0) (LOW) read-back back-off per tab; no counters or package-name line for private tabs
 
+## Second independent review of the video bar scripts (vfind.js / videobar.js / content.js long press, 2026-11-15; repros t1..t10 were in the reviewer's scratch folder): fix before alpha49
+- [ ] RW1 (MAJOR) a video that is NOT in the elementsFromPoint stack counts as "under the finger" by rectangle alone: a link / button / picture over a decorative video gave the Save sheet (long press) or Kestrel's bar (tap). Fix: such a video counts only when the top-most stack element is a bare layer (no a[href], button, field, role, onclick, pointer cursor; at most ~24 characters of text); taps whose top-most element is interactive are ignored
+- [ ] RW2 (MAJOR) full screen of a shadow-host box left no bar (the bar sat in the light DOM of a host with no slot, 0x0): the bar's home is `VF.rootOf(fe) || fe` in show() and onFullscreen()
+- [ ] RW3 (MAJOR) ownControls only looked at the first 1500 candidates of the document: look in the player's box (a few levels up from the film) first, the document only as the fallback
+- [ ] RW4 (MOD) panel and Save sheet could both open when the frame round trip took more than 400 ms: the top frame answers {video:true, src}, the frame itself sends vmenu only if the panel was not already sent
+- [ ] RW5 (MOD) the tap window (600 ms) was longer than the engine's long press (500 ms): a press released at 500-600 ms was a menu AND a tap (bar behind the sheet): tap = 450 ms, and a contextmenu stamps a time that makes tapped() ignore the release
+- [ ] RW6 (MOD) frame relay matched by size only: two frames of one size gave the bar / menu to the wrong film: more than one frame of that size = no video
+- [ ] RW7 (MOD) the page could set data-kestrel-bar on its own layer to switch the long press menu / panel off, and fake pointerdown / pointercancel events cancelled real taps: the bar is recognised by identity (KestrelVB.isBar), the attribute is gone, untrusted events return first
+- [ ] RW8 (MINOR) the touch path: the pre-check at pointerdown ran VF.at + ownControls synchronously on every touch near a video; frames scanned the whole document twice per tap: ~60 ms timer cleared by pointercancel / pointermove, all() cached for 2 s
+- [ ] RW9 (MINOR) no bar for a second film while the first film's bar is up: hide the old one and go on
+- [ ] RW10 (MINOR) the late look (1.7 s) could flip a good player that auto-hides its controls: remember 'own' for that film and skip the late look
+- [ ] RW11 (MINOR) a failed guard answer meant Off for the page's whole life: answer the waiters but do not store it
+- [ ] RW12 (MINOR) cleanup: content.js uses VF.menu, api.dbg / api.hide not in release builds' reach, report('shown') only when the bar is really drawn, vfind.js listed once per script group
+
 ## Owner message 45 (2026-11-15, verbatim in INBOX.md): sound must stop when I leave Kestrel; a polished daily browser; compatibility with all sites and good speed; emulator runs on fast wifi that log everything and teach us what to tune
 - [~] SND1 (owner message 45) "Sound should not keep playing if I am not currently on the Kestrel tab." (= the answer NO to the open question RX4-V2: no media foreground service, no keep-playing setting) {ccr-b3c2484c-sbew36 2026-11-15T18:13Z}
   - [ ] SND1a find out what happens today when the app leaves the screen (Home, another app, screen off) and when another tab comes to the front: BrowserActivity.onStop setActive(false) + GeckoSession suspendMediaWhenInactive(true): does audio really stop for video, audio-only, MSE and Web Audio pages? prove it in the lab (audible clip, Home, `dumpsys audio` players, the page's pause events)
