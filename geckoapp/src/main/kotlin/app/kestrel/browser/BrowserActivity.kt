@@ -1518,11 +1518,12 @@ open class BrowserActivity : Activity(), DockListener {
      */
     private fun readBack(why: String, force: Boolean = false): GeckoResult<android.graphics.Bitmap>? {
         val t0 = SystemClock.uptimeMillis()
-        if (!force && t0 < readBackBlockedUntil) { Health.count("look.readBackSkipped"); return null }
+        val priv = current?.isPrivateTab == true // RV9: a private tab keeps no counters and no log lines
+        if (!force && t0 < readBackBlockedUntil) { if (!priv) Health.count("look.readBackSkipped"); return null }
         val r = geckoView.capturePixels()
         val took = SystemClock.uptimeMillis() - t0
         val back = LastLookRules.readBackBackoffMs(took)
-        if (back > 0) { readBackBlockedUntil = t0 + took + back; Health.count("look.readBackSlow"); Health.log("look", "slow-read-back", "$why took ${took} ms: no more read-backs for ${back / 1000} s") }
+        if (back > 0) { readBackBlockedUntil = t0 + took + back; if (!priv) { Health.count("look.readBackSlow"); Health.log("look", "slow-read-back", "$why took ${took} ms: no more read-backs for ${back / 1000} s") } }
         return r
     }
 
@@ -2993,7 +2994,7 @@ open class BrowserActivity : Activity(), DockListener {
                 when (app.kestrel.core.download.ApkIdentity.verdict(info.pkg, packageName, fromUpdater)) {
                     app.kestrel.core.download.ApkIdentity.Verdict.OWN_UPDATE_OK -> go()
                     app.kestrel.core.download.ApkIdentity.Verdict.REFUSE_LOOKALIKE -> {
-                        Health.count("download.lookalikeRefused"); Health.log("download", "lookalike-refused", info.pkg)
+                        if (!v.priv) { Health.count("download.lookalikeRefused"); Health.log("download", "lookalike-refused", info.pkg) } // RV9: nothing kept for a private download
                         askYesNo(app.kestrel.core.download.ApkIdentity.LOOKALIKE_TITLE, app.kestrel.core.download.ApkIdentity.LOOKALIKE_TEXT, "Delete the file", "Leave it", { del -> if (del) DownloadController.remove(v.id, true) })
                     }
                     app.kestrel.core.download.ApkIdentity.Verdict.SHOW_FACTS -> {
