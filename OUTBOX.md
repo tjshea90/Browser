@@ -1717,3 +1717,7 @@
 ## 2026-11-15T16:52:28Z
 > Still waiting for the lab run to finish; I'll read it when it does.
 <!-- sha:58f3a58fbfa0 -->
+
+## 2026-11-15T16:54:11Z
+> Waiting for the video-controls lab run to finish (about 17:00 on the container clock).
+<!-- sha:46e986a8cc85 -->
