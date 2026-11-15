@@ -406,7 +406,7 @@ open class BrowserActivity : Activity(), DockListener {
                 }
                 GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
                 GeckoEngine.warmUp(this)
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, labBuild = { labBuild }, labProbe = { m -> onLabProbe(m) }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, labBuild = { labBuild }, labProbe = { m -> onLabProbe(m) }, viewport = { m -> Io.main.post { onPageViewport(m) } }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }))
                 Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
             }
         }
@@ -594,7 +594,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onDestroy() {
         try { fsTurner.exit() } catch (e: Exception) { /* RV8: leave the orientation as Android had it */ }
-        turnSettler.abandon(); Io.main.removeCallbacks(strayCheck); Io.main.removeCallbacks(barsCheck); Io.main.removeCallbacks(rehideAfterTurn) // alpha49 review: no timer of ours may fire against a dead activity
+        turnSettler.abandon(); Io.main.removeCallbacks(strayCheck); Io.main.removeCallbacks(barsCheck); Io.main.removeCallbacks(rehideAfterTurn); Io.main.removeCallbacks(vpUndo) // alpha49 review: no timer of ours may fire against a dead activity
         if (::downloadPopup.isInitialized) downloadPopup.detach()
         UpdateManager.removeListener(updateListener)
         kbProbe.detach()
@@ -1237,6 +1237,49 @@ open class BrowserActivity : Activity(), DockListener {
         }
         Health.log("videobar", e, if (e == "turn") "$a n=${m.optInt("n")}" else a)
     }
+    // ---- FB4 (owner message 47; lab run 43760546128 on the real engine): GeckoView sizes a page that goes full screen to the DISPLAY (1024 px) at the moment it enters, while the view between the system bars is 947 px, and
+    // keeps that size until the view changes size again (a race between the engine's own full-screen resize and the app's relayout: some entries were right, the first one of a run was wrong): the page's own bottom controls were cut
+    // off even with the bars kept, and a turn can leave the old height behind (the owner's third screenshot: a 575 px box in a 947 px view). The page (turn.js) tells the viewport it really got; when it is not the view's, the app gives
+    // the engine a REAL size change (the view one pixel shorter for 120 ms), up to three times per full screen, and writes down what it saw.
+    private var vpChecks = 0
+    private var vpMismatches = 0
+    private var vpResyncs = 0
+    private var vpTries = 0
+    private var vpLastResyncAt = 0L
+    private var vpLast = "no full-screen page has told its size yet"
+    private val vpUndo = Runnable { (geckoView.layoutParams as? FrameLayout.LayoutParams)?.let { if (it.bottomMargin != 0) { it.bottomMargin = 0; geckoView.layoutParams = it } } }
+
+    internal fun onPageViewport(m: org.json.JSONObject) {
+        if (!fullscreenOn) return
+        val ft = fullscreenTab ?: return
+        if (tabWithUrl(m.optString("p")) !== ft) return                       // only the page that is full screen
+        val pw = m.optInt("w"); val ph = m.optInt("h")
+        val vw = geckoView.width; val vh = geckoView.height
+        if (pw <= 0 || ph <= 0 || vw <= 0 || vh <= 0) return
+        vpChecks++
+        if (Math.abs(pw - vw) <= 3 && Math.abs(ph - vh) <= 3) {
+            if (vpTries > 0 || vpLast.startsWith("no ")) Health.log("fullscreen", "viewport", "right: page ${pw}x$ph, view ${vw}x$vh")
+            vpLast = "right (page ${pw}x$ph = view ${vw}x$vh)"; vpTries = 0
+            return
+        }
+        vpMismatches++
+        vpLast = "WRONG (page ${pw}x$ph, view ${vw}x$vh)"
+        val now = SystemClock.uptimeMillis()
+        if (vpTries >= 3 || now - vpLastResyncAt < 1200L) { Health.log("fullscreen", "viewport", "still wrong: page ${pw}x$ph, view ${vw}x$vh (tries $vpTries)"); return }
+        vpTries++; vpLastResyncAt = now; vpResyncs++
+        Health.log("fullscreen", "viewport", "mismatch: page ${pw}x$ph, view ${vw}x$vh: the engine is given a real size change (try $vpTries)")
+        resyncEngineSize()
+    }
+
+    /** The view one pixel shorter for 120 ms, then as it was: the engine takes the size from the view when the view's size really changes. */
+    private fun resyncEngineSize() {
+        val lp = geckoView.layoutParams as? FrameLayout.LayoutParams ?: return
+        lp.bottomMargin = 1; geckoView.layoutParams = lp
+        Io.main.removeCallbacks(vpUndo); Io.main.postDelayed(vpUndo, 120L)
+    }
+
+    private fun viewportLine() = "Full-screen page size (the engine sizes a page that goes full screen to the display; the page tells what it got): $vpChecks checks, $vpMismatches wrong, the engine was given a real size change $vpResyncs times; last: $vpLast"
+
     private fun turnPageLine() = "Turning, the page's own pause (every video, also a muted one): ${Health.counter("turn.page.turns")} turns met by pages, videos played again ${Health.counter("turn.page.played")}, left paused ${Health.counter("turn.page.skipped")}, turns with nothing to pause ${Health.counter("turn.page.none")}"
     private fun videoBarLine(): String {
         val mode = listOf("Automatic", "always", "off")[prefs.videoControls]
@@ -2037,6 +2080,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(fsBarsLine())
         out.add(turnSettler.line())
         out.add(turnPageLine())
+        out.add(viewportLine())
         out.add(strayLine())
         out.add(videoBarLine())
         out.add(videoQuality.line(GeckoEngine.videoPolicyText))
@@ -2718,6 +2762,7 @@ open class BrowserActivity : Activity(), DockListener {
         progress.visibility = if (on) View.GONE else View.VISIBLE
         applyImmersive(on)
         root.requestApplyInsets() // FSB1: the padding follows the bars: zero while the system hides them, their size while it keeps them
+        vpTries = 0; Io.main.removeCallbacks(vpUndo); vpUndo.run() // FB4: a new full screen starts clean (the view is back to its full height)
         if (on) { fsTurner.enter(); if (prefs.fullscreenBars == 1) checkBarsSoon() else { fsBarsNote = "kept: Settings > System bars in full-screen video is on Keep (the default); the page is laid out between the bars" ; Health.log("fullscreen", "bars", fsBarsNote) } } else { fsTurner.exit(); Io.main.removeCallbacks(barsCheck) } // FS1: the screen follows the tablet while a page is full screen
     }
 

@@ -74,6 +74,8 @@ class ShieldsBridge(
     private val labBuild: () -> Boolean = { false },
     /** LAB2: the page-health probe of a page (numbers only: text length, images, broken images, frames, videos, size, nodes). Worker thread; only ever sent by a debug build. */
     private val labProbe: (JSONObject) -> Unit = {},
+    /** FB4: the viewport a full-screen page really got (turn.js, top frame): width (w) and height (h) in device pixels, f = 1, and the page of its tab (p). Numbers only. Worker thread. */
+    private val viewport: (JSONObject) -> Unit = {},
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -126,6 +128,7 @@ class ShieldsBridge(
                     "vq" -> { videoQuality(m); "" }
                     "sg" -> { scrollGaps(m); "" }
                     "probe" -> { if (labBuild()) labProbe(m); "" }
+                    "vpt" -> { viewport(m); "" }
                     "bk" -> backPlace(m.optString("p"))
                     "bf" -> { backShown(m.optString("p"), m.optInt("ps") == 1, m.optString("nt"), m.optLong("ts"), m.optInt("y")); "" }
                     "ns" -> { noStore(m.optString("p")); "" }

@@ -235,6 +235,21 @@ class OwnerRulesTest {
         assertTrue("the numbers reach the app as vbk 'turn'", source(dir + "background.js").contains("m.e === 'turn'") && source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("\"turn\" -> { Health.count(\"turn.page.turns\")"))
     }
 
+    // FB4: the engine sizes a page that goes full screen to the display, not to the view (lab run 43760546128): the page tells the viewport it got, the app corrects it.
+    @Test fun aFullScreenPageThatGotTheWrongViewportIsGivenARealSizeChange() {
+        val dir = "geckoapp/src/main/assets/kestrel-shields/"
+        val turn = source(dir + "turn.js")
+        assertTrue("the top frame tells its viewport in device pixels, only in full screen", turn.contains("k: 'vpt'") && turn.contains("if (!document.fullscreenElement) return;") && turn.contains("window.innerHeight * dpr"))
+        assertTrue("and relayed by the background page with clamped numbers", source(dir + "background.js").contains("m.k !== 'vpt'") && source(dir + "background.js").contains("sender.frameId !== 0"))
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        val fn = body(act, "internal fun onPageViewport(m: org.json.JSONObject) {")
+        assertTrue(fn, fn.contains("tabWithUrl(m.optString(\"p\")) !== ft") && fn.contains("vpTries >= 3") && fn.contains("resyncEngineSize()"))
+        assertTrue("the real size change is the view one pixel shorter, then back", body(act, "private fun resyncEngineSize() {").contains("lp.bottomMargin = 1") && act.contains("it.bottomMargin = 0"))
+        assertTrue("a new full screen starts clean and the activity going away cancels it", body(act, "internal fun fullScreenChanged(tab: Tab, on: Boolean) {").contains("vpUndo.run()") && body(act, "override fun onDestroy() {").contains("removeCallbacks(vpUndo)"))
+        assertTrue("Diagnostics says it", act.contains("out.add(viewportLine())"))
+        assertTrue("the bridge passes it on", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt").contains("\"vpt\" -> { viewport(m); \"\" }"))
+    }
+
     // SND1, owner message 45: "Sound should not keep playing if I am not currently on the Kestrel tab." The engine suspends the media of an inactive session (proven in the emulator lab); the app adds a safety net.
     @Test fun aVideoThatIsNotShownDoesNotGoOnMakingSound() {
         val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
