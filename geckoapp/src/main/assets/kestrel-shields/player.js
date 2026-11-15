@@ -17,7 +17,7 @@ window.KestrelVP = window.KestrelVP || (function () {
   try {
     var VF = window.KestrelVF;
     if (!VF || !window.addEventListener || !document.createElement) return api;
-    var C = { idle: 500, busy: 250, tapMs: 450, slop: 14, soon: 60, askRetry: 4000 };                  // the clocks (a test shortens them through window.__kstVPcfg)
+    var C = { idle: 1000, busy: 250, tapMs: 450, slop: 14, soon: 60, askRetry: 4000 };                  // the clocks (a test shortens them through window.__kstVPcfg)
     try { if (window.__kstVPcfg) for (var key in window.__kstVPcfg) C[key] = window.__kstVPcfg[key]; } catch (e0) { /* optional */ }
     api.c = C;
 

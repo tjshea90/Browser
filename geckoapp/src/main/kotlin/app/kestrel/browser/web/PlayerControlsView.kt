@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Shader
+import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
 import app.kestrel.core.player.DurationView
@@ -361,5 +362,7 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
     companion object {
         private const val ACCENT = 0xFF36E6F2.toInt()
         private const val PlayerRules_FADE_MS = 160L
+        private const val RING_TURN_MS = 900L           // one turn of the buffering ring
+        private const val RING_FRAME_MS = 50L           // and a new frame of it this often
     }
 }
