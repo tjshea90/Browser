@@ -65,6 +65,14 @@ object LastLookRules {
     /** Pictures kept: the page in front and this many most recently used pages. */
     const val KEEP_EXTRA = 2
 
+    /**
+     * Found by the emulator lab (research/EMU_LAB.md, 2026-11-15): GeckoView's `capturePixels()` is a SYNCHRONOUS call into the compositor. On a heavy page it held the UI thread for 2 s in the app's own watchdog
+     * (stack: `GeckoSession$Compositor.requestScreenPixels` <- `captureLook`) and, with the compositor starved, for more than 20 s: an Android "not responding". A read-back that took [SLOW_READBACK_MS] or more is
+     * followed by no read-back at all for this long (the tab grid's preview, which the person is waiting for, is the one exception). 0 = fast, nothing to do.
+     */
+    const val SLOW_READBACK_MS = 400L
+    fun readBackBackoffMs(tookMs: Long): Long = when { tookMs < SLOW_READBACK_MS -> 0L; tookMs < 2_000L -> 120_000L; else -> 600_000L }
+
     private fun bare(url: String): String = url.substringBefore('#')
 
     /** The same page (the #fragment aside). */

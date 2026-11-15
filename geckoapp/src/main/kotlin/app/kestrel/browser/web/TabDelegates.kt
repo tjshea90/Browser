@@ -166,7 +166,10 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
             }
             WebRequestError.ERROR_HTTPS_ONLY -> tab.error = ErrorScreen.HttpsUnavailable(failing, host)
             WebRequestError.ERROR_SAFEBROWSING_MALWARE_URI, WebRequestError.ERROR_SAFEBROWSING_PHISHING_URI,
-            WebRequestError.ERROR_SAFEBROWSING_HARMFUL_URI, WebRequestError.ERROR_SAFEBROWSING_UNWANTED_URI -> tab.error = ErrorScreen.Dangerous(failing, host, Category.MALWARE)
+            WebRequestError.ERROR_SAFEBROWSING_HARMFUL_URI, WebRequestError.ERROR_SAFEBROWSING_UNWANTED_URI -> {
+                if (!tab.isPrivateTab) { Health.count("safebrowsing.engineBlocks"); Health.log("page", "safebrowsing", "host=$host code=${error.code}") } // RX4-X3: the ENGINE's own protection said no (not Kestrel's list)
+                tab.error = ErrorScreen.Dangerous(failing, host, Category.MALWARE)
+            }
             WebRequestError.ERROR_CONTENT_CRASHED -> tab.error = ErrorScreen.Crashed(failing)
             else -> {
                 val code = webViewCode(error.code)

@@ -632,6 +632,15 @@ open class BrowserActivity : Activity(), DockListener {
                 Io.exec { try { java.io.File(filesDir, "debug-diag.txt").writeText(text); Health.log("lab", "dump", "${text.length} bytes") } catch (e: Exception) { Health.log("lab", "dump-failed", e.toString().take(80)) } }
             }
             "closetabs" -> Io.main.post { for (t in tabs.toList()) doCloseTab(t); Health.log("lab", "closetabs", "tabs=${tabs.size}") }
+            "answer" -> { // SOAK1: press a button of the question on screen (debug builds only)
+                val yes = i.getStringExtra("kestrel_arg") == "yes"; i.removeExtra("kestrel_arg")
+                Io.main.post {
+                    val d = labDialog
+                    if (d != null && d.isShowing) { Health.log("dialog", "answered", if (yes) "yes" else "no"); d.getButton(if (yes) android.content.DialogInterface.BUTTON_POSITIVE else android.content.DialogInterface.BUTTON_NEGATIVE)?.performClick() }
+                    else Health.log("dialog", "none-to-answer")
+                }
+            }
+            "exitfs" -> Io.main.post { Health.log("lab", "exitfs", "fullscreenOn=$fullscreenOn"); try { current?.session?.exitFullScreen() } catch (e: Exception) { Health.log("lab", "exitfs-failed", e.toString().take(80)) } }
             "videodl" -> Io.main.post { current?.let { video.labDownloadBest(it) } } // SOAK1: "find the video" and one tap on the first row of the Save video sheet
             "apkcheck" -> { // RX4-X1: what the Downloads list would do with this file (a file in the app's own folder: a copy of an installer, a disguised copy, a plain video)
                 val name = (i.getStringExtra("kestrel_arg") ?: "").substringAfterLast('/'); i.removeExtra("kestrel_arg")
@@ -1469,6 +1478,22 @@ open class BrowserActivity : Activity(), DockListener {
         }
     } catch (e: Throwable) { null }
 
+    private var readBackBlockedUntil = 0L
+
+    /**
+     * The one place that calls `GeckoView.capturePixels()` (RX4 lab finding: it is a synchronous call into the compositor that held the UI thread for 2 s and, on a starved emulator, for 20 s). The time the call takes
+     * is measured; after a slow one nothing is read back for a while ([LastLookRules.readBackBackoffMs]) except for the tab grid ([force]). null = skipped.
+     */
+    private fun readBack(why: String, force: Boolean = false): GeckoResult<android.graphics.Bitmap>? {
+        val t0 = SystemClock.uptimeMillis()
+        if (!force && t0 < readBackBlockedUntil) { Health.count("look.readBackSkipped"); return null }
+        val r = geckoView.capturePixels()
+        val took = SystemClock.uptimeMillis() - t0
+        val back = LastLookRules.readBackBackoffMs(took)
+        if (back > 0) { readBackBlockedUntil = t0 + took + back; Health.count("look.readBackSlow"); Health.log("look", "slow-read-back", "$why took ${took} ms: no more read-backs for ${back / 1000} s") }
+        return r
+    }
+
     /**
      * Snapshot the page in front for the tab grid: a GPU read-back (not a screenshot, so it also works under FLAG_SECURE), scaled down on the IO thread.
      * Only for a page that is really on screen - not the Home screen, an error screen or a page that is still loading.
@@ -1478,7 +1503,7 @@ open class BrowserActivity : Activity(), DockListener {
         val appCtx = applicationContext
         val leftUrl = tab.url // the address the picture belongs to (the tab may already show another one when the capture arrives)
         try {
-            geckoView.capturePixels().accept({ full ->
+            (readBack("thumb", force = tabGrid.visibility == View.VISIBLE) ?: return).accept({ full ->
                 val lane: (() -> Unit) -> Unit = if (tabGrid.visibility == View.VISIBLE) Io::fast else Io::exec // the grid is open: the user is waiting for this preview
                 if (full != null) lane {
                     val both = if (forBack) ThumbStore.shrinkWithPicture(full) else null // one capture, two sizes
@@ -2055,8 +2080,7 @@ open class BrowserActivity : Activity(), DockListener {
         val am = getSystemService(ActivityManager::class.java)
         val ram = ActivityManager.MemoryInfo().also { am?.getMemoryInfo(it) }.totalMem
         out.add("Device" to "RAM ${"%.1f".format(ram / 1_073_741_824.0)} GB, app memory class ${am?.memoryClass} MB, low-RAM mode: ${am?.isLowRamDevice}")
-        out.add("Safe Browsing" to if (hasPlayServices()) "Google Safe Browsing is available on this tablet, on top of Kestrel's built-in malware list."
-            else "Google Safe Browsing needs Google Play services, which this tablet doesn't have. Protection against malware and phishing sites comes only from Kestrel's built-in list, which updates weekly.")
+        out.add("Safe Browsing" to "Firefox's own Safe Browsing works in this browser without Google Play services: the engine keeps Mozilla's and Google's lists of dangerous sites up to date by itself and shows a warning page before a phishing or malware page opens (tested on both companies' test pages in an Android 10 emulator, research/EMU_LAB.md). Kestrel's own blocking lists, which update daily, add to it. Files you save with the download manager are not looked at by the engine's download protection; Kestrel asks before it saves a file a page started by itself and looks inside an installer before it opens it.")
         out.add("Licenses" to "Filter lists: EasyList and EasyPrivacy (GPLv3+ / CC BY-SA 3.0), uBlock Origin filters (GPLv3), Fanboy Cookiemonster (CC BY 3.0 / GPLv3). Public Suffix List (MPL-2.0). Personal, non-commercial use.")
         return out
     }
@@ -2461,7 +2485,7 @@ open class BrowserActivity : Activity(), DockListener {
         val appearance = LastLook.appearance(appCtx, prefs.webDark); val dark = prefs.webDark == 1
         val keep = LastLookRules.keep(id, tabs.filter { !it.isPrivateTab && !it.isNewTab }.associate { it.id to it.lastActive })
         try {
-            geckoView.capturePixels().accept({ full ->
+            (readBack("look-$why") ?: run { lookCapturing = false; return }).accept({ full ->
                 if (full == null) lookCapturing = false
                 else Io.exec {
                     try {
@@ -2491,6 +2515,13 @@ open class BrowserActivity : Activity(), DockListener {
         }
     }
 
+    /** Debug builds only (the emulator lab): where does a Back key go? */
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (event.keyCode == android.view.KeyEvent.KEYCODE_BACK && event.action == android.view.KeyEvent.ACTION_UP && (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0)
+            Health.log("key", "back-up", "fullscreenOn=$fullscreenOn canceled=${event.isCanceled}")
+        return super.dispatchKeyEvent(event)
+    }
+
     // Serves Android 10-12. On Android 13+ (incl. 16's predictive back) the OnBackInvokedCallback registered in installBackHandling() runs instead.
     @SuppressLint("GestureBackNavigation")
     @Deprecated("Used below API 33; API 33+ uses OnBackInvokedCallback")
@@ -2499,7 +2530,7 @@ open class BrowserActivity : Activity(), DockListener {
     /** @return true if the back press did something. */
     private fun handleBack(): Boolean {
         // FS1: Back leaves full screen first, like every video player (it used to go back in the page's history, which only left full screen by leaving the page)
-        if (fullscreenOn) { try { current?.session?.exitFullScreen() } catch (e: Exception) { Health.log("fullscreen", "exit-failed", e.toString().take(80)) }; return true }
+        if (fullscreenOn) { Health.log("fullscreen", "back-exit", "asking the page to leave full screen"); try { current?.session?.exitFullScreen() } catch (e: Exception) { Health.log("fullscreen", "exit-failed", e.toString().take(80)) }; return true }
         if (::miniNav.isInitialized && miniNav.onBackPressed()) return true // the small keyboard closes first
         if (sheet.isShowing) { sheet.dismiss(); return true }
         if (downloadsView?.parent != null) { closeDownloads(); return true }
@@ -2679,12 +2710,18 @@ open class BrowserActivity : Activity(), DockListener {
     internal fun askYesNo(title: String, message: String, yes: String, no: String, result: (Boolean) -> Unit) {
         if (isFinishing || isDestroyed) { result(false); return }
         var answered = false
-        AlertDialog.Builder(this).setTitle(title).setMessage(message)
+        val dlg = AlertDialog.Builder(this).setTitle(title).setMessage(message)
             .setPositiveButton(yes) { _, _ -> if (!answered) { answered = true; result(true) } }
             .setNegativeButton(no) { _, _ -> if (!answered) { answered = true; result(false) } }
             .setOnCancelListener { if (!answered) { answered = true; result(false) } }
             .show()
+        if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) { // the emulator lab reads the question and answers it (uiautomator cannot see this window while the page animates)
+            labDialog = dlg
+            Health.log("dialog", "shown", "title=${title.take(70)} | ${message.replace('\n', ' ').take(260)} | $yes/$no")
+        }
     }
+
+    private var labDialog: AlertDialog? = null
 
     /** JS dialogs: origin shown, only for the visible tab, and a "stop this page" checkbox after the third one. */
     internal fun jsDialog(tab: Tab, url: String, message: String, input: String?, hasCancel: Boolean, onOk: (String?) -> Unit, onCancel: () -> Unit): Boolean {
