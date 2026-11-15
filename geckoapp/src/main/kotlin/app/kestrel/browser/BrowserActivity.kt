@@ -588,11 +588,12 @@ open class BrowserActivity : Activity(), DockListener {
         try { turnSettler.configChanged(landscape) } catch (e: Throwable) { Health.log("fullscreen", "turn-settler-failed", e.toString().take(80)) } // ROT1: pause the video and cover the page BEFORE the engine re-lays out
         GeckoEngine.runtimeOrNull()?.let { try { it.orientationChanged() } catch (e: Throwable) { Health.log("fullscreen", "orientation-notify-failed", e.toString().take(80)) } }
         Health.log("life", "config", "orientation=${if (landscape) "landscape" else "portrait"} fullscreen=$fullscreenOn")
-        if (fullscreenOn) Io.main.postDelayed({ if (fullscreenOn) { applyImmersive(true); checkBarsSoon() } }, 150L) // FSB1: a turn can bring the bars back on some systems
+        if (fullscreenOn) { Io.main.removeCallbacks(rehideAfterTurn); Io.main.postDelayed(rehideAfterTurn, 150L) } // FSB1: a turn can bring the bars back on some systems
     }
 
     override fun onDestroy() {
         try { fsTurner.exit() } catch (e: Exception) { /* RV8: leave the orientation as Android had it */ }
+        turnSettler.abandon(); Io.main.removeCallbacks(strayCheck); Io.main.removeCallbacks(barsCheck); Io.main.removeCallbacks(rehideAfterTurn) // alpha49 review: no timer of ours may fire against a dead activity
         if (::downloadPopup.isInitialized) downloadPopup.detach()
         UpdateManager.removeListener(updateListener)
         kbProbe.detach()
@@ -991,7 +992,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun silenceStrays() {
         val away = !onScreenNow
         for (t in tabs) {
-            if (!t.gecko.videoPlaying) continue
+            if (!t.gecko.videoPlaying || t.session == null) continue // (a tab without a live session has nothing that plays, whatever it last said)
             if (!away && t === current && !homeShown(t)) continue // the page in front, on screen, with nothing over it: it plays
             val ms = t.gecko.mediaSession ?: continue
             val why = if (away) "the app is not on screen" else if (t === current) "the Home screen covers the page" else "another tab is in front"
@@ -2741,14 +2742,26 @@ open class BrowserActivity : Activity(), DockListener {
     private var fsBarsNote = "no full screen yet"
     private var barsRehidden = false
     private val barsCheck = Runnable { checkBars() }
+    private val rehideAfterTurn = Runnable { if (fullscreenOn) { applyImmersive(true); checkBarsSoon() } }
 
     private fun barsSeen(l: Int, t: Int, r: Int, b: Int) { fsBars[0] = l; fsBars[1] = t; fsBars[2] = r; fsBars[3] = b }
 
     private fun checkBarsSoon() { barsRehidden = false; Io.main.removeCallbacks(barsCheck); Io.main.postDelayed(barsCheck, 700L) }
 
     /** 700 ms after full screen began: a bar that still takes room is asked to go once more (some systems miss the first request, made while the screen turns); what remains is written down. */
+    /**
+     * What the system bars take of the window RIGHT NOW. The decor of an Android 10 window pads itself and consumes the insets before they reach [root] (its listener always hears zero there), so the raw
+     * insets of the decor view are read: the same source as the keyboard probe. Where they are not available, what the listener last heard.
+     */
+    private fun systemBarsNow() {
+        val wi = try { window.decorView.rootWindowInsets } catch (e: Throwable) { null } ?: return
+        if (Build.VERSION.SDK_INT >= 30) { val i = wi.getInsets(WindowInsets.Type.systemBars()); barsSeen(i.left, i.top, i.right, i.bottom) }
+        else @Suppress("DEPRECATION") barsSeen(wi.systemWindowInsetLeft, wi.systemWindowInsetTop, wi.systemWindowInsetRight, wi.systemWindowInsetBottom)
+    }
+
     private fun checkBars() {
         if (!fullscreenOn) return
+        systemBarsNow()
         val shown = fsBars[0] > 0 || fsBars[1] > 0 || fsBars[2] > 0 || fsBars[3] > 0
         if (shown && !barsRehidden) {
             barsRehidden = true

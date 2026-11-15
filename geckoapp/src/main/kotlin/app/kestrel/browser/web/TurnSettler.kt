@@ -45,12 +45,16 @@ class TurnSettler(
         override fun frontHasSession() = front()?.gecko?.mediaSession != null
         override fun pauseFront(): Tab? {
             val t = front() ?: return null
-            return try { t.gecko.mediaSession?.pause()?.let { t } ?: if (t.gecko.mediaSession != null) t else null } catch (e: Throwable) { Health.log("fullscreen", "turn-pause-failed", e.toString().take(80)); null }
+            val ms = t.gecko.mediaSession ?: return null
+            return try { ms.pause(); t } catch (e: Throwable) { Health.log("fullscreen", "turn-pause-failed", e.toString().take(80)); null }
         }
         override fun playingNow(handle: Tab) = handle.gecko.videoPlaying
         override fun isFront(handle: Tab) = front() === handle
         override fun onScreen() = isOnScreen()
-        override fun resume(handle: Tab): Boolean = try { handle.gecko.mediaSession?.play(); handle.gecko.mediaSession != null } catch (e: Throwable) { Health.log("fullscreen", "turn-resume-failed", e.toString().take(80)); false }
+        override fun resume(handle: Tab): Boolean {
+            val ms = handle.gecko.mediaSession ?: return false
+            return try { ms.play(); true } catch (e: Throwable) { Health.log("fullscreen", "turn-resume-failed", e.toString().take(80)); false }
+        }
         override fun log(event: String, text: String) { Health.log("fullscreen", event, text) }
     })
 
