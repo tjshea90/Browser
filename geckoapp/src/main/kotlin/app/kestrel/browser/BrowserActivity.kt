@@ -1985,6 +1985,8 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(playerSkipStats.line() + if (prefs.skipVideoAds) "" else " (the Settings switch is off)")
         out.add(seekStats.line() + if (prefs.tapSeek) "" else " (the Settings switch is off)")
         out.add(fsTurner.line())
+        out.add(fsBarsLine())
+        out.add(turnSettler.line())
         out.add(videoBarLine())
         out.add(videoQuality.line(GeckoEngine.videoPolicyText))
         out.add(scrollGaps.line(prefs.measureScroll))
