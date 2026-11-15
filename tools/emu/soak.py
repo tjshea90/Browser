@@ -1098,7 +1098,7 @@ class Soak:
         L.append("")
         L.append("Run: %s, %d scenes in %.0f min. Device: Android 10 emulator, %dx%d, package %s, network %s. **x86_64 + software GL is NOT the tablet: only behaviour counts, not absolute times.**" %
                  (time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime()), len(ev), (time.time() - T0) / 60, self.screen[0], self.screen[1], self.a.pkg,
-                  "shaped like the owner's hotspot (5 Mbit/s, 60-100 ms; the emulator reports: %s)" % (self.net_status or "no answer") if self.a.net == "hotspot" else "unshaped (the runner's own fast link)"))
+                  "shaped like the owner's hotspot (public sites: 5 Mbit/s and 60-100 ms by the emulator, it reports: %s; the lab's own clips and downloads: 600 KB/s and 80 ms by the lab server)" % (self.net_status or "no answer") if self.a.net == "hotspot" else "unshaped (the runner's own fast link)"))
         L.append("")
         L.append("## Summary")
         L.append("")
