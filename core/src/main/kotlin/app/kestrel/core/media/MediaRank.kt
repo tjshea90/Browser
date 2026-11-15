@@ -25,6 +25,12 @@ object MediaRank {
 
     private val SCRIPT_EXTS = setOf("php", "php3", "php4", "php5", "asp", "aspx", "jsp", "jspx", "cgi", "pl", "do", "action")
     private val HINT_WORDS = Regex("""(?i)(?:^|[/._\-=&?])(track|tracking|tracker|pixel|beacon|analytics|telemetry|metrics?|adserv\w*|advert\w*|ads?|banner|preroll|pre-roll|sponsor\w*|promo|teaser|preview|thumb\w*|sprite|ping|stat|stats)(?:$|[/._\-=&?])""")
+    /**
+     * RX3-V6: words that only SOMETIMES mean "not the film" (an advertisement's own plumbing, decoration, a trailer or an intro that can be wanted). They hide a file only when it is ALSO clearly smaller than the biggest
+     * one ([SOFT_REL]); never alone, never the biggest, never a file of unknown size. Whatever they hide stays one tap away under "Other files".
+     */
+    private val SOFT_WORDS = Regex("""(?i)(?:^|[/._\-=&?])(vast|vpaid|imasdk|adunit|ad_type|adid|creative|bumper|intro|idle|loop|bg|hero|background|snippet|trailer)(?:$|[/._\-=&?])""")
+    private const val SOFT_REL = 0.25
     private val RES_TOKEN = Regex("""(?i)[_\-. ]?(?<![0-9a-z])\(?\d{3,4}p?\)?(?![0-9a-z])""")      // "_1080p", "-480", " (720p)"
     private val QUALITY_WORD = Regex("""(?i)[_\-. ](hd|sd|fhd|uhd|high|low|medium|mobile)(?![0-9a-z])""")
     private val PIECE_PARAMS = setOf("range", "bytestart", "byteend", "start", "end", "sq", "seg", "segment", "rn", "rbuf", "offset", "byte_range", "bytes")
@@ -99,6 +105,7 @@ object MediaRank {
         if (script && (len < 0 || len < SCRIPT_BIG)) return true                              // "get.php" is a video only when it is big
         if (hint && len in 0 until maxOf(SMALL_ABS, (biggest * 0.4).toLong())) return true      // "preview.mp4", "teaser", "ad": a clip, not the video
         if (hint && len < 0 && biggest > 0) return true
+        if (biggest > 0 && len in 0 until (biggest * SOFT_REL).toLong() && SOFT_WORDS.containsMatchIn(pathAndQuery(c.url))) return true   // RX3-V6: a soft word AND clearly smaller than the biggest file
         if (c.frame.isNotEmpty() && topFrame > 0 && len in 0 until (topFrame * 0.25).toLong()) return true   // asked for by another frame (an advert) and small next to the page's own
         return false
     }
