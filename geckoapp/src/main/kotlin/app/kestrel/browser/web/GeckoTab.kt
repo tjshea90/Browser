@@ -13,6 +13,8 @@ class GeckoTabData {
     var delegates: TabDelegates? = null
     /** RX3-S1: the page's video is playing (the engine's media session said PLAY and has not said pause / stop / end since): the neon glow holds still meanwhile. UI thread. */
     var videoPlaying = false
+    /** ROT1: the engine's media session of this page while it is active (it exists only for AUDIBLE media), so the app can pause the video while the screen turns. UI thread. */
+    var mediaSession: org.mozilla.geckoview.MediaSession? = null
     /** FS1: the picture size (pixels) of the video that plays on this page, as its element reported it ([picturePlayed] = from an element that really played); 0 = not known. A new page forgets it ([VideoFlow.clearTab]). */
     var pictureW = 0
     /** RX4-X2: when (uptime ms) and with which address the page's navigation began: a touch BEFORE it is the tap that opened the page, not a touch of the page. */
