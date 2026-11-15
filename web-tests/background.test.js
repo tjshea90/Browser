@@ -1194,6 +1194,20 @@ test('RX4-M0a: a video look is forwarded as clamped whole numbers with the tab p
   assert.deepEqual(got[1], { k: 'vq', t: 0, d: 0, c: 0, s: 0, w: 0, h: 0, p: PAGE }, 'absurd numbers become 0 and the page is the tab\'s, not the frame\'s');
 });
 
+test('RX4-M0e: a scroll burst is forwarded as clamped whole numbers with the tab page, from the top frame only; flag 32 of the page configuration is the guard answer\'s sg', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '9' });
+  h.message({ k: 'sg', n: 120, a: 6, b: 2, mx: 180, junk: 'x'.repeat(4000), p: 'https://evil.example/' }, 1, PAGE, 0);
+  h.message({ k: 'sg', n: 99999, a: -1, b: 'x', mx: 1e9 }, 1, PAGE, 0);
+  h.message({ k: 'sg', n: 120, a: 6, b: 2, mx: 180 }, 1, 'https://player.example/embed', 4);        // a frame: never measured
+  assert.equal(h.message({ k: 'sg', n: 10 }, -1, PAGE, 0), undefined, 'not from a tab');
+  await tick(20);
+  const got = h.of('sg');
+  assert.equal(got.length, 2);
+  assert.deepEqual(got[0], { k: 'sg', n: 120, a: 6, b: 2, mx: 180, p: PAGE });
+  assert.deepEqual(got[1], { k: 'sg', n: 0, a: 0, b: 0, mx: 0, p: PAGE }, 'absurd numbers become 0');
+});
+
 test('RX4-M0b: cache hits and 304 answers are counted (when the headers arrive and when the request completes), a 304 is timed from its start, pages are counted; the text rides on the stats message', async () => {
   const h = harness(standardApp());
   const sub = (id, ts) => h.listeners.before({ type: 'script', url: 'https://cdn.example/' + id + '.js', tabId: 1, frameId: 0, requestId: id, timeStamp: ts, documentUrl: PAGE, frameAncestors: [{ url: PAGE, frameId: 0 }] });

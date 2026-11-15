@@ -65,7 +65,7 @@ test('a second burst after a pause is a second report', async () => {
   assert.ok((await sg(page)).length > first, 'two bursts, two reports');
 });
 
-test('a page that never scrolls sends nothing, and a frame inside the page does not measure', async () => {
+test('a page that never scrolls sends nothing', async () => {
   const page = await open(true);
   await page.waitForTimeout(500);
   assert.deepEqual(await sg(page), []);
