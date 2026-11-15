@@ -25,7 +25,8 @@
     var STACK = 14;                  // how deep the stack of elements under the finger is looked at
 
     var g = null;                    // the gesture in progress: { id, t0, x, y, bar, video }
-    var lastSeek = 0, lastSeekEl = null;
+    var lastSeek = 0, lastSeekEl = null;   // the last seek of any film in this frame that the PAGE made (our own are not counted) and which film
+    var ownAt = 0, ownEl = null;           // our own last seek: its `seeking` event comes a moment later and must not count as the page's
     var ask = 0, askAt = 0, waiting = [];   // 0 = not asked, 1 = asking, 2 = yes, 3 = no
     var pend = { t: 0, s: 0, f: 0, o: 0, r: '' }, sendTimer = 0;
 
@@ -191,13 +192,17 @@
       f = f < 0 ? 0 : (f > 1 ? 1 : f);
       var to = f * dur;
       try { var s = v.seekable; if (s && s.length) { var lo = s.start(0), hi = s.end(s.length - 1); if (to < lo) to = lo; if (to > hi) to = hi; } } catch (e) { /* ignore */ }
-      try { v.currentTime = to; mark('f'); } catch (e) { mark('o', 'refused'); }
+      try { ownAt = now(); ownEl = v; v.currentTime = to; mark('f'); } catch (e) { ownAt = 0; mark('o', 'refused'); }
     }
 
     var opt = { capture: true, passive: true };
     window.addEventListener('pointerdown', onDown, opt);
     window.addEventListener('pointerup', onUp, opt);
     window.addEventListener('pointercancel', onCancel, opt);
-    window.addEventListener('seeking', function (e) { lastSeek = now(); lastSeekEl = e.target; }, true);   // a media event does not bubble; the capture phase sees every film of the frame
+    window.addEventListener('seeking', function (e) {            // a media event does not bubble; the capture phase sees every film of the frame
+      var t = now();
+      if (e.target === ownEl && t - ownAt < 250) return;                // our own seek
+      lastSeek = t; lastSeekEl = e.target;
+    }, true);
   } catch (e) { /* never break a page */ }
 })();
