@@ -1320,7 +1320,7 @@ class Soak:
         how = "none"
         fm = self.log.size()
         if "shown" in bar:
-            self.ph.tap(int((8 + 548 - 24) * d), 25 + int(475 * d)); time.sleep(5)   # the bar's Full button
+            self.ph.tap(556, 25 + int(475 * d)); time.sleep(5)   # the bar's Full button: x 556 px lies inside it for a 532 and a 564 css px wide film (probe of the live page: the film is 532 wide at x 16)
             entered = bool(health_events(self.log.since(fm), "fullscreen", "turn"))
             how = "Kestrel's Full button"
         else:
