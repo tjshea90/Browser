@@ -2664,23 +2664,59 @@ open class BrowserActivity : Activity(), DockListener {
         dock.visibility = if (on) View.GONE else View.VISIBLE
         progress.visibility = if (on) View.GONE else View.VISIBLE
         applyImmersive(on)
-        root.requestApplyInsets() // FS1: the insets listener drops its padding while a page is full screen and takes it back afterwards
-        if (on) fsTurner.enter() else fsTurner.exit() // FS1: the screen follows the tablet while a page is full screen
+        root.requestApplyInsets() // FSB1: the padding follows the bars: zero while the system hides them, their size while it keeps them
+        if (on) { fsTurner.enter(); checkBarsSoon() } else { fsTurner.exit(); Io.main.removeCallbacks(barsCheck) } // FS1: the screen follows the tablet while a page is full screen
     }
 
+    /**
+     * Hides the system bars while a page is full screen (shows them again afterwards). FSB1: NO layout flags on Android 10: with LAYOUT_STABLE / LAYOUT_HIDE_NAVIGATION / LAYOUT_FULLSCREEN the window is laid out
+     * under both bars whether or not the system really hides them, and on the owner's tablet it did not: the controls of a full-screen player sat under the navigation bar. Without them the insets are the truth.
+     * Debug builds only: `setprop debug.kestrel.nohide 1` plays a tablet that keeps its bars (the emulator lab, tools/emu/soak.py scene fsy).
+     */
     private fun applyImmersive(on: Boolean) {
+        if (app.kestrel.browser.diag.DebugProps.get(this, "debug.kestrel.nohide") == "1") { Health.log("fullscreen", "bars", "debug switch nohide: the system bars are NOT asked to hide (on=$on)"); return }
         if (Build.VERSION.SDK_INT >= 30) {
             val c = window.insetsController ?: return
             if (on) { c.hide(WindowInsets.Type.systemBars()); c.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE } else c.show(WindowInsets.Type.systemBars())
         } else {
             @Suppress("DEPRECATION")
             // Read-modify-write: assigning a whole new value would also clear the light status/navigation bar flags the theme set (icons invisible afterwards).
-            val immersive = View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_FULLSCREEN or
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            val immersive = View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_FULLSCREEN
+            @Suppress("DEPRECATION")
+            val older = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN // (alpha48 set these too: cleared if they are still on)
             val dv = window.decorView
-            dv.systemUiVisibility = if (on) dv.systemUiVisibility or immersive else dv.systemUiVisibility and immersive.inv()
+            @Suppress("DEPRECATION")
+            dv.systemUiVisibility = if (on) (dv.systemUiVisibility and older.inv()) or immersive else dv.systemUiVisibility and (immersive or older).inv()
         }
     }
+
+    // ---- FSB1: what the system really did with its bars while a page is full screen (Diagnostics says it, the owner's next screenshot is no longer needed)
+    private val fsBars = IntArray(4)                  // left, top, right, bottom of the system bars as the last insets reported them
+    private var fsBarsNote = "no full screen yet"
+    private var barsRehidden = false
+    private val barsCheck = Runnable { checkBars() }
+
+    private fun barsSeen(l: Int, t: Int, r: Int, b: Int) { fsBars[0] = l; fsBars[1] = t; fsBars[2] = r; fsBars[3] = b }
+
+    private fun checkBarsSoon() { barsRehidden = false; Io.main.removeCallbacks(barsCheck); Io.main.postDelayed(barsCheck, 700L) }
+
+    /** 700 ms after full screen began: a bar that still takes room is asked to go once more (some systems miss the first request, made while the screen turns); what remains is written down. */
+    private fun checkBars() {
+        if (!fullscreenOn) return
+        val shown = fsBars[0] > 0 || fsBars[1] > 0 || fsBars[2] > 0 || fsBars[3] > 0
+        if (shown && !barsRehidden) {
+            barsRehidden = true
+            Health.log("fullscreen", "bars", "still showing after 700 ms (left ${fsBars[0]} top ${fsBars[1]} right ${fsBars[2]} bottom ${fsBars[3]} px): asked again")
+            applyImmersive(true); root.requestApplyInsets()
+            Io.main.postDelayed(barsCheck, 1500L)
+            return
+        }
+        fsBarsNote = if (shown) "KEPT by this tablet (left ${fsBars[0]}, top ${fsBars[1]}, right ${fsBars[2]}, bottom ${fsBars[3]} px): the page is laid out inside them, so nothing of a player is under a bar"
+                     else "hidden (the picture is full-bleed)"
+        Health.log("fullscreen", "bars", fsBarsNote)
+    }
+
+    private fun fsBarsLine() = "Full-screen system bars: $fsBarsNote"
 
     // ================================================================== policy helpers used by the per-tab delegates
 
