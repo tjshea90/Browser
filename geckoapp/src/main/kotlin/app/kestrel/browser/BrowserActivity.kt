@@ -551,6 +551,7 @@ open class BrowserActivity : Activity(), DockListener {
         }
         when (ev.actionMasked) {
             android.view.MotionEvent.ACTION_DOWN -> {
+                turnSettler.touchedScreen() // ROT1: a finger during a turn is the person taking over: nothing is played for them
                 pressOnPanel = ::miniNav.isInitialized && miniNav.coversWindowPoint(ev.x, ev.y)
                 pressActive = !pressOnPanel; pressX = ev.x; pressY = ev.y; pressDownTime = ev.downTime; pressMovedFar = false
                 if (pressOnPanel) pressEndAt = 0L
