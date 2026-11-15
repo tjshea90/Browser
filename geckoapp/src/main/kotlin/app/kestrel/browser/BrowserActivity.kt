@@ -1255,6 +1255,9 @@ open class BrowserActivity : Activity(), DockListener {
     private var vpTries = 0
     private var vpLastResyncAt = 0L
     private var vpLast = "no full-screen page has told its size yet"
+    private var vpIdleMatch = 0   // ROT2: the one report a page makes outside full screen: it was the view's size ...
+    private var vpIdleMiss = 0    // ... or it was not (such a page is not waited for during a turn)
+    private var vpIdleLast = ""
     private val vpUndo = Runnable { (geckoView.layoutParams as? FrameLayout.LayoutParams)?.let { if (it.bottomMargin != 0) { it.bottomMargin = 0; geckoView.layoutParams = it } } }
 
     /**
@@ -1276,7 +1279,10 @@ open class BrowserActivity : Activity(), DockListener {
         val matches = Math.abs(pw - vw) <= 3 && Math.abs(ph - vh) <= 3
         // ROT2: the evidence that this page can say when it has a turn's new size: it reports and its viewport is the view's (a page whose viewport never is, in desktop mode or zoomed, is not waited for)
         if (matches) tab.gecko.vpOk = true else if (!turnSettler.turning) tab.gecko.vpOk = false
-        if (!fullscreenOn || fullscreenTab !== tab) return                    // the rest is for the page that IS full screen
+        if (!fullscreenOn || fullscreenTab !== tab) {                          // the rest is for the page that IS full screen
+            if (matches) vpIdleMatch++ else { vpIdleMiss++; vpIdleLast = "page ${pw}x$ph, view ${vw}x$vh" }
+            return
+        }
         vpChecks++
         turnSettler.pageReported(matches)                                     // ROT2: a turn waits for this (the cover stays until the page has the new size)
         if (matches) {
@@ -1301,7 +1307,7 @@ open class BrowserActivity : Activity(), DockListener {
         Io.main.removeCallbacks(vpUndo); Io.main.postDelayed(vpUndo, 120L)
     }
 
-    private fun viewportLine() = "Full-screen page size (the engine sizes a page that goes full screen to the display; the page tells what it got): $vpChecks checks, $vpMismatches wrong, the engine was given a real size change $vpResyncs times; last: $vpLast"
+    private fun viewportLine() = "Full-screen page size (the engine sizes a page that goes full screen to the display; the page tells what it got): $vpChecks checks, $vpMismatches wrong, the engine was given a real size change $vpResyncs times; last: $vpLast; reports outside full screen: $vpIdleMatch were the view's size, $vpIdleMiss were not" + (if (vpIdleLast.isNotEmpty()) " (last: $vpIdleLast)" else "")
 
     private fun turnPageLine() = "Turning, the page's own pause (every video, also a muted one): ${Health.counter("turn.page.turns")} turns met by pages, videos played again ${Health.counter("turn.page.played")}, left paused ${Health.counter("turn.page.skipped")}, turns with nothing to pause ${Health.counter("turn.page.none")}"
     private fun videoBarLine(): String {
