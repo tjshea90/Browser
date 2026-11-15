@@ -1,21 +1,22 @@
-# CHECKPOINT 2413 — read me first, then TASKS.md
+# CHECKPOINT 2414 — read me first, then TASKS.md
 
-**Written:** 2026-11-15T18:51:45Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `1a55e440` (this checkpoint is the commit after it)
+**Written:** 2026-11-15T19:10:25Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `52e323b9` (this checkpoint is the commit after it)
 
 ## Just done
-owner message 46 written into TASKS.md (FSB1 bars cover the controls in full screen, ROT1 rotation lag, FSC1 no controls in landscape; screenshots measured: both system bars stay visible on the tablet and the page is laid out full-bleed under them = alpha48 FS1 root padding zero + LAYOUT_* flags); second review rows RW1-RW12 written; vfind.js already patched for RW1/RW6/RW8 (bare-layer rule, covered() ambiguity, all() cache, srcOf instead of menu)
+code for owner message 46 + second review: FSB1 (applyImmersive without LAYOUT flags, insets follow real bars, re-hide at focus/turn/700 ms, bars note in Diagnostics, debug nohide), ROT1 (core TurnSettle + TurnSettler: MediaSession pause, black cover, resume rules; GeckoTabData.mediaSession), SND1 safety net (silenceStrays; Home over a playing page pauses it), RW1-RW12 in vfind/videobar/content/background JS with 11 new tests (videobar.test.js 25/25, npm test 443 pass), Kotlin suites core+app+geckoapp green before the last small edits, guard tests green; lab: page /fsbox, scene fullscreen_bars (suite fsy, hidden vs kept bars, strip pixel check, rotation, Kestrel bar in a full-screen web component), snd verdict now uses the page clock (run 43745675957 showed sound DOES stop when the app is left)
 
 ## Do this next
-NEXT: (1) FSB1 code in geckoapp BrowserActivity: applyImmersive without LAYOUT_* flags, insets listener without the fullscreenOn zero-padding branch, bars check +700 ms with one re-hide, onWindowFocusChanged re-hide, Diagnostics line, debug prop debug.kestrel.nohide; (2) ROT1: GeckoTabData.mediaSession + TurnSettler (pause via MediaSession, black cover, resume) with pure rules in core; (3) videobar.js RW2/RW3/RW5/RW7-RW11, content.js identity check + RW4, background.js ft src; tests in web-tests/videobar.test.js; (4) lab scene fsy; compat run 43747605584 is running (commit d288355b, ends about 20:10Z); snd run 43745675957 finished green: read its table (artifact) for SND1
+NEXT: (1) bump versionCode 150 / versionName alpha49 (sync-ext-version.sh), write the alpha49 release note, bash ship.sh gecko note, dispatch android.yml app=gecko full_build=true; (2) dispatch the lab suite fsy (app=lab lab_suite=fsy lab_minutes=10) - it queues behind compat run 43747605584 (ends about 20:10Z); read its report: strip rows kept vs hidden, turn settled lines, Kestrel bar in full screen; (3) read compat run 43747605584 into research/COMPAT_RUN1.md; (4) answer owner messages 44-46 in plain words (ANS44/ANS45/ANS46)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  7f2c4c92 ckpt 2413: owner message 46 written into TASKS.md (FSB1 bars cover the controls in full
   b8c5d333 ckpt 2412: hour soak 43740398387 read (commit 281c48f4, hotspot-shaped, 70 min, 79 scen
   9edf1ab7 ckpt 2411: LAB2 harness written: lab-only page-health probe (vfind.js probe(), guard an
   4a9a28f4 ckpt 2410: SND1a lab scene written: lab page /video/audible?kind=video|audio (big butto
@@ -25,8 +26,7 @@ NEXT: (1) FSB1 code in geckoapp BrowserActivity: applyImmersive without LAYOUT_*
   96a8ccce ckpt 2406: TASKS: VC1b/VC1c/LP1b/LP1c ticked with the lab evidence (run 43739450975); r
   fbbd7efc ckpt 2405: lab vc run 3 (43739450975, commit ecbdecc3) all green on the REAL engine inc
   2211e3fd ckpt 2404: gated kestrel-g-v0.3.0-alpha48 (gecko code 149) and pushed it: handoff self-
-  b619f02e ckpt 2403: pre-ship: alpha48: videos with no controls now get Kestrel's own: tap a vide
 ```
 
-(7 automatic checkpoint(s) since the last deliberate one — the
+(34 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
