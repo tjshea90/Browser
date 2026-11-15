@@ -1,21 +1,22 @@
-# CHECKPOINT 2432 — read me first, then TASKS.md
+# CHECKPOINT 2433 — read me first, then TASKS.md
 
-**Written:** 2026-11-15T21:26:05Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `9141496d` (this checkpoint is the commit after it)
+**Written:** 2026-11-15T21:26:44Z · **tests:** 1 RED: test_handoff.sh (0 green)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `80198e75` (this checkpoint is the commit after it)
 
 ## Just done
-FB4 coded + all green: turn.js vpt report, background relay, ShieldsBridge viewport param, BrowserActivity.onPageViewport/resyncEngineSize/viewportLine, OwnerRulesTest guard, soak.py viewport lines, research/FULLSCREEN_BARS.md addendum C; Kotlin suites EXIT 0, npm test 453 pass
+pre-ship: alpha52: full-screen video, third step. Found with the emulator lab (real Firefox engine): when a page goes full screen the engine sizes it to the whole DISPLAY (1024 px high) instead of the space between the system bars (947 px) and keeps that size until the next real size change, so a player's bottom controls were cut off even with the bars kept, and a turn could leave the old height behind (your third screenshot). Now the page tells the app the size it really got, and when that is not the size of the screen area the app gives the engine a real size change (the view one pixel shorter for a moment, at most three times per full screen). Diagnostics has a new line Full-screen page size (how many checks, how many were wrong, how many corrections). Everything else is as alpha51: bars kept by default (Settings, System bars in full-screen video), every video paused during a turn and played again by itself, an extra resize after the turn, Kestrel's video bar in full screen. Tested in headless browsers (453 tests) and unit tests; a clean emulator run of this fix is queued; NOT tried on your tablet yet: please try the Yahoo Finance video in full screen, turn the tablet both ways, and send me the Diagnostics lines Full-screen system bars, Turning the page's own pause, and Full-screen page size.
 
 ## Do this next
-bump geckoapp/build.gradle.kts to versionCode 153 / 0.3.0-alpha52, write note file in scratchpad, bash ship.sh gecko "$(cat note)", dispatch android.yml app=gecko full_build=true note=SAME, in parallel dispatch lab fsy (app=lab lab_suite=fsy lab_minutes=10 lab_net=full) and read the fullscreen viewport lines + first-state red strip; record-release only when the run is green
+ship.sh gates and releases this (gecko)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M TASKS.md
+     M geckoapp/build.gradle.kts
 
 ## Last ten checkpoints
 ```
+  80198e75 ckpt 2432: FB4 coded + all green: turn.js vpt report, background relay, ShieldsBridge v
   9780732e ckpt 2431: lab run 43760546128 (fsy, first clean run, alpha51 code) read: Keep mode put
   e9464a7e ckpt 2430: alpha51 gated and queued (FB1 bars kept by default + Settings row, FB2/FB3 t
   38a628d2 ckpt 2429: gated kestrel-g-v0.3.0-alpha51 (gecko code 152) and pushed it: handoff self-
@@ -25,8 +26,4 @@ bump geckoapp/build.gradle.kts to versionCode 153 / 0.3.0-alpha52, write note fi
   d941af5c ckpt 2425: alpha50 shipped and recorded (Release kestrel-g-v0.3.0-alpha50, run 43758859
   4415fbaf ckpt 2424: lab run 43753283814 (fsy) read: it says NOTHING about the full-screen code: 
   6689210f ckpt 2423: gated kestrel-g-v0.3.0-alpha50 (gecko code 151) and pushed it: handoff self-
-  ca8bc3fb ckpt 2422: pre-ship: alpha50: fixes from an independent check of alpha49 (everything el
 ```
-
-(5 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
