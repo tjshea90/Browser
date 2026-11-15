@@ -1359,8 +1359,9 @@ class Soak:
                     nosess = health_events(lines, "fullscreen", "turn-no-session")
                     bars = [e["rest"][:110] for e in health_events(lines, "fullscreen", "bars")]
                     vps = [e["rest"][:120] for e in health_events(lines, "fullscreen", "viewport")]     # FB4: what the page told about its viewport and what the app did about it
+                    nconf = len(health_events(lines, "life", "config"))                                  # ROT3: how many times the screen turned for this one move of the tablet (2 = a flash of the wrong orientation first)
                     states.append({"state": label, "red": red, "ih": lastrow.get("ih"), "iw": lastrow.get("iw"), "mb": lastrow.get("mb"), "size_events": len(sizes), "paused": len(paused), "no_session": len(nosess),
-                                   "settled": settled[-1] if settled else "", "bars": bars[-1] if bars else "", "viewport": vps[-3:]})
+                                   "settled": settled[-1] if settled else "", "bars": bars[-1] if bars else "", "viewport": vps[-3:], "configs": nconf})
                 lm = self.log.size()
                 self.ph.key("KEYCODE_BACK")
                 time.sleep(3)
@@ -1381,6 +1382,8 @@ class Soak:
                 if red is None:
                     continue
                 count, first, lasty, height = red
+                if st.get("configs", 0) >= 2:
+                    self.issue("medium", "fullscreen-turn", "%s %s %s: the screen turned %d times for one move of the tablet (a flash of the wrong orientation before the right one)" % (r["mode"], r["kind"], st["state"], st["configs"]))
                 if count < 3:
                     self.issue("high", "fullscreen-bars", "%s %s %s: the bottom edge of the full-screen page is NOT visible (no red strip): it is under a system bar" % (r["mode"], r["kind"], st["state"]), shot=True)
                     ok = False
@@ -1930,7 +1933,7 @@ class Soak:
                 for st in r["states"]:
                     red = st["red"]
                     redtxt = "%d (%d-%d of %d)" % red if red else "no picture"
-                    L.append("| %s | %s | %s | %s | %sx%s | %s%s | %s | %s |" % (r["mode"], nm, st["state"], redtxt, st.get("iw") or "?", st.get("ih") or "?", st["paused"], " (silent clip: no session)" if st["no_session"] else "", (st["settled"] or "-")[:70], (st["bars"] or "-")[:90]))
+                    L.append("| %s | %s | %s | %s | %sx%s | %s%s | %s | %s |" % (r["mode"], nm, st["state"], redtxt, st.get("iw") or "?", st.get("ih") or "?", st["paused"], " (silent clip: no session)" if st["no_session"] else "", ((st["settled"] or "-")[:70] + (" [%d config changes]" % st["configs"] if st.get("configs", 0) >= 2 else "")), (st["bars"] or "-")[:90]))
                     if st.get("viewport"):                                  # FB4: what the page told about its viewport and what the app did (numbers only)
                         L.append("| | | | viewport (FB4): %s | | | | |" % " / ".join(v[:100].replace("|", "/") for v in st["viewport"]))
                 if r["nobar"]:

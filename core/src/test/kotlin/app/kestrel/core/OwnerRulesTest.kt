@@ -250,6 +250,18 @@ class OwnerRulesTest {
         assertTrue("the bridge passes it on", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt").contains("\"vpt\" -> { viewport(m); \"\" }"))
     }
 
+    // ROT3 (found in lab run 43763822027, 2026-11-15): handing a one-time turn back to the tablet the instant the raw sensor shows the new position made the screen turn to the position Android still believed in
+    // (a portrait flash, then landscape 0.45 s later: two engine re-layouts for one turn of the owner's hand). The hand-back waits until the tablet has stayed that way for a moment.
+    @Test fun aOneTimeTurnIsHandedBackOnlyAfterTheTabletHasStayedInItsPositionForAMoment() {
+        val f = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/FullscreenTurner.kt")
+        val moved = body(f, "private fun moved(degrees: Int) {")
+        assertTrue(moved, moved.contains("Io.main.postDelayed(releaseNow, RELEASE_SETTLE_MS)") && moved.contains("else cancelRelease()") && !moved.contains("apply(base()"))
+        val rel = body(f, "private fun releaseIfStillHeld() {")
+        assertTrue(rel, rel.contains("FullscreenTurn.release(requested, posture)") && rel.contains("apply(base(), false,"))
+        assertTrue("leaving full screen and the app going away cancel it", body(f, "fun exit() {").contains("cancelRelease()") && f.contains("fun paused() { cancelRelease(); stopSensor() }"))
+        assertTrue("about half a second, long enough for Android's own rotation sensing", f.contains("const val RELEASE_SETTLE_MS = 650L"))
+    }
+
     // ROT2, owner message 48: two screenshots of a page still laid out for the OLD orientation a few seconds after a turn. The cover and the pause of a turn wait until the full-screen page says it HAS the view's new size.
     @Test fun aTurnUnderAFullScreenPageWaitsForThePageToHaveTheNewSize() {
         val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")

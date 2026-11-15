@@ -248,5 +248,7 @@ class FullscreenTurner(
         const val PENDING_MS = 3000L
         /** The rotate button stays up this long after a touch. */
         const val BUTTON_MS = 3500L
+        /** ROT2: a one-time turn is handed back to the tablet only after the tablet has stayed in that position this long (Android's own rotation sensing needs about half a second to agree). */
+        const val RELEASE_SETTLE_MS = 650L
     }
 }
