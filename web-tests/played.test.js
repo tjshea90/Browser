@@ -94,3 +94,11 @@ test('a seek or a loop of the same file does not report it again', async () => {
   assert.equal((await played(page)).length, 1);
   await page.context().close();
 });
+
+test('a slow tablet: playback that is a little behind 3 s of wall time is looked at again, not forgotten', async () => {
+  const page = await open('<video id="v" src="https://cdn.example/long.wav" muted autoplay style="width:300px;height:170px"></video>');
+  await page.evaluate(() => { document.getElementById('v').playbackRate = 0.5; });          // the clock runs at half speed: 3 s of waiting is 1.5 s of film
+  await page.waitForFunction(() => window.__msgs.some((m) => m.ev === 'played'), null, { timeout: 15000 });
+  assert.equal((await played(page)).length, 1);
+  await page.context().close();
+});

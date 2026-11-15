@@ -252,15 +252,17 @@
         if (!src || src.indexOf('http') !== 0) return;
         var key = elId(v) + '|' + src;
         if (playedKeys[key]) return;
-        var t0 = v.currentTime;
-        setTimeout(function () {
+        var t0 = v.currentTime, tries = 0;
+        var check = function () {
           try {
-            if (playedKeys[key] || v.paused || v.ended || (v.currentSrc || v.src || '') !== src || v.currentTime < t0 + 2.5) return;
+            if (playedKeys[key] || v.paused || v.ended || (v.currentSrc || v.src || '') !== src) return;
+            if (v.currentTime < t0 + 2.5) { if (++tries < 8) setTimeout(check, 1500); return; }   // playing, but slowly (a slow tablet): look again a few times before giving up
             playedKeys[key] = true;
             var x = factsOf(v);
             browser.runtime.sendMessage({ k: 'vid', ev: 'played', u: src, w: v.videoWidth || 0, h: v.videoHeight || 0, d: isFinite(v.duration) ? v.duration : 0, l: labelOf(v, src), p: location.href, f: x.f, rw: x.rw, rh: x.rh, vp: x.vp, el: elId(v) }).catch(function () {});
           } catch (err) { /* ignore */ }
-        }, 3000);
+        };
+        setTimeout(check, 3000);
       } catch (err) { /* ignore */ }
     }, true);
   } catch (e) { /* never break the page */ }
