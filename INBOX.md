@@ -1236,3 +1236,10 @@ Did you get my prompt about the mini navigation panel and making the closing x i
 ```
 I'm on YouTube and the videos have a red seek bar. The red line is the portion of the video already watched. The red dot is the current part in the video I'm watching. The rest of the line is a light color to the right side of the red dot for unwatched video. When I press anywhere on this bar on a regular browser or in YouTube app, it will jump the video to the place I pressed on the bar (the red dot will jump to where I pressed). But in Kestrel, it doesn't jump the video at all, it just makes a strange light colored line up to the point I pressed. I want the seek bar for videos inside the browser to act like other browsers and video player apps-- if I press a spot on the video player bar, it should jump the video to that part of the bar. It should start buffering video from that point forward and not buffer anything or waste any internet on any part of the video prior to the part I am currently watching
 ```
+
+## 2026-11-15T04:32:15Z
+```
+The following project is read only. Do not make any changes to the repo or interfere with the other Claude account working in the repo. Several reviews of this repo have been completed. Review the current state of the app and make a new report file that is optimized for another Claude account which I can upload into the other claude account with no explanation at all and claude will fully understand and complete the tasks based on this session's research. 
+
+Review the current state of the Kestrel browser app (which is being worked on now by another claude account) and prior research. Do a thorough review of the code and research ways to improve speed of the app, web page compatibility, speed of browsing and page loading and smoothness of scrolling, smoothness of video playback, and secure browsing. Make a report file of what can be improved and how
+```
