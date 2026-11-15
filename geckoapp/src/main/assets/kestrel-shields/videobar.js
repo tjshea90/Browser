@@ -64,7 +64,7 @@ window.KestrelVB = window.KestrelVB || (function () {
       try {
         if (v.controls) return true;
         var left = r.left - 4, right = r.right + 4, top = r.top - 4, bottom = r.bottom + 80;   // players that keep the bar BELOW the picture count too
-        var roots = rootsFor(v, r), buttons = 0, i, j;
+        var roots = rootsFor(v, r), i, j;
         for (i = 0; i < roots.length; i++) {
           var list;
           try { list = roots[i].querySelectorAll(CAND); } catch (e) { continue; }
@@ -74,17 +74,22 @@ window.KestrelVB = window.KestrelVB || (function () {
             var cr = el.getBoundingClientRect();
             if (cr.width < 10 || cr.height < 3 || cr.right < left || cr.left > right || cr.bottom < top || cr.top > bottom) continue;
             if (cr.width * cr.height >= 0.85 * r.width * r.height) continue;                   // a layer over the whole picture takes taps, it is not a control
-            var nm = nameOf(el), tag = el.tagName, role = el.getAttribute('role') || '';
-            var range = (tag === 'INPUT' && String(el.type).toLowerCase() === 'range') || tag === 'PROGRESS' || /^(slider|progressbar)$/i.test(role);
-            var wide = cr.width >= 0.3 * r.width && cr.height <= 40 && CTRL.test(nm);
-            var btn = (tag === 'BUTTON' || /^button$/i.test(role) || (tag === 'INPUT' && /^(button|submit)$/i.test(String(el.type)))) && CTRL.test(nm) && cr.width >= 14 && cr.height >= 14;
-            if (!(range || wide || btn)) continue;
+            var nm = nameOf(el), tag = el.tagName, role = el.getAttribute('role') || '', type = String(el.type || '').toLowerCase();
+            // a control is something a finger can use: a range / progress / slider (by tag or role, at least 40 px wide: a volume knob counts too), or a button (by tag, role, or a pointer cursor) with a name
+            // like play / pause / mute / seek / full screen that is at least 14 px each way and not a layer over the picture. A container whose class says "controls" is nothing: Yahoo's player has one that
+            // is 5 px tall while its ad plays.
+            var range = (tag === 'INPUT' && type === 'range') || tag === 'PROGRESS' || /^(slider|progressbar)$/i.test(role);
+            if (range && cr.width < 40) range = false;
+            var semantic = tag === 'BUTTON' || /^button$/i.test(role) || (tag === 'INPUT' && (type === 'button' || type === 'submit'));
+            var pointer = false;
+            if (!semantic && !range) { try { pointer = window.getComputedStyle(el).cursor === 'pointer'; } catch (e) { /* no style */ } }
+            var btn = (semantic || pointer) && CTRL.test(nm) && cr.width >= 14 && cr.height >= 14;
+            if (!(range || btn)) continue;
             if (!shown(el)) continue;
-            if (range || wide) return true;
-            buttons++;
+            return true;
           }
         }
-        return buttons > 0;
+        return false;
       } catch (e) { return false; }
     }
 
@@ -92,7 +97,7 @@ window.KestrelVB = window.KestrelVB || (function () {
     function judge(v, late) {
       try {
         if (!v.isConnected) return;
-        if (bar) { if (bar.v === v) keep(); return; }
+        if (bar) { if (bar.v === v && !late) keep(); return; }
         if (late && v.paused) return;                             // the second look is for a video that started after the tap (an ad that follows the play button)
         var r = VF.rect(v);
         if (!r) return;
