@@ -2973,7 +2973,9 @@ open class BrowserActivity : Activity(), DockListener {
                     return@ui
                 }
                 val offer = UpdateManager.state.offer
-                val fromUpdater = offer != null && v.name == offer.apkName && (offer.size <= 0L || v.total <= 0L || v.total == offer.size)
+                // RV3: a page controls a file's name and size (Content-Disposition, Content-Length: both are public on the release), so they prove nothing. What a page cannot set is WHERE the file was saved:
+                // only the Updates screen asks the download manager for the app-private place.
+                val fromUpdater = offer != null && v.kind == app.kestrel.core.download.DEST_APP_PRIVATE && v.name == offer.apkName
                 when (app.kestrel.core.download.ApkIdentity.verdict(info.pkg, packageName, fromUpdater)) {
                     app.kestrel.core.download.ApkIdentity.Verdict.OWN_UPDATE_OK -> go()
                     app.kestrel.core.download.ApkIdentity.Verdict.REFUSE_LOOKALIKE -> {
