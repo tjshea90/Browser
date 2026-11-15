@@ -104,7 +104,7 @@ class PlayerController(
                     m.optInt("rs", 4), m.optInt("ms") == 1, m.optInt("l") == 1 || len == -2.0, m.optInt("w"), m.optInt("h"), SystemClock.uptimeMillis()))
                 if (reports == 1) Health.log("player", "first-report", "film ${m.optInt("w")}x${m.optInt("h")}, length ${m.optDouble("d")}, ${if (m.optInt("ms") == 1) "media source" else "plain file"}")
             }
-            "vtap" -> { taps++; model.onTap(m.optInt("x", 500)) }
+            "vtap" -> { taps++; Health.log("player", "tap", "x=${m.optInt("x", 500)}"); model.onTap(m.optInt("x", 500)) }
         }
         flush()
     }
@@ -131,6 +131,7 @@ class PlayerController(
     override fun scheduleTap(ms: Long) { Io.main.removeCallbacks(tapTick); Io.main.postDelayed(tapTick, ms) }
     override fun cancelTap() { Io.main.removeCallbacks(tapTick) }
     override fun applyControls(shown: Boolean, animate: Boolean) {
+        if (shown != shownFlag) Health.log("player", if (shown) "shown" else "hidden", if (animate) "fade" else "at once")
         shownFlag = shown
         view.show(shown, animate)
         rotateButton(shown)
@@ -152,7 +153,7 @@ class PlayerController(
     // ---------------------------------------------------------------------------------------- inside
 
     /** Move what the model queued for the page into the thread-safe queue the worker thread reads. */
-    private fun flush() { for (c in model.drain()) commands.add(c.json()) }
+    private fun flush() { for (c in model.drain()) { val j = c.json(); commands.add(j); Health.log("player", "cmd", j) } }
 
     private fun refresh() {
         if (!activeFlag) return

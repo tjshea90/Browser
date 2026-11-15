@@ -15,7 +15,7 @@ dumpsys and the files in /sdcard/Download. The report is OUT/report.md (also pri
 Honest limits (also written into the report): x86_64 + software GL is not the tablet's Mali GPU; the JIT is faster; absolute times mean nothing, only "did it load / play / finish /
 crash" and comparisons inside one run do. A site that is down or blocks this runner is reported as UPSTREAM, not as an app fault.
 """
-import argparse, collections, itertools, json, os, random, re, shlex, shutil, struct, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request
+import argparse, collections, itertools, json, tempfile, os, random, re, shlex, shutil, struct, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 
 T0 = time.time()
@@ -208,6 +208,56 @@ class Phone:
                 now = self.nice_of(p)
             got[p] = now
         return got
+
+    def touch_dev(self):
+        """(path, max_x, max_y) of the emulator's multi-touch device that reaches the main display (the LOWEST numbered: the emulator lists one per display)."""
+        out = self.a.sh("getevent -p", timeout=30) or ""
+        best = None
+        for block in out.split("add device")[1:]:
+            m = re.search(r"(/dev/input/event(\d+))", block)
+            if m and "multi_touch" in block and (best is None or int(m.group(2)) < best[0]):
+                best = (int(m.group(2)), m.group(1), block)
+        if not best:
+            return None
+        mx = my = 32767
+        for code, nm in (("0035", "x"), ("0036", "y")):
+            mm = re.search(code + r"\s*:\s*value \d+, min \d+, max (\d+)", best[2])
+            if mm:
+                if nm == "x":
+                    mx = int(mm.group(1))
+                else:
+                    my = int(mm.group(1))
+        return best[1], mx, my
+
+    def raw_taps(self, taps, screen, gap_s=0.09, hold_s=0.04):
+        """Taps with an exact gap, written to the touch device in ONE shell: `adb shell input tap` costs 150-300 ms a call here, too slow for a double tap (VP1). taps = [(x, y), ...]; true = they were sent."""
+        dev = self.touch_dev()
+        if not dev:
+            return False
+        path, mx, my = dev
+        sw, sh = screen
+        def ev(t, c, v):
+            return struct.pack("<qqHHi", 0, 0, t, c, v)
+        chunks = []
+        for i, (x, y) in enumerate(taps):
+            rx, ry = int(round(x / float(sw) * mx)), int(round(y / float(sh) * my))
+            chunks.append(ev(3, 0x2f, 0) + ev(3, 0x39, 50 + i) + ev(3, 0x35, rx) + ev(3, 0x36, ry) + ev(3, 0x3a, 100) + ev(0, 0, 0))   # finger down
+            chunks.append(ev(3, 0x39, -1) + ev(0, 0, 0))                                                                              # finger up
+        with tempfile.TemporaryDirectory() as td:
+            f = os.path.join(td, "kp.bin")
+            with open(f, "wb") as fh:
+                fh.write(b"".join(chunks))
+            self.a.run("push", f, "/data/local/tmp/kp.bin", timeout=30)
+        cmds = []
+        at = 0
+        for idx, c in enumerate(chunks):
+            n = len(c) // 24
+            cmds.append("dd if=/data/local/tmp/kp.bin of=%s bs=24 skip=%d count=%d 2>/dev/null" % (path, at, n))
+            cmds.append("sleep %s" % (hold_s if idx % 2 == 0 else gap_s))
+            at += n
+        cmds.append("rm -f /data/local/tmp/kp.bin")
+        self.a.sh("; ".join(cmds), timeout=30)
+        return True
 
     def hogs_running(self):
         """How many of our busy loops are alive (ps), so the report can say whether the emulator was really slowed down."""

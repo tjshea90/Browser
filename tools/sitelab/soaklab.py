@@ -175,6 +175,7 @@ def page_fs(lock=""):
   });
   window.addEventListener('resize', function () { send('resize'); });
   try { screen.orientation.addEventListener('change', function () { send('orientationchange'); }); } catch (e) {}
+  document.addEventListener('click', function (e) { send('page-click', { tg: (e.target && (e.target.id || e.target.tagName)) || '' }); }, true);   // VP1: a tap on the picture must NOT reach the page while Kestrel's controls are on
   document.getElementById('go').onclick = function () { send('click-go'); var p = v.requestFullscreen ? v.requestFullscreen() : null; if (p && p.catch) p.catch(function (e) { send('fs-rejected', { why: String(e).slice(0, 60) }); }); };
   document.getElementById('lock').onclick = function () { send('click-lock'); lock('landscape', 'lock'); };
   document.getElementById('unlock').onclick = function () { send('click-unlock'); try { screen.orientation.unlock(); send('unlock-ok'); } catch (e) { send('unlock-threw'); } };
@@ -223,6 +224,7 @@ def page_fsbox(kind, nobar):
     try { new Image().src = '/report?' + Object.keys(o).map(function (k) { return k + '=' + encodeURIComponent(o[k]); }).join('&'); } catch (e) {}
   }
   document.addEventListener('fullscreenchange', function () { send('fullscreenchange'); });
+  ['seeked', 'pause', 'play', 'volumechange'].forEach(function (ev) { try { q('v').addEventListener(ev, function () { send('v-' + ev); }); } catch (e) {} });   // VP1: the lab sees what Kestrel's controls did to the film
   window.addEventListener('resize', function () { send('resize'); });
   try { screen.orientation.addEventListener('change', function () { send('orientationchange'); }); } catch (e) {}
   document.getElementById('go').onclick = function () {
