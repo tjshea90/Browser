@@ -32,6 +32,8 @@ class TurnSettler(
     private val nudge: () -> Unit = {},
     /** ROT2: the small progress ring on the cover. */
     private val hintView: () -> View? = { null },
+    /** VP1: the cover goes up (true) / is let go (false): Kestrel's full-screen controls hide under it and come back after it. */
+    private val onCover: (Boolean) -> Unit = {},
 ) {
     private val tick = Runnable { machine.tick() }
 
@@ -40,6 +42,7 @@ class TurnSettler(
         override fun schedule(delayMs: Long) { Io.main.removeCallbacks(tick); Io.main.postDelayed(tick, delayMs) }
         override fun cancelSchedule() { Io.main.removeCallbacks(tick) }
         override fun cover(show: Boolean, fade: Boolean) {
+            try { onCover(show) } catch (e: Throwable) { Health.log("player", "cover-hook-failed", e.toString().take(80)) }
             val c = cover() ?: return
             c.animate().cancel()
             if (show) { c.alpha = 1f; c.visibility = View.VISIBLE; return }

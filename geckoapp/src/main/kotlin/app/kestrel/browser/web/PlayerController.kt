@@ -31,8 +31,12 @@ class PlayerController(
     private var tickerOn = false
     private val commands = ConcurrentLinkedQueue<String>()
     @Volatile private var shownFlag = false
-    @Volatile private var activeFlag = false
+    @Volatile private var activeFlag = false       // a film is under the controls (the page has reported it)
+    @Volatile private var armed = false         // a page is full screen and the person wants Kestrel's controls
     private var started = 0L
+    private var lastReportAt = 0L
+    private val watchdog = object : Runnable { override fun run() { watchOn = false; checkAlive() } }
+    private var watchOn = false
 
     // what Diagnostics says
     private var reports = 0
@@ -43,23 +47,37 @@ class PlayerController(
 
     // ---------------------------------------------------------------------------------------- the activity
 
-    /** A page went full screen (or left it). [playingGuess]: the film is assumed to play until the first report says otherwise. */
-    fun fullscreen(on: Boolean) {
-        if (on == activeFlag) return
-        if (on) {
-            activeFlag = true; started = SystemClock.uptimeMillis(); reports = 0; taps = 0
-            view.visibility = View.VISIBLE
-            model.start(true)
-            Health.log("player", "start", "full screen: Kestrel's controls")
-        } else {
-            activeFlag = false; shownFlag = false
-            Io.main.removeCallbacks(controlsTick); Io.main.removeCallbacks(tapTick); Io.main.removeCallbacks(ticker); tickerOn = false
-            model.stop(); commands.clear()
-            view.show(false, false); view.visibility = View.GONE
-            rotateButton(false)
-            last = "ended after ${(SystemClock.uptimeMillis() - started) / 1000} s: $reports reports, $taps taps, ${model.seeks} seeks, ${model.commands} commands"
-            Health.log("player", "stop", last)
-        }
+    /** A page went full screen (or left it) and the person wants Kestrel's controls ([wanted]): nothing is drawn until the page reports a film (a full-screen game or slide show has none). */
+    fun fullscreen(on: Boolean, wanted: Boolean = true) {
+        if (on && wanted) { armed = true; return }
+        armed = false
+        if (activeFlag) end("full screen ended")
+    }
+
+    private fun begin() {
+        activeFlag = true; started = SystemClock.uptimeMillis(); reports = 0; taps = 0; lastReportAt = started
+        view.visibility = View.VISIBLE
+        model.start(true)
+        scheduleWatchdog()
+        Health.log("player", "start", "a full-screen film: Kestrel's controls")
+    }
+
+    private fun end(why: String) {
+        activeFlag = false; shownFlag = false
+        Io.main.removeCallbacks(controlsTick); Io.main.removeCallbacks(tapTick); Io.main.removeCallbacks(ticker); Io.main.removeCallbacks(watchdog); tickerOn = false; watchOn = false
+        model.stop(); commands.clear()
+        view.show(false, false); view.visibility = View.GONE
+        rotateButton(false)
+        last = "$why after ${(SystemClock.uptimeMillis() - started) / 1000} s: $reports reports, $taps taps, ${model.seeks} seeks, ${model.commands} commands"
+        Health.log("player", "stop", last)
+    }
+
+    /** A page that stops reporting (its full-screen box lost the film, the script is gone) takes the controls with it. */
+    private fun scheduleWatchdog() { if (!watchOn && activeFlag) { watchOn = true; Io.main.postDelayed(watchdog, 1000L) } }
+    private fun checkAlive() {
+        if (!activeFlag) return
+        if (SystemClock.uptimeMillis() - lastReportAt > SILENT_END_MS) { end("the page stopped reporting"); return }
+        scheduleWatchdog()
     }
 
     val active: Boolean get() = activeFlag
@@ -75,7 +93,9 @@ class PlayerController(
 
     /** `vst` (the film's state) or `vtap` (a tap on the picture) from the page that is full screen. */
     fun onMessage(m: JSONObject) {
-        if (!activeFlag) return
+        if (!armed) return
+        if (!activeFlag) { if (m.optString("k") != "vst") return; begin() }
+        lastReportAt = SystemClock.uptimeMillis()
         when (m.optString("k")) {
             "vst" -> {
                 reports++
@@ -91,7 +111,7 @@ class PlayerController(
 
     /** The answer for the page, from any thread: what the controls want done, whether they are shown. */
     fun reply(): String {
-        if (!activeFlag) return "{\"s\":0}"
+        if (!armed && !activeFlag) return "{\"s\":0}"
         val sb = StringBuilder(64).append("{\"s\":").append(if (shownFlag) 1 else 0)
         var c = commands.poll()
         if (c != null) {
@@ -146,6 +166,8 @@ class PlayerController(
         tickerOn = true
         Io.main.postDelayed(ticker, 250L)
     }
+
+    private companion object { const val SILENT_END_MS = 3500L }
 
     /** One Diagnostics line. */
     fun line(): String = "Full-screen video controls (Kestrel's own): ${model.sessions} full screens, $taps taps on the picture (${model.singles} single, ${model.seeks} double-tap seeks), ${model.commands} commands to the page, $reports reports now; last: $last"

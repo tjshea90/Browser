@@ -126,7 +126,18 @@ class FullscreenTurner(
     /** A finger lifted while a page is full screen: the button shows again for a moment (like a player's controls). */
     fun touched() { if (on) showButton() }
 
+    /** VP1: while Kestrel's own full-screen controls are on, the button shows and hides WITH them (a tap that hides the controls must not leave a button on the picture). */
+    var ownedByPlayer: () -> Boolean = { false }
+
+    fun controlledShow(show: Boolean) {
+        val b = button ?: return
+        Io.main.removeCallbacks(hideButton)
+        b.animate().cancel()
+        if (show && on && FullscreenTurn.cleanMode(mode()) != FullscreenTurn.MODE_OFF) { b.alpha = 1f; b.visibility = View.VISIBLE } else b.visibility = View.GONE
+    }
+
     private fun showButton() {
+        if (ownedByPlayer()) return
         val b = button ?: return
         if (FullscreenTurn.cleanMode(mode()) == FullscreenTurn.MODE_OFF) return // "off": only what a site asks for
         b.animate().cancel(); b.alpha = 1f; b.visibility = View.VISIBLE
