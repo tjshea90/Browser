@@ -214,6 +214,34 @@ test('a link with words of its own near the player, and a same-site link on it, 
 });
 
 
+// RX3-G4 review (2026-11-15): the overlay-link rule must not take a page's own big links away
+test('REVIEW: a big card that links to another site and has words of its own is a link, not an advertisement layer', async () => {
+  const page = await open(`<a id="card" href="${AD}" target="_blank" style="display:block;width:480px;height:420px;background:#eee">A news story with a title and a few words under the picture</a>`);
+  const popup = page.waitForEvent('popup', { timeout: 3000 });
+  await page.mouse.click(100, 100);
+  await popup;
+  assert.deepEqual(await notes(page), []);
+});
+
+test('REVIEW: the empty stretched link of a card of the site\'s own (not over a player) is the card\'s link, not an advertisement layer', async () => {
+  const page = await open(`<div style="position:relative;width:480px;height:420px;background:#eee">A card<a id="stretch" href="https://movie.example/story" style="position:absolute;left:0;top:0;width:100%;height:100%"></a></div>`);
+  await page.mouse.click(100, 100);
+  await settle();
+  assert.equal(page.url(), 'https://movie.example/story');
+  assert.deepEqual(await notes(page), []);
+});
+
+test('REVIEW: an EMPTY positioned link of another site that fills the screen, and an empty link of the own site laid over a player, are still advertisement layers', async () => {
+  const a = await open(`<a id="x" href="${AD}" target="_blank" style="position:fixed;left:0;top:0;width:100%;height:100%"></a>`);
+  await a.mouse.click(100, 100); await settle();
+  assert.equal(a.popups.length, 0); assert.deepEqual(await notes(a), ['overlay|' + AD]);
+  const b = await open(`<div style="position:relative;width:480px;height:420px"><video style="width:480px;height:420px;background:#000"></video><a id="y" href="https://movie.example/ad-landing" style="position:absolute;left:0;top:0;width:100%;height:100%"></a></div>`);
+  await b.mouse.click(100, 100); await settle();
+  assert.equal(b.url(), 'https://movie.example/', 'the empty link over the player did not take the page away');
+  assert.deepEqual(await notes(b), ['overlay|https://movie.example/ad-landing']);
+});
+
+
 // ---- AP1: one press plays the video, the fake layers are still refused
 const STUB_PLAY = 'HTMLMediaElement.prototype.play = function () { window.__plays = (window.__plays || 0) + 1; return Promise.resolve(); };';
 const plays = (page) => page.evaluate(() => window.__plays || 0);
