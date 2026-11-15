@@ -1250,3 +1250,10 @@ The following project is read only. Do not make any changes to the repo or inter
 
 Review the current state of the Kestrel browser app (which is being worked on now by another claude account) and prior research. Do a thorough review of the code and research ways to improve speed of the app, web page compatibility, speed of browsing and page loading and smoothness of scrolling, smoothness of video playback, and secure browsing. Make a report file of what can be improved and how
 ```
+
+## 2026-11-15T05:37:00Z
+```
+@"/root/.claude/uploads/b87c69cb-83c4-59c8-95ee-0d82312438d2/b749b73e-REVIEW-EXTERNAL-4.md" First read the attached file and do what it says. Then make it so if I watch videos in full screen, then rotate the tablet or press a rotate button, the video switches to landscape mode just like regular video player apps. 
+
+If it is possible, put the browser in Android 10 emulators matching my hardware as much as possible running on GitHub runners and make them use the Kestrel app stimulating browsing on a variety of web sites and videos and downloads for an hour, and log any issues with loading, speed, finding and downloading videos, crashing, etc. Then look for ways to improve it based on the simulated runs 
+```
