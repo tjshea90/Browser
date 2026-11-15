@@ -52,11 +52,11 @@ class ControlsMachine(private val h: Host) {
 
     /** What the video does now; only a CHANGE is acted on. */
     fun state(playingNow: Boolean, bufferingNow: Boolean, endedNow: Boolean) {
-        val wasPlaying = playing; val wasEnded = ended
+        val wasPlaying = playing; val wasEnded = ended; val could = autoHide()
         playing = playingNow; buffering = bufferingNow; ended = endedNow
         if (!active || turning) return
         if ((wasPlaying && !playingNow) || (!wasEnded && endedNow)) show(0L)          // it paused or ended: the controls come (and stay: no clock while paused)
-        else if (!wasPlaying && playingNow && shown) restart()                        // it started: the usual clock
+        else if (!could && autoHide() && shown) restart()                             // it started playing, or stopped buffering: the usual clock
     }
 
     /** The person used a control (a button, the track): the clock restarts. */

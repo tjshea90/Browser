@@ -78,8 +78,9 @@ class ControlsMachineTest {
         c.state(true, true, false)                                  // buffering
         h.wait(c, PlayerRules.AFTER_ENTER_MS + 100)
         assertTrue("buffering: they stay", h.shown)
-        c.state(true, false, false)
-        assertEquals(PlayerRules.HIDE_AFTER_MS, h.scheduled.also { c.interacted() })
+        c.state(true, false, false)                                 // it plays on
+        assertEquals("the clock starts when buffering ends", PlayerRules.HIDE_AFTER_MS, h.scheduled)
+        h.wait(c, PlayerRules.HIDE_AFTER_MS); assertFalse(h.shown)
         val e = Host(); val ce = m(e)
         ce.state(true, false, true)
         assertTrue(e.shown); assertNull(e.scheduled)
@@ -90,7 +91,10 @@ class ControlsMachineTest {
         c.turnStarted(); assertFalse(h.shown); assertFalse("at once, no fade", h.lastAnimate)
         c.tap(); assertFalse("a tap under the cover does nothing", h.shown)
         c.state(false, false, false); assertFalse("the video paused for the turn: no controls under the cover", h.shown)
-        c.turnEnded(); assertTrue(h.shown); assertEquals(PlayerRules.AFTER_TURN_MS, h.scheduled.takeIf { true }.also { c.state(true, false, false) }?.let { PlayerRules.AFTER_TURN_MS })
+        c.state(true, false, false)                                 // and plays again
+        c.turnEnded()
+        assertTrue(h.shown); assertEquals(PlayerRules.AFTER_TURN_MS, h.scheduled)
+        h.wait(c, PlayerRules.AFTER_TURN_MS); assertFalse(h.shown)
     }
 
     @Test fun stopRemovesEverythingAtOnce() {
