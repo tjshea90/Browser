@@ -1924,3 +1924,39 @@
 > 3. The compatibility run, then fixes from it.
 > 4. Owner-only GitHub steps still waiting: the protected `release` environment, the "pin actions to a full commit SHA" policy, and the private signing key last.
 <!-- sha:2848c2e14233 -->
+
+## 2026-11-15T21:05:38Z
+> alpha51 is ready, and you were right that alpha50 changed nothing for you. The link is here:
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha51
+>
+> **Why alpha48 to alpha50 looked identical on your tablet.**
+> - Those versions only changed how Kestrel reacts to the system bars, and your tablet doesn't behave the way I assumed.
+> - My best explanation: it accepts the request to hide the bars and lays the page out as if they were gone, but still draws both bars on top. The app is told the bars are gone, so nothing it can read would have caught this. I can't prove it from here.
+>
+> **1. Controls under the navigation bar (and no controls in full screen).**
+> - By default, Kestrel no longer asks the tablet to hide its bars in full screen.
+> - The video now fills only the space between the status bar and the navigation bar, the same layout every normal page already gets. That is why the dock is never hidden behind the bar there.
+> - The player's own controls, and Kestrel's own bar when you tap a film that has none, therefore sit above the navigation bar in both orientations.
+> - Settings has a new row, "System bars in full-screen video". "Keep" is the default. "Hide" fills the whole screen and only makes sense on a tablet that really hides its bars.
+> - **Please check that row exists.** If it is missing, the update did not install. Android keeps the old version without a clear message when the tablet is low on storage. That alone would explain "nothing changed".
+>
+> **2. Pausing while the screen turns.**
+> - My earlier pause only worked for videos with sound, and the Yahoo video is muted. So it was never paused at all.
+> - Now the page itself pauses every video when the screen turns, muted ones included. This works for videos inside web-component players like Yahoo's.
+> - When the screen has stopped moving, the page is given one extra resize, so a player that measured itself from the old shape redoes its size. Then the video plays again by itself. A video you had paused stays paused, and so does one you touch during the turn.
+> - The black cover during the turn is still there.
+> - Diagnostics has a new line, "Turning, the page's own pause".
+>
+> **What I could not verify.**
+> - Everything was tested in headless browsers (452 tests) and unit tests only. It was not tested on your tablet.
+> - The emulator run for these cases has not given a clean result yet. Its first attempt died of the emulator's tiny memory limit. The second failed at start-up because of a mistake in my own workflow script, which is now fixed. A third run is in progress.
+> - I have not seen the "wrong size for a few seconds" symptom reproduced anywhere. The extra resize is my best guess at the cause, not a proven fix. In your third screenshot the picture was 575 pixels tall, which is the landscape height. That suggests the page kept the old height after the width had already turned.
+> - If the wrong size still happens, send the Diagnostics lines "Turning under a video" and "Turning, the page's own pause".
+>
+> **Still open:**
+> - Your tablet test of alpha51, starting with the new Settings row.
+> - The emulator results for the Yahoo player, which I will report.
+> - The compatibility run, which was mostly void and is being redone.
+> - The owner-only GitHub steps: the protected `release` environment, the "pin actions to a full commit SHA" policy, and the private signing key last.
+<!-- sha:d4c598f2b2c8 -->
