@@ -139,7 +139,7 @@ test('FB4 + ROT2: a page says its viewport once soon after it is up (f = 0), and
 
 test('review of alpha53: a turn and back inside one window leaves the shape right, so the next unrelated resize is not taken for a turn', async () => {
   const page = await open(VIDEO(), { turn: true });
-  await play(page);
+  await PLAYING(page);
   await page.setViewportSize({ width: 800, height: 500 });                  // the turn ...
   await wait(page, 100);
   await page.setViewportSize({ width: 500, height: 800 });                  // ... and back, before it settled
