@@ -2220,3 +2220,12 @@
 > 4. **One Diagnostics copy** after a Proton Mail session. Its "Extension listeners" numbers tell me whether to slim down the extension's request checks. Diagnostics also now logs what each long press did to the panel.
 > 5. **YouTube:** the "Desktop site" check above.
 <!-- sha:fcc3c0968633 -->
+
+## 2026-11-15T03:25:32Z
+> Nothing to do. Those two notifications are old firings of the auto-resume I created, which asked me to resume and finish the alpha41 release. I deleted that auto-resume earlier, and a lookup now confirms it no longer exists, so it can't fire again.
+>
+> The work it was set up for is all done:
+> - **Releases:** alpha41 through alpha46 are released and recorded in the build log.
+> - **Latest:** alpha46 is out, with the Release link in my previous message.
+> - **Open items:** nothing is running or half-done. The only open items are the questions I listed for you (BK5 and AX1g), your tablet feedback, and one Diagnostics copy.
+<!-- sha:60aef8d0ce21 -->
