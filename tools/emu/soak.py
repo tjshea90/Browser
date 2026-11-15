@@ -1240,19 +1240,21 @@ class Soak:
                 bar_shown = None
                 if nobar and entered:                                      # FSC1: no controls of the page: a tap on the film brings up Kestrel's bar INSIDE the full-screen web component
                     tm = self.log.size()
-                    self.ph.tap(w // 2, h // 2)
+                    self.ph.tap(h // 2, w // 2)                            # the screen is sideways now (the app turned the wide video): the middle of it
                     time.sleep(2.5)
                     bar_shown = bool([e for e in health_events(self.log.since(tm), "videobar") if e["ev"] == "shown"])
                     self.shot("fsb-%s-bar" % tag)
                 states = []
-                for label, accel in (("portrait", None), ("landscape", (9.81, 0, 0)), ("portrait-again", (0, 9.81, 0))):
+                # the app turns a wide video sideways BY ITSELF when full screen begins (FS1), so the first state is landscape; then the tablet is held sideways (the one-time turn is let go), upright (a REAL turn to
+                # portrait), sideways (a turn to landscape) and upright again
+                for label, accel in (("began (sideways by itself)", None), ("held sideways", (9.81, 0, 0)), ("held upright: turn to portrait", (0, 9.81, 0)), ("held sideways: turn to landscape", (9.81, 0, 0)), ("held upright again: portrait", (0, 9.81, 0))):
                     lm = self.log.size()
                     if accel:
                         self.ph.physical(*accel)
                     time.sleep(0.5 if accel else 0.1)
-                    self.shot("fsb-%s-%s-early" % (tag, label))
+                    self.shot("fsb-%s-%s-early" % (tag, label.split(":")[0].replace(" ", "-")[:18]))
                     time.sleep(4.0)
-                    self.shot("fsb-%s-%s" % (tag, label))
+                    self.shot("fsb-%s-%s" % (tag, label.split(":")[0].replace(" ", "-")[:18]))
                     red = self.ph.red_rows()
                     lines = self.log.since(lm)
                     last = [r for r in self.lab.since(rmark) if r.get("kind") == "fsb"]
@@ -1264,8 +1266,6 @@ class Soak:
                     bars = [e["rest"][:110] for e in health_events(lines, "fullscreen", "bars")]
                     states.append({"state": label, "red": red, "ih": lastrow.get("ih"), "iw": lastrow.get("iw"), "mb": lastrow.get("mb"), "size_events": len(sizes), "paused": len(paused), "no_session": len(nosess),
                                    "settled": settled[-1] if settled else "", "bars": bars[-1] if bars else ""})
-                    if accel is None:
-                        continue
                 lm = self.log.size()
                 self.ph.key("KEYCODE_BACK")
                 time.sleep(3)
@@ -1328,11 +1328,12 @@ class Soak:
         self.shot("yahoofs-full")
         states = []
         if entered:
-            for label, accel in (("landscape", (9.81, 0, 0)), ("portrait-again", (0, 9.81, 0))):
+            for label, accel in (("began (sideways by itself)", None), ("held sideways", (9.81, 0, 0)), ("held upright: turn to portrait", (0, 9.81, 0)), ("held sideways: turn to landscape", (9.81, 0, 0)), ("held upright again: portrait", (0, 9.81, 0))):
                 lm = self.log.size()
-                self.ph.physical(*accel)
-                time.sleep(0.5); self.shot("yahoofs-%s-early" % label)
-                time.sleep(4.0); self.shot("yahoofs-%s" % label)
+                if accel:
+                    self.ph.physical(*accel)
+                time.sleep(0.5 if accel else 0.1); self.shot("yahoofs-%s-early" % label.split(":")[0].replace(" ", "-")[:18])
+                time.sleep(4.0); self.shot("yahoofs-%s" % label.split(":")[0].replace(" ", "-")[:18])
                 lines = self.log.since(lm)
                 states.append({"state": label, "settled": [e["rest"] for e in health_events(lines, "fullscreen", "turn-settled")][-1:] or [""], "paused": len(health_events(lines, "fullscreen", "turn-pause")),
                                "sizes": len(health_events(lines, "gecko", "size")), "bars": [e["rest"][:100] for e in health_events(lines, "fullscreen", "bars")][-1:] or [""]})
