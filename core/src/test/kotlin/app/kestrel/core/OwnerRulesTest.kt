@@ -201,6 +201,19 @@ class OwnerRulesTest {
         assertTrue("the delegate keeps the media session of the tab", delegate.contains("tab.gecko.mediaSession = mediaSession") && delegate.contains("tab.gecko.mediaSession = null"))
     }
 
+    // SND1, owner message 45: "Sound should not keep playing if I am not currently on the Kestrel tab." The engine suspends the media of an inactive session (proven in the emulator lab); the app adds a safety net.
+    @Test fun aVideoThatIsNotShownDoesNotGoOnMakingSound() {
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("every session is created with suspendMediaWhenInactive", act.contains(".suspendMediaWhenInactive(true)"))
+        assertTrue("the app leaving the screen sets the page inactive and starts the safety net", body(act, "override fun onStop() {").let { it.contains("setActive(false)") && it.contains("silenceStraysSoon()") })
+        assertTrue("a tab switch starts the safety net", body(act, "private fun show(tab: Tab) {").contains("silenceStraysSoon()"))
+        assertTrue("the Home screen over a playing page pauses it at once", body(act, "override fun onHome() {").contains("silenceStrays()"))
+        val net = body(act, "private fun silenceStrays() {")
+        assertTrue(net, net.contains("ms.pause()") && net.contains("t.gecko.videoPlaying") && net.contains("!homeShown(t)"))
+        assertTrue("coming back to the app cancels the check", body(act, "override fun onStart() {").contains("removeCallbacks(strayCheck)"))
+        assertTrue("Diagnostics shows the numbers", act.contains("out.add(strayLine())"))
+    }
+
     // the second independent review of the video bar (research/REVIEW_ALPHA48.md addendum)
     @Test fun theVideoBarScriptsKeepTheirReviewFixes() {
         val dir = "geckoapp/src/main/assets/kestrel-shields/"
