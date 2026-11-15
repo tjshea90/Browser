@@ -63,6 +63,21 @@ class OwnerRulesTest {
         assertTrue("the panel is picked up by a long press on anything that is not a key", nav.contains("ZONE_BODY -> if (!onKeys(ev.x, ev.y)) armPick(ev)"))
     }
 
+    // MN1 / MN2, owner message 41: "it doesn't close anymore. I should be able to long press again above where it is on the screen and close it. Also ... if I long press and drag the panel, a large x icon appears
+    // at the bottom of the screen and if I drag it into the x, it closes the panel and hides it until I long press somewhere to open it again"
+    @Test fun thePanelClosesByALongPressAboveItAndByDraggingItIntoALargeXAtTheBottom() {
+        val nav = source("app/src/main/kotlin/app/kestrel/browser/ui/MiniNav.kt")
+        val show = body(nav, "fun showAt(xWin: Float, yWin: Float) {")
+        assertTrue("a long press above the open panel closes it: $show", show.contains("if (isAbovePanel(yWin)) { setOpen(false, true); return }"))
+        val finish = body(nav, "private fun finish(ev: MotionEvent) {")
+        assertTrue("letting go over the X closes and hides the panel: $finish", finish.contains("val dropped = m == DRAG_MOVE && ev.actionMasked == MotionEvent.ACTION_UP && closeTarget.hot") && finish.contains("setOpen(false, animate = false)"))
+        assertTrue("a cancelled touch never closes it (only ACTION_UP counts)", !finish.contains("ACTION_CANCEL"))
+        val pick = body(nav, "private fun pickUp(at: Long) {")
+        assertTrue("the X shows the moment the panel is picked up: $pick", pick.contains("showCloseTarget(true)"))
+        assertTrue("the X is large", Regex("""const val CLOSE_SIZE_DP = (\d+)""").find(nav)!!.groupValues[1].toInt() >= 64)
+        assertTrue("the X takes no touch of its own", nav.contains("init { isClickable = false; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }"))
+    }
+
     // AY3, owner message 39: "make the navigation panel keyboard space key able to move the text cursor if I press and hold it then move my finger left or right, just like other keyboard apps do"
     @Test fun theSpaceKeyMovesTheTextCursorWhenSlid() {
         val nav = source("app/src/main/kotlin/app/kestrel/browser/ui/MiniNav.kt")
