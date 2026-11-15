@@ -448,6 +448,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onStart() {
         super.onStart()
+        Io.main.removeCallbacks(strayCheck)
         ProcessLife.uiVisible = true; DownloadController.uiVisibilityChanged()
         downloadPopup.attach(); downloadPopup.resumed()
         val appCtx = applicationContext
@@ -524,6 +525,7 @@ open class BrowserActivity : Activity(), DockListener {
         super.onStop()
         Health.log("life", "stop"); Health.stopWatchdog(); Health.unwatchFrames(window); app.kestrel.browser.diag.CpuMeter.stop()
         current?.session?.setActive(false) // stops rendering and throttles the page: saves battery and mobile data
+        silenceStraysSoon() // SND1
         Io.fast { NetworkMonitor.stop() }
         Neon.foreground(false)
         ProcessLife.uiVisible = false; DownloadController.uiVisibilityChanged()
@@ -972,7 +974,32 @@ open class BrowserActivity : Activity(), DockListener {
         enforceLiveLimit()
         updateUi()
         scheduleSave()
+        if (prev != null && prev !== tab) silenceStraysSoon() // SND1: the tab that was left must not go on making sound
     }
+
+    // ---- SND1 (owner message 45): "Sound should not keep playing if I am not currently on the Kestrel tab."
+    // The engine suspends the media of a session that is set inactive (suspendMediaWhenInactive; proven in the emulator lab: the clip's clock stood still while the app was left and the media session said
+    // paused). This is the safety net for a video it does NOT suspend: 1.5 s after the app left the screen or another tab came to the front, and at once when the Home screen covers a page, every tab that is not
+    // showing its page and still reports a playing video is paused through its media session (a silent video has none and makes no sound).
+    private val strayCheck = Runnable { silenceStrays() }
+    private var strayPaused = 0
+    private var strayLast = "nothing needed pausing yet"
+
+    private fun silenceStraysSoon() { Io.main.removeCallbacks(strayCheck); Io.main.postDelayed(strayCheck, 1500L) }
+
+    private fun silenceStrays() {
+        val away = !onScreenNow
+        for (t in tabs) {
+            if (!t.gecko.videoPlaying) continue
+            if (!away && t === current && !homeShown(t)) continue // the page in front, on screen, with nothing over it: it plays
+            val ms = t.gecko.mediaSession ?: continue
+            val why = if (away) "the app is not on screen" else if (t === current) "the Home screen covers the page" else "another tab is in front"
+            try { ms.pause(); strayPaused++; Health.count("sound.pausedAway"); strayLast = "tab ${t.id}: $why"; Health.log("sound", "paused-away", "tab=${t.id} $why") }
+            catch (e: Throwable) { Health.log("sound", "pause-failed", e.toString().take(80)) }
+        }
+    }
+
+    private fun strayLine() = "Sound while the page is not in front: the engine suspends it itself; the app paused $strayPaused video(s) the engine left playing; last: $strayLast"
 
     /** Private tab in front: no screenshots / recents thumbnail, and no autofill service sees what is typed. */
     private var secureWindow = false
@@ -1446,6 +1473,7 @@ open class BrowserActivity : Activity(), DockListener {
         hideKeyboard()
         t.showHome = true
         attachContent(t)
+        silenceStrays() // SND1: the page stays alive underneath the Home screen, but nobody is looking at it: its video must not go on making sound
         updateUi()
         scheduleSave() // AQ1: the session file says "on Home" at once, not only when the app next goes to the background
     }
@@ -2001,6 +2029,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(fsTurner.line())
         out.add(fsBarsLine())
         out.add(turnSettler.line())
+        out.add(strayLine())
         out.add(videoBarLine())
         out.add(videoQuality.line(GeckoEngine.videoPolicyText))
         out.add(scrollGaps.line(prefs.measureScroll))
