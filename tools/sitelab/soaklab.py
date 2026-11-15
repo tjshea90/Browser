@@ -193,7 +193,7 @@ def page_vc(kind, ad):
                 "<input type=range aria-label='Seek' value=0 style='width:60%'></div></div>")
     elif kind == "shadow":
         body = ("<div style='position:relative;width:100%;max-width:560px;margin:8px auto'><div id=host style='width:100%;height:315px'></div>"
-                + ("<iframe srcdoc=\"<body style='margin:0;background:transparent'></body>\" style='position:absolute;left:0;top:0;width:100%;height:280px;border:0'></iframe>" if ad else "")
+                + ("<iframe src='/blank' style='position:absolute;left:0;top:0;width:100%;height:280px;border:0'></iframe>" if ad else "")  # a real address: the extension's scripts do not run in about:srcdoc / about:blank frames
                 + "</div><script>var root=document.getElementById('host').attachShadow({mode:'open'});root.innerHTML='<div style=\"position:relative;width:100%;height:315px;background:#000\">"
                 "<video id=v src=\"__CLIP__\" autoplay muted loop playsinline style=\"width:100%;height:100%\"></video><div class=\"shaka-controls-container\" style=\"position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none\">"
                 "<div class=\"shaka-bottom-controls\" style=\"position:absolute;left:0;right:0;bottom:0;height:5px;pointer-events:auto\"></div></div></div>';</script>")
@@ -304,6 +304,8 @@ class H(http.server.BaseHTTPRequestHandler):
                 if name in CLIPS:
                     return self._file(os.path.join(OUT, CLIPS[name][2]), "video/mp4")
                 return self._send(b"unknown clip", "text/plain", 404)
+            if p == "/blank":
+                return self._send(b"<!doctype html><html><body style=\"margin:0;background:transparent\"></body></html>")
             if p == "/video/vc":
                 return self._send(page_vc((q.get("kind") or ["naked"])[0], (q.get("ad") or [""])[0] == "1"))
             if p == "/fs":
