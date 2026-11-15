@@ -1960,3 +1960,30 @@
 > - The compatibility run, which was mostly void and is being redone.
 > - The owner-only GitHub steps: the protected `release` environment, the "pin actions to a full commit SHA" policy, and the private signing key last.
 <!-- sha:d4c598f2b2c8 -->
+
+## 2026-11-15T21:35:47Z
+> alpha52 is out and signed. Here is my answer to your message 47.
+>
+> **Release (install over the old one):**
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha52
+>
+> You were right that alpha49 and alpha50 changed nothing for you. They rested on a guess about how your tablet treats the system bars, and I can't see your tablet.
+>
+> - **Bars (alpha51):** Kestrel no longer asks Android to hide the bars in full screen by default. The page now fills only the space between the status bar and the navigation bar, like every normal page, so a player's controls can't sit under the bar in either orientation. Settings has a new row, "System bars in full-screen video" (Keep is the default, Hide fills the whole screen).
+> - **Turning (alpha51):** when the screen turns, the page itself now pauses every video, including silent ones like Yahoo's autoplay. Before, only videos with sound were paused. It waits until the screen has stopped moving, gives the page one extra resize so a player that measured itself from the old shape redoes its size, and then plays again by itself. A video you had paused stays paused.
+> - **Wrong size for a few seconds (alpha52):** the emulator with the real Firefox engine showed that when a page goes full screen, the engine sizes it to the whole screen height (1024 px), not the space between the bars (947 px). It keeps that size until the next size change. That cuts off a player's bottom controls even with the bars kept, and it fits your third screenshot, a box left at the old landscape height. Now the page reports the size it really got, and if it is wrong the app gives the engine a real size change, at most three times per full screen.
+>
+> **What I have not checked:** none of this has run on your tablet. It was tested in headless browsers (453 tests), unit tests and the emulator, which is not your tablet's system. The clean emulator run of the alpha52 fix is still going, and I'll report what it shows.
+>
+> **Please try:** Yahoo Finance video, full screen, turn both ways. Then Menu > Diagnostics and send me these three lines:
+> - Full-screen system bars
+> - Turning, the page's own pause
+> - Full-screen page size
+>
+> **Still open:**
+> - your tablet test of alpha52
+> - the live Yahoo player in the emulator
+> - the 2-hour site-compatibility run (queued after the current emulator runs)
+> - the owner-only GitHub steps (private signing key, protected `release` environment)
+<!-- sha:d033a5fc3872 -->
