@@ -1214,7 +1214,7 @@ class Soak:
                 self.issue("high", "long-press-video", "%s: a long press on the video did not open the video options (menu message missing)" % name, shot=True)
             if panel:
                 self.issue("high", "long-press-video", "%s: a long press on the video opened the floating panel" % name, shot=True)
-        self.vbar_rows = rows
+        self.vbar_rows = rows + [r for r in self.vbar_rows if r[0].startswith("yahoo")]   # (the live Yahoo row of an earlier round is kept)
         self.record({"kind": "vbar", "name": "video-controls", "status": "ok" if all(r[2] == r[1] and r[3] and not r[5] for r in rows) else "failed", "results": [{"page": r[0], "tap": r[2], "expected": r[1], "menu": r[3], "sheet": r[4], "panel": r[5]} for r in rows]})
         self.check_alive("video-controls")
 
