@@ -2960,6 +2960,8 @@ open class BrowserActivity : Activity(), DockListener {
 
     private fun closeDownloads() { downloadsView?.let { root.removeView(it) }; downloadsView = null; if (::downloadPopup.isInitialized) downloadPopup.suppress(false) }
 
+    private val inspecting = HashSet<Long>() // downloads whose file is being looked into before it opens (RV6)
+
     private fun openDownload(v: DownloadView) {
         val uri = v.destUri ?: run { toast("The file is not available"); return }
         val go = {
@@ -2974,9 +2976,12 @@ open class BrowserActivity : Activity(), DockListener {
         }
         // RX4-X1: look inside before anything opens: what is it, and does it pretend to be Kestrel? (IO thread: the signature check of a big file takes a moment)
         val appCtx = applicationContext
-        Io.exec {
+        // RV6: the user-awaited lane (Io.exec is the one nice-13 thread of the tidy-up and the picture saves), and one look at a time per file: a second tap while it reads must not start the player twice
+        if (!inspecting.add(v.id)) return
+        Io.fast {
             val info = try { ApkInspect.read(appCtx, Uri.parse(uri)) } catch (e: Throwable) { null }
             Io.ui {
+                inspecting.remove(v.id)
                 if (info == null) {
                     if (risky) askYesNo("Open this file?", "${v.name} can install software or run code. Only open it if you trust where it came from.", "Open", "Cancel", { ok -> if (ok) go() }) else go()
                     return@ui
