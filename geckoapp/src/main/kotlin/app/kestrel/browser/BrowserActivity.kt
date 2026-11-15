@@ -40,6 +40,7 @@ import app.kestrel.browser.data.BrowserDb
 import app.kestrel.browser.data.DataMeter
 import app.kestrel.browser.data.Entry
 import app.kestrel.browser.data.Prefs
+import app.kestrel.browser.net.ApkInspect
 import app.kestrel.browser.net.Downloads
 import app.kestrel.browser.net.NetworkMonitor
 import app.kestrel.browser.shield.Engine
@@ -2732,16 +2733,38 @@ open class BrowserActivity : Activity(), DockListener {
         val big = limit >= 0 && (length < 0 || length >= limit)
         val risky = Downloads.isRisky(name, mime)
         val cleartext = url.startsWith("http://", ignoreCase = true) // on a hotspot the carrier can read or change an unencrypted download
-        if (!big && !risky && !cleartext) { startDownload(url, userAgent, contentDisposition, mime, tab, nameOverride, headers); leaveDownloadTab(tab); return }
+        // RX4-X2: a download nobody tapped (a timer clicking a hidden link, a redirect to a file) asks first; the owner's own address and own buttons never count as "by itself"
+        val now = SystemClock.uptimeMillis()
+        val guard = app.kestrel.core.download.DownloadGuardRules.Input(
+            touchAgeMs = if (lastTouchAt == 0L) Long.MAX_VALUE else now - lastTouchAt, ownerNavigation = tab.pendingNav != null, risky = risky, big = big, cleartext = cleartext,
+            fromBlob = url.startsWith("blob:", ignoreCase = true), ownRequest = nameOverride != null || headers != null, declinedAgoMs = autoDownloadDeclinedAt[tab.id]?.let { now - it } ?: Long.MAX_VALUE)
+        when (app.kestrel.core.download.DownloadGuardRules.decide(guard)) {
+            app.kestrel.core.download.DownloadGuardRules.Verdict.GO -> { startDownload(url, userAgent, contentDisposition, mime, tab, nameOverride, headers); leaveDownloadTab(tab); return }
+            app.kestrel.core.download.DownloadGuardRules.Verdict.REFUSE_QUIETLY -> {
+                if (!tab.isPrivateTab) { Health.count("download.autoRefused"); Health.log("download", "auto-refused", UrlParts.hostOf(url) ?: "") }
+                toast("Blocked another download this page started by itself"); leaveDownloadTab(tab); return
+            }
+            app.kestrel.core.download.DownloadGuardRules.Verdict.ASK -> { /* the question below */ }
+        }
+        val byItself = app.kestrel.core.download.DownloadGuardRules.byItself(guard)
+        if (byItself && !tab.isPrivateTab) { Health.count("download.autoAsked"); Health.log("download", "auto-asked", "${UrlParts.hostOf(url) ?: ""} age=${if (guard.touchAgeMs == Long.MAX_VALUE) -1 else guard.touchAgeMs}ms") }
         val size = if (length >= 0) NewTabPage.fmtBytes(length) else "unknown size"
         val msg = buildString {
+            val note = app.kestrel.core.download.DownloadGuardRules.note(guard)
+            if (note.isNotEmpty()) append(note).append("\n\n")
             append(name).append("\nFrom: ").append(UrlParts.hostOf(url) ?: "unknown site").append("\nSize: ").append(size)
             if (cleartext) append("\n\nThis download is not encrypted: your mobile carrier or anyone on the network could read or change the file.")
             if (big) append("\n\nYou're on a metered connection (your phone's hotspot). This may use a lot of mobile data.")
             if (risky) append("\n\nThis type of file can install software or run code. Only continue if you trust the site.")
         }
-        askYesNo("Download this file?", msg, "Download", "Cancel", { ok -> if (ok) startDownload(url, userAgent, contentDisposition, mime, tab, nameOverride, headers); leaveDownloadTab(tab) })
+        askYesNo(if (byItself) "A page started a download" else "Download this file?", msg, "Download", "Cancel", { ok ->
+            if (ok) startDownload(url, userAgent, contentDisposition, mime, tab, nameOverride, headers)
+            else if (byItself) autoDownloadDeclinedAt[tab.id] = SystemClock.uptimeMillis() // the same page's next self-started downloads are refused quietly for a minute
+            leaveDownloadTab(tab)
+        })
     }
+
+    private val autoDownloadDeclinedAt = HashMap<Long, Long>()
 
     /** A tab whose only "page" was the download link has nothing to show: back to the page it came from, to Home, or closed when a page opened it. */
     private fun leaveDownloadTab(tab: Tab) {
@@ -2805,8 +2828,36 @@ open class BrowserActivity : Activity(), DockListener {
             try { startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse(uri), v.mime ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }
             catch (e: Exception) { toast("No app on this tablet can open this file") }
         }
-        if (Downloads.isRisky(v.name, v.mime)) askYesNo("Open this file?", "${v.name} can install software or run code. Only open it if you trust where it came from.", "Open", "Cancel", { ok -> if (ok) go() })
-        else go()
+        val installerMaybe = v.name.endsWith(".apk", true) || v.name.endsWith(".xapk", true) || v.mime == "application/vnd.android.package-archive" || app.kestrel.core.download.ApkIdentity.extensionCanLie(v.name)
+        val risky = Downloads.isRisky(v.name, v.mime)
+        if (!installerMaybe) {
+            if (risky) askYesNo("Open this file?", "${v.name} can install software or run code. Only open it if you trust where it came from.", "Open", "Cancel", { ok -> if (ok) go() }) else go()
+            return
+        }
+        // RX4-X1: look inside before anything opens: what is it, and does it pretend to be Kestrel? (IO thread: the signature check of a big file takes a moment)
+        val appCtx = applicationContext
+        Io.exec {
+            val info = try { ApkInspect.read(appCtx, Uri.parse(uri)) } catch (e: Throwable) { null }
+            Io.ui {
+                if (info == null) {
+                    if (risky) askYesNo("Open this file?", "${v.name} can install software or run code. Only open it if you trust where it came from.", "Open", "Cancel", { ok -> if (ok) go() }) else go()
+                    return@ui
+                }
+                val offer = UpdateManager.state.offer
+                val fromUpdater = offer != null && v.name == offer.apkName && (offer.size <= 0L || v.total <= 0L || v.total == offer.size)
+                when (app.kestrel.core.download.ApkIdentity.verdict(info.pkg, packageName, fromUpdater)) {
+                    app.kestrel.core.download.ApkIdentity.Verdict.OWN_UPDATE_OK -> go()
+                    app.kestrel.core.download.ApkIdentity.Verdict.REFUSE_LOOKALIKE -> {
+                        Health.count("download.lookalikeRefused"); Health.log("download", "lookalike-refused", info.pkg)
+                        askYesNo(app.kestrel.core.download.ApkIdentity.LOOKALIKE_TITLE, app.kestrel.core.download.ApkIdentity.LOOKALIKE_TEXT, "Delete the file", "Leave it", { del -> if (del) DownloadController.remove(v.id, true) })
+                    }
+                    app.kestrel.core.download.ApkIdentity.Verdict.SHOW_FACTS -> {
+                        val words = app.kestrel.core.download.ApkIdentity.dangerousWords(info.permissions)
+                        askYesNo("Open this app installer?", app.kestrel.core.download.ApkIdentity.facts(info.label, info.pkg, info.permissions.size, words, info.installedLabel, info.sameSigner), "Open", "Cancel", { ok -> if (ok) go() })
+                    }
+                }
+            }
+        }
     }
 
     private fun shareDownload(v: DownloadView) {
