@@ -243,14 +243,18 @@
         return { f: f, rw: Math.max(0, Math.min(20000, rw)), rh: Math.max(0, Math.min(20000, rh)), vp: vp };
       } catch (e) { return { f: f, rw: 0, rh: 0, vp: 0 }; }
     }
+    // RX3-V4: a player that feeds a blob: address (a MediaSource: hls.js, shaka, dash.js, most embeds) has no address worth sending, but its length and picture height can be matched to a playlist the app has read. Only the
+    // word "blob" goes (never the blob: address); the app's core MediaList.applyBlob does the matching.
+    function isBlob(src) { return src.indexOf('blob:') === 0; }
     function report(v) {
       var src = v.currentSrc || v.src || '';
-      if (!src || src.indexOf('http') !== 0) return;
-      var key = src + '|' + v.videoHeight + '|' + Math.round(v.duration || 0);
+      var blob = isBlob(src);
+      if (!src || (!blob && src.indexOf('http') !== 0)) return;
+      var key = (blob ? 'blob|' + elId(v) : src) + '|' + v.videoHeight + '|' + Math.round(v.duration || 0);
       if (sent[key]) return;
       sent[key] = true;
       var x = factsOf(v);
-      browser.runtime.sendMessage({ k: 'vid', u: src, w: v.videoWidth || 0, h: v.videoHeight || 0, d: isFinite(v.duration) ? v.duration : 0, l: labelOf(v, src), p: location.href, f: x.f, rw: x.rw, rh: x.rh, vp: x.vp, el: elId(v) }).catch(function () {});
+      browser.runtime.sendMessage({ k: 'vid', u: blob ? 'blob' : src, w: v.videoWidth || 0, h: v.videoHeight || 0, d: isFinite(v.duration) ? v.duration : 0, l: blob ? '' : labelOf(v, src), p: location.href, f: x.f, rw: x.rw, rh: x.rh, vp: x.vp, el: elId(v) }).catch(function () {});
     }
     document.addEventListener('loadedmetadata', function (e) { var t = e.target; if (t && (t.tagName === 'VIDEO' || t.tagName === 'AUDIO')) report(t); }, true);
     // RX3-V3 (research/FINDER_LAB.md section 4): which element really PLAYS. `el` names an element for the page's lifetime (a small whole number, nothing else about it), so the app can tell "the same player went from a
@@ -262,17 +266,19 @@
         var v = e.target;
         if (!v || (v.tagName !== 'VIDEO' && v.tagName !== 'AUDIO') || !e.isTrusted) return;
         var src = v.currentSrc || v.src || '';
-        if (!src || src.indexOf('http') !== 0) return;
-        var key = elId(v) + '|' + src;
+        var blob = isBlob(src);
+        if (!src || (!blob && src.indexOf('http') !== 0)) return;
+        var dur0 = Math.round(v.duration || 0);
+        var key = elId(v) + '|' + src + (blob ? '|' + dur0 : '');       // a blob: player may go from an advertisement to the film without a new address: the length tells them apart
         if (playedKeys[key]) return;
         var t0 = v.currentTime, tries = 0;
         var check = function () {
           try {
-            if (playedKeys[key] || v.paused || v.ended || (v.currentSrc || v.src || '') !== src) return;
+            if (playedKeys[key] || v.paused || v.ended || (v.currentSrc || v.src || '') !== src || (blob && Math.round(v.duration || 0) !== dur0)) return;
             if (v.currentTime < t0 + 2.5) { if (++tries < 8) setTimeout(check, 1500); return; }   // playing, but slowly (a slow tablet): look again a few times before giving up
             playedKeys[key] = true;
             var x = factsOf(v);
-            browser.runtime.sendMessage({ k: 'vid', ev: 'played', u: src, w: v.videoWidth || 0, h: v.videoHeight || 0, d: isFinite(v.duration) ? v.duration : 0, l: labelOf(v, src), p: location.href, f: x.f, rw: x.rw, rh: x.rh, vp: x.vp, el: elId(v) }).catch(function () {});
+            browser.runtime.sendMessage({ k: 'vid', ev: 'played', u: blob ? 'blob' : src, w: v.videoWidth || 0, h: v.videoHeight || 0, d: isFinite(v.duration) ? v.duration : 0, l: blob ? '' : labelOf(v, src), p: location.href, f: x.f, rw: x.rw, rh: x.rh, vp: x.vp, el: elId(v) }).catch(function () {});
           } catch (err) { /* ignore */ }
         };
         setTimeout(check, 3000);
