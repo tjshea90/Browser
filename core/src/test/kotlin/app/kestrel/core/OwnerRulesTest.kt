@@ -164,4 +164,58 @@ class OwnerRulesTest {
         assertTrue("it is on (automatic) by default", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("""sp.getInt("fs_turn", 0)"""))
         assertFalse("the manifest never pins the screen: the page, the person and the rotate button decide", source("geckoapp/src/main/AndroidManifest.xml").contains("screenOrientation"))
     }
+
+    // FSB1 / ROT1, owner message 46 (3 screenshots): "the controls in full screen get covered up by the Android bottom navigation bar", "when I rotate the tablet ... it is laggy and glitchy. It may benefit from
+    // pausing the video shortly until the orientation is set", "I don't see any video player controls in full screen landscape mode". The tablet KEEPS both system bars in full screen and alpha48 laid the page
+    // out under them (root padding zeroed while a page is full screen + the LAYOUT_* flags on Android 10).
+    @Test fun aFullScreenPageIsNeverLaidOutUnderASystemBarThatIsStillShowing() {
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        val listener = act.substringAfter("root.setOnApplyWindowInsetsListener { v, insets ->").take(1400)
+        assertFalse("the padding follows the real insets also in full screen: no zeroing for fullscreenOn ($listener)", listener.contains("fullscreenOn"))
+        assertTrue("the insets listener tells what the system did with its bars", listener.contains("barsSeen("))
+        val immersive = body(act, "private fun applyImmersive(on: Boolean) {")
+        assertTrue(immersive, immersive.contains("val immersive = View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_FULLSCREEN\n"))
+        assertFalse("no layout flags are ASKED for (they put the window under the bars whether or not the system hides them)", immersive.contains("dv.systemUiVisibility or older") || immersive.contains("or immersive or older"))
+        assertTrue("the flags of an older build are cleared", immersive.contains("and older.inv()"))
+        assertTrue("a system dialog or Recents may bring the bars back: they are asked to go again when the window has focus", body(act, "override fun onWindowFocusChanged(hasFocus: Boolean) {").contains("if (hasFocus && fullscreenOn) { applyImmersive(true)"))
+        assertTrue("and after a turn", body(act, "override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {").contains("applyImmersive(true)"))
+        val check = body(act, "private fun checkBars() {")
+        assertTrue("a bar that still takes room is asked once more and what remains is written down", check.contains("barsRehidden") && check.contains("fsBarsNote"))
+        assertTrue("Diagnostics says what the system did with its bars", act.contains("out.add(fsBarsLine())"))
+        assertTrue("a debug switch plays a tablet that keeps its bars (the emulator lab)", act.contains("debug.kestrel.nohide"))
+    }
+
+    @Test fun theVideoIsPausedAndThePageCoveredWhileTheScreenTurnsAndLetGoWhenItIsStill() {
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        val config = body(act, "override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {")
+        assertTrue("the turn is met BEFORE the engine is told", config.indexOf("turnSettler.configChanged(landscape)") in 0 until config.indexOf("orientationChanged()"))
+        assertTrue("the app leaving the screen lets everything go without playing", body(act, "override fun onPause() {").contains("turnSettler.abandon()"))
+        assertTrue("a finger during a turn is the person taking over", act.contains("turnSettler.touchedScreen()"))
+        assertTrue("the page area's size changes keep the turn going", act.contains("geckoView.sizeListener = { turnSettler.sizeChanged() }"))
+        assertTrue("Diagnostics shows the numbers", act.contains("out.add(turnSettler.line())"))
+        val settler = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TurnSettler.kt")
+        assertTrue("the video is paused through the engine's media session", settler.contains("ms!!.pause()") && settler.contains("TurnSettle.pauseIt("))
+        assertTrue("it is played again only by the rule: we paused it, nobody touched, the same tab is in front, the app is on screen", settler.contains("TurnSettle.resumeIt(pausedByUs = true"))
+        assertTrue("the cover is black and fades out", settler.contains("TurnSettle.FADE_MS"))
+        val delegate = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt")
+        assertTrue("the delegate keeps the media session of the tab", delegate.contains("tab.gecko.mediaSession = mediaSession") && delegate.contains("tab.gecko.mediaSession = null"))
+    }
+
+    // the second independent review of the video bar (research/REVIEW_ALPHA48.md addendum)
+    @Test fun theVideoBarScriptsKeepTheirReviewFixes() {
+        val dir = "geckoapp/src/main/assets/kestrel-shields/"
+        val bar = source(dir + "videobar.js")
+        val vfind = source(dir + "vfind.js")
+        val content = source(dir + "content.js")
+        val bg = source(dir + "background.js")
+        assertFalse("RW7: a page cannot name a layer 'the bar'", bar.contains("data-kestrel-bar") || content.contains("data-kestrel-bar"))
+        assertTrue("RW7: the bar is known by identity", bar.contains("api.isBar = function (el) { return !!bar && el === bar.host; }") && content.contains("window.KestrelVB.isBar(e.target)"))
+        assertTrue("RW7: a script's own pointer events are nobody's touch", bar.contains("window.addEventListener('pointerdown', function (e) {\n      if (!e.isTrusted) return;"))
+        assertTrue("RW5: a tap is shorter than the engine's long press", bar.contains("tap: 450"))
+        assertTrue("RW1: a video that is not in the stack of elements under the finger counts only under a bare layer", vfind.contains("if (els.length && bare(els[0]))"))
+        assertTrue("RW6: two frames of one size are ambiguous", vfind.contains("if (mine.length !== 1) return null;"))
+        assertTrue("RW2: a full-screen web component's host gets the bar inside its shadow tree", bar.contains("return VF.rootOf(fe) || fe;"))
+        assertTrue("RW4: the frame sends the video menu itself and only while the panel was not told", content.contains("if (told) return;") && bg.contains("r.src.length <= 2000"))
+        assertTrue("RW11: an answer that did not come is not kept", bar.contains("done({ on: false, always: false }, false)"))
+    }
 }
