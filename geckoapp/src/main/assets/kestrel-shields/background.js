@@ -895,6 +895,27 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   return undefined;
 });
 
+// VC1 / LP1 (owner message 44): a tap or long press that lands inside a FRAME (the ad overlays of Google IMA lie over a player and take every touch) is invisible to the page above it. The frame's script says
+// how big the frame is (it cannot see its own element); the top frame's script looks for a video that a frame of that size lies over (vfind.js covered()) and answers {video: true|false}. Only frames
+// ask (frameId > 0), only the top frame (frameId 0) is asked, sizes are clamped. Nothing about the page leaves the tab.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'ft' || !sender || !sender.tab || !(sender.frameId > 0)) return undefined;
+  var w = m.w | 0, h = m.h | 0;
+  if (w < 40 || h < 30 || w > 5000 || h > 5000 || !browser.tabs || typeof browser.tabs.sendMessage !== 'function') return Promise.resolve({ video: false });
+  return browser.tabs.sendMessage(sender.tab.id, { k: 'ftq', t: m.t === 'lp' ? 'lp' : 'tap', w: w, h: h }, { frameId: 0 }).then(function (r) { return { video: !!(r && r.video) }; }, function () { return { video: false }; });
+});
+
+// VC1: videobar.js reports what Kestrel's own video bar did: it was shown (e 'shown'), the page had controls of its own (e 'own'), the person used it (e 'act', a = play, pause, seek, mute, full). Numbers
+// and one of five words, never an address; the page of the tab goes along so that the app can drop the report of a private tab.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'vbk' || !sender || !sender.tab) return undefined;
+  var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || (sender.frameId === 0 ? docOf(sender.url) : '');
+  var e = m.e === 'shown' || m.e === 'own' || m.e === 'act' ? m.e : '';
+  var a = /^(play|pause|seek|mute|full)$/.test(String(m.a || '')) ? String(m.a) : '';
+  if (e) send({ k: 'vbk', e: e, a: a, p: String(page).slice(0, 300) }).catch(function () {});
+  return undefined;
+});
+
 // RX4-M0a: content.js reports how a playing video did since its last look: frames shown, dropped, corrupted, seconds, picture size (numbers only). The top page of the tab goes along so that the app can drop the
 // numbers of a private tab; the address of the video itself never leaves the page.
 browser.runtime.onMessage.addListener(function (m, sender) {
