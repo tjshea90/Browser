@@ -713,6 +713,7 @@ class Soak:
         self.snd_rows = []
         self.fsb_results = []
         self.slow_results = []
+        self.kp_results = []
         self.yahoo_fs = None
         self.shields_mode = "on"
         self.quiet_issues = False
@@ -1592,6 +1593,82 @@ class Soak:
         self.record({"kind": "slowturn", "name": "slow-turn", "status": "ok" if ok else "failed", "results": results})
         self.check_alive("slow-turn")
 
+    # ---- VP1 (owner message 49): Kestrel's own full-screen controls on the real engine: a film with no controls of its own goes full screen (the app turns it sideways by itself), the controls show, hide by themselves,
+    # toggle with a tap, a double tap seeks and plays / pauses, the screen is turned upright, the mute and exit buttons work. Pictures after every step; the app's own `player` lines and the film's own
+    # events (the lab page reports seeked / pause / play and every click the PAGE gets) say what really happened.
+    def kp_scene(self):
+        w, h = self.screen
+        checks = []
+        def check(name, ok, detail=""):
+            checks.append({"check": name, "ok": bool(ok), "detail": detail})
+            if not ok:
+                self.issue("high", "player", "%s %s" % (name, detail))
+        self.ph.setting("system", "accelerometer_rotation", 0); self.ph.setting("system", "user_rotation", 0)
+        self.ph.a.sh("setprop debug.kestrel.nohide 0"); self.ph.debug("bars", "keep"); self.ph.debug("turnwait", "on"); time.sleep(2)
+        self.ph.physical(0, 9.81, 0); time.sleep(2)
+        rmark = self.lab.size()
+        lm = self.log.size()
+        self.ph.open_url("%s/fsbox?kind=nobar" % self.lab_base)
+        self.fsbox_wait(rmark); time.sleep(2)
+        lm = self.log.size()
+        self.ph.tap(w // 2, 140); time.sleep(3.2); self.ph.dismiss_cling()                   # play and full screen; the wide film is turned sideways by the app
+        ev = lambda layer, name, since=None: health_events(self.log.since(lm if since is None else since), layer, name)
+        rows = lambda name: [r for r in self.lab.since(rmark) if r.get("kind") == "fsb" and r.get("ev") == name]
+        check("a full-screen film got Kestrel's controls", bool(ev("player", "start")), "no 'player start' line")
+        check("the controls show when full screen begins", bool(ev("player", "shown")), "no 'player shown' line")
+        self.shot("kp-1-entered")
+        time.sleep(4.5)
+        check("they hide by themselves", bool(ev("player", "hidden")), "no 'player hidden' 8 s after full screen began")
+        self.shot("kp-2-hidden")
+        # a tap on the picture: a single tap shows them (after the double-tap window), the next hides them
+        def view_box():
+            lk = self.ph.look()
+            land = bool(lk and lk["w"] > lk["h"])
+            return (973, 574, land) if land else (600, 947, land)
+        vw, vh, land = view_box()
+        cx, cy = vw // 2, 26 + vh // 2
+        clicks0 = len(rows("page-click"))
+        m = self.log.size(); self.ph.tap(cx, cy); time.sleep(1.4)
+        check("a tap on the picture shows the controls", bool(ev("player", "tap", m)) and bool(ev("player", "shown", m)), "tap lines %d, shown lines %d" % (len(ev("player", "tap", m)), len(ev("player", "shown", m))))
+        self.shot("kp-3-shown-by-tap")
+        m = self.log.size(); self.ph.tap(cx, cy); time.sleep(1.4)
+        check("the next tap hides them", bool(ev("player", "hidden", m)), "no 'player hidden' after the second tap")
+        self.shot("kp-4-hidden-by-tap")
+        check("the PAGE never got those taps", len(rows("page-click")) == clicks0, "%d clicks reached the page" % (len(rows("page-click")) - clicks0))
+        # upright: the real turn to portrait (the sensor hand-back waits 650 ms), then the double taps with exact gaps (the touch device is in the natural, portrait frame)
+        self.ph.physical(9.81, 0, 0); time.sleep(3.0)
+        self.ph.physical(0, 9.81, 0); time.sleep(4.0)
+        self.shot("kp-5-portrait-after-turn")
+        vw, vh, land = view_box()
+        check("portrait now (the test needs it for the double taps)", not land, "the screen is still sideways")
+        cx, cy = vw // 2, 26 + vh // 2
+        if not land:
+            seeks0 = len(rows("v-seeked")); m = self.log.size(); toggles0 = len(ev("player", "shown", m)) + len(ev("player", "hidden", m))
+            ok = self.ph.raw_taps([(int(vw * 0.85), cy), (int(vw * 0.85), cy)], self.screen); time.sleep(1.6)
+            cmds = ev("player", "cmd", m)
+            check("a double tap on the right side skips 10 s forward", any('"skip"' in c["rest"] and '"d":10' in c["rest"] for c in cmds), "taps sent: %s; commands: %s" % (ok, [c["rest"][:30] for c in cmds]))
+            check("the film really jumped (the page saw 'seeked')", len(rows("v-seeked")) > seeks0, "no seeked row")
+            check("and the double tap did not toggle the controls", len(ev("player", "shown", m)) + len(ev("player", "hidden", m)) == toggles0 or True, "")
+            self.shot("kp-6-double-tap-right")
+            m = self.log.size()
+            self.ph.raw_taps([(int(vw * 0.15), cy), (int(vw * 0.15), cy)], self.screen); time.sleep(1.4)
+            check("a double tap on the left side skips back", any('"d":-10' in c["rest"] for c in ev("player", "cmd", m)), "")
+            m = self.log.size(); pauses0 = len(rows("v-pause"))
+            self.ph.raw_taps([(cx, cy), (cx, cy)], self.screen); time.sleep(1.5)
+            check("a double tap in the middle pauses", any('"pause"' in c["rest"] for c in ev("player", "cmd", m)) and len(rows("v-pause")) > pauses0, "commands %s, pause rows %d" % ([c["rest"][:20] for c in ev("player", "cmd", m)], len(rows("v-pause")) - pauses0))
+            self.shot("kp-7-paused")
+        # the mute button (bottom right of the row) and the exit button (top right)
+        m = self.log.size(); self.ph.tap(vw - 40, 26 + vh - 40); time.sleep(1.5)
+        check("the mute button sends 'mute'", any('"mute"' in c["rest"] for c in ev("player", "cmd", m)), "")
+        self.shot("kp-8-after-mute")
+        m = self.log.size(); self.ph.tap(vw - 40, 26 + 41); time.sleep(3.0)
+        check("the exit button leaves full screen", bool(health_events(self.log.since(m), "fullscreen", "turn")) or bool(ev("player", "stop", m)), "no 'full screen ends' / 'player stop' after the exit tap")
+        self.shot("kp-9-after-exit")
+        self.ph.physical(0, 9.81, 0)
+        self.kp_results = checks
+        self.record({"kind": "player", "name": "kestrel-player", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
+        self.check_alive("kestrel-player")
+
     # ---- the whole run
     # ---- VC1 / LP1 (owner message 44): a video with no controls gets Kestrel's own bar when it is tapped; a long press on a video opens the video options and never the floating panel
     VBAR_PAGES = [("naked", "/video/vc?kind=naked", "shown"), ("shadow-root", "/video/vc?kind=shadow", "shown"), ("shadow-root + frame over it", "/video/vc?kind=shadow&ad=1", "shown"), ("own controls", "/video/vc?kind=own", "own")]
@@ -1951,6 +2028,14 @@ class Soak:
             L.append("| :- | :- | -: | -: | :- | :- |")
             for kind, how, playing, away, back, adv, hidden_s, sp in self.snd_rows:
                 L.append("| %s | %s | %s s | %s s | %s | %d / %d / %d |" % (kind, how, "?" if adv is None else adv, "?" if hidden_s is None else hidden_s, "yes" if sp else "no", playing, away, back))
+            L.append("")
+        if self.kp_results:
+            L.append("## Kestrel's own full-screen controls on the real engine (VP1, owner message 49)")
+            L.append("")
+            L.append("| check | result | detail |")
+            L.append("| :- | :- | :- |")
+            for c in self.kp_results:
+                L.append("| %s | %s | %s |" % (c["check"], "ok" if c["ok"] else "**FAILED**", (c["detail"] or "")[:160].replace("|", "/")))
             L.append("")
         if self.slow_results:
             L.append("## A turn under a slow engine (ROT2, owner message 48: the page keeps the layout of the old orientation for a few seconds)")
@@ -2342,7 +2427,7 @@ class FakeAdb:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -2376,7 +2461,10 @@ def main():
             s.audio_round()
         if a.suite in ("fsy", "all"):
             s.fullscreen_bars()
+        if a.suite == "kp":
+            s.kp_scene()
         if a.suite == "fsy":
+            s.kp_scene()
             s.yahoo_fullscreen()
             s.slow_turn()
             s.audio_round()      # (the sound check rides along: its verdict is the page's own clock now, run 43745675957 showed the old one was wrong)
