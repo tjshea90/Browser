@@ -37,7 +37,7 @@ class ShieldsBridge(
     private val mediaSeen: (MediaCandidate) -> Unit = {},
     /** The page's own player told us about a file: page URL, file URL, picture width and height, length in ms, the label next to its <source>. */
     /** page, address, picture width, height, length in ms, label, and (RX3-V1) what the element is for; the facts are null when the page script sent none (an older one). */
-    private val mediaInfo: (String, String, Int, Int, Long, String?, app.kestrel.core.media.VideoFacts?) -> Unit = { _, _, _, _, _, _, _ -> },
+    private val mediaInfo: (String, String, Int, Int, Long, String?, app.kestrel.core.media.VideoFacts?, Boolean, Int) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
     /** The pop-up and redirect guard refused something: page address, kind ("open", "click", "overlay", "form", "redirect"), the address it wanted (called on the worker thread). */
     private val popupBlocked: (String, String, String) -> Unit = { _, _, _ -> },
     /** The page's script named an origin the owner is likely to open next (EX-15): `https://host[:port]/`, the page's address, "touch" (finger on a link) or "result" (a top search result). Worker thread. */
@@ -164,7 +164,8 @@ class ShieldsBridge(
         val url = m.optString("u")
         if (url.isEmpty()) return
         val facts = if (m.has("f")) app.kestrel.core.media.VideoFacts.fromBits(m.optInt("f"), m.optInt("rw"), m.optInt("rh"), m.optInt("vp")) else null
-        mediaInfo(m.optString("p"), url, m.optInt("w"), m.optInt("h"), m.optLong("d"), m.optString("l").takeIf { it.isNotBlank() }, facts)
+        // RX3-V3: ev = "played": the element really played this file for 3 s; el = the element's number on its page (0 = not told)
+        mediaInfo(m.optString("p"), url, m.optInt("w"), m.optInt("h"), m.optLong("d"), m.optString("l").takeIf { it.isNotBlank() }, facts, m.optString("ev") == "played", m.optInt("el"))
     }
 
     /** The extension sends JSON text; tolerate the engine handing it over already parsed. */

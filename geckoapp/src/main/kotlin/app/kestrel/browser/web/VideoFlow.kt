@@ -182,12 +182,13 @@ class VideoFlow(private val a: BrowserActivity) {
     }
 
     /** Called on the Shields worker thread. */
-    fun info(page: String, url: String, width: Int, height: Int, durationMs: Long, label: String?, facts: app.kestrel.core.media.VideoFacts? = null) = Io.ui {
+    fun info(page: String, url: String, width: Int, height: Int, durationMs: Long, label: String?, facts: app.kestrel.core.media.VideoFacts? = null, played: Boolean = false, element: Int = 0) = Io.ui {
         val t = tabOf(page) ?: return@ui
         // RX3-V1: a hover preview, a hero loop or an ad that loaded its metadata is not "a video the owner may want": the page's own element says what it is for
         val role = if (facts == null) null else app.kestrel.core.media.VideoRoleRules.decide(facts, durationMs)
-        t.media.applyInfo(url, width, height, durationMs, label, role)
-        app.kestrel.browser.diag.Health.log("video", "info", "role=${role ?: "none"} length=${durationMs / 1000}s counted=${t.media.usableCount()} of ${t.media.size}")   // no address
+        val area = if (facts == null) 0L else facts.widthPx.toLong() * facts.heightPx * facts.viewPercent / 100   // the part of its picture that is on screen
+        t.media.applyInfo(url, width, height, durationMs, label, role, played, element, area)
+        app.kestrel.browser.diag.Health.log("video", "info", "${if (played) "PLAYED " else ""}el=$element role=${role ?: "none"} length=${durationMs / 1000}s counted=${t.media.usableCount()} of ${t.media.size}")   // no address
         a.refreshDownloadButton()
     }
 
@@ -211,7 +212,7 @@ class VideoFlow(private val a: BrowserActivity) {
 
     /** The sheet. [pressedUrl]: the address of the element the owner long-pressed, when known. */
     fun show(tab: Tab, pressedUrl: String? = null, extras: List<Pair<String, () -> Unit>> = emptyList()) {
-        val ranked = MediaRank.rank(candidates(tab, pressedUrl), pressedUrl)
+        val ranked = MediaRank.rank(candidates(tab, pressedUrl), pressedUrl, tab.media.primary())
         if (ranked.main.isEmpty() && ranked.other.isEmpty()) {
             a.toast("No video found on this page yet. Some sites only show it once you press play: press play, then tap this icon again.")
             return
@@ -271,7 +272,7 @@ class VideoFlow(private val a: BrowserActivity) {
 
     /** What the sheet shows: the ranked files (the long-pressed one first), the streams' quality lists as they arrive, and the small or odd files tucked under "Other files". */
     private fun model(tab: Tab): VideoPanel.Model {
-        val ranked = MediaRank.rank(candidates(tab, panelPressed), panelPressed)
+        val ranked = MediaRank.rank(candidates(tab, panelPressed), panelPressed, tab.media.primary())
         val host = UrlParts.hostOf(tab.url) ?: ""
         val rows = ArrayList<VideoPanel.Choice>(); val other = ArrayList<VideoPanel.Choice>()
         var note: String? = null; var busy: String? = null
