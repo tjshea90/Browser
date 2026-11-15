@@ -1794,3 +1794,7 @@
 ## 2026-11-15T18:08:31Z
 > Status: alpha48 is released and the Release link is above. I'm now waiting on two things: the one-hour browsing soak in the lab (it ends around 18:35) and a second independent review of the new video-bar code. I'll fix anything real from either.
 <!-- sha:56ffb546efcb -->
+
+## 2026-11-15T18:21:24Z
+> Waiting for the Kotlin compile, the hour soak (about 18:36) and the sound run that follows it; I'll read each as it lands.
+<!-- sha:6392419da406 -->
