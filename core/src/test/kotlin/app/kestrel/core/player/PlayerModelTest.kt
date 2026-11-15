@@ -61,14 +61,13 @@ class PlayerModelTest {
         m.onTap(500); assertTrue("not yet: the double tap window", m.shown)
         h.tickTap(m, PlayerRules.DOUBLE_TAP_MS); assertFalse("a single tap hides them", m.shown)
         m.onTap(500); h.tickTap(m, PlayerRules.DOUBLE_TAP_MS); assertTrue("and the next shows them", m.shown)
-        val before = m.drain().size
+        m.drain()
         m.onTap(900); h.clock += 100; m.onTap(900)
         val cmds = m.drain()
         assertEquals(1, cmds.size); assertEquals("skip", cmds[0].a); assertEquals(10.0, cmds[0].d, 0.0)
         assertEquals(listOf("RIGHT 1"), h.feedback)
-        h.clock += 200; m.onTap(100); h.clock += 50
-        m.onTap(200)
-        assertEquals("another side: a first tap and a second", before, 0)
+        h.clock += 200; m.onTap(100)                                   // the burst is on the right: a tap on the left is a first tap of its own
+        assertTrue("and seeks nothing yet", m.drain().isEmpty())
     }
 
     @Test fun theLeftSideSeeksBackAndTheMiddleDoubleTapPlaysAndPauses() {

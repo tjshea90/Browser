@@ -58,7 +58,7 @@ class PlayerModel(private val h: Host) {
         override fun cancel() = h.cancelTap()
         override fun single() { controls.tap(); singles++ }
         override fun seek(zone: Zone, burst: Int) { skip(if (zone == Zone.LEFT) -PlayerRules.SKIP_S else PlayerRules.SKIP_S); h.feedback(zone, burst); seeks++ }
-        override fun playPause() { playPause() }
+        override fun playPause() { this@PlayerModel.playPause() }
     })
 
     private val queue = ArrayList<Cmd>()
