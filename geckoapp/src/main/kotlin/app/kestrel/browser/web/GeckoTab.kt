@@ -15,6 +15,8 @@ class GeckoTabData {
     var videoPlaying = false
     /** ROT1: the engine's media session of this page while it is active (it exists only for AUDIBLE media), so the app can pause the video while the screen turns. UI thread. */
     var mediaSession: org.mozilla.geckoview.MediaSession? = null
+    /** ROT2: this page runs `turn.js` and has told its viewport at least once (`vpt`), so after a turn its next report can say when it has the new size. A new session forgets it. UI thread. */
+    var vpSeen = false
     /** FS1: the picture size (pixels) of the video that plays on this page, as its element reported it ([picturePlayed] = from an element that really played); 0 = not known. A new page forgets it ([VideoFlow.clearTab]). */
     var pictureW = 0
     /** RX4-X2: when (uptime ms) and with which address the page's navigation began: a touch BEFORE it is the tap that opened the page, not a touch of the page. */
@@ -30,5 +32,5 @@ internal var Tab.session: GeckoSession?
     get() = gecko.session
     // a session that is closed, hibernated or replaced sends no "deactivated": what it said about its media ("playing", the MediaSession object) must go with it (alpha49 review: otherwise a turn of the screen
     // covered a page with no video, "paused" a dead session and counted it, and the old session stayed reachable from the tab)
-    set(v) { val g = gecko; if (v == null || v !== g.session) { g.videoPlaying = false; g.mediaSession = null }; g.session = v }
+    set(v) { val g = gecko; if (v == null || v !== g.session) { g.videoPlaying = false; g.mediaSession = null; g.vpSeen = false }; g.session = v }
 internal val Tab.isPrivateTab: Boolean get() = gecko.privateTab

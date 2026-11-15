@@ -13,7 +13,8 @@ import app.kestrel.core.media.TurnSettleMachine
  * While the screen TURNS under a full-screen page or a playing video: the video is paused through the engine's media session (the decoder and the compositor then only have the new layout to do), the page
  * area is covered with black (the half-laid-out frames of a turn are never seen), and both are let go once the page area has stopped changing size for [TurnSettle.SETTLE_MS] (at the latest
  * [TurnSettle.CAP_MS] after the turn began). A video the person had paused stays paused, a touch during the turn is the person taking over (nothing is played for them), and leaving the app lets everything
- * go without playing anything (owner message 45: no sound behind another app). The decisions are the pure [TurnSettleMachine] / [TurnSettle] in core (`TurnSettleMachineTest`, `TurnSettleTest`); this class only
+ * go without playing anything (owner message 45: no sound behind another app). ROT2 (owner message 48): when the full-screen page reports its viewport, the cover also waits until the page says it HAS the
+ * new size (the engine hands it over later than the app's own view changes). The decisions are the pure [TurnSettleMachine] / [TurnSettle] in core (`TurnSettleMachineTest`, `TurnSettleTest`); this class only
  * gives the machine the facts of the moment and carries out what it decides with the views and the engine. UI thread only.
  */
 class TurnSettler(
@@ -25,6 +26,12 @@ class TurnSettler(
     private val cover: () -> View?,
     /** The app is on screen (resumed and not paused). */
     private val isOnScreen: () -> Boolean,
+    /** ROT2: the full-screen page in front has told its viewport before (its report can say when it has a turn's new size). */
+    private val expectsPage: () -> Boolean = { false },
+    /** ROT2: give the engine one real size change (the view one pixel shorter for a moment). */
+    private val nudge: () -> Unit = {},
+    /** ROT2: the small progress ring on the cover. */
+    private val hintView: () -> View? = { null },
 ) {
     private val tick = Runnable { machine.tick() }
 
@@ -56,6 +63,9 @@ class TurnSettler(
             return try { ms.play(); true } catch (e: Throwable) { Health.log("fullscreen", "turn-resume-failed", e.toString().take(80)); false }
         }
         override fun log(event: String, text: String) { Health.log("fullscreen", event, text) }
+        override fun expectsPageReport() = expectsPage()
+        override fun nudgeEngine() = nudge()
+        override fun hint(show: Boolean) { hintView()?.visibility = if (show) View.VISIBLE else View.GONE }
     })
 
     /** Where the screen is at the start (the first turn must count too). */
@@ -66,6 +76,12 @@ class TurnSettler(
 
     /** The page area changed size (KestrelGeckoView.onSizeChanged): the turn is not over yet. */
     fun sizeChanged() = machine.sizeChanged()
+
+    /** ROT2: the full-screen page reported its viewport; [matchesView] = it is the size of the page area now. */
+    fun pageReported(matchesView: Boolean) = machine.pageReported(matchesView)
+
+    /** ROT2: a turn is going on (the cover is up). */
+    val turning: Boolean get() = machine.turning
 
     /** A finger came down: the person takes over, nothing is played for them afterwards. */
     fun touchedScreen() = machine.touchedScreen()

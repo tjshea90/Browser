@@ -348,7 +348,9 @@ open class BrowserActivity : Activity(), DockListener {
     /** ROT1 (owner message 46): while the screen turns under a full-screen page or a playing video the video is paused, the page area is covered with black, and both are let go once the area is still. */
     private var turnCover: View? = null
     private var onScreenNow = false
-    private val turnSettler = app.kestrel.browser.web.TurnSettler({ current }, { fullscreenOn }, { turnCover }, { onScreenNow })
+    private var turnHint: View? = null
+    private val turnSettler = app.kestrel.browser.web.TurnSettler({ current }, { fullscreenOn }, { turnCover }, { onScreenNow },
+        { fullscreenOn && fullscreenTab?.gecko?.vpSeen == true }, { resyncEngineSize() }, { turnHint }) // ROT2: a page that reports its viewport says when it has a turn's new size
     private var pendingFilePick: ((List<Uri>) -> Unit)? = null
     private var pendingAndroidPerms: PermissionDelegate.Callback? = null
     private var backCallback: Any? = null
@@ -773,8 +775,12 @@ open class BrowserActivity : Activity(), DockListener {
         val rotateButton = app.kestrel.browser.web.FullscreenTurner.RotateButton(this) // FS1: shows for a moment after a touch while a page is full screen
         content.addView(rotateButton, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.START or Gravity.CENTER_VERTICAL).apply { leftMargin = dp(12) })
         fsTurner.attachButton(rotateButton)
-        turnCover = View(this).apply { setBackgroundColor(0xFF000000.toInt()); visibility = View.GONE; alpha = 0f; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO } // ROT1: topmost in the page area, takes no touch
-        content.addView(turnCover, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        val cover = FrameLayout(this).apply { setBackgroundColor(0xFF000000.toInt()); visibility = View.GONE; alpha = 0f; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO } // ROT1: topmost in the page area, takes no touch
+        // ROT2: a small ring after about a second, so a black screen that waits for the engine does not look frozen
+        val ring = android.widget.ProgressBar(this).apply { isIndeterminate = true; visibility = View.GONE; indeterminateTintList = android.content.res.ColorStateList.valueOf(0xFF9A9A9A.toInt()) }
+        cover.addView(ring, FrameLayout.LayoutParams(dp(34), dp(34), Gravity.CENTER))
+        turnCover = cover; turnHint = ring
+        content.addView(cover, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         geckoView.sizeListener = { turnSettler.sizeChanged() }
         findBar = FindBar(this, pal, object : FindBar.Listener {
             override fun query(q: String) { findIn(q, false) }
@@ -1250,20 +1256,23 @@ open class BrowserActivity : Activity(), DockListener {
     private val vpUndo = Runnable { (geckoView.layoutParams as? FrameLayout.LayoutParams)?.let { if (it.bottomMargin != 0) { it.bottomMargin = 0; geckoView.layoutParams = it } } }
 
     internal fun onPageViewport(m: org.json.JSONObject) {
-        if (!fullscreenOn) return
-        val ft = fullscreenTab ?: return
-        if (tabWithUrl(m.optString("p")) !== ft) return                       // only the page that is full screen
+        val tab = tabWithUrl(m.optString("p")) ?: return
+        tab.gecko.vpSeen = true                                               // ROT2: this page runs the report script: after a turn its report can say when it has the new size
+        if (!fullscreenOn || fullscreenTab !== tab) return                    // the rest is for the page that IS full screen
         val pw = m.optInt("w"); val ph = m.optInt("h")
         val vw = geckoView.width; val vh = geckoView.height
         if (pw <= 0 || ph <= 0 || vw <= 0 || vh <= 0) return
         vpChecks++
-        if (Math.abs(pw - vw) <= 3 && Math.abs(ph - vh) <= 3) {
+        val matches = Math.abs(pw - vw) <= 3 && Math.abs(ph - vh) <= 3
+        turnSettler.pageReported(matches)                                     // ROT2: a turn waits for this (the cover stays until the page has the new size)
+        if (matches) {
             if (vpTries > 0 || vpLast.startsWith("no ")) Health.log("fullscreen", "viewport", "right: page ${pw}x$ph, view ${vw}x$vh")
             vpLast = "right (page ${pw}x$ph = view ${vw}x$vh)"; vpTries = 0
             return
         }
         vpMismatches++
-        vpLast = "WRONG (page ${pw}x$ph, view ${vw}x$vh)"
+        vpLast = "WRONG (page ${pw}x$ph, view ${vw}x$vh)" + (if (turnSettler.turning) " while the screen turns" else "")
+        if (turnSettler.turning) return                                       // ROT2: the engine is still handing the turn's size to the page: the turn waits (and nudges once if it takes long)
         val now = SystemClock.uptimeMillis()
         if (vpTries >= 3 || now - vpLastResyncAt < 1200L) { Health.log("fullscreen", "viewport", "still wrong: page ${pw}x$ph, view ${vw}x$vh (tries $vpTries)"); return }
         vpTries++; vpLastResyncAt = now; vpResyncs++
