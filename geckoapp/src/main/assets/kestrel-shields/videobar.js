@@ -257,7 +257,6 @@ var KestrelVB = (typeof KestrelVB !== 'undefined' && KestrelVB) || (function () 
 
       var names = ['timeupdate', 'play', 'pause', 'playing', 'volumechange', 'durationchange', 'seeked', 'ended', 'emptied'];
       for (var k = 0; k < names.length; k++) { v.addEventListener(names[k], render); b.on.push(names[k]); }
-      v.addEventListener('ended', function () { keep(); });
       window.addEventListener('scroll', place, { capture: true, passive: true });
       window.addEventListener('resize', place, { passive: true });
       b.tick = setInterval(place, 250);
