@@ -591,12 +591,15 @@
     window.addEventListener('contextmenu', function (e) {
       try {
         if (!e.isTrusted) return;
+        if (e.target && e.target.getAttribute && e.target.getAttribute('data-kestrel-bar')) return; // Kestrel's own video bar (videobar.js)
         var els = document.elementsFromPoint ? document.elementsFromPoint(e.clientX, e.clientY) : [e.target];
         var media = null;
         for (var i = 0; i < els.length && i < 16; i++) {
           var n = els[i].tagName;
           if (n === 'VIDEO' || n === 'AUDIO') { media = els[i]; break; }
         }
+        // LP1 (owner message 44): a video inside a shadow root (finance.yahoo.com's player is one: the point test returns only the shadow HOST) or under a layer with pointer-events: none is not in that list
+        if (!media && typeof KestrelVF !== 'undefined') media = KestrelVF.at(e.clientX, e.clientY);
         if (!media) return;
         var src = media.currentSrc || media.src || '';
         if (!src && !(media.querySelector && media.querySelector('source'))) return;
