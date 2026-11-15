@@ -1053,6 +1053,59 @@ class Soak:
                      "steps": [{"check": l, "ok": ok} for l, ok in steps], "turn_lines": [e["rest"][:160] for e in turns()][:14], "display": self.ph.display_hint()})
 
     # ---- the whole run
+    # ---- VC1 / LP1 (owner message 44): a video with no controls gets Kestrel's own bar when it is tapped; a long press on a video opens the video options and never the floating panel
+    VBAR_PAGES = [("naked", "/video/vc?kind=naked", "shown"), ("shadow-root", "/video/vc?kind=shadow", "shown"), ("shadow-root + frame over it", "/video/vc?kind=shadow&ad=1", "shown"), ("own controls", "/video/vc?kind=own", "own")]
+
+    def vbar_round(self):
+        w, h = self.screen
+        rows = []
+        for name, path, expect in self.VBAR_PAGES:
+            lmark = self.log.size()
+            self.ph.open_url(self.lab_base + path)
+            t0 = time.time()
+            while time.time() - t0 < 40 and not any(e["ev"] == "loaded" for e in health_events(self.log.since(lmark), "page")):
+                time.sleep(1.5)
+            time.sleep(4)                                     # the clip plays
+            y = 250                                           # inside the 315 px picture (status bar, heading, margin)
+            self.ph.tap(w // 2, y); time.sleep(3)
+            ev = [e["ev"] for e in health_events(self.log.since(lmark), "videobar")]
+            got = "shown" if "shown" in ev else ("own" if "own" in ev else "nothing")
+            self.shot("vbar-" + name.split()[0])
+            lm2 = self.log.size()
+            self.ph.long_press(w // 2, y - 60 if got == "shown" else y, 900); time.sleep(3.5)   # (the bar covers the bottom of the picture: press higher)
+            lines = self.log.since(lm2)
+            menu = bool(health_events(lines, "video", "long-press-menu"))
+            sheet = bool(health_events(lines, "video", "sheet-shown")) or bool(health_events(lines, "video", "sheet-empty"))
+            panel = bool(health_events(lines, "panel", "open-space"))
+            self.shot("vbar-press-" + name.split()[0])
+            self.ph.key("KEYCODE_BACK"); time.sleep(1.5)       # closes the sheet
+            rows.append((name, expect, got, menu, sheet, panel))
+            if got != expect:
+                self.issue("high" if expect == "shown" else "medium", "video-controls", "%s: a tap gave '%s', expected '%s'" % (name, got, expect), shot=True)
+            if not menu:
+                self.issue("high", "long-press-video", "%s: a long press on the video did not open the video options (menu message missing)" % name, shot=True)
+            if panel:
+                self.issue("high", "long-press-video", "%s: a long press on the video opened the floating panel" % name, shot=True)
+        self.vbar_rows = rows
+        self.record({"kind": "vbar", "name": "video-controls", "status": "ok" if all(r[2] == r[1] and r[3] and not r[5] for r in rows) else "failed", "results": [{"page": r[0], "tap": r[2], "expected": r[1], "menu": r[3], "sheet": r[4], "panel": r[5]} for r in rows]})
+        self.check_alive("video-controls")
+
+    # ---- the owner's page (message 44): a walk down finance.yahoo.com/quote/TTWO with a picture at every step; whoever reads the report looks at the pictures (the video module comes and goes: it is a test of the live page)
+    def yahoo_scan(self):
+        w, h = self.screen
+        lmark = self.log.size()
+        self.ph.open_url("https://finance.yahoo.com/quote/TTWO/")
+        t0 = time.time()
+        while time.time() - t0 < 90 and not any(e["ev"] in ("loaded", "error") for e in health_events(self.log.since(lmark), "page")):
+            time.sleep(2)
+        time.sleep(4)
+        for i in range(14):
+            self.shot("yahoo-%02d" % i)
+            self.ph.swipe(w // 2, int(h * 0.78), w // 2, int(h * 0.30), 450); time.sleep(1.8)
+        ev = [e["ev"] for e in health_events(self.log.since(lmark), "videobar")]
+        self.record({"kind": "yahoo", "name": "yahoo-scan", "status": "ok", "note": "14 pictures taken; videobar events: %s" % (",".join(ev) or "none")})
+        self.check_alive("yahoo-scan")
+
     def setup_device(self):
         for k in ("window_animation_scale", "transition_animation_scale", "animator_duration_scale"):
             self.ph.setting("global", k, 0)
@@ -1116,7 +1169,7 @@ class Soak:
     def schedule(self, minutes):
         """The scene list for the soak, shuffled but fair: every kind appears again and again until the time is up."""
         pools = [("page", p) for p in PUBLIC_PAGES] * 1 + [("lab", p) for p in LAB_PAGES] * 2 + [("video", v) for v in VIDEOS] * 1 + [("vsite", v) for v in VIDEO_PAGES] * 1 + \
-                [("dl", d) for d in DOWNLOADS] * 1 + [("fs", None)] * 2 + [("guard", None)]
+                [("dl", d) for d in DOWNLOADS] * 1 + [("fs", None)] * 2 + [("guard", None)] + [("vbar", None)] * 2 + [("yahoo", None)]
         order = []
         while len(order) < 400:
             batch = list(pools)
@@ -1149,6 +1202,10 @@ class Soak:
                 elif kind == "guard":
                     self.guard_downloads()
                     self.apk_guard()
+                elif kind == "vbar":
+                    self.vbar_round()
+                elif kind == "yahoo":
+                    self.yahoo_scan()
             except Exception as e:  # a bug in this script must never end the hour
                 self.issue("low", "tooling", "scene %s %s raised %r" % (kind, item[0] if item else "", e))
             if n % 8 == 0:
@@ -1184,7 +1241,7 @@ class Soak:
         L.append("## Summary")
         L.append("")
         L.append("Scene results: " + ", ".join("%s %d" % (k, v) for k, v in sorted(counts.items(), key=lambda kv: -kv[1])))
-        L.append("The emulated phone's own system restarted %d time(s) (an overloaded emulator, not the app)." % self.system_restarts)
+        L.append("The emulated phone's own system restarted %d time(s), the emulator itself started again from scratch %d time(s) (an overloaded emulator, not the app)." % (self.system_restarts, self.hard_restarts))
         L.append("App restarts / crashes seen: %d. Issues logged: %d (high %d, medium %d, low %d)." % (self.restarts, len(self.issues), *[sum(1 for s, _, _ in self.issues if s == x) for x in ("high", "medium", "low")]))
         L.append("")
         if self.issues:
@@ -1218,6 +1275,14 @@ class Soak:
             L.append("")
             for n, ok, said in self.apk_rows:
                 L.append("- [%s] %s: %s" % ("x" if ok else " ", n, said))
+            L.append("")
+        if self.vbar_rows:
+            L.append("## Video controls and the long press on a video (VC1 / LP1, owner message 44)")
+            L.append("")
+            L.append("| page | a tap gave | expected | long press: video options | the sheet | floating panel (must be no) |")
+            L.append("| :- | :- | :- | :- | :- | :- |")
+            for name, expect, got, menu, sheet, panel in self.vbar_rows:
+                L.append("| %s | %s | %s | %s | %s | %s |" % (name, got, expect, "yes" if menu else "NO", "yes" if sheet else "-", "YES" if panel else "no"))
             L.append("")
         if self.fs_result:
             L.append("## Full-screen turning (FS1)")
@@ -1279,8 +1344,8 @@ class Soak:
                 L.append("App PSS: first %d MB, last %d MB, max %d MB. Lowest MemAvailable: %d MB." % (pss[0], pss[-1], max(pss), min(s[2] for s in self.samples)))
             L.append("")
         if self.last_diag:
-            keep = ("Real video", "Real scrolling", "Full-screen turning", "Blocker:", "Page loads", "  ", "Counters:", "Cold start", "Engine prefs", "CPU", "Processes:", "Memory:", "Network:", "Video:")
-            lines = [ln for ln in self.last_diag.splitlines() if ln.startswith(keep[:5]) or ln.startswith(("Counters:", "Cold start", "Engine prefs", "CPU by process", "Processes:", "Memory:", "Network:", "Video:", "Safe", "Downloads"))]
+            keep = ("Real video", "Real scrolling", "Full-screen turning", "Video controls", "Blocker:", "Page loads", "  ", "Counters:", "Cold start", "Engine prefs", "CPU", "Processes:", "Memory:", "Network:", "Video:")
+            lines = [ln for ln in self.last_diag.splitlines() if ln.startswith(keep[:6]) or ln.startswith(("Counters:", "Cold start", "Engine prefs", "CPU by process", "Processes:", "Memory:", "Network:", "Video:", "Safe", "Downloads"))]
             L.append("## What the app says about itself (its own Diagnostics text at the end of the run)")
             L.append("")
             for ln in lines[:40]:
@@ -1415,12 +1480,14 @@ class FakeAdb:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--net", default="full", choices=["full", "hotspot"], help="hotspot = the owner's link: 5 Mbit/s each way and about 80 ms of delay (the carrier caps his phone hotspot)")
+    ap.add_argument("--emu-cmd", default="", help="how the workflow started the emulator: used to start it again from a clean disk when the phone's system keeps dying")
+    ap.add_argument("--apk", default="", help="the debug APK, installed again after such a restart")
     ap.add_argument("--selftest", action="store_true")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
@@ -1440,6 +1507,9 @@ def main():
         if a.suite in ("fs", "all"):
             s.guard_downloads()
             s.apk_guard()
+        if a.suite in ("vc", "all"):
+            s.vbar_round()
+            s.yahoo_scan()
         if a.suite in ("soak", "all"):
             s.soak(a.minutes)
         s.dump_diag("end")
