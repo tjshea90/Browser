@@ -93,8 +93,9 @@ class PlayerController(
     fun turnStarted() { if (activeFlag) { model.turnStarted(); flush() } }
     fun turnEnded() { if (activeFlag) { model.turnEnded(); flush() } }
 
-    /** The navigation bar was pulled up over the film (Hide mode): the controls move up. */
-    fun setBottomInset(px: Int) { Health.log("player", "inset", "the navigation bar pulled up over the film: controls ${if (px > 0) "move up by $px px" else "back down"}"); view.setBottomInset(px) }
+    /** The bars are hidden for the film (Hide mode) and a swipe can pull the navigation bar up over it: the controls' bottom row keeps [px] free (0 = the bars stay: nothing to keep free). */
+    fun setBottomInset(px: Int) { if (px != lastInset) { lastInset = px; Health.log("player", "inset", if (px > 0) "the system bars are hidden: the controls keep $px px free at the bottom for a pulled-up navigation bar" else "the system bars stay: the controls use the whole page area") }; view.setBottomInset(px) }
+    private var lastInset = 0
 
     // ---------------------------------------------------------------------------------------- the page (UI thread)
 

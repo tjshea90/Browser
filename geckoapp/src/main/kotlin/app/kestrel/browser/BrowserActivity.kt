@@ -2837,12 +2837,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (Build.VERSION.SDK_INT >= 30) {
             val c = window.insetsController ?: return
             if (hide) { c.hide(WindowInsets.Type.systemBars()); c.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE } else c.show(WindowInsets.Type.systemBars())
-            // VP3 (owner message 49: "if I pull up the navigation bar, it covers the video controls"): while the person has pulled the bar up over the film, Kestrel's controls sit above it
-            window.decorView.setOnApplyWindowInsetsListener(if (hide) View.OnApplyWindowInsetsListener { v, insets ->
-                if (::player.isInitialized) player.setBottomInset(if (insets.isVisible(WindowInsets.Type.navigationBars())) insets.getInsets(WindowInsets.Type.navigationBars()).bottom else 0)
-                v.onApplyWindowInsets(insets)
-            } else null)
-            if (!hide && ::player.isInitialized) player.setBottomInset(0)
+            if (::player.isInitialized) player.setBottomInset(if (hide) navBarPx() else 0)       // VP3, see navBarPx
         } else {
             @Suppress("DEPRECATION")
             // Read-modify-write: assigning a whole new value would also clear the light status/navigation bar flags the theme set (icons invisible afterwards).
@@ -2852,14 +2847,23 @@ open class BrowserActivity : Activity(), DockListener {
             val dv = window.decorView
             @Suppress("DEPRECATION")
             dv.systemUiVisibility = if (hide) (dv.systemUiVisibility and older.inv()) or immersive else dv.systemUiVisibility and (immersive or older).inv()
-            // VP3: a pulled-up navigation bar must not cover Kestrel's controls
-            @Suppress("DEPRECATION")
-            dv.setOnSystemUiVisibilityChangeListener(if (hide) View.OnSystemUiVisibilityChangeListener { vis ->
-                val navShown = (vis and View.SYSTEM_UI_FLAG_HIDE_NAVIGATION) == 0
-                if (::player.isInitialized) player.setBottomInset(if (navShown) (dv.rootWindowInsets?.stableInsetBottom ?: 0) else 0)
-            } else null)
-            if (!hide && ::player.isInitialized) player.setBottomInset(0)
+            if (::player.isInitialized) player.setBottomInset(if (hide) navBarPx() else 0)       // VP3, see navBarPx
         }
+    }
+
+    /**
+     * VP3 (owner message 49, on alpha50: "if I pull up the navigation bar, it covers the video controls"): while the system bars are hidden for a full-screen film (Settings > System bars: Hide), a swipe from the
+     * bottom edge pulls the navigation bar up OVER the picture, and the controls under it cannot be used. The pulled-up bar is a TRANSIENT one (sticky immersive): Android 10 does not tell the app when it
+     * comes (lab run 43776782679: no visibility callback, no inset change; its picture kp-11 shows the bar over the film), so the controls' bottom row always keeps the bar's height free while the bars are hidden.
+     * The size is the one the system reports as stable (it stays the same whether the bar shows or not), else the system's dimension, else 48 dp.
+     */
+    private fun navBarPx(): Int {
+        val wi = try { window.decorView.rootWindowInsets } catch (e: Throwable) { null }
+        @Suppress("DEPRECATION")
+        val fromInsets = if (wi == null) 0 else if (Build.VERSION.SDK_INT >= 30) wi.getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars()).bottom else wi.stableInsetBottom
+        if (fromInsets > 0) return fromInsets
+        val id = resources.getIdentifier("navigation_bar_height", "dimen", "android")
+        return if (id > 0) resources.getDimensionPixelSize(id) else (48 * resources.displayMetrics.density).toInt()
     }
 
     // ---- FSB1: what the system really did with its bars while a page is full screen (Diagnostics says it, the owner's next screenshot is no longer needed)
