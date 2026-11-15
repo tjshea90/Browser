@@ -369,7 +369,7 @@ open class BrowserActivity : Activity(), DockListener {
         }
         buildUi()
         if (savedInstanceState == null) { // SP1 (owner message 41): the app's own symbol glows for about 0.4 s over the first frame, after the launch window that shows it; it takes no touch and nothing waits for it
-            root.addView(app.kestrel.browser.ui.LaunchLogo(this) { v -> root.removeView(v) }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            root.addView(app.kestrel.browser.ui.LaunchLogo(this, debugLogoStretch()) { v -> root.removeView(v) }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         }
         DownloadController.init(this) // restores interrupted downloads (they come back paused) so the list and the menu are right from the start
         UpdateManager.init(this)
@@ -881,6 +881,12 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** Private tab in front: no screenshots / recents thumbnail, and no autofill service sees what is typed. */
     private var secureWindow = false
+
+    /** DEBUG builds only (never a release): `adb shell setprop debug.kestrel.logostretch 25` makes the start-up logo flourish 25 times slower, so an emulator screenshot can catch it. 1 in every release. */
+    private fun debugLogoStretch(): Float {
+        if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) == 0) return 1f
+        return try { ((Class.forName("android.os.SystemProperties").getMethod("get", String::class.java).invoke(null, "debug.kestrel.logostretch") as? String)?.toFloatOrNull() ?: 1f).coerceIn(1f, 60f) } catch (e: Throwable) { 1f }
+    }
 
     /** DEBUG builds only (never a release): `adb shell setprop debug.kestrel.nosecure 1` lets screenshots show private tabs, so the private skin can be checked on an emulator. */
     private val debugAllowsScreenshots: Boolean by lazy {

@@ -31,7 +31,7 @@ class LaunchLogoTest {
     @Before fun setUp() {
         val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
         frame = FrameLayout(activity)
-        logo = LaunchLogo(activity) { v -> done++; frame.removeView(v) }
+        logo = LaunchLogo(activity, 1f) { v -> done++; frame.removeView(v) }
         logo.clock = { now }; logo.nextFrame = { pending = it }
         frame.addView(logo, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         frame.measure(View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(973, View.MeasureSpec.EXACTLY))
@@ -70,5 +70,20 @@ class LaunchLogoTest {
         now += 5000L                                   // the UI thread was busy for 5 s: the next frame sees the end of the flourish at once
         drawNow()
         assertTrue(logo.isFinished); assertEquals(1, done)
+    }
+
+    @Test fun aDebugStretchMakesItLastLongerAndNothingElseChanges() {
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        var finished = 0
+        val slow = LaunchLogo(activity, 10f) { finished++ }
+        slow.clock = { now }; slow.nextFrame = { pending = it }
+        val f = FrameLayout(activity); f.addView(slow, FrameLayout.LayoutParams(600, 973))
+        f.measure(View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(973, View.MeasureSpec.EXACTLY)); f.layout(0, 0, 600, 973)
+        val canvas = Canvas(Bitmap.createBitmap(600, 973, Bitmap.Config.ARGB_8888))
+        slow.draw(canvas)
+        now += LaunchAnim.TOTAL_MS * 5; slow.draw(canvas)
+        assertFalse("half way through the stretched flourish", slow.isFinished)
+        now += LaunchAnim.TOTAL_MS * 6; slow.draw(canvas)
+        assertTrue(slow.isFinished); assertEquals(1, finished)
     }
 }

@@ -19,7 +19,7 @@ import app.kestrel.core.session.LaunchAnim
  * underneath is already built and starts its engine as usual. The owner runs Android with animations turned OFF, so it keeps its own clock (like the mini panel's slide) instead of a system animator. The clock starts at the
  * FIRST DRAW (the first frame of the app), not when the view is made: building the screen takes longer than the flourish.
  */
-class LaunchLogo(ctx: Context, private val onDone: (LaunchLogo) -> Unit) : View(ctx) {
+class LaunchLogo(ctx: Context, private val stretch: Float = 1f, private val onDone: (LaunchLogo) -> Unit) : View(ctx) {   // [stretch] > 1 makes it slower (DEBUG builds only: an emulator proof can catch the frames)
     private val logo = ctx.getDrawable(R.drawable.ic_launcher_foreground)
     private val accent = ctx.getColor(R.color.accent)
     private val coverPaint = Paint()
@@ -48,7 +48,7 @@ class LaunchLogo(ctx: Context, private val onDone: (LaunchLogo) -> Unit) : View(
     override fun onDraw(c: Canvas) {
         if (finished) return
         if (startAt < 0) startAt = clock()
-        val t = (clock() - startAt).toFloat() / LaunchAnim.TOTAL_MS
+        val t = (clock() - startAt).toFloat() / (LaunchAnim.TOTAL_MS * stretch)
         if (t >= 1f) { finished = true; onDone(this); return }
         val w = width.toFloat(); val h = height.toFloat()
         val cx = w / 2f; val cy = h / 2f
