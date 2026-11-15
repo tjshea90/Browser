@@ -66,7 +66,8 @@ async function open(body, o) {
             } catch (e) { return Promise.resolve({ video: false, src: '' }); }
           }
           if (m && (m.k === 'vst' || m.k === 'vtap')) {                // VP1: the app's answer to the film's state / a tap (the test sets window.top.__vpReply)
-            const r = window.top.__vpReply;
+            const q = window.top.__vpQueue;                              // one-shot answers first (commands are delivered once), then the standing one
+            const r = (q && q.length) ? q.shift() : window.top.__vpReply;
             return Promise.resolve(r ? JSON.parse(JSON.stringify(r)) : undefined);
           }
           return Promise.resolve(undefined);

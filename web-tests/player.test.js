@@ -1,0 +1,192 @@
+'use strict';
+// VP1 (owner message 49, research/VIDEO_PLAYER_AUDIT.md): player.js in real headless Chromium against the fake extension API of videobar-lib.js. The app is played by the test: its answers come from
+// window.top.__vpQueue (one-shot: commands are delivered once) and window.top.__vpReply (the standing answer: whether the controls are shown). Run: cd web-tests && npm test
+const { test, before, after } = require('node:test');
+const assert = require('node:assert/strict');
+const { launch, close, open, msgs, touch } = require('./videobar-lib');
+
+before(launch);
+after(close);
+
+const wait = (page, ms) => page.waitForTimeout(ms);
+// a player box that goes full screen: the film fills it, a page button ("Skip ad"), a button named like a player control ("Mute") and a link; the page counts the clicks it gets
+const BOX = `<div id="box" style="position:fixed;left:0;top:0;width:300px;height:200px;background:#000">
+  <video id="v" src="https://cdn.example/film.wav" preload="auto" muted style="width:100%;height:100%"></video>
+  <button id="skip" style="position:absolute;right:8px;top:8px;width:90px;height:40px">Skip ad</button>
+  <button id="mutebtn" aria-label="Mute" style="position:absolute;left:8px;bottom:8px;width:60px;height:40px">M</button>
+  <a id="lnk" href="https://ads.example/" style="position:absolute;left:100px;top:8px;width:90px;height:40px;display:block">More</a></div>
+  <script>window.__clicks = []; document.addEventListener('click', function (e) { window.__clicks.push(e.target.id || e.target.tagName); if (e.target.id === 'lnk') e.preventDefault(); }, false);</script>`;
+const SHADOW = `<div id="host" style="position:fixed;left:0;top:0;width:300px;height:200px"></div>
+  <script>var sr = document.getElementById('host').attachShadow({ mode: 'open' }); sr.innerHTML = '<video id="v" src="https://cdn.example/film.wav" preload="auto" muted style="width:100%;height:100%"></video>'; window.__deepV = function () { return sr.getElementById('v'); };</script>`;
+
+const fullscreen = (page, id) => page.evaluate((i) => document.getElementById(i || 'box').requestFullscreen(), id);
+const states = (page) => msgs(page, 'vst');
+const taps = (page) => msgs(page, 'vtap');
+const clicks = (page) => page.evaluate(() => window.__clicks.slice());
+const standing = (page, r) => page.evaluate((x) => { window.top.__vpReply = x; }, r);
+const queue = (page, r) => page.evaluate((x) => { (window.top.__vpQueue = window.top.__vpQueue || []).push(x); }, r);
+const firstState = async (page) => { await page.waitForFunction(() => window.__msgs.some((m) => m && m.k === 'vst'), null, { timeout: 8000 }); return (await states(page))[0]; };
+const film = (page) => page.evaluate(() => { const v = document.getElementById('v') || window.__deepV(); return { t: v.currentTime, paused: v.paused, muted: v.muted, rate: v.playbackRate, fit: v.style.getPropertyValue('object-fit'), prio: v.style.getPropertyPriority('object-fit') }; });
+
+test('VP1: a full-screen film tells the app its state (numbers only); nothing before full screen', async () => {
+  const page = await open(BOX, { player: true, cfg: { kp: true } });
+  await wait(page, 500);
+  assert.deepEqual(await states(page), [], 'nothing outside full screen');
+  await fullscreen(page);
+  const m = await firstState(page);
+  assert.equal(m.k, 'vst'); assert.equal(m.d, 60); assert.equal(m.p, 1); assert.equal(m.e, 0); assert.equal(m.ms, 0); assert.equal(m.l, 0); assert.ok(m.rs >= 3, 'ready state ' + m.rs);
+  assert.deepEqual(Object.keys(m).sort(), ['b', 'd', 'e', 'h', 'k', 'l', 'm', 'ms', 'p', 'r', 'rs', 't', 'v', 'w'], 'only numbers: ' + JSON.stringify(m));
+  await page.context().close();
+});
+
+test('VP1: the app says controls are not Kestrel\'s (guard kp false): nothing is reported and no tap is taken', async () => {
+  const page = await open(BOX, { player: true, cfg: { kp: false } });
+  await fullscreen(page);
+  await wait(page, 900);
+  assert.deepEqual(await states(page), []);
+  await page.touchscreen.tap(250, 400);
+  await wait(page, 150);
+  assert.ok((await clicks(page)).includes('v'), 'the page gets the tap: ' + JSON.stringify(await clicks(page)));
+  await page.context().close();
+});
+
+test('VP1: the commands of the app are done once: play, pause, seek, skip, mute, speed', async () => {
+  const page = await open(BOX, { player: true, cfg: { kp: true } });
+  await fullscreen(page); await firstState(page);
+  await queue(page, { s: 1, c: [{ a: 'play' }] });
+  await page.waitForFunction(() => !document.getElementById('v').paused, null, { timeout: 5000 });
+  await queue(page, { s: 1, c: [{ a: 'seek', t: 30 }] });
+  await page.waitForFunction(() => document.getElementById('v').currentTime >= 29.9, null, { timeout: 5000 });
+  const t0 = (await film(page)).t;
+  await queue(page, { s: 1, c: [{ a: 'skip', d: 10 }] });
+  await page.waitForFunction((t) => document.getElementById('v').currentTime >= t + 9.5, t0, { timeout: 5000 });
+  await queue(page, { s: 1, c: [{ a: 'skip', d: -1000 }] });
+  await page.waitForFunction(() => document.getElementById('v').currentTime < 3, null, { timeout: 5000 });
+  await queue(page, { s: 1, c: [{ a: 'pause' }, { a: 'mute', on: false }, { a: 'rate', r: 1.5 }] });
+  await page.waitForFunction(() => { const v = document.getElementById('v'); return v.paused && !v.muted && v.playbackRate === 1.5; }, null, { timeout: 5000 });
+  await queue(page, { s: 1, c: [{ a: 'skip', d: 1000 }] });
+  await page.waitForFunction(() => document.getElementById('v').currentTime >= 59, null, { timeout: 5000 });
+  assert.ok((await film(page)).t <= 60.01, 'a skip never goes past the end');
+  await page.context().close();
+});
+
+test('VP2: a tap on the film is told to the app (place across the picture) and NOT passed to the page; the page\'s own buttons still work', async () => {
+  const page = await open(BOX, { player: true, cfg: { kp: true } });
+  await fullscreen(page); await firstState(page);
+  await page.touchscreen.tap(250, 400);                                    // the film
+  await page.waitForFunction(() => window.__msgs.some((m) => m && m.k === 'vtap'), null, { timeout: 5000 });
+  let t = await taps(page);
+  assert.equal(t.length, 1); assert.ok(Math.abs(t[0].x - 500) <= 10, 'the middle: ' + t[0].x);
+  assert.deepEqual(await clicks(page), [], 'the page did not see it: ' + JSON.stringify(await clicks(page)));
+  await page.touchscreen.tap(447, 28);                                      // "Skip ad": the page's own button
+  await wait(page, 200);
+  assert.deepEqual(await clicks(page), ['skip']); assert.equal((await taps(page)).length, 1, 'not a tap on the film');
+  await page.touchscreen.tap(145, 28);                                      // a link
+  await wait(page, 200);
+  assert.deepEqual(await clicks(page), ['skip', 'lnk']); assert.equal((await taps(page)).length, 1);
+  await page.touchscreen.tap(38, 772);                                      // a button named Mute: a control Kestrel's replace, so it is a tap on the film
+  await page.waitForFunction(() => window.__msgs.filter((m) => m && m.k === 'vtap').length === 2, null, { timeout: 5000 });
+  assert.deepEqual(await clicks(page), ['skip', 'lnk'], 'the page\'s Mute button did not get it');
+  await page.context().close();
+});
+
+test('VP2: the place of a tap says which side it is on', async () => {
+  const page = await open(BOX, { player: true, cfg: { kp: true } });
+  await fullscreen(page); await firstState(page);
+  await page.touchscreen.tap(50, 400); await wait(page, 120);
+  await page.touchscreen.tap(450, 400); await wait(page, 120);
+  const t = await taps(page);
+  assert.equal(t.length, 2); assert.ok(t[0].x < 150, 'left: ' + t[0].x); assert.ok(t[1].x > 850, 'right: ' + t[1].x);
+  await page.context().close();
+});
+
+test('VP2: a slide or a long press is not a tap', async () => {
+  const page = await open(BOX, { player: true, cfg: { kp: true } });
+  await fullscreen(page); await firstState(page);
+  await touch(page, 250, 400, { toX: 330, toY: 400 });                      // a swipe
+  await touch(page, 250, 400, { holdMs: 700 });                              // a long press
+  await wait(page, 300);
+  assert.deepEqual(await taps(page), []);
+  await page.context().close();
+});
+
+test('VP1: it reports faster while the controls are shown than while they are hidden, and the app can switch it off', async () => {
+  const page = await open(BOX, { player: true, cfg: { kp: true } });
+  await page.evaluate(() => { window.KestrelVP.c.idle = 400; window.KestrelVP.c.busy = 100; });
+  await fullscreen(page); await firstState(page);
+  await standing(page, { s: 0 });
+  const a0 = (await states(page)).length; await wait(page, 1200); const hidden = (await states(page)).length - a0;
+  await standing(page, { s: 1 });
+  await wait(page, 400);
+  const b0 = (await states(page)).length; await wait(page, 1200); const shown = (await states(page)).length - b0;
+  assert.ok(shown >= hidden * 2, 'shown ' + shown + ' reports in 1.2 s, hidden ' + hidden);
+  assert.ok(shown <= 20 && hidden >= 1, 'bounded: ' + shown + ' / ' + hidden);
+  await standing(page, { on: 0 });                                          // the controls are not Kestrel's here after all
+  await wait(page, 500);
+  const n = (await states(page)).length; await wait(page, 800);
+  assert.equal((await states(page)).length, n, 'no more reports');
+  await page.touchscreen.tap(250, 400); await wait(page, 150);
+  assert.ok((await clicks(page)).includes('v'), 'and the page gets the taps again');
+  await page.context().close();
+});
+
+test('VP1: leaving full screen ends everything: no more reports, the page gets the taps', async () => {
+  const page = await open(BOX, { player: true, cfg: { kp: true } });
+  await fullscreen(page); await firstState(page);
+  await page.evaluate(() => document.exitFullscreen());
+  await wait(page, 600);
+  const n = (await states(page)).length; await wait(page, 900);
+  assert.equal((await states(page)).length, n, 'no more reports');
+  assert.equal((await page.evaluate(() => window.KestrelVP.active())), false);
+  await page.touchscreen.tap(100, 100); await wait(page, 150);
+  assert.ok((await clicks(page)).includes('v'));
+  await page.context().close();
+});
+
+test('VP1: a film inside a web component\'s shadow tree is found and controlled', async () => {
+  const page = await open(SHADOW, { player: true, cfg: { kp: true } });
+  await fullscreen(page, 'host');
+  const m = await firstState(page);
+  assert.equal(m.d, 60);
+  await queue(page, { s: 1, c: [{ a: 'seek', t: 20 }] });
+  await page.waitForFunction(() => window.__deepV().currentTime >= 19.9, null, { timeout: 5000 });
+  await page.context().close();
+});
+
+test('VP6: a film whose box is not its shape is shown whole while it is full screen, and put back afterwards', async () => {
+  const page = await open(BOX, { player: true, cfg: { kp: true } });
+  await page.evaluate(() => {                                              // a 16:9 picture in a portrait box with the page's object-fit: fill (the owner's stretched picture)
+    const v = document.getElementById('v'); v.style.objectFit = 'fill';
+    Object.defineProperty(v, 'videoWidth', { get: () => 640 }); Object.defineProperty(v, 'videoHeight', { get: () => 360 });
+  });
+  await fullscreen(page); await firstState(page);
+  await wait(page, 300);
+  let f = await film(page);
+  assert.equal(f.fit, 'contain'); assert.equal(f.prio, 'important');
+  await page.evaluate(() => document.exitFullscreen());
+  await wait(page, 500);
+  f = await film(page);
+  assert.equal(f.fit, 'fill', 'the page\'s own value is back');
+  await page.context().close();
+});
+
+test('VP6: a film that already has the picture\'s shape, or a page that chose contain, is left alone', async () => {
+  const page = await open(BOX, { player: true, cfg: { kp: true } });
+  await page.evaluate(() => {
+    const v = document.getElementById('v'); v.style.objectFit = 'contain';
+    Object.defineProperty(v, 'videoWidth', { get: () => 640 }); Object.defineProperty(v, 'videoHeight', { get: () => 360 });
+  });
+  await fullscreen(page); await firstState(page);
+  await wait(page, 300);
+  assert.equal((await film(page)).prio, '', 'nothing forced');
+  await page.context().close();
+});
+
+test('VP2: while Kestrel\'s full-screen controls own the film the injected video bar draws nothing', async () => {
+  const page = await open(BOX, { player: true, cfg: { kp: true, vba: true } });
+  await fullscreen(page); await firstState(page);
+  await page.touchscreen.tap(250, 400);
+  await wait(page, 900);
+  assert.deepEqual((await msgs(page, 'vbk')).filter((m) => m.e === 'shown'), []);
+  await page.context().close();
+});
