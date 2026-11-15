@@ -200,3 +200,17 @@ test('VC1: a tap on a film whose own controls were showing, and which hide on th
   assert.deepEqual((await msgs(page, 'vbk')).map((m) => m.e), ['own', 'own']);
   await page.context().close();
 });
+
+test('LAB2: the lab-only page-health probe counts text, pictures (and broken ones), frames and videos once the page has loaded, and sends numbers only', async () => {
+  const page = await open(VIDEO() + '<p>Hello, this page has some text in it.</p><img id="ok" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" width="40" height="40"><img id="bad" src="https://cdn.example/missing.png" width="40" height="40"><iframe src="about:blank" width="50" height="50"></iframe>');
+  await page.evaluate(() => window.KestrelVF.probe());
+  await wait(page, 3200);
+  const m = (await msgs(page, 'probe'))[0];
+  assert.ok(m, 'one probe message');
+  assert.ok(m.t >= 30 && m.im === 2 && m.ib >= 1 && m.fr === 1 && m.vd === 1 && m.nd > 5 && m.hh > 100 && m.rd === 'complete', JSON.stringify(m));
+  assert.deepEqual(Object.keys(m).sort(), ['fr', 'h', 'hh', 'ib', 'im', 'iv', 'iw', 'k', 'nd', 'rd', 'rs', 'sc', 't', 'vd', 'vp', 'ww'].sort(), 'numbers and a host name only');
+  await page.evaluate(() => window.KestrelVF.probe());
+  await wait(page, 300);
+  assert.equal((await msgs(page, 'probe')).length, 1, 'only once per page');
+  await page.context().close();
+});
