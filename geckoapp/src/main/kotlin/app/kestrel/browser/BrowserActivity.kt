@@ -2165,15 +2165,19 @@ open class BrowserActivity : Activity(), DockListener {
         val to = UrlParts.hostOf(uri)
         if (!prefs.blockPopups || from == null || to == null || !Shields.effective(prefs, from).shieldsUp) return app.kestrel.core.guard.JumpGuard.Verdict.ALLOW
         val now = SystemClock.uptimeMillis()
-        return app.kestrel.core.guard.JumpGuard.decide(
-            crossSite = !app.kestrel.core.filter.Psl.default.isSameSite(from, to),
+        val cross = !app.kestrel.core.filter.Psl.default.isSameSite(from, to)
+        val listed = cross && listedAdHost(from, to)
+        val v = app.kestrel.core.guard.JumpGuard.decide(
+            crossSite = cross,
             touchAgeMs = now - lastTouchAt,
             tapArrived = tab.lastTapAt >= lastTouchAt - 50,
             tapAgeMs = now - tab.lastTapAt,
             tapHref = tab.lastTapHref,
             uri = uri,
-            adHost = listedAdHost(from, to),
+            adHost = listed,
         )
+        if (cross) Health.log("guard", "jump-judged", "to=$to listed=$listed touchAge=${now - lastTouchAt} ms -> $v")
+        return v
     }
 
     /** RX3-G6: is [host] (a destination the page wants to jump to, third-party to [pageHost]) one the block lists name as an ad or tracker host? Host rules only: one hash lookup, no page address, no query. */
