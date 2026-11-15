@@ -31,11 +31,12 @@ const LEN = 60;
 const FAST = { waitMs: 120, flushMs: 80, tapMs: 400, reaskMs: 500, keepMs: 800 };   // the clocks of the script, shortened
 
 const VIDEO = '<video id="v" src="https://cdn.example/film.wav" preload="auto" muted style="position:absolute;left:0;top:0;width:400px;height:240px;background:#222"></video>';
-/** YouTube-like chrome: the bar sits over the bottom of the picture, thin, with a taller hit area; the page does NOT seek on a tap unless a test script says so. */
-const YT = (extra) => `<div id="player" class="html5-video-player" style="position:relative;width:400px;height:240px;background:#000">${VIDEO}`
-  + `<div class="ytp-chrome-bottom" style="position:absolute;left:0;right:0;bottom:0;height:44px"><div class="ytp-progress-bar-container" style="position:absolute;left:12px;right:12px;bottom:30px;height:6px">`
-  + `<div id="bar" class="ytp-progress-bar" role="slider" aria-label="Seek slider" aria-valuemin="0" aria-valuemax="${LEN}" aria-valuenow="0" tabindex="0" style="position:absolute;left:0;right:0;top:-10px;height:26px"><div class="ytp-play-progress" style="width:10%;height:6px;background:red;margin-top:10px"></div><div class="ytp-scrubber-container" style="position:absolute;left:10%;top:6px;width:12px;height:12px;border-radius:6px;background:red"></div></div>`
-  + `</div>${extra || ''}</div></div>`;
+/** A player box with the picture and [inner] over it. */
+const PLAYER = (inner) => `<div id="player" class="html5-video-player" style="position:relative;width:400px;height:240px;background:#000">${VIDEO}${inner || ''}</div>`;
+/** YouTube-like chrome: the bar sits over the bottom of the picture, thin, with a taller hit area (touch-action:none as on the real bar); the page does NOT seek on a tap unless a test script says so. */
+const YT = (extra) => PLAYER(`<div class="ytp-chrome-bottom" style="position:absolute;left:0;right:0;bottom:0;height:44px"><div class="ytp-progress-bar-container" style="position:absolute;left:12px;right:12px;bottom:30px;height:6px">`
+  + `<div id="bar" class="ytp-progress-bar" role="slider" aria-label="Seek slider" aria-valuemin="0" aria-valuemax="${LEN}" aria-valuenow="0" tabindex="0" style="position:absolute;left:0;right:0;top:-10px;height:26px;touch-action:none"><div class="ytp-play-progress" style="width:10%;height:6px;background:red;margin-top:10px"></div><div class="ytp-scrubber-container" style="position:absolute;left:10%;top:6px;width:12px;height:12px;border-radius:6px;background:red"></div></div>`
+  + `</div>${extra || ''}</div>`);
 
 async function open(body, o) {
   o = o || {};
@@ -171,7 +172,7 @@ test('YS1: not a seek bar: a volume slider, a speed slider, a thin line far from
     ['an advertisement\'s progress line', `<div id="x" class="ytp-ad-persistent-progress-bar-container" style="position:absolute;left:0;top:225px;width:400px;height:4px;background:#fc0"></div>`, 0.5],
   ];
   for (const [what, extra, f] of cases) {
-    const page = await open(YT().replace('<div class="ytp-chrome-bottom"', '<div class="ytp-chrome-bottom" style="display:none;"').replace('position:absolute;left:0;right:0;bottom:0;height:44px', 'position:absolute;left:0;right:0;bottom:0;height:44px;') + `<div style="position:absolute;left:0;top:0">${extra}</div>`);
+    const page = await open(PLAYER(extra));
     const r = await rectOf(page, '#x');
     await page.touchscreen.tap(r.left + r.width * f, r.top + r.height / 2); await page.waitForTimeout(500);
     assert.ok(near(await time(page), 0, 0.5), what + ': nothing moved, at ' + await time(page));
