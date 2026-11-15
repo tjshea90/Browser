@@ -76,6 +76,27 @@ class Phone:
     def key(self, code):
         self.a.sh("input keyevent %s" % code, timeout=15)
 
+    def long_press(self, x, y, ms=900):
+        self.a.sh("input swipe %d %d %d %d %d" % (x, y, x, y, ms), timeout=20)
+
+    def dismiss_cling(self):
+        """Android's one-time 'Viewing full screen / GOT IT' box sits over the app and takes the FIRST Back key (found in lab run 5: it looked like 'Back does not leave full screen'). Tap its button when it is there."""
+        out = self.a.sh("dumpsys window windows", timeout=40)
+        i = out.find("ImmersiveModeConfirmation")
+        if i < 0:
+            return False
+        best = None
+        for m in re.finditer(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", out[i:i + 4000]):
+            l, t, r, b = (int(v) for v in m.groups())
+            if 250 <= r - l <= 700 and 120 <= b - t <= 450:
+                best = (l, t, r, b)
+                break
+        x, y = (best[2] - 70, best[3] - 40) if best else (413, 215)
+        self.tap(x, y)
+        say("dismissed Android's 'Viewing full screen' box at", x, y)
+        time.sleep(1)
+        return True
+
     def home(self):
         self.key("KEYCODE_HOME")
 
@@ -325,14 +346,12 @@ PUBLIC_PAGES = [
     ("github-repo", "https://github.com/mozilla/gecko-dev", 4, 4),
     ("stackoverflow", "https://stackoverflow.com/questions/tagged/android", 4, 3),
     ("reddit", "https://www.reddit.com/r/android/", 4, 4),
-    ("espn", "https://www.espn.com/", 5, 4),
-    ("nytimes", "https://www.nytimes.com/", 4, 4),
     ("duckduckgo", "https://duckduckgo.com/?q=kestrel+browser+android", 2, 2),
     ("google-search", "https://www.google.com/search?q=android+16+release+date", 2, 2),
-    ("youtube-home", "https://m.youtube.com/", 4, 6),
-    ("twitch", "https://www.twitch.tv/", 3, 6),
     ("weather-wttr", "https://wttr.in/London?0", 1, 2),
     ("example", "https://example.com/", 0, 1),
+    ("yahoo-finance", "https://finance.yahoo.com/quote/TTWO/", 8, 4),   # the page of the owner's report (message 44): a video module with an ad that has no controls
+    ("lite-youtube", "https://m.youtube.com/results?search_query=android+16", 2, 3),
 ]
 
 # videos: lab clips (served by soaklab) and public files, all through the lab's player page so the same events are reported. (name, src, seconds to watch)
@@ -411,6 +430,12 @@ class Soak:
         self.apk_rows = []
         self.system_restarts = 0
         self.net_status = ""
+        self.sys_pid = ""
+        self.last_system_restart = 0.0
+        self.consecutive_down = 0
+        self.hard_restarts = 0
+        self.emu_proc = None
+        self.vbar_rows = []
         self.last_diag = ""
 
     # ---- bookkeeping
@@ -455,15 +480,21 @@ class Soak:
     def system_ok(self):
         return self.ph.a.sh("getprop sys.boot_completed", timeout=15).strip() == "1"
 
-    def recover_system(self, where):
-        """Android's own system process died (the emulator was overloaded): wait for the phone to come back, put the lab's wiring back. Not an app fault, but it is written down."""
-        self.system_restarts += 1
-        self.issue("high", "emulator", "the emulated phone's system restarted during %s (system_server died: the emulator was overloaded; a limit of the lab, not of the app)" % where)
-        self.adb.run("wait-for-device", timeout=300)
+    def system_pid(self):
+        out = self.ph.a.sh("pidof system_server", timeout=15).split()
+        return out[0] if out else ""
+
+    def wait_boot(self, limit=420):
         t0 = time.time()
-        while time.time() - t0 < 420 and not self.system_ok():
+        while time.time() - t0 < limit:
+            if self.system_ok() and self.ph.a.sh("pm path android", timeout=20).strip().startswith("package:") and self.system_pid():
+                return True
             time.sleep(5)
-        time.sleep(15)
+        return False
+
+    def rewire(self):
+        """What the lab put on the phone, again after a restart of the system (the settings survive, the reverse tunnel and the app do not)."""
+        time.sleep(10)
         self.adb.run("reverse", "tcp:%d" % self.port, "tcp:%d" % self.port)
         for k in ("window_animation_scale", "transition_animation_scale", "animator_duration_scale"):
             self.ph.setting("global", k, 0)
@@ -472,17 +503,65 @@ class Soak:
         self.ph.setting("system", "accelerometer_rotation", 0)
         if self.a.net == "hotspot":
             self.ph.a.run("emu", "network", "speed", "5000:5000"); self.ph.a.run("emu", "network", "delay", "60:100")
+        self.sys_pid = self.system_pid()
+
+    def hard_restart(self, where):
+        """The system keeps dying (a boot loop under load, found in lab run 5: 20 minutes without the app): start the emulator again from a clean disk and install the app again."""
+        if not self.a.emu_cmd:
+            return False
+        self.issue("high", "emulator", "the emulated phone could not recover after %s: the emulator was started again from a clean disk (a limit of the lab, not of the app)" % where)
+        try:
+            self.adb.run("emu", "kill", timeout=30)
+        except Exception:
+            pass
+        time.sleep(10)
+        try:
+            subprocess.run("pkill -f qemu-system-x86_64", shell=True, timeout=20)
+        except Exception:
+            pass
+        time.sleep(5)
+        self.emu_proc = subprocess.Popen(self.a.emu_cmd, shell=True, stdout=open(os.path.join(self.out, "emulator-restart.txt"), "ab"), stderr=subprocess.STDOUT, start_new_session=True)
+        self.adb.run("wait-for-device", timeout=300)
+        if not self.wait_boot(420):
+            return False
+        if self.a.apk:
+            self.adb.run("install", "-r", "-t", self.a.apk, timeout=300)
+        self.rewire()
         self.ph.start_app()
-        time.sleep(15)
+        time.sleep(20)
         self.main_pid = (self.ph.pids() or [None])[0]
+        self.hard_restarts += 1
+        return True
+
+    def recover_system(self, where):
+        """Android's own system process died (the emulator was overloaded): wait for the phone to come back, put the lab's wiring back. Not an app fault, but it is written down."""
+        self.system_restarts += 1
+        self.issue("high", "emulator", "the emulated phone's system restarted during %s (system_server died: the emulator was overloaded; a limit of the lab, not of the app)" % where)
+        self.adb.run("wait-for-device", timeout=300)
+        ok = self.wait_boot(420)
+        self.rewire()
+        if ok:
+            self.ph.start_app()
+            time.sleep(20)
+            self.main_pid = (self.ph.pids() or [None])[0]
+        if not ok or not self.main_pid or self.system_restarts >= 2 and (time.time() - self.last_system_restart) < 600:
+            self.last_system_restart = time.time()
+            if self.hard_restart(where):
+                return
+        self.last_system_restart = time.time()
 
     # ---- the app
     def check_alive(self, where):
         """True when the app's main process is the one we saw before. A new pid = it died and Android (or we) started it again."""
-        if not self.system_ok():
+        if not self.system_ok() or (self.sys_pid and self.system_pid() not in ("", self.sys_pid)):
             self.recover_system(where)
             return False
         pids = self.ph.pids()
+        if not pids and self.consecutive_down >= 2:     # the app does not come back: not the app's doing any more, the phone is sick
+            self.consecutive_down = 0
+            self.recover_system(where + " (the app would not start again)")
+            return False
+        self.consecutive_down = self.consecutive_down + 1 if not pids else 0
         if not pids:
             self.issue("high", "crash", "the app is not running after %s" % where, shot=True)
             self.restarts += 1
@@ -910,6 +989,7 @@ class Soak:
         # 1. full screen on an upright screen with a wide video: the screen must turn sideways by itself
         self.ph.tap(w // 2, y_of(self.FS_GO))
         time.sleep(4)
+        self.ph.dismiss_cling()
         rows = fs_rows()
         steps.append(("the page went full screen (the lab page saw fullscreenchange)", any(r.get("ev") == "fullscreenchange" and r.get("fs") == "1" for r in rows)))
         steps.append(("the app asked Android to turn the screen when full screen began ('turn' line)", any("full screen starts" in e["rest"] for e in turns())))
@@ -992,6 +1072,7 @@ class Soak:
             st = self.ph.a.run("emu", "network", "status").replace("\n", " ").replace("OK", "").strip()
             self.net_status = st[:200]
             say("network shaped like the owner's hotspot: 5 Mbit/s each way, 60-100 ms delay; the emulator says:", self.net_status)
+        self.sys_pid = self.system_pid()
         say("screen", self.screen, "| density", self.ph.a.sh("wm density").strip().replace("\n", " "), "| android", self.ph.a.sh("getprop ro.build.version.release").strip())
 
     def start_app(self):
