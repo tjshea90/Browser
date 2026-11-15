@@ -266,8 +266,8 @@
   function invisibleBox(el) {
     var cs = getComputedStyle(el);
     if (parseFloat(cs.opacity) < 0.05 || cs.visibility === 'hidden') return true;
-    var bg = cs.backgroundColor;
-    var clear = bg === 'transparent' || /^rgba\(\s*\d+,\s*\d+,\s*\d+,\s*0\s*\)$/.test(bg);
+    var bg = cs.backgroundColor, m = /^rgba\(\s*\d+,\s*\d+,\s*\d+,\s*([0-9.]+)\s*\)$/.exec(bg);
+    var clear = bg === 'transparent' || (m && parseFloat(m[1]) < 0.05);      // a background nobody can see (rgba alpha under 0.05 counts: "invisible but hit-testable" is the trick)
     return clear && (!cs.backgroundImage || cs.backgroundImage === 'none') && !(el.textContent || '').trim();
   }
   function fakeLayerOver(el, player) {

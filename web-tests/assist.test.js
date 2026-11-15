@@ -24,8 +24,9 @@ after(async () => { await browser.close(); });
 const AD = 'https://ads.example/landing?x=1';
 const STUB_PLAY = 'HTMLMediaElement.prototype.play = function () { window.__plays = (window.__plays || 0) + 1; return Promise.resolve(); };';
 const FRAME = '<iframe id="f" src="https://player.example/embed" style="position:absolute;left:0;top:0;width:400px;height:300px;border:0"></iframe>';
-const LAYER_AD = `<div id="layer" style="position:absolute;left:0;top:0;width:400px;height:300px" onclick="window.open('${AD}')"></div>`;
-const LAYER_QUIET = '<div id="layer" style="position:absolute;left:0;top:0;width:400px;height:300px"></div>';
+// these layers are VISIBLE (a faint tint): RX3-G4 switches an INVISIBLE layer off before the press, which would leave nothing for the assist (the path under test here) to do
+const LAYER_AD = `<div id="layer" style="position:absolute;left:0;top:0;width:400px;height:300px;background:rgba(0,0,0,0.3)" onclick="window.open('${AD}')"></div>`;
+const LAYER_QUIET = '<div id="layer" style="position:absolute;left:0;top:0;width:400px;height:300px;background:rgba(0,0,0,0.3)"></div>';
 
 async function open(body, opts) {
   opts = opts || {};
