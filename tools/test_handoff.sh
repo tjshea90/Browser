@@ -56,6 +56,17 @@ fi
 check "android.yml publishes with 'gh release create --target' (a tag PUSH from the sandbox is refused with 403)" 'grep -q "gh release create" "$D/.github/workflows/android.yml" && grep -q -e "--target" "$D/.github/workflows/android.yml"'
 check "android.yml can write the Release (permissions: contents: write)" 'grep -q "contents: write" "$D/.github/workflows/android.yml"'
 check "android.yml uploads no APK as an artifact (RX4-X4a: the signed APK of a failed build used to be public for 7 days)" '! grep -q "upload-artifact" "$D/.github/workflows/android.yml"'
+check "every action the workflows use is pinned to a 40-hex commit (RX4-X4b: a moving tag such as @v5 can be re-pointed by whoever owns that repository)" 'python3 -I - "$D" <<"PYX"
+import glob, re, sys
+bad = []
+for f in glob.glob(sys.argv[1] + "/.github/workflows/*.yml") + glob.glob(sys.argv[1] + "/.github/actions/*/action.yml"):
+    for n, l in enumerate(open(f, encoding="utf-8").read().splitlines(), 1):
+        m = re.search(r"uses:\s*([^\s#]+)", l)
+        if m and not m.group(1).startswith("./") and not re.search(r"@[0-9a-f]{40}$", m.group(1)):
+            bad.append("%s:%d %s" % (f, n, m.group(1)))
+if bad:
+    print("\n".join(bad)); sys.exit(1)
+PYX'
 check "emu-lab.yml exists, is read-only (no contents: write) and its artifacts hold no APK (RX4-E1)" '[ -f "$D/.github/workflows/emu-lab.yml" ] && ! grep -q "contents: write" "$D/.github/workflows/emu-lab.yml" && ! sed -n "/upload-artifact/,\$p" "$D/.github/workflows/emu-lab.yml" | grep -qi "[.]apk"'
 check "android.yml starts the lab with app = lab (the lab file is only on this branch, GitHub dispatches the workflow it already knows)" 'grep -q "uses: ./.github/workflows/emu-lab.yml" "$D/.github/workflows/android.yml" && grep -q "options: \[gecko, web, courier, both, lab\]" "$D/.github/workflows/android.yml"'
 
