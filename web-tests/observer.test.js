@@ -23,6 +23,7 @@ async function open(body, cfg) {
   const page = await context.newPage();
   await page.addInitScript((c) => {
     window.__kstTokCfg = c || {}; window.__gen = []; window.__msgs = []; window.__hidden = false;
+    if (c && c.tick) { let clock = 0; window.__kstTokCfg.now = () => (clock += c.tick); }      // a clock that advances by c.tick ms per look: what the budget test proves does not depend on how busy the machine is
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => window.__hidden });
     window.requestIdleCallback = (f) => setTimeout(f, 30);
     window.browser = { runtime: { sendMessage: (m) => {
@@ -40,10 +41,10 @@ const sent = async (page) => [].concat(...(await page.evaluate(() => window.__ge
 const add = (page, html) => page.evaluate((h) => { const d = document.createElement('div'); d.innerHTML = h; document.body.appendChild(d); }, html);
 
 test('the observer stops after its time budget; the names found before the stop were sent, what comes after is not', async () => {
-  const page = await open('<div class="first">a</div>', { budgetMs: 3 });
+  const page = await open('<div class="first">a</div>', { budgetMs: 40, tick: 5 });                 // 5 ms of "work" per callback: the budget is gone after about eight of them
   await page.waitForTimeout(700);
   const burst = (k) => { let h = ''; for (let i = 0; i < 280; i++) h += `<i class="b${k}x${i}"></i>`; return h; };
-  for (let k = 0; k < 40; k++) { await add(page, burst(k)); await page.waitForTimeout(90); }     // forty callbacks of real work: the 3 ms are used up long before the end
+  for (let k = 0; k < 40; k++) { await add(page, burst(k)); await page.waitForTimeout(90); }     // forty callbacks: the budget is used up long before the end
   await page.waitForTimeout(1200);
   const names = await sent(page);
   assert.ok(names.includes('.first'));

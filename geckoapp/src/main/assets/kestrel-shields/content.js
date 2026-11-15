@@ -25,7 +25,7 @@
       // nothing for what happens inside an editable region (typing in a rich editor adds nodes all the time). The tests shorten the limits through window.__kstTokCfg (a page's globals are not visible here in the real extension).
       var TC = (window.__kstTokCfg && typeof window.__kstTokCfg === 'object') ? window.__kstTokCfg : {};
       var BUDGET_MS = TC.budgetMs || 300, WINDOW_MS = TC.windowMs || 20000, spent = 0, startedAt = 0;
-      function nowMs() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
+      function nowMs() { if (typeof TC.now === 'function') return TC.now(); return (window.performance && performance.now) ? performance.now() : Date.now(); }   // (TC.now: the tests' own clock, so a slow or busy machine cannot change what they prove)
       function note(t) {
         if (t.length > 81 || seen[t]) return;
         seen[t] = 1; fresh.push(t);
