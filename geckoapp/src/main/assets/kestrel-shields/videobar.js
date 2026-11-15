@@ -206,15 +206,19 @@ window.KestrelVB = window.KestrelVB || (function () {
       while (e && i++ < 5) { var sr = VF.rootOf(e); if (sr && sr.fullscreenElement) e = sr.fullscreenElement; else break; }
       return e || null;
     }
+    var forced = null;                // a film that went full screen WITHOUT a box around it: nothing of ours can be drawn over a <video>, so the engine's own controls are on while it lasts
+    function undoForced() { if (forced) { try { forced.controls = false; } catch (e) { /* ignore */ } forced = null; } }
     function toggleFull(v) {
       try {
         if (document.fullscreenElement) { if (document.exitFullscreen) document.exitFullscreen(); return; }
         var t = fsTarget(v);
+        if (t === v && !v.controls) { v.controls = true; forced = v; }
         var p = t.requestFullscreen ? t.requestFullscreen() : null;
-        if (p && p.catch) p.catch(function () {});
-      } catch (e) { /* the page or the engine refused */ }
+        if (p && p.catch) p.catch(function () { undoForced(); });
+      } catch (e) { undoForced(); /* the page or the engine refused */ }
     }
     function onFullscreen() {         // the bar must be inside the full-screen element to be seen there (the top layer shows nothing else)
+      if (!document.fullscreenElement) undoForced();
       if (!bar) return;
       try {
         var fe = fullscreenEl();
@@ -240,9 +244,8 @@ window.KestrelVB = window.KestrelVB || (function () {
       var dur = mk('span', 'flex:none;min-width:34px;text-align:center;color:#fff', wrap); dur.textContent = '0:00';
       var muteB = button(VOL, 'Mute or unmute', wrap);
       var fullB = button(FULL, 'Full screen', wrap);
-      var b = { v: v, host: host, wrap: wrap, playB: playB, cur: cur, track: track, fill: fill, thumb: thumb, dur: dur, muteB: muteB, fullB: fullB, drag: false, timer: 0, tick: 0, lastSeek: 0, on: [], canFull: fsTarget(v) !== v };
+      var b = { v: v, host: host, wrap: wrap, playB: playB, cur: cur, track: track, fill: fill, thumb: thumb, dur: dur, muteB: muteB, fullB: fullB, drag: false, timer: 0, tick: 0, lastSeek: 0, on: [] };
       bar = b;
-      if (!b.canFull) fullB.el.style.display = 'none';
 
       // the page must not see what the person does on the bar (events from inside a closed tree stop here; a page's own capture listeners on the window still do)
       var evs = ['pointerdown', 'pointerup', 'pointermove', 'click', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'touchmove', 'contextmenu', 'dblclick'];
