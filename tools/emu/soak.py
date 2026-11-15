@@ -589,7 +589,7 @@ class Soak:
             self.shot(area)
 
     def shot(self, label):
-        if self.shots >= (70 if self.a.suite == "fsy" else 40):
+        if self.shots >= (120 if self.a.suite == "fsy" else 40):        # fsy: about 60 pictures for the 6 box variants + the live Yahoo page + its turns (the old cap of 70 cut the Yahoo pictures off)
             return
         self.shots += 1
         p = os.path.join(self.out, "shots", "%02d-%s.png" % (self.shots, re.sub(r"[^a-z0-9-]+", "-", label.lower())[:40]))
@@ -1325,6 +1325,7 @@ class Soak:
         self.ph.tap(w // 2, 25 + int(350 * d)); time.sleep(3)                       # the bar (or the page's own controls)
         bar = [e["ev"] for e in health_events(self.log.since(lmark), "videobar")]
         self.shot("yahoofs-tap")
+        time.sleep(1.5); self.shot("yahoofs-tap2")                                   # (the page's own controls come and go: a second picture says which button is where)
         entered = False
         how = "none"
         fm = self.log.size()
