@@ -3,17 +3,128 @@
   "name": "Kestrel Shields",
   "version": "1.0.149",
   "description": "Ad and tracker blocking plus element hiding for Kestrel G, powered by the app's own filter engine (EasyList, EasyPrivacy, uBlock lists).",
-  "browser_specific_settings": { "gecko": { "id": "shields@kestrel.local" } },
-  "permissions": ["webRequest", "webRequestBlocking", "nativeMessaging", "geckoViewAddons", "http://*/*", "https://*/*", "ws://*/*", "wss://*/*"],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "shields@kestrel.local"
+    }
+  },
+  "permissions": [
+    "webRequest",
+    "webRequestBlocking",
+    "nativeMessaging",
+    "geckoViewAddons",
+    "http://*/*",
+    "https://*/*",
+    "ws://*/*",
+    "wss://*/*"
+  ],
   "content_security_policy": "script-src 'self'; object-src 'none'",
-  "background": { "scripts": ["engine.js", "redirects.js", "background.js"] },
-  "web_accessible_resources": ["embed.html", "embed.js"],
+  "background": {
+    "scripts": [
+      "engine.js",
+      "redirects.js",
+      "background.js"
+    ]
+  },
+  "web_accessible_resources": [
+    "embed.html",
+    "embed.js"
+  ],
   "content_scripts": [
-    { "matches": ["http://*/*", "https://*/*"], "js": ["content.js"], "run_at": "document_start", "all_frames": true, "match_about_blank": false },
-    { "matches": ["http://*/*", "https://*/*"], "js": ["guard-main.js"], "run_at": "document_start", "all_frames": true, "match_about_blank": true, "match_origin_as_fallback": true, "world": "MAIN" },
-    { "matches": ["http://*/*", "https://*/*"], "js": ["scriptlets-main.js"], "run_at": "document_start", "all_frames": true, "match_about_blank": true, "match_origin_as_fallback": true, "world": "MAIN" },
-    { "matches": ["*://*.youtube.com/*", "*://*.youtube-nocookie.com/*", "*://*.youtubekids.com/*"], "js": ["youtube.js"], "run_at": "document_end", "all_frames": true },
-    { "matches": ["http://*/*", "https://*/*"], "exclude_matches": ["*://*.youtube.com/*", "*://*.youtube-nocookie.com/*", "*://*.youtubekids.com/*"], "js": ["players.js"], "run_at": "document_start", "all_frames": true, "match_about_blank": false },
-    { "matches": ["http://*/*", "https://*/*"], "js": ["seekbar.js"], "run_at": "document_start", "all_frames": true, "match_about_blank": false }
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "vfind.js",
+        "content.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": false
+    },
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "guard-main.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": true,
+      "match_origin_as_fallback": true,
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "scriptlets-main.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": true,
+      "match_origin_as_fallback": true,
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://*.youtube-nocookie.com/*",
+        "*://*.youtubekids.com/*"
+      ],
+      "js": [
+        "youtube.js"
+      ],
+      "run_at": "document_end",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "exclude_matches": [
+        "*://*.youtube.com/*",
+        "*://*.youtube-nocookie.com/*",
+        "*://*.youtubekids.com/*"
+      ],
+      "js": [
+        "players.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": false
+    },
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "seekbar.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": false
+    },
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "vfind.js",
+        "videobar.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true,
+      "match_about_blank": false
+    }
   ]
 }
