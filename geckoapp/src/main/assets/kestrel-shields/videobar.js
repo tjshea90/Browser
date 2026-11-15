@@ -116,29 +116,38 @@ window.KestrelVB = window.KestrelVB || (function () {
       var r = bar.wrap.getBoundingClientRect();
       return x >= r.left - 4 && x <= r.right + 4 && y >= r.top - 4 && y <= r.bottom + 4;
     }
-    function tapped(x, y) {
+    function tapped(x, y, d) {
       if (insideBar(x, y)) return;
       ask(function (c) {
         if (!c.on) return;
-        var v = VF.at(x, y);
-        if (v) { judgeSoon(v); return; }
+        var v = (d && d.v) || VF.at(x, y);
+        if (v) {
+          // a page whose controls were showing when the finger came down (a tap on the film hides them again, as on YouTube) has controls of its own: not a reason to draw ours as they fade
+          if (d && d.own && !c.always) { report('own'); return; }
+          judgeSoon(v);
+          return;
+        }
         if (!TOP) relay('tap');                                   // maybe this frame lies over a video of the page above it
       });
     }
-    var relayedAt = 0;
     function relay(kind) {
       var now = Date.now();
       if (now - relayedAt < 1500) return;                         // a banner frame that is tapped over and over must not make the page above it look for videos every time
       relayedAt = now;
       try { browser.runtime.sendMessage({ k: 'ft', t: kind, w: window.innerWidth, h: window.innerHeight }).catch(function () {}); } catch (e) { /* nobody listens */ }
     }
-    window.addEventListener('pointerdown', function (e) { down = e.isTrusted ? { x: e.clientX, y: e.clientY, t: Date.now(), id: e.pointerId } : null; }, { capture: true, passive: true });
+    window.addEventListener('pointerdown', function (e) {
+      down = e.isTrusted ? { x: e.clientX, y: e.clientY, t: Date.now(), id: e.pointerId, v: null, own: false } : null;
+      if (down && cfg && cfg.on && !cfg.always) {
+        try { var v = VF.at(down.x, down.y), r = v ? VF.rect(v) : null; if (v && r) { down.v = v; down.own = ownControls(v, r); } } catch (x) { /* never break the page */ }
+      }
+    }, { capture: true, passive: true });
     window.addEventListener('pointercancel', function () { down = null; }, { capture: true, passive: true });
     window.addEventListener('pointerup', function (e) {
       var d = down; down = null;
       if (!d || !e.isTrusted || e.pointerId !== d.id) return;
       if (Date.now() - d.t > T.tap || Math.abs(e.clientX - d.x) > 12 || Math.abs(e.clientY - d.y) > 12) return;
-      tapped(e.clientX, e.clientY);
+      tapped(e.clientX, e.clientY, d);
     }, { capture: true, passive: true });
 
     // the top frame answers what a frame above a video relayed (the background forwards it): a tap there, or a long press there
