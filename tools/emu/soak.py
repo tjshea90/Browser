@@ -1434,8 +1434,10 @@ class Soak:
             self.ph.tap(w // 2, 140); time.sleep(6); self.ph.dismiss_cling()
             entered = any(r.get("ev") == "fullscreenchange" and r.get("fs") == "1" for r in self.lab.since(rmark) if r.get("kind") == "fsb")
             turns = []
+            nhogs = 0
             if entered:
                 hogs = self.ph.start_hogs(3)
+                nhogs = len(hogs)
                 try:
                     time.sleep(2)
                     for label, accel in (("sideways", (9.81, 0, 0)), ("upright", (0, 9.81, 0)), ("sideways again", (9.81, 0, 0)), ("upright again", (0, 9.81, 0))):
@@ -1468,7 +1470,7 @@ class Soak:
                     self.ph.stop_hogs(hogs)
             self.ph.key("KEYCODE_BACK"); time.sleep(3)
             self.ph.physical(0, 9.81, 0); time.sleep(2)
-            results.append({"mode": mode, "entered": entered, "turns": turns})
+            results.append({"mode": mode, "entered": entered, "turns": turns, "hogs": nhogs})
         self.ph.debug("turnwait", "on")
         ok = True
         for r in results:
@@ -1854,6 +1856,8 @@ class Soak:
             L.append("## A turn under a slow engine (ROT2, owner message 48: the page keeps the layout of the old orientation for a few seconds)")
             L.append("")
             L.append("Busy loops slow the emulator's engine; the screen is read for 9 s after each turn: `right` = the red strip sits at the bottom of the page area, `cover` = the app's black cover, `stale` = anything else (a half-laid-out or stale page). `wait on` = the new rule (the cover and the pause stay until the page says it has the new size); `wait off` = the rule of alpha51 / alpha52 (the cover lifts when the app's own view is still).")
+            L.append("")
+            L.append("Busy loops started per mode: " + ", ".join("%s %d" % (r["mode"], r.get("hogs", 0)) for r in self.slow_results) + " (0 = the emulator was not slowed down and the table shows nothing).")
             L.append("")
             L.append("| mode | turn | screen reads (seconds after the turn: what the screen showed) | the turn | engine nudged | the page's report |")
             L.append("| :- | :- | :- | :- | -: | :- |")
