@@ -13,9 +13,9 @@ on:
   workflow_dispatch:
     inputs:
       suite:
-        description: 'smoke = one page + the Diagnostics text; fs = the full-screen turning checks; vc = the video controls and the long press on a video; snd = sound while the app is left; soak = the long run (pages, videos, downloads); all = everything'
+        description: 'smoke = one page + the Diagnostics text; fs = the full-screen turning checks; vc = the video controls and the long press on a video; snd = sound while the app is left; compat = every well-known site twice, Shields on then off, with speed, errors, scrolling and memory; soak = the long run (pages, videos, downloads); all = everything'
         type: choice
-        options: [smoke, fs, vc, snd, soak, all]
+        options: [smoke, fs, vc, snd, compat, soak, all]
         default: smoke
       minutes:
         description: 'How long the soak part runs, in minutes (60 = one hour)'
