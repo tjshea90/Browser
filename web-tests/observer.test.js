@@ -39,18 +39,16 @@ async function open(body, cfg) {
 const sent = async (page) => [].concat(...(await page.evaluate(() => window.__gen)));
 const add = (page, html) => page.evaluate((h) => { const d = document.createElement('div'); d.innerHTML = h; document.body.appendChild(d); }, html);
 
-test('the observer stops after its time budget; everything found before the stop was sent, what comes after is not', async () => {
-  const page = await open('<div class="first">a</div>', { budgetMs: 0.001 });   // any callback that does work uses it up
+test('the observer stops after its time budget; the names found before the stop were sent, what comes after is not', async () => {
+  const page = await open('<div class="first">a</div>', { budgetMs: 3 });
   await page.waitForTimeout(700);
-  let many = ''; for (let i = 0; i < 4000; i++) many += `<i class="burst${i}"></i>`;
-  await add(page, many);                                                         // one big callback: the budget is gone after it
-  await page.waitForTimeout(1500);
-  await add(page, '<p class="after-the-stop"></p>');
+  const burst = (k) => { let h = ''; for (let i = 0; i < 280; i++) h += `<i class="b${k}x${i}"></i>`; return h; };
+  for (let k = 0; k < 40; k++) { await add(page, burst(k)); await page.waitForTimeout(90); }     // forty callbacks of real work: the 3 ms are used up long before the end
   await page.waitForTimeout(1200);
   const names = await sent(page);
   assert.ok(names.includes('.first'));
-  assert.ok(names.includes('.burst0'), 'the burst itself was handled (the budget is checked before a callback, not in the middle of one)');
-  assert.ok(!names.includes('.after-the-stop'), 'the observer was disconnected');
+  assert.ok(names.includes('.b0x0'), 'the first burst was handled');
+  assert.ok(!names.includes('.b39x279'), 'the last burst came after the observer was disconnected');
   await page.context().close();
 });
 
