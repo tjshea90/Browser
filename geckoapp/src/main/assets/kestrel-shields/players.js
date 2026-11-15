@@ -22,7 +22,7 @@
     if (/(^|\.)(youtube\.com|youtube-nocookie\.com|youtubekids\.com)$/i.test(String(location.hostname))) return;
     window.__kstPL = 1;
     var T = (window.__kstPLcfg && typeof window.__kstPLcfg === 'object') ? window.__kstPLcfg : {}; // the tests shorten the clocks; in the real extension a page's globals are not visible here
-    var LOOP = T.loopMs || 250, MAXMS = T.maxMs || 15000, GIVEUP = T.fails || 5, FLUSH = T.flushMs || 3000, LEVELS = 8, MAXVIDEOS = 12;
+    var LOOP = T.loopMs || 250, MAXMS = T.maxMs || 15000, GIVEUP = T.fails || 5, FLUSH = T.flushMs || 3000, HOLD = T.holdMs || 1000, LEVELS = 8, MAXVIDEOS = 12;
     var STATE = ['jw-flag-ads', 'vjs-ad-playing'];       // on an ancestor while an ad plays
     var HOST = ['ima-ad-container', 'plyr__ads'];        // a video inside one of these is the ad itself
     var SKIP = ['.jw-skip.jw-skippable'];                // JW Player: the skip button element gets jw-skippable when skipping is allowed
@@ -128,7 +128,7 @@
     }
     function begin(t) {
       mark('a');
-      t.active = { t0: Date.now(), saved: null, timer: 0, jumped: false, clicked: [], acted: false };
+      t.active = { t0: Date.now(), saved: null, timer: 0, jumped: false, clicked: [], acted: false, lockDur: 0, lockSrc: '', holdUntil: 0 };
       tick(t);
     }
     function restore(t, a) { // put back what was ours; what somebody else changed in the meantime stays
@@ -149,13 +149,20 @@
         if (!adNow(t)) { finish(t, true); return; }
         if (Date.now() - a.t0 > MAXMS) { finish(t, false); return; }
         var v = t.v;
+        // The stream this ad session began on is remembered. When the element's stream CHANGES while the ad class is still there, it is either the next ad of a pod or the film coming back while the class lingers a
+        // moment: what was done to the old stream is undone at once, nothing is done for a second, and only if the class is still there then is the new stream treated as another ad (a film must never be sped up or moved).
+        var dNow = v.duration, srcNow = v.currentSrc || v.src || '';
+        if (a.lockDur > 0 && isFinite(dNow) && dNow > 0 && (Math.abs(dNow - a.lockDur) > 0.5 || srcNow !== a.lockSrc)) {
+          restore(t, a); a.jumped = false; a.lockDur = dNow; a.lockSrc = srcNow; a.holdUntil = Date.now() + HOLD;
+        } else if (!(a.lockDur > 0) && isFinite(dNow) && dNow > 0) { a.lockDur = dNow; a.lockSrc = srcNow; }
+        if (Date.now() < a.holdUntil) { if (t.active === a) a.timer = setTimeout(function () { tick(t); }, LOOP); return; }
         if (!v.paused && !v.ended && notFilm(t)) {
           if (!a.saved) a.saved = { muted: v.muted, rate: v.playbackRate };
           a.acted = true;
           if (!v.muted) v.muted = true;
           if (v.playbackRate !== 16) { try { v.playbackRate = 16; } catch (e) { pend.r = 'speed refused'; } }
           var d = v.duration;
-          if (!a.jumped && Date.now() - a.t0 >= 300 && isFinite(d) && d > 0 && d < 180 && v.currentTime < d - 0.2 && (t.mainDur > 0 || look(v).host)) {   // moved to its end only when the film's length is known (so this is not it) or the video sits in an ad's own container
+          if (!a.jumped && Date.now() - a.t0 >= 300 && isFinite(d) && d > 0 && d < 180 && v.currentTime < d - 0.2) {
             try { v.currentTime = d - 0.1; a.jumped = true; mark('f'); } catch (e) { pend.r = 'seek refused'; }
           }
           clickSkip(t, a);
