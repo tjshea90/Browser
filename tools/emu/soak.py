@@ -426,6 +426,39 @@ PUBLIC_PAGES = [
     ("lite-youtube", "https://m.youtube.com/results?search_query=android+16", 2, 3),
 ]
 
+# LAB2 (owner message 45): "web page compatibility for all sites and good speed". About a hundred well-known sites in the order that matters (the first ones are the ones a daily browser must get right),
+# each loaded twice by the compat suite: Shields ON (the default) and Shields OFF for that site. A site that is worse with Shields on is a false positive of ours. (name, url, screens to scroll, seconds to stay)
+COMPAT_SITES = [
+    ("wikipedia-article", "https://en.wikipedia.org/wiki/Android_(operating_system)", 5, 2), ("google-search", "https://www.google.com/search?q=android+16+release+date", 2, 2),
+    ("bing-search", "https://www.bing.com/search?q=android+16+release+date", 2, 2), ("duckduckgo", "https://duckduckgo.com/?q=kestrel+browser+android", 2, 2),
+    ("yahoo-finance-ttwo", "https://finance.yahoo.com/quote/TTWO/", 6, 4), ("yahoo-finance-videos", "https://finance.yahoo.com/videos/", 3, 5), ("yahoo-home", "https://www.yahoo.com/", 4, 3),
+    ("bbc-news", "https://www.bbc.com/news", 5, 3), ("guardian", "https://www.theguardian.com/international", 5, 3), ("npr", "https://www.npr.org/", 4, 3), ("cnn-lite", "https://lite.cnn.com/", 3, 1),
+    ("apnews", "https://apnews.com/", 4, 3), ("aljazeera", "https://www.aljazeera.com/", 4, 3), ("cbsnews", "https://www.cbsnews.com/", 4, 3), ("nbcnews", "https://www.nbcnews.com/", 4, 3),
+    ("abcnews", "https://abcnews.go.com/", 4, 3), ("usatoday", "https://www.usatoday.com/", 4, 3), ("foxnews", "https://www.foxnews.com/", 4, 3), ("latimes", "https://www.latimes.com/", 4, 3),
+    ("huffpost", "https://www.huffpost.com/", 4, 3), ("politico", "https://www.politico.com/", 4, 3), ("axios", "https://www.axios.com/", 4, 3), ("dw", "https://www.dw.com/en/top-stories/s-9097", 3, 3),
+    ("dailymail", "https://www.dailymail.co.uk/home/index.html", 4, 3), ("nypost", "https://nypost.com/", 4, 3), ("independent", "https://www.independent.co.uk/", 4, 3), ("mirror", "https://www.mirror.co.uk/", 4, 3),
+    ("theverge", "https://www.theverge.com/", 4, 3), ("arstechnica", "https://arstechnica.com/", 4, 3), ("wired", "https://www.wired.com/", 4, 3), ("techcrunch", "https://techcrunch.com/", 4, 3),
+    ("engadget", "https://www.engadget.com/", 4, 3), ("cnet", "https://www.cnet.com/", 4, 3), ("hacker-news", "https://news.ycombinator.com/", 3, 1), ("lobsters", "https://lobste.rs/", 3, 1),
+    ("slashdot", "https://slashdot.org/", 3, 2), ("npr-text", "https://text.npr.org/", 3, 1), ("marketwatch", "https://www.marketwatch.com/", 4, 3), ("investopedia", "https://www.investopedia.com/", 4, 3),
+    ("cnbc", "https://www.cnbc.com/", 4, 3), ("cbssports", "https://www.cbssports.com/", 4, 3), ("yahoo-sports", "https://sports.yahoo.com/", 4, 3), ("espn", "https://www.espn.com/", 4, 4),
+    ("amazon", "https://www.amazon.com/", 4, 3), ("ebay", "https://www.ebay.com/", 4, 3), ("walmart", "https://www.walmart.com/", 4, 3), ("target", "https://www.target.com/", 4, 3),
+    ("bestbuy", "https://www.bestbuy.com/", 4, 3), ("etsy", "https://www.etsy.com/", 4, 3), ("homedepot", "https://www.homedepot.com/", 4, 3), ("ikea", "https://www.ikea.com/us/en/", 4, 3),
+    ("apple", "https://www.apple.com/", 4, 3), ("microsoft", "https://www.microsoft.com/en-us/", 3, 3), ("github-repo", "https://github.com/mozilla/gecko-dev", 4, 3),
+    ("stackoverflow", "https://stackoverflow.com/questions/tagged/android", 4, 3), ("mdn", "https://developer.mozilla.org/en-US/docs/Web/API/Screen/orientation", 4, 3),
+    ("w3schools", "https://www.w3schools.com/html/html_intro.asp", 3, 3), ("npmjs", "https://www.npmjs.com/package/react", 3, 3), ("pypi", "https://pypi.org/project/requests/", 3, 2),
+    ("python-docs", "https://docs.python.org/3/tutorial/index.html", 3, 2), ("android-dev", "https://developer.android.com/guide", 3, 3), ("kotlinlang", "https://kotlinlang.org/docs/home.html", 3, 3),
+    ("archive-org", "https://archive.org/", 3, 3), ("gutenberg", "https://www.gutenberg.org/", 3, 2), ("openstreetmap", "https://www.openstreetmap.org/#map=12/37.77/-122.42", 1, 6),
+    ("weather-gov", "https://forecast.weather.gov/MapClick.php?lat=40.71&lon=-74.01", 3, 2), ("weather-com", "https://weather.com/", 3, 3), ("accuweather", "https://www.accuweather.com/", 3, 3),
+    ("timeanddate", "https://www.timeanddate.com/", 3, 2), ("nasa", "https://www.nasa.gov/", 4, 3), ("imdb", "https://www.imdb.com/chart/top/", 4, 3), ("rottentomatoes", "https://www.rottentomatoes.com/", 4, 3),
+    ("goodreads", "https://www.goodreads.com/", 3, 3), ("quora", "https://www.quora.com/", 3, 3), ("medium", "https://medium.com/", 3, 3), ("substack", "https://substack.com/", 3, 3),
+    ("wordpress", "https://wordpress.com/", 3, 3), ("imgur", "https://imgur.com/", 3, 4), ("flickr", "https://www.flickr.com/explore", 3, 4), ("unsplash", "https://unsplash.com/", 3, 4),
+    ("pexels", "https://www.pexels.com/", 3, 4), ("pinterest", "https://www.pinterest.com/", 3, 3), ("tumblr", "https://www.tumblr.com/explore/trending", 3, 3), ("x-twitter", "https://x.com/", 2, 3),
+    ("facebook", "https://www.facebook.com/", 2, 3), ("vimeo", "https://vimeo.com/", 3, 4), ("dailymotion", "https://www.dailymotion.com/", 3, 4), ("soundcloud", "https://soundcloud.com/", 3, 4),
+    ("bandcamp", "https://bandcamp.com/", 3, 3), ("youtube-results", "https://m.youtube.com/results?search_query=android+16", 2, 4), ("craigslist", "https://sfbay.craigslist.org/", 3, 2),
+    ("indeed", "https://www.indeed.com/", 3, 3), ("zillow", "https://www.zillow.com/", 3, 3), ("tripadvisor", "https://www.tripadvisor.com/", 3, 3), ("booking", "https://www.booking.com/", 3, 4),
+    ("expedia", "https://www.expedia.com/", 3, 3), ("airbnb", "https://www.airbnb.com/", 3, 4), ("yelp", "https://www.yelp.com/", 3, 3), ("msn", "https://www.msn.com/", 4, 4),
+]
+
 # videos: lab clips (served by soaklab) and public files, all through the lab's player page so the same events are reported. (name, src, seconds to watch)
 VIDEOS = [
     ("lab-landscape", "lab:/clip/landscape.mp4", 25),
@@ -508,12 +541,16 @@ class Soak:
         self.hard_restarts = 0
         self.emu_proc = None
         self.vbar_rows = []
+        self.compat_sites_done = []
         self.snd_rows = []
         self.shields_mode = "on"
+        self.quiet_issues = False
         self.last_diag = ""
 
     # ---- bookkeeping
     def issue(self, sev, area, text, shot=False):
+        if self.quiet_issues and sev != "high":
+            return                                       # the Shields-off pass of the compat suite: only the comparison matters, not a second list of the same slow sites
         self.issues.append((sev, area, text))
         say("ISSUE [%s] %s: %s" % (sev, area, text))
         if shot:
@@ -1265,6 +1302,46 @@ class Soak:
         self.record({"kind": "snd", "name": "sound-when-left", "status": "ok" if all(r[3] == 0 for r in rows if r[2] >= 1) else "failed", "results": [{"clip": r[0], "left_by": r[1], "playing": r[2], "away": r[3], "back": r[4]} for r in rows]})
         self.check_alive("sound-when-left")
 
+    # ---- LAB2 (owner message 45): every site twice, Shields ON then Shields OFF for that site, from a cold cache each time; the report puts the two side by side
+    def compat_round(self, minutes):
+        budget = minutes * 60 * 0.46
+        self.ph.measure_on(); time.sleep(2)
+        done = []
+        t_start = time.time()
+        self.shields_mode = "on"
+        for i, (name, url, scrolls, dwell) in enumerate(COMPAT_SITES):
+            if time.time() - t_start > budget:
+                break
+            try:
+                ev = self.load_page(name, url, scrolls, dwell, timeout=50, kind="page")
+                if ev is not None:
+                    done.append((name, url, scrolls, dwell))
+            except Exception as e:
+                self.issue("low", "tooling", "compat scene %s raised %r" % (name, e))
+            if (i + 1) % 8 == 0:
+                self.ph.debug("closetabs"); time.sleep(3)
+            if i % 12 == 11:
+                self.dump_diag("compat%d" % (i + 1))
+        hosts = []
+        for _n, url, _s, _d in done:
+            h = host_of(self.url(url))
+            for v in (h, "www." + h if not h.startswith("www.") else h[4:], "m." + h if not h.startswith("m.") else h[2:]):
+                if v and v not in hosts:
+                    hosts.append(v)
+        self.compat_sites_done = [d[0] for d in done]
+        self.ph.shields("off", hosts); time.sleep(3)
+        self.ph.clear_cache(); self.ph.debug("closetabs"); time.sleep(6)
+        self.shields_mode = "off"; self.quiet_issues = True
+        for i, (name, url, scrolls, dwell) in enumerate(done):
+            try:
+                self.load_page(name, url, scrolls, dwell, timeout=50, kind="page")
+            except Exception as e:
+                self.issue("low", "tooling", "compat scene (shields off) %s raised %r" % (name, e))
+            if (i + 1) % 8 == 0:
+                self.ph.debug("closetabs"); time.sleep(3)
+        self.quiet_issues = False; self.shields_mode = "on"
+        self.ph.shields("on", hosts); time.sleep(2)
+
     def setup_device(self):
         for k in ("window_animation_scale", "transition_animation_scale", "animator_duration_scale"):
             self.ph.setting("global", k, 0)
@@ -1651,7 +1728,7 @@ class FakeAdb:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -1663,7 +1740,7 @@ def main():
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
-        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd") else "all")
+        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat") else "all")
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
@@ -1683,6 +1760,8 @@ def main():
             s.yahoo_scan()
         if a.suite in ("snd", "all"):
             s.audio_round()
+        if a.suite == "compat":
+            s.compat_round(a.minutes)
         if a.suite in ("soak", "all"):
             s.soak(a.minutes)
         s.dump_diag("end")
