@@ -2,7 +2,7 @@
 // video players." The page side of Kestrel's OWN full-screen video controls. The controls themselves are drawn by the app (Android views over the engine: never under a system bar, never laid out late by the
 // engine, nothing of them in the page), this script is the part that has to live in the page:
 //  - it finds the film that is full screen (also inside a web component's shadow tree: KestrelVF) and tells the app its state (`vst`: position, length as the page reports it, what is buffered, paused,
-//    muted, volume, speed, ready state, whether the stream is a Media Source one) a few times a second while the controls are up and twice a second otherwise; the app answers with what the controls want done
+//    muted, volume, speed, ready state, whether the stream is a Media Source one) four times a second while the controls are up and once a second otherwise (a film event brings the state at once); the app answers with what the controls want done
 //    (play, pause, seek, skip, mute, speed) and whether they are shown: so there is no second channel into the page;
 //  - it takes the taps on the picture: a tap on the film, or on the page's own player controls that Kestrel's replace (play, pause, mute, volume, seek, progress, full screen), is NOT passed on to the page
 //    (the page's player would toggle ITS controls, or not: Shaka's default is that a tap does not hide them) but told to the app (`vtap`, the place across the picture): one tap toggles the controls,
