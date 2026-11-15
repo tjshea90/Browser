@@ -1278,3 +1278,9 @@ For video playback:
 2) when I rotate the tablet from portrait to landscape and back, it is laggy and glitchy. It may benefit from pausing the video shortly until the orientation is set
 3) I don't see any video player controls in full screen landscape mode. They either don't exist or they are covered by the Android navigation bar.
 ```
+
+## 2026-11-15T20:44:05Z
+```
+I haven't noticed any change with the new version. The controls are still under Android navigation bar. There are no controls in full screen. The video didn't pause when switching orientation. It looks like nothing changed
+When switching orientation, it is laggy and for a few seconds the video is the wrong size in either mode. Make it pause the video and properly set up the size and orientation smoothly then resume. Make the controls available for both orientations and never underneath the Android navigation bar
+```
