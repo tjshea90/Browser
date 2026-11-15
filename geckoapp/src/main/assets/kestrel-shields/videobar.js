@@ -142,9 +142,11 @@ window.KestrelVB = window.KestrelVB || (function () {
     }
 
     // ------------------------------------------------------------------------------------------ taps
+    function kpOwns() { try { return !!(window.KestrelVP && window.KestrelVP.active && window.KestrelVP.active()); } catch (e) { return false; } }   // VP1: Kestrel's full-screen controls (player.js) own the film: this bar draws nothing then
     function judge(v, late) {
       try {
         if (!v.isConnected) return;
+        if (kpOwns()) { if (bar) hide(); return; }
         if (bar) {
           if (bar.v === v) { if (!late) keep(); return; }
           hide();                                                  // RW9: a tap on another film while the first one's bar is up: that bar goes, the new film is judged
@@ -185,6 +187,7 @@ window.KestrelVB = window.KestrelVB || (function () {
       return false;
     }
     function tapped(x, y, d) {
+      if (kpOwns()) return;
       if (insideBar(x, y)) return;
       if (Date.now() - (VF.pressedAt || 0) < 1000) return;         // RW5: this release ends a long press that already opened the video menu (or the panel)
       ask(function (c) {

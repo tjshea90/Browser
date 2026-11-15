@@ -11,7 +11,7 @@ try { ({ chromium } = require('playwright')); } catch (e) { ({ chromium } = requ
 
 const DIR = path.join(__dirname, '..', 'geckoapp', 'src', 'main', 'assets', 'kestrel-shields');
 const read = (f) => fs.readFileSync(path.join(DIR, f), 'utf8');
-const VFIND = read('vfind.js'), VBAR = read('videobar.js'), CONTENT = read('content.js'), TURN = read('turn.js');
+const VFIND = read('vfind.js'), VBAR = read('videobar.js'), CONTENT = read('content.js'), TURN = read('turn.js'), PLAYER = read('player.js');
 
 let browser;
 async function launch() { browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required', '--mute-audio'] }); }
@@ -56,7 +56,7 @@ async function open(body, o) {
           try { window.top.__all.push(m); } catch (e) { /* another origin */ }
           if (m && m.k === 'guard') {
             if ((window.top.__guardFails || 0) > 0) { window.top.__guardFails--; return Promise.reject(new Error('no answer')); }
-            return Promise.resolve({ on: true, top: location.hostname, skip: false, seek: true, vb: cfg.vb !== false, vba: !!cfg.vba });
+            return Promise.resolve({ on: true, top: location.hostname, skip: false, seek: true, vb: cfg.vb !== false, vba: !!cfg.vba, kp: cfg.kp === true });
           }
           if (m && m.k === 'ft') {                      // the background page: ask the top frame, answer {video, src} (http addresses only, like background.js)
             try {
@@ -64,6 +64,10 @@ async function open(body, o) {
               const d = window.top.__ftDelay || 0;
               return d ? new Promise((res) => setTimeout(res, d)).then(() => p) : p;
             } catch (e) { return Promise.resolve({ video: false, src: '' }); }
+          }
+          if (m && (m.k === 'vst' || m.k === 'vtap')) {                // VP1: the app's answer to the film's state / a tap (the test sets window.top.__vpReply)
+            const r = window.top.__vpReply;
+            return Promise.resolve(r ? JSON.parse(JSON.stringify(r)) : undefined);
           }
           return Promise.resolve(undefined);
         },
@@ -75,6 +79,7 @@ async function open(body, o) {
   if (o.content) await page.addInitScript({ content: CONTENT });
   await page.addInitScript({ content: VBAR });
   if (o.turn) await page.addInitScript({ content: TURN });
+  if (o.player) await page.addInitScript({ content: PLAYER });
   await page.goto('https://movie.example/');
   if (o.wait !== false) await page.waitForFunction(() => { const v = document.getElementById('v') || (window.__deepV && window.__deepV()); return v && v.readyState >= 3 && v.duration > 50; }, null, { timeout: 15000 });
   return page;

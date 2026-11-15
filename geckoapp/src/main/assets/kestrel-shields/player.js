@@ -142,6 +142,7 @@ window.KestrelVP = window.KestrelVP || (function () {
       if (!s) return;
       if (!s.v.isConnected) { stop(); return; }
       s.reports++;
+      if (!s.fit && s.reports < 8) fit(s.v);                                  // (the picture's size may be known only after the first reports)
       send(sample(s.v));
     }
     // the app's answer: { c: [commands], s: shown 1 | 0, on: 0 = the controls are not Kestrel's here }

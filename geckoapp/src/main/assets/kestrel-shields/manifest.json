@@ -121,7 +121,8 @@
       "js": [
         "vfind.js",
         "videobar.js",
-        "turn.js"
+        "turn.js",
+        "player.js"
       ],
       "run_at": "document_idle",
       "all_frames": true,

@@ -289,7 +289,7 @@ function skipText() { return (skipAsked || skipReports) ? ' | ad skippers: asked
 var guardBlocked = 0;
 function trimMap(m, max) { while (m.size > max) m.delete(m.keys().next().value); }
 function guardAnswer(host, topHost) { // on: the pop-up guard applies; skip (RX3-Y2): the ad skipper may run (flag 8: the Settings row and the site's Shields switch); seek (YS1): a tap on a player's bar may move the video (flag 16: the Settings row "Tap the video bar to jump" only)
-  function answer(f) { return { on: (f & 1) !== 0, top: topHost || host, skip: (f & 8) !== 0, seek: (f & 16) !== 0, sg: (f & 32) !== 0, vb: (f & 64) !== 0, vba: (f & 128) !== 0, lab: (f & 256) !== 0 }; } // vb / vba (VC1): Kestrel's own video bar (Automatic or Always / Always only; the Settings row, not a Shields feature)
+  function answer(f) { return { on: (f & 1) !== 0, top: topHost || host, skip: (f & 8) !== 0, seek: (f & 16) !== 0, sg: (f & 32) !== 0, vb: (f & 64) !== 0, vba: (f & 128) !== 0, lab: (f & 256) !== 0, kp: (f & 512) !== 0 }; } // vb / vba (VC1): Kestrel's own video bar (Automatic or Always / Always only; the Settings row, not a Shields feature)
   var f = cfgFlags.get(host);
   if (f !== undefined) return Promise.resolve(answer(f));
   return askCfg(host).then(function () { return answer(cfgFlags.get(host) || 0); });
@@ -916,6 +916,19 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || docOf(sender.url);
   send({ k: 'probe', h: String(m.h || '').replace(/[^A-Za-z0-9.-]/g, '').slice(0, 60), t: n(m.t), im: n(m.im), ib: n(m.ib), iv: n(m.iv), fr: n(m.fr), vd: n(m.vd), vp: n(m.vp), hh: n(m.hh), ww: n(m.ww), iw: n(m.iw), sc: n(m.sc), nd: n(m.nd), rs: n(m.rs), rd: String(m.rd || '').replace(/[^a-z]/g, '').slice(0, 12), p: String(page).slice(0, 300) }).catch(function () {});
   return undefined;
+});
+
+// VP1 (owner message 49): player.js (the frame that has a full-screen film under Kestrel's own controls) tells the film's state (`vst`) and the taps on the picture (`vtap`): numbers only, clamped. The app
+// answers with JSON: what the controls want done (c), whether they are shown (s), on = 0 when the controls are not Kestrel's here; the answer goes back to the frame that asked, so there is no second channel.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || (m.k !== 'vst' && m.k !== 'vtap') || !sender || !sender.tab) return undefined;
+  function n(v, lo, hi) { v = +v; return (v >= lo && v <= hi) ? v : lo; }
+  var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || docOf(sender.url);
+  var o = m.k === 'vtap' ? { k: 'vtap', x: n(m.x, 0, 1000) } : {
+    k: 'vst', t: n(m.t, 0, 1e7), d: (m.d === -1 || m.d === -2) ? m.d : n(m.d, 0, 1e7), b: n(m.b, 0, 1e7), p: m.p === 1 ? 1 : 0, e: m.e === 1 ? 1 : 0, m: m.m === 1 ? 1 : 0, v: n(m.v, 0, 100),
+    r: n(m.r, 0.1, 16), rs: n(m.rs, 0, 4), ms: m.ms === 1 ? 1 : 0, l: m.l === 1 ? 1 : 0, w: n(m.w, 0, 20000), h: n(m.h, 0, 20000) };
+  o.p = String(page).slice(0, 300);
+  return send(o).then(function (r) { try { return r ? JSON.parse(r) : undefined; } catch (e) { return undefined; } }, function () { return undefined; });
 });
 
 // FB4: turn.js (top frame only) tells the viewport the engine gave a full-screen page, in device pixels: numbers only, clamped; the app compares it with its view and gives the engine a real size change when they differ.
