@@ -15,7 +15,7 @@ dumpsys and the files in /sdcard/Download. The report is OUT/report.md (also pri
 Honest limits (also written into the report): x86_64 + software GL is not the tablet's Mali GPU; the JIT is faster; absolute times mean nothing, only "did it load / play / finish /
 crash" and comparisons inside one run do. A site that is down or blocks this runner is reported as UPSTREAM, not as an app fault.
 """
-import argparse, collections, json, os, random, re, shlex, shutil, statistics, subprocess, sys, threading, time, urllib.error, urllib.request
+import argparse, collections, json, os, random, re, shlex, shutil, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 
 T0 = time.time()
@@ -97,13 +97,9 @@ class Phone:
     def meminfo(self):
         """(app PSS in MB summed over its processes, MemAvailable in MB)."""
         out = self.a.sh("dumpsys meminfo %s" % self.pkg, timeout=45)
-        pss = 0
-        for m in re.finditer(r"^\s*TOTAL(?: PSS:)?\s+(\d+)", out, re.M):
-            pss += int(m.group(1))
-        # "Total PSS by process" also lists every process once: prefer the block totals above, fall back to that table
-        if pss == 0:
-            for m in re.finditer(r"^\s*([\d,]+)K: %s" % re.escape(self.pkg), out, re.M):
-                pss += int(m.group(1).replace(",", ""))
+        # Android 10 prints "TOTAL PSS: n" once per process; older tables print "TOTAL n": count one of the two forms, never both
+        nums = re.findall(r"TOTAL PSS:\s+(\d+)", out) or re.findall(r"^\s*TOTAL\s+(\d+)", out, re.M)
+        pss = sum(int(n) for n in nums)
         avail = 0
         mi = self.a.sh("cat /proc/meminfo", timeout=15)
         m = re.search(r"MemAvailable:\s+(\d+) kB", mi)
@@ -255,6 +251,12 @@ def crash_lines(lines):
     return found
 
 
+def ms_of(v):
+    """"1234ms" -> 1234, anything else -> -1."""
+    v = v[:-2] if v.endswith("ms") else v
+    return int(v) if v.lstrip("-").isdigit() else -1
+
+
 def host_of(url):
     m = re.match(r"^[a-z]+://([^/:?#]+)", url, re.I)
     return (m.group(1).lower() if m else "")
@@ -355,7 +357,7 @@ DOWNLOADS = [
     ("lab-20mb", "lab:/dl/20mb.bin", 20 * 1048576, 240),
     ("lab-slow-5mb", "lab:/dl/slow.bin", 5 * 1048576, 150),
     ("cloudflare-10mb", "https://speed.cloudflare.com/__down?bytes=10000000", 10000000, 180),
-    ("ovh-10mb", "https://proof.ovh.net/files/10Mb.dat", 10 * 1024 * 1024 // 8 * 8 if False else 0, 180),
+    ("ovh-10mb", "https://proof.ovh.net/files/10Mb.dat", 0, 180),   # size not asserted: any file that arrives
 ]
 
 
@@ -407,17 +409,18 @@ class Soak:
         return self.lab_base + u[4:] if u.startswith("lab:") else u
 
     def upstream(self, url):
-        """Does the runner itself get an answer from this address? (a site that is down or blocks datacenters is not an app fault) -> (ok, note)"""
+        """Does the runner itself get an answer from this address? -> (state, note): "ok", "http-error" (the probe got a 4xx / 5xx: the site may only be blocking this probe, the app
+        still tries) or "unreachable" (no answer at all: the scene is skipped, it is not an app fault)."""
         if url.startswith("lab:") or self.a.selftest:
-            return True, ""
+            return "ok", ""
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Linux; Android 10) Kestrel-soak-probe", "Range": "bytes=0-1023"})
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Linux; Android 10; Mobile) Gecko/160.0 Firefox/160.0", "Range": "bytes=0-1023"})
             with urllib.request.urlopen(req, timeout=15) as r:
-                return True, "http %d" % r.status
+                return "ok", "http %d" % r.status
         except urllib.error.HTTPError as e:
-            return (e.code < 400 or e.code in (403, 429) and False), "http %d" % e.code
+            return ("ok", "http %d" % e.code) if e.code in (206, 416) else ("http-error", "http %d" % e.code)
         except Exception as e:
-            return False, str(e)[:60]
+            return "unreachable", str(e)[:70]
 
     # ---- the app
     def check_alive(self, where):
@@ -439,16 +442,6 @@ class Soak:
             return False
         return True
 
-    def wait_engine(self, timeout=240):
-        mark = self.log.size() if False else 0
-        t0 = time.time()
-        while time.time() - t0 < timeout:
-            ev = health_events(self.log.since(mark), "engine", "runtime-ready")
-            if ev:
-                return time.time() - t0
-            time.sleep(3)
-        return None
-
     def sample(self):
         pss, avail = self.ph.meminfo()
         procs = self.ph.procs()
@@ -464,10 +457,11 @@ class Soak:
 
     # ---- one page
     def load_page(self, name, url, scrolls, dwell, timeout=75, kind="page"):
-        up_ok, up_note = self.upstream(url)
-        if not up_ok:
+        up_state, up_note = self.upstream(url)
+        if up_state == "unreachable":
             self.record({"kind": kind, "name": name, "status": "upstream", "note": "the site does not answer from the runner (%s): not an app fault" % up_note})
             return None
+        sev = "medium" if up_state == "ok" else "low"
         mark = self.log.size()
         t0 = time.time()
         self.ph.open_url(self.url(url))
@@ -478,7 +472,7 @@ class Soak:
         while time.time() < end:
             lines = self.log.since(mark)
             for e in health_events(lines, "page"):
-                if e["ev"] == "loaded" and tail(e["kv"].get("host", "")) == want or e["ev"] == "loaded" and "localhost" in e["kv"].get("host", "") and "localhost" in want:
+                if e["ev"] == "loaded" and tail(e["kv"].get("host", "")) == want:
                     loaded = e
                 if e["ev"] == "error" and tail(e["kv"].get("host", "")) == want:
                     errored = e
@@ -494,14 +488,13 @@ class Soak:
         ev = {"kind": kind, "name": name, "url_host": host_of(self.url(url)), "wall_s": round(wall, 1)}
         if errored:
             ev.update(status="error-page", note="the app showed an error page (%s)" % errored["rest"])
-            self.issue("medium", "load", "%s: %s" % (name, ev["note"]), shot=True)
+            self.issue(sev, "load", "%s: %s%s" % (name, ev["note"], "" if up_state == "ok" else " (the runner's own probe got %s: the site may be blocking data-centre addresses)" % up_note), shot=True)
         elif not loaded:
             ev.update(status="timeout", note="no 'page loaded' line within %d s" % timeout)
-            self.issue("medium", "load", "%s did not finish loading within %d s" % (name, timeout), shot=True)
+            self.issue(sev, "load", "%s did not finish loading within %d s%s" % (name, timeout, "" if up_state == "ok" else " (the runner's own probe got %s)" % up_note), shot=True)
         else:
             kv = loaded["kv"]
-            paint = int(kv.get("paint", "-1").rstrip("ms") or -1) if kv.get("paint", "").rstrip("ms").lstrip("-").isdigit() else -1
-            done = int(kv.get("done", "-1").rstrip("ms")) if kv.get("done", "").rstrip("ms").lstrip("-").isdigit() else -1
+            paint, done = ms_of(kv.get("paint", "")), ms_of(kv.get("done", ""))
             ev.update(status="ok", paint_ms=paint, done_ms=done, blocked=int(kv.get("blocked", "0") or 0), visit=int(kv.get("visit", "1") or 1), ok=kv.get("ok"))
             if done > 25000:
                 ev["status"] = "slow"
@@ -538,13 +531,13 @@ class Soak:
 
     # ---- one video
     def play_video(self, name, src, watch, via_lab=True):
-        up_ok, up_note = self.upstream(src)
-        if not up_ok:
+        up_state, up_note = self.upstream(src)
+        if up_state == "unreachable":
             self.record({"kind": "video", "name": name, "status": "upstream", "note": "the file does not answer from the runner (%s): not an app fault" % up_note})
             return None
         self.seq += 1
         vid = "%s-%d" % (name, self.seq)
-        url = "%s/video/%s?id=%d&src=%s" % (self.lab_base, name, self.seq, urllib.request.quote(self.url(src), safe="")) if not src.startswith("lab:") else \
+        url = "%s/video/%s?id=%d&src=%s" % (self.lab_base, name, self.seq, urllib.parse.quote(self.url(src), safe="")) if not src.startswith("lab:") else \
               "%s/video/%s?id=%d" % (self.lab_base, src.split("/")[-1].rsplit(".", 1)[0], self.seq)
         lmark, rmark = self.log.size(), self.lab.size()
         t0 = time.time()
@@ -628,8 +621,8 @@ class Soak:
 
     # ---- a download
     def download(self, name, src, size, wait):
-        up_ok, up_note = self.upstream(src)
-        if not up_ok:
+        up_state, up_note = self.upstream(src)
+        if up_state == "unreachable":
             self.record({"kind": "download", "name": name, "status": "upstream", "note": "the file does not answer from the runner (%s)" % up_note})
             return
         before = self.ph.downloads()
@@ -675,8 +668,11 @@ class Soak:
         self.record(ev)
 
     # ---- the full-screen turning (FS1)
+    # where the lab's /fs page puts its buttons, as a fraction of the page area's height (see soaklab.page_fs)
+    FS_GO, FS_LOCK, FS_UNLOCK, FS_EXIT = 0.255, 0.445, 0.635, 0.825
+
     def fullscreen_round(self, thorough=True):
-        """Tap 'Go full screen' on the lab page and watch what the app does with the screen. Returns the findings (also recorded)."""
+        """Tap 'Go full screen' on the lab page and watch what the app does with the screen (FS1). The result is a list of checks, also written into the report."""
         steps = []
         self.ph.setting("system", "accelerometer_rotation", 0)  # Android's own rotation lock ON, like the owner's tablet
         self.ph.setting("system", "user_rotation", 0)
@@ -687,11 +683,10 @@ class Soak:
         while time.time() - t0 < 40 and not [r for r in self.lab.since(rmark) if r.get("kind") == "fs" and r.get("ev") == "page"]:
             time.sleep(1.5)
         w, h = self.screen
-        top, bottom = 25, h - 51 - 60  # status bar, nav bar + the app's dock
-        page_h = bottom - top
+        top, bottom = 25, h - 51 - 60  # status bar; nav bar + the app's dock
 
         def y_of(frac):
-            return int(top + page_h * frac)
+            return int(top + (bottom - top) * frac)
 
         def turns():
             return health_events(self.log.since(lmark), "fullscreen", "turn")
@@ -699,72 +694,65 @@ class Soak:
         def configs():
             return [e["kv"].get("orientation") for e in health_events(self.log.since(lmark), "life", "config")]
 
-        # 1. full screen: the wide video on an upright screen must turn the screen sideways by itself
-        self.ph.tap(w // 2, y_of(0.28))
+        def fs_rows():
+            return [r for r in self.lab.since(rmark) if r.get("kind") == "fs"]
+
+        # 1. full screen on an upright screen with a wide video: the screen must turn sideways by itself
+        self.ph.tap(w // 2, y_of(self.FS_GO))
         time.sleep(4)
-        rows = [r for r in self.lab.since(rmark) if r.get("kind") == "fs"]
-        entered = any(r.get("ev") == "fullscreenchange" and r.get("fs") == "1" for r in rows)
-        steps.append(("page went full screen", entered))
-        t = turns()
-        steps.append(("the app asked Android to turn the screen on entering (a 'turn' line)", bool(t)))
-        sideways = "landscape" in configs()
-        steps.append(("the screen is landscape after entering (the wide video was turned sideways)", sideways))
-        page_o = next((r.get("ot") for r in reversed(rows) if r.get("ev") in ("resize", "orientationchange", "fullscreenchange")), None)
-        steps.append(("the page itself sees a landscape screen (screen.orientation / window size)", bool(page_o and "landscape" in page_o) or any(int(r.get("iw", 0) or 0) > int(r.get("ih", 0) or 0) for r in rows if r.get("ev") in ("resize", "fullscreenchange"))))
+        rows = fs_rows()
+        steps.append(("the page went full screen (the lab page saw fullscreenchange)", any(r.get("ev") == "fullscreenchange" and r.get("fs") == "1" for r in rows)))
+        steps.append(("the app asked Android to turn the screen when full screen began ('turn' line)", any("full screen starts" in e["rest"] for e in turns())))
+        steps.append(("the screen is landscape now (the wide video was turned sideways)", "landscape" in configs()))
+        steps.append(("the page itself sees a wider-than-tall window", any(int(r.get("iw", 0) or 0) > int(r.get("ih", 0) or 0) for r in rows if r.get("ev") in ("resize", "fullscreenchange", "orientationchange"))))
         self.shot("fs-entered")
         if thorough:
-            # 2. the tablet is turned: "held on its side", then "held upright" again, with the system rotation lock still ON
+            # 2. the tablet is turned physically (the emulator's virtual sensor) with Android's rotation lock still ON
+            self.ph.physical(9.81, 0, 0); time.sleep(3)      # held on its side: the one-time turn is let go
             n0 = len(configs())
-            self.ph.physical(9.81, 0, 0); time.sleep(3)
-            self.ph.physical(-9.81, 0, 0); time.sleep(3)
-            self.ph.physical(0, 9.81, 0); time.sleep(4)
-            c = configs()[n0:]
-            steps.append(("turning the tablet upright again turns the picture back (a portrait configuration after the sideways ones)", "portrait" in c))
+            self.ph.physical(0, 9.81, 0); time.sleep(4)      # held upright again: the picture must turn back
+            steps.append(("holding the tablet upright again turned the screen back to portrait", "portrait" in configs()[n0:]))
             self.shot("fs-upright")
             n1 = len(configs())
             self.ph.physical(9.81, 0, 0); time.sleep(4)
-            c = configs()[n1:]
-            steps.append(("turning the tablet on its side turns the picture sideways", "landscape" in c))
-            self.shot("fs-sideways")
-            # 3. the rotate button (shown for a moment after a touch, at the left edge, vertically centred)
+            steps.append(("holding the tablet on its side turned the screen sideways again", "landscape" in configs()[n1:]))
+            # 3. the rotate button: the tablet upright, the screen follows; tap shows the button, tap on the button turns the screen sideways
             self.ph.physical(0, 9.81, 0); time.sleep(4)
             n2 = len(configs())
-            self.ph.tap(w // 2, y_of(0.5)); time.sleep(0.6)
-            self.ph.tap(40, (top + bottom) // 2); time.sleep(3)
-            by_button = [e for e in turns() if "rotate button" in e["rest"]]
-            steps.append(("the rotate button asked for a turn", bool(by_button)))
-            steps.append(("and the screen really changed (a new configuration line)", len(configs()) > n2))
-            # 4. a page's own lock (screen.orientation.lock('landscape'))
-            self.ph.tap(w // 2, y_of(0.5)); time.sleep(0.6)
-            # the page's buttons are behind the full-screen video now: exit first, press 'Lock', then go full screen again
-        # 5. leaving full screen puts the screen back
+            self.ph.tap(w // 2, h // 2); time.sleep(0.7)
+            self.ph.tap(40, h // 2); time.sleep(3)
+            steps.append(("the rotate button was pressed and asked for a turn ('rotate button' turn line)", any("rotate button" in e["rest"] for e in turns())))
+            steps.append(("and the screen really turned (a new configuration line)", len(configs()) > n2))
+            self.shot("fs-after-button")
+        # 4. leaving full screen puts the screen back
         self.ph.key("KEYCODE_BACK")
         time.sleep(4)
-        t = turns()
-        steps.append(("leaving full screen restored the orientation (a 'turn' line that says so)", any("full screen ends" in e["rest"] for e in t)))
-        end_cfg = configs()
-        steps.append(("and the app is upright again with Android's rotation lock on", bool(end_cfg) and end_cfg[-1] == "portrait"))
-        # 6. a page's own lock request, outside full screen: must be refused (the screen must not turn)
+        steps.append(("leaving full screen restored the orientation ('full screen ends' turn line)", any("full screen ends" in e["rest"] for e in turns())))
+        cfg = configs()
+        steps.append(("and the app is upright again with Android's rotation lock on", bool(cfg) and cfg[-1] == "portrait"))
+        self.shot("fs-left")
+        # 5. a page asks to lock the screen while it is NOT full screen: refused / ignored, the screen must not turn
         n3 = len(configs())
-        self.ph.tap(w // 2, y_of(0.48)); time.sleep(3)   # 'Lock landscape'
-        steps.append(("a page's lock request outside full screen does not turn the screen", len(configs()) == n3))
-        # 7. full screen again, THEN the page locks: the lock must be honoured
-        self.ph.tap(w // 2, y_of(0.28)); time.sleep(3)
-        self.ph.physical(0, 9.81, 0)
+        self.ph.tap(w // 2, y_of(self.FS_LOCK)); time.sleep(3)
+        steps.append(("a page's screen.orientation.lock outside full screen does not turn the screen", len(configs()) == n3))
+        # 6. a page that locks to PORTRAIT as soon as it is full screen (a wide video!): the page's lock wins
         n4 = len(configs())
-        lock_rows = [r for r in self.lab.since(rmark) if r.get("kind") == "fs" and r.get("ev", "").startswith("lock")]
-        steps.append(("(the page's 'lock landscape' answer was recorded: %s)" % (",".join(sorted({r.get('ev') for r in lock_rows})) or "none"), True))
+        self.ph.open_url(self.lab_base + "/fs?lock=portrait"); time.sleep(5)
+        self.ph.tap(w // 2, y_of(self.FS_GO)); time.sleep(5)
+        late = fs_rows()
+        steps.append(("(info) the page's lock request answers: %s" % (",".join(sorted({r.get("ev") for r in late if str(r.get("ev", "")).startswith(("lock", "autolock"))})) or "none"), True))
+        steps.append(("a page that locks to portrait in full screen keeps the screen upright in the end", (configs()[n4:] or ["portrait"])[-1] == "portrait"))
         self.ph.key("KEYCODE_BACK"); time.sleep(3)
         lines = self.log.since(lmark)
         crashes, _ = self.scan_log(lines, "fullscreen")
         alive = self.check_alive("fullscreen")
         for label, ok in steps:
             if not ok:
-                self.issue("high" if "turn" in label or "landscape" in label else "medium", "fullscreen", "FAILED: " + label, shot=False)
+                self.issue("high" if ("turn" in label or "landscape" in label) else "medium", "fullscreen", "FAILED: " + label)
         self.fs_result = steps
         self.shot("fs-end")
         self.record({"kind": "fullscreen", "name": "fs-turning", "status": "ok" if all(ok for _, ok in steps) and alive and not crashes else "fs-failed",
-                     "steps": [{"check": l, "ok": ok} for l, ok in steps], "turn_lines": [e["rest"][:150] for e in turns()][:12], "display": self.ph.display_hint()})
+                     "steps": [{"check": l, "ok": ok} for l, ok in steps], "turn_lines": [e["rest"][:160] for e in turns()][:14], "display": self.ph.display_hint()})
 
     # ---- the whole run
     def setup_device(self):
@@ -1086,7 +1074,6 @@ def main():
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
         a.minutes, a.suite = 0.4, "all"
-        global time_sleep
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
