@@ -20,6 +20,12 @@
     try {
       var seen = Object.create(null), fresh = [], timer = 0, batches = 0, sent = 0, off = false;
       var MAX_BATCHES = 60, MAX_SENT = 8000, BATCH = 300, DELAY = 350; // a page that keeps inventing names (generated ids) stops being asked
+      // RX3-S3: a TIME budget as well (the procedural observer below has one): this callback runs on the page's own main thread for as long as the page keeps adding nodes with names it has not seen, so on a page that
+      // never stops it costs time for ever. Now: 300 ms of its own work in total, or 20 s after the page was parsed, whichever comes first; nothing while the page is hidden (looked at again when it is shown);
+      // nothing for what happens inside an editable region (typing in a rich editor adds nodes all the time). The tests shorten the limits through window.__kstTokCfg (a page's globals are not visible here in the real extension).
+      var TC = (window.__kstTokCfg && typeof window.__kstTokCfg === 'object') ? window.__kstTokCfg : {};
+      var BUDGET_MS = TC.budgetMs || 300, WINDOW_MS = TC.windowMs || 20000, spent = 0, startedAt = 0;
+      function nowMs() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
       function note(t) {
         if (t.length > 81 || seen[t]) return;
         seen[t] = 1; fresh.push(t);
@@ -47,13 +53,18 @@
         if (fresh.length && !off) timer = setTimeout(flush, DELAY);
       }
       function later() { if (!timer && !off) timer = setTimeout(flush, DELAY); }
-      function first() { scan(document); later(); }
+      function first() { if (!startedAt) startedAt = nowMs(); scan(document); later(); }
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', first); else first();
       window.addEventListener('load', first);
       if (window.MutationObserver) {
         var mo = new MutationObserver(function (recs) {
           if (off) { mo.disconnect(); return; }
+          if (document.hidden) return;                                        // nobody sees the page: visibilitychange looks again when it is shown
+          var t0 = nowMs();
+          if (spent > BUDGET_MS || (startedAt && t0 - startedAt > WINDOW_MS)) { off = true; mo.disconnect(); return; }
           for (var r = 0; r < recs.length && r < 200; r++) {
+            var tg = recs[r].target;
+            if (tg && tg.isContentEditable) continue;                         // typing in an editor
             var added = recs[r].addedNodes;
             for (var k = 0; k < added.length && k < 50; k++) {
               var n = added[k];
@@ -63,8 +74,10 @@
             }
           }
           if (fresh.length) later();
+          spent += nowMs() - t0;
         });
         mo.observe(document, { childList: true, subtree: true }); // the document itself: its root element may not exist yet
+        document.addEventListener('visibilitychange', function () { if (!document.hidden && !off) { scan(document); later(); } });
       }
     } catch (e) { /* never break the page */ }
   }
