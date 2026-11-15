@@ -1460,7 +1460,7 @@ class Soak:
     # ---- the report
     def report(self):
         ev = self.events
-        loads = [e for e in ev if e.get("kind") in ("page", "labpage", "videosite") and e.get("status") in ("ok", "slow")]
+        loads = [e for e in ev if e.get("kind") in ("page", "labpage", "videosite") and e.get("status") in ("ok", "slow") and e.get("shields", "on") == "on"]
         by_host = collections.defaultdict(list)
         for e in loads:
             by_host[e["name"]].append(e)
@@ -1533,6 +1533,139 @@ class Soak:
             L.append("")
             for label, ok in self.fs_result:
                 L.append("- [%s] %s" % ("x" if ok else " ", label))
+            L.append("")
+        # ---------------------------------------------------------------- LAB2: speed, compatibility, errors, scrolling, memory of the measured pages
+        measured = [e for e in ev if e.get("kind") == "page" and "shields" in e]
+        on_pass = [e for e in measured if e["shields"] == "on"]
+        off_pass = {e["name"]: e for e in measured if e["shields"] == "off"}
+        okstat = ("ok", "slow")
+
+        def cell(e):
+            if not e:
+                return "-"
+            if e.get("status") not in okstat:
+                return str(e.get("status"))
+            pr, c = e.get("probe") or {}, e.get("console") or {}
+            return "%s / %s ms, text %s, pictures %s (broken %s), errors %s" % (e.get("paint_ms"), e.get("done_ms"), pr.get("t", "?"), pr.get("iv", "?"), pr.get("ib", "?"), c.get("errors", "?"))
+
+        def verdict(on, off):
+            if not on or not off:
+                return ""
+            if off.get("status") in okstat and on.get("status") not in okstat:
+                return "BREAKS WITH SHIELDS (%s only with Shields on)" % on.get("status")
+            if not (on.get("status") in okstat and off.get("status") in okstat):
+                return ""
+            reasons = []
+            pon, poff = on.get("probe"), off.get("probe")
+            if pon and poff:
+                t_on, t_off = int(pon.get("t", 0)), int(poff.get("t", 0))
+                if t_off >= 500 and t_on < 0.6 * t_off:
+                    reasons.append("less text (%d vs %d)" % (t_on, t_off))
+                iv_on, iv_off = int(pon.get("iv", 0)), int(poff.get("iv", 0))
+                if iv_off >= 10 and iv_on < 0.6 * iv_off:
+                    reasons.append("fewer pictures (%d vs %d)" % (iv_on, iv_off))
+                if int(poff.get("vd", 0)) > int(pon.get("vd", 0)):
+                    reasons.append("fewer videos")
+                if int(pon.get("ib", 0)) > int(poff.get("ib", 0)) + 5:
+                    reasons.append("more broken pictures")
+            con, coff = (on.get("console") or {}).get("errors", 0), (off.get("console") or {}).get("errors", 0)
+            if con > coff + 8:
+                reasons.append("more script errors (%d vs %d)" % (con, coff))
+            son, soff = on.get("screen") or {}, off.get("screen") or {}
+            if soff and son and soff.get("edges", 0) > 0.05 and son.get("edges", 0) < 0.5 * soff.get("edges", 0):
+                reasons.append("emptier first screen")
+            if reasons:
+                return "WORSE WITH SHIELDS: " + "; ".join(reasons)
+            if on.get("done_ms", 0) > off.get("done_ms", 0) * 1.5 + 1500:
+                return "slower with Shields (%d vs %d ms)" % (on["done_ms"], off["done_ms"])
+            return ""
+
+        if on_pass:
+            def pct(vals, q):
+                vals = sorted(v for v in vals if isinstance(v, (int, float)) and v >= 0)
+                return vals[min(len(vals) - 1, int(len(vals) * q))] if vals else None
+            good = [e for e in on_pass if e.get("status") in okstat]
+            L.append("## Speed of the measured pages (%d sites loaded, %d did not)" % (len(good), len(on_pass) - len(good)))
+            L.append("")
+            L.append("First paint: median %s ms, 90th percentile %s ms. Load finished: median %s ms, 90th percentile %s ms. (Fast link, software GL: compare runs with each other, not with the tablet.)" %
+                     (pct([e.get("paint_ms") for e in good], 0.5), pct([e.get("paint_ms") for e in good], 0.9), pct([e.get("done_ms") for e in good], 0.5), pct([e.get("done_ms") for e in good], 0.9)))
+            L.append("")
+            L.append("Slowest to finish: " + ", ".join("%s %.1f s" % (e["name"], (e.get("done_ms") or 0) / 1000.0) for e in sorted(good, key=lambda e: -(e.get("done_ms") or 0))[:10]))
+            L.append("")
+            bad = []
+            for e in on_pass:
+                why = []
+                scr, pr, c = e.get("screen") or {}, e.get("probe") or {}, e.get("console") or {}
+                if e.get("status") not in okstat:
+                    why.append("did not load (%s)" % e.get("status"))
+                else:
+                    if scr and (scr.get("dominant", 0) >= 0.97 or scr.get("edges", 1) < 0.01):
+                        why.append("first screen looks blank (dominant colour %.0f %%, edges %s)" % (scr.get("dominant", 0) * 100, scr.get("edges")))
+                    if pr and int(pr.get("t", 99)) < 20:
+                        why.append("no text on the page")
+                    if pr and int(pr.get("ww", 0)) > int(pr.get("iw", 0)) + 8 and int(pr.get("iw", 0)) > 0:
+                        why.append("wider than the screen (%s vs %s px)" % (pr.get("ww"), pr.get("iw")))
+                    if pr and int(pr.get("ib", 0)) >= max(4, 0.3 * int(pr.get("im", 0))):
+                        why.append("%s of %s pictures broken" % (pr.get("ib"), pr.get("im")))
+                    if c.get("errors", 0) >= 20:
+                        why.append("%d script errors" % c.get("errors"))
+                if why:
+                    bad.append((e["name"], "; ".join(why)))
+            L.append("## Pages that did not load correctly (Shields on, the default)")
+            L.append("")
+            for n, w in bad:
+                L.append("- **%s**: %s" % (n, w))
+            if not bad:
+                L.append("- none")
+            L.append("")
+            if off_pass:
+                L.append("## Compatibility: every site with Shields ON and with Shields OFF (a site that is worse with Shields on is OUR false positive)")
+                L.append("")
+                L.append("| site | Shields ON: paint / done, text, pictures, script errors | Shields OFF | verdict |")
+                L.append("| :- | :- | :- | :- |")
+                worse_list = []
+                for e in on_pass:
+                    off = off_pass.get(e["name"])
+                    if not off:
+                        continue
+                    v = verdict(e, off)
+                    L.append("| %s | %s | %s | %s |" % (e["name"], cell(e), cell(off), v or "same"))
+                    if v.startswith(("WORSE", "BREAKS")):
+                        worse_list.append((e["name"], v))
+                L.append("")
+                L.append("Suspects (worse with Shields on): " + ("; ".join("%s: %s" % w for w in worse_list) if worse_list else "none"))
+                L.append("")
+            sc = [e for e in on_pass if e.get("scroll")]
+            if sc:
+                tot_frames = sum(e["scroll"]["frames"] for e in sc)
+                tot50 = sum(e["scroll"]["gaps50"] for e in sc)
+                tot100 = sum(e["scroll"]["gaps100"] for e in sc)
+                L.append("## Scrolling (the app's own counters while the lab flings each page; software GL: only the differences between pages and between builds mean something)")
+                L.append("")
+                L.append("%d pages scrolled, %d frames counted, %d screen updates over 50 ms (%.1f %%), %d over 100 ms (%.1f %%)." % (len(sc), tot_frames, tot50, 100.0 * tot50 / max(1, tot_frames), tot100, 100.0 * tot100 / max(1, tot_frames)))
+                L.append("")
+                L.append("| page | scroll bursts | frames | gaps over 50 ms | over 100 ms | longest gap ms |")
+                L.append("| :- | -: | -: | -: | -: | -: |")
+                for e in sorted(sc, key=lambda e: -(e["scroll"]["gaps100"] * 5 + e["scroll"]["gaps50"]))[:15]:
+                    x = e["scroll"]
+                    L.append("| %s | %d | %d | %d | %d | %d |" % (e["name"], x["bursts"], x["frames"], x["gaps50"], x["gaps100"], x["worst_ms"]))
+                L.append("")
+            mem = [e for e in on_pass if e.get("pss")]
+            if mem:
+                L.append("## Memory after each page (app PSS, MB; the tablet has 2 GB)")
+                L.append("")
+                L.append("Largest: " + ", ".join("%s %d" % (e["name"], e["pss"]) for e in sorted(mem, key=lambda e: -e["pss"])[:10]) + ". Median " + str(pct([e["pss"] for e in mem], 0.5)) + " MB.")
+                L.append("")
+            msgs = collections.Counter()
+            for e in on_pass:
+                for m_ in (e.get("console") or {}).get("first", []):
+                    msgs[m_[:90]] += 1
+            noisy = sorted(((e.get("console") or {}).get("errors", 0), e["name"]) for e in on_pass)[-8:]
+            L.append("## Script errors of the pages (the engine's own log; the first error of each page, most frequent first)")
+            L.append("")
+            L.append("Most errors: " + ", ".join("%s %d" % (n, c_) for c_, n in reversed(noisy) if c_ > 0))
+            for m_, c_ in msgs.most_common(12):
+                L.append("- %d x %s" % (c_, m_))
             L.append("")
         if by_host:
             L.append("## Page loads (ms; the same page again later shows what the cache saves)")
