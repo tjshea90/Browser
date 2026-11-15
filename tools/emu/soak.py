@@ -410,6 +410,7 @@ class Soak:
         self.guard_rows = []
         self.apk_rows = []
         self.system_restarts = 0
+        self.last_diag = ""
 
     # ---- bookkeeping
     def issue(self, sev, area, text, shot=False):
@@ -835,7 +836,7 @@ class Soak:
         lmark = self.log.size()
         t0 = time.time()
         self.ph.open_url(self.url(src))
-        text = self.wait_dialog(lmark, 12)  # the "Download this file?" question (plain-http and risky files always ask)
+        text = self.wait_dialog(lmark, 12 if src.startswith("lab:") else 5)  # the "Download this file?" question (plain-http and risky files always ask)
         tapped = text
         if text:
             self.answer(True)
@@ -1012,6 +1013,7 @@ class Soak:
         if txt and "Kestrel diagnostics" in txt:
             with open(os.path.join(self.out, "diagnostics-%s.txt" % tag), "w") as f:
                 f.write(txt)
+            self.last_diag = txt
             return txt
         self.issue("low", "tooling", "the Diagnostics dump (%s) did not arrive" % tag)
         return ""
@@ -1179,6 +1181,14 @@ class Soak:
             if pss:
                 L.append("")
                 L.append("App PSS: first %d MB, last %d MB, max %d MB. Lowest MemAvailable: %d MB." % (pss[0], pss[-1], max(pss), min(s[2] for s in self.samples)))
+            L.append("")
+        if self.last_diag:
+            keep = ("Real video", "Real scrolling", "Full-screen turning", "Blocker:", "Page loads", "  ", "Counters:", "Cold start", "Engine prefs", "CPU", "Processes:", "Memory:", "Network:", "Video:")
+            lines = [ln for ln in self.last_diag.splitlines() if ln.startswith(keep[:5]) or ln.startswith(("Counters:", "Cold start", "Engine prefs", "CPU by process", "Processes:", "Memory:", "Network:", "Video:", "Safe", "Downloads"))]
+            L.append("## What the app says about itself (its own Diagnostics text at the end of the run)")
+            L.append("")
+            for ln in lines[:40]:
+                L.append("- " + ln[:520].replace("|", "/"))
             L.append("")
         other = [e for e in ev if e.get("kind") in ("start",)]
         for e in other:
