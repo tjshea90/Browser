@@ -1987,3 +1987,42 @@
 > - the 2-hour site-compatibility run (queued after the current emulator runs)
 > - the owner-only GitHub steps (private signing key, protected `release` environment)
 <!-- sha:d033a5fc3872 -->
+
+## 2026-11-15T22:42:32Z
+> alpha53 is out and recorded. Here is my answer to your message 48.
+>
+> **Release (install over the old one):**
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha53
+>
+> **What your screenshots show (I measured them):**
+> - **Portrait:** the page is laid out as if the window were still landscape. The film is at the landscape height and cut off at the right screen edge, with empty space under it.
+> - **Landscape:** the page is laid out as if the window were still portrait. It is a 600 px wide box, the film is cut by the navigation bar, and there is empty space on the right.
+> - So after a turn, the page keeps the old orientation's layout for a few seconds. The good news is that the page sits between the bars now, which was the alpha51 change.
+>
+> **Why it happened:** your tablet's engine hands the new window size to the page late. The black cover from alpha51 and alpha52 went away as soon as Kestrel's own window was still, which is before the page had caught up. The emulator is much faster than your tablet, so it never showed this for seconds. It did show it once, on a quick double turn.
+>
+> **What alpha53 does:**
+> - The black cover and the video pause now stay until the page itself says it has the new size, for at most 7 seconds.
+> - A small progress ring shows after about a second so the black doesn't look frozen.
+> - A touch on the screen ends the wait.
+> - If the page still hasn't caught up after 2.5 seconds, the engine is given one real size change.
+> - I found and fixed a bug in my own first version: a page open in two tabs got mixed up with the other tab.
+> - Diagnostics: the line "Turning under a video" now says how long the page took to have the new size, the worst case, and how many turns gave up. The line "Full-screen page size" now also counts the pages that report their size.
+>
+> **What I have not checked:**
+> - None of this has run on your tablet.
+> - It passed 453 headless-browser tests, the unit tests, and the emulator with the real Firefox engine. There, every waited-for turn logged "the page had the new size after 0.35 to 0.9 s" and the run found no issues.
+> - I could not make the emulator's engine slow enough to reproduce your multi-second delay. So I can't promise the black screen won't last 3 to 7 s on your tablet. That is what the new Diagnostics line will tell me.
+>
+> **Please try:** the Yahoo Finance video in full screen, turned both ways. Tell me how long the black screen lasts, and send me three Diagnostics lines (Menu > Diagnostics):
+> - Turning under a video
+> - Full-screen page size
+> - Full-screen system bars
+>
+> **Still open:**
+> - your tablet test of alpha53
+> - the 2-hour site-compatibility run, which is running on the emulator now
+> - a stronger slow-engine emulator scene
+> - the owner-only GitHub steps (private signing key, protected `release` environment)
+<!-- sha:00fe0dafcdb1 -->
