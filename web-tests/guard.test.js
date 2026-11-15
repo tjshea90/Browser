@@ -216,7 +216,7 @@ test('a link with words of its own near the player, and a same-site link on it, 
 
 // RX3-G4 review (2026-11-15): the overlay-link rule must not take a page's own big links away
 test('REVIEW: a big card that links to another site and has words of its own is a link, not an advertisement layer', async () => {
-  const page = await open(`<a id="card" href="${AD}" target="_blank" style="display:block;width:480px;height:420px;background:#eee">A news story with a title and a few words under the picture</a>`);
+  const page = await open(`<a id="card" href="${AD}" target="_blank" style="display:block;width:700px;height:500px;background:#eee">A news story with a title and a few words under the picture</a>`);
   const popup = page.waitForEvent('popup', { timeout: 3000 });
   await page.mouse.click(100, 100);
   await popup;
@@ -224,7 +224,7 @@ test('REVIEW: a big card that links to another site and has words of its own is 
 });
 
 test('REVIEW: the empty stretched link of a card of the site\'s own (not over a player) is the card\'s link, not an advertisement layer', async () => {
-  const page = await open(`<div style="position:relative;width:480px;height:420px;background:#eee">A card<a id="stretch" href="https://movie.example/story" style="position:absolute;left:0;top:0;width:100%;height:100%"></a></div>`);
+  const page = await open(`<div style="position:relative;width:700px;height:500px;background:#eee">A card<a id="stretch" href="https://movie.example/story" style="position:absolute;left:0;top:0;width:100%;height:100%"></a></div>`);
   await page.mouse.click(100, 100);
   await settle();
   assert.equal(page.url(), 'https://movie.example/story');
