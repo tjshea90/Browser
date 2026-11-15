@@ -115,4 +115,21 @@ class OwnerRulesTest {
         val slid = body(nav, "private fun cursorSlid(delta: Int) {")
         assertTrue("the address bar's cursor and the page field's caret both move: $slid", slid.contains("model.moveCursor") && slid.contains("moveCursor(delta)"))
     }
+    // FS1, owner message 43: "make it so if I watch videos in full screen, then rotate the tablet or press a rotate button, the video switches to landscape mode just like regular video player apps."
+    @Test fun fullScreenVideoTurnsWithTheTabletAndTheRotateButton() {
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        val fs = body(act, "internal fun fullScreenChanged(on: Boolean) {")
+        assertTrue(fs, fs.contains("fsTurner.enter()") && fs.contains("fsTurner.exit()"))
+        assertTrue("a page's screen.orientation.lock() has somebody who answers it", act.contains("OrientationController.OrientationDelegate") && act.contains("fsTurner.siteLocked(orientation)") && act.contains("fsTurner.siteUnlocked()"))
+        assertTrue("a finger lifted in full screen shows the rotate button", act.contains("if (fullscreenOn) fsTurner.touched()"))
+        assertTrue("Diagnostics shows the numbers", act.contains("out.add(fsTurner.line())"))
+        val turner = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/FullscreenTurner.kt")
+        assertTrue("the turner really asks Android to turn the screen", turner.contains("a.requestedOrientation = o"))
+        assertTrue("and puts back what it was when full screen ends", body(turner, "    fun exit() {").contains("setRequested(saved"))
+        val rule = source("core/src/main/kotlin/app/kestrel/core/media/FullscreenTurn.kt")
+        assertTrue("the screen follows the sensor, whatever Android's rotation lock says", rule.contains("Plan(FULL_SENSOR, false)") && rule.contains("const val FULL_SENSOR = 10"))
+        assertTrue("Settings has the choice", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("""choice("Turn the screen for full-screen video""""))
+        assertTrue("it is on (automatic) by default", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("""sp.getInt("fs_turn", 0)"""))
+        assertFalse("the manifest never pins the screen: the page, the person and the rotate button decide", source("geckoapp/src/main/AndroidManifest.xml").contains("screenOrientation"))
+    }
 }
