@@ -158,6 +158,17 @@ def page_fs(lock=""):
             "<button id=unlock style='" + btn + "'>Unlock</button><button id=exit style='" + btn + "'>Exit full screen</button>" + reporter).encode()
 
 
+def page_dlguard(kind):
+    """RX4-X2: four ways a page starts a download. auto-* = by itself 2.5 s after the load (a timer), tap-* = the person taps the big button; *-link clicks a hidden link, *-nav sets location."""
+    nav = kind.endswith("nav")
+    trigger = ("location.href='/dl/1mb.bin';" if nav else
+               "var a=document.createElement('a');a.href='/dl/1mb.bin';a.setAttribute('download','lab-guard.bin');document.body.appendChild(a);a.click();")
+    head = "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Guard %s</title><body style='font:22px sans-serif;margin:14px'><h1>%s</h1>" % (kind, kind)
+    if kind.startswith("auto"):
+        return (head + "<p>a timer starts the download 2.5 s after the page loaded</p><script>setTimeout(function(){%s}, 2500);</script>" % trigger).encode()
+    return (head + "<button id=go style='display:block;width:92%%;height:30vh;margin:30vh auto 0;font-size:28px' onclick=\"%s\">Download</button>" % trigger.replace('"', "'")).encode()
+
+
 def page_dl():
     links = "".join("<p><a href='/dl/%dmb.bin'>%d MB file</a></p>" % (n, n) for n in (1, 5, 20)) + "<p><a href='/dl/slow.bin'>5 MB, slowly</a></p>"
     return ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Soak downloads</title><body style='font:20px sans-serif;margin:14px'><h1>Downloads</h1>" + links).encode()
@@ -259,6 +270,8 @@ class H(http.server.BaseHTTPRequestHandler):
                 return self._send(page_fs((q.get("lock") or [""])[0]))
             if p == "/dl/page":
                 return self._send(page_dl())
+            if p == "/dl/guard":
+                return self._send(page_dlguard((q.get("kind") or ["auto-link"])[0]))
             if p.startswith("/dl/") and p.endswith("mb.bin"):
                 return self._download(int(p[4:-6]) * 1024 * 1024, "kestrel-lab-%smb.bin" % p[4:-6], 0)
             if p == "/dl/slow.bin":

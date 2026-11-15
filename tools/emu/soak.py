@@ -396,6 +396,7 @@ class Soak:
         self.lab_base = "http://localhost:%d" % a.port
         self.fs_result = None
         self.sb_rounds = []
+        self.guard_rows = []
 
     # ---- bookkeeping
     def issue(self, sev, area, text, shot=False):
@@ -632,6 +633,46 @@ class Soak:
         self.check_alive(name)
         self.record(r)
 
+    # ---- RX4-X2: which downloads ask first, and what the question says
+    def guard_downloads(self):
+        w, h = self.screen
+        rows = []
+        for kind in ("auto-link", "auto-nav", "tap-link", "tap-nav"):
+            time.sleep(9)                                 # nobody touches the screen for longer than the app's 8 s window
+            before, lmark = self.ph.downloads(), self.log.size()
+            self.ph.open_url("%s/dl/guard?kind=%s" % (self.lab_base, kind))
+            t0 = time.time()
+            while time.time() - t0 < 30 and not any(e["ev"] == "loaded" for e in health_events(self.log.since(lmark), "page")):
+                time.sleep(1.5)
+            if kind.startswith("tap"):
+                time.sleep(1.5)
+                self.ph.tap(w // 2, int(25 + (h - 51 - 60 - 25) * 0.5))
+            title, by_itself, seen = "", False, False
+            for _ in range(10):
+                time.sleep(2)
+                nodes = self.ph.ui_nodes()
+                texts = [t for t, d, i, c, k in nodes if t]
+                if any(re.fullmatch(r"(?i)download", t.strip()) for t in texts) and any(re.fullmatch(r"(?i)cancel", t.strip()) for t in texts):
+                    seen = True
+                    by_itself = any("by itself" in t for t in texts)
+                    title = next((t for t in texts if "download" in t.lower() and t.strip().lower() not in ("download", "downloads")), "")[:60]
+                    self.ph.tap_text(r"^cancel$")
+                    break
+                if self.ph.downloads() != before:
+                    break                                  # the file arrived without any question
+            refused = any(e["ev"] == "auto-refused" for e in health_events(self.log.since(lmark), "download"))
+            rows.append((kind, "asked, by itself wording" if seen and by_itself else ("asked (plain wording)" if seen else ("refused quietly" if refused else "no question"))))
+            self.shot("guard-" + kind)
+        expect = {"auto-link": "asked, by itself wording", "auto-nav": "asked, by itself wording", "tap-link": "asked (plain wording)", "tap-nav": "asked (plain wording)"}
+        self.guard_rows = rows
+        for kind, res in rows:
+            if kind.startswith("auto") and res == "no question":
+                self.issue("high", "download-guard", "%s: a download the page started by itself arrived with NO question" % kind)
+            if kind.startswith("tap") and res.endswith("by itself wording"):
+                self.issue("medium", "download-guard", "%s: the person tapped, yet the question says the page started it by itself" % kind)
+        self.record({"kind": "guard", "name": "download-guard", "status": "ok", "results": [{"page": k, "result": r, "expected": expect[k]} for k, r in rows]})
+        self.check_alive("download-guard")
+
     # ---- Safe Browsing (RX4-X3)
     def safe_browsing(self, tag=""):
         rows = []
@@ -850,7 +891,7 @@ class Soak:
     def schedule(self, minutes):
         """The scene list for the soak, shuffled but fair: every kind appears again and again until the time is up."""
         pools = [("page", p) for p in PUBLIC_PAGES] * 1 + [("lab", p) for p in LAB_PAGES] * 2 + [("video", v) for v in VIDEOS] * 1 + [("vsite", v) for v in VIDEO_PAGES] * 1 + \
-                [("dl", d) for d in DOWNLOADS] * 1 + [("fs", None)] * 2
+                [("dl", d) for d in DOWNLOADS] * 1 + [("fs", None)] * 2 + [("guard", None)]
         order = []
         while len(order) < 400:
             batch = list(pools)
@@ -880,6 +921,8 @@ class Soak:
                     self.download(item[0], item[1], item[2], item[3])
                 elif kind == "fs":
                     self.fullscreen_round(thorough=False)
+                elif kind == "guard":
+                    self.guard_downloads()
             except Exception as e:  # a bug in this script must never end the hour
                 self.issue("low", "tooling", "scene %s %s raised %r" % (kind, item[0] if item else "", e))
             if n % 8 == 0:
@@ -935,6 +978,12 @@ class Soak:
             L.append("| :- | " + " | ".join(":-" for _ in self.sb_rounds) + " |")
             for i, (name, _) in enumerate(SAFEBROWSING):
                 L.append("| %s | " % name + " | ".join(next((r for n, r in rows if n == name), "-") for _, rows in self.sb_rounds) + " |")
+            L.append("")
+        if self.guard_rows:
+            L.append("## Downloads nobody tapped (RX4-X2)")
+            L.append("")
+            for kind, res in self.guard_rows:
+                L.append("- %s: %s" % (kind, res))
             L.append("")
         if self.fs_result:
             L.append("## Full-screen turning (FS1)")
@@ -1136,6 +1185,8 @@ def main():
             s.smoke()
         if a.suite in ("fs", "all"):
             s.fullscreen_round(thorough=True)
+        if a.suite in ("fs", "all"):
+            s.guard_downloads()
         if a.suite in ("soak", "all"):
             s.soak(a.minutes)
         s.dump_diag("end")
