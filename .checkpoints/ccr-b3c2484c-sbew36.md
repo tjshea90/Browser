@@ -1,13 +1,13 @@
-# CHECKPOINT 2390 — read me first, then TASKS.md
+# CHECKPOINT 2391 — read me first, then TASKS.md
 
-**Written:** 2026-11-15T15:50:16Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `56d1068d` (this checkpoint is the commit after it)
+**Written:** 2026-11-15T15:54:00Z · **tests:** 1 RED: test_handoff.sh (0 green)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `9e880b85` (this checkpoint is the commit after it)
 
 ## Just done
-hotspot-shaped network option for the lab (--net hotspot = 5 Mbit/s each way + 60-100 ms, via adb emu network), 'page painted' line for a fast page's late first paint (PageTimes + 3 Robolectric tests), lab debug hooks (dialog shown/answer, exitfs, key logging), full-bleed full screen, TASKS statuses, HANDOFF section 3 + research/EXT_COST.md updated; the unshaped queued run 43731630000 cancelled; a broken-YAML push run (43731987280) was a harmless failure from my own slip, fixed
+gates for alpha48 are green: web tests 418/418 (npm test, final scripts), JVM suite exit 0 (core + app + geckoapp unit tests, 15:48Z); checked android.yml concurrency: lab runs share group apk-<ref>-lab, a gecko release uses apk-<ref>-gecko + release-gecko, so shipping alpha48 does NOT cancel the queued hour run 43732156386 (but a second LAB dispatch would replace it: do not dispatch lab again unless that is wanted)
 
 ## Do this next
-dispatch lab_suite=all lab_minutes=60 lab_net=hotspot (queues behind run 43731411440); read run 43731411440 artifacts when done (Back in full screen? download dialogs? ANR?); then ship alpha48 while the hour runs
+wait for lab run 5 (43731411440, in progress since 15:42Z, ends about 16:17Z container clock): actions_list list_workflow_run_artifacts -> actions_get download_workflow_run_artifact (text artifact) -> python3 -I tools/emu/fetch_artifact.py URL scratchpad-dir -> read report.md: Back in full screen (key back-up, fullscreen back-exit, full screen ends), guard_downloads table, apk_guard, ANR/stall, look.readBackSlow; then ship alpha48 (versionCode 149 already bumped): bash ship.sh gecko NOTE, dispatch android.yml app=gecko full_build=true, wait for tag + green jobs, bash tools/record-release.sh TAG with the IDENTICAL note, Release link on its own line; hour run 43732156386 (hotspot, 60 min) is queued behind run 5: read it, write research/SOAK_RUN1.md
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ dispatch lab_suite=all lab_minutes=60 lab_net=hotspot (queues behind run 4373141
 
 ## Last ten checkpoints
 ```
+  a7ef675c ckpt 2390: hotspot-shaped network option for the lab (--net hotspot = 5 Mbit/s each way
   64223f1f ckpt 2389: run 5 (all, 20 min) = android.yml run 43731411440 in progress; run 6 (all, 6
   a5ac2866 ckpt 2388: lab runs 3+4 read (artifacts via tools/emu/fetch_artifact.py): FS1 WORKS on 
   b486edd4 ckpt 2387: added: Back leaves full screen first (handleBack: exitFullScreen), RX4-X2 re
@@ -25,8 +26,7 @@ dispatch lab_suite=all lab_minutes=60 lab_net=hotspot (queues behind run 4373141
   5aaab1ce ckpt 2383: dispatched the first lab run (smoke, 3 min soak): android.yml run 4368415828
   e7847e2b ckpt 2382: SOAK1/RX4-E1 built: .github/workflows/emu-lab.yml (KVM Android 10 x86_64 600
   c471f4a5 ckpt 2381: FS1 code: core/media/FullscreenTurn (pure rule + 20 tests), geckoapp/web/Ful
-  f81e0818 ckpt 2380: saved research/REVIEW-EXTERNAL-4.md (byte-identical copy of the upload) and 
 ```
 
-(14 automatic checkpoint(s) since the last deliberate one — the
+(2 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
