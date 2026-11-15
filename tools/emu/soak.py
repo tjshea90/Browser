@@ -1496,7 +1496,7 @@ def main():
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
-        a.minutes, a.suite = 0.4, "all"
+        a.minutes, a.suite = 0.4, ("vc" if a.suite == "vc" else "all")
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
