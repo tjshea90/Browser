@@ -4,7 +4,7 @@
 // Everything here is read-only, conservative ES5, bounded (a scan stops after a few thousand elements) and does nothing until another script asks.
 var KestrelVF = (typeof KestrelVF !== 'undefined' && KestrelVF) || (function () {
   var MIN_W = 80, MIN_H = 45;      // a video smaller than this (in CSS pixels) is a thumbnail or a decoration: no bar, no menu
-  var SCAN = 5000;                 // elements looked at below one point (the stack of a press), more for a whole-document scan
+  var SCAN = 1500;                 // elements looked at below the elements under a point (a press), more for a whole-document scan
 
   function rootOf(el) {            // Firefox gives content scripts the root of a CLOSED shadow tree too
     try { return el.openOrClosedShadowRoot || el.shadowRoot || null; } catch (e) { return null; }
