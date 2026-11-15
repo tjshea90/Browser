@@ -237,9 +237,32 @@
       if (sent[key]) return;
       sent[key] = true;
       var x = factsOf(v);
-      browser.runtime.sendMessage({ k: 'vid', u: src, w: v.videoWidth || 0, h: v.videoHeight || 0, d: isFinite(v.duration) ? v.duration : 0, l: labelOf(v, src), p: location.href, f: x.f, rw: x.rw, rh: x.rh, vp: x.vp }).catch(function () {});
+      browser.runtime.sendMessage({ k: 'vid', u: src, w: v.videoWidth || 0, h: v.videoHeight || 0, d: isFinite(v.duration) ? v.duration : 0, l: labelOf(v, src), p: location.href, f: x.f, rw: x.rw, rh: x.rh, vp: x.vp, el: elId(v) }).catch(function () {});
     }
     document.addEventListener('loadedmetadata', function (e) { var t = e.target; if (t && (t.tagName === 'VIDEO' || t.tagName === 'AUDIO')) report(t); }, true);
+    // RX3-V3 (research/FINDER_LAB.md section 4): which element really PLAYS. `el` names an element for the page's lifetime (a small whole number, nothing else about it), so the app can tell "the same player went from a
+    // 15 s clip to the film" (a pre-roll) from "two different videos". After 3 s of real playback of a file, once per element and file, the same report goes again with ev:'played'.
+    var elIds = (typeof WeakMap === 'function') ? new WeakMap() : null, elNext = 1, playedKeys = {};
+    function elId(v) { try { if (!elIds) return 0; var i = elIds.get(v); if (!i) { i = elNext++; elIds.set(v, i); } return i; } catch (e) { return 0; } }
+    document.addEventListener('playing', function (e) {
+      try {
+        var v = e.target;
+        if (!v || (v.tagName !== 'VIDEO' && v.tagName !== 'AUDIO') || !e.isTrusted) return;
+        var src = v.currentSrc || v.src || '';
+        if (!src || src.indexOf('http') !== 0) return;
+        var key = elId(v) + '|' + src;
+        if (playedKeys[key]) return;
+        var t0 = v.currentTime;
+        setTimeout(function () {
+          try {
+            if (playedKeys[key] || v.paused || v.ended || (v.currentSrc || v.src || '') !== src || v.currentTime < t0 + 2.5) return;
+            playedKeys[key] = true;
+            var x = factsOf(v);
+            browser.runtime.sendMessage({ k: 'vid', ev: 'played', u: src, w: v.videoWidth || 0, h: v.videoHeight || 0, d: isFinite(v.duration) ? v.duration : 0, l: labelOf(v, src), p: location.href, f: x.f, rw: x.rw, rh: x.rh, vp: x.vp, el: elId(v) }).catch(function () {});
+          } catch (err) { /* ignore */ }
+        }, 3000);
+      } catch (err) { /* ignore */ }
+    }, true);
   } catch (e) { /* never break the page */ }
 })();
 
