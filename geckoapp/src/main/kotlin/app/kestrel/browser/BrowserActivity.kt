@@ -350,7 +350,7 @@ open class BrowserActivity : Activity(), DockListener {
     private var onScreenNow = false
     private var turnHint: View? = null
     private val turnSettler = app.kestrel.browser.web.TurnSettler({ current }, { fullscreenOn }, { turnCover }, { onScreenNow },
-        { fullscreenOn && fullscreenTab?.gecko?.vpSeen == true }, { resyncEngineSize() }, { turnHint }) // ROT2: a page that reports its viewport says when it has a turn's new size
+        { fullscreenOn && fullscreenTab?.gecko?.vpOk == true }, { resyncEngineSize() }, { turnHint }) // ROT2: a page that reports its viewport says when it has a turn's new size
     private var pendingFilePick: ((List<Uri>) -> Unit)? = null
     private var pendingAndroidPerms: PermissionDelegate.Callback? = null
     private var backCallback: Any? = null
@@ -1257,13 +1257,14 @@ open class BrowserActivity : Activity(), DockListener {
 
     internal fun onPageViewport(m: org.json.JSONObject) {
         val tab = tabWithUrl(m.optString("p")) ?: return
-        tab.gecko.vpSeen = true                                               // ROT2: this page runs the report script: after a turn its report can say when it has the new size
-        if (!fullscreenOn || fullscreenTab !== tab) return                    // the rest is for the page that IS full screen
         val pw = m.optInt("w"); val ph = m.optInt("h")
         val vw = geckoView.width; val vh = geckoView.height
         if (pw <= 0 || ph <= 0 || vw <= 0 || vh <= 0) return
-        vpChecks++
         val matches = Math.abs(pw - vw) <= 3 && Math.abs(ph - vh) <= 3
+        // ROT2: the evidence that this page can say when it has a turn's new size: it reports and its viewport is the view's (a page whose viewport never is, in desktop mode or zoomed, is not waited for)
+        if (matches) tab.gecko.vpOk = true else if (!turnSettler.turning) tab.gecko.vpOk = false
+        if (!fullscreenOn || fullscreenTab !== tab) return                    // the rest is for the page that IS full screen
+        vpChecks++
         turnSettler.pageReported(matches)                                     // ROT2: a turn waits for this (the cover stays until the page has the new size)
         if (matches) {
             if (vpTries > 0 || vpLast.startsWith("no ")) Health.log("fullscreen", "viewport", "right: page ${pw}x$ph, view ${vw}x$vh")
