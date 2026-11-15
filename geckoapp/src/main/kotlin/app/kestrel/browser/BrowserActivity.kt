@@ -457,6 +457,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onResume() {
         super.onResume()
+        onScreenNow = true
         fsTurner.resumed()
         Health.log("life", "resume"); Health.startWatchdog(); Health.watchFrames(window); app.kestrel.browser.diag.CpuMeter.start(packageName)
         flushStateWanted = false
