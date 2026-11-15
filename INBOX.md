@@ -1264,3 +1264,8 @@ https://finance.yahoo.com/quote/TTWO/
 
 I played a video on this site in Kestrel, and the player had no controls at all. I couldn't pause or stop the video or seek. When I long pressed the video, the floating notification panel appeared. Anywhere I can start a video in the browser, I should be able to control it. Also, the download options should come up for videos when I long press them instead of the floating notification panel
 ```
+
+## 2026-11-15T18:11:26Z
+```
+Sound should not keep playing if I am not currently on the Kestrel tab. I want Kestrel to be a polished daily browser with web page compatibility for all sites and good speed. Run github runners with emulators matching my hardware setup, but keep in mind that most of the time I have fast wifi on so the 5mbit/s cap is irrelevant most of the time. The emulated runs should log speed, crashes, errors, pages not loading correctly, video playback, smoothness of scrolling, etc. Learn from the emulators to fine tune Kestrel and make it as good as possible
+```
