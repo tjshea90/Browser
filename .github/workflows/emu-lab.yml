@@ -119,7 +119,10 @@ jobs:
           echo "installing $APK ($(du -h "$APK" | cut -f1))"
           adb install -r -t "$APK"
           mkdir -p "$RUNNER_TEMP/lab-out/lab"
-          nohup python3 -I tools/sitelab/soaklab.py 8091 "$RUNNER_TEMP/lab-out/lab" > "$RUNNER_TEMP/lab-out/soaklab.log" 2>&1 &
+          # net = hotspot: the lab's own clips and downloads are served at 600 KB/s (about 5 Mbit/s) with 80 ms before each answer (adb reverse is not touched by the emulator's own shaping)
+          RATE=0; DELAY=0
+          if [ "$NET" = hotspot ]; then RATE=600; DELAY=80; fi
+          LAB_RATE_KBPS="$RATE" LAB_DELAY_MS="$DELAY" nohup python3 -I tools/sitelab/soaklab.py 8091 "$RUNNER_TEMP/lab-out/lab" > "$RUNNER_TEMP/lab-out/soaklab.log" 2>&1 &
           for i in $(seq 1 30); do python3 -I -c "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:8091/health', timeout=3)" 2>/dev/null && break; sleep 2; done
           adb reverse tcp:8091 tcp:8091
           cat "$RUNNER_TEMP/lab-out/soaklab.log"
