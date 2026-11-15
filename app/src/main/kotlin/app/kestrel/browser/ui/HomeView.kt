@@ -84,17 +84,16 @@ class HomeView(ctx: Context, private var pal: Pal, private val brand: String, pr
         brandText.letterSpacing = 0.28f
         badge.letterSpacing = 0.16f
         badge.setPadding(ctx.dp(8), ctx.dp(3), ctx.dp(8), ctx.dp(3))
-        brandIcon.setImageResource(R.drawable.ic_shield)
         val brandRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            addView(brandIcon, LinearLayout.LayoutParams(ctx.dp(26), ctx.dp(26)).apply { marginEnd = ctx.dp(12) })
+            addView(brandIcon, LinearLayout.LayoutParams(ctx.dp(BRAND_DP), ctx.dp(BRAND_DP)).apply { marginEnd = ctx.dp(8) })
             addView(brandText)
             addView(badge, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = ctx.dp(12) })
         }
         column.orientation = LinearLayout.VERTICAL
         column.gravity = Gravity.CENTER_HORIZONTAL
-        column.addView(brandRow, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, ctx.dp(34)))
+        column.addView(brandRow, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, ctx.dp(BRAND_DP)))
         column.addView(box, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ctx.dp(FIELD_DP)).apply { topMargin = ctx.dp(GAP_DP) })
         column.addView(hint, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(14) })
         suggest.visibility = GONE
@@ -111,7 +110,9 @@ class HomeView(ctx: Context, private var pal: Pal, private val brand: String, pr
 
     private fun tint() {
         setBackgroundColor(pal.windowBg)
-        brandIcon.setColorFilter(pal.accent)
+        // SP1 (owner message 41): the brand mark is the app's own symbol (the shield with the falcon of the icon in the app drawer), not a flat shield; the private Home keeps a small violet shield so the two cannot be mistaken
+        if (pal.isPrivate) { brandIcon.setImageResource(R.drawable.ic_shield); brandIcon.setColorFilter(pal.accent); brandIcon.setPadding(context.dp(10), context.dp(10), context.dp(10), context.dp(10)) }
+        else { brandIcon.setImageResource(R.drawable.ic_launcher_foreground); brandIcon.clearColorFilter(); brandIcon.setPadding(0, 0, 0, 0) }
         brandText.setTextColor(pal.fg)
         badge.setTextColor(pal.accentOn)
         badge.background = ChamferDrawable(pal.accent, context.dpf(5f), ChamferDrawable.TL or ChamferDrawable.BR)
