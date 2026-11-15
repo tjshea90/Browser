@@ -414,13 +414,18 @@ function wire(id, bid, tid, name, jumps) {
   window['rect' + name] = rect;
 }
 var N = Date.now();
+var only = (location.search.match(/only=([ABR])/) || [])[1];   // ?only=R shows one player only (three streaming players are too much for the emulator's software renderer)
+var show = { A: !only || only === 'A', B: !only || only === 'B', R: !only || only === 'R' };
+['A', 'B', 'R'].forEach(function (k) { if (!show[k]) { ['p' + k.toLowerCase(), 't' + k.toLowerCase()].forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = 'none'; }); } });
 var F = (location.search.indexOf('small') >= 0) ? '/seek-film.wav' : '/seek-big.wav';
-document.getElementById('va').src = F + '?p=A&n=' + N; document.getElementById('vb').src = F + '?p=B&n=' + N;   // a new address per load: a repeated one is served from the engine's media cache without asking the server
-wire('va', 'ba', 'ta', 'A', false);
-wire('vb', 'bb', 'tb', 'B', true);
+if (show.A) document.getElementById('va').src = F + '?p=A&n=' + N;
+if (show.B) document.getElementById('vb').src = F + '?p=B&n=' + N;   // a new address per load: a repeated one is served from the engine's media cache without asking the server
+if (show.A) wire('va', 'ba', 'ta', 'A', false);
+if (show.B) wire('vb', 'bb', 'tb', 'B', true);
 ['pointerdown', 'pointerup', 'click'].forEach(function (n) { document.getElementById('volc').addEventListener(n, function (e) { L('ev', 'C ' + n + ' x=' + Math.round(e.clientX) + ' y=' + Math.round(e.clientY)); }); });   // the volume slider: its taps are only logged, they must never move a video
 // R: the REAL current YouTube player bar (markup of the live embed, build 20261114): the page paints only its light "Hovered" line under the finger and does NOT seek on a tap (the owner's case)
 (function () {
+  if (!show.R) return;
   var v = document.getElementById('vr'), bar = document.getElementById('br'), hov = document.getElementById('hr'), line = document.getElementById('lr'), t = document.getElementById('tr'), pl = document.getElementById('pl'), ph = document.getElementById('ph');
   v.src = '/seek-film.wav?p=R&n=' + N;
   function paint() { var w = bar.getBoundingClientRect().width * (v.currentTime / (v.duration || 300)); pl.style.width = w + 'px'; ph.style.left = (w - 6) + 'px'; t.textContent = 'R: ' + v.currentTime.toFixed(1) + ' s of ' + Math.round(v.duration || 300) + (v.paused ? ' (paused)' : ' (playing)'); }
@@ -434,8 +439,8 @@ wire('vb', 'bb', 'tb', 'B', true);
   setTimeout(function () { var r = line.getBoundingClientRect(), b = bar.getBoundingClientRect(); L('rect', 'R rail left=' + Math.round(b.left) + ' w=' + Math.round(b.width) + ' railTop=' + Math.round(r.top) + ' railH=' + Math.round(r.height) + ' barTop=' + Math.round(b.top) + ' barH=' + Math.round(b.height)); }, 1500);
   v.play().catch(function (e) { L('play-refused', 'R ' + String(e)); });
 })();
-document.getElementById('va').play().catch(function (e) { L('play-refused', String(e)); });   // A and B play (muted): the jump must keep playing
-document.getElementById('vb').play().catch(function (e) { L('play-refused', String(e)); });
+if (show.A) document.getElementById('va').play().catch(function (e) { L('play-refused', String(e)); });   // A and B play (muted): the jump must keep playing
+if (show.B) document.getElementById('vb').play().catch(function (e) { L('play-refused', String(e)); });
 </script></body></html>
 """
 
