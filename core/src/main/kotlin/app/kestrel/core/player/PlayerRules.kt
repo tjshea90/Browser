@@ -7,7 +7,8 @@ package app.kestrel.core.player
  * The numbers are the ones the big players agree on (the audit's table), in one place so a test can pin them and a change is one line.
  */
 object PlayerRules {
-    /** The controls hide after this long without a touch while the film plays (YouTube about 3 s, Chrome 3 s, ExoPlayer 5 s). Never while it is paused, buffering, ended, or a finger is on a control. */
+    /** The controls hide after this long without a touch while the film plays (research/VIDEO_PLAYER_AUDIT.md: Chromium 2.5 s, Shaka 3 s, VLC 4 s, ExoPlayer and Firefox 5 s; the middle, a little short for "the whole screen to the video").
+     *  The app raises it to what Android's accessibility setting recommends ([minOf] of nothing: the larger). Never while it is paused, buffering, ended, or a finger is on a control. */
     const val HIDE_AFTER_MS = 3500L
 
     /** They show for this long when full screen begins, so the person sees that they exist. */
@@ -16,11 +17,11 @@ object PlayerRules {
     /** ... and for this long after the screen has turned (the picture was covered meanwhile). */
     const val AFTER_TURN_MS = 2500L
 
-    /** Two taps this close are a double tap (Chrome and YouTube use about this window): the single tap waits this long before it toggles the controls. */
-    const val DOUBLE_TAP_MS = 280L
+    /** Two taps this close are a double tap (Android's own double-tap timeout on API 29 is 300 ms, Chromium uses it too): the single tap waits this long before it toggles the controls. */
+    const val DOUBLE_TAP_MS = 300L
 
-    /** After a double tap that seeked, further taps on the same side seek again at once until this long passes without one (YouTube). */
-    const val BURST_MS = 650L
+    /** After a double tap that seeked, further taps on the same side seek again at once until this long passes without one (Shaka 500 ms, YouTube alike). */
+    const val BURST_MS = 500L
 
     /** One seek step of a double tap and of the skip buttons, in seconds. */
     const val SKIP_S = 10.0
@@ -30,6 +31,9 @@ object PlayerRules {
 
     /** A length that has been the same this long is believed (a Media Source stream grows its duration segment by segment, and an ad has its own). */
     const val STABLE_MS = 2000L
+
+    /** A length of this many seconds or more is how some players say "live" where `Infinity` is not allowed (Shaka and Plyr treat 2^32 so): no end time, no track. */
+    const val LIVE_SECONDS = 4294967296.0
 
     /** A length may be this much smaller than the played / buffered end before it is called wrong (rounding). */
     const val FLOOR_SLACK_S = 0.75

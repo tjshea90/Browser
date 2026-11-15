@@ -57,6 +57,7 @@ class PlayerController(
     private fun begin() {
         activeFlag = true; started = SystemClock.uptimeMillis(); reports = 0; taps = 0; lastReportAt = started
         view.visibility = View.VISIBLE
+        model.setHideAfter(accessibilityMs())
         model.start(true)
         scheduleWatchdog()
         Health.log("player", "start", "a full-screen film: Kestrel's controls")
@@ -71,6 +72,12 @@ class PlayerController(
         last = "$why after ${(SystemClock.uptimeMillis() - started) / 1000} s: $reports reports, $taps taps, ${model.seeks} seeks, ${model.commands} commands"
         Health.log("player", "stop", last)
     }
+
+    /** The longest Android's accessibility settings ask a control to stay (API 29: "Time to take action"): the controls never hide sooner than that. */
+    private fun accessibilityMs(): Long = try {
+        val am = view.context.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE) as? android.view.accessibility.AccessibilityManager
+        if (am != null && android.os.Build.VERSION.SDK_INT >= 29) am.getRecommendedTimeoutMillis(PlayerRules.HIDE_AFTER_MS.toInt(), android.view.accessibility.AccessibilityManager.FLAG_CONTENT_CONTROLS).toLong() else PlayerRules.HIDE_AFTER_MS
+    } catch (e: Throwable) { PlayerRules.HIDE_AFTER_MS }
 
     /** A page that stops reporting (its full-screen box lost the film, the script is gone) takes the controls with it. */
     private fun scheduleWatchdog() { if (!watchOn && activeFlag) { watchOn = true; Io.main.postDelayed(watchdog, 1000L) } }

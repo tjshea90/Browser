@@ -39,6 +39,7 @@ class DurationViewTest {
 
     @Test fun anInfiniteOrLiveStreamSaysLive() {
         assertEquals(Kind.LIVE, DurationView().at(0, Double.POSITIVE_INFINITY).kind)
+        assertEquals("some players say live as 2^32 seconds", Kind.LIVE, DurationView().at(0, 4294967296.0).kind)
         assertEquals(Kind.LIVE, DurationView().at(0, 120.0, live = true).kind)
     }
 

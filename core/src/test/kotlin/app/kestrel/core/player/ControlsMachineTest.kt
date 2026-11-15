@@ -97,6 +97,14 @@ class ControlsMachineTest {
         h.wait(c, PlayerRules.AFTER_TURN_MS); assertFalse(h.shown)
     }
 
+    @Test fun theAccessibilityTimeoutMakesThemStayLonger() {
+        val h = Host(); val c = ControlsMachine(h).also { it.hideAfterMs = 9000L; it.start(true) }
+        assertEquals(9000L, h.scheduled)
+        c.tap(); c.tap()                                          // hidden, then shown by a tap
+        assertEquals(9000L, h.scheduled)
+        h.wait(c, 9000L); assertFalse(h.shown)
+    }
+
     @Test fun stopRemovesEverythingAtOnce() {
         val h = Host(); val c = m(h)
         c.stop(); assertFalse(h.shown); assertFalse(h.lastAnimate); assertNull(h.scheduled)

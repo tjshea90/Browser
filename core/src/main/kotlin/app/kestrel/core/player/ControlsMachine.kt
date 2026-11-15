@@ -23,6 +23,8 @@ class ControlsMachine(private val h: Host) {
     }
 
     var shown = false; private set
+    /** How long they stay after a touch while the film plays: [PlayerRules.HIDE_AFTER_MS], or more when the person's accessibility setting asks for it. */
+    var hideAfterMs = PlayerRules.HIDE_AFTER_MS
     private var active = false
     private var playing = false
     private var buffering = false
@@ -34,7 +36,7 @@ class ControlsMachine(private val h: Host) {
     /** Full screen with a video began: the controls show for [PlayerRules.AFTER_ENTER_MS]. */
     fun start(playingNow: Boolean) {
         active = true; playing = playingNow; buffering = false; ended = false; pinned = false; turning = false
-        show(PlayerRules.AFTER_ENTER_MS)
+        show(scaled(PlayerRules.AFTER_ENTER_MS))
     }
 
     /** Full screen ended (or the video is gone): everything off at once. */
@@ -47,7 +49,7 @@ class ControlsMachine(private val h: Host) {
     /** A tap on the picture (already told apart from a double tap and from a tap on a control). */
     fun tap() {
         if (!active || turning) return
-        if (shown) hide(true) else show(PlayerRules.HIDE_AFTER_MS)
+        if (shown) hide(true) else show(hideAfterMs)
     }
 
     /** What the video does now; only a CHANGE is acted on. */
@@ -73,7 +75,7 @@ class ControlsMachine(private val h: Host) {
     fun turnStarted() { turning = true; h.cancel(); if (shown) { shown = false; h.apply(false, false) } }
 
     /** The cover is gone: the controls show for a moment. */
-    fun turnEnded() { turning = false; if (active) show(PlayerRules.AFTER_TURN_MS) }
+    fun turnEnded() { turning = false; if (active) show(scaled(PlayerRules.AFTER_TURN_MS)) }
 
     /** The timer the host was asked for. */
     fun tick() {
@@ -85,6 +87,9 @@ class ControlsMachine(private val h: Host) {
 
     private fun autoHide() = playing && !pinned && !buffering && !ended
 
+    /** A fixed time stays what it is, unless the person's accessibility setting asks for longer. */
+    private fun scaled(base: Long) = if (hideAfterMs > PlayerRules.HIDE_AFTER_MS) maxOf(base, hideAfterMs) else base
+
     private fun show(forMs: Long) {
         deadline = h.now() + forMs
         if (!shown) { shown = true; h.apply(true, true) }
@@ -92,8 +97,8 @@ class ControlsMachine(private val h: Host) {
     }
 
     private fun restart() {
-        deadline = h.now() + PlayerRules.HIDE_AFTER_MS
-        if (autoHide()) h.schedule(PlayerRules.HIDE_AFTER_MS) else h.cancel()
+        deadline = h.now() + hideAfterMs
+        if (autoHide()) h.schedule(hideAfterMs) else h.cancel()
     }
 
     private fun hide(animate: Boolean) {

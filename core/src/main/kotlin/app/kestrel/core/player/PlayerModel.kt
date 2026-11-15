@@ -78,6 +78,9 @@ class PlayerModel(private val h: Host) {
 
     val shown: Boolean get() = controls.shown
 
+    /** The accessibility setting's recommended time for controls to stay (never less than [PlayerRules.HIDE_AFTER_MS]). */
+    fun setHideAfter(ms: Long) { controls.hideAfterMs = maxOf(PlayerRules.HIDE_AFTER_MS, ms) }
+
     fun start(playingNow: Boolean) { active = true; sessions++; last = null; duration.reset(); queue.clear(); optPlaying = null; optMuted = null; taps.reset(); controls.start(playingNow) }
     fun stop() { active = false; taps.reset(); controls.stop(); queue.clear(); last = null; h.changed() }
     val running: Boolean get() = active
