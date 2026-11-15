@@ -20,10 +20,11 @@ class MediaListBlobTest {
     private fun film(l: MediaList) = l.find("https://c.test/film.m3u8")!!
     private fun clip(l: MediaList) = l.find("https://ads.test/pre.m3u8")!!
 
-    private fun twoStreams(): MediaList {
+    /** An advertising playlist of [clipMs] and a film of five minutes, both read by the early look. */
+    private fun twoStreams(clipMs: Long = 15_000): MediaList {
         val l = MediaList()
         l.add(hls("https://ads.test/pre.m3u8")); l.add(hls("https://c.test/film.m3u8"))
-        l.looked("https://ads.test/pre.m3u8", 15_000, 360)
+        l.looked("https://ads.test/pre.m3u8", clipMs, 360)
         l.looked("https://c.test/film.m3u8", 300_000, 360, 720)
         return l
     }
@@ -86,7 +87,7 @@ class MediaListBlobTest {
     }
 
     @Test fun anAdThenTheFilmOnTheSameBlobElementMakesTheAdAnAd() {
-        val l = twoStreams()
+        val l = twoStreams(clipMs = 15_000)
         l.applyBlob(360, 15_000, VideoRole.PLAYER, played = true, element = 1, areaPx = 1)         // the pre-roll plays first
         l.applyBlob(720, 300_000, VideoRole.PLAYER, played = true, element = 1, areaPx = 1)         // then the film, same element
         assertEquals(VideoRole.AD, clip(l).role)
@@ -94,8 +95,9 @@ class MediaListBlobTest {
     }
 
     @Test fun aBlobElementThatIsDecorationOrAnAdMakesItsPlaylistDecoration() {
-        val l = twoStreams()
-        l.applyBlob(360, 15_000, VideoRole.AD, played = true, element = 3, areaPx = 1)
+        val l = twoStreams(clipMs = 90_000)                                      // long enough to be counted by itself: only the page's own word 'ad' takes it out
+        assertEquals(2, l.usableCount())
+        l.applyBlob(360, 90_000, VideoRole.AD, played = true, element = 3, areaPx = 1)
         assertTrue(clip(l).decoy)
         assertNull("a decoy is never the primary file", l.primary())
         assertEquals(1, l.usableCount())
@@ -131,9 +133,12 @@ class MediaListBlobTest {
     }
 
     @Test fun theClipRuleSparesWhatPlayedWhatTheOwnerTouchedAndSetsOfShortClips() {
-        val l = twoStreams()
-        l.applyBlob(360, 15_000, VideoRole.PLAYER, played = true, element = 1, areaPx = 1)
-        assertEquals("the clip really played: it stays counted until the film plays after it", 2, l.usableCount())
+        val l = twoStreams(clipMs = 45_000)
+        assertEquals("a 45 s playlist next to a 5 minute one is a clip", 1, l.usableCount())
+        l.applyBlob(360, 45_000, VideoRole.PLAYER, played = true, element = 1, areaPx = 1)
+        assertEquals("the clip really played: it is counted until the film plays after it on the same element", 2, l.usableCount())
+        l.applyBlob(720, 300_000, VideoRole.PLAYER, played = true, element = 1, areaPx = 1)
+        assertEquals(1, l.usableCount())
         val m = MediaList()
         m.add(hls("https://ads.test/pre.m3u8")); m.add(hls("https://c.test/film.m3u8"))
         m.looked("https://ads.test/pre.m3u8", 45_000, 360); m.looked("https://c.test/film.m3u8", 400_000, 720)
