@@ -68,6 +68,9 @@ object GeckoEngine {
         try { org.mozilla.gecko.GeckoThread.speculativeConnect(origin); app.kestrel.browser.diag.Health.log("engine", "warm-start", origin.take(80)) } catch (e: Throwable) { /* only a head start */ }
     }
 
+    /** The runtime if the engine has started, else null (never starts it). */
+    fun runtimeOrNull(): GeckoRuntime? = rt
+
     fun runtime(ctx: Context): GeckoRuntime = rt ?: synchronized(this) { rt ?: create(ctx.applicationContext).also { rt = it } }
 
     private fun create(ctx: Context): GeckoRuntime {

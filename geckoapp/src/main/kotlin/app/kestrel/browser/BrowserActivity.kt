@@ -109,7 +109,9 @@ import app.kestrel.browser.web.session
 import app.kestrel.core.filter.RequestType
 import app.kestrel.core.filter.Verdict
 import app.kestrel.core.url.HttpsPolicy
+import org.mozilla.geckoview.AllowOrDeny
 import org.mozilla.geckoview.GeckoResult
+import org.mozilla.geckoview.OrientationController
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoSession.ContentDelegate
 import org.mozilla.geckoview.GeckoSession.PermissionDelegate
@@ -338,6 +340,9 @@ open class BrowserActivity : Activity(), DockListener {
 
     private lateinit var geckoView: KestrelGeckoView
     private var fullscreenOn = false
+    /** FS1 (owner message 43): the screen follows the tablet (and the rotate button) while a page is full screen; the picture size comes from what the page told about its playing video. */
+    private val fsTurner = app.kestrel.browser.web.FullscreenTurner(this, { prefs.fullscreenTurn }, { current?.gecko?.let { Pair(it.pictureW, it.pictureH) } ?: Pair(0, 0) })
+    internal fun fullscreenPictureKnown() { fsTurner.pictureKnown() }
     private var pendingFilePick: ((List<Uri>) -> Unit)? = null
     private var pendingAndroidPerms: PermissionDelegate.Callback? = null
     private var backCallback: Any? = null
@@ -385,7 +390,10 @@ open class BrowserActivity : Activity(), DockListener {
             setRecentsLook() // AO3: the icon and colour of this app's card in the Recents list
             Io.main.post {
                 Health.log("engine", "runtime-create")
-                GeckoEngine.runtime(this)
+                GeckoEngine.runtime(this).orientationController.delegate = object : OrientationController.OrientationDelegate { // FS1: screen.orientation.lock() from a full-screen player
+                    override fun onOrientationLock(orientation: Int): GeckoResult<AllowOrDeny>? = GeckoResult.fromValue(if (fsTurner.siteLocked(orientation)) AllowOrDeny.ALLOW else AllowOrDeny.DENY)
+                    override fun onOrientationUnlock() { fsTurner.siteUnlocked() }
+                }
                 GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
                 GeckoEngine.warmUp(this)
                 ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }))
@@ -441,6 +449,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onResume() {
         super.onResume()
+        fsTurner.resumed()
         Health.log("life", "resume"); Health.startWatchdog(); Health.watchFrames(window); app.kestrel.browser.diag.CpuMeter.start(packageName)
         flushStateWanted = false
         warmFrontOrigin()
@@ -481,7 +490,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onPause() {
         super.onPause()
-        Health.log("life", "pause")
+        Health.log("life", "pause"); fsTurner.paused()
         captureLook(current, "pause", LastLookRules.LEAVE_MIN_AGE_MS.toLong()) // EY-1: the page as it is left, before anything else (the read-back is a few hundred ms at most)
         app.kestrel.browser.net.WifiBoost.set(this, false)
         pausedAt = SystemClock.uptimeMillis()
@@ -550,11 +559,19 @@ open class BrowserActivity : Activity(), DockListener {
             android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
                 pressActive = false; if (!pressOnPanel) pressEndAt = SystemClock.uptimeMillis()
                 lastTouchAt = SystemClock.uptimeMillis()
+                if (fullscreenOn) fsTurner.touched() // FS1: the rotate button shows again for a moment
                 // a swipe may leave a fling running (hold the glow still for it); a plain tap leaves nothing behind, so the glow comes back almost at once
                 Io.main.removeCallbacks(touchRelease); Io.main.postDelayed(touchRelease, if (dragged) 1500L else 350L)
             }
         }
         return super.dispatchTouchEvent(ev)
+    }
+
+    /** FS1: the screen turned (the tablet, the rotate button, a page's lock): the engine is told so `screen.orientation` and a full-screen video's layout follow. The activity handles the change itself (manifest configChanges). */
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        GeckoEngine.runtimeOrNull()?.let { try { it.orientationChanged() } catch (e: Throwable) { Health.log("fullscreen", "orientation-notify-failed", e.toString().take(80)) } }
+        Health.log("life", "config", "orientation=${if (newConfig.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"} fullscreen=$fullscreenOn")
     }
 
     override fun onDestroy() {
@@ -681,6 +698,9 @@ open class BrowserActivity : Activity(), DockListener {
         miniNav.available = prefs.miniNavToggle
         miniNav.setGlideEnabled(prefs.glideTyping)
         miniNav.setOpen(prefs.miniNavOpen, animate = false, notify = false)
+        val rotateButton = app.kestrel.browser.web.FullscreenTurner.RotateButton(this) // FS1: shows for a moment after a touch while a page is full screen
+        content.addView(rotateButton, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.START or Gravity.CENTER_VERTICAL).apply { leftMargin = dp(12) })
+        fsTurner.attachButton(rotateButton)
         findBar = FindBar(this, pal, object : FindBar.Listener {
             override fun query(q: String) { findIn(q, false) }
             override fun next(forward: Boolean) { findIn(findBar.input.text.toString(), !forward) }
@@ -1841,6 +1861,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(adSkipStats.line() + if (prefs.skipVideoAds) "" else " (the Settings switch is off)")
         out.add(playerSkipStats.line() + if (prefs.skipVideoAds) "" else " (the Settings switch is off)")
         out.add(seekStats.line() + if (prefs.tapSeek) "" else " (the Settings switch is off)")
+        out.add(fsTurner.line())
         out.add(app.kestrel.browser.shield.ScriptletSummary.read(applicationContext).ifEmpty { "Scriptlets in the lists: no compile report yet (the bundled lists are used until the first update)" })
         Engine.peek()?.let { fs -> out.add("YouTube scriptlet calls loaded: www.youtube.com " + fs.scriptletsFor("www.youtube.com").size + ", m.youtube.com " + fs.scriptletsFor("m.youtube.com").size) }
         out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null }} of ${tabs.size} tabs (the memory budget keeps up to ${liveBudget()} ready, MemAvailable ${Health.memAvailableMb()} MB, setting ${listOf("automatic", "few", "many")[prefs.tabsKept]}); current ${current?.url?.take(60) ?: "-"}")
@@ -2479,6 +2500,7 @@ open class BrowserActivity : Activity(), DockListener {
         dock.visibility = if (on) View.GONE else View.VISIBLE
         progress.visibility = if (on) View.GONE else View.VISIBLE
         applyImmersive(on)
+        if (on) fsTurner.enter() else fsTurner.exit() // FS1: the screen follows the tablet while a page is full screen
     }
 
     private fun applyImmersive(on: Boolean) {
