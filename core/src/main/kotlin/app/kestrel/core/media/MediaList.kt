@@ -212,6 +212,9 @@ class MediaList(private val max: Int = 48) {
         return changed
     }
 
+    /** RX3-V4: how many stream playlists the player with this element number was matched to (for the Diagnostics events). */
+    fun matchedBy(element: Int): Int = items.count { it.kind != MediaKind.FILE && it.element == element }
+
     private fun matchBlob(element: Int, b: Blob): Boolean {
         val tol = maxOf(BLOB_TOL_MS, b.durationMs * 3 / 100)
         var cands = items.filter { it.kind != MediaKind.FILE && it.looked && it.durationMs > 0 && Math.abs(it.durationMs - b.durationMs) <= tol }
@@ -320,6 +323,8 @@ class MediaList(private val max: Int = 48) {
         /** RX3-V3: a file that played under this long, then replaced on the same element by one three times longer, was an advertisement. */
         private const val AD_MAX_MS = 90_000L
         /** RX3-V4: a blob: player's length matches a playlist within this (or 3 percent of the player's length, whichever is more); at most this many players are remembered. */
+        /** What a player that feeds a blob: address reports as its address (the address itself is never sent). */
+        const val BLOB = "blob"
         private const val BLOB_TOL_MS = 1_500L
         private const val BLOB_MAX = 8
         /** RX3-V4: a stream under [CLIP_MS] next to one of at least [FILM_MS] is a clip (an advertisement, a trailer), not the film. */

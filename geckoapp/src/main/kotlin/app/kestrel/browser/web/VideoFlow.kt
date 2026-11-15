@@ -13,6 +13,7 @@ import app.kestrel.core.media.Hls
 import app.kestrel.core.media.MediaCandidate
 import app.kestrel.core.media.MediaHeaders
 import app.kestrel.core.media.MediaKind
+import app.kestrel.core.media.MediaList
 import app.kestrel.core.media.MediaLabels
 import app.kestrel.core.media.MediaNames
 import app.kestrel.core.media.MediaRank
@@ -102,27 +103,38 @@ class VideoFlow(private val a: BrowserActivity) {
         for (c in t.media.streamsToLook(3)) {
             val n = looks[t.id] ?: 0
             if (n >= LOOKS_PER_PAGE) break
-            if (c.kind != MediaKind.HLS || !lookedKeys.add(c.key)) continue
+            if ((c.kind != MediaKind.HLS && c.kind != MediaKind.DASH) || !lookedKeys.add(c.key)) continue
             looks[t.id] = n + 1
+            if (c.kind == MediaKind.DASH) { // RX3-V4: a DASH manifest says its length and its picture heights in its first bytes
+                fetchPlaylist(t, c, c.url, { Dash.parse(it, c.url) != null }) { text, _ ->
+                    val m = text?.let { Dash.parse(it, c.url) }
+                    if (m != null) noteStream(t, c, m.problem, m.durationMs, 0L, 0, m.video.map { it.height }.filter { it > 0 }.distinct().toIntArray())
+                }
+                continue
+            }
             fetchPlaylist(t, c, c.url, { Hls.parse(it, c.url) != null }) { text, _ ->
                 when (val pl = text?.let { Hls.parse(it, c.url) }) {
-                    is Hls.MediaPlaylist -> noteLook(t, c, pl.media)
+                    is Hls.MediaPlaylist -> noteLook(t, c, pl.media, IntArray(0))
                     is Hls.MasterPlaylist -> {
                         val vs = pl.master.variants
+                        val heights = vs.filter { !it.audioOnly }.map { it.height }.filter { it > 0 }.distinct().toIntArray()   // RX3-V4: what a blob: player's picture height is matched against
                         val probe = vs.filter { !it.audioOnly }.minByOrNull { it.bandwidth } ?: vs.minByOrNull { it.bandwidth }
-                        if (probe != null) DownloadController.fetchText(a, probe.url, requestHeaders(t, c), 1, t.isPrivateTab) { txt -> (txt?.let { Hls.parse(it, probe.url) } as? Hls.MediaPlaylist)?.media?.let { noteLook(t, c, it) } }
+                        if (probe != null) DownloadController.fetchText(a, probe.url, requestHeaders(t, c), 1, t.isPrivateTab) { txt -> (txt?.let { Hls.parse(it, probe.url) } as? Hls.MediaPlaylist)?.media?.let { noteLook(t, c, it, heights) } }
                     }
                     null -> {}
                 }
             }
         }
     }
-    private fun noteLook(t: Tab, c: MediaCandidate, media: Hls.Media) {
+    private fun noteLook(t: Tab, c: MediaCandidate, media: Hls.Media, heights: IntArray) {
         val ads = AdRuns.find(media)
-        val live = media.problem == Hls.Problem.LIVE
-        val drm = media.problem == Hls.Problem.DRM || media.problem == Hls.Problem.SAMPLE_AES
-        if (t.media.applyStream(c.url, live, drm, media.durationMs, ads.skippedMs, ads.breaks)) { a.refreshDownloadButton(); refresh(t) }
-        Health.log("media", "look", "live=$live drm=$drm length=${media.durationMs / 1000}s advertising=${ads.skippedMs / 1000}s in ${ads.breaks} breaks counted=${t.media.usableCount()} of ${t.media.size}")
+        noteStream(t, c, media.problem, media.durationMs, ads.skippedMs, ads.breaks, heights)
+    }
+    private fun noteStream(t: Tab, c: MediaCandidate, problem: Hls.Problem?, durationMs: Long, adMs: Long, breaks: Int, heights: IntArray) {
+        val live = problem == Hls.Problem.LIVE
+        val drm = problem == Hls.Problem.DRM || problem == Hls.Problem.SAMPLE_AES
+        if (t.media.applyStream(c.url, live, drm, durationMs, adMs, breaks, heights)) { a.refreshDownloadButton(); refresh(t) }
+        Health.log("media", "look", "${c.kind} live=$live drm=$drm length=${durationMs / 1000}s heights=${heights.size} advertising=${adMs / 1000}s in $breaks breaks counted=${t.media.usableCount()} of ${t.media.size}")
     }
 
     // ---- RX3-V2 (research/FINDER_LAB.md section 2): an address found only in the page's text was never requested; on a page with nothing verified, up to three of them get ONE cheap question at idle
@@ -187,6 +199,13 @@ class VideoFlow(private val a: BrowserActivity) {
         // RX3-V1: a hover preview, a hero loop or an ad that loaded its metadata is not "a video the owner may want": the page's own element says what it is for
         val role = if (facts == null) null else app.kestrel.core.media.VideoRoleRules.decide(facts, durationMs)
         val area = if (facts == null) 0L else facts.widthPx.toLong() * facts.heightPx * facts.viewPercent / 100   // the part of its picture that is on screen
+        if (url == MediaList.BLOB) { // RX3-V4: a player that feeds a blob: address says only its length and picture height: matched to the playlist of its length (now, or when that playlist has been read)
+            val changed = t.media.applyBlob(height, durationMs, role, played, element, area)
+            Health.log("video", "info-blob", "${if (played) "PLAYED " else ""}el=$element role=${role ?: "none"} length=${durationMs / 1000}s h=$height matched=${t.media.matchedBy(element)} counted=${t.media.usableCount()} of ${t.media.size}")
+            a.refreshDownloadButton()
+            if (changed) refresh(t)
+            return@ui
+        }
         t.media.applyInfo(url, width, height, durationMs, label, role, played, element, area)
         app.kestrel.browser.diag.Health.log("video", "info", "${if (played) "PLAYED " else ""}el=$element role=${role ?: "none"} length=${durationMs / 1000}s counted=${t.media.usableCount()} of ${t.media.size}")   // no address
         a.refreshDownloadButton()
