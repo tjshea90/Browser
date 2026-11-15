@@ -46,13 +46,24 @@ async function open(body, o) {
   const page = await context.newPage();
   await page.addInitScript((cfg) => {
     window.__msgs = [];
-    window.__kstVBcfg = { judge: 80, late: 500, hide: 1100, hidePaused: 1700, drag: 20, tap: 600 };
+    if (window.top === window) { window.__all = []; window.__guardFails = 0; window.__ftDelay = 0; }
+    window.__kstVBcfg = { judge: 80, late: 500, hide: 1100, hidePaused: 1700, drag: 20 };      // (tap stays the app's 450 ms)
     window.browser = {
       runtime: {
         sendMessage: (m) => {
           window.__msgs.push(m);
-          if (m && m.k === 'guard') return Promise.resolve({ on: true, top: location.hostname, skip: false, seek: true, vb: cfg.vb !== false, vba: !!cfg.vba });
-          if (m && m.k === 'ft') { try { return window.top.__ftq({ k: 'ftq', t: m.t, w: m.w, h: m.h }); } catch (e) { return Promise.resolve({ video: false }); } }
+          try { window.top.__all.push(m); } catch (e) { /* another origin */ }
+          if (m && m.k === 'guard') {
+            if ((window.top.__guardFails || 0) > 0) { window.top.__guardFails--; return Promise.reject(new Error('no answer')); }
+            return Promise.resolve({ on: true, top: location.hostname, skip: false, seek: true, vb: cfg.vb !== false, vba: !!cfg.vba });
+          }
+          if (m && m.k === 'ft') {                      // the background page: ask the top frame, answer {video, src} (http addresses only, like background.js)
+            try {
+              const p = window.top.__ftq({ k: 'ftq', t: m.t, w: m.w, h: m.h }).then((r) => ({ video: !!(r && r.video), src: (r && typeof r.src === 'string' && /^https?:\/\//i.test(r.src)) ? r.src : '' }));
+              const d = window.top.__ftDelay || 0;
+              return d ? new Promise((res) => setTimeout(res, d)).then(() => p) : p;
+            } catch (e) { return Promise.resolve({ video: false, src: '' }); }
+          }
           return Promise.resolve(undefined);
         },
         onMessage: { addListener: (fn) => { window.__ftq = (m) => Promise.resolve(fn(m)); } },
@@ -68,6 +79,8 @@ async function open(body, o) {
 }
 
 const msgs = (page, k) => page.evaluate((kk) => window.__msgs.filter((m) => m && m.k === kk), k);
+/** Every message of every frame of the page (the background page sees all of them). */
+const msgsAll = (page, k) => page.evaluate((kk) => window.__all.filter((m) => m && m.k === kk), k);
 /** The bar's state as the test can see it (its shadow tree is closed): null = none, else { left, top, width, height, playing, muted, text }. */
 const barInfo = (page) => page.evaluate(() => {
   const b = window.KestrelVB && window.KestrelVB.dbg();
@@ -90,4 +103,4 @@ async function touch(page, x, y, o) {
   await c.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 }
 
-module.exports = { launch, close, open, msgs, barInfo, tapAt, partCentre, filmTime, touch, VIDEO, LEN, CONTENT };
+module.exports = { launch, close, open, msgs, msgsAll, barInfo, tapAt, partCentre, filmTime, touch, VIDEO, LEN, CONTENT };
