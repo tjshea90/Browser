@@ -22,7 +22,7 @@
     if (/(^|\.)(youtube\.com|youtube-nocookie\.com|youtubekids\.com)$/i.test(String(location.hostname))) return;
     window.__kstPL = 1;
     var T = (window.__kstPLcfg && typeof window.__kstPLcfg === 'object') ? window.__kstPLcfg : {}; // the tests shorten the clocks; in the real extension a page's globals are not visible here
-    var LOOP = T.loopMs || 250, MAXMS = T.maxMs || 15000, GIVEUP = T.fails || 5, FLUSH = T.flushMs || 3000, HOLD = T.holdMs || 1000, LEVELS = 8, MAXVIDEOS = 12;
+    var LOOP = T.loopMs || 250, MAXMS = T.maxMs || 15000, GIVEUP = T.fails || 5, FLUSH = T.flushMs || 3000, HOLD = T.holdMs || 1000, SEEK = T.seekMs || 900, LEVELS = 8, MAXVIDEOS = 12;
     var STATE = ['jw-flag-ads', 'vjs-ad-playing'];       // on an ancestor while an ad plays
     var HOST = ['ima-ad-container', 'plyr__ads'];        // a video inside one of these is the ad itself
     var SKIP = ['.jw-skip.jw-skippable'];                // JW Player: the skip button element gets jw-skippable when skipping is allowed
@@ -109,13 +109,13 @@
       trackers.push(t);
       return t;
     }
-    // The length of the film itself, remembered while no ad shows - and only once it is certain to be the film: a stream of 3 minutes or more, or one that played 10 s without an ad class (an ad stream whose
+    // The length of the film itself, remembered while no ad shows - and only once it is certain to be the film: a stream of 3 minutes or more, or one that played 3 s without an ad class (an ad stream whose
     // class came a moment late must not be taken for the film: the real film would then look like an ad). While it is not known, only streams under 3 minutes count as ads and nothing is moved to its end.
     function filmLength(t, played) {
       try {
         var v = t.v, d = v.duration;
         if (t.dead || adNow(t) || !isFinite(d) || !(d > 0)) return;
-        if (d >= 180 || (played && v.currentTime >= 10)) t.mainDur = d;
+        if (d >= 180 || (played && v.currentTime >= 3)) t.mainDur = d;
       } catch (e) { /* ignore */ }
     }
 
@@ -128,7 +128,7 @@
     }
     function begin(t) {
       mark('a');
-      t.active = { t0: Date.now(), saved: null, timer: 0, jumped: false, clicked: [], acted: false, lockDur: 0, lockSrc: '', holdUntil: 0 };
+      t.active = { t0: Date.now(), saved: null, timer: 0, jumped: false, clicked: [], acted: false, lockDur: 0, lockSrc: '', lockAt: 0, holdUntil: 0 };
       tick(t);
     }
     function restore(t, a) { // put back what was ours; what somebody else changed in the meantime stays
@@ -153,8 +153,8 @@
         // moment: what was done to the old stream is undone at once, nothing is done for a second, and only if the class is still there then is the new stream treated as another ad (a film must never be sped up or moved).
         var dNow = v.duration, srcNow = v.currentSrc || v.src || '';
         if (a.lockDur > 0 && isFinite(dNow) && dNow > 0 && (Math.abs(dNow - a.lockDur) > 0.5 || srcNow !== a.lockSrc)) {
-          restore(t, a); a.jumped = false; a.lockDur = dNow; a.lockSrc = srcNow; a.holdUntil = Date.now() + HOLD;
-        } else if (!(a.lockDur > 0) && isFinite(dNow) && dNow > 0) { a.lockDur = dNow; a.lockSrc = srcNow; }
+          restore(t, a); a.jumped = false; a.lockDur = dNow; a.lockSrc = srcNow; a.lockAt = Date.now(); a.holdUntil = a.lockAt + HOLD;
+        } else if (!(a.lockDur > 0) && isFinite(dNow) && dNow > 0) { a.lockDur = dNow; a.lockSrc = srcNow; a.lockAt = Date.now(); }
         if (Date.now() < a.holdUntil) { if (t.active === a) a.timer = setTimeout(function () { tick(t); }, LOOP); return; }
         if (!v.paused && !v.ended && notFilm(t)) {
           if (!a.saved) a.saved = { muted: v.muted, rate: v.playbackRate };
@@ -162,11 +162,11 @@
           if (!v.muted) v.muted = true;
           if (v.playbackRate !== 16) { try { v.playbackRate = 16; } catch (e) { pend.r = 'speed refused'; } }
           var d = v.duration;
-          if (!a.jumped && Date.now() - a.t0 >= 300 && isFinite(d) && d > 0 && d < 180 && v.currentTime < d - 0.2) {
+          if (!a.jumped && a.lockAt > 0 && Date.now() - a.lockAt >= SEEK && isFinite(d) && d > 0 && d < 180 && v.currentTime < d - 0.2) {   // moved to its end only once the stream has stayed the same for a while: a film coming back is never moved
             try { v.currentTime = d - 0.1; a.jumped = true; mark('f'); } catch (e) { pend.r = 'seek refused'; }
           }
-          clickSkip(t, a);
         } else if (a.saved && !notFilm(t)) restore(t, a);   // the film is back while the class has not gone yet
+        if (!v.ended) clickSkip(t, a);                       // a visible skip button that says skippable exists only in an ad's own bar: pressing it is what a person would do
       } catch (e) { pend.r = String((e && e.message) || e).slice(0, 40); }
       if (t.active === a) a.timer = setTimeout(function () { tick(t); }, LOOP);
     }
