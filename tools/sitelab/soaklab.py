@@ -7,7 +7,7 @@ Serves, on one port (the emulator reaches it with `adb reverse tcp:<port> tcp:<p
   /video/<name>[?src=URL]          a player page: <video> + a reporter that sends every media event and getVideoPlaybackQuality() to /report
                                    name = landscape | portrait | big (clips made with ffmpeg at start) ; ?src= plays a PUBLIC address instead
   /fs                              the full-screen lab (FS1): a wide video, buttons "full screen", "lock landscape", "unlock"; reports fullscreenchange / orientation
-  /fsbox?kind=light|shadow&nobar=1 the full-screen BOX lab (FSB1 / ROT1, owner message 46): a player box (in a shadow root like finance.yahoo.com's, or plain) that goes full screen as a box, with a red strip on its bottom edge
+  /fsbox?kind=light|shadow&nobar=1&chrome=1 the full-screen BOX lab (FSB1 / ROT1, owner message 46): a player box (in a shadow root like finance.yahoo.com's, or plain) that goes full screen as a box, with a red strip on its bottom edge
   /dl/<n>mb.bin  /dl/slow.bin  /dl/page   downloads of known size (the last page links to them)
   /report?...            one line of JSON per call -> <outdir>/report.jsonl  (what the pages saw: the soak driver reads it)
   /health                "ok"
@@ -192,14 +192,16 @@ def page_fs(lock=""):
             "<button id=unlock style='" + btn + "'>Unlock</button><button id=exit style='" + btn + "'>Exit full screen</button>" + reporter).encode()
 
 
-def page_fsbox(kind, nobar):
+def page_fsbox(kind, nobar, chrome=False):
     """FSB1 / ROT1 / FSC1 (owner message 46): a PLAYER BOX goes full screen (not the bare video), as finance.yahoo.com's player does: kind=shadow puts the box inside a web component's open shadow root (the full-screen
     element is then the host), kind=light is a plain box. The box's bottom edge carries a 6 px RED strip, so a screenshot shows whether the bottom of the full-screen page is hidden under a system bar
     (the strip is gone) or visible (red rows). The clip has sound (a media session opens, so the app can pause it while the screen turns). nobar=1: the box has no controls of its own (Kestrel's bar can show).
-    The report rows (/report, kind=fsb) carry the window size and the strip's position."""
+    The report rows (/report, kind=fsb) carry the window size and the strip's position. chrome=1 (VP2): the box also has a bar named like YouTube's player chrome (class ytp-chrome-bottom, bright magenta); the rows
+    say its computed display, so the lab sees that Kestrel's controls put the page's own controls away while they own the film and give them back."""
     own = "" if nobar else ('<div id="bar" style="position:absolute;left:0;right:0;bottom:6px;height:44px;background:rgba(0,0,0,.7)"><button class="play-button" aria-label="Play or pause" style="width:44px;height:44px">|&gt;</button>'
                             '<input type="range" aria-label="Seek" value="0" style="width:60%"></div>')
-    box = ('<div id="box" style="position:relative;width:100%;height:300px;background:#000"><video id="v" src="/clip/landscape.mp4" loop playsinline style="width:100%;height:100%;object-fit:contain"></video>' + own +
+    ytc = '<div id="ytchrome" class="ytp-chrome-bottom" style="position:absolute;left:0;right:0;bottom:30px;height:36px;background:#c0c;color:#fff;display:block">page chrome</div>' if chrome else ""
+    box = ('<div id="box" style="position:relative;width:100%;height:300px;background:#000"><video id="v" src="/clip/landscape.mp4" loop playsinline style="width:100%;height:100%;object-fit:contain"></video>' + own + ytc +
            '<div id="mark" style="position:absolute;left:0;right:0;bottom:0;height:6px;background:#f00"></div></div>')
     css = "#box:fullscreen,:host(:fullscreen) #box{width:100vw !important;height:100vh !important}"
     if kind == "shadow":
@@ -219,6 +221,7 @@ def page_fsbox(kind, nobar):
     var o = { kind: 'fsb', ev: ev, t: Date.now(), fs: document.fullscreenElement ? 1 : 0, iw: innerWidth, ih: innerHeight, dpr: window.devicePixelRatio };
     try { var m = q('mark').getBoundingClientRect(); o.mb = Math.round(m.bottom); o.bw = Math.round(m.width); o.bh = Math.round(q('box').getBoundingClientRect().height); } catch (e) {}
     try { var v = q('v'); o.paused = v.paused ? 1 : 0; o.ct = v.currentTime.toFixed(1); } catch (e) {}
+    try { var yc = q('ytchrome'); if (yc) o.chrome = getComputedStyle(yc).display; } catch (e) {}
     try { o.ot = screen.orientation.type; } catch (e) {}
     if (extra) for (var k in extra) o[k] = extra[k];
     try { new Image().src = '/report?' + Object.keys(o).map(function (k) { return k + '=' + encodeURIComponent(o[k]); }).join('&'); } catch (e) {}
@@ -382,7 +385,7 @@ class H(http.server.BaseHTTPRequestHandler):
             if p == "/fs":
                 return self._send(page_fs((q.get("lock") or [""])[0]))
             if p == "/fsbox":
-                return self._send(page_fsbox((q.get("kind") or ["light"])[0], (q.get("nobar") or [""])[0] == "1"))
+                return self._send(page_fsbox((q.get("kind") or ["light"])[0], (q.get("nobar") or [""])[0] == "1", (q.get("chrome") or [""])[0] == "1"))
             if p == "/dl/page":
                 return self._send(page_dl())
             if p == "/dl/guard":

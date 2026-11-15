@@ -1608,7 +1608,7 @@ class Soak:
         self.ph.a.sh("setprop debug.kestrel.nohide 0"); self.ph.debug("bars", "keep"); self.ph.debug("turnwait", "on"); time.sleep(2)
         self.ph.physical(0, 9.81, 0); time.sleep(2)
         rmark = self.lab.size()
-        self.ph.open_url("%s/fsbox?kind=shadow&nobar=1" % self.lab_base)              # a film with no controls of its own, in a web component (like finance.yahoo.com's player)
+        self.ph.open_url("%s/fsbox?kind=shadow&nobar=1&chrome=1" % self.lab_base)     # a film with no controls of its own, in a web component (like finance.yahoo.com's player), and a bar named like YouTube's chrome
         self.fsbox_wait(rmark); time.sleep(2)
         lm = self.log.size()
         self.ph.tap(w // 2, 140); time.sleep(3.2); self.ph.dismiss_cling()           # play and full screen; the wide film is turned sideways by the app
@@ -1685,6 +1685,12 @@ class Soak:
         check("the exit button leaves full screen", bool(health_events(self.log.since(m), "fullscreen", "turn")) or bool(ev("player", "stop", m)), "no 'full screen ends' / 'player stop' after the exit tap")
         self.shot("kp-9-after-exit")
         self.ph.physical(0, 9.81, 0)
+        # VP2: the page's own player controls (the lab page has a bar with YouTube's class name) are not shown while Kestrel's controls own the film, and are given back when full screen ends
+        cr = [r for r in self.lab.since(rmark) if r.get("kind") == "fsb" and r.get("chrome")]
+        inside = [r for r in cr if str(r.get("fs")) == "1" and str(r.get("ev", "")).startswith("v-")]
+        check("the page's own player controls are put away while Kestrel's own the film", bool(inside) and all(r.get("chrome") == "none" for r in inside[-3:]), "rows (event, display): %s" % [(r.get("ev"), r.get("chrome")) for r in cr][-8:])
+        outside = [r for r in cr if r.get("ev") == "fullscreenchange" and str(r.get("fs")) == "0"]
+        check("and they are given back when full screen ends", bool(outside) and outside[-1].get("chrome") not in ("none", None), "rows (event, display): %s" % [(r.get("ev"), r.get("chrome")) for r in cr][-8:])
         # VP3 (owner message 49: "if I pull up the navigation bar, it covers the video controls"): the second pass hides the system bars (Settings "Hide"), pulls the navigation bar up over the film with a swipe from the
         # bottom edge, and the controls must move up by the bar's height (a Health line 'player inset ...' and a picture)
         self.ph.debug("bars", "hide"); time.sleep(2)
