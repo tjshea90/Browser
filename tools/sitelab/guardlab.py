@@ -34,7 +34,7 @@
 
   /seekbar-lab YS1: three mock players over a REAL 300 s silent media file (/seek-film.wav, served with byte ranges, every request logged with its Range header). A: a YouTube-like red bar whose page IGNORES a tap
               (only a light "hover" line follows the finger, as the owner reported); B: the same bar whose page jumps the video itself on a tap (the control: Kestrel must not seek twice); C: a short volume
-              slider (must never move the video); under A's bar a thin strip with a name the script does not know (a tap on it only shows up in Diagnostics: "1 tap on a bar-like strip Kestrel did not know (last: div.mystery-strip)"). ?small uses the 2.4 MB film instead of /seek-big.wav (57.6 MB, 192 KB/s). The page logs every pointer / mouse / touch event of a tap (type, isTrusted, pointerType) and every seeking / seeked of each video with its time, and shows both
+              slider (must never move the video); R: the REAL current YouTube bar markup (yt-progress-bar, role=slider drag container, 3 px rail at opacity .3, 'Hovered' line), the page ignores a tap and only paints the light line; under A's bar a thin strip with a name the script does not know (a tap on it only shows up in Diagnostics: "1 tap on a bar-like strip Kestrel did not know (last: div.mystery-strip)"). ?small uses the 2.4 MB film instead of /seek-big.wav (57.6 MB, 192 KB/s). The page logs every pointer / mouse / touch event of a tap (type, isTrusted, pointerType) and every seeking / seeked of each video with its time, and shows both
               times on screen. The log's "GET /seek-film.wav Range=bytes=N-" lines show where the engine reads from after a jump: nothing before the jumped-to place is asked for again.
 
 Used as the FIRST page after a force-stop (a cold start from a link: the extension may not be active yet) and as a later page, to see whether the guard was there from the very first document.
@@ -373,6 +373,19 @@ body{margin:8px;font:15px sans-serif}
  <div class="ch ytp-chrome-bottom"><div id="bb" class="bar ytp-progress-bar" role="slider" aria-label="Seek slider" aria-valuemin="0" aria-valuemax="300" aria-valuenow="0" tabindex="0">
   <div class="rail"></div><div class="hov ytp-hover-progress"></div><div class="red ytp-play-progress"></div><div class="dot ytp-scrubber-container"></div></div></div></div>
 <p class="t" id="tb">B: ...</p>
+<div id="pr" class="pl html5-video-player"><video id="vr" preload="auto" muted playsinline></video>
+ <div class="player-controls-content" style="position:absolute;left:0;top:0;width:340px;height:190px">
+  <yt-progress-bar class="ytPlayerProgressBarHost watch-page-progress-bar" style="display:block;position:absolute;left:20px;top:130px;width:300px;height:44px">
+   <div id="br" class="ytPlayerProgressBarDragContainer" role="slider" aria-label="Seek slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0" style="display:block;position:static;height:44px;touch-action:none">
+    <div class="ytPlayerProgressBarProgressBar" style="position:relative;height:0">
+     <yt-progress-bar-line class="ytProgressBarLineHost" style="display:block;position:absolute;left:0;top:21px;width:300px;height:3px"><div id="lr" class="ytProgressBarLineProgressBarLine" style="position:relative;height:3px">
+      <div class="ytProgressBarLineProgressBarBackground" style="position:absolute;left:0;top:0;width:100%;height:3px;background:#fff;opacity:.3"></div>
+      <div class="ytProgressBarLineProgressBarLoaded" style="position:absolute;left:0;top:0;width:0;height:3px;background:#fff;opacity:.6"></div>
+      <div id="hr" class="ytProgressBarLineProgressBarHovered" style="position:absolute;left:0;top:0;width:0;height:3px;background:#fff;opacity:.7"></div>
+      <div id="pl" class="ytProgressBarLineProgressBarPlayed" style="position:absolute;left:0;top:0;width:0;height:3px;background:#f03"></div></div></yt-progress-bar-line>
+     <yt-progress-bar-playhead class="ytProgressBarPlayheadHost" id="ph" style="display:block;position:absolute;left:-6px;top:16px;width:12px;height:12px"><div class="ytProgressBarPlayheadProgressBarPlayheadDot" style="width:12px;height:12px;border-radius:6px;background:#f03"></div></yt-progress-bar-playhead>
+    </div></div></yt-progress-bar></div></div>
+<p class="t" id="tr">R: ...</p>
 <script>
 function L(k, v) { try { var x = new XMLHttpRequest(); x.open('GET', '/log?kind=' + encodeURIComponent(k) + '&v=' + encodeURIComponent(v)); x.send(); } catch (e) {} }
 L('load', 'seekbar-lab ontouchstart=' + ('ontouchstart' in window) + ' maxTouchPoints=' + navigator.maxTouchPoints + ' PointerEvent=' + (typeof PointerEvent));
@@ -406,6 +419,21 @@ document.getElementById('va').src = F + '?p=A&n=' + N; document.getElementById('
 wire('va', 'ba', 'ta', 'A', false);
 wire('vb', 'bb', 'tb', 'B', true);
 ['pointerdown', 'pointerup', 'click'].forEach(function (n) { document.getElementById('volc').addEventListener(n, function (e) { L('ev', 'C ' + n + ' x=' + Math.round(e.clientX) + ' y=' + Math.round(e.clientY)); }); });   // the volume slider: its taps are only logged, they must never move a video
+// R: the REAL current YouTube player bar (markup of the live embed, build 20261114): the page paints only its light "Hovered" line under the finger and does NOT seek on a tap (the owner's case)
+(function () {
+  var v = document.getElementById('vr'), bar = document.getElementById('br'), hov = document.getElementById('hr'), line = document.getElementById('lr'), t = document.getElementById('tr'), pl = document.getElementById('pl'), ph = document.getElementById('ph');
+  v.src = '/seek-film.wav?p=R&n=' + N;
+  function paint() { var w = bar.getBoundingClientRect().width * (v.currentTime / (v.duration || 300)); pl.style.width = w + 'px'; ph.style.left = (w - 6) + 'px'; t.textContent = 'R: ' + v.currentTime.toFixed(1) + ' s of ' + Math.round(v.duration || 300) + (v.paused ? ' (paused)' : ' (playing)'); }
+  setInterval(paint, 500);
+  ['pointerdown', 'pointermove'].forEach(function (n) { bar.addEventListener(n, function (e) { hov.style.width = (e.clientX - bar.getBoundingClientRect().left) + 'px'; }, { passive: true }); });
+  ['pointerdown', 'pointerup', 'pointercancel', 'mousedown', 'mouseup', 'click', 'touchstart', 'touchend', 'touchcancel', 'contextmenu'].forEach(function (n) {
+    bar.addEventListener(n, function (e) { var pt = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0] : e; L('ev', 'R ' + n + (e.pointerType ? ' pointerType=' + e.pointerType : '') + ' x=' + Math.round(pt.clientX) + ' y=' + Math.round(pt.clientY)); });
+  });
+  v.addEventListener('seeking', function () { L('seeking', 'R to ' + v.currentTime.toFixed(1)); });
+  v.addEventListener('seeked', function () { L('seeked', 'R at ' + v.currentTime.toFixed(1)); });
+  setTimeout(function () { var r = line.getBoundingClientRect(), b = bar.getBoundingClientRect(); L('rect', 'R rail left=' + Math.round(b.left) + ' w=' + Math.round(b.width) + ' railTop=' + Math.round(r.top) + ' railH=' + Math.round(r.height) + ' barTop=' + Math.round(b.top) + ' barH=' + Math.round(b.height)); }, 1500);
+  v.play().catch(function (e) { L('play-refused', 'R ' + String(e)); });
+})();
 document.getElementById('va').play().catch(function (e) { L('play-refused', String(e)); });   // A and B play (muted): the jump must keep playing
 document.getElementById('vb').play().catch(function (e) { L('play-refused', String(e)); });
 </script></body></html>
