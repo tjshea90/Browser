@@ -2185,3 +2185,38 @@
 ## 2026-11-15T02:18:57Z
 > Yes, this is the first time these have reached me. I'm checking whether an earlier mini-panel message was recorded that I missed, then writing all five requests into the task list in your words before touching any code.
 <!-- sha:b3fc19885441 -->
+
+## 2026-11-15T03:25:14Z
+> alpha46 is out. Install it over the old one; the signing certificate is the same.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha46
+>
+> **Did I get your earlier mini panel and X message?** No. I searched my record of your messages and the first mention of the closing X is in the message you just sent. It's written down now and done.
+>
+> **Why the panel wouldn't close:** the empty spot straight above the panel was being counted as part of the panel's top bar. A long press there never reached the page, so it neither closed nor moved the panel. Presses above but off to the side worked, which is why it looked random. I found this on the emulator and fixed it.
+>
+> **What changed**
+> 1. **Close by long press:** a long press on an empty spot above the open panel closes it. A long press beside or below it still moves it under your finger.
+> 2. **Close by X:** long press the panel and drag it, and a large X appears at the bottom of the screen. Let go over the X and the panel closes and stays hidden until you long press an empty spot again. I didn't add a Settings switch for this; the existing "Mini navigation panel" switch still turns the whole feature off.
+> 3. **Top bar tap:** tapping the little bar on top of the panel is more forgiving of slow taps and a drifting thumb. The Settings text now lists all three ways to close it.
+> 4. **Tab left on Home:** it now comes back as the Home screen when you switch back to it.
+> 5. **Private box:** it disappears when there are no private tabs, and the regular Tabs page shows. A private tab is still opened from the menu.
+> 6. **Start-up picture:** the starting screen now shows the app's own symbol (the shield with the bird from the app drawer) instead of a plain shield. It glows for about a third of a second as the screen comes up, and nothing waits for it. The Home screen shows the same symbol next to "Kestrel". I didn't do spreading wings, just the glow.
+>
+> **What was and wasn't proven**
+> - **Emulator, real touches:** a long press straight above the panel closed it. Carrying it onto the X showed the lit X, and lifting there removed the panel. A long press on an empty spot brought it back. A tap on the top bar closed it.
+> - **Emulator, other changes:** the Home tab, Private box and start-up picture also worked there.
+> - **Start-up glow:** I only saw it in slow motion on a debug build; at real speed it was not seen.
+> - **Slow top-bar tap:** proven only by automatic tests; the emulator tooling is too slow to time it.
+> - **Automatic tests:** all pass.
+> - **Not run:** none of it has been on your tablet.
+>
+> **The YouTube screenshot again:** I tried to settle it from here, but YouTube served my test browser a bot-check page, so I couldn't tell whether Kestrel plays a part. Please try "Desktop site" in the menu on that page, and tell me if it plays.
+>
+> **Still open for you**
+> 1. **BK5:** may Back be instant on pages that tell the browser "don't keep me" (`Cache-Control: no-store`), on sites you pick? Yes or no.
+> 2. **AX1g:** should the keyboard be a separate system keyboard app? Yes or no.
+> 3. **Tablet feedback on alpha40 to 46:** does a long press above the panel close it, the X, the Home tab, the Private box, and the start-up picture?
+> 4. **One Diagnostics copy** after a Proton Mail session. Its "Extension listeners" numbers tell me whether to slim down the extension's request checks. Diagnostics also now logs what each long press did to the panel.
+> 5. **YouTube:** the "Desktop site" check above.
+<!-- sha:fcc3c0968633 -->
