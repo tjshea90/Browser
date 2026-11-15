@@ -7,6 +7,7 @@ Serves, on one port (the emulator reaches it with `adb reverse tcp:<port> tcp:<p
   /video/<name>[?src=URL]          a player page: <video> + a reporter that sends every media event and getVideoPlaybackQuality() to /report
                                    name = landscape | portrait | big (clips made with ffmpeg at start) ; ?src= plays a PUBLIC address instead
   /fs                              the full-screen lab (FS1): a wide video, buttons "full screen", "lock landscape", "unlock"; reports fullscreenchange / orientation
+  /fsbox?kind=light|shadow&nobar=1 the full-screen BOX lab (FSB1 / ROT1, owner message 46): a player box (in a shadow root like finance.yahoo.com's, or plain) that goes full screen as a box, with a red strip on its bottom edge
   /dl/<n>mb.bin  /dl/slow.bin  /dl/page   downloads of known size (the last page links to them)
   /report?...            one line of JSON per call -> <outdir>/report.jsonl  (what the pages saw: the soak driver reads it)
   /health                "ok"
@@ -190,6 +191,51 @@ def page_fs(lock=""):
             "<button id=unlock style='" + btn + "'>Unlock</button><button id=exit style='" + btn + "'>Exit full screen</button>" + reporter).encode()
 
 
+def page_fsbox(kind, nobar):
+    """FSB1 / ROT1 / FSC1 (owner message 46): a PLAYER BOX goes full screen (not the bare video), as finance.yahoo.com's player does: kind=shadow puts the box inside a web component's open shadow root (the full-screen
+    element is then the host), kind=light is a plain box. The box's bottom edge carries a 6 px RED strip, so a screenshot shows whether the bottom of the full-screen page is hidden under a system bar
+    (the strip is gone) or visible (red rows). The clip has sound (a media session opens, so the app can pause it while the screen turns). nobar=1: the box has no controls of its own (Kestrel's bar can show).
+    The report rows (/report, kind=fsb) carry the window size and the strip's position."""
+    own = "" if nobar else ('<div id="bar" style="position:absolute;left:0;right:0;bottom:6px;height:44px;background:rgba(0,0,0,.7)"><button class="play-button" aria-label="Play or pause" style="width:44px;height:44px">|&gt;</button>'
+                            '<input type="range" aria-label="Seek" value="0" style="width:60%"></div>')
+    box = ('<div id="box" style="position:relative;width:100%;height:300px;background:#000"><video id="v" src="/clip/landscape.mp4" loop playsinline style="width:100%;height:100%;object-fit:contain"></video>' + own +
+           '<div id="mark" style="position:absolute;left:0;right:0;bottom:0;height:6px;background:#f00"></div></div>')
+    css = "#box:fullscreen,:host(:fullscreen) #box{width:100vw !important;height:100vh !important}"
+    if kind == "shadow":
+        build = ("var host=document.getElementById('slot');var root=host.attachShadow({mode:'open'});root.innerHTML=`<style>@CSS@</style>@BOX@`;"
+                 "var q=function(i){return root.getElementById(i)};var fsEl=host;")
+    else:
+        build = ("document.getElementById('slot').innerHTML=`@BOX@`;var st=document.createElement('style');st.textContent=`@CSS@`;document.head.appendChild(st);"
+                 "var q=function(i){return document.getElementById(i)};var fsEl=q('box');")
+    build = build.replace("@CSS@", css).replace("@BOX@", box)
+    page = """<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>fsbox @KIND@</title>
+<body style='margin:0;background:#112;color:#eee;font:20px sans-serif'><h3 style='margin:10px'>fsbox @KIND@</h3>
+<button id=go style='position:fixed;left:4%;top:60px;width:92%;height:90px;font-size:26px;z-index:5'>Play and go full screen</button>
+<div id=slot style='position:absolute;left:0;top:170px;width:100%;height:300px'></div>
+<script>(function () {
+  @BUILD@
+  function send(ev, extra) {
+    var o = { kind: 'fsb', ev: ev, t: Date.now(), fs: document.fullscreenElement ? 1 : 0, iw: innerWidth, ih: innerHeight, dpr: window.devicePixelRatio };
+    try { var m = q('mark').getBoundingClientRect(); o.mb = Math.round(m.bottom); o.bw = Math.round(m.width); o.bh = Math.round(q('box').getBoundingClientRect().height); } catch (e) {}
+    try { var v = q('v'); o.paused = v.paused ? 1 : 0; o.ct = v.currentTime.toFixed(1); } catch (e) {}
+    try { o.ot = screen.orientation.type; } catch (e) {}
+    if (extra) for (var k in extra) o[k] = extra[k];
+    try { new Image().src = '/report?' + Object.keys(o).map(function (k) { return k + '=' + encodeURIComponent(o[k]); }).join('&'); } catch (e) {}
+  }
+  document.addEventListener('fullscreenchange', function () { send('fullscreenchange'); });
+  window.addEventListener('resize', function () { send('resize'); });
+  try { screen.orientation.addEventListener('change', function () { send('orientationchange'); }); } catch (e) {}
+  document.getElementById('go').onclick = function () {
+    send('click-go');
+    try { q('v').play().catch(function () {}); } catch (e) {}
+    var p = fsEl.requestFullscreen ? fsEl.requestFullscreen() : null;
+    if (p && p.catch) p.catch(function (e) { send('fs-rejected', { why: String(e).slice(0, 60) }); });
+  };
+  send('page');
+})();</script>"""
+    return page.replace("@KIND@", kind).replace("@BUILD@", build).encode()
+
+
 def page_dlguard(kind):
     """RX4-X2: four ways a page starts a download. auto-* = by itself 2.5 s after the load (a timer), tap-* = the person taps the big button; *-link clicks a hidden link, *-nav sets location."""
     nav = kind.endswith("nav")
@@ -227,7 +273,7 @@ def page_dl():
 
 
 def index():
-    rows = ["/page/text", "/page/images", "/page/iframes", "/page/form", "/video/landscape", "/video/portrait", "/video/big", "/fs", "/dl/page", "/dl/1mb.bin", "/dl/5mb.bin", "/dl/20mb.bin", "/dl/slow.bin"]
+    rows = ["/page/text", "/page/images", "/page/iframes", "/page/form", "/video/landscape", "/video/portrait", "/video/big", "/fs", "/fsbox?kind=shadow", "/dl/page", "/dl/1mb.bin", "/dl/5mb.bin", "/dl/20mb.bin", "/dl/slow.bin"]
     return ("<!doctype html><meta charset=utf-8><title>Soak lab</title><body style='font:18px sans-serif'><h1>Soak lab</h1>" + "".join("<p><a href='%s'>%s</a></p>" % (r, r) for r in rows)).encode()
 
 
@@ -333,6 +379,8 @@ class H(http.server.BaseHTTPRequestHandler):
                 return self._send(b"<!doctype html><html><body style=\"margin:0;background:transparent\"></body></html>")
             if p == "/fs":
                 return self._send(page_fs((q.get("lock") or [""])[0]))
+            if p == "/fsbox":
+                return self._send(page_fsbox((q.get("kind") or ["light"])[0], (q.get("nobar") or [""])[0] == "1"))
             if p == "/dl/page":
                 return self._send(page_dl())
             if p == "/dl/guard":
