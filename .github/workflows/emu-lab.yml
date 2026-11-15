@@ -41,6 +41,7 @@ jobs:
       MINUTES: ${{ inputs.minutes }}
       AVD_NAME: kestrel29x64
       PKG: app.kestrel.browser.gecko.debug
+      ANDROID_AVD_HOME: /home/runner/.android/avd # avdmanager and the emulator must agree where the virtual device lives (newer tools may choose another folder)
     steps:
       - uses: actions/checkout@v5
         with:
@@ -71,8 +72,11 @@ jobs:
       - name: Create the tablet-shaped emulator (Android 10, 600 x 1024 at 170 dpi, 2 GB, 4 cores)
         run: |
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
+          mkdir -p "$ANDROID_AVD_HOME"
           echo no | avdmanager create avd -n "$AVD_NAME" -k "system-images;android-29;default;x86_64" -d pixel --force
-          CFG="$HOME/.android/avd/$AVD_NAME.avd/config.ini"
+          avdmanager list avd | head -12
+          CFG="$ANDROID_AVD_HOME/$AVD_NAME.avd/config.ini"
+          [ -f "$CFG" ] || { echo "::error::no config.ini at $CFG"; find "$HOME" -name config.ini -path '*avd*' 2>/dev/null | head; exit 1; }
           python3 -I - "$CFG" <<'PY'
           import sys
           p = sys.argv[1]
