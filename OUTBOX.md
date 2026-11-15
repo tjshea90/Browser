@@ -2111,3 +2111,32 @@
 >
 > **Next:** making one tap play a video when an invisible ad layer sits on top of it. It is coded and tested, and goes in alpha44.
 <!-- sha:4ff9b1a7fd63 -->
+
+## 2026-11-15T01:03:40Z
+> alpha44 is built, signed and published, and it's recorded in the build log.
+>
+> Install it over the old one (same signing certificate):
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha44
+>
+> **What changed in alpha44**
+> 1. **One tap plays a video even when an invisible ad layer lies over it.** The layer is switched off the moment your finger touches the player. An ad frame hidden over a player is found too.
+> 2. **A short clip that plays first and is then replaced by a much longer film on the same player (a "pre-roll") is now treated as an ad.** It no longer counts toward the download badge, and in the download sheet the file that really plays comes first.
+> 3. **The helper that hides ad boxes now stops after a short time budget.** A busy page can no longer slow itself down with it.
+>
+> **What was and wasn't proven**
+> - **Emulator:** on the test pages, a tap plays the video under an invisible layer, and a tap on a real link under another layer is not swallowed. A pre-roll page counted 1 of its 2 video files.
+> - **Test browser only:** the time budget on the ad-box helper.
+> - **Automatic tests:** the web tests (362) and the Kotlin tests all pass, and GitHub's own build and signature check passed.
+> - **Not run:** none of this has been on your tablet. I have also not seen a real ad from a real site, so how a real site's invisible layer behaves is still unconfirmed.
+>
+> **Not in alpha44, queued for the next release:** counters that show how long each of the extension's web-request checks holds the thread. They will appear on the Diagnostics "Blocker" line. I'm continuing with the download-list work on blob-based video players.
+>
+> **Still open for you**
+> 1. **BK5:** may Back be instant on pages that tell the browser "don't keep me" (`Cache-Control: no-store`), on sites you pick? Yes or no.
+> 2. **AX1g:** should the keyboard be a separate system keyboard app? Yes or no.
+> 3. **Tablet feedback on alpha40–44:** especially Back (scroll place and speed), ad skipping, and the download list.
+> 4. **One Diagnostics copy:** after a Proton Mail session, once the counters release is on the tablet.
+>
+> Next I'm running an independent review of the page-facing ad-layer code, then the blob-player row.
+<!-- sha:29d252566b5c -->
