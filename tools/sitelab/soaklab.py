@@ -295,6 +295,8 @@ class H(http.server.BaseHTTPRequestHandler):
                 return self._send(page_form())
             if p.startswith("/img/") and p.endswith(".svg"):
                 return self._send(svg(int(p[5:-4] or 0)), "image/svg+xml")
+            if p == "/video/vc":
+                return self._send(page_vc((q.get("kind") or ["naked"])[0], (q.get("ad") or [""])[0] == "1"))
             if p.startswith("/video/"):
                 name = p[7:]
                 src = (q.get("src") or [""])[0] or "/clip/%s.mp4" % name
@@ -306,8 +308,6 @@ class H(http.server.BaseHTTPRequestHandler):
                 return self._send(b"unknown clip", "text/plain", 404)
             if p == "/blank":
                 return self._send(b"<!doctype html><html><body style=\"margin:0;background:transparent\"></body></html>")
-            if p == "/video/vc":
-                return self._send(page_vc((q.get("kind") or ["naked"])[0], (q.get("ad") or [""])[0] == "1"))
             if p == "/fs":
                 return self._send(page_fs((q.get("lock") or [""])[0]))
             if p == "/dl/page":
