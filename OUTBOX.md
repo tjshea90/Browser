@@ -1857,3 +1857,48 @@
 ## 2026-11-15T18:36:56Z
 > The second independent review found twelve issues in the video-bar code, three of them major. They need fixing before alpha49. The worst is that a long press on a link sitting over a decorative video could wrongly open the Save sheet. I'm reading the files and fixing them now.
 <!-- sha:da874f23e39c -->
+
+## 2026-11-15T19:23:09Z
+> alpha49 is ready for your tablet:
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha49
+>
+> I measured your three screenshots, and all three problems come from the same two causes.
+>
+> **1. Controls under the navigation bar.**
+> - On your tablet both system bars stay visible in full screen. alpha48 laid the page out edge to edge under them, so the player's bottom controls, and Kestrel's own bar, sat behind the navigation bar.
+> - Now the page is laid out inside any bar the tablet keeps. Where a system really hides its bars, the picture is still full-bleed.
+> - Menu > Diagnostics has a new line, "Full-screen system bars", that says what your tablet does.
+>
+> **2. Laggy, glitchy turning.**
+> - I did what you suggested. While the screen turns under a full-screen or playing video, the video pauses and the page is covered with black until the screen has stopped changing (about a second). Then it plays again by itself.
+> - A video you had paused stays paused, and so does one you touch during the turn.
+> - The engine only lets me pause videos that have sound. A muted video is only covered, not paused.
+> - Your third screenshot showed a stale layout with a grey strip after turning back. I don't yet know whether that is the page or the engine. The emulator run described below checks the live Yahoo player for it.
+>
+> **3. No controls in landscape.**
+> - Part of it was the navigation bar covering them, which is fixed above.
+> - Kestrel's own bar was also never drawn when the full-screen player is a web component like Yahoo's (a bug the independent check found). That is fixed. Tap the film in full screen and the bar appears if the page has none of its own.
+>
+> **Sound.**
+> - In the emulator the sound already stops when you leave the app by Home or screen-off. The clip's own clock stood still and the engine reported it paused. My first lab verdict of "sound kept playing" was a bad measurement, and I corrected it.
+> - I found one real gap by reading the code: Kestrel's own Home screen over a playing page left the page playing underneath. The app now pauses it, and also pauses any video left playing on another tab.
+>
+> **Also fixed**, from a second independent check of the video bar:
+> - A link, button or picture over a decorative video no longer opens the video menu or the bar.
+> - A long press released a moment late no longer brings the bar up behind the video menu.
+> - Two ad frames of the same size no longer confuse it.
+> - A web page can no longer switch the bar's menus off or cancel your taps.
+> - The page's own controls are now found on pages with very many links.
+>
+> **Not run on your tablet.** Everything above ran in headless browsers and guard tests only. The emulator runs of these exact full-screen cases are still queued. They include a switch that makes the emulator keep its bars the way your tablet does, plus the live Yahoo player turned both ways.
+>
+> **Still running, not finished:**
+> - The emulator run of the full-screen cases above, queued behind the big compatibility run.
+> - The compatibility run on about a hundred sites at fast-wifi speed, due around 20:10 UTC.
+> - An independent code check of the new code. If any of these finds something real I will ship alpha50.
+>
+> **Open for you:**
+> - Please try alpha49: the Yahoo Finance video in full screen, turned both ways. If a bar still covers anything, send me the Diagnostics lines "Full-screen system bars" and "Turning under a video".
+> - Owner-only GitHub steps still waiting: the protected `release` environment, the "pin actions to a full commit SHA" policy, and the private signing key last.
+<!-- sha:5705f1b86c79 -->
