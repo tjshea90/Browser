@@ -410,6 +410,7 @@ class Soak:
         self.guard_rows = []
         self.apk_rows = []
         self.system_restarts = 0
+        self.net_status = ""
         self.last_diag = ""
 
     # ---- bookkeeping
@@ -988,7 +989,9 @@ class Soak:
         if self.a.net == "hotspot":
             self.ph.a.run("emu", "network", "speed", "5000:5000")
             self.ph.a.run("emu", "network", "delay", "60:100")
-            say("network shaped like the owner's hotspot: 5 Mbit/s each way, 60-100 ms delay")
+            st = self.ph.a.run("emu", "network", "status").replace("\n", " ").replace("OK", "").strip()
+            self.net_status = st[:200]
+            say("network shaped like the owner's hotspot: 5 Mbit/s each way, 60-100 ms delay; the emulator says:", self.net_status)
         say("screen", self.screen, "| density", self.ph.a.sh("wm density").strip().replace("\n", " "), "| android", self.ph.a.sh("getprop ro.build.version.release").strip())
 
     def start_app(self):
@@ -1095,7 +1098,7 @@ class Soak:
         L.append("")
         L.append("Run: %s, %d scenes in %.0f min. Device: Android 10 emulator, %dx%d, package %s, network %s. **x86_64 + software GL is NOT the tablet: only behaviour counts, not absolute times.**" %
                  (time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime()), len(ev), (time.time() - T0) / 60, self.screen[0], self.screen[1], self.a.pkg,
-                  "shaped like the owner's hotspot (5 Mbit/s, 60-100 ms)" if self.a.net == "hotspot" else "unshaped (the runner's own fast link)"))
+                  "shaped like the owner's hotspot (5 Mbit/s, 60-100 ms; the emulator reports: %s)" % (self.net_status or "no answer") if self.a.net == "hotspot" else "unshaped (the runner's own fast link)"))
         L.append("")
         L.append("## Summary")
         L.append("")
