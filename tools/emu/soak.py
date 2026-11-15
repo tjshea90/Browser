@@ -64,8 +64,8 @@ class Phone:
     def start_app(self):
         return self.a.sh("am start -n %s/%s" % (self.pkg, ACT), timeout=30)
 
-    def debug(self, what):
-        return self.a.sh("am start -n %s/%s --es kestrel_debug %s" % (self.pkg, ACT, what), timeout=30)
+    def debug(self, what, arg=None):
+        return self.a.sh("am start -n %s/%s --es kestrel_debug %s%s" % (self.pkg, ACT, what, (" --es kestrel_arg %s" % shlex.quote(arg)) if arg else ""), timeout=30)
 
     def tap(self, x, y):
         self.a.sh("input tap %d %d" % (x, y), timeout=15)
@@ -397,6 +397,7 @@ class Soak:
         self.fs_result = None
         self.sb_rounds = []
         self.guard_rows = []
+        self.apk_rows = []
 
     # ---- bookkeeping
     def issue(self, sev, area, text, shot=False):
@@ -673,6 +674,36 @@ class Soak:
         self.record({"kind": "guard", "name": "download-guard", "status": "ok", "results": [{"page": k, "result": r, "expected": expect[k]} for k, r in rows]})
         self.check_alive("download-guard")
 
+    # ---- RX4-X1: what the Downloads list would do with an installer that says it is Kestrel (a copy of the app under test, as an .apk and disguised as a video) and with a plain video
+    def apk_guard(self):
+        pkg = self.a.pkg
+        path = self.adb.sh("pm path %s" % pkg).strip().splitlines()[0].replace("package:", "").strip() if self.adb.sh("pm path %s" % pkg).strip() else ""
+        rows = []
+        if not path:
+            self.issue("low", "tooling", "apk guard: could not find the installed APK")
+            return
+        self.adb.sh("run-as %s cp %s files/fake-update.apk" % (pkg, path), timeout=120)
+        self.adb.sh("run-as %s cp %s files/holiday.mp4" % (pkg, path), timeout=120)
+        self.adb.sh("run-as %s sh -c 'head -c 300000 /dev/urandom > files/plain.mp4'" % pkg, timeout=30)
+        want = {"fake-update.apk": "verdict=REFUSE_LOOKALIKE", "holiday.mp4": "verdict=REFUSE_LOOKALIKE", "plain.mp4": "manifest=false"}
+        for name, expect in want.items():
+            lmark = self.log.size()
+            self.ph.debug("apkcheck", name)
+            got = ""
+            for _ in range(15):
+                time.sleep(2)
+                ev = [e for e in health_events(self.log.since(lmark), "download", "apk-verdict") if ("file=%s " % name) in e["rest"] + " "]
+                if ev:
+                    got = ev[-1]["rest"]; break
+            ok = expect in got
+            rows.append((name, ok, got or "no answer"))
+            if not ok:
+                self.issue("high", "apk-guard", "%s: expected %s, the app said: %s" % (name, expect, got or "nothing"))
+        self.apk_rows = rows
+        self.adb.sh("run-as %s rm -f files/fake-update.apk files/holiday.mp4 files/plain.mp4" % pkg, timeout=30)
+        self.record({"kind": "apkguard", "name": "apk-guard", "status": "ok" if all(r[1] for r in rows) else "apk-guard-failed", "results": [{"file": n, "ok": o, "said": g[:200]} for n, o, g in rows]})
+        self.check_alive("apk-guard")
+
     # ---- Safe Browsing (RX4-X3)
     def safe_browsing(self, tag=""):
         rows = []
@@ -923,6 +954,7 @@ class Soak:
                     self.fullscreen_round(thorough=False)
                 elif kind == "guard":
                     self.guard_downloads()
+                    self.apk_guard()
             except Exception as e:  # a bug in this script must never end the hour
                 self.issue("low", "tooling", "scene %s %s raised %r" % (kind, item[0] if item else "", e))
             if n % 8 == 0:
@@ -984,6 +1016,12 @@ class Soak:
             L.append("")
             for kind, res in self.guard_rows:
                 L.append("- %s: %s" % (kind, res))
+            L.append("")
+        if self.apk_rows:
+            L.append("## Installers that pretend to be Kestrel (RX4-X1)")
+            L.append("")
+            for n, ok, said in self.apk_rows:
+                L.append("- [%s] %s: %s" % ("x" if ok else " ", n, said))
             L.append("")
         if self.fs_result:
             L.append("## Full-screen turning (FS1)")
@@ -1187,6 +1225,7 @@ def main():
             s.fullscreen_round(thorough=True)
         if a.suite in ("fs", "all"):
             s.guard_downloads()
+            s.apk_guard()
         if a.suite in ("soak", "all"):
             s.soak(a.minutes)
         s.dump_diag("end")
