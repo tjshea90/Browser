@@ -1,5 +1,6 @@
 # The real-engine lab (RX4-E1 and SOAK1, owner messages 43 and the outside review research/REVIEW-EXTERNAL-4.md): the Kestrel G DEBUG build running on an Android 10
 # emulator (x86_64, 600 x 1024 at 170 dpi, 2 GB of RAM, 4 cores = the tablet's shape) with hardware acceleration (KVM) on GitHub's free runners (this repository is public).
+# (2 guest cores of the runner's 4: with 4 the emulated phone's own system process starved under heavy pages and was killed by its watchdog in run 3; the host needs the other cores for the software GPU)
 # It drives the real Firefox engine through tools/emu/soak.py: pages, videos, downloads, full screen, and writes a plain-text report of everything that loaded badly, played
 # badly, crashed or stalled. Nothing here builds a release or touches a key: no secrets, `contents: read`, no APK is ever uploaded (the artifacts are text and a few screenshots).
 #
@@ -69,7 +70,7 @@ jobs:
       - name: Build the Kestrel G debug app for x86_64 (the real Firefox engine, GeckoView 160)
         run: ./gradlew :geckoapp:assembleDebug -PgeckoAbi=x86_64 --console=plain
 
-      - name: Create the tablet-shaped emulator (Android 10, 600 x 1024 at 170 dpi, 2 GB, 4 cores)
+      - name: Create the tablet-shaped emulator (Android 10, 600 x 1024 at 170 dpi, 2 GB, 2 cores)
         run: |
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
           mkdir -p "$ANDROID_AVD_HOME"
@@ -80,7 +81,7 @@ jobs:
           python3 -I - "$CFG" <<'PY'
           import sys
           p = sys.argv[1]
-          want = {"hw.lcd.width": "600", "hw.lcd.height": "1024", "hw.lcd.density": "170", "hw.ramSize": "2048", "vm.heapSize": "128", "hw.cpu.ncore": "4",
+          want = {"hw.lcd.width": "600", "hw.lcd.height": "1024", "hw.lcd.density": "170", "hw.ramSize": "2048", "vm.heapSize": "128", "hw.cpu.ncore": "2",
                   "disk.dataPartition.size": "6G", "hw.gpu.enabled": "yes", "hw.gpu.mode": "swiftshader_indirect", "hw.keyboard": "yes", "hw.mainKeys": "no",
                   "hw.accelerometer": "yes", "hw.sensors.orientation": "yes", "showDeviceFrame": "no", "hw.initialOrientation": "portrait"}
           lines = [l for l in open(p).read().splitlines() if l.split("=")[0].strip() not in want and not l.startswith("skin.")]
