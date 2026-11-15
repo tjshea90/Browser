@@ -582,6 +582,10 @@ class Soak:
                 self.ph.swipe(300, 300, 300, 760, 300)
                 time.sleep(0.7)
         lines = self.log.since(mark)
+        if ev.get("paint_ms", 0) < 0:      # a fast page paints after its load ended: the app says so in a second line
+            late = [e for e in health_events(lines, "page", "painted") if tail(e["kv"].get("host", "")) == want]
+            if late:
+                ev["paint_ms"] = ms_of(late[0]["kv"].get("paint", ""))
         crashes, stalls = self.scan_log(lines, name)
         worst = max([int(re.sub(r"\D", "", e["rest"].split("ms")[0]) or 0) for e in stalls] or [0])
         ev["ui_stalls"] = len([s for s in stalls if s["ev"] == "STALL"])
