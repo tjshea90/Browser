@@ -19,7 +19,7 @@ class VideoQualityTest {
         q.add("b.example", 750, 0, 0, 30, 640, 360)
         val l = q.line(policy)
         assertTrue(l, l.contains("3 looks at 2 site(s)"))
-        assertTrue(l, l.contains("2 min watched"))     // 150 s rounds to 2 min
+        assertTrue(l, l.contains("3 min watched"))     // 150 s = 2.5 min, rounded to the nearest minute
         assertTrue(l, l.contains("3750 frames, dropped 4.8 %")) // 180 of 3750
         assertTrue(l, l.contains("(worst: a.example 10 % at 1280x720)"))
         assertTrue(l, l.endsWith(policy))
