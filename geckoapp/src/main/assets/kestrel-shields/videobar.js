@@ -218,7 +218,7 @@ window.KestrelVB = window.KestrelVB || (function () {
       return false;
     }
     // what the page showed when the finger came down. RW8: not at once (a scroll starts with the same touch and this is a look at the page), but T.pre ms in, and a touch that turns into a scroll
-    // (pointercancel, or a move of more than 12 px) never gets it; a tap that is over before the timer runs gets it at its pointerup, still before any handler of the page sees that.
+    // (pointercancel) before then never gets it; a tap that is over before the timer runs gets it at its pointerup, still before any handler of the page sees that.
     function pre(d) {
       if (d.looked) return;
       d.looked = true;
@@ -331,12 +331,23 @@ window.KestrelVB = window.KestrelVB || (function () {
         if (p && p.catch) p.catch(function () { undoForced(); });
       } catch (e) { undoForced(); /* the page or the engine refused */ }
     }
-    function onFullscreen() {         // the bar must be inside the full-screen element to be seen there (the top layer shows nothing else)
+    // where the bar lives: the document element, or inside the full-screen element (the top layer shows nothing else). RW2: a full-screen element that is a web component's HOST shows its shadow tree, not its
+    // light children: the bar goes into the shadow root then. A film that is full screen on its own (nothing around it) can have nothing drawn over it: no home (null).
+    function barHome() {
+      var fe = fullscreenEl();
+      if (!fe) return document.documentElement;
+      if (fe.tagName === 'VIDEO') return null;
+      return VF.rootOf(fe) || fe;
+    }
+    function onFullscreen() {
       if (!document.fullscreenElement) undoForced();
+      var fe = fullscreenEl();
+      // the page took a bare film full screen (no box around it, no controls of its own): the engine's own controls are the only thing that can be drawn over it, for as long as it lasts
+      if (fe && fe.tagName === 'VIDEO' && !fe.controls && !forced && cfg && cfg.on) { try { fe.controls = true; forced = fe; } catch (e) { /* ignore */ } }
       if (!bar) return;
       try {
-        var fe = fullscreenEl();
-        var home = (fe && fe.tagName !== 'VIDEO') ? fe : document.documentElement;
+        var home = barHome();
+        if (!home) { hide(); return; }
         if (bar.host.parentNode !== home) home.appendChild(bar.host);
         place(); render();
       } catch (e) { /* never break the page */ }
@@ -345,8 +356,9 @@ window.KestrelVB = window.KestrelVB || (function () {
 
     function show(v) {
       hide();
+      var home = barHome();
+      if (!home) return;                                         // a film that is full screen on its own: nothing of ours can be drawn over it (onFullscreen switched its own controls on)
       var host = mk('div', 'position:fixed;left:0;top:0;width:0;height:0;margin:0;padding:0;border:0;z-index:2147483647;pointer-events:none;display:block', null);
-      host.setAttribute('data-kestrel-bar', '1');
       var root = host.attachShadow({ mode: 'closed' });
       var wrap = mk('div', 'position:fixed;left:0;top:0;width:300px;height:44px;box-sizing:border-box;display:flex;align-items:center;padding:0 4px;border-radius:12px;background:rgba(18,20,24,0.86);color:#fff;font:12px/1 sans-serif;pointer-events:auto;touch-action:none;-webkit-user-select:none;user-select:none;box-shadow:0 1px 6px rgba(0,0,0,.5)', root);
       var playB = button(PLAY, 'Play or pause', wrap);
@@ -388,8 +400,7 @@ window.KestrelVB = window.KestrelVB || (function () {
       window.addEventListener('resize', place, { passive: true });
       b.tick = setInterval(place, 250);
 
-      var fe = fullscreenEl();
-      (fe && fe.tagName !== 'VIDEO' ? fe : document.documentElement).appendChild(host);
+      home.appendChild(host);
       place(); render(); keep();
       report('shown');
     }
