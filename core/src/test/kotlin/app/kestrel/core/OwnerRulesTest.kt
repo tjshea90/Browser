@@ -243,11 +243,26 @@ class OwnerRulesTest {
         assertTrue("and relayed by the background page with clamped numbers", source(dir + "background.js").contains("m.k !== 'vpt'") && source(dir + "background.js").contains("sender.frameId !== 0"))
         val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
         val fn = body(act, "internal fun onPageViewport(m: org.json.JSONObject) {")
-        assertTrue(fn, fn.contains("tabWithUrl(m.optString(\"p\")) !== ft") && fn.contains("vpTries >= 3") && fn.contains("resyncEngineSize()"))
+        assertTrue(fn, fn.contains("tabWithUrl(m.optString(\"p\")) ?: return") && fn.contains("fullscreenTab !== tab") && fn.contains("vpTries >= 3") && fn.contains("resyncEngineSize()"))
         assertTrue("the real size change is the view one pixel shorter, then back", body(act, "private fun resyncEngineSize() {").contains("lp.bottomMargin = 1") && act.contains("it.bottomMargin = 0"))
         assertTrue("a new full screen starts clean and the activity going away cancels it", body(act, "internal fun fullScreenChanged(tab: Tab, on: Boolean) {").contains("vpUndo.run()") && body(act, "override fun onDestroy() {").contains("removeCallbacks(vpUndo)"))
         assertTrue("Diagnostics says it", act.contains("out.add(viewportLine())"))
         assertTrue("the bridge passes it on", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt").contains("\"vpt\" -> { viewport(m); \"\" }"))
+    }
+
+    // ROT2, owner message 48: two screenshots of a page still laid out for the OLD orientation a few seconds after a turn. The cover and the pause of a turn wait until the full-screen page says it HAS the view's new size.
+    @Test fun aTurnUnderAFullScreenPageWaitsForThePageToHaveTheNewSize() {
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        val fn = body(act, "internal fun onPageViewport(m: org.json.JSONObject) {")
+        assertTrue(fn, fn.contains("tab.gecko.vpSeen = true") && fn.contains("turnSettler.pageReported(matches)") && fn.contains("if (turnSettler.turning) return"))
+        assertTrue("a page can confirm a turn when it is full screen and has reported before", act.contains("{ fullscreenOn && fullscreenTab?.gecko?.vpSeen == true }"))
+        assertTrue("the nudge the turn asks for is the real size change of FB4, and the ring is a view of the cover", act.contains("{ resyncEngineSize() }, { turnHint }") && act.contains("turnCover = cover; turnHint = ring"))
+        val machine = source("core/src/main/kotlin/app/kestrel/core/media/TurnSettleMachine.kt")
+        assertTrue(machine.contains("TurnSettle.settled(n - lastChangeAt, n - startedAt, expects, confirmed)") && machine.contains("fun pageReported(matchesView: Boolean)"))
+        assertTrue("a size change takes a confirmation back", body(machine, "fun sizeChanged() {").contains("confirmed = false"))
+        val turn = source("geckoapp/src/main/assets/kestrel-shields/turn.js")
+        assertTrue("the top frame says its viewport once soon after the page is up", turn.contains("if (TOP) setTimeout(function () { try { sendViewport(document.fullscreenElement ? 1 : 0); }"))
+        assertTrue("a new session forgets that the page reports", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/GeckoTab.kt").contains("g.vpSeen = false"))
     }
 
     // SND1, owner message 45: "Sound should not keep playing if I am not currently on the Kestrel tab." The engine suspends the media of an inactive session (proven in the emulator lab); the app adds a safety net.
