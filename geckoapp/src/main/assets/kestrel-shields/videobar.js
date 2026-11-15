@@ -138,10 +138,19 @@ window.KestrelVB = window.KestrelVB || (function () {
       try { browser.runtime.sendMessage({ k: 'ft', t: kind, w: window.innerWidth, h: window.innerHeight }).catch(function () {}); } catch (e) { /* nobody listens */ }
     }
     if (TOP) setTimeout(function () { ask(function () {}); }, 1200);   // the answer is there before the first touch: the controls showing at touch start can be seen
+    // a touch that starts a scroll costs nothing on a page with no video at all and no shadow host under the finger (the look at the page's controls is only for a film that could be there)
+    function mayHaveVideo(e) {
+      try {
+        if (document.getElementsByTagName('video').length) return true;
+        var n = e.target, i = 0;
+        while (n && n.nodeType === 1 && i++ < 10) { if (VF.rootOf(n)) return true; n = n.parentNode; if (n && n.nodeType === 11) n = n.host; }
+      } catch (x) { /* never break the page */ }
+      return false;
+    }
     window.addEventListener('pointerdown', function (e) {
       down = e.isTrusted ? { x: e.clientX, y: e.clientY, t: Date.now(), id: e.pointerId, v: null, own: false } : null;
-      if (down && cfg && cfg.on && !cfg.always) {
-        try { var v = VF.at(down.x, down.y), r = v ? VF.rect(v) : null; if (v && r) { down.v = v; down.own = ownControls(v, r); } } catch (x) { /* never break the page */ }
+      if (down && cfg && cfg.on && !cfg.always && mayHaveVideo(e)) {
+        try { var v = VF.at(down.x, down.y, 300), r = v ? VF.rect(v) : null; if (v && r) { down.v = v; down.own = ownControls(v, r); } } catch (x) { /* never break the page */ }
       }
     }, { capture: true, passive: true });
     window.addEventListener('pointercancel', function () { down = null; }, { capture: true, passive: true });

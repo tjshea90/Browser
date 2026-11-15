@@ -47,11 +47,11 @@ window.KestrelVF = window.KestrelVF || (function () {
   function area(r) { return r.width * r.height; }
 
   // the best video under a point (client coordinates) or null: playing first, then the larger one
-  function at(x, y) {
+  function at(x, y, limit) {
     var vids = [];
     try {
       var els = document.elementsFromPoint ? document.elementsFromPoint(x, y) : [];
-      var budget = { n: SCAN };
+      var budget = { n: limit || SCAN };
       for (var i = 0; i < els.length && i < 24; i++) {
         if (els[i].tagName === 'VIDEO') vids.push(els[i]);
         var sr = rootOf(els[i]);
