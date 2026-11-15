@@ -190,3 +190,39 @@ test('VP2: while Kestrel\'s full-screen controls own the film the injected video
   assert.deepEqual((await msgs(page, 'vbk')).filter((m) => m.e === 'shown'), []);
   await page.context().close();
 });
+
+// the page's own controls (YouTube's chrome, Shaka's UI, video.js ...) and the engine's bar of a `<video controls>` are put away while Kestrel's controls own the film, and given back
+const CHROME = `<div id="box" style="position:fixed;left:0;top:0;width:300px;height:200px;background:#000">
+  <video id="v" src="https://cdn.example/film.wav" preload="auto" muted controls style="width:100%;height:100%"></video>
+  <div id="yt" class="ytp-chrome-bottom" style="position:absolute;left:0;bottom:0;width:300px;height:30px;display:block">bar</div>
+  <div id="shaka" class="shaka-controls-container" style="position:absolute;left:0;top:0;width:100px;height:30px;display:flex">ui</div>
+  <button id="cc" class="captions-button" style="position:absolute;right:0;top:60px;display:block">CC</button></div>
+  <div id="outside" class="ytp-chrome-bottom" style="position:fixed;left:0;top:400px;width:50px;height:20px;display:block">another player</div>`;
+const disp = (page, id) => page.evaluate((i) => getComputedStyle(document.getElementById(i)).display, id);
+
+test('VP2: the page\'s own player controls are not shown while Kestrel\'s are (also ones made later), the rest of the page is left alone, and all is given back', async () => {
+  const page = await open(CHROME, { player: true, cfg: { kp: true } });
+  await page.evaluate(() => { window.KestrelVP.c.idle = 300; window.KestrelVP.c.busy = 300; });
+  assert.equal(await disp(page, 'yt'), 'block'); assert.equal(await page.evaluate(() => document.getElementById('v').controls), true);
+  await fullscreen(page); await firstState(page);
+  await page.waitForFunction(() => window.KestrelVP.away() >= 2, null, { timeout: 5000 });
+  assert.equal(await disp(page, 'yt'), 'none'); assert.equal(await disp(page, 'shaka'), 'none');
+  assert.equal(await disp(page, 'cc'), 'block', 'a captions button is the page\'s');
+  assert.equal(await disp(page, 'outside'), 'block', 'a player that is not in the full-screen box is not touched');
+  assert.equal(await page.evaluate(() => document.getElementById('v').controls), false, 'the engine\'s own bar is off');
+  await page.evaluate(() => document.getElementById('box').insertAdjacentHTML('beforeend', '<div id="late" class="vjs-control-bar" style="display:block">x</div>'));
+  await page.waitForFunction(() => getComputedStyle(document.getElementById('late')).display === 'none', null, { timeout: 4000 });
+  await page.evaluate(() => document.exitFullscreen());
+  await page.waitForFunction(() => window.KestrelVP.active() === false, null, { timeout: 4000 });
+  assert.equal(await disp(page, 'yt'), 'block'); assert.equal(await disp(page, 'shaka'), 'flex'); assert.equal(await disp(page, 'late'), 'block', 'given back');
+  assert.equal(await page.evaluate(() => document.getElementById('v').controls), true, 'the engine\'s bar is back');
+  await page.context().close();
+});
+
+test('VP2: with the app saying the controls are not Kestrel\'s the page keeps all of its own', async () => {
+  const page = await open(CHROME, { player: true, cfg: { kp: false } });
+  await fullscreen(page);
+  await wait(page, 1200);
+  assert.equal(await disp(page, 'yt'), 'block'); assert.equal(await page.evaluate(() => document.getElementById('v').controls), true);
+  await page.context().close();
+});
