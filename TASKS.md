@@ -518,7 +518,7 @@ A question, not an order: answer it in plain words with a TESTED recipe, then le
   - [ ] RX3-B3 signed list bundle (SECURITY B20), priority raised
   - [x] RX3-S1 hold the glow pulse while a video plays (GeckoSession MediaSession delegate); CPU line before/after - NeonRules (core/session) busy rule + NeonRulesTest 2; GeckoSession.setMediaSessionDelegate in TabDelegates -> Tab.gecko.videoPlaying -> BrowserActivity.updateNeonBusy; emulator /playlab: neon video playing=true/false follows the page's play/pause (research/VIDEO_SMOOTHNESS.md RX3-S1). KNOWN LIMIT: only audible media opens a media session (muted/silent video keeps the glow); NOT measured: parent-process CPU on the tablet
   - [ ] RX3-S2 extension listener counters, then restrict onErrorOccurred/onCompleted types and the onBeforeSendHeaders scope
-  - [ ] RX3-S3 time budget and stop for the class/id token MutationObserver (content.js D2); web test; Proton Mail A/B
+  - [~] RX3-S3 time budget and stop for the class/id token MutationObserver (content.js D2); web test; Proton Mail A/B {claude/new-session-7d9rxz 2026-11-15T00:49Z}
   - [ ] RX3-S4 blocker histogram with cold/warm split; trigger on average x requests; bucket report; then the cuts in section 9
   - [ ] RX3-S5 site-group hashes in the engine image so frames without rules never ask the app (PERF_JS "css")
   - [ ] RX3-S6 A/B lazy-load margin 600/1000/1500 on the plain hotspot
