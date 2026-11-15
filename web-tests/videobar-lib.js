@@ -11,7 +11,7 @@ try { ({ chromium } = require('playwright')); } catch (e) { ({ chromium } = requ
 
 const DIR = path.join(__dirname, '..', 'geckoapp', 'src', 'main', 'assets', 'kestrel-shields');
 const read = (f) => fs.readFileSync(path.join(DIR, f), 'utf8');
-const VFIND = read('vfind.js'), VBAR = read('videobar.js'), CONTENT = read('content.js');
+const VFIND = read('vfind.js'), VBAR = read('videobar.js'), CONTENT = read('content.js'), TURN = read('turn.js');
 
 let browser;
 async function launch() { browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required', '--mute-audio'] }); }
@@ -48,6 +48,7 @@ async function open(body, o) {
     window.__msgs = [];
     if (window.top === window) { window.__all = []; window.__guardFails = 0; window.__ftDelay = 0; }
     window.__kstVBcfg = { judge: 80, late: 500, hide: 1100, hidePaused: 1700, drag: 20 };      // (tap stays the app's 450 ms)
+    window.__kstTurnCfg = { settle: 300, cap: 1500, tick: 60, nudge: 40 };                       // FB2: the turn guard's clocks, shortened
     window.browser = {
       runtime: {
         sendMessage: (m) => {
@@ -73,6 +74,7 @@ async function open(body, o) {
   await page.addInitScript({ content: VFIND });
   if (o.content) await page.addInitScript({ content: CONTENT });
   await page.addInitScript({ content: VBAR });
+  if (o.turn) await page.addInitScript({ content: TURN });
   await page.goto('https://movie.example/');
   if (o.wait !== false) await page.waitForFunction(() => { const v = document.getElementById('v') || (window.__deepV && window.__deepV()); return v && v.readyState >= 3 && v.duration > 50; }, null, { timeout: 15000 });
   return page;
