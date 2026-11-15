@@ -5,6 +5,7 @@
 #                           gecko   = Kestrel G (:geckoapp, Firefox engine, ~92 MB, tag kestrel-g-v<version>)
 #                           courier = Kestrel Courier (:courier, the small app for the owner's PHONE, ~2 MB, tag kestrel-courier-v<version>)
 # Dispatch with  app = gecko | web | courier | both (web + gecko)  and  full_build = true.  full_build = false is a ~1 minute check that the gates still pass.
+#   app = lab starts the emulator lab (emu-lab.yml: the real engine on an Android 10 emulator, no release): lab_suite + lab_minutes say what and how long.
 # Claude dispatches it through the GitHub API (mcp__github__actions_run_trigger, run_workflow) after `bash ship.sh <app> "note"`.
 #
 # MINUTES ARE THE SCARCE RESOURCE (tools/test_handoff.sh fails if either rule is undone):
@@ -27,9 +28,9 @@ on:
   workflow_dispatch:
     inputs:
       app:
-        description: 'Which app: gecko = Kestrel G (Firefox engine), web = Kestrel (system WebView), courier = Kestrel Courier (the phone app), or both (web + gecko)'
+        description: 'Which app: gecko = Kestrel G (Firefox engine), web = Kestrel (system WebView), courier = Kestrel Courier (the phone app), both (web + gecko), or lab = no release: the emulator lab (see lab_suite)'
         type: choice
-        options: [gecko, web, courier, both]
+        options: [gecko, web, courier, both, lab]
         default: gecko
       full_build:
         description: 'Test, build, sign and publish (several minutes of Actions time). Leave OFF for a ~1 min check of the gates.'
@@ -39,6 +40,15 @@ on:
         description: 'What changed in this release (goes into the Release text)'
         type: string
         default: ''
+      lab_suite:
+        description: 'Only for app = lab. smoke = one page + the Diagnostics text; fs = the full-screen turning checks; soak = the long run of pages, videos and downloads; all = all three'
+        type: choice
+        options: [smoke, fs, soak, all]
+        default: smoke
+      lab_minutes:
+        description: 'Only for app = lab: how long the soak part runs, in minutes (60 = one hour)'
+        type: string
+        default: '60'
 
 # Read-only by default. Only the three build jobs below publish a Release (`gh release create`), and only they get `contents: write`, so the cheap gate jobs and the test jobs
 # (which run the repository's own scripts) never hold a token that can write.
@@ -172,6 +182,17 @@ jobs:
           npx playwright install --with-deps chromium
           npm test
 
+  # ------------------------------------------------------------------ the real-engine lab: no release, no secrets (RX4-E1 / SOAK1; the steps are in emu-lab.yml)
+  lab:
+    needs: check
+    if: inputs.app == 'lab'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/emu-lab.yml
+    with:
+      suite: ${{ inputs.lab_suite }}
+      minutes: ${{ inputs.lab_minutes }}
+
   # ------------------------------------------------------------------ Kestrel (system WebView)
   build-web:
     needs: [check, test-jvm, test-js]
@@ -214,15 +235,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NOTE: ${{ inputs.note }}
         run: bash .github/scripts/publish-release.sh "$APP"
-
-      - name: Keep the APK for inspection (failed runs only)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: unpublished-web-apk
-          path: app/build/outputs/apk/release/app-release.apk
-          retention-days: 7
-          if-no-files-found: ignore
 
       - name: Remove the signing material from the workspace
         if: always()
@@ -274,15 +286,6 @@ jobs:
           NOTE: ${{ inputs.note }}
         run: bash .github/scripts/publish-release.sh "$APP"
 
-      - name: Keep the APK for inspection (failed runs only)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: unpublished-gecko-apk
-          path: geckoapp/build/outputs/apk/release/geckoapp-release.apk
-          retention-days: 7
-          if-no-files-found: ignore
-
       - name: Remove the signing material from the workspace
         if: always()
         run: rm -f keystore.properties "$RUNNER_TEMP/release.jks"
@@ -329,15 +332,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NOTE: ${{ inputs.note }}
         run: bash .github/scripts/publish-release.sh "$APP"
-
-      - name: Keep the APK for inspection (failed runs only)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: unpublished-courier-apk
-          path: courier/build/outputs/apk/release/courier-release.apk
-          retention-days: 7
-          if-no-files-found: ignore
 
       - name: Remove the signing material from the workspace
         if: always()
