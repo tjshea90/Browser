@@ -28,7 +28,8 @@
     var lastSeek = 0, lastSeekEl = null;   // the last seek of any film in this frame that the PAGE made (our own are not counted) and which film
     var ownAt = 0, ownEl = null;           // our own last seek: its `seeking` event comes a moment later and must not count as the page's
     var ask = 0, askAt = 0, waiting = [];   // 0 = not asked, 1 = asking, 2 = yes, 3 = no
-    var pend = { t: 0, s: 0, f: 0, o: 0, r: '' }, sendTimer = 0;
+    var pend = { t: 0, s: 0, f: 0, o: 0, u: 0, r: '', n: '' }, sendTimer = 0;
+    var unkAt = 0, unkN = 0;         // taps on a bar-like strip that was not known: at most one a second, eight a page
 
     function now() { return Date.now(); }
     function mark(k, why) {
@@ -38,8 +39,8 @@
     }
     function flush() {
       sendTimer = 0;
-      var m = { k: 'sbk', t: pend.t, s: pend.s, f: pend.f, o: pend.o, r: pend.r };
-      pend = { t: 0, s: 0, f: 0, o: 0, r: '' };
+      var m = { k: 'sbk', t: pend.t, s: pend.s, f: pend.f, o: pend.o, u: pend.u, r: pend.r, n: pend.n };
+      pend = { t: 0, s: 0, f: 0, o: 0, u: 0, r: '', n: '' };
       try { browser.runtime.sendMessage(m).catch(function () {}); } catch (e) { /* ignore */ }
     }
 
@@ -69,6 +70,14 @@
       if (el.tagName === 'INPUT') return el.type === 'range';
       if (el.getAttribute('role') === 'slider') return true;
       return GOOD.test(s);
+    }
+    function wideThin(r) { return r.width >= 100 && r.height <= 72 && r.width >= 5 * r.height; }
+    /** A short harmless name of an element for Diagnostics: its tag and its first class made of letters, digits, - and _ only. */
+    function nameOf(el) {
+      var c = el.className;
+      if (c && typeof c !== 'string') c = c.baseVal;
+      var m = /[A-Za-z][A-Za-z0-9_-]{2,30}/.exec(String(c || ''));
+      return String(el.tagName || '').toLowerCase() + (m ? '.' + m[0] : '');
     }
     function interactive(el) {
       var t = el.tagName;
@@ -106,16 +115,34 @@
       }
       return true;
     }
+    /** A tap in the lower part of a player's picture landed on a thin wide strip that was NOT taken for a bar: its name goes to Diagnostics (a player with a bar this script does not know shows up there). */
+    function noteUnknown(x, y, list, vids) {
+      var t = now(), i, vr, el, r, inside = false;
+      if (t - unkAt < 1000 || unkN >= 8) return;
+      for (i = 0; i < vids.length && i < 12 && !inside; i++) {
+        vr = vids[i].getBoundingClientRect();
+        inside = vr.width >= 120 && vr.height >= 68 && x >= vr.left && x <= vr.right && y >= vr.top + 0.55 * vr.height && y <= vr.bottom + 32;
+      }
+      if (!inside) return;
+      for (i = 0; i < list.length && i < STACK; i++) {
+        el = list[i];
+        if (!el || el.nodeType !== 1 || el === document.body || el === document.documentElement || el.tagName === 'VIDEO' || el.tagName === 'IFRAME') continue;
+        r = el.getBoundingClientRect();
+        if (!wideThin(r) || !shown(el)) continue;
+        unkAt = t; unkN++; pend.n = nameOf(el); mark('u');
+        return;
+      }
+    }
     function findBar(x, y, vids) {
       var list = stackAt(x, y), n = Math.min(list.length, STACK), best = null, bestAt = -1, i, el, r;
       for (i = 0; i < n; i++) {
         el = list[i];
         if (!el || el.nodeType !== 1 || el === document.body || el === document.documentElement || !barLike(el)) continue;
         r = el.getBoundingClientRect();
-        if (!(r.width >= 100 && r.height <= 72 && r.width >= 5 * r.height)) continue;
+        if (!wideThin(r)) continue;
         if (!best || r.width > best.r.width) { best = { el: el, r: r }; bestAt = i; }
       }
-      if (!best) return null;
+      if (!best) { noteUnknown(x, y, list, vids); return null; }
       for (i = 0; i < bestAt; i++) if (!best.el.contains(list[i]) && interactive(list[i])) return null;   // the finger is on a button / link / field that lies over the bar
       var v = videoFor(best.r, vids);
       if (!v || !shown(best.el)) return null;

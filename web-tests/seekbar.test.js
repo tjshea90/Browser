@@ -317,6 +317,34 @@ test('YS1: a player inside a frame of another site is handled by the copy of the
   await page.context().close();
 });
 
+// ---- a bar the script does not know is named in Diagnostics
+
+test('YS1: a tap on a thin wide strip inside a player that the script did NOT take for a bar is reported with a harmless name (the next fix needs it), once a second at most; a tap high in the picture is not', async () => {
+  const page = await open(PLAYER('<div class="mystery-strip-7" style="position:absolute;left:10px;right:10px;bottom:10px;height:12px;background:#555"></div>'));
+  const r = await rectOf(page, '.mystery-strip-7');
+  await page.touchscreen.tap(r.left + r.width * 0.5, r.top + 6); await page.waitForTimeout(300);
+  await page.touchscreen.tap(r.left + r.width * 0.2, r.top + 6); await page.waitForTimeout(300);       // within a second of the first: not counted again
+  await page.touchscreen.tap(200, 40); await page.waitForTimeout(300);                                  // high in the picture: not a bar place
+  assert.ok(near(await time(page), 0, 0.5), 'nothing moved');
+  await page.waitForTimeout(300);
+  const all = await msgs(page, 'sbk');
+  const u = all.reduce((a, m) => a + m.u, 0);
+  assert.equal(u, 1);
+  assert.equal(all.filter((m) => m.n).pop().n, 'div.mystery-strip-7');
+  assert.equal(all.reduce((a, m) => a + m.t, 0), 0, 'it is not a counted tap on a bar');
+  await page.context().close();
+});
+
+test('YS1: a recognised bar is never reported as unknown, and a name with odd characters is cut to harmless ones by the extension before it reaches the app (checked in the app relay by its code)', async () => {
+  const page = await open(YT());
+  await tapBar(page, 0.7); await page.waitForTimeout(500);
+  const all = await msgs(page, 'sbk');
+  assert.equal(all.reduce((a, m) => a + m.u, 0), 0);
+  const bg = fs.readFileSync(path.join(__dirname, '..', 'geckoapp', 'src', 'main', 'assets', 'kestrel-shields', 'background.js'), 'utf8');
+  assert.ok(bg.includes("n: String(m.n || '').replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 40)"), 'the relay keeps letters, digits and - _ . only');
+  await page.context().close();
+});
+
 // ---- cost and privacy
 
 test('YS1: a page without a video does no work at a touch (no hit test at all), and one with a video does one hit test per touch', async () => {
@@ -342,7 +370,7 @@ test('YS1: the report holds numbers and a few words only - never an address - an
   await tapBar(page, 0.7); await page.waitForTimeout(400);
   const all = await msgs(page, 'sbk');
   assert.ok(all.length >= 1);
-  for (const m of all) { assert.deepEqual(Object.keys(m).sort(), ['f', 'k', 'o', 'r', 's', 't']); assert.ok(!/example|http|:\/\//.test(JSON.stringify(m)), JSON.stringify(m)); }
+  for (const m of all) { assert.deepEqual(Object.keys(m).sort(), ['f', 'k', 'n', 'o', 'r', 's', 't', 'u']); assert.ok(!/example|http|:\/\//.test(JSON.stringify(m)), JSON.stringify(m)); }
   const ev = await page.evaluate(() => window.__ev);
   assert.ok(ev.includes('pointerdown') && ev.includes('pointerup') && ev.includes('click'), 'the page still got every event: ' + ev);
   assert.ok(!ev.some((x) => x.endsWith('!')), 'none of them cancelled');
