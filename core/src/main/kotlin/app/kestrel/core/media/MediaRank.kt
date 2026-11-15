@@ -105,7 +105,7 @@ object MediaRank {
         if (script && (len < 0 || len < SCRIPT_BIG)) return true                              // "get.php" is a video only when it is big
         if (hint && len in 0 until maxOf(SMALL_ABS, (biggest * 0.4).toLong())) return true      // "preview.mp4", "teaser", "ad": a clip, not the video
         if (hint && len < 0 && biggest > 0) return true
-        if (biggest > 0 && len in 0 until (biggest * SOFT_REL).toLong() && SOFT_WORDS.containsMatchIn(pathAndQuery(c.url))) return true   // RX3-V6: a soft word AND clearly smaller than the biggest file
+        if (biggest > 0 && len in 0 until (biggest * SOFT_REL).toLong() && !c.touched && !c.played && !c.interest && SOFT_WORDS.containsMatchIn(pathAndQuery(c.url))) return true   // RX3-V6: a soft word AND clearly smaller than the biggest file, and no player or owner vouches for it
         if (c.frame.isNotEmpty() && topFrame > 0 && len in 0 until (topFrame * 0.25).toLong()) return true   // asked for by another frame (an advert) and small next to the page's own
         return false
     }
