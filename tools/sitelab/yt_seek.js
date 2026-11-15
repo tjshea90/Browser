@@ -1,6 +1,6 @@
 'use strict';
 // tools/sitelab/yt_seek.js [video id] [--kestrel] - what happens when a finger taps YouTube's seek bar, in plain headless Chromium with a touch screen (YS1, owner message 42).
-// Needs the cloud sandbox's agent proxy (HTTPS_PROXY). Sends the tablet's Firefox-Android user agent to m.youtube.com. Logs which events the page gets for the tap and whether the video's currentTime moved.
+// Needs the cloud sandbox's agent proxy (HTTPS_PROXY). Sends a Chrome-Android user agent to m.youtube.com. Logs which events the page gets for the tap and whether the video's currentTime moved.
 // With --kestrel the REAL page scripts of the built-in extension are loaded the way the engine loads them: guard-main.js in the page (before any page script), content.js / youtube.js in the page too with a
 // fake `browser.runtime` that answers like the app does (guard: on + skip; css: nothing). Chromium is not Gecko: this shows how the PAGE seeks and whether OUR scripts get in its way, not the engine's touch handling.
 // Never puts a cookie, token or signed URL in its output.
@@ -14,7 +14,8 @@ const VIDEO = args.find((a) => !a.startsWith('--')) || 'dQw4w9WgXcQ';
 const KESTREL = args.includes('--kestrel');
 const DIR = path.join(__dirname, '..', '..', 'geckoapp', 'src', 'main', 'assets', 'kestrel-shields');
 const read = (f) => fs.readFileSync(path.join(DIR, f), 'utf8');
-const UA = 'Mozilla/5.0 (Android 10; Mobile; rv:160.0) Gecko/160.0 Firefox/160.0';
+// (a Firefox user agent on Chromium's own TLS fingerprint is answered with YouTube's bot-check page, found 2026-11-15; the Chrome-Android one gets the real mobile site, which is what the seek logic is read from)
+const UA = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36';
 
 (async () => {
   const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required', '--mute-audio'], proxy: process.env.HTTPS_PROXY ? { server: process.env.HTTPS_PROXY } : undefined });
