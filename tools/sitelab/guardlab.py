@@ -397,7 +397,8 @@ function wire(id, bid, tid, name, jumps) {
   window['rect' + name] = rect;
 }
 var N = Date.now();
-document.getElementById('va').src = '/seek-film.wav?p=A&n=' + N; document.getElementById('vb').src = '/seek-film.wav?p=B&n=' + N;   // a new address per load: a repeated one is served from the engine's media cache without asking the server
+var F = (location.search.indexOf('small') >= 0) ? '/seek-film.wav' : '/seek-big.wav';
+document.getElementById('va').src = F + '?p=A&n=' + N; document.getElementById('vb').src = F + '?p=B&n=' + N;   // a new address per load: a repeated one is served from the engine's media cache without asking the server
 wire('va', 'ba', 'ta', 'A', false);
 wire('vb', 'bb', 'tb', 'B', true);
 document.getElementById('va').play().catch(function (e) { L('play-refused', String(e)); });   // A and B play (muted): the jump must keep playing
@@ -410,6 +411,25 @@ def seek_wav():
     if not _SEEKWAV:
         _SEEKWAV.append(base64.b64decode(silent_wav(300).split(",", 1)[1]))
     return _SEEKWAV[0]
+
+
+BIGRATE, BIGSECS = 192000, 300                       # 48 kHz, 16 bit, stereo: 192 KB/s, so the 300 s film is 57.6 MB and the engine's read-ahead limit (60 s = 11.5 MB) matters
+BIGLEN = 44 + BIGRATE * BIGSECS
+BIGHDR = b"RIFF" + struct.pack("<I", BIGLEN - 8) + b"WAVEfmt " + struct.pack("<IHHIIHH", 16, 1, 2, 48000, BIGRATE, 4, 16) + b"data" + struct.pack("<I", BIGRATE * BIGSECS)
+
+
+def stream_big(h, lo, hi, who, rng):
+    """Writes bytes lo..hi of the big film in 64 KB chunks and logs how many the engine took before it closed the connection (or that it took them all)."""
+    sent = 0
+    try:
+        pos = lo
+        while pos <= hi:
+            n = min(65536, hi - pos + 1)
+            chunk = (BIGHDR[pos:44] if pos < 44 else b"") + b"\x00" * max(0, n - max(0, 44 - pos))
+            h.wfile.write(chunk[:n]); sent += n; pos += n
+        h._write("   player=%s Range=%s: all %d bytes sent (the engine read to the end of this request)" % (who, rng, sent))
+    except (BrokenPipeError, ConnectionResetError):
+        h._write("   player=%s Range=%s: the engine closed the connection after %d bytes = %.1f s of film from offset %d" % (who, rng, sent, sent / float(BIGRATE), lo))
 
 
 class H(http.server.BaseHTTPRequestHandler):
@@ -474,6 +494,19 @@ class H(http.server.BaseHTTPRequestHandler):
         if u.path == "/seekbar-lab":
             self._write("GET /seekbar-lab")
             return self._send(200, SEEKLAB)
+        if u.path == "/seek-big.wav":
+            rng = self.headers.get("Range", ""); who = q.get("p", ["?"])[0]
+            self._write("GET /seek-big.wav player=%s Range=%s" % (who, rng or "-"))
+            lo, hi = 0, BIGLEN - 1
+            if rng.startswith("bytes="):
+                a, _, b = rng[6:].partition("-")
+                lo = int(a or 0); hi = min(int(b) if b else BIGLEN - 1, BIGLEN - 1)
+                self.send_response(206); self.send_header("Content-Range", "bytes %d-%d/%d" % (lo, hi, BIGLEN))
+            else:
+                self.send_response(200)
+            self.send_header("Content-Type", "audio/wav"); self.send_header("Content-Length", str(hi - lo + 1)); self.send_header("Accept-Ranges", "bytes"); self.send_header("Cache-Control", "no-store"); self.end_headers()
+            stream_big(self, lo, hi, who, rng or "-")
+            return
         if u.path == "/seek-film.wav":
             body = seek_wav(); total = len(body); rng = self.headers.get("Range", "")
             self._write("GET /seek-film.wav player=%s Range=%s" % (q.get("p", ["?"])[0], rng or "-"))
