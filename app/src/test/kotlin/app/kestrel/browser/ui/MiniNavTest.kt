@@ -941,6 +941,20 @@ class MiniNavTest {
 
     // ------------------------------------------------------------------ closing the panel (owner message 41): a long press above it, a forgiving tap on the grip, and a large X at the bottom while it is carried
 
+    @Test fun aPointStraightAboveOrBesideThePanelIsThePagesNotThePanels() {
+        // the bug behind "it doesn't close anymore": the grip zone had no upper limit, so everything above the panel within 56 dp of its centre line counted as the panel, and the page never got the press
+        val loc = IntArray(2); nav.getLocationInWindow(loc)
+        nav.showAt(loc[0] + 300f, loc[1] + 400f); relayout()
+        val o = nav.outlineForTest(); val cx = (o[0] + o[2]) / 2f
+        assertTrue("the panel itself is the panel's", nav.coversWindowPoint(cx, (o[1] + o[3]) / 2f))
+        assertTrue("so is its grip, in the band just above the outline", nav.coversWindowPoint(cx, o[1] - 6f * d))
+        assertFalse("100 dp straight above it: the page's", nav.coversWindowPoint(cx, o[1] - 100f * d))
+        assertFalse("20 dp above its top edge, above the band: the page's", nav.coversWindowPoint(cx, o[1] - 20f * d - MiniNav.BAND_DP * d))
+        assertFalse("far above, level with its left edge: the page's", nav.coversWindowPoint(o[0] + 10f, loc[1] + 40f))
+        assertFalse("beside it: the page's", nav.coversWindowPoint(o[0] - 40f * d, (o[1] + o[3]) / 2f))
+        assertFalse("below it: the page's", nav.coversWindowPoint(cx, o[3] + 40f * d))
+    }
+
     @Test fun aLongPressOnOpenSpaceAboveTheOpenPanelClosesItAndOneBesideOrBelowItStillMovesIt() {
         val loc = IntArray(2); nav.getLocationInWindow(loc)
         nav.showAt(loc[0] + 300f, loc[1] + 400f); relayout()

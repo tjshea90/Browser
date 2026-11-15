@@ -955,6 +955,9 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         /** 0 = the band (the page's), 1 = the panel itself, 2 = the grip, 3..6 = a corner. */
         internal fun zoneAt(x: Float, y: Float): Int {
             val w = width.toFloat(); val h = height.toFloat(); val b = bandPx.toFloat(); val inner = b + padPx
+            // Only points INSIDE this view are the panel's. (Before owner message 41 the grip zone had no upper limit: [coversWindowPoint] asks about any point of the window, so a press straight ABOVE the panel counted as
+            // a press on its grip, the page never got it, and a long press above the panel could neither move nor close it.)
+            if (x < 0f || y < 0f || x > w || y > h) return ZONE_NONE
             if (x >= inner && x <= w - inner && y >= inner && y <= h - inner) return ZONE_BODY
             if (keyboardShowing) for (c in 0..3) {
                 val cx = if (c and 1 != 0) w - b else b
