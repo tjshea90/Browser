@@ -1243,3 +1243,10 @@ The following project is read only. Do not make any changes to the repo or inter
 
 Review the current state of the Kestrel browser app (which is being worked on now by another claude account) and prior research. Do a thorough review of the code and research ways to improve speed of the app, web page compatibility, speed of browsing and page loading and smoothness of scrolling, smoothness of video playback, and secure browsing. Make a report file of what can be improved and how
 ```
+
+## 2026-11-15T04:32:49Z
+```
+The following project is read only. Do not make any changes to the repo or interfere with the other Claude account working in the repo. Several reviews of this repo have been completed. Review the current state of the app and make a new report file that is optimized for another Claude account which I can upload into the other claude account with no explanation at all and claude will fully understand and complete the tasks based on this session's research. 
+
+Review the current state of the Kestrel browser app (which is being worked on now by another claude account) and prior research. Do a thorough review of the code and research ways to improve speed of the app, web page compatibility, speed of browsing and page loading and smoothness of scrolling, smoothness of video playback, and secure browsing. Make a report file of what can be improved and how
+```
