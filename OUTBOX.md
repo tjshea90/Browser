@@ -1659,3 +1659,12 @@
 >
 > 💡 The code word is off in this chat. Type `/amcodeword` and I'll start every reply with "Yes Boss!".
 <!-- sha:53bdeeadb01a -->
+
+## 2026-11-15T16:00:31Z
+> Alpha48 isn't released yet. I'm waiting on three things:
+> - **Lab run 5** (20-minute check on the real engine): it ends around 16:15 container time. It will show whether Back leaves full screen and how the unrequested-download questions behave.
+> - **The independent code review** of the alpha48 changes: it's still running.
+> - **The one-hour hotspot run** (43732896160): it starts right after run 5. The lab's own test downloads and clips are now slowed to hotspot speed as well.
+>
+> Web tests (418) and the Kotlin unit tests are green. I'll ship alpha48 once run 5 and the review are in, and I'll answer you in plain words then.
+<!-- sha:5a3683f0fb9e -->
