@@ -1,13 +1,15 @@
-# CHECKPOINT 2376 — read me first, then TASKS.md
+# CHECKPOINT 2377 — read me first, then TASKS.md
 
-**Written:** 2026-11-15T04:47:36Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/new-session-7d9rxz` · **builds on:** `04195f99` (this checkpoint is the commit after it)
+**Written:** 2026-11-15T05:19:39Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/new-session-7d9rxz` · **builds on:** `0c770803` (this checkpoint is the commit after it)
 
 ## Just done
-YS1: independent review of seekbar.js applied (real YouTube bar markup from the live embed: role=slider 44 px drag container + 3 px rail at opacity .3 was rejected on the rail; fixes: rank slider over decor, own opacity not visibility, scope to the player's films, anything over the bar blocks, history of page seeks, live 2^32, input max, Plyr 30 percent low, media-chrome, 1000/10000, late answer); web-tests seekbar.test.js 22 + seekbar-real.test.js 10 (9 fail on the pre-review script); lab /seekbar-lab has the real YouTube bar R; unknown-strip name in Diagnostics
+gated kestrel-g-v0.3.0-alpha47 (gecko code 148) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
 
 ## Do this next
-debug APK rebuilding (scratchpad b3.log); then adb install -r + pm clear + start lab, reload once the extension is ready (toolbar reload at screen px 563,831), tap R rail at 70 percent (bar x 28..328 css), A, B, mystery strip; then rerun gradle core:test (single run), npm test, TASKS ticks via claim.sh --done, HANDOFF, ship.sh gecko alpha47, dispatch android.yml app=gecko, record-release, answer owner
+TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref claude/new-session-7d9rxz, inputs {"app":"gecko","full_build":"true","note":"alpha47: a tap or slide on a video player's bar jumps the video when the page does not do it (YouTube's current bar included); Settings row Tap the video bar to jump, Diagnostics line Tap on a video bar"}.
+When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha47), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha47 "alpha47: a tap or slide on a video player's bar jumps the video when the page does not do it (YouTube's current bar included); Settings row Tap the video bar to jump, Diagnostics line Tap on a video bar"
+NEVER ship kestrel-g-v0.3.0-alpha47 twice (check BUILDLOG.md and the Releases first).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +18,7 @@ debug APK rebuilding (scratchpad b3.log); then adb install -r + pm clear + start
 
 ## Last ten checkpoints
 ```
+  943f5a5e ckpt 2376: YS1: independent review of seekbar.js applied (real YouTube bar markup from 
   021ec124 ckpt 2375: YS1: seekbar.js wired in (manifest, guard flag 16, sbk relay, Settings row '
   b225c11a ckpt 2374: YS1b: seekbar.js (tap/slide on a player's progress bar -> video jumps when t
   a7c3b677 ckpt 2373: owner message 42 written into TASKS.md as YS1 (+YS1a find why a tap on the Y
@@ -25,8 +28,7 @@ debug APK rebuilding (scratchpad b3.log); then adb install -r + pm clear + start
   95cc5c99 ckpt 2369: pre-ship: alpha46: the floating navigation panel can be closed again: a long
   42026781 ckpt 2368: owner message 41 CODED + unit-proven (emulator proof still to do, rows not t
   ea36cfba ckpt 2367: wrote the owner's message 41 into TASKS.md as boxes (MN1 panel will not clos
-  5abf8de1 ckpt 2366: alpha45 (gecko code 146) RELEASED, RECORDED in BUILDLOG.md (run 43664857352 
 ```
 
-(12 automatic checkpoint(s) since the last deliberate one — the
+(8 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
