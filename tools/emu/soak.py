@@ -350,6 +350,18 @@ VIDEO_PAGES = [
     ("wikimedia-commons", "https://commons.wikimedia.org/wiki/File:Big_Buck_Bunny_4K.webm", 25),
 ]
 
+# Safe Browsing test pages (RX4-X3): Mozilla's are answered from the engine's built-in test tables (they prove the machinery is on), Google's from the real lists (they prove the list download
+# and the key work). A page the engine blocks shows the app's warning screen: the Health line "page error ... kind=Dangerous".
+SAFEBROWSING = [
+    ("mozilla-phishing", "https://itisatrap.org/firefox/its-a-trap.html"),
+    ("mozilla-malware", "https://itisatrap.org/firefox/its-an-attack.html"),
+    ("mozilla-unwanted", "https://itisatrap.org/firefox/unwanted.html"),
+    ("mozilla-harmful", "https://itisatrap.org/firefox/harmful.html"),
+    ("google-phishing", "https://testsafebrowsing.appspot.com/s/phishing.html"),
+    ("google-malware", "https://testsafebrowsing.appspot.com/s/malware.html"),
+    ("google-unwanted", "https://testsafebrowsing.appspot.com/s/unwanted.html"),
+]
+
 # downloads: (name, url or lab path, expected bytes or 0 = just "something arrived", seconds to wait)
 DOWNLOADS = [
     ("lab-1mb", "lab:/dl/1mb.bin", 1048576, 60),
@@ -383,6 +395,7 @@ class Soak:
         self.port = a.port
         self.lab_base = "http://localhost:%d" % a.port
         self.fs_result = None
+        self.sb_rounds = []
 
     # ---- bookkeeping
     def issue(self, sev, area, text, shot=False):
@@ -619,6 +632,34 @@ class Soak:
         self.check_alive(name)
         self.record(r)
 
+    # ---- Safe Browsing (RX4-X3)
+    def safe_browsing(self, tag=""):
+        rows = []
+        for name, url in SAFEBROWSING:
+            state, note = self.upstream(url)
+            if state == "unreachable":
+                rows.append((name, "UPSTREAM (%s)" % note)); continue
+            mark = self.log.size()
+            self.ph.open_url(url)
+            t0, res = time.time(), "no answer in 45 s"
+            while time.time() - t0 < 45:
+                hs = health_events(self.log.since(mark), "page")
+                if any(e["ev"] == "error" and "Dangerous" in e["kv"].get("kind", "") for e in hs):
+                    res = "BLOCKED: the app showed its warning screen"; break
+                if any(e["ev"] == "loaded" for e in hs):
+                    time.sleep(4)
+                    hs = health_events(self.log.since(mark), "page")
+                    res = "BLOCKED: the app showed its warning screen" if any(e["ev"] == "error" and "Dangerous" in e["kv"].get("kind", "") for e in hs) else "NOT BLOCKED: the page loaded"
+                    break
+                time.sleep(2)
+            rows.append((name, res))
+        self.sb_rounds.append((tag or "t%d" % int((time.time() - T0) / 60), rows))
+        self.record({"kind": "safebrowsing", "name": "safe-browsing", "status": "ok", "results": [{"page": n, "result": r} for n, r in rows]})
+        for n, r in rows:
+            if r.startswith("NOT BLOCKED"):
+                self.issue("medium", "safe-browsing", "%s was not blocked (%s): the engine's own Safe Browsing is not protecting this page" % (n, tag or "this round"))
+        self.check_alive("safe-browsing")
+
     # ---- a download
     def download(self, name, src, size, wait):
         up_state, up_note = self.upstream(src)
@@ -791,6 +832,7 @@ class Soak:
 
     def smoke(self):
         ev = self.load_page("lab-text", "lab:/page/text", 2, 1, timeout=60)
+        self.safe_browsing("smoke")
         self.dump_diag("smoke")
         return ev
 
@@ -849,6 +891,7 @@ class Soak:
                 say("memory: app PSS %d MB, MemAvailable %d MB, %d app processes, scene %d, %.0f min left" % (pss, avail, procs, n, (deadline - time.time()) / 60))
             if time.time() - last_dump > 20 * 60:
                 self.dump_diag("t%d" % int((time.time() - T0) / 60))
+                self.safe_browsing()
                 last_dump = time.time()
         self.sample()
 
@@ -884,6 +927,14 @@ class Soak:
                     continue
                 seen.add(key)
                 L.append("- **%s / %s**: %s" % (sev, area, text))
+            L.append("")
+        if self.sb_rounds:
+            L.append("## Safe Browsing (RX4-X3: does the engine's own protection work in this build?)")
+            L.append("")
+            L.append("| test page | " + " | ".join(t for t, _ in self.sb_rounds) + " |")
+            L.append("| :- | " + " | ".join(":-" for _ in self.sb_rounds) + " |")
+            for i, (name, _) in enumerate(SAFEBROWSING):
+                L.append("| %s | " % name + " | ".join(next((r for n, r in rows if n == name), "-") for _, rows in self.sb_rounds) + " |")
             L.append("")
         if self.fs_result:
             L.append("## Full-screen turning (FS1)")
