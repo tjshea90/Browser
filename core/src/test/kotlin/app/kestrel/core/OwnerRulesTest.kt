@@ -115,6 +115,31 @@ class OwnerRulesTest {
         val slid = body(nav, "private fun cursorSlid(delta: Int) {")
         assertTrue("the address bar's cursor and the page field's caret both move: $slid", slid.contains("model.moveCursor") && slid.contains("moveCursor(delta)"))
     }
+    // VC1 + LP1, owner message 44: "I played a video on finance.yahoo.com in Kestrel, and the player had no controls at all ... Anywhere I can start a video in the browser, I should be able to control it ... the
+    // download options should come up for videos when I long press them instead of the floating notification panel." The player is a shadow-root web component: every video feature has to look INSIDE shadow roots.
+    @Test fun aVideoWithNoControlsGetsKestrelsBarAndALongPressOnAVideoIsTheVideoMenuNotThePanel() {
+        val dir = "geckoapp/src/main/assets/kestrel-shields/"
+        val manifest = source(dir + "manifest.json")
+        assertTrue("vfind.js loads before content.js, and videobar.js is declared", manifest.indexOf("\"vfind.js\"") in 0 until manifest.indexOf("\"content.js\"") && manifest.contains("\"videobar.js\""))
+        val content = source(dir + "content.js")
+        assertTrue("the video-menu long press finds a video inside a shadow root", content.contains("if (!media && window.KestrelVF) media = window.KestrelVF.at(e.clientX, e.clientY);"))
+        assertTrue("the open-space (panel) long press never fires on a video, wherever it hides", content.contains("if (window.KestrelVF && window.KestrelVF.at(e.clientX, e.clientY)) return;"))
+        assertTrue("a long press inside a frame asks the page above before it reports open space", content.contains("k: 'ft', t: 'lp'"))
+        val vfind = source(dir + "vfind.js")
+        assertTrue("shadow roots, closed ones too", vfind.contains("openOrClosedShadowRoot") && vfind.contains("collect(sr, vids, budget, 1, 'video')"))
+        val bar = source(dir + "videobar.js")
+        assertTrue("the bar is judged after a tap and only when the app allows it", bar.contains("r.vb === true") && bar.contains("T = { judge: 450"))
+        assertTrue("the bar is built with DOM calls and CSSOM only (a page's content-security-policy cannot block it)", !bar.contains("innerHTML") && !bar.contains("<style") && bar.contains("style.cssText"))
+        val bg = source(dir + "background.js")
+        assertTrue("the page-config answer carries the Settings choice", bg.contains("vb: (f & 64) !== 0, vba: (f & 128) !== 0"))
+        assertTrue("frames are relayed to the top frame", bg.contains("m.k !== 'ft'") && bg.contains("k: 'ftq'"))
+        val bridge = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt")
+        assertTrue("flags 64 (Automatic or Always) and 128 (Always) follow ONLY the Settings row", bridge.contains("(if (prefs().videoControls != 2) 64 else 0) or (if (prefs().videoControls == 1) 128 else 0)"))
+        assertTrue("the Settings row exists", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("choice(\"Video controls\""))
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("a private tab leaves no trace of the bar", body(act, "private fun onVideoBar(m: org.json.JSONObject) {").contains("if (pageIsPrivate(m.optString(\"p\"))) return"))
+    }
+
     // FS1, owner message 43: "make it so if I watch videos in full screen, then rotate the tablet or press a rotate button, the video switches to landscape mode just like regular video player apps."
     @Test fun fullScreenVideoTurnsWithTheTabletAndTheRotateButton() {
         val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
