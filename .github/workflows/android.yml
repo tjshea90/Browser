@@ -41,9 +41,9 @@ on:
         type: string
         default: ''
       lab_suite:
-        description: 'Only for app = lab. smoke = one page + the Diagnostics text; fs = the full-screen turning checks; vc = the video controls and the long press on a video (owner message 44) with a walk down the Yahoo Finance page; soak = the long run of pages, videos and downloads; all = everything'
+        description: 'Only for app = lab. smoke = one page + the Diagnostics text; fs = the full-screen turning checks; vc = the video controls and the long press on a video (owner message 44) with a walk down the Yahoo Finance page; snd = sound while the app is left (owner message 45); soak = the long run of pages, videos and downloads; all = everything'
         type: choice
-        options: [smoke, fs, vc, soak, all]
+        options: [smoke, fs, vc, snd, soak, all]
         default: smoke
       lab_minutes:
         description: 'Only for app = lab: how long the soak part runs, in minutes (60 = one hour)'

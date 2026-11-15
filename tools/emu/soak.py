@@ -436,6 +436,7 @@ class Soak:
         self.hard_restarts = 0
         self.emu_proc = None
         self.vbar_rows = []
+        self.snd_rows = []
         self.last_diag = ""
 
     # ---- bookkeeping
@@ -1131,6 +1132,50 @@ class Soak:
         self.record({"kind": "yahoo", "name": "yahoo-scan", "status": "ok", "note": "videos page: tap gave %s, long press: menu %s sheet %s panel %s; the quote page was only photographed" % (got, menu, sheet, panel)})
         self.check_alive("yahoo-scan")
 
+    # ---- SND1 (owner message 45): "Sound should not keep playing if I am not currently on the Kestrel tab."  The app is left (Home) and the screen is turned off while a clip plays WITH sound; Android's own list of
+    # playing audio (dumpsys audio: AudioPlaybackConfiguration ... state:started) says whether anything still makes sound, and the page's own media events say what the engine did to the element.
+    def audio_started(self):
+        out = self.ph.a.sh("dumpsys audio", timeout=40)
+        i = out.find("players:")
+        seg = out[i:i + 8000] if i >= 0 else out
+        return len(re.findall(r"state:started", seg))
+
+    def audio_round(self):
+        w, h = self.screen
+        rows = []
+        for kind in ("video", "audio"):
+            for how in ("home", "screen-off"):
+                rmark, lmark = self.lab.size(), self.log.size()
+                self.ph.open_url("%s/video/audible?kind=%s" % (self.lab_base, kind))
+                t0 = time.time()
+                while time.time() - t0 < 40 and not any(e["ev"] == "loaded" for e in health_events(self.log.since(lmark), "page")):
+                    time.sleep(1.5)
+                time.sleep(2)
+                self.ph.tap(w // 2, 175); time.sleep(5)           # the big button: sound starts
+                playing = self.audio_started()
+                if how == "home":
+                    self.ph.home()
+                else:
+                    self.ph.key("KEYCODE_SLEEP")
+                time.sleep(6)
+                away = self.audio_started()
+                ev_away = [r.get("ev") for r in self.lab.since(rmark) if r.get("kind") == "snd"]
+                if how == "home":
+                    self.ph.start_app()
+                else:
+                    self.ph.key("KEYCODE_WAKEUP"); self.ph.a.sh("wm dismiss-keyguard")
+                time.sleep(5)
+                back = self.audio_started()
+                self.shot("snd-%s-%s" % (kind, how))
+                rows.append((kind, how, playing, away, back))
+                if playing < 1:
+                    self.issue("low", "tooling", "sound lab %s: the clip never started making sound (%d players started): the test says nothing about leaving the app" % (kind, playing))
+                elif away > 0:
+                    self.issue("high", "sound", "%s: sound kept playing after %s (Android lists %d playing audio streams)" % (kind, how, away))
+        self.snd_rows = rows
+        self.record({"kind": "snd", "name": "sound-when-left", "status": "ok" if all(r[3] == 0 for r in rows if r[2] >= 1) else "failed", "results": [{"clip": r[0], "left_by": r[1], "playing": r[2], "away": r[3], "back": r[4]} for r in rows]})
+        self.check_alive("sound-when-left")
+
     def setup_device(self):
         for k in ("window_animation_scale", "transition_animation_scale", "animator_duration_scale"):
             self.ph.setting("global", k, 0)
@@ -1300,6 +1345,14 @@ class Soak:
             L.append("")
             for n, ok, said in self.apk_rows:
                 L.append("- [%s] %s: %s" % ("x" if ok else " ", n, said))
+            L.append("")
+        if self.snd_rows:
+            L.append("## Sound when the app is left (SND1, owner message 45)")
+            L.append("")
+            L.append("| clip | the app was left by | audio streams playing before | while away (must be 0) | after coming back |")
+            L.append("| :- | :- | -: | -: | -: |")
+            for kind, how, playing, away, back in self.snd_rows:
+                L.append("| %s | %s | %d | %d | %d |" % (kind, how, playing, away, back))
             L.append("")
         if self.vbar_rows:
             L.append("## Video controls and the long press on a video (VC1 / LP1, owner message 44)")
@@ -1509,7 +1562,7 @@ class FakeAdb:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -1521,7 +1574,7 @@ def main():
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
-        a.minutes, a.suite = 0.4, ("vc" if a.suite == "vc" else "all")
+        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd") else "all")
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
@@ -1539,6 +1592,8 @@ def main():
         if a.suite in ("vc", "all"):
             s.vbar_round()
             s.yahoo_scan()
+        if a.suite in ("snd", "all"):
+            s.audio_round()
         if a.suite in ("soak", "all"):
             s.soak(a.minutes)
         s.dump_diag("end")
