@@ -26,6 +26,17 @@ class DownloadGuardRulesTest {
         assertEquals(Verdict.ASK, d(touch = 30_000, declined = DownloadGuardRules.REPEAT_WINDOW_MS))
     }
     @Test fun aCancelDoesNotBlockADownloadThePersonStartsNext() { assertEquals(Verdict.GO, d(touch = 1_000, declined = 5_000)) }
+    private fun nav(touch: Long, toStart: Long, itself: Boolean) = DownloadGuardRules.decide(Input(touch, false, false, false, false, touchToPageStartMs = toStart, pageItself = itself))
+
+    @Test fun aTapThatOnlyOpenedThePageDoesNotCoverWhatThePageStartsLater() {
+        // the person tapped a link on page A 5 s ago; page B began 0.4 s after the tap; B starts a file by itself (not B's own address)
+        assertEquals(Verdict.ASK, nav(5_000, 400, false))
+    }
+    @Test fun aTapInsideThePageAfterItBeganCounts() { assertEquals(Verdict.GO, nav(2_000, -3_000, false)) }
+    @Test fun aLinkToAFileWhoseNavigationBeganRightAfterTheTapCounts() { assertEquals(Verdict.GO, nav(1_000, 300, true)) }
+    @Test fun aTimerThatSetsTheAddressToAFileLongAfterTheTapDoesNot() { assertEquals(Verdict.ASK, nav(6_000, 2_600, true)) }
+    @Test fun anUnknownPageStartKeepsTheSimpleRule() { assertEquals(Verdict.GO, d(touch = 1_000)); assertEquals(Verdict.ASK, d(touch = 30_000)) }
+
     @Test fun theQuestionSaysWhyOnlyWhenThePageStartedItAlone() {
         assertEquals(DownloadGuardRules.BY_ITSELF, DownloadGuardRules.note(Input(30_000, false, false, false, false)))
         assertEquals("", DownloadGuardRules.note(Input(1_000, false, false, false, false)))

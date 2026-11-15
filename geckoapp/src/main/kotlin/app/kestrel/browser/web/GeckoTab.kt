@@ -15,6 +15,9 @@ class GeckoTabData {
     var videoPlaying = false
     /** FS1: the picture size (pixels) of the video that plays on this page, as its element reported it ([picturePlayed] = from an element that really played); 0 = not known. A new page forgets it ([VideoFlow.clearTab]). */
     var pictureW = 0
+    /** RX4-X2: when (uptime ms) and with which address the page's navigation began: a touch BEFORE it is the tap that opened the page, not a touch of the page. */
+    var pageStartedAt = 0L
+    var pageStartUrl = ""
     var pictureH = 0
     var picturePlayed = false
     var fieldInput: app.kestrel.browser.PageFieldInput? = null // AU3: sees the page's text field gain and lose focus; the mini keyboard types through it

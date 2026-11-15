@@ -188,6 +188,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
 
     override fun onPageStart(session: GeckoSession, url: String) {
         lastStartUrl = url
+        tab.gecko.pageStartedAt = android.os.SystemClock.uptimeMillis(); tab.gecko.pageStartUrl = url // RX4-X2
         if (a.isCurrentTab(tab)) app.kestrel.browser.download.DownloadController.pageLoading(true) // downloads step aside while this page loads
         app.kestrel.browser.diag.PageTimes.start(tab, url, tab.isPrivateTab)
         tab.loading = true

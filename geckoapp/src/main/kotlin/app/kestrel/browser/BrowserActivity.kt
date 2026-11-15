@@ -2754,7 +2754,8 @@ open class BrowserActivity : Activity(), DockListener {
         val now = SystemClock.uptimeMillis()
         val guard = app.kestrel.core.download.DownloadGuardRules.Input(
             touchAgeMs = if (lastTouchAt == 0L) Long.MAX_VALUE else now - lastTouchAt, ownerNavigation = tab.pendingNav != null, risky = risky, big = big, cleartext = cleartext,
-            fromBlob = url.startsWith("blob:", ignoreCase = true), ownRequest = nameOverride != null || headers != null, declinedAgoMs = autoDownloadDeclinedAt[tab.id]?.let { now - it } ?: Long.MAX_VALUE)
+            fromBlob = url.startsWith("blob:", ignoreCase = true), ownRequest = nameOverride != null || headers != null, declinedAgoMs = autoDownloadDeclinedAt[tab.id]?.let { now - it } ?: Long.MAX_VALUE,
+            touchToPageStartMs = if (tab.gecko.pageStartedAt == 0L || lastTouchAt == 0L) Long.MIN_VALUE else tab.gecko.pageStartedAt - lastTouchAt, pageItself = url == tab.gecko.pageStartUrl)
         when (app.kestrel.core.download.DownloadGuardRules.decide(guard)) {
             app.kestrel.core.download.DownloadGuardRules.Verdict.GO -> { startDownload(url, userAgent, contentDisposition, mime, tab, nameOverride, headers); leaveDownloadTab(tab); return }
             app.kestrel.core.download.DownloadGuardRules.Verdict.REFUSE_QUIETLY -> {

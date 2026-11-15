@@ -13,6 +13,9 @@ object DownloadGuardRules {
     /** A finger that lifted this recently counts as "the person started it" (a slow server answers later than that: one extra question, acceptable). */
     const val TOUCH_WINDOW_MS = 8_000L
 
+    /** A tap that began the very navigation which turned out to be the download (a link to a file, a button that sets the address) comes this long before that navigation's page start. */
+    const val NAV_TAP_MS = 1_500L
+
     /** After a Cancel on a download the page started itself, more of them from the same tab are refused without a question for this long. */
     const val REPEAT_WINDOW_MS = 60_000L
 
@@ -34,9 +37,20 @@ object DownloadGuardRules {
         val fromBlob: Boolean = false,
         val ownRequest: Boolean = false,
         val declinedAgoMs: Long = Long.MAX_VALUE,
+        /** The page's navigation began this long AFTER the last touch (negative = the touch came after it; [Long.MIN_VALUE] = not known): a touch BEFORE the page began is the tap that opened the page, not a touch of the page. */
+        val touchToPageStartMs: Long = Long.MIN_VALUE,
+        /** The download's address is the very address the page's navigation started with (the navigation itself was the download). */
+        val pageItself: Boolean = false,
     )
 
-    fun byItself(i: Input): Boolean = !i.ownRequest && !i.ownerNavigation && !(i.touchAgeMs in 0..TOUCH_WINDOW_MS)
+    /** Did a person touch THIS page recently, or tap the link that turned into this very download? A tap that merely opened the page ("click Download on a file host" -> a page that starts the file by itself) does not count. */
+    fun touchedByPerson(i: Input): Boolean {
+        if (i.touchAgeMs !in 0..TOUCH_WINDOW_MS) return false
+        if (i.touchToPageStartMs < 0) return true                                  // the touch came after the page began (or nothing is known): the person touched the page itself
+        return i.pageItself && i.touchToPageStartMs <= NAV_TAP_MS                  // the tap that started the navigation that turned out to be the download
+    }
+
+    fun byItself(i: Input): Boolean = !i.ownRequest && !i.ownerNavigation && !touchedByPerson(i)
 
     fun decide(i: Input): Verdict {
         val itself = byItself(i)
