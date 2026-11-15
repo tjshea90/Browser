@@ -918,6 +918,15 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   return undefined;
 });
 
+// FB4: turn.js (top frame only) tells the viewport the engine gave a full-screen page, in device pixels: numbers only, clamped; the app compares it with its view and gives the engine a real size change when they differ.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'vpt' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
+  function n(v) { v = v | 0; return v > 0 && v < 20000 ? v : 0; }
+  var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || docOf(sender.url);
+  send({ k: 'vpt', w: n(m.w), h: n(m.h), f: m.f === 1 ? 1 : 0, p: String(page).slice(0, 300) }).catch(function () {});
+  return undefined;
+});
+
 // VC1: videobar.js reports what Kestrel's own video bar did: it was shown (e 'shown'), the page had controls of its own (e 'own'), the person used it (e 'act', a = play, pause, seek, mute, full); FB2: turn.js reports a
 // turn of the screen (e 'turn', a = played | skipped | none, n = videos). Numbers
 // and a few words, never an address; the page of the tab goes along so that the app can drop the report of a private tab.

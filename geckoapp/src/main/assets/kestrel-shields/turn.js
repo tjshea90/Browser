@@ -8,12 +8,15 @@
 //    turning, which is the "wrong size for a few seconds", redoes its layout from the final one), and 80 ms later the videos that WE paused play again;
 //  - a video that is not paused by us is never started, one the person (or the page) started again meanwhile is left alone, and a touch during the turn is the person taking over: nothing is played for them.
 // Numbers go to the app as `vbk` (e = 'turn', a = played | skipped | none, n = how many videos), never an address. Conservative ES5, passive listeners, no work until the screen turns.
+// FB4 (lab run 43760546128): the engine sizes a page that goes full screen to the DISPLAY (1024 px) while the view between the system bars is 947 px, and keeps it so until the view changes size again. The top frame
+// therefore tells the app the viewport it really got (`vpt`: width and height in device pixels, only while the page is full screen, 350 ms after the last resize / fullscreenchange); the app compares it with
+// its view and, when they differ, gives the engine a real size change. Numbers only.
 (function () {
   try {
     var VF = window.KestrelVF;
     if (!VF || !window.addEventListener || window.__kestrelTurn) return;
     window.__kestrelTurn = true;                        // (a second load of the script in the same frame keeps the first)
-    var T = { settle: 650, cap: 2200, tick: 120, nudge: 80 };
+    var T = { settle: 650, cap: 2200, tick: 120, nudge: 80, vp: 350 };
     try { if (window.__kstTurnCfg) for (var key in window.__kstTurnCfg) T[key] = window.__kstTurnCfg[key]; } catch (e0) { /* optional */ }
 
     var TOP = window.top === window;
@@ -77,6 +80,22 @@
       landscape = now;
       begin();
     }
+    // FB4: the size the engine really gave this page, told to the app while the page is full screen (the app corrects a viewport that is not its view's)
+    var vpTimer = 0;
+    function tellViewport() {
+      if (!TOP) return;
+      if (vpTimer) clearTimeout(vpTimer);
+      vpTimer = setTimeout(function () {
+        vpTimer = 0;
+        try {
+          if (!document.fullscreenElement) return;
+          var dpr = window.devicePixelRatio || 1;
+          browser.runtime.sendMessage({ k: 'vpt', w: Math.round(window.innerWidth * dpr), h: Math.round(window.innerHeight * dpr), f: 1 }).catch(function () {});
+        } catch (e) { /* nobody listens */ }
+      }, T.vp);
+    }
+    window.addEventListener('resize', tellViewport, { passive: true });
+    document.addEventListener('fullscreenchange', tellViewport, true);
     window.addEventListener('resize', changed, { passive: true });
     window.addEventListener('orientationchange', changed, { passive: true });
     try { if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', changed); } catch (e1) { /* no orientation API */ }
