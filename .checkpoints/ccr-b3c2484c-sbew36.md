@@ -1,21 +1,22 @@
-# CHECKPOINT 2407 — read me first, then TASKS.md
+# CHECKPOINT 2408 — read me first, then TASKS.md
 
-**Written:** 2026-11-15T17:35:53Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `5d3fd3bb` (this checkpoint is the commit after it)
+**Written:** 2026-11-15T18:08:21Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `71442f0e` (this checkpoint is the commit after it)
 
 ## Just done
-alpha48 RELEASED: tag kestrel-g-v0.3.0-alpha48 (commit 281c48f4, APK 94.7 MB, certificate verified), release run 43740388928 all jobs green (test-js, test-jvm, build-gecko), BUILDLOG.md recorded (commit 5d3fd3bb); TASKS ticked: RX4-E1, RX4-X2, FS1d (emulator part), VC1b/c, LP1b/c
+owner answered in plain words for messages 43 and 44 (alpha48 Release link given, what was not run on the tablet said, open items re-listed); a second independent review (video bar scripts: vfind.js, videobar.js, the long-press and relay code, Kotlin glue) running in the background (agent af040def2527a6855, read-only)
 
 ## Do this next
-1) answer the owner in plain words with the Release link https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha48 on its own line (not run on the tablet: the lab used an Android 10 x86_64 emulator with software GL), re-list open items; 2) hour soak 43740398387 ends about 18:35 container clock: download artifacts, write research/SOAK_RUN1.md, fix cheap findings (alpha49 only if worth it), then delete heartbeat trig_01Y8CFHKVb6hmQmEEM78p6gv
+1) the hour soak run 43740398387 (all, 60 min, hotspot) ends about 18:35 container clock: download artifacts (actions_list list_workflow_run_artifacts, download_workflow_run_artifact, tools/emu/fetch_artifact.py), read report.md, write research/SOAK_RUN1.md, TASKS rows per finding (SOAK1c/SOAK1d), fix cheap findings; 2) read the reviewer's findings for the video bar scripts and fix real ones (alpha49 only if worth shipping); 3) delete heartbeat trig_01Y8CFHKVb6hmQmEEM78p6gv when everything is shipped and written up; nothing else is waiting on the owner except the tablet test and RX4-V2
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M TASKS.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  055248fc ckpt 2407: alpha48 RELEASED: tag kestrel-g-v0.3.0-alpha48 (commit 281c48f4, APK 94.7 MB
   96a8ccce ckpt 2406: TASKS: VC1b/VC1c/LP1b/LP1c ticked with the lab evidence (run 43739450975); r
   fbbd7efc ckpt 2405: lab vc run 3 (43739450975, commit ecbdecc3) all green on the REAL engine inc
   2211e3fd ckpt 2404: gated kestrel-g-v0.3.0-alpha48 (gecko code 149) and pushed it: handoff self-
@@ -25,7 +26,6 @@ alpha48 RELEASED: tag kestrel-g-v0.3.0-alpha48 (commit 281c48f4, APK 94.7 MB, ce
   0acf028c ckpt 2400: lab driver: hotspot shaping without the emulator delay option (it made hacke
   4e233ebe ckpt 2399: VC1/LP1/RV1-RV9 verified: Kotlin suite (core + app + geckoapp tests + geckoa
   31e0d580 ckpt 2398: RV3 (updater spoof: fromUpdater needs the app-private download kind), RV4 (r
-  a61cff67 ckpt 2397: RV1 (site orientation lock = Android constants, verified in the GeckoView 16
 ```
 
 (1 automatic checkpoint(s) since the last deliberate one — the
