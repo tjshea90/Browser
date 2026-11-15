@@ -108,6 +108,32 @@ class Phone:
                 pairs += 1; diff += (a != b)
         return {"dominant": round(dom, 3), "colours": sum(1 for v in cnt.values() if v >= len(flat) * 0.01), "edges": round(diff / float(max(1, pairs)), 3)}
 
+    def red_rows(self):
+        """FSB1 (owner message 46): the lab page /fsbox draws a 6 px RED strip on the bottom edge of its full-screen box. The framebuffer is read raw: how many pixel rows have a long red run, where the first and the last
+        are, and how tall the screen is -> (count, first_y, last_y, height); None = no picture. No strip at all = the bottom of the page is under a system bar."""
+        data = self.a.run("exec-out", "screencap", timeout=40, binary=True)
+        if not data or len(data) < 1000:
+            return None
+        try:
+            w, h, _fmt = struct.unpack("<III", data[:12])
+        except struct.error:
+            return None
+        off = 12 if len(data) - 12 >= w * h * 4 else 16
+        if w < 100 or h < 200 or len(data) - off < w * h * 4:
+            return None
+        red = []
+        for y in range(h):
+            base = off + y * w * 4
+            hit = n = 0
+            for x in range(8, w - 8, 10):
+                r, g, b = data[base + x * 4], data[base + x * 4 + 1], data[base + x * 4 + 2]
+                n += 1
+                if r > 200 and g < 70 and b < 70:
+                    hit += 1
+            if n and hit >= 0.7 * n:
+                red.append(y)
+        return (len(red), red[0] if red else -1, red[-1] if red else -1, h)
+
     def measure_on(self):
         self.debug("measure")
 
@@ -558,7 +584,7 @@ class Soak:
             self.shot(area)
 
     def shot(self, label):
-        if self.shots >= 40:
+        if self.shots >= (70 if self.a.suite == "fsy" else 40):
             return
         self.shots += 1
         p = os.path.join(self.out, "shots", "%02d-%s.png" % (self.shots, re.sub(r"[^a-z0-9-]+", "-", label.lower())[:40]))
@@ -1179,6 +1205,95 @@ class Soak:
         self.shot("fs-end")
         self.record({"kind": "fullscreen", "name": "fs-turning", "status": "ok" if all(ok for _, ok in steps) and alive and not crashes else "fs-failed",
                      "steps": [{"check": l, "ok": ok} for l, ok in steps], "turn_lines": [e["rest"][:160] for e in turns()][:14], "display": self.ph.display_hint()})
+
+    # ---- FSB1 / ROT1 / FSC1 (owner message 46): "the controls in full screen get covered up by the Android bottom navigation bar", "when I rotate the tablet from portrait to landscape and back, it is laggy and
+    # glitchy", "I don't see any video player controls in full screen landscape mode". A player BOX (not the bare video) goes full screen on the lab page /fsbox, in a web component's shadow root (as finance.yahoo.com's
+    # player) and as a plain box; the page's bottom edge carries a red strip. Run twice: the emulator as it is (the system hides its bars) and with the debug switch nohide (a tablet that KEEPS its bars, like the owner's:
+    # screenshots 2026-11-15 showed both bars visible in full screen). The tablet is turned sideways and back with the virtual sensor; the strip must stay visible, the app must pause / cover / settle.
+    def fsbox_wait(self, rmark, ev="page", limit=40):
+        t0 = time.time()
+        while time.time() - t0 < limit and not [r for r in self.lab.since(rmark) if r.get("kind") == "fsb" and r.get("ev") == ev]:
+            time.sleep(1.5)
+
+    def fullscreen_bars(self):
+        w, h = self.screen
+        self.ph.setting("system", "accelerometer_rotation", 0)    # Android's own rotation lock ON, like the owner's tablet: the app's full-sensor request must still turn the screen
+        self.ph.setting("system", "user_rotation", 0)
+        results = []
+        for mode in ("hidden", "kept"):
+            self.ph.a.sh("setprop debug.kestrel.nohide %s" % ("1" if mode == "kept" else "0"))
+            for kind, nobar in (("shadow", False), ("light", False), ("shadow", True)):
+                self.ph.physical(0, 9.81, 0)
+                time.sleep(2)
+                rmark, lmark = self.lab.size(), self.log.size()
+                self.ph.open_url("%s/fsbox?kind=%s%s" % (self.lab_base, kind, "&nobar=1" if nobar else ""))
+                self.fsbox_wait(rmark)
+                time.sleep(2)
+                self.ph.tap(w // 2, 140)                                  # Play and go full screen (a real tap: the user gesture both need)
+                time.sleep(5)
+                self.ph.dismiss_cling()
+                frows = [r for r in self.lab.since(rmark) if r.get("kind") == "fsb"]
+                entered = any(r.get("ev") == "fullscreenchange" and r.get("fs") == "1" for r in frows)
+                tag = "%s-%s%s" % (mode, kind, "-nobar" if nobar else "")
+                bar_shown = None
+                if nobar and entered:                                      # FSC1: no controls of the page: a tap on the film brings up Kestrel's bar INSIDE the full-screen web component
+                    tm = self.log.size()
+                    self.ph.tap(w // 2, h // 2)
+                    time.sleep(2.5)
+                    bar_shown = bool([e for e in health_events(self.log.since(tm), "videobar") if e["ev"] == "shown"])
+                    self.shot("fsb-%s-bar" % tag)
+                states = []
+                for label, accel in (("portrait", None), ("landscape", (9.81, 0, 0)), ("portrait-again", (0, 9.81, 0))):
+                    lm = self.log.size()
+                    if accel:
+                        self.ph.physical(*accel)
+                    time.sleep(0.5 if accel else 0.1)
+                    self.shot("fsb-%s-%s-early" % (tag, label))
+                    time.sleep(4.0)
+                    self.shot("fsb-%s-%s" % (tag, label))
+                    red = self.ph.red_rows()
+                    lines = self.log.since(lm)
+                    last = [r for r in self.lab.since(rmark) if r.get("kind") == "fsb"]
+                    lastrow = last[-1] if last else {}
+                    sizes = [e for e in health_events(lines, "gecko", "size")]
+                    settled = [e["rest"] for e in health_events(lines, "fullscreen", "turn-settled")]
+                    paused = health_events(lines, "fullscreen", "turn-pause")
+                    nosess = health_events(lines, "fullscreen", "turn-no-session")
+                    bars = [e["rest"][:110] for e in health_events(lines, "fullscreen", "bars")]
+                    states.append({"state": label, "red": red, "ih": lastrow.get("ih"), "iw": lastrow.get("iw"), "mb": lastrow.get("mb"), "size_events": len(sizes), "paused": len(paused), "no_session": len(nosess),
+                                   "settled": settled[-1] if settled else "", "bars": bars[-1] if bars else ""})
+                    if accel is None:
+                        continue
+                lm = self.log.size()
+                self.ph.key("KEYCODE_BACK")
+                time.sleep(3)
+                results.append({"mode": mode, "kind": kind, "nobar": nobar, "entered": entered, "bar_shown": bar_shown, "states": states})
+                self.ph.physical(0, 9.81, 0)
+        self.ph.a.sh("setprop debug.kestrel.nohide 0")
+        # verdicts: the red strip must be visible (>= 3 rows) in every state; with the bars KEPT it must end above the system bar (the navigation bar is 52 px tall), with the bars hidden it sits on the very edge
+        ok = True
+        for r in results:
+            if not r["entered"]:
+                self.issue("medium", "fullscreen-bars", "%s %s: the box did not go full screen (the lab page saw no fullscreenchange)" % (r["mode"], r["kind"]))
+                ok = False
+                continue
+            for st in r["states"]:
+                red = st["red"]
+                if red is None:
+                    continue
+                count, first, lasty, height = red
+                if count < 3:
+                    self.issue("high", "fullscreen-bars", "%s %s %s: the bottom edge of the full-screen page is NOT visible (no red strip): it is under a system bar" % (r["mode"], r["kind"], st["state"]), shot=True)
+                    ok = False
+                elif r["mode"] == "kept" and lasty >= height - 40:
+                    self.issue("high", "fullscreen-bars", "%s %s %s: the page reaches y=%d of %d: it still extends under the kept navigation bar" % (r["mode"], r["kind"], st["state"], lasty, height))
+                    ok = False
+            if r["nobar"] and r["bar_shown"] is False:
+                self.issue("high", "full-screen-controls", "%s %s: a tap on the full-screen film did not bring up Kestrel's bar" % (r["mode"], r["kind"]), shot=True)
+                ok = False
+        self.fsb_results = results
+        self.record({"kind": "fsbars", "name": "fullscreen-bars", "status": "ok" if ok else "failed", "results": results})
+        self.check_alive("fullscreen-bars")
 
     # ---- the whole run
     # ---- VC1 / LP1 (owner message 44): a video with no controls gets Kestrel's own bar when it is tapped; a long press on a video opens the video options and never the floating panel
@@ -1862,7 +1977,7 @@ class FakeAdb:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -1874,7 +1989,7 @@ def main():
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
-        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat") else "all")
+        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy") else "all")
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
@@ -1894,6 +2009,8 @@ def main():
             s.yahoo_scan()
         if a.suite in ("snd", "all"):
             s.audio_round()
+        if a.suite in ("fsy", "all"):
+            s.fullscreen_bars()
         if a.suite == "compat":
             s.compat_round(a.minutes)
         if a.suite in ("soak", "all"):
