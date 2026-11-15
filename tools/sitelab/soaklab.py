@@ -72,7 +72,7 @@ def page_audible(kind):
              "['play','playing','pause','ended','volumechange','emptied'].forEach(function(e){v.addEventListener(e,function(){send(e);});});"
              "document.addEventListener('visibilitychange',function(){send('vis');});"
              "document.getElementById('go').onclick=function(){v.muted=false;v.volume=1;var r=v.play();if(r&&r.then){r.then(function(){send('started');},function(){send('rejected');});}};"
-             "setInterval(function(){send('tick');},2000);send('page');</script>") % (kind, kind, el)).encode())
+             "setInterval(function(){send('tick');},2000);send('page');</script>") % (kind, kind, el)).encode()
 
 
 LOREM = ("Kestrel is a small private browser made for one tablet. It blocks advertisements and trackers, keeps the pages light, and tries hard to stay out of the way. "
@@ -314,6 +314,8 @@ class H(http.server.BaseHTTPRequestHandler):
                 return self._send(page_form())
             if p.startswith("/img/") and p.endswith(".svg"):
                 return self._send(svg(int(p[5:-4] or 0)), "image/svg+xml")
+            if p == "/video/audible":
+                return self._send(page_audible((q.get("kind") or ["video"])[0]))
             if p == "/video/vc":
                 return self._send(page_vc((q.get("kind") or ["naked"])[0], (q.get("ad") or [""])[0] == "1"))
             if p.startswith("/video/"):
@@ -325,8 +327,6 @@ class H(http.server.BaseHTTPRequestHandler):
                 if name in CLIPS:
                     return self._file(os.path.join(OUT, CLIPS[name][2]), "video/mp4")
                 return self._send(b"unknown clip", "text/plain", 404)
-            if p == "/video/audible":
-                return self._send(page_audible((q.get("kind") or ["video"])[0]))
             if p == "/clip/tone.m4a":
                 return self._file(os.path.join(OUT, "tone.m4a"), "audio/mp4")
             if p == "/blank":
