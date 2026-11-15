@@ -25,8 +25,8 @@ class PlayerModelTest {
         override fun feedback(zone: Zone, burst: Int) { feedback.add("${zone.name} $burst") }
     }
 
-    private fun sample(h: Host, t: Double = 0.0, d: Double = 65.0, b: Double = 20.0, paused: Boolean = false, ended: Boolean = false, muted: Boolean = false, ready: Int = 4, mse: Boolean = false, live: Boolean = false, rate: Double = 1.0) =
-        PlayerModel.Sample(t, d, b, paused, ended, muted, 100, rate, ready, mse, live, 1280, 720, h.clock)
+    private fun sample(h: Host, t: Double = 0.0, d: Double = 65.0, b: Double = 20.0, paused: Boolean = false, ended: Boolean = false, muted: Boolean = false, ready: Int = 4, mse: Boolean = false, live: Boolean = false, rate: Double = 1.0, ack: Int = 0) =
+        PlayerModel.Sample(t, d, b, paused, ended, muted, 100, rate, ready, mse, live, 1280, 720, h.clock, ack)
     private fun model(h: Host, playing: Boolean = true) = PlayerModel(h).also { it.start(playing) }
     private fun Host.tickTap(m: PlayerModel, ms: Long) { clock += ms; if (tapAt != null) { tapAt = null; m.tapTimer() } }
     private fun Host.tickControls(m: PlayerModel, ms: Long) { clock += ms; if (controlsAt != null) { controlsAt = null; m.controlsTimer() } }
@@ -89,11 +89,11 @@ class PlayerModelTest {
         assertEquals("pause", m.drain()[0].a); assertFalse(m.view().playing)
         h.clock += 300; m.onSample(sample(h, t = 5.3, paused = false))                   // the page has not paused yet: the wait is not over
         assertFalse("still shown as paused", m.view().playing)
-        h.clock += 300; m.onSample(sample(h, t = 5.3, paused = true))                    // now it did
+        h.clock += 300; m.onSample(sample(h, t = 5.3, paused = true, ack = 1))           // now it did (and says so: command 1 is carried out)
         assertFalse(m.view().playing)
         m.playPause(); assertEquals("play", m.drain()[0].a); assertTrue(m.view().playing)
-        h.clock += 2000; m.onSample(sample(h, t = 5.3, paused = true))
-        assertFalse("a page that never did it: its own state counts again after 1.2 s", m.view().playing)
+        h.clock += 3100; m.onSample(sample(h, t = 5.3, paused = true, ack = 1))
+        assertFalse("a page that never did it: its own state counts again after 3 s", m.view().playing)
         m.mute(); val mc = m.drain()[0]; assertEquals("mute", mc.a); assertTrue(mc.on); assertTrue(m.view().muted)
         m.skipButton(false); assertEquals(-10.0, m.drain()[0].d, 0.0)
         m.seekFraction(0.5); val sc = m.drain()[0]; assertEquals("seek", sc.a); assertEquals(32.5, sc.t, 1e-9)
@@ -108,6 +108,29 @@ class PlayerModelTest {
         m.onSample(sample(h, paused = true)); assertTrue(m.shown)
         m.onSample(sample(h, paused = false)); h.tickControls(m, PlayerRules.HIDE_AFTER_MS); assertFalse(m.shown)
         m.onSample(sample(h, ended = true)); assertTrue(m.shown)
+    }
+
+    @Test fun aLateReportTakenBeforeTheFilmPausedDoesNotUndoTheButtonAndTheSecondPressPlays() {
+        // lab run 43776782679: press 1 asked for "pause", the film paused, but a report taken BEFORE the pause was handled late (a busy tablet); it ended the wait and a second press asked for "pause" again
+        val h = Host(); val m = model(h)
+        m.onSample(sample(h, t = 15.0))
+        m.playPause(); val first = m.drain()[0]; assertEquals("pause", first.a); assertEquals(1, first.id)
+        h.clock += 1500; m.onSample(sample(h, t = 15.2, paused = false, ack = 0))              // old: the page had not carried out command 1 when it was taken
+        assertFalse("still shown as paused: the report is older than the command", m.view().playing)
+        h.clock += 100; m.onSample(sample(h, t = 15.3, paused = true, ack = 1))
+        m.playPause(); assertEquals("the second press plays", "play", m.drain()[0].a)
+    }
+
+    @Test fun aReportThatNamesTheCommandCountsAtOnceAndEverythingIsNumbered() {
+        val h = Host(); val m = model(h)
+        m.onSample(sample(h, t = 2.0))
+        m.playPause(); m.mute(); m.skipButton(true)
+        val c = m.drain()
+        assertEquals(listOf(1, 2, 3), c.map { it.id })
+        assertEquals("{\"a\":\"pause\",\"i\":1}", c[0].json()); assertEquals("{\"a\":\"mute\",\"on\":true,\"i\":2}", c[1].json()); assertEquals("{\"a\":\"skip\",\"d\":10,\"i\":3}", c[2].json())
+        h.clock += 200; m.onSample(sample(h, t = 2.2, paused = false, muted = false, ack = 3))   // the page carried all three out: a film that plays and is not muted is what it IS (the page refused)
+        assertTrue(m.view().playing); assertFalse(m.view().muted)
+        m.start(true); m.playPause(); assertEquals("the count goes on across a new full screen", 4, m.drain()[0].id)
     }
 
     @Test fun theCommandJsonIsWhatThePageScriptReads() {

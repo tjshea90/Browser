@@ -24,9 +24,13 @@ class PlayerModel(private val h: Host) {
         fun log(event: String, text: String) {}
     }
 
-    /** What the page told (see player.js: all numbers). [lengthS] -1 = no length, -2 = infinite (a live stream). */
+    /**
+     * What the page told (see player.js: all numbers). [lengthS] -1 = no length, -2 = infinite (a live stream). [ack] = the number of the last command the page had carried out when it took this sample (0 = none yet):
+     * a report that comes later than a command but says a lower number was taken BEFORE the film did what was asked (lab run 43776782679: a second press on the big button, 1.5 s after the first, asked for
+     * "pause" again, because a stale report had ended the wait), so it must not undo what the person just saw happen.
+     */
     class Sample(val timeS: Double, val lengthS: Double, val bufferedS: Double, val paused: Boolean, val ended: Boolean, val muted: Boolean, val volume: Int, val rate: Double, val ready: Int,
-                 val mse: Boolean, val live: Boolean, val width: Int, val height: Int, val atMs: Long)
+                 val mse: Boolean, val live: Boolean, val width: Int, val height: Int, val atMs: Long, val ack: Int = 0)
 
     /** What the controls draw. */
     class View(val playing: Boolean, val ended: Boolean, val buffering: Boolean, val muted: Boolean, val timeS: Double, val kind: DurationView.Kind, val lengthS: Double,
@@ -34,13 +38,18 @@ class PlayerModel(private val h: Host) {
 
     /** A command for the page (`player.js run()`): play, pause, seek (t), skip (d), mute (on), rate (r). */
     class Cmd(val a: String, val t: Double = 0.0, val d: Double = 0.0, val on: Boolean = false, val r: Double = 1.0) {
+        /** The command's number (1, 2, 3 ... for as long as the app runs): the page says in its reports which was the last one it carried out ([Sample.ack]). */
+        var id = 0
         /** Compact JSON for the answer to the page. */
-        fun json(): String = when (a) {
-            "seek" -> "{\"a\":\"seek\",\"t\":${num(t)}}"
-            "skip" -> "{\"a\":\"skip\",\"d\":${num(d)}}"
-            "mute" -> "{\"a\":\"mute\",\"on\":$on}"
-            "rate" -> "{\"a\":\"rate\",\"r\":${num(r)}}"
-            else -> "{\"a\":\"$a\"}"
+        fun json(): String {
+            val body = when (a) {
+                "seek" -> "{\"a\":\"seek\",\"t\":${num(t)}}"
+                "skip" -> "{\"a\":\"skip\",\"d\":${num(d)}}"
+                "mute" -> "{\"a\":\"mute\",\"on\":$on}"
+                "rate" -> "{\"a\":\"rate\",\"r\":${num(r)}}"
+                else -> "{\"a\":\"$a\"}"
+            }
+            return if (id > 0) body.substring(0, body.length - 1) + ",\"i\":$id}" else body
         }
         private fun num(x: Double) = if (x == Math.floor(x) && Math.abs(x) < 1e9) x.toLong().toString() else "%.2f".format(java.util.Locale.ROOT, x)
     }
@@ -64,9 +73,13 @@ class PlayerModel(private val h: Host) {
     private val queue = ArrayList<Cmd>()
     private var last: Sample? = null
     private var shownLength: DurationView.Shown = DurationView.Shown(DurationView.Kind.UNKNOWN, 0.0)
-    private var optPlaying: Boolean? = null
+    private var seq = 0                       // the number of the last command made (never reset: the page's own count of what it did only grows too)
+    private var optPlaying: Boolean? = null   // what a play / pause press asked for, shown at once and held until the page says it did it (its report names the command) or OPT_WAIT_MS pass
+    private var optSeq = 0
     private var optUntil = 0L
     private var optMuted: Boolean? = null
+    private var optMutedSeq = 0
+    private var optMutedUntil = 0L
     private var active = false
 
     // what Diagnostics says
@@ -90,9 +103,9 @@ class PlayerModel(private val h: Host) {
         if (!active) return
         last = s; samples++
         shownLength = duration.feed(s.lengthS, s.timeS, s.bufferedS, s.mse, s.live || s.lengthS == -2.0, s.atMs)
-        val o = optPlaying
-        if (o != null && (s.atMs >= optUntil || o == !(s.paused || s.ended))) optPlaying = null   // the film did what was asked (or the wait is over): its own state counts again
-        if (optMuted != null && optMuted == s.muted) optMuted = null
+        // the page has carried out the command (this report was taken after it: the film's own state counts again) or the wait is over (a page that never answers must not hold a wrong picture for ever)
+        if (optPlaying != null && (s.ack >= optSeq || s.atMs >= optUntil)) optPlaying = null
+        if (optMuted != null && (s.ack >= optMutedSeq || s.atMs >= optMutedUntil || optMuted == s.muted)) optMuted = null
         val v = view()
         controls.state(v.playing, v.buffering, v.ended)
         h.changed()
@@ -124,8 +137,8 @@ class PlayerModel(private val h: Host) {
     fun playPause() {
         val v = view()
         val want = !v.playing
-        optPlaying = want; optUntil = h.now() + 1200L
         send(Cmd(if (want) "play" else "pause"))
+        optPlaying = want; optSeq = seq; optUntil = h.now() + OPT_WAIT_MS
         controls.interacted(); h.changed()
     }
     fun skip(deltaS: Double) { send(Cmd("skip", d = deltaS)); controls.interacted() }
@@ -136,7 +149,7 @@ class PlayerModel(private val h: Host) {
         send(Cmd("seek", t = PlayerRules.timeAt(f, v.lengthS)))
         controls.interacted(); h.changed()
     }
-    fun mute() { val v = view(); optMuted = !v.muted; send(Cmd("mute", on = !v.muted)); controls.interacted(); h.changed() }
+    fun mute() { val v = view(); send(Cmd("mute", on = !v.muted)); optMuted = !v.muted; optMutedSeq = seq; optMutedUntil = h.now() + OPT_WAIT_MS; controls.interacted(); h.changed() }
     fun setRate(r: Double) { send(Cmd("rate", r = r)); controls.interacted() }
     /** A finger is on a control (or the track): the controls stay up until it lets go. */
     fun pin(on: Boolean) = controls.pin(on)
@@ -146,7 +159,12 @@ class PlayerModel(private val h: Host) {
     fun turnEnded() = controls.turnEnded()
 
     // ---- the page asks
-    private fun send(c: Cmd) { queue.add(c); commands++; if (queue.size > 16) queue.removeAt(0) }
+    private fun send(c: Cmd) { c.id = ++seq; queue.add(c); commands++; if (queue.size > 16) queue.removeAt(0) }
     /** The commands for the page, once. */
     fun drain(): List<Cmd> { if (queue.isEmpty()) return emptyList(); val out = ArrayList(queue); queue.clear(); return out }
+
+    private companion object {
+        /** How long a play / pause / mute press is shown as done while the page has not said it did it (the report that says so is a few hundred ms away on a tablet that is busy). */
+        const val OPT_WAIT_MS = 3000L
+    }
 }
