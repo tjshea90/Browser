@@ -2079,3 +2079,35 @@
 >
 > **Next:** leaving advertising out of downloaded video streams before it is fetched. The first part is written and tested here, but it isn't in alpha42.
 <!-- sha:c703eeb60dc6 -->
+
+## 2026-11-15T00:20:56Z
+> **Kestrel G alpha43 is built and published.** GitHub's tests and builds all passed, and it installs over alpha42.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha43
+>
+> **What changed**
+> 1. **The glow holds still while a video with sound plays.** A muted video still lets it pulse, because the engine only reports videos that make sound.
+> 2. **Two more tracker block lists.** These are AdGuard Tracking Protection and HaGeZi Light, with a new switch at Settings > Filter lists > Extra tracker lists, **on by default**. The first update downloads about 3 MB and rebuilds the lists, which roughly doubles the rule count (112k to 211k).
+> 3. **A page jump to an advertising site is stopped even long after your last tap.** The blocked-page icon shows, and one tap on it opens the site anyway.
+> 4. **A new window opened by a button now needs one tap on the small blocked-window icon.** This applies when the button opens a different site. Links you tap, windows on the same site and sign-in or payment windows work as before.
+> 5. **Downloads wait out a lost connection instead of failing.** This covers video streams and files that use several connections. The wait starts at 10 seconds, doubles up to a minute, and gives up after 30 minutes with the part already downloaded kept.
+> 6. **Video downloads skip advertising breaks.** Breaks that the stream's own list gives away are left out before they are downloaded, and the row says "Left out 0:30 of advertising". Live, copy-protected and clip-sized streams no longer count for the download badge.
+>
+> **What I tested, and what I didn't**
+> - **Emulator (real Firefox engine):**
+>   - The glow's busy state followed a real video's play and pause.
+>   - A page that jumped to an ad site with no touch for hours was stopped.
+>   - The playlist check found 12 seconds of advertising in a test film. A live stream and a 12-second clip did not count (1 of 3 counted).
+> - **Real list files:** I compiled them and checked the rule counts and that the safety checks still pass. The extra lists add about 8 MB of working memory while building.
+> - **Test suites only, not on the emulator:** the download wait, the new-window rule and leaving advertising out of a download.
+> - **Not run on your tablet at all.** No real dropped connection was tried.
+>
+> **Please watch for this:** the first list update after installing compiles about 211,000 rules on the tablet. If lists stop updating, switch "Extra tracker lists" off and tell me. A page that stops working with the extra lists: turn Shields off for that site and tell me which site.
+>
+> **Still waiting on you**
+> 1. **Back for "no copy" pages (yes/no).** Banks, mail and some shops tell the browser not to keep a copy, so Back has to ask the site again. I can make Back instant on sites you pick, but then a copy of those pages stays on the tablet. Do you want that, and for which sites?
+> 2. **Separate keyboard app (yes/no).** Do you want the keyboard as a system keyboard app for all your apps?
+> 3. **Tablet feedback on alpha40 to alpha43.** Back keeping your place, ad skipping, the download list, the glow, the new-window icon, and downloads after a connection drop.
+>
+> **Next:** making one tap play a video when an invisible ad layer sits on top of it. It is coded and tested, and goes in alpha44.
+<!-- sha:4ff9b1a7fd63 -->
