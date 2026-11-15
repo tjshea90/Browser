@@ -313,7 +313,7 @@ test('AP1: a press that was not on a player never starts a video, even when it m
 
 test('AP1/RX3-G3: a refused press on a player that is a frame makes the guard say "go" to the extension (a parameterless event), and it posts nothing into the frame', async () => {
   const page = await open(`<iframe src="https://player.example/embed" style="position:absolute;left:0;top:0;width:400px;height:300px;border:0"></iframe>
-    <div id="layer" style="position:absolute;left:0;top:0;width:400px;height:300px" onclick="window.open('${AD}')"></div>`,
+    <div id="layer" style="position:absolute;left:0;top:0;width:400px;height:300px;background:rgba(0,0,0,0.3)" onclick="window.open('${AD}')"></div>`,   // a visible tint: RX3-G4 would switch an invisible layer off before the press and there would be no refusal to react to
     { embed: `<video id="v" src="https://player.example/clip.mp4" style="width:400px;height:300px;background:#000"></video><script>${STUB_PLAY} window.addEventListener('message', function (e) { window.__msg = (window.__msg || 0) + 1; });</script>` });
   await page.evaluate(() => { window.__go = []; document.addEventListener('__kst_assist_v1', (e) => window.__go.push(String(e.detail)), true); });
   await settle(900);
