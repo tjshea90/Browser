@@ -103,6 +103,8 @@ class Prefs private constructor(ctx: Context) {
     var videoDrm: Int get() = sp.getInt("vid_drm", 0).coerceIn(0, 1); set(v) = put("vid_drm", v.coerceIn(0, 1))
     /** Which codecs a site is offered: 0 automatic (not one that would run in software on this device), 1 H.264 only, 2 everything the engine can decode (core/media/VideoPolicy). */
     var videoCodecs: Int get() = sp.getInt("vid_codecs", 0).coerceIn(0, 2); set(v) = put("vid_codecs", v.coerceIn(0, 2))
+    /** FS1 (owner message 43): how the screen turns while a page shows a video full screen: 0 follow the tablet (also with auto-rotate off) and turn a wide video sideways when the tablet is held upright, 1 follow the tablet only, 2 only what a site asks for (core/media/FullscreenTurn). */
+    var fullscreenTurn: Int get() = app.kestrel.core.media.FullscreenTurn.cleanMode(sp.getInt("fs_turn", 0)); set(v) = put("fs_turn", app.kestrel.core.media.FullscreenTurn.cleanMode(v))
     /** Calm pages: sites see "reduce motion" and GIFs play once (the owner's "have no animations", now for pages too). OFF since alpha27: a site that hides its loading symbol from an animation, or whose reduce-motion style leaves one frozen, kept it on screen. */
     var calmPages: Boolean get() = bool("calm_pages", false); set(v) = put("calm_pages", v)
 
