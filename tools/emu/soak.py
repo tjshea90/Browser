@@ -341,6 +341,9 @@ VIDEOS = [
     ("hls-apple", "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8", 25),
 ]
 
+# the videos whose file is also saved through the app's "Save video" finder after they played (small ones only: the lab keeps the hour short)
+SAVE_VIDEO = {"lab-landscape", "lab-portrait", "mdn-flower-h264", "bbb-360p-h264"}
+
 # real video sites: does the page play, does the app's "download video" finder see a video?  (name, url, seconds to watch)
 VIDEO_PAGES = [
     ("youtube-short", "https://m.youtube.com/watch?v=jNQXAC9IVRw", 30),
@@ -612,7 +615,61 @@ class Soak:
         if not self.check_alive(name):
             ev["status"] = "crash"
         self.record(ev)
+        if ev["status"] in ("ok", "choppy", "stalling") and src.lower().split("?")[0].endswith(".mp4") and name in SAVE_VIDEO:
+            size = 0
+            if src.startswith("lab:"):
+                try: size = os.path.getsize(os.path.join(self.out, "lab", os.path.basename(src)))
+                except OSError: size = 0
+            self.found_video_download(name, size)
         return ev
+
+    # ---- "Save video": what the app's finder offers on the page that just played a file, and does one tap on its first row really save it
+    def found_video_download(self, name, expect_size=0):
+        before, lmark = self.ph.downloads(), self.log.size()
+        self.ph.debug("videodl")
+        said = None
+        for _ in range(10):
+            time.sleep(2)
+            ev = health_events(self.log.since(lmark), "lab", "videodl")
+            if ev:
+                said = ev[-1]["rest"]; break
+        r = {"kind": "videodl", "name": name, "finder_said": said}
+        if not said:
+            r.update(status="no-answer", note="the app did not answer the lab's 'save the found video' request")
+            self.issue("low", "tooling", "%s: no answer from the finder hook" % name)
+        elif "pick=none" in said:
+            r.update(status="not-found", note="the finder offered nothing although the page played this file")
+            self.issue("medium", "finding-video", "%s: the app's 'Save video' finder found NOTHING on a page that played the file (%s)" % (name, said))
+        else:
+            tapped = None
+            for _ in range(6):
+                time.sleep(2)
+                tapped = self.ph.tap_text(r"^download$")
+                if tapped:
+                    break
+                if self.ph.downloads() != before:
+                    break
+            got = None
+            t0 = time.time()
+            while time.time() - t0 < 120:
+                now = self.ph.downloads()
+                new = {k: v for k, v in now.items() if k not in before and "lab-found-video" in k}
+                if new:
+                    k, v = max(new.items(), key=lambda kv: kv[1])
+                    got = (k, v)
+                    if not expect_size or v >= expect_size:
+                        break
+                time.sleep(3)
+            if got is None:
+                r.update(status="dl-none", note="found it (%s) but the saved file never appeared" % said)
+                self.issue("medium", "download-video", "%s: the finder found the video but saving it produced no file (%s)" % (name, said))
+            elif expect_size and got[1] != expect_size:
+                r.update(status="dl-incomplete", file=got[0], size=got[1], note="%d of %d bytes" % (got[1], expect_size))
+                self.issue("medium", "download-video", "%s: the saved video has %d of %d bytes" % (name, got[1], expect_size))
+            else:
+                r.update(status="ok", file=got[0], size=got[1], asked=bool(tapped))
+        self.record(r)
+        return r
 
     # ---- a video site: play + "does the finder see it"
     def video_site(self, name, url, watch):
@@ -1046,6 +1103,13 @@ class Soak:
             L.append("| :- | :- | -: | :- | -: | -: | -: | -: | -: | :- |")
             for e in vids:
                 L.append("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (e["name"], e["status"], e.get("start_s", "-"), e.get("picture", "-"), e.get("played_s", "-"), e.get("frames", "-"), e.get("dropped", "-"), e.get("stalls", "-"), e.get("app_found", "-"), e.get("note", "")))
+            L.append("")
+        vdl = [e for e in ev if e.get("kind") == "videodl"]
+        if vdl:
+            L.append("## Finding and saving videos (the app's 'Save video' finder, then one tap on its first row)")
+            L.append("")
+            for e in vdl:
+                L.append("- %s: %s%s (finder: %s)" % (e["name"], e["status"], (", " + e.get("note", "")) if e.get("note") else (", %s bytes" % e.get("size", "?")), e.get("finder_said")))
             L.append("")
         vs = [e for e in ev if e.get("kind") == "videosite-play"]
         if vs:

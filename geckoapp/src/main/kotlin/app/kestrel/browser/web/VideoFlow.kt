@@ -579,6 +579,17 @@ class VideoFlow(private val a: BrowserActivity) {
     /** "MP4 - 48.2 MB - 1:02" */
     private fun detail(c: MediaCandidate): String = listOf(MediaLabels.format(c), MediaLabels.size(c.length), MediaLabels.duration(c.durationMs)).filter { it.isNotEmpty() }.joinToString("  ·  ")
 
+    /**
+     * SOAK1 (the emulator lab, debug builds only, BrowserActivity.labIntent "videodl"): what the "Save video" sheet would offer on this tab, and what one tap on its first row does.
+     * One Health line says what was found; a plain file is then saved exactly as the sheet would save it.
+     */
+    fun labDownloadBest(tab: Tab) {
+        val ranked = MediaRank.rank(candidates(tab, null), null, tab.media.primary())
+        val c = ranked.main.firstOrNull() ?: ranked.exact
+        Health.log("lab", "videodl", "main=${ranked.main.size} other=${ranked.other.size} usable=${tab.media.usableCount()} of ${tab.media.size} pick=${if (c == null) "none" else "${c.kind} ${c.height}p ${c.length / 1024}KB"}")
+        if (c != null && c.kind == MediaKind.FILE) pick(tab, c, "lab-found-video")
+    }
+
     private fun pick(tab: Tab, c: MediaCandidate, stem: String) {
         a.sheet.dismiss()
         tab.media.touch(c.url)

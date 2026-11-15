@@ -632,6 +632,7 @@ open class BrowserActivity : Activity(), DockListener {
                 Io.exec { try { java.io.File(filesDir, "debug-diag.txt").writeText(text); Health.log("lab", "dump", "${text.length} bytes") } catch (e: Exception) { Health.log("lab", "dump-failed", e.toString().take(80)) } }
             }
             "closetabs" -> Io.main.post { for (t in tabs.toList()) doCloseTab(t); Health.log("lab", "closetabs", "tabs=${tabs.size}") }
+            "videodl" -> Io.main.post { current?.let { video.labDownloadBest(it) } } // SOAK1: "find the video" and one tap on the first row of the Save video sheet
             "apkcheck" -> { // RX4-X1: what the Downloads list would do with this file (a file in the app's own folder: a copy of an installer, a disguised copy, a plain video)
                 val name = (i.getStringExtra("kestrel_arg") ?: "").substringAfterLast('/'); i.removeExtra("kestrel_arg")
                 Io.exec {
