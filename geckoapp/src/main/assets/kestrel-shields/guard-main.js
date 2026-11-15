@@ -251,6 +251,63 @@
     } catch (e) { return false; }
   }
   // press through at a point: the pointer events of a press, to what lies beneath (a layer on top is switched off for a moment so it does not take the press again)
+  // ---- RX3-G4: a fake play layer is switched off BEFORE the press. The assist above is refusal-driven: the FIRST press always went to the layer, the ad was refused, and only the second press played. Now the touch
+  // itself (touchstart / pointerdown, trusted only) looks at what lies over the player under the finger and switches the layer off (pointer-events:none !important) while the finger is still down: the click that
+  // follows is hit-tested again and reaches the player. A fake layer is positioned, has no words, no picture or control and holds no media, and is invisible (opacity under 0.05, hidden, or a transparent
+  // background); or it is an invisible frame of ANOTHER site. Not the player's own controls: inside a container that calls itself a player they stay; inside the video's plain wrapper they stay until this
+  // document has refused an ad (evidence that a layer there is hostile). Never for a press that is not on a player.
+  var fakeSeen = (typeof WeakSet === 'function') ? new WeakSet() : null;
+  function playerRootOf(p) {
+    for (var n = p, d = 0; n && n !== document.body && n !== document.documentElement && d < 6; n = n.parentElement, d++) {
+      if (typeof n.className === 'string' && PLAYERISH.test(n.className + ' ' + (n.id || ''))) return n;
+    }
+    return null;
+  }
+  function invisibleBox(el) {
+    var cs = getComputedStyle(el);
+    if (parseFloat(cs.opacity) < 0.05 || cs.visibility === 'hidden') return true;
+    var bg = cs.backgroundColor;
+    var clear = bg === 'transparent' || /^rgba\(\s*\d+,\s*\d+,\s*\d+,\s*0\s*\)$/.test(bg);
+    return clear && (!cs.backgroundImage || cs.backgroundImage === 'none') && !(el.textContent || '').trim();
+  }
+  function fakeLayerOver(el, player) {
+    try {
+      if (!el || el === player || (player.contains && player.contains(el))) return false;
+      var cs = getComputedStyle(el);
+      if (cs.position !== 'fixed' && cs.position !== 'absolute') return false;
+      var own = playerRootOf(player);
+      if (own && own.contains(el)) return false;                       // the named player's own controls and posters stay
+      var plain = player.tagName === 'VIDEO' ? player.parentElement : null;
+      if (!own && plain && plain !== document.body && plain.contains(el) && !refusedAt) return false;   // the video's plain wrapper: only once an ad was refused here
+      if (el.tagName === 'IFRAME') {                                    // an invisible frame of another site laid over the player
+        if (!(parseFloat(cs.opacity) < 0.05 || cs.visibility === 'hidden')) return false;
+        var h = hostOf(absolute(el.getAttribute('src') || ''));
+        return !!h && !sameSite(h, pageHost());
+      }
+      if (!isLayer(el, player)) return false;                          // words, controls, media inside, not positioned: not a layer in this sense
+      if (el.querySelector && el.querySelector('img,svg,picture,button,input,a')) return false;
+      return invisibleBox(el);
+    } catch (e) { return false; }
+  }
+  function switchOffFakeLayers(e) {
+    try {
+      if (!on || !e.isTrusted) return;
+      var pt = pointOf(e);
+      if (!pt || !document.elementsFromPoint) return;
+      var player = playerAt(pt.x, pt.y);
+      if (!player) return;
+      var list = document.elementsFromPoint(pt.x, pt.y), n = 0;
+      for (var i = 0; i < list.length && i < 8 && n < 4; i++) {
+        var el = list[i];
+        if (el === player || (player.contains && player.contains(el))) break;      // reached the player: what lies beneath is not a layer over it
+        if (fakeSeen && fakeSeen.has(el)) continue;
+        if (fakeLayerOver(el, player)) { if (fakeSeen) fakeSeen.add(el); el.style.setProperty('pointer-events', 'none', 'important'); n++; }
+      }
+    } catch (x) { /* never break the page */ }
+  }
+  window.addEventListener('touchstart', switchOffFakeLayers, { capture: true, passive: true });
+  window.addEventListener('pointerdown', switchOffFakeLayers, { capture: true, passive: true });
+
   function pressThrough(x, y, layer) {
     try {
       if (x < 0 || y < 0) return;
