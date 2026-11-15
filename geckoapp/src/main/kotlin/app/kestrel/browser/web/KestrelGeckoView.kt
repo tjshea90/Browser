@@ -78,8 +78,12 @@ class KestrelGeckoView(ctx: Context) : GeckoView(ctx) {
         super.onDetachedFromWindow()
     }
 
+    /** ROT1: told whenever the page area changed size (a turn is not over while this keeps coming). */
+    var sizeListener: (() -> Unit)? = null
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         Health.log("gecko", "size", "${w}x$h (was ${oldw}x$oldh)")
+        sizeListener?.invoke()
     }
 }
