@@ -621,6 +621,7 @@ class Soak:
         self.compat_sites_done = []
         self.snd_rows = []
         self.fsb_results = []
+        self.slow_results = []
         self.yahoo_fs = None
         self.shields_mode = "on"
         self.quiet_issues = False
@@ -1415,6 +1416,80 @@ class Soak:
         self.record({"kind": "yahoo", "name": "yahoo-fullscreen", "status": "ok", "note": "full screen %s (%s); %d turn(s) photographed" % ("began" if entered else "did NOT begin", how[:90], len(states))})
         self.check_alive("yahoo-fullscreen")
 
+    # ---- ROT2 (owner message 48, two screenshots: after a turn the page keeps the layout of the OLD orientation for a few seconds): the engine of the tablet hands a turn's new size to the page late. Busy loops slow this
+    # emulator's engine down the same way; each turn is watched with screen reads for 9 s (the red strip of /fsbox at the bottom of the page = laid out right; nearly all black without a strip = the app's cover; anything
+    # else = a half-laid-out or stale page). Played twice: with the app's wait for the page (the new rule) and without it (the rule of alpha51 / 52: the cover lifts when the app's own view is still), so the run shows
+    # the symptom AND that it is gone.
+    def slow_turn(self):
+        w, h = self.screen
+        self.ph.setting("system", "accelerometer_rotation", 0); self.ph.setting("system", "user_rotation", 0)
+        self.ph.a.sh("setprop debug.kestrel.nohide 0"); self.ph.debug("bars", "keep"); time.sleep(2)
+        results = []
+        for mode in ("on", "off"):
+            self.ph.debug("turnwait", mode); time.sleep(2)
+            self.ph.physical(0, 9.81, 0); time.sleep(2)
+            rmark = self.lab.size()
+            self.ph.open_url("%s/fsbox?kind=light" % self.lab_base)
+            self.fsbox_wait(rmark); time.sleep(2)
+            self.ph.tap(w // 2, 140); time.sleep(6); self.ph.dismiss_cling()
+            entered = any(r.get("ev") == "fullscreenchange" and r.get("fs") == "1" for r in self.lab.since(rmark) if r.get("kind") == "fsb")
+            turns = []
+            if entered:
+                hogs = self.ph.start_hogs(3)
+                try:
+                    time.sleep(2)
+                    for label, accel in (("sideways", (9.81, 0, 0)), ("upright", (0, 9.81, 0)), ("sideways again", (9.81, 0, 0)), ("upright again", (0, 9.81, 0))):
+                        lm = self.log.size()
+                        self.ph.physical(*accel)
+                        t0 = time.time()
+                        samples = []
+                        shot_taken = False
+                        while time.time() - t0 < 9.0:
+                            lk = self.ph.look()
+                            dt = round(time.time() - t0, 1)
+                            if lk is None:
+                                continue
+                            cnt, _first, last = lk["red"]
+                            if cnt >= 3 and last >= lk["h"] - 56:
+                                cls = "right"
+                            elif lk["dark"] >= 0.985 and cnt == 0:
+                                cls = "cover"
+                            else:
+                                cls = "stale"
+                                if not shot_taken:
+                                    shot_taken = True
+                                    self.shot("slowturn-%s-%s" % (mode, label.replace(" ", "-")))
+                            samples.append((dt, cls, lk["w"], lk["h"], cnt, last))
+                        lines = self.log.since(lm)
+                        settled = [e["rest"] for e in health_events(lines, "fullscreen", "turn-settled")][-1:]
+                        turns.append({"turn": label, "samples": samples, "settled": settled[0][:150] if settled else "", "nudges": len(health_events(lines, "fullscreen", "turn-nudge")),
+                                      "viewport": [e["rest"][:100] for e in health_events(lines, "fullscreen", "viewport")][-3:]})
+                finally:
+                    self.ph.stop_hogs(hogs)
+            self.ph.key("KEYCODE_BACK"); time.sleep(3)
+            self.ph.physical(0, 9.81, 0); time.sleep(2)
+            results.append({"mode": mode, "entered": entered, "turns": turns})
+        self.ph.debug("turnwait", "on")
+        ok = True
+        for r in results:
+            if not r["entered"]:
+                self.issue("medium", "slow-turn", "%s: the box did not go full screen" % r["mode"])
+                ok = False
+                continue
+            for t in r["turns"]:
+                classes = [c for _dt, c, *_rest in t["samples"]]
+                stale_run = max([len(list(g)) for k, g in itertools.groupby(classes) if k == "stale"] or [0])
+                if r["mode"] == "on":
+                    if stale_run >= 2:
+                        self.issue("high", "slow-turn", "with the wait for the page, the turn '%s' still showed a stale or half-laid-out page in %d screen reads in a row: %s" % (t["turn"], stale_run, " ".join("%.1f:%s" % (dt, c) for dt, c, *_ in t["samples"])))
+                        ok = False
+                    if classes and classes[-1] == "cover":
+                        self.issue("high", "slow-turn", "with the wait for the page, the cover was still up 9 s after the turn '%s'" % t["turn"])
+                        ok = False
+        self.slow_results = results
+        self.record({"kind": "slowturn", "name": "slow-turn", "status": "ok" if ok else "failed", "results": results})
+        self.check_alive("slow-turn")
+
     # ---- the whole run
     # ---- VC1 / LP1 (owner message 44): a video with no controls gets Kestrel's own bar when it is tapped; a long press on a video opens the video options and never the floating panel
     VBAR_PAGES = [("naked", "/video/vc?kind=naked", "shown"), ("shadow-root", "/video/vc?kind=shadow", "shown"), ("shadow-root + frame over it", "/video/vc?kind=shadow&ad=1", "shown"), ("own controls", "/video/vc?kind=own", "own")]
@@ -1774,6 +1849,20 @@ class Soak:
             L.append("| :- | :- | -: | -: | :- | :- |")
             for kind, how, playing, away, back, adv, hidden_s, sp in self.snd_rows:
                 L.append("| %s | %s | %s s | %s s | %s | %d / %d / %d |" % (kind, how, "?" if adv is None else adv, "?" if hidden_s is None else hidden_s, "yes" if sp else "no", playing, away, back))
+            L.append("")
+        if self.slow_results:
+            L.append("## A turn under a slow engine (ROT2, owner message 48: the page keeps the layout of the old orientation for a few seconds)")
+            L.append("")
+            L.append("Busy loops slow the emulator's engine; the screen is read for 9 s after each turn: `right` = the red strip sits at the bottom of the page area, `cover` = the app's black cover, `stale` = anything else (a half-laid-out or stale page). `wait on` = the new rule (the cover and the pause stay until the page says it has the new size); `wait off` = the rule of alpha51 / alpha52 (the cover lifts when the app's own view is still).")
+            L.append("")
+            L.append("| mode | turn | screen reads (seconds after the turn: what the screen showed) | the turn | engine nudged | the page's report |")
+            L.append("| :- | :- | :- | :- | -: | :- |")
+            for r in self.slow_results:
+                if not r["entered"]:
+                    L.append("| wait %s | did not go full screen | - | - | - | - |" % r["mode"])
+                    continue
+                for t in r["turns"]:
+                    L.append("| wait %s | %s | %s | %s | %d | %s |" % (r["mode"], t["turn"], " ".join("%.1f %s" % (dt, c) for dt, c, *_ in t["samples"]), (t["settled"] or "-")[:110], t["nudges"], " / ".join(t["viewport"]).replace("|", "/")[:120] or "-"))
             L.append("")
         if self.fsb_results:
             L.append("## Full screen: the system bars, the turn and the controls (FSB1 / ROT1 / FSC1, owner message 46)")
@@ -2185,6 +2274,7 @@ def main():
             s.fullscreen_bars()
         if a.suite == "fsy":
             s.yahoo_fullscreen()
+            s.slow_turn()
             s.audio_round()      # (the sound check rides along: its verdict is the page's own clock now, run 43745675957 showed the old one was wrong)
         if a.suite == "compat":
             s.compat_round(a.minutes)
