@@ -367,6 +367,9 @@ open class BrowserActivity : Activity(), DockListener {
             window.navigationBarColor = pal.chromeBg
         }
         buildUi()
+        if (savedInstanceState == null) { // SP1 (owner message 41): the app's own symbol glows for about 0.4 s over the first frame, after the launch window that shows it; it takes no touch and nothing waits for it
+            root.addView(app.kestrel.browser.ui.LaunchLogo(this) { v -> root.removeView(v) }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        }
         DownloadController.init(this) // restores interrupted downloads (they come back paused) so the list and the menu are right from the start
         UpdateManager.init(this)
         UpdateManager.addListener(updateListener)
