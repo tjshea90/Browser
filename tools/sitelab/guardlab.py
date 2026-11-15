@@ -388,10 +388,13 @@ function wire(id, bid, tid, name, jumps) {
   function hover(e) { var x = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX; hov.style.width = (frac(bar, x) * bar.getBoundingClientRect().width) + 'px'; }
   ['mousemove', 'pointermove', 'touchstart', 'touchmove'].forEach(function (n) { bar.addEventListener(n, hover, { passive: true }); });
   ['pointerdown', 'pointerup', 'pointercancel', 'mousedown', 'mouseup', 'click', 'touchstart', 'touchend', 'touchcancel'].forEach(function (n) {
-    bar.addEventListener(n, function (e) { L('ev', name + ' ' + n + (e.pointerType ? ' pointerType=' + e.pointerType : '') + ' trusted=' + e.isTrusted + ' x=' + Math.round(e.clientX === undefined ? (e.changedTouches ? e.changedTouches[0].clientX : -1) : e.clientX)); });
+    bar.addEventListener(n, function (e) { var pt = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0] : e; L('ev', name + ' ' + n + (e.pointerType ? ' pointerType=' + e.pointerType : '') + ' trusted=' + e.isTrusted + ' x=' + Math.round(pt.clientX) + ' y=' + Math.round(pt.clientY)); });
   });
   if (jumps) bar.addEventListener('pointerup', function (e) { var f = frac(bar, e.clientX); v.currentTime = f * v.duration; L('page-seek', name + ' to ' + (f * v.duration).toFixed(1)); });
   setInterval(paint, 500);
+  function rect() { var r = bar.getBoundingClientRect(); L('rect', name + ' left=' + Math.round(r.left) + ' top=' + Math.round(r.top) + ' w=' + Math.round(r.width) + ' h=' + Math.round(r.height) + ' inner=' + innerWidth + 'x' + innerHeight + ' dpr=' + devicePixelRatio + ' moz=' + window.mozInnerScreenX + ',' + window.mozInnerScreenY); }
+  setTimeout(rect, 1500);
+  window['rect' + name] = rect;
 }
 wire('va', 'ba', 'ta', 'A', false);
 wire('vb', 'bb', 'tb', 'B', true);
