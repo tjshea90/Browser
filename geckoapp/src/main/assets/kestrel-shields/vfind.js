@@ -81,7 +81,9 @@ var KestrelVF = (typeof KestrelVF !== 'undefined' && KestrelVF) || (function () 
   // frame's own script (it cannot see its element), only its size, so the match is by size.
   function covered(w, h) {
     try {
-      var frames = all('iframe'), vids = all('video'), best = null, bestR = null;
+      var vids = all('video'), best = null, bestR = null;
+      if (!vids.length) return null;
+      var frames = all('iframe');
       for (var i = 0; i < frames.length; i++) {
         var fr = frames[i].getBoundingClientRect();
         if (Math.abs(fr.width - w) > 4 || Math.abs(fr.height - h) > 4 || fr.width < 60 || fr.height < 40) continue;
