@@ -28,7 +28,7 @@ function wavBytes(seconds) {
 const FILM = wavBytes(60);
 const LOOP = wavBytes(1);
 const LEN = 60;
-const FAST = { waitMs: 120, flushMs: 80, tapMs: 400, reaskMs: 500, keepMs: 800, lateMs: 600 };   // the clocks of the script, shortened
+const FAST = { waitMs: 120, flushMs: 80, tapMs: 400, reaskMs: 900, keepMs: 800, lateMs: 600 };   // the clocks of the script, shortened
 
 const VIDEO = '<video id="v" src="https://cdn.example/film.wav" preload="auto" muted style="position:absolute;left:0;top:0;width:400px;height:240px;background:#222"></video>';
 /** A player box with the picture and [inner] over it. */

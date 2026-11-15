@@ -161,7 +161,7 @@ test('YS1: the Settings switch is off (the app answers seek:false): nothing is s
   assert.equal(await page.evaluate(() => window.__asked), 1, 'asked once');
   assert.ok(near(await time(page), 0, 0.5));
   const r = await report(page); assert.deepEqual({ f: r.f, o: r.o, r: r.r }, { f: 0, o: 1, r: 'off' });
-  await page.waitForTimeout(700);                             // the 500 ms pause of the test clock
+  await page.waitForTimeout(700);                             // the 900 ms pause of the test clock
   await tapBar(page, 0.5); await page.waitForTimeout(400);
   assert.equal(await page.evaluate(() => window.__asked), 2, 'asked again after the pause');
   await page.context().close();
