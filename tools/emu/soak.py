@@ -177,6 +177,38 @@ class Phone:
                 pids.append(m.group(0))
         return pids
 
+    def content_pids(self):
+        """The engine's content process(es) (the page's main thread lives there): named <package>:sandboxed_tab... in `ps`."""
+        out = self.a.sh("ps -A -o PID,NAME 2>/dev/null", timeout=15) or ""
+        pids = []
+        for ln in out.splitlines():
+            m = re.match(r"\s*(\d+)\s+(\S+)", ln)
+            if m and "sandboxed_tab" in m.group(2):
+                pids.append(m.group(1))
+        return pids
+
+    def nice_of(self, pid):
+        out = self.a.sh("ps -p %s -o NI 2>/dev/null" % pid, timeout=15) or ""
+        m = re.search(r"-?\d+", out.replace("NI", ""))
+        return int(m.group(0)) if m else None
+
+    def set_nice(self, pids, value):
+        """Give the process's main thread this nice value whichever way this renice reads its number (absolute or an increment): -> {pid: nice read back}."""
+        got = {}
+        for p in pids:
+            cur = self.nice_of(p)
+            if cur is None:
+                continue
+            self.a.sh("renice -n %d -p %s" % (value, p), timeout=15)
+            now = self.nice_of(p)
+            if now != value and cur is not None and now == cur + value:
+                pass                                          # an increment: the result is what it is
+            elif now != value and value == 0 and now is not None and now != 0:
+                self.a.sh("renice -n %d -p %s" % (-now, p), timeout=15)   # an increment: take the difference back
+                now = self.nice_of(p)
+            got[p] = now
+        return got
+
     def hogs_running(self):
         """How many of our busy loops are alive (ps), so the report can say whether the emulator was really slowed down."""
         out = self.a.sh("ps -A -o PID,ARGS 2>/dev/null | grep -c 'while :; do :; done'", timeout=15)
@@ -461,6 +493,9 @@ class LabReport:
 CONSOLE_RX = re.compile(r'Web Content: \[JavaScript (Error|Warning): "(.*?)"(?: \{file: "(.*?)" line: (\d+)\})?')
 NOISE_FILES = ("moz-extension:", "resource:", "chrome:", "about:")
 NOISE_TEXT = ("Layout was forced", "Quirks Mode", "bounce tracker", "Safe Browsing", "Unable to preload", "Some cookies are misusing")
+
+
+SLOW_NICE = 12   # ROT2 slow_turn: the nice value of the engine's content process while the busy loops run (19 = lowest priority; 12 makes its work about 20 times slower beside 3 loops on 2 cores)
 
 
 def console_summary(lines):
@@ -1441,10 +1476,14 @@ class Soak:
             entered = any(r.get("ev") == "fullscreenchange" and r.get("fs") == "1" for r in self.lab.since(rmark) if r.get("kind") == "fsb")
             turns = []
             nhogs = 0
+            slowed = {}
+            cpids = []
             if entered:
                 hogs = self.ph.start_hogs(3)
                 time.sleep(1)
                 nhogs = self.ph.hogs_running()
+                cpids = self.ph.content_pids()                 # the page's main thread gets a low priority beside the busy loops: its layout of a turn's new size then takes seconds, as on the tablet
+                slowed = self.ph.set_nice(cpids, SLOW_NICE)
                 try:
                     time.sleep(2)
                     for label, accel in (("sideways", (9.81, 0, 0)), ("upright", (0, 9.81, 0)), ("sideways again", (9.81, 0, 0)), ("upright again", (0, 9.81, 0))):
@@ -1474,10 +1513,11 @@ class Soak:
                         turns.append({"turn": label, "samples": samples, "settled": settled[0][:150] if settled else "", "nudges": len(health_events(lines, "fullscreen", "turn-nudge")),
                                       "viewport": [e["rest"][:100] for e in health_events(lines, "fullscreen", "viewport")][-3:]})
                 finally:
+                    self.ph.set_nice(cpids, 0)
                     self.ph.stop_hogs(hogs)
             self.ph.key("KEYCODE_BACK"); time.sleep(3)
             self.ph.physical(0, 9.81, 0); time.sleep(2)
-            results.append({"mode": mode, "entered": entered, "turns": turns, "hogs": nhogs})
+            results.append({"mode": mode, "entered": entered, "turns": turns, "hogs": nhogs, "slowed": slowed})
         self.ph.debug("turnwait", "on")
         ok = True
         for r in results:
@@ -1864,7 +1904,7 @@ class Soak:
             L.append("")
             L.append("Busy loops slow the emulator's engine; the screen is read for 9 s after each turn: `right` = the red strip sits at the bottom of the page area, `cover` = the app's black cover, `stale` = anything else (a half-laid-out or stale page). `wait on` = the new rule (the cover and the pause stay until the page says it has the new size); `wait off` = the rule of alpha51 / alpha52 (the cover lifts when the app's own view is still).")
             L.append("")
-            L.append("Busy loops started per mode: " + ", ".join("%s %d" % (r["mode"], r.get("hogs", 0)) for r in self.slow_results) + " (0 = the emulator was not slowed down and the table shows nothing).")
+            L.append("Busy loops started per mode: " + ", ".join("%s %d" % (r["mode"], r.get("hogs", 0)) for r in self.slow_results) + " (0 = the emulator was not slowed down and the table shows nothing); nice value read back for the engine's content process: " + ", ".join("%s %s" % (r["mode"], r.get("slowed") or "none found") for r in self.slow_results) + ".")
             L.append("")
             L.append("| mode | turn | screen reads (seconds after the turn: what the screen showed) | the turn | engine nudged | the page's report |")
             L.append("| :- | :- | :- | :- | -: | :- |")
