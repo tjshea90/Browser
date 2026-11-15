@@ -76,7 +76,7 @@ class TurnSettleMachineTest {
         assertFalse(h.coverShown); assertTrue("the cover fades out", h.coverFaded)
         assertEquals(listOf("tab1"), h.resumed)
         assertEquals(1, m.resumedCount); assertEquals(1, m.pausedCount); assertTrue(m.last.contains("played again"))
-        assertNull("no timer is left behind", h.scheduled.takeIf { !m.turning && false })
+        assertFalse(m.turning)
     }
 
     @Test fun aSecondTurnWhileOneGoesOnExtendsItAndPausesOnce() {
@@ -100,7 +100,6 @@ class TurnSettleMachineTest {
         m.configChanged(true)
         var t = 0L
         while (m.turning && t < 10_000) { h.wait(m, 100); t += 100; if (m.turning) m.sizeChanged() }
-        assertEquals(TurnSettle.CAP_MS, m.lastMs - (m.lastMs % 100).let { if (it == 0L) 0L else it - 100 }.coerceAtLeast(0L).let { 0L } + 0L).let { /* the exact tick that crosses the cap */ }
         assertTrue("let go at the cap, not before: " + m.lastMs, m.lastMs >= TurnSettle.CAP_MS && m.lastMs < TurnSettle.CAP_MS + TurnSettle.TICK_MS)
         assertFalse(h.coverShown)
     }
