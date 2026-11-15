@@ -11,7 +11,8 @@ const path = require('node:path');
 let chromium;
 try { ({ chromium } = require('playwright')); } catch (e) { ({ chromium } = require('/usr/local/lib/node_modules_global/playwright')); }
 
-const SB = fs.readFileSync(path.join(__dirname, '..', 'geckoapp', 'src', 'main', 'assets', 'kestrel-shields', 'seekbar.js'), 'utf8');
+// SEEKBAR_JS=<file> runs the same tests against another version of the script (to see that a test really fails on the version it was written against)
+const SB = fs.readFileSync(process.env.SEEKBAR_JS || path.join(__dirname, '..', 'geckoapp', 'src', 'main', 'assets', 'kestrel-shields', 'seekbar.js'), 'utf8');
 let browser;
 async function launch() { browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required', '--mute-audio'] }); }
 async function close() { await browser.close(); }
