@@ -1,21 +1,22 @@
-# CHECKPOINT 2414 — read me first, then TASKS.md
+# CHECKPOINT 2415 — read me first, then TASKS.md
 
-**Written:** 2026-11-15T19:10:25Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `52e323b9` (this checkpoint is the commit after it)
+**Written:** 2026-11-15T19:11:07Z · **tests:** 1 RED: test_handoff.sh (0 green)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `3b4b950f` (this checkpoint is the commit after it)
 
 ## Just done
-code for owner message 46 + second review: FSB1 (applyImmersive without LAYOUT flags, insets follow real bars, re-hide at focus/turn/700 ms, bars note in Diagnostics, debug nohide), ROT1 (core TurnSettle + TurnSettler: MediaSession pause, black cover, resume rules; GeckoTabData.mediaSession), SND1 safety net (silenceStrays; Home over a playing page pauses it), RW1-RW12 in vfind/videobar/content/background JS with 11 new tests (videobar.test.js 25/25, npm test 443 pass), Kotlin suites core+app+geckoapp green before the last small edits, guard tests green; lab: page /fsbox, scene fullscreen_bars (suite fsy, hidden vs kept bars, strip pixel check, rotation, Kestrel bar in a full-screen web component), snd verdict now uses the page clock (run 43745675957 showed sound DOES stop when the app is left)
+pre-ship: alpha49: full-screen video fixes after your three screenshots. (1) In full screen the page is now laid out INSIDE the system bars when this tablet keeps them (both bars stayed visible and a player's controls sat under the navigation bar); where the system hides the bars the picture is still full-bleed; Diagnostics has a new line Full-screen system bars that says what your tablet did. (2) Turning the tablet under a full-screen or playing video: the video is paused and the picture covered with black until the screen has settled (about a second), then it plays again by itself; a video you had paused stays paused and a touch during the turn leaves it paused. (3) Kestrel's own video bar now also shows inside a full-screen player that is a web component (Yahoo's kind), and a film that a page takes full screen on its own gets the engine's controls. Sound: it already stopped when you leave the app or change tab (checked on the emulator: the clip's clock stood still while the app was away); as a safety net the app now also pauses a video that is left playing under Kestrel's Home screen or on another tab. From a second independent check of the video bar: a link, button or picture over a decorative video no longer opens the video menu or the bar, a press released a moment after the long press no longer brings the bar up behind the video menu, two ad frames of one size no longer confuse it, a web page can no longer switch the menus off or cancel your taps, and the page's own controls are found on pages with very many links. Tested in headless browsers and on an Android 10 emulator with the real Firefox engine, NOT on your tablet: please try the Yahoo Finance video in full screen, turn the tablet both ways, and send Diagnostics if a bar still covers anything.
 
 ## Do this next
-NEXT: (1) bump versionCode 150 / versionName alpha49 (sync-ext-version.sh), write the alpha49 release note, bash ship.sh gecko note, dispatch android.yml app=gecko full_build=true; (2) dispatch the lab suite fsy (app=lab lab_suite=fsy lab_minutes=10) - it queues behind compat run 43747605584 (ends about 20:10Z); read its report: strip rows kept vs hidden, turn settled lines, Kestrel bar in full screen; (3) read compat run 43747605584 into research/COMPAT_RUN1.md; (4) answer owner messages 44-46 in plain words (ANS44/ANS45/ANS46)
+ship.sh gates and releases this (gecko)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M TASKS.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  7c987e9f ckpt 2414: code for owner message 46 + second review: FSB1 (applyImmersive without LAYO
   7f2c4c92 ckpt 2413: owner message 46 written into TASKS.md (FSB1 bars cover the controls in full
   b8c5d333 ckpt 2412: hour soak 43740398387 read (commit 281c48f4, hotspot-shaped, 70 min, 79 scen
   9edf1ab7 ckpt 2411: LAB2 harness written: lab-only page-health probe (vfind.js probe(), guard an
@@ -25,8 +26,7 @@ NEXT: (1) bump versionCode 150 / versionName alpha49 (sync-ext-version.sh), writ
   055248fc ckpt 2407: alpha48 RELEASED: tag kestrel-g-v0.3.0-alpha48 (commit 281c48f4, APK 94.7 MB
   96a8ccce ckpt 2406: TASKS: VC1b/VC1c/LP1b/LP1c ticked with the lab evidence (run 43739450975); r
   fbbd7efc ckpt 2405: lab vc run 3 (43739450975, commit ecbdecc3) all green on the REAL engine inc
-  2211e3fd ckpt 2404: gated kestrel-g-v0.3.0-alpha48 (gecko code 149) and pushed it: handoff self-
 ```
 
-(34 automatic checkpoint(s) since the last deliberate one — the
+(1 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
