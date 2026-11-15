@@ -1744,6 +1744,8 @@ class Soak:
                     red = st["red"]
                     redtxt = "%d (%d-%d of %d)" % red if red else "no picture"
                     L.append("| %s | %s | %s | %s | %sx%s | %s%s | %s | %s |" % (r["mode"], nm, st["state"], redtxt, st.get("iw") or "?", st.get("ih") or "?", st["paused"], " (silent clip: no session)" if st["no_session"] else "", (st["settled"] or "-")[:70], (st["bars"] or "-")[:90]))
+                    if st.get("viewport"):                                  # FB4: what the page told about its viewport and what the app did (numbers only)
+                        L.append("| | | | viewport (FB4): %s | | | | |" % " / ".join(v[:100].replace("|", "/") for v in st["viewport"]))
                 if r["nobar"]:
                     L.append("| %s | %s | Kestrel's bar after a tap on the full-screen film | %s | | | | |" % (r["mode"], nm, "shown" if r["bar_shown"] else "NOT SHOWN"))
             L.append("")
