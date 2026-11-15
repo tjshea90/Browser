@@ -13,9 +13,9 @@ on:
   workflow_dispatch:
     inputs:
       suite:
-        description: 'smoke = one page + the Diagnostics text; fs = the full-screen turning checks; soak = the long run (pages, videos, downloads); all = smoke + fs + soak'
+        description: 'smoke = one page + the Diagnostics text; fs = the full-screen turning checks; vc = the video controls and the long press on a video; soak = the long run (pages, videos, downloads); all = everything'
         type: choice
-        options: [smoke, fs, soak, all]
+        options: [smoke, fs, vc, soak, all]
         default: smoke
       minutes:
         description: 'How long the soak part runs, in minutes (60 = one hour)'
@@ -130,7 +130,11 @@ jobs:
       - name: Run the lab (${{ inputs.suite }}, soak ${{ inputs.minutes }} min, net ${{ inputs.net }})
         run: |
           export PATH="$ANDROID_HOME/platform-tools:$PATH"
-          python3 -u -I tools/emu/soak.py --out "$RUNNER_TEMP/lab-out" --suite "$SUITE" --minutes "$MINUTES" --net "$NET" --pkg "$PKG" --port 8091 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
+          export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
+          APK="$PWD/$(ls geckoapp/build/outputs/apk/debug/*.apk | head -1)"
+          # when the emulated phone's system keeps dying (lab runs 3 and 5) the driver starts this same emulator again from a clean disk and installs the app again
+          EMU_CMD="emulator -avd $AVD_NAME -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data -gpu swiftshader_indirect -accel on -netdelay none -netspeed full -no-metrics"
+          python3 -u -I tools/emu/soak.py --out "$RUNNER_TEMP/lab-out" --suite "$SUITE" --minutes "$MINUTES" --net "$NET" --pkg "$PKG" --port 8091 --emu-cmd "$EMU_CMD" --apk "$APK" 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
 
       - name: Put the report on the run's summary page
         if: always()
@@ -156,6 +160,7 @@ jobs:
             ${{ runner.temp }}/lab-out/console.txt
             ${{ runner.temp }}/lab-out/logcat-tail.txt
             ${{ runner.temp }}/lab-out/emulator-tail.txt
+            ${{ runner.temp }}/lab-out/emulator-restart.txt
             ${{ runner.temp }}/lab-out/soaklab.log
             ${{ runner.temp }}/lab-out/lab/report.jsonl
           retention-days: 7
