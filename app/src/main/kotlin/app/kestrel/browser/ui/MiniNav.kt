@@ -54,6 +54,9 @@ import java.util.concurrent.Executors
  * will show up under where I long pressed, but only if I am long pressing an open space"): a long press on open space of the page puts the panel under the finger ([showAt]; the page's own script tells open
  * space from a link, a picture or text, and [HotCorner] stands in for a page whose script cannot answer). AY4 (same message: "make the navigation panel a floating panel which I can move around easily by long
  * pressing it and dragging it around"): a long press on the panel itself picks it up and the finger carries it; it stays where it is put. A tap on the bar at the top of the panel (the grip) closes it.
+ * Owner message 41 ("it doesn't close anymore. I should be able to long press again above where it is on the screen and close it. Also ... if I long press and drag the panel, a large x icon appears at the bottom of
+ * the screen and if I drag it into the x, it closes the panel and hides it until I long press somewhere to open it again"): a long press on open space ABOVE the open panel closes it ([showAt]), a tap on the grip
+ * is forgiving (a slow tap, a thumb that drifts a little), and while the panel is carried a large X sits at the bottom of the page area: let go over it and the panel is gone until the next long press.
  *
  * Glide typing (AT1, owner message 34: "glide typing like Gboard ... make the glide word predictions accurate"): a finger that slides off the key it went down on draws a word over the letters;
  * on lift the core decoder (core/input/glide) turns the path into words, the best goes into the bar with a space after it and the next two show in a strip above the keys.
@@ -102,6 +105,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private val forward = NavButton(ctx, R.drawable.ic_forward, "Forward") { l.navForward() }
     private val bar = BarView(ctx)
     private val keys = KeysView(ctx)
+    private val closeTarget = CloseTarget(ctx)   // the large X at the bottom while the panel is carried (owner message 41)
     private var address = ""
     private var anim: Runnable? = null
 
@@ -166,6 +170,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         keys.visibility = GONE
         panel.visibility = GONE
         addView(panel, LayoutParams(ctx.dp(PANEL_W_DP) + 2 * ctx.dp(BAND_DP), LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END))
+        closeTarget.visibility = GONE
+        addView(closeTarget, LayoutParams(ctx.dp(CLOSE_SIZE_DP), ctx.dp(CLOSE_SIZE_DP), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = ctx.dp(CLOSE_BOTTOM_DP) }) // above the panel in the stack; it never takes a touch
         keys.onKey = { key -> typed(key) }
         keys.onCursor = { n -> cursorSlid(n) }
         applyColors()
@@ -204,6 +210,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
      * else it moves there. The place is remembered like any other the person moved it to.
      */
     fun showAt(xWin: Float, yWin: Float) {
+        if (isAbovePanel(yWin)) { setOpen(false, true); return }   // a second long press ABOVE the open panel closes it (owner message 41)
         val loc = IntArray(2); getLocationInWindow(loc)
         val d = density
         val xdp = (xWin - loc[0]) / d; val ydp = (yWin - loc[1]) / d
@@ -213,6 +220,13 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         clampStored()
         if (isOpen) { applyGeometry(); saveGeometry() }
         else { setOpen(true, animate = false); applyGeometry(); saveGeometry() }
+    }
+
+    /** The open panel is on screen and the window point is higher up than its top edge (its outline, not the transparent band that belongs to the page): a long press there closes it. */
+    internal fun isAbovePanel(yWin: Float): Boolean {
+        if (!isOpen || panel.visibility != VISIBLE) return false
+        val loc = IntArray(2); panel.getLocationInWindow(loc)
+        return yWin < loc[1] + context.dp(BAND_DP)
     }
 
     /** Shows or hides the panel; [animate] false jumps (the start of the app). */
@@ -646,6 +660,52 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     /** The panel is in the finger (or not): its outline is drawn lit. */
     private fun setLifted(on: Boolean) { if (lifted == on) return; lifted = on; applyColors() }
 
+    // ------------------------------------------------------------------ the large X at the bottom while the panel is carried (owner message 41)
+
+    private fun showCloseTarget(on: Boolean) {
+        if (!on && closeTarget.visibility != VISIBLE) return
+        if (on == (closeTarget.visibility == VISIBLE)) return
+        closeTarget.hot = false
+        closeTarget.visibility = if (on) VISIBLE else GONE
+    }
+
+    /** Where the X's middle is, in this view's pixels (it is centred at the bottom of the page area). */
+    internal fun closeTargetCenter(): Pair<Float, Float> {
+        val half = context.dpf(CLOSE_SIZE_DP / 2f)
+        return width / 2f to height - context.dpf(CLOSE_BOTTOM_DP.toFloat()) - half
+    }
+
+    /** The finger (screen pixels) is over the X, with some room around it: the X lights, with a tick when it just did. */
+    private fun watchCloseTarget(rawX: Float, rawY: Float) {
+        if (closeTarget.visibility != VISIBLE) return
+        val o = IntArray(2); getLocationOnScreen(o)
+        val (cx, cy) = closeTargetCenter()
+        val r = context.dpf(CLOSE_SIZE_DP / 2f) * CLOSE_HOT_FACTOR
+        val over = Math.hypot((rawX - o[0] - cx).toDouble(), (rawY - o[1] - cy).toDouble()) <= r
+        if (over != closeTarget.hot) { closeTarget.hot = over; if (over) performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) }
+    }
+
+    /** The big X: a dark disc with a neon ring and a cross; larger and lit while the finger is over it. It takes no touch of its own. */
+    private inner class CloseTarget(ctx: Context) : View(ctx) {
+        var hot = false
+            set(v) { if (field != v) { field = v; invalidate() } }
+        private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+        private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+        private val cross = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+        init { isClickable = false; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
+        override fun onDraw(c: Canvas) {
+            val cx = width / 2f; val cy = height / 2f
+            val r = Math.min(width, height) / 2f * (if (hot) 1f else 0.82f)
+            fill.color = if (hot) (pal.accent and 0x00FFFFFF) or 0x66000000 else 0xF0000000.toInt()
+            c.drawCircle(cx, cy, r, fill)
+            ring.strokeWidth = context.dpf(if (hot) 3.5f else 2f); ring.color = if (hot) pal.accentHi else pal.accent
+            c.drawCircle(cx, cy, r - ring.strokeWidth / 2f, ring)
+            cross.strokeWidth = context.dpf(if (hot) 6f else 5f); cross.color = pal.accentHi
+            val a = r * 0.4f
+            c.drawLine(cx - a, cy - a, cx + a, cy + a, cross); c.drawLine(cx - a, cy + a, cx + a, cy - a, cross)
+        }
+    }
+
     private fun cancelAnim() { slideToken++; anim?.let { removeCallbacks(it) }; anim = null; panel.setLayerType(LAYER_TYPE_NONE, null) }
 
     private fun slide(from: Float, to: Float, ip: Interpolator, done: () -> Unit) {
@@ -704,6 +764,10 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         return (panel.left + x) to (panel.top + y)
     }
     internal val liftedForTest: Boolean get() = lifted
+    internal val closeTargetShownForTest: Boolean get() = closeTarget.visibility == VISIBLE
+    internal val closeTargetHotForTest: Boolean get() = closeTarget.hot
+    internal fun closeTargetCenterForTest(): Pair<Float, Float> = closeTargetCenter()
+    internal val closeTargetSizeForTest: Float get() = context.dpf(CLOSE_SIZE_DP.toFloat())
     internal val barTextForTest: String get() = bar.shownText()
     internal val typesIntoPageForTest: Boolean get() = typesIntoPage
     internal val bubbleForTest: String? get() = keys.bubbleTextForTest()
@@ -874,6 +938,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         private var mode = DRAG_NONE
         private var corner = 0                       // bit 0: right side, bit 1: bottom
         private var downRawX = 0f; private var downRawY = 0f; private var downAt = 0L; private var moved = false
+        private var pickedUp = false                // this touch began as a long press that picked the panel up (not a touch on the grip)
         private var right0 = 0f; private var top0 = 0f; private var w0 = 0f; private var h0 = 0f
         // a finger is down on the panel (not on the keys) and has stayed still: when it has stayed for PICK_MS the panel is picked up (AY4)
         private var pickArmed = false
@@ -953,11 +1018,12 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             super.dispatchTouchEvent(cancel); cancel.recycle()
             parent?.requestDisallowInterceptTouchEvent(true)
             cancelAnim(); panel.translationY = if (isOpen) 0f else panel.translationY
-            mode = DRAG_MOVE; corner = 0; moved = true
+            mode = DRAG_MOVE; corner = 0; moved = true; pickedUp = true
             downRawX = pickRawX; downRawY = pickRawY; downAt = pickDownTime
             right0 = effRight(); top0 = effTop(); w0 = gW; h0 = gH
             gRight = right0; gTop = top0
             setLifted(true)
+            showCloseTarget(true); watchCloseTarget(pickRawX, pickRawY)
             performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
             invalidate()
         }
@@ -965,7 +1031,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         private fun begin(ev: MotionEvent, m: Int, c: Int) {
             parent?.requestDisallowInterceptTouchEvent(true)
             cancelAnim(); panel.translationY = if (isOpen) 0f else panel.translationY
-            mode = m; corner = c; moved = false
+            mode = m; corner = c; moved = false; pickedUp = false
             downRawX = ev.rawX; downRawY = ev.rawY; downAt = ev.eventTime
             right0 = effRight(); top0 = effTop(); w0 = gW; h0 = gH
             gRight = right0; gTop = top0
@@ -979,7 +1045,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                 MotionEvent.ACTION_MOVE -> {
                     if (!moved && Math.hypot((ev.rawX - downRawX).toDouble(), (ev.rawY - downRawY).toDouble()) > slop) moved = true
                     if (!moved) return
-                    if (mode == DRAG_MOVE) moveBy(dx, dy) else sizeBy(dx, dy)
+                    if (mode == DRAG_MOVE) { showCloseTarget(true); watchCloseTarget(ev.rawX, ev.rawY); moveBy(dx, dy) } else sizeBy(dx, dy)
                 }
                 MotionEvent.ACTION_UP -> { if (moved) { if (mode == DRAG_MOVE) moveBy(dx, dy) else sizeBy(dx, dy) }; finish(ev) } // the lift's own position counts too: events that arrive late (a busy screen) are not lost
                 MotionEvent.ACTION_CANCEL -> finish(ev)
@@ -1011,14 +1077,22 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
         /** The finger lifted (or the touch was taken away). The panel stays exactly where it was put: no snapping back to the corner (AY4, "floating"). A short tap on the grip closes the panel. */
         private fun finish(ev: MotionEvent) {
-            val tap = !moved && ev.eventTime - downAt < ViewConfiguration.getTapTimeout() + 150
+            // a tap on the grip: it stayed (a thumb on a small target drifts a little, and a careful tap is slow), and it was not a long press that picked the panel up
+            val travel = Math.hypot((ev.rawX - downRawX).toDouble(), (ev.rawY - downRawY).toDouble())
+            val tap = !pickedUp && (!moved || travel <= GRIP_TAP_SLOP * slop) && ev.eventTime - downAt < GRIP_TAP_MS
             val m = mode
             mode = DRAG_NONE
+            // let go over the X: the panel is closed and hidden (a cancelled touch decides nothing)
+            if (m == DRAG_MOVE && ev.actionMasked == MotionEvent.ACTION_UP && moved) watchCloseTarget(ev.rawX, ev.rawY)
+            val dropped = m == DRAG_MOVE && ev.actionMasked == MotionEvent.ACTION_UP && closeTarget.hot
+            showCloseTarget(false)
             if (m == DRAG_MOVE) setLifted(false)
+            if (dropped) { gRight = right0; gTop = top0 } // (it goes where it was before this carry, not to the bottom of the screen)
             clampStored()
             if (m == DRAG_SIZE) { resizing = false; preparedFor = ""; post { prepareGlide() } }
             applyGeometry(); saveGeometry(); invalidate()
-            if (m == DRAG_MOVE && tap && ev.actionMasked == MotionEvent.ACTION_UP) setOpen(false, true)
+            if (dropped) { performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); setOpen(false, animate = false) }
+            else if (m == DRAG_MOVE && tap && ev.actionMasked == MotionEvent.ACTION_UP) setOpen(false, true)
         }
 
         override fun onDraw(c: Canvas) {
@@ -1453,6 +1527,13 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         const val SHOW_BELOW_DP = 26f
         /** A finger that stays down this long on the panel (not on its keys) picks it up. Longer than any tap, shorter than the page's own long press. */
         const val PICK_MS = 400L
+        /** A tap on the grip (it closes the panel): at most this long, and the finger may drift this many touch slops (a thumb on a small target). */
+        const val GRIP_TAP_MS = 600L
+        const val GRIP_TAP_SLOP = 1.5
+        /** The large X at the bottom of the page area that closes the panel when it is carried onto it: its size, its distance from the bottom, and how much room around it counts as "over it". */
+        const val CLOSE_SIZE_DP = 84
+        const val CLOSE_BOTTOM_DP = 56
+        const val CLOSE_HOT_FACTOR = 1.5f
         /** Sliding over the space key: the finger must move this far sideways before it is a cursor slide and not a space, and every step of this width moves the cursor one character. */
         const val SLIDE_START_DP = 10f
         const val SLIDE_STEP_DP = 11f
