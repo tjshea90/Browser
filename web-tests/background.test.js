@@ -1194,6 +1194,32 @@ test('RX4-M0a: a video look is forwarded as clamped whole numbers with the tab p
   assert.deepEqual(got[1], { k: 'vq', t: 0, d: 0, c: 0, s: 0, w: 0, h: 0, p: PAGE }, 'absurd numbers become 0 and the page is the tab\'s, not the frame\'s');
 });
 
+test('RX4-M0b: cache hits and 304 answers are counted (when the headers arrive and when the request completes), a 304 is timed from its start, pages are counted; the text rides on the stats message', async () => {
+  const h = harness(standardApp());
+  const sub = (id, ts) => h.listeners.before({ type: 'script', url: 'https://cdn.example/' + id + '.js', tabId: 1, frameId: 0, requestId: id, timeStamp: ts, documentUrl: PAGE, frameAncestors: [{ url: PAGE, frameId: 0 }] });
+  h.mainFrame(PAGE, { requestId: '5', timeStamp: 1000 });
+  sub('6', 1010); sub('7', 1010); sub('8', 1010);
+  h.listeners.headers({ statusCode: 304, requestId: '6', url: 'https://cdn.example/6.js', tabId: 1, frameId: 0, type: 'script', responseHeaders: [], timeStamp: 1140 });
+  h.listeners.completed({ requestId: '6', statusCode: 304, fromCache: false, url: 'https://cdn.example/6.js', tabId: 1, frameId: 0, type: 'script', timeStamp: 1150 });
+  h.listeners.completed({ requestId: '7', statusCode: 200, fromCache: true, url: 'https://cdn.example/7.js', tabId: 1, frameId: 0, type: 'script', timeStamp: 1012 });
+  h.listeners.error({ requestId: '8', error: 'NS_ERROR_ABORT', url: 'https://cdn.example/8.js', tabId: 1, frameId: 0, type: 'script' });
+  await h.flushTimers();
+  const st = h.of('st'); assert.ok(st.length > 0, 'a stats message was sent');
+  const rv = st[st.length - 1].rv;
+  assert.ok(/pages 1, requests 2, from cache 1, 304 seen when headers arrived 1 and when completed 1 \(140 ms in all\)/.test(rv), rv);
+});
+
+test('RX4-M0c: the wait before a navigation to a site that has scriptlet rules is timed and counted (and the answer still arrives)', async () => {
+  const { h, mine } = scHarness({ 'site.example': '1:' + SLCALLS });
+  h.mainFrame(SLSITE);
+  await until(() => mine().length === 1, 'the site script');
+  eq(await h.mainFrame(SLSITE), {});
+  await h.flushTimers();
+  const st = h.of('st'); assert.ok(st.length > 0);
+  const rv = st[st.length - 1].rv;
+  assert.ok(/scriptlet waits before a page 1 \(\d+ ms in all, slowest \d+ ms, 0 hit the 250 ms ceiling\)/.test(rv), rv);
+});
+
 test('RX3-V1: the video report carries the element facts as clamped whole numbers; a report without them (an older script) stays as it was', async () => {
   const h = harness(standardApp());
   h.message({ k: 'vid', u: 'https://cdn.example/a.mp4', w: 1280, h: 720, d: 25.4, l: '', p: PAGE, f: 27, rw: 300.7, rh: 170, vp: 80 }, 1, PAGE, 0);
