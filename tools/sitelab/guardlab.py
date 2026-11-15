@@ -16,8 +16,8 @@
               break marked by CUE-OUT / CUE-IN). The app's Health lines "media look live=.. length=..s advertising=..s in N breaks counted=N of M" show what the early look found.
   /playlab    RX3-S1: ONE real, audible 440 Hz tone (/tone.wav, 30 s) in a <video>; a tap anywhere starts it (the app refuses audible autoplay without a tap), the page pauses it after 6 s, plays it again 3 s later,
               pauses it after 6 s more and ends with DONE. The app's Health lines "neon video playing=true/false front=true" show the glow being held while it plays.
-  /slowjump   RX3-G6: with NO tap at all, 5 s after it loaded the page sends its own tab to a host the block lists name (https://doubleclick.net/). Before RX3-G6 a jump with no recent touch was always allowed;
-              now the app stops it and shows the blocked icon (Health: "guard app-wall stopped a jump to doubleclick.net").
+  /slowjump   RX3-G6: with NO tap at all, 5 s after it loaded the page sends its own tab to a host the block lists name (https://propellerads.com/). Before RX3-G6 a jump with no recent touch was always allowed;
+              now the app stops it and shows the blocked icon (Health: "guard app-wall stopped a jump to propellerads.com").
   /layer-link RX3-G5: a transparent layer over the page: a tap on it makes the page click a hidden <a target=_blank> to another site (an ad). The app's new-window wall now needs a tap ON a link to exactly
               that address: Health "guard app-wall stopped a new window to ..." (or the page guard's own "chip-show open", whichever refused it first).
   /playerlab  RX3-G7: five mock video players on one page, driven by the page itself (no touch needed): an ordinary video (no ad words), a JW-style player (jw-flag-ads on its root), a Video.js-style player
@@ -258,7 +258,7 @@ SLOWJUMP = b"""<!doctype html><html><head><meta charset="utf-8"><title>slowjump<
 <script>
 function L(k, v) { try { var x = new XMLHttpRequest(); x.open('GET', '/log?kind=' + encodeURIComponent(k) + '&v=' + encodeURIComponent(v) + '&t=' + Date.now()); x.send(); } catch (e) {} }
 L('load', 'slowjump');
-setTimeout(function () { L('jump', 'location = https://doubleclick.net/'); location = 'https://doubleclick.net/'; }, 5000);
+setTimeout(function () { L('jump', 'location = https://propellerads.com/'); location = 'https://propellerads.com/'; }, 5000);
 setTimeout(function () { L('still-here', 'the page is still showing after 9 s (the jump was refused)'); }, 9000);
 setTimeout(function () { L('DONE', 'slowjump'); }, 10000);
 </script></body></html>
