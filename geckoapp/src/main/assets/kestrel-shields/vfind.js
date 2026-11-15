@@ -99,5 +99,14 @@ var KestrelVF = (typeof KestrelVF !== 'undefined' && KestrelVF) || (function () 
     } catch (e) { return null; }
   }
 
-  return { at: at, all: all, covered: covered, rect: rect, rootOf: rootOf, playing: playing };
+  // the person long pressed this video: tell the app, which shows its Save video sheet (the finder's list, Copy video address, or the line that says why nothing was found). The video's own address goes
+  // along only when it is a web address (a blob: address names nothing the app could fetch).
+  function menu(v) {
+    try {
+      var src = v.currentSrc || v.src || '';
+      browser.runtime.sendMessage({ k: 'pop', d: 'vmenu|' + (src.indexOf('http') === 0 ? src : ''), p: location.href }).catch(function () {});
+    } catch (e) { /* nobody listens */ }
+  }
+
+  return { at: at, all: all, covered: covered, rect: rect, rootOf: rootOf, playing: playing, menu: menu };
 })();
