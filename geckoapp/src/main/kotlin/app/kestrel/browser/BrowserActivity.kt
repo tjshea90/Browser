@@ -369,6 +369,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (requestedOrientation != android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         turnSettler.init(resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) // ROT1: the first turn counts too
         StartTimeline.activityCreated() // EY-2: the start-up timeline (Diagnostics)
+        Health.log("start", "heap", "java heap limit ${Runtime.getRuntime().maxMemory() shr 20} MB, memory class ${getSystemService(ActivityManager::class.java)?.memoryClass ?: -1} MB") // (a lab run died of a 16 MB heap limit: the limit is on record now)
         window.setBackgroundDrawableResource(R.color.window_bg) // the cold-start window showed the shield; from here on it is plain black behind every page and panel
         ProcessLife.uiAlive = true; ProcessLife.cancel()
         prefs = Prefs.get(this)

@@ -136,6 +136,10 @@ class ShieldsBridge(
             } catch (e: Exception) {
                 Log.w(Io.TAG, "shields bridge", e)
                 ""
+            } catch (e: OutOfMemoryError) { // a background lane must never take the whole browser down (the engine image goes out in 256 KB chunks; the lab run of 2026-11-15 died of this at a 16 MB heap): the extension asks again
+                Log.w(Io.TAG, "shields bridge: out of memory")
+                app.kestrel.browser.diag.Health.count("shields.oom")
+                ""
             }
             result.complete(reply)
         }
