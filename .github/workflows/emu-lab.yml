@@ -1,0 +1,154 @@
+# The real-engine lab (RX4-E1 and SOAK1, owner messages 43 and the outside review research/REVIEW-EXTERNAL-4.md): the Kestrel G DEBUG build running on an Android 10
+# emulator (x86_64, 600 x 1024 at 170 dpi, 2 GB of RAM, 4 cores = the tablet's shape) with hardware acceleration (KVM) on GitHub's free runners (this repository is public).
+# It drives the real Firefox engine through tools/emu/soak.py: pages, videos, downloads, full screen, and writes a plain-text report of everything that loaded badly, played
+# badly, crashed or stalled. Nothing here builds a release or touches a key: no secrets, `contents: read`, no APK is ever uploaded (the artifacts are text and a few screenshots).
+#
+# HOW TO START IT: it is dispatched through android.yml with  app = lab  (that workflow is the one GitHub already knows on the default branch; this file is called from it), with
+# lab_suite = smoke | fs | soak | all and lab_minutes = how long the soak part runs (60 = one hour). It can also be dispatched by itself once this file is on the default branch.
+# MINUTES: never add a `push:` trigger (tools/test_handoff.sh fails if you do); the owner's rule is dispatch only.
+name: Emulator lab
+
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: 'smoke = one page + the Diagnostics text; fs = the full-screen turning checks; soak = the long run (pages, videos, downloads); all = smoke + fs + soak'
+        type: choice
+        options: [smoke, fs, soak, all]
+        default: smoke
+      minutes:
+        description: 'How long the soak part runs, in minutes (60 = one hour)'
+        type: string
+        default: '60'
+  workflow_call:
+    inputs:
+      suite:
+        type: string
+        default: smoke
+      minutes:
+        type: string
+        default: '60'
+
+permissions:
+  contents: read
+
+jobs:
+  lab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 175
+    env:
+      SUITE: ${{ inputs.suite }}
+      MINUTES: ${{ inputs.minutes }}
+      AVD_NAME: kestrel29x64
+      PKG: app.kestrel.browser.gecko.debug
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false # the token is not left in .git/config for later steps
+      - uses: ./.github/actions/setup-build
+
+      - name: Hardware acceleration (KVM)
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm || { echo "::error::this runner has no /dev/kvm: the emulator would be far too slow"; exit 1; }
+          echo "cores: $(nproc), memory: $(free -m | awk '/Mem:/ {print $2}') MB, free disk: $(df -h / | awk 'NR==2 {print $4}')"
+
+      - name: ffmpeg (the lab makes its own video clips)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+
+      - name: Android emulator and the Android 10 system image
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses >/dev/null 2>&1 || true
+          "$SDKM" "emulator" "platform-tools" "system-images;android-29;default;x86_64" 2>&1 | tr '\r' '\n' | tail -4
+          ls "$ANDROID_HOME/emulator/emulator" "$ANDROID_HOME/system-images/android-29/default/x86_64" | head -5
+
+      - name: Build the Kestrel G debug app for x86_64 (the real Firefox engine, GeckoView 160)
+        run: ./gradlew :geckoapp:assembleDebug -PgeckoAbi=x86_64 --console=plain
+
+      - name: Create the tablet-shaped emulator (Android 10, 600 x 1024 at 170 dpi, 2 GB, 4 cores)
+        run: |
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
+          echo no | avdmanager create avd -n "$AVD_NAME" -k "system-images;android-29;default;x86_64" -d pixel --force
+          CFG="$HOME/.android/avd/$AVD_NAME.avd/config.ini"
+          python3 -I - "$CFG" <<'PY'
+          import sys
+          p = sys.argv[1]
+          want = {"hw.lcd.width": "600", "hw.lcd.height": "1024", "hw.lcd.density": "170", "hw.ramSize": "2048", "vm.heapSize": "128", "hw.cpu.ncore": "4",
+                  "disk.dataPartition.size": "6G", "hw.gpu.enabled": "yes", "hw.gpu.mode": "swiftshader_indirect", "hw.keyboard": "yes", "hw.mainKeys": "no",
+                  "hw.accelerometer": "yes", "hw.sensors.orientation": "yes", "showDeviceFrame": "no", "hw.initialOrientation": "portrait"}
+          lines = [l for l in open(p).read().splitlines() if l.split("=")[0].strip() not in want and not l.startswith("skin.")]
+          lines += ["%s=%s" % kv for kv in want.items()]
+          open(p, "w").write("\n".join(lines) + "\n")
+          print("\n".join(l for l in lines if l.split("=")[0].strip() in want))
+          PY
+
+      - name: Start the emulator and wait until Android 10 has booted
+        run: |
+          export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
+          nohup emulator -avd "$AVD_NAME" -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel on -netdelay none -netspeed full -no-metrics > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          adb start-server
+          adb wait-for-device
+          timeout 600 bash -c 'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = 1 ]; do sleep 5; done' || { echo "::error::the emulator did not finish booting in 10 minutes"; tail -30 "$RUNNER_TEMP/emulator.log"; exit 1; }
+          sleep 10
+          adb shell getprop ro.build.version.release
+          adb shell wm size
+          adb shell wm density
+          emulator -version | head -2
+
+      - name: Install the app and start the lab server
+        run: |
+          export PATH="$ANDROID_HOME/platform-tools:$PATH"
+          APK="$(ls geckoapp/build/outputs/apk/debug/*.apk | head -1)"
+          echo "installing $APK ($(du -h "$APK" | cut -f1))"
+          adb install -r -t "$APK"
+          mkdir -p "$RUNNER_TEMP/lab-out/lab"
+          nohup python3 -I tools/sitelab/soaklab.py 8091 "$RUNNER_TEMP/lab-out/lab" > "$RUNNER_TEMP/lab-out/soaklab.log" 2>&1 &
+          for i in $(seq 1 30); do python3 -I -c "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:8091/health', timeout=3)" 2>/dev/null && break; sleep 2; done
+          adb reverse tcp:8091 tcp:8091
+          cat "$RUNNER_TEMP/lab-out/soaklab.log"
+
+      - name: Run the lab (${{ inputs.suite }}, soak ${{ inputs.minutes }} min)
+        run: |
+          export PATH="$ANDROID_HOME/platform-tools:$PATH"
+          python3 -u -I tools/emu/soak.py --out "$RUNNER_TEMP/lab-out" --suite "$SUITE" --minutes "$MINUTES" --pkg "$PKG" --port 8091 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
+
+      - name: Put the report on the run's summary page
+        if: always()
+        run: |
+          OUT="$RUNNER_TEMP/lab-out"
+          if [ -f "$OUT/report.md" ]; then head -c 900000 "$OUT/report.md" >> "$GITHUB_STEP_SUMMARY"; else echo "The lab wrote no report (it did not get as far as running)." >> "$GITHUB_STEP_SUMMARY"; fi
+          tail -n 40000 "$OUT/logcat.txt" > "$OUT/logcat-tail.txt" 2>/dev/null || true
+          rm -f "$OUT/logcat.txt"
+          tail -n 60 "$RUNNER_TEMP/emulator.log" > "$OUT/emulator-tail.txt" 2>/dev/null || true
+          ls -la "$OUT" "$OUT/shots" 2>/dev/null | head -60
+
+      - name: Keep the text of the run (7 days; no APK, no key)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-lab-text
+          path: |
+            ${{ runner.temp }}/lab-out/report.md
+            ${{ runner.temp }}/lab-out/summary.json
+            ${{ runner.temp }}/lab-out/events.jsonl
+            ${{ runner.temp }}/lab-out/health-lines.txt
+            ${{ runner.temp }}/lab-out/diagnostics-*.txt
+            ${{ runner.temp }}/lab-out/console.txt
+            ${{ runner.temp }}/lab-out/logcat-tail.txt
+            ${{ runner.temp }}/lab-out/emulator-tail.txt
+            ${{ runner.temp }}/lab-out/soaklab.log
+            ${{ runner.temp }}/lab-out/lab/report.jsonl
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Keep the screenshots of the problem moments (3 days)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-lab-shots
+          path: ${{ runner.temp }}/lab-out/shots/*.png
+          retention-days: 3
+          if-no-files-found: ignore
