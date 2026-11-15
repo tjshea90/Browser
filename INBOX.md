@@ -1222,3 +1222,12 @@ Yes to all four, and include YouTube ad skipping and blocking. Redo the file wit
 ```
 @"/root/.claude/uploads/17ec0ceb-a150-56e3-a260-68009790b426/7c8e6ee3-REVIEW-EXTERNAL-3.md" 
 ```
+
+## 2026-11-15T02:18:17Z
+```
+The floating navigation panel works and opens where I long press, but it doesn't close anymore. I should be able to long press again above where it is on the screen and close it. Also make an option where if I long press and drag the panel, a large x icon appears at the bottom of the screen and if I drag it into the x, it closes the panel and hides it until I long press somewhere to open it again
+Did you get my prompt about the mini navigation panel and making the closing x icon feature
+1) I just pressed the home button to put a tab on the home screen, switched tabs to a different tab, then came back to the tab that I switched to the home screen, but instead of the home screen it loaded the site I was on before the home screen. Since I was on the home screen last on this tab, it should have loaded the home screen. 
+2) when I close all private tabs, make the private tab box at the top of the tab selector disappear, because there are no more private tabs, then automatically default to the regular "tabs" page. 
+3) when Kestrel first loads, it shows a shield icon. Instead of this shield, make it match the symbol from the app drawer. If possible, give it a very quick lightweight animation, such as spreading wings or glowing neon or something cool but very fast so I don't have to wait. 
+```
