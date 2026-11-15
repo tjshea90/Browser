@@ -72,6 +72,16 @@ class LaunchLogoTest {
         assertTrue(logo.isFinished); assertEquals(1, done)
     }
 
+    @Test fun theFadeDoesNotLeaveTheSameSymbolFadedWhereElseItIsUsed() {
+        // a vector drawable shares its alpha with every drawable made from the same resource: the Home screen's brand mark is one (found on the emulator: it stayed dark after the flourish)
+        val other = logo.context.getDrawable(app.kestrel.browser.R.drawable.ic_launcher_foreground)!!
+        drawNow()
+        now += (LaunchAnim.TOTAL_MS * 0.9f).toLong(); drawNow()                  // nearly faded out
+        assertEquals("the other copy of the symbol is untouched", 255, other.alpha)
+        now += LaunchAnim.TOTAL_MS; drawNow()
+        assertEquals(255, other.alpha)
+    }
+
     @Test fun aDebugStretchMakesItLastLongerAndNothingElseChanges() {
         val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
         var finished = 0
