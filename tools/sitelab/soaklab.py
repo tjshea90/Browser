@@ -10,6 +10,7 @@ Serves, on one port (the emulator reaches it with `adb reverse tcp:<port> tcp:<p
   /dl/<n>mb.bin  /dl/slow.bin  /dl/page   downloads of known size (the last page links to them)
   /report?...            one line of JSON per call -> <outdir>/report.jsonl  (what the pages saw: the soak driver reads it)
   /health                "ok"
+Environment: LAB_RATE_KBPS (clips and downloads are served at most this fast, KB/s) and LAB_DELAY_MS (a pause before every answer) shape the lab like the owner's hotspot; both default to 0 = off.
 Nothing here is part of the app and nothing it writes belongs in the repository (keep <outdir> outside the repo). Clips need ffmpeg; without it the video pages show an error and say so.
 """
 import http.server, json, os, shutil, socketserver, subprocess, sys, threading, time, urllib.parse
