@@ -591,7 +591,8 @@
     window.addEventListener('contextmenu', function (e) {
       try {
         if (!e.isTrusted) return;
-        if (e.target && e.target.getAttribute && e.target.getAttribute('data-kestrel-bar')) return; // Kestrel's own video bar (videobar.js)
+        if (window.KestrelVF) window.KestrelVF.pressedAt = Date.now();                              // RW5: the release of this press is no tap (videobar.js)
+        if (window.KestrelVB && window.KestrelVB.isBar && window.KestrelVB.isBar(e.target)) return; // Kestrel's own video bar (videobar.js; RW7: known by identity, a page cannot mark its own layer as "the bar")
         var els = document.elementsFromPoint ? document.elementsFromPoint(e.clientX, e.clientY) : [e.target];
         var media = null;
         for (var i = 0; i < els.length && i < 16; i++) {
@@ -636,7 +637,7 @@
     window.addEventListener('contextmenu', function (e) {
       try {
         if (!e.isTrusted) return;
-        if (e.target && e.target.getAttribute && e.target.getAttribute('data-kestrel-bar')) return; // Kestrel's own video bar (videobar.js)
+        if (window.KestrelVB && window.KestrelVB.isBar && window.KestrelVB.isBar(e.target)) return; // Kestrel's own video bar (videobar.js, by identity: RW7)
         var els = document.elementsFromPoint ? document.elementsFromPoint(e.clientX, e.clientY) : [e.target];
         for (var i = 0; i < els.length && i < 10; i++) if (interactive(els[i])) return;
         if (window.KestrelVF && window.KestrelVF.at(e.clientX, e.clientY)) return; // LP1: a video here (also in a shadow root, also under a layer that takes no pointer events) has its own menu: never the panel
@@ -651,10 +652,20 @@
             if (sel.length > 0 && sel !== before) return; // the engine selected a word: the press was on text (a selection it CLEARED, as it does on a press elsewhere, is not that)
             if (window.top === window) { browser.runtime.sendMessage({ k: 'os', p: location.href }).catch(function () {}); return; }
             // a press inside a FRAME: an ad overlay (Google IMA) lies over a player of the page above and takes every touch. The top frame is asked whether a frame of this size covers a video; only if not is it open space.
-            var asked = false;
-            var openHere = function () { if (asked) return; asked = true; browser.runtime.sendMessage({ k: 'os', p: location.href }).catch(function () {}); };
-            var lateTimer = setTimeout(openHere, 400);
-            browser.runtime.sendMessage({ k: 'ft', t: 'lp', w: window.innerWidth, h: window.innerHeight }).then(function (r) { if (r && r.video === true) { asked = true; clearTimeout(lateTimer); } else { clearTimeout(lateTimer); openHere(); } }, function () { clearTimeout(lateTimer); openHere(); });
+            // RW4: exactly ONE of the two goes to the app: the panel (told after 700 ms of silence, or when the answer is "no video") or the video menu (the answer carries the film's address and THIS frame sends it, only
+            // while the panel has not been told). A late answer after the panel was told changes nothing, so the panel and the sheet never open together.
+            var told = false;
+            var openHere = function () { if (told) return; told = true; browser.runtime.sendMessage({ k: 'os', p: location.href }).catch(function () {}); };
+            var lateTimer = setTimeout(openHere, 700);
+            browser.runtime.sendMessage({ k: 'ft', t: 'lp', w: window.innerWidth, h: window.innerHeight }).then(function (r) {
+              clearTimeout(lateTimer);
+              if (r && r.video === true) {
+                if (told) return;
+                told = true;
+                var src = (typeof r.src === 'string' && r.src.indexOf('http') === 0) ? r.src.slice(0, 2000) : '';
+                browser.runtime.sendMessage({ k: 'pop', d: 'vmenu|' + src, p: location.href }).catch(function () {});
+              } else openHere();
+            }, function () { clearTimeout(lateTimer); openHere(); });
           } catch (x) { /* never break the page */ }
         }, 200);
       } catch (x) { /* never break the page */ }

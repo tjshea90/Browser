@@ -902,7 +902,11 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   if (!m || m.k !== 'ft' || !sender || !sender.tab || !(sender.frameId > 0)) return undefined;
   var w = m.w | 0, h = m.h | 0;
   if (w < 40 || h < 30 || w > 5000 || h > 5000 || !browser.tabs || typeof browser.tabs.sendMessage !== 'function') return Promise.resolve({ video: false });
-  return browser.tabs.sendMessage(sender.tab.id, { k: 'ftq', t: m.t === 'lp' ? 'lp' : 'tap', w: w, h: h }, { frameId: 0 }).then(function (r) { return { video: !!(r && r.video) }; }, function () { return { video: false }; });
+  // RW4: for a long press the top frame also names the film's web address (only http(s), clamped): the FRAME then sends the video menu itself, so it can still choose the panel instead
+  return browser.tabs.sendMessage(sender.tab.id, { k: 'ftq', t: m.t === 'lp' ? 'lp' : 'tap', w: w, h: h }, { frameId: 0 }).then(function (r) {
+    var src = (r && typeof r.src === 'string' && /^https?:\/\//i.test(r.src) && r.src.length <= 2000) ? r.src : '';
+    return { video: !!(r && r.video), src: src };
+  }, function () { return { video: false, src: '' }; });
 });
 
 // LAB2: a DEBUG build (flag 256 in the guard answer) asks every page for a page-health probe (vfind.js probe()): numbers only, clamped; the page of the tab goes along so that the app drops a private tab's.
