@@ -1008,7 +1008,7 @@ class Soak:
 
     def dump_diag(self, tag):
         self.ph.debug("dump")
-        time.sleep(4)
+        time.sleep(7)   # the app reads the engine's preferences first (2.5 s), then writes the text
         txt = self.adb.sh("run-as %s cat files/debug-diag.txt" % self.a.pkg, timeout=30)
         if txt and "Kestrel diagnostics" in txt:
             with open(os.path.join(self.out, "diagnostics-%s.txt" % tag), "w") as f:

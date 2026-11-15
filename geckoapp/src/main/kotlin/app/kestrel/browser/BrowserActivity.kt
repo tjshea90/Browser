@@ -627,9 +627,12 @@ open class BrowserActivity : Activity(), DockListener {
         val what = i?.getStringExtra("kestrel_debug") ?: return
         i.removeExtra("kestrel_debug")
         when (what) {
-            "dump" -> Io.main.post {
-                val text = try { Health.report(this, engineFacts(), 400) } catch (e: Throwable) { "dump failed: $e" }
-                Io.exec { try { java.io.File(filesDir, "debug-diag.txt").writeText(text); Health.log("lab", "dump", "${text.length} bytes") } catch (e: Exception) { Health.log("lab", "dump-failed", e.toString().take(80)) } }
+            "dump" -> {
+                try { GeckoEngine.readBackPrefs { } } catch (e: Throwable) { /* the engine is not up: the line says "not read yet" */ } // what Diagnostics > Engine prefs would show (screen.orientation lock, Safe Browsing ...)
+                Io.main.postDelayed({
+                    val text = try { Health.report(this, engineFacts(), 400) } catch (e: Throwable) { "dump failed: $e" }
+                    Io.exec { try { java.io.File(filesDir, "debug-diag.txt").writeText(text); Health.log("lab", "dump", "${text.length} bytes") } catch (e: Exception) { Health.log("lab", "dump-failed", e.toString().take(80)) } }
+                }, 2500L)
             }
             "closetabs" -> Io.main.post { for (t in tabs.toList()) doCloseTab(t); Health.log("lab", "closetabs", "tabs=${tabs.size}") }
             "answer" -> { // SOAK1: press a button of the question on screen (debug builds only)
