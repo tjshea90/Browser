@@ -54,7 +54,8 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
 
     private enum class Hit { NONE, PLAY, BACK, FORWARD, MUTE, EXIT, TRACK }
 
-    private val scrimPaint = Paint()
+    private val bottomScrim = Paint()               // the two scrims keep their gradient (made once per size, not once per frame: a fade draws ten frames, a report every 250 ms one more)
+    private val topScrim = Paint()
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x73000000 }
     private val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt(); style = Paint.Style.FILL }
     private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt(); style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeWidth = dp(2.2f) }
@@ -76,8 +77,24 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
     fun update(v: PlayerModel.View) {
         val wasBuffering = model?.buffering == true
         model = v
-        if (v.buffering && !wasBuffering) postInvalidateOnAnimation()
-        if (alphaNow > 0f || v.buffering) invalidate()
+        val changed = lookChanged(v)                                          // a report every 250 ms and a ticker every 250 ms mostly say what is already on the screen
+        if (wasBuffering && !v.buffering) { invalidate(); return }            // the ring goes (it may be the only thing drawn)
+        if (changed && (alphaNow > 0f || v.buffering)) invalidate()
+    }
+
+    // what the last update said, in the units that are DRAWN (whole seconds of the texts, whole pixels of the track): an update that changes none of them needs no new frame
+    private var dSec = -1L; private var dLen = -1L; private var dPlayPx = -1; private var dBufPx = -1; private var dBits = -1
+    private fun lookChanged(v: PlayerModel.View): Boolean {
+        val known = v.kind == DurationView.Kind.KNOWN
+        val span = trackR - trackL
+        val sec = v.timeS.toLong()
+        val len = if (known) v.lengthS.toLong() else -1L
+        val pp = if (known) (PlayerRules.fraction(v.timeS, v.lengthS) * span).toInt() else 0
+        val bp = if (known) (PlayerRules.fraction(v.bufferedS, v.lengthS) * span).toInt() else 0
+        val bits = (if (v.playing) 1 else 0) or (if (v.muted) 2 else 0) or (if (v.buffering) 4 else 0) or (v.kind.ordinal shl 3)
+        val changed = sec != dSec || len != dLen || pp != dPlayPx || bp != dBufPx || bits != dBits
+        dSec = sec; dLen = len; dPlayPx = pp; dBufPx = bp; dBits = bits
+        return changed
     }
 
     /** Fade the controls in or out ([animate] false = at once). */
@@ -110,7 +127,14 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) { layoutParts() }
 
+    private fun buildScrims(w: Float, h: Float) {
+        val bottomH = dp(150f) + bottomInset
+        bottomScrim.shader = LinearGradient(0f, h - bottomH, 0f, h, 0x00000000, 0xB3000000.toInt(), Shader.TileMode.CLAMP)
+        topScrim.shader = LinearGradient(0f, 0f, 0f, dp(90f), 0x8C000000.toInt(), 0x00000000, Shader.TileMode.CLAMP)
+    }
+
     private fun layoutParts() {
+        bottomScrim.shader = null; topScrim.shader = null                    // (the size or the lifted bottom changed: the next draw makes them again)
         val w = width.toFloat(); val h = height.toFloat() - bottomInset
         if (w <= 0f || h <= 0f) return
         val cx = w / 2f; val cy = h / 2f
@@ -146,12 +170,11 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
         val a = (alphaNow * 255).toInt().coerceIn(0, 255)
         // the scrims: dark at the edges, so white controls read over any picture
         val bottomH = dp(150f) + bottomInset
-        scrimPaint.shader = LinearGradient(0f, h - bottomH, 0f, h, 0x00000000, 0xB3000000.toInt(), Shader.TileMode.CLAMP)
-        scrimPaint.alpha = a
-        c.drawRect(0f, h - bottomH, w, h, scrimPaint)
-        scrimPaint.shader = LinearGradient(0f, 0f, 0f, dp(90f), 0x8C000000.toInt(), 0x00000000, Shader.TileMode.CLAMP)
-        scrimPaint.alpha = a
-        c.drawRect(0f, 0f, w, dp(90f), scrimPaint)
+        if (bottomScrim.shader == null) buildScrims(w, h)
+        bottomScrim.alpha = a
+        c.drawRect(0f, h - bottomH, w, h, bottomScrim)
+        topScrim.alpha = a
+        c.drawRect(0f, 0f, w, dp(90f), topScrim)
         fill.alpha = (0x73 * alphaNow).toInt(); ink.alpha = a; line.alpha = a; text.alpha = a
 
         // the middle cluster
@@ -261,12 +284,14 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
     }
 
     private fun drawRing(c: Canvas, w: Float, h: Float) {
-        spin = (spin + 6f) % 360f
+        spin = (SystemClock.uptimeMillis() % RING_TURN_MS) * 360f / RING_TURN_MS      // by the clock: the speed is the same at any frame rate
         val cx = w / 2f; val cy = (h - bottomInset) / 2f; val r = dp(22f)
         rect.set(cx - r, cy - r, cx + r, cy + r)
         line.alpha = 220
         c.drawArc(rect, spin, 250f, false, line)
-        postInvalidateOnAnimation()
+        // the next frame in 50 ms and only of the ring's own box (a spinner needs no 60 frames a second, and the film behind it is decoded by a tablet that has none to spare)
+        val pad = (line.strokeWidth + dp(2f)).toInt()
+        postInvalidateDelayed(RING_FRAME_MS, (cx - r).toInt() - pad, (cy - r).toInt() - pad, (cx + r).toInt() + pad, (cy + r).toInt() + pad)
     }
 
     // ---------------------------------------------------------------------------------------- touch
