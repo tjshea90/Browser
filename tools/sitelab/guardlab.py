@@ -387,7 +387,7 @@ function wire(id, bid, tid, name, jumps) {
   // the hover line (what the owner saw: a light line up to the place that was pressed)
   function hover(e) { var x = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX; hov.style.width = (frac(bar, x) * bar.getBoundingClientRect().width) + 'px'; }
   ['mousemove', 'pointermove', 'touchstart', 'touchmove'].forEach(function (n) { bar.addEventListener(n, hover, { passive: true }); });
-  ['pointerdown', 'pointerup', 'pointercancel', 'mousedown', 'mouseup', 'click', 'touchstart', 'touchend', 'touchcancel'].forEach(function (n) {
+  ['pointerdown', 'pointerup', 'pointercancel', 'mousedown', 'mouseup', 'click', 'touchstart', 'touchend', 'touchcancel', 'contextmenu'].forEach(function (n) {
     bar.addEventListener(n, function (e) { var pt = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0] : e; L('ev', name + ' ' + n + (e.pointerType ? ' pointerType=' + e.pointerType : '') + ' trusted=' + e.isTrusted + ' x=' + Math.round(pt.clientX) + ' y=' + Math.round(pt.clientY)); });
   });
   if (jumps) bar.addEventListener('pointerup', function (e) { var f = frac(bar, e.clientX); v.currentTime = f * v.duration; L('page-seek', name + ' to ' + (f * v.duration).toFixed(1)); });
@@ -404,6 +404,7 @@ var F = (location.search.indexOf('small') >= 0) ? '/seek-film.wav' : '/seek-big.
 document.getElementById('va').src = F + '?p=A&n=' + N; document.getElementById('vb').src = F + '?p=B&n=' + N;   // a new address per load: a repeated one is served from the engine's media cache without asking the server
 wire('va', 'ba', 'ta', 'A', false);
 wire('vb', 'bb', 'tb', 'B', true);
+['pointerdown', 'pointerup', 'click'].forEach(function (n) { document.getElementById('volc').addEventListener(n, function (e) { L('ev', 'C ' + n + ' x=' + Math.round(e.clientX) + ' y=' + Math.round(e.clientY)); }); });   // the volume slider: its taps are only logged, they must never move a video
 document.getElementById('va').play().catch(function (e) { L('play-refused', String(e)); });   // A and B play (muted): the jump must keep playing
 document.getElementById('vb').play().catch(function (e) { L('play-refused', String(e)); });
 </script></body></html>
