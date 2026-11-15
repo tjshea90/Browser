@@ -10,7 +10,7 @@
 // page's own player (YouTube: the segment of the new place) fetches what it needs from there on.
 // Counters (numbers only, differences, at most one report every 3 s, never an address) go to the app as k:'sbk' for Diagnostics. The Settings row "Tap the video bar to jump" (default on) turns it off: the
 // answer to the `guard` question carries `seek`, and nothing is done unless it is exactly true.
-// Tested in headless Chromium against mock players (web-tests/seekbar.test.js) and on the emulator's Gecko on a lab page; NOT yet on a real YouTube page.
+// Tested in headless Chromium against mock players (web-tests/seekbar.test.js); NOT yet on a real YouTube page.
 (function () {
   try {
     if (window.__kstSB) return;
