@@ -78,6 +78,15 @@ class OwnerRulesTest {
         assertTrue("the X takes no touch of its own", nav.contains("init { isClickable = false; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }"))
     }
 
+    // HM1, owner message 41, item 1: "I just pressed the home button to put a tab on the home screen, switched tabs to a different tab, then came back to the tab ... but instead of the home screen it loaded the site I was on
+    // before the home screen. Since I was on the home screen last on this tab, it should have loaded the home screen."
+    @Test fun aTabThatWasLeftOnTheHomeScreenComesBackAsTheHomeScreen() {
+        val a = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        val show = body(a, "private fun show(tab: Tab) {")
+        assertFalse("switching to a tab never clears its Home screen: $show", show.contains("showHome = false"))
+        assertTrue("the Home button still puts the Home screen over the page", body(a, "override fun onHome() {").contains("t.showHome = true"))
+    }
+
     // AY3, owner message 39: "make the navigation panel keyboard space key able to move the text cursor if I press and hold it then move my finger left or right, just like other keyboard apps do"
     @Test fun theSpaceKeyMovesTheTextCursorWhenSlid() {
         val nav = source("app/src/main/kotlin/app/kestrel/browser/ui/MiniNav.kt")

@@ -862,7 +862,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     private fun show(tab: Tab) {
         val prev = current
-        if (prev != null && prev !== tab) { prev.session?.setActive(false); tab.showHome = false } // coming back to a tab shows its page, not the Home overlay
+        if (prev != null && prev !== tab) prev.session?.setActive(false) // HM1 (owner message 41): a tab that was left on the Home screen comes back as the Home screen (its page stays alive underneath; Back returns to it); only a new address, Back or the Home screen's own search shows the page again
         current = tab
         if (restoringTab != null && restoringTab !== tab) hideRestoring("other-tab") // another tab came to the front: the overlay belonged to the one that died
         tab.lastActive = System.currentTimeMillis()
