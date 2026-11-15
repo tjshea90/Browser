@@ -274,10 +274,11 @@ var skipAsked = 0, skipYes = 0, skipReports = 0; // RX3-Y2 / RX3-G7: how often t
 function skipText() { return (skipAsked || skipReports) ? ' | ad skippers: asked ' + skipAsked + ', allowed ' + skipYes + ', reports ' + skipReports : ''; }
 var guardBlocked = 0;
 function trimMap(m, max) { while (m.size > max) m.delete(m.keys().next().value); }
-function guardAnswer(host, topHost) { // on: the pop-up guard applies; skip (RX3-Y2): the ad skipper may run (flag 8: the Settings row and the site's Shields switch)
+function guardAnswer(host, topHost) { // on: the pop-up guard applies; skip (RX3-Y2): the ad skipper may run (flag 8: the Settings row and the site's Shields switch); seek (YS1): a tap on a player's bar may move the video (flag 16: the Settings row "Tap the video bar to jump" only)
+  function answer(f) { return { on: (f & 1) !== 0, top: topHost || host, skip: (f & 8) !== 0, seek: (f & 16) !== 0 }; }
   var f = cfgFlags.get(host);
-  if (f !== undefined) return Promise.resolve({ on: (f & 1) !== 0, top: topHost || host, skip: (f & 8) !== 0 });
-  return askCfg(host).then(function () { var g = cfgFlags.get(host) || 0; return { on: (g & 1) !== 0, top: topHost || host, skip: (g & 8) !== 0 }; });
+  if (f !== undefined) return Promise.resolve(answer(f));
+  return askCfg(host).then(function () { return answer(cfgFlags.get(host) || 0); });
 }
 browser.runtime.onMessage.addListener(function (m, sender) {
   if (!m) return undefined;
@@ -857,6 +858,16 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   // the page the tab is on; the FIRST page after a cold start (and a restored tab nobody navigated) loads before the extension knows it, so the top frame's own address stands in (found on the emulator 2026-11-14: every report was dropped as "private")
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || (sender.frameId === 0 ? docOf(sender.url) : '');
   send({ k: 'yts', w: m.w === 'p' ? 'p' : 'y', a: n(m.a), s: n(m.s), c: n(m.c), o: n(m.o), d: n(m.d), f: n(m.f), g: n(m.g), r: String(m.r || '').slice(0, 60), p: String(page).slice(0, 300) }).catch(function () {});
+  return undefined;
+});
+
+// YS1: seekbar.js (a tap on a video player's progress bar) reports NUMBERS: taps on a bar, how many the page answered itself, how many the script answered, how many it left alone, and the last reason in a few words.
+// The page of the tab goes along so that the app can drop the report of a private tab. Never an address.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'sbk' || !sender || !sender.tab) return undefined;
+  function n(v) { v = v | 0; return v > 0 && v < 1000 ? v : 0; }
+  var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || (sender.frameId === 0 ? docOf(sender.url) : '');
+  send({ k: 'sbk', t: n(m.t), s: n(m.s), f: n(m.f), o: n(m.o), r: String(m.r || '').slice(0, 24), p: String(page).slice(0, 300) }).catch(function () {});
   return undefined;
 });
 
