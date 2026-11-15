@@ -1853,3 +1853,7 @@
 ## 2026-11-15T18:35:34Z
 > Waiting for the sound run (about 18:44) and the reviewer's report.
 <!-- sha:69a7d11712e5 -->
+
+## 2026-11-15T18:36:56Z
+> The second independent review found twelve issues in the video-bar code, three of them major. They need fixing before alpha49. The worst is that a long press on a link sitting over a decorative video could wrongly open the Save sheet. I'm reading the files and fixing them now.
+<!-- sha:da874f23e39c -->
