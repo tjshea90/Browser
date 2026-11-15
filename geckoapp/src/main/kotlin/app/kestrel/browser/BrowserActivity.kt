@@ -626,7 +626,7 @@ open class BrowserActivity : Activity(), DockListener {
         super.onWindowFocusChanged(hasFocus)
         Health.log("win", "focus", hasFocus.toString())
         if (hasFocus && ::root.isInitialized) kbProbe.attach(root) // the keyboard probe needs the window token: have it ready before the first keystroke
-        if (hasFocus && fullscreenOn) { applyImmersive(true); checkBarsSoon() } // FSB1: a system dialog, the volume panel or Recents may have brought the bars back: take them away again
+        if (hasFocus && fullscreenOn && prefs.fullscreenBars == 1) { applyImmersive(true); checkBarsSoon() } // FSB1: a system dialog, the volume panel or Recents may have brought the bars back (only when the person chose Hide): take them away again
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -655,6 +655,7 @@ open class BrowserActivity : Activity(), DockListener {
                 }, 2500L)
             }
             "clearcache" -> Io.main.post { try { GeckoEngine.runtime(this).storageController.clearData(StorageController.ClearFlags.ALL_CACHES); Health.log("lab", "clearcache", "done") } catch (e: Exception) { Health.log("lab", "clearcache-failed", e.toString().take(80)) } } // LAB2: both Shields passes start from a cold cache
+            "bars" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); prefs.fullscreenBars = if (arg == "hide") 1 else 0; Health.log("lab", "bars", if (arg == "hide") "hide" else "keep") } // FB1: the lab plays both settings
             "nolook" -> { prefs.lastLook = false; Health.log("lab", "nolook", "last look off") } // LAB2: the emulator's software GL makes the picture read-back stall the UI thread for seconds (an ANR on Yahoo in run 43747605584)
             "measure" -> { prefs.measureScroll = true; Health.log("lab", "measure", "on") } // LAB2: the scroll-gap counters on real pages are on for the whole run
             "shields" -> { // LAB2: "<on|off>|host,host,...": Shields down (or back to the default) for these sites, as if the person had turned the site's Shields switch (compatibility A/B)
@@ -2714,19 +2715,21 @@ open class BrowserActivity : Activity(), DockListener {
         progress.visibility = if (on) View.GONE else View.VISIBLE
         applyImmersive(on)
         root.requestApplyInsets() // FSB1: the padding follows the bars: zero while the system hides them, their size while it keeps them
-        if (on) { fsTurner.enter(); checkBarsSoon() } else { fsTurner.exit(); Io.main.removeCallbacks(barsCheck) } // FS1: the screen follows the tablet while a page is full screen
+        if (on) { fsTurner.enter(); if (prefs.fullscreenBars == 1) checkBarsSoon() else { fsBarsNote = "kept: Settings > System bars in full-screen video is on Keep (the default); the page is laid out between the bars" ; Health.log("fullscreen", "bars", fsBarsNote) } } else { fsTurner.exit(); Io.main.removeCallbacks(barsCheck) } // FS1: the screen follows the tablet while a page is full screen
     }
 
     /**
-     * Hides the system bars while a page is full screen (shows them again afterwards). FSB1: NO layout flags on Android 10: with LAYOUT_STABLE / LAYOUT_HIDE_NAVIGATION / LAYOUT_FULLSCREEN the window is laid out
-     * under both bars whether or not the system really hides them, and on the owner's tablet it did not: the controls of a full-screen player sat under the navigation bar. Without them the insets are the truth.
-     * Debug builds only: `setprop debug.kestrel.nohide 1` plays a tablet that keeps its bars (the emulator lab, tools/emu/soak.py scene fsy).
+     * FB1 (owner message 47): the system bars are hidden while a page is full screen ONLY when the person chose "Hide" (Settings > System bars in full-screen video); by default they stay and the page is laid out
+     * between them, exactly as for every ordinary page, where the dock is never under a bar. alpha48 to alpha50 asked for hidden bars (alpha49 without the layout flags) and on the owner's tablet nothing changed:
+     * the tablet's window manager laid the window out over the whole screen for the request while its System UI kept drawing both bars on top, and no inset says so (the insets report the bars as gone).
+     * Not asking is the only layout that cannot go wrong. Debug builds only: `setprop debug.kestrel.nohide 1` never asks, whatever the setting.
      */
     private fun applyImmersive(on: Boolean) {
         if (app.kestrel.browser.diag.DebugProps.get(this, "debug.kestrel.nohide") == "1") { Health.log("fullscreen", "bars", "debug switch nohide: the system bars are NOT asked to hide (on=$on)"); return }
+        val hide = on && prefs.fullscreenBars == 1
         if (Build.VERSION.SDK_INT >= 30) {
             val c = window.insetsController ?: return
-            if (on) { c.hide(WindowInsets.Type.systemBars()); c.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE } else c.show(WindowInsets.Type.systemBars())
+            if (hide) { c.hide(WindowInsets.Type.systemBars()); c.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE } else c.show(WindowInsets.Type.systemBars())
         } else {
             @Suppress("DEPRECATION")
             // Read-modify-write: assigning a whole new value would also clear the light status/navigation bar flags the theme set (icons invisible afterwards).
@@ -2735,7 +2738,7 @@ open class BrowserActivity : Activity(), DockListener {
             val older = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN // (alpha48 set these too: cleared if they are still on)
             val dv = window.decorView
             @Suppress("DEPRECATION")
-            dv.systemUiVisibility = if (on) (dv.systemUiVisibility and older.inv()) or immersive else dv.systemUiVisibility and (immersive or older).inv()
+            dv.systemUiVisibility = if (hide) (dv.systemUiVisibility and older.inv()) or immersive else dv.systemUiVisibility and (immersive or older).inv()
         }
     }
 
@@ -2744,7 +2747,7 @@ open class BrowserActivity : Activity(), DockListener {
     private var fsBarsNote = "no full screen yet"
     private var barsRehidden = false
     private val barsCheck = Runnable { checkBars() }
-    private val rehideAfterTurn = Runnable { if (fullscreenOn) { applyImmersive(true); checkBarsSoon() } }
+    private val rehideAfterTurn = Runnable { if (fullscreenOn && prefs.fullscreenBars == 1) { applyImmersive(true); checkBarsSoon() } }
 
     private fun barsSeen(l: Int, t: Int, r: Int, b: Int) { fsBars[0] = l; fsBars[1] = t; fsBars[2] = r; fsBars[3] = b }
 
