@@ -1,13 +1,13 @@
-# CHECKPOINT 2380 — read me first, then TASKS.md
+# CHECKPOINT 2381 — read me first, then TASKS.md
 
-**Written:** 2026-11-15T05:39:11Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `1ced5cda` (this checkpoint is the commit after it)
+**Written:** 2026-11-15T05:51:34Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `1cbc464e` (this checkpoint is the commit after it)
 
 ## Just done
-saved research/REVIEW-EXTERNAL-4.md (byte-identical copy of the upload) and wrote the RX4 rows + owner message 43 (FS1 fullscreen rotation, SOAK1 hour-long emulator soak on GitHub) into TASKS.md; alpha47 (the in-flight item) is already shipped by lane claude/new-session-7d9rxz so nothing in flight
+FS1 code: core/media/FullscreenTurn (pure rule + 20 tests), geckoapp/web/FullscreenTurner (requestedOrientation, sensor release, rotate button), OrientationDelegate wired in BrowserActivity, Settings choice 'Turn the screen for full-screen video' (default Automatic), Diagnostics line, picture size per tab; compile + core/app unit tests green
 
 ## Do this next
-claim FS1 (bash tools/claim.sh FS1) and do the fullscreen rotation first (GA/BrowserActivity.fullScreenChanged ~line 2467, manifest orientation, new CORE/session/OrientationMap + test), then SOAK1/RX4-E1: read tools/emu/*.py + tools/sitelab/*.py, write .github/workflows/emu-lab.yml (dispatch only) + tools/emu/soak.py, dispatch and read the log; then RX4-M0, X3 text, X2, X1, X4a in alpha48/49 per section 3 of research/REVIEW-EXTERNAL-4.md
+FS1: check dom.screenorientation.allow-lock exists in libxul (unzip AAR in scratchpad) and add to gecko-prefs.txt + readBackPrefs; add tools/sitelab fs page (video + lock buttons) and tools/emu driver for dumpsys requestedOrientation; write research/VIDEO_SMOOTHNESS.md section FS1; then SOAK1 (emu-lab.yml + tools/emu/soak.py)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ claim FS1 (bash tools/claim.sh FS1) and do the fullscreen rotation first (GA/Bro
 
 ## Last ten checkpoints
 ```
+  f81e0818 ckpt 2380: saved research/REVIEW-EXTERNAL-4.md (byte-identical copy of the upload) and 
   1f33dcab ckpt 2379: alpha47 RELEASED and recorded (run 43680608062 green, BUILDLOG line written,
   0665c59e ckpt 2378: alpha47 DISPATCHED: workflow android.yml run 43680608062 (run_number 99, ref
   99978930 ckpt 2377: gated kestrel-g-v0.3.0-alpha47 (gecko code 148) and pushed it: handoff self-
@@ -25,8 +26,7 @@ claim FS1 (bash tools/claim.sh FS1) and do the fullscreen rotation first (GA/Bro
   a7c3b677 ckpt 2373: owner message 42 written into TASKS.md as YS1 (+YS1a find why a tap on the Y
   43ba62e0 ckpt 2372: alpha46 (gecko code 147) RELEASED + RECORDED (run 43671662558 green, APK on 
   ba09cf6f ckpt 2371: alpha46 (gecko code 147) gated (JVM: core, tools, app incl. MiniNavTest 95, 
-  c1e9d89b ckpt 2370: gated kestrel-g-v0.3.0-alpha46 (gecko code 147) and pushed it: handoff self-
 ```
 
-(4 automatic checkpoint(s) since the last deliberate one — the
+(9 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
