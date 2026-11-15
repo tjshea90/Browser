@@ -228,7 +228,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
 
     override fun onTitleChange(session: GeckoSession, title: String?) { tab.title = title ?: ""; a.tabChanged(tab) }
     override fun onCloseRequest(session: GeckoSession) { a.closeTab(tab) }
-    override fun onFullScreen(session: GeckoSession, fullScreen: Boolean) { a.fullScreenChanged(fullScreen) }
+    override fun onFullScreen(session: GeckoSession, fullScreen: Boolean) { a.fullScreenChanged(tab, fullScreen) }
     override fun onContextMenu(session: GeckoSession, screenX: Int, screenY: Int, element: ContentDelegate.ContextElement) { a.longPress(tab, element) }
     override fun onCrash(session: GeckoSession) { Health.log("gecko", "onCrash", tab.url.take(80)); Health.count("gecko.crash"); a.sessionGone(tab, true) }
     override fun onFirstComposite(session: GeckoSession) { if (a.isCurrentTab(tab)) { Health.log("gecko", "first-composite", a.sinceTrim()); Health.count("gecko.firstComposite") } } // a repeat without a navigation = the compositor restarted

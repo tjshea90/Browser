@@ -930,6 +930,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     private fun show(tab: Tab) {
+        if (fullscreenOn && fullscreenTab !== tab) endFullScreenOf(null, "another tab came to the front")
         val prev = current
         if (prev != null && prev !== tab) prev.session?.setActive(false) // HM1 (owner message 41): a tab that was left on the Home screen comes back as the Home screen (its page stays alive underneath; Back returns to it); only a new address, Back or the Home screen's own search shows the page again
         current = tab
@@ -1259,6 +1260,7 @@ open class BrowserActivity : Activity(), DockListener {
     /** Free a tab's engine session but keep what is needed to bring it back (session state with its history, or at least its URL). */
     private fun hibernate(tab: Tab) {
         val s = tab.session ?: return
+        endFullScreenOf(tab, "the tab was put to sleep")
         BackPictures.dropTab(tab.id)
         if (geckoView.session === s) geckoView.releaseSession()
         try { s.close() } catch (e: Exception) { /* already gone */ }
@@ -1289,6 +1291,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun doCloseTab(tab: Tab) {
         val idx = tabs.indexOf(tab)
         if (idx < 0) return
+        endFullScreenOf(tab, "the tab was closed")
         tabs.removeAt(idx)
         if (tab === restoringTab) hideRestoring("closed")
         tab.thumb = null
@@ -1305,6 +1308,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     private fun showNewTabPage(tab: Tab) {
+        endFullScreenOf(tab, "the tab went back to the new tab page")
         tab.gecko.stateJson = null; tab.gecko.stateWritten = null; tab.gecko.stateWrittenUrl = null
         val appCtx = applicationContext; val tid = tab.id
         Io.exec { TabStateStore.delete(appCtx, tid); LastLook.delete(appCtx, tid) }
@@ -2395,6 +2399,7 @@ open class BrowserActivity : Activity(), DockListener {
      * preview instead of a white screen; a second death within 15 s reloads the plain URL (the state itself may be the cause); a third shows the error screen.
      */
     internal fun sessionGone(tab: Tab, crashed: Boolean) {
+        endFullScreenOf(tab, if (crashed) "the page's process crashed" else "the page's process was killed")
         val url = tab.url
         val saved = tab.gecko.state
         tab.session?.let { s -> if (geckoView.session === s) geckoView.releaseSession(); try { s.close() } catch (e: Exception) { /* already unusable */ } }
@@ -2555,7 +2560,17 @@ open class BrowserActivity : Activity(), DockListener {
     /** @return true if the back press did something. */
     private fun handleBack(): Boolean {
         // FS1: Back leaves full screen first, like every video player (it used to go back in the page's history, which only left full screen by leaving the page)
-        if (fullscreenOn) { Health.log("fullscreen", "back-exit", "asking the page to leave full screen"); try { current?.session?.exitFullScreen() } catch (e: Exception) { Health.log("fullscreen", "exit-failed", e.toString().take(80)) }; return true }
+        if (fullscreenOn) {
+            val ft = fullscreenTab
+            if (ft != null && ft === current && ft.session != null) {
+                Health.log("fullscreen", "back-exit", "asking the page to leave full screen")
+                try { ft.session?.exitFullScreen() } catch (e: Exception) { Health.log("fullscreen", "exit-failed", e.toString().take(80)) }
+                // the engine answers with "full screen ends" within moments; when it does not (a page that refuses, a dying process) Back would do nothing for good: end it here (RV2)
+                Io.main.postDelayed({ if (fullscreenOn && fullscreenTab === ft) endFullScreenOf(ft, "the engine did not answer Back") }, 600L)
+                return true
+            }
+            endFullScreenOf(null, "Back: the full-screen page is not in front or has no session") // then Back does its ordinary job
+        }
         if (::miniNav.isInitialized && miniNav.onBackPressed()) return true // the small keyboard closes first
         if (sheet.isShowing) { sheet.dismiss(); return true }
         if (downloadsView?.parent != null) { closeDownloads(); return true }
@@ -2600,7 +2615,24 @@ open class BrowserActivity : Activity(), DockListener {
 
     // ================================================================== fullscreen video (the engine draws it; we only get out of its way)
 
-    internal fun fullScreenChanged(on: Boolean) {
+    /** The tab whose page is full screen now (RV2: only an engine "ends" from THIS tab, or the app itself when the page is gone, ends it). */
+    private var fullscreenTab: Tab? = null
+
+    /**
+     * RV2 (independent review): the page that was full screen is gone or no longer in front (its session was killed, hibernated, closed or replaced): GeckoSession.close() and a dead content process never
+     * send "full screen ends", so the dock, the immersive bars and the forced orientation would stay. The app ends it itself ([tab] null = whatever tab it was).
+     */
+    private fun endFullScreenOf(tab: Tab?, why: String) {
+        val ft = fullscreenTab
+        if (!fullscreenOn || ft == null || (tab != null && tab !== ft)) return
+        Health.log("fullscreen", "ended-by-app", why)
+        try { ft.session?.exitFullScreen() } catch (e: Exception) { /* the session is already gone */ }
+        fullScreenChanged(ft, false)
+    }
+
+    internal fun fullScreenChanged(tab: Tab, on: Boolean) {
+        if (!on && fullscreenTab != null && fullscreenTab !== tab) return // the late "ends" of a tab we already left: the full screen of the tab in front goes on
+        fullscreenTab = if (on) tab else null
         fullscreenOn = on
         miniNav.available = !on && prefs.miniNavToggle
         dock.visibility = if (on) View.GONE else View.VISIBLE
