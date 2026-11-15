@@ -169,3 +169,21 @@ test('LP1: a long press inside a FRAME that lies over a video: the top frame say
   assert.equal((await page.frames()[1].evaluate(() => window.__msgs.filter((m) => m.k === 'os'))).length, 1);
   await page.context().close();
 });
+
+test('VC1: full screen: a bare film gets the engine\'s own controls for as long as it lasts; a film in a box goes full screen as the box, with Kestrel\'s bar inside it', async () => {
+  let page = await open(VIDEO());
+  await tapAt(page, ...CENTRE); await wait(page, 350);
+  let full = await partCentre(page, 'full');
+  await tapAt(page, full.x, full.y); await wait(page, 700);
+  assert.deepEqual(await page.evaluate(() => ({ fs: !!document.fullscreenElement, ctl: document.getElementById('v').controls })), { fs: true, ctl: true });
+  await page.evaluate(() => document.exitFullscreen()); await wait(page, 600);
+  assert.equal(await page.evaluate(() => document.getElementById('v').controls), false, 'back to what the page had');
+  await page.context().close();
+  page = await open('<div id="box" style="position:absolute;left:20px;top:100px;width:400px;height:240px"><video id="v" src="https://cdn.example/film.wav" preload="auto" muted style="width:400px;height:240px"></video></div>');
+  await tapAt(page, ...CENTRE); await wait(page, 350);
+  full = await partCentre(page, 'full');
+  await tapAt(page, full.x, full.y); await wait(page, 800);
+  assert.equal(await page.evaluate(() => document.fullscreenElement && document.fullscreenElement.id), 'box');
+  assert.equal((await barInfo(page)).host, 'other', 'the bar moved into the full-screen box');
+  await page.context().close();
+});
