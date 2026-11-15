@@ -251,6 +251,14 @@ def crash_lines(lines):
     return found
 
 
+def num(v, default=0):
+    """A number from what a page reported (a missing browser property arrives as the text 'undefined')."""
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return default
+
+
 def ms_of(v):
     """"1234ms" -> 1234, anything else -> -1."""
     v = v[:-2] if v.endswith("ms") else v
@@ -401,6 +409,7 @@ class Soak:
         self.sb_rounds = []
         self.guard_rows = []
         self.apk_rows = []
+        self.system_restarts = 0
 
     # ---- bookkeeping
     def issue(self, sev, area, text, shot=False):
@@ -440,9 +449,35 @@ class Soak:
         except Exception as e:
             return "unreachable", str(e)[:70]
 
+    # ---- the emulated phone itself
+    def system_ok(self):
+        return self.ph.a.sh("getprop sys.boot_completed", timeout=15).strip() == "1"
+
+    def recover_system(self, where):
+        """Android's own system process died (the emulator was overloaded): wait for the phone to come back, put the lab's wiring back. Not an app fault, but it is written down."""
+        self.system_restarts += 1
+        self.issue("high", "emulator", "the emulated phone's system restarted during %s (system_server died: the emulator was overloaded; a limit of the lab, not of the app)" % where)
+        self.adb.run("wait-for-device", timeout=300)
+        t0 = time.time()
+        while time.time() - t0 < 420 and not self.system_ok():
+            time.sleep(5)
+        time.sleep(15)
+        self.adb.run("reverse", "tcp:%d" % self.port, "tcp:%d" % self.port)
+        for k in ("window_animation_scale", "transition_animation_scale", "animator_duration_scale"):
+            self.ph.setting("global", k, 0)
+        self.ph.a.sh("svc power stayon true")
+        self.ph.key("KEYCODE_WAKEUP")
+        self.ph.setting("system", "accelerometer_rotation", 0)
+        self.ph.start_app()
+        time.sleep(15)
+        self.main_pid = (self.ph.pids() or [None])[0]
+
     # ---- the app
     def check_alive(self, where):
         """True when the app's main process is the one we saw before. A new pid = it died and Android (or we) started it again."""
+        if not self.system_ok():
+            self.recover_system(where)
+            return False
         pids = self.ph.pids()
         if not pids:
             self.issue("high", "crash", "the app is not running after %s" % where, shot=True)
@@ -472,6 +507,20 @@ class Soak:
             self.issue("high", "crash", "%s during %s: %s" % (what, scene, text), shot=False)
         stalls = [e for e in health_events(lines, "ui") if e["ev"] in ("STALL", "slow", "late-beat")]
         return found, stalls
+
+    # ---- the app's questions ("Download this file?" ...): a DEBUG build logs each one and answers on request
+    def wait_dialog(self, lmark, timeout=20):
+        t0 = time.time()
+        while time.time() - t0 < timeout:
+            ev = health_events(self.log.since(lmark), "dialog", "shown")
+            if ev:
+                return ev[-1]["rest"]
+            time.sleep(1)
+        return None
+
+    def answer(self, yes):
+        self.ph.debug("answer", "yes" if yes else "no")
+        time.sleep(1.5)
 
     # ---- one page
     def load_page(self, name, url, scrolls, dwell, timeout=75, kind="page"):
@@ -574,11 +623,11 @@ class Soak:
         rows = [r for r in self.lab.since(rmark) if r.get("kind") == "video" and r.get("name", "").endswith("#%d" % self.seq)]
         evs = collections.Counter(r.get("ev") for r in rows)
         last = rows[-1] if rows else {}
-        total = int(last.get("total", 0) or 0)
-        dropped = int(last.get("dropped", 0) or 0)
-        ct = float(last.get("ct", 0) or 0)
+        total = num(last.get("total"))
+        dropped = num(last.get("dropped"))
+        ct = float(num(float(last.get("ct", 0) or 0) * 10)) / 10.0
         ev = {"kind": "video", "name": name, "src_host": host_of(self.url(src)), "events": dict(evs), "wall_s": round(time.time() - t0, 1),
-              "start_s": round(playing_at - t0, 1) if playing_at else None, "frames": total, "dropped": dropped, "corrupt": int(last.get("corrupt", 0) or 0),
+              "start_s": round(playing_at - t0, 1) if playing_at else None, "frames": total, "dropped": dropped, "corrupt": num(last.get("corrupt")),
               "played_s": ct, "picture": "%sx%s" % (last.get("w", "?"), last.get("h", "?"))}
         lines = self.log.since(lmark)
         heal = health_events(lines)
@@ -641,14 +690,9 @@ class Soak:
             r.update(status="not-found", note="the finder offered nothing although the page played this file")
             self.issue("medium", "finding-video", "%s: the app's 'Save video' finder found NOTHING on a page that played the file (%s)" % (name, said))
         else:
-            tapped = None
-            for _ in range(6):
-                time.sleep(2)
-                tapped = self.ph.tap_text(r"^download$")
-                if tapped:
-                    break
-                if self.ph.downloads() != before:
-                    break
+            tapped = self.wait_dialog(lmark, 12)
+            if tapped:
+                self.answer(True)
             got = None
             t0 = time.time()
             while time.time() - t0 < 120:
@@ -705,19 +749,11 @@ class Soak:
             if kind.startswith("tap"):
                 time.sleep(1.5)
                 self.ph.tap(w // 2, int(25 + (h - 51 - 60 - 25) * 0.5))
-            title, by_itself, seen = "", False, False
-            for _ in range(10):
-                time.sleep(2)
-                nodes = self.ph.ui_nodes()
-                texts = [t for t, d, i, c, k in nodes if t]
-                if any(re.fullmatch(r"(?i)download", t.strip()) for t in texts) and any(re.fullmatch(r"(?i)cancel", t.strip()) for t in texts):
-                    seen = True
-                    by_itself = any("by itself" in t for t in texts)
-                    title = next((t for t in texts if "download" in t.lower() and t.strip().lower() not in ("download", "downloads")), "")[:60]
-                    self.ph.tap_text(r"^cancel$")
-                    break
-                if self.ph.downloads() != before:
-                    break                                  # the file arrived without any question
+            text = self.wait_dialog(lmark, 20)
+            seen = text is not None
+            by_itself = bool(text) and "by itself" in text
+            if seen:
+                self.answer(False)                         # Cancel (also arms the "refuse quietly for a minute" rule)
             refused = any(e["ev"] == "auto-refused" for e in health_events(self.log.since(lmark), "download"))
             rows.append((kind, "asked, by itself wording" if seen and by_itself else ("asked (plain wording)" if seen else ("refused quietly" if refused else "no question"))))
             self.shot("guard-" + kind)
@@ -799,14 +835,10 @@ class Soak:
         lmark = self.log.size()
         t0 = time.time()
         self.ph.open_url(self.url(src))
-        tapped = None
-        for _ in range(8):  # the "Download this file?" question (plain-http and risky files always ask)
-            time.sleep(2)
-            tapped = self.ph.tap_text(r"^download$")
-            if tapped:
-                break
-            if self.ph.downloads() != before:
-                break
+        text = self.wait_dialog(lmark, 12)  # the "Download this file?" question (plain-http and risky files always ask)
+        tapped = text
+        if text:
+            self.answer(True)
         got = None
         end = t0 + wait
         while time.time() < end:
@@ -894,10 +926,18 @@ class Soak:
             steps.append(("the rotate button was pressed and asked for a turn ('rotate button' turn line)", any("rotate button" in e["rest"] for e in turns())))
             steps.append(("and the screen really turned (a new configuration line)", len(configs()) > n2))
             self.shot("fs-after-button")
-        # 4. leaving full screen puts the screen back
+        # 4. leaving full screen puts the screen back: the Back key first; when it does nothing, the app's own call (so the later scenes start clean) and the Back key is reported as a fault
         self.ph.key("KEYCODE_BACK")
         time.sleep(4)
-        steps.append(("leaving full screen restored the orientation ('full screen ends' turn line)", any("full screen ends" in e["rest"] for e in turns())))
+        back_worked = any("full screen ends" in e["rest"] for e in turns())
+        steps.append(("the Back key leaves full screen ('full screen ends' turn line)", back_worked))
+        if not back_worked:
+            self.ph.debug("exitfs")
+            time.sleep(4)
+            steps.append(("(fallback) the app's own exitFullScreen call leaves full screen", any("full screen ends" in e["rest"] for e in turns())))
+            if not any("full screen ends" in e["rest"] for e in turns()):
+                self.ph.a.sh("am force-stop %s" % self.a.pkg); time.sleep(3); self.ph.start_app(); time.sleep(12)
+                self.main_pid = (self.ph.pids() or [None])[0]
         cfg = configs()
         steps.append(("and the app is upright again with Android's rotation lock on", bool(cfg) and cfg[-1] == "portrait"))
         self.shot("fs-left")
@@ -1046,6 +1086,7 @@ class Soak:
         L.append("## Summary")
         L.append("")
         L.append("Scene results: " + ", ".join("%s %d" % (k, v) for k, v in sorted(counts.items(), key=lambda kv: -kv[1])))
+        L.append("The emulated phone's own system restarted %d time(s) (an overloaded emulator, not the app)." % self.system_restarts)
         L.append("App restarts / crashes seen: %d. Issues logged: %d (high %d, medium %d, low %d)." % (self.restarts, len(self.issues), *[sum(1 for s, _, _ in self.issues if s == x) for x in ("high", "medium", "low")]))
         L.append("")
         if self.issues:
@@ -1233,6 +1274,8 @@ class FakeAdb:
         if cmd.startswith("input keyevent KEYCODE_BACK"):
             self._health("fullscreen turn to=-1 (as Android had it) was=10 why=full screen ends: put back what Android had"); self._health("life config orientation=portrait fullscreen=false"); self.cfg = "portrait"
             return ""
+        if cmd.startswith("getprop sys.boot_completed"):
+            return "1"
         if cmd.startswith("pidof"):
             return str(self.pid)
         if cmd.startswith("ps -A"):
