@@ -194,8 +194,8 @@ class MediaRankTest {
     @Test fun aSoftWordNamedFileThatAPlayerPlayedOrThatTheOwnerShowedInterestInStays() {
         val film = file("https://cdn.example/v/film.mp4", 100 * MB)
         val trailer = file("https://cdn.example/v/trailer.mp4", 20 * MB).also { it.touched = true }                                   // a visible player reported it
-        val intro = file("https://cdn.example/v/intro.mp4", 10 * MB).also { it.played = true }
-        val loop = file("https://cdn.example/v/loop.mp4", 8 * MB).also { it.interest = true; it.touched = true }                      // the owner pressed it
+        val intro = file("https://cdn.example/v/intro.mp4", 15 * MB).also { it.played = true }
+        val loop = file("https://cdn.example/v/loop.mp4", 14 * MB).also { it.interest = true; it.touched = true }                      // the owner pressed it
         assertEquals(setOf(film.url, trailer.url, intro.url, loop.url), urls(MediaRank.rank(listOf(film, trailer, intro, loop)).main).toSet())
     }
 
