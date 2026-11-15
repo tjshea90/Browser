@@ -70,7 +70,8 @@ class CourierServer(
         if (a != null && a !== Thread.currentThread()) try { a.join(3000) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
         acceptor = null
         watchdog?.shutdownNow(); watchdog = null
-        for (c in conns.keys.toList()) closeQuietly(c)
+        // iterate the key set itself: Collection.toList() of a ConcurrentHashMap key set checks size, then calls iterator().next(), and a connection that ends in between made it throw NoSuchElementException (a flaky ServerTest)
+        for (c in conns.keys) closeQuietly(c)
         pool.shutdownNow()
     }
 
