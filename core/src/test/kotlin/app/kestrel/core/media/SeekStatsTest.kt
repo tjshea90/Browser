@@ -30,6 +30,16 @@ class SeekStatsTest {
         assertTrue(s.line().all { it.code in 32..126 })
     }
 
+    @Test fun tapsOnAStripTheScriptDidNotKnowAreNamed() {
+        val s = SeekStats()
+        s.add(0, 0, 0, 0, "", 2, "div.ytm-some-bar")
+        assertEquals("Tap on a video bar: none seen yet; 2 taps on a bar-like strip Kestrel did not know (last: div.ytm-some-bar)", s.line())
+        s.add(1, 0, 1, 0, "", 1, "")
+        assertEquals("Tap on a video bar: 1 tap, the page jumped by itself 0, Kestrel jumped 1, 3 taps on a bar-like strip Kestrel did not know (last: div.ytm-some-bar)", s.line())
+        s.add(0, 0, 0, 0, "", 0, "bad name <script>x</script>")
+        assertTrue(s.line().contains("(last: badnamescriptxscript)"))
+    }
+
     @Test fun resetForgetsEverything() {
         val s = SeekStats(); s.add(4, 1, 1, 2, "ad"); s.reset()
         assertEquals("Tap on a video bar: none seen yet", s.line())

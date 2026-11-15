@@ -1074,9 +1074,9 @@ open class BrowserActivity : Activity(), DockListener {
     // ---------------------------------------------------------------- YS1: taps on a video player's bar (seekbar.js reports differences; never an address; private tabs are dropped before)
     private val seekStats = app.kestrel.core.media.SeekStats()
     private fun onSeekTaps(m: org.json.JSONObject) {
-        seekStats.add(m.optInt("t"), m.optInt("s"), m.optInt("f"), m.optInt("o"), m.optString("r"))
+        seekStats.add(m.optInt("t"), m.optInt("s"), m.optInt("f"), m.optInt("o"), m.optString("r"), m.optInt("u"), m.optString("n"))
         Health.count("seekbar.reports")
-        Health.log("seekbar", "report", "taps=${m.optInt("t")} page=${m.optInt("s")} ours=${m.optInt("f")} left=${m.optInt("o")} ${m.optString("r")}".trim())
+        Health.log("seekbar", "report", "taps=${m.optInt("t")} page=${m.optInt("s")} ours=${m.optInt("f")} left=${m.optInt("o")} unknown=${m.optInt("u")} ${m.optString("r")} ${m.optString("n")}".trim())
     }
 
     // ---------------------------------------------------------------- RX3-BK1 / RX3-BK2: Back keeps the place (research/REVIEW-EXTERNAL-3.md section 3, research/BACK_SCROLL.md)

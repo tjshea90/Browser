@@ -861,13 +861,13 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   return undefined;
 });
 
-// YS1: seekbar.js (a tap on a video player's progress bar) reports NUMBERS: taps on a bar, how many the page answered itself, how many the script answered, how many it left alone, and the last reason in a few words.
+// YS1: seekbar.js (a tap on a video player's progress bar) reports NUMBERS: taps on a bar, how many the page answered itself, how many the script answered, how many it left alone, taps on a thin wide element inside a player that it did not know (u) with the element's tag and first class name (n: letters, digits and - _ . only), and the last reason in a few words.
 // The page of the tab goes along so that the app can drop the report of a private tab. Never an address.
 browser.runtime.onMessage.addListener(function (m, sender) {
   if (!m || m.k !== 'sbk' || !sender || !sender.tab) return undefined;
   function n(v) { v = v | 0; return v > 0 && v < 1000 ? v : 0; }
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || (sender.frameId === 0 ? docOf(sender.url) : '');
-  send({ k: 'sbk', t: n(m.t), s: n(m.s), f: n(m.f), o: n(m.o), r: String(m.r || '').slice(0, 24), p: String(page).slice(0, 300) }).catch(function () {});
+  send({ k: 'sbk', t: n(m.t), s: n(m.s), f: n(m.f), o: n(m.o), u: n(m.u), r: String(m.r || '').slice(0, 24), n: String(m.n || '').replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 40), p: String(page).slice(0, 300) }).catch(function () {});
   return undefined;
 });
 
