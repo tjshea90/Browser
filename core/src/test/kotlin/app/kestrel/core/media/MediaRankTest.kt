@@ -158,4 +158,19 @@ class MediaRankTest {
         val r = MediaRank.rank(listOf(live, clip, film))
         assertEquals(listOf(film.url), urls(r.main)); assertEquals(setOf(live.url, clip.url), urls(r.other).toSet())
     }
+
+    // ---- RX3-V3: the file that really plays comes first
+
+    @Test fun thePlayedPrimaryFileIsOnTopEvenWhenAnotherFileIsBigger() {
+        val big = file("https://cdn.example/other.mp4", 500 * MB, h = 1080, dur = 600_000)
+        val film = file("https://cdn.example/film.mp4", 120 * MB, h = 480, dur = 3_000_000).also { it.played = true; it.areaPx = 100_000 }
+        val r = MediaRank.rank(listOf(big, film), primary = film)
+        assertEquals(film.url, r.main.first().url)
+        assertTrue(urls(r.main).contains(big.url))
+    }
+
+    @Test fun withoutAPlayedFileTheOrderIsAsBefore() {
+        val a = file("https://cdn.example/a.mp4", 100 * MB, h = 480, dur = 600_000); val b = file("https://cdn.example/b.mp4", 300 * MB, h = 1080, dur = 600_000)
+        assertEquals(listOf(b.url, a.url), urls(MediaRank.rank(listOf(a, b)).main))
+    }
 }

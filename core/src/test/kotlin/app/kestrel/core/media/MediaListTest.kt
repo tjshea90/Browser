@@ -270,6 +270,68 @@ class MediaListTest {
         assertEquals(3, l.streamsToLook(3).size)                                                                  // files are never looked at here
     }
 
+    // ---- RX3-V3: which element actually plays
+
+    private fun playedInfo(l: MediaList, url: String, element: Int, durMs: Long, area: Long = 120_000, role: VideoRole? = VideoRole.PLAYER) = l.applyInfo(url, 1280, 720, durMs, null, role, played = true, element = element, areaPx = area)
+
+    @Test fun thePlayedFileWithTheLargestPictureThenTheLongestLengthIsThePrimaryOne() {
+        val l = MediaList()
+        assertEquals(null, l.primary())
+        l.add(file("https://c.test/small.mp4", 20_000_000)); l.add(file("https://c.test/big.mp4", 20_000_000)); l.add(file("https://c.test/long.mp4", 20_000_000)); l.add(file("https://c.test/unplayed.mp4", 900_000_000))
+        playedInfo(l, "https://c.test/small.mp4", 1, 600_000, area = 20_000)
+        playedInfo(l, "https://c.test/big.mp4", 2, 100_000, area = 150_000)
+        assertEquals("https://c.test/big.mp4", l.primary()!!.url)                                              // the biggest picture wins, however short
+        playedInfo(l, "https://c.test/long.mp4", 3, 900_000, area = 150_000)
+        assertEquals("equal pictures: the longer file", "https://c.test/long.mp4", l.primary()!!.url)
+        assertTrue("a file nobody played is never primary", l.find("https://c.test/unplayed.mp4")!!.played.not())
+    }
+
+    @Test fun aPreRollThatPlayedOnTheSameElementBeforeAFilmThreeTimesLongerIsAnAd() {
+        val l = MediaList()
+        l.add(file("https://ads.test/pre.mp4", 8_000_000)); l.add(file("https://c.test/film.mp4", 300_000_000))
+        playedInfo(l, "https://ads.test/pre.mp4", 1, 15_000)
+        assertEquals("on its own it is just a played file", 1, l.usableCount())
+        playedInfo(l, "https://c.test/film.mp4", 1, 300_000)                                                  // the SAME element, later, a file 20 times longer
+        assertEquals(VideoRole.AD, l.find("https://ads.test/pre.mp4")!!.role)
+        assertEquals(1, l.usableCount()); assertEquals("https://c.test/film.mp4", l.primary()!!.url)
+    }
+
+    @Test fun theDurationJumpNeedsTheSameElementAnEarlierFileUnderNinetySecondsAndThreeTimesTheLength() {
+        fun run(first: Long, second: Long, sameElement: Boolean = true): VideoRole? {
+            val l = MediaList(); l.add(file("https://c.test/a.mp4", 20_000_000)); l.add(file("https://c.test/b.mp4", 20_000_000))
+            playedInfo(l, "https://c.test/a.mp4", 1, first); playedInfo(l, "https://c.test/b.mp4", if (sameElement) 1 else 2, second)
+            return l.find("https://c.test/a.mp4")!!.role
+        }
+        assertEquals(VideoRole.AD, run(30_000, 90_000))
+        assertEquals("less than three times", VideoRole.PLAYER, run(60_000, 150_000))
+        assertEquals("the earlier file is 90 s or more: two parts of one film", VideoRole.PLAYER, run(120_000, 600_000))
+        assertEquals("another element: two different videos", VideoRole.PLAYER, run(15_000, 600_000, sameElement = false))
+    }
+
+    @Test fun theOwnerShowingInterestInThePreRollKeepsItEvenAfterTheJump() {
+        val l = MediaList()
+        l.add(file("https://ads.test/pre.mp4", 8_000_000)); l.add(file("https://c.test/film.mp4", 300_000_000))
+        playedInfo(l, "https://ads.test/pre.mp4", 1, 15_000)
+        l.touch("https://ads.test/pre.mp4")
+        playedInfo(l, "https://c.test/film.mp4", 1, 300_000)
+        assertEquals(2, l.usableCount())
+    }
+
+    @Test fun aDecoyThatPlaysIsStillADecoyAndNeverPrimary() {
+        val l = MediaList()
+        l.add(file("https://c.test/hero.mp4", 6_000_000))
+        playedInfo(l, "https://c.test/hero.mp4", 1, 90_000, role = VideoRole.DECOR)
+        assertEquals(null, l.primary()); assertEquals(0, l.usableCount())
+    }
+
+    @Test fun whatTheElementSaidBeforeTheFileWasSeenKeepsItsPlayedFlag() {
+        val l = MediaList()
+        playedInfo(l, "https://c.test/film.mp4", 4, 300_000, area = 90_000)                                    // the report comes before the extension reported the file
+        l.add(file("https://c.test/film.mp4", 300_000_000))
+        val c = l.find("https://c.test/film.mp4")!!
+        assertTrue(c.played); assertEquals(4, c.element); assertEquals("https://c.test/film.mp4", l.primary()!!.url)
+    }
+
     @Test fun aFullListEvictsDecoysBeforeAnythingElse() {
         val l = MediaList(max = 4)
         played(l, file("https://c.test/film.mp4", 80_000_000), VideoRole.PLAYER, durMs = 3_600_000)
