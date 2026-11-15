@@ -94,7 +94,7 @@ class PlayerController(
     fun turnEnded() { if (activeFlag) { model.turnEnded(); flush() } }
 
     /** The navigation bar was pulled up over the film (Hide mode): the controls move up. */
-    fun setBottomInset(px: Int) = view.setBottomInset(px)
+    fun setBottomInset(px: Int) { Health.log("player", "inset", "the navigation bar pulled up over the film: controls ${if (px > 0) "move up by $px px" else "back down"}"); view.setBottomInset(px) }
 
     // ---------------------------------------------------------------------------------------- the page (UI thread)
 
