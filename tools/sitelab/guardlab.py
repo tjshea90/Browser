@@ -32,6 +32,11 @@
               (vjs-ad-loading, then vjs-ad-playing), a Google-IMA-style host (the ad video inside .ima-ad-container) and a JW-style ad with a skip button (.jw-skip, .jw-skippable). Each ad is a REAL 12 s silent
               media element. The log says how long the ad took (about 12000 ms = not skipped, a few hundred = fast-forwarded), at what speed it ran, and which events the skip button got. Ends with a DONE line.
 
+  /seekbar-lab YS1: three mock players over a REAL 300 s silent media file (/seek-film.wav, served with byte ranges, every request logged with its Range header). A: a YouTube-like red bar whose page IGNORES a tap
+              (only a light "hover" line follows the finger, as the owner reported); B: the same bar whose page jumps the video itself on a tap (the control: Kestrel must not seek twice); C: a short volume
+              slider (must never move the video). The page logs every pointer / mouse / touch event of a tap (type, isTrusted, pointerType) and every seeking / seeked of each video with its time, and shows both
+              times on screen. The log's "GET /seek-film.wav Range=bytes=N-" lines show where the engine reads from after a jump: nothing before the jumped-to place is asked for again.
+
 Used as the FIRST page after a force-stop (a cold start from a link: the extension may not be active yet) and as a later page, to see whether the guard was there from the very first document.
 Nothing here is part of the app. Reach it with `adb reverse tcp:<port> tcp:<port>` and http://localhost:<port>/fakeplay. The driver is tools/emu/firstpage_emu.py.
 """
@@ -343,6 +348,65 @@ v.addEventListener('timeupdate', function () {      // tied to the real playback
 POPAD = b"""<!doctype html><meta charset=utf-8><title>an ad</title><body style="font:20px sans-serif;margin:24px">popad: this is the ad page. If you can see it, the pop-up was NOT stopped.</body>"""
 
 
+SEEKLAB = b"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>seekbar-lab</title>
+<style>
+body{margin:8px;font:15px sans-serif}
+.pl{position:relative;width:340px;height:190px;background:#111;margin:0 0 6px 0}
+.pl video{position:absolute;left:0;top:0;width:340px;height:190px}
+.ch{position:absolute;left:0;right:0;bottom:0;height:46px}
+.bar{position:absolute;left:10px;right:10px;bottom:12px;height:26px;touch-action:none}
+.rail{position:absolute;left:0;right:0;top:11px;height:5px;background:rgba(255,255,255,.3)}
+.hov{position:absolute;left:0;top:11px;height:5px;width:0;background:rgba(255,255,255,.7)}
+.red{position:absolute;left:0;top:11px;height:5px;width:0;background:#f00}
+.dot{position:absolute;top:6px;left:0;width:14px;height:14px;margin-left:-7px;border-radius:7px;background:#f00}
+.vol{position:absolute;right:10px;top:10px;width:70px;height:12px;background:#999}
+.t{font:14px monospace;margin:0 0 18px 0}
+</style></head><body>
+<p>seekbar-lab: tap the red bar of A, then B. C is a volume slider.</p>
+<div id="pa" class="pl html5-video-player"><video id="va" src="/seek-film.wav" preload="auto" muted playsinline></video>
+ <div class="ch ytp-chrome-bottom"><div id="ba" class="bar ytp-progress-bar" role="slider" aria-label="Seek slider" aria-valuemin="0" aria-valuemax="300" aria-valuenow="0" tabindex="0">
+  <div class="rail"></div><div class="hov ytp-hover-progress"></div><div class="red ytp-play-progress"></div><div class="dot ytp-scrubber-container"></div></div></div>
+ <div id="volc" class="vol" role="slider" aria-label="Volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"></div></div>
+<p class="t" id="ta">A: ...</p>
+<div id="pb" class="pl html5-video-player"><video id="vb" src="/seek-film.wav" preload="auto" muted playsinline></video>
+ <div class="ch ytp-chrome-bottom"><div id="bb" class="bar ytp-progress-bar" role="slider" aria-label="Seek slider" aria-valuemin="0" aria-valuemax="300" aria-valuenow="0" tabindex="0">
+  <div class="rail"></div><div class="hov ytp-hover-progress"></div><div class="red ytp-play-progress"></div><div class="dot ytp-scrubber-container"></div></div></div></div>
+<p class="t" id="tb">B: ...</p>
+<script>
+function L(k, v) { try { var x = new XMLHttpRequest(); x.open('GET', '/log?kind=' + encodeURIComponent(k) + '&v=' + encodeURIComponent(v)); x.send(); } catch (e) {} }
+L('load', 'seekbar-lab ontouchstart=' + ('ontouchstart' in window) + ' maxTouchPoints=' + navigator.maxTouchPoints + ' PointerEvent=' + (typeof PointerEvent));
+function frac(bar, x) { var r = bar.getBoundingClientRect(); return Math.max(0, Math.min(1, (x - r.left) / r.width)); }
+function wire(id, bid, tid, name, jumps) {
+  var v = document.getElementById(id), bar = document.getElementById(bid), t = document.getElementById(tid);
+  var hov = bar.querySelector('.hov'), red = bar.querySelector('.red'), dot = bar.querySelector('.dot');
+  function paint() { var d = v.duration || 300, w = (bar.getBoundingClientRect().width) * (v.currentTime / d); red.style.width = w + 'px'; dot.style.left = w + 'px'; t.textContent = name + ': ' + v.currentTime.toFixed(1) + ' s of ' + Math.round(d) + (v.paused ? ' (paused)' : ' (playing)'); }
+  v.addEventListener('timeupdate', paint); v.addEventListener('seeked', paint); v.addEventListener('loadedmetadata', function () { L('meta', name + ' duration=' + v.duration); paint(); });
+  v.addEventListener('seeking', function () { L('seeking', name + ' to ' + v.currentTime.toFixed(1)); });
+  v.addEventListener('seeked', function () { L('seeked', name + ' at ' + v.currentTime.toFixed(1)); });
+  v.addEventListener('play', function () { L('play', name); });
+  // the hover line (what the owner saw: a light line up to the place that was pressed)
+  function hover(e) { var x = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX; hov.style.width = (frac(bar, x) * bar.getBoundingClientRect().width) + 'px'; }
+  ['mousemove', 'pointermove', 'touchstart', 'touchmove'].forEach(function (n) { bar.addEventListener(n, hover, { passive: true }); });
+  ['pointerdown', 'pointerup', 'pointercancel', 'mousedown', 'mouseup', 'click', 'touchstart', 'touchend', 'touchcancel'].forEach(function (n) {
+    bar.addEventListener(n, function (e) { L('ev', name + ' ' + n + (e.pointerType ? ' pointerType=' + e.pointerType : '') + ' trusted=' + e.isTrusted + ' x=' + Math.round(e.clientX === undefined ? (e.changedTouches ? e.changedTouches[0].clientX : -1) : e.clientX)); });
+  });
+  if (jumps) bar.addEventListener('pointerup', function (e) { var f = frac(bar, e.clientX); v.currentTime = f * v.duration; L('page-seek', name + ' to ' + (f * v.duration).toFixed(1)); });
+  setInterval(paint, 500);
+}
+wire('va', 'ba', 'ta', 'A', false);
+wire('vb', 'bb', 'tb', 'B', true);
+document.getElementById('va').play().catch(function (e) { L('play-refused', String(e)); });   // A and B play (muted): the jump must keep playing
+document.getElementById('vb').play().catch(function (e) { L('play-refused', String(e)); });
+</script></body></html>
+"""
+
+_SEEKWAV = []
+def seek_wav():
+    if not _SEEKWAV:
+        _SEEKWAV.append(base64.b64decode(silent_wav(300).split(",", 1)[1]))
+    return _SEEKWAV[0]
+
+
 class H(http.server.BaseHTTPRequestHandler):
     logfile = None
 
@@ -402,6 +466,24 @@ class H(http.server.BaseHTTPRequestHandler):
         if u.path == "/blob-film.wav":
             self._write("GET /blob-film.wav")
             return self._send(200, base64.b64decode(silent_wav(300).split(",", 1)[1]), "audio/wav")
+        if u.path == "/seekbar-lab":
+            self._write("GET /seekbar-lab")
+            return self._send(200, SEEKLAB)
+        if u.path == "/seek-film.wav":
+            body = seek_wav(); total = len(body); rng = self.headers.get("Range", "")
+            self._write("GET /seek-film.wav Range=%s" % (rng or "-"))
+            try:
+                if rng.startswith("bytes="):
+                    a, _, b = rng[6:].partition("-")
+                    lo = int(a or 0); hi = min(int(b) if b else total - 1, total - 1)
+                    part = body[lo:hi + 1]
+                    self.send_response(206); self.send_header("Content-Type", "audio/wav"); self.send_header("Content-Range", "bytes %d-%d/%d" % (lo, hi, total))
+                    self.send_header("Content-Length", str(len(part))); self.send_header("Accept-Ranges", "bytes"); self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(part)
+                else:
+                    self.send_response(200); self.send_header("Content-Type", "audio/wav"); self.send_header("Content-Length", str(total)); self.send_header("Accept-Ranges", "bytes"); self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                self._write("   (the engine closed the connection: it moved on)")
+            return
         if u.path == "/playlab":
             self._write("GET /playlab")
             return self._send(200, PLAYLAB)
