@@ -20,8 +20,9 @@
               now the app stops it and shows the blocked icon (Health: "guard app-wall stopped a jump to propellerads.com").
   /layer-link RX3-G5: a transparent layer over the page: a tap on it makes the page click a hidden <a target=_blank> to another site (an ad). The app's new-window wall now needs a tap ON a link to exactly
               that address: Health "guard app-wall stopped a new window to ..." (or the page guard's own "chip-show open", whichever refused it first).
-  /fake-layer RX3-G4: a <video> (each click on it is logged) and over it an INVISIBLE full-screen layer whose click handler opens an ad window. One real tap on the video: with the guard's fake-layer switch-off
-              the video gets the click and the layer none ("video-click" only); without it the layer takes the first tap ("layer-click", the ad is refused) and the video plays on the second try.
+  /fake-layer RX3-G4: a <video> (each click on it is logged) and over it an INVISIBLE full-screen layer of the page itself whose click handler opens an ad window. Version 1 (alpha44) switched such a layer off before the
+              press ("video-click" only); an independent review showed that unsafe (it disabled a page's own invisible controls), so since alpha45 the layer takes the first tap ("layer-click", the ad is refused) and the
+              assist starts the video: see research/REVIEW_ALPHA44.md. Only an invisible FRAME of another site over a player is switched off now (test browser only, no lab page).
   /preroll-main RX3-V3: ONE <video> element plays a 15 s "ad" file (/ad15.wav); after 8 s of real playback the page gives the same element the 60 s "film" (/film60.wav). The app's Health lines "video info PLAYED el=N ..."
               show both played reports with the SAME element number and, after the second, the ad marked as an advertisement and not counted: "counted=1 of 2".
   /blob-lab   RX3-V4: a <video> whose source is a blob: address (the page fetched /blob-film.wav, 300 s of silence, and made the address itself), next to two stream playlists the page asked for:
