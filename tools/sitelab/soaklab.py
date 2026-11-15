@@ -226,15 +226,18 @@ class H(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         if self.command == "HEAD":
             return
+        sent, t0 = 0, time.time()
         with open(path, "rb") as f:
             f.seek(start)
             left = n
             while left > 0:
-                chunk = f.read(min(65536, left))
+                chunk = f.read(min(16384 if RATE else 65536, left))
                 if not chunk:
                     break
                 self.wfile.write(chunk)
                 left -= len(chunk)
+                sent += len(chunk)
+                pace(sent, t0, RATE)
 
     def do_HEAD(self):
         self.do_GET()
