@@ -1,0 +1,298 @@
+#!/usr/bin/env python3
+"""SOAK1 lab server (the GitHub emulator lab, tools/emu/soak.py): python3 -I tools/sitelab/soaklab.py <port> <outdir>
+
+Serves, on one port (the emulator reaches it with `adb reverse tcp:<port> tcp:<port>` and http://localhost:<port>/):
+  /                      index of everything below
+  /page/text|images|iframes|form   synthetic pages of different weight (a long article, 40 small pictures, three frames, a form)
+  /video/<name>[?src=URL]          a player page: <video> + a reporter that sends every media event and getVideoPlaybackQuality() to /report
+                                   name = landscape | portrait | big (clips made with ffmpeg at start) ; ?src= plays a PUBLIC address instead
+  /fs                              the full-screen lab (FS1): a wide video, buttons "full screen", "lock landscape", "unlock"; reports fullscreenchange / orientation
+  /dl/<n>mb.bin  /dl/slow.bin  /dl/page   downloads of known size (the last page links to them)
+  /report?...            one line of JSON per call -> <outdir>/report.jsonl  (what the pages saw: the soak driver reads it)
+  /health                "ok"
+Nothing here is part of the app and nothing it writes belongs in the repository (keep <outdir> outside the repo). Clips need ffmpeg; without it the video pages show an error and say so.
+"""
+import http.server, json, os, shutil, socketserver, subprocess, sys, threading, time, urllib.parse
+
+PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8091
+OUT = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else os.path.abspath("soaklab-out")
+os.makedirs(OUT, exist_ok=True)
+REPORT = os.path.join(OUT, "report.jsonl")
+LOCK = threading.Lock()
+CLIPS = {
+    "landscape": ("640x360", 24, "landscape.mp4"),
+    "portrait": ("360x640", 24, "portrait.mp4"),
+    "big": ("1280x720", 20, "big.mp4"),
+}
+
+
+def make_clips():
+    if not shutil.which("ffmpeg"):
+        print("soaklab: ffmpeg not found, no clips", flush=True)
+        return
+    for name, (size, secs, fn) in CLIPS.items():
+        path = os.path.join(OUT, fn)
+        if os.path.exists(path):
+            continue
+        w, h = size.split("x")
+        # H.264 (the one codec this tablet decodes in hardware) + AAC, an on-screen counter so a frozen picture is visible in a screenshot
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=duration=%d:size=%s:rate=25" % (secs, size),
+                        "-f", "lavfi", "-i", "sine=frequency=440:duration=%d" % secs, "-c:v", "libx264", "-preset", "veryfast", "-profile:v", "main",
+                        "-pix_fmt", "yuv420p", "-b:v", "1500k" if name == "big" else "600k", "-g", "50", "-c:a", "aac", "-b:a", "64k",
+                        "-movflags", "+faststart", path], check=False)
+        print("soaklab: clip %s %s" % (name, "ok" if os.path.exists(path) else "FAILED"), flush=True)
+
+
+LOREM = ("Kestrel is a small private browser made for one tablet. It blocks advertisements and trackers, keeps the pages light, and tries hard to stay out of the way. "
+         "A page like this one exists only to be scrolled, measured and forgotten: it has headings, paragraphs, a list, a table and a few links, but no script of its own. ")
+
+
+def page_text():
+    parts = ["<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Soak text page</title>",
+             "<body style='font:17px/1.55 sans-serif;margin:0 14px;background:#fff;color:#111'><h1>A long article</h1>"]
+    for i in range(1, 41):
+        parts.append("<h2>Section %d</h2><p>%s</p><p>%s</p>" % (i, LOREM * 3, LOREM * 2))
+        if i % 8 == 0:
+            parts.append("<table border=1 cellpadding=6><tr><th>a<th>b<th>c</tr>" + "".join("<tr><td>%d<td>%d<td>%d</tr>" % (i, j, i * j) for j in range(1, 8)) + "</table>")
+        if i % 10 == 0:
+            parts.append("<ul>" + "".join("<li><a href='/page/images?from=%d'>link %d</a></li>" % (i, j) for j in range(8)) + "</ul>")
+    parts.append("<p id=end>the end</p>")
+    return "".join(parts).encode()
+
+
+def page_images():
+    parts = ["<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Soak images page</title>",
+             "<body style='margin:0;background:#222;color:#eee;font:16px sans-serif'><h1 style='margin:10px'>40 pictures</h1>"]
+    for i in range(40):
+        parts.append("<img loading=lazy width=280 height=210 style='margin:6px' src='/img/%d.svg' alt='picture %d'>" % (i, i))
+    return "".join(parts).encode()
+
+
+def svg(n):
+    hue = (n * 47) % 360
+    return ("<svg xmlns='http://www.w3.org/2000/svg' width='280' height='210'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>"
+            "<stop offset='0' stop-color='hsl(%d,70%%,45%%)'/><stop offset='1' stop-color='hsl(%d,70%%,20%%)'/></linearGradient></defs>"
+            "<rect width='280' height='210' fill='url(#g)'/><text x='16' y='120' font-size='56' fill='white'>%d</text></svg>" % (hue, (hue + 90) % 360, n)).encode()
+
+
+def page_iframes():
+    return (b"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Soak frames page</title>"
+            b"<body style='margin:0;font:16px sans-serif'><h1 style='margin:8px'>Three frames</h1>"
+            b"<iframe src='/page/text' style='width:100%;height:240px'></iframe><iframe src='/page/images' style='width:100%;height:240px'></iframe>"
+            b"<iframe src='/page/form' style='width:100%;height:240px'></iframe></body>")
+
+
+def page_form():
+    return (b"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Soak form page</title>"
+            b"<body style='font:18px sans-serif;margin:12px'><form action='/report' method='get'><input type=hidden name=kind value=form>"
+            b"<p><label>Name <input name=name></label></p><p><label>Email <input type=email name=email></label></p>"
+            b"<p><select name=pick><option>one<option>two<option>three</select></p><p><textarea name=msg rows=4></textarea></p><button>Send</button></form></body>")
+
+
+REPORTER = """
+<script>
+(function () {
+  var q = new URLSearchParams(location.search), name = %(name)s;
+  function send(ev, extra) {
+    var v = document.getElementById('v'), o = { kind: 'video', name: name, ev: ev, t: Date.now() };
+    try { o.ct = v.currentTime.toFixed(2); o.rs = v.readyState; o.ns = v.networkState; o.w = v.videoWidth; o.h = v.videoHeight; o.paused = v.paused ? 1 : 0;
+          if (v.error) o.err = v.error.code + ':' + (v.error.message || '');
+          if (v.getVideoPlaybackQuality) { var c = v.getVideoPlaybackQuality(); o.total = c.totalVideoFrames; o.dropped = c.droppedVideoFrames; o.corrupt = c.corruptedVideoFrames; } } catch (e) { o.exc = String(e); }
+    if (extra) for (var k in extra) o[k] = extra[k];
+    try { new Image().src = '/report?' + Object.keys(o).map(function (k) { return k + '=' + encodeURIComponent(o[k]); }).join('&'); } catch (e) {}
+  }
+  var v = document.getElementById('v');
+  ['loadstart', 'loadedmetadata', 'canplay', 'playing', 'pause', 'waiting', 'stalled', 'error', 'ended', 'seeked'].forEach(function (e) { v.addEventListener(e, function () { send(e); }); });
+  var n = 0; setInterval(function () { if (!v.paused) { n++; send('tick'); } }, 5000);
+  send('page');
+  var p = v.play(); if (p && p.catch) p.catch(function (e) { send('playrejected', { why: String(e).slice(0, 60) }); });
+})();
+</script>"""
+
+
+def page_video(name, src):
+    reporter = (REPORTER % {"name": json.dumps(name)})
+    return (("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Soak video %s</title>"
+             "<body style='margin:0;background:#000;color:#9f9;font:14px monospace'>"
+             "<video id=v src='%s' muted autoplay playsinline loop controls style='width:100%%;max-height:70vh;background:#000'></video>"
+             "<p style='margin:8px'>%s</p>%s") % (name, src, name, reporter)).encode()
+
+
+def page_fs():
+    reporter = """
+<script>
+(function () {
+  var v = document.getElementById('v');
+  function send(ev, extra) {
+    var o = { kind: 'fs', ev: ev, t: Date.now(), fs: document.fullscreenElement ? 1 : 0, iw: innerWidth, ih: innerHeight };
+    try { o.ot = screen.orientation.type; o.oa = screen.orientation.angle; } catch (e) { o.ot = 'none'; }
+    try { o.vw = v.videoWidth; o.vh = v.videoHeight; o.paused = v.paused ? 1 : 0; o.ct = v.currentTime.toFixed(1); } catch (e) {}
+    if (extra) for (var k in extra) o[k] = extra[k];
+    try { new Image().src = '/report?' + Object.keys(o).map(function (k) { return k + '=' + encodeURIComponent(o[k]); }).join('&'); } catch (e) {}
+  }
+  document.addEventListener('fullscreenchange', function () { send('fullscreenchange'); });
+  window.addEventListener('resize', function () { send('resize'); });
+  try { screen.orientation.addEventListener('change', function () { send('orientationchange'); }); } catch (e) {}
+  document.getElementById('go').onclick = function () { send('click-go'); var p = v.requestFullscreen ? v.requestFullscreen() : null; if (p && p.catch) p.catch(function (e) { send('fs-rejected', { why: String(e).slice(0, 60) }); }); };
+  document.getElementById('lock').onclick = function () { send('click-lock'); try { screen.orientation.lock('landscape').then(function () { send('lock-ok'); }, function (e) { send('lock-rejected', { why: String(e).slice(0, 80) }); }); } catch (e) { send('lock-threw', { why: String(e).slice(0, 80) }); } };
+  document.getElementById('unlock').onclick = function () { send('click-unlock'); try { screen.orientation.unlock(); send('unlock-ok'); } catch (e) { send('unlock-threw'); } };
+  document.getElementById('exit').onclick = function () { send('click-exit'); try { document.exitFullscreen(); } catch (e) {} };
+  v.play().catch(function () {});
+  send('page');
+})();
+</script>"""
+    return (b"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Full-screen lab</title>"
+            b"<body style='margin:0;background:#112;color:#eee;font:20px sans-serif'><video id=v src='/clip/landscape.mp4' muted autoplay playsinline loop style='width:100%;background:#000'></video>"
+            b"<button id=go style='display:block;width:92%;margin:14px auto;height:84px;font-size:26px'>Go full screen</button>"
+            b"<button id=lock style='display:block;width:92%;margin:14px auto;height:84px;font-size:26px'>Lock landscape</button>"
+            b"<button id=unlock style='display:block;width:92%;margin:14px auto;height:84px;font-size:26px'>Unlock</button>"
+            b"<button id=exit style='display:block;width:92%;margin:14px auto;height:84px;font-size:26px'>Exit full screen</button>" + reporter.encode())
+
+
+def page_dl():
+    links = "".join("<p><a href='/dl/%dmb.bin'>%d MB file</a></p>" % (n, n) for n in (1, 5, 20)) + "<p><a href='/dl/slow.bin'>5 MB, slowly</a></p>"
+    return ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Soak downloads</title><body style='font:20px sans-serif;margin:14px'><h1>Downloads</h1>" + links).encode()
+
+
+def index():
+    rows = ["/page/text", "/page/images", "/page/iframes", "/page/form", "/video/landscape", "/video/portrait", "/video/big", "/fs", "/dl/page", "/dl/1mb.bin", "/dl/5mb.bin", "/dl/20mb.bin", "/dl/slow.bin"]
+    return ("<!doctype html><meta charset=utf-8><title>Soak lab</title><body style='font:18px sans-serif'><h1>Soak lab</h1>" + "".join("<p><a href='%s'>%s</a></p>" % (r, r) for r in rows)).encode()
+
+
+def blob(n, seed=7):
+    # deterministic bytes the driver can check by size alone
+    line = bytes((seed + i) % 251 for i in range(1024))
+    return line, n
+
+
+class H(http.server.BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+    server_version = "soaklab"
+
+    def log_message(self, *a):
+        pass
+
+    def _send(self, body, ctype="text/html; charset=utf-8", code=200, extra=None):
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        for k, v in (extra or {}).items():
+            self.send_header(k, v)
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
+
+    def _file(self, path, ctype):
+        """A file with Range support (a <video> asks for ranges)."""
+        if not os.path.exists(path):
+            return self._send(b"no such clip (ffmpeg missing?)", "text/plain", 404)
+        size = os.path.getsize(path)
+        rng = self.headers.get("Range")
+        start, end, code = 0, size - 1, 200
+        if rng and rng.startswith("bytes="):
+            a, _, b = rng[6:].partition("-")
+            start = int(a) if a else 0
+            end = int(b) if b else size - 1
+            end = min(end, size - 1)
+            code = 206
+        n = end - start + 1
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(n))
+        if code == 206:
+            self.send_header("Content-Range", "bytes %d-%d/%d" % (start, end, size))
+        self.end_headers()
+        if self.command == "HEAD":
+            return
+        with open(path, "rb") as f:
+            f.seek(start)
+            left = n
+            while left > 0:
+                chunk = f.read(min(65536, left))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                left -= len(chunk)
+
+    def do_HEAD(self):
+        self.do_GET()
+
+    def do_GET(self):
+        u = urllib.parse.urlparse(self.path)
+        p, q = u.path, urllib.parse.parse_qs(u.query)
+        try:
+            if p == "/":
+                return self._send(index())
+            if p == "/health":
+                return self._send(b"ok", "text/plain")
+            if p == "/page/text":
+                return self._send(page_text())
+            if p == "/page/images":
+                return self._send(page_images())
+            if p == "/page/iframes":
+                return self._send(page_iframes())
+            if p == "/page/form":
+                return self._send(page_form())
+            if p.startswith("/img/") and p.endswith(".svg"):
+                return self._send(svg(int(p[5:-4] or 0)), "image/svg+xml")
+            if p.startswith("/video/"):
+                name = p[7:]
+                src = (q.get("src") or [""])[0] or "/clip/%s.mp4" % name
+                return self._send(page_video(name, src.replace("'", "%27")))
+            if p.startswith("/clip/") and p.endswith(".mp4"):
+                name = p[6:-4]
+                if name in CLIPS:
+                    return self._file(os.path.join(OUT, CLIPS[name][2]), "video/mp4")
+                return self._send(b"unknown clip", "text/plain", 404)
+            if p == "/fs":
+                return self._send(page_fs())
+            if p == "/dl/page":
+                return self._send(page_dl())
+            if p.startswith("/dl/") and p.endswith("mb.bin"):
+                return self._download(int(p[4:-6]) * 1024 * 1024, "kestrel-lab-%smb.bin" % p[4:-6], 0)
+            if p == "/dl/slow.bin":
+                return self._download(5 * 1024 * 1024, "kestrel-lab-slow.bin", 400 * 1024)
+            if p == "/report":
+                row = {k: v[0] for k, v in q.items()}
+                row["srv"] = round(time.time(), 2)
+                with LOCK:
+                    with open(REPORT, "a") as f:
+                        f.write(json.dumps(row) + "\n")
+                return self._send(b"", "image/gif", 204)
+            return self._send(b"not found", "text/plain", 404)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
+    def _download(self, n, name, rate):
+        line, _ = blob(n)
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Length", str(n))
+        self.send_header("Content-Disposition", 'attachment; filename="%s"' % name)
+        self.end_headers()
+        if self.command == "HEAD":
+            return
+        sent = 0
+        t0 = time.time()
+        while sent < n:
+            k = min(len(line) * 16, n - sent)
+            self.wfile.write((line * 16)[:k])
+            sent += k
+            if rate:
+                ahead = sent / float(rate) - (time.time() - t0)
+                if ahead > 0:
+                    time.sleep(ahead)
+
+
+class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    daemon_threads = True
+    allow_reuse_address = True
+    request_queue_size = 64
+
+
+if __name__ == "__main__":
+    make_clips()
+    print("soaklab: http://localhost:%d/ (out %s)" % (PORT, OUT), flush=True)
+    Server(("0.0.0.0", PORT), H).serve_forever()
