@@ -4,7 +4,6 @@ import android.os.SystemClock
 import android.view.View
 import app.kestrel.browser.Io
 import app.kestrel.browser.diag.Health
-import app.kestrel.browser.tab.Tab
 import app.kestrel.core.media.TurnSettle
 
 /**
