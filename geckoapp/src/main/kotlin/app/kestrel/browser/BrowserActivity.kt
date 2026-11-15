@@ -349,9 +349,12 @@ open class BrowserActivity : Activity(), DockListener {
     private var turnCover: View? = null
     private var onScreenNow = false
     private var turnHint: View? = null
+    private lateinit var playerView: app.kestrel.browser.web.PlayerControlsView   // VP1: Kestrel's own full-screen controls (view and controller)
+    private lateinit var player: app.kestrel.browser.web.PlayerController
     private var labTurnWaitOff = false // debug builds only (labIntent "turnwait" off): the lab plays the old rule beside the new one
     private val turnSettler = app.kestrel.browser.web.TurnSettler({ current }, { fullscreenOn }, { turnCover }, { onScreenNow },
-        { !labTurnWaitOff && fullscreenOn && fullscreenTab?.gecko?.vpOk == true }, { resyncEngineSize() }, { turnHint }) // ROT2: a page that reports its viewport says when it has a turn's new size
+        { !labTurnWaitOff && fullscreenOn && fullscreenTab?.gecko?.vpOk == true }, { resyncEngineSize() }, { turnHint },
+        { shown -> if (::player.isInitialized) { if (shown) player.turnStarted() else player.turnEnded() } }) // ROT2: a page that reports its viewport says when it has a turn's new size
     private var pendingFilePick: ((List<Uri>) -> Unit)? = null
     private var pendingAndroidPerms: PermissionDelegate.Callback? = null
     private var backCallback: Any? = null
@@ -409,7 +412,7 @@ open class BrowserActivity : Activity(), DockListener {
                 }
                 GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
                 GeckoEngine.warmUp(this)
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, labBuild = { labBuild }, labProbe = { m -> onLabProbe(m) }, viewport = { m -> Io.main.post { onPageViewport(m) } }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, labBuild = { labBuild }, labProbe = { m -> onLabProbe(m) }, viewport = { m -> Io.main.post { onPageViewport(m) } }, player = { m -> playerMessage(m) }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }))
                 Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
             }
         }
@@ -597,6 +600,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onDestroy() {
         try { fsTurner.exit() } catch (e: Exception) { /* RV8: leave the orientation as Android had it */ }
+        if (::player.isInitialized) player.fullscreen(false)
         turnSettler.abandon(); Io.main.removeCallbacks(strayCheck); Io.main.removeCallbacks(barsCheck); Io.main.removeCallbacks(rehideAfterTurn); Io.main.removeCallbacks(vpUndo) // alpha49 review: no timer of ours may fire against a dead activity
         if (::downloadPopup.isInitialized) downloadPopup.detach()
         UpdateManager.removeListener(updateListener)
@@ -777,6 +781,13 @@ open class BrowserActivity : Activity(), DockListener {
         val rotateButton = app.kestrel.browser.web.FullscreenTurner.RotateButton(this) // FS1: shows for a moment after a touch while a page is full screen
         content.addView(rotateButton, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.START or Gravity.CENTER_VERTICAL).apply { leftMargin = dp(12) })
         fsTurner.attachButton(rotateButton)
+        // VP1 (owner message 49): Kestrel's own controls for a full-screen video: one view over the engine's, drawn only while a film is full screen (the page script reports it)
+        playerView = app.kestrel.browser.web.PlayerControlsView(this).apply { visibility = View.GONE }
+        content.addView(playerView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        player = app.kestrel.browser.web.PlayerController(playerView,
+            { fullscreenTab?.let { t -> try { t.session?.exitFullScreen() } catch (e: Exception) { Health.log("player", "exit-failed", e.toString().take(80)) } } },
+            { shown -> fsTurner.controlledShow(shown) })
+        fsTurner.ownedByPlayer = { player.active }
         val cover = FrameLayout(this).apply { setBackgroundColor(0xFF000000.toInt()); visibility = View.GONE; alpha = 0f; isClickable = true; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO } // ROT1: topmost in the page area; it takes the touch (review of alpha53: the tap that ends a long wait must not reach the page nobody can see)
         // ROT2: a small ring after about a second, so a black screen that waits for the engine does not look frozen
         val ring = android.widget.ProgressBar(this).apply { isIndeterminate = true; visibility = View.GONE; indeterminateTintList = android.content.res.ColorStateList.valueOf(0xFF9A9A9A.toInt()) }
@@ -1276,6 +1287,12 @@ open class BrowserActivity : Activity(), DockListener {
         val host = UrlParts.hostOf(u) ?: return null
         fun sameHost(t: Tab?) = t != null && UrlParts.hostOf(t.url) == host
         return (if (fullscreenOn) fullscreenTab?.takeIf { sameHost(it) } else null) ?: current?.takeIf { sameHost(it) }
+    }
+
+    /** VP1: the page's report of a full-screen film or a tap on it (a Shields worker thread): the UI thread takes it, the ANSWER (what the controls want done) is read from the controller's queue right now. */
+    private fun playerMessage(m: org.json.JSONObject): String {
+        Io.main.post { if (fullscreenOn && fullscreenTab != null && tabOfReport(m.optString("p")) === fullscreenTab) player.onMessage(m) }
+        return if (::player.isInitialized) player.reply() else "{\"s\":0}"
     }
 
     internal fun onPageViewport(m: org.json.JSONObject) {
@@ -2121,6 +2138,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(turnSettler.line())
         out.add(turnPageLine())
         out.add(viewportLine())
+        out.add(player.line())
         out.add(strayLine())
         out.add(videoBarLine())
         out.add(videoQuality.line(GeckoEngine.videoPolicyText))
@@ -2803,6 +2821,7 @@ open class BrowserActivity : Activity(), DockListener {
         applyImmersive(on)
         root.requestApplyInsets() // FSB1: the padding follows the bars: zero while the system hides them, their size while it keeps them
         vpTries = 0; Io.main.removeCallbacks(vpUndo); vpUndo.run() // FB4: a new full screen starts clean (the view is back to its full height)
+        player.fullscreen(on, prefs.fsControls == 0)                          // VP1: Kestrel's controls over the film (drawn once the page reports one)
         if (on) { fsTurner.enter(); if (prefs.fullscreenBars == 1) checkBarsSoon() else { fsBarsNote = "kept: Settings > System bars in full-screen video is on Keep (the default); the page is laid out between the bars" ; Health.log("fullscreen", "bars", fsBarsNote) } } else { fsTurner.exit(); Io.main.removeCallbacks(barsCheck) } // FS1: the screen follows the tablet while a page is full screen
     }
 
