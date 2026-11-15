@@ -363,12 +363,12 @@ body{margin:8px;font:15px sans-serif}
 .t{font:14px monospace;margin:0 0 18px 0}
 </style></head><body>
 <p>seekbar-lab: tap the red bar of A, then B. C is a volume slider.</p>
-<div id="pa" class="pl html5-video-player"><video id="va" src="/seek-film.wav" preload="auto" muted playsinline></video>
+<div id="pa" class="pl html5-video-player"><video id="va" preload="auto" muted playsinline></video>
  <div class="ch ytp-chrome-bottom"><div id="ba" class="bar ytp-progress-bar" role="slider" aria-label="Seek slider" aria-valuemin="0" aria-valuemax="300" aria-valuenow="0" tabindex="0">
   <div class="rail"></div><div class="hov ytp-hover-progress"></div><div class="red ytp-play-progress"></div><div class="dot ytp-scrubber-container"></div></div></div>
  <div id="volc" class="vol" role="slider" aria-label="Volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"></div></div>
 <p class="t" id="ta">A: ...</p>
-<div id="pb" class="pl html5-video-player"><video id="vb" src="/seek-film.wav" preload="auto" muted playsinline></video>
+<div id="pb" class="pl html5-video-player"><video id="vb" preload="auto" muted playsinline></video>
  <div class="ch ytp-chrome-bottom"><div id="bb" class="bar ytp-progress-bar" role="slider" aria-label="Seek slider" aria-valuemin="0" aria-valuemax="300" aria-valuenow="0" tabindex="0">
   <div class="rail"></div><div class="hov ytp-hover-progress"></div><div class="red ytp-play-progress"></div><div class="dot ytp-scrubber-container"></div></div></div></div>
 <p class="t" id="tb">B: ...</p>
@@ -396,6 +396,8 @@ function wire(id, bid, tid, name, jumps) {
   setTimeout(rect, 1500);
   window['rect' + name] = rect;
 }
+var N = Date.now();
+document.getElementById('va').src = '/seek-film.wav?p=A&n=' + N; document.getElementById('vb').src = '/seek-film.wav?p=B&n=' + N;   // a new address per load: a repeated one is served from the engine's media cache without asking the server
 wire('va', 'ba', 'ta', 'A', false);
 wire('vb', 'bb', 'tb', 'B', true);
 document.getElementById('va').play().catch(function (e) { L('play-refused', String(e)); });   // A and B play (muted): the jump must keep playing
@@ -474,7 +476,7 @@ class H(http.server.BaseHTTPRequestHandler):
             return self._send(200, SEEKLAB)
         if u.path == "/seek-film.wav":
             body = seek_wav(); total = len(body); rng = self.headers.get("Range", "")
-            self._write("GET /seek-film.wav Range=%s" % (rng or "-"))
+            self._write("GET /seek-film.wav player=%s Range=%s" % (q.get("p", ["?"])[0], rng or "-"))
             try:
                 if rng.startswith("bytes="):
                     a, _, b = rng[6:].partition("-")
