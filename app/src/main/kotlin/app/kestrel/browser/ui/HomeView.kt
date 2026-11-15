@@ -208,6 +208,8 @@ class HomeView(ctx: Context, private var pal: Pal, private val brand: String, pr
     }
 
     companion object {
+        /** The brand mark's box: the symbol's 108 dp canvas is half empty (its safe zone), so 44 dp shows the artwork at about 28 dp. */
+        const val BRAND_DP = 44
         const val FIELD_DP = 72
         const val GAP_DP = 26
         const val MAX_W_DP = 560
