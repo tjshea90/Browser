@@ -58,7 +58,7 @@ class VideoFlow(private val a: BrowserActivity) {
     }
 
     /** What the tab's list held is gone (a new page): the list is emptied and everything learned about its entries is forgotten, so the same address on the next page is read afresh. UI thread. */
-    fun clearTab(tab: Tab) { val keys = tab.media.keys(); tab.media.clear(); forget(keys); looks.remove(tab.id); val p = tab.id.toString() + "|"; maybeAsked.removeAll { it.startsWith(p) } }
+    fun clearTab(tab: Tab) { tab.gecko.pictureW = 0; tab.gecko.pictureH = 0; tab.gecko.picturePlayed = false; val keys = tab.media.keys(); tab.media.clear(); forget(keys); looks.remove(tab.id); val p = tab.id.toString() + "|"; maybeAsked.removeAll { it.startsWith(p) } }
 
     private fun forget(keys: List<String>) {
         for (k in keys) { lookedKeys.remove(k); streamInfo.remove(k); probed.remove(k); sized.remove(k); childUrls.remove(k)?.forEach { children.remove(it) } }
@@ -196,6 +196,11 @@ class VideoFlow(private val a: BrowserActivity) {
     /** Called on the Shields worker thread. */
     fun info(page: String, url: String, width: Int, height: Int, durationMs: Long, label: String?, facts: app.kestrel.core.media.VideoFacts? = null, played: Boolean = false, element: Int = 0) = Io.ui {
         val t = tabOf(page) ?: return@ui
+        if (width > 0 && height > 0 && (played || !t.gecko.picturePlayed) && (played || t.gecko.pictureW == 0 || width.toLong() * height >= t.gecko.pictureW.toLong() * t.gecko.pictureH)) { // FS1: what shape the picture is decides whether full screen starts sideways
+            val first = t.gecko.pictureW == 0
+            t.gecko.pictureW = width; t.gecko.pictureH = height; if (played) t.gecko.picturePlayed = true
+            if (first || played) a.fullscreenPictureKnown()
+        }
         // RX3-V1: a hover preview, a hero loop or an ad that loaded its metadata is not "a video the owner may want": the page's own element says what it is for
         val role = if (facts == null) null else app.kestrel.core.media.VideoRoleRules.decide(facts, durationMs)
         val area = if (facts == null) 0L else facts.widthPx.toLong() * facts.heightPx * facts.viewPercent / 100   // the part of its picture that is on screen

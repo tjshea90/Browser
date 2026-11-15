@@ -13,6 +13,10 @@ class GeckoTabData {
     var delegates: TabDelegates? = null
     /** RX3-S1: the page's video is playing (the engine's media session said PLAY and has not said pause / stop / end since): the neon glow holds still meanwhile. UI thread. */
     var videoPlaying = false
+    /** FS1: the picture size (pixels) of the video that plays on this page, as its element reported it ([picturePlayed] = from an element that really played); 0 = not known. A new page forgets it ([VideoFlow.clearTab]). */
+    var pictureW = 0
+    var pictureH = 0
+    var picturePlayed = false
     var fieldInput: app.kestrel.browser.PageFieldInput? = null // AU3: sees the page's text field gain and lose focus; the mini keyboard types through it
 }
 
