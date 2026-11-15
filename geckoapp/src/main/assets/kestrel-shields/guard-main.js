@@ -289,8 +289,8 @@
       return invisibleBox(el);
     } catch (e) { return false; }
   }
-  function switchOffAt(x, y, framesOnly) {
-    var player = playerAt(x, y);
+  function switchOffAt(x, y, framesOnly, known) {
+    var player = known || playerAt(x, y);   // (a look at the page names the player itself: an invisible frame on top would be taken for the player by playerAt)
     if (!player) return;
     var list = document.elementsFromPoint(x, y), n = 0;
     for (var i = 0; i < list.length && i < 8 && n < 4; i++) {
@@ -321,7 +321,7 @@
         var r = cands[i].getBoundingClientRect();
         if (r.width < 120 || r.height < 80 || r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) continue;
         var x = Math.min(Math.max(r.left + r.width / 2, 1), innerWidth - 1), y = Math.min(Math.max(r.top + r.height / 2, 1), innerHeight - 1);
-        switchOffAt(x, y, true);
+        switchOffAt(x, y, true, cands[i]);
       }
     } catch (e) { /* ignore */ }
   }
