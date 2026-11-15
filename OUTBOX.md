@@ -2140,3 +2140,44 @@
 >
 > Next I'm running an independent review of the page-facing ad-layer code, then the blob-player row.
 <!-- sha:29d252566b5c -->
+
+## 2026-11-15T02:18:13Z
+> alpha45 is built, signed and published, and it's recorded. Install it over the old one; the signing certificate is the same.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha45
+>
+> **Please update from alpha44.** I had an independent reviewer try to break alpha44's code that runs on every page, and it found real problems, all on test pages (you hadn't reported any):
+> - **Ad-layer code:** it could switch off a page's own invisible button or menu lying over a video, for good.
+> - **Ad skipper:** in some cases it could take a short film for an ad and speed it up.
+>
+> alpha45 fixes both:
+> 1. **Invisible layers:** Kestrel no longer switches off invisible layers that belong to the page itself. It only switches off an invisible frame from another site lying over a video, and gives it back if it was just fading in. So when a page puts an invisible ad layer over a video, the first tap goes to that layer, as before alpha44. Kestrel refuses the ad it opens and then starts the video itself (as in alpha40 to 43).
+> 2. **Links:** a big link to another site that has words on it, like a news card with a title, works normally again. Only picture-only or empty full-screen links to other sites, and empty links lying over a video, count as ad layers.
+> 3. **Skipper for JW Player, Video.js and Plyr:** a short film is not taken for an ad, and when the film returns after an ad it is put back at once. The skip button is pressed once, not in turns.
+>
+> **Also in alpha45:**
+> - **Blob players:** many embeds play through a hidden "blob" address. Kestrel now matches the playing video to the right playlist by length, so the film that really plays comes first in the download sheet. A clip under a minute next to a film no longer counts.
+> - **Playlists:** DASH playlists are read early too.
+> - **Words like trailer, intro, hero, loop:** they push a file down only when it is also much smaller than the biggest file, and never when it played or you pressed it.
+> - **Diagnostics:** the Blocker line now shows how often each of the extension's request checks ran and how long it held the thread. That number decides whether I slim them down.
+>
+> **What was and wasn't proven**
+> - **Tested:** the ad-layer, link and skipper fixes were tested in test browsers (all 373 web tests and the Kotlin suites pass), and GitHub's build and signature check passed.
+> - **Emulator:** the blob-player matching ran in the real app on the emulator, on my own lab page.
+> - **Not run:** none of it has been on your tablet or a real site.
+> - **Unproven:** the new numbers in Diagnostics, and DASH matching, are not proven on the emulator.
+>
+> **YouTube ad skipping:** YouTube's terms forbid it, so YouTube may show a warning or limit playback, more likely when you're signed in. "Skip ads inside video players" in Settings turns it off. This is a moving target, and your reports decide what I fix next.
+>
+> **The file and screenshot you sent again:** the review file is byte-identical to the first one; the session restarted and delivere
+> [... 121 characters omitted ...]
+> let or your answers below. The screenshot is the same YouTube page as before ("Stolen from the Suburbs", Preview only). That "not available on your mobile browser" text comes from YouTube, which sends some Movies & TV titles to its app, and this tablet has none. I didn't test that exact title. "Desktop site" in the menu may or may not help, and I can't promise it.
+>
+> I deleted the scheduled auto-resume, and nothing is half-done.
+>
+> **Still open for you**
+> 1. **BK5:** may Back be instant on pages that tell the browser "don't keep me" (`Cache-Control: no-store`), on sites you pick? Yes or no.
+> 2. **AX1g:** should the keyboard be a separate system keyboard app? Yes or no.
+> 3. **Tablet feedback on alpha40 to 45:** especially Back (scroll place and speed), ad skipping, and the download list.
+> 4. **One Diagnostics copy** after a Proton Mail session, so I can read the new "Extension listeners" numbers.
+<!-- sha:01e7e65fcbdf -->
