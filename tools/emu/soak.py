@@ -1024,7 +1024,7 @@ class FakeAdb:
             x, y = (int(v) for v in cmd.split()[2:4])
             if x < 80:  # the rotate button
                 self._health("fullscreen turn to=7 (upright) was=6 why=the rotate button"); self._health("life config orientation=portrait fullscreen=true")
-            elif 270 < y < 330 and self.cfg == "portrait":
+            elif 200 < y < 330 and self.cfg == "portrait":
                 self._lab({"kind": "fs", "ev": "fullscreenchange", "fs": "1", "iw": 1024, "ih": 600, "ot": "landscape-primary"})
                 self._health("fullscreen turn to=6 (sideways) was=-1 why=full screen starts"); self._health("life config orientation=landscape fullscreen=true"); self.cfg = "landscape"
             return ""
