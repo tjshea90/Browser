@@ -1384,6 +1384,9 @@ class Soak:
         return len(re.findall(r"state:started", seg))
 
     def audio_round(self):
+        """SND1: the clip plays with sound, the app is left (Home / screen off) for 6 s and comes back. The verdict is what the PAGE saw: did the element's currentTime advance while the page was hidden
+        (sound = the clock moves)? Lab run 43745675957 showed that Android's own list of playing audio streams (dumpsys audio) cannot be used for this: its 'state:started' entries pile up (1, 3, 5, 7 ... one more
+        per round) while the clip's clock stood still and the engine's media session said 'paused' (the Health line 'neon video playing=false')."""
         w, h = self.screen
         rows = []
         for kind in ("video", "audio"):
@@ -1396,13 +1399,14 @@ class Soak:
                 time.sleep(2)
                 self.ph.tap(w // 2, 175); time.sleep(5)           # the big button: sound starts
                 playing = self.audio_started()
+                lm_away = self.log.size()
                 if how == "home":
                     self.ph.home()
                 else:
                     self.ph.key("KEYCODE_SLEEP")
                 time.sleep(6)
                 away = self.audio_started()
-                ev_away = [r.get("ev") for r in self.lab.since(rmark) if r.get("kind") == "snd"]
+                away_lines = self.log.since(lm_away)
                 if how == "home":
                     self.ph.start_app()
                 else:
@@ -1410,13 +1414,27 @@ class Soak:
                 time.sleep(5)
                 back = self.audio_started()
                 self.shot("snd-%s-%s" % (kind, how))
-                rows.append((kind, how, playing, away, back))
-                if playing < 1:
-                    self.issue("low", "tooling", "sound lab %s: the clip never started making sound (%d players started): the test says nothing about leaving the app" % (kind, playing))
-                elif away > 0:
-                    self.issue("high", "sound", "%s: sound kept playing after %s (Android lists %d playing audio streams)" % (kind, how, away))
+                snd = [r for r in self.lab.since(rmark) if r.get("kind") == "snd"]
+                adv, hidden_s = None, None
+                try:
+                    hi = next(i for i, r in enumerate(snd) if r.get("ev") == "vis" and r.get("vis") == "hidden")
+                    vi = next((i for i in range(hi + 1, len(snd)) if snd[i].get("ev") == "vis" and snd[i].get("vis") == "visible"), len(snd) - 1)
+                    ct0 = float(snd[hi].get("ct", 0))
+                    # the clock at the LAST sign of life while hidden (a tick, or the visible event itself): it must not have moved
+                    ct1 = max(float(r.get("ct", 0)) for r in snd[hi:vi + 1])
+                    adv = round(ct1 - ct0, 1)
+                    hidden_s = round((int(snd[vi]["t"]) - int(snd[hi]["t"])) / 1000.0, 1)
+                except (StopIteration, ValueError, KeyError):
+                    pass
+                session_paused = any("playing=false" in ln and "KestrelHealth" in ln for ln in away_lines)
+                rows.append((kind, how, playing, away, back, adv, hidden_s, session_paused))
+                if adv is None:
+                    self.issue("low", "tooling", "sound lab %s/%s: the page never reported 'hidden': the test says nothing about leaving the app" % (kind, how))
+                elif adv >= 1.5:
+                    self.issue("high", "sound", "%s: the clip's clock moved %.1f s while the app was left by %s (hidden %s s): sound kept playing" % (kind, adv, how, hidden_s))
         self.snd_rows = rows
-        self.record({"kind": "snd", "name": "sound-when-left", "status": "ok" if all(r[3] == 0 for r in rows if r[2] >= 1) else "failed", "results": [{"clip": r[0], "left_by": r[1], "playing": r[2], "away": r[3], "back": r[4]} for r in rows]})
+        self.record({"kind": "snd", "name": "sound-when-left", "status": "ok" if all(r[5] is not None and r[5] < 1.5 for r in rows) else "failed",
+                     "results": [{"clip": r[0], "left_by": r[1], "audio_streams_before": r[2], "away": r[3], "back": r[4], "clock_advance_while_hidden_s": r[5], "hidden_s": r[6], "engine_session_paused": r[7]} for r in rows]})
         self.check_alive("sound-when-left")
 
     # ---- LAB2 (owner message 45): every site twice, Shields ON then Shields OFF for that site, from a cold cache each time; the report puts the two side by side
@@ -1632,10 +1650,12 @@ class Soak:
         if self.snd_rows:
             L.append("## Sound when the app is left (SND1, owner message 45)")
             L.append("")
-            L.append("| clip | the app was left by | audio streams playing before | while away (must be 0) | after coming back |")
-            L.append("| :- | :- | -: | -: | -: |")
-            for kind, how, playing, away, back in self.snd_rows:
-                L.append("| %s | %s | %d | %d | %d |" % (kind, how, playing, away, back))
+            L.append("The verdict is the clip's own clock while the page was hidden (it must stand still: no sound); the engine's media session must say paused. Android's `dumpsys audio` stream counts are shown for the record only (their 'started' entries pile up).")
+            L.append("")
+            L.append("| clip | the app was left by | clock moved while hidden (must be 0) | hidden for | engine media session paused | audio streams before / away / back (record only) |")
+            L.append("| :- | :- | -: | -: | :- | :- |")
+            for kind, how, playing, away, back, adv, hidden_s, sp in self.snd_rows:
+                L.append("| %s | %s | %s s | %s s | %s | %d / %d / %d |" % (kind, how, "?" if adv is None else adv, "?" if hidden_s is None else hidden_s, "yes" if sp else "no", playing, away, back))
             L.append("")
         if self.fsb_results:
             L.append("## Full screen: the system bars, the turn and the controls (FSB1 / ROT1 / FSC1, owner message 46)")
