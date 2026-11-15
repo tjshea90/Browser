@@ -499,6 +499,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onPause() {
         super.onPause()
+        onScreenNow = false; turnSettler.abandon()
         Health.log("life", "pause"); fsTurner.paused()
         captureLook(current, "pause", LastLookRules.LEAVE_MIN_AGE_MS.toLong()) // EY-1: the page as it is left, before anything else (the read-back is a few hundred ms at most)
         app.kestrel.browser.net.WifiBoost.set(this, false)
