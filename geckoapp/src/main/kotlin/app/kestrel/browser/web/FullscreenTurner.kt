@@ -43,6 +43,9 @@ class FullscreenTurner(
     private var armed = false                          // a one-time turn waits for the tablet to be held that way
     private var sensor: OrientationEventListener? = null
     private var button: RotateButton? = null
+    private var lastDegrees = -1                       // the newest reading of the orientation sensor
+    private var releasePending = false                 // the tablet is held the way a one-time turn asked for; the hand-back waits for it to stay so for [RELEASE_SETTLE_MS]
+    private val releaseNow = Runnable { releaseIfStillHeld() }
 
     // what Diagnostics says
     private var fullScreens = 0
@@ -75,6 +78,7 @@ class FullscreenTurner(
     fun exit() {
         if (!on) return
         on = false; siteLock = null; pendingSite = null; armed = false
+        cancelRelease()
         stopSensor()
         Io.main.removeCallbacks(hideButton)
         button?.let { it.animate().cancel(); it.visibility = View.GONE }
@@ -157,16 +161,31 @@ class FullscreenTurner(
 
     private fun moved(degrees: Int) {
         if (!on || !armed) return
+        lastDegrees = degrees
         val posture = FullscreenTurn.postureLandscape(degrees, naturalPortrait())
+        if (FullscreenTurn.release(requested, posture)) {
+            // ROT2 (owner message 48; lab run 43763822027: two turns 0.45 s apart, a flash of PORTRAIT before the landscape): this listener sees the tablet's new position at once, Android's own rotation
+            // sensing needs about half a second to agree, and a "follow the tablet" request that comes earlier makes the screen turn to the position Android still believes in. So the hand-back waits until
+            // the tablet has stayed that way for a moment (a turn back meanwhile cancels it).
+            if (!releasePending) { releasePending = true; Io.main.postDelayed(releaseNow, RELEASE_SETTLE_MS) }
+        } else cancelRelease()
+    }
+
+    private fun cancelRelease() { releasePending = false; Io.main.removeCallbacks(releaseNow) }
+
+    private fun releaseIfStillHeld() {
+        releasePending = false
+        if (!on || !armed || lastDegrees < 0) return
+        val posture = FullscreenTurn.postureLandscape(lastDegrees, naturalPortrait())
         if (FullscreenTurn.release(requested, posture)) {
             armed = false; handedBack++
             stopSensor()
-            apply(base(), false, "the tablet is held that way now: follow it again (sensor $degrees)")
+            apply(base(), false, "the tablet has been held that way for a moment: follow it again (sensor $lastDegrees)")
         }
     }
 
     /** The activity is leaving the screen: the sensor sleeps; it wakes again when the activity returns while a turn is still waiting. */
-    fun paused() { stopSensor() }
+    fun paused() { cancelRelease(); stopSensor() }
     fun resumed() { if (on && armed) startSensor() }
 
     // ---------------------------------------------------------------------------------------- the screen as it is
