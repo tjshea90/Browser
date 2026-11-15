@@ -140,6 +140,21 @@ function flushCounts() {
 }
 
 // ---------------------------------------------------------------- numbers for Diagnostics (at most one small message every 5 s while requests are being checked)
+// RX3-S2 (counters first, research/EXT_COST.md): how often each webRequest listener ran and how long it held the thread, in microseconds, for the extension state line of Diagnostics. Every request of every page goes through
+// these on the parent process's main thread; the numbers say which of them is worth a diet before anybody changes one.
+var LST = { req: [0, 0], err: [0, 0], cmp: [0, 0], snd: [0, 0], rcv: [0, 0] };
+function nowUs() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() * 1000 : Date.now() * 1000; }
+function lstTimed(slot, fn) {
+  return function () {
+    var t = nowUs();
+    try { return fn.apply(this, arguments); } finally { slot[0]++; slot[1] += nowUs() - t; }
+  };
+}
+function lstText() {
+  var out = [], names = [['req', 'req'], ['rcv', 'rcv'], ['snd', 'snd'], ['cmp', 'done'], ['err', 'err']];
+  for (var i = 0; i < names.length; i++) { var s = LST[names[i][0]]; if (s[0] > 0) out.push(names[i][1] + ' ' + s[0] + ' (' + Math.round(s[1]) + ' us)'); }
+  return out.length ? ' | listeners: ' + out.join(', ') : '';
+}
 var statsDirty = false, statsTimer = 0;
 function markStats() { // lazy timer: nothing is scheduled while no request is being judged (a permanent interval would wake the page on an idle tablet)
   statsDirty = true;
@@ -196,16 +211,16 @@ function logFailed(d, what) {
   if (L.failed.length < LOG_MAX) L.failed.push(d.type + ' ' + shortUrl(d.url) + ' ' + what);
   reportLater(d.tabId);
 }
-browser.webRequest.onErrorOccurred.addListener(function (d) {
+browser.webRequest.onErrorOccurred.addListener(lstTimed(LST.err, function (d) {
   noteDone(d); // RX3-BK1: every request that ended, whatever the reason, is no longer pending (an aborted one or one we cancelled included)
   if (d.tabId < 0 || blockedIds.has(d.requestId)) return;
   if (d.error === 'NS_BINDING_ABORTED' || d.error === 'NS_ERROR_ABORT') return; // the page was left or stopped, or another extension said no: not a network failure
   logFailed(d, String(d.error || 'error').replace(/^NS_ERROR_/, ''));
-}, { urls: ['http://*/*', 'https://*/*'] });
-browser.webRequest.onCompleted.addListener(function (d) {
+}), { urls: ['http://*/*', 'https://*/*'] });
+browser.webRequest.onCompleted.addListener(lstTimed(LST.cmp, function (d) {
   noteDone(d);
   if (d.statusCode >= 400 && d.tabId >= 0) logFailed(d, 'HTTP ' + d.statusCode);
-}, { urls: ['http://*/*', 'https://*/*'] });
+}), { urls: ['http://*/*', 'https://*/*'] });
 // content.js tells about scripts that threw and about files an element could not load (the network may have worked and the file still be unusable: wrong type, broken)
 browser.runtime.onMessage.addListener(function (m, sender) {
   if (!m || m.k !== 'jserr' || !sender || !sender.tab) return undefined;
@@ -539,10 +554,10 @@ function onRequest(d) {
   if (Date.now() - cfgAt.get(host) > CFG_TTL) askCfg(host); // refresh in the background; this request still uses the answer we have
   return decide(d, page, host, mode);
 }
-browser.webRequest.onBeforeRequest.addListener(function (d) {
+browser.webRequest.onBeforeRequest.addListener(lstTimed(LST.req, function (d) {
   var r = onRequest(d);
   return d.type === 'sub_frame' ? slFrame(d, r) : r; // AW1b+: a frame's own site gets its scriptlet calls registered before the frame's document starts
-}, { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] }, ['blocking']);
+}), { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] }, ['blocking']);
 
 // ---------------------------------------------------------------- element hiding: still asked of the app, once per frame, answered from a cache for repeat visits
 // The answer depends on the lists (their generation), on the site's Shields switches and on whether the lists are loaded at all, so a cached answer is only used while all of that is unchanged:
@@ -681,7 +696,7 @@ function frameNavigates(d) { // a sub_frame request: the frame [d.frameId] is be
 // repeats these when it reads the playlist and fetches the parts. Kept briefly, by request id; a request that never gets an answer is pushed out by the next ones.
 var reqHdr = new Map();
 var REQ_HDR_MAX = 160;
-browser.webRequest.onBeforeSendHeaders.addListener(function (d) {
+browser.webRequest.onBeforeSendHeaders.addListener(lstTimed(LST.snd, function (d) {
   var h = d.requestHeaders;
   if (!h) return;
   var ref = '', org = '';
@@ -740,7 +755,7 @@ function maybeMedia(d, url, ct, size, ref, org) {
   send({ k: 'maybe', u: url, c: ct, l: size, p: page, f: docOf(d.documentUrl), rf: ref, og: org, ty: d.type }).catch(function () {});
 }
 
-browser.webRequest.onHeadersReceived.addListener(function (d) {
+browser.webRequest.onHeadersReceived.addListener(lstTimed(LST.rcv, function (d) {
   var rh = reqHdr.get(d.requestId), ref = '', org = '';
   if (rh !== undefined) { reqHdr.delete(d.requestId); var nlp = rh.indexOf('\n'); ref = rh.slice(0, nlp); org = rh.slice(nlp + 1); }
   if (d.statusCode !== 200 && d.statusCode !== 206) return;

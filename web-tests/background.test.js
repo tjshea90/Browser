@@ -1207,6 +1207,18 @@ test('RX3-V3: the played report and the element number are relayed as small whol
   assert.equal(got[2].el, 1000000, 'clamped');
 });
 
+test('RX3-S2: the numbers for Diagnostics say how often each web request listener ran and how long it held the thread', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '1' });
+  h.mainFrame('https://example.com/next', { requestId: '2' });
+  h.listeners.headers({ tabId: 1, frameId: 0, type: 'main_frame', url: PAGE, statusCode: 200, requestId: '1', responseHeaders: [] });
+  await h.flushTimers();
+  const w = h.of('st').map((m) => m.w).join(' | ');
+  assert.match(w, /listeners: .*req 2 \(\d+ us\)/, w);
+  assert.match(w, /rcv 1 \(\d+ us\)/, w);
+  assert.doesNotMatch(w, /snd \d/, 'a listener that never ran is not mentioned');
+});
+
 test('RX3-G1: the manifest declares the pop-up guard and the scriptlet library for the page world, every frame, from the first moment; nothing registers them at run time', () => {
   const m = JSON.parse(fs.readFileSync(path.join(SHIELDS, 'manifest.json'), 'utf8'));
   for (const f of ['guard-main.js', 'scriptlets-main.js']) {
