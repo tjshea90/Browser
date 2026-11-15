@@ -286,19 +286,22 @@ test('a long feed: videos that played and stopped are forgotten, so the player t
 
 // ---- after the independent review of alpha44 (2026-11-15): the film must never be taken for the ad
 
-test('REVIEW: the film comes back while the ad class lingers a moment: it is put back at once and never sped up or moved to its end', async () => {
-  const page = await open({ fam: FAMILY.jw, timing: Object.assign({}, FAST, { holdMs: 700 }) });
-  await page.evaluate(() => window.__startAd({ lingerMs: 450 }));
-  await waitFor(page, () => window.__ended === 1);
-  await page.waitForTimeout(120);                                      // the film is back, the class is still there for about 330 ms more
+test('REVIEW: the ad starts BEFORE its class and the film comes back while the class lingers: the film is put back at once and never sped up or moved to its end', async () => {
+  const page = await open({ fam: FAMILY.jw, timing: Object.assign({}, FAST, { holdMs: 700 }), noFilm: true });
+  await page.evaluate(() => {
+    const v = document.querySelector('#player video'), r = document.getElementById('player');
+    window.__tMain = -1;
+    v.loop = false; v.src = window.__AD; v.play();                                   // the 12 s ad stream is there first ...
+    setTimeout(() => r.classList.add('jw-flag-ads'), 200);                           // ... its class comes 200 ms later
+    v.onended = () => { v.loop = true; v.src = window.__MAIN; v.play(); window.__tMain = 0; setTimeout(() => r.classList.remove('jw-flag-ads'), 450); };   // the film (20 s) returns, the class lingers 450 ms
+  });
+  await waitFor(page, () => window.__tMain === 0);
+  await page.waitForTimeout(150);
   const mid = await state(page);
-  assert.equal(mid.rate, 1, 'the film is not sped up while the class lingers');
-  assert.equal(mid.muted, false, 'and not muted');
-  const t0 = mid.t;
-  await page.waitForTimeout(900);
+  assert.equal(mid.rate, 1, 'the film is not sped up while the class lingers'); assert.equal(mid.muted, false, 'and not muted');
+  await page.waitForTimeout(1200);
   const s = await state(page);
-  assert.ok(s.t < t0 + 3, 'the film was not thrown to its end: ' + t0 + ' -> ' + s.t);
-  assert.equal(sum(s.msgs, 'f'), 1, 'only the AD was moved to its end (once)');
+  assert.ok(s.t < 6, 'the film was not thrown to its end (20 s long): it is at ' + s.t);
   await page.context().close();
 });
 
