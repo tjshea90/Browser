@@ -32,6 +32,8 @@ object Flavor {
     @JvmField var hasScriptlets = false
     /** Kestrel G (RX3-Y2): the built-in ad skipper for video players (YouTube first): Settings shows its switch. */
     @JvmField var hasAdSkipper = false
+    /** Kestrel G (YS1): a tap on a video player's progress bar moves the video when the page does not (seekbar.js): Settings shows its switch. */
+    @JvmField var hasTapSeek = false
 
     /** The browser engine bundled in this build ("160.0", empty on the WebView build, whose engine is the system's) and where Mozilla lists the newest one; the daily look tells the owner when a newer one exists. */
     @JvmField var engineVersion = ""
