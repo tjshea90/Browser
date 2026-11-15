@@ -90,11 +90,12 @@ window.KestrelVP = window.KestrelVP || (function () {
 
     // ------------------------------------------------------------------------------------------ the session
     function start(v, fs) {
-      S = { v: v, fs: fs, shown: 0, timer: 0, soonTimer: 0, fit: null, down: null, taps: 0, tapWin: 0, ls: [], reports: 0 };
+      S = { v: v, fs: fs, shown: 0, timer: 0, soonTimer: 0, fit: null, down: null, taps: 0, tapWin: 0, ls: [], reports: 0, gone: [], native: false, awayAt: 0 };
       for (var i = 0; i < FILM_EVENTS.length; i++) { v.addEventListener(FILM_EVENTS[i], soon, { passive: true }); S.ls.push(FILM_EVENTS[i]); }
       for (var j = 0; j < EVS.length; j++) window.addEventListener(EVS[j], onEvent, { capture: true, passive: true });
       window.addEventListener('resize', fitSoon, { passive: true });
       fit(v);
+      putAway(S);
       report();
       loop();
     }
@@ -106,6 +107,7 @@ window.KestrelVP = window.KestrelVP || (function () {
       try { for (var i = 0; i < s.ls.length; i++) s.v.removeEventListener(s.ls[i], soon); } catch (e1) { /* ignore */ }
       try { for (var j = 0; j < EVS.length; j++) window.removeEventListener(EVS[j], onEvent, true); window.removeEventListener('resize', fitSoon); } catch (e2) { /* ignore */ }
       try { unfit(s); } catch (e3) { /* ignore */ }
+      try { bringBack(s); } catch (e4) { /* ignore */ }
     }
     api.active = function () { return !!S; };            // videobar.js draws nothing while Kestrel's controls own the film
     api.stop = stop;
@@ -143,6 +145,7 @@ window.KestrelVP = window.KestrelVP || (function () {
       if (!s.v.isConnected) { stop(); return; }
       s.reports++;
       if (!s.fit && s.reports < 8) fit(s.v);                                  // (the picture's size may be known only after the first reports)
+      if (Date.now() - s.awayAt >= 900) putAway(s);                           // (a page that makes its controls late, or again)
       send(sample(s.v));
     }
     // the app's answer: { c: [commands], s: shown 1 | 0, on: 0 = the controls are not Kestrel's here }
@@ -234,6 +237,45 @@ window.KestrelVP = window.KestrelVP || (function () {
       fx = Math.max(0, Math.min(1, fx));
       send({ k: 'vtap', x: Math.round(fx * 1000) });
     }
+
+    // ------------------------------------------------------------------------------------------ the page's own controls are put away
+    // The page's player draws controls of its own (YouTube's chrome, Shaka's UI, video.js, JW Player, Plyr, MediaElement ...) and a `<video controls>` has the engine's bar: two sets of controls on one screen, one of
+    // them not hiding when the person taps (Shaka keeps its bar up on a tap), is what the owner called a screen that is not given to the video. While Kestrel's controls own the film the page's are not shown, and they
+    // are given back when full screen ends. Done through the element's own style (the page's content security policy does not stop that) and looked for again every second (a page makes them late, or again). Captions,
+    // "Skip ad", next / previous, settings and every other button of the page are NOT in the list.
+    var CHROME = '.ytp-chrome-top,.ytp-chrome-bottom,.ytp-gradient-top,.ytp-gradient-bottom,.ytp-pause-overlay,.player-controls-top,.player-controls-bottom,.player-controls-background,' +
+      '.shaka-controls-container,.shaka-play-button-container,.vjs-control-bar,.vjs-big-play-button,.jw-controls,.jw-controls-backdrop,.plyr__controls,.plyr__control--overlaid,' +
+      '.mejs__controls,.mejs__overlay-play,.fp-controls';
+    function putAway(s) {
+      s.awayAt = Date.now();
+      try { if (s.v.controls && !s.native) { s.native = true; s.v.controls = false; } } catch (e0) { /* the engine's bar stays */ }
+      var roots = [], rn = null;
+      try { rn = s.v.getRootNode ? s.v.getRootNode() : null; } catch (e1) { rn = null; }
+      if (rn && rn.querySelectorAll) roots.push(rn);
+      if (rn !== document && document.querySelectorAll) roots.push(document);
+      for (var r = 0; r < roots.length; r++) {
+        var list;
+        try { list = roots[r].querySelectorAll(CHROME); } catch (e2) { continue; }
+        for (var i = 0; i < list.length && s.gone.length < 80; i++) {
+          var el = list[i], known = false;
+          for (var k = 0; k < s.gone.length; k++) if (s.gone[k].el === el) { known = true; break; }
+          if (known || !within(s.fs, el)) continue;
+          try {
+            s.gone.push({ el: el, old: el.style.getPropertyValue('display'), prio: el.style.getPropertyPriority('display') });
+            el.style.setProperty('display', 'none', 'important');
+          } catch (e3) { /* not an element with a style */ }
+        }
+      }
+    }
+    function bringBack(s) {
+      var g = s.gone || [];
+      s.gone = [];
+      for (var i = 0; i < g.length; i++) {
+        try { if (g[i].old) g[i].el.style.setProperty('display', g[i].old, g[i].prio); else g[i].el.style.removeProperty('display'); } catch (e) { /* the page took it away */ }
+      }
+      try { if (s.native) { s.native = false; s.v.controls = true; } } catch (e5) { /* ignore */ }
+    }
+    api.away = function () { return S ? S.gone.length : 0; };           // (tests)
 
     // ------------------------------------------------------------------------------------------ the picture is shown whole
     function fit(v) {
