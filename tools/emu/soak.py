@@ -1447,6 +1447,10 @@ class FakeAdb:
             return ""
         if cmd.startswith("getprop sys.boot_completed"):
             return "1"
+        if cmd.startswith("pidof system_server"):
+            return "1111"
+        if cmd.startswith("pm path android"):
+            return "package:/system/framework/framework-res.apk"
         if cmd.startswith("pidof"):
             return str(self.pid)
         if cmd.startswith("ps -A"):
