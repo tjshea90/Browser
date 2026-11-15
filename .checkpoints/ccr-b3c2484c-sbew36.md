@@ -1,21 +1,22 @@
-# CHECKPOINT 2388 — read me first, then TASKS.md
+# CHECKPOINT 2389 — read me first, then TASKS.md
 
-**Written:** 2026-11-15T15:42:44Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `68bec1cb` (this checkpoint is the commit after it)
+**Written:** 2026-11-15T15:45:31Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `8c17fde8` (this checkpoint is the commit after it)
 
 ## Just done
-lab runs 3+4 read (artifacts via tools/emu/fetch_artifact.py): FS1 WORKS on the real engine (turn sideways on a wide video, follows the sensor with Android's rotation lock ON, one-time turn let go, rotate button); RX4-X1 APK guard PROVEN (own copy + disguised mp4 refused, plain mp4 ignored); RX4-X3 Safe Browsing PROVEN (all 7 Mozilla/Google test pages blocked); X2 asks 'by itself' (auto-asked seen) but the lab could not read the dialog; FOUND: Back did not leave full screen (fixed? not proven: key logging added), capturePixels() blocks the UI thread (2 s stall, ANR after 20 s) -> read-back back-off added, emulator system_server watchdog death under 4 guest cores -> 2 cores + recovery, driver number bug
+run 5 (all, 20 min) = android.yml run 43731411440 in progress; run 6 (all, 60 min = the one-hour soak) QUEUED behind it (same concurrency group), dispatched at ~15:47Z on commit 8c17fde8 which also has: full-bleed full screen (insets padding dropped), Android immersive box pre-confirmed in the lab, dump reads engine prefs, README of lab findings in research/EMU_LAB.md
 
 ## Do this next
-dispatch lab_suite=all lab_minutes=20 (run 5) on this commit; then read it with tools/emu/fetch_artifact.py; if green dispatch lab_minutes=60; then ship alpha48 (bump geckoapp versionCode 149 / alpha48, bash ship.sh gecko ...)
+poll run 43731411440 artifacts (list_workflow_run_artifacts), read with tools/emu/fetch_artifact.py (download_workflow_run_artifact -> url); then the one-hour run (id: list_workflow_runs status in_progress/queued) ends ~17:30Z -> write research/SOAK_RUN1.md; meanwhile: tick TASKS rows (claim.sh --done), bump geckoapp versionCode 149 / 0.3.0-alpha48, run the full JVM+web suites, ship.sh gecko when run 5 shows no new bug
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M tools/emu/soak.py
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  a5ac2866 ckpt 2388: lab runs 3+4 read (artifacts via tools/emu/fetch_artifact.py): FS1 WORKS on 
   b486edd4 ckpt 2387: added: Back leaves full screen first (handleBack: exitFullScreen), RX4-X2 re
   e29a9127 ckpt 2386: RX4-M0e done (opt-in 'Measure scrolling on real pages': Settings toggle defa
   4a1e86b2 ckpt 2385: lab smoke run 2 GREEN (run 43684548711: KVM ok, emulator boots in 30 s, Geck
@@ -25,8 +26,7 @@ dispatch lab_suite=all lab_minutes=20 (run 5) on this commit; then read it with 
   c471f4a5 ckpt 2381: FS1 code: core/media/FullscreenTurn (pure rule + 20 tests), geckoapp/web/Ful
   f81e0818 ckpt 2380: saved research/REVIEW-EXTERNAL-4.md (byte-identical copy of the upload) and 
   1f33dcab ckpt 2379: alpha47 RELEASED and recorded (run 43680608062 green, BUILDLOG line written,
-  0665c59e ckpt 2378: alpha47 DISPATCHED: workflow android.yml run 43680608062 (run_number 99, ref
 ```
 
-(5 automatic checkpoint(s) since the last deliberate one — the
+(4 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
