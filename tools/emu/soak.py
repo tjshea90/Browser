@@ -571,6 +571,7 @@ class Soak:
         self.compat_sites_done = []
         self.snd_rows = []
         self.fsb_results = []
+        self.yahoo_fs = None
         self.shields_mode = "on"
         self.quiet_issues = False
         self.last_diag = ""
@@ -1296,6 +1297,51 @@ class Soak:
         self.record({"kind": "fsbars", "name": "fullscreen-bars", "status": "ok" if ok else "failed", "results": results})
         self.check_alive("fullscreen-bars")
 
+    # ---- the owner's page itself (message 46): the live Yahoo Finance player taken full screen the way the owner did, then the tablet turned sideways and back. Kestrel's bar (a tap on the player) has the Full button
+    # at a place worked out from the page: the player was measured at 190-507 css px down the /videos/ page (lab run 17:05), so the bar sits 10 css px above its bottom edge and the button is its last one.
+    # Nothing here is asserted hard (a live page changes): pictures at every step, the app's own lines, and whether full screen began at all.
+    def yahoo_fullscreen(self):
+        w, h = self.screen
+        d = 1.0625                                           # 170 dpi
+        self.ph.a.sh("setprop debug.kestrel.nohide 0")
+        self.ph.setting("system", "accelerometer_rotation", 0); self.ph.setting("system", "user_rotation", 0)
+        self.ph.physical(0, 9.81, 0); time.sleep(2)
+        lmark = self.log.size()
+        self.ph.open_url("https://finance.yahoo.com/videos/")
+        t0 = time.time()
+        while time.time() - t0 < 90 and not any(e["ev"] in ("loaded", "error") for e in health_events(self.log.since(lmark), "page")):
+            time.sleep(2)
+        time.sleep(10)
+        self.shot("yahoofs-page")
+        self.ph.tap(w // 2, 25 + int(350 * d)); time.sleep(3)                       # the bar (or the page's own controls)
+        bar = [e["ev"] for e in health_events(self.log.since(lmark), "videobar")]
+        self.shot("yahoofs-tap")
+        entered = False
+        how = "none"
+        fm = self.log.size()
+        if "shown" in bar:
+            self.ph.tap(int((8 + 548 - 24) * d), 25 + int(475 * d)); time.sleep(5)   # the bar's Full button
+            entered = bool(health_events(self.log.since(fm), "fullscreen", "turn"))
+            how = "Kestrel's Full button"
+        else:
+            how = "the page showed controls of its own (Kestrel's bar: %s); its full-screen button is not known: only a picture" % (",".join(bar) or "nothing")
+        self.shot("yahoofs-full")
+        states = []
+        if entered:
+            for label, accel in (("landscape", (9.81, 0, 0)), ("portrait-again", (0, 9.81, 0))):
+                lm = self.log.size()
+                self.ph.physical(*accel)
+                time.sleep(0.5); self.shot("yahoofs-%s-early" % label)
+                time.sleep(4.0); self.shot("yahoofs-%s" % label)
+                lines = self.log.since(lm)
+                states.append({"state": label, "settled": [e["rest"] for e in health_events(lines, "fullscreen", "turn-settled")][-1:] or [""], "paused": len(health_events(lines, "fullscreen", "turn-pause")),
+                               "sizes": len(health_events(lines, "gecko", "size")), "bars": [e["rest"][:100] for e in health_events(lines, "fullscreen", "bars")][-1:] or [""]})
+            self.ph.key("KEYCODE_BACK"); time.sleep(3)
+        self.ph.physical(0, 9.81, 0)
+        self.yahoo_fs = {"entered": entered, "how": how, "states": states}
+        self.record({"kind": "yahoo", "name": "yahoo-fullscreen", "status": "ok", "note": "full screen %s (%s); %d turn(s) photographed" % ("began" if entered else "did NOT begin", how[:90], len(states))})
+        self.check_alive("yahoo-fullscreen")
+
     # ---- the whole run
     # ---- VC1 / LP1 (owner message 44): a video with no controls gets Kestrel's own bar when it is tapped; a long press on a video opens the video options and never the floating panel
     VBAR_PAGES = [("naked", "/video/vc?kind=naked", "shown"), ("shadow-root", "/video/vc?kind=shadow", "shown"), ("shadow-root + frame over it", "/video/vc?kind=shadow&ad=1", "shown"), ("own controls", "/video/vc?kind=own", "own")]
@@ -1675,6 +1721,14 @@ class Soak:
                     L.append("| %s | %s | %s | %s | %sx%s | %s%s | %s | %s |" % (r["mode"], nm, st["state"], redtxt, st.get("iw") or "?", st.get("ih") or "?", st["paused"], " (silent clip: no session)" if st["no_session"] else "", (st["settled"] or "-")[:70], (st["bars"] or "-")[:90]))
                 if r["nobar"]:
                     L.append("| %s | %s | Kestrel's bar after a tap on the full-screen film | %s | | | | |" % (r["mode"], nm, "shown" if r["bar_shown"] else "NOT SHOWN"))
+            L.append("")
+        if self.yahoo_fs:
+            y = self.yahoo_fs
+            L.append("## The owner's Yahoo Finance player in full screen, turned sideways and back (message 46; pictures yahoofs-*)")
+            L.append("")
+            L.append("- full screen %s (%s)" % ("began" if y["entered"] else "did NOT begin", y["how"]))
+            for st in y["states"]:
+                L.append("- %s: video paused for the turn %d time(s); %s; page-area size changes %d; bars: %s" % (st["state"], st["paused"], st["settled"][0] or "no 'turn settled' line", st["sizes"], st["bars"][0] or "-"))
             L.append("")
         if self.vbar_rows:
             L.append("## Video controls and the long press on a video (VC1 / LP1, owner message 44)")
@@ -2056,6 +2110,7 @@ def main():
         if a.suite in ("fsy", "all"):
             s.fullscreen_bars()
         if a.suite == "fsy":
+            s.yahoo_fullscreen()
             s.audio_round()      # (the sound check rides along: its verdict is the page's own clock now, run 43745675957 showed the old one was wrong)
         if a.suite == "compat":
             s.compat_round(a.minutes)
