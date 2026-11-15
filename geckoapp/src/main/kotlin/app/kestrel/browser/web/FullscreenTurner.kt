@@ -92,13 +92,13 @@ class FullscreenTurner(
 
     // ---------------------------------------------------------------------------------------- what the engine tells us (UI thread)
 
-    /** GeckoView's OrientationDelegate: a page called screen.orientation.lock(...). true = allowed. Only ever applied while full screen; a request that comes a moment before "full screen" is kept briefly. */
-    fun siteLocked(bits: Int): Boolean {
-        val o = FullscreenTurn.fromSite(bits)
-        if (o == null) { Health.log("fullscreen", "site-lock-refused", "bits=$bits"); return false }
-        if (!on) { pendingSite = o; pendingAt = SystemClock.uptimeMillis(); Health.log("fullscreen", "site-lock-early", "bits=$bits"); return true }
+    /** GeckoView's OrientationDelegate: a page called screen.orientation.lock(...); [orientation] is an ANDROID orientation number (RV1). true = allowed. Only ever applied while full screen; a request that comes a moment before "full screen" is kept briefly. */
+    fun siteLocked(orientation: Int): Boolean {
+        val o = FullscreenTurn.fromSite(orientation)
+        if (o == null) { Health.log("fullscreen", "site-lock-refused", "orientation=$orientation"); return false }
+        if (!on) { pendingSite = o; pendingAt = SystemClock.uptimeMillis(); Health.log("fullscreen", "site-lock-early", "orientation=$orientation"); return true }
         siteLock = o; bySite++
-        apply(o, false, "the page asked: screen.orientation.lock (bits $bits)")
+        apply(o, false, "the page asked: screen.orientation.lock (orientation $orientation)")
         return true
     }
 

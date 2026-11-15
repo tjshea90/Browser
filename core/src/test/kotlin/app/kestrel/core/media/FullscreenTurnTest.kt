@@ -8,26 +8,18 @@ import org.junit.Test
 
 /** FS1 (owner message 43): the screen turns with the tablet while a video is full screen, like in a video player app. */
 class FullscreenTurnTest {
-    // ---- what a site asks for: screen.orientation.lock(...) arrives as GeckoView's bit set (portrait 1|2, landscape 4|8)
-    @Test fun aSiteLockMapsToTheAndroidOrientationItMeans() {
-        assertEquals(FullscreenTurn.PORTRAIT, FullscreenTurn.fromSite(1))
-        assertEquals(FullscreenTurn.REVERSE_PORTRAIT, FullscreenTurn.fromSite(2))
-        assertEquals(FullscreenTurn.SENSOR_PORTRAIT, FullscreenTurn.fromSite(3))
-        assertEquals(FullscreenTurn.LANDSCAPE, FullscreenTurn.fromSite(4))
-        assertEquals(FullscreenTurn.REVERSE_LANDSCAPE, FullscreenTurn.fromSite(8))
-        assertEquals("'landscape' lets the sensor choose between the two landscapes", FullscreenTurn.SENSOR_LANDSCAPE, FullscreenTurn.fromSite(12))
-        assertEquals("'any'", FullscreenTurn.FULL_SENSOR, FullscreenTurn.fromSite(15))
+    // ---- what a site asks for: screen.orientation.lock(...) arrives as an ANDROID orientation number (GeckoView 160 converts the engine's bits first: GeckoRuntime.toAndroidOrientation, review RV1)
+    @Test fun aSiteLockIsTheAndroidOrientationItNames() {
+        for (o in listOf(0, 1, 6, 7, 8, 9, 10)) assertEquals(o, FullscreenTurn.fromSite(o))
+        assertEquals("'landscape' (any landscape) arrives as 6", FullscreenTurn.SENSOR_LANDSCAPE, FullscreenTurn.fromSite(6))
+        assertEquals("'landscape-primary' arrives as 0 and used to be refused", FullscreenTurn.LANDSCAPE, FullscreenTurn.fromSite(0))
+        assertEquals("'portrait' arrives as 7 and used to mean 'any'", FullscreenTurn.SENSOR_PORTRAIT, FullscreenTurn.fromSite(7))
+        assertEquals("'any'", FullscreenTurn.FULL_SENSOR, FullscreenTurn.fromSite(10))
     }
 
     @Test fun aSiteLockWeDoNotUnderstandIsRefused() {
-        assertNull(FullscreenTurn.fromSite(0))
-        assertNull("only the engine's DEFAULT bit", FullscreenTurn.fromSite(16))
-        assertNull("a negative number is not a bit set", FullscreenTurn.fromSite(-1))
-    }
-
-    @Test fun aMixedSiteLockMeansAnyOrientation() {
-        assertEquals(FullscreenTurn.FULL_SENSOR, FullscreenTurn.fromSite(5)) // portrait-primary + landscape-primary
-        assertEquals(FullscreenTurn.FULL_SENSOR, FullscreenTurn.fromSite(14))
+        assertNull("natural", FullscreenTurn.fromSite(-1))
+        for (o in listOf(2, 3, 4, 5, 11, 12, 15, 16, 99)) assertNull("$o is no orientation the engine sends", FullscreenTurn.fromSite(o))
     }
 
     // ---- what to ask for when a page goes full screen

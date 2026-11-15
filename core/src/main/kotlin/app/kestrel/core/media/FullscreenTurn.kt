@@ -34,26 +34,14 @@ object FullscreenTurn {
     /** What to ask Android for, and whether that request is a one-time turn that should be let go once the tablet is held that way ([release]). */
     class Plan(val request: Int, val release: Boolean)
 
-    // GeckoView's screen-orientation bits (GeckoScreenOrientation.ScreenOrientation in the 160 engine): portrait primary / secondary, landscape primary / secondary. 16 = the engine's DEFAULT (no request)
-    private const val G_PORTRAIT_PRIMARY = 1
-    private const val G_PORTRAIT_SECONDARY = 2
-    private const val G_LANDSCAPE_PRIMARY = 4
-    private const val G_LANDSCAPE_SECONDARY = 8
-    private const val G_ANY_OF_FOUR = G_PORTRAIT_PRIMARY or G_PORTRAIT_SECONDARY or G_LANDSCAPE_PRIMARY or G_LANDSCAPE_SECONDARY
-
-    /** A site's `screen.orientation.lock(...)` as the engine passes it on (a bit set) -> the Android orientation it means; null = nothing we understand (refuse). */
-    fun fromSite(bits: Int): Int? {
-        if (bits <= 0) return null
-        return when (bits and G_ANY_OF_FOUR) {
-            0 -> null
-            G_PORTRAIT_PRIMARY -> PORTRAIT
-            G_PORTRAIT_SECONDARY -> REVERSE_PORTRAIT
-            G_PORTRAIT_PRIMARY or G_PORTRAIT_SECONDARY -> SENSOR_PORTRAIT
-            G_LANDSCAPE_PRIMARY -> LANDSCAPE
-            G_LANDSCAPE_SECONDARY -> REVERSE_LANDSCAPE
-            G_LANDSCAPE_PRIMARY or G_LANDSCAPE_SECONDARY -> SENSOR_LANDSCAPE
-            else -> FULL_SENSOR // a mix of both directions: the page accepts any
-        }
+    /**
+     * A site's `screen.orientation.lock(...)` as GeckoView 160 hands it to OrientationDelegate.onOrientationLock: an ANDROID `SCREEN_ORIENTATION_*` number, NOT the engine's bit set (the engine converts
+     * first: `GeckoRuntime.toAndroidOrientation`, read in the 160 bytecode by the independent review RV1: portrait-primary 1, portrait-secondary 9, landscape-primary 0, landscape-secondary 8, portrait
+     * 7, landscape 6, any 10, natural -1, anything else 1). Returns the number to ask Android for; null = nothing to apply (natural, or a number nobody sends): the lock is refused.
+     */
+    fun fromSite(androidOrientation: Int): Int? = when (androidOrientation) {
+        LANDSCAPE, PORTRAIT, SENSOR_LANDSCAPE, SENSOR_PORTRAIT, REVERSE_LANDSCAPE, REVERSE_PORTRAIT, FULL_SENSOR -> androidOrientation
+        else -> null
     }
 
     fun isLandscape(o: Int) = o == LANDSCAPE || o == SENSOR_LANDSCAPE || o == REVERSE_LANDSCAPE
