@@ -243,7 +243,7 @@ class OwnerRulesTest {
         assertTrue("and relayed by the background page with clamped numbers", source(dir + "background.js").contains("m.k !== 'vpt'") && source(dir + "background.js").contains("sender.frameId !== 0"))
         val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
         val fn = body(act, "internal fun onPageViewport(m: org.json.JSONObject) {")
-        assertTrue(fn, fn.contains("tabWithUrl(m.optString(\"p\")) ?: return") && fn.contains("fullscreenTab !== tab") && fn.contains("vpTries >= 3") && fn.contains("resyncEngineSize()"))
+        assertTrue(fn, fn.contains("tabOfReport(m.optString(\"p\")) ?: return") && fn.contains("fullscreenTab !== tab") && fn.contains("vpTries >= 3") && fn.contains("resyncEngineSize()"))
         assertTrue("the real size change is the view one pixel shorter, then back", body(act, "private fun resyncEngineSize() {").contains("lp.bottomMargin = 1") && act.contains("it.bottomMargin = 0"))
         assertTrue("a new full screen starts clean and the activity going away cancels it", body(act, "internal fun fullScreenChanged(tab: Tab, on: Boolean) {").contains("vpUndo.run()") && body(act, "override fun onDestroy() {").contains("removeCallbacks(vpUndo)"))
         assertTrue("Diagnostics says it", act.contains("out.add(viewportLine())"))
@@ -263,6 +263,8 @@ class OwnerRulesTest {
         val turn = source("geckoapp/src/main/assets/kestrel-shields/turn.js")
         assertTrue("the top frame says its viewport once soon after the page is up", turn.contains("if (TOP) setTimeout(function () { try { sendViewport(document.fullscreenElement ? 1 : 0); }"))
         assertTrue("a new session forgets that the page reports", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/GeckoTab.kt").contains("g.vpOk = false"))
+        val pick = body(act, "private fun tabOfReport(pageUrl: String): Tab? {")
+        assertTrue("two tabs with the same address: the full-screen tab, then the tab in front, before the first one in the list", pick.indexOf("fullscreenTab?.takeIf { same(it) }") in 0 until pick.indexOf("current?.takeIf { same(it) }") && pick.indexOf("current?.takeIf { same(it) }") < pick.indexOf("tabWithUrl(u)"))
     }
 
     // SND1, owner message 45: "Sound should not keep playing if I am not currently on the Kestrel tab." The engine suspends the media of an inactive session (proven in the emulator lab); the app adds a safety net.

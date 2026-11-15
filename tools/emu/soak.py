@@ -177,6 +177,12 @@ class Phone:
                 pids.append(m.group(0))
         return pids
 
+    def hogs_running(self):
+        """How many of our busy loops are alive (ps), so the report can say whether the emulator was really slowed down."""
+        out = self.a.sh("ps -A -o PID,ARGS 2>/dev/null | grep -c 'while :; do :; done'", timeout=15)
+        m = re.search(r"\d+", out or "")
+        return max(0, int(m.group(0)) - 1) if m else 0        # (the grep itself matches its own line)
+
     def stop_hogs(self, pids):
         if pids:
             self.a.sh("kill %s" % " ".join(pids), timeout=15)
@@ -1437,7 +1443,8 @@ class Soak:
             nhogs = 0
             if entered:
                 hogs = self.ph.start_hogs(3)
-                nhogs = len(hogs)
+                time.sleep(1)
+                nhogs = self.ph.hogs_running()
                 try:
                     time.sleep(2)
                     for label, accel in (("sideways", (9.81, 0, 0)), ("upright", (0, 9.81, 0)), ("sideways again", (9.81, 0, 0)), ("upright again", (0, 9.81, 0))):

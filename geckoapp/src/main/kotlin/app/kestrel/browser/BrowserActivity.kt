@@ -1257,8 +1257,19 @@ open class BrowserActivity : Activity(), DockListener {
     private var vpLast = "no full-screen page has told its size yet"
     private val vpUndo = Runnable { (geckoView.layoutParams as? FrameLayout.LayoutParams)?.let { if (it.bottomMargin != 0) { it.bottomMargin = 0; geckoView.layoutParams = it } } }
 
+    /**
+     * The tab a page's viewport report came from. Two tabs can hold the same address (lab run 43766649065: the same lab page opened again, a restored tab plus the same link): the FIRST one in the list is the wrong one
+     * then, and the report of the full-screen page was credited to it and lost. So: the full-screen tab, else the tab in front, when their address is the page's; else the first tab with that address.
+     */
+    private fun tabOfReport(pageUrl: String): Tab? {
+        val u = pageUrl.substringBefore('#')
+        if (u.isEmpty()) return null
+        fun same(t: Tab?) = t != null && t.url.substringBefore('#') == u
+        return (if (fullscreenOn) fullscreenTab?.takeIf { same(it) } else null) ?: current?.takeIf { same(it) } ?: tabWithUrl(u)
+    }
+
     internal fun onPageViewport(m: org.json.JSONObject) {
-        val tab = tabWithUrl(m.optString("p")) ?: return
+        val tab = tabOfReport(m.optString("p")) ?: return
         val pw = m.optInt("w"); val ph = m.optInt("h")
         val vw = geckoView.width; val vh = geckoView.height
         if (pw <= 0 || ph <= 0 || vw <= 0 || vh <= 0) return
