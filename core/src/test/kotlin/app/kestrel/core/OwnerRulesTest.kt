@@ -276,7 +276,9 @@ class OwnerRulesTest {
         assertTrue("the top frame says its viewport once soon after the page is up", turn.contains("if (TOP) setTimeout(function () { try { sendViewport(document.fullscreenElement ? 1 : 0); }"))
         assertTrue("a new session forgets that the page reports", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/GeckoTab.kt").contains("g.vpOk = false"))
         val pick = body(act, "private fun tabOfReport(pageUrl: String): Tab? {")
-        assertTrue("two tabs with the same address: the full-screen tab, then the tab in front, before the first one in the list", pick.indexOf("fullscreenTab?.takeIf { same(it) }") in 0 until pick.indexOf("current?.takeIf { same(it) }") && pick.indexOf("current?.takeIf { same(it) }") < pick.indexOf("tabWithUrl(u)"))
+        assertTrue("two tabs with the same address: the full-screen tab, then the tab in front, before the first one in the list", pick.indexOf("fullscreenTab?.takeIf { same(it) }") in 0 until pick.indexOf("current?.takeIf { same(it) }") && pick.indexOf("current?.takeIf { same(it) }") < pick.indexOf("tabs.firstOrNull { same(it) }"))
+        assertTrue("a single-page site (the tab's address follows pushState, the page's is the one it loaded with): the same host", pick.contains("fun sameHost(t: Tab?)") && pick.indexOf("tabs.firstOrNull { same(it) }") < pick.indexOf("sameHost(it)") && pick.contains(".take(300)"))
+        assertTrue("a new page has not told its size yet", act.contains("tab.gecko.vpOk = false } // (a new page has not told its size yet"))
     }
 
     // SND1, owner message 45: "Sound should not keep playing if I am not currently on the Kestrel tab." The engine suspends the media of an inactive session (proven in the emulator lab); the app adds a safety net.
