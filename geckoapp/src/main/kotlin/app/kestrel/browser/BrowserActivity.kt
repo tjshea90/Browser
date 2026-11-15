@@ -397,7 +397,7 @@ open class BrowserActivity : Activity(), DockListener {
                 }
                 GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
                 GeckoEngine.warmUp(this)
-                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }))
+                ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }))
                 Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
             }
         }
@@ -1153,6 +1153,24 @@ open class BrowserActivity : Activity(), DockListener {
 
     // ---------------------------------------------------------------- YS1: taps on a video player's bar (seekbar.js reports differences; never an address; private tabs are dropped before)
     private val seekStats = app.kestrel.core.media.SeekStats()
+    /** VC1 (owner message 44): what Kestrel's own video bar (videobar.js) did on a page. Worker thread; never for a private tab, numbers only. */
+    private fun onVideoBar(m: org.json.JSONObject) {
+        if (pageIsPrivate(m.optString("p"))) return
+        val e = m.optString("e")
+        val a = m.optString("a")
+        when (e) {
+            "shown" -> Health.count("videobar.shown")
+            "own" -> Health.count("videobar.pageHasControls")
+            "act" -> if (a.isNotEmpty()) Health.count("videobar.act.$a")
+            else -> return
+        }
+        Health.log("videobar", e, a)
+    }
+    private fun videoBarLine(): String {
+        val mode = listOf("Automatic", "always", "off")[prefs.videoControls]
+        val acts = listOf("play", "pause", "seek", "mute", "full").joinToString(", ") { "$it ${Health.counter("videobar.act.$it")}" }
+        return "Video controls ($mode): Kestrel's bar shown ${Health.counter("videobar.shown")} times, the page had controls of its own ${Health.counter("videobar.pageHasControls")} times; used: $acts"
+    }
     private fun onSeekTaps(m: org.json.JSONObject) {
         seekStats.add(m.optInt("t"), m.optInt("s"), m.optInt("f"), m.optInt("o"), m.optString("r"), m.optInt("u"), m.optString("n"))
         Health.count("seekbar.reports")
@@ -1938,6 +1956,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(playerSkipStats.line() + if (prefs.skipVideoAds) "" else " (the Settings switch is off)")
         out.add(seekStats.line() + if (prefs.tapSeek) "" else " (the Settings switch is off)")
         out.add(fsTurner.line())
+        out.add(videoBarLine())
         out.add(videoQuality.line(GeckoEngine.videoPolicyText))
         out.add(scrollGaps.line(prefs.measureScroll))
         out.add(app.kestrel.browser.shield.ScriptletSummary.read(applicationContext).ifEmpty { "Scriptlets in the lists: no compile report yet (the bundled lists are used until the first update)" })
