@@ -12,6 +12,7 @@ try { ({ chromium } = require('playwright')); } catch (e) { ({ chromium } = requ
 const args = process.argv.slice(2);
 const VIDEO = args.find((a) => !a.startsWith('--')) || 'dQw4w9WgXcQ';
 const KESTREL = args.includes('--kestrel');
+const EMBED = args.includes('--embed');
 const DIR = path.join(__dirname, '..', '..', 'geckoapp', 'src', 'main', 'assets', 'kestrel-shields');
 const read = (f) => fs.readFileSync(path.join(DIR, f), 'utf8');
 // (a Firefox user agent on Chromium's own TLS fingerprint is answered with YouTube's bot-check page, found 2026-11-15; the Chrome-Android one gets the real mobile site, which is what the seek logic is read from)
@@ -43,7 +44,8 @@ const UA = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like G
   });
   const out = { mode: KESTREL ? 'WITH the real Kestrel page scripts' : 'plain page (nothing injected)', video: VIDEO };
   try {
-    await page.goto('https://m.youtube.com/watch?v=' + VIDEO, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    // --embed: the same HTML5 player (and its progress bar) in YouTube's embed page, which is not answered with the bot-check page
+    await page.goto(EMBED ? 'https://www.youtube.com/embed/' + VIDEO + '?controls=1&playsinline=1&autoplay=1&mute=1' : 'https://m.youtube.com/watch?v=' + VIDEO, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForFunction(() => { const v = document.querySelector('video'); return v && v.readyState >= 2 && v.duration > 30; }, null, { timeout: 40000 }).catch(() => {});
     await page.waitForTimeout(4000);
     out.start = await page.evaluate(() => { const v = document.querySelector('video'); return v ? { t: Math.round(v.currentTime * 10) / 10, dur: Math.round(v.duration), paused: v.paused, seeking: v.seeking } : null; });
