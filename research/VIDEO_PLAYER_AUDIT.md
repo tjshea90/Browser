@@ -18,3 +18,23 @@ Evidence level: R = read in the code, L = seen in an emulator lab run, O = the o
 | 8 | first full screen stretched the picture; a turn and back fixed it (51) | the engine sized the full-screen page to the DISPLAY (1024 px) while the view was 947 px, and kept that until a real size change (lab run 43760546128); the page laid its player out for the wrong box. Fixed in alpha52 (page tells its viewport, app corrects) | L | FB4 shipped; VP6 adds a guard that keeps `object-fit: contain` on a full-screen film whose box is not its shape |
 | 9 | the video is slow and laggy (51) | Kestrel's scripts measured at no cost (research/VIDEO_SMOOTHNESS.md 2a); the page's own JavaScript and ads on a 3-5x slower CPU, one page process, and the stream (5 Mbit/s) are the known causes. What Kestrel does add around a playing video: `place()` polls `getBoundingClientRect` every 250 ms while the bar shows (forces layout), `render()` writes DOM on every `timeupdate`, the neon glow, and (alpha51-53) turn.js listeners | R | VP8 / VP9: a controller with no per-frame and no layout work, nothing running while hidden; the owner's Diagnostics line "CPU by process" decides the rest |
 | 10 | the tablet's navigation bar DID hide in full screen on alpha50 (50) | my theory "this ROM keeps its bars whatever is asked" was wrong for portrait; the screenshots of message 46 were taken with the bar pulled up | O | Settings "System bars in full-screen video": Keep stays the default (never covers anything), Hide stays available and the new controls respect a pulled-up bar |
+
+## 2. Research: what the proven touch players do (VP1a, report R2 = research/VIDEO_PLAYER_SOURCES_PLAYERS.md; R1 on the browsers' own controls follows)
+Read from source and official docs (Media3 PlayerView / PlayerControlView / DefaultTimeBar, Shaka UI, video.js, Plyr, NewPipe, VLC, MX; Android 10 `ViewConfiguration`, `AccessibilityManager`). The behaviours they share, and what Kestrel does:
+
+| Behaviour | The players | Kestrel (core/player/PlayerRules) |
+| :- | :- | :- |
+| a tap on the picture | toggles the controls (shows if hidden, hides if shown); never play / pause on touch (Plyr only reveals) | `ControlsMachine.tap` |
+| single-tap latency | when double-tap is on, the single tap waits the double-tap window: 300 ms (Chromium, Android's own timeout), 500 ms (Shaka), 550 ms (NewPipe) | 300 ms (`DOUBLE_TAP_MS`) |
+| auto-hide while playing | 2.0-5.0 s: Chromium 2.5, video.js 2, Shaka 3, VLC 4, ExoPlayer 5, Firefox touch 5 | 3.5 s (`HIDE_AFTER_MS`), longer when Android's accessibility "time to take action" asks (`AccessibilityManager.getRecommendedTimeoutMillis`, API 29) |
+| paused / ended / failed | the controls stay until the person acts (all but Firefox) | stay; come back when the film pauses or ends (edge-triggered, so a repeated "paused" report cannot bring them back after a tap hid them) |
+| any touch, scrubbing | restarts the timer; scrubbing suspends it | `interacted()`, `pin()` |
+| buffering | a spinner; the controls' state does not change | ring over the picture; the clock waits |
+| double tap seek | +/-10 s, repeated taps within 0.5 s accumulate (Shaka, NewPipe, YouTube) | left / right third, 10 s, `BURST_MS` 500 ms, flash "+20 s" |
+| double tap middle | play / pause (VLC, NewPipe, MX) | play / pause |
+| scrub target | a strip 40-48 dp tall around a 2-5 dp bar, a 10-14 dp thumb | 48 dp strip, 3.4 dp bar (5 dragging), 6.5 dp thumb (10 dragging) |
+| scrub semantics | Media3: seek on release, never pauses; the others pause while dragging | seek on release (no rebuffer for every move on a 5 Mbit/s link), no pause |
+| duration display | only when finite, > 0 and < 2^32; NaN / 0 = unknown; Infinity or 2^32 = live (no end time, no track); re-read on every `durationchange`; a Media Source stream's length is spec-legal short and growing (rises as segments append, shrinks at `endOfStream`) | `DurationView`: KNOWN only when it is not smaller than what is played or buffered AND (for a `blob:` stream) it has stayed the same for 2 s; LIVE for Infinity or 2^32; otherwise only the position |
+| ads in the same element | the time bar and seeking are hidden during an ad (Shaka, Media3) | not detected (no page-agnostic rule): an ad's own length shows once it has been stable |
+| rotation | keep playing, resume at the same position, handle the change in place (no recreation); no documented "pause while resizing" | Kestrel's own pause + cover until the page has the new size (ROT1/ROT2), controls hidden under the cover and shown for a moment after |
+| system bars | hidden bars come back over the content without moving it (Media3 has no inset code) | the controls move up by a pulled-up navigation bar's height (VP3) |
