@@ -224,17 +224,46 @@ class TurnSettleMachineTest {
         assertFalse(m.turning)
     }
 
-    @Test fun thePageCapEndsTheWaitForAPageThatNeverSaysItAndTheEngineIsNudgedOnce() {
+    @Test fun thePageCapEndsTheWaitForAPageThatReportsTheWrongSizeForeverAndTheEngineIsNudgedOnce() {
         val h = Host().apply { playing = true; expects = true }
         val m = machine(h)
         m.configChanged(true)
-        while (m.turning && h.clock < 10_000) h.wait(m, TurnSettle.TICK_MS)
+        m.pageReported(false)                                       // it reports, with the old size: the engine has not handed the new one over
+        while (m.turning && h.clock < 10_000) { h.wait(m, TurnSettle.TICK_MS); if (h.clock % 1000L < TurnSettle.TICK_MS) m.pageReported(false) }
         assertFalse(m.turning)
         assertTrue("let go at the page cap, not before: ${h.clock}", h.clock >= TurnSettle.PAGE_CAP_MS && h.clock < TurnSettle.PAGE_CAP_MS + 2 * TurnSettle.TICK_MS)
         assertEquals("the engine was given one real size change, once", 1, h.nudges); assertEquals(1, m.nudges)
         assertEquals(1, m.gaveUp); assertEquals(0, m.lagTurns)
         assertTrue(m.last, m.last.contains("gave up"))
         assertEquals("the video plays again all the same", listOf("tab1"), h.resumed)
+    }
+
+    // review of alpha53: a page whose report is dropped (a single-page site whose address differs) must not keep the cover up for the whole cap
+    @Test fun aPageThatSaysNothingAtAllIsLetGoAfterThreeSecondsByTheOldRule() {
+        val h = Host().apply { playing = true; expects = true }
+        val m = machine(h)
+        m.configChanged(true)
+        while (m.turning && h.clock < 10_000) h.wait(m, TurnSettle.TICK_MS)
+        assertFalse(m.turning)
+        assertTrue("about the silent limit, far short of the page cap: ${h.clock}", h.clock >= TurnSettle.SILENT_MS && h.clock < TurnSettle.SILENT_MS + 2 * TurnSettle.TICK_MS)
+        assertEquals(listOf("tab1"), h.resumed)
+    }
+
+    @Test fun aSecondTurnWhileOneGoesOnStartsItsOwnClocks() {
+        val h = Host().apply { playing = true; expects = true }
+        val m = machine(h)
+        m.configChanged(true)
+        m.pageReported(false)
+        h.wait(m, 6900)
+        m.configChanged(false)                                       // a rotation at 6.9 s of the first
+        m.pageReported(false)
+        h.wait(m, 100)
+        assertTrue("the second turn gets its own wait, not the 0.1 s that were left", m.turning)
+        h.wait(m, TurnSettle.PAGE_CAP_MS - 200)
+        assertTrue(m.turning)
+        h.wait(m, 400)
+        assertFalse(m.turning)
+        assertEquals("one pause for both", 1, m.pausedCount)
     }
 
     @Test fun aPageThatDoesNotReportIsJudgedByTheOldRuleAndNeverNudged() {
@@ -311,6 +340,7 @@ class TurnSettleMachineTest {
         m.touchedScreen()
         assertFalse("the cover goes at once", m.turning); assertTrue(h.coverFaded)
         assertTrue("their play / pause stands: nothing is played for them", h.resumed.isEmpty()); assertEquals(1, m.skippedResume)
+        assertEquals("a touch is not the page giving up", 0, m.gaveUp); assertTrue(m.last, m.last.contains("ended by a touch"))
         assertNull("no timer is left behind", h.scheduled)
     }
 }
