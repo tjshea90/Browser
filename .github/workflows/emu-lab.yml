@@ -21,6 +21,11 @@ on:
         description: 'How long the soak part runs, in minutes (60 = one hour)'
         type: string
         default: '60'
+      net:
+        description: 'full = the runner\'s own fast link; hotspot = shaped like the owner\'s phone hotspot (5 Mbit/s each way, 60-100 ms delay)'
+        type: choice
+        options: [full, hotspot]
+        default: full
   workflow_call:
     inputs:
       suite:
@@ -29,6 +34,9 @@ on:
       minutes:
         type: string
         default: '60'
+      net:
+        type: string
+        default: full
 
 permissions:
   contents: read
@@ -40,6 +48,7 @@ jobs:
     env:
       SUITE: ${{ inputs.suite }}
       MINUTES: ${{ inputs.minutes }}
+      NET: ${{ inputs.net }}
       AVD_NAME: kestrel29x64
       PKG: app.kestrel.browser.gecko.debug
       ANDROID_AVD_HOME: /home/runner/.android/avd # avdmanager and the emulator must agree where the virtual device lives (newer tools may choose another folder)
@@ -115,10 +124,10 @@ jobs:
           adb reverse tcp:8091 tcp:8091
           cat "$RUNNER_TEMP/lab-out/soaklab.log"
 
-      - name: Run the lab (${{ inputs.suite }}, soak ${{ inputs.minutes }} min)
+      - name: Run the lab (${{ inputs.suite }}, soak ${{ inputs.minutes }} min, net ${{ inputs.net }})
         run: |
           export PATH="$ANDROID_HOME/platform-tools:$PATH"
-          python3 -u -I tools/emu/soak.py --out "$RUNNER_TEMP/lab-out" --suite "$SUITE" --minutes "$MINUTES" --pkg "$PKG" --port 8091 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
+          python3 -u -I tools/emu/soak.py --out "$RUNNER_TEMP/lab-out" --suite "$SUITE" --minutes "$MINUTES" --net "$NET" --pkg "$PKG" --port 8091 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
 
       - name: Put the report on the run's summary page
         if: always()

@@ -469,6 +469,8 @@ class Soak:
         self.ph.a.sh("svc power stayon true")
         self.ph.key("KEYCODE_WAKEUP")
         self.ph.setting("system", "accelerometer_rotation", 0)
+        if self.a.net == "hotspot":
+            self.ph.a.run("emu", "network", "speed", "5000:5000"); self.ph.a.run("emu", "network", "delay", "60:100")
         self.ph.start_app()
         time.sleep(15)
         self.main_pid = (self.ph.pids() or [None])[0]
@@ -983,6 +985,10 @@ class Soak:
         m = re.search(r"(\d+)x(\d+)", size)
         if m:
             self.screen = (int(m.group(1)), int(m.group(2)))
+        if self.a.net == "hotspot":
+            self.ph.a.run("emu", "network", "speed", "5000:5000")
+            self.ph.a.run("emu", "network", "delay", "60:100")
+            say("network shaped like the owner's hotspot: 5 Mbit/s each way, 60-100 ms delay")
         say("screen", self.screen, "| density", self.ph.a.sh("wm density").strip().replace("\n", " "), "| android", self.ph.a.sh("getprop ro.build.version.release").strip())
 
     def start_app(self):
@@ -1087,8 +1093,9 @@ class Soak:
         L = []
         L.append("# Kestrel emulator lab: %s run" % self.a.suite)
         L.append("")
-        L.append("Run: %s, %d scenes in %.0f min. Device: Android 10 emulator, %dx%d, package %s. **x86_64 + software GL is NOT the tablet: only behaviour counts, not absolute times.**" %
-                 (time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime()), len(ev), (time.time() - T0) / 60, self.screen[0], self.screen[1], self.a.pkg))
+        L.append("Run: %s, %d scenes in %.0f min. Device: Android 10 emulator, %dx%d, package %s, network %s. **x86_64 + software GL is NOT the tablet: only behaviour counts, not absolute times.**" %
+                 (time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime()), len(ev), (time.time() - T0) / 60, self.screen[0], self.screen[1], self.a.pkg,
+                  "shaped like the owner's hotspot (5 Mbit/s, 60-100 ms)" if self.a.net == "hotspot" else "unshaped (the runner's own fast link)"))
         L.append("")
         L.append("## Summary")
         L.append("")
@@ -1329,6 +1336,7 @@ def main():
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--net", default="full", choices=["full", "hotspot"], help="hotspot = the owner's link: 5 Mbit/s each way and about 80 ms of delay (the carrier caps his phone hotspot)")
     ap.add_argument("--selftest", action="store_true")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)

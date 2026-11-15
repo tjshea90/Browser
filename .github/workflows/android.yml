@@ -49,6 +49,11 @@ on:
         description: 'Only for app = lab: how long the soak part runs, in minutes (60 = one hour)'
         type: string
         default: '60'
+      lab_net:
+        description: 'Only for app = lab: full = the runner\'s own fast link, hotspot = shaped like the owner\'s phone hotspot (5 Mbit/s, 60-100 ms)'
+        type: choice
+        options: [full, hotspot]
+        default: full
 
 # Read-only by default. Only the three build jobs below publish a Release (`gh release create`), and only they get `contents: write`, so the cheap gate jobs and the test jobs
 # (which run the repository's own scripts) never hold a token that can write.
@@ -192,6 +197,7 @@ jobs:
     with:
       suite: ${{ inputs.lab_suite }}
       minutes: ${{ inputs.lab_minutes }}
+      net: ${{ inputs.lab_net }}
 
   # ------------------------------------------------------------------ Kestrel (system WebView)
   build-web:
