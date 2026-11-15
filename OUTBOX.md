@@ -1902,3 +1902,25 @@
 > - Please try alpha49: the Yahoo Finance video in full screen, turned both ways. If a bar still covers anything, send me the Diagnostics lines "Full-screen system bars" and "Turning under a video".
 > - Owner-only GitHub steps still waiting: the protected `release` environment, the "pin actions to a full commit SHA" policy, and the private signing key last.
 <!-- sha:5705f1b86c79 -->
+
+## 2026-11-15T20:43:57Z
+> alpha50 is out and replaces alpha49. Please install this one:
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha50
+>
+> **Why alpha50.** An independent code check of alpha49 found two real problems, both fixed:
+> - The "Full-screen system bars" line in Diagnostics could say "hidden" while both bars were showing on Android 10. That is the line I asked you to send me.
+> - A tab that had been closed or put to sleep could still make a turn of the screen cover the page for nothing.
+> - Turning the tablet a second time during a turn was ignored once the video had been paused. That is also fixed.
+> - The code that handles turning now has twelve unit tests for exactly these cases.
+>
+> **Not proven yet.**
+> - The emulator run of your full-screen and turning cases proved nothing. That emulator booted with a 16 MB memory limit for apps, so Kestrel kept crashing on start-up and no page action ever ran. That limit is a quirk of the emulator, because the later boot and every earlier run had 512 MB. I added a guard so the Shields background code can no longer take the whole browser down on a memory error. The app now also logs its memory limit at start, and I re-ran the emulator at about 20:50 UTC. Until that run is clean, the full-screen, turning and Yahoo-controls fixes are checked only by tests, not on a real engine, and not on your tablet.
+> - The big compatibility run on about a hundred sites was also mostly void. The emulator's own system was killed three times, and only four sites loaded: Google, Bing, DuckDuckGo and Wikipedia. The two "crashes" it reported were not Kestrel. I changed the setup (more memory, one tab per site, a longer wait) and will re-run it after the full-screen run.
+>
+> **Still open:**
+> 1. Your tablet test of alpha50: the Yahoo Finance video in full screen, turned both ways, and the two Diagnostics lines if anything is still covered.
+> 2. The emulator results for full screen, turning and the Yahoo player. I will tell you what they show.
+> 3. The compatibility run, then fixes from it.
+> 4. Owner-only GitHub steps still waiting: the protected `release` environment, the "pin actions to a full commit SHA" policy, and the private signing key last.
+<!-- sha:2848c2e14233 -->
