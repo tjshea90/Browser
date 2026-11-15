@@ -29,11 +29,12 @@ object MediaRank {
     private val QUALITY_WORD = Regex("""(?i)[_\-. ](hd|sd|fhd|uhd|high|low|medium|mobile)(?![0-9a-z])""")
     private val PIECE_PARAMS = setOf("range", "bytestart", "byteend", "start", "end", "sq", "seg", "segment", "rn", "rbuf", "offset", "byte_range", "bytes")
 
-    fun rank(items: List<MediaCandidate>, pressedUrl: String? = null): Result {
+    /** [primary] (RX3-V3): the file that really plays ([MediaList.primary]); it goes to the top of the sheet. */
+    fun rank(items: List<MediaCandidate>, pressedUrl: String? = null, primary: MediaCandidate? = null): Result {
         val all = dedupe(items)
         val pressedKey = pressedUrl?.takeIf { it.startsWith("http", true) }?.let { MediaCandidate.keyOf(it) }
         val exact = pressedKey?.let { k -> all.firstOrNull { it.key == k } ?: all.firstOrNull { normKey(it.url) == normKey(k) } }
-        return if (exact != null) byExact(all, exact) else byRank(all)
+        return if (exact != null) byExact(all, exact) else byRank(all, primary)
     }
 
     // ---- the element the owner pressed is known: that file, its other qualities, nothing else on top
@@ -63,7 +64,7 @@ object MediaRank {
 
     // ---- nothing pressed (the download icon, a player that hands out a blob: address): the best guess
 
-    private fun byRank(all: List<MediaCandidate>): Result {
+    private fun byRank(all: List<MediaCandidate>, primary: MediaCandidate? = null): Result {
         val files = all.filter { it.kind == MediaKind.FILE && !it.audioOnly }
         val real = files.filter { !it.decoy && it.verified }                    // RX3-V1 / V2: a big hero loop, an ad or an address nobody has seen must not make the real video look small
         val ref = real.filter { it.length > 0 }.maxByOrNull { it.length }
@@ -84,6 +85,7 @@ object MediaRank {
             if (best != null) { other.remove(best); main.add(best) }
         }
         main.sortWith(order()); other.sortWith(order())
+        if (primary != null) main.firstOrNull { it === primary || it.key == primary.key }?.let { p -> main.remove(p); main.add(0, p) }   // RX3-V3: what really plays comes first
         return Result(main, other, null)
     }
 

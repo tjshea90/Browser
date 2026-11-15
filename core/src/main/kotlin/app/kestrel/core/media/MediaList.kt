@@ -25,6 +25,11 @@ class MediaCandidate(
     var label: String? = null
     /** Somebody showed interest in it (the page's player reported it, it was long-pressed, opened in the sheet or downloaded): it is never pushed out of a full list and never hidden as a preview ([MediaList]). */
     var touched = false
+    /** RX3-V3: an element really PLAYED this file (3 s of playback, reported by the page): [element] is that element's number on its page, [areaPx] the part of its box that was on screen, [playedSeq] the order of such reports. */
+    var played = false
+    var element = 0
+    var areaPx = 0L
+    var playedSeq = 0
     /** RX3-V2: found only in the page's text (a link, an og tag, a string in a script): never requested, so nobody has seen what it is. See [verified]. */
     var fromMarkup = false
     /**
@@ -82,7 +87,8 @@ class MediaCandidate(
 class MediaList(private val max: Int = 48) {
     private val items = ArrayList<MediaCandidate>()
     /** What a page's element said about a file the sniffer has not reported yet (the element reports on loadedmetadata, the extension on the response: either can come first). Bounded; applied when the file is added. */
-    private class Said(val width: Int, val height: Int, val durationMs: Long, val label: String?, val role: VideoRole?)
+    private class Said(val width: Int, val height: Int, val durationMs: Long, val label: String?, val role: VideoRole?, val played: Boolean, val element: Int, val areaPx: Long)
+    private var playSeq = 0
     private val pending = LinkedHashMap<String, Said>()
 
     val size: Int get() = items.size
@@ -135,7 +141,7 @@ class MediaList(private val max: Int = 48) {
             return changed
         }
         items.add(0, c)
-        pending.remove(c.key)?.let { applyTo(c, it.width, it.height, it.durationMs, it.label, it.role) }
+        pending.remove(c.key)?.let { applyTo(c, it.width, it.height, it.durationMs, it.label, it.role, it.played, it.element, it.areaPx) }
         while (items.size > max) removeLeastValuable()
         version++
         return true
@@ -199,20 +205,20 @@ class MediaList(private val max: Int = 48) {
     }
 
     /** What the page's own `<video>` / `<source>` told us about a URL (picture size, length in time, the label it shows). */
-    fun applyInfo(url: String, width: Int, height: Int, durationMs: Long, label: String?, role: VideoRole? = null): Boolean {
+    fun applyInfo(url: String, width: Int, height: Int, durationMs: Long, label: String?, role: VideoRole? = null, played: Boolean = false, element: Int = 0, areaPx: Long = 0L): Boolean {
         val key = MediaCandidate.keyOf(url)
         val c = items.firstOrNull { it.key == key }
         if (c == null) { // the file has not been reported yet: what the element said waits for it
-            pending[key] = Said(width, height, durationMs, label, role)
+            pending[key] = Said(width, height, durationMs, label, role, played, element, areaPx)
             while (pending.size > PENDING_MAX) pending.remove(pending.keys.first())
             return false
         }
-        val changed = applyTo(c, width, height, durationMs, label, role)
+        val changed = applyTo(c, width, height, durationMs, label, role, played, element, areaPx)
         if (changed) version++
         return changed
     }
 
-    private fun applyTo(c: MediaCandidate, width: Int, height: Int, durationMs: Long, label: String?, role: VideoRole?): Boolean {
+    private fun applyTo(c: MediaCandidate, width: Int, height: Int, durationMs: Long, label: String?, role: VideoRole?, played: Boolean = false, element: Int = 0, areaPx: Long = 0L): Boolean {
         var changed = false
         if (width > 0 && c.width != width) { c.width = width; changed = true }
         if (height > 0 && c.height != height) { c.height = height; changed = true }
@@ -222,8 +228,29 @@ class MediaList(private val max: Int = 48) {
         if (role != null && c.role != role) { c.role = role; changed = true }
         if (role == null || role == VideoRole.PLAYER) { if (!c.touched) { c.touched = true; changed = true } }
         else if (!c.interest && c.touched) { c.touched = false; changed = true }
+        // RX3-V3: which element really plays
+        if (element > 0 && c.element != element) { c.element = element; changed = true }
+        if (areaPx > 0 && c.areaPx != areaPx) { c.areaPx = areaPx; changed = true }
+        if (played && !c.played) { c.played = true; c.playedSeq = ++playSeq; changed = true }
+        if (played && c.element > 0 && markEarlierAds(c)) changed = true
         return changed
     }
+
+    /**
+     * RX3-V3: the SAME element that played a file under 90 s earlier and now plays one at least three times longer: the earlier one was an advertisement (a pre-roll, then the film). Never when the owner showed interest
+     * in it. @return true if something changed.
+     */
+    private fun markEarlierAds(c: MediaCandidate): Boolean {
+        var changed = false
+        for (o in items) {
+            if (o === c || o.element != c.element || !o.played || o.playedSeq >= c.playedSeq || o.interest) continue
+            if (o.durationMs in 1 until AD_MAX_MS && c.durationMs >= 3 * o.durationMs && o.role != VideoRole.AD) { o.role = VideoRole.AD; o.touched = false; changed = true }
+        }
+        return changed
+    }
+
+    /** RX3-V3: the file that really plays: the played one with the largest part of its picture on screen, then the longest. Null when nothing played (or only decoration). */
+    fun primary(): MediaCandidate? = items.filter { it.played && !it.decoy }.maxWithOrNull(compareBy<MediaCandidate>({ it.areaPx }, { it.durationMs }))
 
     /**
      * What is worth offering: playlists and big files first. Tiny files (sounds, tracking clips) and, when the page has a stream, small clips next to it (ads, previews) are left out.
@@ -256,6 +283,8 @@ class MediaList(private val max: Int = 48) {
         /** A stream shorter than this is a clip (an advertisement, a preview), not something to save. */
         const val MIN_STREAM_MS = 20_000L
         private const val PENDING_MAX = 32
+        /** RX3-V3: a file that played under this long, then replaced on the same element by one three times longer, was an advertisement. */
+        private const val AD_MAX_MS = 90_000L
     }
 }
 
