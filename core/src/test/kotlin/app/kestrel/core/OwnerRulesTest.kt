@@ -97,8 +97,8 @@ class OwnerRulesTest {
         assertFalse("and on YouTube too (it is the owner's case): $entry", entry.contains("exclude_matches"))
         val js = source("geckoapp/src/main/assets/kestrel-shields/seekbar.js")
         for (banned in listOf("preventDefault", "stopPropagation", "stopImmediatePropagation", "dispatchEvent", ".click(", "fastSeek")) assertFalse("the script never cancels, stops or fakes a page event ($banned)", js.contains(banned))
-        assertTrue("the video is moved only after the app said yes", body(js, "    function settle(d, x) {").contains("askApp(function (yes) {") && js.contains("r.seek === true"))
-        assertTrue("and never while the page already moved it", body(js, "    function settle(d, x) {").contains("pageMoved(d)"))
+        assertTrue("the video is moved only after the app said yes", body(js, "function settle(d, x) {").contains("askApp(function (yes) {") && js.contains("r.seek === true"))
+        assertTrue("and never while the page already moved it", body(js, "function settle(d, x) {").contains("pageMoved(d)"))
         val bridge = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt")
         val flags = bridge.lines().first { it.contains("val guard = ") }
         assertTrue("flag 16 follows only the Settings switch (a site with Shields off keeps tap-to-seek): $flags", flags.contains("or (if (prefs().tapSeek) 16 else 0)"))
