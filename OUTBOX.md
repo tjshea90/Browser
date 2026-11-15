@@ -1802,3 +1802,50 @@
 ## 2026-11-15T18:21:57Z
 > Everything is pushed. Waiting for the hour soak (about 18:36) and then the sound run.
 <!-- sha:f5c5295f9107 -->
+
+## 2026-11-15T18:34:07Z
+> Status: the one-hour soak finished, and its numbers are mostly unusable. The emulator's 5 Mbit/s cap made ordinary pages like Wikipedia and BBC time out. Since you say fast wifi is the normal case, the main lab runs are now fast-network. The soak also flagged three "crashes" that were only helper processes closing normally, which I'm fixing. Next are the sound check, then the big site-by-site compatibility run.
+>
+> 📌 **Chat checkpoint: 🔴 Red**
+>
+> **Goal:** Kestrel, the owner's private browser for a 2 GB Android 10 Go tablet, mostly on fast wifi. Current asks (messages 43–45):
+> - full-screen rotation (shipped)
+> - video controls and long-press options (shipped in alpha48)
+> - sound must stop when not on the Kestrel tab (SND1)
+> - a polished, compatible, fast daily browser (PD1)
+> - fast-wifi emulator runs that log everything, then tune Kestrel from them (LAB2)
+>
+> **Decisions made:**
+> - Lab runs use the runner's fast link by default; hotspot shaping is not used for the main runs.
+> - The compat suite loads about 100 sites twice, Shields ON then OFF, from a cold cache.
+> - No foreground service for sound (the answer to RX4-V2 is NO).
+>
+> **Changed / rejected:**
+> - The hour soak under 5 Mbit/s shaping is not trustworthy for page speed.
+> - Helper-process deaths (`:media`, tab processes) are not app crashes.
+> - The earlier "Back does not leave full screen" report was a lab artifact.
+>
+> **Key details:**
+> - Branch `ccr-b3c2484c-sbew36`.
+> - alpha48 is released (tag `kestrel-g-v0.3.0-alpha48`, commit 281c48f4).
+> - Hour soak run 43740398387 has been read.
+> - Sound run 43745675957 is queued.
+> - Video-bar review agent `af040def2527a6855` is still running.
+> - Heartbeat trigger `trig_01Y8CFHKVb6hmQmEEM78p6gv`.
+>
+> **Done so far:** the lab harness is written and tested (page-health probe, scroll and memory measures, compat suite, report tables), and the Kotlin compile is green.
+>
+> **Open / next steps:**
+> 1. Fix the lab's helper-process false "crash".
+> 2. Read the sound run and fix SND1b if needed.
+> 3. Dispatch the 90-minute fast-net compat run, then read it and tune.
+> 4. Read the reviewer's result.
+> 5. Delete the heartbeat when done.
+>
+> **Rules to remember:** ckpt after every step; owner requests go into TASKS first; no `push:` workflow trigger; no APKs or keys in the repo; say what was not run on the tablet; sound must not play away from Kestrel; answer in plain words and re-list open items.
+>
+> ⚠️ **Health:** very long session with one compaction and many large logs; CHECKPOINT.md in the repo is the real state.
+>
+> 🔴 I'd move to a fresh chat now. Run `/amhandoff` and I'll write a file that brings the new chat fully up to speed.
+> 💡 The code word is off in this chat. Type `/amcodeword` and I'll start every reply with 'Yes Boss!', so you'll notice if I start losing track.
+<!-- sha:3230fc3d5e8f -->

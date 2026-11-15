@@ -240,7 +240,8 @@ CRASH_PATTERNS = [
     (re.compile(r"am_crash.*app\.kestrel"), "am_crash"),
     (re.compile(r"am_anr.*app\.kestrel"), "am_anr"),
     (re.compile(r"Process app\.kestrel\S* \(pid \d+\) has died"), "process died"),
-    (re.compile(r"am_proc_died.*app\.kestrel"), "am_proc_died"),
+    # only the app's MAIN process (its name has no ":something" after the package): the helper processes (:media, :sandboxed_tab...) end normally when a tab closes or the decoder is idle (lab run 43740398387 counted three as crashes)
+    (re.compile(r"am_proc_died: \[\d+,\d+,app\.kestrel[\w.]*,"), "am_proc_died"),
     (re.compile(r"am_kill.*app\.kestrel.*(?:lowmem|low mem|empty|cached|memory)", re.I), "killed for memory"),
 ]
 
