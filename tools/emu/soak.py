@@ -1271,6 +1271,7 @@ class Soak:
                 time.sleep(3)
                 results.append({"mode": mode, "kind": kind, "nobar": nobar, "entered": entered, "bar_shown": bar_shown, "states": states})
                 self.ph.physical(0, 9.81, 0)
+            self.dump_diag("fsb-" + mode)                       # the app's own words about the bars after this mode (diagnostics-fsb-hidden.txt / -kept.txt)
         self.ph.a.sh("setprop debug.kestrel.nohide 0")
         # verdicts: the red strip must be visible (>= 3 rows) in every state; with the bars KEPT it must end above the system bar (the navigation bar is 52 px tall), with the bars hidden it sits on the very edge
         ok = True
