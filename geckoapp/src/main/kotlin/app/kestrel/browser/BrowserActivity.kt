@@ -787,7 +787,10 @@ open class BrowserActivity : Activity(), DockListener {
 
         // Edge-to-edge safe: Android 15+ draws behind the system bars for targetSdk 35+; Android 10 reports zero insets here.
         root.setOnApplyWindowInsetsListener { v, insets ->
-            if (Build.VERSION.SDK_INT >= 30) {
+            if (fullscreenOn) { // FS1: a full-screen picture is full-bleed (the emulator lab's screenshot showed a 51 px black strip where the hidden navigation bar's space was kept, sideways)
+                v.setPadding(0, 0, 0, 0)
+                if (Build.VERSION.SDK_INT >= 30) WindowInsets.CONSUMED else @Suppress("DEPRECATION") insets.consumeSystemWindowInsets()
+            } else if (Build.VERSION.SDK_INT >= 30) {
                 val i = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout() or (if (urlTyping) 0 else WindowInsets.Type.ime()))
                 v.setPadding(i.left, i.top, i.right, i.bottom)
                 WindowInsets.CONSUMED
@@ -2584,6 +2587,7 @@ open class BrowserActivity : Activity(), DockListener {
         dock.visibility = if (on) View.GONE else View.VISIBLE
         progress.visibility = if (on) View.GONE else View.VISIBLE
         applyImmersive(on)
+        root.requestApplyInsets() // FS1: the insets listener drops its padding while a page is full screen and takes it back afterwards
         if (on) fsTurner.enter() else fsTurner.exit() // FS1: the screen follows the tablet while a page is full screen
     }
 
