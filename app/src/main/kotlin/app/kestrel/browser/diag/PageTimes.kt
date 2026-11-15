@@ -18,6 +18,7 @@ object PageTimes {
     private const val KEEP = 14
     private val loads = ArrayList<Load>()
     private val open = HashMap<Any, Load>()
+    private val late = HashMap<Any, Load>()   // loads that ended before their first paint was reported (a fast page paints after its load ended): the paint is still wanted
     private val seen = HashMap<String, Int>()
 
     private fun hostOf(url: String): String {
@@ -29,6 +30,7 @@ object PageTimes {
     }
 
     @Synchronized fun start(key: Any, url: String, priv: Boolean) {
+        late.remove(key)
         if (priv) { open.remove(key); return }
         val host = hostOf(url)
         if (host.isEmpty()) { open.remove(key); return }
@@ -42,14 +44,18 @@ object PageTimes {
     }
 
     @Synchronized fun paint(key: Any) {
-        val l = open[key] ?: return
-        if (l.paintMs < 0) l.paintMs = SystemClock.elapsedRealtime() - l.startedAt
+        val l = open[key] ?: late[key] ?: return
+        if (l.paintMs < 0) {
+            l.paintMs = SystemClock.elapsedRealtime() - l.startedAt
+            if (open[key] == null) { late.remove(key); Health.log("page", "painted", "host=${l.host} paint=${l.paintMs}ms (after the load ended)") }
+        }
     }
 
     @Synchronized fun stop(key: Any, blocked: Int, ok: Boolean = true) {
         val l = open.remove(key) ?: return
         if (l.doneMs < 0) l.doneMs = SystemClock.elapsedRealtime() - l.startedAt
         l.blocked = blocked
+        if (l.paintMs < 0) { if (late.size >= 8) late.clear(); late[key] = l }
         // SOAK1: one line per finished load (the host only), so the emulator lab and a Diagnostics paste can tell slow pages from fast ones
         Health.log("page", "loaded", "host=${l.host} paint=${l.paintMs}ms done=${l.doneMs}ms blocked=$blocked visit=${l.nth} ok=$ok")
     }
