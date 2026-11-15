@@ -290,7 +290,7 @@ class MediaListTest {
         val l = MediaList()
         l.add(file("https://ads.test/pre.mp4", 8_000_000)); l.add(file("https://c.test/film.mp4", 300_000_000))
         playedInfo(l, "https://ads.test/pre.mp4", 1, 15_000)
-        assertEquals("on its own it is just a played file", 1, l.usableCount())
+        assertEquals("until the film plays the clip is just a played file, like the film's own file", 2, l.usableCount())
         playedInfo(l, "https://c.test/film.mp4", 1, 300_000)                                                  // the SAME element, later, a file 20 times longer
         assertEquals(VideoRole.AD, l.find("https://ads.test/pre.mp4")!!.role)
         assertEquals(1, l.usableCount()); assertEquals("https://c.test/film.mp4", l.primary()!!.url)
