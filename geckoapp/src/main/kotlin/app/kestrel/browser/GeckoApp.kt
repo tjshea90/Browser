@@ -20,6 +20,7 @@ class GeckoApp : Application() {
         Flavor.hasAdSkipper = true
         Flavor.hasTapSeek = true
         Flavor.hasFullscreenTurn = true
+        Flavor.hasVideoBar = true
         Flavor.hasNetworkLab = true
         Flavor.engineVersion = try { Class.forName("org.mozilla.geckoview.BuildConfig").getField("MOZ_APP_VERSION").get(null) as? String ?: "" } catch (e: Throwable) { "" }
         Flavor.engineMetaUrl = "https://maven.mozilla.org/maven2/org/mozilla/geckoview/geckoview-armeabi-v7a/maven-metadata.xml"

@@ -109,6 +109,8 @@ class Prefs private constructor(ctx: Context) {
     var calmPages: Boolean get() = bool("calm_pages", false); set(v) = put("calm_pages", v)
     /** RX4-M0e: count the late screen updates while a real page scrolls (a frame callback that runs only during a scroll) and show the totals in Diagnostics. OFF: nothing runs. */
     var measureScroll: Boolean get() = bool("measure_scroll", false); set(v) = put("measure_scroll", v)
+    /** VC1 (owner message 44): Kestrel's own video bar for videos that have no controls: 0 automatic (only where the page shows none), 1 always, 2 off. */
+    var videoControls: Int get() = sp.getInt("video_controls", 0).let { if (it in 0..2) it else 0 }; set(v) = put("video_controls", if (v in 0..2) v else 0)
 
     /** Kestrel G: double-tap to zoom a page. OFF by default: while it is allowed, Firefox holds every tap on a page wider than the screen (Desktop site, no viewport tag) for about a quarter of a second to see whether a second tap follows (research/REVIEW-EXTERNAL-1.md 3.1, EX-3). Pinch zoom is separate and always works. */
     var doubleTapZoom: Boolean get() = bool("tap_zoom", false); set(v) = put("tap_zoom", v)
