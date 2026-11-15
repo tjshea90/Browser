@@ -180,7 +180,7 @@
       for (var s = 0; s < SKIP.length; s++) {
         var list = root.querySelectorAll(SKIP[s]);
         for (var i = 0; i < list.length; i++) {
-          if (a.clicked.indexOf(list[i]) < 0 && visible(list[i])) { a.clicked.push(list[i]); press(list[i]); mark('c'); return; }
+          if (a.clicked.indexOf(list[i]) < 0 && visible(list[i])) { a.clicked.push(list[i]); a.acted = true; press(list[i]); mark('c'); return; }
         }
       }
     }

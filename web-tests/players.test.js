@@ -26,7 +26,7 @@ function wav(seconds) {
   return 'data:audio/wav;base64,' + Buffer.concat([h, Buffer.alloc(n, 0x80)]).toString('base64');
 }
 const MAIN = wav(20), AD12 = wav(12);
-const FAST = { loopMs: 40, flushMs: 100 };   // the clocks of the script, shortened
+const FAST = { loopMs: 40, flushMs: 100, seekMs: 150, holdMs: 300 };   // the clocks of the script, shortened
 
 // the player families whose ad state is a class on the player root
 const FAMILY = {
@@ -54,11 +54,12 @@ window.__startAd = function (o) {
   var r = root(), v = vid();
   window.__mainTime = v.currentTime;
   FAM.before.forEach(function (c) { r.classList.add(c); });
+  function ui() { FAM.during.forEach(function (c) { r.classList.remove(c); }); FAM.after.forEach(function (c) { r.classList.add(c); }); }
   function done() {
-    FAM.during.forEach(function (c) { r.classList.remove(c); });
-    FAM.after.forEach(function (c) { r.classList.add(c); });
+    if (!o.lingerMs) ui();                                     // (a real player takes its ad class off a moment AFTER the film is back: lingerMs)
     v.loop = true; v.src = MAIN; v.currentTime = window.__mainTime || 0;
     if (o.unmuteAtEnd) v.muted = false;
+    if (o.lingerMs) setTimeout(ui, o.lingerMs);
     window.__ended++; v.play();
   }
   function go() {
@@ -206,7 +207,7 @@ test('on the YouTube hosts this script does nothing (youtube.js owns them)', asy
 
 test('while the stream is still the film (the ad class came first) the film is not moved', async () => {
   const page = await open({ fam: FAMILY.jw, timing: FAST });
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(3600);                                    // the film has played 3 s: it is KNOWN as the film (a pre-roll before that is a different case, below)
   const t0 = (await state(page)).t;
   await page.evaluate(() => window.__startAd({ filmStays: true }));
   await page.waitForTimeout(1200);
@@ -280,5 +281,56 @@ test('a long feed: videos that played and stopped are forgotten, so the player t
   await waitFor(page, () => window.__ended === 1);
   await page.waitForTimeout(500);
   assert.equal(sum((await state(page)).msgs, 'f'), 1, 'handled although sixteen videos came first');
+  await page.context().close();
+});
+
+// ---- after the independent review of alpha44 (2026-11-15): the film must never be taken for the ad
+
+test('REVIEW: the film comes back while the ad class lingers a moment: it is put back at once and never sped up or moved to its end', async () => {
+  const page = await open({ fam: FAMILY.jw, timing: Object.assign({}, FAST, { holdMs: 700 }) });
+  await page.evaluate(() => window.__startAd({ lingerMs: 450 }));
+  await waitFor(page, () => window.__ended === 1);
+  await page.waitForTimeout(120);                                      // the film is back, the class is still there for about 330 ms more
+  const mid = await state(page);
+  assert.equal(mid.rate, 1, 'the film is not sped up while the class lingers');
+  assert.equal(mid.muted, false, 'and not muted');
+  const t0 = mid.t;
+  await page.waitForTimeout(900);
+  const s = await state(page);
+  assert.ok(s.t < t0 + 3, 'the film was not thrown to its end: ' + t0 + ' -> ' + s.t);
+  assert.equal(sum(s.msgs, 'f'), 1, 'only the AD was moved to its end (once)');
+  await page.context().close();
+});
+
+test('REVIEW: a stream of 3 minutes or more is never moved or sped up while the film length is not known (it could be the film), whatever class is on', async () => {
+  const page = await open({ fam: FAMILY.jw, timing: FAST });
+  await page.evaluate(() => window.__startAd({ stuckAd: true, fakeDuration: 3600 }));
+  await page.waitForTimeout(1500);
+  const s = await state(page);
+  assert.equal(s.muted, false); assert.equal(s.rate, 1); assert.equal(sum(s.msgs, 'f'), 0);
+  await page.context().close();
+});
+
+test('REVIEW: the length of the film is learned only after 3 s of play without an ad class (an ad whose class came a moment late is not the film)', async () => {
+  const page = await open({ fam: FAMILY.jw, timing: FAST, noFilm: true });
+  // an ad stream of 12 s starts BEFORE its class (the class comes 200 ms later), then the 20 s film returns while the class lingers
+  await page.evaluate(() => { const v = document.querySelector('#player video'); v.src = window.__AD; v.loop = false; v.play(); setTimeout(() => document.getElementById('player').classList.add('jw-flag-ads'), 200); });
+  await page.waitForTimeout(1500);
+  const s = await state(page);
+  assert.ok(sum(s.msgs, 'a') >= 1, 'the ad was recognised although its stream was there first: ' + JSON.stringify(s.msgs));
+  assert.ok(sum(s.msgs, 'f') + sum(s.msgs, 's') >= 1, 'and skipped: it was not remembered as the film');
+  await page.context().close();
+});
+
+test('REVIEW: two visible skip buttons are each pressed once, not in turns', async () => {
+  const page = await open({ fam: FAMILY.jw, timing: FAST });
+  await page.evaluate(() => {
+    window.__startAd({ stuckAd: true, fakeDuration: 400 });
+    window.__pressed = [0, 0];
+    setTimeout(() => { for (let i = 0; i < 2; i++) { const b = document.createElement('div'); b.className = 'jw-skip jw-reset jw-skippable'; b.style.cssText = 'position:absolute;right:' + (4 + i * 90) + 'px;bottom:4px;width:80px;height:30px;background:#000'; b.addEventListener('click', () => { window.__pressed[i]++; }); document.getElementById('player').appendChild(b); } }, 100);
+  });
+  await page.waitForTimeout(1200);
+  const p = await page.evaluate(() => window.__pressed);
+  assert.deepEqual(p, [1, 1], 'each button once');
   await page.context().close();
 });
