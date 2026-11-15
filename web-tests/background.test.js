@@ -1194,6 +1194,19 @@ test('RX3-V1: the video report carries the element facts as clamped whole number
   assert.equal('f' in got[2], false, 'no facts were sent, none are invented');
 });
 
+test('RX3-V3: the played report and the element number are relayed as small whole numbers, nothing else of the element', async () => {
+  const h = harness(standardApp());
+  h.message({ k: 'vid', ev: 'played', el: 7, u: 'https://cdn.example/a.mp4', w: 1280, h: 720, d: 300, l: '', p: PAGE, f: 8, rw: 300, rh: 170, vp: 100, junk: 'x'.repeat(3000) }, 1, PAGE, 0);
+  h.message({ k: 'vid', ev: 'weird', el: -4, u: 'https://cdn.example/b.mp4', w: 1, h: 1, d: 1, l: '', p: PAGE }, 1, PAGE, 0);
+  h.message({ k: 'vid', el: 99999999999, u: 'https://cdn.example/c.mp4', w: 1, h: 1, d: 1, l: '', p: PAGE }, 1, PAGE, 0);
+  await tick(20);
+  const got = h.of('vid');
+  assert.equal(got.length, 3);
+  assert.equal(got[0].ev, 'played'); assert.equal(got[0].el, 7); assert.equal(got[0].junk, undefined);
+  assert.equal(got[1].ev, undefined, 'only "played" is passed on'); assert.equal(got[1].el, 0);
+  assert.equal(got[2].el, 1000000, 'clamped');
+});
+
 test('RX3-G1: the manifest declares the pop-up guard and the scriptlet library for the page world, every frame, from the first moment; nothing registers them at run time', () => {
   const m = JSON.parse(fs.readFileSync(path.join(SHIELDS, 'manifest.json'), 'utf8'));
   for (const f of ['guard-main.js', 'scriptlets-main.js']) {

@@ -785,6 +785,8 @@ browser.runtime.onMessage.addListener(function (m) {
   function ci(v, max) { v = v | 0; return v < 0 ? 0 : (v > max ? max : v); }
   var o = { k: 'vid', u: m.u, w: m.w | 0, h: m.h | 0, d: Math.round((m.d || 0) * 1000), l: m.l || '', p: m.p || '' };
   if (typeof m.f === 'number') { o.f = ci(m.f, 63); o.rw = ci(m.rw, 20000); o.rh = ci(m.rh, 20000); o.vp = ci(m.vp, 100); }
+  if (typeof m.el === 'number') o.el = ci(m.el, 1000000);          // RX3-V3: the element's number on its page
+  if (m.ev === 'played') o.ev = 'played';                            // RX3-V3: it really played for 3 s
   send(o).catch(function () {});
   return undefined;
 });
