@@ -1,13 +1,15 @@
-# CHECKPOINT 2363 — read me first, then TASKS.md
+# CHECKPOINT 2364 — read me first, then TASKS.md
 
-**Written:** 2026-11-15T01:10:44Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/new-session-7d9rxz` · **builds on:** `6482c198` (this checkpoint is the commit after it)
+**Written:** 2026-11-15T01:48:52Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/new-session-7d9rxz` · **builds on:** `ff8a70db` (this checkpoint is the commit after it)
 
 ## Just done
-RX3-V4 coded + unit-proven (not ticked yet): core MediaList.applyBlob/matchBlob/matchedBy + MediaCandidate.heights + MediaList.clipNextToFilm (stream under 60 s next to one of 5 min or more is not counted and goes to Other, never what played or was pressed) + MediaRank hook; MediaListBlobTest 14 + MediaListTest 33 + MediaRankTest 23 green; content.js reports blob: players as u='blob' (+ played) - web-tests/blob.test.js 4 green, played/videofacts 15 green; VideoFlow blob route + DASH early look + heights; :geckoapp:compileDebugKotlin green; lab page /blob-lab (tools/sitelab/guardlab.py). alpha44 RELEASED + RECORDED + ANSWERED (run 43660521253). RX3-S2 counters ticked. Independent review agent a47c2917ff11723db running on guard-main G4 + players.js (results arrive as a notification).
+gated kestrel-g-v0.3.0-alpha45 (gecko code 146) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
 
 ## Do this next
-RX3-V4 emulator proof, then gates and tick: (1) build ./gradlew --offline :geckoapp:assembleDebug -PgeckoAbi=x86_64 (background, poll log for EXIT), adb install -r the APK, adb shell pm clear app.kestrel.browser.gecko.debug (content.js changed, manifest version unchanged), start the lab python3 -B -I tools/sitelab/guardlab.py 8090 LOG (+ adb reverse tcp:8090 tcp:8090), run python3 -u -I tools/emu/playerlab_emu.py --port 8090 --log LOG --path /blob-lab --grep 'info-blob|media look|DONE' --wait 40; expect 'media look HLS ... length=300s' and 'video info-blob PLAYED el=1 ... matched=1 counted=1 of 2' (the 45 s clip next to the film not counted); write what it showed into research/FINDER_LAB.md (new section 5, ls first) and research/REVIEW notes; (2) full gates: bash scratchpad gates (./gradlew --offline -q :core:test :tools:build :app:testDebugUnitTest :geckoapp:testDebugUnitTest :app:lintRelease then cd web-tests && npm test) detached, poll for EXIT; (3) bash tools/claim.sh RX3-V4 --done evidence; (4) handle the review agent's findings (fix real G4/players.js bugs test-first); (5) then V6 (soft words in MediaRank) and V7 (corpus + precision in FINDER_LAB), then alpha45 = S2 counters + V4 (+ review fixes): bump geckoapp/build.gradle.kts versionCode 146 + versionName 0.3.0-alpha45, bash tools/sync-ext-version.sh, gates, bash ship.sh gecko NOTE, dispatch android.yml. Heartbeat trig_01KEDB7Qxd8zFeawjGcAkSQZ stays until alpha45 is shipped.
+TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref claude/new-session-7d9rxz, inputs {"app":"gecko","full_build":"true","note":"alpha45: an outside check of the ad-layer code in alpha44 found it could switch off a page's own invisible buttons and menus, so that part is gone (now only an invisible frame of ANOTHER site laid over a video is switched off, and it is given back if it turns out to be only fading in); the rule that refuses big links to other sites no longer catches an ordinary news card with a title; the ad skipper for JW Player, Video.js and Plyr no longer mistakes a short film for an ad and puts the film back at once when it returns after an ad; video players that use a blob address (most modern embeds) are matched to the right playlist by length, so the film that really plays comes first in the download sheet, and a clip under a minute next to a film no longer counts; DASH playlists are read early too; words such as trailer, intro or hero only push a file down when it is also much smaller than the biggest one; Diagnostics shows how long each of the extension's web-request checks holds the thread. Tested on the emulator and in test browsers, not on your tablet."}.
+When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha45), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha45 "alpha45: an outside check of the ad-layer code in alpha44 found it could switch off a page's own invisible buttons and menus, so that part is gone (now only an invisible frame of ANOTHER site laid over a video is switched off, and it is given back if it turns out to be only fading in); the rule that refuses big links to other sites no longer catches an ordinary news card with a title; the ad skipper for JW Player, Video.js and Plyr no longer mistakes a short film for an ad and puts the film back at once when it returns after an ad; video players that use a blob address (most modern embeds) are matched to the right playlist by length, so the film that really plays comes first in the download sheet, and a clip under a minute next to a film no longer counts; DASH playlists are read early too; words such as trailer, intro or hero only push a file down when it is also much smaller than the biggest one; Diagnostics shows how long each of the extension's web-request checks holds the thread. Tested on the emulator and in test browsers, not on your tablet."
+NEVER ship kestrel-g-v0.3.0-alpha45 twice (check BUILDLOG.md and the Releases first).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +18,7 @@ RX3-V4 emulator proof, then gates and tick: (1) build ./gradlew --offline :gecko
 
 ## Last ten checkpoints
 ```
+  c8a968e7 ckpt 2363: RX3-V4 coded + unit-proven (not ticked yet): core MediaList.applyBlob/matchB
   1dea80c7 ckpt 2362: RX3-S2 DONE and ticked (counters only): background.js LST + lstTimed around 
   d90ec3e7 ckpt 2361: alpha44 gated, pushed and dispatched (G4 fake play layers, V3 played element
   02082e19 ckpt 2360: gated kestrel-g-v0.3.0-alpha44 (gecko code 145) and pushed it: handoff self-
@@ -25,8 +28,7 @@ RX3-V4 emulator proof, then gates and tick: (1) build ./gradlew --offline :gecko
   b7d3f84a ckpt 2356: RX3-S1, B2, G5, G6 DONE and ticked (S1 + G6 emulator-proven, B2 measured wit
   822e687f ckpt 2355: RX3-V5 and RX3-D1 DONE (ticked): AdMarkers/AdRuns/early look and the outage 
   dec2df9d ckpt 2354: alpha42 shipped to GitHub (gated + pushed + android.yml dispatched): G7 + V1
-  652f583c ckpt 2353: gated kestrel-g-v0.3.0-alpha42 (gecko code 143) and pushed it: handoff self-
 ```
 
-(9 automatic checkpoint(s) since the last deliberate one — the
+(33 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
