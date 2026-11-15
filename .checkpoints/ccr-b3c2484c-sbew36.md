@@ -1,23 +1,22 @@
-# CHECKPOINT 2442 — read me first, then TASKS.md
+# CHECKPOINT 2443 — read me first, then TASKS.md
 
-**Written:** 2026-11-15T22:34:28Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `3b961794` (this checkpoint is the commit after it)
+**Written:** 2026-11-15T22:35:21Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `848ef753` (this checkpoint is the commit after it)
 
 ## Just done
-gated kestrel-g-v0.3.0-alpha53 (gecko code 154) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
+alpha53 (ROT2: the cover and pause of a turn wait until the page has the new size, ring, touch ends the wait, nudge, tab matching fix, Diagnostics lag + idle report counters) gated + pushed, android.yml app=gecko dispatched (release run pending), compat lab run (120 min) queued; lab run 43768199168 (fsy) read: 0 issues, every waited-on turn logs 'the page had the new size after 356-919 ms'; busy loops did not slow the KVM emulator's engine enough to show the owner's multi-second lag
 
 ## Do this next
-TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref ccr-b3c2484c-sbew36, inputs {"app":"gecko","full_build":"true","note":"alpha53: turning the tablet under a full-screen video, after your two screenshots. They showed the page still laid out for the OLD orientation for a few seconds after the turn: the engine of your tablet hands the new size to the page late, and the black cover of alpha51 and alpha52 went away as soon as Kestrel's own window was still, which is before the page had caught up. Now the black cover and the video pause stay until the page itself says it has the new size (at most 7 seconds), a small progress ring shows after about a second, a touch on the screen ends the wait, and if the page has not caught up after 2.5 seconds the engine is given one real size change. A page open in two tabs is no longer mixed up with the other tab. Diagnostics: the line Turning under a video now says how long the page took to have the new size after the last turn (the worst case, how many gave up), and Full-screen page size counts the pages that report their size. Everything else is as alpha52. Tested in headless browsers (453 tests), unit tests and the emulator (its engine is much faster than your tablet's, so it cannot show the long delay), NOT on your tablet: please try the Yahoo Finance video in full screen, turn the tablet both ways, tell me how long the black screen lasts, and send me the Diagnostics lines Turning under a video, Full-screen page size and Full-screen system bars."}.
-When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha53), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha53 "alpha53: turning the tablet under a full-screen video, after your two screenshots. They showed the page still laid out for the OLD orientation for a few seconds after the turn: the engine of your tablet hands the new size to the page late, and the black cover of alpha51 and alpha52 went away as soon as Kestrel's own window was still, which is before the page had caught up. Now the black cover and the video pause stay until the page itself says it has the new size (at most 7 seconds), a small progress ring shows after about a second, a touch on the screen ends the wait, and if the page has not caught up after 2.5 seconds the engine is given one real size change. A page open in two tabs is no longer mixed up with the other tab. Diagnostics: the line Turning under a video now says how long the page took to have the new size after the last turn (the worst case, how many gave up), and Full-screen page size counts the pages that report their size. Everything else is as alpha52. Tested in headless browsers (453 tests), unit tests and the emulator (its engine is much faster than your tablet's, so it cannot show the long delay), NOT on your tablet: please try the Yahoo Finance video in full screen, turn the tablet both ways, tell me how long the black screen lasts, and send me the Diagnostics lines Turning under a video, Full-screen page size and Full-screen system bars."
-NEVER ship kestrel-g-v0.3.0-alpha53 twice (check BUILDLOG.md and the Releases first).
+when the tag kestrel-g-v0.3.0-alpha53 exists (background watcher): mcp__github__actions_get get_workflow_run <run id> conclusion success, get_release_by_tag shows the APK, then bash tools/record-release.sh kestrel-g-v0.3.0-alpha53 "$(cat scratchpad note53.one)" and ANSWER owner message 48 in plain words (Release link on its own line; what the screenshots showed; what changed; NOT run on the tablet; what to send back: Diagnostics lines Turning under a video, Full-screen page size, Full-screen system bars; open items); then read the compat run when it ends (about 2 h) into research/COMPAT_RUN1.md and fix Shields false positives
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M geckoapp/src/main/assets/kestrel-shields/manifest.json
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  848ef753 ckpt 2442: gated kestrel-g-v0.3.0-alpha53 (gecko code 154) and pushed it: handoff self-
   3b961794 ckpt 2441: pre-ship: alpha53: turning the tablet under a full-screen video, after your 
   9d4609ad ckpt 2440: lab run 43766649065 (fsy with the slow_turn scene) read: ROT2 works on the r
   9cadf845 ckpt 2439: ROT2 complete in the tree and green: all Kotlin suites EXIT 0, npm test 453 
@@ -27,5 +26,4 @@ NEVER ship kestrel-g-v0.3.0-alpha53 twice (check BUILDLOG.md and the Releases fi
   1e089300 ckpt 2435: alpha52 shipped to GitHub (gates green, pushed): release run 43763812046 (an
   49db2736 ckpt 2434: gated kestrel-g-v0.3.0-alpha52 (gecko code 153) and pushed it: handoff self-
   ab5859df ckpt 2433: pre-ship: alpha52: full-screen video, third step. Found with the emulator la
-  80198e75 ckpt 2432: FB4 coded + all green: turn.js vpt report, background relay, ShieldsBridge v
 ```
