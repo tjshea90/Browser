@@ -52,47 +52,93 @@ window.KestrelVB = window.KestrelVB || (function () {
       }
       return window.getComputedStyle(el).pointerEvents !== 'none';
     }
-    function rootsFor(v, r) {
-      var roots = [], rt = v.getRootNode ? v.getRootNode() : document;
-      roots.push(rt);
-      if (rt !== document) roots.push(document);
+    // RW3 (second review): the page's own controls are looked for where a player keeps them, not in the first 1500 candidates of the whole document (an article with 1700 links in front of a Video.js
+    // player never got to its play button). The places, nearest first: the shadow trees and boxes around the film (up to eight levels, a whole web component at once), the shadow trees of whatever lies over
+    // the middle of the picture (a web-component overlay), and a few points over the picture and below it (a control that is not in the film's box but lies over it).
+    function scopesOf(v) {
+      var out = [], n = v, hops = 0;
+      while (n && hops++ < 8) {
+        var p = n.parentNode;
+        if (!p) break;
+        if (p.nodeType === 11) { out.push(p); n = p.host; continue; }            // the top of a shadow tree: all of it is the player's
+        if (p.nodeType !== 1 || p === document.documentElement) break;
+        out.push(p); n = p;
+        if (p === document.body) break;                                          // the body is the last box, and only when the film sits near the top of the page's boxes
+      }
+      return out;
+    }
+    function overlayRoots(r, have) {
+      var roots = [];
       try {
         var els = document.elementsFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-        for (var i = 0; i < els.length && i < 24; i++) { var sr = VF.rootOf(els[i]); if (sr && roots.indexOf(sr) < 0) roots.push(sr); }
+        for (var i = 0; i < els.length && i < 24; i++) { var sr = VF.rootOf(els[i]); if (sr && roots.indexOf(sr) < 0 && have.indexOf(sr) < 0) roots.push(sr); }
       } catch (e) { /* ignore */ }
       return roots;
+    }
+    // one element: is it a control a finger could use over / next to the film? (range / progress / slider by tag or role, at least 40 px wide; a button by tag, role or pointer cursor with a name like play /
+    // pause / mute / seek / full screen, at least 14 px each way, not a layer over the whole picture). A container whose class says "controls" is nothing: Yahoo's player has one that is 5 px tall while its ad plays.
+    function isControl(el, v, r) {
+      if (el === v || el.tagName === 'VIDEO' || (bar && el === bar.host)) return false;
+      var nm = nameOf(el), tag = el.tagName, role = el.getAttribute('role') || '', type = String(el.type || '').toLowerCase();
+      var rangeLike = (tag === 'INPUT' && type === 'range') || tag === 'PROGRESS' || /^(slider|progressbar)$/i.test(role);
+      var named = CTRL.test(nm);
+      if (!rangeLike && !named) return false;                                    // (cheap exit before any geometry: most elements are neither)
+      var cr = el.getBoundingClientRect();
+      if (cr.width < 10 || cr.height < 3 || cr.right < r.left - 4 || cr.left > r.right + 4 || cr.bottom < r.top - 4 || cr.top > r.bottom + 80) return false;   // players that keep the bar BELOW the picture count too
+      if (cr.width * cr.height >= 0.85 * r.width * r.height) return false;       // a layer over the whole picture takes taps, it is not a control
+      var range = rangeLike && cr.width >= 40;
+      var semantic = tag === 'BUTTON' || /^button$/i.test(role) || (tag === 'INPUT' && (type === 'button' || type === 'submit'));
+      var pointer = false;
+      if (named && !semantic && !range) { try { pointer = window.getComputedStyle(el).cursor === 'pointer'; } catch (e) { /* no style */ } }
+      var btn = named && (semantic || pointer) && cr.width >= 14 && cr.height >= 14;
+      if (!(range || btn)) return false;
+      return shown(el);
+    }
+    function scanList(list, skipIn, v, r) {
+      var n = 0;
+      for (var j = 0; j < list.length && n < 400; j++) {
+        var el = list[j];
+        if (skipIn && skipIn.contains && skipIn.contains(el)) continue;           // (already looked at one level down)
+        n++;
+        if (isControl(el, v, r)) return true;
+      }
+      return false;
     }
     function ownControls(v, r) {
       try {
         if (v.controls) return true;
-        var left = r.left - 4, right = r.right + 4, top = r.top - 4, bottom = r.bottom + 80;   // players that keep the bar BELOW the picture count too
-        var roots = rootsFor(v, r), i, j;
-        for (i = 0; i < roots.length; i++) {
-          var list;
-          try { list = roots[i].querySelectorAll(CAND); } catch (e) { continue; }
-          for (j = 0; j < list.length && j < 1500; j++) {
-            var el = list[j];
-            if (el === v || el.tagName === 'VIDEO' || (el.getAttribute && el.getAttribute('data-kestrel-bar'))) continue;
-            var cr = el.getBoundingClientRect();
-            if (cr.width < 10 || cr.height < 3 || cr.right < left || cr.left > right || cr.bottom < top || cr.top > bottom) continue;
-            if (cr.width * cr.height >= 0.85 * r.width * r.height) continue;                   // a layer over the whole picture takes taps, it is not a control
-            var nm = nameOf(el), tag = el.tagName, role = el.getAttribute('role') || '', type = String(el.type || '').toLowerCase();
-            // a control is something a finger can use: a range / progress / slider (by tag or role, at least 40 px wide: a volume knob counts too), or a button (by tag, role, or a pointer cursor) with a name
-            // like play / pause / mute / seek / full screen that is at least 14 px each way and not a layer over the picture. A container whose class says "controls" is nothing: Yahoo's player has one that
-            // is 5 px tall while its ad plays.
-            var range = (tag === 'INPUT' && type === 'range') || tag === 'PROGRESS' || /^(slider|progressbar)$/i.test(role);
-            if (range && cr.width < 40) range = false;
-            var semantic = tag === 'BUTTON' || /^button$/i.test(role) || (tag === 'INPUT' && (type === 'button' || type === 'submit'));
-            var pointer = false;
-            if (!semantic && !range) { try { pointer = window.getComputedStyle(el).cursor === 'pointer'; } catch (e) { /* no style */ } }
-            var btn = (semantic || pointer) && CTRL.test(nm) && cr.width >= 14 && cr.height >= 14;
-            if (!(range || btn)) continue;
-            if (!shown(el)) continue;
-            return true;
+        var levels = scopesOf(v), prev = null, i, list;
+        for (i = 0; i < levels.length; i++) {
+          try { list = levels[i].querySelectorAll(CAND); } catch (e) { continue; }
+          if (scanList(list, prev, v, r)) return true;
+          if (list.length > 600) break;                                          // a box that holds half the page: no further levels (the points below look at what lies over the picture)
+          prev = levels[i];
+        }
+        var extra = overlayRoots(r, levels);
+        for (i = 0; i < extra.length; i++) {
+          try { list = extra[i].querySelectorAll(CAND); } catch (e) { continue; }
+          if (scanList(list, null, v, r)) return true;
+        }
+        return pointsOver(v, r);
+      } catch (e) { return false; }
+    }
+    // a few points over the picture and just below it: whatever the page has stacked there (also inside shadow trees) that a finger could use
+    function pointsOver(v, r) {
+      try {
+        var xs = [r.left + 24, r.left + r.width * 0.25, r.left + r.width * 0.5, r.left + r.width * 0.75, r.right - 24];
+        var ys = [r.bottom - 22, r.bottom + 30, r.top + r.height * 0.5];
+        for (var yi = 0; yi < ys.length; yi++) for (var xi = 0; xi < xs.length; xi++) {
+          var x = xs[xi], y = ys[yi];
+          if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) continue;
+          var st = document.elementsFromPoint(x, y), k, m;
+          for (k = 0; k < st.length && k < 24; k++) {
+            if (isControl(st[k], v, r)) return true;
+            var sr = VF.rootOf(st[k]);
+            if (sr && sr.elementsFromPoint) { var inner = sr.elementsFromPoint(x, y); for (m = 0; m < inner.length && m < 24; m++) if (isControl(inner[m], v, r)) return true; }
           }
         }
-        return false;
-      } catch (e) { return false; }
+      } catch (e) { /* ignore */ }
+      return false;
     }
 
     // ------------------------------------------------------------------------------------------ taps
