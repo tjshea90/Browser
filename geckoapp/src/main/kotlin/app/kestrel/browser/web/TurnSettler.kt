@@ -43,6 +43,9 @@ class TurnSettler(
 
     private val tick = Runnable { check() }
 
+    /** Where the screen is at the start (the first turn must count too). */
+    fun init(landscape: Boolean) { wasLandscape = landscape }
+
     /** The activity's configuration changed: [landscape] is the orientation now. Called from onConfigurationChanged BEFORE the engine is told. */
     fun configChanged(landscape: Boolean) {
         val before = wasLandscape

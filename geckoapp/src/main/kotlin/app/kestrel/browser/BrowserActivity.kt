@@ -367,6 +367,7 @@ open class BrowserActivity : Activity(), DockListener {
         super.onCreate(savedInstanceState)
         // RV8: an activity that is recreated while a full screen had forced an orientation must not start with it (the system keeps the request of the old record)
         if (requestedOrientation != android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        turnSettler.init(resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) // ROT1: the first turn counts too
         StartTimeline.activityCreated() // EY-2: the start-up timeline (Diagnostics)
         window.setBackgroundDrawableResource(R.color.window_bg) // the cold-start window showed the shield; from here on it is plain black behind every page and panel
         ProcessLife.uiAlive = true; ProcessLife.cancel()

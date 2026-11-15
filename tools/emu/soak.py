@@ -2055,6 +2055,8 @@ def main():
             s.audio_round()
         if a.suite in ("fsy", "all"):
             s.fullscreen_bars()
+        if a.suite == "fsy":
+            s.audio_round()      # (the sound check rides along: its verdict is the page's own clock now, run 43745675957 showed the old one was wrong)
         if a.suite == "compat":
             s.compat_round(a.minutes)
         if a.suite in ("soak", "all"):
