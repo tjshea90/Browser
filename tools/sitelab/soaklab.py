@@ -54,6 +54,25 @@ def make_clips():
                         "-pix_fmt", "yuv420p", "-b:v", "1500k" if name == "big" else "600k", "-g", "50", "-c:a", "aac", "-b:a", "64k",
                         "-movflags", "+faststart", path], check=False)
         print("soaklab: clip %s %s" % (name, "ok" if os.path.exists(path) else "FAILED"), flush=True)
+    tone = os.path.join(OUT, "tone.m4a")          # SND1: sound without a picture
+    if not os.path.exists(tone):
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=120", "-c:a", "aac", "-b:a", "64k", "-movflags", "+faststart", tone], check=False)
+        print("soaklab: tone %s" % ("ok" if os.path.exists(tone) else "FAILED"), flush=True)
+
+
+def page_audible(kind):
+    """SND1 (owner message 45): a page that starts SOUND when its big button is tapped (a real tap is the user gesture the engine wants), as a <video> or as an <audio>, and reports every media event
+    and the page's visibility to /report so the driver can see what happened when the app was left."""
+    el = ("<video id=v src='/clip/landscape.mp4' loop playsinline style='width:100%;max-height:35vh;background:#000'></video>" if kind == "video"
+          else "<audio id=v src='/clip/tone.m4a' loop></audio>")
+    return (("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>sound lab %s</title>"
+             "<body style='margin:0;font:16px sans-serif'><h3 style='margin:10px'>sound lab %s</h3>"
+             "<button id=go style='display:block;width:90%%;height:120px;margin:20px auto;font-size:28px'>Play with sound</button>%s"
+             "<script>var v=document.getElementById('v');function send(ev){try{new Image().src='/report?kind=snd&ev='+ev+'&paused='+(v.paused?1:0)+'&ct='+v.currentTime.toFixed(1)+'&vis='+document.visibilityState+'&t='+Date.now();}catch(e){}}"
+             "['play','playing','pause','ended','volumechange','emptied'].forEach(function(e){v.addEventListener(e,function(){send(e);});});"
+             "document.addEventListener('visibilitychange',function(){send('vis');});"
+             "document.getElementById('go').onclick=function(){v.muted=false;v.volume=1;var r=v.play();if(r&&r.then){r.then(function(){send('started');},function(){send('rejected');});}};"
+             "setInterval(function(){send('tick');},2000);send('page');</script>") % (kind, kind, el)).encode())
 
 
 LOREM = ("Kestrel is a small private browser made for one tablet. It blocks advertisements and trackers, keeps the pages light, and tries hard to stay out of the way. "
@@ -306,6 +325,10 @@ class H(http.server.BaseHTTPRequestHandler):
                 if name in CLIPS:
                     return self._file(os.path.join(OUT, CLIPS[name][2]), "video/mp4")
                 return self._send(b"unknown clip", "text/plain", 404)
+            if p == "/video/audible":
+                return self._send(page_audible((q.get("kind") or ["video"])[0]))
+            if p == "/clip/tone.m4a":
+                return self._file(os.path.join(OUT, "tone.m4a"), "audio/mp4")
             if p == "/blank":
                 return self._send(b"<!doctype html><html><body style=\"margin:0;background:transparent\"></body></html>")
             if p == "/fs":
