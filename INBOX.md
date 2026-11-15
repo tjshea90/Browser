@@ -1257,3 +1257,10 @@ Review the current state of the Kestrel browser app (which is being worked on no
 
 If it is possible, put the browser in Android 10 emulators matching my hardware as much as possible running on GitHub runners and make them use the Kestrel app stimulating browsing on a variety of web sites and videos and downloads for an hour, and log any issues with loading, speed, finding and downloading videos, crashing, etc. Then look for ways to improve it based on the simulated runs 
 ```
+
+## 2026-11-15T16:00:34Z
+```
+https://finance.yahoo.com/quote/TTWO/
+
+I played a video on this site in Kestrel, and the player had no controls at all. I couldn't pause or stop the video or seek. When I long pressed the video, the floating notification panel appeared. Anywhere I can start a video in the browser, I should be able to control it. Also, the download options should come up for videos when I long press them instead of the floating notification panel
+```
