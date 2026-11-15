@@ -502,7 +502,7 @@ class Soak:
         self.ph.key("KEYCODE_WAKEUP")
         self.ph.setting("system", "accelerometer_rotation", 0)
         if self.a.net == "hotspot":
-            self.ph.a.run("emu", "network", "speed", "5000:5000"); self.ph.a.run("emu", "network", "delay", "60:100")
+            self.ph.a.run("emu", "network", "speed", "5000:5000"); self.ph.a.run("emu", "network", "delay", "none")
         self.sys_pid = self.system_pid()
 
     def hard_restart(self, where):
@@ -1121,10 +1121,10 @@ class Soak:
             self.screen = (int(m.group(1)), int(m.group(2)))
         if self.a.net == "hotspot":
             self.ph.a.run("emu", "network", "speed", "5000:5000")
-            self.ph.a.run("emu", "network", "delay", "60:100")
+            self.ph.a.run("emu", "network", "delay", "none")   # the emulator's delay option (60-100 ms) made hacker-news take 33 s and cnn-lite never load (lab run 109): the speed cap alone is used
             st = self.ph.a.run("emu", "network", "status").replace("\n", " ").replace("OK", "").strip()
             self.net_status = st[:200]
-            say("network shaped like the owner's hotspot: 5 Mbit/s each way, 60-100 ms delay; the emulator says:", self.net_status)
+            say("network shaped like the owner's hotspot: 5 Mbit/s each way (no extra delay); the emulator says:", self.net_status)
         self.sys_pid = self.system_pid()
         say("screen", self.screen, "| density", self.ph.a.sh("wm density").strip().replace("\n", " "), "| android", self.ph.a.sh("getprop ro.build.version.release").strip())
 
@@ -1236,7 +1236,7 @@ class Soak:
         L.append("")
         L.append("Run: %s, %d scenes in %.0f min. Device: Android 10 emulator, %dx%d, package %s, network %s. **x86_64 + software GL is NOT the tablet: only behaviour counts, not absolute times.**" %
                  (time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime()), len(ev), (time.time() - T0) / 60, self.screen[0], self.screen[1], self.a.pkg,
-                  "shaped like the owner's hotspot (public sites: 5 Mbit/s and 60-100 ms by the emulator, it reports: %s; the lab's own clips and downloads: 600 KB/s and 80 ms by the lab server)" % (self.net_status or "no answer") if self.a.net == "hotspot" else "unshaped (the runner's own fast link)"))
+                  "shaped like the owner's hotspot (public sites: 5 Mbit/s by the emulator, it reports: %s; the lab's own clips and downloads: 600 KB/s and 80 ms by the lab server)" % (self.net_status or "no answer") if self.a.net == "hotspot" else "unshaped (the runner's own fast link)"))
         L.append("")
         L.append("## Summary")
         L.append("")
