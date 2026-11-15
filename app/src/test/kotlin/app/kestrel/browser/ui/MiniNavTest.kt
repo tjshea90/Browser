@@ -922,10 +922,11 @@ class MiniNavTest {
         nav.showAt(loc[0] + 5f, loc[1] + 890f); relayout()
         val e = nav.outlineForTest()
         assertTrue("bottom left: still inside the page ${e.toList()}", e[0] >= 0 && e[2] <= 600 && e[1] >= 0 && e[3] <= 900)
+        nav.setOpen(false, animate = false)                                      // (a long press ABOVE the open panel closes it now - owner message 41 - so the top right is tried from closed)
         nav.showAt(loc[0] + 598f, loc[1] + 2f); relayout()
         val f = nav.outlineForTest()
         assertTrue("top right: still inside the page ${f.toList()}", f[0] >= 0 && f[2] <= 600 && f[1] >= 0 && f[3] <= 900)
-        assertEquals("shown once, never closed", listOf(true), rec.opened)
+        assertEquals("shown, then closed by hand, then shown again", listOf(true, false, true), rec.opened)
     }
 
     @Test fun showAtWhileItIsOpenMovesItThereAndTheKeyboardStaysOpen() {

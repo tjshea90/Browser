@@ -1045,7 +1045,11 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                 MotionEvent.ACTION_MOVE -> {
                     if (!moved && Math.hypot((ev.rawX - downRawX).toDouble(), (ev.rawY - downRawY).toDouble()) > slop) moved = true
                     if (!moved) return
-                    if (mode == DRAG_MOVE) { showCloseTarget(true); watchCloseTarget(ev.rawX, ev.rawY); moveBy(dx, dy) } else sizeBy(dx, dy)
+                    if (mode == DRAG_MOVE) {
+                        // the X shows when this can no longer be a tap on the grip (a carry that began as a long press shows it at once, in pickUp)
+                        if (pickedUp || Math.hypot((ev.rawX - downRawX).toDouble(), (ev.rawY - downRawY).toDouble()) > GRIP_TAP_SLOP * slop) { showCloseTarget(true); watchCloseTarget(ev.rawX, ev.rawY) }
+                        moveBy(dx, dy)
+                    } else sizeBy(dx, dy)
                 }
                 MotionEvent.ACTION_UP -> { if (moved) { if (mode == DRAG_MOVE) moveBy(dx, dy) else sizeBy(dx, dy) }; finish(ev) } // the lift's own position counts too: events that arrive late (a busy screen) are not lost
                 MotionEvent.ACTION_CANCEL -> finish(ev)
