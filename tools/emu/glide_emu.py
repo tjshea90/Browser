@@ -37,16 +37,18 @@ def touch_device():
     if _dev: return _dev["v"]
     out = shell("getevent -p")
     path = None; mx = my = 32767
+    # the emulator exposes several virtio multi-touch devices (one per display); only the LOWEST numbered one reaches the main display (found 2026-11-15: the first one listed, event10, was ignored by the app)
+    best = None
     for block in out.split("add device")[1:]:
-        m = re.search(r"(/dev/input/event\d+)", block)
-        if m and "multi_touch" in block:
-            path = m.group(1)
-            for code, name in (("0035", "x"), ("0036", "y")):
-                mm = re.search(code + r"\s*:\s*value \d+, min \d+, max (\d+)", block)
-                if mm:
-                    if name == "x": mx = int(mm.group(1))
-                    else: my = int(mm.group(1))
-            break
+        m = re.search(r"(/dev/input/event(\d+))", block)
+        if m and "multi_touch" in block and (best is None or int(m.group(2)) < best[0]): best = (int(m.group(2)), m.group(1), block)
+    if best:
+        path = best[1]
+        for code, name in (("0035", "x"), ("0036", "y")):
+            mm = re.search(code + r"\s*:\s*value \d+, min \d+, max (\d+)", best[2])
+            if mm:
+                if name == "x": mx = int(mm.group(1))
+                else: my = int(mm.group(1))
     if not path: raise RuntimeError("no multi-touch input device found")
     _dev["v"] = (path, mx, my)
     return _dev["v"]
