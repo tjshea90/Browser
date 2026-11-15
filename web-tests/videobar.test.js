@@ -187,3 +187,16 @@ test('VC1: full screen: a bare film gets the engine\'s own controls for as long 
   assert.equal((await barInfo(page)).host, 'other', 'the bar moved into the full-screen box');
   await page.context().close();
 });
+
+test('VC1: a tap on a film whose own controls were showing, and which hide on that very tap (YouTube), does not bring up Kestrel\'s bar as they fade', async () => {
+  const page = await open(VIDEO() + OWN_BAR);
+  await page.evaluate(() => { document.addEventListener('pointerup', () => { const b = document.querySelector('.seek-bar').parentNode; b.style.opacity = b.style.opacity === '0' ? '1' : '0'; }, true); });
+  await wait(page, 1500);                                           // the app's answer is there (it is asked once the page is idle)
+  await tapAt(page, 220, 160); await wait(page, 400);               // the page's bar was showing and fades out
+  assert.equal(await page.evaluate(() => document.querySelector('.seek-bar').parentNode.style.opacity), '0', 'the page hid its bar');
+  assert.equal(await barInfo(page), null, 'no bar of ours');
+  await tapAt(page, 220, 160); await wait(page, 400);               // the page's bar comes back
+  assert.equal(await barInfo(page), null);
+  assert.deepEqual((await msgs(page, 'vbk')).map((m) => m.e), ['own', 'own']);
+  await page.context().close();
+});

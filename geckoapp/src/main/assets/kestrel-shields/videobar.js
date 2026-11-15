@@ -136,6 +136,7 @@ window.KestrelVB = window.KestrelVB || (function () {
       relayedAt = now;
       try { browser.runtime.sendMessage({ k: 'ft', t: kind, w: window.innerWidth, h: window.innerHeight }).catch(function () {}); } catch (e) { /* nobody listens */ }
     }
+    if (TOP) setTimeout(function () { ask(function () {}); }, 1200);   // the answer is there before the first touch: the controls showing at touch start can be seen
     window.addEventListener('pointerdown', function (e) {
       down = e.isTrusted ? { x: e.clientX, y: e.clientY, t: Date.now(), id: e.pointerId, v: null, own: false } : null;
       if (down && cfg && cfg.on && !cfg.always) {
