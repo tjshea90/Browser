@@ -1721,3 +1721,7 @@
 ## 2026-11-15T16:54:11Z
 > Waiting for the video-controls lab run to finish (about 17:00 on the container clock).
 <!-- sha:46e986a8cc85 -->
+
+## 2026-11-15T16:59:47Z
+> Waiting for the second video-controls lab run (about 17:12 on the container clock).
+<!-- sha:128466e1f8e2 -->
