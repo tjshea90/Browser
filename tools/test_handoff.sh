@@ -55,6 +55,9 @@ PY
 fi
 check "android.yml publishes with 'gh release create --target' (a tag PUSH from the sandbox is refused with 403)" 'grep -q "gh release create" "$D/.github/workflows/android.yml" && grep -q -e "--target" "$D/.github/workflows/android.yml"'
 check "android.yml can write the Release (permissions: contents: write)" 'grep -q "contents: write" "$D/.github/workflows/android.yml"'
+check "android.yml uploads no APK as an artifact (RX4-X4a: the signed APK of a failed build used to be public for 7 days)" '! grep -q "upload-artifact" "$D/.github/workflows/android.yml"'
+check "emu-lab.yml exists, is read-only (no contents: write) and its artifacts hold no APK (RX4-E1)" '[ -f "$D/.github/workflows/emu-lab.yml" ] && ! grep -q "contents: write" "$D/.github/workflows/emu-lab.yml" && ! sed -n "/upload-artifact/,\$p" "$D/.github/workflows/emu-lab.yml" | grep -qi "[.]apk"'
+check "android.yml starts the lab with app = lab (the lab file is only on this branch, GitHub dispatches the workflow it already knows)" 'grep -q "uses: ./.github/workflows/emu-lab.yml" "$D/.github/workflows/android.yml" && grep -q "options: \[gecko, web, courier, both, lab\]" "$D/.github/workflows/android.yml"'
 
 # ---------------------------------------------------------------- the repo's own wiring
 check "every tools/*.sh and ship.sh passes bash -n" 'for f in "$D"/tools/*.sh "$D"/ship.sh "$D"/bootstrap.sh; do bash -n "$f" || exit 1; done'
