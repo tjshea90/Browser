@@ -391,6 +391,9 @@ function wire(id, bid, tid, name, jumps) {
     bar.addEventListener(n, function (e) { var pt = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0] : e; L('ev', name + ' ' + n + (e.pointerType ? ' pointerType=' + e.pointerType : '') + ' trusted=' + e.isTrusted + ' x=' + Math.round(pt.clientX) + ' y=' + Math.round(pt.clientY)); });
   });
   if (jumps) bar.addEventListener('pointerup', function (e) { var f = frac(bar, e.clientX); v.currentTime = f * v.duration; L('page-seek', name + ' to ' + (f * v.duration).toFixed(1)); });
+  var lastBuf = '';
+  function buf() { var b = v.buffered, o = []; for (var i = 0; i < b.length; i++) o.push(b.start(i).toFixed(0) + '-' + b.end(i).toFixed(0)); var t = o.join(' '); if (t !== lastBuf) { lastBuf = t; L('buffered', name + ' at ' + v.currentTime.toFixed(0) + ' s holds: ' + (t || 'nothing')); } }   // what the ENGINE holds (seconds): the proof of "nothing before the new place"
+  setInterval(buf, 1000);
   setInterval(paint, 500);
   function rect() { var r = bar.getBoundingClientRect(); L('rect', name + ' left=' + Math.round(r.left) + ' top=' + Math.round(r.top) + ' w=' + Math.round(r.width) + ' h=' + Math.round(r.height) + ' inner=' + innerWidth + 'x' + innerHeight + ' dpr=' + devicePixelRatio + ' moz=' + window.mozInnerScreenX + ',' + window.mozInnerScreenY); }
   setTimeout(rect, 1500);
