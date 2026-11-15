@@ -155,6 +155,14 @@ function lstText() {
   for (var i = 0; i < names.length; i++) { var s = LST[names[i][0]]; if (s[0] > 0) out.push(names[i][1] + ' ' + s[0] + ' (' + Math.round(s[1]) + ' us)'); }
   return out.join(', ');
 }
+// RX4-M0b / M0c (research/REVIEW-EXTERNAL-4.md): what do revalidations and the scriptlet wait cost on this tablet? A conditional request (If-None-Match / If-Modified-Since, answered 304) costs a whole round trip
+// on a hotspot; the first navigation to a site that has scriptlet rules waits up to SL_WAIT_MS for the app. Counters only, sent as one text with the stats message (Diagnostics > Blocker). Which webRequest event
+// carries the 304 in Gecko is not known (headers received, or completed): both are counted, so the first Diagnostics paste says which one it is.
+var rv = { pages: 0, all: 0, cache: 0, h304: 0, c304: 0, ms304: 0, wn: 0, ws: 0, wx: 0, wc: 0 }, rvStart = new Map();
+function rvText() {
+  if (rv.all === 0 && rv.wn === 0) return '';
+  return 'pages ' + rv.pages + ', requests ' + rv.all + ', from cache ' + rv.cache + ', 304 seen when headers arrived ' + rv.h304 + ' and when completed ' + rv.c304 + ' (' + rv.ms304 + ' ms in all); scriptlet waits before a page ' + rv.wn + ' (' + rv.ws + ' ms in all, slowest ' + rv.wx + ' ms, ' + rv.wc + ' hit the ' + SL_WAIT_MS + ' ms ceiling)';
+}
 var statsDirty = false, statsTimer = 0;
 function markStats() { // lazy timer: nothing is scheduled while no request is being judged (a permanent interval would wake the page on an idle tablet)
   statsDirty = true;
@@ -163,7 +171,7 @@ function markStats() { // lazy timer: nothing is scheduled while no request is b
 function reportStats(force) {
   if (!force && !statsDirty) return;
   statsDirty = false;
-  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, lt: lstText(), w: (guardState + ', ' + guardBlocked + ' blocked' + assistText() + skipText() + ' | ' + slState + (slPages ? ', ' + slPages + ' pages ran ' + slCalls + ' calls' + (slBad ? ' (' + slBad + ' failed)' : '') + ', ' + slEarlyPages + ' before the page\'s first script' : '') + (slEarlySet ? ', ' + slEarlySet + ' sites set up early (' + slReg.size + ' kept, ' + slEarlyAsks + ' asks)' : '') + (standIns ? ', ' + standIns + ' blocked files answered with a stand-in' : '') + (slEarlyFail ? ', early error: ' + slEarlyFail : '') + ' | ' + stats.last).slice(0, 400) }).catch(function () {});
+  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, lt: lstText(), rv: rvText().slice(0, 300), w: (guardState + ', ' + guardBlocked + ' blocked' + assistText() + skipText() + ' | ' + slState + (slPages ? ', ' + slPages + ' pages ran ' + slCalls + ' calls' + (slBad ? ' (' + slBad + ' failed)' : '') + ', ' + slEarlyPages + ' before the page\'s first script' : '') + (slEarlySet ? ', ' + slEarlySet + ' sites set up early (' + slReg.size + ' kept, ' + slEarlyAsks + ' asks)' : '') + (standIns ? ', ' + standIns + ' blocked files answered with a stand-in' : '') + (slEarlyFail ? ', early error: ' + slEarlyFail : '') + ' | ' + stats.last).slice(0, 400) }).catch(function () {});
 }
 
 // ---------------------------------------------------------------- the page report (Diagnostics > Page report)
@@ -213,12 +221,18 @@ function logFailed(d, what) {
 }
 browser.webRequest.onErrorOccurred.addListener(lstTimed(LST.err, function (d) {
   noteDone(d); // RX3-BK1: every request that ended, whatever the reason, is no longer pending (an aborted one or one we cancelled included)
+  rvStart.delete(d.requestId);
   if (d.tabId < 0 || blockedIds.has(d.requestId)) return;
   if (d.error === 'NS_BINDING_ABORTED' || d.error === 'NS_ERROR_ABORT') return; // the page was left or stopped, or another extension said no: not a network failure
   logFailed(d, String(d.error || 'error').replace(/^NS_ERROR_/, ''));
 }), { urls: ['http://*/*', 'https://*/*'] });
 browser.webRequest.onCompleted.addListener(lstTimed(LST.cmp, function (d) {
   noteDone(d);
+  var rvT = rvStart.get(d.requestId);                                                // RX4-M0b: cache hits and revalidations (304) of this tablet
+  if (rvT !== undefined) rvStart.delete(d.requestId);
+  rv.all++;
+  if (d.fromCache) rv.cache++;
+  if (d.statusCode === 304) { rv.c304++; if (rvT !== undefined) rv.ms304 += Math.max(0, Math.round(d.timeStamp - rvT)); }
   if (d.statusCode >= 400 && d.tabId >= 0) logFailed(d, 'HTTP ' + d.statusCode);
 }), { urls: ['http://*/*', 'https://*/*'] });
 // content.js tells about scripts that threw and about files an element could not load (the network may have worked and the file still be unusable: wrong type, broken)
@@ -408,7 +422,13 @@ function slBefore(host, frame) {
   if (cur) {
     slReg.delete(host); slReg.set(host, cur); // most recently used
     if (frame && Date.now() - cur.at < SL_TTL) return null;
-    return Promise.race([slAsk(host), later(SL_WAIT_MS)]);
+    var w0 = performance.now();                                                      // RX4-M0c: how long this navigation waited for the app's answer (the ceiling is SL_WAIT_MS)
+    return Promise.race([slAsk(host), later(SL_WAIT_MS)]).then(function (r) {
+      var ms = Math.round(performance.now() - w0);
+      rv.wn++; rv.ws += ms; if (ms > rv.wx) rv.wx = ms; if (ms >= SL_WAIT_MS - 5) rv.wc++;
+      markStats();
+      return r;
+    });
   }
   var t = slNone.get(host);
   if (t !== undefined && Date.now() - t < SL_TTL) return null;
@@ -530,8 +550,11 @@ function decide(d, page, host, mode) {
 }
 
 function onRequest(d) {
+  if (rvStart.size > 600) rvStart.clear();                                           // RX4-M0b: when this request started (a 304 is timed from here to its end)
+  rvStart.set(d.requestId, d.timeStamp);
   if (d.type === 'sub_frame') frameNavigates(d);
   if (d.type === 'main_frame') {
+    rv.pages++;
     var left = pageLog.get(d.tabId);
     if (left && left.page && left.reqs - left.done > 0) send({ k: 'pend', p: left.page, n: left.reqs - left.done }).catch(function () {}); // RX3-BK1: the page that is being left still had requests open
     navId.set(d.tabId, Number(d.requestId) || 0); frameParent.delete(d.tabId); mediaFrames.delete(d.tabId); frameDoc.delete(d.tabId);
@@ -757,6 +780,7 @@ function maybeMedia(d, url, ct, size, ref, org) {
 }
 
 browser.webRequest.onHeadersReceived.addListener(lstTimed(LST.rcv, function (d) {
+  if (d.statusCode === 304) rv.h304++;                                               // RX4-M0b
   var rh = reqHdr.get(d.requestId), ref = '', org = '';
   if (rh !== undefined) { reqHdr.delete(d.requestId); var nlp = rh.indexOf('\n'); ref = rh.slice(0, nlp); org = rh.slice(nlp + 1); }
   if (d.statusCode !== 200 && d.statusCode !== 206) return;
