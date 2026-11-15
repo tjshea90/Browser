@@ -64,6 +64,8 @@ class ShieldsBridge(
     private val noStore: (String) -> Unit = {},
     /** RX3-BK1: the page that was just left still had this many requests open (the page's address, the count). Worker thread. */
     private val leftPending: (String, Int) -> Unit = { _, _ -> },
+    /** RX4-M0a: how a playing video did since the page's last look: frames shown (t), dropped (d), corrupt (c), seconds (s), picture width and height (w, h) and the page of its tab (p). Numbers only. Worker thread. */
+    private val videoQuality: (JSONObject) -> Unit = {},
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -112,6 +114,7 @@ class ShieldsBridge(
                     "os" -> { openSpace(m.optString("p")); "" }
                     "yts" -> { adSkips(m); "" }
                     "sbk" -> { seekTaps(m); "" }
+                    "vq" -> { videoQuality(m); "" }
                     "bk" -> backPlace(m.optString("p"))
                     "bf" -> { backShown(m.optString("p"), m.optInt("ps") == 1, m.optString("nt"), m.optLong("ts"), m.optInt("y")); "" }
                     "ns" -> { noStore(m.optString("p")); "" }

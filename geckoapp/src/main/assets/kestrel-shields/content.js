@@ -284,6 +284,44 @@
         setTimeout(check, 3000);
       } catch (err) { /* ignore */ }
     }, true);
+
+    // RX4-M0a (research/REVIEW-EXTERNAL-4.md): how smoothly do REAL videos play on this tablet? While an element plays, every 15 s (and when it pauses or ends, or the page is hidden) its
+    // getVideoPlaybackQuality() is read and only the DIFFERENCE since the last look is sent: frames shown, dropped, corrupted, seconds, picture size. Numbers; never an address. One timer for
+    // every element, none while nothing plays; the first look of an element only sets its baseline.
+    var vqState = (typeof WeakMap === 'function') ? new WeakMap() : null, vqList = [], vqTimer = 0;
+    function vqClamp(n, max) { n = Math.round(n) || 0; return n < 0 ? 0 : (n > max ? max : n); }
+    function vqLook(v, final) {
+      try {
+        if (!vqState || !v || typeof v.getVideoPlaybackQuality !== 'function') return;
+        var q = v.getVideoPlaybackQuality(), s = vqState.get(v), now = Date.now();
+        var total = q.totalVideoFrames || 0, dropped = q.droppedVideoFrames || 0, corrupt = q.corruptedVideoFrames || 0;
+        if (!s) { vqState.set(v, { t: total, d: dropped, c: corrupt, at: now }); return; }
+        var dt = total - s.t, dd = dropped - s.d, dc = corrupt - s.c, secs = (now - s.at) / 1000;
+        if (dt < 0 || dd < 0) { s.t = total; s.d = dropped; s.c = corrupt; s.at = now; return; }   // a new source started its counters again
+        if (dt < (final ? 15 : 30)) return;                                                         // too few frames to say anything: look again later
+        s.t = total; s.d = dropped; s.c = corrupt; s.at = now;
+        browser.runtime.sendMessage({ k: 'vq', t: vqClamp(dt, 20000), d: vqClamp(dd, 20000), c: vqClamp(dc, 20000), s: vqClamp(secs, 600), w: vqClamp(v.videoWidth, 20000), h: vqClamp(v.videoHeight, 20000) });
+      } catch (err) { /* ignore */ }
+    }
+    function vqTick() {
+      vqTimer = 0;
+      var any = false;
+      for (var i = vqList.length - 1; i >= 0; i--) { var v = vqList[i]; if (v.paused || v.ended) { vqList.splice(i, 1); continue; } any = true; vqLook(v, false); }
+      if (any) vqTimer = setTimeout(vqTick, 15000);
+    }
+    document.addEventListener('playing', function (e) {
+      var v = e.target;
+      if (!v || v.tagName !== 'VIDEO' || !e.isTrusted) return;
+      if (vqList.indexOf(v) < 0) vqList.push(v);
+      vqLook(v, false);
+      if (!vqTimer) vqTimer = setTimeout(vqTick, 15000);
+    }, true);
+    function vqEnd(e) { var v = e.target; if (v && v.tagName === 'VIDEO') vqLook(v, true); }
+    document.addEventListener('pause', vqEnd, true);
+    document.addEventListener('ended', vqEnd, true);
+    function vqAll() { for (var i = 0; i < vqList.length; i++) vqLook(vqList[i], true); }
+    document.addEventListener('visibilitychange', function () { if (document.hidden) vqAll(); }, true);
+    window.addEventListener('pagehide', vqAll, true);
   } catch (e) { /* never break the page */ }
 })();
 

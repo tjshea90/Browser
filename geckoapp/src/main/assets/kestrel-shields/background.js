@@ -871,6 +871,16 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   return undefined;
 });
 
+// RX4-M0a: content.js reports how a playing video did since its last look: frames shown, dropped, corrupted, seconds, picture size (numbers only). The top page of the tab goes along so that the app can drop the
+// numbers of a private tab; the address of the video itself never leaves the page.
+browser.runtime.onMessage.addListener(function (m, sender) {
+  if (!m || m.k !== 'vq' || !sender || !sender.tab) return undefined;
+  function n(v, max) { v = v | 0; return v > 0 && v <= max ? v : 0; }
+  var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || (sender.frameId === 0 ? docOf(sender.url) : '');
+  send({ k: 'vq', t: n(m.t, 20000), d: n(m.d, 20000), c: n(m.c, 20000), s: n(m.s, 600), w: n(m.w, 20000), h: n(m.h, 20000), p: String(page).slice(0, 300) }).catch(function () {});
+  return undefined;
+});
+
 // RX3-BK1: what kind of show a Back / Forward was (content.js, top frame): kept by the engine or loaded again, what the page's file cost, where the page was. Numbers and the address; nothing else.
 browser.runtime.onMessage.addListener(function (m, sender) {
   if (!m || m.k !== 'bf' || !sender || !sender.tab || sender.frameId !== 0) return undefined;
