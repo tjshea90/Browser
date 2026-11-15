@@ -289,24 +289,45 @@
       return invisibleBox(el);
     } catch (e) { return false; }
   }
+  function switchOffAt(x, y, framesOnly) {
+    var player = playerAt(x, y);
+    if (!player) return;
+    var list = document.elementsFromPoint(x, y), n = 0;
+    for (var i = 0; i < list.length && i < 8 && n < 4; i++) {
+      var el = list[i];
+      if (el === player || (player.contains && player.contains(el))) break;      // reached the player: what lies beneath is not a layer over it
+      if (fakeSeen && fakeSeen.has(el)) continue;
+      if (framesOnly && el.tagName !== 'IFRAME') continue;
+      if (fakeLayerOver(el, player)) { if (fakeSeen) fakeSeen.add(el); el.style.setProperty('pointer-events', 'none', 'important'); n++; }
+    }
+  }
   function switchOffFakeLayers(e) {
     try {
       if (!on || !e.isTrusted) return;
       var pt = pointOf(e);
-      if (!pt || !document.elementsFromPoint) return;
-      var player = playerAt(pt.x, pt.y);
-      if (!player) return;
-      var list = document.elementsFromPoint(pt.x, pt.y), n = 0;
-      for (var i = 0; i < list.length && i < 8 && n < 4; i++) {
-        var el = list[i];
-        if (el === player || (player.contains && player.contains(el))) break;      // reached the player: what lies beneath is not a layer over it
-        if (fakeSeen && fakeSeen.has(el)) continue;
-        if (fakeLayerOver(el, player)) { if (fakeSeen) fakeSeen.add(el); el.style.setProperty('pointer-events', 'none', 'important'); n++; }
-      }
+      if (pt && document.elementsFromPoint) switchOffAt(pt.x, pt.y, false);
     } catch (x) { /* never break the page */ }
   }
   window.addEventListener('touchstart', switchOffFakeLayers, { capture: true, passive: true });
   window.addEventListener('pointerdown', switchOffFakeLayers, { capture: true, passive: true });
+  // A touch that lands inside a FRAME never reaches this document (events do not leave a frame), so an invisible frame of another site laid over the player is switched off by a look at the page instead of
+  // by the touch: when the page is parsed, when it has loaded and a few times in the seconds after (ad scripts add their frames late), for each player of the page (a <video> or canvas of player size, or a
+  // container that calls itself a player). A handful of cheap checks, then nothing more.
+  function sweepFrames() {
+    try {
+      if (!on || !document.elementsFromPoint || !document.querySelector('iframe')) return;
+      var cands = document.querySelectorAll('video, canvas, [class*="player" i], [id*="player" i]');
+      for (var i = 0; i < cands.length && i < 12; i++) {
+        var r = cands[i].getBoundingClientRect();
+        if (r.width < 120 || r.height < 80 || r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) continue;
+        var x = Math.min(Math.max(r.left + r.width / 2, 1), innerWidth - 1), y = Math.min(Math.max(r.top + r.height / 2, 1), innerHeight - 1);
+        switchOffAt(x, y, true);
+      }
+    } catch (e) { /* ignore */ }
+  }
+  [0, 1500, 4000, 9000].forEach(function (ms) { setTimeout(sweepFrames, ms); });
+  document.addEventListener('DOMContentLoaded', sweepFrames, true);
+  window.addEventListener('load', sweepFrames, true);
 
   function pressThrough(x, y, layer) {
     try {

@@ -63,9 +63,19 @@ test('the same layer WITHOUT the guard really does take the tap and open the ad 
 
 test('an invisible cross-site frame laid over the player is switched off too', async () => {
   const page = await open(VIDEO + '<iframe id="layer" src="https://ads.example/frame" style="position:fixed;left:0;top:0;width:100%;height:100%;opacity:0;border:0"></iframe>');
+  await page.waitForTimeout(200);                                               // the page has loaded: the guard looked at it
   await tapAt(page, 220, 170);
   assert.equal((await counts(page)).v, 1);
   assert.equal(await noneOf(page, '#layer'), 'none');
+  await page.context().close();
+});
+
+test('a frame an ad script adds a second after the page loaded is found by a later look', async () => {
+  const page = await open(VIDEO);
+  await page.evaluate(() => { setTimeout(() => { const f = document.createElement('iframe'); f.id = 'layer'; f.src = 'https://ads.example/late'; f.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;opacity:0;border:0'; document.body.appendChild(f); }, 600); });
+  await page.waitForTimeout(2200);                                              // the look at 1.5 s
+  await tapAt(page, 220, 170);
+  assert.equal((await counts(page)).v, 1);
   await page.context().close();
 });
 
@@ -80,7 +90,7 @@ test('the player\'s own transparent click layer inside its wrapper is left alone
 test('after the guard refused an ad in this document, an invisible layer in the same wrapper is switched off as well', async () => {
   const page = await open('<div class="wrap" style="position:absolute;left:20px;top:20px;width:400px;height:300px"><video id="v" style="width:400px;height:300px;background:#222"></video><div id="layer" style="position:absolute;left:0;top:0;width:100%;height:100%"></div></div>');
   await page.evaluate((ad) => { window.open(ad); }, AD);                          // no tap behind it: refused, which the guard remembers
-  await page.waitForTimeout(100);
+  await page.waitForTimeout(1000);                                              // (the assist of an earlier refusal only joins presses within 800 ms of it)
   await tapAt(page, 220, 170);
   assert.deepEqual(await counts(page), { v: 1, l: 0 });
   await page.context().close();
