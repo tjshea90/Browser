@@ -134,6 +134,53 @@ class Phone:
                 red.append(y)
         return (len(red), red[0] if red else -1, red[-1] if red else -1, h)
 
+    def look(self):
+        """ROT2 (owner message 48): one screencap read three ways -> {"red": (count, first, last), "dark": share of black pixels in the page area, "w": .., "h": ..} or None. The page area leaves out the status bar,
+        the navigation bar (bottom, or the side on this emulator in landscape) and 8 px of edge. A turn's black cover = nearly all black and no red strip; a page laid out right = the red strip right at the bottom of the
+        page area; anything else is a half-laid-out or stale page."""
+        data = self.a.run("exec-out", "screencap", timeout=40, binary=True)
+        if not data or len(data) < 1000:
+            return None
+        try:
+            w, h, _fmt = struct.unpack("<III", data[:12])
+        except struct.error:
+            return None
+        off = 12 if len(data) - 12 >= w * h * 4 else 16
+        if w < 100 or h < 200 or len(data) - off < w * h * 4:
+            return None
+        red = []
+        dark = seen = 0
+        for y in range(h):
+            base = off + y * w * 4
+            hit = n = 0
+            inarea = 30 <= y < h - 60
+            for x in range(8, w - 8, 10):
+                r, g, b = data[base + x * 4], data[base + x * 4 + 1], data[base + x * 4 + 2]
+                n += 1
+                if r > 200 and g < 70 and b < 70:
+                    hit += 1
+                if inarea and x < w - 60:
+                    seen += 1
+                    if r < 14 and g < 14 and b < 14:
+                        dark += 1
+            if n and hit >= 0.7 * n:
+                red.append(y)
+        return {"red": (len(red), red[0] if red else -1, red[-1] if red else -1), "dark": round(dark / float(max(1, seen)), 3), "w": w, "h": h}
+
+    def start_hogs(self, n):
+        """Busy loops on the emulator: its two cores are shared with the engine, so a turn's new size reaches the page late, as it does on the tablet (owner message 48). -> pids"""
+        pids = []
+        for _ in range(n):
+            out = self.a.sh("nohup sh -c 'while :; do :; done' >/dev/null 2>&1 & echo $!", timeout=15)
+            m = re.search(r"\d+", out or "")
+            if m:
+                pids.append(m.group(0))
+        return pids
+
+    def stop_hogs(self, pids):
+        if pids:
+            self.a.sh("kill %s" % " ".join(pids), timeout=15)
+
     def measure_on(self):
         self.debug("measure")
 
