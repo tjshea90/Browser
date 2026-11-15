@@ -2026,3 +2026,18 @@
 > - a stronger slow-engine emulator scene
 > - the owner-only GitHub steps (private signing key, protected `release` environment)
 <!-- sha:00fe0dafcdb1 -->
+
+## 2026-11-15T22:46:36Z
+> alpha53 is out and your message 48 is answered above: the cover and pause now wait for the page to confirm the new size, and an independent review of the new code is running. Nothing has run on your tablet, so how long the black wait lasts there is still open.
+>
+> **While that review runs:**
+> - **Double rotation (ROT3, not released):** the emulator log showed the first manual rotation after full screen started turning the screen twice, with a portrait flash 0.45 s before landscape. Kestrel handed the screen back to the tablet's sensor before Android agreed on the new position. The fix waits 0.65 s for the tablet to stay in its position first. It is in the code with a test but not shipped, and I'll bundle it into alpha54 with the review fixes.
+> - **Site-compatibility run:** it is running on the emulator now, about 2 hours, with Shields on and off for about a hundred sites. I'll write up what it finds and fix the cheap issues.
+>
+> **Open:**
+> - your tablet test of alpha53 (the three Diagnostics lines: Turning under a video, Full-screen page size, Full-screen system bars)
+> - the review findings
+> - the compatibility-run findings
+> - the stronger slow-engine emulator scene, which has to wait for the compatibility run to finish because they share the lab
+> - the owner-only GitHub steps (private signing key, protected `release` environment)
+<!-- sha:ed06d93199a5 -->
