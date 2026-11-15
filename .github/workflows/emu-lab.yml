@@ -109,6 +109,7 @@ jobs:
           timeout 600 bash -c 'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = 1 ]; do sleep 5; done' || { echo "::error::the emulator did not finish booting in 10 minutes"; tail -30 "$RUNNER_TEMP/emulator.log"; exit 1; }
           sleep 10
           adb shell getprop ro.build.version.release
+          echo "java heap properties of this boot:"; adb shell getprop | grep -i "dalvik.vm.heap" || true   # lab run 43753283814: the first emulator boot gave apps a 16 MB heap limit (the app died of OutOfMemoryError in a crash loop); the next one had 512 MB
           adb shell wm size
           adb shell wm density
           emulator -version | head -2
