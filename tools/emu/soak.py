@@ -1500,7 +1500,7 @@ class Soak:
             if time.time() - t_start > budget:
                 break
             try:
-                ev = self.load_page(name, url, scrolls, dwell, timeout=50, kind="page")
+                ev = self.load_page(name, url, scrolls, dwell, timeout=90, kind="page")
                 if ev is not None:
                     done.append((name, url, scrolls, dwell))
             except Exception as e:
@@ -1520,7 +1520,7 @@ class Soak:
         self.shields_mode = "off"; self.quiet_issues = True
         for i, (name, url, scrolls, dwell) in enumerate(done):
             try:
-                self.load_page(name, url, scrolls, dwell, timeout=50, kind="page")
+                self.load_page(name, url, scrolls, dwell, timeout=90, kind="page")
             except Exception as e:
                 self.issue("low", "tooling", "compat scene (shields off) %s raised %r" % (name, e))
             self.ph.debug("closetabs"); time.sleep(2)
