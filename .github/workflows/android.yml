@@ -72,7 +72,7 @@ jobs:
       courier: ${{ steps.plan.outputs.courier }}
       full: ${{ steps.plan.outputs.full }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false # the token is not left in .git/config for later steps
 
@@ -151,7 +151,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false # the token is not left in .git/config for later steps
       - uses: ./.github/actions/setup-build
@@ -169,10 +169,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false # the token is not left in .git/config for later steps
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
       - name: Injected-script tests in Chromium
@@ -207,7 +207,7 @@ jobs:
     env:
       APP: web
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false # the token is not left in .git/config for later steps
       - uses: ./.github/actions/setup-build
@@ -254,7 +254,7 @@ jobs:
     env:
       APP: gecko
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false # the token is not left in .git/config for later steps
       - uses: ./.github/actions/setup-build
@@ -304,7 +304,7 @@ jobs:
     env:
       APP: courier
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false # the token is not left in .git/config for later steps
       - uses: ./.github/actions/setup-build
