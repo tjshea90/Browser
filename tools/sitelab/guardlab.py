@@ -22,7 +22,7 @@
               that address: Health "guard app-wall stopped a new window to ..." (or the page guard's own "chip-show open", whichever refused it first).
   /fake-layer RX3-G4: a <video> (each click on it is logged) and over it an INVISIBLE full-screen layer whose click handler opens an ad window. One real tap on the video: with the guard's fake-layer switch-off
               the video gets the click and the layer none ("video-click" only); without it the layer takes the first tap ("layer-click", the ad is refused) and the video plays on the second try.
-  /preroll-main RX3-V3: ONE <video> element plays a 15 s "ad" file (/ad15.wav); after 6.5 s the page gives the same element the 60 s "film" (/film60.wav). The app's Health lines "video info PLAYED el=N ..."
+  /preroll-main RX3-V3: ONE <video> element plays a 15 s "ad" file (/ad15.wav); after 8 s of real playback the page gives the same element the 60 s "film" (/film60.wav). The app's Health lines "video info PLAYED el=N ..."
               show both played reports with the SAME element number and, after the second, the ad marked as an advertisement and not counted: "counted=1 of 2".
   /playerlab  RX3-G7: five mock video players on one page, driven by the page itself (no touch needed): an ordinary video (no ad words), a JW-style player (jw-flag-ads on its root), a Video.js-style player
               (vjs-ad-loading, then vjs-ad-playing), a Google-IMA-style host (the ad video inside .ima-ad-container) and a JW-style ad with a skip button (.jw-skip, .jw-skippable). Each ad is a REAL 12 s silent
@@ -301,8 +301,13 @@ function L(k, v) { try { var x = new XMLHttpRequest(); x.open('GET', '/log?kind=
 var v = document.getElementById('v');
 v.addEventListener('playing', function () { L('playing', v.currentSrc.split('/').pop()); });
 L('load', 'preroll-main');
-setTimeout(function () { L('switch', 'the same element gets the film'); v.src = '/film60.wav'; v.muted = true; v.play().catch(function (e) { L('refused', String(e)); }); }, 6500);
-setTimeout(function () { L('DONE', 'preroll-main'); }, 16000);
+var switched = false;
+v.addEventListener('timeupdate', function () {      // tied to the real playback, not to a clock: the emulator stalls for seconds at a time
+  if (switched || v.currentTime < 8) return;
+  switched = true; L('switch', 'the same element gets the film after ' + v.currentTime.toFixed(1) + ' s of the ad');
+  v.src = '/film60.wav'; v.muted = true; v.play().catch(function (e) { L('refused', String(e)); });
+  setTimeout(function () { L('DONE', 'preroll-main'); }, 9000);
+});
 </script></body></html>
 """
 
