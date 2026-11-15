@@ -90,7 +90,7 @@
       var one = document.elementFromPoint(x, y);
       return one ? [one] : [];
     }
-    /** The <video> a bar belongs to: it lies over the picture or right beside it (a bar known only by its NAME must lie within 12 px of it, a slider or range input within 32), and is at least half as wide as it
+    /** The <video> a bar belongs to: it lies over the picture, or, when its range can be checked against the film's length (aria-valuemax / a range input's max), up to 32 px beside it, and is at least half as wide as it
      *  (a volume slider is not); controls laid over the lower half of the picture may be narrower, down to 30 percent (a bar between buttons: Plyr at 564 px is 40). */
     function videoFor(r, vids, tight) {
       var best = null, gapBest = 1e9;
@@ -101,7 +101,7 @@
         var low = r.top >= vr.top + 0.5 * vr.height && r.bottom <= vr.bottom + 6;
         if (ov < 0.6 * r.width || r.width < (low ? 0.3 : 0.5) * vr.width) continue;
         var gap = r.top > vr.bottom ? r.top - vr.bottom : (r.bottom < vr.top ? vr.top - r.bottom : 0);
-        if (gap > (tight ? 12 : 32)) continue;
+        if (gap > (tight ? 0 : 32)) continue;
         if (gap < gapBest) { best = vids[i]; gapBest = gap; }
       }
       return best;
@@ -151,14 +151,14 @@
         if (!best || rank > best.rank || (rank === best.rank && (r.width > best.r.width + 1 || (r.width > best.r.width - 1 && r.height > best.r.height)))) { best = { el: el, r: r, rank: rank }; bestAt = i; }
       }
       if (!best) { noteUnknown(x, y, list, vids); return null; }
-      var v = videoFor(best.r, scope(best.el, vids), best.rank === 0);
+      var v = videoFor(best.r, scope(best.el, vids), !(parseFloat(best.el.getAttribute('aria-valuemax')) > 0 || (best.el.tagName === 'INPUT' && parseFloat(best.el.max) > 0)));   // a bar whose range cannot be checked must lie OVER the picture
       if (!v) return null;
       var root = best.el;
       while (root && !root.contains(v)) root = root.parentElement;      // the player: the lowest ancestor of the bar that also holds the film
       for (i = 0; i < bestAt; i++) {
         var o = list[i];
-        if (best.el.contains(o)) continue;
-        if (interactive(o) || !(root && root.contains(o))) return null; // a button / link / field, or something of the page (a scrim, a banner) lies over the bar at the finger
+        if (interactive(o) && o.getAttribute('role') !== 'slider') return null;   // a button / link / field (even inside the strip: a playlist of links) is under the finger, not the bar
+        if (!best.el.contains(o) && !(root && root.contains(o))) return null;      // something of the page (a scrim, a banner) lies over the bar at the finger
       }
       if (!shown(best.el)) return null;
       return { bar: best.el, video: v };
