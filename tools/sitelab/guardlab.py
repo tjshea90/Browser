@@ -34,7 +34,7 @@
 
   /seekbar-lab YS1: three mock players over a REAL 300 s silent media file (/seek-film.wav, served with byte ranges, every request logged with its Range header). A: a YouTube-like red bar whose page IGNORES a tap
               (only a light "hover" line follows the finger, as the owner reported); B: the same bar whose page jumps the video itself on a tap (the control: Kestrel must not seek twice); C: a short volume
-              slider (must never move the video). The page logs every pointer / mouse / touch event of a tap (type, isTrusted, pointerType) and every seeking / seeked of each video with its time, and shows both
+              slider (must never move the video); under A's bar a thin strip with a name the script does not know (a tap on it only shows up in Diagnostics: "1 tap on a bar-like strip Kestrel did not know (last: div.mystery-strip)"). ?small uses the 2.4 MB film instead of /seek-big.wav (57.6 MB, 192 KB/s). The page logs every pointer / mouse / touch event of a tap (type, isTrusted, pointerType) and every seeking / seeked of each video with its time, and shows both
               times on screen. The log's "GET /seek-film.wav Range=bytes=N-" lines show where the engine reads from after a jump: nothing before the jumped-to place is asked for again.
 
 Used as the FIRST page after a force-stop (a cold start from a link: the extension may not be active yet) and as a later page, to see whether the guard was there from the very first document.
@@ -366,7 +366,8 @@ body{margin:8px;font:15px sans-serif}
 <div id="pa" class="pl html5-video-player"><video id="va" preload="auto" muted playsinline></video>
  <div class="ch ytp-chrome-bottom"><div id="ba" class="bar ytp-progress-bar" role="slider" aria-label="Seek slider" aria-valuemin="0" aria-valuemax="300" aria-valuenow="0" tabindex="0">
   <div class="rail"></div><div class="hov ytp-hover-progress"></div><div class="red ytp-play-progress"></div><div class="dot ytp-scrubber-container"></div></div></div>
- <div id="volc" class="vol" role="slider" aria-label="Volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"></div></div>
+ <div id="volc" class="vol" role="slider" aria-label="Volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"></div>
+ <div id="mys" class="mystery-strip" style="position:absolute;left:10px;right:10px;bottom:1px;height:9px;background:#444"></div></div>
 <p class="t" id="ta">A: ...</p>
 <div id="pb" class="pl html5-video-player"><video id="vb" preload="auto" muted playsinline></video>
  <div class="ch ytp-chrome-bottom"><div id="bb" class="bar ytp-progress-bar" role="slider" aria-label="Seek slider" aria-valuemin="0" aria-valuemax="300" aria-valuenow="0" tabindex="0">
