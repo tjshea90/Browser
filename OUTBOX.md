@@ -1753,3 +1753,40 @@
 ## 2026-11-15T17:19:52Z
 > Waiting for the alpha48 build to finish; the next check is at 17:35 container time.
 <!-- sha:1f1c1bf4dd51 -->
+
+## 2026-11-15T17:36:20Z
+> alpha48 is released. Your Yahoo problem is fixed and tested on the real Firefox engine, but not on your tablet.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha48
+>
+> **Your Yahoo Finance video**
+> - **Why the long press showed the floating panel:** Yahoo's player is built as a hidden "web component". Kestrel's video code couldn't see inside it, so it thought you pressed on empty space and opened the panel. The same blindness affected the other video features.
+> - **Why it had no controls:** in my check of the live page, the player draws almost no buttons while its ad plays. In my emulator run it did show its own buttons while the main video played, so the ad moment is my best explanation of what you saw.
+> - **What changed:**
+>   - **Controls:** if you tap a video that shows no buttons, Kestrel puts its own bar on it: play/pause, a track to tap or drag with the time, mute, and full screen. It hides itself and stays away where the page has its own buttons.
+>   - **Setting:** Settings > "Video controls" has Automatic, Always and Off.
+>   - **Long press:** this now opens the "Save video" options (download, copy the address) instead of the panel, including for players like Yahoo's.
+> - **What I tested:** on the real Firefox engine in an Android 10 emulator on GitHub, on four test pages and on Yahoo's real video page. On Yahoo, the long press opened "Save video" with no panel, and the tap left the page's own buttons alone. In that run the player was a live stream, so "Save video" said live streams can't be saved.
+> - **Not run on your tablet:** the emulator is a pretend tablet with software graphics.
+>
+> **Also in alpha48**
+> - **Full-screen video** turns sideways with the tablet, follows it with Android's rotation lock on, has a turn button at the left edge, and Back leaves full screen first. Android's one-time "Viewing full screen" box takes the first Back press, which is normal.
+> - **Downloads and installs:**
+>   - A download nobody tapped asks first.
+>   - A fake "Kestrel update" file is refused.
+>   - The Safe Browsing text is corrected.
+> - **Fixes from an independent check of this version:**
+>   - A site's own screen lock was misread.
+>   - Full screen could stay stuck after its tab was killed or closed.
+>   - A web page could have posed as the updater.
+>   - Redirecting download links were wrongly treated as started by themselves.
+>   - Several questions could pile up.
+>
+> **The emulator hour:** the lab runs on GitHub. A full one-hour browsing, video and download run with your hotspot speed is going now and ends in about an hour. The shorter runs found that the pretend phone's own system dies under heavy pages. The lab now restarts it and I took the heaviest sites out of the mix. I'll write up what the hour shows and fix what I can.
+>
+> **Open items**
+> 1. **Your tablet test:** play a Yahoo Finance video, long press it, tap a video that shows no buttons, play a film in full screen, turn the tablet, and press the turn button.
+> 2. **Question for you:** should sound keep playing when you leave Kestrel or turn the screen off? I won't build that until you answer.
+> 3. **Your GitHub steps:** a protected `release` environment, the "pin actions to a full commit" policy, and the private signing key last.
+> 4. **Not started:** cold-start speed, startup profile, the 250 ms wait, repeated page checks, and what Shields-off really lifts. Several need your tablet's Diagnostics numbers.
+<!-- sha:ac91cb85b1b3 -->
