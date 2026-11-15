@@ -2229,3 +2229,31 @@
 > - **Latest:** alpha46 is out, with the Release link in my previous message.
 > - **Open items:** nothing is running or half-done. The only open items are the questions I listed for you (BK5 and AX1g), your tablet feedback, and one Diagnostics copy.
 <!-- sha:60aef8d0ce21 -->
+
+## 2026-11-15T04:52:35Z
+> I've written the report as one file you can upload to the other Claude account as is. Nothing was run: no build, tests, emulator or tablet. My claims come from reading the code and a few public web pages, and each marks what is unverified and the check that would settle it.
+>
+> The repo was not changed. I wrote the file outside it, so the auto-save hooks couldn't commit anything. The project's own session-start hook did sync and merge other branches into my session's branch before I began, but I made no edits and touched no other account's branch.
+>
+> ## What's in the file
+> The first section, "START HERE", tells the receiving Claude exactly what to do. It saves the file into the repo as `research/REVIEW-EXTERNAL-4.md`, adds a ready-made task block to `TASKS.md`, makes a checkpoint, and finishes the work already in flight first. The rest is a ranked list of rows, each with evidence, the change, the proof needed and the risk. It follows the same layout earlier outside reviews used, which that Claude already works from.
+>
+> ## What I found
+> The engine settings, scrolling, caching and ad-blocking code are already tuned about as far as settings can take them, so the report doesn't re-tune them. The tablet already measured 64–65 scroll frames a second and 0 dropped frames on hardware-decoded video, with the first screen up 520 ms after launch. The report instead lists:
+>
+> - **Fullscreen video never rotates the screen.** Nothing in the code listens for a site's "lock landscape" request, so a film fills about a third of the portrait screen.
+> - **A fake "Kestrel update" file could install over the app.** The signing key is public, and an APK downloaded in the browser gets only a generic warning.
+> - **Downloads no one tapped for are silent** for ordinary file types.
+> - **The About page says Safe Browsing doesn't work on this tablet,** while the earlier security research says it does. Nobody has tested it.
+> - **Navigation to a site that has ad-fix scripts can wait up to 250 ms** from the second visit on.
+> - **The real Firefox engine can't be tested automatically.** The repo is public, so GitHub's free runners could run an accelerated Android emulator, which would close most "not run" gaps.
+> - **No way to measure real-site video smoothness.** The test pages were removed at your request, so the report proposes passive counters in Diagnostics.
+> - **Safe order for the signing key.** The private key must not be added before the release approval gate, or any session branch could read it.
+> - **Smaller items:** engine start timing, a pre-compiled startup profile, a cache-freshness experiment, and what "Shields off for this site" really turns off.
+>
+> ## One question for you
+> Should sound keep playing when you leave the app or the screen turns off? It currently stops. The report flags this as the only open owner question.
+>
+> Files are in `/tmp/claude-0/-home-user-Browser/d9c0c79e-0ff7-5c2c-9ab9-daefb6ae1d02/scratchpad/`:
+> - `REVIEW-EXTERNAL-4.md`
+<!-- sha:564051041b6f -->
