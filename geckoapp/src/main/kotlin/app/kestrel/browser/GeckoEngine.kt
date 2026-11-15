@@ -208,7 +208,9 @@ object GeckoEngine {
             "network.dns.echconfig.enabled", "security.tls.enable_kyber", "network.http.http2.enabled",
             // Firefox's own tracking protection: which lists block (content-track-digest256 = the CDN / player category), and the allow-lists Mozilla's service would fill
             "urlclassifier.trackingTable", "urlclassifier.trackingAnnotationTable", "privacy.trackingprotection.enabled", "privacy.annotate_channels.strict_list.enabled",
-            "privacy.trackingprotection.allow_list.baseline.enabled", "privacy.trackingprotection.allow_list.convenience.enabled")
+            "privacy.trackingprotection.allow_list.baseline.enabled", "privacy.trackingprotection.allow_list.convenience.enabled",
+            // FS1: the engine accepts screen.orientation.lock() only with this on; RX4-X3: is the engine's own Safe Browsing (phishing / malware pages and downloads) switched on here
+            "dom.screenorientation.allow-lock", "browser.safebrowsing.malware.enabled", "browser.safebrowsing.phishing.enabled", "browser.safebrowsing.downloads.enabled", "urlclassifier.malwareTable", "urlclassifier.phishTable")
         try {
             org.mozilla.geckoview.GeckoPreferenceController.getGeckoPrefs(names).accept({ list ->
                 prefReadback = "Engine prefs: " + (list?.joinToString(", ") { "${shortPref(it.pref)}=${it.value.toString().take(if (it.pref.startsWith("urlclassifier")) 220 else 40)}(${when (it.type) { org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_BOOL -> "b"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_INT -> "i"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_STRING -> "s"; else -> "?" }})" } ?: "none")
