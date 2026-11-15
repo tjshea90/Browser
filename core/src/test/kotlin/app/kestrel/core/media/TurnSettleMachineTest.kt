@@ -22,6 +22,12 @@ class TurnSettleMachineTest {
         val paused = ArrayList<String>()
         val resumed = ArrayList<String>()
         val logs = ArrayList<String>()
+        var expects = false
+        var nudges = 0
+        var hintShown = false
+        override fun expectsPageReport() = expects
+        override fun nudgeEngine() { nudges++ }
+        override fun hint(show: Boolean) { hintShown = show }
         override fun now() = clock
         override fun schedule(delayMs: Long) { scheduled = delayMs }
         override fun cancelSchedule() { scheduled = null }
@@ -183,5 +189,114 @@ class TurnSettleMachineTest {
         val m = machine(h)
         m.sizeChanged(); m.touchedScreen(); m.tick()
         assertFalse(h.coverShown); assertNull(h.scheduled); assertEquals(0, m.turns)
+    }
+
+    // ---- ROT2 (owner message 48: "The video size and frame is awkward for a few seconds"): the cover waits for the page to say it has the new size
+
+    @Test fun aPageThatReportsItsViewportKeepsTheCoverUntilItHasTheNewSize() {
+        val h = Host().apply { playing = true; expects = true }
+        val m = machine(h)
+        m.configChanged(true)
+        h.wait(m, 300); m.sizeChanged()                          // the view is laid out
+        h.wait(m, TurnSettle.SETTLE_MS)                          // the view is still, the page has said nothing
+        assertTrue("still covered: the page has not said it has the new size", h.coverShown); assertTrue(m.turning); assertTrue(h.resumed.isEmpty())
+        h.clock += 100; m.pageReported(true)                      // the page says it has the view's size
+        h.wait(m, TurnSettle.TICK_MS)
+        assertFalse(m.turning); assertFalse(h.coverShown); assertTrue(h.coverFaded)
+        assertEquals(listOf("tab1"), h.resumed)
+        assertEquals(1, m.lagTurns); assertEquals(1050L, m.lagLastMs); assertEquals(1050L, m.lagWorstMs); assertEquals(0, m.gaveUp)
+        assertTrue(m.last, m.last.contains("the page had the new size after 1050 ms"))
+    }
+
+    @Test fun aReportThatIsNotTheViewsSizeDoesNotConfirmAndALaterSizeChangeTakesAConfirmationBack() {
+        val h = Host().apply { playing = true; expects = true }
+        val m = machine(h)
+        m.configChanged(true)
+        m.pageReported(false)                                     // the old size: the engine has not handed the new one to the page yet
+        h.wait(m, TurnSettle.SETTLE_MS + 120)
+        assertTrue("a report that is not the view's size confirms nothing", m.turning)
+        m.pageReported(true)                                      // the page caught up ...
+        m.sizeChanged()                                           // ... and the view changed again (a second turn, a nudge): the report no longer counts
+        h.wait(m, TurnSettle.SETTLE_MS + 120)
+        assertTrue(m.turning)
+        m.pageReported(true)
+        h.wait(m, TurnSettle.TICK_MS)
+        assertFalse(m.turning)
+    }
+
+    @Test fun thePageCapEndsTheWaitForAPageThatNeverSaysItAndTheEngineIsNudgedOnce() {
+        val h = Host().apply { playing = true; expects = true }
+        val m = machine(h)
+        m.configChanged(true)
+        while (m.turning && h.clock < 10_000) h.wait(m, TurnSettle.TICK_MS)
+        assertFalse(m.turning)
+        assertTrue("let go at the page cap, not before: ${h.clock}", h.clock >= TurnSettle.PAGE_CAP_MS && h.clock < TurnSettle.PAGE_CAP_MS + 2 * TurnSettle.TICK_MS)
+        assertEquals("the engine was given one real size change, once", 1, h.nudges); assertEquals(1, m.nudges)
+        assertEquals(1, m.gaveUp); assertEquals(0, m.lagTurns)
+        assertTrue(m.last, m.last.contains("gave up"))
+        assertEquals("the video plays again all the same", listOf("tab1"), h.resumed)
+    }
+
+    @Test fun aPageThatDoesNotReportIsJudgedByTheOldRuleAndNeverNudged() {
+        val h = Host().apply { playing = true; expects = false }
+        val m = machine(h)
+        m.configChanged(true)
+        h.wait(m, TurnSettle.SETTLE_MS)
+        assertFalse("the old rule: still for the settle time", m.turning)
+        assertEquals(0, h.nudges); assertEquals(0, m.lagTurns); assertEquals(0, m.gaveUp)
+        val h2 = Host().apply { playing = true; expects = false }
+        val m2 = machine(h2)
+        m2.configChanged(true)
+        var n = 0
+        while (m2.turning && n++ < 100) { h2.wait(m2, 100); m2.sizeChanged() }       // a page that never stops resizing
+        assertTrue("the old cap lets it go", !m2.turning && h2.clock in TurnSettle.CAP_MS..(TurnSettle.CAP_MS + 200))
+    }
+
+    @Test fun theRingShowsAfterAboutASecondOnceAndGoesWithTheCover() {
+        val h = Host().apply { playing = true; expects = true }
+        val m = machine(h)
+        m.configChanged(true)
+        h.wait(m, TurnSettle.HINT_AFTER_MS - 100)
+        assertFalse("not yet", h.hintShown)
+        h.wait(m, 120)
+        assertTrue("after about a second", h.hintShown)
+        m.pageReported(true); m.sizeChanged(); m.pageReported(true)
+        h.wait(m, TurnSettle.SETTLE_MS)
+        assertFalse(m.turning); assertFalse("the ring goes with the cover", h.hintShown)
+    }
+
+    @Test fun leavingTheAppMidTurnRemovesTheRingToo() {
+        val h = Host().apply { playing = true; expects = true }
+        val m = machine(h)
+        m.configChanged(true)
+        h.wait(m, TurnSettle.HINT_AFTER_MS + 100)
+        assertTrue(h.hintShown)
+        m.abandon()
+        assertFalse(h.hintShown); assertFalse(h.coverShown); assertFalse(m.turning)
+    }
+
+    @Test fun aSecondTurnWhileOneGoesOnTakesTheConfirmationBack() {
+        val h = Host().apply { playing = true; expects = true }
+        val m = machine(h)
+        m.configChanged(true)
+        m.pageReported(true)                                      // the page had caught up with the first half of the turn ...
+        h.wait(m, 200)
+        m.configChanged(false)                                    // ... and the screen turned again
+        h.wait(m, TurnSettle.SETTLE_MS + 120)
+        assertTrue("the earlier report does not count for the new size", m.turning)
+        m.pageReported(true)
+        h.wait(m, TurnSettle.TICK_MS)
+        assertFalse(m.turning)
+        assertEquals("one video pause for the whole turn", 1, m.pausedCount)
+    }
+
+    @Test fun theLineSaysHowLongThePageTookToHaveTheNewSize() {
+        val h = Host().apply { playing = true; expects = true }
+        val m = machine(h)
+        m.configChanged(true)
+        h.clock += 800; m.pageReported(true)
+        h.wait(m, TurnSettle.SETTLE_MS)
+        val l = m.line()
+        assertTrue(l, l.contains("the page took 800 ms to have the new size") && l.contains("worst 800 ms") && l.contains("1 turns measured") && l.contains("0 gave up"))
     }
 }
