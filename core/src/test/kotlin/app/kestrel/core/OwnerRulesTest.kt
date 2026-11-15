@@ -177,8 +177,8 @@ class OwnerRulesTest {
         assertTrue(immersive, immersive.contains("val immersive = View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_FULLSCREEN\n"))
         assertFalse("no layout flags are ASKED for (they put the window under the bars whether or not the system hides them)", immersive.contains("dv.systemUiVisibility or older") || immersive.contains("or immersive or older"))
         assertTrue("the flags of an older build are cleared", immersive.contains("and older.inv()"))
-        assertTrue("a system dialog or Recents may bring the bars back: they are asked to go again when the window has focus", body(act, "override fun onWindowFocusChanged(hasFocus: Boolean) {").contains("if (hasFocus && fullscreenOn) { applyImmersive(true)"))
-        assertTrue("and after a turn", body(act, "override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {").contains("rehideAfterTurn") && act.contains("private val rehideAfterTurn = Runnable { if (fullscreenOn) { applyImmersive(true)"))
+        assertTrue("a system dialog or Recents may bring the bars back: they are asked to go again when the window has focus (only when the person chose Hide)", body(act, "override fun onWindowFocusChanged(hasFocus: Boolean) {").contains("if (hasFocus && fullscreenOn && prefs.fullscreenBars == 1) { applyImmersive(true)"))
+        assertTrue("and after a turn", body(act, "override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {").contains("rehideAfterTurn") && act.contains("private val rehideAfterTurn = Runnable { if (fullscreenOn && prefs.fullscreenBars == 1) { applyImmersive(true)"))
         val check = body(act, "private fun checkBars() {")
         assertTrue("a bar that still takes room is asked once more and what remains is written down", check.contains("barsRehidden") && check.contains("fsBarsNote"))
         assertTrue("the bars are read from the decor's raw insets (an Android 10 decor consumes them before the root's listener: alpha49 review)", check.contains("systemBarsNow()") && body(act, "private fun systemBarsNow() {").contains("window.decorView.rootWindowInsets"))
@@ -204,6 +204,20 @@ class OwnerRulesTest {
         assertTrue("a closed or replaced session forgets its media state", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/GeckoTab.kt").contains("g.videoPlaying = false; g.mediaSession = null"))
         val delegate = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt")
         assertTrue("the delegate keeps the media session of the tab", delegate.contains("tab.gecko.mediaSession = mediaSession") && delegate.contains("tab.gecko.mediaSession = null"))
+    }
+
+    // FB1, owner message 47: "The controls are still under Android navigation bar. There are no controls in full screen ... Make the controls available for both orientations and never underneath the Android navigation bar".
+    // alpha48 - alpha50 asked the system to hide its bars and nothing changed on the tablet (its window manager laid the window out over the whole screen for the request while its System UI kept drawing the bars):
+    // by default the app does not ask, the page stays between the bars.
+    @Test fun aFullScreenPageKeepsTheSystemBarsAndStaysBetweenThemUnlessThePersonChoseHide() {
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        val immersive = body(act, "private fun applyImmersive(on: Boolean) {")
+        assertTrue("the bars are asked to go only for the choice Hide", immersive.contains("val hide = on && prefs.fullscreenBars == 1"))
+        assertTrue("both API paths follow it", immersive.contains("if (hide) { c.hide(WindowInsets.Type.systemBars())") && immersive.contains("= if (hide) (dv.systemUiVisibility and older.inv()) or immersive else"))
+        assertTrue("the default is Keep", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("""sp.getInt("fs_bars", 0).coerceIn(0, 1)"""))
+        assertTrue("Settings has the row", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("""choice("System bars in full-screen video""""))
+        assertTrue("the lab can play both choices", act.contains("\"bars\" -> { val arg"))
+        assertTrue("Diagnostics says which one is on", body(act, "internal fun fullScreenChanged(tab: Tab, on: Boolean) {").contains("Settings > System bars in full-screen video is on Keep"))
     }
 
     // SND1, owner message 45: "Sound should not keep playing if I am not currently on the Kestrel tab." The engine suspends the media of an inactive session (proven in the emulator lab); the app adds a safety net.
