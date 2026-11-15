@@ -107,6 +107,8 @@ class Prefs private constructor(ctx: Context) {
     var fullscreenTurn: Int get() = app.kestrel.core.media.FullscreenTurn.cleanMode(sp.getInt("fs_turn", 0)); set(v) = put("fs_turn", app.kestrel.core.media.FullscreenTurn.cleanMode(v))
     /** FB1 (owner message 47): what a full-screen page does with the system bars: 0 keep them (the page is laid out between the status bar and the navigation bar, nothing of a player is ever under them; the default: the owner's tablet kept drawing both bars over a page that had asked for them to go), 1 hide them (the picture fills the screen; only where the system really hides them). */
     var fullscreenBars: Int get() = sp.getInt("fs_bars", 0).coerceIn(0, 1); set(v) = put("fs_bars", v.coerceIn(0, 1))
+    /** VP1 (owner message 49): 0 = Kestrel's own controls over a full-screen video (the default), 1 = the page's own controls. */
+    var fsControls: Int get() = sp.getInt("fs_controls", 0).coerceIn(0, 1); set(v) = put("fs_controls", v.coerceIn(0, 1))
     /** Calm pages: sites see "reduce motion" and GIFs play once (the owner's "have no animations", now for pages too). OFF since alpha27: a site that hides its loading symbol from an animation, or whose reduce-motion style leaves one frozen, kept it on screen. */
     var calmPages: Boolean get() = bool("calm_pages", false); set(v) = put("calm_pages", v)
     /** RX4-M0e: count the late screen updates while a real page scrolls (a frame callback that runs only during a scroll) and show the totals in Diagnostics. OFF: nothing runs. */

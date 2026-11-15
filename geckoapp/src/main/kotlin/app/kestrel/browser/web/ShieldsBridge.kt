@@ -76,6 +76,8 @@ class ShieldsBridge(
     private val labProbe: (JSONObject) -> Unit = {},
     /** FB4: the viewport a full-screen page really got (turn.js, top frame): width (w) and height (h) in device pixels, f = 1, and the page of its tab (p). Numbers only. Worker thread. */
     private val viewport: (JSONObject) -> Unit = {},
+    /** VP1: the page's report of a full-screen film (`vst`) or a tap on its picture (`vtap`): the answer is what the controls want done (JSON). Worker thread. */
+    private val player: (JSONObject) -> String = { "" },
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -129,6 +131,7 @@ class ShieldsBridge(
                     "sg" -> { scrollGaps(m); "" }
                     "probe" -> { if (labBuild()) labProbe(m); "" }
                     "vpt" -> { viewport(m); "" }
+                    "vst", "vtap" -> player(m)
                     "bk" -> backPlace(m.optString("p"))
                     "bf" -> { backShown(m.optString("p"), m.optInt("ps") == 1, m.optString("nt"), m.optLong("ts"), m.optInt("y")); "" }
                     "ns" -> { noStore(m.optString("p")); "" }
@@ -227,8 +230,9 @@ class ShieldsBridge(
         // 8 = the ad skipper may run in video players (RX3-Y2; follows Shields and the Settings switch "Skip ads inside video players"),
         // 256 = a DEBUG build (the emulator lab): the page sends a page-health probe once it has loaded (LAB2; never set in a release build),
         // 64 = Kestrel's own video bar may show on a tapped video whose page has no controls, 128 = also where the page has some (VC1, videobar.js; follows ONLY the Settings row "Video controls"),
+        // 512 = Kestrel's own controls over a FULL-SCREEN video (VP1, player.js; follows ONLY the Settings row "Full-screen video controls"),
         // 16 = a tap on a video player's bar may move the video when the page does not (YS1, seekbar.js; follows ONLY the Settings switch "Tap the video bar to jump": it is not a Shields feature, a site with Shields off keeps it)
-        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0) or (if (prefs().tapSeek) 16 else 0) or (if (prefs().measureScroll) 32 else 0) or (if (prefs().videoControls != 2) 64 else 0) or (if (prefs().videoControls == 1) 128 else 0) or (if (labBuild()) 256 else 0)
+        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0) or (if (prefs().tapSeek) 16 else 0) or (if (prefs().measureScroll) 32 else 0) or (if (prefs().fsControls == 0) 512 else 0) or (if (prefs().videoControls != 2) 64 else 0) or (if (prefs().videoControls == 1) 128 else 0) or (if (labBuild()) 256 else 0)
         val on = s.shieldsUp && s.blockAds && snap?.fs?.isPageAllowed(host) != true
         return (if (on) "1:" else "0:") + gen + ":" + (if (snap != null) contentId(snap) else "") + ":" + guard
     }
