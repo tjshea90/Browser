@@ -1232,10 +1232,12 @@ open class BrowserActivity : Activity(), DockListener {
             "shown" -> Health.count("videobar.shown")
             "own" -> Health.count("videobar.pageHasControls")
             "act" -> if (a.isNotEmpty()) Health.count("videobar.act.$a")
+            "turn" -> { Health.count("turn.page.turns"); if (a.isNotEmpty()) Health.count("turn.page.$a") } // FB2: the page paused its videos for a turn of the screen and played them again (or left them: the person touched, or the page started them itself)
             else -> return
         }
-        Health.log("videobar", e, a)
+        Health.log("videobar", e, if (e == "turn") "$a n=${m.optInt("n")}" else a)
     }
+    private fun turnPageLine() = "Turning, the page's own pause (every video, also a muted one): ${Health.counter("turn.page.turns")} turns met by pages, videos played again ${Health.counter("turn.page.played")}, left paused ${Health.counter("turn.page.skipped")}, turns with nothing to pause ${Health.counter("turn.page.none")}"
     private fun videoBarLine(): String {
         val mode = listOf("Automatic", "always", "off")[prefs.videoControls]
         val acts = listOf("play", "pause", "seek", "mute", "full").joinToString(", ") { "$it ${Health.counter("videobar.act.$it")}" }
@@ -2034,6 +2036,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(fsTurner.line())
         out.add(fsBarsLine())
         out.add(turnSettler.line())
+        out.add(turnPageLine())
         out.add(strayLine())
         out.add(videoBarLine())
         out.add(videoQuality.line(GeckoEngine.videoPolicyText))

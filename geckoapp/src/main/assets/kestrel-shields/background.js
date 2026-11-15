@@ -918,14 +918,16 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   return undefined;
 });
 
-// VC1: videobar.js reports what Kestrel's own video bar did: it was shown (e 'shown'), the page had controls of its own (e 'own'), the person used it (e 'act', a = play, pause, seek, mute, full). Numbers
-// and one of five words, never an address; the page of the tab goes along so that the app can drop the report of a private tab.
+// VC1: videobar.js reports what Kestrel's own video bar did: it was shown (e 'shown'), the page had controls of its own (e 'own'), the person used it (e 'act', a = play, pause, seek, mute, full); FB2: turn.js reports a
+// turn of the screen (e 'turn', a = played | skipped | none, n = videos). Numbers
+// and a few words, never an address; the page of the tab goes along so that the app can drop the report of a private tab.
 browser.runtime.onMessage.addListener(function (m, sender) {
   if (!m || m.k !== 'vbk' || !sender || !sender.tab) return undefined;
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || (sender.frameId === 0 ? docOf(sender.url) : '');
-  var e = m.e === 'shown' || m.e === 'own' || m.e === 'act' ? m.e : '';
-  var a = /^(play|pause|seek|mute|full)$/.test(String(m.a || '')) ? String(m.a) : '';
-  if (e) send({ k: 'vbk', e: e, a: a, p: String(page).slice(0, 300) }).catch(function () {});
+  var e = m.e === 'shown' || m.e === 'own' || m.e === 'act' || m.e === 'turn' ? m.e : '';
+  var a = /^(play|pause|seek|mute|full|played|skipped|none)$/.test(String(m.a || '')) ? String(m.a) : '';
+  var n = Math.max(0, Math.min(99, m.n | 0));                    // (turn.js: how many videos a turn of the screen paused)
+  if (e) send({ k: 'vbk', e: e, a: a, n: n, p: String(page).slice(0, 300) }).catch(function () {});
   return undefined;
 });
 

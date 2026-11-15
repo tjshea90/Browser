@@ -120,7 +120,8 @@
       ],
       "js": [
         "vfind.js",
-        "videobar.js"
+        "videobar.js",
+        "turn.js"
       ],
       "run_at": "document_idle",
       "all_frames": true,
