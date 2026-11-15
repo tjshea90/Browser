@@ -288,6 +288,7 @@ open class BrowserActivity : Activity(), DockListener {
         }
         root.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
         Health.count("panel.openSpace")
+        if (!(tabForPage(page)?.isPrivateTab ?: current?.isPrivateTab ?: false)) Health.log("panel", "open-space") // the lab tells a panel from the video menu by this line
         Health.log("panel", "open-space", "x=${pressX.toInt()} y=${pressY.toInt()} finger=$pressActive")
         miniNav.showAt(pressX, pressY)
     }
@@ -2287,6 +2288,7 @@ open class BrowserActivity : Activity(), DockListener {
         val tab = (if (pageUrl.isNotEmpty()) tabOfTouch(pageUrl, kind) ?: current?.takeIf { it.url.substringBefore('#') == pageUrl.substringBefore('#') } ?: tabWithUrl(pageUrl) ?: tabForPage(pageUrl) else null) ?: current ?: return // the same address may be open in several tabs: the one in front is the one the owner tapped in
         if (kind == "tap") { tab.lastTapAt = SystemClock.uptimeMillis(); tab.lastTapHref = url; return } // a real tap in the page, and the link it was on: the jump guard's evidence
         if (kind == "vmenu") { // a long press on a video or audio element, taken by the page script before the site's own player menu could appear (owner request X14)
+            if (!tab.isPrivateTab) Health.log("video", "long-press-menu", if (url.startsWith("http", true)) "with its address" else "no address")
             if (tab === current && !isFinishing) video.longPress(tab, url.takeIf { it.startsWith("http", true) }, null) { link -> val t = newTabInternal(tab, tab.isPrivateTab); show(t); navigateTo(t, link) }
             return
         }

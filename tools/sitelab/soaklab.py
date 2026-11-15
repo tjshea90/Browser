@@ -182,6 +182,26 @@ def page_dlguard(kind):
     return (head + "<button id=go style='display:block;width:92%%;height:30vh;margin:30vh auto 0;font-size:28px' onclick=\"%s\">Download</button>" % trigger.replace('"', "'")).encode()
 
 
+def page_vc(kind, ad):
+    """VC1 / LP1 (owner message 44): a clip with no controls of the page's own (naked), inside a web component's shadow root like finance.yahoo.com's player (shadow; ad=1 lays a frame over it, as Google's
+    IMA overlay does), and with a visible button and slider of its own (own)."""
+    clip = "/clip/landscape.mp4"
+    head = "<!doctype html><html><head><meta name=viewport content='width=device-width,initial-scale=1'><title>vc %s</title></head><body style='margin:0;background:#fff;font:16px sans-serif'><h3 style='margin:10px'>vc %s</h3>" % (kind, kind)
+    if kind == "own":
+        body = ("<div style='position:relative;width:100%;max-width:560px;margin:8px auto'><video id=v src='__CLIP__' autoplay muted loop playsinline style='display:block;width:100%;background:#222'></video>"
+                "<div style='position:absolute;left:0;right:0;bottom:0;height:44px;background:rgba(0,0,0,.6)'><button class='play-button' aria-label='Play or pause' style='width:44px;height:44px'>|&gt;</button>"
+                "<input type=range aria-label='Seek' value=0 style='width:60%'></div></div>")
+    elif kind == "shadow":
+        body = ("<div style='position:relative;width:100%;max-width:560px;margin:8px auto'><div id=host style='width:100%;height:315px'></div>"
+                + ("<iframe srcdoc=\"<body style='margin:0;background:transparent'></body>\" style='position:absolute;left:0;top:0;width:100%;height:280px;border:0'></iframe>" if ad else "")
+                + "</div><script>var root=document.getElementById('host').attachShadow({mode:'open'});root.innerHTML='<div style=\"position:relative;width:100%;height:315px;background:#000\">"
+                "<video id=v src=\"__CLIP__\" autoplay muted loop playsinline style=\"width:100%;height:100%\"></video><div class=\"shaka-controls-container\" style=\"position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none\">"
+                "<div class=\"shaka-bottom-controls\" style=\"position:absolute;left:0;right:0;bottom:0;height:5px;pointer-events:auto\"></div></div></div>';</script>")
+    else:
+        body = "<video id=v src='__CLIP__' autoplay muted loop playsinline style='display:block;width:100%;max-width:560px;margin:8px auto;background:#222'></video>"
+    return (head + body.replace("__CLIP__", clip) + "<p style='margin:10px'>The clip plays by itself (muted).</p></body></html>").encode()
+
+
 def page_dl():
     links = "".join("<p><a href='/dl/%dmb.bin'>%d MB file</a></p>" % (n, n) for n in (1, 5, 20)) + "<p><a href='/dl/slow.bin'>5 MB, slowly</a></p>"
     return ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Soak downloads</title><body style='font:20px sans-serif;margin:14px'><h1>Downloads</h1>" + links).encode()
@@ -284,6 +304,8 @@ class H(http.server.BaseHTTPRequestHandler):
                 if name in CLIPS:
                     return self._file(os.path.join(OUT, CLIPS[name][2]), "video/mp4")
                 return self._send(b"unknown clip", "text/plain", 404)
+            if p == "/video/vc":
+                return self._send(page_vc((q.get("kind") or ["naked"])[0], (q.get("ad") or [""])[0] == "1"))
             if p == "/fs":
                 return self._send(page_fs((q.get("lock") or [""])[0]))
             if p == "/dl/page":

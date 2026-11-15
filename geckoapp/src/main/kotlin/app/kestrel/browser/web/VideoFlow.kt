@@ -238,6 +238,7 @@ class VideoFlow(private val a: BrowserActivity) {
     fun show(tab: Tab, pressedUrl: String? = null, extras: List<Pair<String, () -> Unit>> = emptyList()) {
         val ranked = MediaRank.rank(candidates(tab, pressedUrl), pressedUrl, tab.media.primary())
         if (ranked.main.isEmpty() && ranked.other.isEmpty()) {
+            if (!tab.isPrivateTab) Health.log("video", "sheet-empty")
             a.toast("No video found on this page yet. Some sites only show it once you press play: press play, then tap this icon again.")
             return
         }
@@ -247,6 +248,7 @@ class VideoFlow(private val a: BrowserActivity) {
         panel = p; panelTab = tab; panelPressed = pressedUrl; panelExtras = extras
         render(p, tab)
         a.sheet.show("Save video", p)
+        if (!tab.isPrivateTab) Health.log("video", "sheet-shown", "main=${ranked.main.size} other=${ranked.other.size}")
         for (c in ranked.main + listOfNotNull(ranked.exact)) { // only what is on top is looked into: a few hundred KB each, never the files tucked away
             if (c.kind == MediaKind.FILE && !c.audioOnly && (c.knownHeight == 0 || c.durationMs == 0L) && looksMp4(c) && probed.add(c.key)) probe(tab, c, 0L, 256 * 1024, 0)
             // a file found in the page's own markup has not been requested yet, so nobody has seen its length: one byte asked for gives it back as "Content-Range: bytes 0-0/TOTAL"
