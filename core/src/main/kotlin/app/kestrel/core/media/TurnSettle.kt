@@ -33,6 +33,9 @@ object TurnSettle {
     /** ROT2: after this long a small progress ring shows on the cover. */
     const val HINT_AFTER_MS = 900L
 
+    /** ROT2: a finger that comes down this long after the turn began is the person waiting for the picture: the cover goes (an earlier one is the hand that turned the tablet). */
+    const val TOUCH_ENDS_AFTER_MS = 900L
+
     /** The black cover fades out over this long. */
     const val FADE_MS = 160L
 
@@ -64,6 +67,9 @@ object TurnSettle {
 
     /** ROT2: the page still has not caught up: time to give the engine one real size change. */
     fun nudgeDue(sinceLastChangeMs: Long): Boolean = sinceLastChangeMs >= NUDGE_AFTER_MS
+
+    /** ROT2: a touch ends the wait for the page (the person takes over) once the turn has lasted this long. */
+    fun touchEnds(sinceStartMs: Long): Boolean = sinceStartMs >= TOUCH_ENDS_AFTER_MS
 
     /** ROT2: the turn takes long: show the progress ring. */
     fun hintDue(sinceStartMs: Long): Boolean = sinceStartMs >= HINT_AFTER_MS

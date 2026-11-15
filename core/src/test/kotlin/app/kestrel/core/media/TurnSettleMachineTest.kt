@@ -299,4 +299,18 @@ class TurnSettleMachineTest {
         val l = m.line()
         assertTrue(l, l.contains("the page took 800 ms to have the new size") && l.contains("worst 800 ms") && l.contains("1 turns measured") && l.contains("0 gave up"))
     }
+
+    @Test fun aTouchAfterAboutASecondOfWaitingLetsTheCoverGoAndLeavesTheVideoPausedButAnEarlierOneDoesNot() {
+        val h = Host().apply { playing = true; expects = true }
+        val m = machine(h)
+        m.configChanged(true)
+        h.wait(m, 300); m.touchedScreen()                          // the hand that turned the tablet
+        assertTrue("an early touch only marks the turn", m.turning); assertTrue(h.coverShown)
+        h.wait(m, TurnSettle.TOUCH_ENDS_AFTER_MS)                  // 1200 ms: the person waits for the picture and taps
+        assertTrue(m.turning)
+        m.touchedScreen()
+        assertFalse("the cover goes at once", m.turning); assertTrue(h.coverFaded)
+        assertTrue("their play / pause stands: nothing is played for them", h.resumed.isEmpty()); assertEquals(1, m.skippedResume)
+        assertNull("no timer is left behind", h.scheduled)
+    }
 }

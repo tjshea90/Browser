@@ -112,8 +112,13 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
         if (matchesView) { if (!confirmed) { confirmed = true; confirmedAt = h.now() } } else confirmed = false
     }
 
-    /** A finger came down: the person takes over. */
-    fun touchedScreen() { if (active) touched = true }
+    /** A finger came down: the person takes over (nothing is played for them). After about a second of waiting for the picture it also ends the wait: the cover goes. */
+    fun touchedScreen() {
+        if (!active) return
+        touched = true
+        val n = h.now()
+        if (TurnSettle.touchEnds(n - startedAt)) { h.cancelSchedule(); finish(n, h.expectsPageReport()) }
+    }
 
     /** The app left the screen: everything goes at once and nothing is played. */
     fun abandon() {

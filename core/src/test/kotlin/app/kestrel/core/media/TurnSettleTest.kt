@@ -61,6 +61,10 @@ class TurnSettleTest {
         assertTrue("the wait for the page is longer than the old cap", TurnSettle.PAGE_CAP_MS > TurnSettle.CAP_MS)
     }
 
+    @Test fun aTouchEndsTheWaitOnlyOnceTheTurnHasLastedAboutASecond() {
+        assertFalse(TurnSettle.touchEnds(TurnSettle.TOUCH_ENDS_AFTER_MS - 1)); assertTrue(TurnSettle.touchEnds(TurnSettle.TOUCH_ENDS_AFTER_MS))
+    }
+
     @Test fun theNumbersAreSane() {
         assertTrue("the cap must be longer than the settle time", TurnSettle.CAP_MS > TurnSettle.SETTLE_MS + 2 * TurnSettle.TICK_MS)
         assertEquals(160L, TurnSettle.FADE_MS)
