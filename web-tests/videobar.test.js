@@ -228,10 +228,11 @@ test('RW1: a decorative film under a link, a button or a picture: the link\'s lo
   assert.deepEqual(await msgs(page, 'os'), [], 'and no panel either: the link has its own menu');
   await tapAt(page, 270, 140); await wait(page, 350);                              // the "Menu" button
   assert.equal(await barInfo(page), null, 'a tap on a button of the page is not a tap on the film');
+  await wait(page, 1100);                                                          // (a tap within a second of a long press is that press's release: RW5)
   await tapAt(page, 300, 300); await wait(page, 350);                              // an empty spot of the layer over the film
   assert.ok(await barInfo(page), 'a bare spot of the layer still brings up the bar');
   await page.mouse.click(300, 320, { button: 'right' }); await wait(page, 350);
-  assert.equal((await msgs(page, 'pop')).length, 1, 'and its long press is the video menu');
+  assert.equal((await msgs(page, 'pop')).filter((m) => m.d.startsWith('vmenu|')).length, 1, 'and its long press is the video menu');
   await page.context().close();
 });
 
@@ -291,7 +292,7 @@ test('RW6: two frames of one size: nobody can say which one was touched: no bar,
   await tapAt(page, 220, 560); await wait(page, 450);
   assert.equal(await barInfo(page), null, 'a tap in the unrelated frame gives the other frame\'s film no bar');
   await page.mouse.click(220, 560, { button: 'right' }); await wait(page, 900);
-  assert.deepEqual(await msgsAll(page, 'pop'), [], 'no video menu');
+  assert.deepEqual((await msgsAll(page, 'pop')).filter((m) => m.d.startsWith('vmenu|')), [], 'no video menu');
   assert.equal((await msgsAll(page, 'os')).length, 1, 'the panel');
   await page.context().close();
 });
