@@ -613,7 +613,25 @@ open class BrowserActivity : Activity(), DockListener {
         setIntent(intent)
         if (intent.getBooleanExtra(Notifier.EXTRA_OPEN_DOWNLOADS, false)) showDownloads()
         handleUpdateIntent(intent)
+        labIntent(intent)
         urlFromIntent(intent)?.let { openInNewTabOrCurrent(it) }
+    }
+
+    /**
+     * SOAK1 / RX4-E1 (the GitHub emulator lab, tools/emu/soak.py): two things a script cannot do through the screen, and only in a DEBUGGABLE build (a release build ignores the extra):
+     * `am start -n <package>/app.kestrel.browser.MainActivity --es kestrel_debug dump` writes the Diagnostics text to files/debug-diag.txt (read with `run-as`); `... closetabs` closes every tab (a fresh one opens).
+     */
+    private fun labIntent(i: Intent?) {
+        if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) == 0) return
+        val what = i?.getStringExtra("kestrel_debug") ?: return
+        i.removeExtra("kestrel_debug")
+        when (what) {
+            "dump" -> Io.main.post {
+                val text = try { Health.report(this, engineFacts(), 400) } catch (e: Throwable) { "dump failed: $e" }
+                Io.exec { try { java.io.File(filesDir, "debug-diag.txt").writeText(text); Health.log("lab", "dump", "${text.length} bytes") } catch (e: Exception) { Health.log("lab", "dump-failed", e.toString().take(80)) } }
+            }
+            "closetabs" -> Io.main.post { for (t in tabs.toList()) doCloseTab(t); Health.log("lab", "closetabs", "tabs=${tabs.size}") }
+        }
     }
 
     /** A tap on the update notification: open the Updates sheet; "Install" also starts the install (Android then asks for its one confirmation). */
@@ -2254,6 +2272,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     internal fun errorChanged(tab: Tab) {
+        if (tab.error != null && !tab.isPrivateTab) Health.log("page", "error", "host=${UrlParts.hostOf(tab.url) ?: ""} kind=${tab.error?.javaClass?.simpleName}") // SOAK1: the emulator lab counts these
         if (tab === restoringTab && tab.error != null) hideRestoring("error") // the error screen replaces the preview
         if (tab === current) { attachContent(tab); updateUi() }
     }

@@ -203,7 +203,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
     }
 
     override fun onPageStop(session: GeckoSession, success: Boolean) {
-        app.kestrel.browser.diag.PageTimes.stop(tab, (0 until 4).sumOf { tab.blocked.get(it) })
+        app.kestrel.browser.diag.PageTimes.stop(tab, (0 until 4).sumOf { tab.blocked.get(it) }, success)
         tab.loading = false
         tab.progress = 100
         tab.savedCopyOnce = false
