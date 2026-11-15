@@ -1269,8 +1269,9 @@ class Soak:
                     paused = health_events(lines, "fullscreen", "turn-pause")
                     nosess = health_events(lines, "fullscreen", "turn-no-session")
                     bars = [e["rest"][:110] for e in health_events(lines, "fullscreen", "bars")]
+                    vps = [e["rest"][:120] for e in health_events(lines, "fullscreen", "viewport")]     # FB4: what the page told about its viewport and what the app did about it
                     states.append({"state": label, "red": red, "ih": lastrow.get("ih"), "iw": lastrow.get("iw"), "mb": lastrow.get("mb"), "size_events": len(sizes), "paused": len(paused), "no_session": len(nosess),
-                                   "settled": settled[-1] if settled else "", "bars": bars[-1] if bars else ""})
+                                   "settled": settled[-1] if settled else "", "bars": bars[-1] if bars else "", "viewport": vps[-3:]})
                 lm = self.log.size()
                 self.ph.key("KEYCODE_BACK")
                 time.sleep(3)
@@ -1344,7 +1345,8 @@ class Soak:
                 time.sleep(4.0); self.shot("yahoofs-%s" % label.split(":")[0].replace(" ", "-")[:18])
                 lines = self.log.since(lm)
                 states.append({"state": label, "settled": [e["rest"] for e in health_events(lines, "fullscreen", "turn-settled")][-1:] or [""], "paused": len(health_events(lines, "fullscreen", "turn-pause")),
-                               "sizes": len(health_events(lines, "gecko", "size")), "bars": [e["rest"][:100] for e in health_events(lines, "fullscreen", "bars")][-1:] or [""]})
+                               "sizes": len(health_events(lines, "gecko", "size")), "bars": [e["rest"][:100] for e in health_events(lines, "fullscreen", "bars")][-1:] or [""],
+                               "viewport": [e["rest"][:120] for e in health_events(lines, "fullscreen", "viewport")][-3:]})
             self.ph.key("KEYCODE_BACK"); time.sleep(3)
         self.ph.physical(0, 9.81, 0)
         self.yahoo_fs = {"entered": entered, "how": how, "states": states}
