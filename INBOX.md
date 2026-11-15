@@ -1284,3 +1284,8 @@ For video playback:
 I haven't noticed any change with the new version. The controls are still under Android navigation bar. There are no controls in full screen. The video didn't pause when switching orientation. It looks like nothing changed
 When switching orientation, it is laggy and for a few seconds the video is the wrong size in either mode. Make it pause the video and properly set up the size and orientation smoothly then resume. Make the controls available for both orientations and never underneath the Android navigation bar
 ```
+
+## 2026-11-15T21:40:19Z
+```
+The attached screenshots are what happens when I rotate between portrait and landscape. The video size and frame is awkward for a few seconds
+```
