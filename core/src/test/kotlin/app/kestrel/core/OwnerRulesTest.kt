@@ -255,7 +255,7 @@ class OwnerRulesTest {
         val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
         val fn = body(act, "internal fun onPageViewport(m: org.json.JSONObject) {")
         assertTrue(fn, fn.contains("if (matches) tab.gecko.vpOk = true") && fn.contains("turnSettler.pageReported(matches)") && fn.contains("if (turnSettler.turning) return"))
-        assertTrue("a page can confirm a turn when it is full screen, reports and its viewport is the view's", act.contains("{ fullscreenOn && fullscreenTab?.gecko?.vpOk == true }"))
+        assertTrue("a page can confirm a turn when it is full screen, reports and its viewport is the view's", act.contains("{ !labTurnWaitOff && fullscreenOn && fullscreenTab?.gecko?.vpOk == true }"))
         assertTrue("the nudge the turn asks for is the real size change of FB4, and the ring is a view of the cover", act.contains("{ resyncEngineSize() }, { turnHint }") && act.contains("turnCover = cover; turnHint = ring"))
         val machine = source("core/src/main/kotlin/app/kestrel/core/media/TurnSettleMachine.kt")
         assertTrue(machine.contains("TurnSettle.settled(n - lastChangeAt, n - startedAt, expects, confirmed)") && machine.contains("fun pageReported(matchesView: Boolean)"))

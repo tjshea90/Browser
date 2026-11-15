@@ -349,8 +349,9 @@ open class BrowserActivity : Activity(), DockListener {
     private var turnCover: View? = null
     private var onScreenNow = false
     private var turnHint: View? = null
+    private var labTurnWaitOff = false // debug builds only (labIntent "turnwait" off): the lab plays the old rule beside the new one
     private val turnSettler = app.kestrel.browser.web.TurnSettler({ current }, { fullscreenOn }, { turnCover }, { onScreenNow },
-        { fullscreenOn && fullscreenTab?.gecko?.vpOk == true }, { resyncEngineSize() }, { turnHint }) // ROT2: a page that reports its viewport says when it has a turn's new size
+        { !labTurnWaitOff && fullscreenOn && fullscreenTab?.gecko?.vpOk == true }, { resyncEngineSize() }, { turnHint }) // ROT2: a page that reports its viewport says when it has a turn's new size
     private var pendingFilePick: ((List<Uri>) -> Unit)? = null
     private var pendingAndroidPerms: PermissionDelegate.Callback? = null
     private var backCallback: Any? = null
@@ -658,6 +659,7 @@ open class BrowserActivity : Activity(), DockListener {
             }
             "clearcache" -> Io.main.post { try { GeckoEngine.runtime(this).storageController.clearData(StorageController.ClearFlags.ALL_CACHES); Health.log("lab", "clearcache", "done") } catch (e: Exception) { Health.log("lab", "clearcache-failed", e.toString().take(80)) } } // LAB2: both Shields passes start from a cold cache
             "bars" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); prefs.fullscreenBars = if (arg == "hide") 1 else 0; Health.log("lab", "bars", if (arg == "hide") "hide" else "keep") } // FB1: the lab plays both settings
+            "turnwait" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); labTurnWaitOff = arg == "off"; Health.log("lab", "turnwait", if (labTurnWaitOff) "off (the cover lifts when the view is still: alpha51/52 behaviour)" else "on") } // ROT2: the lab plays a turn with and without the wait for the page
             "nolook" -> { prefs.lastLook = false; Health.log("lab", "nolook", "last look off") } // LAB2: the emulator's software GL makes the picture read-back stall the UI thread for seconds (an ANR on Yahoo in run 43747605584)
             "measure" -> { prefs.measureScroll = true; Health.log("lab", "measure", "on") } // LAB2: the scroll-gap counters on real pages are on for the whole run
             "shields" -> { // LAB2: "<on|off>|host,host,...": Shields down (or back to the default) for these sites, as if the person had turned the site's Shields switch (compatibility A/B)
