@@ -638,6 +638,7 @@ open class BrowserActivity : Activity(), DockListener {
                     Io.exec { try { java.io.File(filesDir, "debug-diag.txt").writeText(text); Health.log("lab", "dump", "${text.length} bytes") } catch (e: Exception) { Health.log("lab", "dump-failed", e.toString().take(80)) } }
                 }, 2500L)
             }
+            "clearcache" -> Io.main.post { try { GeckoEngine.runtime(this).storageController.clearData(StorageController.ClearFlags.ALL_CACHES); Health.log("lab", "clearcache", "done") } catch (e: Exception) { Health.log("lab", "clearcache-failed", e.toString().take(80)) } } // LAB2: both Shields passes start from a cold cache
             "measure" -> { prefs.measureScroll = true; Health.log("lab", "measure", "on") } // LAB2: the scroll-gap counters on real pages are on for the whole run
             "shields" -> { // LAB2: "<on|off>|host,host,...": Shields down (or back to the default) for these sites, as if the person had turned the site's Shields switch (compatibility A/B)
                 val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg")

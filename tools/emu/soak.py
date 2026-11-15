@@ -15,7 +15,7 @@ dumpsys and the files in /sdcard/Download. The report is OUT/report.md (also pri
 Honest limits (also written into the report): x86_64 + software GL is not the tablet's Mali GPU; the JIT is faster; absolute times mean nothing, only "did it load / play / finish /
 crash" and comparisons inside one run do. A site that is down or blocks this runner is reported as UPSTREAM, not as an app fault.
 """
-import argparse, collections, json, os, random, re, shlex, shutil, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request
+import argparse, collections, json, os, random, re, shlex, shutil, struct, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 
 T0 = time.time()
@@ -75,6 +75,47 @@ class Phone:
 
     def key(self, code):
         self.a.sh("input keyevent %s" % code, timeout=15)
+
+    def screen_stats(self):
+        """A cheap 'is this page blank or broken' reading of the raw framebuffer (no image library): over the page area, the share of the dominant colour, how many colours hold at least 1 % of the
+        samples, and the share of neighbouring samples that differ (content has edges, a blank page has none)."""
+        data = self.a.run("exec-out", "screencap", timeout=40, binary=True)
+        if not data or len(data) < 1000:
+            return None
+        try:
+            w, h, _fmt = struct.unpack("<III", data[:12])
+        except struct.error:
+            return None
+        off = 12 if len(data) - 12 >= w * h * 4 else 16
+        if w < 100 or h < 200 or len(data) - off < w * h * 4:
+            return None
+        step = 6
+        rows = []
+        for y in range(30, h - 120, step):
+            base = off + y * w * 4
+            rows.append([(data[base + x * 4] >> 4, data[base + x * 4 + 1] >> 4, data[base + x * 4 + 2] >> 4) for x in range(0, w, step)])
+        flat = [c for r in rows for c in r]
+        if not flat:
+            return None
+        cnt = collections.Counter(flat)
+        dom = cnt.most_common(1)[0][1] / float(len(flat))
+        diff = pairs = 0
+        for r in rows:
+            for a, b in zip(r, r[1:]):
+                pairs += 1; diff += (a != b)
+        for r0, r1 in zip(rows, rows[1:]):
+            for a, b in zip(r0, r1):
+                pairs += 1; diff += (a != b)
+        return {"dominant": round(dom, 3), "colours": sum(1 for v in cnt.values() if v >= len(flat) * 0.01), "edges": round(diff / float(max(1, pairs)), 3)}
+
+    def measure_on(self):
+        self.debug("measure")
+
+    def shields(self, mode, hosts):
+        self.debug("shields", "%s|%s" % (mode, ",".join(hosts)))
+
+    def clear_cache(self):
+        self.debug("clearcache")
 
     def long_press(self, x, y, ms=900):
         self.a.sh("input swipe %d %d %d %d %d" % (x, y, x, y, ms), timeout=20)
@@ -331,6 +372,37 @@ class LabReport:
         return rows
 
 
+# ------------------------------------------------------------------------------------------------ what the engine says about a page (LAB2)
+# The engine writes the script errors and warnings of every page to logcat (tag "Web Content": [JavaScript Error: "..." {file: "..." line: N}]). Messages of the engine's own scripts and of the built-in
+# extension (moz-extension:, resource:, chrome:) and the engine's chatter (quirks mode, forced layout, bounce tracker, Safe Browsing) are not the page's.
+CONSOLE_RX = re.compile(r'Web Content: \[JavaScript (Error|Warning): "(.*?)"(?: \{file: "(.*?)" line: (\d+)\})?')
+NOISE_FILES = ("moz-extension:", "resource:", "chrome:", "about:")
+NOISE_TEXT = ("Layout was forced", "Quirks Mode", "bounce tracker", "Safe Browsing", "Unable to preload", "Some cookies are misusing")
+
+
+def console_summary(lines):
+    errs = warns = cors = csp = 0
+    seen, first = set(), []
+    for ln in lines:
+        m = CONSOLE_RX.search(ln)
+        if not m:
+            continue
+        kind, text, file_, _line = m.groups()
+        if (file_ and file_.startswith(NOISE_FILES)) or any(n in text for n in NOISE_TEXT):
+            continue
+        if "Cross-Origin Request Blocked" in text:
+            cors += 1
+        if "Content-Security-Policy" in text or "Content Security Policy" in text:
+            csp += 1
+        if kind == "Error":
+            errs += 1
+            if text[:100] not in seen and len(first) < 3:
+                seen.add(text[:100]); first.append(text[:140])
+        else:
+            warns += 1
+    return {"errors": errs, "warnings": warns, "cors": cors, "csp": csp, "first": first}
+
+
 # ------------------------------------------------------------------------------------------------ the scenes
 LAB_PAGES = [("lab-text", "/page/text", 6), ("lab-images", "/page/images", 6), ("lab-iframes", "/page/iframes", 2), ("lab-form", "/page/form", 0)]
 
@@ -437,6 +509,7 @@ class Soak:
         self.emu_proc = None
         self.vbar_rows = []
         self.snd_rows = []
+        self.shields_mode = "on"
         self.last_diag = ""
 
     # ---- bookkeeping
@@ -658,6 +731,8 @@ class Soak:
         # scroll like a person
         if loaded or errored:
             time.sleep(dwell)
+            if kind == "page":
+                ev["screen"] = self.ph.screen_stats()        # the first screen as the person sees it (LAB2: blank or broken?)
             for _ in range(scrolls):
                 self.ph.swipe(300, 720, 300, 260, 380)
                 time.sleep(0.9)
@@ -669,6 +744,20 @@ class Soak:
             late = [e for e in health_events(lines, "page", "painted") if tail(e["kv"].get("host", "")) == want]
             if late:
                 ev["paint_ms"] = ms_of(late[0]["kv"].get("paint", ""))
+        # LAB2: what the page really has, what the engine said about it, how its scrolling went, what it cost
+        if kind == "page":
+            probe = [e for e in health_events(lines, "probe", "page")]
+            ev["probe"] = probe[-1]["kv"] if probe else None
+            ev["console"] = console_summary(lines)
+            bursts = health_events(lines, "scroll", "burst")
+            if bursts:
+                ev["scroll"] = {"bursts": len(bursts), "frames": sum(int(b["kv"].get("n", 0) or 0) for b in bursts), "gaps50": sum(int(b["kv"].get("a", 0) or 0) for b in bursts),
+                                "gaps100": sum(int(b["kv"].get("b", 0) or 0) for b in bursts), "worst_ms": max(int(b["kv"].get("mx", 0) or 0) for b in bursts)}
+            try:
+                ev["pss"] = self.sample()[0]
+            except Exception:
+                pass
+            ev["shields"] = self.shields_mode
         crashes, stalls = self.scan_log(lines, name)
         worst = max([int(re.sub(r"\D", "", e["rest"].split("ms")[0]) or 0) for e in stalls] or [0])
         ev["ui_stalls"] = len([s for s in stalls if s["ev"] == "STALL"])
