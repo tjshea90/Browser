@@ -19,6 +19,18 @@ OUT = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else os.path.abspath("so
 os.makedirs(OUT, exist_ok=True)
 REPORT = os.path.join(OUT, "report.jsonl")
 LOCK = threading.Lock()
+# The owner's hotspot (research/EMU_LAB.md): LAB_RATE_KBPS = how fast the lab serves its clips and downloads (0 = full speed), LAB_DELAY_MS = one round trip before each answer.
+# The emulator's own network shaping does not touch what comes through `adb reverse`, so the lab server shapes its own answers (the workflow sets both when net = hotspot).
+RATE = int(os.environ.get("LAB_RATE_KBPS", "0") or 0) * 1024
+DELAY = int(os.environ.get("LAB_DELAY_MS", "0") or 0) / 1000.0
+
+
+def pace(sent, t0, rate):
+    """Sleep so that `sent` bytes since t0 never go faster than `rate` bytes a second (0 = no limit)."""
+    if rate:
+        ahead = sent / float(rate) - (time.time() - t0)
+        if ahead > 0:
+            time.sleep(ahead)
 CLIPS = {
     "landscape": ("640x360", 24, "landscape.mp4"),
     "portrait": ("360x640", 24, "portrait.mp4"),
