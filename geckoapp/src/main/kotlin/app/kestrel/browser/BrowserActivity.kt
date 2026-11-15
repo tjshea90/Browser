@@ -345,6 +345,10 @@ open class BrowserActivity : Activity(), DockListener {
     /** FS1 (owner message 43): the screen follows the tablet (and the rotate button) while a page is full screen; the picture size comes from what the page told about its playing video. */
     private val fsTurner = app.kestrel.browser.web.FullscreenTurner(this, { prefs.fullscreenTurn }, { current?.gecko?.let { Pair(it.pictureW, it.pictureH) } ?: Pair(0, 0) })
     internal fun fullscreenPictureKnown() { fsTurner.pictureKnown() }
+    /** ROT1 (owner message 46): while the screen turns under a full-screen page or a playing video the video is paused, the page area is covered with black, and both are let go once the area is still. */
+    private var turnCover: View? = null
+    private var onScreenNow = false
+    private val turnSettler = app.kestrel.browser.web.TurnSettler({ current }, { fullscreenOn }, { turnCover }, { onScreenNow })
     private var pendingFilePick: ((List<Uri>) -> Unit)? = null
     private var pendingAndroidPerms: PermissionDelegate.Callback? = null
     private var backCallback: Any? = null
