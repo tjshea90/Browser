@@ -182,7 +182,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         }
 
         section("Secure DNS")
-        if (app.kestrel.browser.Flavor.secureDnsBuiltIn) info("Encrypted DNS", "This browser encrypts its DNS lookups itself (DNS over HTTPS through Cloudflare, so the mobile carrier cannot read or tamper with them) and quietly falls back to the tablet's normal DNS if that service cannot be reached.")
+        if (app.kestrel.browser.Flavor.secureDnsBuiltIn) info("Encrypted DNS", "This browser encrypts its DNS lookups itself (DNS over HTTPS through Cloudflare, so the mobile carrier cannot read or tamper with them) and quietly falls back to the tablet's normal DNS if that service cannot be reached. On a phone hotspot that fallback is the carrier's DNS, which can read the names you look up, and nothing tells you when it happens. For the strictest protection also set Private DNS for the whole tablet: Settings → Network & internet → Advanced → Private DNS, for example dns.quad9.net.")
         else info("Private DNS", "This browser cannot encrypt DNS lookups by itself. For that, set it for the whole tablet: Settings → Network & internet → Advanced → Private DNS (for example dns.quad9.net or dns.adguard-dns.eu).")
 
         section("Back up & restore")
