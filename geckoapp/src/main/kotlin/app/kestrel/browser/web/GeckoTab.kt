@@ -28,5 +28,7 @@ class GeckoTabData {
 internal val Tab.gecko: GeckoTabData get() = (engineData as? GeckoTabData) ?: GeckoTabData().also { engineData = it }
 internal var Tab.session: GeckoSession?
     get() = gecko.session
-    set(v) { gecko.session = v }
+    // a session that is closed, hibernated or replaced sends no "deactivated": what it said about its media ("playing", the MediaSession object) must go with it (alpha49 review: otherwise a turn of the screen
+    // covered a page with no video, "paused" a dead session and counted it, and the old session stayed reachable from the tab)
+    set(v) { val g = gecko; if (v == null || v !== g.session) { g.videoPlaying = false; g.mediaSession = null }; g.session = v }
 internal val Tab.isPrivateTab: Boolean get() = gecko.privateTab
