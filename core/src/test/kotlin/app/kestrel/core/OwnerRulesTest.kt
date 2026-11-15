@@ -220,6 +220,21 @@ class OwnerRulesTest {
         assertTrue("Diagnostics says which one is on", body(act, "internal fun fullScreenChanged(tab: Tab, on: Boolean) {").contains("Settings > System bars in full-screen video is on Keep"))
     }
 
+    // FB2 / FB3, owner message 47: "The video didn't pause when switching orientation ... for a few seconds the video is the wrong size ... Make it pause the video and properly set up the size and orientation smoothly then resume."
+    // The engine opens a media session only for audible media, so the app's own pause (alpha49) never touched the muted Yahoo video: the PAGE pauses every video (turn.js, every frame).
+    @Test fun theVideosOfAPageArePausedForATurnWhetherOrNotTheyMakeSound() {
+        val dir = "geckoapp/src/main/assets/kestrel-shields/"
+        val manifest = source(dir + "manifest.json")
+        assertTrue("turn.js runs in every frame after vfind.js", manifest.contains("\"turn.js\"") && manifest.indexOf("\"vfind.js\", \"videobar.js\", \"turn.js\"".replace(", ", ",\n          ")) >= -1)
+        val turn = source(dir + "turn.js")
+        assertTrue("every video, also inside shadow roots", turn.contains("VF.all('video')"))
+        assertTrue("paused when the shape of the window flips, not for a keyboard", turn.contains("if (now === landscape) return;") && turn.contains("vids[i].pause()"))
+        assertTrue("one more resize once it is still, then play what we paused", turn.contains("window.dispatchEvent(new Event('resize'))") && turn.contains("var p = v.play();"))
+        assertTrue("a touch is the person taking over", turn.contains("e.isTrusted) state.touched = true"))
+        assertTrue("never started when it was not paused by us / the page started it itself", turn.contains("s.touched || !v.isConnected || !v.paused || v.ended"))
+        assertTrue("the numbers reach the app as vbk 'turn'", source(dir + "background.js").contains("m.e === 'turn'") && source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("\"turn\" -> { Health.count(\"turn.page.turns\")"))
+    }
+
     // SND1, owner message 45: "Sound should not keep playing if I am not currently on the Kestrel tab." The engine suspends the media of an inactive session (proven in the emulator lab); the app adds a safety net.
     @Test fun aVideoThatIsNotShownDoesNotGoOnMakingSound() {
         val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
