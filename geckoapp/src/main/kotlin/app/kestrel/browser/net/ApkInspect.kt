@@ -17,9 +17,13 @@ object ApkInspect {
     /** The installer behind [uri], or null when the file is not an Android installer (or cannot be read): a video, a picture, a PDF, a plain ZIP. */
     fun read(ctx: Context, uri: Uri): Info? {
         val pfd = try { ctx.contentResolver.openFileDescriptor(uri, "r") } catch (e: Exception) { null } ?: return null
-        pfd.use {
-            val path = "/proc/self/fd/${it.fd}"
-            if (!hasManifest(path)) return null
+        pfd.use { return inspectPath(ctx, "/proc/self/fd/${it.fd}") }
+    }
+
+    /** The same by file path (the emulator lab hands over a file in the app's own folder). null = not an installer. */
+    fun inspectPath(ctx: Context, path: String): Info? {
+        if (!hasManifest(path)) return null
+        run {
             val pm = ctx.packageManager
             @Suppress("DEPRECATION")
             val flags = PackageManager.GET_PERMISSIONS or PackageManager.GET_SIGNING_CERTIFICATES
