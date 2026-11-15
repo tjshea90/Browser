@@ -68,7 +68,9 @@ class OwnerRulesTest {
     @Test fun thePanelClosesByALongPressAboveItAndByDraggingItIntoALargeXAtTheBottom() {
         val nav = source("app/src/main/kotlin/app/kestrel/browser/ui/MiniNav.kt")
         val show = body(nav, "fun showAt(xWin: Float, yWin: Float) {")
-        assertTrue("a long press above the open panel closes it: $show", show.contains("if (isAbovePanel(yWin)) { setOpen(false, true); return }"))
+        assertTrue("a long press above the open panel closes it: $show", show.contains("val above = isAbovePanel(yWin)") && show.contains("if (above) { setOpen(false, true); return }"))
+        val zone = body(nav, "internal fun zoneAt(x: Float, y: Float): Int {")
+        assertTrue("only points inside the panel are the panel's (the page gets everything above it): $zone", zone.contains("if (x < 0f || y < 0f || x > w || y > h) return ZONE_NONE"))
         val finish = body(nav, "private fun finish(ev: MotionEvent) {")
         assertTrue("letting go over the X closes and hides the panel: $finish", finish.contains("val dropped = m == DRAG_MOVE && ev.actionMasked == MotionEvent.ACTION_UP && closeTarget.hot") && finish.contains("setOpen(false, animate = false)"))
         assertTrue("a cancelled touch never closes it (only ACTION_UP counts)", !finish.contains("ACTION_CANCEL"))
