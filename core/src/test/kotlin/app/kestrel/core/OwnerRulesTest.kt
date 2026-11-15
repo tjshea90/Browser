@@ -250,6 +250,27 @@ class OwnerRulesTest {
         assertTrue("the bridge passes it on", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt").contains("\"vpt\" -> { viewport(m); \"\" }"))
     }
 
+    // VP1, owner message 49: "each time I tap the screen it should toggle playback controls shown or hidden ... controls easily accessible". Kestrel's own full-screen controls: the pieces that must stay connected.
+    @Test fun kestrelsOwnFullScreenControlsAreConnectedFromThePageToTheScreen() {
+        val dir = "geckoapp/src/main/assets/kestrel-shields/"
+        val vp = source(dir + "player.js")
+        assertTrue("taps on the picture are told to the app and kept from the page, the page's own buttons (skip ad, captions) are not", vp.contains("e.stopImmediatePropagation()") && vp.contains("send({ k: 'vtap'") && vp.contains("return CTRL.test(nameOf(el)) ? 'film' : 'page'") && !vp.contains("|skip|"))
+        assertTrue("it only runs when the app says so and only while a film is full screen", vp.contains("r.kp === true") && vp.contains("document.addEventListener('fullscreenchange', onFullscreen, true)"))
+        assertTrue("the manifest loads it after vfind.js", source(dir + "manifest.json").let { it.indexOf("\"player.js\"") > it.lastIndexOf("\"vfind.js\"") })
+        val bg = source(dir + "background.js")
+        assertTrue("the background relays the film's state and the taps and answers with the app's JSON, and the guard answer carries kp", bg.contains("m.k !== 'vst' && m.k !== 'vtap'") && bg.contains("kp: (f & 512) !== 0") && bg.contains("JSON.parse(r)"))
+        val bridge = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt")
+        assertTrue("flag 512 follows the Settings row and the messages reach the player", bridge.contains("prefs().fsControls == 0) 512") && bridge.contains("\"vst\", \"vtap\" -> player(m)"))
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("full screen arms the controller; the report of a film begins it; the cover hides it", act.contains("player.fullscreen(on, prefs.fsControls == 0)") && act.contains("player.turnStarted()") && act.contains("fsTurner.ownedByPlayer = { player.active }"))
+        assertTrue("only the page that IS full screen drives the controls", act.contains("tabOfReport(m.optString(\"p\")) === fullscreenTab"))
+        val ctl = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerController.kt")
+        assertTrue("nothing is drawn until a film reports, and a page that stops reporting takes the controls away", ctl.contains("if (m.optString(\"k\") != \"vst\") return; begin()") && ctl.contains("SILENT_END_MS"))
+        val vb = source(dir + "videobar.js")
+        assertTrue("the injected bar draws nothing while Kestrel's controls own the film", vb.contains("if (kpOwns()) { if (bar) hide(); return; }") && vb.contains("if (kpOwns()) return;"))
+        assertTrue("the pref defaults to Kestrel's", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("sp.getInt(\"fs_controls\", 0)"))
+    }
+
     // ROT3 (found in lab run 43763822027, 2026-11-15): handing a one-time turn back to the tablet the instant the raw sensor shows the new position made the screen turn to the position Android still believed in
     // (a portrait flash, then landscape 0.45 s later: two engine re-layouts for one turn of the owner's hand). The hand-back waits until the tablet has stayed that way for a moment.
     @Test fun aOneTimeTurnIsHandedBackOnlyAfterTheTabletHasStayedInItsPositionForAMoment() {

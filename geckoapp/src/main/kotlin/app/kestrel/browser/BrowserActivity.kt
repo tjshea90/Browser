@@ -2837,6 +2837,12 @@ open class BrowserActivity : Activity(), DockListener {
         if (Build.VERSION.SDK_INT >= 30) {
             val c = window.insetsController ?: return
             if (hide) { c.hide(WindowInsets.Type.systemBars()); c.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE } else c.show(WindowInsets.Type.systemBars())
+            // VP3 (owner message 49: "if I pull up the navigation bar, it covers the video controls"): while the person has pulled the bar up over the film, Kestrel's controls sit above it
+            window.decorView.setOnApplyWindowInsetsListener(if (hide) View.OnApplyWindowInsetsListener { v, insets ->
+                if (::player.isInitialized) player.setBottomInset(if (insets.isVisible(WindowInsets.Type.navigationBars())) insets.getInsets(WindowInsets.Type.navigationBars()).bottom else 0)
+                v.onApplyWindowInsets(insets)
+            } else null)
+            if (!hide && ::player.isInitialized) player.setBottomInset(0)
         } else {
             @Suppress("DEPRECATION")
             // Read-modify-write: assigning a whole new value would also clear the light status/navigation bar flags the theme set (icons invisible afterwards).
@@ -2846,6 +2852,13 @@ open class BrowserActivity : Activity(), DockListener {
             val dv = window.decorView
             @Suppress("DEPRECATION")
             dv.systemUiVisibility = if (hide) (dv.systemUiVisibility and older.inv()) or immersive else dv.systemUiVisibility and (immersive or older).inv()
+            // VP3: a pulled-up navigation bar must not cover Kestrel's controls
+            @Suppress("DEPRECATION")
+            dv.setOnSystemUiVisibilityChangeListener(if (hide) View.OnSystemUiVisibilityChangeListener { vis ->
+                val navShown = (vis and View.SYSTEM_UI_FLAG_HIDE_NAVIGATION) == 0
+                if (::player.isInitialized) player.setBottomInset(if (navShown) (dv.rootWindowInsets?.stableInsetBottom ?: 0) else 0)
+            } else null)
+            if (!hide && ::player.isInitialized) player.setBottomInset(0)
         }
     }
 
