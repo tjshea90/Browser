@@ -78,7 +78,8 @@
       var v = t.v, d = v.duration;
       if (look(v).host) return true;
       if (!(d > 0) || !isFinite(d)) return false;
-      return !(t.mainDur > 0) || Math.abs(d - t.mainDur) > 0.5;
+      if (!(t.mainDur > 0)) return d < 180;     // the film's length is not known yet (the ad came first): only a stream under 3 minutes can be an ad
+      return Math.abs(d - t.mainDur) > 0.5;
     }
 
     function find(v) { for (var i = 0; i < trackers.length; i++) if (trackers[i].v === v) return trackers[i]; return null; }
@@ -102,12 +103,20 @@
       }
       t = { v: v, obs: null, active: null, given: false, mainDur: 0, dead: false };
       t.obs = new MutationObserver(function () { check(t); });
-      v.addEventListener('durationchange', function () { filmLength(t); }, true);
+      v.addEventListener('durationchange', function () { filmLength(t, false); }, true);
+      t.onTime = function () { if (t.mainDur > 0 || t.dead) { v.removeEventListener('timeupdate', t.onTime, true); return; } filmLength(t, true); };
+      v.addEventListener('timeupdate', t.onTime, true);
       trackers.push(t);
       return t;
     }
-    function filmLength(t) { // the length of the film itself: remembered while no ad shows
-      try { var d = t.v.duration; if (!t.dead && !adNow(t) && isFinite(d) && d > 0) t.mainDur = d; } catch (e) { /* ignore */ }
+    // The length of the film itself, remembered while no ad shows - and only once it is certain to be the film: a stream of 3 minutes or more, or one that played 10 s without an ad class (an ad stream whose
+    // class came a moment late must not be taken for the film: the real film would then look like an ad). While it is not known, only streams under 3 minutes count as ads and nothing is moved to its end.
+    function filmLength(t, played) {
+      try {
+        var v = t.v, d = v.duration;
+        if (t.dead || adNow(t) || !isFinite(d) || !(d > 0)) return;
+        if (d >= 180 || (played && v.currentTime >= 10)) t.mainDur = d;
+      } catch (e) { /* ignore */ }
     }
 
     function check(t) {
@@ -119,7 +128,7 @@
     }
     function begin(t) {
       mark('a');
-      t.active = { t0: Date.now(), saved: null, timer: 0, jumped: false, clicked: null, acted: false };
+      t.active = { t0: Date.now(), saved: null, timer: 0, jumped: false, clicked: [], acted: false };
       tick(t);
     }
     function restore(t, a) { // put back what was ours; what somebody else changed in the meantime stays
@@ -146,7 +155,7 @@
           if (!v.muted) v.muted = true;
           if (v.playbackRate !== 16) { try { v.playbackRate = 16; } catch (e) { pend.r = 'speed refused'; } }
           var d = v.duration;
-          if (!a.jumped && Date.now() - a.t0 >= 300 && isFinite(d) && d > 0 && d < 180 && v.currentTime < d - 0.2) {
+          if (!a.jumped && Date.now() - a.t0 >= 300 && isFinite(d) && d > 0 && d < 180 && v.currentTime < d - 0.2 && (t.mainDur > 0 || look(v).host)) {   // moved to its end only when the film's length is known (so this is not it) or the video sits in an ad's own container
             try { v.currentTime = d - 0.1; a.jumped = true; mark('f'); } catch (e) { pend.r = 'seek refused'; }
           }
           clickSkip(t, a);
@@ -164,7 +173,7 @@
       for (var s = 0; s < SKIP.length; s++) {
         var list = root.querySelectorAll(SKIP[s]);
         for (var i = 0; i < list.length; i++) {
-          if (list[i] !== a.clicked && visible(list[i])) { a.clicked = list[i]; press(list[i]); mark('c'); return; }
+          if (a.clicked.indexOf(list[i]) < 0 && visible(list[i])) { a.clicked.push(list[i]); press(list[i]); mark('c'); return; }
         }
       }
     }
@@ -192,7 +201,7 @@
         if (off || !v || v.nodeType !== 1 || v.tagName !== 'VIDEO') return;
         var t = track(v);
         if (!t) return;
-        watch(t); filmLength(t); check(t);
+        watch(t); filmLength(t, false); check(t);
       } catch (err) { /* never break the page */ }
     }
     function onEnded(e) { // a hosted ad video that ended: the ad is over
