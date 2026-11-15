@@ -235,7 +235,7 @@ test('REVIEW: an EMPTY positioned link of another site that fills the screen, an
   const a = await open(`<a id="x" href="${AD}" target="_blank" style="position:fixed;left:0;top:0;width:100%;height:100%"></a>`);
   await a.mouse.click(100, 100); await settle();
   assert.equal(a.popups.length, 0); assert.deepEqual(await notes(a), ['overlay|' + AD]);
-  const b = await open(`<div style="position:relative;width:480px;height:420px"><video style="width:480px;height:420px;background:#000"></video><a id="y" href="https://movie.example/ad-landing" style="position:absolute;left:0;top:0;width:100%;height:100%"></a></div>`);
+  const b = await open(`<div style="position:relative;width:700px;height:500px"><video style="width:700px;height:500px;background:#000"></video><a id="y" href="https://movie.example/ad-landing" style="position:absolute;left:0;top:0;width:100%;height:100%"></a></div>`);
   await b.mouse.click(100, 100); await settle();
   assert.equal(b.url(), 'https://movie.example/', 'the empty link over the player did not take the page away');
   assert.deepEqual(await notes(b), ['overlay|https://movie.example/ad-landing']);
