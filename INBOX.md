@@ -1289,3 +1289,10 @@ When switching orientation, it is laggy and for a few seconds the video is the w
 ```
 The attached screenshots are what happens when I rotate between portrait and landscape. The video size and frame is awkward for a few seconds
 ```
+
+## 2026-11-15T22:46:40Z
+```
+On alpha50, the controls showed up in portrait mode as usual at the very bottom and the Android navigation bar hid. But if I pull up the navigation bar, it covers the video controls. If I go to full screen and rotate the screen, there are no video controls or seek bar for landscape mode at all. If I rotate back and forth from landscape to portrait, the video sizing glitches for a few seconds and I don't think it pauses but I could be wrong 
+Also when I switch to landscape full screen (which has no player controls) then switch back to portrait, portrait mode then no longer has player controls
+On alpha51, the video player first falsely reported that the video was 4 seconds long when it was over one minute. When I first opened full screen it stretched the video to fill the screen which messed up the aspect ratio. But when I went to landscape mode then back, it turned to its normal aspect ratio. The rotation from portrait to landscape and back is buggy and slow. The video was slow and laggy. The controls now show up in both orientations. When the controls are showing and I tap the video, the controls should disappear and dedicate the whole screen to the video, just like other video plays. This video player needs an audit and overhaul. Do whatever research necessary such as reviewing the logic and coding and behavior of other well known and well coded browser video players. Do a significant overhaul and make the video player run efficiently and smoothly with controls easily accessible but each time I tap the screen it should toggle playback controls shown or hidden, just like other popular video players. 
+```
