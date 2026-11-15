@@ -22,7 +22,7 @@ class FullscreenTurnTest {
     @Test fun aSiteLockWeDoNotUnderstandIsRefused() {
         assertNull(FullscreenTurn.fromSite(0))
         assertNull("only the engine's DEFAULT bit", FullscreenTurn.fromSite(16))
-        assertNull(FullscreenTurn.fromSite(-1).takeIf { false }) // a negative number is not a bit set: see next test
+        assertNull("a negative number is not a bit set", FullscreenTurn.fromSite(-1))
     }
 
     @Test fun aMixedSiteLockMeansAnyOrientation() {
