@@ -95,7 +95,7 @@ Flow [I]
 1. Pause the page film (existing command); keep the page active until the first native frame, then `setActive(false)`.
 2. Build ExoPlayer: hardware-only MediaCodecSelector, load control 15/30 s and 16 MiB, `setMaxVideoSizeSd()` or 720p cap, SurfaceView with `setZOrderMediaOverlay(true)` [D36]. GeckoView's default backend (Surface or Texture) is not stated in the page I read [D35]: test the z-order.
 3. Reuse PlayerControlsView and the core player models; an adapter maps play, pause, seek, skip, mute and rate to ExoPlayer. Count dropped frames with the same Diagnostics line.
-4. Free the decoder first: `getMaxSupportedInstances()` is only an upper-bound hint [D37]; if the codec cannot start, release at once.
+4. Decoder count: the page's paused video may still hold a hardware decoder; `getMaxSupportedInstances()` is only an upper-bound hint [D37]. If the native codec cannot start, release and fall back.
 5. Exit: `setActive(true)`, then `currentTime = position`, then `play()` if it was playing. Stitched-ad positions agree because both play the same manifest.
 6. Fallback: on player error, 401/403/410, no first frame in 8 s, or codec failure: release, reactivate, restore the position, remember the host for an hour.
 Rotation: the 0.9 to 2 s stall at a turn is the engine's surface resize [L2]; with the page inactive and only the SurfaceView resizing it should vanish [I].
