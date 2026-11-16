@@ -288,9 +288,9 @@ test('VP1: the film can change under the controls (an ad element, then the film 
 });
 
 test('VP2: a tap on something the page made clickable with a script (onclick, a pointer cursor) goes to the page, a layer over the whole picture does not (review F6)', async () => {
-  const JS = BOX.replace('<a id="lnk"', '<div id="jsb" onclick="window.__clicks.push(\'jsb\')" style="position:absolute;left:210px;top:8px;width:60px;height:40px;background:#333"></div><div id="ptr" style="position:absolute;left:210px;top:60px;width:60px;height:40px;cursor:pointer;background:#444"></div><a id="lnk"');
+  const JS = BOX.replace('<a id="lnk"', '<div id="jsb" onclick="void 0" style="position:absolute;left:210px;top:8px;width:60px;height:40px;background:#333"></div><div id="ptr" style="position:absolute;left:210px;top:60px;width:60px;height:40px;cursor:pointer;background:#444"></div><a id="lnk"');
   const page = await open(JS, { player: true, cfg: { kp: true } });
-  await page.evaluate(() => { document.getElementById('ptr').addEventListener('click', () => window.__clicks.push('ptr')); document.getElementById('box').style.cursor = 'pointer'; });
+  await page.evaluate(() => { document.getElementById('box').style.cursor = 'pointer'; });                       // (the page's own click listener on the document records the clicks it gets)
   await fullscreen(page); await firstState(page);
   await page.touchscreen.tap(240, 28); await wait(page, 200);
   assert.deepEqual(await clicks(page), ['jsb'], 'the onclick div got its tap: ' + JSON.stringify(await clicks(page)));
