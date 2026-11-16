@@ -40,7 +40,7 @@
   var mseUrls = Object.create(null), mseCount = 0;       // blob: addresses made from a MediaSource
   var REFUSED = 'The play method is not allowed by the user agent or the platform in the current context, possibly because the user denied permission.';
 
-  function rec(el) { var r = recs.get(el); if (!r) { r = { open: false, src: null, hasSrc: false, preload: null, hasPreload: false, autoplay: false, hasAutoplay: false, load: false, tracked: false, adopted: false, forced: false, ask: null, askedAt: 0 }; recs.set(el, r); } return r; }
+  function rec(el) { var r = recs.get(el); if (!r) { r = { open: false, src: null, hasSrc: false, preload: null, hasPreload: false, autoplay: false, hasAutoplay: false, load: false, tracked: false, adopted: false, forced: false, ask: null, askedAt: 0, noUntil: 0 }; recs.set(el, r); } return r; }
   function peek(el) { try { return recs.get(el); } catch (e) { return undefined; } }
   function isBlob(v) { var u = (typeof v === 'string') ? v : ((v !== null && v !== undefined) ? String(v) : ''); return mseUrls[u] === 1; }   // only a MediaSource's address (see the createObjectURL wrapper below)
   function isMediaEl(x) { return !!x && x.nodeType === 1 && x.nodeName === 'VIDEO'; }
@@ -157,7 +157,11 @@
         if (!el.isConnected || rec(el).open) continue;
         var rc = el.getBoundingClientRect();
         if (rc.width >= 80 && rc.height >= 45 && x >= rc.left - 4 && x <= rc.right + 4 && y >= rc.top - 4 && y <= rc.bottom + 4 && sameBox(el, target)) {
-          if (hand && !el.controls && target !== el && playLike(target, el)) ask(el, 'press', function (handed) { if (!handed) openEl(el, 'press'); });   // a play button over the picture: the app is asked first, the element stays closed while it thinks
+          if (hand && !el.controls && target !== el && playLike(target, el)) {                                  // a play button over the picture: the app is asked first, the element stays closed while it thinks
+            var rr = rec(el), nowT = dnow.call(Date);
+            if (nowT - rr.askedAt > 400 && nowT >= rr.noUntil) ask(el, 'press', function (handed) { if (!handed) openEl(el, 'press'); });
+            else if (!(rr.ask && !rr.ask.done) && !rr.open) openEl(el, 'press');                                   // (the same press seen again, or the app said no a moment ago)
+          }
           else { openEl(el, 'press'); if (hand && el.controls) askPress(el); }
         }   // (a cookie button or a menu that merely sits over the picture opens nothing)
       } catch (e) { /* ignore */ }
@@ -186,9 +190,11 @@
     if (!hand || askSeq >= 60) { cb(false); return; }
     var r = rec(el), q = r.ask;
     if (q && !q.done) { q.cbs.push(cb); return; }
+    if (why !== 'kestrel' && dnow.call(Date) < r.noUntil) { cb(false); return; }                                 // the app said no (or did not answer) a moment ago: the page plays without another wait
     var id = ++askSeq, f = factsOf(el, why);
     f.i = id; q = { el: el, cbs: [cb], done: false }; r.ask = q; r.askedAt = dnow.call(Date); asks[id] = q;
-    try { later.call(window, function () { finishAsk(q, false); }, 700); } catch (e) { /* no timers */ }
+    q.el = el;
+    try { later.call(window, function () { if (!q.done) { r.noUntil = dnow.call(Date) + 30000; finishAsk(q, false); } }, 700); } catch (e) { /* no timers */ }
     try { later.call(window, function () { delete asks[id]; }, 8000); } catch (e) { /* ignore */ }
     try { document.dispatchEvent(new CustomEvent(ASK_EVENT, { detail: jstr(f) })); } catch (e) { finishAsk(q, false); }
   }
@@ -196,11 +202,12 @@
     if (q.done) return false;
     q.done = true;
     var cbs = q.cbs; q.cbs = [];
+    try { var rq = rec(q.el); rq.noUntil = yes ? 0 : Math.max(rq.noUntil, dnow.call(Date) + 15000); } catch (e) { /* ignore */ }
     for (var i = 0; i < cbs.length; i++) { try { cbs[i](yes); } catch (e) { /* ignore */ } }
     return true;
   }
   // a new press on this player (a tap on its box that came after the last question) and the film is not playing yet
-  function wantsAsk(el) { var r = rec(el); return hand && el.paused && lastTap.t > r.askedAt + 400 && pressedRecently(el); }
+  function wantsAsk(el) { var r = rec(el); return hand && el.paused && lastTap.t > r.askedAt + 400 && dnow.call(Date) >= r.noUntil && pressedRecently(el); }
   // does the tap's target look like a play button that sits over the picture (not the picture itself)?
   function playLike(t, el) {
     try {
