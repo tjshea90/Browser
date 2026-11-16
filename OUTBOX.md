@@ -2356,3 +2356,14 @@
 ## 2026-11-16T22:35:31Z
 > Final lab run 43971358668 is in progress on the head with the review fixes (about 22 more minutes). I'll continue when it finishes: read the report, then ship alpha61.
 <!-- sha:2294b14cb1c6 -->
+
+## 2026-11-16T22:43:23Z
+> Not yet. Alpha61 is built and tested but not released.
+>
+> - **Done:** your four requests (gestures without a long press, the hint text for each side, the quality button in the small player, the playback tuning) are coded. The unit tests pass. The emulator proved the gestures (27 of 27 checks) and the quality list inside the page (10 of 10).
+> - **Extra fixes:** an independent code review found five small bugs, and I fixed them. The worst was that the jump text after a seek showed twice the jump.
+> - **Now running:** the last full emulator check on the final code, started at 22:34 UTC. It takes about 23 minutes, so it should finish around 22:58 (it's 22:43 now). Two earlier runs failed in two scenes I didn't change. I traced the codec-format scene to a timing race in the emulator test itself. The other failure was a double tap in the test that landed too far apart, and I made that test exact.
+> - **After that:** if the run is clean, I build and sign the release (about 15 to 20 minutes), then send you the link.
+>
+> So the link should come in roughly 35 to 45 minutes. Nothing has been tried on your tablet yet, and I can't measure playback speed on the emulator.
+<!-- sha:1966943ffc95 -->
