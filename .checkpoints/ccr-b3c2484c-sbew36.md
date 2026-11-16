@@ -1,13 +1,13 @@
-# CHECKPOINT 2552 — read me first, then TASKS.md
+# CHECKPOINT 2553 — read me first, then TASKS.md
 
-**Written:** 2026-11-16T18:58:46Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `47d2920c` (this checkpoint is the commit after it)
+**Written:** 2026-11-16T20:14:56Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `b7ca1fca` (this checkpoint is the commit after it)
 
 ## Just done
-RELEASE kestrel-g-v0.3.0-alpha60 (gecko code 161) DISPATCHED ONCE: android.yml run 43934390638 (head 47d2920c, started 18:58:16Z, full_build=true, note = docs/handoff/ALPHA60_RELEASE_NOTE.txt). vp lab before it: run 43930125170 = 11 scenes, 349 checks, 0 failed. The stale queued lab run 43920043728 was cancelled.
+alpha60 SHIPPED and RECORDED: Release kestrel-g-v0.3.0-alpha60 (code 161, run 43934390638 green first time, APK 95 MB signed with the pinned certificate, BUILDLOG.md line pushed); HANDOFF alpha60 bullet rewritten; TASKS rows ANS55c/d/f/f5, ANS57*, ANS58c/d, ANS59* ticked; heartbeat trig_01LyMjhKLgSaFigb7F61XAfe deleted; the owner answer for messages 55, 57, 58, 59 is given in the chat
 
 ## Do this next
-DO NOT DISPATCH AGAIN (ckpt 2551 above still says 'trigger the build': that is done). 1) wait for run 43934390638: use mcp__github__actions_get get_workflow_job / list_workflow_jobs filter latest (NOT list_workflow_runs: huge); expect ~10-15 min; 2) verify the tag: git ls-remote --tags origin kestrel-g-v0.3.0-alpha60, all jobs green, mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha60 shows the APK; 3) ONLY THEN: bash tools/record-release.sh kestrel-g-v0.3.0-alpha60 "$(cat docs/handoff/ALPHA60_RELEASE_NOTE.txt)" (identical note); 4) update HANDOFF (alpha60 SHIPPED bullet), tick ANS55f5 / ANS58d / ANS58 / ANS59 rows; 5) answer the owner (messages 55, 57, 58, 59: plain words, Release link https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha60 on its own line, what was NOT run on the tablet, open items: VP12 YouTube-style films, VP10, ROT2e, ANS48, SOAK1d, LAB2f, ANS52j, ANS55h return-to-inline after full screen, ANS58e lazy script injection, SLOW Cloudflare/typing lag unmeasured) and delete heartbeat trig_01LyMjhKLgSaFigb7F61XAfe.
+Wait for the owner: tablet test of alpha60 (Yahoo film inside the page: over its box, follows the scroll, full-screen button / x / Back; double tap on a side; hold + drag seek; vertical drags; switching apps in a private and a regular tab; the WHOLE Diagnostics right after a slow Cloudflare check; the new 'life destroy' Diagnostics line). Open rows: ANS58a/b (slow Cloudflare check + laggy typing: only a hypothesis shipped, unmeasured), ANS58e (lazy script injection idea), ANS55h (return to the inline film after the full-screen button), VP12 (YouTube-style films with no playlist address), VP10, ROT2e, ANS48, SOAK1d, LAB2f, ANS52j. No release is pending; no heartbeat exists. Never ship kestrel-g-v0.3.0-alpha60 twice.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ DO NOT DISPATCH AGAIN (ckpt 2551 above still says 'trigger the build': that is d
 
 ## Last ten checkpoints
 ```
+  a1b11269 ckpt 2552: RELEASE kestrel-g-v0.3.0-alpha60 (gecko code 161) DISPATCHED ONCE: android.y
   47d2920c ckpt 2551: gated kestrel-g-v0.3.0-alpha60 (gecko code 161) and pushed it: handoff self-
   4f54303f ckpt 2550: pre-ship: alpha60: your messages 55, 57, 58 and 59 (the player inside the we
   2ef63cb0 ckpt 2549: lab vp (all video suites kp np cp ap ho ip gp pv, one boot) dispatched: run 
@@ -25,5 +26,7 @@ DO NOT DISPATCH AGAIN (ckpt 2551 above still says 'trigger the build': that is d
   42e933e5 ckpt 2545: lab run 43925029376 (gv, head 3c1b38d8): pv scene 7/7 OK on the real engine 
   306ef253 ckpt 2544: dispatched lab gv run 43925029376 (head 3c1b38d8: input motionevent finger p
   3c1b38d8 ckpt 2543: lab touch fix coded (not yet run): raw dd finger paths never reached the app
-  dcf083e4 ckpt 2542: ANS59a coded: regular tabs are not put to sleep by a trip to another app eit
 ```
+
+(3 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
