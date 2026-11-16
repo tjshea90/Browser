@@ -1867,3 +1867,7 @@
 ## 2026-11-16T09:41:20Z
 > Gates running; I'll read their result in a couple of minutes.
 <!-- sha:496109449eef -->
+
+## 2026-11-16T09:43:57Z
+> The release gates passed (alpha58, build 159, is staged). I'm waiting for the last emulator re-run before telling GitHub to build and publish it.
+<!-- sha:d4e081f1b632 -->
