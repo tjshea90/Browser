@@ -1844,3 +1844,13 @@ It should work for regular tabs in addition to private tabs
 ```
 Q15 put everything into one keyboard app q16 translate can be in any app but only if I turn on translate, just like on Gboard q17 this is ok q18 I want the easiest way to translate to English, fewest presses q19 do not change linkmeter
 ```
+
+## 2026-11-16T20:36:21Z
+```
+The video player works well. YouTube works well. A couple small improvements: 
+
+1) make the seek, brightness, and volume gestures in the video player work without a long press. 
+2) when I adjust the volume and brightness, it says slide left or right to seek, but if I'm gesturing on the left and right sides of the screen, it should say slide up or down for brightness or volume respectively. 
+3) put the video quality controls in the regular player size when it is not in full screen. Right now I can only select quality in full screen. 
+4) it works well now, but see if there are any additional ways to make playback smoother or faster or more optimized for my hardware. I want it as optimized as possible
+```
