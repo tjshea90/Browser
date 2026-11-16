@@ -1806,3 +1806,10 @@ Counters: frames.jank=46  gecko.firstComposite=8  look.saved=14  mem.trim=1  mem
 +237.689s video decoders AHVi 26 decoder(s) in 195 ms, widevine=true
 +245.052s frames 10s frames=98 jank=25 worst=575ms
 ```
+
+## 2026-11-16T16:01:41Z
+```
+"The black Yahoo video is traced to the app picking a subtitle or audio playlist instead of the main one, and I'm now fixing the decision code that makes that choice."
+
+Also, even when I selected a totally different video, it opened the player with the old video still playing in the same spot
+```
