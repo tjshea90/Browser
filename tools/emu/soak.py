@@ -757,6 +757,8 @@ class Soak:
         self.ho_events = []                   # (page, what the page saw of the tap): which tap events the engine lets a page see
         self.ho_box = (0.0, 0.0)               # the picture of the page just shown (width, height in device pixels)
         self.ho_line = ""
+        self.ip_results = []                  # ANS55f: the film plays INSIDE the page over the page's own video box (suite ip)
+        self.ip_nums = []                     # the numbers behind the checks (the boxes, the pixel differences): for tuning from one run
         self.ap_table = []
         self.ap_line = ""
         self.kp_wake = []                      # (label, the wake-lock lines of `dumpsys power`) while the film plays in full screen and after it ended
@@ -2912,6 +2914,17 @@ class Soak:
             L.append("| :- | :- | :- |")
             for c in self.np_results:
                 L.append("| %s | %s | %s |" % (c["check"], "ok" if c["ok"] else "**FAILED**", (c["detail"] or "")[:160].replace("|", "/")))
+            L.append("")
+        if self.ip_results:
+            L.append("## The film inside the page (ANS55f, owner message 55), on the real engine")
+            L.append("")
+            L.append("| check | result | detail |")
+            L.append("| :- | :- | :- |")
+            for c in self.ip_results:
+                L.append("| %s | %s | %s |" % (c["check"], "ok" if c["ok"] else "**FAILED**", (c["detail"] or "")[:200].replace("|", "/")))
+            L.append("")
+            for n in self.ip_nums:
+                L.append("- numbers: %s" % n[:400])
             L.append("")
         if self.ho_results:
             L.append("## Web videos play in Kestrel's own player (ANS54e, owner message 54), on the real engine")
