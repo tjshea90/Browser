@@ -429,6 +429,22 @@
     var wanted = true, topHost = '';
     function push() { try { document.dispatchEvent(new CustomEvent(CFG, { detail: wanted ? '1|' + topHost : '0' })); } catch (e) { /* ignore */ } }
     document.addEventListener(READY, push, true); // the page-side script may come up after our first answer
+    // ANS52g: the page-side video format policy (codec-main.js) is told the policy the app wants (the `cx` of the guard answer below: "" = none) and reports what it refused: numbers and one short word. Any page script
+    // can dispatch the same event, so what comes in is checked, the word is cut to a few characters and a document gets only a handful of reports through.
+    var CCFG = '__kst_codec_cfg_v1', CREP = '__kst_codec_rep_v1', CREADY = '__kst_codec_ready_v1', cx = null, cReports = 0;
+    function pushCodec() { if (cx !== null) { try { document.dispatchEvent(new CustomEvent(CCFG, { detail: cx })); } catch (e) { /* ignore */ } } }
+    document.addEventListener(CREADY, pushCodec, true);
+    document.addEventListener(CREP, function (e) {
+      try {
+        if (cReports >= 10 || typeof e.detail !== 'string') return;
+        var p = e.detail.slice(0, 120).split('|');
+        if (p.length !== 5) return;
+        var n = [], i;
+        for (i = 0; i < 4; i++) { var v = parseInt(p[i], 10); if (!(v >= 0 && v <= 1000000000)) return; n.push(v); }
+        cReports++;
+        browser.runtime.sendMessage({ k: 'vcx', a: n[0], s: n[1], m: n[2], f: n[3], w: p[4].replace(/[^a-z0-9 x@.]/g, '').slice(0, 30) }).catch(function () {});
+      } catch (x) { /* ignore */ }
+    }, true);
     // What the page-side guard may REPORT through this event: it refused something. A `tap` (the evidence that lets a jump through) or a `vmenu` arriving through it is never believed: any script of the
     // page can dispatch the same event itself (RX3-G2). The owner's real taps are recorded below, here in the isolated world, from trusted events only.
     var KINDS = { open: 1, click: 1, overlay: 1, form: 1, redirect: 1 };
