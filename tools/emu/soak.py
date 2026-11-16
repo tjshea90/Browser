@@ -2471,6 +2471,10 @@ class Soak:
         self.shot("ip-sheet")
         m3c = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(2)
         check("inline: Back closes the sheet and the film plays on (no 'inline stop')", not ev("inline", "stop", m3c), "stop lines %s" % [e["rest"][:60] for e in ev("inline", "stop", m3c)])
+        m3d = self.log.size(); self.ph.tap(cx, cy); time.sleep(1.5)                 # (the controls hid themselves meanwhile: a tap shows them again, with their places)
+        shown4 = ev("inline", "shown", m3d)
+        if shown4:
+            mm = re.search(r"close at (\d+),(\d+) full screen at (\d+),(\d+)", shown4[-1]["rest"]) or mm
         # ---- 4. the full-screen button: the same film, the same second
         if mm:
             fx, fy = int(mm.group(3)), int(mm.group(4))
