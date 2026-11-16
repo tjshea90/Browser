@@ -1863,3 +1863,7 @@
 ## 2026-11-16T09:33:51Z
 > Emulator run still going (lab job started 09:23, now nearly 20 minutes in); I'll look again in four minutes.
 <!-- sha:0d21988291c6 -->
+
+## 2026-11-16T09:41:20Z
+> Gates running; I'll read their result in a couple of minutes.
+<!-- sha:496109449eef -->
