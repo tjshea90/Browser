@@ -341,7 +341,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     /** A row of the list was picked (the host's sheet says so): that picture, and the list closes. */
     fun pickQuality(row: QualitySheet.Row) { val p = player ?: return; quality?.pick(p, row); host?.closeQuality() }
     /** The list closed (a pick, the x, a tap outside, Back, the end of the film). */
-    fun qualityClosed() { if (player != null) model.pin(false) }
+    fun qualityClosed() { if (player != null) { model.pin(false); say("quality-closed", "the list closed") } }
 
     // ---------------------------------------------------------------------------------------- touch
 

@@ -484,7 +484,7 @@ def page_ho(variant, tag):
     file = a film file with the engine's own controls; overlay = a film file with a play button of the page's own over the picture; hls = a script player (blob: source) whose page also asks for the lab's HLS
     master list at load, like hls.js; unknown = a script player with NO playlist anywhere (YouTube-style: nothing to hand over); bad = a film address that does not exist (Kestrel's player fails, the page takes over)."""
     q = urllib.parse.quote(tag, safe="")
-    film = ("/clip/long.mp4?c=%s" if variant == "inlinelong" else "/clip/landscape.mp4?c=%s") % q
+    film = ("/clip/long.mp4?c=%s" if variant == "inlinelong" else ("/hls/film/master.m3u8?c=%s" if variant == "inlinehls" else "/clip/landscape.mp4?c=%s")) % q     # (inlinehls = ANS60c: a film with two pictures to choose from)
     box = "display:block;width:100%;height:300px;background:#0b2a4a;object-fit:contain"
     head = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Hand-over lab %s</title>"
             "<body style='margin:0;font:15px sans-serif;background:#fff'><h3 style='margin:6px 8px'>hand-over lab: %s</h3>" % (variant, variant)) + AP_JS
@@ -511,7 +511,7 @@ def page_ho(variant, tag):
                 "ms.addEventListener('sourceopen', function () { apRep('sourceopen'); var sb = ms.addSourceBuffer('video/mp4; codecs=\"avc1.4d401f,mp4a.40.2\"');"
                 " fetch('/clip/frag.mp4?c=@Q@').then(function (r) { return r.arrayBuffer(); }).then(function (b) { apRep('fetched', { bytes: b.byteLength }); sb.addEventListener('updateend', function () { try { if (!sb.updating && ms.readyState === 'open') ms.endOfStream(); } catch (e) {} }); sb.appendBuffer(b); }); });"
                 "document.getElementById('btn').onclick = function () { var how = 'overlay'; v.muted = true; " + play_js + " };</script>")
-    elif variant in ("inline", "inlinelong"):
+    elif variant in ("inline", "inlinelong", "inlinehls"):
         # ANS55f (owner message 55: the player inside the website): a tall page, the film's own play button in the middle of the text. Kestrel's player plays INSIDE the page over this box and follows its scroll; the page
         # says where its box is (view pixels = CSS pixels x devicePixelRatio) at load and 450 ms after every scroll (kind=ap ev=rect: l, t, w, h, sy), for the driver to compare with the overlay's own numbers
         body = ("<p style='margin:8px;height:70px'>text above the film</p>"
