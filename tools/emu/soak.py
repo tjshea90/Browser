@@ -714,6 +714,7 @@ class Soak:
         self.fsb_results = []
         self.slow_results = []
         self.kp_results = []
+        self.np_results = []                   # ANS52i: Kestrel's own player (suite np)
         self.kp_wake = []                      # (label, the wake-lock lines of `dumpsys power`) while the film plays in full screen and after it ended
         self.kp_ff = []                        # ANS52a: ms from each turn to the app window's first frame at the new size (kp scene)
         self.kp_pic_path = ""                  # ANS51b: how the film's picture size reached automatic turning (known at entry, or from the player's first report)
@@ -1771,6 +1772,69 @@ class Soak:
         self.record({"kind": "player", "name": "kestrel-player", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
         self.check_alive("kestrel-player")
 
+    def np_scene(self):
+        """ANS52i (owner message 52, research/VIDEO_ACCELERATION.md plan item 6): Kestrel's own player. The lab's plain video page loads its clip, the app's sniffer finds the file, the lab command hands the best row to the player
+        (the same path as the Save video sheet's second button), and the player is checked: it starts, a decoder starts, the first picture comes, the controls show and hide by taps, the big button and the 10 s buttons make
+        commands that the player carries out (the film's position moves), Back ends it and the browser is back. The emulator has no MediaTek decoders: 'plays' and 'no errors' count, smoothness does not."""
+        w, h = self.screen
+        checks = []
+        def check(name, ok, detail=""):
+            checks.append({"check": name, "ok": bool(ok), "detail": detail if not ok else ""})
+            if not ok:
+                self.issue("high", "native-player", "%s %s" % (name, detail))
+        self.ph.setting("system", "accelerometer_rotation", 0); self.ph.setting("system", "user_rotation", 0)
+        self.ph.a.sh("setprop debug.kestrel.nohide 0"); self.ph.debug("bars", "keep"); time.sleep(2)
+        self.ph.physical(0, 9.81, 0); time.sleep(2)
+        self.ph.open_url("%s/video/landscape" % self.lab_base)                     # a page with the lab's clip (the sniffer sees the file when the page loads it)
+        time.sleep(7)
+        lm = self.log.size()
+        ev = lambda layer, name, since=None: health_events(self.log.since(lm if since is None else since), layer, name)
+        self.ph.debug("nativeplay")
+        t_end = time.time() + 25
+        while time.time() < t_end and not ev("native", "first-picture"):
+            time.sleep(1)
+        time.sleep(1.5)
+        self.shot("np-1-started")
+        check("the best row of the page was handed to Kestrel's own player", bool(ev("lab", "nativeplay")) and bool(ev("native", "start")), "lab lines %s, native start lines %d" % ([e["rest"][:80] for e in ev("lab", "nativeplay")], len(ev("native", "start"))))
+        check("a video decoder started", bool(ev("native", "decoder")), "no 'native decoder' line (%s)" % [e["rest"][:60] for e in ev("native", "error")])
+        check("the first picture came", bool(ev("native", "first-picture")), "no 'native first-picture' line")
+        check("the controls showed when it started", bool(ev("native", "shown")), "no 'native shown' line")
+        lk = self.ph.look()
+        land = bool(lk and lk["w"] > lk["h"])
+        vw, vh = (973, 574) if land else (600, 947)
+        check("a wide film turned the screen sideways", land, "the screen is %s" % (lk,))
+        time.sleep(4.5)
+        check("the controls hide by themselves", bool(ev("native", "hidden")), "no 'native hidden' line after 6 s")
+        ex, ey = int(vw * 0.25), 26 + int(vh * 0.2)
+        m = self.log.size(); self.ph.tap(ex, ey); time.sleep(1.4)
+        check("a tap on the picture shows the controls", bool(ev("native", "shown", m)), "no 'native shown' after the tap")
+        self.shot("np-2-controls")
+        m = self.log.size(); self.ph.tap(ex, ey); time.sleep(1.4)
+        check("the next tap hides them", bool(ev("native", "hidden", m)), "no 'native hidden' after the second tap")
+        self.ph.tap(ex, ey); time.sleep(1.2)                                       # shown again for the buttons
+        cx, cy = vw // 2, 26 + vh // 2
+        m = self.log.size(); self.ph.tap(cx, cy); time.sleep(1.5)
+        check("the big button pauses (a command 'pause' reached the player)", any('"pause"' in c["rest"] for c in ev("native", "cmd", m)), "commands %s" % [c["rest"][:30] for c in ev("native", "cmd", m)])
+        m = self.log.size(); self.ph.tap(cx, cy); time.sleep(1.5)
+        check("and plays again", any('"play"' in c["rest"] for c in ev("native", "cmd", m)), "commands %s" % [c["rest"][:30] for c in ev("native", "cmd", m)])
+        m = self.log.size(); self.ph.tap(cx + 102, cy); time.sleep(1.5)
+        check("the 10 s button skips forward", any('"skip"' in c["rest"] and '"d":10' in c["rest"] for c in ev("native", "cmd", m)), "commands %s" % [c["rest"][:40] for c in ev("native", "cmd", m)])
+        self.shot("np-3-after-skip")
+        m = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(3)
+        check("Back ends Kestrel's own player", bool(ev("native", "stop", m)), "no 'native stop' line")
+        self.dump_diag("np")
+        diag = ""
+        try:
+            diag = self.ph.a.sh("run-as %s cat files/debug-diag.txt" % self.ph.pkg, timeout=30) or ""
+        except Exception:
+            pass
+        line = [ln for ln in diag.splitlines() if ln.startswith("Kestrel's own player:")]
+        check("Diagnostics says how it went (frames shown, decoder)", bool(line) and "frames shown" in line[-1], "line: %s" % (line[-1][:200] if line else "none"))
+        self.np_line = line[-1] if line else ""
+        self.np_results = checks
+        self.record({"kind": "player", "name": "kestrel-native-player", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
+        self.check_alive("kestrel-native-player")
+
     # ---- the whole run
     # ---- VC1 / LP1 (owner message 44): a video with no controls gets Kestrel's own bar when it is tapped; a long press on a video opens the video options and never the floating panel
     VBAR_PAGES = [("naked", "/video/vc?kind=naked", "shown"), ("shadow-root", "/video/vc?kind=shadow", "shown"), ("shadow-root + frame over it", "/video/vc?kind=shadow&ad=1", "shown"), ("own controls", "/video/vc?kind=own", "own")]
@@ -2151,6 +2215,14 @@ class Soak:
             L.append("| :- | :- | -: | -: | :- | :- |")
             for kind, how, playing, away, back, adv, hidden_s, sp in self.snd_rows:
                 L.append("| %s | %s | %s s | %s s | %s | %d / %d / %d |" % (kind, how, "?" if adv is None else adv, "?" if hidden_s is None else hidden_s, "yes" if sp else "no", playing, away, back))
+            L.append("")
+        if self.np_results:
+            L.append("## Kestrel's own player (Media3 on a SurfaceView, ANS52i, owner message 52)")
+            L.append("")
+            L.append("| check | result | detail |")
+            L.append("| :- | :- | :- |")
+            for c in self.np_results:
+                L.append("| %s | %s | %s |" % (c["check"], "ok" if c["ok"] else "**FAILED**", (c["detail"] or "")[:160].replace("|", "/")))
             L.append("")
         if self.kp_results:
             L.append("## Kestrel's own full-screen controls on the real engine (VP1, owner message 49)")
@@ -2563,7 +2635,7 @@ class FakeAdb:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -2575,7 +2647,7 @@ def main():
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
-        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh") else "all")
+        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np") else "all")
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
@@ -2599,6 +2671,8 @@ def main():
             s.fullscreen_bars()
         if a.suite == "kp":
             s.kp_scene()
+        if a.suite == "np":
+            s.np_scene()
         if a.suite == "yh":
             s.yahoo_fullscreen()                             # (only the live Yahoo Finance player in full screen with Kestrel's controls: about 4 minutes)
         if a.suite == "fsy":
