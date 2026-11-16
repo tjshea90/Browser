@@ -2254,3 +2254,53 @@
 > - **Compat lab run:** it ends around 03:25 UTC, and a scheduled wake at 03:30 UTC reads it.
 > - **kp lab run:** the check of the late automatic turn runs behind the compat run, and a scheduled wake at 04:20 UTC picks it up and ships alpha56 if it passes.
 <!-- sha:6dba3f1ff197 -->
+
+## 2026-11-16T04:14:25Z
+> **alpha56 is released.** It answers your Diagnostics paste (message 51) and your messages about the rotation lag and video lag (message 52, including the re-sent first paragraph). Nothing in it has been tried on your tablet yet.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha56
+>
+> **One correction to my earlier reply:** your paste showed one full screen, not four. Kestrel's controls started four times inside it, and three of those were restarts after a page that was only busy.
+>
+> **Why the status bar icons stuck and the video cropped**
+> - When the tablet turns, Android freezes the screen until Kestrel has drawn its first frame at the new size.
+> - Kestrel's screen thread was blocked about 2 seconds inside the Firefox engine's surface resize, so the wait ran into Android's 2-second limit.
+> - Android then showed the old portrait pictures in the new landscape screen: icons at the old right edge, video cut at the old width.
+> - **Fix:** the engine's view keeps its old size for the first frame. The black cover and the bars are drawn at the new size at once, and the engine resizes behind the cover. On the emulator the first frame came 76–480 ms after the turn.
+>
+> **"Wrong size for a long pause"**
+> - That is a second, separate delay: your Yahoo page said nothing for 3.6 s to 14 s after a turn.
+> - The cover now waits up to 6 s (it was 3 s).
+> - The 1 px resize nudge now happens only for a page that answered with a wrong size. Both nudges in your log were for a page that was only busy.
+>
+> **Also in alpha56**
+> - A film in a web component (Yahoo's player) now turns the screen sideways by itself, using the size the player reports.
+> - A busy page no longer ends and restarts the controls (12 s limit instead of 3.5 s).
+> - The page's saved look is no longer read back from the graphics chip while a film is full screen. That happened twice in your log.
+>
+> **What other browsers do**
+> - Chrome puts the film on its own screen layer, so the screen hardware shows it without the graphics chip.
+> - Firefox has no such path on Android.
+> - Your tablet has hardware decoders for H.264, H.265 and VP9, so the lag is not the decoder.
+> - The more likely causes are your page's busy script thread, and VP9 1080p60, which is beyond the 1080p30 the chip declares. The engine settings cannot hide VP9 on this tablet.
+>
+> **Third-party code**
+> - Media3 (ExoPlayer) is already inside the app through the Firefox engine, so using it adds no new library.
+> - libVLC, ijkplayer, mpv and external players are not worth it.
+> - To try: the Save video sheet now has **"Play in Kestrel's player (test)"**. It plays plain video files and HLS streams on a SurfaceView with the hardware decoder and no page in the way. It is not offered for DASH or DRM, and it does not carry the page's cookies yet.
+> - On the emulator, the page's player dropped 18.7 % of 134 frames and Kestrel's own player dropped 0.3 % of 351. That is a rough look, since both decoded in software, and it says nothing about your tablet's speed.
+>
+> **Tested:** web tests, unit tests, an independent review (6 small findings fixed), 26 emulator checks on the real Firefox engine, and 13 emulator checks of the new player. **Not on your tablet.**
+>
+> **What I need from you**
+> - Turn the tablet under a film on the Yahoo page, and on a light video page too.
+> - Try "Play in Kestrel's player (test)" on the Yahoo film.
+> - Send these Diagnostics lines: Full-screen video controls, Turning under a video, Frames around turns, Real video, Video decoders, Heat and speed, and Kestrel's own player.
+>
+> **Still open**
+> - Page codec and frame-rate policy (I'll build it next).
+> - A 720p picture cap for HLS pages.
+> - DASH, cookies, and freezing the page behind the native player.
+> - Whether the first tap should show or hide the controls at once (it waits 300 ms for a double tap).
+> - Captions and quality buttons while Kestrel's controls own the film.
+<!-- sha:2290f1d9a234 -->
