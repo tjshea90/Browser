@@ -39,6 +39,13 @@ object TurnSettle {
     /** ROT2: a finger that comes down this long after the turn began is the person waiting for the picture: the cover goes (an earlier one is the hand that turned the tablet). */
     const val TOUCH_ENDS_AFTER_MS = 900L
 
+    /**
+     * ANS52a (owner message 52: after a turn "the status bar icons stuck in the middle of the screen and the video cropped at about the same point for several moments"): the engine's view is kept at its OLD size for the
+     * first frame of a turn so the app's window can draw (the black cover, the bars) at the new size at once; GeckoView's own size change blocks the UI thread for 0.9 to 2 s on the tablet and, done first, kept the system
+     * showing the old portrait buffers through the new landscape display. This is the longest the view may be held when no frame comes (the app is not drawing: it was left, the screen is off).
+     */
+    const val HOLD_MAX_MS = 1200L
+
     /** The black cover fades out over this long. */
     const val FADE_MS = 160L
 

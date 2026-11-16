@@ -48,6 +48,8 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
         fun nudgeEngine() {}
         /** ROT2: a small progress ring on the cover ([show]) while the page takes long to catch up. */
         fun hint(show: Boolean) {}
+        /** ANS52a: the engine's view has not been given its new size yet (it is held at the old one for the turn's first frame): the page area is not "still", the cover stays. */
+        fun resizePending(): Boolean = false
     }
 
     private var wasLandscape: Boolean? = null
@@ -73,6 +75,10 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
     var lagWorstMs = 0L; private set
     var gaveUp = 0; private set            // turns that waited the whole cap for a page that never said it
     var nudges = 0; private set
+    var ffCount = 0; private set           // ANS52a: turns whose first frame at the new size was drawn
+    var ffLastMs = 0L; private set         // from the start of the turn to that frame (until then the system shows the old frames)
+    var ffWorstMs = 0L; private set
+    private var ffDone = false
     var silent = 0; private set            // ANS51c: turns whose page had said NOTHING when the old rule let the cover go ([TurnSettle.SILENT_MS])
     var lateCount = 0; private set         // ... of which the page spoke later (after the cover had gone) and the time was measured
     var lateLastMs = 0L; private set       // from the start of that turn to the page's first word
@@ -100,6 +106,7 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
         val t = h.now()
         // a turn while one goes on is a new turn for the clocks (review of alpha53: a rotation at 6.9 s of the first one got 0.1 s of cover, and a touch counted from the first): the video is paused once
         if (!active) { active = true; touched = false; hinted = false }
+        ffDone = false                                                     // (each turn has its own first frame)
         lateFrom = -1L                                                     // (a page that was still silent from the turn before is now measured by THIS turn)
         startedAt = t; confirmedAt = 0L; nudged = false; heard = 0
         lastChangeAt = t
@@ -122,6 +129,18 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
         if (!active) { lateWord(); return }
         heard++
         if (matchesView) { if (!confirmed) { confirmed = true; confirmedAt = h.now() } } else confirmed = false
+    }
+
+    /**
+     * ANS52a: the app's window drew its first frame at the new size. Until then the system keeps showing the old frames (owner message 52: the status bar icons stuck in the middle, the video cropped at the old
+     * width), so how long this takes is what the person sees as "glitchy". Counted once per turn.
+     */
+    fun firstFrame() {
+        if (!active || ffDone) return
+        ffDone = true
+        val ms = h.now() - startedAt
+        ffCount++; ffLastMs = ms; if (ms > ffWorstMs) ffWorstMs = ms
+        h.log("turn-first-frame", "the app's window drew its first frame at the new size $ms ms after the screen turned")
     }
 
     /** ANS51c (owner message 51: the tablet's page said its first word 3.6 s and 7.8 s after a turn, and the line said "0 ms, 0 turns measured"): the first report of a page whose turn was let go while it was still silent. */
@@ -158,6 +177,7 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
     fun tick() {
         if (!active) return
         val n = h.now()
+        if (h.resizePending()) lastChangeAt = n                             // ANS52a: the engine's view has not got its new size yet: the page area is not still
         val expects = h.expectsPageReport() && !(heard == 0 && n - startedAt >= TurnSettle.SILENT_MS)       // a page that said nothing at all for 3 s is not reporting: the old rule
         if (TurnSettle.settled(n - lastChangeAt, n - startedAt, expects, confirmed)) { finish(n, expects); return }
         if (expects && !confirmed && !nudged && TurnSettle.nudgeDue(n - lastChangeAt)) {
@@ -194,5 +214,6 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
     /** One Diagnostics line. */
     fun line(): String = "Turning under a video: $turns turns met a full-screen page or a playing video, video paused $pausedCount times, played again $resumedCount, left paused $skippedResume; " +
         "the page took ${lagLastMs} ms to have the new size after the last turn (worst $lagWorstMs ms, $lagTurns turns measured, $gaveUp gave up after ${TurnSettle.PAGE_CAP_MS / 1000} s, engine nudged $nudges times); " +
+        "first frame at the new size: last $ffLastMs ms, worst $ffWorstMs ms, $ffCount turns (until then the system shows the old frames); " +
         "silent pages: $silent turns where the page said nothing for ${TurnSettle.SILENT_MS / 1000} s, of which $lateCount spoke later (first word ${lateLastMs} ms after the turn began, worst $lateWorstMs ms); last: $last"
 }

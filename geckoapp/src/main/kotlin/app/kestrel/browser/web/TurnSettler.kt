@@ -32,6 +32,8 @@ class TurnSettler(
     private val nudge: () -> Unit = {},
     /** ROT2: the small progress ring on the cover. */
     private val hintView: () -> View? = { null },
+    /** ANS52a: the engine's view is still held at its old size (it gets the new one right after the first frame of the turn): the cover must stay. */
+    private val resizePending: () -> Boolean = { false },
     /** VP1: the cover goes up (true) / is let go (false): Kestrel's full-screen controls hide under it and come back after it. */
     private val onCover: (Boolean) -> Unit = {},
 ) {
@@ -69,6 +71,7 @@ class TurnSettler(
         override fun expectsPageReport() = expectsPage()
         override fun nudgeEngine() = nudge()
         override fun hint(show: Boolean) { hintView()?.visibility = if (show) View.VISIBLE else View.GONE }
+        override fun resizePending() = resizePending()
     })
 
     /** Where the screen is at the start (the first turn must count too). */
@@ -76,6 +79,9 @@ class TurnSettler(
 
     /** The activity's configuration changed: [landscape] is the orientation now. Called from onConfigurationChanged BEFORE the engine is told. */
     fun configChanged(landscape: Boolean) = machine.configChanged(landscape)
+
+    /** ANS52a: the app's window drew its first frame at the new size (counted once per turn). */
+    fun firstFrame() = machine.firstFrame()
 
     /** The page area changed size (KestrelGeckoView.onSizeChanged): the turn is not over yet. */
     fun sizeChanged() = machine.sizeChanged()
