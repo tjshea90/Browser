@@ -2245,3 +2245,12 @@
 > - Tell me if the 300 ms tap delay feels slow, so I can make the first tap act at once.
 > - VP12 (caption and quality buttons while Kestrel's controls own the film) still needs your decision.
 <!-- sha:c7a85d3a4736 -->
+
+## 2026-11-16T02:42:10Z
+> Everything is pushed. The branch on GitHub and the local branch are at the same commit (`fe7636f1`), so nothing is left only in this container.
+>
+> I'm still waiting on three things, and the session will be woken for each:
+> - **Code review:** the independent reviewer of the alpha56 changes is still running.
+> - **Compat lab run:** it ends around 03:25 UTC, and a scheduled wake at 03:30 UTC reads it.
+> - **kp lab run:** the check of the late automatic turn runs behind the compat run, and a scheduled wake at 04:20 UTC picks it up and ships alpha56 if it passes.
+<!-- sha:6dba3f1ff197 -->
