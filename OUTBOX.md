@@ -2167,3 +2167,40 @@
 ## 2026-11-16T18:00:25Z
 > Your answers change the architecture (one app, internet permission inside the keyboard) and the activation model (a Gboard-style toggle in any app, not a per-app list), and they set a goal of fewest presses for received messages. I'm finding every place in the plan that depends on the old design.
 <!-- sha:0ea3954a47b5 -->
+
+## 2026-11-16T18:04:43Z
+> I updated the plan with your five answers and sent it as `KEYBOARD-APP-PLAN.md`; use this one instead of the earlier file. I changed nothing in LinkMeter and ran no code or translation requests.
+>
+> ## What changed
+>
+> - **Q15, one app.** There is no second translator app. The keyboard now holds the internet permission, used only by translation. This drops the earlier promise that the keyboard can't send anything anywhere, so the plan replaces it with checks the build enforces:
+>   - The permission list must be exactly what's expected.
+>   - All network code stays in one place, and a scan fails the build if network code appears anywhere else.
+>   - Only the two services LinkMeter uses are ever contacted.
+>   - The keyboard uses no outside libraries.
+>   - One gate decides every request. It refuses password, web-address, email, number, phone and search fields.
+>   - A log counts every request but never records the words.
+>   - Any future change to that code is reported to you in plain words.
+> - **Q16, any app, only when you turn it on.** The keyboard gets a Translate button in its toolbar, like Gboard's. It is off until you tap it, and the first tap shows a short explanation. While it's on, the button is lit and Enter shows a small "ES" mark. There is no per-app list. An optional timer can switch it off by itself, and the default is that it stays on until you turn it off, as you asked. A short "never translate in these apps" list is pre-filled with LinkMeter, because LinkMeter already translates by itself and a second translation would garble the Spanish. You can remove it.
+> - **Q17, own Send button.** Accepted. Enter translates, then you tap the app's Send.
+> - **Q19, LinkMeter.** It stays untouched and read-only.
+>
+> ## Q18, fewest presses for a received Spanish message
+>
+> | Route | Presses |
+> | :- | :- |
+> | Long-press the message, then tap "Translate to English" in the text-selection menu. The English shows at once. | 2 |
+> | Copy the message, open the keyboard, tap a chip that appears by itself (only while Translate is on). This covers apps that offer only Copy. | 3, plus the reply-box tap you'd do anyway |
+> | Google's own Tap to Translate, for comparison | 3 |
+>
+> - **Two is the minimum.** Android decides where the "Translate to English" entry sits in the menu. If it lands under the "more" button, that route costs 3.
+> - **One press needs an accessibility service.** A long press anywhere in any app would need a service that reads other apps' screens. That is heavy on this tablet and invasive, so I left it out.
+> - **Measured on your tablet.** The plan counts the real presses in the apps you use and writes up which route is best where.
+>
+> ## Questions for you
+>
+> - **Q20:** do you want the one-press accessibility option later? I assumed no.
+> - **Q21:** should Translate switch itself off after a while, or stay on until you turn it off? I assumed it stays on, as you asked.
+>
+> The translation service, the Mexican-Spanish clean-up and the friendly-"tú" checks are unchanged from the previous version.
+<!-- sha:eea4b3e3c27e -->
