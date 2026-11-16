@@ -1388,7 +1388,9 @@ class Soak:
                     tm = self.log.size()
                     self.ph.tap(h // 2, w // 2)                            # the screen is sideways now (the app turned the wide video): the middle of it
                     time.sleep(2.5)
-                    bar_shown = bool([e for e in health_events(self.log.since(tm), "videobar") if e["ev"] == "shown"])
+                    lines_tm = self.log.since(tm)
+                    # VP1: Kestrel's own full-screen controls (the app's native ones, the default) own the film now and the injected DOM bar draws nothing then: either one showing is the answer
+                    bar_shown = bool([e for e in health_events(lines_tm, "videobar") if e["ev"] == "shown"]) or bool(health_events(lines_tm, "player", "shown"))
                     self.shot("fsb-%s-bar" % tag)
                 states = []
                 # the app turns a wide video sideways BY ITSELF when full screen begins (FS1), so the first state is landscape; then the tablet is held sideways (the one-time turn is let go), upright (a REAL turn to
@@ -1443,7 +1445,7 @@ class Soak:
                     self.issue("high", "fullscreen-bars", "%s %s %s: the page reaches y=%d of %d: it still extends under the kept navigation bar" % (r["mode"], r["kind"], st["state"], lasty, height))
                     ok = False
             if r["nobar"] and r["bar_shown"] is False:
-                self.issue("high", "full-screen-controls", "%s %s: a tap on the full-screen film did not bring up Kestrel's bar" % (r["mode"], r["kind"]), shot=True)
+                self.issue("high", "full-screen-controls", "%s %s: a tap on the full-screen film did not bring up Kestrel's controls (neither the app's own nor the injected bar)" % (r["mode"], r["kind"]), shot=True)
                 ok = False
         self.fsb_results = results
         self.record({"kind": "fsbars", "name": "fullscreen-bars", "status": "ok" if ok else "failed", "results": results})
