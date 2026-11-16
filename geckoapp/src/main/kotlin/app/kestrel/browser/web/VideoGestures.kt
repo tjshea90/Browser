@@ -35,6 +35,8 @@ class VideoGestures(private val activity: Activity, private val s: Surface, priv
         fun longHold() {}
         /** A gesture of ours began (true) or ended (false): the page full screen takes its own touch back at the beginning. */
         fun gestureChanged(active: Boolean) {}
+        /** A line for Diagnostics / the emulator lab (the host decides whether it may be logged: never for a private tab). */
+        fun note(event: String, text: String) {}
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -84,7 +86,7 @@ class VideoGestures(private val activity: Activity, private val s: Surface, priv
     override fun scheduleHold(ms: Long) { main.removeCallbacks(holdRun); main.postDelayed(holdRun, ms) }
     override fun cancelHold() { main.removeCallbacks(holdRun) }
     override fun tap(xFraction: Double) { s.tap(xFraction) }
-    override fun armed() { s.haptic(); s.showInfo(HINT); if (!began) { began = true; s.gestureChanged(true) } }
+    override fun armed() { s.haptic(); s.showInfo(HINT); s.note("gesture-armed", "the long press armed the precise seek (xdpi ${"%.0f".format(engine.cfg.xdpi)}, view ${s.viewWidth}x${s.viewHeight}, range ${engine.cfg.rangePx.toInt()} px)"); if (!began) { began = true; s.gestureChanged(true) } }
     override fun longHold() { s.longHold() }
     override fun positionMs() = s.positionMs()
     override fun lengthMs() = s.lengthMs()
@@ -101,12 +103,25 @@ class VideoGestures(private val activity: Activity, private val s: Surface, priv
     override fun level(level: GestureMath.Level, delta: Double) {
         if (!began) { began = true; s.gestureChanged(true) }
         when (level) {
-            GestureMath.Level.VOLUME -> { if (vol < 0f) vol = levels.volume(); vol = (vol + delta.toFloat()).coerceIn(0f, 1f); levels.setVolume(vol); s.showLevel(level, vol) }
-            GestureMath.Level.BRIGHTNESS -> { if (br < 0f) br = levels.brightness(); br = (br + delta.toFloat()).coerceIn(0.01f, 1f); levels.setBrightness(br); s.showLevel(level, br) }
+            GestureMath.Level.VOLUME -> { if (vol < 0f) vol = levels.volume(); vol = (vol + delta.toFloat()).coerceIn(0f, 1f); levels.setVolume(vol); s.showLevel(level, vol); noteLevel(level, vol) }
+            GestureMath.Level.BRIGHTNESS -> { if (br < 0f) br = levels.brightness(); br = (br + delta.toFloat()).coerceIn(0.01f, 1f); levels.setBrightness(br); s.showLevel(level, br); noteLevel(level, br) }
         }
     }
 
+    private var noteAt = 0L
+    private var notedPct = -100
+    private var lastKind: GestureMath.Level? = null
+    private var lastFrac = 0f
+    /** At most one line per 5 points or 250 ms (a drag makes sixty moves a second); the last value is written when the finger lets go. */
+    private fun noteLevel(kind: GestureMath.Level, f: Float) {
+        lastKind = kind; lastFrac = f
+        val pct = Math.round(f * 100); val now = SystemClock.uptimeMillis()
+        if (Math.abs(pct - notedPct) >= 5 || now - noteAt >= 250L) { noteAt = now; notedPct = pct; s.note("gesture-level", "${kind.name.lowercase()} $pct %") }
+    }
+
     override fun finished() {
+        lastKind?.let { k -> val pct = Math.round(lastFrac * 100); if (pct != notedPct) s.note("gesture-level", "${k.name.lowercase()} $pct %") }
+        lastKind = null; notedPct = -100
         vol = -1f; br = -1f; began = false
         if (committed) { committed = false; main.removeCallbacks(clearInfo); main.postDelayed(clearInfo, RESULT_MS) }       // the jump stays on the picture for a moment after the finger lets go (VLC)
         else s.showInfo(null)

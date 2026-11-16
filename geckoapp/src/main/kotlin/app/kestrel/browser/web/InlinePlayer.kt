@@ -81,7 +81,8 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
             override fun tap(xFraction: Double) { model.onTap((xFraction * 1000).toInt()); flush() }
             override fun seekBy(deltaMs: Long) { model.skip(deltaMs / 1000.0); flush(); say("gesture-seek", "the precise seek moved the film by ${deltaMs / 1000} s") }
             override fun showInfo(text: String?) { controls.showInfo(text) }
-            override fun showLevel(kind: GestureMath.Level, fraction: Float) { controls.showLevel(kind, fraction); say("gesture-level", "${kind.name.lowercase()} ${Math.round(fraction * 100)} %") }
+            override fun showLevel(kind: GestureMath.Level, fraction: Float) { controls.showLevel(kind, fraction) }
+            override fun note(event: String, text: String) { say(event, text) }
             override fun haptic() { performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS) }
             override fun gestureChanged(active: Boolean) { if (active) { model.gestureBegan() } }
             override fun passThrough() { startPass() }
