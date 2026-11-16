@@ -2340,3 +2340,7 @@
 ## 2026-11-16T22:04:28Z
 > Status: lab video suite (vp, run 43966056564) is running on the alpha61 candidate with the format-scene fix, and an independent review of the alpha61 code changes is running in parallel. I'll pick up when either reports (a wake is scheduled for 22:25Z).
 <!-- sha:a7bf829e320a -->
+
+## 2026-11-16T22:26:02Z
+> The lab run is still going (step "Run the lab (vp)" started 22:06Z, roughly 19 minutes in a normal run). Waiting for the timer and the review agent to report.
+<!-- sha:51f28564081a -->
