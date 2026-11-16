@@ -74,6 +74,13 @@ class Phone:
     def tap(self, x, y):
         self.a.sh("input tap %d %d" % (x, y), timeout=15)
 
+    def double_tap(self, x, y, gap_ms=90):
+        """Two taps with an EXACT gap, played by the app on its own clock (the in-app DebugTouch receiver, the same path as hold_drag). Two `input tap` processes started at once landed 0.3 s apart or never on the busy
+        2-core emulator (lab runs 43960432251 and 43966056564 both lost the kp double tap this way: 'commands []'), and a double tap is judged against a 300 ms window."""
+        script = "D%d,%d W40 U%d,%d W%d D%d,%d W40 U%d,%d" % (x, y, x, y, gap_ms, x, y, x, y)
+        self.a.sh("am broadcast -a app.kestrel.browser.DEBUG_TOUCH -p %s --es script %s" % (self.pkg, shlex.quote(script)), timeout=30)
+        time.sleep(0.4)                                                              # (the script is 170 ms long)
+
     def swipe(self, x1, y1, x2, y2, ms=350):
         self.a.sh("input swipe %d %d %d %d %d" % (x1, y1, x2, y2, ms), timeout=15)
 
