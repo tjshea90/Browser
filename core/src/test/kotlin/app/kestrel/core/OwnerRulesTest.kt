@@ -490,6 +490,42 @@ class OwnerRulesTest {
         assertTrue("a pick from the page's list wins over the remembered cap and is matched against what the stream really offers", np.contains("pick != null -> QualityLabel.pClass(pick.w, pick.h)") && np.contains("QualityLabel.nearest(w, rowsNow.map { it.first })") && np.contains("fun launch(from: Context, url: String, headers: List<String>, startMs: Long, maxH: Int, priv: Boolean, w: Int, h: Int, pick: QualityLabel.Rung? = null, auto: Boolean = false, fromPage: Boolean = false)"))
     }
 
+    // ANS55f (owner message 55: "Can the player be inside the website so the video plays but I still see the website around it?"): Kestrel's own player over the page's own video box (research/ANS55_INLINE_PLAYER.md)
+    @Test fun ownerMessage55TheFilmPlaysInsideThePage() {
+        val flow = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/VideoFlow.kt")
+        val host = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/InlineHost.kt")
+        val view = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/InlinePlayer.kt")
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        val shields = "geckoapp/src/main/assets/kestrel-shields/"
+        val gate = source(shields + "gate-main.js"); val content = source(shields + "content.js"); val bg = source(shields + "background.js")
+        val box = source("core/src/main/kotlin/app/kestrel/core/media/InlineBox.kt")
+        assertTrue("the film starts inside the page ONLY through the hand-over, after the person's tap (the press check comes first), never for a playlist that came late or a page that went full screen",
+            flow.indexOf("a.inline.start(") > flow.indexOf("if (!pressed) return decline(") && flow.contains("why != WebHandOver.Why.LATE && why != WebHandOver.Why.FULLSCREEN"))
+        assertTrue("the person's setting decides: Settings > Play web videos inside the page, on by default, saved with the backup",
+            source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("bool(\"web_inline\", true)") && source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("Play web videos inside the page")
+                && source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"web_inline\", T.BOOL)") && flow.contains("a.prefs.webInline && geometry != null"))
+        assertTrue("the page's box comes from the gate and is checked twice (the content script's ranges, the background page's top-frame flag); a box in a frame, under a fixed or sticky ancestor or in a scroller of its own is never placed",
+            gate.contains("function geomOf(el)") && gate.contains("cs.position === 'fixed' || cs.position === 'sticky'") && content.contains("function geo(a)") && bg.contains("tp: sender.frameId === 0 ? 1 : 0") && flow.contains("m.optInt(\"tp\") != 1") && box.contains("!p.follows"))
+        assertTrue("the overlay follows the page by the engine's compositor (CompositorScrollDelegate), never by a message of the page's script (a busy page would lag)",
+            host.contains("GeckoSession.CompositorScrollDelegate") && host.contains("InlineBox.Track(") && !host.contains("pageScrolled") && !view.contains("runtime.sendMessage"))
+        assertTrue("the picture is a media-overlay SurfaceView (above the engine's own surface, below the window's views) and never stretched",
+            view.contains("setZOrderMediaOverlay(true)") && view.contains("InlineBox.letterbox(") && view.contains("a point until the shape of the picture is known"))
+        assertTrue("a drag or a second finger that starts on the picture goes to the page (it scrolls or zooms as if nothing lay over it); a short tap is the controls'",
+            view.contains("private fun startPass()") && view.contains("ACTION_POINTER_DOWN -> if (!passing) startPass()") && host.contains("engine.dispatchTouchEvent(c)") && view.contains("model.onTap("))
+        for (why in listOf("inline.backPressed()", "inline.stop(\"the app was left\")", "inline.stop(\"the screen turned\")", "inline.stop(\"another page is in front\")", "inline.stop(\"the page changed\")", "inline.stop(\"the tab list opened\")", "inline.stop(\"the page went full screen\")", "inline.stop(\"closing\")"))
+            assertTrue("every way the page stops being what the person sees ends the film: $why", act.contains(why))
+        assertTrue("a pinch, a scroll that cannot be followed or a box scrolled out of view ends the film, a box mostly out of view pauses it",
+            host.contains("the page was pinched") && view.contains("stop(\"scrolled out of view\")") && view.contains("mostly out of view: paused") && box.contains("Math.abs(zoom - zoomRef) > zoomRef * 0.03"))
+        assertTrue("a private tab's film is not logged or counted by the inline player",
+            view.contains("private fun say(event: String, text: String) { if (!priv) Health.log") && view.contains("if (!priv) { NativePlayerStats.plays++") && host.contains("if (!priv) { WebHandStats.lastInlineEnd = why"))
+        assertTrue("no picture for 7 s, or an error before the first picture, gives the film back to the page's own player",
+            view.contains("> 7_000L") && view.contains("stop(\"no picture\", failed = true)") && view.contains("stop(\"failed before the first picture\", failed = true)") && host.contains("a.nativeFilmFailed()"))
+        assertTrue("the full-screen button hands the same second to the full-screen player; the film that is up is not started twice; a new film replaces the old one",
+            host.contains("NativePlayerActivity.launch(a, u, h, positionMs") && flow.contains("a.inline.url == d.url") && host.contains("if (view.active) view.stop(\"a new film\")"))
+        assertTrue("the film is released at once when it ends (no sound after it) and its place is kept for 'pressed again continues'", view.contains("try { p.release() }") && view.contains("NativePlayerActivity.lastPositionMs = pos"))
+        assertTrue("Diagnostics counts the films inside the page", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/WebHandStats.kt").contains("inside the page: \$inline film(s)"))
+    }
+
     @Test fun ownerMessage54IsActedOn() {
         val dir = "geckoapp/src/main/assets/kestrel-shields/"
         // the screen never turns by itself by default; the options box has an x
