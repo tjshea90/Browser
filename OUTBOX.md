@@ -2344,3 +2344,7 @@
 ## 2026-11-16T22:26:02Z
 > The lab run is still going (step "Run the lab (vp)" started 22:06Z, roughly 19 minutes in a normal run). Waiting for the timer and the review agent to report.
 <!-- sha:51f28564081a -->
+
+## 2026-11-16T22:31:59Z
+> Waiting for the unit-test run to finish; next is the final lab run on this head.
+<!-- sha:07e0013c0827 -->
