@@ -427,14 +427,13 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         fit()
     }
 
-    /** DEBUG builds only (the emulator lab drives the screen without finger coordinates): `am start --activity-single-top -n .../NativePlayerActivity --es kestrel_debug qopen|qpick|rotate|touch [--es kestrel_arg N or the touch script]`. */
+    /** DEBUG builds only (the emulator lab drives the screen without finger coordinates): `am start --activity-single-top -n .../NativePlayerActivity --es kestrel_debug qopen|qpick|rotate [--es kestrel_arg N]` (a finger path: web/DebugTouch, a broadcast). */
     override fun onNewIntent(i: Intent) {
         super.onNewIntent(i)
         if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) == 0) return
         val what = i.getStringExtra("kestrel_debug") ?: return
         val n = (i.getStringExtra("kestrel_arg") ?: "").toIntOrNull() ?: 0
         when (what) {
-            "touch" -> app.kestrel.browser.web.DebugTouch.play(this, i.getStringExtra("kestrel_arg") ?: "")      // ANS57 lab: one finger's path (rest, drag, lift) played into this screen
             "qopen" -> openQuality()
             "qpick" -> { val rows = qualityRows(); if (n in rows.indices) pickQuality(rows[n]) else say("quality-failed", "no row $n of ${rows.size}") }
             "rotate" -> onRotate()
