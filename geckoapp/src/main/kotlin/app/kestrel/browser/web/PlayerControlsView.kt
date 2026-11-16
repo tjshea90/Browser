@@ -146,9 +146,9 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
 
     val controlsShown: Boolean get() = shownTarget
 
-    /** ANS55f lab: the centres of the close x and of the full-screen button in WINDOW pixels (x, y, x, y): the emulator lab taps them like a finger would. */
+    /** ANS55f lab: the centres of the close x and of the full-screen button in SCREEN pixels (x, y, x, y): the emulator lab taps them like a finger would. */
     fun buttonCentres(): IntArray {
-        val loc = IntArray(2); getLocationInWindow(loc)
+        val loc = IntArray(2); getLocationOnScreen(loc)
         return intArrayOf((loc[0] + exit.centerX()).toInt(), (loc[1] + exit.centerY()).toInt(), (loc[0] + full.centerX()).toInt(), (loc[1] + full.centerY()).toInt())
     }
 
