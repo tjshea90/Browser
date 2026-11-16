@@ -400,4 +400,26 @@ class OwnerRulesTest {
         assertTrue("its own window, not exported, handles the turn itself", manifest.contains("android:name=\".NativePlayerActivity\"") && manifest.substringAfter("android:name=\".NativePlayerActivity\"").substringBefore("/>").let { it.contains("android:exported=\"false\"") && it.contains("orientation|screenSize") })
         assertTrue("Media3 is the version the engine carries", source("geckoapp/build.gradle.kts").contains("val media3Version = \"1.11.1\""))
     }
+
+    /** ANS52g (owner message 52, "optimized for the hardware"): the engine's preferences cannot hide VP9 on the tablet, so the PAGE answers "no" for what the settings and the chips rule out; a policy that is not known is never applied. */
+    @Test fun theVideoFormatPolicyIsEnforcedInThePageAndFollowsTheSettings() {
+        val dir = "geckoapp/src/main/assets/kestrel-shields/"
+        val manifest = source(dir + "manifest.json")
+        assertTrue("declared (not registered at run time) in the page's own world, every frame, from the first script", manifest.substringAfter("\"codec-main.js\"").substringBefore("}").let { it.contains("\"world\": \"MAIN\"") && it.contains("\"all_frames\": true") && it.contains("\"run_at\": \"document_start\"") })
+        val js = source(dir + "codec-main.js")
+        assertTrue("the three questions a player asks are answered by the policy", js.contains("replace(MediaSource, 'isTypeSupported'") && js.contains("replace(HTMLMediaElement.prototype, 'canPlayType'") && js.contains("replace(MediaCapabilities.prototype, 'decodingInfo'"))
+        assertTrue("a policy that is not known is never applied, and a question without a size is never refused for its size", js.contains("typeof t === 'string' && policy") && js.contains("if (!(w > 0 && h > 0)) return false;"))
+        assertTrue("the isolated world's copy does nothing", js.contains("typeof browser !== 'undefined' && browser && browser.runtime"))
+        val content = source(dir + "content.js")
+        assertTrue("the content script hands over what the app said and relays only checked numbers, ten at most", content.contains("typeof r.cx === 'string'") && content.contains("cReports >= 10") && content.contains("p.length !== 5"))
+        val bg = source(dir + "background.js")
+        assertTrue("the policy rides in the fifth field of the page answer and comes back as cx; an older app keeps the last one", bg.contains("if (parts.length > 4) codecCfg =") && bg.contains("cx: codecCfg") && bg.contains("vx: vcxText()"))
+        val bridge = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt")
+        assertTrue("every page answer carries the policy", bridge.contains("\":\" + guard + \":\" + videoPolicy()"))
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("the activity builds it from the two Settings rows and the device's limits, and Diagnostics shows it", act.contains("videoPolicy = { app.kestrel.browser.web.VideoFormats.policy(applicationContext, prefs) }") && act.contains("app.kestrel.browser.web.VideoFormats.line(applicationContext, prefs)"))
+        assertTrue("the limits come from the hardware decoders only, and the probe also runs when only the limits are missing", source("geckoapp/src/main/kotlin/app/kestrel/browser/DeviceVideo.kt").contains("it.mime == mime && it.hardware") && source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoEngine.kt").contains("DeviceVideo.hardware(ctx) == null || DeviceVideo.limits(ctx) == null"))
+        val settings = source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt")
+        assertTrue("both rows exist: the formats row (Automatic by default) and the 30 frames switch (off by default)", settings.contains("choice(\"Video formats offered to sites\"") && settings.contains("toggle(\"At most 30 frames a second\"") && source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("bool(\"vid_fps30\", false)"))
+    }
 }
