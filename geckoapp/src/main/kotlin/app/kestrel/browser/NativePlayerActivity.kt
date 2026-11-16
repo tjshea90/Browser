@@ -42,6 +42,7 @@ import app.kestrel.browser.web.FullscreenTurner
 import app.kestrel.browser.web.NativePlayerStats
 import app.kestrel.browser.web.PlayerControlsView
 import app.kestrel.browser.web.PlayerFactory
+import app.kestrel.browser.web.PlayerQuality
 import app.kestrel.browser.web.QualitySheet
 import app.kestrel.browser.web.VideoGestures
 import app.kestrel.core.media.FullscreenTurn
