@@ -2099,7 +2099,7 @@ class Soak:
     # NOT ONE BYTE went out and nothing played before a press, then taps (the picture, or the page's own button) and checks that the film is asked for and, where the page has a play button, plays. Last: the rule off
     # gives the old behaviour (so the switch works), and the Diagnostics line counts what was held.
     # (page, what the person presses, what must follow): "play" = the film is asked for and plays; "still" = a hero loop with no play button of any kind: a stray tap on it starts nothing and loads nothing
-    AP_CASES = [("autoplay", "picture", "still"), ("preload-auto", "picture", "play"), ("preload-meta", "picture", "play"), ("no-attr", "picture", "play"), ("script", "button", "play"),
+    AP_CASES = [("autoplay", "picture", "still"), ("preload-auto", "picture", "play"), ("preload-meta", "picture", "play"), ("no-attr", "picture", "play"), ("bar", "bar", "play"), ("script", "button", "play"),
                 ("mse", "button", "play"), ("button", "button", "play"), ("iframe", "picture", "still")]
 
     def ap_scene(self):
@@ -2139,6 +2139,9 @@ class Soak:
                 continue
             L = lay[-1]
             tx, ty = (int(L.get("bx") or 0), int(L.get("by") or 0)) if how == "button" else (int(L.get("vx") or 0), int(L.get("vy") or 0))
+            if how == "bar" and tx > 0:                                                  # the engine's own control bar: its play button is at the left end, 30 dp in and 22 dp up from the bottom edge
+                dp = float(L.get("dpr") or 1.0625)
+                tx, ty = int(tx - int(L.get("vw") or 0) / 2 + 30 * dp), int(ty + int(L.get("vh") or 0) / 2 - 22 * dp)
             if tx <= 0 or ty <= 0:
                 tx, ty = self.screen[0] // 2, 260
             elif float(L.get("oy") or 0) < 5:

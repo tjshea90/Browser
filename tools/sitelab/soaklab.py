@@ -446,7 +446,7 @@ def page_ap(variant, tag):
         body = "<video id=v preload=auto controls playsinline poster='/img/1.svg' src='@FILM@' style='@BOX@'></video><script>apHook(document.getElementById('v'));</script>"
     elif variant == "preload-meta":
         body = "<video id=v preload=metadata controls playsinline poster='/img/1.svg' src='@FILM@' style='@BOX@'></video><script>apHook(document.getElementById('v'));</script>"
-    elif variant == "no-attr":
+    elif variant in ("no-attr", "bar"):            # "bar": the same page, pressed on the PLAY BUTTON of the engine's own control bar (bottom left), not on the middle of the picture (review of the gate, finding 10)
         body = "<video id=v controls playsinline poster='/img/1.svg' src='@FILM@' style='@BOX@'></video><script>apHook(document.getElementById('v'));</script>"
     elif variant == "script":                      # the page tries play() by itself three times (no finger: refused), and has a play button of its own
         body = ("<video id=v muted playsinline poster='/img/1.svg' style='@BOX@'></video>" + btn +
