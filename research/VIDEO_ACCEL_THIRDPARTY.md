@@ -21,7 +21,7 @@ Local files: [L1] research/VIDEO_AUDIT.md section 9, [L2] research/TABLET_DIAG_2
 1. Read the next Diagnostics (dropped frames, page stalls) before building anything large [L2]. No code.
 2. Rewrite manifests to cap the picture (section 8a): about 150 lines of extension JS, no dependency. A 720p picture has 0.44 of the pixels of 1080p [I]; it also fits the 5 Mbit/s link better.
 3. Add to Diagnostics, for the MTK decoder: max instances, adaptive playback, tunneled playback [D37]. Add the three-way test (leg 2 is section 9, leg 3 a debug-only Media3 SurfaceView). Cheap because Media3 is in the APK.
-4. If leg 3 beats leg 1: ship the hand-off below behind Settings > Video, default off until proven. Compile against media3-exoplayer and -exoplayer-hls (optionally -dash) at exactly GeckoView's version (1.11.1), so no second copy arrives [I].
+4. If leg 3 beats leg 1: ship the hand-off below (about 700 to 1000 lines of Kotlin plus tests [I]) behind Settings > Video, default off until proven. Compile against media3-exoplayer and -exoplayer-hls (optionally -dash) at exactly GeckoView's version (1.11.1), so no second copy arrives [I].
 5. Do not add libVLC, ijkplayer, mpv, external players or extractors.
 6. Later, optional: Kestrel Courier on the phone could serve segments over the LAN, which the carrier cap does not see [L3, I].
 
