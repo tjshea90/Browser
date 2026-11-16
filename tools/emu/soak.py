@@ -3716,7 +3716,7 @@ class FakeAdb:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "vp"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -3728,7 +3728,7 @@ def main():
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
-        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "vp") else "all")
+        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp") else "all")
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
@@ -3764,9 +3764,9 @@ def main():
             s.ho_scene()
         if a.suite in ("ip", "vp"):
             s.ip_scene()                                     # (ANS55f: the film inside the page)
-        if a.suite in ("gp", "vp"):
+        if a.suite in ("gp", "gv", "vp"):
             s.gp_scene()                                     # (ANS57: VLC-style gestures)
-        if a.suite == "pv":
+        if a.suite in ("pv", "gv", "vp"):
             s.pv_scene()                                     # (ANS58c: a private tab keeps its login when the app is left)
         if a.suite == "yh":
             s.yahoo_fullscreen()                             # (only the live Yahoo Finance player in full screen with Kestrel's controls: about 4 minutes)
