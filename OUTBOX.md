@@ -1919,3 +1919,7 @@
 > - The fast-wifi lab program (LAB2f).
 > - Older items still open in TASKS.md: VP10, ROT2e, ANS48, ANS52j.
 <!-- sha:75b6aab7ec25 -->
+
+## 2026-11-16T10:12:43Z
+> The owner-facing answer is already given; I'm saving the session handoff notes (done by a helper) and will confirm the saved paths when it reports back.
+<!-- sha:d264dac5b6b0 -->
