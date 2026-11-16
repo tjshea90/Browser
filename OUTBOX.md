@@ -1750,3 +1750,7 @@
 ## 2026-11-16T06:42:16Z
 > Lab run 3 (id 43818471174) is running on the exact build I plan to ship, and I'm waiting on it before releasing alpha57. Once it's clean I'll ship, wait for GitHub to build and sign it, then answer message 53 point by point with the Release link.
 <!-- sha:544b4ded09db -->
+
+## 2026-11-16T06:51:38Z
+> The release note is drafted; I'm waiting for lab run 3 to finish before shipping.
+<!-- sha:9c7ba13a7abd -->
