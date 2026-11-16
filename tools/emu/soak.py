@@ -3038,8 +3038,8 @@ def main():
             s.audio_round()
         if a.suite in ("fsy", "all"):
             s.fullscreen_bars()
-        if a.suite == "kp":
-            s.kp_scene()
+        if a.suite in ("kp", "vp"):
+            s.kp_scene()                                     # (vp = every video check of alpha57 in ONE emulator boot: controls, own player, codec policy + HLS cap, press-to-play)
         if a.suite in ("np", "vp"):
             s.np_scene()
             s.np_scene(hls=True)
