@@ -84,7 +84,7 @@ The cached GeckoView AAR holds GeckoHlsPlayer and its renderers, not Media3 clas
 
 ## Hand-off design: Kestrel plays the film in a SurfaceView
 Inputs
-- URL: the candidate the page really plays (`MediaList.primary()` or the existing blob duration match, tolerance 3 percent) [L4, I]. Add: HLS EXTINF sum or MPD duration within max(2 s, 3 percent) of `video.duration`; picture size equals a listed variant; not live, not DRM, playlist looked at.
+- URL: the candidate the page really plays (`MediaList.primary()` or the existing blob duration match, tolerance 3 percent) [L6]. Add: HLS EXTINF sum or MPD duration within max(2 s, 3 percent) of `video.duration`; picture size equals a listed variant; not live, not DRM, playlist looked at.
 - Headers: first working set of `MediaHeaders.sets` (Referer, Origin) plus the engine's exact User-Agent. Nothing else [I].
 - Cookies: a DataSource over `GeckoWebExecutor` (profile cookies unless anonymous, private tabs use the private jar) [L3]; never copy Cookie values into app storage [I].
 - Start: position, paused, muted, rate from player.js reports [I].
