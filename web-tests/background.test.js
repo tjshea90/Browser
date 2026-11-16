@@ -1321,3 +1321,46 @@ test('VP1: a length of 2^32 seconds (the live marker) and a huge position reach 
   const g2 = h.of('vst')[1];
   assert.equal(g2.d, 0, 'still clamped beyond ten billion seconds'); assert.equal(g2.t, 0);
 });
+
+// ---------------------------------------------------------------- ANS52g: the video format policy (codec-main.js) and what it refused
+const VPOLICY = '00|2048x1088@522000|2048x1088@522000|2048x1088@244800|-';
+
+test('ANS52g: the video format policy rides in the fifth field of the page answer and comes back as `cx` in the guard answer', async () => {
+  let policy = VPOLICY;
+  const h = harness((m) => (m.k === 'cfg' ? `1:1:${ID}:1:${policy}` : standardApp()(m)));
+  h.mainFrame(PAGE);
+  await until(() => h.of('cfg').length >= 1, 'cfg');
+  await tick(10);
+  assert.equal((await h.message({ k: 'guard', h: 'movie.example' })).cx, VPOLICY);
+  // a new policy (a Settings change) arrives with the next answer for any host; an empty one means none
+  policy = '10|-|-|-|-';
+  assert.equal((await h.message({ k: 'guard', h: 'other.example' })).cx, '10|-|-|-|-');
+  policy = '';
+  assert.equal((await h.message({ k: 'guard', h: 'third.example' })).cx, '', 'told "none"');
+});
+
+test('ANS52g: an answer of an older app (four fields) keeps the policy that was told before; nobody has a policy before the first answer', async () => {
+  const h = harness((m) => (m.k === 'cfg' ? (m.h === 'old.example' ? `1:1:${ID}:1` : `1:1:${ID}:1:${VPOLICY}`) : standardApp()(m)));
+  h.mainFrame(PAGE);
+  await until(() => h.of('cfg').length >= 1, 'cfg');
+  await tick(10);
+  assert.equal((await h.message({ k: 'guard', h: 'new.example' })).cx, VPOLICY);
+  assert.equal((await h.message({ k: 'guard', h: 'old.example' })).cx, VPOLICY, 'four fields: nothing new was said');
+  const fresh = harness((m) => (m.k === 'cfg' ? `1:1:${ID}:1` : standardApp()(m)));
+  fresh.mainFrame(PAGE);
+  await until(() => fresh.of('cfg').length >= 1, 'cfg');
+  assert.equal((await fresh.message({ k: 'guard', h: 'old.example' })).cx, '');
+});
+
+test('ANS52g: what the pages refused is summed, clamped and handed to the app as `vx` of the stats message; nothing is said until a page reports', async () => {
+  const h = await onPage();
+  await h.flushTimers();
+  assert.ok(h.of('st').every((m) => m.vx === ''), 'no report, no text');
+  h.message({ k: 'vcx', a: 7, s: 5, m: 1, f: 0, w: 'vp9 3840x2160@60' }, 1, PAGE, 0);
+  h.message({ k: 'vcx', a: 3, s: 0, m: 0, f: 2, w: 'avc 1280x720@60' }, 1, PAGE, 3);
+  h.message({ k: 'vcx', a: -5, s: 'x', m: 1e12, f: NaN, w: '<script>alert(1)</script> ' + 'z'.repeat(100) }, 1, PAGE, 0);
+  await h.flushTimers();
+  const st = h.of('st'), vx = st[st.length - 1].vx;
+  assert.match(vx, /^questions 10 \(counted when something was refused\), refused 8: above the decoder's limit 5, not H\.264 1, above 30 fps 2; last: [a-z0-9 x@.]{0,30}$/);
+  assert.ok(vx.length <= 240 && vx.indexOf('<') < 0);
+});
