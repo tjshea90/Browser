@@ -1978,3 +1978,43 @@
 ## 2026-11-16T16:14:41Z
 > Waiting for the release checks to finish; the release build is dispatched right after.
 <!-- sha:3292d1b5ec5b -->
+
+## 2026-11-16T16:27:56Z
+> Your messages 55 and 56 are fixed in alpha59, except for the player inside the page, which isn't built yet. It still opens full screen. I also haven't run any of this on your tablet.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha59
+>
+> **Message 55, the black Yahoo video: fixed.**
+> - **Cause:** Yahoo hands the browser one main list for the film, plus separate lists for the picture, the sound and the subtitles. All of them are as long as the film. Kestrel's player was given the sound or subtitles list, so it showed the time and no picture. I found this by loading the real Yahoo page from my build machine.
+> - **Fix:** Kestrel's player now always takes the main list, the one that offers pictures.
+> - **Safety net:** if a film plays for 7 seconds with no picture, Kestrel's player hands it back to the page, which plays it with a short message.
+>
+> **Message 55, switching to another video: fixed.**
+> - The newest main list the page asked for is now the film, so each video gets its own stream.
+> - A new video starts at the beginning. "Resume where I stopped" only applies when you press play on the same video again.
+>
+> **Message 56, an old video showing when you pick a different one: same fix.** The old video's list was being reused for the new press. Each press now takes its own list.
+>
+> **Message 55, the player inside the page: not in alpha59.**
+> - **What's coming:** the video will sit over the page's own video box, follow the page as you scroll, and have a full-screen button, so you still see the website around it.
+> - **Where it stands:** I'm building it now for the next release. The position-tracking rules are written and their unit tests pass. The page-side measuring, the view itself and the controls are not.
+> - **Until then:** it opens full screen as before. To keep the page's own player, use Settings > Web videos play in > The page's own player.
+>
+> **Tested:**
+> - Unit tests, 573 web tests in headless browsers, and 53 emulator checks of the hand-over on the real Firefox engine.
+> - The emulator copied Yahoo's list layout and covered the page moving on to another video, and a stream with sound but no picture.
+>
+> **Please do on the tablet:**
+> - Try the same Yahoo video again.
+> - Send the Diagnostics line "Web videos in Kestrel's own player". It now names the site of the list it took.
+>
+> **Still open:**
+> - the player inside the page (in progress)
+> - VP12: films with no playlist address, e.g. YouTube style
+> - VP10
+> - ROT2e
+> - ANS48
+> - SOAK1d
+> - LAB2f
+> - ANS52j
+<!-- sha:50a847bda896 -->
