@@ -30,7 +30,7 @@ Local files: [L1] research/VIDEO_AUDIT.md section 9, [L2] research/TABLET_DIAG_2
 | Candidate | Size | Licence | Dependencies | Decode | Fit | Verdict |
 | :- | :- | :- | :- | :- | :- | :- |
 | MediaPlayer | 0 | OS | none | MediaCodec | HLS TS-only, no DASH, no rendition control | fallback only |
-| Media3 1.11.1 | already in APK; own use at most +0.5 MB gzipped [M] | Apache-2.0 [D14] | Guava, annotation, exifinterface; no androidx.core, no coroutines [D2] | MediaCodec | HLS, DASH, MP4, WebM, headers, caps | GO |
+| Media3 1.11.1 | already in APK; own use at most +0.5 to 0.7 MB gzipped [M] | Apache-2.0 [D14] | Guava, annotation, exifinterface; no androidx.core, no coroutines [D2] | MediaCodec | HLS, DASH, MP4, WebM, headers, caps | GO |
 | libVLC 3.7.7 | 92.9 MB AAR, 4 ABIs [D20] | LGPL-2.1 lib, GPL app [D21, D22] | annotation, legacy-support-v4, kotlin-stdlib [D21] | MediaCodec or software | huge, no gain | no |
 | ijkplayer 0.8.8 | not on Maven Central [D25] | LGPL-2.1+ [D25] | native FFmpeg n3.4 | MediaCodec or software | dead since 2021 | no |
 | mpv-android | APK 117 MiB [D26] | MIT app [D26] | native | MediaCodec or copy | not embeddable [D26] | no |
