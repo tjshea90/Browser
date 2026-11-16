@@ -78,6 +78,8 @@ class ShieldsBridge(
     private val viewport: (JSONObject) -> Unit = {},
     /** VP1: the page's report of a full-screen film (`vst`) or a tap on its picture (`vtap`): the answer is what the controls want done (JSON). Worker thread. */
     private val player: (JSONObject) -> String = { "" },
+    /** ANS52g: the video format policy the pages are told (core/media/VideoLimits.policy: the owner's two settings and the hardware limits of this device); the 5th field of every page answer. Worker thread, cheap. */
+    private val videoPolicy: () -> String = { "" },
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -216,7 +218,7 @@ class ShieldsBridge(
     }
 
     /**
-     * `cfg`: "<mode>:<generation>:<content id>:<flags>" (flags: 1 = the pop-up and redirect guard applies to this site). mode 1 = block on pages of this host, 0 = Shields off / site allowed, L = ask per request (compatibility mode).
+     * `cfg`: "<mode>:<generation>:<content id>:<flags>:<video policy>" (flags: 1 = the pop-up and redirect guard applies to this site; the video policy is [app.kestrel.core.media.VideoLimits.policy], ANS52g). mode 1 = block on pages of this host, 0 = Shields off / site allowed, L = ask per request (compatibility mode).
      * While the lists are still loading (cold start) the answer is provisional - generation 0, no id, the site allow-list unknown - so the extension can already judge requests with the
      * copy it saved last time and asks again within seconds; before this, those first requests went unfiltered.
      */
@@ -234,7 +236,7 @@ class ShieldsBridge(
         // 16 = a tap on a video player's bar may move the video when the page does not (YS1, seekbar.js; follows ONLY the Settings switch "Tap the video bar to jump": it is not a Shields feature, a site with Shields off keeps it)
         val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0) or (if (prefs().tapSeek) 16 else 0) or (if (prefs().measureScroll) 32 else 0) or (if (prefs().fsControls == 0) 512 else 0) or (if (prefs().videoControls != 2) 64 else 0) or (if (prefs().videoControls == 1) 128 else 0) or (if (labBuild()) 256 else 0)
         val on = s.shieldsUp && s.blockAds && snap?.fs?.isPageAllowed(host) != true
-        return (if (on) "1:" else "0:") + gen + ":" + (if (snap != null) contentId(snap) else "") + ":" + guard
+        return (if (on) "1:" else "0:") + gen + ":" + (if (snap != null) contentId(snap) else "") + ":" + guard + ":" + videoPolicy()
     }
 
     /** Set by [install]: the app build, part of the image identity (a new build may ship a new Public Suffix List). */
@@ -350,11 +352,13 @@ class ShieldsBridge(
         val listeners: String = "",
         /** RX4-M0b / M0c: revalidations (304), cache hits and the scriptlet wait before a page, as the extension counted them (text). */
         val revalidation: String = "",
+        /** ANS52g: what the pages' video format policy refused (the extension's counts, text). */
+        val videoFormats: String = "",
     ) {
         companion object {
             fun from(m: JSONObject) = EngineStats(
                 m.optInt("g"), m.optLong("n"), m.optLong("us"), m.optLong("mx"), m.optLong("sl"), m.optLong("lg"), m.optLong("lu"), m.optInt("er"),
-                m.optLong("ld"), m.optInt("by"), m.optInt("pl"), m.optInt("off") != 0, m.optString("w").take(400), System.currentTimeMillis(), m.optString("lt").take(240), m.optString("rv").take(320),
+                m.optLong("ld"), m.optInt("by"), m.optInt("pl"), m.optInt("off") != 0, m.optString("w").take(400), System.currentTimeMillis(), m.optString("lt").take(240), m.optString("rv").take(320), m.optString("vx").take(240),
             )
         }
     }
