@@ -681,6 +681,12 @@ open class BrowserActivity : Activity(), DockListener {
                 pressActive = false; if (!pressOnPanel) pressEndAt = SystemClock.uptimeMillis()
                 lastTouchAt = SystemClock.uptimeMillis()
                 if (fullscreenOn) fsTurner.touched() // FS1: the rotate button shows again for a moment
+                // ANS53c (owner message 53: "zero delay"): a short tap on the picture of a full-screen film under Kestrel's controls is answered HERE, on the glass, not after the page's script, the extension and the app have talked
+                // (a busy page took seconds); the page still gets the touch and its own message for it is matched by the time of the touch and dropped (PlayerController.appTap)
+                if (ev.actionMasked == android.view.MotionEvent.ACTION_UP && fullscreenOn && ::player.isInitialized && player.active && !dragged && !pressOnPanel && ev.eventTime - ev.downTime <= 450L && !player.controlAt(downX, downY)) {
+                    val ago = SystemClock.uptimeMillis() - ev.eventTime
+                    player.appTap((downX * 1000f / window.decorView.width.coerceAtLeast(1)).toInt(), System.currentTimeMillis() - ago, ago)
+                }
                 // a swipe may leave a fling running (hold the glow still for it); a plain tap leaves nothing behind, so the glow comes back almost at once
                 Io.main.removeCallbacks(touchRelease); Io.main.postDelayed(touchRelease, if (dragged) 1500L else 350L)
             }
