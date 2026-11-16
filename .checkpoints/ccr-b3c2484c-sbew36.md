@@ -1,13 +1,13 @@
-# CHECKPOINT 2503 — read me first, then TASKS.md
+# CHECKPOINT 2504 — read me first, then TASKS.md
 
-**Written:** 2026-11-16T08:34:58Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `ab5f28b7` (this checkpoint is the commit after it)
+**Written:** 2026-11-16T08:36:47Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `559be944` (this checkpoint is the commit after it)
 
 ## Just done
-lab run 43831112200 (ho run 2) read: file now hands over on the real engine (first press), overlay/hls/unknown/bad/never ok; the page logs prove the engine's native controls send NO pointer/click events (hypothesis confirmed). Remaining lab-driver issues fixed: page-paused check judged after Back (page timers freeze while Kestrel's player is in front), second press of file taps the engine's bar play button (up to 3 taps). New: a film pressed again continues where Kestrel's player stopped (core WebHandOver.resumeMs + test, NativePlayerActivity lastUrl/lastDurationMs/lastStoppedAt RAM only never private, VideoFlow.start, OwnerRulesTest guards, lab check 'from N s'); core tests + gecko compile green
+lab vp run dispatched: 43832408756 (lab job 133180783158, head 6b32808a = ckpt 2503, started 08:35Z); all unit suites green (core, app, gecko), web suite 566/566; ANS54 design doc has the lab findings
 
 ## Do this next
-dispatch lab suite vp on this head (android.yml app=lab lab_suite=vp lab_minutes=10 lab_net=full full_build=false ref ccr-b3c2484c-sbew36); read it (get_workflow_job small output; artifact emulator-lab-text via fetch_artifact.py); expect kp + np + cp + hls + ap + ho all green (ho: file again + from N s, bar tap); then bump 159 / alpha58, docs/handoff/ALPHA58_RELEASE_NOTE.txt, ship.sh gecko, ONE dispatch, record-release, answer owner message 54
+read lab run 43832408756 when job 133180783158 is completed (mcp__github__actions_get get_workflow_job, small): artifact emulator-lab-text -> python3 -I tools/emu/fetch_artifact.py <url> <empty dir>; every section green? (kp incl. 'follow the tablet by default stays upright', np, cp, hls, ap, ho incl. file again + from N s). Fix findings; then bump geckoapp/build.gradle.kts to versionCode 159 / 0.3.0-alpha58 + bash tools/sync-ext-version.sh, docs/handoff/ALPHA58_RELEASE_NOTE.txt (ASCII, no double quotes or backslashes), bash ship.sh gecko with the note, ONE dispatch (app=gecko full_build=true), tag + jobs + release, bash tools/record-release.sh <tag> identical note, tick ANS54a-f in TASKS, answer owner message 54 with the Release link on its own line
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ dispatch lab suite vp on this head (android.yml app=lab lab_suite=vp lab_minutes
 
 ## Last ten checkpoints
 ```
+  6b32808a ckpt 2503: lab run 43831112200 (ho run 2) read: file now hands over on the real engine 
   57239dd2 ckpt 2502: lab run 43831112200 (suite ho, head bbfc9c3f = ckpt 2501) dispatched; gradle
   bbfc9c3f ckpt 2501: ANS54e: lab run 43826954106 (suite ho) read: overlay/hls/unknown/never ok, f
   00b6ff6b ckpt 2500: lab run 43826954106 dispatched: suite ho (head 97294fcb): web videos play in
@@ -25,8 +26,7 @@ dispatch lab suite vp on this head (android.yml app=lab lab_suite=vp lab_minutes
   519b8caa ckpt 2496: owner message 54 written into TASKS.md as ANS54a-f in his words (a: page pla
   201e537f ckpt 2495: alpha57 SHIPPED and recorded: Release kestrel-g-v0.3.0-alpha57 (code 158, AP
   eb5df864 ckpt 2494: alpha57 RELEASE DISPATCHED (ONE time): android.yml run 43820755532 (app=geck
-  efc4f774 ckpt 2493: gated kestrel-g-v0.3.0-alpha57 (gecko code 158) and pushed it: handoff self-
 ```
 
-(4 automatic checkpoint(s) since the last deliberate one — the
+(1 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
