@@ -1859,3 +1859,7 @@
 ## 2026-11-16T09:28:59Z
 > Still waiting on the emulator run (no results yet).
 <!-- sha:f13b276a2df8 -->
+
+## 2026-11-16T09:33:51Z
+> Emulator run still going (lab job started 09:23, now nearly 20 minutes in); I'll look again in four minutes.
+<!-- sha:0d21988291c6 -->
