@@ -925,7 +925,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   function n(v, lo, hi) { v = +v; return (v >= lo && v <= hi) ? v : lo; }
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || docOf(sender.url);
   var o = m.k === 'vtap' ? { k: 'vtap', x: n(m.x, 0, 1000) } : {
-    k: 'vst', t: n(m.t, 0, 1e7), d: (m.d === -1 || m.d === -2) ? m.d : n(m.d, 0, 1e7), b: n(m.b, 0, 1e7), pa: m.p === 1 ? 1 : 0, e: m.e === 1 ? 1 : 0, m: m.m === 1 ? 1 : 0, v: n(m.v, 0, 100),
+    k: 'vst', t: n(m.t, 0, 1e10), d: (m.d === -1 || m.d === -2) ? m.d : n(m.d, 0, 1e10), b: n(m.b, 0, 1e10), pa: m.p === 1 ? 1 : 0, e: m.e === 1 ? 1 : 0, m: m.m === 1 ? 1 : 0, v: n(m.v, 0, 100),
     r: n(m.r, 0.1, 16), rs: n(m.rs, 0, 4), ms: m.ms === 1 ? 1 : 0, l: m.l === 1 ? 1 : 0, w: n(m.w, 0, 20000), h: n(m.h, 0, 20000), ak: n(m.ak, 0, 2000000000), aw: n(m.aw, 0, 1000) };
   o.p = String(page).slice(0, 300);                       // (`p` is the page's address in every message the app gets; the film's PAUSED flag is `pa`: lab run 43776782679 found the app reading the address as "not paused" for ever)
   return send(o).then(function (r) { try { return r ? JSON.parse(r) : undefined; } catch (e) { return undefined; } }, function () { return undefined; });

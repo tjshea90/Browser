@@ -1303,3 +1303,15 @@ test('VP1: the full-screen film state is relayed as clamped numbers: the PAUSED 
   assert.equal(g2.t, 0, 'clamped'); assert.equal(g2.d, -2, 'infinite is kept as -2'); assert.equal(g2.ak, 0); assert.equal(g2.pa, 0);
   assert.ok(t);
 });
+
+test('VP1: a length of 2^32 seconds (the live marker) and a huge position reach the app as they are (review F8)', async () => {
+  const h = harness((m) => (m.k === 'vst' ? '{"s":0}' : standardApp()(m)));
+  h.mainFrame(PAGE, { requestId: '1' });
+  await ready(h);
+  await h.message({ k: 'vst', t: 1700000000, d: 4294967296, b: 4294967296, p: 0 }, 1, PAGE, 0);
+  const g = h.of('vst')[0];
+  assert.equal(g.d, 4294967296); assert.equal(g.t, 1700000000); assert.equal(g.b, 4294967296);
+  await h.message({ k: 'vst', t: 1e12, d: 1e12, b: -1, p: 0 }, 1, PAGE, 0);
+  const g2 = h.of('vst')[1];
+  assert.equal(g2.d, 0, 'still clamped beyond ten billion seconds'); assert.equal(g2.t, 0);
+});

@@ -242,3 +242,73 @@ test('VP2: with the app saying the controls are not Kestrel\'s the page keeps al
   assert.equal(await disp(page, 'yt'), 'block'); assert.equal(await page.evaluate(() => document.getElementById('v').controls), true);
   await page.context().close();
 });
+
+// ---- the findings of the independent review of alpha55 (F1, F2, F5, F6, F10)
+test('VP1: the app is asked again at every full screen, so a Settings change reaches a page that is already open (review F1)', async () => {
+  const page = await open(BOX, { player: true, cfg: { kp: true } });
+  await fullscreen(page); await firstState(page);
+  await page.evaluate(() => document.exitFullscreen());
+  await page.waitForFunction(() => window.KestrelVP.active() === false, null, { timeout: 4000 });
+  await page.evaluate(() => { window.top.__kpOverride = false; });                 // the person chose "the page's own"
+  const n = (await states(page)).length;
+  await fullscreen(page); await wait(page, 1500);
+  assert.equal((await states(page)).length, n, 'no session, no reports');
+  assert.equal(await page.evaluate(() => window.KestrelVP.active()), false);
+  await page.touchscreen.tap(250, 400); await wait(page, 150);
+  assert.ok((await clicks(page)).includes('v'), 'the page gets the tap');
+  await page.evaluate(() => document.exitFullscreen()); await wait(page, 400);
+  await page.evaluate(() => { window.top.__kpOverride = true; });                  // and back on, without a reload
+  await fullscreen(page);
+  await page.waitForFunction((k) => window.__msgs.filter((m) => m && m.k === 'vst').length > k, n, { timeout: 5000 });
+  await page.context().close();
+});
+
+test('VP2: a tap makes the reports come at the quick pace for a moment, so what the tap produced is carried out without waiting for the slow pace (review F2)', async () => {
+  const page = await open(BOX, { player: true, cfg: { kp: true } });
+  await page.evaluate(() => { window.KestrelVP.c.idle = 3000; window.KestrelVP.c.busy = 150; });
+  await fullscreen(page); await firstState(page);
+  await standing(page, { s: 0 });
+  await wait(page, 500);
+  const n0 = (await states(page)).length;
+  await page.touchscreen.tap(250, 400);
+  await page.waitForFunction((k) => window.__msgs.filter((m) => m && m.k === 'vst').length >= k + 2, n0, { timeout: 1500 });   // two more reports within 1.5 s although the slow pace is 3 s
+  await page.context().close();
+});
+
+test('VP1: the film can change under the controls (an ad element, then the film in another element): the session follows it (review F5)', async () => {
+  const TWO = BOX.replace('<button id="skip"', '<video id="w" src="https://cdn.example/film.wav" preload="auto" muted style="position:absolute;left:0;top:0;width:100%;height:100%"></video><button id="skip"');
+  const page = await open(TWO, { player: true, cfg: { kp: true } });
+  await page.evaluate(() => { const v = document.getElementById('v'); v.play().catch(() => {}); });
+  await fullscreen(page); await firstState(page);
+  await page.evaluate(() => { const v = document.getElementById('v'), w = document.getElementById('w'); v.pause(); v.style.display = 'none'; w.currentTime = 30; w.play().catch(() => {}); });
+  await page.waitForFunction(() => window.__msgs.some((m) => m && m.k === 'vst' && m.t >= 30 && m.p === 0), null, { timeout: 6000 });   // the reports are the second element's
+  await queue(page, { s: 1, c: [{ a: 'pause', i: 1 }] });
+  await page.waitForFunction(() => document.getElementById('w').paused, null, { timeout: 4000 });                                   // and the commands go to it
+  await page.context().close();
+});
+
+test('VP2: a tap on something the page made clickable with a script (onclick, a pointer cursor) goes to the page, a layer over the whole picture does not (review F6)', async () => {
+  const JS = BOX.replace('<a id="lnk"', '<div id="jsb" onclick="window.__clicks.push(\'jsb\')" style="position:absolute;left:210px;top:8px;width:60px;height:40px;background:#333"></div><div id="ptr" style="position:absolute;left:210px;top:60px;width:60px;height:40px;cursor:pointer;background:#444"></div><a id="lnk"');
+  const page = await open(JS, { player: true, cfg: { kp: true } });
+  await page.evaluate(() => { document.getElementById('ptr').addEventListener('click', () => window.__clicks.push('ptr')); document.getElementById('box').style.cursor = 'pointer'; });
+  await fullscreen(page); await firstState(page);
+  await page.touchscreen.tap(240, 28); await wait(page, 200);
+  assert.deepEqual(await clicks(page), ['jsb'], 'the onclick div got its tap: ' + JSON.stringify(await clicks(page)));
+  await page.touchscreen.tap(240, 80); await wait(page, 200);
+  assert.deepEqual(await clicks(page), ['jsb', 'ptr'], 'and the pointer-cursor one');
+  assert.equal((await taps(page)).length, 0, 'neither was a tap on the film');
+  await page.touchscreen.tap(250, 400);                                              // the film itself, although the whole box has a pointer cursor
+  await page.waitForFunction(() => window.__msgs.some((m) => m && m.k === 'vtap'), null, { timeout: 5000 });
+  assert.deepEqual(await clicks(page), ['jsb', 'ptr'], 'the page did not get the tap on its film');
+  await page.context().close();
+});
+
+test('VP2: the engine\'s own bar is put away again when the page turns it on again (review F10)', async () => {
+  const page = await open(CHROME, { player: true, cfg: { kp: true } });
+  await page.evaluate(() => { window.KestrelVP.c.idle = 300; window.KestrelVP.c.busy = 300; });
+  await fullscreen(page); await firstState(page);
+  await page.waitForFunction(() => document.getElementById('v').controls === false, null, { timeout: 4000 });
+  await page.evaluate(() => { document.getElementById('v').controls = true; });
+  await page.waitForFunction(() => document.getElementById('v').controls === false, null, { timeout: 4000 });
+  await page.context().close();
+});
