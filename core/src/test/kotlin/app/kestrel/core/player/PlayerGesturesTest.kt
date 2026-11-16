@@ -101,12 +101,13 @@ class PlayerGesturesTest {
         g.move(500f + 252f, 300f)                                      // 4 cm right
         assertEquals(1, h.previews.size)
         val (jump, target, coef) = h.previews.last()
-        assertEquals(40500L, jump); assertEquals(100_000L + 40500L, target); assertEquals(1.0, coef, 1e-9)
+        val j4 = GestureMath.jumpMs(GestureMath.cm(252.0, 160.0), 1.0)         // (252 px at 160 dpi are 4.0005 cm)
+        assertEquals(j4, jump); assertEquals(100_000L + j4, target); assertEquals(1.0, coef, 1e-9); assertTrue("about 40 s", jump in 40_400L..40_700L)
         assertTrue("nothing has moved yet", h.commits.isEmpty())
         g.move(500f + 126f, 300f)                                      // back to 2 cm: smaller
         assertEquals(5343L, h.previews.last().first)
         g.move(500f + 252f, 300f); g.up(500f + 252f, 300f)
-        assertEquals(listOf(40500L), h.commits); assertEquals(1, h.finished)
+        assertEquals(listOf(j4), h.commits); assertEquals(1, h.finished)
     }
 
     @Test fun holdThenDragLeftRewindsAndTheFartherTheMore() {
