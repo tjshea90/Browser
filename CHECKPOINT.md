@@ -1,13 +1,13 @@
-# CHECKPOINT 2513 — read me first, then TASKS.md
+# CHECKPOINT 2514 — read me first, then TASKS.md
 
-**Written:** 2026-11-16T09:57:26Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `7d1d4e04` (this checkpoint is the commit after it)
+**Written:** 2026-11-16T09:57:55Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `596e4e4a` (this checkpoint is the commit after it)
 
 ## Just done
-release run 43843245891 FAILED before any build: GitHub's web-test job failed ONE old test (player.test.js VP1 'a = 0 four times': it read the page before the player had started, a timing race on a slow runner; the 22 new hand-over tests and the other 572 passed), so build-gecko was skipped and NO tag / release exists (git ls-remote shows none). Test made race-free (waits for the player to start, then to give up); player tests 27/27 locally
+alpha58 RELEASE DISPATCHED AGAIN (the first run 43843245891 made no release: a racy old web test failed): android.yml run 43844463765 (run 171, app=gecko full_build=true, head 596e4e4a, queued 09:57Z)
 
 ## Do this next
-dispatch the alpha58 release AGAIN, once (the first run made no release): android.yml app=gecko full_build=true ref ccr-b3c2484c-sbew36 note = the exact text of docs/handoff/ALPHA58_RELEASE_NOTE.txt; record its run id in a ckpt at once; then wait for tag kestrel-g-v0.3.0-alpha58 + all jobs success (test-js can flake: if a DIFFERENT old test fails read it and decide) + get_release_by_tag shows the APK; ONLY THEN bash tools/record-release.sh kestrel-g-v0.3.0-alpha58 with the IDENTICAL note; tick ANS54a-f; answer owner message 54
+do NOT dispatch again unless this run ends WITHOUT a tag: wait for run 43844463765 (actions_list list_workflow_jobs resource_id 43844463765 workflow_jobs_filter latest perPage 8 is ~6 KB; or git ls-remote --tags origin | grep alpha58 then get_release_by_tag kestrel-g-v0.3.0-alpha58): tag + test-jvm + test-js + build-gecko success + release with the APK; ONLY THEN bash tools/record-release.sh kestrel-g-v0.3.0-alpha58 "$(cat docs/handoff/ALPHA58_RELEASE_NOTE.txt)"; tick ANS54a-f in TASKS.md; HANDOFF alpha58 bullet -> SHIPPED; answer owner message 54 (Release link on its own line, nothing ran on the tablet, open items re-listed)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ dispatch the alpha58 release AGAIN, once (the first run made no release): androi
 
 ## Last ten checkpoints
 ```
+  596e4e4a ckpt 2513: release run 43843245891 FAILED before any build: GitHub's web-test job faile
   d639fb36 ckpt 2512: alpha58 RELEASE DISPATCHED (ONE time): android.yml run 43843245891 (run 170,
   59ccf63d ckpt 2511: gated kestrel-g-v0.3.0-alpha58 (gecko code 159) and pushed it: handoff self-
   eb003faf ckpt 2510: alpha58 release prepared (NOT shipped yet): geckoapp versionCode 159 / 0.3.0
@@ -25,8 +26,4 @@ dispatch the alpha58 release AGAIN, once (the first run made no release): androi
   9ba75b5b ckpt 2506: tap window widened for a slow tablet (core WebHandOver.pressWindowMs 15 s, 3
   51380853 ckpt 2505: ANS54e.9 SECURITY: a page script can fake the gate's question, so every hand
   4ad3a730 ckpt 2504: lab vp run dispatched: 43832408756 (lab job 133180783158, head 6b32808a = ck
-  6b32808a ckpt 2503: lab run 43831112200 (ho run 2) read: file now hands over on the real engine 
 ```
-
-(2 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
