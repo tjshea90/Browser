@@ -1879,3 +1879,7 @@
 ## 2026-11-16T09:58:07Z
 > Waiting for the release run (about five minutes between checks).
 <!-- sha:a0ffb8fc909d -->
+
+## 2026-11-16T10:03:08Z
+> Android build in progress; I'll confirm the tag and the published APK before recording or announcing anything.
+<!-- sha:2cf57785815d -->
