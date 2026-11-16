@@ -498,7 +498,9 @@ def page_ho(variant, tag):
                 "document.getElementById('btn').onclick = function () { var how = 'overlay'; v.muted = true; " + play_js + " };</script>")
     else:
         body = "<p>unknown variant</p>"
-    state = "<script>setInterval(function () { var v = document.getElementById('v'); if (v) apRep('state', { paused: v.paused ? 1 : 0, t: (v.currentTime || 0).toFixed(1) }); }, 2000);</script>"   # (where the page's own video is, every 2 s)
+    state = ("<script>setInterval(function () { var v = document.getElementById('v'); if (v) apRep('state', { paused: v.paused ? 1 : 0, t: (v.currentTime || 0).toFixed(1) }); }, 2000);"
+             "var evl = 0; ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'mousedown', 'mouseup', 'click'].forEach(function (t) { window.addEventListener(t, function (e) { if (evl++ < 40) apRep('evt', { type: t, tgt: (e.target && e.target.nodeName) || '', tr: e.isTrusted ? 1 : 0 }); }, true); });"
+             "['play', 'pause'].forEach(function (t) { document.addEventListener(t, function (e) { if (evl++ < 40) apRep('evt', { type: t, tgt: (e.target && e.target.nodeName) || '', tr: e.isTrusted ? 1 : 0 }); }, true); });</script>")   # (where the page's own video is, every 2 s; and which tap events the page gets at all: the engine's own controls may keep them from it)
     return (head + body.replace("@FILM@", film).replace("@BOX@", box).replace("@Q@", q) + state).encode()
 
 

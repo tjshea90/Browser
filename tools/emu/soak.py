@@ -728,6 +728,7 @@ class Soak:
         self.ap_results = []                   # ANS53a / ANS53b: videos start only when pressed (suite ap)
         self.ho_results = []                   # ANS54e: web videos play in Kestrel's own player (suite ho)
         self.ho_table = []
+        self.ho_events = []                   # (page, what the page saw of the tap): which tap events the engine lets a page see
         self.ho_line = ""
         self.ap_table = []
         self.ap_line = ""
@@ -2249,6 +2250,7 @@ class Soak:
             ev2 = [r.get("ev") for r in rows2]
             taken, started = ev("video", "hand-over", m), ev("native", "start", m)
             self.shot("ho-%s-after" % variant)
+            self.ho_events.append((variant, ", ".join("%s>%s%s" % (r.get("type"), r.get("tgt"), "" if str(r.get("tr")) == "1" else "(script)") for r in rows2 if r.get("ev") == "evt") or "nothing at all"))
             if expect in ("native", "native-hls"):
                 check("%s: Kestrel's own player took the film over (a 'video hand-over' line: %s)" % (variant, [e["rest"][:50] for e in taken][:1]), bool(taken), "no 'video hand-over' line (page events %s)" % sorted(set(ev2)))
                 check("%s: Kestrel's own player started%s" % (variant, " on the stream" if expect == "native-hls" else " on the file"), bool(started) and (expect != "native-hls" or any("HLS" in e["rest"] for e in started)), "native start lines %s" % [e["rest"][:60] for e in started])
@@ -2261,6 +2263,14 @@ class Soak:
                 check("%s: Kestrel's own player showed its first picture" % variant, bool(ev("native", "first-picture", m)), "no 'native first-picture' line")
                 m2 = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(3)
                 check("%s: Back ends Kestrel's own player and the page is in front again" % variant, bool(ev("native", "stop", m2)), "no 'native stop' line")
+                if variant == "file":                                                       # (the film is Kestrel's now: the engine's own play button pressed again asks the app again, the page's element was paused by the first yes)
+                    m4, r4 = self.log.size(), self.lab.size()
+                    time.sleep(2); self.ph.tap(*at); time.sleep(9)
+                    t4, s4 = ev("video", "hand-over", m4), ev("native", "start", m4)
+                    self.ho_events.append(("file, pressed again", ", ".join("%s>%s" % (r.get("type"), r.get("tgt")) for r in self.lab.since(r4) if r.get("kind") == "ap" and r.get("ev") == "evt") or "nothing at all"))
+                    check("file: pressed again with the page in front, Kestrel's own player takes the film again", bool(t4) and bool(s4), "hand-over lines %d, native start lines %d" % (len(t4), len(s4)))
+                    m5 = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(3)
+                    check("file: Back ends it again", bool(ev("native", "stop", m5)), "no 'native stop' line")
                 self.ho_table.append((variant, "yes: " + ("stream" if expect == "native-hls" else "file"), "no", "yes" if ev("native", "first-picture", m) else "no"))
             elif expect == "page":
                 check("%s: nothing to take over (no playlist anywhere): no hand-over and no second player" % variant, not taken and not started, "hand-over lines %s, native start lines %d" % ([e["rest"][:50] for e in taken], len(started)))
@@ -2711,6 +2721,12 @@ class Soak:
             for row in self.ho_table:
                 L.append("| %s | %s | %s | %s |" % row)
             L.append("")
+            if self.ho_events:
+                L.append("What the page itself saw of each tap (its own listeners on the window; the engine's own controls may keep the tap from the page):")
+                L.append("")
+                for ev_row in self.ho_events:
+                    L.append("- %s: %s" % (ev_row[0], ev_row[1][:300]))
+                L.append("")
         if self.ap_results:
             L.append("## Videos start only when pressed (ANS53a / ANS53b, owner message 53), on the real engine")
             L.append("")
