@@ -58,6 +58,21 @@ Transport: `ShieldsBridge.pageConfig` appends a 5th field to the cfg answer (`<m
 
 Why not more: no per-site list, no rewriting of what a site sends (that is ANS52h for HLS playlists), no change to `<video src>` / `<source type>` selection (the engine decides those itself).
 
+## ANS52h design: the picture size cap for HLS pages (written 2026-11-16 before the code)
+
+Why it matters most: the owner's own diagnostics (research/TABLET_DIAG_2026-11-16.md) show the Yahoo film is a Boltdns HLS stream and the page's player picked 1920x1080 in a 600x947 view: the site's default, no cap (hls.js: capLevelToPlayerSize and capLevelOnFPSDrop are false). The screen is 973x600 in landscape, so a 1080p picture is decoded, copied by the GPU and drawn at 1.9 times the pixels the glass can show, over a 5 Mbit/s hotspot that a 1080p rung can fill by itself.
+
+The lever: the extension answers the player's request for the MASTER playlist with the rungs above the cap removed (webRequest.filterResponseData). The player then never sees them and its own ABR picks among the rest. Rules:
+- only HLS master playlists: a request whose address path ends in .m3u8 (or whose content type says mpegurl) of type xmlhttprequest / media / other, in `onHeadersReceived` (the latest point filterResponseData may be called), status 200, and only when the cap is on;
+- the filter is attached ONLY when the response has no content-encoding (or identity). Gecko may hand the filter decoded or raw bytes: until the lab proves which, a compressed response is left alone and counted ("compressed, left alone"); `onBeforeSendHeaders` asks for `Accept-Encoding: identity` for exactly these requests so that most servers answer plain (a playlist is a few KB);
+- the body is buffered (at most 512 KB, otherwise written back unchanged), a text that is not a master playlist (no `#EXT-X-STREAM-INF`) is written back byte for byte;
+- a rung is dropped when its RESOLUTION's longer side is above the cap (`#EXT-X-STREAM-INF` + its address line, and `#EXT-X-I-FRAME-STREAM-INF` lines with RESOLUTION); a rung without RESOLUTION is kept; at least the smallest rung with a RESOLUTION always stays; every other line, the line endings and the order stay as they were;
+- never an error for the page: on any doubt (a throw, a stream error, a body that is not text) the original bytes are written back, or `disconnect()` is called before anything was changed.
+
+The cap: Settings "Picture size from sites": Automatic (default) = no picture whose longer side is more than 1.35 times the screen's longer side (973 px -> 1313 px: 720p stays, 1080p goes; the phone's 2400 px -> no cap), Off, 480p (854), 720p (1280), 1080p (1920). The app sends the number of pixels (0 = off) as the 6th field of the page answer; the extension needs no list and no per-site setting. Diagnostics: playlists seen, rewritten, rungs dropped, left alone (compressed, too big, not a master), the last cap and rung counts.
+
+Not done on purpose: no DASH (.mpd) rewriting, no `mediaCapabilities` answer by size (a site with ONE 1080p rendition would then refuse to play), no change for progressive files (nothing to choose) or for Gecko's own HLS player (it fetches in Java, past webRequest).
+
 ## What to ask the owner for next
 
 The same four Diagnostics lines of message 51 plus, new in alpha56: `Full-screen video controls` (page stalls, own cost, frames), `Real video`, `Turning under a video` (first frame, silent pages), `Frames around turns`, `Video decoders`, `Heat and speed`. Test once on the Yahoo page and once on a light video page.
