@@ -1,21 +1,22 @@
-# CHECKPOINT 2536 — read me first, then TASKS.md
+# CHECKPOINT 2537 — read me first, then TASKS.md
 
-**Written:** 2026-11-16T17:35:42Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `00ce5a14` (this checkpoint is the commit after it)
+**Written:** 2026-11-16T17:39:18Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `a53b4436` (this checkpoint is the commit after it)
 
 ## Just done
-ANS57 lab scene: the gesture info and the level bars are now photographed while the finger is down (raw_path end_hold_s + with_shot threads); the queued gp run 43919867824 (older scene) cancelled to save runner minutes
+owner message 58 written into TASKS.md (ANS58a-d): a PRIVATE tab was reloaded and logged out after switching apps (cause suspected: BrowserActivity.onTrimMemory/hibernate closes the engine session, Gecko clears private cookies when its last private session closes); typing lag while a Cloudflare check loads; the check itself slow. Gesture lab run gp 2 is still running.
 
 ## Do this next
-Dispatch lab gp (android.yml app=lab lab_suite=gp lab_minutes=1) on this head; read the report + the shots (gp-A-2-volume-while-dragging, gp-A-3-brightness-while-dragging, gp-A-4-seek-info-while-dragging) with the Read tool; fix; then lab vp; then ship alpha60.
+1) read the gp lab run (dispatched ~17:36Z; artifacts when done) and the web-run2 result; 2) ANS58c FIRST (clear bug): read BrowserActivity.onTrimMemory / hibernate / enforceLiveLimit / LiveBudget for private tabs: never hibernate or close a private tab's session by memory handling; core rule + OwnerRules guard; 3) ANS58b/a: look at what the app does on its UI thread while a page loads and a field is focused (captureLook, Neon, saveSessionNow, flushCounters, the shields round trips) and add a lab scene typing into a field during a heavy page load; 4) alpha60 ship includes these.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  3fb0e402 ckpt 2536: ANS57 lab scene: the gesture info and the level bars are now photographed wh
   9a20b91e ckpt 2535: ANS57 lab gp run 1 (43918159286): volume / brightness drags, dead zone, plai
   e3cd26c4 ckpt 2534: ANS57: lab suite gp DISPATCHED: run 43918159286 (head 55e61f02, started 17:2
   55e61f02 ckpt 2533: ANS57 coded end to end + lab scene written: gp suite (soak.py gp_scene: A = 
@@ -25,8 +26,7 @@ Dispatch lab gp (android.yml app=lab lab_suite=gp lab_minutes=1) on this head; r
   736bac20 ckpt 2529: ANS55f lab run 1 (ip, 43911183498): the inline player WORKS on the real engi
   6d700eee ckpt 2528: ANS55f: lab run 1 of suite ip DISPATCHED: run 43911183498 (head 72df6d09, st
   72df6d09 ckpt 2527: ANS55f: inline player coded + unit suites ALL green (core, app, geckoapp; gu
-  441aa19c ckpt 2526: ANS55f step 2 coded and COMPILES (:geckoapp:compileDebugKotlin ok): PlayerFa
 ```
 
-(1 automatic checkpoint(s) since the last deliberate one — the
+(3 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
