@@ -2191,3 +2191,7 @@
 ## 2026-11-16T18:11:28Z
 > The lab step started at 18:08:50 and usually takes about 3 to 4 minutes; I'll read the artifacts at the next timer.
 <!-- sha:7dfdca210b6d -->
+
+## 2026-11-16T18:11:44Z
+> Artifacts aren't up yet; the lab is probably spending extra time on the new hold-and-drag steps. Waiting for the next timer.
+<!-- sha:260e18066562 -->
