@@ -431,6 +431,21 @@
     document.addEventListener(READY, push, true); // the page-side script may come up after our first answer
     // ANS52g: the page-side video format policy (codec-main.js) is told the policy the app wants (the `cx` of the guard answer below: "" = none) and reports what it refused: numbers and one short word. Any page script
     // can dispatch the same event, so what comes in is checked, the word is cut to a few characters and a document gets only a handful of reports through.
+    // ANS53a / ANS53b: the page-side gate (gate-main.js: no video loads or starts before the person presses it) is told whether the rule is on (`gt` of the guard answer; closed until then) and says what it held and
+    // opened: seven numbers, checked here (any page script can dispatch the same event), a handful per document.
+    var GCFG = '__kst_gate_cfg_v1', GREP = '__kst_gate_rep_v1', GREADY = '__kst_gate_ready_v1', gt = null, gReports = 0;
+    function pushGate() { if (gt !== null) { try { document.dispatchEvent(new CustomEvent(GCFG, { detail: gt ? '1' : '0' })); } catch (e) { /* ignore */ } } }
+    document.addEventListener(GREADY, pushGate, true);
+    document.addEventListener(GREP, function (e) {
+      try {
+        if (gReports >= 8 || typeof e.detail !== 'string') return;
+        var p = e.detail.slice(0, 80).split('|'), n = [], i;
+        if (p.length !== 7) return;
+        for (i = 0; i < 7; i++) { var v = parseInt(p[i], 10); if (!(v >= 0 && v <= 1000000)) return; n.push(v); }
+        gReports++;
+        browser.runtime.sendMessage({ k: 'vgt', n: n }).catch(function () {});
+      } catch (x) { /* ignore */ }
+    }, true);
     var CCFG = '__kst_codec_cfg_v1', CREP = '__kst_codec_rep_v1', CREADY = '__kst_codec_ready_v1', cx = null, cReports = 0;
     function pushCodec() { if (cx !== null) { try { document.dispatchEvent(new CustomEvent(CCFG, { detail: cx })); } catch (e) { /* ignore */ } } }
     document.addEventListener(CREADY, pushCodec, true);
@@ -550,7 +565,7 @@
       } catch (e) { /* ignore */ }
       return undefined;
     });
-    browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { wanted = !(r && r.on === false); topHost = (r && r.top) ? String(r.top) : ''; push(); cx = (r && typeof r.cx === 'string') ? r.cx.slice(0, 160) : ''; pushCodec(); if (r && r.lab === true && window.KestrelVF) window.KestrelVF.probe(); }, function () {});
+    browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { wanted = !(r && r.on === false); topHost = (r && r.top) ? String(r.top) : ''; push(); cx = (r && typeof r.cx === 'string') ? r.cx.slice(0, 160) : ''; pushCodec(); gt = !(r && r.gt === false); pushGate(); if (r && r.lab === true && window.KestrelVF) window.KestrelVF.probe(); }, function () {});
   } catch (e) { /* never break the page */ }
 })();
 

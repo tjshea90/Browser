@@ -175,7 +175,7 @@ function markStats() { // lazy timer: nothing is scheduled while no request is b
 function reportStats(force) {
   if (!force && !statsDirty) return;
   statsDirty = false;
-  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, lt: lstText(), rv: rvText().slice(0, 300), vx: vcxText().slice(0, 240), hx: hlsText().slice(0, 300), w: (guardState + ', ' + guardBlocked + ' blocked' + assistText() + skipText() + ' | ' + slState + (slPages ? ', ' + slPages + ' pages ran ' + slCalls + ' calls' + (slBad ? ' (' + slBad + ' failed)' : '') + ', ' + slEarlyPages + ' before the page\'s first script' : '') + (slEarlySet ? ', ' + slEarlySet + ' sites set up early (' + slReg.size + ' kept, ' + slEarlyAsks + ' asks)' : '') + (standIns ? ', ' + standIns + ' blocked files answered with a stand-in' : '') + (slEarlyFail ? ', early error: ' + slEarlyFail : '') + ' | ' + stats.last).slice(0, 400) }).catch(function () {});
+  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, lt: lstText(), rv: rvText().slice(0, 300), vx: vcxText().slice(0, 240), hx: hlsText().slice(0, 300), vg: vgtText().slice(0, 300), w: (guardState + ', ' + guardBlocked + ' blocked' + assistText() + skipText() + ' | ' + slState + (slPages ? ', ' + slPages + ' pages ran ' + slCalls + ' calls' + (slBad ? ' (' + slBad + ' failed)' : '') + ', ' + slEarlyPages + ' before the page\'s first script' : '') + (slEarlySet ? ', ' + slEarlySet + ' sites set up early (' + slReg.size + ' kept, ' + slEarlyAsks + ' asks)' : '') + (standIns ? ', ' + standIns + ' blocked files answered with a stand-in' : '') + (slEarlyFail ? ', early error: ' + slEarlyFail : '') + ' | ' + stats.last).slice(0, 400) }).catch(function () {});
 }
 
 // ---------------------------------------------------------------- the page report (Diagnostics > Page report)
@@ -293,6 +293,12 @@ function skipText() { return (skipAsked || skipReports) ? ' | ad skippers: asked
 var guardBlocked = 0;
 // ANS52g: what the page-side video format policy (codec-main.js) refused, summed over all pages and frames since the extension started; shown in Diagnostics ("Video formats offered to sites")
 var vcx = { reports: 0, asked: 0, size: 0, mode: 0, fps: 0, last: '' };
+// ANS53a / ANS53b: what the page-side gate (gate-main.js) held back and opened, summed over all pages and frames since the extension started ("Videos start only when pressed" in Diagnostics)
+var vgt = { reports: 0, held: 0, opened: 0, play: 0, press: 0, kestrel: 0, deferred: 0, refused: 0 };
+function vgtText() {
+  if (!vgt.reports) return '';
+  return 'held back ' + vgt.held + ' (preload / autoplay of the markup), ' + vgt.deferred + ' script players kept from starting to fetch, refused ' + vgt.refused + ' plays that nobody pressed; opened by the person: ' + vgt.opened + ' (play button ' + vgt.play + ', a tap on the picture ' + vgt.press + ', Kestrel\'s controls ' + vgt.kestrel + ')';
+}
 // ANS52h: what the picture size cap did to the HLS master playlists the pages asked for (shown in Diagnostics: "Picture size cap")
 var hls = { seen: 0, cut: 0, rungs: 0, media: 0, within: 0, notText: 0, big: 0, err: 0, last: '' };
 function hlsText() {
@@ -305,7 +311,7 @@ function vcxText() {
 }
 function trimMap(m, max) { while (m.size > max) m.delete(m.keys().next().value); }
 function guardAnswer(host, topHost) { // on: the pop-up guard applies; skip (RX3-Y2): the ad skipper may run (flag 8: the Settings row and the site's Shields switch); seek (YS1): a tap on a player's bar may move the video (flag 16: the Settings row "Tap the video bar to jump" only)
-  function answer(f) { return { on: (f & 1) !== 0, top: topHost || host, skip: (f & 8) !== 0, seek: (f & 16) !== 0, sg: (f & 32) !== 0, vb: (f & 64) !== 0, vba: (f & 128) !== 0, lab: (f & 256) !== 0, kp: (f & 512) !== 0, cx: codecCfg }; } // vb / vba (VC1): Kestrel's own video bar (Automatic or Always / Always only; the Settings row, not a Shields feature)
+  function answer(f) { return { on: (f & 1) !== 0, top: topHost || host, skip: (f & 8) !== 0, seek: (f & 16) !== 0, sg: (f & 32) !== 0, vb: (f & 64) !== 0, vba: (f & 128) !== 0, lab: (f & 256) !== 0, kp: (f & 512) !== 0, gt: (f & 1024) !== 0, cx: codecCfg }; } // vb / vba (VC1): Kestrel's own video bar (Automatic or Always / Always only; the Settings row, not a Shields feature)
   var f = cfgFlags.get(host);
   if (f !== undefined) return Promise.resolve(answer(f));
   return askCfg(host).then(function () { return answer(cfgFlags.get(host) || 0); });
@@ -318,6 +324,12 @@ browser.runtime.onMessage.addListener(function (m, sender) {
     var gh = (top && pageHost(top)) || m.h;
     if (m.s !== 1) return guardAnswer(gh, (top && pageHost(top)) || '');
     return guardAnswer(gh, (top && pageHost(top)) || '').then(function (r) { skipAsked++; if (r && r.skip === true) skipYes++; markStats(); return r; });
+  }
+  if (m.k === 'vgt') { // ANS53a / ANS53b: what the page-side gate did (seven numbers: held, opened, by play(), by a tap on the picture, by Kestrel's controls, sources held, plays refused; content.js checked them)
+    var gn = Array.isArray(m.n) ? m.n : [], gv = function (i) { var x = +gn[i]; return x >= 0 && x <= 1000000 ? Math.floor(x) : 0; };
+    vgt.reports++; vgt.held += gv(0); vgt.opened += gv(1); vgt.play += gv(2); vgt.press += gv(3); vgt.kestrel += gv(4); vgt.deferred += gv(5); vgt.refused += gv(6);
+    markStats();
+    return undefined;
   }
   if (m.k === 'vcx') { // ANS52g: what the page-side video format policy refused (numbers and one short word; content.js checked them), summed over all pages and frames
     var vn = function (x) { x = +x; return x >= 0 && x <= 1000000000 ? Math.floor(x) : 0; };
