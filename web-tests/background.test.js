@@ -1435,6 +1435,23 @@ test('ANS52h: a list that is no master list, a master list within the cap and by
   assert.match(hx, /cut 0 \(0 rungs taken out\), left as they were: not a master list 1, nothing above the cap 1, not text 3, too big 0, errors 0/);
 });
 
+test('ANS53 review 6: the page gate (flag 1024) stays CLOSED when the app gives no answer, and follows the flag when it does', async () => {
+  const silent = harness((m) => (m.k === 'cfg' ? '' : standardApp()(m)));          // an app that cannot answer (not ready, a bridge error): not an answer
+  silent.mainFrame(PAGE);
+  await tick(20);
+  assert.equal((await silent.message({ k: 'guard', h: 'a.example' }, -1)).gt, true, 'no answer: the person\'s rule is the default');
+  const ruleOff = harness((m) => (m.k === 'cfg' ? `1:1:${ID}:0` : standardApp()(m)));
+  ruleOff.mainFrame(PAGE);
+  await until(() => ruleOff.of('cfg').length >= 1, 'cfg');
+  await tick(10);
+  assert.equal((await ruleOff.message({ k: 'guard', h: 'movie.example' })).gt, false, 'answered, flag 1024 not set: the rule is off');
+  const ruleOn = harness((m) => (m.k === 'cfg' ? `1:1:${ID}:1024` : standardApp()(m)));
+  ruleOn.mainFrame(PAGE);
+  await until(() => ruleOn.of('cfg').length >= 1, 'cfg');
+  await tick(10);
+  assert.equal((await ruleOn.message({ k: 'guard', h: 'movie.example' })).gt, true, 'answered, flag 1024 set: the rule is on');
+});
+
 test('ANS52h: a body above 512 KB is passed on untouched from the first byte (no playlist is that big), also the part that came after', async () => {
   const h = await onPage(hlsApp(1313));
   const big = 'x'.repeat(300000);
