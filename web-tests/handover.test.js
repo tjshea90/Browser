@@ -12,6 +12,8 @@ try { ({ chromium } = require('playwright')); } catch (e) { ({ chromium } = requ
 const SHIELDS = path.join(__dirname, '..', 'geckoapp', 'src', 'main', 'assets', 'kestrel-shields');
 const read = (f) => fs.readFileSync(path.join(SHIELDS, f), 'utf8');
 const VFIND = read('vfind.js'), CONTENT = read('content.js'), GATE = read('gate-main.js');
+// 5 seconds of silence as a WAV file (8 kHz, 8 bit, mono): the smallest thing a <video> element really plays in headless Chromium, so that play, pause and play again behave like a real film
+const WAV = (() => { const rate = 8000, n = rate * 5, b = Buffer.alloc(44 + n, 128); b.write('RIFF', 0); b.writeUInt32LE(36 + n, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(rate, 24); b.writeUInt32LE(rate, 28); b.writeUInt16LE(1, 32); b.writeUInt16LE(8, 34); b.write('data', 36); b.writeUInt32LE(n, 40); return b; })();
 let browser;
 before(async () => { browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] }); });
 after(async () => { await browser.close(); });
@@ -25,6 +27,7 @@ async function open(html, guard, handAnswer) {
   await context.route('https://**/*', (r) => {
     const u = new URL(r.request().url());
     if (u.pathname.endsWith('.mp4')) return r.fulfill({ status: 200, contentType: 'video/mp4', body: Buffer.alloc(2000) });
+    if (u.pathname.endsWith('.wav')) return r.fulfill({ status: 200, contentType: 'audio/wav', body: WAV });         // (a film the engine can really play: silence, 5 s; a <video> plays it like any file)
     return r.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><title>t</title></head><body style="margin:0">${html}</body></html>` });
   });
   const page = await context.newPage();
@@ -126,7 +129,7 @@ test('the engine\'s own controls: a press opens the video, the app is asked, a y
   assert.ok(await page.evaluate(() => window.__pauses) >= 1, 'paused after the yes');
 });
 
-const CONTROLS = '<video id="v" controls src="https://cdn.example/a.mp4" style="display:block;width:320px;height:180px"></video>';
+const CONTROLS = '<video id="v" controls src="https://cdn.example/a.wav" style="display:block;width:320px;height:180px"></video>';
 // what the engine's own controls do on a press: the engine's play(), no tap event for the page (Gecko, lab run 43826954106). Playwright's evaluate() carries a user activation, like the tap would.
 const nativePlay = (page) => page.evaluate(() => { const p = window.__nativePlay.call(document.getElementById('v')); if (p && p.catch) p.catch(() => {}); });
 test('the engine\'s own controls start the film with no tap event reaching the page (Gecko): the engine\'s play event is the press', async () => {
@@ -135,7 +138,7 @@ test('the engine\'s own controls start the film with no tap event reaching the p
   assert.equal(await page.evaluate(() => document.getElementById('v').getAttribute('preload')), 'none', 'closed until pressed');
   await nativePlay(page); await settle(page, 700);
   const q = await vhand(page);
-  assert.equal(q.length, 1, JSON.stringify(q)); assert.equal(q[0].y, 'press'); assert.equal(q[0].s, 'https://cdn.example/a.mp4');
+  assert.equal(q.length, 1, JSON.stringify(q)); assert.equal(q[0].y, 'press'); assert.equal(q[0].s, 'https://cdn.example/a.wav');
   assert.ok(await page.evaluate(() => window.__pauses) >= 1, 'a yes pauses the page\'s copy');
   assert.equal(await page.evaluate(() => document.getElementById('v').getAttribute('preload')), null, 'opened by the press: the page\'s own preload is back');
 });
