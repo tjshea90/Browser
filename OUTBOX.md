@@ -1974,3 +1974,7 @@
 ## 2026-11-16T16:11:56Z
 > Still running; checking again in two minutes.
 <!-- sha:ba39173a6388 -->
+
+## 2026-11-16T16:14:41Z
+> Waiting for the release checks to finish; the release build is dispatched right after.
+<!-- sha:3292d1b5ec5b -->
