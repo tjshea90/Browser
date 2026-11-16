@@ -16,6 +16,10 @@ object WebHandStats {
     @Volatile var failed = 0
     @Volatile var lastDeclined = ""
     @Volatile var lastTaken = ""
+    /** ANS55f: films that played INSIDE the page, how many of them went on in the full-screen player from its button, and how the last one ended (a short word). */
+    @Volatile var inline = 0
+    @Volatile var inlineFull = 0
+    @Volatile var lastInlineEnd = ""
 
     fun line(mode: Int): String {
         val m = when (mode) { 0 -> "Kestrel's player whenever it can"; 1 -> "Kestrel's player in full screen only"; else -> "the page's own player" }

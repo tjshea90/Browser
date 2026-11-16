@@ -23,6 +23,7 @@ class InlineHost(private val a: BrowserActivity, private val content: FrameLayou
     private var track: InlineBox.Track? = null
     private var box: InlineBox.Rect? = null
     private var headers: List<String> = emptyList()
+    private var playing = ""                                       // the address of the film that is up (for the full-screen button)
     private var priv = false
     private var lastLogAt = 0L
     private var updates = 0
@@ -43,7 +44,7 @@ class InlineHost(private val a: BrowserActivity, private val content: FrameLayou
         val s = tab.session ?: return false
         if (view.active) view.stop("a new film")
         this.tab = tab; this.session = s; this.headers = headerLines; this.priv = tab.isPrivateTab
-        this.box = boxNow; this.track = InlineBox.Track(boxNow, page.pageX, page.pageY)
+        this.box = boxNow; this.track = InlineBox.Track(boxNow, page.pageX, page.pageY); this.playing = url
         updates = 0; lastLogAt = 0L
         try { s.compositorScrollDelegate = scrollDelegate } catch (e: Throwable) { Health.log("inline", "scroll-delegate-failed", e.toString().take(80)); cleanup(); return false }
         val cap = Math.min(a.prefs.nativeMaxH.let { if (it > 0) it else 480 }, 480).coerceAtLeast(240)       // a box is small: 480p is plenty and a slow link thanks it
@@ -64,7 +65,7 @@ class InlineHost(private val a: BrowserActivity, private val content: FrameLayou
     }
 
     override fun onEnded(why: String, positionMs: Long, fullscreen: Boolean, failed: Boolean) {
-        val t = tab; val u = lastUrl; val h = headers; val p = priv
+        val t = tab; val u = playing; val h = headers; val p = priv
         cleanup()
         if (!p) { WebHandStats.lastInlineEnd = why; if (fullscreen) WebHandStats.inlineFull++ }
         if (fullscreen && u.isNotEmpty() && t != null && a.current === t) {
@@ -75,10 +76,6 @@ class InlineHost(private val a: BrowserActivity, private val content: FrameLayou
             a.video.nativeFailed()                                              // the page's own player plays its films for two minutes, and the person is told
         }
     }
-
-    private var lastUrl = ""
-        get() = field
-    init { /* the address is kept by start(): see urlOf */ }
 
     override fun toPage(e: MotionEvent) {
         val c = MotionEvent.obtain(e)
