@@ -278,28 +278,34 @@ window.KestrelVP = window.KestrelVP || (function () {
     var CHROME = '.ytp-chrome-top,.ytp-chrome-bottom,.ytp-gradient-top,.ytp-gradient-bottom,.ytp-pause-overlay,.player-controls-top,.player-controls-bottom,.player-controls-background,' +
       '.shaka-controls-container,.shaka-play-button-container,.vjs-control-bar,.vjs-big-play-button,.jw-controls,.jw-controls-backdrop,.plyr__controls,.plyr__control--overlaid,' +
       '.mejs__controls,.mejs__overlay-play,.fp-controls';
+    function chromeIn(root, depth, out) {                // the page's control elements inside [root], also inside the shadow trees below it (open or closed: Firefox gives a content script both)
+      var list = null, all = null, i, sr;
+      try { list = root.querySelectorAll(CHROME); } catch (e) { list = null; }
+      for (i = 0; list && i < list.length && out.length < 120; i++) out.push(list[i]);
+      if (depth >= 4) return;
+      try { all = root.querySelectorAll('*'); } catch (e1) { all = null; }
+      for (i = 0; all && i < all.length && i < 4000; i++) { sr = VF.rootOf(all[i]); if (sr) chromeIn(sr, depth + 1, out); }
+    }
     function putAway(s) {
       s.awayAt = Date.now();
       try { if (s.v.controls) { s.native = true; s.v.controls = false; } } catch (e0) { /* the engine's bar stays */ }
       for (var g = 0; g < s.gone.length; g++) {                                // a page that sets the element's display again (inline, without !important) gets it taken away again
         try { var st = s.gone[g].el.style; if (st.getPropertyValue('display') !== 'none' || st.getPropertyPriority('display') !== 'important') st.setProperty('display', 'none', 'important'); } catch (e6) { /* gone */ }
       }
-      var roots = [], rn = null;
+      var found = [], own = null, rn = null;
+      try { own = VF.rootOf(s.fs); } catch (e2) { own = null; }                // the full-screen element may itself be a host of the player's shadow tree (finance.yahoo.com)
+      if (own) chromeIn(own, 1, found);
+      chromeIn(s.fs, 0, found);
       try { rn = s.v.getRootNode ? s.v.getRootNode() : null; } catch (e1) { rn = null; }
-      if (rn && rn.querySelectorAll) roots.push(rn);
-      if (rn !== document && document.querySelectorAll) roots.push(document);
-      for (var r = 0; r < roots.length; r++) {
-        var list;
-        try { list = roots[r].querySelectorAll(CHROME); } catch (e2) { continue; }
-        for (var i = 0; i < list.length && s.gone.length < 80; i++) {
-          var el = list[i], known = false;
-          for (var k = 0; k < s.gone.length; k++) if (s.gone[k].el === el) { known = true; break; }
-          if (known || !within(s.fs, el)) continue;
-          try {
-            s.gone.push({ el: el, old: el.style.getPropertyValue('display'), prio: el.style.getPropertyPriority('display') });
-            el.style.setProperty('display', 'none', 'important');
-          } catch (e3) { /* not an element with a style */ }
-        }
+      if (rn && rn !== document && rn.querySelectorAll) chromeIn(rn, 1, found);    // the film's own tree, when the full-screen element lies above it
+      for (var i = 0; i < found.length && s.gone.length < 80; i++) {
+        var el = found[i], known = false;
+        for (var k = 0; k < s.gone.length; k++) if (s.gone[k].el === el) { known = true; break; }
+        if (known || !within(s.fs, el)) continue;
+        try {
+          s.gone.push({ el: el, old: el.style.getPropertyValue('display'), prio: el.style.getPropertyPriority('display') });
+          el.style.setProperty('display', 'none', 'important');
+        } catch (e3) { /* not an element with a style */ }
       }
     }
     function bringBack(s) {

@@ -312,3 +312,22 @@ test('VP2: the engine\'s own bar is put away again when the page turns it on aga
   await page.waitForFunction(() => document.getElementById('v').controls === false, null, { timeout: 4000 });
   await page.context().close();
 });
+
+test('VP2: the page\'s own controls are found inside nested shadow trees below the full-screen element too (finance.yahoo.com shape)', async () => {
+  const NESTED = `<div id="host" style="position:fixed;left:0;top:0;width:300px;height:200px"></div>
+    <script>var a = document.getElementById('host').attachShadow({ mode: 'open' });
+      a.innerHTML = '<div id="ui" style="width:100%;height:100%"><video id="v" src="https://cdn.example/film.wav" preload="auto" muted style="width:100%;height:100%"></video><div id="innerhost"></div></div>';
+      var b = a.getElementById('innerhost').attachShadow({ mode: 'open' });
+      b.innerHTML = '<div id="deep" class="shaka-controls-container" style="display:flex;position:absolute;left:0;bottom:0;width:100px;height:30px">bar</div>';
+      window.__deep = function () { return getComputedStyle(b.getElementById('deep')).display; };
+      window.__deepV = function () { return a.getElementById('v'); };</script>`;
+  const page = await open(NESTED, { player: true, cfg: { kp: true } });
+  await page.evaluate(() => { window.KestrelVP.c.idle = 300; window.KestrelVP.c.busy = 300; });
+  assert.equal(await page.evaluate(() => window.__deep()), 'flex');
+  await page.evaluate(() => document.getElementById('host').requestFullscreen());
+  await firstState(page);
+  await page.waitForFunction(() => window.__deep() === 'none', null, { timeout: 5000 });
+  await page.evaluate(() => document.exitFullscreen());
+  await page.waitForFunction(() => window.__deep() === 'flex', null, { timeout: 5000 });
+  await page.context().close();
+});
