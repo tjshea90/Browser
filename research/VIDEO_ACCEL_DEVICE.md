@@ -14,7 +14,7 @@ Method: web sources read 2026-11-16; no code run, no device. DOCUMENTED = read i
 8. No Gecko pref makes the resize asynchronous; the TextureView backend resizes synchronously too and is slower [G13 G14]. Best lever is app side: hold GeckoView at its old frame for the first traversal, cover, resize after the first draw (test in lab); Chromium also hides rotation jank with black [X1].
 9. Seamless rotation is probably refused here (nav bar stays at the bottom) [A6]; JUMPCUT saves only the rotate animation; animation scale 0 does not remove the freeze (INFERRED) [A4 A5].
 10. Gecko's vsync is the app's UI-thread Choreographer [G10]: any UI-thread work (overlay, glows, resize) delays video frames.
-11. "mem trim level 5/10" is not a memory fact: Gecko ignores trim levels below 15 except 40 and up [G11].
+11. "mem trim level 5/10" is not a memory fact: Gecko acts only on trim level 15 and on 40 and up [G11].
 12. Not verifiable without the tablet: DVFS, thermal, zram, vendor overlay values, real decoder throughput (commands at the end).
 
 ## A. The hardware
