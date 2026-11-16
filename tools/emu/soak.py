@@ -1720,7 +1720,7 @@ class Soak:
         check("ANS52a: a turn holds the engine's view at its old size for the first frame and gives it the new size after that frame", bool(holds) and len(rels) >= len(holds), "holds %d, released %d" % (len(holds), len(rels)))
         check("ANS52a: the app's window drew its first frame at the new size within 3 s of every turn (times %s ms)" % ff_ms, bool(ff_ms) and max(ff_ms) < 3000, "first-frame lines: %s" % ff_ms)
         self.kp_ff = ff_ms
-        # double taps: a double tap on a side seeks and must NOT toggle the controls; in the middle it plays / pauses
+        # double taps (ANS53c, owner message 53: "zero delay"): the FIRST tap toggles the controls at once, the second tap on a side within 300 ms is the seek; the middle has no double-tap meaning (two toggles, no command)
         time.sleep(4.0)                                                              # (they hide by themselves)
         cx, cy = vw // 2, 26 + vh // 2
         m = self.log.size(); seeks0 = len(rows("v-seeked")); sh0 = len(ev("player", "shown", m)) + len(ev("player", "hidden", m))
@@ -1728,14 +1728,20 @@ class Soak:
         cmds = ev("player", "cmd", m)
         check("a double tap on the right side skips 10 s forward", any('"skip"' in c["rest"] and '"d":10' in c["rest"] for c in cmds), "commands %s" % [c["rest"][:30] for c in cmds])
         check("the film really jumped (the page saw 'seeked')", len(rows("v-seeked")) > seeks0, "no seeked row")
-        check("the double tap did not toggle the controls", len(ev("player", "shown", m)) + len(ev("player", "hidden", m)) == sh0, "toggles after the double tap: %d" % (len(ev("player", "shown", m)) + len(ev("player", "hidden", m)) - sh0))
+        check("the double tap toggled the controls exactly once (its first tap, at once) and the second tap only seeked", len(ev("player", "shown", m)) + len(ev("player", "hidden", m)) - sh0 == 1, "toggles after the double tap: %d" % (len(ev("player", "shown", m)) + len(ev("player", "hidden", m)) - sh0))
         self.shot("kp-7-double-tap-right")
         m = self.log.size()
         double_tap(int(vw * 0.15), cy - 120); time.sleep(1.4)
         check("a double tap on the left side skips back", any('"d":-10' in c["rest"] for c in ev("player", "cmd", m)), "")
         m = self.log.size()
+        sh1 = len(ev("player", "shown", m)) + len(ev("player", "hidden", m))
         double_tap(cx, cy - 200); time.sleep(1.4)
-        check("a double tap in the middle pauses or plays", any('"pause"' in c["rest"] or '"play"' in c["rest"] for c in ev("player", "cmd", m)), "commands %s" % [c["rest"][:20] for c in ev("player", "cmd", m)])
+        mid_cmds = [c["rest"][:20] for c in ev("player", "cmd", m) if '"pause"' in c["rest"] or '"play"' in c["rest"] or '"skip"' in c["rest"]]
+        check("two quick taps in the middle are two toggles and make no command (no pause by accident)", not mid_cmds and len(ev("player", "shown", m)) + len(ev("player", "hidden", m)) - sh1 == 2, "commands %s, toggles %d" % (mid_cmds, len(ev("player", "shown", m)) + len(ev("player", "hidden", m)) - sh1))
+        taps_here = [e for e in ev("player", "tap") if "on the screen itself" in e["rest"]]
+        ms_list = [int(mm.group(1)) for mm in (re.search(r"itself, (\d+) ms after", e["rest"]) for e in taps_here) if mm]
+        check("ANS53c: taps on the picture are answered on the glass itself, within 150 ms of the finger lifting (the lab's times: %s)" % ms_list[-8:], bool(ms_list) and max(ms_list) <= 150, "no tap on the glass was logged" if not ms_list else "worst %d ms" % max(ms_list))
+        shown_fades = [e for e in ev("player", "shown") if "fade" in e["rest"]]
         # mute and exit
         ensure_shown()
         m = self.log.size(); self.ph.tap(vw - 40, 26 + vh - 40); time.sleep(1.2)
