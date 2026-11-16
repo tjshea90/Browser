@@ -718,6 +718,9 @@ class Soak:
         self.cp_results = []                   # ANS52g: the page's video format policy on the real engine (suite cp)
         self.cp_table = []                     # (label, row, mse, can, mc) of every case
         self.cp_line = ""
+        self.hs_results = []                   # ANS52h: the picture size cap for HLS pages on the real engine (suite cp, second part)
+        self.hs_table = []
+        self.hs_line = ""
         self.kp_wake = []                      # (label, the wake-lock lines of `dumpsys power`) while the film plays in full screen and after it ended
         self.kp_ff = []                        # ANS52a: ms from each turn to the app window's first frame at the new size (kp scene)
         self.kp_pic_path = ""                  # ANS51b: how the film's picture size reached automatic turning (known at entry, or from the player's first report)
@@ -1926,6 +1929,82 @@ class Soak:
         self.record({"kind": "formats", "name": "video-formats-policy", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
         self.check_alive("video-formats-policy")
 
+    # ANS52h (owner message 52, research/VIDEO_ACCELERATION.md section "ANS52h design"): the picture size cap for HLS pages on the REAL engine. The lab page /hlsfetch asks for four playlists with XMLHttpRequest, as
+    # hls.js does: a master list with four rungs (1920, 1280, 960 and 640 wide) + an audio rung + a picture strip, the same one gzip-compressed (a CDN does that; this is where the lab learns whether Gecko hands the
+    # extension's filter the decoded or the raw bytes), a media list and a master list that is within every cap. The debug intent `vcap` plays the five settings; what the page received is compared with what
+    # each setting must leave: rungs and the longest picture side. A playlist the extension cannot read is passed on untouched, so the gzip row may legitimately come back unchanged: it is reported either way.
+    HS_CASES = [("off", "1"), ("auto", "0"), ("p480", "2"), ("p720", "3"), ("p1080", "4")]
+    HS_EXPECT = {                                         # case -> name -> (stream-inf lines, longest picture side, picture strips)
+        "off": {"master": (5, 1920, 1), "master-small": (3, 960, 0)},
+        "auto": {"master": (4, 1280, 0), "master-small": (3, 960, 0)},
+        "p480": {"master": (2, 640, 0), "master-small": (2, 640, 0)},
+        "p720": {"master": (4, 1280, 0), "master-small": (3, 960, 0)},
+        "p1080": {"master": (5, 1920, 1), "master-small": (3, 960, 0)},
+    }
+
+    def hls_scene(self):
+        checks = []
+        def check(name, ok, detail=""):
+            checks.append({"check": name, "ok": bool(ok), "detail": detail if not ok else ""})
+            if not ok:
+                self.issue("high", "hls-cap", "%s %s" % (name, detail))
+        got = {}
+        for label, arg in self.HS_CASES:
+            self.ph.debug("vcap", arg)
+            time.sleep(2.5)
+            rmark = self.lab.size()
+            self.ph.open_url("%s/hlsfetch?tag=%s" % (self.lab_base, label))
+            t0 = time.time()
+            while time.time() - t0 < 40 and not [r for r in self.lab.since(rmark) if r.get("kind") == "hls" and r.get("tag") == label and r.get("pass") == "b"]:
+                time.sleep(1)
+            time.sleep(1)
+            self.shot("hs-" + label)
+            passes = {}
+            for r in self.lab.since(rmark):
+                if r.get("kind") != "hls" or r.get("tag") != label:
+                    continue
+                rows = {}
+                for item in (r.get("d") or "").split(","):
+                    f = item.split(":")
+                    if len(f) == 6:
+                        rows[f[0]] = (f[1], int(f[2] or 0), int(f[3] or 0), int(f[4] or 0), int(f[5] or 0))   # status, length, stream-inf lines, longest side, strips
+                passes[r.get("pass")] = rows
+            got[label] = passes
+            check("%s: the page fetched its four playlists (both passes)" % label, "a" in passes and "b" in passes and len(passes.get("b", {})) == 4, "passes %s" % {k: len(v) for k, v in passes.items()})
+        off = got.get("off", {}).get("b", {})
+        check("without a cap the master list arrives whole (5 stream tags, 1920 wide, a picture strip)", off.get("master", (0, 0, 0, 0, 0))[2:] == (5, 1920, 1), "got %s" % (off.get("master"),))
+        for label, _ in self.HS_CASES:
+            rows = got.get(label, {}).get("b", {})
+            for name, want in self.HS_EXPECT[label].items():
+                row = rows.get(name)
+                have = (row[2], row[3], row[4]) if row else None
+                check("%s: %s arrives with %d stream tags, longest side %d, %d picture strips" % (label, name, want[0], want[1], want[2]), have == want, "got %s" % (have,))
+            m = rows.get("media")
+            check("%s: a media playlist is passed on byte for byte" % label, bool(m) and bool(off.get("media")) and m[1] == off["media"][1] and m[2] == 0, "got %s, without a cap %s" % (m, off.get("media")))
+            gz = rows.get("master-gz")
+            ref = rows.get("master")
+            check("%s: the gzip-compressed master list reaches the page whole and readable (cut like the plain one or untouched)" % label,
+                  bool(gz) and gz[0] == "200" and gz[2] > 0 and ((ref and (gz[2], gz[3], gz[4]) == (ref[2], ref[3], ref[4])) or (gz[2], gz[3], gz[4]) == (5, 1920, 1)), "got %s, plain list %s" % (gz, ref))
+            self.hs_table.append((label, "master", ) + tuple(rows.get("master", ("?",) * 5)))
+            self.hs_table.append((label, "master-gz", ) + tuple(rows.get("master-gz", ("?",) * 5)))
+        gz_cut = [l for l, _ in self.HS_CASES[1:4] if got.get(l, {}).get("b", {}).get("master-gz", (0, 0, 0, 0, 0))[2:] != (5, 1920, 1)]
+        self.hs_gzip = "the gzip-compressed list was cut like the plain one (the filter gets DECODED bytes)" if len(gz_cut) == 3 else ("the gzip-compressed list was passed on untouched (the filter gets RAW bytes, or the extension left it alone)" if not gz_cut else "mixed: cut in %s" % gz_cut)
+        late = [l for l, _ in self.HS_CASES if got.get(l, {}).get("a") != got.get(l, {}).get("b")]
+        check("the cap was already there at the page's first requests (1.5 s after it started)", not late, "pass a differs from pass b in %s" % late)
+        self.dump_diag("hs")
+        diag = ""
+        try:
+            diag = open(os.path.join(self.out, "diagnostics-hs.txt")).read()
+        except OSError:
+            pass
+        line = [ln for ln in diag.splitlines() if ln.startswith("Picture size cap for HLS pages")]
+        self.hs_line = line[-1] if line else ""
+        check("Diagnostics says what the extension did to the playlists (cut count above 0)", bool(line) and re.search(r"cut ([1-9]\d*) \(", line[-1]) is not None, "line: %s" % (line[-1][-300:] if line else "none"))
+        self.ph.debug("vcap", "0")                         # the owner's default again
+        self.hs_results = checks
+        self.record({"kind": "hls", "name": "hls-picture-cap", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
+        self.check_alive("hls-picture-cap")
+
     # ---- the whole run
     # ---- VC1 / LP1 (owner message 44): a video with no controls gets Kestrel's own bar when it is tapped; a long press on a video opens the video options and never the floating panel
     VBAR_PAGES = [("naked", "/video/vc?kind=naked", "shown"), ("shadow-root", "/video/vc?kind=shadow", "shown"), ("shadow-root + frame over it", "/video/vc?kind=shadow&ad=1", "shown"), ("own controls", "/video/vc?kind=own", "own")]
@@ -2314,6 +2393,26 @@ class Soak:
             L.append("| :- | :- | :- |")
             for c in self.np_results:
                 L.append("| %s | %s | %s |" % (c["check"], "ok" if c["ok"] else "**FAILED**", (c["detail"] or "")[:160].replace("|", "/")))
+            L.append("")
+        if self.hs_results:
+            L.append("## The picture size cap for HLS pages on the real engine (ANS52h, owner message 52)")
+            L.append("")
+            L.append("| check | result | detail |")
+            L.append("| :- | :- | :- |")
+            for c in self.hs_results:
+                L.append("| %s | %s | %s |" % (c["check"], "ok" if c["ok"] else "**FAILED**", (c["detail"] or "")[:160].replace("|", "/")))
+            L.append("")
+            L.append("What the gzip test showed: %s." % getattr(self, "hs_gzip", "not run"))
+            L.append("")
+            if self.hs_line:
+                L.append("Diagnostics line: %s" % self.hs_line[:700])
+                L.append("")
+            L.append("What the page received (status, bytes, stream tags, longest picture side, picture strips):")
+            L.append("")
+            L.append("| setting | playlist | status | bytes | stream tags | longest side | strips |")
+            L.append("| :- | :- | :- | -: | -: | -: | -: |")
+            for row in self.hs_table:
+                L.append("| %s | %s | %s | %s | %s | %s | %s |" % row)
             L.append("")
         if self.cp_results:
             L.append("## The page's video format policy on the real engine (ANS52g, owner message 52)")
@@ -2784,6 +2883,7 @@ def main():
             s.np_scene()
         if a.suite == "cp":
             s.cp_scene()
+            s.hls_scene()
         if a.suite == "yh":
             s.yahoo_fullscreen()                             # (only the live Yahoo Finance player in full screen with Kestrel's controls: about 4 minutes)
         if a.suite == "fsy":
