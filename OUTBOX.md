@@ -2251,3 +2251,7 @@
 ## 2026-11-16T18:27:16Z
 > Unit suites are green on the alpha60 head. The gp lab run is about a minute old; I'll read it when the timer fires, around 18:33Z.
 <!-- sha:666db3187239 -->
+
+## 2026-11-16T18:34:39Z
+> The vp run is about 2 minutes in and should take 15 to 20. I'm waiting on a timer and will read the full report when it finishes.
+<!-- sha:7d9522cd8c0d -->
