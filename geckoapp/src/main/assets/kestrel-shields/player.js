@@ -138,7 +138,7 @@ window.KestrelVP = window.KestrelVP || (function () {
       if (d === Infinity) { live = 1; dd = -2; } else if (d > 0) dd = r2(d);
       try { var br = v.buffered; if (br && br.length) b = br.end(br.length - 1); } catch (e) { /* none */ }
       return { k: 'vst', t: r2(v.currentTime || 0), d: dd, b: r2(b), p: v.paused ? 1 : 0, e: v.ended ? 1 : 0, m: (v.muted || v.volume === 0) ? 1 : 0, v: Math.round((v.volume || 0) * 100),
-               r: r2(v.playbackRate || 1), rs: v.readyState | 0, ms: isMse(v) ? 1 : 0, l: live, w: v.videoWidth | 0, h: v.videoHeight | 0, ak: S ? S.ack | 0 : 0, aw: S ? S.gone.length : 0 };   // ak = the last command of the app carried out
+               r: r2(v.playbackRate || 1), rs: v.readyState | 0, ms: isMse(v) ? 1 : 0, l: live, w: v.videoWidth | 0, h: v.videoHeight | 0, ak: S ? S.ack | 0 : 0, aw: S ? S.gone.length : 0, er: v.error ? 1 : 0 };   // ak = the last command of the app carried out
     }
     function send(m) {
       var s = S;

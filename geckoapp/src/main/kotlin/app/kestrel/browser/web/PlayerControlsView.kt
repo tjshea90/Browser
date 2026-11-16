@@ -92,7 +92,7 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
         val len = if (known) v.lengthS.toLong() else -1L
         val pp = if (known) (PlayerRules.fraction(v.timeS, v.lengthS) * span).toInt() else 0
         val bp = if (known) (PlayerRules.fraction(v.bufferedS, v.lengthS) * span).toInt() else 0
-        val bits = (if (v.playing) 1 else 0) or (if (v.muted) 2 else 0) or (if (v.buffering) 4 else 0) or (v.kind.ordinal shl 3)
+        val bits = (if (v.playing) 1 else 0) or (if (v.muted) 2 else 0) or (if (v.buffering) 4 else 0) or (v.kind.ordinal shl 3) or (if (v.failed) 32 else 0)
         val changed = sec != dSec || len != dLen || pp != dPlayPx || bp != dBufPx || bits != dBits
         dSec = sec; dLen = len; dPlayPx = pp; dBufPx = bp; dBits = bits
         return changed
@@ -181,6 +181,11 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
 
         // the middle cluster
         drawDisc(c, play, pressed == Hit.PLAY); drawPlayIcon(c, play, v.playing)
+        if (v.failed) {                                                  // the film stopped with an error (a flaky link): say so under the buttons instead of a ring that spins for ever
+            val note = "This video stopped"
+            text.alpha = a
+            c.drawText(note, w / 2f - text.measureText(note) / 2f, play.bottom + dp(40f), text)
+        }
         drawDisc(c, back, pressed == Hit.BACK); drawSkipIcon(c, back, false)
         drawDisc(c, forward, pressed == Hit.FORWARD); drawSkipIcon(c, forward, true)
         // top right: leave full screen

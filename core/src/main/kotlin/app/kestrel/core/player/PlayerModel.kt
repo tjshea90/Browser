@@ -30,10 +30,10 @@ class PlayerModel(private val h: Host) {
      * "pause" again, because a stale report had ended the wait), so it must not undo what the person just saw happen.
      */
     class Sample(val timeS: Double, val lengthS: Double, val bufferedS: Double, val paused: Boolean, val ended: Boolean, val muted: Boolean, val volume: Int, val rate: Double, val ready: Int,
-                 val mse: Boolean, val live: Boolean, val width: Int, val height: Int, val atMs: Long, val ack: Int = 0)
+                 val mse: Boolean, val live: Boolean, val width: Int, val height: Int, val atMs: Long, val ack: Int = 0, val error: Boolean = false)
 
     /** What the controls draw. */
-    class View(val playing: Boolean, val ended: Boolean, val buffering: Boolean, val muted: Boolean, val timeS: Double, val kind: DurationView.Kind, val lengthS: Double,
+    class View(val playing: Boolean, val ended: Boolean, val failed: Boolean, val buffering: Boolean, val muted: Boolean, val timeS: Double, val kind: DurationView.Kind, val lengthS: Double,
                val bufferedS: Double, val rate: Double, val shown: Boolean)
 
     /** A command for the page (`player.js run()`): play, pause, seek (t), skip (d), mute (on), rate (r). */
@@ -111,7 +111,7 @@ class PlayerModel(private val h: Host) {
         if (optMuted != null && (s.ack >= optMutedSeq || s.atMs >= optMutedUntil || optMuted == s.muted)) optMuted = null
         if (optPos != null && (s.ack >= optPosSeq || s.atMs >= optPosUntil)) optPos = null
         val v = view()
-        controls.state(v.playing, v.buffering, v.ended)
+        controls.state(v.playing, v.buffering, v.ended || v.failed)                       // a film that FAILED is like one that ended: the controls come and stay (the research: Media3, Shaka, Chromium)
         h.changed()
     }
 
@@ -119,8 +119,9 @@ class PlayerModel(private val h: Host) {
     fun view(): View {
         val s = last
         val now = h.now()
-        val playing = optPlaying ?: (s != null && !(s.paused || s.ended))
-        val buffering = s != null && playing && !s.ended && s.ready in 0..2
+        val failed = s?.error == true
+        val playing = optPlaying ?: (s != null && !(s.paused || s.ended || failed))
+        val buffering = s != null && playing && !s.ended && !failed && s.ready in 0..2
         val rate = s?.rate ?: 1.0
         val t = when {
             s == null -> 0.0
@@ -130,7 +131,7 @@ class PlayerModel(private val h: Host) {
         }
         val known = shownLength.kind == DurationView.Kind.KNOWN
         val shownT = if (known) t.coerceAtMost(shownLength.seconds) else t
-        return View(playing, s?.ended == true, buffering, optMuted ?: (s?.muted == true), shownT, shownLength.kind, shownLength.seconds, s?.bufferedS ?: 0.0, rate, controls.shown)
+        return View(playing, s?.ended == true, failed, buffering, optMuted ?: (s?.muted == true), shownT, shownLength.kind, shownLength.seconds, s?.bufferedS ?: 0.0, rate, controls.shown)
     }
 
     // ---- the person
