@@ -91,6 +91,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     private lateinit var sheet: QualitySheet
     private lateinit var gestures: VideoGestures                      // ANS57: VLC-style gestures (long press + drag = precise seek, vertical drags = brightness / volume)
     private var gesturesOn = true
+    private var debugTouch: android.content.BroadcastReceiver? = null
     private var fromPage = false                              // ANS54e: started for a film of a web page: a failure before the first picture goes back to the page (RESULT_FAILED)
     private var chosen: QualityLabel.Rung? = null          // the picture the person picked (null = Automatic)
     private var capH = 720
@@ -147,6 +148,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         stage.setOnTouchListener { v, e -> if (gesturesOn) { gestures.onTouch(e); true } else onStageTouch(v, e) }
         stage.addOnLayoutChangeListener { _, l, t, r, bt, ol, ot, orr, ob -> if (r - l != orr - ol || bt - t != ob - ot) fit() }
         setContentView(stage)
+        debugTouch = app.kestrel.browser.web.DebugTouch.attach(this)             // DEBUG builds only (the emulator lab plays a finger path through a broadcast)
 
         try { buildPlayer(url, i.getStringArrayExtra(EXTRA_HEADERS)?.toList().orEmpty(), i.getLongExtra(EXTRA_START_MS, 0L), i.getIntExtra(EXTRA_MAX_H, 720), QualityLabel.decode(i.getStringExtra(EXTRA_PICK)), i.getBooleanExtra(EXTRA_AUTO, false)) }
         catch (e: Throwable) { fail("the player could not start: ${e.javaClass.simpleName}"); return }
@@ -455,6 +457,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     }
 
     override fun onDestroy() {
+        app.kestrel.browser.web.DebugTouch.detach(this, debugTouch); debugTouch = null
         main.removeCallbacks(ticker); main.removeCallbacks(controlsTick)
         if (::gestures.isInitialized) gestures.stop()                          // ANS57: the window's brightness is the tablet's again
         val p = player
