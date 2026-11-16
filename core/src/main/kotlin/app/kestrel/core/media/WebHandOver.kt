@@ -27,8 +27,11 @@ object WebHandOver {
      */
     class Element(val src: String, val blob: Boolean, val mime: String, val loop: Boolean, val w: Int, val h: Int, val timeS: Double, val durS: Double)
 
-    /** A stream or file the sniffer saw in the element's frame: [usable] = not DRM, not a decoy; [durationMs] 0 = the early look has not read it yet. */
-    class Known(val url: String, val kind: MediaKind, val durationMs: Long, val usable: Boolean)
+    /**
+     * A stream or file the sniffer saw in the element's frame: [usable] = not DRM, not a decoy; [durationMs] 0 = the early look has not read it yet; [master] = a MASTER playlist (it lists variants: the pictures),
+     * not the list of one rendition; [seenAt] = when the page last asked for it (milliseconds, any clock, only compared with each other).
+     */
+    class Known(val url: String, val kind: MediaKind, val durationMs: Long, val usable: Boolean, val master: Boolean = false, val seenAt: Long = 0L)
 
     /** Play [url] ([kind] FILE or HLS) from [startMs]. [note] says why, for Diagnostics. */
     class Decision(val url: String, val kind: MediaKind, val startMs: Long, val note: String)
@@ -46,8 +49,7 @@ object WebHandOver {
         if (m == FULLSCREEN && why != Why.FULLSCREEN) return null
         if (el.loop) return null
         if ((el.w in 1 until MIN_BOX_W) || (el.h in 1 until MIN_BOX_H)) return null
-        // the film of the frame: the LONGEST usable HLS stream (one whose length is not read yet counts as a film); a lone short stream is taken too: there is nothing else to choose
-        val film = known.filter { it.usable && it.kind == MediaKind.HLS }.maxWithOrNull(compareBy<Known>({ if (it.durationMs <= 0L) FILM_MS else it.durationMs }, { -it.url.length }))
+        val film = filmOf(known, why)
         val direct = directOf(el)
         return when {
             direct != null -> {
@@ -55,11 +57,30 @@ object WebHandOver {
                 val filmLong = film != null && (film.durationMs <= 0L || film.durationMs >= FILM_MS)
                 if (shortClip && filmLong) make(film!!, el, "an advertisement is in the element: the film of the frame") else make(direct, el, "the element's own address")
             }
-            el.blob && film != null -> make(film, el, "the stream the frame asked for")
-            !el.blob && el.src.isEmpty() && (why == Why.FULLSCREEN || why == Why.LATE) && film != null -> make(film, el, "the stream the frame asked for (full screen)")
+            el.blob && film != null -> make(film, el, "the stream the frame asked for" + (if (film.master) " (a master list)" else " (a bare list)"))
+            !el.blob && el.src.isEmpty() && (why == Why.FULLSCREEN || why == Why.LATE) && film != null -> make(film, el, "the stream the frame asked for (full screen)" + (if (film.master) " (a master list)" else " (a bare list)"))
             else -> null
         }
     }
+
+    /**
+     * The film of the frame (ANS55, owner message 55: Yahoo's player showed the time but a black picture). A player written in script loads a MASTER playlist and then the lists of the renditions it names (the picture,
+     * the sound, the subtitles: Brightcove, which Yahoo uses, puts all three next to the master, every one as long as the film), and the sniffer sees them all. So: a master first (it offers pictures); among masters the
+     * ones as long as a film (an advertisement is shorter); of those the one the page asked for LAST (a player that moves on to another video asks for that video's master last). With no master known a bare media
+     * list is the film only when it is the only HLS list of the frame (renditions come in twos and threes), and never for a list that came late (it may be the first of several).
+     */
+    internal fun filmOf(known: List<Known>, why: Why): Known? {
+        val hls = known.filter { it.usable && it.kind == MediaKind.HLS }
+        val masters = hls.filter { it.master }
+        if (masters.isNotEmpty()) {
+            val long = masters.filter { it.durationMs <= 0L || it.durationMs >= FILM_MS }
+            return (if (long.isNotEmpty()) long else masters).maxWithOrNull(compareBy<Known>({ it.seenAt }, { it.durationMs }, { -it.url.length }))
+        }
+        return if (hls.size == 1 && why != Why.LATE) hls[0] else null
+    }
+
+    /** The address of a playlist that has not been read yet says master ("master.m3u8", "/master/"): a hint for the moment before the early look, never against a list that was read. */
+    fun looksLikeMaster(url: String): Boolean = Regex("(^|[/_.-])master([/_.-]|$)", RegexOption.IGNORE_CASE).containsMatchIn(url.substringBefore('?').substringAfter("://"))
 
     private fun directOf(el: Element): Known? {
         val u = el.src
