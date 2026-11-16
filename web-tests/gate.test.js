@@ -38,6 +38,8 @@ async function open(html, cfg) {
 const box = async (page, sel) => { const b = await page.locator(sel).boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
 const tapOn = async (page, sel) => { const c = await box(page, sel); await page.mouse.click(c.x, c.y); };
 const settle = (page, ms) => page.waitForTimeout(ms || 250);
+// what play() does, without waiting for a film that never gets a byte in these pages (a pending promise is the engine waiting for data)
+const PLAY = "(el) => Promise.race([el.play().then(() => 'ok', (e) => e.name + ': ' + e.message.slice(0, 40)), new Promise((r) => setTimeout(() => r('pending'), 300))])";
 
 const VID = '<video id="v" style="display:block;width:320px;height:180px"></video>';
 const MSE = `<video id="v" style="display:block;width:320px;height:180px"></video><div id="far" style="width:300px;height:100px;margin-top:40px">elsewhere</div>
@@ -59,12 +61,12 @@ test('a MediaSource attach is held: the player gets no sourceopen, so a script p
 
 test('play() without a user activation is refused like the engine would, with a user activation it opens the element and goes through', async () => {
   const page = await open(MSE);
-  const refused = await page.evaluate(() => document.getElementById('v').play().then(() => 'played', (e) => e.name + ': ' + e.message.slice(0, 30)));
+  const refused = await page.evaluate(`(${PLAY})(document.getElementById('v'))`);
   assert.match(refused, /^NotAllowedError: The play method is not allowed/);
   assert.equal(await page.evaluate(() => window.opened), 0);
   await tapOn(page, '#far');                                                // a real tap on the page (not on the picture): a transient user activation
-  const r = await page.evaluate(() => document.getElementById('v').play().then(() => 'ok', (e) => e.name));
-  assert.notEqual(r, 'NotAllowedError', 'inside the activation the call is the page\'s own');
+  const r = await page.evaluate(`(${PLAY})(document.getElementById('v'))`);
+  assert.ok(!/^NotAllowedError: The play method is not allowed by the user agent or the platform in the current context, possibly because the user denied permission/.test(r), 'inside the activation the call is the page\'s own: ' + r);
   await settle(page, 400);
   assert.equal(await page.evaluate(() => window.opened), 1, 'and the held source was applied by it');
 });
@@ -117,9 +119,9 @@ test('a stream (camera, call) is never held and its play() is not refused by the
   const r = await page.evaluate(() => {
     const c = document.createElement('canvas'); c.width = 64; c.height = 36; c.getContext('2d').fillRect(0, 0, 64, 36);
     const v = document.getElementById('v'); v.muted = true; v.srcObject = c.captureStream(5);
-    return v.play().then(() => 'ok', (e) => e.message);
+    return Promise.race([v.play().then(() => 'ok', (e) => e.message), new Promise((res) => setTimeout(() => res('pending'), 400))]);
   });
-  assert.ok(!/The play method is not allowed by the user agent or the platform in the current context, possibly because the user denied permission\.$/.test(r) || r === 'ok', r);
+  assert.ok(!/^The play method is not allowed by the user agent or the platform in the current context, possibly because the user denied permission\./.test(r), r);
 });
 
 test('the setting off lets everything go at once, also what was held before, and elements that come later are not touched', async () => {
@@ -139,7 +141,7 @@ test('the setting off lets everything go at once, also what was held before, and
 test('what was held and opened is counted and reported once as numbers', async () => {
   const page = await open(MSE);
   await settle(page, 300);
-  await page.evaluate(() => document.getElementById('v').play().catch(() => 0));
+  await page.evaluate(`(${PLAY})(document.getElementById('v'))`);
   await tapOn(page, '#v');
   await page.waitForFunction(() => window.__reports.length > 0, null, { timeout: 5000 });
   const rep = await page.evaluate(() => window.__reports);
