@@ -1651,8 +1651,11 @@ class Soak:
         self.shot("kp-5-paused-by-button")
         m = self.log.size(); self.ph.tap(vw // 2, 26 + vh // 2); time.sleep(1.2)
         check("and plays again", any('"play"' in c["rest"] for c in ev("player", "cmd", m)), "")
-        m = self.log.size(); self.ph.tap(vw // 2 + 160, 26 + vh // 2); time.sleep(1.2)
+        step = 102                                                                   # the skip buttons sit 96 dp left and right of the middle (1 dp = 1.0625 px at 170 dpi)
+        m = self.log.size(); self.ph.tap(vw // 2 + step, 26 + vh // 2); time.sleep(1.2)
         check("the 10 s button skips forward", any('"skip"' in c["rest"] and '"d":10' in c["rest"] for c in ev("player", "cmd", m)), "commands %s" % [c["rest"][:30] for c in ev("player", "cmd", m)])
+        m = self.log.size(); self.ph.tap(vw // 2 - step, 26 + vh // 2); time.sleep(1.2)
+        check("and the 10 s button back skips back", any('"d":-10' in c["rest"] for c in ev("player", "cmd", m)), "commands %s" % [c["rest"][:30] for c in ev("player", "cmd", m)])
         # the real turn to portrait (the sensor hand-back waits 650 ms)
         self.ph.physical(9.81, 0, 0); time.sleep(3.0)
         self.ph.physical(0, 9.81, 0); time.sleep(3.0)
@@ -1700,13 +1703,14 @@ class Soak:
         m = self.log.size()
         self.ph.tap(w // 2, 140); time.sleep(2.5); self.ph.dismiss_cling()
         check("Hide mode: the controls show at full screen start", bool(ev("player", "shown", m)), "")
+        # Android 10 does not tell an app that a transient navigation bar was pulled up (lab run 43776782679, picture kp-11), so the controls keep the bar's height free at the bottom the whole time the bars are hidden
+        check("Hide mode: the controls keep the navigation bar's height free at the bottom", any("free at the bottom" in e["rest"] for e in ev("player", "inset", m)), "inset lines: %s" % [e["rest"][:60] for e in ev("player", "inset", m)])
         self.shot("kp-10-hide-mode")
+        ensure_shown()                                                               # (the controls are up when the bar is pulled over them)
         lk = self.ph.look()
         sw, sh = (lk["w"], lk["h"]) if lk else (w, h)
-        m = self.log.size()
-        self.ph.a.sh("input swipe %d %d %d %d 250" % (sw // 2, sh - 2, sw // 2, sh - 160), timeout=20); time.sleep(0.8)   # pull the navigation bar up
-        self.shot("kp-11-navigation-bar-pulled-up")
-        check("Hide mode: a pulled-up navigation bar moves the controls up", bool(ev("player", "inset", m)), "no 'player inset' line after the swipe from the bottom edge")
+        self.ph.a.sh("input swipe %d %d %d %d 250" % (sw // 2, sh - 2, sw // 2, sh - 160), timeout=20); time.sleep(0.6)   # pull the navigation bar up
+        self.shot("kp-11-navigation-bar-pulled-up")                                  # the picture shows whether the bottom row is clear of the bar
         self.ph.key("KEYCODE_BACK"); time.sleep(2)
         self.ph.debug("bars", "keep")
         self.kp_results = checks
