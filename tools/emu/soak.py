@@ -2687,6 +2687,7 @@ class Soak:
         self.ph.physical(0, 9.81, 0); self.ph.debug("vpress", "1"); self.ph.debug("webmode", "0"); time.sleep(2.5)
         self.ph.a.sh("media volume --stream 3 --set 4 2>/dev/null", timeout=15)
         sw, sh = self.screen
+        self.ph.touch_probe(self.out)                                              # touch-probe.txt: what this Android's touch devices and `input` offer
         def double_tap(x, y):
             self.ph.a.sh("input tap %d %d & input tap %d %d & wait" % (x, y, x, y), timeout=30)
         def jumps(lines):
@@ -2717,7 +2718,7 @@ class Soak:
         self.shot("gp-A-1-playing")
         # a vertical drag on the right side: volume (no hold in full screen)
         m = self.log.size()
-        with_shot("gp-A-2-volume-while-dragging", lambda: self.ph.hold_drag(self.screen, int(sw * 0.85), 760, 0, dy=-340, hold_s=0.0, steps=14, step_s=0.12), 1.3); time.sleep(1.5)
+        with_shot("gp-A-2-volume-while-dragging", lambda: self.ph.a.sh("input swipe %d %d %d %d 2200" % (int(sw * 0.85), 760, int(sw * 0.85), 420), timeout=30), 1.2); time.sleep(1.5)
         vol = levels(ev("native", "gesture-level", m), "volume")
         nums.append("A volume levels %s" % vol[:12])
         check("A: a drag UP on the right side raises the volume (%s)" % (vol[:1] + vol[-1:],), len(vol) >= 2 and vol[-1] > vol[0], "volume lines %s" % vol)
@@ -2728,7 +2729,7 @@ class Soak:
         check("A: a drag DOWN on the right side lowers it", len(vol2) >= 2 and vol2[-1] < vol2[0], "volume lines %s" % vol2)
         # the left side: brightness
         m = self.log.size()
-        with_shot("gp-A-3-brightness-while-dragging", lambda: self.ph.hold_drag(self.screen, int(sw * 0.15), 760, 0, dy=-280, hold_s=0.0, steps=14, step_s=0.12), 1.3); time.sleep(1.5)
+        with_shot("gp-A-3-brightness-while-dragging", lambda: self.ph.a.sh("input swipe %d %d %d %d 2200" % (int(sw * 0.15), 760, int(sw * 0.15), 480), timeout=30), 1.2); time.sleep(1.5)
         bri = levels(ev("native", "gesture-level", m), "brightness")
         nums.append("A brightness levels %s" % bri[:12])
         check("A: a drag up on the left side changes the brightness (%s)" % (bri[:1] + bri[-1:],), len(bri) >= 2 and bri[-1] > bri[0], "brightness lines %s" % bri)
@@ -2741,9 +2742,20 @@ class Soak:
         m = self.log.size()
         self.ph.a.sh("input swipe %d %d %d %d 500" % (150, 500, 450, 500), timeout=20); time.sleep(1.5)
         check("A: a sideways drag WITHOUT the long press does not seek", not jumps(ev("native", "gesture-seek", m)) and not any('"skip"' in c["rest"] for c in ev("native", "cmd", m)), "seek lines %s" % [e["rest"] for e in ev("native", "gesture-seek", m)][:3])
+        # which way of resting a finger reaches the app? the first that makes the engine say 'gesture-armed' (a short drag, under the 1 cm dead zone: nothing moves)
+        for way in self.ph.touch_methods():
+            mp = self.log.size()
+            self.ph.hold_drag(self.screen, 150, 500, 40, method=way); time.sleep(1.5)
+            got = bool(ev("native", "gesture-armed", mp))
+            nums.append("touch way %s: %s" % (way, "the app saw the long press" if got else "the app saw nothing"))
+            if got:
+                self.ph.touch_pref = way
+                break
+        else:
+            self.issue("medium", "tooling", "the lab could not rest a finger on the glass (neither input motionevent nor the raw touch device reached the app): %s (touch-probe.txt)" % self.ph.touch_log[-3:])
         # long press, then drag right: the precise seek; the film moves when the finger lets go
         m = self.log.size()
-        with_shot("gp-A-4-seek-info-while-dragging", lambda: self.ph.hold_drag(self.screen, 150, 500, XCM, end_hold_s=3.0), 2.0); time.sleep(2.0)
+        with_shot("gp-A-4-seek-info-while-dragging", lambda: self.ph.hold_drag(self.screen, 150, 500, XCM, end_hold_s=3.0), 3.2); time.sleep(2.5)
         j1 = jumps(ev("native", "gesture-seek", m))
         nums.append("A hold + 4 cm right: jumps %s" % j1)
         check("A: a long press and a drag right of about 4 cm jumps forward by tens of seconds (%s)" % j1[-1:], bool(j1) and 25 <= j1[-1] <= 60, "seek lines %s, cmd lines %s" % ([e["rest"][:50] for e in ev("native", "gesture-seek", m)], [c["rest"][:30] for c in ev("native", "cmd", m)][:3]))
