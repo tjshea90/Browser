@@ -2096,6 +2096,11 @@ class Soak:
         for label, arg in self.CP_CASES:
             self.ph.debug("vfmt", arg)
             time.sleep(2.5)
+            # ANS60 lab finding (vp run 43960432251: 14 cp checks failed, the page had seen the PREVIOUS mode's policy, in both of its passes): the extension asks the app for the policy when a page STARTS and answers the page's own
+            # first question from what it knew before that answer came back ("the answer beats the document's first bytes over a hotspot"). The lab's localhost server has the first bytes in under a millisecond, so on a busy
+            # 2-core emulator the page now and then wins that race. So a first page (any page of the same host) lets the extension learn the new policy; the page that is JUDGED is the second one.
+            self.ph.open_url("%s/page/text" % self.lab_base)
+            time.sleep(3.0)
             rmark = self.lab.size()
             self.ph.open_url("%s/formats?tag=%s" % (self.lab_base, label))
             t0 = time.time()
