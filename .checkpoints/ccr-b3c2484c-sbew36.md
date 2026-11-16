@@ -1,13 +1,13 @@
-# CHECKPOINT 2464 — read me first, then TASKS.md
+# CHECKPOINT 2465 — read me first, then TASKS.md
 
-**Written:** 2026-11-16T02:39:48Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `72ccba4f` (this checkpoint is the commit after it)
+**Written:** 2026-11-16T02:41:46Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `44230eea` (this checkpoint is the commit after it)
 
 ## Just done
-ANS51h: no page-look read-back while a page is full screen (the tablet's log: two 'tabs look-saved' during a film = GPU read-back + encode competing with the decoder and the film's frame saved as the page's look); guard test in OwnerRulesTest; compile + OwnerRulesTest green; independent review of the alpha56 diff (agent a8e537c38b2ece4e6, 90d4d6e8..HEAD) running; kp lab run 43793291701 pending behind compat 43784927532 (ends ~03:25Z)
+evidence file corrected (ONE full screen with four control sessions, three watchdog restarts: my first interim answer said '4 of 4 full screens', the final answer must say so) and given a reading guide for the new alpha56 numbers; send_later trig_015YaAfScTQXziSPN7zQ5u86 at 04:20Z checks the kp lab run and ships; independent review agent a8e537c38b2ece4e6 still running
 
 ## Do this next
-when the review agent's notification arrives: verify each finding against the code, fix + test, ckpt; at 03:30Z read the compat run (trig_019ZZh4wE2UHrvMLbwxEFmrV) into research/COMPAT_RUN1.md; when kp run 43793291701 ends: read its report (check the two new ANS51b checks and the kp-pic-path line), then bump gecko versionCode 157 / 0.3.0-alpha56 (bash tools/sync-ext-version.sh), write the owner note to a file (ASCII), bash ship.sh gecko with it, dispatch app=gecko full_build=true with the SAME note, wait for tag + jobs, get_release_by_tag, bash tools/record-release.sh TAG with the IDENTICAL note, answer owner message 51 finally with the Release link on its own line; heartbeat trig_01Y8CFHKVb6hmQmEEM78p6gv (04:07Z)
+WAIT for events: (1) the review agent's notification: verify each finding against the code, fix + test, ckpt; (2) 03:30Z trig_019ZZh4wE2UHrvMLbwxEFmrV: read compat run 43784927532 into research/COMPAT_RUN1.md (artifacts via mcp__github__actions_get download_workflow_run_artifact + tools/emu/fetch_artifact.py into own scratchpad folders, check health-lines.txt for 'java heap limit' first); (3) kp run 43793291701 (list_workflow_jobs only, never list_workflow_runs): read the two ANS51b checks + 'film picture size' line; (4) then bump gecko versionCode 157 / 0.3.0-alpha56 + bash tools/sync-ext-version.sh, ASCII owner note file, bash ship.sh gecko, dispatch app=gecko full_build=true SAME note, record-release IDENTICAL note, final answer to message 51 with the Release link on its own line; heartbeats trig_01Y8CFHKVb6hmQmEEM78p6gv (04:07Z) and trig_015YaAfScTQXziSPN7zQ5u86 (04:20Z)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ when the review agent's notification arrives: verify each finding against the co
 
 ## Last ten checkpoints
 ```
+  82385186 ckpt 2464: ANS51h: no page-look read-back while a page is full screen (the tablet's log
   c7e7d87b ckpt 2463: ANS51b-f ticked in TASKS.md; kp lab scene extended (soak.py kp_scene: after 
   a6585051 ckpt 2462: ANS51b-f CODED + tested: (b) BrowserActivity.filmPicture feeds the film's w/
   dd7a66a8 ckpt 2461: owner message 51 (the real tablet's Diagnostics of alpha55): read in researc
@@ -25,8 +26,7 @@ when the review agent's notification arrives: verify each finding against the co
   90d4d6e8 ckpt 2457: gated kestrel-g-v0.3.0-alpha55 (gecko code 156) and pushed it: handoff self-
   6d36261e ckpt 2456: independent review of the alpha55 code (agent, 12 findings) ALL addressed wi
   1bf5e48d ckpt 2455: lab fsy run 43778698760: kp scene 22/22 ok again, sound ok, Yahoo live playe
-  8eab718d ckpt 2454: kp lab run 5 (43778006356, 512 MB heap boot): 22 of 22 checks GREEN on the r
 ```
 
-(3 automatic checkpoint(s) since the last deliberate one — the
+(4 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
