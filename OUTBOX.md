@@ -2352,3 +2352,7 @@
 ## 2026-11-16T22:32:48Z
 > The JVM test run is still going. I'll continue as soon as it finishes.
 <!-- sha:2f07b7757a0e -->
+
+## 2026-11-16T22:35:31Z
+> Final lab run 43971358668 is in progress on the head with the review fixes (about 22 more minutes). I'll continue when it finishes: read the report, then ship alpha61.
+<!-- sha:2294b14cb1c6 -->
