@@ -25,6 +25,8 @@ class TurnSettleMachineTest {
         var expects = false
         var nudges = 0
         var hintShown = false
+        var pending = false                      // ANS52a: the engine's view is held at its old size
+        override fun resizePending() = pending
         override fun expectsPageReport() = expects
         override fun nudgeEngine() { nudges++ }
         override fun hint(show: Boolean) { hintShown = show }
@@ -292,6 +294,49 @@ class TurnSettleMachineTest {
         h.clock += 40_000L; m.abandon()
         h.clock += 1000L; m.pageReported(true)                       // far too late to be about any turn
         assertEquals(0, m.lateCount)
+    }
+
+    // ANS52a (owner message 52: the status bar icons stuck in the middle of the screen, the video cropped at the old width for several moments): the engine's view is held at its old size for the first frame of the turn and gets its
+    // new size right after it; the cover must not be let go before that size change has been laid out and has stood still
+    @Test fun theCoverStaysWhileTheEnginesViewHasNotGotItsNewSize() {
+        val h = Host().apply { playing = true; pending = true }
+        val m = machine(h)
+        m.configChanged(true)
+        while (m.turning && h.clock < 1200) h.wait(m, TurnSettle.TICK_MS)
+        assertTrue("still held at 1.2 s: the cover stays although the area has not changed for longer than the settle time", m.turning)
+        h.pending = false                                              // the view got its new size (that also tells sizeChanged)
+        m.sizeChanged()
+        h.wait(m, 360)
+        assertTrue("the new size has to stand still for the settle time first", m.turning)
+        while (m.turning && h.clock < 5000) h.wait(m, TurnSettle.TICK_MS)
+        assertFalse(m.turning)
+        assertTrue("settled after the settle time, or at the cap: ${h.clock}", h.clock >= 1200 + TurnSettle.SETTLE_MS && h.clock <= TurnSettle.CAP_MS + 2 * TurnSettle.TICK_MS)
+    }
+
+    @Test fun aViewThatIsNeverGivenItsSizeStillEndsAtTheCap() {
+        val h = Host().apply { playing = true; pending = true }
+        val m = machine(h)
+        m.configChanged(true)
+        while (m.turning && h.clock < 10_000) h.wait(m, TurnSettle.TICK_MS)
+        assertFalse("the cap ends it whatever the host says", m.turning)
+        assertTrue("at the cap, not before: ${h.clock}", h.clock >= TurnSettle.CAP_MS && h.clock < TurnSettle.CAP_MS + 2 * TurnSettle.TICK_MS)
+    }
+
+    @Test fun theFirstFrameAtTheNewSizeIsCountedOncePerTurn() {
+        val h = Host().apply { playing = true }
+        val m = machine(h)
+        m.firstFrame()
+        assertEquals("no turn, nothing to count", 0, m.ffCount)
+        m.configChanged(true)
+        h.clock = 350L
+        m.firstFrame(); m.firstFrame()
+        assertEquals(1, m.ffCount); assertEquals(350L, m.ffLastMs); assertEquals(350L, m.ffWorstMs)
+        while (m.turning && h.clock < 10_000) h.wait(m, TurnSettle.TICK_MS)
+        h.clock += 5000L
+        m.configChanged(false); h.clock += 90L; m.firstFrame()
+        assertEquals(2, m.ffCount); assertEquals(90L, m.ffLastMs); assertEquals("worst stays", 350L, m.ffWorstMs)
+        assertTrue(m.line(), m.line().contains("first frame at the new size: last 90 ms, worst 350 ms, 2 turns"))
+        assertTrue(h.logs.toString(), h.logs.any { it.startsWith("turn-first-frame:") && it.contains("350 ms") })
     }
 
     @Test fun aSecondTurnWhileOneGoesOnStartsItsOwnClocks() {
