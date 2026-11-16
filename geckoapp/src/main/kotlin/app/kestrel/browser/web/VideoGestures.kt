@@ -141,7 +141,7 @@ class VideoGestures(private val activity: Activity, private val s: Surface, priv
         lastKind?.let { k -> val pct = Math.round(lastFrac * 100); if (pct != notedPct) s.note("gesture-level", "${k.name.lowercase()} $pct %") }
         lastKind = null; notedPct = -100
         vol = -1f; br = -1f; began = false; hintShown = false
-        if (committed) { committed = false; main.removeCallbacks(clearInfo); main.postDelayed(clearInfo, RESULT_MS) }       // the jump stays on the picture for a moment after the finger lets go (VLC)
+        if (committed) { committed = false; pillWaiting = true; main.removeCallbacks(clearInfo); main.postDelayed(clearInfo, RESULT_MS) }       // the jump stays on the picture for a moment after the finger lets go (VLC)
         else s.showInfo(null)
         s.gestureChanged(false)
     }
