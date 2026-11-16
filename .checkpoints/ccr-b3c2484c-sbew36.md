@@ -1,21 +1,22 @@
-# CHECKPOINT 2564 — read me first, then TASKS.md
+# CHECKPOINT 2565 — read me first, then TASKS.md
 
-**Written:** 2026-11-16T21:56:59Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `c83b7978` (this checkpoint is the commit after it)
+**Written:** 2026-11-16T22:02:08Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `531f917d` (this checkpoint is the commit after it)
 
 ## Just done
-lab vp run 43960432251 (head 5beb6f7e) finished: new ANS60 checks all pass (gp 27/27, iq 10/10, np 43/43, ip/ho/ap/hs/pv green) but 17 checks failed in two scenes outside my change: cp (14: page codec policy seems applied one vfmt mode late) and kp (3: double tap in the page's own full screen); to tell flake from regression dispatched lab cp ALONE: run 43964880053 (head c83b7978, same code as 5beb6f7e)
+lab cp scene made robust against a race found by reading the extension (first page after a vfmt change can see the old policy: background.js asks the app at navigation start, not awaited, and answers the page's guard from cache): cp now loads a throw-away /page/text first (soak.py cp_scene), finding written into research/ANS60_PLAYBACK_OPTIMISATION.md section 7 and TASKS ANS60e; cancelled the cp-only run 43964880053 (it would have run the old scene); kp double-tap failure (3 checks, one root: the second of two parallel 'input tap' never arrived) matches the known lab flake but must be re-proven
 
 ## Do this next
-1) read run 43964880053 (actions_list list_workflow_jobs for the job id, get_workflow_job; when done list_workflow_run_artifacts + download_workflow_run_artifact, python3 -I tools/emu/fetch_artifact.py <url with & not u0026> <empty dir>, read report.md): cp all green = flake (then also dispatch kp alone, run 3 must be green or explainable) ; cp red the same way = real regression: look at the vfmt debug command in BrowserActivity.kt (line ~890, applyVideo) and soak.py cp_scene (lines ~2089-2158: debug vfmt, sleep 2.5, open_url) 2) fill TESTED_PLACEHOLDER in docs/handoff/ALPHA61_RELEASE_NOTE.txt, ship.sh gecko, ONE run_workflow app=gecko full_build=true, verify, record-release.sh with identical note 3) tick ANS60a-d in TASKS.md, answer owner 60, delete heartbeat trig_01WwqLTpgB4vKso9Rn5q9WV1
+1) dispatch lab vp (app=lab lab_suite=vp lab_minutes=1 lab_net=full full_build=false) on this head, read its report: cp must be 0 failed and kp must pass (kp double tap in the page's own full screen: if it fails again the same way look at BrowserActivity.pageFilmGestureTouch / VideoGestures / PlayerGestures.up for a real regression of the no-long-press change); 2) fill TESTED_PLACEHOLDER in docs/handoff/ALPHA61_RELEASE_NOTE.txt, ship.sh gecko, ONE run_workflow app=gecko full_build=true, verify tag + jobs + release, record-release.sh with the identical note; 3) tick ANS60a-d in TASKS.md, answer owner 60, delete heartbeat trig_01WwqLTpgB4vKso9Rn5q9WV1
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  abc3386d ckpt 2564: lab vp run 43960432251 (head 5beb6f7e) finished: new ANS60 checks all pass (
   c952601c ckpt 2563: docs for ANS60: CLAUDE.md decisions (gestures without a long press, shared P
   203d9ece ckpt 2562: lab vp (all video suites incl. gp + iq) dispatched: run 43960432251 on head 
   5beb6f7e ckpt 2561: lab run 43958301833 (gp + iq, head 3bf6994e): ALL 26 gesture checks OK (A: p
@@ -25,8 +26,7 @@ lab vp run 43960432251 (head 5beb6f7e) finished: new ANS60 checks all pass (gp 2
   c8fca4df ckpt 2557: ANS60c CODED (lab proof pending): quality list in the player inside the page
   756afc69 ckpt 2556: ANS60a+b CODED (lab proof pending): core PlayerGestures has NO long press an
   6d684f43 ckpt 2555: heartbeat trig_01WwqLTpgB4vKso9Rn5q9WV1 created (cron every 2 h at :45, boun
-  00db0efd ckpt 2554: owner message 60 written into TASKS.md (ANS60a-d) in his words: gestures wit
 ```
 
-(5 automatic checkpoint(s) since the last deliberate one — the
+(2 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
