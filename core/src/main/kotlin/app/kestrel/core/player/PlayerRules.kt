@@ -24,7 +24,7 @@ object PlayerRules {
     const val BURST_MS = 500L
 
     /**
-     * ANS51d (owner message 51: the real tablet's page script was silent for 3.5 to 14 s after a turn and then reported again; the old 3.5 s limit ended the session four times in 160 s and every restart popped the controls up):
+     * ANS51d (owner message 51: the real tablet's page script was silent for 3.5 to 14 s after a turn and then reported again; the old 3.5 s limit ended the session three times in 160 s and every restart popped the controls up):
      * a page that has not reported for this long is taken as gone (its full-screen box lost the film, its script is dead, it was left); a page that is only busy is waited for.
      */
     const val PAGE_GONE_MS = 12000L

@@ -352,7 +352,7 @@ class OwnerRulesTest {
         val machine = source("core/src/main/kotlin/app/kestrel/core/media/TurnSettleMachine.kt")
         assertTrue(machine.contains("if (!active) { lateWord(); return }") && machine.contains("silent++; lateFrom = startedAt") && machine.contains("silent pages: "))
         assertTrue("the silent limit and the nudge were NOT changed on a guess (research/TABLET_DIAG_2026-11-16.md)", source("core/src/main/kotlin/app/kestrel/core/media/TurnSettle.kt").let { it.contains("const val SILENT_MS = 3000L") && it.contains("const val NUDGE_AFTER_MS = 2500L") })
-        // d: a page that is only busy does not end the session (it did four times in 160 s and every restart popped the controls up)
+        // d: a page that is only busy does not end the session (it did three times in 160 s and every restart popped the controls up)
         val pc = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerController.kt")
         assertTrue(pc.contains("PlayerRules.pageGone(SystemClock.uptimeMillis() - lastReportAt)") && !pc.contains("SILENT_END_MS"))
         // e: stalls, the script's own cost and the film's frames travel from the page to Diagnostics and to "Real video"
