@@ -35,7 +35,7 @@ Local files: [L1] research/VIDEO_AUDIT.md section 9, [L2] research/TABLET_DIAG_2
 | ijkplayer 0.8.8 | not on Maven Central [D25] | LGPL-2.1+ [D25] | native FFmpeg n3.4 | MediaCodec or software | dead since 2021 | no |
 | mpv-android | APK 117 MiB [D26] | MIT app [D26] | native | MediaCodec or copy | not embeddable [D26] | no |
 | VLC / MX by intent | 0 | n/a | apps must be sideloaded [I] | their own | leaves browser, headers only in MX | no |
-| NewPipeExtractor | + Rhino, desugaring [D27] | GPL-3.0 [D27] | none decodes | n/a | YouTube terms | no |
+| NewPipeExtractor | not measured | GPL-3.0 [D27] | Rhino, desugar_jdk_libs_nio [D27] | none (finds URLs) | YouTube terms | no |
 | Manifest cap, hints | 0 | n/a | extension JS | n/a | any page player | do first |
 
 ## 1. Android MediaPlayer
