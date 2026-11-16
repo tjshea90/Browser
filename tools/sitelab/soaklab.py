@@ -430,38 +430,43 @@ AP_JS = """
 
 
 def page_ap(variant, tag):
+    """One page per way a site starts or loads a video. The film's address carries ?c=<tag> so that every case asks the NETWORK for it (lab run 43812820865: the engine's cache answered the later cases from the first one's
+    bytes). AP_JS comes FIRST: the pages' own scripts call apHook / apRep at once."""
     box = "display:block;width:100%;height:300px;background:#0b2a4a;object-fit:contain"
+    film = "%s?c=%s" % (AP_FILM, urllib.parse.quote(tag, safe=""))
+    frag = "/clip/frag.mp4?c=%s" % urllib.parse.quote(tag, safe="")
     head = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Press lab %s</title>"
-            "<body style='margin:0;font:15px sans-serif;background:#fff'><h3 style='margin:6px 8px'>press lab: %s</h3>" % (variant, variant))
-    if variant == "autoplay":
-        body = "<video id=v autoplay muted loop playsinline poster='/img/1.svg' src='%s' style='%s'></video>" % (AP_FILM, box)
+            "<body style='margin:0;font:15px sans-serif;background:#fff'><h3 style='margin:6px 8px'>press lab: %s</h3>" % (variant, variant)) + AP_JS
+    btn = "<button id=btn style='margin:12px 8px;padding:16px 28px;font-size:20px'>Play</button>"
+    play_js = "var p = v.play(); if (p && p.then) p.then(function () { apRep('playing-promise', { how: how }); }, function (e) { apRep('rejected', { name: e.name, how: how }); });"
+    if variant == "autoplay":                      # a hero loop: no controls, no play button
+        body = "<video id=v autoplay muted loop playsinline poster='/img/1.svg' src='@FILM@' style='@BOX@'></video><script>apHook(document.getElementById('v'));</script>"
     elif variant == "preload-auto":
-        body = "<video id=v preload=auto controls playsinline poster='/img/1.svg' src='%s' style='%s'></video>" % (AP_FILM, box)
+        body = "<video id=v preload=auto controls playsinline poster='/img/1.svg' src='@FILM@' style='@BOX@'></video><script>apHook(document.getElementById('v'));</script>"
     elif variant == "preload-meta":
-        body = "<video id=v preload=metadata controls playsinline poster='/img/1.svg' src='%s' style='%s'></video>" % (AP_FILM, box)
+        body = "<video id=v preload=metadata controls playsinline poster='/img/1.svg' src='@FILM@' style='@BOX@'></video><script>apHook(document.getElementById('v'));</script>"
     elif variant == "no-attr":
-        body = "<video id=v controls playsinline poster='/img/1.svg' src='%s' style='%s'></video>" % (AP_FILM, box)
-    elif variant == "script":
-        body = ("<video id=v muted playsinline poster='/img/1.svg' style='%s'></video><script>var v = document.getElementById('v'); apHook(v); v.src = '%s'; v.muted = true; "
-                "function go() { var p = v.play(); if (p && p.then) p.then(function () { apRep('playing-promise'); }, function (e) { apRep('rejected', { name: e.name }); }); }"
-                "setTimeout(go, 1200); setTimeout(go, 3200); setTimeout(go, 5200);</script>") % (box, AP_FILM)
-    elif variant == "mse":
-        body = ("<video id=v muted playsinline poster='/img/1.svg' style='%s'></video><button id=btn style='margin:12px 8px;padding:16px 28px;font-size:20px'>Play</button>"
+        body = "<video id=v controls playsinline poster='/img/1.svg' src='@FILM@' style='@BOX@'></video><script>apHook(document.getElementById('v'));</script>"
+    elif variant == "script":                      # the page tries play() by itself three times (no finger: refused), and has a play button of its own
+        body = ("<video id=v muted playsinline poster='/img/1.svg' style='@BOX@'></video>" + btn +
+                "<script>var v = document.getElementById('v'); apHook(v); v.src = '@FILM@'; v.muted = true; function go(how) { " + play_js + " }"
+                "setTimeout(function () { go('timer1'); }, 1200); setTimeout(function () { go('timer2'); }, 3200); setTimeout(function () { go('timer3'); }, 5200);"
+                "document.getElementById('btn').onclick = function () { go('button'); };</script>")
+    elif variant == "mse":                         # a script player: it fetches its film as soon as it may attach a source buffer
+        body = ("<video id=v muted playsinline poster='/img/1.svg' style='@BOX@'></video>" + btn +
                 "<script>var v = document.getElementById('v'); apHook(v);"
                 "var ms = new MediaSource(); v.src = URL.createObjectURL(ms);"
                 "ms.addEventListener('sourceopen', function () { apRep('sourceopen'); var sb = ms.addSourceBuffer('video/mp4; codecs=\"avc1.4d401f,mp4a.40.2\"');"
-                " fetch('/clip/frag.mp4').then(function (r) { return r.arrayBuffer(); }).then(function (b) { apRep('fetched', { bytes: b.byteLength }); sb.addEventListener('updateend', function () { try { if (!sb.updating && ms.readyState === 'open') ms.endOfStream(); } catch (e) {} }); sb.appendBuffer(b); }); });"
-                "document.getElementById('btn').onclick = function () { v.muted = true; var p = v.play(); if (p && p.then) p.then(function () { apRep('playing-promise'); }, function (e) { apRep('rejected', { name: e.name }); }); };</script>") % box
-    elif variant == "button":
-        body = ("<video id=v muted playsinline preload=none poster='/img/1.svg' src='%s' style='%s'></video><button id=btn style='margin:12px 8px;padding:16px 28px;font-size:20px'>Play</button>"
-                "<script>var v = document.getElementById('v'); apHook(v); document.getElementById('btn').onclick = function () { var p = v.play(); if (p && p.then) p.then(function () { apRep('playing-promise'); }, function (e) { apRep('rejected', { name: e.name }); }); };</script>") % (AP_FILM, box)
-    elif variant == "iframe":
-        body = "<iframe id=f src='/ap?v=autoplay&tag=%s-inner' style='display:block;width:100%%;height:320px;border:0;background:#222'></iframe>" % tag
+                " fetch('@FRAG@').then(function (r) { return r.arrayBuffer(); }).then(function (b) { apRep('fetched', { bytes: b.byteLength }); sb.addEventListener('updateend', function () { try { if (!sb.updating && ms.readyState === 'open') ms.endOfStream(); } catch (e) {} }); sb.appendBuffer(b); }); });"
+                "document.getElementById('btn').onclick = function () { var how = 'button'; v.muted = true; " + play_js + " };</script>")
+    elif variant == "button":                      # preload=none and a play button of the page's own
+        body = ("<video id=v muted playsinline preload=none poster='/img/1.svg' src='@FILM@' style='@BOX@'></video>" + btn +
+                "<script>var v = document.getElementById('v'); apHook(v); document.getElementById('btn').onclick = function () { var how = 'button'; " + play_js + " };</script>")
+    elif variant == "iframe":                      # the hero loop in a frame of its own
+        return (head + "<iframe id=f src='/ap?v=autoplay&tag=%s-inner' style='display:block;width:100%%;height:320px;border:0;background:#222'></iframe>" % urllib.parse.quote(tag, safe="")).encode()
     else:
         body = "<p>unknown variant</p>"
-    if variant in ("iframe",):
-        return (head + body).encode()                                     # (the inner page reports itself)
-    return (head + body + AP_JS + ("<script>apHook(document.getElementById('v'));</script>" if variant in ("autoplay", "preload-auto", "preload-meta", "no-attr") else "")).encode()
+    return (head + body.replace("@FILM@", film).replace("@FRAG@", frag).replace("@BOX@", box)).encode()
 
 
 def page_dl():
