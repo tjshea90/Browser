@@ -1839,3 +1839,7 @@
 ## 2026-11-16T09:02:07Z
 > Still running; checking again in a few minutes.
 <!-- sha:c70ff9ad45cd -->
+
+## 2026-11-16T09:04:22Z
+> The independent review found nine real problems in the new hand-over code, including a real security hole; I'm verifying each one against the code before changing anything. First, checking where the emulator run stands.
+<!-- sha:28befa47970a -->
