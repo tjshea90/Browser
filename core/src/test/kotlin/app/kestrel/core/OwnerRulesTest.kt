@@ -551,6 +551,15 @@ class OwnerRulesTest {
             act.contains("private var privateAnchor: GeckoSession? = null") && act.contains("private fun syncPrivateAnchor()") && act.contains("if (tab.isPrivateTab) syncPrivateAnchor()") && act.contains("syncPrivateAnchor()                                                      // ANS58c") && act.contains("try { privateAnchor?.close() }"))
     }
 
+    // ANS58a/b (owner message 58): none of our scripts runs inside a human-check frame (Cloudflare Turnstile and the like)
+    @Test fun ourScriptsDoNotRunInsideTheHumanCheckFrames() {
+        val manifest = source("geckoapp/src/main/assets/kestrel-shields/manifest.json")
+        val blocks = Regex("\"matches\": \\[\\s*\"http://\\*/\\*\",\\s*\"https://\\*/\\*\"\\s*\\],\\s*\"exclude_matches\": \\[([^\\]]*)\\]").findAll(manifest).toList()
+        assertTrue("every content script for the web has an exclude list (8 blocks): ${blocks.size}", blocks.size >= 8)
+        for (b in blocks) for (h in listOf("https://challenges.cloudflare.com/*", "https://*.hcaptcha.com/*", "https://www.google.com/recaptcha/*", "https://*.arkoselabs.com/*", "https://*.captcha-delivery.com/*"))
+            assertTrue("the exclude list names $h", b.groupValues[1].contains(h))
+    }
+
     // ANS57 (owner message 57: VLC-style gestures; research/ANS57_VLC_GESTURES.md)
     @Test fun ownerMessage57VlcStyleGestures() {
         val math = source("core/src/main/kotlin/app/kestrel/core/player/PlayerGestures.kt")
