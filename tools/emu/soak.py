@@ -714,6 +714,7 @@ class Soak:
         self.fsb_results = []
         self.slow_results = []
         self.kp_results = []
+        self.kp_wake = []                      # (label, the wake-lock lines of `dumpsys power`) while the film plays in full screen and after it ended
         self.yahoo_fs = None
         self.shields_mode = "on"
         self.quiet_issues = False
@@ -1648,10 +1649,14 @@ class Soak:
                 return
             vw, vh, land = box()
             self.ph.tap(int(vw * 0.25), 26 + int(vh * 0.2)); time.sleep(0.9)
+        def wake(label):                                                            # ANS50 / research: does the screen stay on while a film plays? (the engine holds a wake lock itself: GeckoAppShell.setWakeLockState)
+            out = self.ph.a.sh("dumpsys power | grep -i 'wake_lock\\|Wake Locks'", timeout=30) or ""
+            self.kp_wake.append((label, [ln.strip()[:150] for ln in out.splitlines() if ln.strip()][:8]))
         check("a full-screen film got Kestrel's controls", bool(ev("player", "start")), "no 'player start' line")
         check("the controls show when full screen begins", bool(ev("player", "shown")), "no 'player shown' line")
         self.shot("kp-1-entered")
         time.sleep(4.5)
+        wake("the film plays in full screen")
         check("they hide by themselves", bool(ev("player", "hidden")), "no 'player hidden' 8 s after full screen began")
         self.shot("kp-2-hidden")
         vw, vh, land = box()
@@ -1710,6 +1715,7 @@ class Soak:
         m = self.log.size(); self.ph.tap(vw - 40, 26 + 41); time.sleep(3.0)
         check("the exit button leaves full screen", bool(health_events(self.log.since(m), "fullscreen", "turn")) or bool(ev("player", "stop", m)), "no 'full screen ends' / 'player stop' after the exit tap")
         self.shot("kp-9-after-exit")
+        time.sleep(1.5); wake("after full screen ended (the film is paused)")
         self.ph.physical(0, 9.81, 0)
         # VP2: the page's own player controls (the lab page has a bar with YouTube's class name) are not shown while Kestrel's controls own the film, and are given back when full screen ends
         cr = [r for r in self.lab.since(rmark) if r.get("kind") == "fsb" and r.get("chrome")]
@@ -2131,6 +2137,12 @@ class Soak:
             for c in self.kp_results:
                 L.append("| %s | %s | %s |" % (c["check"], "ok" if c["ok"] else "**FAILED**", (c["detail"] or "")[:160].replace("|", "/")))
             L.append("")
+            if self.kp_wake:
+                L.append("Wake locks of the emulated phone (`dumpsys power`), for the question whether the screen stays on while a film plays (the lab keeps the screen on by itself with `svc power stayon`, so read the lock names, not the screen):")
+                L.append("")
+                for lab, lines in self.kp_wake:
+                    L.append("- %s: %s" % (lab, " / ".join(lines) or "no wake-lock line"))
+                L.append("")
         if self.slow_results:
             L.append("## A turn under a slow engine (ROT2, owner message 48: the page keeps the layout of the old orientation for a few seconds)")
             L.append("")
