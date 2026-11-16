@@ -2654,7 +2654,7 @@ class Soak:
         self.ph.a.sh("media volume --stream 3 --set 4 2>/dev/null", timeout=15)
         sw, sh = self.screen
         def double_tap(x, y):
-            self.ph.a.sh("input tap %d %d & input tap %d %d & wait" % (x, y, x, y), timeout=30)
+            self.ph.double_tap(x, y)
         def jumps(lines):
             out = []
             for e in lines:
