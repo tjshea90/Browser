@@ -34,7 +34,18 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
         fun onSeek(fraction: Double)
         /** A finger is on a control (true) or let go / was cancelled (false). */
         fun onPin(on: Boolean)
+        /** ANS53f: the rotate button (drawn only while [showRotate]). */
+        fun onRotate() {}
+        /** ANS53d: the quality button (drawn only while [showQuality]). */
+        fun onQuality() {}
     }
+
+    /** ANS53f: Kestrel's own player shows a rotate button at the top left (the page's full screen has its own, a separate view). */
+    var showRotate = false
+        set(v) { if (field != v) { field = v; invalidate() } }
+    /** ANS53d: a quality button left of the exit button, where the film has a quality list to pick from. */
+    var showQuality = false
+        set(v) { if (field != v) { field = v; invalidate() } }
 
     var listener: Listener? = null
     private val d = resources.displayMetrics.density
@@ -53,7 +64,7 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
     private var spin = 0f
     private var bottomInset = 0f                  // the navigation bar pulled up over the film (Hide mode): the controls sit above it
 
-    private enum class Hit { NONE, PLAY, BACK, FORWARD, MUTE, EXIT, TRACK }
+    private enum class Hit { NONE, PLAY, BACK, FORWARD, MUTE, EXIT, TRACK, ROTATE, QUALITY }
 
     private val bottomScrim = Paint()               // the two scrims keep their gradient (made once per size, not once per frame: a fade draws ten frames, a report every 250 ms one more)
     private val topScrim = Paint()
@@ -66,7 +77,7 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
     private val rect = RectF()
 
     // the places of the controls (px), computed from the size
-    private val play = RectF(); private val back = RectF(); private val forward = RectF(); private val mute = RectF(); private val exit = RectF(); private val trackBox = RectF()
+    private val play = RectF(); private val back = RectF(); private val forward = RectF(); private val mute = RectF(); private val exit = RectF(); private val trackBox = RectF(); private val rotate = RectF(); private val quality = RectF()
     private var trackL = 0f; private var trackR = 0f; private var rowY = 0f
     private var curX = 0f; private var durRight = 0f
 
@@ -153,6 +164,8 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
         forward.set(cx + pr + gap, cy - sr, cx + pr + gap + 2 * sr, cy + sr)
         val er = dp(24f); val margin = dp(14f)
         exit.set(w - margin - 2 * er, margin, w - margin, margin + 2 * er)
+        quality.set(exit.left - dp(10f) - 2 * er, margin, exit.left - dp(10f), margin + 2 * er)
+        rotate.set(margin, margin, margin + 2 * er, margin + 2 * er)
         rowY = h - dp(38f)
         mute.set(w - margin - 2 * er, rowY - er, w - margin, rowY + er)
         curX = dp(20f)
@@ -197,6 +210,8 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
         drawDisc(c, forward, pressed == Hit.FORWARD); drawSkipIcon(c, forward, true)
         // top right: leave full screen
         drawDisc(c, exit, pressed == Hit.EXIT); drawExitIcon(c, exit)
+        if (showQuality) { drawDisc(c, quality, pressed == Hit.QUALITY); drawQualityIcon(c, quality) }
+        if (showRotate) { drawDisc(c, rotate, pressed == Hit.ROTATE); drawRotateIcon(c, rotate) }
         // the row at the bottom: time, track, length, mute
         val shownT = if (scrub >= 0.0 && v.kind == DurationView.Kind.KNOWN) PlayerRules.timeAt(scrub, v.lengthS) else v.timeS
         c.drawText(PlayerRules.formatTime(shownT), curX, rowY + dp(5f), text)
@@ -283,6 +298,26 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
         }
     }
 
+    private fun drawQualityIcon(c: Canvas, r: RectF) {   // three sliders with a knob each: "settings"
+        val cx = r.centerX(); val cy = r.centerY()
+        for (i in -1..1) {
+            val y = cy + i * dp(6.5f)
+            c.drawLine(cx - dp(9f), y, cx + dp(9f), y, line)
+            c.drawCircle(cx + i * dp(4.5f), y, dp(2.8f), ink)
+        }
+    }
+
+    private fun drawRotateIcon(c: Canvas, r: RectF) {    // a phone with an arrow that goes round it
+        val cx = r.centerX(); val cy = r.centerY()
+        rect.set(cx - dp(4.5f), cy - dp(7.5f), cx + dp(4.5f), cy + dp(7.5f)); c.drawRoundRect(rect, dp(1.6f), dp(1.6f), line)
+        val ar = dp(12.5f); val start = 215f; val sweep = 250f
+        rect.set(cx - ar, cy - ar, cx + ar, cy + ar); c.drawArc(rect, start, sweep, false, line)
+        val e = Math.toRadians((start + sweep).toDouble()); val cs = Math.cos(e).toFloat(); val sn = Math.sin(e).toFloat()
+        val px = cx + ar * cs; val py = cy + ar * sn; val len = dp(5f); val wid = dp(3.6f)
+        path.reset(); path.moveTo(px - sn * len, py + cs * len); path.lineTo(px + cs * wid, py + sn * wid); path.lineTo(px - cs * wid, py - sn * wid); path.close()
+        c.drawPath(path, ink)
+    }
+
     private fun drawFlash(c: Canvas, w: Float, h: Float) {
         val z = flashZone ?: return
         if (flashAmount <= 0f) return
@@ -318,6 +353,8 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
             inside(back, dp(8f)) -> Hit.BACK
             inside(forward, dp(8f)) -> Hit.FORWARD
             inside(exit, dp(8f)) -> Hit.EXIT
+            showQuality && inside(quality, dp(8f)) -> Hit.QUALITY
+            showRotate && inside(rotate, dp(8f)) -> Hit.ROTATE
             inside(mute, dp(6f)) -> Hit.MUTE
             v != null && v.kind == DurationView.Kind.KNOWN && inside(trackBox, 0f) -> Hit.TRACK
             else -> Hit.NONE
@@ -355,6 +392,8 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
                     Hit.FORWARD -> if (up == Hit.FORWARD) listener?.onSkip(true)
                     Hit.MUTE -> if (up == Hit.MUTE) listener?.onMute()
                     Hit.EXIT -> if (up == Hit.EXIT) listener?.onExit()
+                    Hit.QUALITY -> if (up == Hit.QUALITY) listener?.onQuality()
+                    Hit.ROTATE -> if (up == Hit.ROTATE) listener?.onRotate()
                     Hit.NONE -> {}
                 }
                 return hit != Hit.NONE
