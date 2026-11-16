@@ -369,6 +369,7 @@ test('VP1: a page whose reports the app does not take (a = 0 four times) puts it
   await page.evaluate(() => { window.KestrelVP.c.idle = 150; window.KestrelVP.c.busy = 150; window.KestrelVP.c.giveUpMs = 700; });
   await standing(page, { s: 0, a: 0 });                                             // the app answers every report with "not mine"
   await fullscreen(page);
+  await page.waitForFunction(() => window.KestrelVP.active() === true, null, { timeout: 5000 });             // (first the player must have started: before that active() is false too, and a slow runner read the page at that moment: GitHub run 43843245891)
   await page.waitForFunction(() => window.KestrelVP.active() === false, null, { timeout: 5000 });
   assert.equal(await disp(page, 'yt'), 'block', 'the page\'s own bar is back');
   assert.equal(await page.evaluate(() => document.getElementById('v').controls), true);
