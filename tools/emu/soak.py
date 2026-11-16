@@ -1786,6 +1786,26 @@ class Soak:
         self.shot("kp-11-navigation-bar-pulled-up")                                  # the picture shows whether the bottom row is clear of the bar
         self.ph.key("KEYCODE_BACK"); time.sleep(2)
         self.ph.debug("bars", "keep")
+        # ANS53d.2 (owner message 53: "a setting for video quality in the player controls for as many videos as possible"): a page that also loads an HLS stream with two pictures (the lab's own, asked for like hls.js does).
+        # The app reads the master list, the full-screen controls draw the Quality button, the list opens over them, and a pick moves the film to Kestrel's own player at the page's position in that picture.
+        time.sleep(1.5)
+        rmark3 = self.lab.size()
+        self.ph.open_url("%s/fsbox?kind=shadow&nobar=1&hls=1" % self.lab_base)
+        self.fsbox_wait(rmark3); time.sleep(5)                                       # (the page asks for the master list 0.8 s after it loads; the app reads it a few seconds later)
+        m0 = self.log.size()
+        self.ph.tap(w // 2, 140); time.sleep(3.5); self.ph.dismiss_cling()
+        e3 = lambda layer, name, since: health_events(self.log.since(since), layer, name)
+        check("ANS53d.2: the page's HLS stream was read and the full-screen controls offer the Quality button", bool(e3("player", "quality-button", m0)), "no 'player quality-button' line (media lines: %s)" % [e["rest"][:70] for e in e3("media", "list-ok", m0)][:3])
+        m = self.log.size(); self.ph.debug("pagequality"); time.sleep(1.8)
+        check("ANS53d.2: the quality list opens over the controls with Automatic and the two pictures", any("3 row(s)" in e["rest"] for e in e3("video", "quality-open", m)), "lines: %s" % [e["rest"][:60] for e in e3("video", "quality-open", m)])
+        self.shot("kp-12-quality-list-over-controls")
+        m = self.log.size(); self.ph.debug("pagepick", "2"); time.sleep(10)
+        check("ANS53d.2: a pick hands the film to Kestrel's own player (a 'native-quality' line, then the player's own 'start-quality' line)", bool(e3("video", "native-quality", m)) and any("picked in the page's list" in e["rest"] for e in e3("native", "start-quality", m)), "video lines %s, native lines %s" % [e["rest"][:60] for e in e3("video", "native-quality", m)], [e["rest"][:60] for e in e3("native", "start-quality", m)])
+        check("ANS53d.2: the picture named is found among the stream's pictures", bool(e3("native", "pick-applied", m)), "no 'native pick-applied' line")
+        self.shot("kp-13-handed-over-to-own-player")
+        m = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(3)
+        check("ANS53d.2: Back ends Kestrel's own player and the page's full screen is still there", bool(e3("native", "stop", m)) and not e3("fullscreen", "end", m), "native stop lines %d" % len(e3("native", "stop", m)))
+        self.ph.key("KEYCODE_BACK"); time.sleep(2)
         self.kp_results = checks
         self.record({"kind": "player", "name": "kestrel-player", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
         self.check_alive("kestrel-player")

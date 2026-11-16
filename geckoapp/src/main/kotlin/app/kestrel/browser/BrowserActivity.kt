@@ -353,6 +353,7 @@ open class BrowserActivity : Activity(), DockListener {
     private lateinit var player: app.kestrel.browser.web.PlayerController
     private lateinit var qualitySheet: app.kestrel.browser.web.QualitySheet   // ANS53d.2: the quality list over the full-screen controls (a page's film: a pick hands it to Kestrel's own player)
     private var pageQualityStartMs = 0L
+    private var pageQualityRows: List<app.kestrel.browser.web.QualitySheet.Row> = emptyList()
     private var labTurnWaitOff = false // debug builds only (labIntent "turnwait" off): the lab plays the old rule beside the new one
     private val turnSettler = app.kestrel.browser.web.TurnSettler({ current }, { fullscreenOn }, { turnCover }, { onScreenNow },
         { !labTurnWaitOff && fullscreenOn && fullscreenTab?.gecko?.vpOk == true }, { resyncEngineSize() }, { turnHint }, { turnHolding || turnResizeAwaited },
@@ -795,6 +796,8 @@ open class BrowserActivity : Activity(), DockListener {
             "vpress" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); prefs.videoPressToPlay = arg != "0"; GeckoEngine.applyVideo(applicationContext, prefs); Health.log("lab", "vpress", if (prefs.videoPressToPlay) "on: videos start only when pressed" else "off") } // ANS53: the lab plays both settings (the lab turns the rule off for every suite but its own)
             "vcap" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); prefs.videoCap = arg.toIntOrNull() ?: 0; Health.log("lab", "vcap", "mode ${prefs.videoCap} -> ${app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs)} px") } // ANS52h: the lab plays the picture size cap setting (0 Automatic, 1 off, 2 480p, 3 720p, 4 1080p)
             "nativeplay" -> Io.main.post { current?.let { video.labPlayBest(it) } } // ANS52i: the best row of the sheet in Kestrel's own player
+            "pagequality" -> Io.main.post { if (::player.isInitialized) player.pressQuality() }   // ANS53d.2 lab: the Quality button of the full-screen controls
+            "pagepick" -> { val n = (i.getStringExtra("kestrel_arg") ?: "").toIntOrNull() ?: 0; i.removeExtra("kestrel_arg"); Io.main.post { pageQualityRows.getOrNull(n)?.let { pagePicked(it) } } }   // ANS53d.2 lab: row n of the open quality list
             "nativeurl" -> { val u = i.getStringExtra("kestrel_arg") ?: ""; val pk = app.kestrel.core.media.QualityLabel.decode(i.getStringExtra("kestrel_pick")); i.removeExtra("kestrel_arg"); i.removeExtra("kestrel_pick"); if (u.startsWith("http://127.0.0.1") || u.startsWith("http://10.0.2.2")) Io.main.post { NativePlayerActivity.launch(this, u, emptyList(), 0L, 720, false, 0, 0, pk) } } // ANS52i lab: an address of the lab server
             "videodl" -> Io.main.post { current?.let { video.labDownloadBest(it) } } // SOAK1: "find the video" and one tap on the first row of the Save video sheet
             "apkcheck" -> { // RX4-X1: what the Downloads list would do with this file (a file in the app's own folder: a copy of an installer, a disguised copy, a plain video)
@@ -2587,6 +2590,7 @@ open class BrowserActivity : Activity(), DockListener {
         rows.add(app.kestrel.browser.web.QualitySheet.Row("Automatic", "Kestrel's player picks, at most 720p", false, true, null))
         for (r in film.rungs) rows.add(app.kestrel.browser.web.QualitySheet.Row(app.kestrel.core.media.QualityLabel.text(r), "", false, true, r))
         player.pinControls(true)
+        pageQualityRows = rows
         qualitySheet.show("Quality", rows, "The film goes on in Kestrel's own player from where it is, in the picture you pick. A smaller picture and a lower frame rate are lighter for this tablet and for the hotspot. Back brings you here again.")
         Health.log("video", "quality-open", "${rows.size} row(s) for the page's film")
     }

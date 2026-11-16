@@ -91,6 +91,7 @@ class PlayerController(
         java.util.Arrays.fill(appTapEpoch, 0L); lastAppTapUptime = 0L; lastToggled = false
         health.newSession()
         view.showQuality = qualityAvailable()
+        if (view.showQuality) say("quality-button", "shown at the start: the film offers pictures to pick from")
         view.visibility = View.VISIBLE
         model.setHideAfter(accessibilityMs())
         model.start(true)
@@ -195,6 +196,9 @@ class PlayerController(
         val v = qualityAvailable()
         if (v != view.showQuality) { view.showQuality = v; view.invalidate(); say("quality-button", if (v) "shown: the film offers pictures to pick from" else "gone") }
     }
+
+    /** The lab presses the Quality button (debug intent): the same call the button makes. */
+    fun pressQuality() { if (activeFlag && view.showQuality) onQuality() }
 
     /** ANS53d.2: keep the controls up while the quality list is open. */
     fun pinControls(on: Boolean) { model.pin(on) }

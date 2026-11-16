@@ -214,7 +214,7 @@ def page_fs(lock=""):
             "<button id=unlock style='" + btn + "'>Unlock</button><button id=exit style='" + btn + "'>Exit full screen</button>" + reporter).encode()
 
 
-def page_fsbox(kind, nobar, chrome=False):
+def page_fsbox(kind, nobar, chrome=False, hls=False):
     """FSB1 / ROT1 / FSC1 (owner message 46): a PLAYER BOX goes full screen (not the bare video), as finance.yahoo.com's player does: kind=shadow puts the box inside a web component's open shadow root (the full-screen
     element is then the host), kind=light is a plain box. The box's bottom edge carries a 6 px RED strip, so a screenshot shows whether the bottom of the full-screen page is hidden under a system bar
     (the strip is gone) or visible (red rows). The clip has sound (a media session opens, so the app can pause it while the screen turns). nobar=1: the box has no controls of its own (Kestrel's bar can show).
@@ -259,8 +259,10 @@ def page_fsbox(kind, nobar, chrome=False):
     if (p && p.catch) p.catch(function (e) { send('fs-rejected', { why: String(e).slice(0, 60) }); });
   };
   send('page');
+  @HLS@
 })();</script>"""
-    return page.replace("@KIND@", kind).replace("@BUILD@", build).encode()
+    hls_js = "setTimeout(function () { try { var x = new XMLHttpRequest(); x.open('GET', '/hls/film/master.m3u8'); x.send(); send('hls-asked'); } catch (e) {} }, 800);" if hls else ""   # ANS53d.2: a page that also loads an HLS stream with two pictures (the lab's own), like hls.js does
+    return page.replace("@KIND@", kind).replace("@BUILD@", build).replace("@HLS@", hls_js).encode()
 
 
 def page_dlguard(kind):
@@ -616,7 +618,7 @@ class H(http.server.BaseHTTPRequestHandler):
             if p == "/fs":
                 return self._send(page_fs((q.get("lock") or [""])[0]))
             if p == "/fsbox":
-                return self._send(page_fsbox((q.get("kind") or ["light"])[0], (q.get("nobar") or [""])[0] == "1", (q.get("chrome") or [""])[0] == "1"))
+                return self._send(page_fsbox((q.get("kind") or ["light"])[0], (q.get("nobar") or [""])[0] == "1", (q.get("chrome") or [""])[0] == "1", (q.get("hls") or [""])[0] == "1"))
             if p == "/dl/page":
                 return self._send(page_dl())
             if p == "/dl/guard":
