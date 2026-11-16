@@ -249,6 +249,51 @@ class TurnSettleMachineTest {
         assertEquals(listOf("tab1"), h.resumed)
     }
 
+    // ANS51c (owner message 51): the real tablet's page said its first word 3.56 s and 7.8 s after a turn; the line said "0 ms, 0 turns measured, 0 gave up" because nothing counted a page that was let go while silent
+    @Test fun aSilentPageIsCountedAndItsLateFirstWordIsMeasured() {
+        val h = Host().apply { playing = true; expects = true }
+        val m = machine(h)
+        m.configChanged(true)
+        while (m.turning && h.clock < 10_000) h.wait(m, TurnSettle.TICK_MS)
+        assertEquals("the page said nothing, the old rule let the cover go", 1, m.silent); assertEquals(0, m.lateCount)
+        h.clock = 3560L
+        m.pageReported(true)                                         // the tablet's first word, after the cover had gone
+        assertEquals(1, m.lateCount); assertEquals(3560L, m.lateLastMs); assertEquals(3560L, m.lateWorstMs)
+        m.pageReported(true)                                         // the next report is an ordinary one: not measured again
+        assertEquals(1, m.lateCount)
+        assertTrue(m.line(), m.line().contains("silent pages: 1 turns") && m.line().contains("1 spoke later") && m.line().contains("first word 3560 ms"))
+        assertTrue(h.logs.toString(), h.logs.any { it.startsWith("turn-late-word:") && it.contains("3560") })
+    }
+
+    @Test fun aPageThatSpokeBeforeTheLimitIsNotSilentAndAPageThatIsNotExpectedIsNeither() {
+        val h = Host().apply { playing = true; expects = true }
+        val m = machine(h)
+        m.configChanged(true)
+        h.wait(m, 1000); m.pageReported(true)
+        while (m.turning && h.clock < 10_000) h.wait(m, TurnSettle.TICK_MS)
+        assertEquals("it spoke at 1 s", 0, m.silent); assertEquals(1, m.lagTurns)
+        val g = Host().apply { playing = true; expects = false }       // a page that never reports (no viewport script): the old rule from the start, nothing to measure
+        val n = machine(g)
+        n.configChanged(true)
+        while (n.turning && g.clock < 10_000) g.wait(n, TurnSettle.TICK_MS)
+        assertEquals(0, n.silent)
+    }
+
+    @Test fun aLateWordOfAnEarlierTurnIsNotMeasuredByTheNextTurn() {
+        val h = Host().apply { playing = true; expects = true }
+        val m = machine(h)
+        m.configChanged(true)
+        while (m.turning && h.clock < 10_000) h.wait(m, TurnSettle.TICK_MS)
+        assertEquals(1, m.silent)
+        h.clock += 1000L
+        m.configChanged(false)                                       // the screen turns again before the page ever spoke
+        m.pageReported(false)                                        // its word now belongs to this turn (an ordinary report)
+        assertEquals(0, m.lateCount)
+        h.clock += 40_000L; m.abandon()
+        h.clock += 1000L; m.pageReported(true)                       // far too late to be about any turn
+        assertEquals(0, m.lateCount)
+    }
+
     @Test fun aSecondTurnWhileOneGoesOnStartsItsOwnClocks() {
         val h = Host().apply { playing = true; expects = true }
         val m = machine(h)
