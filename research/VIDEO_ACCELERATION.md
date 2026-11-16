@@ -39,6 +39,25 @@ NEXT, cheapest and safest first (each behind a Settings row, each with tests and
 
 NOT recommended (reasons in the research files): TextureView backend (slower, still synchronous), seamless rotation (refused here: the navigation bar moves), rotationAnimation JUMPCUT (the owner has system animations off already), libVLC / ijkplayer / mpv / external players / extractors, server-side compression, setFixedSize tricks.
 
+## ANS52g design: the page codec policy (written 2026-11-16 before the code, so a cut-off session can resume)
+
+What exists: `core/media/VideoPolicy` + Settings "Video formats offered to sites" (Automatic / H.264 only / Everything) set only the engine prefs `media.mediasource.vp9.enabled`, `media.av1.enabled`, `media.hevc.enabled`. On this tablet VP9 has a hardware decoder, and Gecko then offers VP9 whatever the pref says (G2 / G3), so "H.264 only" cannot hide VP9 and nothing stops a site from asking for VP9 above what the chip declares (1080p30).
+
+The policy, decided in the page (MAIN world, before the page's own scripts) for the three questions a player asks:
+- `MediaSource.isTypeSupported(type)` (+ `ManagedMediaSource` when present), `HTMLMediaElement.prototype.canPlayType(type)`: "no" ("" for canPlayType) when the type names a video codec the policy refuses;
+- `navigator.mediaCapabilities.decodingInfo(config)`: resolves `{supported:false, smooth:false, powerEfficient:false}` for a refused video config, otherwise the engine's own answer;
+- the size and frame rate come from the HINTS a site puts in the type string (`width=`, `height=`, `framerate=`, the YouTube / TV convention that Enhanced h264ify also reads) or from the mediaCapabilities `video.width / height / framerate`. No hints = no size known = never refused for size (so a VP9-only site at an unknown size keeps working).
+
+Modes (the existing row, now really enforced; the app sends them, the script never guesses):
+- 0 Automatic: a codec is refused ABOVE what this tablet's HARDWARE decoder declares for it (maximum size, and macroblocks per second = ceil(w/16) * ceil(h/16) * fps, from `MediaCodecInfo.VideoCapabilities`: here VP9 = 2048x1088 at 244800 blocks/s = 1080p30, H.264 = 522000 = 1080p64). A codec with NO hardware decoder is left to the engine prefs (they work then).
+- 1 H.264 only: every other video codec is refused (the pref could not do it for VP9).
+- 2 Everything: the script does nothing.
+- new switch "Frame rate offered to sites" (default: whatever the decoder can do; option: at most 30 a second): any video config with an explicit frame rate above 30 is refused, whatever the codec.
+
+Transport: `ShieldsBridge.pageConfig` appends a 5th field to the cfg answer (`<mode>:<gen>:<id>:<flags>:<policy>`, policy = `<mode><fps30>|<avc>|<hevc>|<vp9>|<av1>`, each codec `-` or `<long>x<short>@<blocks per s>`); background.js keeps the last one and returns it as `cx` in the `guard` answer; content.js hands it to `codec-main.js` through a DOM event (like guard-main.js); the page script reports what it refused (counts, one short description, throttled) back the same way (`vcx` message), and the Diagnostics line "Video formats offered to sites" shows the policy, the hardware limits and the counts. Config arrives a few tens of ms after document_start: until then the script answers like the engine (a policy that is not known is never applied).
+
+Why not more: no per-site list, no rewriting of what a site sends (that is ANS52h for HLS playlists), no change to `<video src>` / `<source type>` selection (the engine decides those itself).
+
 ## What to ask the owner for next
 
 The same four Diagnostics lines of message 51 plus, new in alpha56: `Full-screen video controls` (page stalls, own cost, frames), `Real video`, `Turning under a video` (first frame, silent pages), `Frames around turns`, `Video decoders`, `Heat and speed`. Test once on the Yahoo page and once on a light video page.
