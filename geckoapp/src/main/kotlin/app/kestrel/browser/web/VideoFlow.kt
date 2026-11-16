@@ -368,6 +368,7 @@ class VideoFlow(private val a: BrowserActivity) {
         val mode = a.prefs.webVideoMode
         if (mode == WebHandOver.NEVER) return decline(tab, "the setting says the page's own player")
         if (tab !== a.current || tab.isNewTab || a.onHomeScreen(tab)) return decline(tab, "not the page in front")
+        if (!a.pageInFront()) return decline(tab, "the app is not in front or a screen lies over the page")      // a late answer after Home or the power button, or a page script's question, starts nothing
         val now = SystemClock.uptimeMillis()
         if (now < tab.gecko.handOverOffUntil) return decline(tab, "Kestrel's player failed on this page a moment ago")
         if (NativePlayerStats.active || now - NativePlayerStats.launchedAt < 3000L) { if (!tab.isPrivateTab) WebHandStats.repeats++; return true }   // it is up (or just started): the page keeps its element closed, no second player

@@ -196,10 +196,10 @@
   // or an ancestor is fixed or sticky, or sits in a scroller of its own (a carousel, an overflow box). The app follows the page's scroll through the engine's compositor, never through this script (a busy page
   // would make it lag).
   function geomOf(el) {
+    function up(x) { var rn = x.getRootNode ? x.getRootNode() : null; return x.parentElement || ((rn && rn !== document && rn.host) ? rn.host : null); }
+    function r2(v) { return Math.round(v * 100) / 100; }
     try {
       var rc = el.getBoundingClientRect(), vv = window.visualViewport, se = document.scrollingElement || document.documentElement, fx = 0, n = el, i = 0;
-      function up(x) { var rn = x.getRootNode ? x.getRootNode() : null; return x.parentElement || ((rn && rn !== document && rn.host) ? rn.host : null); }
-      function r2(v) { return Math.round(v * 100) / 100; }
       for (; n && n !== document.documentElement && i < 40; i++, n = up(n)) {
         var cs = getComputedStyle(n);
         if (cs.position === 'fixed' || cs.position === 'sticky') { fx = 1; break; }

@@ -213,8 +213,8 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
 
     /** The box (view pixels, in the page area) the whole view covers; the picture is letterboxed inside it. */
     fun place(box: InlineBox.Rect) {
-        val lp = (layoutParams as? FrameLayout.LayoutParams) ?: FrameLayout.LayoutParams(box.w, box.h, Gravity.TOP or Gravity.START)
-        if (lp.width != box.w || lp.height != box.h || lp.gravity != (Gravity.TOP or Gravity.START)) { lp.width = box.w; lp.height = box.h; lp.gravity = Gravity.TOP or Gravity.START; layoutParams = lp }
+        val lp = (layoutParams as? FrameLayout.LayoutParams) ?: FrameLayout.LayoutParams(box.w, box.h, Gravity.TOP or Gravity.LEFT)
+        if (lp.width != box.w || lp.height != box.h || lp.gravity != (Gravity.TOP or Gravity.LEFT)) { lp.width = box.w; lp.height = box.h; lp.gravity = Gravity.TOP or Gravity.LEFT; layoutParams = lp }
         translationX = box.l.toFloat(); translationY = box.t.toFloat()
     }
 
@@ -318,7 +318,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
         val slop = 12f * density
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> { downX = e.x; downY = e.y; downT = e.eventTime; passing = false; longFired = false; downCopy?.recycle(); downCopy = MotionEvent.obtain(e); main.removeCallbacks(longPressRun); main.postDelayed(longPressRun, android.view.ViewConfiguration.getLongPressTimeout().toLong()) }
-            MotionEvent.ACTION_MOVE -> if (!passing && (Math.abs(e.x - downX) > slop || Math.abs(e.y - downY) > slop)) startPass()
+            MotionEvent.ACTION_MOVE -> if (!passing && !longFired && (Math.abs(e.x - downX) > slop || Math.abs(e.y - downY) > slop)) startPass()
             MotionEvent.ACTION_POINTER_DOWN -> if (!passing) startPass()
         }
         if (passing) {

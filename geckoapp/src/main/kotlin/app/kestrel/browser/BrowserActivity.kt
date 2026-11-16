@@ -335,6 +335,12 @@ open class BrowserActivity : Activity(), DockListener {
     /** ANS55f (owner message 55): Kestrel's own player inside the page, over the page's video box. Made with the page area (onCreate); VideoFlow starts it, the hooks below end it. */
     internal lateinit var inline: app.kestrel.browser.web.InlineHost
     internal fun nativeFilmFailed() = video.nativeFailed()
+    /** Review of the inline player (2026-11-16): a film may only start while the app is in front and nothing lies over the page (a late answer after Home or the power button, or a page script's own question, must start nothing). */
+    internal fun pageInFront(): Boolean = onScreenNow && tabGrid.visibility != View.VISIBLE && settingsView?.parent == null && downloadsView?.parent == null && diagView?.parent == null && listPanel?.parent == null && !sheet.isShowing
+    /** The film inside the page began or ended: the neon glow holds still while it plays (the page's own element is paused, so the engine's media session says nothing). */
+    internal fun inlineChanged() { updateNeonBusy() }
+    /** The tab's address changed WITHOUT a page load (a single-page site's pushState, a #link): a film that lies over the old content ends. */
+    internal fun pageAddressChanged(tab: Tab, url: String) { if (::inline.isInitialized) inline.addressChanged(tab, url) }
     /** ANS55f / LP1: a long press on the film inside the page opens the download options of that film, as a long press on the page's own video does. */
     internal fun inlineLongPress(t: Tab, url: String) = video.longPress(t, url, null) { }
 
@@ -654,6 +660,7 @@ open class BrowserActivity : Activity(), DockListener {
     /** ANS54e: did this touch end inside the page view (not in the toolbar, a sheet or a menu)? */
     private fun tapInPage(ev: android.view.MotionEvent): Boolean {
         if (!::geckoView.isInitialized || !geckoView.isShown) return false
+        if (::inline.isInitialized && inline.active && inline.covers(ev.rawX, ev.rawY)) return false          // a tap on the film's own buttons is no tap on the page: it must not renew the press window
         val loc = IntArray(2); geckoView.getLocationOnScreen(loc)
         return ev.rawX >= loc[0] && ev.rawX <= loc[0] + geckoView.width && ev.rawY >= loc[1] && ev.rawY <= loc[1] + geckoView.height
     }
@@ -949,8 +956,8 @@ open class BrowserActivity : Activity(), DockListener {
         content.addView(restoreOverlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) // above the page, below Home / error screens
         pullChip = PullChip(this, pal)
         content.addView(pullChip, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
-        inline = app.kestrel.browser.web.InlineHost(this, content, geckoView)   // ANS55f: above the page, below Home / error screens, the mini panel and every sheet (so they cover it)
-        content.addView(inline.view, FrameLayout.LayoutParams(1, 1, Gravity.TOP or Gravity.START))
+        inline = app.kestrel.browser.web.InlineHost(this, geckoView)   // ANS55f: above the page, below Home / error screens, the mini panel and every sheet (so they cover it)
+        content.addView(inline.view, FrameLayout.LayoutParams(1, 1, Gravity.TOP or Gravity.LEFT))
         geckoView.pull = pullListener
         geckoView.pullEnabled = {
             val t = current
@@ -1672,6 +1679,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun hibernate(tab: Tab) {
         val s = tab.session ?: return
         endFullScreenOf(tab, "the tab was put to sleep")
+        if (::inline.isInitialized && inline.tabOrNull === tab) inline.stop("the tab was put to sleep")
         BackPictures.dropTab(tab.id)
         if (geckoView.session === s) geckoView.releaseSession()
         try { s.close() } catch (e: Exception) { /* already gone */ }
@@ -2714,7 +2722,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (t?.loading != true) loadSeen = null
         else if (loadSeen !== t) { loadSeen = t; loadSeenAt = now; Io.main.postDelayed({ updateNeonBusy() }, 3100) }
         val heavyLoad = t?.loading == true && now - loadSeenAt < 3000
-        Neon.busy(app.kestrel.core.session.NeonRules.busy(heavyLoad, kbTopScreen > 0, keyboardComing, t?.gecko?.videoPlaying == true))   // RX3-S1: a playing video holds the glow still too
+        Neon.busy(app.kestrel.core.session.NeonRules.busy(heavyLoad, kbTopScreen > 0, keyboardComing, t?.gecko?.videoPlaying == true || (::inline.isInitialized && inline.active)))   // RX3-S1: a playing video holds the glow still too
     }
     /** RX3-S1: the page's video started or stopped; only the tab in front matters for the glow. UI thread (the engine's delegates run there). */
     internal fun videoStateChanged(tab: Tab) { Health.log("neon", "video", "playing=${tab.gecko.videoPlaying} front=${tab === current}"); if (tab === current) updateNeonBusy() }
@@ -2863,6 +2871,7 @@ open class BrowserActivity : Activity(), DockListener {
      */
     internal fun sessionGone(tab: Tab, crashed: Boolean) {
         endFullScreenOf(tab, if (crashed) "the page's process crashed" else "the page's process was killed")
+        if (::inline.isInitialized && inline.tabOrNull === tab) inline.stop("the page's process went")
         val url = tab.url
         val saved = tab.gecko.state
         tab.session?.let { s -> if (geckoView.session === s) geckoView.releaseSession(); try { s.close() } catch (e: Exception) { /* already unusable */ } }
