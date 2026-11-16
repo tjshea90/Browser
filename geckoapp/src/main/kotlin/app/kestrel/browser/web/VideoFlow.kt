@@ -356,6 +356,7 @@ class VideoFlow(private val a: BrowserActivity) {
         if (mode == WebHandOver.NEVER) return decline(tab, "the setting says the page's own player")
         if (tab !== a.current || tab.isNewTab || a.onHomeScreen(tab)) return decline(tab, "not the page in front")
         val now = SystemClock.uptimeMillis()
+        if (a.lastPressAt == 0L || now - a.lastPressAt > WebHandOver.pressWindowMs(why)) return decline(tab, "no tap of the person just before")   // a page's script can fake the question, not a finger
         if (NativePlayerStats.active || now - NativePlayerStats.launchedAt < 3000L) { if (!tab.isPrivateTab) WebHandStats.repeats++; return true }   // it is up (or just started): the page keeps its element closed, no second player
         if (now < tab.gecko.handOverOffUntil) return decline(tab, "Kestrel's player failed on this page a moment ago")
         val known = knownIn(tab, frame).let { k -> if (why == WebHandOver.Why.LATE) k.filter { it.durationMs >= WebHandOver.FILM_MS } else k }   // (a playlist that comes late must be known to be as long as a film: it may be an advertisement)

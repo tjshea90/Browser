@@ -14,6 +14,11 @@ class WebHandOverTest {
     private val film = Known("https://v.example/film/master.m3u8", MediaKind.HLS, 600_000L, true)
     private val unknownLength = Known("https://v.example/other/master.m3u8", MediaKind.HLS, 0L, true)
 
+    @Test fun aHandOverNeedsAFreshTapOfThePerson() {
+        assertEquals(8_000L, WebHandOver.pressWindowMs(Why.PRESS)); assertEquals(8_000L, WebHandOver.pressWindowMs(Why.PLAY)); assertEquals(8_000L, WebHandOver.pressWindowMs(Why.KESTREL))
+        assertEquals(20_000L, WebHandOver.pressWindowMs(Why.FULLSCREEN)); assertEquals(20_000L, WebHandOver.pressWindowMs(Why.LATE))
+    }
+
     @Test fun aFilmPressedAgainContinuesWhereThePersonStopped() {
         val u = "https://cdn.example/clip.mp4"
         assertEquals(118_000L, WebHandOver.resumeMs(0L, u, u, 120_000L, 600_000L, 60_000L))

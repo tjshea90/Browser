@@ -643,6 +643,8 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     private var lastTouchAt = 0L
+    /** ANS54e: when the person last ended a tap (a short touch that did not drag) or pressed a key that plays; 0 = not yet. A page's script can fake the gate's question, not a finger (core WebHandOver.pressWindowMs). */
+    @Volatile internal var lastPressAt = 0L
     private var downX = 0f
     private var downY = 0f
     private var dragged = false
@@ -683,6 +685,7 @@ open class BrowserActivity : Activity(), DockListener {
             android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
                 pressActive = false; if (!pressOnPanel) pressEndAt = SystemClock.uptimeMillis()
                 lastTouchAt = SystemClock.uptimeMillis()
+                if (ev.actionMasked == android.view.MotionEvent.ACTION_UP && !dragged && ev.eventTime - ev.downTime <= 700L) lastPressAt = SystemClock.uptimeMillis()   // a tap: Kestrel's player may take a film over now
                 if (fullscreenOn) fsTurner.touched() // FS1: the rotate button shows again for a moment
                 // ANS53c (owner message 53: "zero delay"): a short tap on the picture of a full-screen film under Kestrel's controls is answered HERE, on the glass, not after the page's script, the extension and the app have talked
                 // (a busy page took seconds); the page still gets the touch and its own message for it is matched by the time of the touch and dropped (PlayerController.appTap)
@@ -2925,6 +2928,10 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** Debug builds only (the emulator lab): where does a Back key go? */
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (event.action == android.view.KeyEvent.ACTION_DOWN) when (event.keyCode) {          // (a keyboard or remote that plays: a press as well)
+            android.view.KeyEvent.KEYCODE_ENTER, android.view.KeyEvent.KEYCODE_NUMPAD_ENTER, android.view.KeyEvent.KEYCODE_SPACE, android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+            android.view.KeyEvent.KEYCODE_MEDIA_PLAY, android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> lastPressAt = SystemClock.uptimeMillis()
+        }
         if (event.keyCode == android.view.KeyEvent.KEYCODE_BACK && event.action == android.view.KeyEvent.ACTION_UP && (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0)
             Health.log("key", "back-up", "fullscreenOn=$fullscreenOn canceled=${event.isCanceled}")
         return super.dispatchKeyEvent(event)
