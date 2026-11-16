@@ -1,8 +1,8 @@
 # Video acceleration and smooth video: what other browsers do, what Kestrel G can copy
 
 ## Summary (10 lines)
-1. Chrome puts Android video on its own SurfaceView/SurfaceControl layer that SurfaceFlinger can show as a hardware overlay (no GPU composition of the picture). Gecko on Android has no such path (overlay bugs open since 2019); it draws each frame from a SurfaceTexture, one frame at a time.
-2. Chrome decodes into AImageReader buffers; Gecko is migrating (pref gfx.video.aimage-reader-gpu-process-android, GPU-process MediaCodec in 161) but it is unfinished.
+1. Chrome puts Android video on its own SurfaceView/SurfaceControl layer that SurfaceFlinger can show as a hardware overlay (no GPU composition of the picture). Gecko on Android has no such path (overlay bugs open since 2019); it draws each frame from a SurfaceTexture, one frame at a time. (sec 1 and 2, DOCUMENTED)
+2. Chrome decodes into AImageReader buffers; Gecko is migrating (pref gfx.video.aimage-reader-gpu-process-android, GPU-process MediaCodec in 161) but it is unfinished. (sec 1 and 2, DOCUMENTED)
 3. Rotation: Chrome batches size changes into one update, embeds fullscreen on a black fallback and, as far as the code shows, posts the resize to viz without waiting. Gecko resizes through a synchronous IPC to the compositor and its Javadoc says surfaceChanged may block. The 0.9-2 s UI stalls are most likely engine-side.
 4. Only a Kestrel-owned SurfaceView plus MediaPlayer or Media3 gives the overlay path on this tablet, for sniffed direct URLs (Samsung's popup player works so). No MSE blob streams, no DRM; framework HLS is MPEG-TS only.
 5. External players by intent: only MX Player documents a headers extra; VLC and mpv-android document none.
