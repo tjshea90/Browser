@@ -80,6 +80,9 @@ class PlayerModel(private val h: Host) {
     private var optMuted: Boolean? = null
     private var optMutedSeq = 0
     private var optMutedUntil = 0L
+    private var optPos: Double? = null        // where a seek (the track, a 10 s button, a double tap) asked to go: shown at once and held until the page says it did it (review of alpha55: the thumb sprang back for a moment)
+    private var optPosSeq = 0
+    private var optPosUntil = 0L
     private var active = false
 
     // what Diagnostics says
@@ -94,7 +97,7 @@ class PlayerModel(private val h: Host) {
     /** The accessibility setting's recommended time for controls to stay (never less than [PlayerRules.HIDE_AFTER_MS]). */
     fun setHideAfter(ms: Long) { controls.hideAfterMs = maxOf(PlayerRules.HIDE_AFTER_MS, ms) }
 
-    fun start(playingNow: Boolean) { active = true; sessions++; last = null; duration.reset(); queue.clear(); optPlaying = null; optMuted = null; taps.reset(); controls.start(playingNow) }
+    fun start(playingNow: Boolean) { active = true; sessions++; last = null; duration.reset(); queue.clear(); optPlaying = null; optMuted = null; optPos = null; taps.reset(); controls.start(playingNow) }
     fun stop() { active = false; taps.reset(); controls.stop(); queue.clear(); last = null; h.changed() }
     val running: Boolean get() = active
 
@@ -106,6 +109,7 @@ class PlayerModel(private val h: Host) {
         // the page has carried out the command (this report was taken after it: the film's own state counts again) or the wait is over (a page that never answers must not hold a wrong picture for ever)
         if (optPlaying != null && (s.ack >= optSeq || s.atMs >= optUntil)) optPlaying = null
         if (optMuted != null && (s.ack >= optMutedSeq || s.atMs >= optMutedUntil || optMuted == s.muted)) optMuted = null
+        if (optPos != null && (s.ack >= optPosSeq || s.atMs >= optPosUntil)) optPos = null
         val v = view()
         controls.state(v.playing, v.buffering, v.ended)
         h.changed()
@@ -120,6 +124,7 @@ class PlayerModel(private val h: Host) {
         val rate = s?.rate ?: 1.0
         val t = when {
             s == null -> 0.0
+            optPos != null -> optPos!!                                                       // a seek the page has not carried out yet: where it was asked to go
             playing && !buffering && s.rate > 0.0 -> s.timeS + (now - s.atMs).coerceAtLeast(0L) / 1000.0 * s.rate
             else -> s.timeS
         }
@@ -141,12 +146,20 @@ class PlayerModel(private val h: Host) {
         optPlaying = want; optSeq = seq; optUntil = h.now() + OPT_WAIT_MS
         controls.interacted(); h.changed()
     }
-    fun skip(deltaS: Double) { send(Cmd("skip", d = deltaS)); controls.interacted() }
+    fun skip(deltaS: Double) {
+        val v = view()
+        val target = (v.timeS + deltaS).coerceAtLeast(0.0).let { if (v.kind == DurationView.Kind.KNOWN) it.coerceAtMost(v.lengthS) else it }
+        send(Cmd("skip", d = deltaS))
+        if (last != null) { optPos = target; optPosSeq = seq; optPosUntil = h.now() + OPT_WAIT_MS }
+        controls.interacted()
+    }
     fun skipButton(forward: Boolean) { skip(if (forward) PlayerRules.SKIP_S else -PlayerRules.SKIP_S); h.changed() }
     fun seekFraction(f: Double) {
         val v = view()
         if (v.kind != DurationView.Kind.KNOWN) return
-        send(Cmd("seek", t = PlayerRules.timeAt(f, v.lengthS)))
+        val to = PlayerRules.timeAt(f, v.lengthS)
+        send(Cmd("seek", t = to))
+        optPos = to; optPosSeq = seq; optPosUntil = h.now() + OPT_WAIT_MS
         controls.interacted(); h.changed()
     }
     fun mute() { val v = view(); send(Cmd("mute", on = !v.muted)); optMuted = !v.muted; optMutedSeq = seq; optMutedUntil = h.now() + OPT_WAIT_MS; controls.interacted(); h.changed() }

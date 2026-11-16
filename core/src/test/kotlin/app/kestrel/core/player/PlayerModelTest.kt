@@ -121,6 +121,27 @@ class PlayerModelTest {
         m.playPause(); assertEquals("the second press plays", "play", m.drain()[0].a)
     }
 
+    @Test fun aSeekIsShownAtOnceAndHeldUntilThePageSaysItDidIt() {
+        // review of alpha55: the thumb sprang back to the old place for a few hundred ms (up to a second) after the finger let go of the track, because the position is only the page's
+        val h = Host(); val m = model(h)
+        m.onSample(sample(h, t = 30.0, d = 600.0))
+        h.clock += 100
+        m.seekFraction(0.5)
+        assertEquals("the track: shown where it was asked to go, at once", 300.0, m.view().timeS, 1e-6)
+        h.clock += 200; m.onSample(sample(h, t = 30.4, d = 600.0, ack = 0))                    // a report taken before the page carried the seek out
+        assertEquals("it does not pull the thumb back", 300.0, m.view().timeS, 1e-6)
+        h.clock += 100; m.onSample(sample(h, t = 300.1, d = 600.0, ack = 1))                   // carried out: the page's own position counts again
+        assertEquals(300.1, m.view().timeS, 1e-6)
+        m.skipButton(true)
+        assertEquals("a 10 s button: shown 10 s on at once", 310.1, m.view().timeS, 1e-6)
+        m.skipButton(true)
+        assertEquals("and again from there", 320.1, m.view().timeS, 1e-6)
+        h.clock += 3100; m.onSample(sample(h, t = 300.9, d = 600.0, ack = 1))                  // a page that never did it: its own position counts again after 3 s
+        assertEquals(300.9, m.view().timeS, 1e-6)
+        m.seekFraction(2.0); assertEquals("never past the end", 600.0, m.view().timeS, 1e-6)
+        m.skip(-1000.0); assertEquals("never before the start", 0.0, m.view().timeS, 1e-6)
+    }
+
     @Test fun aReportThatNamesTheCommandCountsAtOnceAndEverythingIsNumbered() {
         val h = Host(); val m = model(h)
         m.onSample(sample(h, t = 2.0))
