@@ -2319,3 +2319,24 @@
 ## 2026-11-16T04:59:24Z
 > Waiting on two background jobs: the emulator proof run (43806840560, now running the lab suite) and the independent code review. I'll pick up when either finishes, or at the 05:08Z wake.
 <!-- sha:407d8142df8f -->
+
+## 2026-11-16T05:57:06Z
+> Alpha57 is not shipped yet. The code is written and passes every test I can run here. I'm waiting on two things before shipping.
+>
+> - **Emulator run on the real Firefox engine (run 43812820865):** it covers the controls, Kestrel's own player and the press-to-play rule. I'll read its report when it finishes.
+> - **Independent review of the press-to-play script:** it's read-only, and a bug there could stop videos playing on real sites.
+>
+> I also added a lab check for the Quality button in the page's full-screen controls. It needs a second lab run, since the one in flight started before I wrote it.
+>
+> What your message 53 gets so far, all coded:
+> - **No auto-playing:** a video starts only when you press play.
+> - **No video data before play:** only the picture the site shows for the video is downloaded.
+> - **Instant controls:** a tap on the picture shows or hides the full-screen controls with no wait and no fade.
+> - **Quality:** a Quality button in Kestrel's own player. The page's full-screen controls get the same button for films that offer two or more pictures, like the Yahoo one; picking one moves the film to Kestrel's player from the same second.
+> - **Download badge:** the button no longer stays lit on the Home screen.
+> - **Kestrel's own player:** it follows how you hold the tablet and has a rotate button.
+>
+> None of this has run on your tablet. The emulator proves behaviour, not how smooth it is on your hardware.
+>
+> Still open from earlier: your tablet test and Diagnostics numbers, a caption/speed/quality entry for films without a playlist address (VP12), and a few older lab-tuning rows (ROT2e, SOAK1d, LAB2f).
+<!-- sha:6dbf79de49f7 -->
