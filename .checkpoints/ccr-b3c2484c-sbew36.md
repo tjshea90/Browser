@@ -1,21 +1,22 @@
-# CHECKPOINT 2547 — read me first, then TASKS.md
+# CHECKPOINT 2548 — read me first, then TASKS.md
 
-**Written:** 2026-11-16T18:26:20Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `ac17a357` (this checkpoint is the commit after it)
+**Written:** 2026-11-16T18:33:37Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `6b09bf70` (this checkpoint is the commit after it)
 
 ## Just done
-lab run 43927135769 (gp, head 42e933e5): Kestrel's OWN player passes every gesture check on the real engine (rest = gesture-armed, hold + 4 cm = +40 s, 6 cm = +193 s, 4 cm left = -40 s, an inch up = +13 s, volume 27->91, brightness 41->92, dead zone, double tap + controls away) = ANS57a/b(A)/c(A) proven; the inline film (B) failed only because the debug am start paused the screen ('the app was left'); DebugTouch is now a debug-only BROADCAST receiver (am broadcast -a app.kestrel.browser.DEBUG_TOUCH -p pkg --es script ...), attached in both screens, only the window with focus plays it; compile green; heartbeat trig_01LyMjhKLgSaFigb7F61XAfe
+lab run 43928839921 (gp, head af4a8675): 21/21 checks, 0 issues = ANS57 proven on the real engine for Kestrel's own player AND the film inside the page (volume, brightness, hold + drag seek +40 s / +193 s / -40 s / fine +13 s, dead zone, plain drag scrolls the page inside the page, double tap hides the controls); the screenshots show the volume bar with percent and the +0:40 (1:02) text; JVM suites green on the alpha60 bump (versionCode 161, extension manifest 1.0.161); ANS57 rows ticked in TASKS.md
 
 ## Do this next
-1) dispatch lab gp again on this head (android.yml app=lab lab_suite=gp lab_minutes=1 lab_net=full): B (inline hold-first volume / brightness / seek, plain drag scrolls the page, double tap hides controls) must pass; read report.md; fix what fails; 2) tick ANS57b/c (B) in TASKS.md with the run id; lab vp (all video suites) once gp is green; 3) ship alpha60 (versionCode 161, 0.3.0-alpha60, tools/sync-ext-version.sh, fill TESTED_PLACEHOLDER in docs/handoff/ALPHA60_RELEASE_NOTE.txt, bash ship.sh gecko, ONE dispatch, record-release.sh); 4) answer owner 55, 57, 58, 59 and delete the heartbeat.
+1) dispatch lab vp (android.yml app=lab lab_suite=vp lab_minutes=1 lab_net=full; all video suites kp np cp ap ho ip gp pv in one boot, about 15-20 min) on this head as the release-candidate regression; read report.md; fix anything real; 2) ship alpha60: fill TESTED_PLACEHOLDER in docs/handoff/ALPHA60_RELEASE_NOTE.txt, bash ship.sh gecko "$(cat docs/handoff/ALPHA60_RELEASE_NOTE.txt)", ONE run_workflow (app=gecko full_build=true note), verify tag + jobs + release APK, bash tools/record-release.sh kestrel-g-v0.3.0-alpha60 with the IDENTICAL note; 3) tick ANS55/ANS58/ANS59 rows, update HANDOFF; 4) answer owner 55, 57, 58, 59 and delete heartbeat trig_01LyMjhKLgSaFigb7F61XAfe.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  11d927ab ckpt 2547: lab run 43927135769 (gp, head 42e933e5): Kestrel's OWN player passes every g
   d6fe07e1 ckpt 2546: heartbeat created: trig_01LyMjhKLgSaFigb7F61XAfe (every 2 h, bound to this s
   42e933e5 ckpt 2545: lab run 43925029376 (gv, head 3c1b38d8): pv scene 7/7 OK on the real engine 
   306ef253 ckpt 2544: dispatched lab gv run 43925029376 (head 3c1b38d8: input motionevent finger p
@@ -25,7 +26,6 @@ lab run 43927135769 (gp, head 42e933e5): Kestrel's OWN player passes every gestu
   66aa33a7 ckpt 2540: ANS58a/b first cheap measure: kestrel-shields manifest exclude_matches for t
   a23e57dc ckpt 2539: lab suite gv = gp + pv in ONE emulator boot (the queue of GitHub was slow: t
   c70f2aac ckpt 2538: ANS58c FIX coded + tested: private tabs are NEVER put to sleep by the memory
-  c0017fa7 ckpt 2537: owner message 58 written into TASKS.md (ANS58a-d): a PRIVATE tab was reloade
 ```
 
 (6 automatic checkpoint(s) since the last deliberate one — the
