@@ -69,7 +69,7 @@ test('a press on the player\'s own button asks the app first; yes = the page\'s 
   await tapOn(page, '#btn'); await settle(page, 500);
   const q = await vhand(page);
   assert.equal(q.length, 1, 'one question: ' + JSON.stringify(q));
-  assert.equal(q[0].y, 'play'); assert.equal(q[0].s, 'https://cdn.example/a.mp4'); assert.equal(q[0].b, 0); assert.equal(q[0].l, 0);
+  assert.equal(q[0].y, 'press', 'the tap on a play button over the picture asks first (the page\'s play() joins that question)'); assert.equal(q[0].s, 'https://cdn.example/a.mp4'); assert.equal(q[0].b, 0); assert.equal(q[0].l, 0);
   assert.ok(q[0].w >= 300 && q[0].h >= 170, 'the box: ' + q[0].w + 'x' + q[0].h);
   assert.equal(await result(page), 'AbortError', 'the page\'s play() was interrupted, not refused with an error screen');
   await tapOn(page, '#btn'); await settle(page, 500);

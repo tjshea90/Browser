@@ -160,7 +160,7 @@
           if (hand && !el.controls && target !== el && playLike(target, el)) {                                  // a play button over the picture: the app is asked first, the element stays closed while it thinks
             var rr = rec(el), nowT = dnow.call(Date);
             if (nowT - rr.askedAt > 400 && nowT >= rr.noUntil) ask(el, 'press', function (handed) { if (!handed) openEl(el, 'press'); });
-            else if (!(rr.ask && !rr.ask.done) && !rr.open) openEl(el, 'press');                                   // (the same press seen again, or the app said no a moment ago)
+            else if (!(rr.ask && !rr.ask.done) && !rr.open && nowT < rr.noUntil) openEl(el, 'press');             // (the app said no a moment ago: the film plays here; the same press seen again after a yes changes nothing)
           }
           else { openEl(el, 'press'); if (hand && el.controls) askPress(el); }
         }   // (a cookie button or a menu that merely sits over the picture opens nothing)
