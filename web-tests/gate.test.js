@@ -62,7 +62,7 @@ test('a MediaSource attach is held: the player gets no sourceopen, so a script p
 });
 
 test('play() without a user activation is refused like the engine would, with a user activation it opens the element and goes through', async () => {
-  const page = await open(MSE + LATE_PLAY);
+  const page = await open(MSE + LATE_PLAY, '1');                          // (rule ON, answered: without an answer a play() waits for it, see the test of the late answer)
   await settle(page, 600);
   assert.match(await page.evaluate(() => window.__r), /^NotAllowedError: The play method is not allowed/);
   assert.equal(await page.evaluate(() => window.opened), 0);
@@ -159,7 +159,7 @@ test('the setting off lets everything go at once, also what was held before, and
 });
 
 test('what was held and opened is counted and reported once as numbers', async () => {
-  const page = await open(MSE + LATE_PLAY);
+  const page = await open(MSE + LATE_PLAY, '1');
   await settle(page, 600);
   await tapOn(page, '#v');
   await page.waitForFunction(() => window.__reports.length > 0, null, { timeout: 5000 });
@@ -202,5 +202,93 @@ test('a hundred media elements in one go cost little: the scan is bounded', asyn
   await settle(page, 300);
   assert.ok(ms < 800, 'took ' + ms + ' ms');
   const n = await page.evaluate(() => Array.from(document.querySelectorAll('video')).filter((v) => v.getAttribute('preload') === 'none' && !v.hasAttribute('autoplay')).length);
-  assert.ok(n >= 59, 'the first sixty are made safe at once (the rest by the wrappers): ' + n);
+  assert.equal(n, 300, 'all of them are made safe (review: the old cap of sixty left the rest autoplaying): ' + n);
+});
+
+// ---------------------------------------------------------------- the independent review of the gate (research/ANS53_GATE_REVIEW.md)
+test('review 1: a blob: of a FILE (an upload form\'s preview or duration probe, also on a detached element) is not held; only a MediaSource\'s is', async () => {
+  const page = await open('<video id="v" style="display:block;width:320px;height:180px"></video><script>window.ev = []; window.dev = [];'
+    + 'window.fileUrl = URL.createObjectURL(new Blob([new Uint8Array(3000)], { type: "video/mp4" }));'
+    + 'var v = document.getElementById("v"); ["loadstart", "error"].forEach(function (n) { v.addEventListener(n, function () { window.ev.push(n); }); }); v.src = window.fileUrl;'
+    + 'var d = document.createElement("video"); ["loadstart", "error"].forEach(function (n) { d.addEventListener(n, function () { window.dev.push(n); }); }); d.src = window.fileUrl;</script>', '1');
+  await settle(page, 800);
+  const ev = await page.evaluate(() => ({ attached: window.ev, detached: window.dev }));
+  assert.ok(ev.attached.includes('loadstart'), 'the file address reached the engine (attached): ' + JSON.stringify(ev));
+  assert.ok(ev.detached.includes('loadstart'), 'and on a detached element: ' + JSON.stringify(ev));
+});
+
+test('review 2: a video that is given a stream (a camera, a call) shows it by its own autoplay, also after an earlier press', async () => {
+  for (const pressFirst of [false, true]) {
+    const page = await open('<video id="v" autoplay muted playsinline style="display:block;width:320px;height:180px"></video><canvas id="c" width="64" height="64"></canvas>', '1');
+    await settle(page, 300);
+    assert.equal(await page.evaluate(() => document.getElementById('v').hasAttribute('autoplay')), false, 'closed: the autoplay is off the element');
+    if (pressFirst) { await tapOn(page, '#v'); await settle(page, 200); }
+    await page.evaluate(() => { const c = document.getElementById('c'); c.getContext('2d').fillRect(0, 0, 10, 10); document.getElementById('v').srcObject = c.captureStream(10); });
+    await settle(page, 900);
+    const st = await page.evaluate(() => { const v = document.getElementById('v'); return { attr: v.hasAttribute('autoplay'), paused: v.paused }; });
+    assert.deepEqual(st, { attr: true, paused: false }, 'pressFirst=' + pressFirst);
+  }
+});
+
+test('review 11: audio is not touched (a music player\'s next track, a sound): attributes stay, play() is not refused', async () => {
+  const page = await open('<audio id="a" autoplay preload="auto" src="https://cdn.example/a.mp3"></audio><script>setTimeout(function () { var x = new Audio("https://cdn.example/b.mp3"); window.__r = "waiting"; x.play().then(function () { window.__r = "ok"; }, function (e) { window.__r = e.name; }); }, 150);</script>', '1');
+  await settle(page, 700);
+  const st = await page.evaluate(() => { const a = document.getElementById('a'); return { autoplay: a.hasAttribute('autoplay'), preload: a.getAttribute('preload'), r: window.__r }; });
+  assert.equal(st.autoplay, true); assert.equal(st.preload, 'auto');
+  assert.notEqual(st.r, 'NotAllowedError', 'the gate refused an audio play(): ' + st.r);
+});
+
+test('review 7: a tap opens the video it landed on or in (its player box), not one that a cookie button merely sits over', async () => {
+  const page = await open('<div id="player" style="position:relative;width:320px;height:180px"><video id="v" style="display:block;width:320px;height:180px"></video><button id="playbtn" style="position:absolute;left:100px;top:90px;width:120px;height:60px">Play</button></div>'
+    + '<div id="cookie" style="position:fixed;left:0;top:0;width:320px;height:50px;background:#eee;z-index:9"><button id="accept" style="width:200px;height:40px">Accept cookies</button></div>'
+    + '<script>window.ms = new MediaSource(); window.opened = 0; ms.addEventListener("sourceopen", function () { window.opened++; }); document.getElementById("v").src = URL.createObjectURL(ms);</script>', '1');
+  await settle(page, 300);
+  await tapOn(page, '#accept'); await settle(page, 400);
+  assert.equal(await page.evaluate(() => window.opened), 0, 'the cookie button sits over the picture and opened nothing');
+  await tapOn(page, '#playbtn'); await settle(page, 500);
+  assert.equal(await page.evaluate(() => window.opened), 1, 'the player\'s own button opened it');
+});
+
+test('review 3: a play() 6 s after a press on the player\'s own button is the person\'s (slow hotspot); 6 s after a tap far away it is not', async () => {
+  const mk = (which) => '<div id="player" style="position:relative;width:320px;height:180px"><video id="v" src="https://cdn.example/a.mp4" style="display:block;width:320px;height:180px"></video><button id="btn" style="position:absolute;left:100px;top:60px;width:120px;height:60px">Play</button></div>'
+    + '<div id="far" style="width:300px;height:80px;margin-top:40px"><button id="other" style="width:200px;height:50px">Other</button></div>'
+    + '<script>function later() { setTimeout(function () { window.__r = "waiting"; document.getElementById("v").play().then(function () { window.__r = "ok"; }, function (e) { window.__r = e.name; }); }, 6000); }'
+    + 'document.getElementById("' + which + '").onclick = later;</script>';
+  const own = await open(mk('btn'), '1');
+  await tapOn(own, '#btn');
+  const far = await open(mk('other'), '1');
+  await tapOn(far, '#other');
+  await far.waitForTimeout(6800);
+  assert.equal(await far.evaluate(() => window.__r), 'NotAllowedError', 'a tap far from the player does not let a later play() through');
+  assert.notEqual(await own.evaluate(() => window.__r), 'NotAllowedError', 'the player\'s own button did: ' + await own.evaluate(() => window.__r));
+});
+
+test('review 3b: a click that goes full screen and plays in the same breath is the person\'s press (the full screen call uses the activation up)', async () => {
+  const page = await open('<div id="player" style="position:relative;width:320px;height:180px"><video id="v" src="https://cdn.example/a.mp4" style="display:block;width:320px;height:180px"></video><button id="btn" style="position:absolute;left:100px;top:60px;width:120px;height:60px">Play</button></div>'
+    + '<script>document.getElementById("btn").onclick = function () { try { document.getElementById("player").requestFullscreen(); } catch (e) {} window.__r = "waiting"; document.getElementById("v").play().then(function () { window.__r = "ok"; }, function (e) { window.__r = e.name; }); };</script>', '1');
+  await tapOn(page, '#btn');
+  await settle(page, 900);
+  assert.notEqual(await page.evaluate(() => window.__r), 'NotAllowedError', 'refused after requestFullscreen(): ' + await page.evaluate(() => window.__r));
+});
+
+test('review 5a: a play() that comes before the app has answered waits for it: carried out when the rule turns out OFF, refused when it is ON', async () => {
+  const SLOW = '<script>setTimeout(function () { window.__p = "waiting"; document.getElementById("v").play().then(function () { window.__p = "ok"; }, function (e) { window.__p = e.name; }); }, 100);</script>';
+  const V = '<video id="v" src="https://cdn.example/a.mp4" style="display:block;width:320px;height:180px"></video>';
+  const off = await open(V + SLOW);                                          // no answer at load
+  await settle(off, 500);
+  assert.equal(await off.evaluate(() => window.__p), 'waiting', 'nothing is decided before the answer');
+  await off.evaluate(() => document.dispatchEvent(new CustomEvent('__kst_gate_cfg_v1', { detail: '0' })));
+  await settle(off, 500);
+  assert.notEqual(await off.evaluate(() => window.__p), 'NotAllowedError', 'rule OFF: the call went through to the engine: ' + await off.evaluate(() => window.__p));
+  const on = await open(V + SLOW);
+  await settle(on, 500);
+  await on.evaluate(() => document.dispatchEvent(new CustomEvent('__kst_gate_cfg_v1', { detail: '1' })));
+  await settle(on, 300);
+  assert.equal(await on.evaluate(() => window.__p), 'NotAllowedError', 'rule ON: refused when the answer comes');
+});
+
+test('review 5a: an answer that never comes ends the wait after 4 s with a refusal (the person\'s rule is the default)', async () => {
+  const page = await open('<video id="v" src="https://cdn.example/a.mp4" style="display:block;width:320px;height:180px"></video><script>setTimeout(function () { window.__p = "waiting"; document.getElementById("v").play().then(function () { window.__p = "ok"; }, function (e) { window.__p = e.name; }); }, 100);</script>');
+  await page.waitForTimeout(4600);
+  assert.equal(await page.evaluate(() => window.__p), 'NotAllowedError');
 });
