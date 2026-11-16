@@ -353,8 +353,65 @@ open class BrowserActivity : Activity(), DockListener {
     private lateinit var player: app.kestrel.browser.web.PlayerController
     private var labTurnWaitOff = false // debug builds only (labIntent "turnwait" off): the lab plays the old rule beside the new one
     private val turnSettler = app.kestrel.browser.web.TurnSettler({ current }, { fullscreenOn }, { turnCover }, { onScreenNow },
-        { !labTurnWaitOff && fullscreenOn && fullscreenTab?.gecko?.vpOk == true }, { resyncEngineSize() }, { turnHint },
+        { !labTurnWaitOff && fullscreenOn && fullscreenTab?.gecko?.vpOk == true }, { resyncEngineSize() }, { turnHint }, { turnHolding || turnResizeAwaited },
         { shown -> if (::player.isInitialized) { if (shown) player.turnStarted() else player.turnEnded() } }) // ROT2: a page that reports its viewport says when it has a turn's new size
+
+    // ---- ANS52a (owner message 52: after a turn "the Android symbols at the top such as the battery and wifi symbols were stuck in the middle of the screen and the video was cropped to about the same point for several moments"):
+    // when the window turns, the system keeps showing the OLD frames (the portrait buffers, 600 px wide, in the 1024 px wide landscape display: the status bar icons stay where the old right edge was, the video is cut at the old
+    // width) until the app's window has drawn its first frame at the new size. GeckoView's own size change (SurfaceView surfaceChanged -> a synchronous compositor resize) blocks the UI thread for 0.9 to 2 s on the tablet
+    // (Health: 'ui slow 887 ms', 'ui late-beat 2021 ms' right after 'gecko size 1024x523'), and it ran BEFORE that first frame. So for a turn that gets the cover (a full-screen page or a playing video) the engine's view is held
+    // at its old size for the first traversal (the cover and the bars are drawn at the new size at once), and gets its new size right after that frame: the blocking part happens behind the black cover, not in front of the screen.
+    private var turnHolding = false           // the engine's view is held at its old size
+    private var turnResizeAwaited = false     // ... and its new size has not been laid out yet
+    private var turnHoldAt = 0L
+    private var turnRootW = 0; private var turnRootH = 0
+    private var turnFrameWatch: android.view.ViewTreeObserver.OnDrawListener? = null
+    private val turnHoldTimeout = Runnable { releaseGeckoHold("no frame came") }
+    private val turnAwaitTimeout = Runnable { turnResizeAwaited = false }
+
+    private fun holdGeckoView() {
+        if (turnHolding || !::geckoView.isInitialized || !::root.isInitialized) return
+        val lp = geckoView.layoutParams as? FrameLayout.LayoutParams ?: return
+        val w = geckoView.width; val h = geckoView.height
+        if (w <= 0 || h <= 0 || !geckoView.isAttachedToWindow) return
+        turnHolding = true; turnResizeAwaited = true; turnHoldAt = SystemClock.uptimeMillis()
+        lp.width = w; lp.height = h; geckoView.layoutParams = lp
+        turnRootW = root.width; turnRootH = root.height
+        val vto = root.viewTreeObserver
+        if (vto.isAlive) {
+            val l = object : android.view.ViewTreeObserver.OnDrawListener {
+                override fun onDraw() {
+                    if (turnFrameWatch !== this) return
+                    if (root.width == turnRootW && root.height == turnRootH) return        // a draw at the old size (an animation): not the turn's frame yet
+                    turnFrameWatch = null
+                    Io.main.post {                                                          // (a listener is never removed inside its own callback)
+                        try { root.viewTreeObserver.removeOnDrawListener(this) } catch (e: Throwable) { /* gone with the window */ }
+                        try { turnSettler.firstFrame() } catch (e: Throwable) { Health.log("fullscreen", "first-frame-failed", e.toString().take(80)) }
+                        releaseGeckoHold("the first frame at the new size was drawn")
+                    }
+                }
+            }
+            turnFrameWatch = l
+            vto.addOnDrawListener(l)
+        }
+        Io.main.removeCallbacks(turnHoldTimeout); Io.main.postDelayed(turnHoldTimeout, app.kestrel.core.media.TurnSettle.HOLD_MAX_MS)
+        Io.main.removeCallbacks(turnAwaitTimeout); Io.main.postDelayed(turnAwaitTimeout, app.kestrel.core.media.TurnSettle.HOLD_MAX_MS + 1500L)
+        Health.log("fullscreen", "turn-hold", "the engine's view stays ${w}x$h for the first frame of the turn (the cover and the bars are drawn at the new size at once)")
+    }
+
+    private fun releaseGeckoHold(why: String) {
+        Io.main.removeCallbacks(turnHoldTimeout)
+        turnFrameWatch?.let { try { root.viewTreeObserver.removeOnDrawListener(it) } catch (e: Throwable) { /* gone with the window */ }; turnFrameWatch = null }
+        if (!turnHolding) return
+        turnHolding = false
+        val lp = geckoView.layoutParams as? FrameLayout.LayoutParams
+        if (lp != null) { lp.width = FrameLayout.LayoutParams.MATCH_PARENT; lp.height = FrameLayout.LayoutParams.MATCH_PARENT; geckoView.layoutParams = lp }
+        val vto = geckoView.viewTreeObserver
+        if (vto.isAlive) vto.addOnGlobalLayoutListener(object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
+            override fun onGlobalLayout() { try { geckoView.viewTreeObserver.removeOnGlobalLayoutListener(this) } catch (e: Throwable) { /* gone */ }; turnResizeAwaited = false }
+        }) else turnResizeAwaited = false
+        Health.log("fullscreen", "turn-hold-released", "$why, ${SystemClock.uptimeMillis() - turnHoldAt} ms after the turn: the engine's view gets its new size now (behind the cover)")
+    }
     private var pendingFilePick: ((List<Uri>) -> Unit)? = null
     private var pendingAndroidPerms: PermissionDelegate.Callback? = null
     private var backCallback: Any? = null
@@ -508,7 +565,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onPause() {
         super.onPause()
-        onScreenNow = false; turnSettler.abandon()
+        onScreenNow = false; turnSettler.abandon(); releaseGeckoHold("the app was left"); turnResizeAwaited = false
         Health.log("life", "pause"); fsTurner.paused()
         captureLook(current, "pause", LastLookRules.LEAVE_MIN_AGE_MS.toLong()) // EY-1: the page as it is left, before anything else (the read-back is a few hundred ms at most)
         app.kestrel.browser.net.WifiBoost.set(this, false)
@@ -593,7 +650,7 @@ open class BrowserActivity : Activity(), DockListener {
         val cfgAt = SystemClock.uptimeMillis()
         super.onConfigurationChanged(newConfig)
         val landscape = newConfig.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-        try { turnSettler.configChanged(landscape) } catch (e: Throwable) { Health.log("fullscreen", "turn-settler-failed", e.toString().take(80)); try { turnSettler.abandon() } catch (x: Throwable) { /* nothing more to do */ } } // ROT1: pause the video and cover the page BEFORE the engine re-lays out (a failure must never leave the cover up)
+        try { turnSettler.configChanged(landscape); if (turnSettler.turning) holdGeckoView() } catch (e: Throwable) { Health.log("fullscreen", "turn-settler-failed", e.toString().take(80)); try { turnSettler.abandon() } catch (x: Throwable) { /* nothing more to do */ } } // ROT1: pause the video and cover the page BEFORE the engine re-lays out (a failure must never leave the cover up)
         GeckoEngine.runtimeOrNull()?.let { try { it.orientationChanged() } catch (e: Throwable) { Health.log("fullscreen", "orientation-notify-failed", e.toString().take(80)) } }
         Health.log("life", "config", "orientation=${if (landscape) "landscape" else "portrait"} fullscreen=$fullscreenOn" + (SystemClock.uptimeMillis() - cfgAt).let { if (it >= 50L) ", the app's own handling took $it ms" else "" })   // ANS51f
         if (fullscreenOn) { Io.main.removeCallbacks(rehideAfterTurn); Io.main.postDelayed(rehideAfterTurn, 150L) } // FSB1: a turn can bring the bars back on some systems
@@ -602,7 +659,7 @@ open class BrowserActivity : Activity(), DockListener {
     override fun onDestroy() {
         try { fsTurner.exit() } catch (e: Exception) { /* RV8: leave the orientation as Android had it */ }
         if (::player.isInitialized) player.fullscreen(false)
-        turnSettler.abandon(); Io.main.removeCallbacks(strayCheck); Io.main.removeCallbacks(barsCheck); Io.main.removeCallbacks(rehideAfterTurn); Io.main.removeCallbacks(vpUndo) // alpha49 review: no timer of ours may fire against a dead activity
+        turnSettler.abandon(); releaseGeckoHold("closing"); Io.main.removeCallbacks(turnAwaitTimeout); Io.main.removeCallbacks(strayCheck); Io.main.removeCallbacks(barsCheck); Io.main.removeCallbacks(rehideAfterTurn); Io.main.removeCallbacks(vpUndo) // alpha49 review: no timer of ours may fire against a dead activity
         if (::downloadPopup.isInitialized) downloadPopup.detach()
         UpdateManager.removeListener(updateListener)
         kbProbe.detach()
@@ -1356,6 +1413,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** The view one pixel shorter for 120 ms, then as it was: the engine takes the size from the view when the view's size really changes. */
     private fun resyncEngineSize() {
+        if (turnHolding) return                                                // ANS52a: the view is held at its old size for the turn's first frame; a size change now would be a second one
         val lp = geckoView.layoutParams as? FrameLayout.LayoutParams ?: return
         lp.bottomMargin = 1; geckoView.layoutParams = lp
         Io.main.removeCallbacks(vpUndo); Io.main.postDelayed(vpUndo, 120L)
