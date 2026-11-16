@@ -1825,8 +1825,8 @@ class Soak:
         self.dump_diag("np")
         diag = ""
         try:
-            diag = self.ph.a.sh("run-as %s cat files/debug-diag.txt" % self.ph.pkg, timeout=30) or ""
-        except Exception:
+            diag = open(os.path.join(self.out, "diagnostics-np.txt")).read()
+        except OSError:
             pass
         line = [ln for ln in diag.splitlines() if ln.startswith("Kestrel's own player:")]
         check("Diagnostics says how it went (frames shown, decoder)", bool(line) and "frames shown" in line[-1], "line: %s" % (line[-1][:200] if line else "none"))
