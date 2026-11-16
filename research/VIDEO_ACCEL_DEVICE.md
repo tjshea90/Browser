@@ -67,7 +67,7 @@ Method: web sources read 2026-11-16; no code run, no device. DOCUMENTED = read i
 | media.video-queue.default-size 10, send-to-compositor-size 1 | frame queue | none | DOC G5 | no |
 | layers.gpu-process.enabled = false (start-up only) | compositor in parent: one process less, no IPC hop; driver crash kills app | medium | DOC G4 G22 | test in lab |
 | GeckoSession.setPriorityHint(PRIORITY_HIGH) for the full-screen tab | app-chosen process priority | none | DOC G12 | test in lab |
-| dom.ipc.processCount 1, processPriorityManager, gc_on_memory_pressure, suspend-background-video | already right or background-only | none | DOC G4 | no change |
+| gfx.webrender.*, layout.frame_rate, dom.ipc.processCount 1, processPriorityManager, gc_on_memory_pressure, suspend-background-video | defaults already right, or background-only | none | DOC G4 | no change |
 | GeckoView.setViewBackend(TEXTURE_VIEW) | extra GPU pass, still synchronous | more GPU and RAM | DOC G13 G14 A12 | no |
 | T1: keep GeckoView frame at the old size for the first traversal, cover, resize after the first draw (OnDrawListener, post or Choreographer) | the first frame is cheap, the freeze ends early, the 1-2 s block hides behind the cover | medium (layout hack) | INF A1 A3 G17 X1 | test in lab |
 | window rotationAnimation = JUMPCUT in full screen | skips the rotate animation only | none | DOC A8 A6 | yes |
