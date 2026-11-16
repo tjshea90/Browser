@@ -265,7 +265,7 @@ class OwnerRulesTest {
         assertTrue("full screen arms the controller; the report of a film begins it; the cover hides it", act.contains("player.fullscreen(on, prefs.fsControls == 0)") && act.contains("player.turnStarted()") && act.contains("fsTurner.ownedByPlayer = { player.active }"))
         assertTrue("only the page that IS full screen drives the controls", act.contains("tabOfReport(m.optString(\"p\")) === fullscreenTab"))
         val ctl = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerController.kt")
-        assertTrue("nothing is drawn until a film reports, and a page that stops reporting takes the controls away", ctl.contains("if (m.optString(\"k\") != \"vst\") return; begin()") && ctl.contains("SILENT_END_MS"))
+        assertTrue("nothing is drawn until a film reports, and a page that stops reporting takes the controls away", ctl.contains("if (m.optString(\"k\") != \"vst\") return; begin()") && ctl.contains("PlayerRules.pageGone("))
         // lab run 43776782679 (second press on the big button asked "pause" again): the relay put the page ADDRESS into `p` over the film's paused flag, so the app read every film as "not paused". The paused flag is `pa`
         // in everything the app gets, `p` is the address, and the number of the last carried-out command is `ak` all the way to the model.
         assertTrue("the relay names the paused flag pa, keeps ak, and leaves p for the address", bg.contains("pa: m.p === 1 ? 1 : 0") && bg.contains("ak: n(m.ak, 0, 2000000000)") && bg.contains("o.p = String(page).slice(0, 300)"))
