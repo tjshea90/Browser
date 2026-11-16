@@ -42,7 +42,7 @@ Local files: [L1] research/VIDEO_AUDIT.md section 9, [L2] research/TABLET_DIAG_2
 - HLS: "MPEG-2 TS media files only", protocol version 3 [D18]; DASH is not listed [D18]. fMP4/CMAF HLS therefore fails [I].
 - Headers: `setDataSource(Context, Uri, Map)` since API 14; cookies list overload since API 26, and "headers must not include cookies" [D19].
 - No rendition control: `selectTrack` only takes timed text, subtitle or audio tracks [D19]. The only cap is to hand it a chosen media-playlist URL, and a separate audio group is then lost [I].
-- Surface and seek: `setDisplay/setSurface` work in any state; `seekTo(msec, SEEK_CLOSEST)` since API 26 [D19]; HLS lands on segment starts [I]. A second SurfaceView sits above Gecko's only with `setZOrderMediaOverlay(true)` [D36].
+- Surface and seek: `setDisplay/setSurface` work in any state; `seekTo(msec, SEEK_CLOSEST)` since API 26 [D19]; HLS lands on segment starts [I]. To sit above a SurfaceView-backed GeckoView use `setZOrderMediaOverlay(true)` [D36, I].
 - Verdict: Media3 is present and better; keep MediaPlayer out.
 
 ## 2. AndroidX Media3 ExoPlayer
