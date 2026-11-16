@@ -289,6 +289,12 @@ function assistText() { return assistAsked ? ' | assist ' + assistSent + '/' + a
 var skipAsked = 0, skipYes = 0, skipReports = 0; // RX3-Y2 / RX3-G7: how often the ad skippers (youtube.js, players.js) asked whether they may run, how often the answer was yes, how many of their reports reached the app
 function skipText() { return (skipAsked || skipReports) ? ' | ad skippers: asked ' + skipAsked + ', allowed ' + skipYes + ', reports ' + skipReports : ''; }
 var guardBlocked = 0;
+// ANS52g: what the page-side video format policy (codec-main.js) refused, summed over all pages and frames since the extension started; shown in Diagnostics ("Video formats offered to sites")
+var vcx = { reports: 0, asked: 0, size: 0, mode: 0, fps: 0, last: '' };
+function vcxText() {
+  if (!vcx.reports) return '';
+  return 'questions ' + vcx.asked + ' (counted when something was refused), refused ' + (vcx.size + vcx.mode + vcx.fps) + ': above the decoder\'s limit ' + vcx.size + ', not H.264 ' + vcx.mode + ', above 30 fps ' + vcx.fps + '; last: ' + vcx.last;
+}
 function trimMap(m, max) { while (m.size > max) m.delete(m.keys().next().value); }
 function guardAnswer(host, topHost) { // on: the pop-up guard applies; skip (RX3-Y2): the ad skipper may run (flag 8: the Settings row and the site's Shields switch); seek (YS1): a tap on a player's bar may move the video (flag 16: the Settings row "Tap the video bar to jump" only)
   function answer(f) { return { on: (f & 1) !== 0, top: topHost || host, skip: (f & 8) !== 0, seek: (f & 16) !== 0, sg: (f & 32) !== 0, vb: (f & 64) !== 0, vba: (f & 128) !== 0, lab: (f & 256) !== 0, kp: (f & 512) !== 0, cx: codecCfg }; } // vb / vba (VC1): Kestrel's own video bar (Automatic or Always / Always only; the Settings row, not a Shields feature)
