@@ -189,7 +189,26 @@
     } catch (e) { s = ''; }
     try { var rc = el.getBoundingClientRect(); w = Math.round(rc.width); h = Math.round(rc.height); } catch (e) { /* ignore */ }
     try { t = el.currentTime || 0; d = isFinite(el.duration) ? (el.duration || 0) : 0; lp = el.loop ? 1 : 0; } catch (e) { /* ignore */ }
-    return { i: 0, y: why, s: String(s).slice(0, 2000), b: blob ? 1 : 0, m: mime.slice(0, 60), l: lp, w: w, h: h, t: t, d: d };
+    return { i: 0, y: why, s: String(s).slice(0, 2000), b: blob ? 1 : 0, m: mime.slice(0, 60), l: lp, w: w, h: h, t: t, d: d, g: geomOf(el) };
+  }
+  // ANS55f (owner message 55: "Can the player be inside the website ... I still see the website around it?"): where the film's box is, so that the app can draw Kestrel's own player over it. [x, y, w, h] of the box in the
+  // layout viewport (CSS px), the visual viewport's scale, offset x / y and width, where the visual viewport sits in the document (x, y), and fx = 1 when the box does NOT move with the page's own scroll: the element
+  // or an ancestor is fixed or sticky, or sits in a scroller of its own (a carousel, an overflow box). The app follows the page's scroll through the engine's compositor, never through this script (a busy page
+  // would make it lag).
+  function geomOf(el) {
+    try {
+      var rc = el.getBoundingClientRect(), vv = window.visualViewport, se = document.scrollingElement || document.documentElement, fx = 0, n = el, i = 0;
+      function up(x) { var rn = x.getRootNode ? x.getRootNode() : null; return x.parentElement || ((rn && rn !== document && rn.host) ? rn.host : null); }
+      function r2(v) { return Math.round(v * 100) / 100; }
+      for (; n && n !== document.documentElement && i < 40; i++, n = up(n)) {
+        var cs = getComputedStyle(n);
+        if (cs.position === 'fixed' || cs.position === 'sticky') { fx = 1; break; }
+        if (n !== se && ((/(auto|scroll|overlay)/.test(cs.overflowY) && n.scrollHeight > n.clientHeight + 1) || (/(auto|scroll|overlay)/.test(cs.overflowX) && n.scrollWidth > n.clientWidth + 1))) { fx = 1; break; }
+      }
+      if (n && n !== document.documentElement && i >= 40) fx = 1;                                     // a very deep tree: not told
+      return [r2(rc.left), r2(rc.top), r2(rc.width), r2(rc.height), r2(vv ? vv.scale : 1), r2(vv ? vv.offsetLeft : 0), r2(vv ? vv.offsetTop : 0), r2(vv ? vv.width : (window.innerWidth || 0)),
+        r2(vv ? vv.pageLeft : (window.pageXOffset || 0)), r2(vv ? vv.pageTop : (window.pageYOffset || 0)), fx];
+    } catch (e) { return null; }
   }
   // cb(true) = the app took the film over (Kestrel's own player runs it); cb(false) = no, or no answer within 700 ms. An answer that comes later and says yes still stops the element. A second question about the SAME
   // press while the first is in the air joins it (the tap on a play button over the picture, then the page's play() a moment later).
