@@ -6,7 +6,6 @@ import android.widget.FrameLayout
 import app.kestrel.browser.BrowserActivity
 import app.kestrel.browser.NativePlayerActivity
 import app.kestrel.browser.diag.Health
-import app.kestrel.browser.model.Tab
 import app.kestrel.core.media.InlineBox
 import org.mozilla.geckoview.GeckoSession
 
