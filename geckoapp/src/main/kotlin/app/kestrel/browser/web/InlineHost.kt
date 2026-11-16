@@ -78,6 +78,8 @@ class InlineHost(private val a: BrowserActivity, private val content: FrameLayou
         }
     }
 
+    override fun onLongPress() { val t = tab ?: return; a.inlineLongPress(t, playing) }
+
     override fun toPage(e: MotionEvent) {
         val c = MotionEvent.obtain(e)
         try {

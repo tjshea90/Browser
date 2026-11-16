@@ -335,6 +335,8 @@ open class BrowserActivity : Activity(), DockListener {
     /** ANS55f (owner message 55): Kestrel's own player inside the page, over the page's video box. Made with the page area (onCreate); VideoFlow starts it, the hooks below end it. */
     internal lateinit var inline: app.kestrel.browser.web.InlineHost
     internal fun nativeFilmFailed() = video.nativeFailed()
+    /** ANS55f / LP1: a long press on the film inside the page opens the download options of that film, as a long press on the page's own video does. */
+    internal fun inlineLongPress(t: Tab, url: String) = video.longPress(t, url, null) { }
 
     /** For tests (same module): the selected tab. */
     internal val currentTab: Tab? get() = current
