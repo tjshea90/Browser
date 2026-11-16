@@ -1,10 +1,5 @@
 # Video acceleration and smooth video: what other browsers do, what Kestrel G can copy
 
-Research only, 2026-11-16. Nothing was run on the tablet. DOCUMENTED = I read it (source in brackets). INFERRED = my reasoning.
-Source prefixes: BZnnnn = bugzilla.mozilla.org/show_bug.cgi?id=nnnn ; GH = raw.githubusercontent.com/mozilla-firefox/firefox/main ; CR = chromium.googlesource.com/chromium/src/+/main ; GV = mozilla.github.io/geckoview/javadoc/mozilla-central/org/mozilla/geckoview.
-Tablet facts: research/TABLET_DIAG_2026-11-16.md and the engine-pref readback pasted in INBOX.md (GeckoView 160: gpu-process on, rdd-process off, android-media-codec on, media.hls on, gfx.webrender.compositor off, video-queue default-size 10).
-Gecko pref values below were read on Gecko main (GH/modules/libpref/init/StaticPrefList.yaml), not on 160 itself.
-
 ## Summary (10 lines)
 1. Chrome puts Android video on its own SurfaceView/SurfaceControl layer that SurfaceFlinger can show as a hardware overlay (no GPU composition of the picture). Gecko on Android has no such path (overlay bugs open since 2019); it draws each frame from a SurfaceTexture, one frame at a time.
 2. Chrome decodes into AImageReader buffers; Gecko is migrating (pref gfx.video.aimage-reader-gpu-process-android, GPU-process MediaCodec in 161) but it is unfinished.
