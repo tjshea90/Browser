@@ -1,21 +1,24 @@
-# CHECKPOINT 2510 — read me first, then TASKS.md
+# CHECKPOINT 2511 — read me first, then TASKS.md
 
-**Written:** 2026-11-16T09:40:49Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `f7dec7b9` (this checkpoint is the commit after it)
+**Written:** 2026-11-16T09:41:43Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `515741df` (this checkpoint is the commit after it)
 
 ## Just done
-alpha58 release prepared (NOT shipped yet): geckoapp versionCode 159 / 0.3.0-alpha58, extension manifest 1.0.159, docs/handoff/ALPHA58_RELEASE_NOTE.txt final (573 web tests, about 270 emulator checks, 9 review problems, honest 'not on your tablet')
+gated kestrel-g-v0.3.0-alpha58 (gecko code 159) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
 
 ## Do this next
-wait for the kp rerun (dispatched 09:5x, find it with list_workflow_runs status in_progress perPage 1 -> its lab job -> artifact emulator-lab-text): kp all green? then bash ship.sh gecko with the note (note=$(cat docs/handoff/ALPHA58_RELEASE_NOTE.txt)), ONE dispatch (android.yml app=gecko full_build=true note=same text, ref ccr-b3c2484c-sbew36), tag kestrel-g-v0.3.0-alpha58 (git ls-remote --tags origin) + all jobs success + get_release_by_tag shows the APK, bash tools/record-release.sh kestrel-g-v0.3.0-alpha58 with the IDENTICAL note, tick ANS54a-f in TASKS, answer owner message 54
+TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref ccr-b3c2484c-sbew36, inputs {"app":"gecko","full_build":"true","note":"alpha58: your message 54 (on alpha57). (1) WEB VIDEOS PLAY IN KESTREL'S OWN PLAYER, the smooth one behind the download button: when you press play on a video in a web page, Kestrel's own player takes the film over (hardware decoder, upright, its own controls and Quality list) and Back returns you to the page; press play on the page again and it continues where you stopped. It works for a plain video file, for a stream the page asked for (players that load a playlist, as tested on the emulator; I have not tried your sites) and for a film that goes full screen. Players that hide their stream (YouTube style) and DRM films stay in the page, as before. If Kestrel's own player cannot play a film it goes back to the page, which plays it itself for two minutes. Settings > Web videos play in: Kestrel's player whenever it can (default) / only in full screen / the page's own player. Only your own tap can start it: a page cannot open the player by itself. (2) FIXED: full screen no longer turns the tablet sideways by itself. Settings > Turn the screen for full-screen video now starts as Follow the tablet (portrait stays portrait); Automatic is still there. (3) FIXED: the Quality list in Kestrel's own player has an x button. The box you saw freeze was the site's own quality box (the site's code); films that move to Kestrel's player use Kestrel's list instead. TESTED: unit tests, 573 web tests in headless browsers, an independent code review (9 problems found and fixed, one of them a page that could have opened the player without your tap) and about 270 emulator checks on the real Firefox engine (a plain video with the engine's own play button, a play button over the picture, a script player with a stream, a player with nothing to take over, a broken address, pressing again, and the setting). NOT on your tablet: please send the Diagnostics line Web videos in Kestrel's own player, and tell me which video sites still play in the page."}.
+When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha58), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha58 "alpha58: your message 54 (on alpha57). (1) WEB VIDEOS PLAY IN KESTREL'S OWN PLAYER, the smooth one behind the download button: when you press play on a video in a web page, Kestrel's own player takes the film over (hardware decoder, upright, its own controls and Quality list) and Back returns you to the page; press play on the page again and it continues where you stopped. It works for a plain video file, for a stream the page asked for (players that load a playlist, as tested on the emulator; I have not tried your sites) and for a film that goes full screen. Players that hide their stream (YouTube style) and DRM films stay in the page, as before. If Kestrel's own player cannot play a film it goes back to the page, which plays it itself for two minutes. Settings > Web videos play in: Kestrel's player whenever it can (default) / only in full screen / the page's own player. Only your own tap can start it: a page cannot open the player by itself. (2) FIXED: full screen no longer turns the tablet sideways by itself. Settings > Turn the screen for full-screen video now starts as Follow the tablet (portrait stays portrait); Automatic is still there. (3) FIXED: the Quality list in Kestrel's own player has an x button. The box you saw freeze was the site's own quality box (the site's code); films that move to Kestrel's player use Kestrel's list instead. TESTED: unit tests, 573 web tests in headless browsers, an independent code review (9 problems found and fixed, one of them a page that could have opened the player without your tap) and about 270 emulator checks on the real Firefox engine (a plain video with the engine's own play button, a play button over the picture, a script player with a stream, a player with nothing to take over, a broken address, pressing again, and the setting). NOT on your tablet: please send the Diagnostics line Web videos in Kestrel's own player, and tell me which video sites still play in the page."
+NEVER ship kestrel-g-v0.3.0-alpha58 twice (check BUILDLOG.md and the Releases first).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M docs/handoff/ALPHA58_RELEASE_NOTE.txt
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  eb003faf ckpt 2510: alpha58 release prepared (NOT shipped yet): geckoapp versionCode 159 / 0.3.0
   a25fa09f ckpt 2509: final vp lab run 43838527885 (head 5567de58 = the independent-review fixes) 
   4430c87e ckpt 2508: final lab vp run dispatched: 43838527885 (head 5567de58 = ckpt 2507, started
   5567de58 ckpt 2507: independent review (9 findings, all real) applied: content.js relays only wh
@@ -25,7 +28,6 @@ wait for the kp rerun (dispatched 09:5x, find it with list_workflow_runs status 
   6b32808a ckpt 2503: lab run 43831112200 (ho run 2) read: file now hands over on the real engine 
   57239dd2 ckpt 2502: lab run 43831112200 (suite ho, head bbfc9c3f = ckpt 2501) dispatched; gradle
   bbfc9c3f ckpt 2501: ANS54e: lab run 43826954106 (suite ho) read: overlay/hls/unknown/never ok, f
-  00b6ff6b ckpt 2500: lab run 43826954106 dispatched: suite ho (head 97294fcb): web videos play in
 ```
 
 (1 automatic checkpoint(s) since the last deliberate one — the
