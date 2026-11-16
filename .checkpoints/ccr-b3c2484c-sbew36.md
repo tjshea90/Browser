@@ -1,13 +1,13 @@
-# CHECKPOINT 2508 — read me first, then TASKS.md
+# CHECKPOINT 2509 — read me first, then TASKS.md
 
-**Written:** 2026-11-16T09:18:54Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `5567de58` (this checkpoint is the commit after it)
+**Written:** 2026-11-16T09:39:46Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `ed4efbc9` (this checkpoint is the commit after it)
 
 ## Just done
-final lab vp run dispatched: 43838527885 (head 5567de58 = ckpt 2507, started 09:18Z, ends ~09:40Z); everything else is ready for the release (note drafted with @WEBTESTS@ @LABCHECKS@ placeholders, TASKS rows ANS54e.7-10 written)
+final vp lab run 43838527885 (head 5567de58 = the independent-review fixes) read: 8 scenes, 7 ok; the whole hand-over scene green (29 checks: file incl. pressed again + 'from N s', overlay, hls, unknown, bad, never, Diagnostics), press-to-play, hls cap, video formats, own player ok; 271 check rows ok, 2 failed = the kp 'big button pauses / plays again' checks, a lab timing race (the command line came 1.2 s after the tap, 0.1 s after the lab read the log; the same button passes in the HLS pass of the same run). Lab waits for the four button checks widened 1.2 -> 2.6 s
 
 ## Do this next
-read lab run 43838527885: find its 'lab / lab' job id (actions_list list_workflow_jobs resource_id 43838527885 workflow_jobs_filter latest perPage 2), wait for status completed (get_workflow_job), then artifacts -> emulator-lab-text -> python3 -I tools/emu/fetch_artifact.py <url> <empty dir>; all sections green? if the console starts with 'gave the app a 16 MB java heap limit' or scene app-start no-engine it is a lab flake: dispatch vp again (ONE more). Then fill @WEBTESTS@ (573) and @LABCHECKS@ in docs/handoff/ALPHA58_RELEASE_NOTE.txt, bump geckoapp/build.gradle.kts to 159 / 0.3.0-alpha58 + bash tools/sync-ext-version.sh, bash ship.sh gecko with the note, ONE dispatch (app=gecko full_build=true note), tag + jobs + release, bash tools/record-release.sh <tag> identical note, tick ANS54a-f, answer owner message 54 (Release link on its own line)
+dispatch lab suite kp ALONE (android.yml app=lab lab_suite=kp lab_minutes=10 lab_net=full full_build=false ref ccr-b3c2484c-sbew36) on this head to get the clean kp result; meanwhile fill @WEBTESTS@ (573) and @LABCHECKS@ in docs/handoff/ALPHA58_RELEASE_NOTE.txt, bump geckoapp/build.gradle.kts 158 -> 159 / 0.3.0-alpha57 -> 0.3.0-alpha58 + bash tools/sync-ext-version.sh, bash ship.sh gecko with the note (the app code is the vp5 head 5567de58 plus the version), ONE dispatch (app=gecko full_build=true), tag + jobs + release, bash tools/record-release.sh <tag> identical note, tick ANS54a-f, answer owner message 54
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ read lab run 43838527885: find its 'lab / lab' job id (actions_list list_workflo
 
 ## Last ten checkpoints
 ```
+  4430c87e ckpt 2508: final lab vp run dispatched: 43838527885 (head 5567de58 = ckpt 2507, started
   5567de58 ckpt 2507: independent review (9 findings, all real) applied: content.js relays only wh
   9ba75b5b ckpt 2506: tap window widened for a slow tablet (core WebHandOver.pressWindowMs 15 s, 3
   51380853 ckpt 2505: ANS54e.9 SECURITY: a page script can fake the gate's question, so every hand
@@ -25,5 +26,7 @@ read lab run 43838527885: find its 'lab / lab' job id (actions_list list_workflo
   bbfc9c3f ckpt 2501: ANS54e: lab run 43826954106 (suite ho) read: overlay/hls/unknown/never ok, f
   00b6ff6b ckpt 2500: lab run 43826954106 dispatched: suite ho (head 97294fcb): web videos play in
   97294fcb ckpt 2499: ANS54e: full web suite 562/562, gradle all green (before the late-hand-over 
-  368a9961 ckpt 2498: ANS54e coded, compiles: core WebHandOver + test (10 ok), Prefs web_in_kestre
 ```
+
+(5 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
