@@ -351,6 +351,8 @@ open class BrowserActivity : Activity(), DockListener {
     private var turnHint: View? = null
     private lateinit var playerView: app.kestrel.browser.web.PlayerControlsView   // VP1: Kestrel's own full-screen controls (view and controller)
     private lateinit var player: app.kestrel.browser.web.PlayerController
+    private lateinit var qualitySheet: app.kestrel.browser.web.QualitySheet   // ANS53d.2: the quality list over the full-screen controls (a page's film: a pick hands it to Kestrel's own player)
+    private var pageQualityStartMs = 0L
     private var labTurnWaitOff = false // debug builds only (labIntent "turnwait" off): the lab plays the old rule beside the new one
     private val turnSettler = app.kestrel.browser.web.TurnSettler({ current }, { fullscreenOn }, { turnCover }, { onScreenNow },
         { !labTurnWaitOff && fullscreenOn && fullscreenTab?.gecko?.vpOk == true }, { resyncEngineSize() }, { turnHint }, { turnHolding || turnResizeAwaited },
@@ -793,7 +795,7 @@ open class BrowserActivity : Activity(), DockListener {
             "vpress" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); prefs.videoPressToPlay = arg != "0"; GeckoEngine.applyVideo(applicationContext, prefs); Health.log("lab", "vpress", if (prefs.videoPressToPlay) "on: videos start only when pressed" else "off") } // ANS53: the lab plays both settings (the lab turns the rule off for every suite but its own)
             "vcap" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); prefs.videoCap = arg.toIntOrNull() ?: 0; Health.log("lab", "vcap", "mode ${prefs.videoCap} -> ${app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs)} px") } // ANS52h: the lab plays the picture size cap setting (0 Automatic, 1 off, 2 480p, 3 720p, 4 1080p)
             "nativeplay" -> Io.main.post { current?.let { video.labPlayBest(it) } } // ANS52i: the best row of the sheet in Kestrel's own player
-            "nativeurl" -> { val u = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); if (u.startsWith("http://127.0.0.1") || u.startsWith("http://10.0.2.2")) Io.main.post { NativePlayerActivity.launch(this, u, emptyList(), 0L, 720, false, 0, 0) } } // ANS52i lab: an address of the lab server
+            "nativeurl" -> { val u = i.getStringExtra("kestrel_arg") ?: ""; val pk = app.kestrel.core.media.QualityLabel.decode(i.getStringExtra("kestrel_pick")); i.removeExtra("kestrel_arg"); i.removeExtra("kestrel_pick"); if (u.startsWith("http://127.0.0.1") || u.startsWith("http://10.0.2.2")) Io.main.post { NativePlayerActivity.launch(this, u, emptyList(), 0L, 720, false, 0, 0, pk) } } // ANS52i lab: an address of the lab server
             "videodl" -> Io.main.post { current?.let { video.labDownloadBest(it) } } // SOAK1: "find the video" and one tap on the first row of the Save video sheet
             "apkcheck" -> { // RX4-X1: what the Downloads list would do with this file (a file in the app's own folder: a copy of an installer, a disguised copy, a plain video)
                 val name = (i.getStringExtra("kestrel_arg") ?: "").substringAfterLast('/'); i.removeExtra("kestrel_arg")
@@ -896,9 +898,19 @@ open class BrowserActivity : Activity(), DockListener {
         // VP1 (owner message 49): Kestrel's own controls for a full-screen video: one view over the engine's, drawn only while a film is full screen (the page script reports it)
         playerView = app.kestrel.browser.web.PlayerControlsView(this).apply { visibility = View.GONE }
         content.addView(playerView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        qualitySheet = app.kestrel.browser.web.QualitySheet(this).apply {
+            listener = object : app.kestrel.browser.web.QualitySheet.Listener {
+                override fun onPick(row: app.kestrel.browser.web.QualitySheet.Row) { pagePicked(row) }
+                override fun onDismiss() { if (::player.isInitialized) player.pinControls(false) }
+            }
+        }
+        content.addView(qualitySheet, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) // ANS53d.2: over the controls, under the turn cover
         player = app.kestrel.browser.web.PlayerController(playerView,
             { exitFullscreenFromControls() },
-            { shown -> fsTurner.controlledShow(shown) })
+            { shown -> fsTurner.controlledShow(shown) },
+            { fullscreenTab?.let { video.pageFilm(it) } != null },
+            { timeS, lengthS -> openPageQuality(timeS, lengthS) },
+            { qualitySheet.isOpen })
         fsTurner.ownedByPlayer = { player.active }
         player.onLook = { page, frames, dropped, seconds, w, h -> filmLook(page, frames, dropped, seconds, w, h) }
         val cover = FrameLayout(this).apply { setBackgroundColor(0xFF000000.toInt()); visibility = View.GONE; alpha = 0f; isClickable = true; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO } // ROT1: topmost in the page area; it takes the touch (review of alpha53: the tap that ends a long wait must not reach the page nobody can see)
@@ -2560,6 +2572,33 @@ open class BrowserActivity : Activity(), DockListener {
         val t = current
         val n = if (t == null || homeShown(t) || t.media.isEmpty()) 0 else t.media.usableCount()   // ANS53e: also not on the Home screen (the page behind it is alive, but the owner is not looking at it)
         dock.setDownloadCount(n)
+        refreshPlayerQuality()
+    }
+
+    /** ANS53d.2: the media list changed or a playlist was read: the Quality button of a full-screen film follows. */
+    internal fun refreshPlayerQuality() { if (::player.isInitialized && fullscreenOn) player.refreshQuality() }
+
+    /** ANS53d.2: the Quality button was pressed: the pictures the page's film offers, Automatic first; the position is kept for the hand-over. */
+    private fun openPageQuality(timeS: Double, lengthS: Double) {
+        val t = fullscreenTab ?: return
+        val film = video.pageFilm(t) ?: return
+        pageQualityStartMs = app.kestrel.core.media.PageQuality.startMs(timeS, lengthS, film.cand.durationMs)
+        val rows = ArrayList<app.kestrel.browser.web.QualitySheet.Row>()
+        rows.add(app.kestrel.browser.web.QualitySheet.Row("Automatic", "Kestrel's player picks, at most 720p", false, true, null))
+        for (r in film.rungs) rows.add(app.kestrel.browser.web.QualitySheet.Row(app.kestrel.core.media.QualityLabel.text(r), "", false, true, r))
+        player.pinControls(true)
+        qualitySheet.show("Quality", rows, "The film goes on in Kestrel's own player from where it is, in the picture you pick. A smaller picture and a lower frame rate are lighter for this tablet and for the hotspot. Back brings you here again.")
+        Health.log("video", "quality-open", "${rows.size} row(s) for the page's film")
+    }
+
+    /** ANS53d.2: a row was picked: the page's film stops, Kestrel's own player takes it from the same second. */
+    private fun pagePicked(row: app.kestrel.browser.web.QualitySheet.Row) {
+        val t = fullscreenTab
+        val film = t?.let { video.pageFilm(it) }
+        qualitySheet.dismiss()
+        if (t == null || film == null) return
+        player.pausePage()
+        video.playPicked(t, film, row.tag as? app.kestrel.core.media.QualityLabel.Rung, pageQualityStartMs)
     }
 
     /** The dock's download icon was tapped: the list of what the page offers, or a hint when nothing was found yet. */
@@ -2898,6 +2937,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     private fun handleBack(): Boolean {
+        if (::qualitySheet.isInitialized && qualitySheet.isOpen) { qualitySheet.dismiss(); return true }   // ANS53d.2: the quality list closes first
         // FS1: Back leaves full screen first, like every video player (it used to go back in the page's history, which only left full screen by leaving the page)
         if (fullscreenOn) {
             val ft = fullscreenTab
@@ -2981,7 +3021,7 @@ open class BrowserActivity : Activity(), DockListener {
         vpTries = 0; Io.main.removeCallbacks(vpUndo); vpUndo.run() // FB4: a new full screen starts clean (the view is back to its full height)
         player.quiet = fullscreenTab?.isPrivateTab == true || (!on && player.quiet)   // a private tab's full screen is not logged or counted (kept until it has ended)
         player.fullscreen(on, prefs.fsControls == 0)                          // VP1: Kestrel's controls over the film (drawn once the page reports one)
-        if (!on) player.quiet = false
+        if (!on) { player.quiet = false; qualitySheet.dismiss() }
         if (on) { filmPictureTold = false; fsTurner.enter(); if (prefs.fullscreenBars == 1) checkBarsSoon() else { fsBarsNote = "kept: Settings > System bars in full-screen video is on Keep (the default); the page is laid out between the bars" ; Health.log("fullscreen", "bars", fsBarsNote) } } else { fsTurner.exit(); Io.main.removeCallbacks(barsCheck) } // FS1: the screen follows the tablet while a page is full screen
     }
 
