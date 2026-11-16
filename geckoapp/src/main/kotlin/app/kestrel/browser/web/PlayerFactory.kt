@@ -45,11 +45,16 @@ object PlayerFactory {
         val load = DefaultLoadControl.Builder().setAllocator(DefaultAllocator(true, C.DEFAULT_BUFFER_SEGMENT_SIZE)).setBufferDurationsMs(15_000, 30_000, 1_500, 3_000)
             .setTargetBufferBytes(16 * 1024 * 1024).setPrioritizeTimeOverSizeThresholds(false).setBackBuffer(BACK_BUFFER_MS, true).build()
         // ANS60d: the player's first guess of the link before it has measured it: the owner's hotspot is capped at 5 Mbit/s (ExoPlayer would guess about 5 to 6 on Wi-Fi and start one step too high, a long first wait)
-        val meter = DefaultBandwidthMeter.Builder(ctx).setInitialBitrateEstimate(C.NETWORK_TYPE_WIFI, INITIAL_LINK_BPS).build()
+        val meter = bandwidthMeter(ctx)
         // WAKE_MODE_NETWORK: while it plays the player holds a Wi-Fi lock (and a CPU wake lock) so that the Wi-Fi chip does not drop into power save between two segments (WAKE_LOCK is in the manifest)
         val p = ExoPlayer.Builder(ctx, renderers).setLoadControl(load).setBandwidthMeter(meter).setWakeMode(C.WAKE_MODE_NETWORK).setHandleAudioBecomingNoisy(true).setAudioAttributes(AudioAttributes.DEFAULT, true).build()
         return Built(p, source)
     }
+
+    // ONE meter for the whole run (like ExoPlayer's own singleton): what the first film measured is the next film's first guess, instead of the fixed one
+    private var sharedMeter: DefaultBandwidthMeter? = null
+    @Synchronized private fun bandwidthMeter(ctx: Context): DefaultBandwidthMeter =
+        sharedMeter ?: DefaultBandwidthMeter.Builder(ctx.applicationContext).setInitialBitrateEstimate(C.NETWORK_TYPE_WIFI, INITIAL_LINK_BPS).build().also { sharedMeter = it }
 
     /** ANS60d: how much already-played film is kept for backward seeks, and the link speed assumed until the player has measured one (bit/s). */
     const val BACK_BUFFER_MS = 10_000
