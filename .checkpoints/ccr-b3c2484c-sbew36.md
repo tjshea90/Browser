@@ -1,21 +1,22 @@
-# CHECKPOINT 2476 — read me first, then TASKS.md
+# CHECKPOINT 2477 — read me first, then TASKS.md
 
-**Written:** 2026-11-16T04:34:57Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `616a86e9` (this checkpoint is the commit after it)
+**Written:** 2026-11-16T04:42:07Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `cad7563b` (this checkpoint is the commit after it)
 
 ## Just done
-ANS52g.2-4 CODED + TESTED: codec-main.js (web-tests/codec.test.js 15 ok), relay in content.js / background.js (codec-relay.test.js 6 ok, background.test.js 88 ok; RX4-M0b de-flaked), app side: core VideoLimits (+test), DeviceVideo.limits (hardware decoders only, three reference sizes), ShieldsBridge cfg 5th field + videoPolicy supplier, VideoFormats object + Diagnostics line 'Video formats offered to sites', Prefs vid_fps30 + BackupManager spec + Settings rows, OwnerRulesTest guard; full web-tests 495 ok
+ANS52g.5 CODED (not yet run on the emulator): lab page /formats in tools/sitelab/soaklab.py, debug intent vfmt (mode,fps30,tablet|none; DeviceVideo.labLimits override, debug builds only), soak.py suite cp (cp_scene: five cases compared with the engine's own answers, Diagnostics line check, report section), cp added to android.yml + emu-lab.yml lab_suite options; full unit suites core+app+geckoapp green; ANS52h designed (research/VIDEO_ACCELERATION.md), claimed, sub-rows ANS52h.1-4 in TASKS; hlscap.js (pure rewriteMaster) written but not yet tested or wired
 
 ## Do this next
-ANS52g.5: the lab proof. Add a lab page to tools/sitelab/soaklab.py (/video/formats: asks isTypeSupported / canPlayType / mediaCapabilities.decodingInfo for a table of types after 2 s and sends each answer to /report?kind=fmt), a soak.py scene (suite 'cp') that sets the Settings (adb debug intent or prefs) to Automatic / H.264 only / 30 fps and reads report.jsonl + the Diagnostics line; add 'cp' to android.yml + emu-lab.yml lab_suite options; then dispatch lab run, read result, tick ANS52g.5; THEN ANS52h
+ANS52h.3: write web-tests/hlscap.test.js (rewriteMaster: rungs above cap dropped, smallest kept when all above, no RESOLUTION kept, I-frame lines, CRLF kept, media playlist = null, portrait by long side); add hlscap.js to the manifest background scripts BEFORE background.js and to the SRC list in web-tests/background.test.js; in background.js: hlsCap from the 6th cfg field (parts[5]), blocking onHeadersReceived listener (urls *://*/*.m3u8*, types xmlhttprequest/media/other, status 200, no content-encoding, filterResponseData buffer <= 512 KB, TextDecoder fatal, any doubt = original bytes), counters hx in the st message; fix the harness (it keeps only the LAST onHeadersReceived listener: store the blocking one as listeners.hlsHeaders) and add a fake StreamFilter. THEN ANS52h.2 app side (core PictureCap, Prefs video_cap, Settings row, ShieldsBridge 6th field, Diagnostics), THEN lab scene hls in suite cp + ONE lab dispatch (android.yml app=lab lab_suite=cp) for both ANS52g and ANS52h
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M TASKS.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  85bc93dc ckpt 2476: ANS52g.2-4 CODED + TESTED: codec-main.js (web-tests/codec.test.js 15 ok), re
   f6c00b7a ckpt 2475: ANS52g designed (research/VIDEO_ACCELERATION.md section 'ANS52g design'), cl
   ec1665a5 ckpt 2474: alpha56 RELEASED and recorded: https://github.com/tjshea90/Browser/releases/
   e4d999c9 ckpt 2473: alpha56 re-dispatched on ckpt 2472 (the re-run of the first attempt failed w
@@ -25,8 +26,7 @@ ANS52g.5: the lab proof. Add a lab page to tools/sitelab/soaklab.py (/video/form
   4ab1e93b ckpt 2469: alpha56 bundle COMPLETE in code and tests after the worker restart: research
   cd7bcd0e ckpt 2468: independent review of the alpha56 diff (agent): 0 major, 6 minor, all fixed 
   774f1e17 ckpt 2467: ANS52a/a2 CODED + tested: (a) BrowserActivity.holdGeckoView/releaseGeckoHold
-  5235b647 ckpt 2466: owner message 52 (rotation still laggy / glitchy, status bar icons stuck in 
 ```
 
-(32 automatic checkpoint(s) since the last deliberate one — the
+(8 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
