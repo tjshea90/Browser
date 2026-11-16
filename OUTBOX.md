@@ -2022,3 +2022,7 @@
 ## 2026-11-16T16:53:27Z
 > Still waiting on the emulator run and the review. I'll continue when they finish.
 <!-- sha:af56b43a1f10 -->
+
+## 2026-11-16T17:04:31Z
+> Draft release note for alpha60 is written, with the test results still to be filled in; waiting for the emulator run.
+<!-- sha:deed9114c4b6 -->
