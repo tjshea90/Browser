@@ -24,6 +24,10 @@ class VideoPanel(ctx: Context, private val pal: Pal, private val listener: Liste
     interface Listener {
         /** Download [choice] under [stem] (the name without its extension; already cleaned for a file system). */
         fun download(choice: Choice, stem: String)
+        /** ANS52i: this build can play [choice] in Kestrel's own player (the Firefox build; false = no second button). */
+        fun canPlay(choice: Choice): Boolean = false
+        /** ANS52i: play [choice] in Kestrel's own player. */
+        fun play(choice: Choice) {}
     }
 
     /** One thing to save. [id] stays the same when the sheet is redrawn; [tag] comes back untouched. A disabled row is shown but cannot be chosen (the reason is in [detail]). */
@@ -83,6 +87,11 @@ class VideoPanel(ctx: Context, private val pal: Pal, private val listener: Liste
         val go = pillButton(ctx, if (size.isEmpty()) "Download" else "Download  ·  $size", pal.accent, pal.accentOn) { chosen?.let { listener.download(it, MediaNames.clean(currentStem())) } }
         go.isEnabled = sel != null; go.alpha = if (sel != null) 1f else 0.5f
         addView(go, LayoutParams(LayoutParams.MATCH_PARENT, ctx.dp(54)).apply { topMargin = ctx.dp(6); bottomMargin = ctx.dp(6) })
+        // ANS52i (research/VIDEO_ACCELERATION.md): the film in Kestrel's own player: the tablet's hardware decoder on its own screen layer, no page in the way (an experiment: tell the owner how it plays)
+        if (sel != null && listener.canPlay(sel)) {
+            val play = pillButton(ctx, "Play in Kestrel's player (test)", pal.pill, pal.fg) { chosen?.let { listener.play(it) } }
+            addView(play, LayoutParams(LayoutParams.MATCH_PARENT, ctx.dp(50)).apply { bottomMargin = ctx.dp(6) })
+        }
 
         // 4. the files that are probably not the video, closed
         if (m.other.isNotEmpty()) {

@@ -244,6 +244,8 @@ class VideoFlow(private val a: BrowserActivity) {
         }
         val p = VideoPanel(a, a.pal, object : VideoPanel.Listener {
             override fun download(choice: VideoPanel.Choice, stem: String) { when (val t = choice.tag) { is MediaCandidate -> pick(tab, t, stem); is StreamPick -> pickStream(tab, t, stem) } }
+            override fun canPlay(choice: VideoPanel.Choice): Boolean = nativeTarget(choice) != null
+            override fun play(choice: VideoPanel.Choice) { playNative(tab, choice) }
         })
         panel = p; panelTab = tab; panelPressed = pressedUrl; panelExtras = extras
         render(p, tab)
@@ -254,6 +256,38 @@ class VideoFlow(private val a: BrowserActivity) {
             // a file found in the page's own markup has not been requested yet, so nobody has seen its length: one byte asked for gives it back as "Content-Range: bytes 0-0/TOTAL"
             else if (c.kind == MediaKind.FILE && c.length <= 0 && sized.add(c.key)) DownloadController.fetchBytes(a, c.url, 0L, 0L, requestHeaders(tab, c), 1, tab.isPrivateTab, onTotal = { n -> if (c.length <= 0) { tab.media.setLength(c.url, n); a.refreshDownloadButton(); refresh(tab) } }) { }
         }
+    }
+
+    // ---- ANS52i (research/VIDEO_ACCELERATION.md plan item 6): "Play in Kestrel's player": the film's own address goes to NativePlayerActivity (Media3 on a SurfaceView, the hardware decoder), the page is left alone and stops
+    // with its screen. What can be handed over: a plain video file, or an HLS stream (its master playlist: the player picks the quality, capped at the row's height, 720 p when the row has none). Never DASH (no module in the
+    // APK), never audio only, never what has no address (an MSE blob): those rows have no second button.
+    private class NativeTarget(val url: String, val cand: MediaCandidate?, val maxH: Int, val w: Int, val h: Int)
+
+    private fun nativeTarget(choice: VideoPanel.Choice): NativeTarget? {
+        return when (val t = choice.tag) {
+            is MediaCandidate -> {
+                if (t.kind != MediaKind.FILE || t.audioOnly) return null
+                val ext = MediaSniff.extension(t.url)
+                if (ext !in PLAYABLE_FILES && !t.mime.startsWith("video/")) return null
+                NativeTarget(t.url, t, 1080, t.width, t.height)
+            }
+            is StreamPick -> {
+                val c = t.cand ?: return null
+                if (c.kind != MediaKind.HLS || t.audioOnly) return null
+                val h = Regex("(\\d{3,4})\\s*p", RegexOption.IGNORE_CASE).find(t.label)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                NativeTarget(c.url, c, if (h > 0) h else 720, 0, h)
+            }
+            else -> null
+        }
+    }
+
+    private fun playNative(tab: Tab, choice: VideoPanel.Choice) {
+        val target = nativeTarget(choice) ?: return
+        val headers = target.cand?.let { MediaHeaders.sets(it, tab.url).firstOrNull() }?.map { "${it.key}: ${it.value}" }.orEmpty()
+        try { tab.gecko.mediaSession?.pause() } catch (e: Throwable) { /* the page's own film may not have a media session (it is silent): then nothing is playing sound */ }
+        a.sheet.dismiss()
+        if (!tab.isPrivateTab) Health.log("video", "native-play", "${if (target.cand?.kind == MediaKind.HLS) "HLS" else "file"} cap ${target.maxH}")
+        NativePlayerActivity.launch(a, target.url, headers, 0L, target.maxH, tab.isPrivateTab, target.w, target.h)
     }
 
     /** What the page loaded that is worth considering, plus the pressed element's own file even when the usual size rules would hide it. */
