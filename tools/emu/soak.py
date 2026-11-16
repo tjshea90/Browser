@@ -2269,6 +2269,8 @@ class Soak:
                     t4, s4 = ev("video", "hand-over", m4), ev("native", "start", m4)
                     self.ho_events.append(("file, pressed again", ", ".join("%s>%s" % (r.get("type"), r.get("tgt")) for r in self.lab.since(r4) if r.get("kind") == "ap" and r.get("ev") == "evt") or "nothing at all"))
                     check("file: pressed again with the page in front, Kestrel's own player takes the film again", bool(t4) and bool(s4), "hand-over lines %d, native start lines %d" % (len(t4), len(s4)))
+                    mres = re.search(r"from (\d+) s", t4[0]["rest"]) if t4 else None
+                    check("file: pressed again, it continues where Kestrel's player stopped (the hand-over line says from N s, N above 0)", bool(mres) and int(mres.group(1)) > 0, "hand-over line: %s" % (t4[0]["rest"][:80] if t4 else "none"))
                     m5 = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(3)
                     check("file: Back ends it again", bool(ev("native", "stop", m5)), "no 'native stop' line")
                 self.ho_table.append((variant, "yes: " + ("stream" if expect == "native-hls" else "file"), "no", "yes" if ev("native", "first-picture", m) else "no"))
