@@ -590,11 +590,12 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** FS1: the screen turned (the tablet, the rotate button, a page's lock): the engine is told so `screen.orientation` and a full-screen video's layout follow. The activity handles the change itself (manifest configChanges). */
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        val cfgAt = SystemClock.uptimeMillis()
         super.onConfigurationChanged(newConfig)
         val landscape = newConfig.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
         try { turnSettler.configChanged(landscape) } catch (e: Throwable) { Health.log("fullscreen", "turn-settler-failed", e.toString().take(80)); try { turnSettler.abandon() } catch (x: Throwable) { /* nothing more to do */ } } // ROT1: pause the video and cover the page BEFORE the engine re-lays out (a failure must never leave the cover up)
         GeckoEngine.runtimeOrNull()?.let { try { it.orientationChanged() } catch (e: Throwable) { Health.log("fullscreen", "orientation-notify-failed", e.toString().take(80)) } }
-        Health.log("life", "config", "orientation=${if (landscape) "landscape" else "portrait"} fullscreen=$fullscreenOn")
+        Health.log("life", "config", "orientation=${if (landscape) "landscape" else "portrait"} fullscreen=$fullscreenOn" + (SystemClock.uptimeMillis() - cfgAt).let { if (it >= 50L) ", the app's own handling took $it ms" else "" })   // ANS51f
         if (fullscreenOn) { Io.main.removeCallbacks(rehideAfterTurn); Io.main.postDelayed(rehideAfterTurn, 150L) } // FSB1: a turn can bring the bars back on some systems
     }
 

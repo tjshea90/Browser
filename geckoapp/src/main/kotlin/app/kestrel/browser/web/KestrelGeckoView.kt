@@ -82,8 +82,12 @@ class KestrelGeckoView(ctx: Context) : GeckoView(ctx) {
     var sizeListener: (() -> Unit)? = null
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        super.onSizeChanged(w, h, oldw, oldh)
-        Health.log("gecko", "size", "${w}x$h (was ${oldw}x$oldh)")
+        val t0 = android.os.SystemClock.uptimeMillis()
+        super.onSizeChanged(w, h, oldw, oldh)                                  // (GeckoView hands the new surface size to its compositor here and waits for it)
+        val took = android.os.SystemClock.uptimeMillis() - t0
+        // ANS51f (owner message 51: `ui late-beat 2021 ms` at a turn on the tablet): how long the ENGINE's part of a size change blocked the UI thread, so the next report says whether the stall is GeckoView's surface or our own views
+        Health.log("gecko", "size", "${w}x$h (was ${oldw}x$oldh)" + (if (took >= 100L) ", the engine's part took $took ms" else ""))
+        if (took >= 100L) Health.count("gecko.sizeSlow")
         sizeListener?.invoke()
     }
 }
