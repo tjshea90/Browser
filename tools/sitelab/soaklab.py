@@ -312,7 +312,7 @@ def page_formats(tag):
   }
   function finish(pass, out) {
     var d = out.map(function (r) { return r.n + ':' + r.mse + ':' + r.can.replace(/[^a-z-]/g, '') + ':' + r.mc; }).join(',');
-    document.getElementById('o').textContent = TAG + ' ' + pass + '\n' + out.map(function (r) { return r.n + '  mse ' + r.mse + '  can ' + r.can + '  mc ' + r.mc; }).join('\n');
+    document.getElementById('o').textContent = TAG + ' ' + pass + '\\n' + out.map(function (r) { return r.n + '  mse ' + r.mse + '  can ' + r.can + '  mc ' + r.mc; }).join('\\n');
     try { new Image().src = '/report?kind=fmt&tag=' + encodeURIComponent(TAG) + '&pass=' + pass + '&d=' + encodeURIComponent(d) + '&t=' + Date.now(); } catch (e) {}
   }
   setTimeout(function () { ask('a'); }, 1500);
