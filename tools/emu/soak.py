@@ -726,6 +726,9 @@ class Soak:
         self.hs_table = []
         self.hs_line = ""
         self.ap_results = []                   # ANS53a / ANS53b: videos start only when pressed (suite ap)
+        self.ho_results = []                   # ANS54e: web videos play in Kestrel's own player (suite ho)
+        self.ho_table = []
+        self.ho_line = ""
         self.ap_table = []
         self.ap_line = ""
         self.kp_wake = []                      # (label, the wake-lock lines of `dumpsys power`) while the film plays in full screen and after it ended
@@ -2202,6 +2205,98 @@ class Soak:
         self.record({"kind": "press-to-play", "name": "videos-start-only-when-pressed", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
         self.check_alive("videos-start-only-when-pressed")
 
+    # ANS54e (owner message 54: "I want the web video players to use this"): a film that a page is about to play is played by Kestrel's own player. Pages: /ho?v=<variant> (soaklab.page_ho). The press goes through the
+    # page gate, the app decides (core WebHandOver) and starts NativePlayerActivity; the page keeps its element closed. Proof on the real engine: Health lines `video hand-over`, `native start`, the page's own events.
+    HO_CASES = [("file", "picture", "native"), ("overlay", "button", "native"), ("hls", "button", "native-hls"), ("unknown", "button", "page"), ("bad", "picture", "fail")]
+
+    def ho_scene(self):
+        checks = []
+        def check(name, ok, detail=""):
+            checks.append({"check": name, "ok": bool(ok), "detail": detail if not ok else ""})
+            if not ok:
+                self.issue("high", "web-hand-over", "%s %s" % (name, detail))
+        ev = lambda layer, name, since: health_events(self.log.since(since), layer, name)
+        self.ph.setting("system", "accelerometer_rotation", 0); self.ph.setting("system", "user_rotation", 0)
+        self.ph.physical(0, 9.81, 0)
+        self.ph.debug("vpress", "1"); self.ph.debug("webmode", "0"); time.sleep(2.5)
+        def press(variant, how, tag):
+            rm = self.lab.size()
+            self.ph.open_url("%s/ho?v=%s&tag=%s" % (self.lab_base, variant, tag))
+            t0 = time.time()
+            while time.time() - t0 < 30 and not [r for r in self.lab.since(rm) if r.get("kind") == "ap" and r.get("ev") == "layout" and str(r.get("tag", "")).startswith(tag)]:
+                time.sleep(1)
+            time.sleep(5)                                                                  # (the playlist is asked for at load, the app's early look reads it 3 s later)
+            lay = [r for r in self.lab.since(rm) if r.get("kind") == "ap" and r.get("ev") == "layout" and str(r.get("tag", "")).startswith(tag)]
+            if not lay:
+                return None
+            L = lay[-1]
+            tx, ty = (int(L.get("bx") or 0), int(L.get("by") or 0)) if how == "button" else (int(L.get("vx") or 0), int(L.get("vy") or 0))
+            if tx <= 0 or ty <= 0:
+                tx, ty = self.screen[0] // 2, 260
+            elif float(L.get("oy") or 0) < 5:
+                ty += 25
+            self.shot("ho-%s-before" % variant)
+            return tx, ty
+        for variant, how, expect in self.HO_CASES:
+            tag = "ho-" + variant
+            at = press(variant, how, tag)
+            if at is None:
+                check("%s: the page told where its picture is (for the tap)" % variant, False, "no layout row")
+                continue
+            m, r2 = self.log.size(), self.lab.size()
+            self.ph.tap(*at); time.sleep(9)
+            rows2 = [r for r in self.lab.since(r2) if r.get("kind") == "ap" and str(r.get("tag", "")).startswith(tag)]
+            ev2 = [r.get("ev") for r in rows2]
+            taken, started = ev("video", "hand-over", m), ev("native", "start", m)
+            self.shot("ho-%s-after" % variant)
+            if expect in ("native", "native-hls"):
+                check("%s: Kestrel's own player took the film over (a 'video hand-over' line: %s)" % (variant, [e["rest"][:50] for e in taken][:1]), bool(taken), "no 'video hand-over' line (page events %s)" % sorted(set(ev2)))
+                check("%s: Kestrel's own player started%s" % (variant, " on the stream" if expect == "native-hls" else " on the file"), bool(started) and (expect != "native-hls" or any("HLS" in e["rest"] for e in started)), "native start lines %s" % [e["rest"][:60] for e in started])
+                check("%s: the page's own player never played it (no 'playing', no 'sourceopen', no 'fetched')" % variant, not any(x in ev2 for x in ("playing", "playing-promise", "sourceopen", "fetched")), "events %s" % sorted(set(ev2)))
+                if variant in ("overlay", "hls"):
+                    check("%s: the page's play() was interrupted (AbortError), not refused" % variant, any(r.get("ev") == "rejected" and r.get("name") == "AbortError" for r in rows2), "rows %s" % [(r.get("ev"), r.get("name")) for r in rows2][:6])
+                check("%s: Kestrel's own player showed its first picture" % variant, bool(ev("native", "first-picture", m)), "no 'native first-picture' line")
+                m2 = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(3)
+                check("%s: Back ends Kestrel's own player and the page is in front again" % variant, bool(ev("native", "stop", m2)), "no 'native stop' line")
+                self.ho_table.append((variant, "yes: " + ("stream" if expect == "native-hls" else "file"), "no", "yes" if ev("native", "first-picture", m) else "no"))
+            elif expect == "page":
+                check("%s: nothing to take over (no playlist anywhere): no hand-over and no second player" % variant, not taken and not started, "hand-over lines %s, native start lines %d" % ([e["rest"][:50] for e in taken], len(started)))
+                check("%s: the page's own player plays it, as before" % variant, "sourceopen" in ev2 and "fetched" in ev2 and ("playing" in ev2 or "playing-promise" in ev2), "events %s" % sorted(set(ev2)))
+                self.ho_table.append((variant, "no: nothing to take over", "yes", "yes" if ("playing" in ev2 or "playing-promise" in ev2) else "no"))
+            elif expect == "fail":
+                check("%s: Kestrel's own player was started for it" % variant, bool(taken) and bool(started), "hand-over lines %d, start lines %d" % (len(taken), len(started)))
+                t_end = time.time() + 12
+                while time.time() < t_end and not ev("native", "back-to-page", m):
+                    time.sleep(1)
+                check("%s: it failed before its first picture and went back to the page (a 'native back-to-page' line)" % variant, bool(ev("native", "back-to-page", m)), "native lines %s" % [e["ev"] for e in health_events(self.log.since(m), "native")][:8])
+                m3, r3 = self.log.size(), self.lab.size()
+                self.ph.tap(*at); time.sleep(6)
+                ev3 = [r.get("ev") for r in self.lab.since(r3) if r.get("kind") == "ap" and str(r.get("tag", "")).startswith(tag)]
+                check("%s: pressed again, Kestrel's player is not started a second time (the page's own player has the film for two minutes)" % variant, not ev("native", "start", m3) and not ev("video", "hand-over", m3), "start lines %d, hand-over lines %d" % (len(ev("native", "start", m3)), len(ev("video", "hand-over", m3))))
+                self.ho_table.append((variant, "yes, then failed", "yes (after the failure)", "no"))
+        # the setting: "the page's own player" takes nothing over
+        self.ph.debug("webmode", "2"); time.sleep(2.5)
+        at = press("file", "picture", "ho-never")
+        if at is not None:
+            m, r2 = self.log.size(), self.lab.size()
+            self.ph.tap(*at); time.sleep(8)
+            ev2 = [r.get("ev") for r in self.lab.since(r2) if r.get("kind") == "ap" and str(r.get("tag", "")).startswith("ho-never")]
+            check("never: with Settings > Web videos play in = the page's own player nothing is taken over and the page plays", not ev("video", "hand-over", m) and not ev("native", "start", m) and ("playing" in ev2), "hand-over lines %d, events %s" % (len(ev("video", "hand-over", m)), sorted(set(ev2))))
+            self.ho_table.append(("file, setting: the page's own player", "no: the setting", "yes", "yes" if "playing" in ev2 else "no"))
+        self.ph.debug("webmode", "0"); time.sleep(1.5)
+        self.dump_diag("ho")
+        diag = ""
+        try:
+            diag = open(os.path.join(self.out, "diagnostics-ho.txt")).read()
+        except OSError:
+            pass
+        line = [ln for ln in diag.splitlines() if ln.startswith("Web videos in Kestrel's own player")]
+        self.ho_line = line[-1] if line else ""
+        check("Diagnostics counts what the pages asked and what was taken over", bool(line) and re.search(r"([1-9]\d*) films taken over", line[-1]) is not None, "line: %s" % (line[-1][:200] if line else "none"))
+        self.ho_results = checks
+        self.record({"kind": "web-hand-over", "name": "web-videos-in-kestrels-player", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
+        self.check_alive("web-videos-in-kestrels-player")
+
     # ---- the whole run
     # ---- VC1 / LP1 (owner message 44): a video with no controls gets Kestrel's own bar when it is tapped; a long press on a video opens the video options and never the floating panel
     VBAR_PAGES = [("naked", "/video/vc?kind=naked", "shown"), ("shadow-root", "/video/vc?kind=shadow", "shown"), ("shadow-root + frame over it", "/video/vc?kind=shadow&ad=1", "shown"), ("own controls", "/video/vc?kind=own", "own")]
@@ -2442,7 +2537,7 @@ class Soak:
         else:
             say("engine ready after %.0f s" % eng)
         time.sleep(5)
-        if eng is not None and self.a.suite != "ap":
+        if eng is not None and self.a.suite not in ("ap", "ho"):
             self.ph.debug("vpress", "0"); time.sleep(1.5)          # ANS53: the other scenes were written for pages whose videos start by themselves; the rule has its own suite (ap)
         if eng is not None:
             self.ph.debug("fsturn", "0"); time.sleep(1.0)          # ANS54e.1: the DEFAULT is now "follow the tablet" (never turn by itself); the older scenes check the automatic turning, so they ask for it; the default has its own check (kp)
@@ -2594,6 +2689,22 @@ class Soak:
             L.append("| :- | :- | :- |")
             for c in self.np_results:
                 L.append("| %s | %s | %s |" % (c["check"], "ok" if c["ok"] else "**FAILED**", (c["detail"] or "")[:160].replace("|", "/")))
+            L.append("")
+        if self.ho_results:
+            L.append("## Web videos play in Kestrel's own player (ANS54e, owner message 54), on the real engine")
+            L.append("")
+            L.append("| check | result | detail |")
+            L.append("| :- | :- | :- |")
+            for c in self.ho_results:
+                L.append("| %s | %s | %s |" % (c["check"], "ok" if c["ok"] else "**FAILED**", (c["detail"] or "")[:160].replace("|", "/")))
+            L.append("")
+            if self.ho_line:
+                L.append("Diagnostics line: %s" % self.ho_line[:900])
+                L.append("")
+            L.append("| page | taken over by Kestrel's player | page's own player ran | Kestrel's player showed a picture |")
+            L.append("| :- | :- | :- | :- |")
+            for row in self.ho_table:
+                L.append("| %s | %s | %s | %s |" % row)
             L.append("")
         if self.ap_results:
             L.append("## Videos start only when pressed (ANS53a / ANS53b, owner message 53), on the real engine")
@@ -3060,7 +3171,7 @@ class FakeAdb:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "vp"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "vp"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -3104,6 +3215,8 @@ def main():
             s.hls_scene()
         if a.suite in ("ap", "vp"):
             s.ap_scene()
+        if a.suite in ("ho", "vp"):
+            s.ho_scene()
         if a.suite == "yh":
             s.yahoo_fullscreen()                             # (only the live Yahoo Finance player in full screen with Kestrel's controls: about 4 minutes)
         if a.suite == "fsy":
