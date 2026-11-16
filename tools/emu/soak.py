@@ -1462,39 +1462,44 @@ class Soak:
         self.ph.setting("system", "accelerometer_rotation", 0); self.ph.setting("system", "user_rotation", 0)
         self.ph.physical(0, 9.81, 0); time.sleep(2)
         lmark = self.log.size()
-        self.ph.open_url("https://finance.yahoo.com/videos/")
-        t0 = time.time()
-        while time.time() - t0 < 90 and not any(e["ev"] in ("loaded", "error") for e in health_events(self.log.since(lmark), "page")):
-            time.sleep(2)
-        time.sleep(10)
-        self.shot("yahoofs-page")
-        self.ph.tap(w // 2, 25 + int(350 * d)); time.sleep(3)                       # the bar (or the page's own controls)
-        bar = [e["ev"] for e in health_events(self.log.since(lmark), "videobar")]
-        self.shot("yahoofs-tap")
-        time.sleep(1.5); self.shot("yahoofs-tap2")                                   # (the page's own controls come and go: a second picture says which button is where)
         entered = False
         how = "none"
-        fm = self.log.size()
-        if "shown" in bar:
-            self.ph.tap(556, 25 + int(475 * d)); time.sleep(5)   # the bar's Full button: x 556 px lies inside it for a 532 and a 564 css px wide film (probe of the live page: the film is 532 wide at x 16)
-            entered = bool(health_events(self.log.since(fm), "fullscreen", "turn"))
-            how = "Kestrel's Full button"
-        else:
-            # the page's own player (Shaka) shows its controls after the tap: its full-screen button is the square icon at the TOP-LEFT of the film (headless probe of the live page, 42 css px right of and below the film's
-            # corner). Where the film starts changes with the ads of the day, so a few heights are tried: a tap shows the controls, a second tap on the same place presses the button; a picture after each try.
-            how = "the page's own full-screen button (top-left of the film), tried at several heights (Kestrel's bar: %s)" % (",".join(bar) or "nothing")
-            def began(mark):
-                return bool(health_events(self.log.since(mark), "fullscreen", "turn") or health_events(self.log.since(mark), "fullscreen", "bars"))
-            for i, (fx, fy) in enumerate(((62, 271), (62, 250), (62, 295), (62, 320))):
-                if entered:
-                    break
-                for press in (1, 2):
-                    fm = self.log.size()
-                    self.ph.tap(fx, fy); time.sleep(2.5)
-                    self.shot("yahoofs-try%d-%d" % (i + 1, press))
-                    if began(fm):
-                        entered = True
+        bar = []
+        for attempt in range(3):
+            if attempt:
+                say("the live Yahoo page did not go full screen: loading it again (%d)" % (attempt + 1))
+                self.ph.physical(0, 9.81, 0); time.sleep(2)
+            self.ph.open_url("https://finance.yahoo.com/videos/")
+            t0 = time.time()
+            while time.time() - t0 < 90 and not any(e["ev"] in ("loaded", "error") for e in health_events(self.log.since(lmark), "page")):
+                time.sleep(2)
+            time.sleep(10)
+            self.shot("yahoofs-page")
+            self.ph.tap(w // 2, 25 + int(350 * d)); time.sleep(3)                       # the bar (or the page's own controls)
+            bar = [e["ev"] for e in health_events(self.log.since(lmark), "videobar")]
+            self.shot("yahoofs-tap")
+            time.sleep(1.5); self.shot("yahoofs-tap2")                                   # (the page's own controls come and go: a second picture says which button is where)
+            fm = self.log.size()
+            if "shown" in bar:
+                self.ph.tap(556, 25 + int(475 * d)); time.sleep(5)   # the bar's Full button: x 556 px lies inside it for a 532 and a 564 css px wide film (probe of the live page: the film is 532 wide at x 16)
+                entered = bool(health_events(self.log.since(fm), "fullscreen", "turn"))
+                how = "Kestrel's Full button"
+            else:
+                # the page's own player (Shaka) shows its controls after the tap: its full-screen button is the square icon at the TOP-LEFT of the film (headless probe of the live page, 42 css px right of and below the film's
+                # corner). Where the film starts changes with the ads of the day, so a few heights are tried: a tap shows the controls, a second tap on the same place presses the button; a picture after each try.
+                how = "the page's own full-screen button (top-left of the film), tried at several heights (Kestrel's bar: %s)" % (",".join(bar) or "nothing")
+                def began(mark):
+                    return bool(health_events(self.log.since(mark), "fullscreen", "turn") or health_events(self.log.since(mark), "fullscreen", "bars"))
+                for i, (fx, fy) in enumerate(((62, 271), (62, 250), (62, 295), (62, 320))):
+                    if entered:
                         break
+                    for press in (1, 2):
+                        fm = self.log.size()
+                        self.ph.tap(fx, fy); time.sleep(2.5)
+                        self.shot("yahoofs-try%d-%d" % (i + 1, press))
+                        if began(fm):
+                            entered = True
+                            break
         self.shot("yahoofs-full")
         states = []
         if entered:
