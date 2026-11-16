@@ -75,7 +75,6 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     private var framesAtStart = 0L
 
     private val controlsTick = Runnable { model.controlsTimer(); flush() }
-    private val tapTick = Runnable { model.tapTimer(); flush() }
     private val ticker = object : Runnable {
         override fun run() {
             sample()
@@ -239,8 +238,6 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     override fun now() = SystemClock.uptimeMillis()
     override fun scheduleControls(ms: Long) { main.removeCallbacks(controlsTick); main.postDelayed(controlsTick, ms) }
     override fun cancelControls() { main.removeCallbacks(controlsTick) }
-    override fun scheduleTap(ms: Long) { main.removeCallbacks(tapTick); main.postDelayed(tapTick, ms) }
-    override fun cancelTap() { main.removeCallbacks(tapTick) }
     override fun applyControls(shown: Boolean, animate: Boolean) { say(if (shown) "shown" else "hidden", if (animate) "fade" else "at once"); controls.show(shown, animate) }
     override fun changed() { controls.update(model.view()) }
     override fun feedback(zone: PlayerRules.Zone, burst: Int) { controls.flash(zone, burst) }
@@ -312,7 +309,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     }
 
     override fun onDestroy() {
-        main.removeCallbacks(ticker); main.removeCallbacks(controlsTick); main.removeCallbacks(tapTick)
+        main.removeCallbacks(ticker); main.removeCallbacks(controlsTick)
         val p = player
         player = null
         if (p != null) {

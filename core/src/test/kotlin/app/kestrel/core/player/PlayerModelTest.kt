@@ -11,16 +11,14 @@ class PlayerModelTest {
     private class Host : PlayerModel.Host {
         var clock = 0L
         var controlsAt: Long? = null
-        var tapAt: Long? = null
         var shown = false
         var redraws = 0
         val feedback = ArrayList<String>()
         override fun now() = clock
         override fun scheduleControls(ms: Long) { controlsAt = ms }
         override fun cancelControls() { controlsAt = null }
-        override fun scheduleTap(ms: Long) { tapAt = ms }
-        override fun cancelTap() { tapAt = null }
-        override fun applyControls(shown: Boolean, animate: Boolean) { this.shown = shown }
+        var lastAnimate = true
+        override fun applyControls(shown: Boolean, animate: Boolean) { this.shown = shown; lastAnimate = animate }
         override fun changed() { redraws++ }
         override fun feedback(zone: Zone, burst: Int) { feedback.add("${zone.name} $burst") }
     }
@@ -28,7 +26,6 @@ class PlayerModelTest {
     private fun sample(h: Host, t: Double = 0.0, d: Double = 65.0, b: Double = 20.0, paused: Boolean = false, ended: Boolean = false, muted: Boolean = false, ready: Int = 4, mse: Boolean = false, live: Boolean = false, rate: Double = 1.0, ack: Int = 0) =
         PlayerModel.Sample(t, d, b, paused, ended, muted, 100, rate, ready, mse, live, 1280, 720, h.clock, ack)
     private fun model(h: Host, playing: Boolean = true) = PlayerModel(h).also { it.start(playing) }
-    private fun Host.tickTap(m: PlayerModel, ms: Long) { clock += ms; if (tapAt != null) { tapAt = null; m.tapTimer() } }
     private fun Host.tickControls(m: PlayerModel, ms: Long) { clock += ms; if (controlsAt != null) { controlsAt = null; m.controlsTimer() } }
 
     @Test fun thePositionRunsOnBetweenReportsAndStopsWhenPausedOrBuffering() {
@@ -54,32 +51,35 @@ class PlayerModelTest {
         assertEquals(DurationView.Kind.LIVE, l.view().kind)
     }
 
-    @Test fun aSingleTapToggleTheControlsAfterTheDoubleTapWindowAndADoubleTapOnASideSeeksInstead() {
+    @Test fun everyTapTogglesTheControlsAtOnceAndADoubleTapOnASideSeeksOnTheSecondTap() {
         val h = Host(); val m = model(h)
         m.onSample(sample(h, t = 30.0))
         assertTrue("full screen shows them", m.shown)
-        m.onTap(500); assertTrue("not yet: the double tap window", m.shown)
-        h.tickTap(m, PlayerRules.DOUBLE_TAP_MS); assertFalse("a single tap hides them", m.shown)
-        m.onTap(500); h.tickTap(m, PlayerRules.DOUBLE_TAP_MS); assertTrue("and the next shows them", m.shown)
+        m.onTap(500); assertFalse("ANS53c: a tap hides them AT ONCE (no double-tap wait)", m.shown); assertFalse("and without a fade", h.lastAnimate)
+        h.clock += 600
+        m.onTap(500); assertTrue("and the next shows them at once, too", m.shown); assertFalse(h.lastAnimate)
         m.drain()
-        m.onTap(900); h.clock += 100; m.onTap(900)
+        h.clock += 600
+        m.onTap(900); assertFalse("the first tap of a side double tap toggled already", m.shown)
+        h.clock += 100; m.onTap(900)
         val cmds = m.drain()
         assertEquals(1, cmds.size); assertEquals("skip", cmds[0].a); assertEquals(10.0, cmds[0].d, 0.0)
         assertEquals(listOf("RIGHT 1"), h.feedback)
+        assertFalse("the second tap seeks and does not toggle again", m.shown)
         h.clock += 200; m.onTap(100)                                   // the burst is on the right: a tap on the left is a first tap of its own
-        assertTrue("and seeks nothing yet", m.drain().isEmpty())
+        assertTrue("it toggles at once and seeks nothing", m.drain().isEmpty()); assertTrue(m.shown)
     }
 
-    @Test fun theLeftSideSeeksBackAndTheMiddleDoubleTapPlaysAndPauses() {
+    @Test fun theLeftSideSeeksBackAndTheMiddleHasNoDoubleTapMeaning() {
         val h = Host(); val m = model(h)
         m.onSample(sample(h, t = 30.0))
         m.onTap(100); h.clock += 100; m.onTap(100)
         assertEquals(-10.0, m.drain()[0].d, 0.0)
         h.clock += 2000
+        val before = m.shown
         m.onTap(500); h.clock += 100; m.onTap(500)
-        val c = m.drain()
-        assertEquals("pause", c[0].a)
-        assertFalse("the picture says paused at once (the page answers later)", m.view().playing)
+        assertTrue("two quick taps in the middle are two toggles and make no command (ANS53c: the owner's own test of instant on / instant off never pauses the film)", m.drain().isEmpty())
+        assertEquals("shown, hidden: back where it was", before, m.shown)
     }
 
     @Test fun theButtonsMakeCommandsAndTheStateIsOptimisticUntilThePageConfirms() {
@@ -179,7 +179,7 @@ class PlayerModelTest {
     @Test fun stopAndAScreenTurnClearEverything() {
         val h = Host(); val m = model(h)
         m.onSample(sample(h)); m.turnStarted(); assertFalse("the controls go under the cover", m.shown)
-        m.onTap(500); h.tickTap(m, 400); assertFalse("a tap under the cover does nothing", m.shown)
+        h.clock += 400; m.onTap(500); assertFalse("a tap under the cover does nothing", m.shown)
         m.turnEnded(); assertTrue(m.shown)
         m.playPause(); m.stop()
         assertTrue(m.drain().isEmpty()); assertFalse(m.shown); assertFalse(m.running)

@@ -31,7 +31,6 @@ class PlayerController(
 
     private val model = PlayerModel(this)
     private val controlsTick = Runnable { model.controlsTimer(); flush() }
-    private val tapTick = Runnable { model.tapTimer(); flush() }
     private val ticker = object : Runnable { override fun run() { tickerOn = false; refresh() } }
     private var tickerOn = false
     private val commands = ConcurrentLinkedQueue<String>()
@@ -85,7 +84,7 @@ class PlayerController(
     private fun end(why: String) {
         deliverLook(true)
         activeFlag = false; shownFlag = false
-        Io.main.removeCallbacks(controlsTick); Io.main.removeCallbacks(tapTick); Io.main.removeCallbacks(ticker); Io.main.removeCallbacks(watchdog); tickerOn = false; watchOn = false
+        Io.main.removeCallbacks(controlsTick); Io.main.removeCallbacks(ticker); Io.main.removeCallbacks(watchdog); tickerOn = false; watchOn = false
         model.stop(); commands.clear()
         view.show(false, false); view.visibility = View.GONE
         rotateButton(false)
@@ -169,8 +168,6 @@ class PlayerController(
     override fun now() = SystemClock.uptimeMillis()
     override fun scheduleControls(ms: Long) { Io.main.removeCallbacks(controlsTick); Io.main.postDelayed(controlsTick, ms) }
     override fun cancelControls() { Io.main.removeCallbacks(controlsTick) }
-    override fun scheduleTap(ms: Long) { Io.main.removeCallbacks(tapTick); Io.main.postDelayed(tapTick, ms) }
-    override fun cancelTap() { Io.main.removeCallbacks(tapTick) }
     override fun applyControls(shown: Boolean, animate: Boolean) {
         if (shown != shownFlag) say(if (shown) "shown" else "hidden", if (animate) "fade" else "at once")
         shownFlag = shown
