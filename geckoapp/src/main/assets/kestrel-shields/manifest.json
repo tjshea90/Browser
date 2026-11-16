@@ -23,6 +23,7 @@
     "scripts": [
       "engine.js",
       "redirects.js",
+      "hlscap.js",
       "background.js"
     ]
   },

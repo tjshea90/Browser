@@ -21,6 +21,7 @@ var cfgMode = new Map();   // page host -> MODE_*
 var cfgAt = new Map();     // page host -> when the answer arrived
 var cfgFlags = new Map();  // page host -> flags from the app (1 = the pop-up and redirect guard applies, 2 = embeds wait for a tap, 4 = stand-ins for blocked files and scriptlets are allowed)
 var cfgWait = new Map();   // page host -> promise of the answer being fetched
+var hlsCap = 0;            // ANS52h: pixels of the LONGER side above which a rung of an HLS master playlist is taken out (0 = off); the app's 6th field of every page answer
 var codecCfg = '';         // ANS52g: the video format policy the app last sent with a page answer (5th field; "" = none), handed to the pages as `cx` (codec-main.js)
 var CFG_MAX = 300;
 var CFG_TTL = 60000;       // a Shields switch changed in Settings reaches pages that are already open within this time (a switch on the page itself reloads it at once)
@@ -37,6 +38,7 @@ function askCfg(host) {
     cfgMode.set(host, mode); cfgAt.set(host, (parseInt(parts[1], 10) > 0) ? Date.now() : Date.now() - CFG_TTL + 3000);
     cfgFlags.set(host, parseInt(parts[3], 10) || 0);
     if (parts.length > 4) codecCfg = String(parts[4]).slice(0, 160); // an answer of an older app (or for no host) has no 5th field: the last policy stays
+    if (parts.length > 5) { var hc = parseInt(parts[5], 10); hlsCap = (hc >= 320 && hc <= 20000) ? hc : 0; } // ANS52h: the 6th is the picture size cap in pixels (nothing sensible = off)
     noteGeneration(parseInt(parts[1], 10) || 0);
     if (mode !== MODE_LEGACY) wantImage(parseInt(parts[1], 10) || 0, parts[2] || '');
     return mode;
@@ -173,7 +175,7 @@ function markStats() { // lazy timer: nothing is scheduled while no request is b
 function reportStats(force) {
   if (!force && !statsDirty) return;
   statsDirty = false;
-  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, lt: lstText(), rv: rvText().slice(0, 300), vx: vcxText().slice(0, 240), w: (guardState + ', ' + guardBlocked + ' blocked' + assistText() + skipText() + ' | ' + slState + (slPages ? ', ' + slPages + ' pages ran ' + slCalls + ' calls' + (slBad ? ' (' + slBad + ' failed)' : '') + ', ' + slEarlyPages + ' before the page\'s first script' : '') + (slEarlySet ? ', ' + slEarlySet + ' sites set up early (' + slReg.size + ' kept, ' + slEarlyAsks + ' asks)' : '') + (standIns ? ', ' + standIns + ' blocked files answered with a stand-in' : '') + (slEarlyFail ? ', early error: ' + slEarlyFail : '') + ' | ' + stats.last).slice(0, 400) }).catch(function () {});
+  send({ k: 'st', g: engineGen, n: stats.checks, us: Math.round(stats.us), mx: Math.round(stats.maxUs), sl: stats.slow, lg: stats.legacy, lu: Math.round(stats.legacyUs), er: stats.errors, ld: stats.loadMs, by: engine ? engine.bytes : 0, pl: stats.pulls, off: engineOff ? 1 : 0, lt: lstText(), rv: rvText().slice(0, 300), vx: vcxText().slice(0, 240), hx: hlsText().slice(0, 300), w: (guardState + ', ' + guardBlocked + ' blocked' + assistText() + skipText() + ' | ' + slState + (slPages ? ', ' + slPages + ' pages ran ' + slCalls + ' calls' + (slBad ? ' (' + slBad + ' failed)' : '') + ', ' + slEarlyPages + ' before the page\'s first script' : '') + (slEarlySet ? ', ' + slEarlySet + ' sites set up early (' + slReg.size + ' kept, ' + slEarlyAsks + ' asks)' : '') + (standIns ? ', ' + standIns + ' blocked files answered with a stand-in' : '') + (slEarlyFail ? ', early error: ' + slEarlyFail : '') + ' | ' + stats.last).slice(0, 400) }).catch(function () {});
 }
 
 // ---------------------------------------------------------------- the page report (Diagnostics > Page report)
@@ -291,6 +293,12 @@ function skipText() { return (skipAsked || skipReports) ? ' | ad skippers: asked
 var guardBlocked = 0;
 // ANS52g: what the page-side video format policy (codec-main.js) refused, summed over all pages and frames since the extension started; shown in Diagnostics ("Video formats offered to sites")
 var vcx = { reports: 0, asked: 0, size: 0, mode: 0, fps: 0, last: '' };
+// ANS52h: what the picture size cap did to the HLS master playlists the pages asked for (shown in Diagnostics: "Picture size cap")
+var hls = { seen: 0, cut: 0, rungs: 0, media: 0, within: 0, notText: 0, big: 0, err: 0, last: '' };
+function hlsText() {
+  if (!hls.seen) return '';
+  return 'playlists looked at ' + hls.seen + ', cut ' + hls.cut + ' (' + hls.rungs + ' rungs taken out' + (hls.last ? ', last ' + hls.last : '') + '), left as they were: not a master list ' + hls.media + ', nothing above the cap ' + hls.within + ', not text ' + hls.notText + ', too big ' + hls.big + ', errors ' + hls.err;
+}
 function vcxText() {
   if (!vcx.reports) return '';
   return 'questions ' + vcx.asked + ' (counted when something was refused), refused ' + (vcx.size + vcx.mode + vcx.fps) + ': above the decoder\'s limit ' + vcx.size + ', not H.264 ' + vcx.mode + ', above 30 fps ' + vcx.fps + '; last: ' + vcx.last;
@@ -832,6 +840,46 @@ browser.webRequest.onHeadersReceived.addListener(lstTimed(LST.rcv, function (d) 
   var page = tabTop.get(d.tabId) || ((d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || ''));
   send({ k: 'media', u: url, c: ct, l: size, p: page, f: docOf(d.documentUrl), n: cd, rf: ref, og: org }).catch(function () {});
 }), { urls: ['http://*/*', 'https://*/*'], types: MEDIA_TYPES }, ['responseHeaders']);
+
+// ANS52h (research/VIDEO_ACCELERATION.md section "ANS52h design"): an HLS master playlist the page asks for is answered with the rungs above the picture size cap taken out (hlscap.js), so the site's player never
+// sees them. Only requests whose address names a .m3u8 reach this (a narrow filter: the response of every other request is never held for this listener), only while the app's cap is on, and the filter is
+// attached before any byte is read. Doubt is never the page's problem: a body that is not text, too big, not a master list, or a stream error leaves the bytes exactly as they came. Whether Gecko hands the
+// filter the bytes before or after the content decoding does not matter for that: compressed bytes are no text, so they are written back untouched, decoded text is rewritten and written back as it is.
+var HLS_MAX_BYTES = 524288;
+function hlsWrite(f, chunks) { for (var i = 0; i < chunks.length; i++) f.write(chunks[i]); }
+browser.webRequest.onHeadersReceived.addListener(function (d) {
+  try {
+    if (!(hlsCap > 0) || d.statusCode !== 200 || d.method !== 'GET' || d.tabId < 0) return {};
+    var f = browser.webRequest.filterResponseData(d.requestId), chunks = [], total = 0, rest = false, cap = hlsCap;
+    hls.seen++;
+    f.ondata = function (e) {
+      try {
+        if (rest) { f.write(e.data); return; }
+        total += e.data.byteLength;
+        if (total > HLS_MAX_BYTES) { rest = true; hls.big++; hlsWrite(f, chunks); chunks = []; f.write(e.data); return; } // too big for a master list: everything goes through, as it came
+        chunks.push(e.data);
+      } catch (x) { hls.err++; try { f.disconnect(); } catch (y) { /* gone */ } }
+    };
+    f.onstop = function () {
+      try {
+        if (rest) { f.close(); return; }
+        var all = new Uint8Array(total), at = 0, i;
+        for (i = 0; i < chunks.length; i++) { var c = new Uint8Array(chunks[i]); all.set(c, at); at += c.length; }
+        var text = null;
+        try { text = new TextDecoder('utf-8', { fatal: true }).decode(all); } catch (x) { text = null; }
+        if (text === null || text.indexOf('#EXTM3U') < 0) { hls.notText++; hlsWrite(f, chunks); f.close(); return; }
+        var r = KestrelHls.rewriteMaster(text, cap);
+        if (!r) { if (text.indexOf('#EXT-X-STREAM-INF') < 0) hls.media++; else hls.within++; hlsWrite(f, chunks); f.close(); return; }
+        f.write(new TextEncoder().encode(r.text).buffer);
+        hls.cut++; hls.rungs += r.dropped; hls.last = (r.kept + r.dropped) + ' -> ' + r.kept + ' at ' + cap;
+        markStats();
+        f.close();
+      } catch (x) { hls.err++; try { hlsWrite(f, chunks); f.close(); } catch (y) { try { f.disconnect(); } catch (z) { /* gone */ } } }
+    };
+    f.onerror = function () { hls.err++; try { f.disconnect(); } catch (x) { /* gone */ } };
+  } catch (e) { hls.err++; }
+  return {};
+}, { urls: ['http://*/*.m3u8*', 'https://*/*.m3u8*'], types: ['xmlhttprequest', 'media', 'other'] }, ['blocking']);
 
 // What the page's own <video> says about the file it plays (picture size, length, the label next to a <source>): relayed by content.js.
 browser.runtime.onMessage.addListener(function (m) {
