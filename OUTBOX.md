@@ -1754,3 +1754,7 @@
 ## 2026-11-16T06:51:38Z
 > The release note is drafted; I'm waiting for lab run 3 to finish before shipping.
 <!-- sha:9c7ba13a7abd -->
+
+## 2026-11-16T06:56:25Z
+> Still running (about 11 minutes in; the previous run took 9). I'll check again in three minutes.
+<!-- sha:9aaa2ee68c0f -->
