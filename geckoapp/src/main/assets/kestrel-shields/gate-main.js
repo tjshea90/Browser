@@ -10,7 +10,9 @@
 // It OPENS - what was held is applied, in order - when (a) `play()` is called inside a user activation (`navigator.userActivation.isActive`: the page's own play button, a keyboard, a script that answers a tap),
 // (b) a real tap lands inside the picture of the element (a custom play overlay, the engine's own controls, a player that waits for `canplay` before it calls play(): it could never get there otherwise), (c) Kestrel's
 // own controls tell it with `__kst_gate_v1` on the element (a content script's own play() does not pass through this page's replacement of play()), (d) the person turned the rule off (Settings).
-// A stream (`srcObject`: a camera, a call) is never held. Until the content script says otherwise the gate is CLOSED: the person's rule is the default.
+// A stream (`srcObject`: a camera, a call) is never held (and its autoplay is given back). Only VIDEO is gated (the person's rule is about video: a music player's next track or a sound must not be refused), and only a
+// blob: address made from a MediaSource is held (a File the person chose for an upload form is no stream). Until the content script says otherwise the gate is CLOSED: the person's rule is the default.
+// Reviewed by an independent agent (research/ANS53_GATE_REVIEW.md): a tap counts for the video it landed on or in (its player box), for 30 s; a gesture counts 1.2 s even when the activation was consumed.
 // What it did is counted (numbers only) and handed to the content script, which relays it to Diagnostics. Conservative ES5; nothing runs until a page touches a media element.
 // Tested in headless Chromium by web-tests/gate.test.js (the logic is plain DOM and the same in Gecko).
 (function () {
@@ -29,12 +31,15 @@
   var gated = [];                                        // the elements that hold something back (a tap on their picture opens them)
   var N = { held: 0, opened: 0, play: 0, press: 0, kestrel: 0, off: 0, deferred: 0, refused: 0 };
   var dirty = false, timer = 0, reportsLeft = 6, lastGesture = 0;
+  var told = false, waiting = [];                        // told: the content script has said on or off at least once; waiting: play() calls that came before that (carried out on OFF, refused on ON)
+  var lastTap = { t: 0, target: null };                  // the last real tap or key press: when, and what it landed on
+  var mseUrls = Object.create(null), mseCount = 0;       // blob: addresses made from a MediaSource
   var REFUSED = 'The play method is not allowed by the user agent or the platform in the current context, possibly because the user denied permission.';
 
   function rec(el) { var r = recs.get(el); if (!r) { r = { open: false, src: null, hasSrc: false, preload: null, hasPreload: false, autoplay: false, hasAutoplay: false, load: false, tracked: false, adopted: false, forced: false }; recs.set(el, r); } return r; }
   function peek(el) { try { return recs.get(el); } catch (e) { return undefined; } }
-  function isBlob(v) { return typeof v === 'string' ? /^blob:/i.test(v) : (v !== null && v !== undefined && /^blob:/i.test(String(v))); }
-  function isMediaEl(x) { return !!x && x.nodeType === 1 && (x.nodeName === 'VIDEO' || x.nodeName === 'AUDIO'); }
+  function isBlob(v) { var u = (typeof v === 'string') ? v : ((v !== null && v !== undefined) ? String(v) : ''); return mseUrls[u] === 1; }   // only a MediaSource's address (see the createObjectURL wrapper below)
+  function isMediaEl(x) { return !!x && x.nodeType === 1 && x.nodeName === 'VIDEO'; }
 
   // ---------------------------------------------------------------- looking like the engine's own functions
   function mask(fn, name, orig) {
@@ -79,9 +84,27 @@
 
   // ---------------------------------------------------------------- user activation
   function activation() {
-    try { var ua = navigator.userActivation; if (ua && typeof ua.isActive === 'boolean') return ua.isActive; } catch (e) { /* an older engine */ }
+    var near = dnow.call(Date) - lastGesture < 1200;                              // (a click that called requestFullscreen() first has used its activation up: its play() is the same press)
+    try { var ua = navigator.userActivation; if (ua && typeof ua.isActive === 'boolean') return ua.isActive || near; } catch (e) { /* an older engine */ }
     return dnow.call(Date) - lastGesture < 1500;
   }
+  // where a tap landed: the node itself, or inside the player box of the video (the video, an overlay or a control bar over it, up to five ancestors, never the page's body), shadow trees followed
+  function inside(t, a) { var n = 0; while (t && n < 80) { if (t === a) return true; var rn = t.getRootNode ? t.getRootNode() : null; t = t.parentElement || ((rn && rn !== document && rn.host) ? rn.host : null); n++; } return false; }
+  function sameBox(el, t) {
+    try {
+      if (!t || t.nodeType !== 1) return false;
+      if (inside(t, el)) return true;
+      var up = el;
+      for (var n = 0; n < 5; n++) {
+        var rn = up.getRootNode ? up.getRootNode() : null;
+        up = up.parentElement || ((rn && rn !== document && rn.host) ? rn.host : null);
+        if (!up || up === document.body || up === document.documentElement) return false;
+        if (inside(t, up)) return true;
+      }
+    } catch (e) { /* ignore */ }
+    return false;
+  }
+  function pressedRecently(el) { return lastTap.t > 0 && dnow.call(Date) - lastTap.t < 30000 && sameBox(el, lastTap.target); }
 
   // ---------------------------------------------------------------- the originals
   var oSetAttr = eproto.setAttribute, oRemoveAttr = eproto.removeAttribute, oGetAttr = eproto.getAttribute, oHasAttr = eproto.hasAttribute;
@@ -92,8 +115,8 @@
     var r = rec(el);
     if (r.tracked) return;
     r.tracked = true;
-    if (gated.length >= 60) { var keep = []; for (var i = 0; i < gated.length; i++) if (gated[i].isConnected && !rec(gated[i]).open) keep.push(gated[i]); gated = keep; }
-    if (gated.length < 60) gated.push(el);
+    if (gated.length >= 400) { var keep = []; for (var i = 0; i < gated.length; i++) if (gated[i].isConnected && !rec(gated[i]).open) keep.push(gated[i]); gated = keep; }
+    if (gated.length < 400) gated.push(el);
     try { el.addEventListener(OPEN_EVENT, function () { openEl(el, 'kestrel'); }, true); } catch (e) { /* ignore */ }   // Kestrel's own controls, also for a film inside a shadow tree
   }
 
@@ -108,26 +131,41 @@
       r.forced = false;
       if (r.hasSrc) { var s = r.src; r.hasSrc = false; r.src = null; r.load = false; if (dSrc) dSrc.set.call(el, s); else oSetAttr.call(el, 'src', s); }
       else if (r.load) { r.load = false; if (el.networkState === 0) oLoad.call(el); }                 // (giving the preload back already resumes a load that was waiting; a second load() would start it again and ask for the file twice)
-      // the person's rule is OFF (Settings): the page's own autoplay comes back, as in any other browser (lab run 43812820865: a muted hero loop loaded but never started with the rule off). A press on the picture, the page's own play()
-      // and Kestrel's own controls start nothing by this: the person pressed a play button, or the page plays at the person's request; a tap on a hero loop that has no play button is not a request to play it.
-      if (r.hasAutoplay) { var wantAuto = r.autoplay; r.hasAutoplay = false; if (why === 'off' && wantAuto) { if (dAutoplay) dAutoplay.set.call(el, true); else oSetAttr.call(el, 'autoplay', ''); } }
+      // the person's rule is OFF (Settings): the page's own autoplay comes back, as in any other browser (lab run 43812820865: a muted hero loop loaded but never started with the rule off); so does the autoplay of a video
+      // that is given a STREAM (a camera, a call: it must show). A press on the picture, the page's own play() and Kestrel's own controls start nothing by this: the person pressed a play button, or the page plays at the
+      // person's request; a tap on a hero loop that has no play button is not a request to play it.
+      if (why === 'off' || why === 'stream') giveAutoplay(el, r);
     } catch (e) { /* the page decides */ }
     touch();
   }
-  function openAll(why) { for (var i = 0; i < gated.length; i++) { try { openEl(gated[i], why); } catch (e) { /* ignore */ } } }
+  function giveAutoplay(el, r) {
+    if (!r.hasAutoplay) return;
+    var want = r.autoplay; r.hasAutoplay = false;
+    if (want) { try { if (dAutoplay) dAutoplay.set.call(el, true); else oSetAttr.call(el, 'autoplay', ''); } catch (e) { /* the page decides */ } }
+  }
+  function openAll(why) { for (var i = 0; i < gated.length; i++) { try { var el = gated[i]; openEl(el, why); if (why === 'off') giveAutoplay(el, rec(el)); } catch (e) { /* ignore */ } } }
 
-  function pressAt(x, y) {
+  function pressAt(x, y, target) {
     for (var i = 0; i < gated.length; i++) {
       var el = gated[i];
       try {
         if (!el.isConnected || rec(el).open) continue;
         var rc = el.getBoundingClientRect();
-        if (rc.width >= 80 && rc.height >= 45 && x >= rc.left - 4 && x <= rc.right + 4 && y >= rc.top - 4 && y <= rc.bottom + 4) openEl(el, 'press');
+        if (rc.width >= 80 && rc.height >= 45 && x >= rc.left - 4 && x <= rc.right + 4 && y >= rc.top - 4 && y <= rc.bottom + 4 && sameBox(el, target)) openEl(el, 'press');   // (a cookie button or a menu that merely sits over the picture opens nothing)
       } catch (e) { /* ignore */ }
     }
   }
 
   // ---------------------------------------------------------------- the replacements
+  try {
+    defMethod(URL, 'createObjectURL', function (orig) {                              // the addresses of MediaSources are the only blob: sources that are held
+      return function (obj) {
+        var u = orig.apply(this, arguments);
+        try { if (typeof MediaSource === 'function' && obj instanceof MediaSource) { if (mseCount > 400) { mseUrls = Object.create(null); mseCount = 0; } mseUrls[u] = 1; mseCount++; } } catch (e) { /* ignore */ }
+        return u;
+      };
+    });
+  } catch (e) { /* ignore */ }
   dSrc = defAccessor(proto, 'src',
     function (g) { return function () { var r = peek(this); return (r && r.hasSrc) ? r.src : g.call(this); }; },
     function (s) {
@@ -171,7 +209,7 @@
     });
   defAccessor(proto, 'srcObject',
     function (g) { return function () { return g.call(this); }; },
-    function (s) { return function (v) { try { if (v && isMediaEl(this)) rec(this).open = true; } catch (e) { /* ignore */ } return s.call(this, v); }; });   // a stream (camera, call) is never held
+    function (s) { return function (v) { try { if (v && isMediaEl(this)) { var r = rec(this); if (!r.open) openEl(this, 'stream'); else giveAutoplay(this, r); r.open = true; } } catch (e) { /* ignore */ } return s.call(this, v); }; });   // a stream (camera, call) is never held, and it autoplays as its page meant
 
   defMethod(proto, 'setAttribute', function (orig) {
     return function (name, value) {
@@ -210,7 +248,11 @@
           if (!r.open) {
             if (!r.adopted) adopt(this);
             track(this);
-            if (activation()) openEl(this, 'play');
+            if (activation() || pressedRecently(this)) openEl(this, 'play');
+            else if (!told) {                                                        // the app has not answered yet: the page's play() waits for the answer (carried out when the rule is OFF)
+              var self = this, args = arguments;
+              return new Promise(function (resolve, reject) { waiting.push({ el: self, args: args, resolve: resolve, reject: reject }); try { later.call(window, settle, 4000); } catch (e) { settle(); } });
+            }
             else { N.refused++; touch(); return Promise.reject(new DOMException(REFUSED, 'NotAllowedError')); }
           }
         }
@@ -240,8 +282,8 @@
       if (!node || node.nodeType !== 1) return;
       if (isMediaEl(node)) adopt(node);
       if (node.firstElementChild) {
-        var list = node.querySelectorAll('video,audio');
-        for (var i = 0; i < list.length && i < 60; i++) adopt(list[i]);
+        var list = node.querySelectorAll('video');
+        for (var i = 0; i < list.length && i < 500; i++) adopt(list[i]);
       }
     } catch (e) { /* never break the page */ }
   }
@@ -250,13 +292,13 @@
     try {
       if (!observer && typeof MutationObserver === 'function') {
         observer = new MutationObserver(function (records) {
-          for (var i = 0; i < records.length; i++) { var add = records[i].addedNodes; for (var j = 0; j < add.length && j < 400; j++) scan(add[j]); }
+          for (var i = 0; i < records.length; i++) { var add = records[i].addedNodes; for (var j = 0; j < add.length && j < 2000; j++) scan(add[j]); }
         });
       }
       if (observer) {
         observer.observe(root, { childList: true, subtree: true });
-        var list = root.querySelectorAll ? root.querySelectorAll('video,audio') : [];      // what is in the tree already (a shadow root that is filled before it is watched)
-        for (var i = 0; i < list.length && i < 60; i++) adopt(list[i]);
+        var list = root.querySelectorAll ? root.querySelectorAll('video') : [];            // what is in the tree already (a shadow root that is filled before it is watched)
+        for (var i = 0; i < list.length && i < 500; i++) adopt(list[i]);
       }
     } catch (e) { /* ignore */ }
   }
@@ -268,24 +310,38 @@
   // ---------------------------------------------------------------- a real tap on a picture is the person's press
   var down = null;
   window.addEventListener('pointerdown', function (e) { try { if (e.isTrusted && e.isPrimary !== false) { down = { x: e.clientX, y: e.clientY, t: dnow.call(Date) }; lastGesture = down.t; } } catch (x) { /* ignore */ } }, { capture: true, passive: true });
+  function targetOf(e) { try { var p = e.composedPath ? e.composedPath() : null; return (p && p.length) ? p[0] : e.target; } catch (x) { return e.target; } }
   window.addEventListener('pointerup', function (e) {
     try {
       if (!e.isTrusted || !down) return;
       var d = down; down = null; lastGesture = dnow.call(Date);
       if (lastGesture - d.t > 600 || Math.abs(e.clientX - d.x) > 14 || Math.abs(e.clientY - d.y) > 14) return;   // a tap, not a swipe or a long press
-      pressAt(e.clientX, e.clientY);
+      var tg = targetOf(e); lastTap.t = lastGesture; lastTap.target = tg;
+      pressAt(e.clientX, e.clientY, tg);
     } catch (x) { /* ignore */ }
   }, { capture: true, passive: true });
-  window.addEventListener('click', function (e) { try { if (e.isTrusted) { lastGesture = dnow.call(Date); if (e.detail > 0 || e.clientX || e.clientY) pressAt(e.clientX, e.clientY); } } catch (x) { /* ignore */ } }, { capture: true, passive: true });
-  window.addEventListener('keydown', function (e) { try { if (e.isTrusted) lastGesture = dnow.call(Date); } catch (x) { /* ignore */ } }, { capture: true, passive: true });
+  window.addEventListener('click', function (e) { try { if (e.isTrusted) { lastGesture = dnow.call(Date); var tg = targetOf(e); lastTap.t = lastGesture; lastTap.target = tg; if (e.detail > 0 || e.clientX || e.clientY) pressAt(e.clientX, e.clientY, tg); } } catch (x) { /* ignore */ } }, { capture: true, passive: true });
+  window.addEventListener('keydown', function (e) { try { if (e.isTrusted) { lastGesture = dnow.call(Date); lastTap.t = lastGesture; lastTap.target = targetOf(e); } } catch (x) { /* ignore */ } }, { capture: true, passive: true });
 
   // ---------------------------------------------------------------- the content script says whether the rule is on
+  // the app's answer is there (or too slow: 4 s): what waited is carried out when the rule is OFF, refused when it is ON
+  function settle() {
+    told = true;
+    var w = waiting; waiting = [];
+    for (var i = 0; i < w.length; i++) {
+      var q = w[i];
+      try {
+        if (!on) { var p = proto.play.apply(q.el, q.args); if (p && p.then) p.then(q.resolve, q.reject); else q.resolve(); }
+        else { N.refused++; touch(); q.reject(new DOMException(REFUSED, 'NotAllowedError')); }
+      } catch (x) { try { q.reject(x); } catch (y) { /* ignore */ } }
+    }
+  }
   try {
     document.addEventListener(CFG_EVENT, function (e) {
       try {
         var d = e && e.detail;
-        if (d === '0') { if (on) { on = false; openAll('off'); } }
-        else if (d === '1') on = true;
+        if (d === '0') { if (on) { on = false; openAll('off'); } told = true; settle(); }
+        else if (d === '1') { on = true; settle(); }
       } catch (x) { /* keep what was told before */ }
     }, true);
     document.dispatchEvent(new CustomEvent(READY_EVENT));
