@@ -2163,3 +2163,7 @@
 ## 2026-11-16T17:48:43Z
 > Waiting for the emulator run to finish.
 <!-- sha:117df21e9e41 -->
+
+## 2026-11-16T18:08:06Z
+> Lab gv run 43925029376 is still running on GitHub. The JVM unit suites passed; the web tests are still going. I'm waiting for the lab report, which will show whether the new finger-injection path (`input motionevent`) reaches the app and whether the private/regular-tab checks pass.
+<!-- sha:631b07c60738 -->
