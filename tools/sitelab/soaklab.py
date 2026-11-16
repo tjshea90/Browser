@@ -69,8 +69,13 @@ def make_clips():
         subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", land, "-c", "copy", "-f", "hls", "-hls_time", "4", "-hls_playlist_type", "vod",
                         "-hls_segment_filename", os.path.join(hdir, "seg%d.ts"), os.path.join(hdir, "index.m3u8")], check=False)
         if os.path.exists(os.path.join(hdir, "index.m3u8")):
+            # ANS53d: a second, smaller picture, so the quality list of Kestrel's own player has something to choose
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", land, "-vf", "scale=320:180", "-c:v", "libx264", "-preset", "veryfast", "-profile:v", "main", "-pix_fmt", "yuv420p", "-b:v", "250k", "-g", "50",
+                            "-c:a", "aac", "-b:a", "48k", "-f", "hls", "-hls_time", "4", "-hls_playlist_type", "vod", "-hls_segment_filename", os.path.join(hdir, "low%d.ts"), os.path.join(hdir, "low.m3u8")], check=False)
             with open(os.path.join(hdir, "master.m3u8"), "w") as f:
-                f.write('#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH=700000,RESOLUTION=640x360,CODECS="avc1.4d401e,mp4a.40.2"\nindex.m3u8\n')
+                f.write('#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH=700000,RESOLUTION=640x360,FRAME-RATE=25.000,CODECS="avc1.4d401e,mp4a.40.2"\nindex.m3u8\n')
+                if os.path.exists(os.path.join(hdir, "low.m3u8")):
+                    f.write('#EXT-X-STREAM-INF:BANDWIDTH=300000,RESOLUTION=320x180,FRAME-RATE=25.000,CODECS="avc1.4d400d,mp4a.40.2"\nlow.m3u8\n')
         print("soaklab: hls film %s" % ("ok" if os.path.exists(os.path.join(hdir, "master.m3u8")) else "FAILED"), flush=True)
     tone = os.path.join(OUT, "tone.m4a")          # SND1: sound without a picture
     if not os.path.exists(tone):
