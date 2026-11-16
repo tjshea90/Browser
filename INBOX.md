@@ -1550,3 +1550,12 @@ The rotation from portrait to landscape is still very laggy and glitchy and resi
 2) I did the "play in kestrel's player" test while my tablet was in portrait orientation. The video opened Fullscreen in portrait orientation but stretched vertically so the aspect ratio was wrong, but then quickly switched to landscape, even though my tablet was being held in portrait orientation. It should have played in portrait. There was no option to go from the landscape mode to portrait. Even rotating the tablet didn't change it. 
 3) other than the errors above, the "play in kestrel's player" test was very smooth. The video played well and noticeably smoother than when it was inside the website. 
 ```
+
+## 2026-11-16T07:24:18Z
+```
+When I play a video from the web page, the video player is very slow and laggy . When I opened full screen, it automatically went to landscape orientation, even though I was holding my tablet in portrait orientation and didn't rotate it. When I selected a resolution then pressed the x button to close the resolution options box, it didn't close, it froze for a while. 
+
+However, when I press the download button and select play in kestrel's player (test), it is nearly perfect. The video is smooth, the orientation is correct, etc. 
+
+Can you model the in-site video player on the Kestrel player from the download button and the "play in kestrel's player (test)" button? This is a much better video player. I want the web video players to use this
+```
