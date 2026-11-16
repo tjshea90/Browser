@@ -33,7 +33,7 @@ class TurnSettler(
     /** ROT2: the small progress ring on the cover. */
     private val hintView: () -> View? = { null },
     /** ANS52a: the engine's view is still held at its old size (it gets the new one right after the first frame of the turn): the cover must stay. */
-    private val resizePending: () -> Boolean = { false },
+    private val viewHeld: () -> Boolean = { false },
     /** VP1: the cover goes up (true) / is let go (false): Kestrel's full-screen controls hide under it and come back after it. */
     private val onCover: (Boolean) -> Unit = {},
 ) {
@@ -71,7 +71,7 @@ class TurnSettler(
         override fun expectsPageReport() = expectsPage()
         override fun nudgeEngine() = nudge()
         override fun hint(show: Boolean) { hintView()?.visibility = if (show) View.VISIBLE else View.GONE }
-        override fun resizePending() = resizePending()
+        override fun resizePending() = viewHeld()
     })
 
     /** Where the screen is at the start (the first turn must count too). */
