@@ -1871,3 +1871,7 @@
 ## 2026-11-16T09:43:57Z
 > The release gates passed (alpha58, build 159, is staged). I'm waiting for the last emulator re-run before telling GitHub to build and publish it.
 <!-- sha:d4e081f1b632 -->
+
+## 2026-11-16T09:50:31Z
+> Waiting for the release build to finish; I'll verify the tag, all build jobs and the published APK before recording or announcing anything.
+<!-- sha:441450ac36c8 -->
