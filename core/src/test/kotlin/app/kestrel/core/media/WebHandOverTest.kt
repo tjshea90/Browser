@@ -14,6 +14,18 @@ class WebHandOverTest {
     private val film = Known("https://v.example/film/master.m3u8", MediaKind.HLS, 600_000L, true)
     private val unknownLength = Known("https://v.example/other/master.m3u8", MediaKind.HLS, 0L, true)
 
+    @Test fun aFilmPressedAgainContinuesWhereThePersonStopped() {
+        val u = "https://cdn.example/clip.mp4"
+        assertEquals(118_000L, WebHandOver.resumeMs(0L, u, u, 120_000L, 600_000L, 60_000L))
+        assertEquals("another film", 0L, WebHandOver.resumeMs(0L, u, "https://cdn.example/other.mp4", 120_000L, 600_000L, 60_000L))
+        assertEquals("too long ago", 0L, WebHandOver.resumeMs(0L, u, u, 120_000L, 600_000L, WebHandOver.RESUME_WINDOW_MS + 1))
+        assertEquals("the page itself is somewhere else: that wins", 40_000L, WebHandOver.resumeMs(40_000L, u, u, 120_000L, 600_000L, 60_000L))
+        assertEquals("it played to its end: from the start again", 0L, WebHandOver.resumeMs(0L, u, u, 595_000L, 600_000L, 60_000L))
+        assertEquals("barely started", 0L, WebHandOver.resumeMs(0L, u, u, 3_000L, 600_000L, 60_000L))
+        assertEquals("nothing was stopped yet", 0L, WebHandOver.resumeMs(0L, u, "", 0L, 0L, -1L))
+        assertEquals("the length is not known: it still continues", 58_000L, WebHandOver.resumeMs(0L, u, u, 60_000L, 0L, 5_000L))
+    }
+
     @Test fun aDirectFileIsHandedOverFromWhereThePageIs() {
         val d = WebHandOver.decide(WebHandOver.ALWAYS, Why.PRESS, el(src = "https://cdn.example/clip.mp4", t = 12.5, d = 300.0), emptyList())!!
         assertEquals("https://cdn.example/clip.mp4", d.url); assertEquals(MediaKind.FILE, d.kind); assertEquals(12_500L, d.startMs)

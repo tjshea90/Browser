@@ -71,6 +71,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     private var player: ExoPlayer? = null
     private val model = PlayerModel(this)
     private var priv = false
+    private var shownUrl = ""                    // the film this screen plays (kept in lastUrl when it ends, for core WebHandOver.resumeMs)
     private var ack = 0
     private var muted = false
     private var startedAt = 0L
@@ -107,6 +108,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         val url = i.getStringExtra(EXTRA_URL).orEmpty()
         priv = i.getBooleanExtra(EXTRA_PRIVATE, false)
         fromPage = i.getBooleanExtra(EXTRA_FROM_PAGE, false)
+        shownUrl = url
         NativePlayerStats.active = true
         picW = i.getIntExtra(EXTRA_W, 0); picH = i.getIntExtra(EXTRA_H, 0)
         if (url.isEmpty()) { finish(); return }
@@ -453,6 +455,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
                 val dc = p.videoDecoderCounters
                 if (!priv) { NativePlayerStats.framesShown += (dc?.renderedOutputBufferCount ?: 0).toLong(); NativePlayerStats.playedMs += p.currentPosition.coerceAtLeast(0L) }
                 lastPositionMs = p.currentPosition.coerceAtLeast(0L)
+                if (priv) lastUrl = "" else { lastUrl = shownUrl; lastDurationMs = p.duration.let { d -> if (d == C.TIME_UNSET || d < 0L) 0L else d }; lastStoppedAt = SystemClock.uptimeMillis() }   // (RAM only, never for a private tab)
                 if (!priv) NativePlayerStats.last = "ended after ${(SystemClock.uptimeMillis() - startedAt) / 1000} s"
             } catch (e: Throwable) { /* gone */ }
             try { p.release() } catch (e: Throwable) { /* gone */ }
@@ -480,6 +483,10 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
 
         /** Where the last play stopped (for a page that wants to continue from there). */
         @Volatile var lastPositionMs = 0L
+        /** The film Kestrel's own player showed last (never a private tab's), how long it is and when it ended: a page film pressed again continues from where it stopped (core WebHandOver.resumeMs). */
+        @Volatile var lastUrl = ""
+        @Volatile var lastDurationMs = 0L
+        @Volatile var lastStoppedAt = 0L
 
         fun launch(from: Context, url: String, headers: List<String>, startMs: Long, maxH: Int, priv: Boolean, w: Int, h: Int, pick: QualityLabel.Rung? = null, auto: Boolean = false, fromPage: Boolean = false) {
             val i = Intent(from, NativePlayerActivity::class.java).putExtra(EXTRA_URL, url).putExtra(EXTRA_HEADERS, headers.toTypedArray()).putExtra(EXTRA_START_MS, startMs)

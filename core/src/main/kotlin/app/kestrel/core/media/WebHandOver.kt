@@ -75,4 +75,18 @@ object WebHandOver {
     }
 
     private fun make(k: Known, el: Element, note: String) = Decision(k.url, k.kind, PageQuality.startMs(el.timeS, el.durS, k.durationMs), note)
+
+    const val RESUME_WINDOW_MS = 30 * 60_000L      // a film pressed again within this long after Kestrel's player ended continues where the person stopped
+
+    /**
+     * Where Kestrel's own player starts when a film is pressed AGAIN on its page (it was watched in Kestrel's player, Back, play on the page once more): two seconds before where the person stopped, when it is the same
+     * address, the player ended no more than [RESUME_WINDOW_MS] ago, the page's own element is still near its start (under 5 s) and the film did not play to its end. Anything else starts where the page is
+     * ([pageStartMs]). [sinceStopMs] < 0 = nothing was stopped yet. The numbers are kept in RAM only and never for a private tab.
+     */
+    fun resumeMs(pageStartMs: Long, url: String, lastUrl: String, lastPosMs: Long, lastDurMs: Long, sinceStopMs: Long): Long {
+        if (url.isEmpty() || url != lastUrl || pageStartMs >= 5_000L || sinceStopMs !in 0L..RESUME_WINDOW_MS) return pageStartMs
+        if (lastPosMs < 5_000L) return pageStartMs
+        if (lastDurMs > 0L && lastPosMs > lastDurMs - 10_000L) return pageStartMs
+        return lastPosMs - 2_000L
+    }
 }
