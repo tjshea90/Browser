@@ -21,7 +21,9 @@ const SHADOW = `<div id="host" style="position:fixed;left:0;top:0;width:300px;he
 
 const fullscreen = (page, id) => page.evaluate((i) => document.getElementById(i || 'box').requestFullscreen(), id);
 const states = (page) => msgs(page, 'vst');
-const taps = (page) => msgs(page, 'vtap');
+const allTaps = (page) => msgs(page, 'vtap');
+const taps = async (page) => (await allTaps(page)).filter((m) => !m.pg);                       // taps on the FILM
+const pageTaps = async (page) => (await allTaps(page)).filter((m) => m.pg === 1);            // ANS53c: taps on one of the page's own buttons: the app is told (it puts back what it toggled at once for them)
 const clicks = (page) => page.evaluate(() => window.__clicks.slice());
 const standing = (page, r) => page.evaluate((x) => { window.top.__vpReply = x; }, r);
 const queue = (page, r) => page.evaluate((x) => { (window.top.__vpQueue = window.top.__vpQueue || []).push(x); }, r);
@@ -90,15 +92,17 @@ test('VP2: a tap on the film is told to the app (place across the picture) and N
   await page.waitForFunction(() => window.__msgs.some((m) => m && m.k === 'vtap'), null, { timeout: 5000 });
   let t = await taps(page);
   assert.equal(t.length, 1); assert.ok(Math.abs(t[0].x - 500) <= 10, 'the middle: ' + t[0].x);
+  assert.ok(t[0].ts > 1e12 && Math.abs(t[0].ts - Date.now()) < 5000, 'the time of the touch rides along (epoch ms): ' + t[0].ts);
   assert.deepEqual(await clicks(page), [], 'the page did not see it: ' + JSON.stringify(await clicks(page)));
   await page.touchscreen.tap(447, 28);                                      // "Skip ad": the page's own button
   await wait(page, 200);
   assert.deepEqual(await clicks(page), ['skip']); assert.equal((await taps(page)).length, 1, 'not a tap on the film');
+  assert.equal((await pageTaps(page)).length, 1, 'but the app is told it was a tap on one of the page\'s own buttons'); assert.ok((await pageTaps(page))[0].ts > 1e12);
   await page.touchscreen.tap(145, 28);                                      // a link
   await wait(page, 200);
-  assert.deepEqual(await clicks(page), ['skip', 'lnk']); assert.equal((await taps(page)).length, 1);
+  assert.deepEqual(await clicks(page), ['skip', 'lnk']); assert.equal((await taps(page)).length, 1); assert.equal((await pageTaps(page)).length, 2);
   await page.touchscreen.tap(38, 772);                                      // a button named Mute: a control Kestrel's replace, so it is a tap on the film
-  await page.waitForFunction(() => window.__msgs.filter((m) => m && m.k === 'vtap').length === 2, null, { timeout: 5000 });
+  await page.waitForFunction(() => window.__msgs.filter((m) => m && m.k === 'vtap' && !m.pg).length === 2, null, { timeout: 5000 });
   assert.deepEqual(await clicks(page), ['skip', 'lnk'], 'the page\'s Mute button did not get it');
   await page.context().close();
 });
@@ -297,9 +301,9 @@ test('VP2: a tap on something the page made clickable with a script (onclick, a 
   assert.deepEqual(await clicks(page), ['jsb'], 'the onclick div got its tap: ' + JSON.stringify(await clicks(page)));
   await page.touchscreen.tap(240, 80); await wait(page, 200);
   assert.deepEqual(await clicks(page), ['jsb', 'ptr'], 'and the pointer-cursor one');
-  assert.equal((await taps(page)).length, 0, 'neither was a tap on the film');
+  assert.equal((await taps(page)).length, 0, 'neither was a tap on the film'); assert.equal((await pageTaps(page)).length, 2);
   await page.touchscreen.tap(250, 400);                                              // the film itself, although the whole box has a pointer cursor
-  await page.waitForFunction(() => window.__msgs.some((m) => m && m.k === 'vtap'), null, { timeout: 5000 });
+  await page.waitForFunction(() => window.__msgs.some((m) => m && m.k === 'vtap' && !m.pg), null, { timeout: 5000 });
   assert.deepEqual(await clicks(page), ['jsb', 'ptr'], 'the page did not get the tap on its film');
   await page.context().close();
 });
