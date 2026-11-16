@@ -12,6 +12,7 @@ import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
 import app.kestrel.core.player.DurationView
+import app.kestrel.core.player.GestureMath
 import app.kestrel.core.player.PlayerModel
 import app.kestrel.core.player.PlayerRules
 
@@ -78,6 +79,7 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
     private val bottomScrim = Paint()               // the two scrims keep their gradient (made once per size, not once per frame: a fade draws ten frames, a report every 250 ms one more)
     private val topScrim = Paint()
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x73000000 }
+    private val pill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xB3000000.toInt() }     // ANS57: the background of the gesture texts and level bars
     private val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt(); style = Paint.Style.FILL }
     private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt(); style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeWidth = dp(2.2f) }
     private val trackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND }
@@ -203,11 +205,77 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
 
     override fun onDraw(c: Canvas) {
         val v = model
-        if (v == null) return
         val w = width.toFloat(); val h = height.toFloat()
-        if (alphaNow > 0.01f) drawControls(c, v, w, h)
-        drawFlash(c, w, h)
-        if (v.buffering) drawRing(c, w, h)
+        if (v != null) {
+            if (alphaNow > 0.01f) drawControls(c, v, w, h)
+            drawFlash(c, w, h)
+            if (v.buffering) drawRing(c, w, h)
+        }
+        drawGestureInfo(c, w, h)
+    }
+
+    // ---------------------------------------------------------------------------------------- ANS57: what the gestures show (VLC style)
+
+    private var infoText: String? = null
+    private var levelKind: GestureMath.Level? = null
+    private var levelValue = 0f
+    private var levelUntil = 0L
+    private val levelClear = Runnable { if (levelKind != null && SystemClock.uptimeMillis() >= levelUntil) { levelKind = null; invalidate() } }
+
+    /** The text of a precise seek in progress ("+0:25 (1:23:45)", VLC's own) or its hint; null = none. */
+    fun showInfo(text: String?) { if (infoText != text) { infoText = text; invalidate() } }
+
+    /** The level bar of brightness (left) or volume (right), [fraction] 0..1; it goes a moment after the last change. */
+    fun showLevel(kind: GestureMath.Level, fraction: Float) {
+        levelKind = kind; levelValue = fraction.coerceIn(0f, 1f); levelUntil = SystemClock.uptimeMillis() + LEVEL_SHOW_MS
+        invalidate(); removeCallbacks(levelClear); postDelayed(levelClear, LEVEL_SHOW_MS + 40L)
+    }
+
+    private fun drawGestureInfo(c: Canvas, w: Float, h: Float) {
+        val sz = Math.max(sc, 0.8f)
+        infoText?.let { t ->
+            val oldSize = text.textSize; val oldA = text.alpha
+            text.textSize = dp(17f) * sz * resources.configuration.fontScale.coerceIn(1f, 1.3f); text.alpha = 255
+            val tw = text.measureText(t); val padX = dp(16f) * sz; val padY = dp(10f) * sz
+            val cx = w / 2f; val cy = h * 0.28f
+            rect.set(cx - tw / 2f - padX, cy - text.textSize / 2f - padY, cx + tw / 2f + padX, cy + text.textSize / 2f + padY)
+            c.drawRoundRect(rect, rect.height() / 2f, rect.height() / 2f, pill)
+            c.drawText(t, cx - tw / 2f, cy + text.textSize * 0.35f, text)
+            text.textSize = oldSize; text.alpha = oldA
+        }
+        val kind = levelKind ?: return
+        val panelW = dp(54f) * sz; val panelH = Math.min(dp(210f) * sz, h * 0.7f)
+        val left = if (kind == GestureMath.Level.BRIGHTNESS) dp(22f) * sz else w - dp(22f) * sz - panelW
+        val top = (h - panelH) / 2f
+        rect.set(left, top, left + panelW, top + panelH)
+        c.drawRoundRect(rect, dp(16f), dp(16f), pill)
+        val cx = left + panelW / 2f
+        val icon = RectF(cx - dp(14f) * sz, top + dp(10f) * sz, cx + dp(14f) * sz, top + dp(10f) * sz + dp(28f) * sz)
+        if (kind == GestureMath.Level.BRIGHTNESS) drawSunIcon(c, icon) else drawMuteIcon(c, icon, levelValue <= 0.001f)
+        val oldSize = text.textSize; val oldA = text.alpha
+        text.textSize = dp(13f) * sz; text.alpha = 255
+        val pct = "${Math.round(levelValue * 100)}%"
+        c.drawText(pct, cx - text.measureText(pct) / 2f, top + panelH - dp(10f) * sz, text)
+        text.textSize = oldSize; text.alpha = oldA
+        val trackTop = icon.bottom + dp(10f) * sz; val trackBottom = top + panelH - dp(14f) * sz - dp(13f) * sz
+        val tw = dp(5f) * sz
+        trackPaint.strokeWidth = tw; trackPaint.color = 0x59FFFFFF; trackPaint.alpha = 0x59
+        c.drawLine(cx, trackTop, cx, trackBottom, trackPaint)
+        trackPaint.color = ACCENT; trackPaint.alpha = 255
+        val fillTop = trackBottom - (trackBottom - trackTop) * levelValue
+        c.drawLine(cx, trackBottom, cx, fillTop, trackPaint)
+        ink.color = 0xFFFFFFFF.toInt(); ink.alpha = 255
+        c.drawCircle(cx, fillTop, dp(6f) * sz, ink)
+    }
+
+    private fun drawSunIcon(c: Canvas, r: RectF) {       // a disc with eight rays: brightness
+        val cx = r.centerX(); val cy = r.centerY(); val u = r.width() / 28f
+        ink.alpha = 255; line.alpha = 255
+        c.drawCircle(cx, cy, 5.5f * u, ink)
+        for (i in 0 until 8) {
+            val a = Math.toRadians(i * 45.0); val cs = Math.cos(a).toFloat(); val sn = Math.sin(a).toFloat()
+            c.drawLine(cx + cs * 8.5f * u, cy + sn * 8.5f * u, cx + cs * 12f * u, cy + sn * 12f * u, line)
+        }
     }
 
     private fun drawControls(c: Canvas, v: PlayerModel.View, w: Float, h: Float) {
@@ -454,5 +522,6 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
         private const val PlayerRules_FADE_MS = 200L           // the research: Media3 250, NewPipe 300, Gecko 200
         private const val RING_TURN_MS = 900L           // one turn of the buffering ring
         private const val RING_FRAME_MS = 50L           // and a new frame of it this often
+        private const val LEVEL_SHOW_MS = 900L          // ANS57: a level bar stays this long after the last change
     }
 }

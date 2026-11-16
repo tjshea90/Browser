@@ -46,6 +46,7 @@ class VideoGestures(private val activity: Activity, private val s: Surface, priv
     private var vol = -1f
     private var br = -1f
     private var committed = false
+    private var began = false                              // gestureChanged(true) was said for this touch
 
     private fun config(): PlayerGestures.Config {
         val xdpi = if (dm.xdpi in 40f..800f) dm.xdpi else dm.densityDpi.toFloat()
@@ -83,7 +84,7 @@ class VideoGestures(private val activity: Activity, private val s: Surface, priv
     override fun scheduleHold(ms: Long) { main.removeCallbacks(holdRun); main.postDelayed(holdRun, ms) }
     override fun cancelHold() { main.removeCallbacks(holdRun) }
     override fun tap(xFraction: Double) { s.tap(xFraction) }
-    override fun armed() { s.haptic(); s.showInfo(HINT); s.gestureChanged(true) }
+    override fun armed() { s.haptic(); s.showInfo(HINT); if (!began) { began = true; s.gestureChanged(true) } }
     override fun longHold() { s.longHold() }
     override fun positionMs() = s.positionMs()
     override fun lengthMs() = s.lengthMs()
@@ -98,17 +99,15 @@ class VideoGestures(private val activity: Activity, private val s: Surface, priv
     override fun passThrough() { s.passThrough() }
 
     override fun level(level: GestureMath.Level, delta: Double) {
-        if (!s_started) { s_started = true; s.gestureChanged(true) }
+        if (!began) { began = true; s.gestureChanged(true) }
         when (level) {
             GestureMath.Level.VOLUME -> { if (vol < 0f) vol = levels.volume(); vol = (vol + delta.toFloat()).coerceIn(0f, 1f); levels.setVolume(vol); s.showLevel(level, vol) }
             GestureMath.Level.BRIGHTNESS -> { if (br < 0f) br = levels.brightness(); br = (br + delta.toFloat()).coerceIn(0.01f, 1f); levels.setBrightness(br); s.showLevel(level, br) }
         }
     }
 
-    private var s_started = false
-
     override fun finished() {
-        vol = -1f; br = -1f; s_started = false
+        vol = -1f; br = -1f; began = false
         if (committed) { committed = false; main.removeCallbacks(clearInfo); main.postDelayed(clearInfo, RESULT_MS) }       // the jump stays on the picture for a moment after the finger lets go (VLC)
         else s.showInfo(null)
         s.gestureChanged(false)
