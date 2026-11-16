@@ -61,9 +61,9 @@ class VideoGestures(private val activity: Activity, private val s: Surface, priv
     fun onTouch(e: MotionEvent): Boolean {
         val was = engine.active
         when (e.actionMasked) {
-            MotionEvent.ACTION_DOWN -> { main.removeCallbacks(clearInfo); if (engine.active) engine.cancel(); engine.cfg = config(); engine.down(e.x, e.y) }       // (a touch whose end was lost: its info goes)
-            MotionEvent.ACTION_MOVE -> engine.move(e.x, e.y)
-            MotionEvent.ACTION_UP -> engine.up(e.x, e.y)
+            MotionEvent.ACTION_DOWN -> { main.removeCallbacks(clearInfo); if (engine.active) engine.cancel(); engine.cfg = config(); engine.down(e.x, e.y, e.eventTime) }       // (a touch whose end was lost: its info goes)
+            MotionEvent.ACTION_MOVE -> engine.move(e.x, e.y, e.eventTime)
+            MotionEvent.ACTION_UP -> engine.up(e.x, e.y, e.eventTime)
             MotionEvent.ACTION_CANCEL -> engine.cancel()
             MotionEvent.ACTION_POINTER_DOWN -> if (engine.active) engine.cancel()           // a second finger ends our gesture (a pinch is not ours)
         }

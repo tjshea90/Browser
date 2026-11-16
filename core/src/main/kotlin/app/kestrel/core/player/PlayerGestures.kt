@@ -143,21 +143,23 @@ class PlayerGestures(private val h: Host, var cfg: Config) {
     /** The finger is on the glass and the touch has not been given away. */
     val tracking: Boolean get() = s != S.IDLE && s != S.PASSED && s != S.IGNORED
 
-    fun down(x: Float, y: Float) {
+    // [t] = the event's own time (a busy UI thread may handle a move before the long-press timer rings: the finger rested long enough when the EVENTS say so; lab run 43918159286 on the loaded emulator lost every long press this way)
+    fun down(x: Float, y: Float, t: Long = h.now()) {
         resetState()
-        startX = x; startY = y; lastY = y; downAt = h.now()
+        startX = x; startY = y; lastY = y; downAt = t
         inBounds = x >= cfg.edgePx && x <= cfg.widthPx - cfg.edgePx && y >= cfg.edgePx && y <= cfg.heightPx - cfg.edgePx
         s = S.PENDING
         if (inBounds) h.scheduleHold(HOLD_MS)
     }
 
-    fun move(x: Float, y: Float) {
+    fun move(x: Float, y: Float, t: Long = h.now()) {
         val dx = x - startX; val dy = y - startY
         when (s) {
             S.PENDING -> {
                 if (abs(dx) < cfg.slopPx && abs(dy) < cfg.slopPx) return
                 h.cancelHold()
                 if (!inBounds) { s = S.IGNORED; return }
+                if (t - downAt >= HOLD_MS) { s = S.ARMED; armedAt = t; h.armed(); move(x, y, t); return }   // it rested long enough before it moved: a long press (the timer is late)
                 if (cfg.holdForVertical) { s = S.PASSED; h.passThrough(); return }       // the plain drag is the page's
                 val coef = if (dx == 0f) Double.MAX_VALUE else abs(dy / dx).toDouble()
                 if (coef > GestureMath.STEEP) { s = S.VWAIT; vertical(x, y) }
@@ -177,12 +179,12 @@ class PlayerGestures(private val h: Host, var cfg: Config) {
         }
     }
 
-    fun up(x: Float, y: Float) {
+    fun up(x: Float, y: Float, t: Long = h.now()) {
         val st = s
         h.cancelHold()
         when (st) {
             S.PENDING -> {
-                val quick = h.now() - downAt <= TAP_MS
+                val quick = t - downAt <= TAP_MS
                 if (quick && abs(x - startX) < cfg.slopPx && abs(y - startY) < cfg.slopPx && cfg.widthPx > 0f) h.tap((startX / cfg.widthPx).toDouble().coerceIn(0.0, 1.0))
             }
             S.SCRUB -> {

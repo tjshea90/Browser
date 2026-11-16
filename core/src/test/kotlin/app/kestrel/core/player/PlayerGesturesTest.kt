@@ -200,6 +200,22 @@ class PlayerGesturesTest {
         assertEquals("and a sideways one is the precise seek", 1, h3.commits.size); assertEquals(0, h3.passed)
     }
 
+    // lab run 43918159286: on a loaded emulator the UI thread handled the first move BEFORE the timer rang (input events come first): the events' own times say the finger rested
+    @Test fun aLateTimerStillMakesItALongPressWhenTheEventsSayTheFingerRested() {
+        val h = Host(); val g = PlayerGestures(h, full())
+        g.down(500f, 300f, 1000L)                                      // (the timer never rings in this test)
+        g.move(560f, 300f, 1500L)                                      // 500 ms later the finger moves: it had rested
+        assertEquals("armed", 1, h.armed); assertEquals(0, h.passed)
+        g.move(752f, 300f, 1560L); assertEquals("and the move is the precise seek", 1, h.previews.size)
+        g.up(752f, 300f, 1600L); assertEquals(1, h.commits.size)
+        val h2 = Host(); val g2 = PlayerGestures(h2, full(hold = true))
+        g2.down(150f, 400f, 0L); g2.move(151f, 360f, 480L)            // inside the page: the same late timer, then a steep drag: a level, not the page's scroll
+        assertEquals(0, h2.passed); assertEquals(Level.BRIGHTNESS, h2.levels.last().first)
+        val h3 = Host(); val g3 = PlayerGestures(h3, full(hold = true))
+        g3.down(150f, 400f, 0L); g3.move(152f, 380f, 120L)            // a quick drag is still the page's
+        assertEquals(1, h3.passed); assertEquals(0, h3.armed)
+    }
+
     @Test fun aFingerThatRestsOnGivesTheSecondStageOnceAndNoSeek() {
         val h = Host(); val g = PlayerGestures(h, full())
         g.down(500f, 300f); g.wait(h, 360); assertEquals(0, h.longHolds)
