@@ -2688,35 +2688,43 @@ class Soak:
         m = self.log.size()
         self.ph.a.sh("input swipe %d %d %d %d 600" % (sw // 2, 760, sw // 2, 420), timeout=20); time.sleep(1.2)
         check("A: a vertical drag in the middle changes nothing (VLC's dead zone)", not ev("native", "gesture-level", m), "lines %s" % [e["rest"] for e in ev("native", "gesture-level", m)][:3])
-        # a plain sideways drag does nothing (the owner's rule: the long press first)
+        # ANS60a (owner message 60: "make the seek, brightness, and volume gestures in the video player work without a long press"): a plain sideways drag SEEKS
         m = self.log.size()
         self.ph.a.sh("input swipe %d %d %d %d 500" % (150, 500, 450, 500), timeout=20); time.sleep(1.5)
-        check("A: a sideways drag WITHOUT the long press does not seek", not jumps(ev("native", "gesture-seek", m)) and not any('"skip"' in c["rest"] for c in ev("native", "cmd", m)), "seek lines %s" % [e["rest"] for e in ev("native", "gesture-seek", m)][:3])
-        # a finger that rests about a third of a second arms the precise seek (the app ticks and says 'gesture-armed'); a short drag under VLC's 1 cm dead zone, so nothing moves
-        m = self.log.size()
-        self.ph.hold_drag(self.screen, 150, 500, 40, target="native")
-        check("A: a finger that rests a third of a second arms the precise seek ('gesture-armed')", bool(ev("native", "gesture-armed", m)), "native lines %s" % [e["ev"] for e in health_events(self.log.since(m), "native")][:8])
-        # long press, then drag right: the precise seek; the film moves when the finger lets go
+        j0 = jumps(ev("native", "gesture-seek", m))
+        check("A: a plain sideways drag (no long press at all) seeks forward (%s)" % j0[-1:], bool(j0) and j0[-1] >= 25 and any('"skip"' in c["rest"] for c in ev("native", "cmd", m)), "seek lines %s, cmd lines %s" % ([e["rest"] for e in ev("native", "gesture-seek", m)][:3], [c["rest"][:30] for c in ev("native", "cmd", m)][:3]))
+        # ANS60b (owner message 60: "it should say slide up or down for brightness or volume respectively"): a finger that rests is told what it can do on ITS side
+        for label, hx, words in (("left", 150, "Slide up or down for brightness"), ("right", 450, "Slide up or down for volume"), ("middle", 300, "Slide left or right to seek")):
+            m = self.log.size()
+            self.ph.hold_drag(self.screen, hx, 500, 0, steps=1, hold_s=0.6, target="native")
+            hl = [e["rest"] for e in ev("native", "gesture-hint", m)]
+            check("A: a finger resting on the %s side is told '%s' (never 'slide left or right to seek' on a side)" % (label, words), any(words in h for h in hl) and (label == "middle" or not any("left or right" in h for h in hl)), "hint lines %s" % hl[:3])
+        # the rest first (as in alpha60) still works, then drags without it
         m = self.log.size()
         with_shot("gp-A-4-seek-info-while-dragging", lambda: self.ph.hold_drag(self.screen, 150, 500, XCM, end_hold_s=3.0, target="native"), 2.6); time.sleep(0.5)
         j1 = jumps(ev("native", "gesture-seek", m))
-        nums.append("A hold + 4 cm right: jumps %s" % j1)
-        check("A: a long press and a drag right of about 4 cm jumps forward by tens of seconds (%s)" % j1[-1:], bool(j1) and 25 <= j1[-1] <= 60, "seek lines %s, cmd lines %s" % ([e["rest"][:50] for e in ev("native", "gesture-seek", m)], [c["rest"][:30] for c in ev("native", "cmd", m)][:3]))
+        nums.append("A rest + 4 cm right: jumps %s" % j1)
+        check("A: after a rest, a drag right of about 4 cm still jumps forward by tens of seconds (%s)" % j1[-1:], bool(j1) and 25 <= j1[-1] <= 60, "seek lines %s, cmd lines %s" % ([e["rest"][:50] for e in ev("native", "gesture-seek", m)], [c["rest"][:30] for c in ev("native", "cmd", m)][:3]))
         check("A: the film really got the command (a skip)", any('"skip"' in c["rest"] and '"d":' in c["rest"] for c in ev("native", "cmd", m)), "cmd lines %s" % [c["rest"][:30] for c in ev("native", "cmd", m)][:4])
         self.shot("gp-A-4-after-seek")
+        m = self.log.size()
+        self.ph.hold_drag(self.screen, 150, 500, XCM, hold_s=0.0, target="native"); time.sleep(1.0)
+        j5 = jumps(ev("native", "gesture-seek", m))
+        nums.append("A no rest + 4 cm right: jumps %s" % j5)
+        check("A: and with no rest at all the same drag jumps the same (%s s against %s s)" % (j5[-1:], j1[-1:]), bool(j5) and bool(j1) and abs(j5[-1] - j1[-1]) <= 4, "jumps %s %s" % (j1, j5))
         # a longer drag jumps farther
         m = self.log.size()
-        self.ph.hold_drag(self.screen, 80, 500, int(XCM * 1.5), target="native"); time.sleep(1.0)
+        self.ph.hold_drag(self.screen, 80, 500, int(XCM * 1.5), hold_s=0.0, target="native"); time.sleep(1.0)
         j2 = jumps(ev("native", "gesture-seek", m))
         check("A: the farther the drag the bigger the jump (6 cm: %s s against 4 cm: %s s)" % (j2[-1:], j1[-1:]), bool(j2) and bool(j1) and j2[-1] > j1[-1], "jumps %s %s" % (j1, j2))
         # left = rewind
         m = self.log.size()
-        self.ph.hold_drag(self.screen, 450, 500, -XCM, target="native"); time.sleep(1.0)
+        self.ph.hold_drag(self.screen, 450, 500, -XCM, hold_s=0.0, target="native"); time.sleep(1.0)
         j3 = jumps(ev("native", "gesture-seek", m))
-        check("A: a long press and a drag LEFT rewinds (%s)" % j3[-1:], bool(j3) and j3[-1] < -20, "jumps %s" % j3)
+        check("A: a drag LEFT rewinds (%s)" % j3[-1:], bool(j3) and j3[-1] < -20, "jumps %s" % j3)
         # moving also up or down: finer
         m = self.log.size()
-        self.ph.hold_drag(self.screen, 150, 700, XCM, dy=-170, target="native"); time.sleep(1.0)
+        self.ph.hold_drag(self.screen, 150, 700, XCM, dy=-170, hold_s=0.0, target="native"); time.sleep(1.0)
         j4 = jumps(ev("native", "gesture-seek", m))
         nums.append("A fine: plain %s s, with 1 inch up %s s" % (j1[-1:], j4))
         check("A: a drag that also goes an inch up is finer (about a third: %s s against %s s)" % (j4[-1:], j1[-1:]), bool(j4) and bool(j1) and 0 < j4[-1] < j1[-1] * 0.6, "jumps %s %s" % (j1, j4))
@@ -2732,42 +2740,49 @@ class Soak:
         time.sleep(1.0); mB = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(3)
         check("A: Back ends the player and the brightness is the tablet's again", bool(ev("native", "stop", mB)), "no 'native stop' line")
         # ---------------------------------------------------------------- B: the film inside the page
-        rm = self.lab.size()
-        self.ph.debug("webinline", "1"); time.sleep(1.5)
-        self.ph.open_url("%s/ho?v=inlinelong&tag=gpi" % self.lab_base)
-        t0 = time.time(); L = None
-        while time.time() - t0 < 40:
-            lay = [r for r in self.lab.since(rm) if r.get("kind") == "ap" and r.get("ev") == "layout" and str(r.get("tag", "")).startswith("gpi")]
-            if lay and time.time() - t0 > 7:
-                L = lay[-1]; break
-            time.sleep(1)
-        if L is None:
+        def inline_page(tag):
+            """Loads the inline-film page and returns (vx, vy, vw, vh, bx, by) of its film (screen pixels), or None."""
+            rmx = self.lab.size()
+            self.ph.open_url("%s/ho?v=inlinelong&tag=%s" % (self.lab_base, tag))
+            t0 = time.time()
+            while time.time() - t0 < 40:
+                lay = [r for r in self.lab.since(rmx) if r.get("kind") == "ap" and r.get("ev") == "layout" and str(r.get("tag", "")).startswith(tag)]
+                if lay and time.time() - t0 > 7:
+                    L = lay[-1]
+                    return tuple(int(float(L.get(k) or 0)) for k in ("vx", "vy", "vw", "vh", "bx", "by"))
+                time.sleep(1)
+            return None
+        self.ph.debug("webinline", "1"); self.ph.debug("gesturehold", "0"); time.sleep(1.5)
+        geo = inline_page("gpi")
+        if geo is None:
             check("B: the page told where its film is", False, "no layout row")
         else:
-            vx, vy, vw, vh = (int(float(L.get(k) or 0)) for k in ("vx", "vy", "vw", "vh"))
-            bx, by = int(float(L.get("bx") or 0)), int(float(L.get("by") or 0))
+            vx, vy, vw, vh, bx, by = geo
             m1 = self.log.size(); self.ph.tap(bx, by); time.sleep(8)
             check("B: the film plays inside the page", bool(ev("inline", "start", m1)) and bool(ev("inline", "first-picture", m1)), "inline lines %s" % [e["ev"] for e in health_events(self.log.since(m1), "inline")][:6])
             time.sleep(4.0)
-            # held first: a vertical drag on the right = volume
+            # ANS60a: no long press inside the page either. The film is as wide as the screen: its right side is x = 85 %, its left side 15 %, its middle strip 50 %
             m = self.log.size()
-            self.ph.hold_drag(self.screen, int(sw * 0.85), vy, 0, dy=-130); time.sleep(1.8)
+            self.ph.a.sh("input swipe %d %d %d %d 600" % (int(sw * 0.85), vy + 60, int(sw * 0.85), vy - 90), timeout=20); time.sleep(2.0)
             vol = levels(ev("inline", "gesture-level", m), "volume")
-            check("B: long press, then a drag up on the right side of the film raises the volume (%s)" % (vol[:1] + vol[-1:],), len(vol) >= 1 and vol[-1] >= vol[0], "inline lines %s" % [e["ev"] + ":" + e["rest"][:30] for e in health_events(self.log.since(m), "inline")][:6])
+            check("B: a plain drag up on the right side of the film raises the volume (%s) and the page does not scroll" % (vol[:1] + vol[-1:],), len(vol) >= 1 and vol[-1] >= vol[0] and not ev("inline", "scroll", m), "inline lines %s" % [e["ev"] + ":" + e["rest"][:30] for e in health_events(self.log.since(m), "inline")][:6])
             m = self.log.size()
-            self.ph.hold_drag(self.screen, int(sw * 0.15), vy + 60, 0, dy=-120); time.sleep(1.8)
+            self.ph.a.sh("input swipe %d %d %d %d 600" % (int(sw * 0.15), vy + 60, int(sw * 0.15), vy - 90), timeout=20); time.sleep(2.0)
             bri = levels(ev("inline", "gesture-level", m), "brightness")
-            check("B: long press, then a drag up on the left side changes the brightness", len(bri) >= 1, "inline lines %s" % [e["ev"] + ":" + e["rest"][:30] for e in health_events(self.log.since(m), "inline")][:6])
-            # held first: sideways = the precise seek
+            check("B: a plain drag up on the left side changes the brightness (%s) and the page does not scroll" % (bri[:1] + bri[-1:],), len(bri) >= 1 and not ev("inline", "scroll", m), "inline lines %s" % [e["ev"] + ":" + e["rest"][:30] for e in health_events(self.log.since(m), "inline")][:6])
             m = self.log.size()
-            self.ph.hold_drag(self.screen, 150, vy, XCM); time.sleep(2.0)
+            self.ph.a.sh("input swipe %d %d %d %d 500" % (150, vy, 450, vy), timeout=20); time.sleep(2.0)
             ji = jumps(ev("inline", "gesture-seek", m))
-            check("B: long press, then a drag right in the film seeks by tens of seconds (%s)" % ji[-1:], bool(ji) and 20 <= ji[-1] <= 70, "inline lines %s" % [e["ev"] + ":" + e["rest"][:40] for e in health_events(self.log.since(m), "inline")][:6])
+            check("B: a plain sideways drag on the film seeks by tens of seconds (%s)" % ji[-1:], bool(ji) and 20 <= ji[-1] <= 120, "inline lines %s" % [e["ev"] + ":" + e["rest"][:40] for e in health_events(self.log.since(m), "inline")][:6])
             self.shot("gp-B-1-inline-after-seek")
-            # a plain vertical drag in the page is the PAGE's: it scrolls and changes no level
             m = self.log.size()
-            self.ph.a.sh("input swipe %d %d %d %d 900" % (int(sw * 0.85), vy + 60, int(sw * 0.85), vy - 40), timeout=20); time.sleep(3.0)
-            check("B: a plain drag on the film still scrolls the PAGE and changes no level", bool(ev("inline", "scroll", m)) and not ev("inline", "gesture-level", m), "scroll lines %d, level lines %d" % (len(ev("inline", "scroll", m)), len(ev("inline", "gesture-level", m))))
+            self.ph.hold_drag(self.screen, int(sw * 0.85), vy, 0, steps=1, hold_s=0.6)
+            hl = [e["rest"] for e in ev("inline", "gesture-hint", m)]
+            check("B: a finger resting on the right side of the film is told to slide up or down for the volume", any("Slide up or down for volume" in h for h in hl), "hint lines %s" % hl[:3])
+            # the middle strip of the film is the page's: a vertical drag that starts there scrolls the page and changes no level
+            m = self.log.size()
+            self.ph.a.sh("input swipe %d %d %d %d 900" % (sw // 2, vy + 60, sw // 2, vy - 40), timeout=20); time.sleep(3.0)
+            check("B: a vertical drag that starts in the middle strip of the film scrolls the PAGE and changes no level", bool(ev("inline", "scroll", m)) and not ev("inline", "gesture-level", m), "scroll lines %d, level lines %d" % (len(ev("inline", "scroll", m)), len(ev("inline", "gesture-level", m))))
             # a double tap on the right side of the film: 10 s forward and the controls away
             time.sleep(4.5)
             m = self.log.size()
@@ -2775,6 +2790,24 @@ class Soak:
             sh_n, hid_n = len(ev("inline", "shown", m)), len(ev("inline", "hidden", m))
             check("B: a double tap on the right side of the film puts the controls away (shown %d, hidden %d)" % (sh_n, hid_n), hid_n >= 1 and hid_n >= sh_n, "shown %d hidden %d" % (sh_n, hid_n))
             self.ph.key("KEYCODE_BACK"); time.sleep(2.5)
+            # the older rule is a Settings switch: with it on a plain drag on the film scrolls the page and the gestures need the rest first
+            self.ph.debug("gesturehold", "1"); time.sleep(1.5)
+            geo2 = inline_page("gpj")
+            if geo2 is None:
+                check("B (long press first): the page told where its film is", False, "no layout row")
+            else:
+                vx, vy, vw, vh, bx, by = geo2
+                m1 = self.log.size(); self.ph.tap(bx, by); time.sleep(8); time.sleep(4.0)
+                m = self.log.size()
+                self.ph.a.sh("input swipe %d %d %d %d 900" % (int(sw * 0.85), vy + 60, int(sw * 0.85), vy - 40), timeout=20); time.sleep(3.0)
+                check("B (Settings: gestures need a long press): a plain drag on the right side scrolls the PAGE and changes no level", bool(ev("inline", "scroll", m)) and not ev("inline", "gesture-level", m), "scroll lines %d, level lines %d" % (len(ev("inline", "scroll", m)), len(ev("inline", "gesture-level", m))))
+                time.sleep(4.0)
+                m = self.log.size()
+                self.ph.hold_drag(self.screen, int(sw * 0.85), vy - 40, 0, dy=-110)
+                vol2 = levels(ev("inline", "gesture-level", m), "volume")
+                check("B (Settings: gestures need a long press): rest first, then a drag up on the right side changes the volume (%s)" % (vol2[:1] + vol2[-1:],), bool(vol2) and bool(ev("inline", "gesture-armed", m)), "inline lines %s" % [e["ev"] + ":" + e["rest"][:30] for e in health_events(self.log.since(m), "inline")][:6])
+                self.ph.key("KEYCODE_BACK"); time.sleep(2.5)
+            self.ph.debug("gesturehold", "0"); time.sleep(1.0)
         self.ph.a.sh("media volume --stream 3 --set 7 2>/dev/null", timeout=15)
         self.dump_diag("gp")
         self.gp_nums = nums
