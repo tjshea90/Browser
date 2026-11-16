@@ -26,7 +26,7 @@ class QualityLabelTest {
         assertEquals("720p  ·  30 fps  ·  2.5 Mbit/s", QualityLabel.text(Rung(1280, 720, 29.97f, 2_500_000L)))
         assertEquals("1080p", QualityLabel.text(Rung(1920, 1080, -1f, 0L)))
         assertEquals("360p  ·  850 kbit/s", QualityLabel.text(Rung(640, 360, -1f, 850_000L)))
-        assertEquals("", QualityLabel.text(Rung(0, 0, 30f, 0L)).substringBefore("30").let { if (it.isEmpty()) "" else it }.ifEmpty { "" })
+        assertEquals("30 fps", QualityLabel.text(Rung(0, 0, 30f, 0L)))
     }
 
     @Test fun theListHasTheBiggestFirstAndNoTwinRows() {
