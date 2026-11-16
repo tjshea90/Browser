@@ -33,7 +33,13 @@ class WebHandOverTest {
         assertNull(WebHandOver.decide(WebHandOver.ALWAYS, Why.PLAY, el(blob = true), emptyList()))
         assertNull("a DRM or decoy stream is no stream", WebHandOver.decide(WebHandOver.ALWAYS, Why.PLAY, el(blob = true), listOf(Known(film.url, MediaKind.HLS, 600_000L, false))))
         assertNull("DASH has no module in the APK", WebHandOver.decide(WebHandOver.ALWAYS, Why.PLAY, el(blob = true), listOf(Known("https://v.example/a.mpd", MediaKind.DASH, 600_000L, true))))
-        assertNull("an advertisement-sized stream is not the film", WebHandOver.decide(WebHandOver.ALWAYS, Why.PLAY, el(blob = true), listOf(Known("https://v.example/ad.m3u8", MediaKind.HLS, 15_000L, true))))
+    }
+
+    @Test fun aLoneShortStreamIsTakenAndWithOthersTheLongestWins() {
+        val ad = Known("https://v.example/ad.m3u8", MediaKind.HLS, 15_000L, true)
+        assertEquals("nothing else to choose", ad.url, WebHandOver.decide(WebHandOver.ALWAYS, Why.PLAY, el(blob = true), listOf(ad))!!.url)
+        assertEquals(film.url, WebHandOver.decide(WebHandOver.ALWAYS, Why.PLAY, el(blob = true), listOf(ad, film))!!.url)
+        assertEquals("a stream whose length is not read yet beats a short one", unknownLength.url, WebHandOver.decide(WebHandOver.ALWAYS, Why.PLAY, el(blob = true), listOf(ad, unknownLength))!!.url)
     }
 
     @Test fun aStreamWhoseLengthIsNotReadYetCounts() {
@@ -50,6 +56,7 @@ class WebHandOverTest {
         val d = WebHandOver.decide(WebHandOver.ALWAYS, Why.PLAY, ad, listOf(film))!!
         assertEquals(film.url, d.url); assertEquals("the ad's position is not the film's", 0L, d.startMs)
         assertEquals("with no film known the file itself is played", "https://ads.example/spot.mp4", WebHandOver.decide(WebHandOver.ALWAYS, Why.PLAY, ad, emptyList())!!.url)
+        assertEquals("a short stream beside a short file is no film: the file", "https://ads.example/spot.mp4", WebHandOver.decide(WebHandOver.ALWAYS, Why.PLAY, ad, listOf(Known("https://v.example/clip.m3u8", MediaKind.HLS, 20_000L, true)))!!.url)
     }
 
     @Test fun loopClipsAndTinyBoxesAreNeverHandedOver() {

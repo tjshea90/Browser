@@ -6,7 +6,7 @@ package app.kestrel.core.media
  * Pure rules, no Android: the page script reports what the element looks like ([Element]), the app lists the streams its sniffer saw in that frame ([Known]), this says yes (a [Decision]: the address to
  * play and where to start) or no (null: the page plays it itself, as before).
  *
- * What is handed over: a direct file or HLS address of the element, or - for a player written in script (a blob: source) - the HLS stream that frame asked for. What never is: loop clips and thumbnails
+ * What is handed over: a direct file or HLS address of the element, or - for a player written in script (a blob: source) - the (longest) HLS stream that frame asked for. What never is: loop clips and thumbnails
  * (the page's own box is tiny), DASH (no module in the APK), DRM, a blob: source with no stream known (YouTube-style players), and a second film while one is handed over already (the app checks that).
  */
 object WebHandOver {
@@ -46,12 +46,14 @@ object WebHandOver {
         if (m == FULLSCREEN && why != Why.FULLSCREEN) return null
         if (el.loop) return null
         if ((el.w in 1 until MIN_BOX_W) || (el.h in 1 until MIN_BOX_H)) return null
-        val film = known.filter { it.usable && it.kind == MediaKind.HLS && (it.durationMs <= 0L || it.durationMs >= FILM_MS) }.maxWithOrNull(compareBy<Known>({ it.durationMs }, { -it.url.length }))
+        // the film of the frame: the LONGEST usable HLS stream (one whose length is not read yet counts as a film); a lone short stream is taken too: there is nothing else to choose
+        val film = known.filter { it.usable && it.kind == MediaKind.HLS }.maxWithOrNull(compareBy<Known>({ if (it.durationMs <= 0L) FILM_MS else it.durationMs }, { -it.url.length }))
         val direct = directOf(el)
         return when {
             direct != null -> {
                 val shortClip = el.durS > 0.0 && el.durS < AD_MAX_S
-                if (shortClip && film != null) make(film, el, "an advertisement is in the element: the film of the frame") else make(direct, el, "the element's own address")
+                val filmLong = film != null && (film.durationMs <= 0L || film.durationMs >= FILM_MS)
+                if (shortClip && filmLong) make(film!!, el, "an advertisement is in the element: the film of the frame") else make(direct, el, "the element's own address")
             }
             el.blob && film != null -> make(film, el, "the stream the frame asked for")
             !el.blob && el.src.isEmpty() && (why == Why.FULLSCREEN || why == Why.LATE) && film != null -> make(film, el, "the stream the frame asked for (full screen)")
