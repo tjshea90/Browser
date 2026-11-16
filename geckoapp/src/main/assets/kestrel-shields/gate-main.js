@@ -12,11 +12,14 @@
 // own controls tell it with `__kst_gate_v1` on the element (a content script's own play() does not pass through this page's replacement of play()), (d) the person turned the rule off (Settings).
 // A stream (`srcObject`: a camera, a call) is never held (and its autoplay is given back). Only VIDEO is gated (the person's rule is about video: a music player's next track or a sound must not be refused), and only a
 // blob: address made from a MediaSource is held (a File the person chose for an upload form is no stream). Until the content script says otherwise the gate is CLOSED: the person's rule is the default.
+// ANS54e (owner message 54: "I want the web video players to use this"): when the person presses a film's player (its play() inside a tap on that player's box, the engine's own controls, Kestrel's own bar) the gate
+// FIRST asks the app whether Kestrel's own player takes the film (event __kst_gate_ask_v1 -> content script -> background page -> app; the answer comes back as __kst_gate_ans_v1). Yes: the element stays closed, the
+// page's play() is rejected with AbortError (players read that as "interrupted", not as an error) and the app has started its own player. No answer in 700 ms, or no: the film plays here as before. The app decides everything.
 // Reviewed by an independent agent (research/ANS53_GATE_REVIEW.md): a tap counts for the video it landed on or in (its player box), for 30 s; a gesture counts 1.2 s even when the activation was consumed.
 // What it did is counted (numbers only) and handed to the content script, which relays it to Diagnostics. Conservative ES5; nothing runs until a page touches a media element.
 // Tested in headless Chromium by web-tests/gate.test.js (the logic is plain DOM and the same in Gecko).
 (function () {
-  var CFG_EVENT = '__kst_gate_cfg_v1', OPEN_EVENT = '__kst_gate_v1', REP_EVENT = '__kst_gate_rep_v1', READY_EVENT = '__kst_gate_ready_v1';
+  var CFG_EVENT = '__kst_gate_cfg_v1', OPEN_EVENT = '__kst_gate_v1', REP_EVENT = '__kst_gate_rep_v1', READY_EVENT = '__kst_gate_ready_v1', ASK_EVENT = '__kst_gate_ask_v1', ANS_EVENT = '__kst_gate_ans_v1';
   try {
     if (typeof browser !== 'undefined' && browser && browser.runtime) return; // declared as MAIN world; a copy that ever ran in the isolated world (extension API present) must do nothing there
     if (window.__kstGate) return;
@@ -31,7 +34,8 @@
   var gated = [];                                        // the elements that hold something back (a tap on their picture opens them)
   var N = { held: 0, opened: 0, play: 0, press: 0, kestrel: 0, off: 0, deferred: 0, refused: 0 };
   var dirty = false, timer = 0, reportsLeft = 6, lastGesture = 0;
-  var told = false, waiting = [];                        // told: the content script has said on or off at least once; waiting: play() calls that came before that (carried out on OFF, refused on ON)
+  var hand = false, askSeq = 0, asks = Object.create(null), jstr = JSON.stringify, oPause = null, playOrig = null;   // hand: the app may take a film over (told with the rule); asks: questions waiting for the app
+  var told = false, waiting = [];                         // told: the content script has said on or off at least once; waiting: play() calls that came before that (carried out on OFF, refused on ON)
   var lastTap = { t: 0, target: null };                  // the last real tap or key press: when, and what it landed on
   var mseUrls = Object.create(null), mseCount = 0;       // blob: addresses made from a MediaSource
   var REFUSED = 'The play method is not allowed by the user agent or the platform in the current context, possibly because the user denied permission.';
@@ -109,6 +113,7 @@
   // ---------------------------------------------------------------- the originals
   var oSetAttr = eproto.setAttribute, oRemoveAttr = eproto.removeAttribute, oGetAttr = eproto.getAttribute, oHasAttr = eproto.hasAttribute;
   var oLoad = proto.load;
+  oPause = proto.pause;
   var dSrc = null, dPreload = null, dAutoplay = null;
 
   function track(el) {
@@ -117,7 +122,7 @@
     r.tracked = true;
     if (gated.length >= 400) { var keep = []; for (var i = 0; i < gated.length; i++) if (gated[i].isConnected && !rec(gated[i]).open) keep.push(gated[i]); gated = keep; }
     if (gated.length < 400) gated.push(el);
-    try { el.addEventListener(OPEN_EVENT, function () { openEl(el, 'kestrel'); }, true); } catch (e) { /* ignore */ }   // Kestrel's own controls, also for a film inside a shadow tree
+    try { el.addEventListener(OPEN_EVENT, function () { var was = rec(el).open; openEl(el, 'kestrel'); if (!was && hand) ask(el, 'kestrel', function (h) { if (h) pauseEl(el); }); }, true); } catch (e) { /* ignore */ }   // Kestrel's own controls, also for a film inside a shadow tree
   }
 
   // ---------------------------------------------------------------- opening
@@ -151,10 +156,57 @@
       try {
         if (!el.isConnected || rec(el).open) continue;
         var rc = el.getBoundingClientRect();
-        if (rc.width >= 80 && rc.height >= 45 && x >= rc.left - 4 && x <= rc.right + 4 && y >= rc.top - 4 && y <= rc.bottom + 4 && sameBox(el, target)) openEl(el, 'press');   // (a cookie button or a menu that merely sits over the picture opens nothing)
+        if (rc.width >= 80 && rc.height >= 45 && x >= rc.left - 4 && x <= rc.right + 4 && y >= rc.top - 4 && y <= rc.bottom + 4 && sameBox(el, target)) { openEl(el, 'press'); if (hand && el.controls) askPress(el); }   // (a cookie button or a menu that merely sits over the picture opens nothing)
       } catch (e) { /* ignore */ }
     }
   }
+
+  // ---------------------------------------------------------------- ANS54e: ask the app whether Kestrel's own player takes the film the person pressed
+  function pauseEl(el) { try { if (oPause) oPause.call(el); } catch (e) { /* ignore */ } }
+  function factsOf(el, why) {
+    var r = peek(el) || {}, s = '', mime = '', blob = false, w = 0, h = 0, t = 0, d = 0, lp = 0;
+    try {
+      if (r.hasSrc) blob = true;
+      else {
+        s = el.currentSrc || el.src || '';
+        if (!s) { var c = el.querySelector ? el.querySelector('source[src]') : null; if (c) { s = c.src || ''; mime = String(c.type || ''); } }
+        if (/^blob:/i.test(s)) { blob = true; s = ''; }
+      }
+    } catch (e) { s = ''; }
+    try { var rc = el.getBoundingClientRect(); w = Math.round(rc.width); h = Math.round(rc.height); } catch (e) { /* ignore */ }
+    try { t = el.currentTime || 0; d = isFinite(el.duration) ? (el.duration || 0) : 0; lp = el.loop ? 1 : 0; } catch (e) { /* ignore */ }
+    return { i: 0, y: why, s: String(s).slice(0, 2000), b: blob ? 1 : 0, m: mime.slice(0, 60), l: lp, w: w, h: h, t: t, d: d };
+  }
+  // cb(true) = the app took the film over (Kestrel's own player runs it); cb(false) = no, or no answer within 700 ms. An answer that comes later and says yes still stops the element.
+  function ask(el, why, cb) {
+    if (!hand || askSeq >= 60) { cb(false); return; }
+    var id = ++askSeq, f = factsOf(el, why), q = { el: el, cb: cb, done: false };
+    f.i = id; asks[id] = q;
+    try { later.call(window, function () { if (!q.done) { q.done = true; try { cb(false); } catch (e) { /* ignore */ } } }, 700); } catch (e) { /* no timers */ }
+    try { later.call(window, function () { delete asks[id]; }, 8000); } catch (e) { /* ignore */ }
+    try { document.dispatchEvent(new CustomEvent(ASK_EVENT, { detail: jstr(f) })); } catch (e) { q.done = true; cb(false); }
+  }
+  function askPlay(el, args) {
+    return new Promise(function (resolve, reject) {
+      ask(el, 'play', function (handed) {
+        if (handed) { reject(new DOMException('The play() request was interrupted: Kestrel\'s own player plays this video.', 'AbortError')); return; }
+        try { openEl(el, 'play'); var p = playOrig.apply(el, args); if (p && typeof p.then === 'function') p.then(resolve, reject); else resolve(); } catch (x) { reject(x); }
+      });
+    });
+  }
+  function askPress(el) { ask(el, 'press', function (handed) { if (handed) pauseEl(el); }); }
+  try {
+    document.addEventListener(ANS_EVENT, function (e) {
+      try {
+        var d = String(e && e.detail).split('|'), q = asks[+d[0]];
+        if (!q) return;
+        var yes = d[1] === '1';
+        if (!q.done) { q.done = true; try { q.cb(yes); } catch (x) { /* ignore */ } }
+        else if (yes) pauseEl(q.el);                                                   // too late for the page's play() (it went through): the film is Kestrel's now, stop the page's copy
+        delete asks[+d[0]];
+      } catch (x) { /* ignore */ }
+    }, true);
+  } catch (e) { /* ignore */ }
 
   // ---------------------------------------------------------------- the replacements
   try {
@@ -240,7 +292,7 @@
       return orig.apply(this, arguments);
     };
   });
-  defMethod(proto, 'play', function (orig) {
+  playOrig = defMethod(proto, 'play', function (orig) {
     return function () {
       try {
         if (on && isMediaEl(this)) {
@@ -248,7 +300,10 @@
           if (!r.open) {
             if (!r.adopted) adopt(this);
             track(this);
-            if (activation() || pressedRecently(this)) openEl(this, 'play');
+            if (activation() || pressedRecently(this)) {
+              if (hand && pressedRecently(this)) return askPlay(this, arguments);                      // the person pressed THIS player: Kestrel's own player may take the film
+              openEl(this, 'play');
+            }
             else if (!told) {                                                        // the app has not answered yet: the page's play() waits for the answer (carried out when the rule is OFF)
               var self = this, args = arguments;
               return new Promise(function (resolve, reject) { waiting.push({ el: self, args: args, resolve: resolve, reject: reject }); try { later.call(window, settle, 4000); } catch (e) { settle(); } });
@@ -340,8 +395,8 @@
     document.addEventListener(CFG_EVENT, function (e) {
       try {
         var d = e && e.detail;
-        if (d === '0') { if (on) { on = false; openAll('off'); } told = true; settle(); }
-        else if (d === '1') { on = true; settle(); }
+        if (d === '0') { hand = false; if (on) { on = false; openAll('off'); } told = true; settle(); }
+        else if (d === '1' || d === '1+') { hand = (d === '1+'); on = true; settle(); }
       } catch (x) { /* keep what was told before */ }
     }, true);
     document.dispatchEvent(new CustomEvent(READY_EVENT));

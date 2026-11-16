@@ -433,8 +433,8 @@
     // can dispatch the same event, so what comes in is checked, the word is cut to a few characters and a document gets only a handful of reports through.
     // ANS53a / ANS53b: the page-side gate (gate-main.js: no video loads or starts before the person presses it) is told whether the rule is on (`gt` of the guard answer; closed until then) and says what it held and
     // opened: seven numbers, checked here (any page script can dispatch the same event), a handful per document.
-    var GCFG = '__kst_gate_cfg_v1', GREP = '__kst_gate_rep_v1', GREADY = '__kst_gate_ready_v1', gt = null, gReports = 0;
-    function pushGate() { if (gt !== null) { try { document.dispatchEvent(new CustomEvent(GCFG, { detail: gt ? '1' : '0' })); } catch (e) { /* ignore */ } } }
+    var GCFG = '__kst_gate_cfg_v1', GREP = '__kst_gate_rep_v1', GREADY = '__kst_gate_ready_v1', gt = null, gReports = 0, ho = false;
+    function pushGate() { if (gt !== null) { try { document.dispatchEvent(new CustomEvent(GCFG, { detail: gt ? (ho ? '1+' : '1') : '0' })); } catch (e) { /* ignore */ } } }
     document.addEventListener(GREADY, pushGate, true);
     document.addEventListener(GREP, function (e) {
       try {
@@ -444,6 +444,24 @@
         for (i = 0; i < 7; i++) { var v = parseInt(p[i], 10); if (!(v >= 0 && v <= 1000000)) return; n.push(v); }
         gReports++;
         browser.runtime.sendMessage({ k: 'vgt', n: n }).catch(function () {});
+      } catch (x) { /* ignore */ }
+    }, true);
+    // ANS54e: the gate asks whether Kestrel's own player takes the film the person pressed. Any page script can dispatch the same event, so everything is checked here (the address must be http(s), numbers are
+    // clamped, a document gets a few dozen questions) and only the answer of the app goes back. The app decides; a refusal or no answer means the page plays the film itself.
+    var AEV = '__kst_gate_ask_v1', NEV = '__kst_gate_ans_v1', asked = 0;
+    document.addEventListener(AEV, function (e) {
+      try {
+        if (!ho || asked >= 60 || typeof e.detail !== 'string' || e.detail.length > 3000) return;
+        var q = JSON.parse(e.detail), id = q.i | 0;
+        if (!(id > 0 && id < 1000000)) return;
+        function num(v, hi) { v = +v; return (v >= 0 && v <= hi) ? v : 0; }
+        var src = (typeof q.s === 'string' && /^https?:\/\//i.test(q.s) && q.s.length <= 2000) ? q.s : '';
+        var why = (q.y === 'play' || q.y === 'press' || q.y === 'kestrel') ? q.y : 'play';
+        asked++;
+        browser.runtime.sendMessage({ k: 'vhand', y: why, s: src, b: q.b === 1 ? 1 : 0, m: String(q.m || '').replace(/[^A-Za-z0-9\/.+;=, -]/g, '').slice(0, 60), l: q.l === 1 ? 1 : 0,
+          w: Math.round(num(q.w, 20000)), h: Math.round(num(q.h, 20000)), t: num(q.t, 1e7), d: num(q.d, 1e7) }).then(function (r) {
+          try { document.dispatchEvent(new CustomEvent(NEV, { detail: id + '|' + ((r && r.h === 1) ? '1' : '0') })); } catch (x) { /* ignore */ }
+        }, function () { try { document.dispatchEvent(new CustomEvent(NEV, { detail: id + '|0' })); } catch (x) { /* ignore */ } });
       } catch (x) { /* ignore */ }
     }, true);
     var CCFG = '__kst_codec_cfg_v1', CREP = '__kst_codec_rep_v1', CREADY = '__kst_codec_ready_v1', cx = null, cReports = 0;
@@ -565,7 +583,7 @@
       } catch (e) { /* ignore */ }
       return undefined;
     });
-    browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { wanted = !(r && r.on === false); topHost = (r && r.top) ? String(r.top) : ''; push(); cx = (r && typeof r.cx === 'string') ? r.cx.slice(0, 160) : ''; pushCodec(); gt = !(r && r.gt === false); pushGate(); if (r && r.lab === true && window.KestrelVF) window.KestrelVF.probe(); }, function () {});
+    browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { wanted = !(r && r.on === false); topHost = (r && r.top) ? String(r.top) : ''; push(); cx = (r && typeof r.cx === 'string') ? r.cx.slice(0, 160) : ''; pushCodec(); gt = !(r && r.gt === false); ho = !!(r && r.ho === true); pushGate(); if (r && r.lab === true && window.KestrelVF) window.KestrelVF.probe(); }, function () {});
   } catch (e) { /* never break the page */ }
 })();
 
