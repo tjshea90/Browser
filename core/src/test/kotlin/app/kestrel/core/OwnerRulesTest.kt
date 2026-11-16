@@ -271,6 +271,7 @@ class OwnerRulesTest {
         assertTrue("the relay names the paused flag pa, keeps ak, and leaves p for the address", bg.contains("pa: m.p === 1 ? 1 : 0") && bg.contains("ak: n(m.ak, 0, 2000000000)") && bg.contains("o.p = String(page).slice(0, 300)"))
         assertTrue("the controller reads pa (never p: that is the address) and ak", ctl.contains("m.optInt(\"pa\") == 1") && ctl.contains("m.optInt(\"ak\", 0)") && !ctl.contains("optInt(\"p\")"))
         assertTrue("the page script sends ak and numbers the commands it carried out", vp.contains("ak: S ? S.ack | 0 : 0") && vp.contains("if (c.i > s.ack) s.ack = c.i | 0;"))
+        assertTrue("the app tells the page whether the controls own the film (a), and a page that is refused four times in a row gives its bar and its taps back", ctl.contains(",\\\"a\\\":") && vp.contains("++s.refused >= C.giveUp"))
         val vb = source(dir + "videobar.js")
         assertTrue("the injected bar draws nothing while Kestrel's controls own the film", vb.contains("if (kpOwns()) { if (bar) hide(); return; }") && vb.contains("if (kpOwns()) return;"))
         assertTrue("the pref defaults to Kestrel's", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("sp.getInt(\"fs_controls\", 0)"))
