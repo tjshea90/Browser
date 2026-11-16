@@ -67,10 +67,12 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     private var passing = false
     private var downCopy: MotionEvent? = null
     private var longFired = false
-    // ANS57 (owner message 57): VLC-style gestures. In the page a plain drag scrolls the PAGE, so every gesture here needs the long press first (VideoGestures holdFirst)
+    // ANS57 + ANS60a (owner messages 57 and 60): VLC-style gestures with NO long press: a sideways drag on the film seeks, a vertical drag at its left / right side changes the brightness / volume, and a vertical drag that begins
+    // in its middle strip is the PAGE's (it scrolls; so does a drag on the page around the film). Settings > "Gestures inside the page need a long press" brings the older rule back (a plain drag is the page's, gestures need the rest first).
     private var gestures: VideoGestures? = null
     private fun gesturesOrNull(): VideoGestures? {
-        if (!app.kestrel.browser.data.Prefs.get(context.applicationContext).videoGestures) return null
+        val prefs = app.kestrel.browser.data.Prefs.get(context.applicationContext)
+        if (!prefs.videoGestures) return null
         gestures?.let { return it }
         val a = context as? android.app.Activity ?: return null
         val g = VideoGestures(a, object : VideoGestures.Surface {
@@ -87,7 +89,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
             override fun gestureChanged(active: Boolean) { if (active) { model.gestureBegan() } }
             override fun passThrough() { startPass() }
             override fun longHold() { if (!longFired) { longFired = true; performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS); say("long-press", "a finger rested on the picture: the download options"); host?.onLongPress() } }
-        }, holdFirst = true, edgeDp = 6f)
+        }, holdFirst = prefs.videoGesturesHold, middlePasses = true, edgeDp = 6f)
         gestures = g
         return g
     }
@@ -125,6 +127,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
         if (player != null) stop("a new film")
         this.url = url; this.priv = priv
         ack = 0; muted = false; firstPictureAt = 0L; playingSince = 0L; picW = 0; picH = 0; pixelRatio = 1f; pausedByEdge = false; passing = false
+        gestures = null                                                            // (the rules are read from Settings again for every film)
         startedAt = SystemClock.uptimeMillis()
         place(box)
         var p: ExoPlayer? = null
@@ -334,7 +337,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
         return true
     }
 
-    /** ANS57: the touch through the gesture rules: a tap is the controls', the long press arms the precise seek, a drag that moves BEFORE the hold is the page's (it scrolls), a second finger is the page's (it zooms). */
+    /** ANS57 + ANS60a: the touch through the gesture rules: a tap is the controls', a sideways drag seeks, a vertical drag at a side is the brightness / volume, a vertical drag in the middle strip is the page's (it scrolls; with the long-press-first setting every plain drag is), a second finger is the page's (it zooms). */
     private fun onGestureTouch(g: VideoGestures, e: MotionEvent): Boolean {
         if (passing) {
             host?.toPage(e)
