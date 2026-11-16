@@ -106,8 +106,9 @@ class VideoGestures(private val activity: Activity, private val s: Surface, priv
     override fun seekPreview(jumpMs: Long, targetMs: Long, coef: Double) { beginOnce(); s.showInfo(GestureMath.infoText(jumpMs, targetMs, coef)) }
     override fun seekCommit(jumpMs: Long) {
         committed = true
+        val target = (s.positionMs() + jumpMs).coerceAtLeast(0L)                          // (BEFORE the seek: afterwards the player already reports the target as its position, review of alpha61 found the pill saying twice the jump)
         s.seekBy(jumpMs)
-        s.showInfo(GestureMath.infoText(jumpMs, (s.positionMs() + jumpMs).coerceAtLeast(0L), 1.0).substringBefore(" x"))
+        s.showInfo(GestureMath.infoText(jumpMs, target, 1.0).substringBefore(" x"))
     }
     override fun seekCancel() { s.showInfo(null) }
     override fun seekUnavailable() { beginOnce(); s.showInfo("This film cannot be moved") }
