@@ -1878,3 +1878,28 @@
 >
 > Do you want me to set up the public releases-only repo and the update change first, so nothing breaks the moment you flip the switch? You'd create the empty public repo, or I can walk you through it, since I can't create repos outside this one.
 <!-- sha:3f4ee01cd253 -->
+
+## 2026-11-16T23:39:55Z
+> Yes, and your new idea is simpler than my plan. I've dropped the separate releases repo and the token, so there is no guide to follow yet. Nothing changes for your tablet or the app.
+>
+> **The plan:**
+> - This repo stays **public**. Tests, emulator runs and release builds keep their free minutes, and in-app updates keep working.
+> - A new **private** repo holds only the sensitive material, and I move those files there.
+> - A code repo has to be public for free builds, so "sensitive" here can only mean files that aren't the code.
+>
+> **What I did now:**
+> - I put the in-app update address back to this repo, so nothing changed for the tablet.
+> - Release builds can now also publish to a second repo, but only if a token is added later, so it does nothing today.
+>
+> **What is sensitive today:** your messages and my replies copied into the repo (`INBOX.md` and `OUTBOX.md`), the session notes (`.handoff`, `.checkpoints`, `CHECKPOINT.md`), and `HANDOFF.md`. The code, tests and research notes aren't sensitive. Your photos and keys were never put in the repo. The signing key in the repo is the public dev one, so moving files won't make it private (a private release key is still your open item).
+>
+> **Question for you:** which of these should move to the private repo? My suggestion is the first group only: `INBOX.md`, `OUTBOX.md` and `.handoff`.
+> - **Group 1:** your messages, my replies and the old handoff archives. Nothing in my cold-resume system depends on them, so it's a low-risk change.
+> - **Group 2:** the checkpoints and `CHECKPOINT.md`. Moving these makes the resume system read from two places, so it takes more work and is riskier.
+>
+> Files already pushed stay in the public history unless I rewrite that history, which I won't do without your say-so. Tell me which group (or both), and whether you want the history cleaned.
+>
+> **Once you answer:**
+> - **You do:** create an empty private repo (name it `Kestrel-Private`) and install the Claude GitHub app on it.
+> - **I do:** repoint the save scripts and move the files, then check that a cold resume still works.
+<!-- sha:11f199acb5ae -->
