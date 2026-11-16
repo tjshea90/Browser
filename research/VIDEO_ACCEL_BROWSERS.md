@@ -6,11 +6,11 @@
 3. Rotation: Chrome batches size changes into one update, embeds fullscreen on a black fallback and, as far as the code shows, posts the resize to viz without waiting. Gecko resizes through a synchronous IPC to the compositor and its Javadoc says surfaceChanged may block. The 0.9-2 s UI stalls are most likely engine-side. (sec 1 and 2, DOCUMENTED; the stall cause INFERRED)
 4. Only a Kestrel-owned SurfaceView plus MediaPlayer or Media3 gives the overlay path on this tablet, for sniffed direct URLs (Samsung's popup player works so). No MSE blob streams, no DRM; framework HLS is MPEG-TS only. (sec 3 and 4; the effect INFERRED)
 5. External players by intent: only MX Player documents a headers extra; VLC and mpv-android document none. (sec 4, DOCUMENTED)
-6. Sites do not cap quality to the screen by default (hls.js: capLevelToPlayerSize and capLevelOnFPSDrop false). VP9/AV1 off is done; a 60 fps block and a quality cap by extension are the page-level levers. Opera compresses server-side (not possible here).
-7. Gecko Android still has its own HLS player (moved from ExoPlayer2 to Media3 in 151); it runs only when a page gives a video an HLS address directly. Forcing it on hls.js pages is an untested experiment that would take page script out of the video path.
-8. I found no browser that freezes the page behind a fullscreen element.
-9. No documented Gecko pref gives overlay or cheaper composition; the prefs below are A/B experiments only.
-10. Nothing is measured on the tablet yet; the missing number is dropped frames in full screen.
+6. Sites do not cap quality to the screen by default (hls.js: capLevelToPlayerSize and capLevelOnFPSDrop false). VP9/AV1 off is done; a 60 fps block and a quality cap by extension are the page-level levers. Opera compresses server-side (not possible here). (sec 3 and 5, DOCUMENTED)
+7. Gecko Android still has its own HLS player (moved from ExoPlayer2 to Media3 in 151); it runs only when a page gives a video an HLS address directly. Forcing it on hls.js pages is an untested experiment that would take page script out of the video path. (sec 2, DOCUMENTED; the rest INFERRED)
+8. I found no browser that freezes the page behind a fullscreen element. (sec 5, absence of evidence)
+9. No documented Gecko pref gives overlay or cheaper composition; the prefs below are A/B experiments only. (sec 2, DOCUMENTED)
+10. Nothing is measured on the tablet yet; the missing number is dropped frames in full screen. (research/TABLET_DIAG_2026-11-16.md)
 
 ## Conventions
 Research only, 2026-11-16; nothing was run on the tablet. DOCUMENTED = I read it (source in brackets). INFERRED = my reasoning.
@@ -38,7 +38,7 @@ Gecko pref values below were read on Gecko main (GH/modules/libpref/init/StaticP
 ## 3. Samsung Internet, Opera, Brave, Vivaldi, Edge, DuckDuckGo, Focus
 - Samsung. DOCUMENTED (search excerpt of a Samsung forum answer; the page itself did not load): Video Assistant's popup player is "an android UI-based video player using Android Media Framework"; it needs the video URL, so MSE sites (videojs, YouTube) cannot use it (forum.developer.samsung.com/t/how-to-support-popup-video-on-samsung-internet/19030).
 - Opera. DOCUMENTED: "Rocket Optimizer" shrinks video to the available bandwidth, about 60 percent savings, under Data savings (blogs.opera.com/news/2015/11/how-operas-video-compression-technology-works/). Where it runs is not stated; INFERRED: a server, so unusable here.
-- Brave, Vivaldi, Edge, Kiwi: Chromium engines. DOCUMENTED (search excerpts): only background-audio options (Vivaldi 5.7, androidauthority.com/vivaldi-browser-android-3287804/), Brave Playlist on iOS and desktop Nightly (support.brave.app/hc/en-us/articles/360060768611), and since January 2026 YouTube blocks background play in third-party browsers (9to5google.com/2026/02/02/youtube-background-playback-workarounds-not-working-third-party-browsers/). No special decode path found.
+- Brave, Vivaldi, Edge, Kiwi: Chromium engines. DOCUMENTED (search excerpts): only background-audio options (Vivaldi 5.7, androidauthority.com/vivaldi-browser-android-3287804/, vivaldi.com/?p=509131), Brave Playlist on iOS and desktop Nightly (support.brave.app/hc/en-us/articles/360060768611), and since January 2026 YouTube blocks background play in third-party browsers (9to5google.com/2026/02/02/youtube-background-playback-workarounds-not-working-third-party-browsers/). No special decode path found.
 - DuckDuckGo. DOCUMENTED: Duck Player is a takeover page "enforcing YouTube's strictest privacy settings for embedded video" (duckduckgo.com/duckduckgo-help-pages/duck-player); not an acceleration.
 - Firefox Focus and Fenix: the same GeckoView video path; Fenix sets orientation from media-session metadata (research/VIDEO_PLAYER_SOURCES_BROWSERS.md). Nothing Focus-specific found.
 
