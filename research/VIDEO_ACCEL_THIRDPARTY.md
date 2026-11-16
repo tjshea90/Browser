@@ -105,7 +105,7 @@ Rotation: the 0.9 to 2 s stall at a turn is the engine's surface resize [L2]; wi
 - filterResponseData in GeckoView 160 itself (BCD only), and gzip or chunked bodies.
 - The true APK delta after Gecko's keep rules (my figure is a standalone upper bound); libVLC minSdk; ijkplayer CVEs.
 - Whether Gecko's HLS sends Referer or cookies; whether GeckoWebExecutor sends profile cookies [L3 unproven].
-- Seek accuracy of ExoPlayer versus MediaPlayer on this chip; whether the Yahoo page's player honours mediaCapabilities.
+- Seek accuracy of ExoPlayer versus MediaPlayer on this chip; whether the Yahoo page's player honours mediaCapabilities; GeckoView's default view backend (decides the z-order).
 - MX Player, Greasy Fork and tracker reports: summaries only [S].
 
 ## Method [M]
