@@ -40,7 +40,7 @@
   var mseUrls = Object.create(null), mseCount = 0;       // blob: addresses made from a MediaSource
   var REFUSED = 'The play method is not allowed by the user agent or the platform in the current context, possibly because the user denied permission.';
 
-  function rec(el) { var r = recs.get(el); if (!r) { r = { open: false, src: null, hasSrc: false, preload: null, hasPreload: false, autoplay: false, hasAutoplay: false, load: false, tracked: false, adopted: false, forced: false }; recs.set(el, r); } return r; }
+  function rec(el) { var r = recs.get(el); if (!r) { r = { open: false, src: null, hasSrc: false, preload: null, hasPreload: false, autoplay: false, hasAutoplay: false, load: false, tracked: false, adopted: false, forced: false, ask: null, askedAt: 0 }; recs.set(el, r); } return r; }
   function peek(el) { try { return recs.get(el); } catch (e) { return undefined; } }
   function isBlob(v) { var u = (typeof v === 'string') ? v : ((v !== null && v !== undefined) ? String(v) : ''); return mseUrls[u] === 1; }   // only a MediaSource's address (see the createObjectURL wrapper below)
   function isMediaEl(x) { return !!x && x.nodeType === 1 && x.nodeName === 'VIDEO'; }
@@ -156,7 +156,10 @@
       try {
         if (!el.isConnected || rec(el).open) continue;
         var rc = el.getBoundingClientRect();
-        if (rc.width >= 80 && rc.height >= 45 && x >= rc.left - 4 && x <= rc.right + 4 && y >= rc.top - 4 && y <= rc.bottom + 4 && sameBox(el, target)) { openEl(el, 'press'); if (hand && el.controls) askPress(el); }   // (a cookie button or a menu that merely sits over the picture opens nothing)
+        if (rc.width >= 80 && rc.height >= 45 && x >= rc.left - 4 && x <= rc.right + 4 && y >= rc.top - 4 && y <= rc.bottom + 4 && sameBox(el, target)) {
+          if (hand && !el.controls && target !== el && playLike(target, el)) ask(el, 'press', function (handed) { if (!handed) openEl(el, 'press'); });   // a play button over the picture: the app is asked first, the element stays closed while it thinks
+          else { openEl(el, 'press'); if (hand && el.controls) askPress(el); }
+        }   // (a cookie button or a menu that merely sits over the picture opens nothing)
       } catch (e) { /* ignore */ }
     }
   }
@@ -177,19 +180,42 @@
     try { t = el.currentTime || 0; d = isFinite(el.duration) ? (el.duration || 0) : 0; lp = el.loop ? 1 : 0; } catch (e) { /* ignore */ }
     return { i: 0, y: why, s: String(s).slice(0, 2000), b: blob ? 1 : 0, m: mime.slice(0, 60), l: lp, w: w, h: h, t: t, d: d };
   }
-  // cb(true) = the app took the film over (Kestrel's own player runs it); cb(false) = no, or no answer within 700 ms. An answer that comes later and says yes still stops the element.
+  // cb(true) = the app took the film over (Kestrel's own player runs it); cb(false) = no, or no answer within 700 ms. An answer that comes later and says yes still stops the element. A second question about the SAME
+  // press while the first is in the air joins it (the tap on a play button over the picture, then the page's play() a moment later).
   function ask(el, why, cb) {
     if (!hand || askSeq >= 60) { cb(false); return; }
-    var id = ++askSeq, f = factsOf(el, why), q = { el: el, cb: cb, done: false };
-    f.i = id; asks[id] = q;
-    try { later.call(window, function () { if (!q.done) { q.done = true; try { cb(false); } catch (e) { /* ignore */ } } }, 700); } catch (e) { /* no timers */ }
+    var r = rec(el), q = r.ask;
+    if (q && !q.done) { q.cbs.push(cb); return; }
+    var id = ++askSeq, f = factsOf(el, why);
+    f.i = id; q = { el: el, cbs: [cb], done: false }; r.ask = q; r.askedAt = dnow.call(Date); asks[id] = q;
+    try { later.call(window, function () { finishAsk(q, false); }, 700); } catch (e) { /* no timers */ }
     try { later.call(window, function () { delete asks[id]; }, 8000); } catch (e) { /* ignore */ }
-    try { document.dispatchEvent(new CustomEvent(ASK_EVENT, { detail: jstr(f) })); } catch (e) { q.done = true; cb(false); }
+    try { document.dispatchEvent(new CustomEvent(ASK_EVENT, { detail: jstr(f) })); } catch (e) { finishAsk(q, false); }
+  }
+  function finishAsk(q, yes) {
+    if (q.done) return false;
+    q.done = true;
+    var cbs = q.cbs; q.cbs = [];
+    for (var i = 0; i < cbs.length; i++) { try { cbs[i](yes); } catch (e) { /* ignore */ } }
+    return true;
+  }
+  // a new press on this player (a tap on its box that came after the last question) and the film is not playing yet
+  function wantsAsk(el) { var r = rec(el); return hand && el.paused && lastTap.t > r.askedAt + 400 && pressedRecently(el); }
+  // does the tap's target look like a play button that sits over the picture (not the picture itself)?
+  function playLike(t, el) {
+    try {
+      for (var n = t, i = 0; n && n !== el && i < 6; i++, n = n.parentElement) {
+        if (n.nodeName === 'BUTTON' || (n.getAttribute && n.getAttribute('role') === 'button')) return true;
+        var cls = (typeof n.className === 'string') ? n.className : '';
+        if (/play|start|poster|big-?button|cover/i.test(String(n.getAttribute ? (n.getAttribute('aria-label') || '') + ' ' + (n.getAttribute('title') || '') : '') + ' ' + cls + ' ' + (n.id || ''))) return true;
+      }
+    } catch (e) { /* ignore */ }
+    return false;
   }
   function askPlay(el, args) {
     return new Promise(function (resolve, reject) {
       ask(el, 'play', function (handed) {
-        if (handed) { reject(new DOMException('The play() request was interrupted: Kestrel\'s own player plays this video.', 'AbortError')); return; }
+        if (handed) { pauseEl(el); reject(new DOMException('The play() request was interrupted: Kestrel\'s own player plays this video.', 'AbortError')); return; }
         try { openEl(el, 'play'); var p = playOrig.apply(el, args); if (p && typeof p.then === 'function') p.then(resolve, reject); else resolve(); } catch (x) { reject(x); }
       });
     });
@@ -201,8 +227,7 @@
         var d = String(e && e.detail).split('|'), q = asks[+d[0]];
         if (!q) return;
         var yes = d[1] === '1';
-        if (!q.done) { q.done = true; try { q.cb(yes); } catch (x) { /* ignore */ } }
-        else if (yes) pauseEl(q.el);                                                   // too late for the page's play() (it went through): the film is Kestrel's now, stop the page's copy
+        if (!finishAsk(q, yes) && yes) pauseEl(q.el);                                    // too late for the page's play() (it went through): the film is Kestrel's now, stop the page's copy
         delete asks[+d[0]];
       } catch (x) { /* ignore */ }
     }, true);
@@ -300,8 +325,9 @@
           if (!r.open) {
             if (!r.adopted) adopt(this);
             track(this);
+            if (r.ask && !r.ask.done) return askPlay(this, arguments);                              // a question for this very press is in the air: wait for the same answer
             if (activation() || pressedRecently(this)) {
-              if (hand && pressedRecently(this)) return askPlay(this, arguments);                      // the person pressed THIS player: Kestrel's own player may take the film
+              if (wantsAsk(this)) return askPlay(this, arguments);                                    // the person pressed THIS player: Kestrel's own player may take the film
               openEl(this, 'play');
             }
             else if (!told) {                                                        // the app has not answered yet: the page's play() waits for the answer (carried out when the rule is OFF)
@@ -310,6 +336,7 @@
             }
             else { N.refused++; touch(); return Promise.reject(new DOMException(REFUSED, 'NotAllowedError')); }
           }
+          else if (wantsAsk(this)) return askPlay(this, arguments);                                   // opened by the press already (the picture, the engine's controls): the question comes with the film's play()
         }
       } catch (e) { /* the engine decides */ }
       return orig.apply(this, arguments);
