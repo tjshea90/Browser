@@ -20,6 +20,7 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener
 import app.kestrel.browser.NativePlayerActivity
 import app.kestrel.browser.diag.Health
 import app.kestrel.core.media.InlineBox
+import app.kestrel.core.player.GestureMath
 import app.kestrel.core.player.PlayerModel
 import app.kestrel.core.player.PlayerRules
 
@@ -66,6 +67,28 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     private var passing = false
     private var downCopy: MotionEvent? = null
     private var longFired = false
+    // ANS57 (owner message 57): VLC-style gestures. In the page a plain drag scrolls the PAGE, so every gesture here needs the long press first (VideoGestures holdFirst)
+    private var gestures: VideoGestures? = null
+    private fun gesturesOrNull(): VideoGestures? {
+        if (!app.kestrel.browser.data.Prefs.get(context.applicationContext).videoGestures) return null
+        gestures?.let { return it }
+        val a = context as? android.app.Activity ?: return null
+        val g = VideoGestures(a, object : VideoGestures.Surface {
+            override val viewWidth: Int get() = this@InlinePlayer.width
+            override val viewHeight: Int get() = this@InlinePlayer.height
+            override fun positionMs(): Long = this@InlinePlayer.positionMs
+            override fun lengthMs(): Long { val p = player ?: return 0L; if (p.isCurrentMediaItemLive) return 0L; val d = p.duration; return if (d == C.TIME_UNSET || d <= 0L) 0L else d }
+            override fun tap(xFraction: Double) { model.onTap((xFraction * 1000).toInt()); flush() }
+            override fun seekBy(deltaMs: Long) { model.skip(deltaMs / 1000.0); flush(); say("gesture-seek", "the precise seek moved the film by ${deltaMs / 1000} s") }
+            override fun showInfo(text: String?) { controls.showInfo(text) }
+            override fun showLevel(kind: GestureMath.Level, fraction: Float) { controls.showLevel(kind, fraction); say("gesture-level", "${kind.name.lowercase()} ${Math.round(fraction * 100)} %") }
+            override fun haptic() { performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS) }
+            override fun passThrough() { startPass() }
+            override fun longHold() { if (!longFired) { longFired = true; performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS); say("long-press", "a finger rested on the picture: the download options"); host?.onLongPress() } }
+        }, holdFirst = true, edgeDp = 6f)
+        gestures = g
+        return g
+    }
     private val density = resources.displayMetrics.density
     private val longPressRun = Runnable { if (!passing && player != null && !longFired) { longFired = true; performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS); say("long-press", "a finger rested on the picture: the download options"); host?.onLongPress() } }
 
@@ -166,6 +189,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
         val p = player ?: return
         player = null
         main.removeCallbacks(ticker); main.removeCallbacks(controlsTick); main.removeCallbacks(longPressRun)
+        gestures?.stop()                                                           // ANS57: a gesture in progress ends, the window's brightness is the tablet's again
         var pos = 0L
         try {
             pos = p.currentPosition.coerceAtLeast(0L)
@@ -289,6 +313,8 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
 
     /** A tap on the picture (anything the controls themselves did not take): the model decides show / hide / double-tap seek. A drag or a second finger goes to the page, which scrolls (or zooms) as if nothing lay over it. */
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        val g = gesturesOrNull()
+        if (g != null) return onGestureTouch(g, e)
         val slop = 12f * density
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> { downX = e.x; downY = e.y; downT = e.eventTime; passing = false; longFired = false; downCopy?.recycle(); downCopy = MotionEvent.obtain(e); main.removeCallbacks(longPressRun); main.postDelayed(longPressRun, android.view.ViewConfiguration.getLongPressTimeout().toLong()) }
@@ -303,6 +329,25 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
             if (!longFired && e.eventTime - downT <= 450L && Math.abs(e.x - downX) <= slop && Math.abs(e.y - downY) <= slop && width > 0) { model.onTap((e.x * 1000f / width).toInt()); flush() }
             downCopy?.recycle(); downCopy = null
         } else if (e.actionMasked == MotionEvent.ACTION_CANCEL) { main.removeCallbacks(longPressRun); downCopy?.recycle(); downCopy = null }
+        return true
+    }
+
+    /** ANS57: the touch through the gesture rules: a tap is the controls', the long press arms the precise seek, a drag that moves BEFORE the hold is the page's (it scrolls), a second finger is the page's (it zooms). */
+    private fun onGestureTouch(g: VideoGestures, e: MotionEvent): Boolean {
+        if (passing) {
+            host?.toPage(e)
+            if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) { passing = false; downCopy?.recycle(); downCopy = null }
+            return true
+        }
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> { longFired = false; downCopy?.recycle(); downCopy = MotionEvent.obtain(e); g.onTouch(e) }
+            MotionEvent.ACTION_POINTER_DOWN -> { if (g.active) g.onTouch(e) else { g.onTouch(e); startPass(); host?.toPage(e) } }
+            else -> {
+                g.onTouch(e)
+                if (passing) host?.toPage(e)                                              // (the move that made the touch the page's is the page's first)
+                if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) { if (!passing) { downCopy?.recycle(); downCopy = null } else passing = false }
+            }
+        }
         return true
     }
 
