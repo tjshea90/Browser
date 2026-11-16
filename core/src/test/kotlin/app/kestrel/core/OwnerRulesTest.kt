@@ -358,8 +358,8 @@ class OwnerRulesTest {
         assertTrue(pc.contains("PlayerRules.pageGone(SystemClock.uptimeMillis() - lastReportAt)") && !pc.contains("SILENT_END_MS"))
         // e: stalls, the script's own cost and the film's frames travel from the page to Diagnostics and to "Real video"
         val vp = source(dir + "player.js")
-        assertTrue(vp.contains("m.lt = s.late; s.late = 0;") && vp.contains("m.pc = Date.now() - t0;") && vp.contains("tf: tf, df: df") && vp.contains("getVideoPlaybackQuality"))
-        assertTrue(source(dir + "background.js").contains("lt: n(m.lt, 0, 3600000), pc: n(m.pc, 0, 3600000), tf: n(m.tf, 0, 2000000000), df: n(m.df, 0, 2000000000)"))
+        assertTrue(vp.contains("m.lt = Math.round(s.late); s.late = 0;") && vp.contains("m.pc = Math.round(mono() - t0);") && vp.contains("function mono() { try { return performance.now();") && vp.contains("if (document.hidden) return;") && vp.contains("tf: tf, df: df") && vp.contains("getVideoPlaybackQuality"))
+        assertTrue(source(dir + "background.js").contains("lt: n(m.lt, 0, 60000), pc: n(m.pc, 0, 60000), tf: n(m.tf, 0, 2000000000), df: n(m.df, 0, 2000000000), sh: m.sh === 1 ? 1 : 0"))
         assertTrue(pc.contains("health.onReport(m.optInt(\"lt\"), m.optInt(\"pc\"), m.optInt(\"tf\", -1), m.optInt(\"df\", -1)") && pc.contains("${'$'}{health.line()}") && pc.contains("if (quiet) return"))
         assertTrue("the frames reach the Real video line", act.contains("player.onLook = { page, frames, dropped, seconds, w, h -> filmLook(page, frames, dropped, seconds, w, h) }") && act.contains("videoQuality.add(host, frames, dropped, 0, seconds, w, h"))
         // ANS52a: the engine's view is held at its old size for the first frame of a turn that gets the cover, and released right after that frame (the blocking resize then happens behind the cover)
@@ -372,6 +372,12 @@ class OwnerRulesTest {
         assertTrue("a leave of the app and the closing give the view its size back", act.contains("releaseGeckoHold(\"the app was left\")") && act.contains("releaseGeckoHold(\"closing\")"))
         assertTrue("the 1 px resync does not add a second size change while the view is held", body(act, "private fun resyncEngineSize() {").contains("if (turnHolding) return"))
         assertTrue(source("core/src/main/kotlin/app/kestrel/core/media/TurnSettleMachine.kt").contains("if (h.resizePending()) lastChangeAt = n"))
+        // review of alpha56: a second film on the same page turns too (the first report of EVERY full screen), a private tab's film size is never written down, only a film in a shadow tree adds to Real video, the page gives up on an app that does not answer only after SECONDS of it
+        assertTrue(act.contains("val first = !filmPictureTold") && act.contains("if (on) { filmPictureTold = false; fsTurner.enter();"))
+        assertTrue(source("geckoapp/src/main/kotlin/app/kestrel/browser/web/FullscreenTurner.kt").let { it.contains("private val isPrivate: () -> Boolean") && it.contains("video ${'$'}{shape(w, h)}") && it.contains("became known (${'$'}{shape(w, h)})") } && act.contains("{ current?.isPrivateTab == true })"))
+        assertTrue(pc.contains("if (lookShadow) onLook(") && pc.contains("lookShadow = m.optInt(\"sh\") == 1"))
+        assertTrue(source("core/src/main/kotlin/app/kestrel/core/player/FilmHealth.kt").contains("if (df > MAX_FPS * maxOf(1L, dt / 1000L) + 60L) return"))
+        assertTrue(vp.contains("mono() - s.refusedAt >= C.giveUpMs") && vp.contains("giveUpMs: 8000"))
         // g: no page look is read back while a page is full screen (the tablet's log: two 'look-saved' during a film; the read-back competes with the decoder and saves the film's frame as the page's look)
         assertTrue(body(act, "private fun captureLook(tab: Tab?, why: String, minGapMs: Long = LastLookRules.MIN_GAP_MS.toLong()) {").contains("if (fullscreenOn) return"))
         // f: how long the app's own part and the engine's part of a turn take is written down

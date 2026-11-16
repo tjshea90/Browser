@@ -285,15 +285,27 @@ class TurnSettleMachineTest {
     @Test fun aLateWordOfAnEarlierTurnIsNotMeasuredByTheNextTurn() {
         val h = Host().apply { playing = true; expects = true }
         val m = machine(h)
-        m.configChanged(true)
+        m.configChanged(true)                                        // turn 1 at 0 ms: its page stays silent
         while (m.turning && h.clock < 10_000) h.wait(m, TurnSettle.TICK_MS)
         assertEquals(1, m.silent)
         h.clock += 1000L
-        m.configChanged(false)                                       // the screen turns again before the page ever spoke
-        m.pageReported(false)                                        // its word now belongs to this turn (an ordinary report)
+        m.configChanged(false)                                       // the screen turns again before the page ever spoke: turn 2
+        m.pageReported(true)                                         // its word belongs to turn 2 (an ordinary report that confirms it)
+        while (m.turning && h.clock < 20_000) h.wait(m, TurnSettle.TICK_MS)
+        assertFalse(m.turning); assertEquals("turn 2 was answered, it is not a silent one", 1, m.silent); assertEquals(0, m.lateCount)
+        h.clock += 1000L
+        m.pageReported(true)                                         // a later report: well inside the 30 s of turn 1's start, but turn 2 took over the waiting, so it is not 'the late word of turn 1'
         assertEquals(0, m.lateCount)
-        h.clock += 40_000L; m.abandon()
-        h.clock += 1000L; m.pageReported(true)                       // far too late to be about any turn
+    }
+
+    @Test fun aWordThatComesHalfAMinuteLaterIsNotTheLateWordOfThatTurn() {
+        val h = Host().apply { playing = true; expects = true }
+        val m = machine(h)
+        m.configChanged(true)
+        while (m.turning && h.clock < 10_000) h.wait(m, TurnSettle.TICK_MS)
+        assertEquals(1, m.silent)
+        h.clock = 31_000L
+        m.pageReported(true)                                         // 31 s after the turn began: an ordinary report of a page that woke up long after
         assertEquals(0, m.lateCount)
     }
 

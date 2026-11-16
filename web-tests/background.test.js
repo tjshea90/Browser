@@ -1305,7 +1305,7 @@ test('VP1: the full-screen film state is relayed as clamped numbers: the PAUSED 
   await h.message({ k: 'vst', t: 1, d: 60, lt: 120000, p: 0 }, 1, PAGE, 0);
   assert.equal(h.of('vst')[2].lt, 0, 'a lateness of minutes is a sleeping device or a clock step, not a stall (review of alpha56)');
   const t = await h.message({ k: 'vst', t: 1e12, d: -2, b: -5, p: 0, ak: -3 }, 1, PAGE, 0);
-  const g2 = h.of('vst')[2];
+  const g2 = h.of('vst')[3];
   assert.equal(g2.t, 0, 'clamped'); assert.equal(g2.d, -2, 'infinite is kept as -2'); assert.equal(g2.ak, 0); assert.equal(g2.pa, 0);
   assert.ok(t);
 });
