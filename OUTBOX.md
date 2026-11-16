@@ -1762,3 +1762,45 @@
 ## 2026-11-16T07:01:38Z
 > Release build for alpha57 is running on GitHub (run 43820755532). I'll check it in about seven minutes.
 <!-- sha:3c51fa54534d -->
+
+## 2026-11-16T07:10:16Z
+> Alpha57 is built and signed by GitHub, ready to install over alpha56.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha57
+>
+> I have not run it on your tablet. I tested it on the emulator running the real Firefox engine.
+>
+> **Your first list**
+> 1. **No video starts by itself.** The engine blocks all autoplay, the app refuses every autoplay request, and a script in each page keeps every video closed until you press it. In the emulator, nine test pages never played without a press, including looping clips and script-driven players.
+>    - A looping clip with no play button stays still, and tapping it does not start it.
+>    - Music and sounds are not held, only video.
+>    - The switch is Settings > "Videos start only when I press play" (on by default). Turn it off and sites behave as before.
+> 2. **No video data before you press play.** Only the page's poster picture loads, and a video with no poster stays blank until you press play. The one exception is the app's own one-byte question about the file's size, used for the download list.
+> 3. **Controls at once.** A tap on the picture now shows or hides the full-screen controls with no wait and no fade. The app answers on the screen itself, between 4 and 104 ms in the emulator. A double tap on the left or right side still jumps 10 seconds.
+> 4. **Quality.**
+>    - Kestrel's own player has a Quality button listing every picture the stream offers, with size, frames a second and bit rate. Your pick is remembered.
+>    - The full-screen controls of a film in the page get the same button when it is an HLS stream with two or more pictures, which the Yahoo film should be. Picking one moves the film to Kestrel's player at the same second, and Back returns to the page.
+>    - The emulator tested this with a stand-in film, not your Yahoo film.
+>    - Films with no playlist address (YouTube-style players) get no list yet.
+>
+> **Your second list**
+> 1. **Download button lit on Home:** the Home screen sits over a page that stays alive underneath, and the button, the list and the menu entry ignored that. They now do not count a page under Home.
+> 2. **Kestrel's player in portrait:** it no longer forces landscape or stretches the first picture. It follows how you hold the tablet and has a rotate button at the top left. The emulator turned it both ways with the tablet and with the button.
+> 3. **Smoother than the page's player:** noted. That is why the Quality button hands films over to it.
+>
+> I also shipped the open parts of message 52: sites are told "no" to video formats this tablet cannot play smoothly (VP9 above 1080p30), and HLS pages are held to a picture size that fits the screen. Both are settings.
+>
+> An independent review of the press-to-play script found 12 problems. I fixed 8, confirmed 1 on the emulator, and left 3 on purpose:
+> - A player inside another site's frame may need a second tap inside the frame.
+> - After one press, a site can still queue its next film itself, because ad players need that.
+> - A Settings change reaches new pages within a minute.
+>
+> **Proof:** 551 web tests, all unit suites, and 243 emulator checks passed on the exact build. Nothing was run on your tablet.
+>
+> **Please send back:** the Diagnostics lines "Videos start only when pressed", "Full-screen video controls" and "Kestrel's own player". Also tell me about any video site that no longer plays after a press, or a film with no Quality button.
+>
+> **Still open:**
+> - Your tablet test of alpha57.
+> - A caption, speed and quality entry for films with no playlist address (VP12).
+> - A few older rows: VP10, ROT2e, ANS48, SOAK1d, LAB2f, and the optional video-speed experiments (ANS52j).
+<!-- sha:a6fec1c4bb30 -->
