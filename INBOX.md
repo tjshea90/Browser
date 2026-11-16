@@ -1879,3 +1879,8 @@ How difficult would it be to turn this entire repo private and continue updating
 ```
 Set up everything you can now, then give me a step by step guide for everything I need to do. I'm not too worried about security, so easier and less secure is fine
 ```
+
+## 2026-11-16T23:38:56Z
+```
+Can you make the testing and builds on a public repo for the free minutes and anything sensitive in the private repo
+```
