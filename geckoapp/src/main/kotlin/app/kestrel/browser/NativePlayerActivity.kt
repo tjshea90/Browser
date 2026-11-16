@@ -182,7 +182,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     }
 
     /** The engine's own user agent, so a server that looks at it sees the browser the person is using. */
-    private fun userAgent(): String { val v = app.kestrel.browser.diag.Flavor.engineMajor(); return "Mozilla/5.0 (Android ${android.os.Build.VERSION.RELEASE}; Mobile; rv:$v.0) Gecko/$v.0 Firefox/$v.0" }
+    private fun userAgent(): String { val v = Flavor.engineVersion.substringBefore('.').filter { it.isDigit() }.ifEmpty { "128" }; return "Mozilla/5.0 (Android ${android.os.Build.VERSION.RELEASE}; Mobile; rv:$v.0) Gecko/$v.0 Firefox/$v.0" }
 
     private fun fail(why: String) {
         if (!priv) { NativePlayerStats.errors++; NativePlayerStats.last = why }
