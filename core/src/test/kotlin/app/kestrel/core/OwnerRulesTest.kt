@@ -422,4 +422,20 @@ class OwnerRulesTest {
         val settings = source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt")
         assertTrue("both rows exist: the formats row (Automatic by default) and the 30 frames switch (off by default)", settings.contains("choice(\"Video formats offered to sites\"") && settings.contains("toggle(\"At most 30 frames a second\"") && source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("bool(\"vid_fps30\", false)"))
     }
+
+    /** ANS52h (owner message 52): the Yahoo film's page picked the 1920 x 1080 rung on a 973 x 600 screen. The extension takes the rungs above a cap out of HLS MASTER playlists and nothing else, and a doubt is never the page's problem. */
+    @Test fun thePictureSizeCapOnlyTouchesMasterPlaylistsAndNeverBreaksThePage() {
+        val dir = "geckoapp/src/main/assets/kestrel-shields/"
+        val bg = source(dir + "background.js")
+        assertTrue("narrow and blocking: only addresses that name a .m3u8 are held, only a 200 GET from a tab, only while the app's cap is on", bg.contains("urls: ['http://*/*.m3u8*', 'https://*/*.m3u8*']") && bg.contains("}, ['blocking']);") && bg.contains("if (!(hlsCap > 0) || d.statusCode !== 200 || d.method !== 'GET' || d.tabId < 0) return {};"))
+        assertTrue("any doubt hands the bytes over as they came: not text, too big, no master list, a stream error, a throw", bg.contains("{ fatal: true }") && bg.contains("hls.notText++; hlsWrite(f, chunks); f.close(); return;") && bg.contains("var HLS_MAX_BYTES = 524288;") && bg.contains("f.onerror = function () { hls.err++; try { f.disconnect(); }"))
+        assertTrue("the cap is the sixth field of the page answer, and nonsense means off", bg.contains("if (parts.length > 5) { var hc = parseInt(parts[5], 10); hlsCap = (hc >= 320 && hc <= 20000) ? hc : 0; }"))
+        val manifest = source(dir + "manifest.json")
+        assertTrue("the pure rewrite is loaded before the background page that uses it", manifest.indexOf("\"hlscap.js\"") in 1 until manifest.indexOf("\"background.js\""))
+        val cap = source(dir + "hlscap.js")
+        assertTrue("only a master playlist, the smallest rungs always stay, a rung without a size stays", cap.contains("text.indexOf(STREAM_INF) < 0) return null") && cap.contains("r.size > limit && r.size > floor") && cap.contains("return (a > 0 && b > 0) ? Math.max(a, b) : 0;"))
+        assertTrue("every page answer carries the cap after the video policy", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt").contains("videoPolicy() + \":\" + pictureCap()"))
+        assertTrue("the activity tells the extension what the setting and the screen make of it", source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").let { it.contains("pictureCap = { app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs) }") && it.contains("VideoFormats.capLine(applicationContext, prefs)") })
+        assertTrue("the setting is Automatic by default and has its row", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("sp.getInt(\"video_cap\", 0).coerceIn(0, 4)") && source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("choice(\"Picture size from sites\""))
+    }
 }
