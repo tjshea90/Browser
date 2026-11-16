@@ -1,12 +1,12 @@
 # Kestrel emulator lab: gp run
 
-Run: 2026-11-16 21:10 UTC, 2 scenes in 1 min. Device: Android 10 emulator, 600x1024, package app.kestrel.browser.gecko.debug, network unshaped (the runner's own fast link). **x86_64 + software GL is NOT the tablet: only behaviour counts, not absolute times.**
+Run: 2026-11-16 21:13 UTC, 3 scenes in 2 min. Device: Android 10 emulator, 600x1024, package app.kestrel.browser.gecko.debug, network unshaped (the runner's own fast link). **x86_64 + software GL is NOT the tablet: only behaviour counts, not absolute times.**
 
 ## Summary
 
-Scene results: ok 1, failed 1
+Scene results: failed 2, ok 1
 The emulated phone's own system restarted 0 time(s), the emulator itself started again from scratch 0 time(s) (an overloaded emulator, not the app).
-App restarts / crashes seen: 0. Issues logged: 18 (high 18, medium 0, low 0).
+App restarts / crashes seen: 0. Issues logged: 19 (high 19, medium 0, low 0).
 
 ## Issues (what to look at, most serious first)
 
@@ -28,6 +28,14 @@ App restarts / crashes seen: 0. Issues logged: 18 (high 18, medium 0, low 0).
 - **high / video-gestures**: A: and the controls are away again (the first tap showed them at once, the seek put them away): shown 0, hidden 0 shown 0 hidden 0
 - **high / video-gestures**: A: Back ends the player and the brightness is the tablet's again no 'native stop' line
 - **high / video-gestures**: B: the page told where its film is no layout row
+- **high / inline-quality**: the page told where its film is (layout row) no row
+
+## The quality list inside the page (ANS60c, owner message 60), on the real engine
+
+| check | result | detail |
+| :- | :- | :- |
+| the page told where its film is (layout row) | **FAILED** | no row |
+
 
 ## VLC-style gestures in Kestrel's players (ANS57, owner message 57), on the real engine
 

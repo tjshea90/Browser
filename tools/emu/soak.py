@@ -831,6 +831,8 @@ class Soak:
         self.pv_results = []                  # ANS58c: a private tab keeps its login when the app is left (suite pv)
         self.gp_results = []                  # ANS57: VLC-style gestures (suite gp)
         self.gp_nums = []
+        self.iq_results = []                  # ANS60c: the quality list inside the page (suites ip, gp, gv, vp)
+        self.iq_nums = []
         self.ip_results = []                  # ANS55f: the film plays INSIDE the page over the page's own video box (suite ip)
         self.ip_nums = []                     # the numbers behind the checks (the boxes, the pixel differences): for tuning from one run
         self.ap_table = []
@@ -2060,6 +2062,7 @@ class Soak:
             pass
         line = [ln for ln in diag.splitlines() if ln.startswith("Kestrel's own player:")]
         check("Diagnostics says how it went (frames shown, decoder)", bool(line) and "frames shown" in line[-1], "line: %s" % (line[-1][:200] if line else "none"))
+        check("ANS60d: the Diagnostics line carries the new playback numbers (playable after, waited for the network, link estimate)", bool(line) and "playable" in line[-1] and "waited for the network" in line[-1] and "link estimate" in line[-1], "line: %s" % (line[-1][-260:] if line else "none"))
         self.np_line = line[-1] if line else ""
         self.np_results = self.np_results + checks
         self.record({"kind": "player", "name": "kestrel-native-player-hls" if hls else "kestrel-native-player", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
@@ -3354,6 +3357,17 @@ class Soak:
             for c in self.pv_results:
                 L.append("| %s | %s | %s |" % (c["check"], "ok" if c["ok"] else "**FAILED**", (c["detail"] or "")[:200].replace("|", "/")))
             L.append("")
+        if self.iq_results:
+            L.append("## The quality list inside the page (ANS60c, owner message 60), on the real engine")
+            L.append("")
+            L.append("| check | result | detail |")
+            L.append("| :- | :- | :- |")
+            for c in self.iq_results:
+                L.append("| %s | %s | %s |" % (c["check"], "ok" if c["ok"] else "**FAILED**", (c["detail"] or "")[:200].replace("|", "/")))
+            L.append("")
+            for n in self.iq_nums:
+                L.append("- numbers: %s" % n[:400])
+            L.append("")
         if self.gp_results:
             L.append("## VLC-style gestures in Kestrel's players (ANS57, owner message 57), on the real engine")
             L.append("")
@@ -3913,6 +3927,8 @@ def main():
             s.ip_scene()                                     # (ANS55f: the film inside the page)
         if a.suite in ("gp", "gv", "vp"):
             s.gp_scene()                                     # (ANS57: VLC-style gestures)
+        if a.suite in ("ip", "gp", "gv", "vp"):
+            s.iq_scene()                                     # (ANS60c: the quality list inside the page)
         if a.suite in ("pv", "gv", "vp"):
             s.pv_scene()                                     # (ANS58c: a private tab keeps its login when the app is left)
         if a.suite == "yh":
