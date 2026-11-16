@@ -107,6 +107,8 @@ class Prefs private constructor(ctx: Context) {
     var webInline: Boolean get() = bool("web_inline", true); set(v) = put("web_inline", v)
     /** ANS57 (owner message 57): VLC-style touch gestures in Kestrel's own players: long press then drag = precise seek, a vertical drag on the left = brightness, on the right = volume (default on). */
     var videoGestures: Boolean get() = bool("video_gestures", true); set(v) = put("video_gestures", v)
+    /** ANS60a (owner message 60: "make the seek, brightness, and volume gestures in the video player work without a long press"): false (default) = no long press anywhere; true = inside the page a plain drag scrolls the page and the gestures need the long press first (the alpha60 rule). */
+    var videoGesturesHold: Boolean get() = bool("video_gestures_hold", false); set(v) = put("video_gestures_hold", v)
     /** Protected video (Widevine DRM, Netflix-style players): 0 ask each time a site wants it (only when the device has Widevine), 1 never. */
     var videoDrm: Int get() = sp.getInt("vid_drm", 0).coerceIn(0, 1); set(v) = put("vid_drm", v.coerceIn(0, 1))
     /** Which codecs a site is offered: 0 automatic (not one that would run in software on this device), 1 H.264 only, 2 everything the engine can decode (core/media/VideoPolicy). */
