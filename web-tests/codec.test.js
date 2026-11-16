@@ -121,7 +121,7 @@ test('mediaCapabilities.decodingInfo: refused configurations get supported:false
   assert.equal((await mc(page, { contentType: 'video/mp4; codecs="avc1.640028"', width: 1920, height: 1080, framerate: 60 })).supported, true);
   // a call the policy has no opinion on reaches the engine with exactly what the page sent
   const sent = await page.evaluate(() => window.__engine.filter((x) => x[0] === 'mc').map((x) => JSON.parse(x[1]).video.contentType));
-  assert.equal(sent.length, 5);
+  assert.equal(sent.length, 4, 'four of the seven questions were no business of the policy');
   const audioOnly = await page.evaluate(() => navigator.mediaCapabilities.decodingInfo({ type: 'file', audio: { contentType: 'audio/mp4; codecs="mp4a.40.2"' } }));
   assert.equal(audioOnly.supported, true);
   const h = await open(P(1, false));
