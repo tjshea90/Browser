@@ -66,7 +66,7 @@ class InlineBoxTest {
         val t = InlineBox.Track(Rect(17, 106, 583, 424), 0.0, 100.0)
         val m = t.at(0.0, 180.0, 1.0638)!!                                          // the page scrolled 80 CSS px down = 85 px
         assertEquals(21, m.t); assertEquals(339, m.b); assertEquals(17, m.l)
-        assertEquals("and back up past where it was", 126, t.at(0.0, 80.0, 1.0638)!!.t)
+        assertEquals("and back up past where it was", 127, t.at(0.0, 80.0, 1.0638)!!.t)
         assertEquals("the same place again", Rect(17, 106, 583, 424), t.at(0.0, 100.0, 1.0638))
     }
 
