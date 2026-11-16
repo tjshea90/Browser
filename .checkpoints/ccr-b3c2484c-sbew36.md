@@ -1,13 +1,13 @@
-# CHECKPOINT 2520 — read me first, then TASKS.md
+# CHECKPOINT 2527 — read me first, then TASKS.md
 
-**Written:** 2026-11-16T16:06:46Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `84c9cdd1` (this checkpoint is the commit after it)
+**Written:** 2026-11-16T16:46:16Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `e17daab2` (this checkpoint is the commit after it)
 
 ## Just done
-lab ho run dispatched: 43903287513 (head 09476513 = ckpt 2519, started 16:03Z, ends about 16:14Z); web suite for the alpha59 candidate 573/573
+ANS55f: inline player coded + unit suites ALL green (core, app, geckoapp; guards OwnerRulesTest incl. new ownerMessage55TheFilmPlaysInsideThePage; 3 old guards re-pointed at PlayerFactory/pressed); compile ok; lab suite ip written (soak.py ip_scene, soaklab /ho?v=inline, android.yml option ip, webinline debug cmd); ho_scene now forces webinline 0
 
 ## Do this next
-read lab run 43903287513 (artifact emulator-lab-text via fetch_artifact.py; hlstwo must name master2 and start from 0 s, all other ho checks ok); then bash ship.sh gecko "$(cat docs/handoff/ALPHA59_RELEASE_NOTE.txt)" (set the emulator check count in the note first: count the ok rows of the report), ONE dispatch (app=gecko full_build=true note), tag + jobs + release, record-release identical note, answer owner messages 55 + 56 (Release link on its own line, say the inline player is NOT in alpha59 and is being built), tick ANS55a-c/e, ANS56a-b
+1) check web-run1.txt in scratchpad (npm test, background) is green; 2) dispatch the emulator lab: mcp__github__actions_run_trigger run_workflow android.yml ref=ccr-b3c2484c-sbew36 inputs app=lab lab_suite=ip lab_minutes=1 (builds the debug APK itself, about 15 min); 3) fetch artifact emulator-lab-text via actions_get download_workflow_run_artifact then python3 -I tools/emu/fetch_artifact.py (see research notes); read the ip checks + numbers (overlay box vs page box, scroll lines, pixel diffs); fix findings; repeat; 4) also lab ho (the full-screen path must still pass, it now sets webinline 0); 5) bump geckoapp versionCode 161 / alpha60, ship, answer owner 55c/d.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,17 +16,17 @@ read lab run 43903287513 (artifact emulator-lab-text via fetch_artifact.py; hlst
 
 ## Last ten checkpoints
 ```
+  441aa19c ckpt 2526: ANS55f step 2 coded and COMPILES (:geckoapp:compileDebugKotlin ok): PlayerFa
+  16795a42 ckpt 2525: ANS55f step 1 done: gate-main.js geomOf + content.js geo() + background.js g
+  50071840 ckpt 2524: alpha59 SHIPPED and RECORDED: Release kestrel-g-v0.3.0-alpha59 (code 160, ru
+  2e6fccf5 ckpt 2523: alpha59 RELEASE DISPATCHED (ONE time): android.yml run 43905841979 (run 174,
+  d0daa8b8 ckpt 2522: gated kestrel-g-v0.3.0-alpha59 (gecko code 160) and pushed it: handoff self-
+  c4c4f1df ckpt 2521: pre-ship: alpha59: your message 55 (on alpha58). (1) FIXED: the black pictur
+  04ffa9c9 ckpt 2520: lab ho run dispatched: 43903287513 (head 09476513 = ckpt 2519, started 16:03
   09476513 ckpt 2519: owner message 56 written into TASKS.md (ANS56a-b): 'even when I selected a t
   f7ab7a01 ckpt 2518: ANS55e fix coded (core tests + gecko compile green): Yahoo/Brightcove root c
   5851f383 ckpt 2517: owner message 55 (alpha58 on the tablet: Yahoo video black, resumed the wron
-  6f31c2fb ckpt 2516: session handoff saved by the handoff tool (.handoff/handoff.md + json + arch
-  3eb91380 ckpt 2515: alpha58 SHIPPED and RECORDED: Release kestrel-g-v0.3.0-alpha58 (code 159, AP
-  8dccb965 ckpt 2514: alpha58 RELEASE DISPATCHED AGAIN (the first run 43843245891 made no release:
-  596e4e4a ckpt 2513: release run 43843245891 FAILED before any build: GitHub's web-test job faile
-  d639fb36 ckpt 2512: alpha58 RELEASE DISPATCHED (ONE time): android.yml run 43843245891 (run 170,
-  59ccf63d ckpt 2511: gated kestrel-g-v0.3.0-alpha58 (gecko code 159) and pushed it: handoff self-
-  eb003faf ckpt 2510: alpha58 release prepared (NOT shipped yet): geckoapp versionCode 159 / 0.3.0
 ```
 
-(2 automatic checkpoint(s) since the last deliberate one — the
+(10 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)

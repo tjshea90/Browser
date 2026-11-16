@@ -460,11 +460,18 @@
         var q = JSON.parse(e.detail), id = q.i | 0;
         if (!(id > 0 && id < 1000000)) return;
         function num(v, hi) { v = +v; return (v >= 0 && v <= hi) ? v : 0; }
+        // ANS55f: the film's box (gate geomOf): eleven numbers, each inside its own range, or nothing (the film then plays in the full-screen player)
+        function geo(a) {
+          if (!Array.isArray(a) || a.length !== 11) return null;
+          var lo = [-1e6, -1e6, 0, 0, 0.05, -1e6, -1e6, 1, -1e7, -1e7, 0], hi = [1e6, 1e6, 1e5, 1e5, 20, 1e6, 1e6, 1e5, 1e7, 1e7, 1], o = [], j, v;
+          for (j = 0; j < 11; j++) { v = +a[j]; if (!(v >= lo[j] && v <= hi[j])) return null; o.push(Math.round(v * 100) / 100); }
+          return o;
+        }
         var src = (typeof q.s === 'string' && /^https?:\/\//i.test(q.s) && q.s.length <= 2000) ? q.s : '';
         var why = (q.y === 'play' || q.y === 'press' || q.y === 'kestrel') ? q.y : 'play';
         asked++;
         browser.runtime.sendMessage({ k: 'vhand', y: why, s: src, b: q.b === 1 ? 1 : 0, m: String(q.m || '').replace(/[^A-Za-z0-9\/.+;=, -]/g, '').slice(0, 60), l: q.l === 1 ? 1 : 0,
-          w: Math.round(num(q.w, 20000)), h: Math.round(num(q.h, 20000)), t: num(q.t, 1e7), d: num(q.d, 1e7) }).then(function (r) {
+          w: Math.round(num(q.w, 20000)), h: Math.round(num(q.h, 20000)), t: num(q.t, 1e7), d: num(q.d, 1e7), g: geo(q.g) }).then(function (r) {
           try { document.dispatchEvent(new CustomEvent(NEV, { detail: id + '|' + ((r && r.h === 1) ? '1' : '0') })); } catch (x) { /* ignore */ }
         }, function () { try { document.dispatchEvent(new CustomEvent(NEV, { detail: id + '|0' })); } catch (x) { /* ignore */ } });
       } catch (x) { /* ignore */ }

@@ -26,6 +26,7 @@ class InlineBoxTest {
     @Test fun aZoomedPageOrAnUnusableBoxIsNotPlaced() {
         assertNull("pinch-zoomed", InlineBox.toView(page(16.0, 100.0, scale = 1.6), 600, 916))
         assertNull("a thumbnail", InlineBox.toView(page(16.0, 100.0, w = 120.0, h = 68.0), 600, 916))
+        assertNull("an element in a frame, under a fixed header or in a scroller of its own", InlineBox.toView(Page(16.0, 100.0, 532.0, 299.0, 1.0, 0.0, 0.0, 564.0, follows = false), 600, 916))
         assertNull("not on the screen", InlineBox.toView(page(16.0, 4000.0), 600, 916))
         assertNull("no view", InlineBox.toView(page(16.0, 100.0), 0, 916))
         assertNull("no viewport width", InlineBox.toView(page(16.0, 100.0, vvW = 0.0), 600, 916))
@@ -59,5 +60,31 @@ class InlineBoxTest {
         assertNull("the shape is not known yet", InlineBox.letterbox(box, 0, 0))
         val wider = InlineBox.letterbox(box, 2000, 500)!!                              // 4:1 film: bars top and bottom
         assertEquals(600, wider.w); assertEquals(150, wider.h); assertEquals(94, wider.t)
+    }
+    // the engine's compositor updates: CSS pixels and zoom = screen pixels per CSS pixel (the documented numbers of GeckoSession.ScrollPositionUpdate)
+    @Test fun theCompositorsScrollMovesTheBoxByTheDeltaTimesZoom() {
+        val t = InlineBox.Track(Rect(17, 106, 583, 424), 0.0, 100.0)
+        val m = t.at(0.0, 180.0, 1.0638)!!                                          // the page scrolled 80 CSS px down = 85 px
+        assertEquals(21, m.t); assertEquals(339, m.b); assertEquals(17, m.l)
+        assertEquals("and back up past where it was", 127, t.at(0.0, 80.0, 1.0638)!!.t)
+        assertEquals("the same place again", Rect(17, 106, 583, 424), t.at(0.0, 100.0, 1.0638))
+    }
+
+    @Test fun aSidewaysScrollMovesItSideways() {
+        val t = InlineBox.Track(Rect(17, 106, 583, 424), 10.0, 0.0)
+        val m = t.at(60.0, 0.0, 1.0)!!
+        assertEquals(-33, m.l); assertEquals(106, m.t)
+    }
+
+    @Test fun aPinchAfterTheFirstUpdateEndsTheFollowing() {
+        val t = InlineBox.Track(Rect(17, 106, 583, 424), 0.0, 0.0)
+        assertNotNull(t.at(0.0, 10.0, 1.0638))
+        assertNotNull("a little jitter in the zoom is no pinch", t.at(0.0, 20.0, 1.07))
+        assertNull(t.at(0.0, 30.0, 1.6))
+    }
+
+    @Test fun nonsenseIsNotFollowed() {
+        val t = InlineBox.Track(Rect(17, 106, 583, 424), 0.0, 0.0)
+        assertNull(t.at(Double.NaN, 0.0, 1.0)); assertNull(t.at(0.0, 0.0, 0.0)); assertNull(t.at(0.0, 9e9, 1.0))
     }
 }

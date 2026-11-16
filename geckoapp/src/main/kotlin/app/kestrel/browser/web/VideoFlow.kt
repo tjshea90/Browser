@@ -347,7 +347,16 @@ class VideoFlow(private val a: BrowserActivity) {
         val tab = tabOf(m.optString("p")) ?: return decline(null, "page not found")
         val why = when (m.optString("y")) { "press" -> WebHandOver.Why.PRESS; "kestrel" -> WebHandOver.Why.KESTREL; else -> WebHandOver.Why.PLAY }
         if (!tab.isPrivateTab) WebHandStats.asked++
-        return start(tab, why, elementOf(m), m.optString("f"))
+        return start(tab, why, elementOf(m), m.optString("f"), pageOf(m))
+    }
+
+    /** ANS55f: where the pressed element's box is (the gate's eleven numbers; only for a film in the top document that moves with the page's own scroll), or null: the film then plays in the full-screen player. */
+    private fun pageOf(m: JSONObject): app.kestrel.core.media.InlineBox.Page? {
+        val g = m.optJSONArray("g") ?: return null
+        if (g.length() != 11 || m.optInt("tp") != 1) return null
+        val v = DoubleArray(11) { g.optDouble(it, Double.NaN) }
+        if (v.any { it.isNaN() || it.isInfinite() }) return null
+        return app.kestrel.core.media.InlineBox.Page(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], follows = v[10] == 0.0)
     }
 
     private fun decline(tab: Tab?, why: String): Boolean {
@@ -355,14 +364,16 @@ class VideoFlow(private val a: BrowserActivity) {
         return false
     }
 
-    private fun start(tab: Tab, why: WebHandOver.Why, el: WebHandOver.Element, frame: String): Boolean {
+    private fun start(tab: Tab, why: WebHandOver.Why, el: WebHandOver.Element, frame: String, geometry: app.kestrel.core.media.InlineBox.Page? = null): Boolean {
         val mode = a.prefs.webVideoMode
         if (mode == WebHandOver.NEVER) return decline(tab, "the setting says the page's own player")
         if (tab !== a.current || tab.isNewTab || a.onHomeScreen(tab)) return decline(tab, "not the page in front")
         val now = SystemClock.uptimeMillis()
         if (now < tab.gecko.handOverOffUntil) return decline(tab, "Kestrel's player failed on this page a moment ago")
         if (NativePlayerStats.active || now - NativePlayerStats.launchedAt < 3000L) { if (!tab.isPrivateTab) WebHandStats.repeats++; return true }   // it is up (or just started): the page keeps its element closed, no second player
-        if (a.lastPressAt == 0L || now - a.lastPressAt > WebHandOver.pressWindowMs(why)) return decline(tab, "no tap of the person just before")   // a page's script can fake the question, not a finger (the tap counts once: it is used up below)
+        val pressed = a.lastPressAt != 0L && now - a.lastPressAt <= WebHandOver.pressWindowMs(why)
+        if (a.inline.active && !pressed) { if (!tab.isPrivateTab) WebHandStats.repeats++; return true }                 // ANS55f: the film plays inside the page: a question without a tap of the person (the page's own play() again) keeps the element closed
+        if (!pressed) return decline(tab, "no tap of the person just before")   // a page's script can fake the question, not a finger (the tap counts once: it is used up below)
         val known = knownIn(tab, frame).let { k -> if (why == WebHandOver.Why.LATE) k.filter { it.durationMs >= WebHandOver.FILM_MS } else k }   // (a playlist that comes late must be known to be as long as a film: it may be an advertisement)
         val d = WebHandOver.decide(mode, why, el, known)
         if (d == null) {
@@ -371,6 +382,7 @@ class VideoFlow(private val a: BrowserActivity) {
             return decline(tab, if (mode == WebHandOver.FULLSCREEN && why != WebHandOver.Why.FULLSCREEN) "the setting says full screen only" else if (el.loop) "a loop clip" else if (el.blob) "no stream known (yet)" else "not a file or stream Kestrel's player plays")
         }
         lastRefused = null
+        if (a.inline.active && a.inline.url == d.url) { if (!tab.isPrivateTab) WebHandStats.repeats++; a.lastPressAt = 0L; return true }   // ANS55f: the same film is up inside the page already
         val seed = tab.media.find(d.url) ?: MediaCandidate(d.url, d.kind, "", -1, tab.url, frame, System.currentTimeMillis())
         val headers = MediaHeaders.sets(seed, tab.url).firstOrNull()?.map { "${it.key}: ${it.value}" }.orEmpty()
         try { tab.gecko.mediaSession?.pause() } catch (e: Throwable) { /* the page's own film may have no media session */ }
@@ -381,6 +393,14 @@ class VideoFlow(private val a: BrowserActivity) {
             when (why) { WebHandOver.Why.PLAY -> WebHandStats.byPlay++; WebHandOver.Why.PRESS -> WebHandStats.byPress++; WebHandOver.Why.KESTREL -> WebHandStats.byKestrel++; WebHandOver.Why.FULLSCREEN -> WebHandStats.byFullscreen++; WebHandOver.Why.LATE -> WebHandStats.late++ }
             WebHandStats.lastTaken = "${if (d.kind == MediaKind.HLS) "a stream" else "a file"}, ${d.note}, from ${startMs / 1000} s"
             Health.log("video", "hand-over", "${why.name.lowercase()} ${if (d.kind == MediaKind.HLS) "HLS" else "file"} from ${startMs / 1000} s (${d.note}) on ${UrlParts.hostOf(d.url) ?: "?"} ${d.url.substringBefore('?').substringBefore('#').trimEnd('/').substringAfterLast('/').take(40)}")   // (the host and the last piece of the address name which list was chosen: the Diagnostics of owner message 55 could not tell)
+        }
+        // ANS55f (owner message 55): INSIDE the page when the box can be told (the person's choice, Settings > Play web videos inside the page): the film plays over the page's own video box; else (a frame, a
+        // fixed or scrolling box, a zoomed page, a small thumbnail, a film that came late or went full screen) the full-screen screen takes it as before
+        if (a.prefs.webInline && geometry == null && why != WebHandOver.Why.LATE && why != WebHandOver.Why.FULLSCREEN && !tab.isPrivateTab) Health.log("inline", "not-inline", "the page told no box (a film in a frame, or the question carried no numbers): full-screen player")
+        if (a.prefs.webInline && geometry != null && why != WebHandOver.Why.LATE && why != WebHandOver.Why.FULLSCREEN && !a.isFullscreenOf(tab)) {
+            val box = a.inline.boxFor(geometry)
+            if (box != null && a.inline.start(tab, d.url, headers, startMs, geometry, box)) { a.lastPressAt = 0L; return true }
+            if (!tab.isPrivateTab) Health.log("inline", "not-inline", if (box == null) "the box cannot be placed (frame, fixed or scrolling box, zoomed page, small or off screen): full-screen player; page box ${geometry.w.toInt()}x${geometry.h.toInt()} at ${geometry.x.toInt()},${geometry.y.toInt()}, visual viewport scale ${"%.3f".format(geometry.vvScale)} width ${geometry.vvW.toInt()}, scroll ${geometry.pageX.toInt()},${geometry.pageY.toInt()}, follows ${geometry.follows}, view ${a.inline.viewSize()}" else "the inline player did not start: full-screen player")
         }
         NativePlayerActivity.launch(a, d.url, headers, startMs, if (d.kind == MediaKind.HLS) 720 else 1080, tab.isPrivateTab, 0, 0, fromPage = true)
         a.lastPressAt = 0L

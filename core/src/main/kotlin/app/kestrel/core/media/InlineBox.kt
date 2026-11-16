@@ -6,8 +6,12 @@ package app.kestrel.core.media
  * the box moves when the page scrolls, and how much of it is in view. A page this cannot place (zoomed, an unusable box, the box far outside the view) gets null: the film then plays in the full-screen player.
  */
 object InlineBox {
-    /** The box of the element in the layout viewport and what the visual viewport is (all CSS pixels). */
-    class Page(val x: Double, val y: Double, val w: Double, val h: Double, val vvScale: Double, val vvOffX: Double, val vvOffY: Double, val vvW: Double)
+    /**
+     * The box of the element in the layout viewport and what the visual viewport is (all CSS pixels). [pageX] / [pageY] = where the visual viewport sits in the document (the scroll position at the press).
+     * [follows] = the box moves with the page's own (root) scroll: false for an element in a frame, under a fixed or sticky ancestor, or in a scroller of its own (nothing can place or follow it).
+     */
+    class Page(val x: Double, val y: Double, val w: Double, val h: Double, val vvScale: Double, val vvOffX: Double, val vvOffY: Double, val vvW: Double,
+               val pageX: Double = 0.0, val pageY: Double = 0.0, val follows: Boolean = true)
 
     /** A box in view pixels (left, top, right, bottom). */
     class Rect(val l: Int, val t: Int, val r: Int, val b: Int) {
@@ -18,14 +22,14 @@ object InlineBox {
         override fun toString() = "[$l,$t ${w}x$h]"
     }
 
-    const val MIN_W = 200            // a box smaller than this is a thumbnail, not a film
-    const val MIN_H = 112
+    const val MIN_W = 240            // a box smaller than this is a thumbnail, not a film (the controls need room: ANS55f)
+    const val MIN_H = 135
     const val SCALE_OK_LOW = 0.97    // the page is not pinch-zoomed (the visual viewport scale is 1)
     const val SCALE_OK_HIGH = 1.03
 
     /** The element's box in view pixels, or null when the numbers cannot be trusted. [viewW] x [viewH] = the page view in pixels. */
     fun toView(p: Page, viewW: Int, viewH: Int): Rect? {
-        if (viewW <= 0 || viewH <= 0 || p.vvW <= 0.0) return null
+        if (viewW <= 0 || viewH <= 0 || p.vvW <= 0.0 || !p.follows) return null
         if (p.vvScale < SCALE_OK_LOW || p.vvScale > SCALE_OK_HIGH) return null
         val k = viewW / p.vvW                                   // view pixels per CSS pixel
         val l = Math.round((p.x - p.vvOffX) * k).toInt()
@@ -36,6 +40,26 @@ object InlineBox {
         if (box.w < MIN_W * k.coerceAtMost(1.0) || box.h < MIN_H * k.coerceAtMost(1.0) || box.w < 4 || box.h < 4) return null
         if (visible(box, viewW, viewH) < 0.5) return null       // it was not on the screen: the press came from somewhere the person cannot see
         return box
+    }
+
+    /**
+     * Follows the page's scroll with the engine's compositor updates (GeckoSession.CompositorScrollDelegate; no message from the page: a starved page script is exactly what makes the page's own player lag).
+     * The engine's documented numbers: scrollX / scrollY in CSS pixels, zoom = screen pixels per CSS pixel ("multiply scrollX / scrollY by zoom to get screen pixels"). [box0] is the box at the press (view
+     * pixels), [baseX] / [baseY] the visual viewport's place in the document at that moment (CSS pixels). The first update's zoom is remembered; a zoom that differs from it by more than 3 % (a pinch) makes
+     * [at] return null: the box can no longer be told and the overlay closes.
+     */
+    class Track(val box0: Rect, private val baseX: Double, private val baseY: Double) {
+        private var zoomRef = 0.0
+        /** The box for the compositor's scroll position ([sx], [sy] in CSS pixels) at [zoom], or null when it cannot be told (a pinch, nonsense numbers). */
+        fun at(sx: Double, sy: Double, zoom: Double): Rect? {
+            if (!(zoom > 0.0) || sx.isNaN() || sy.isNaN()) return null
+            if (zoomRef == 0.0) zoomRef = zoom
+            else if (Math.abs(zoom - zoomRef) > zoomRef * 0.03) return null
+            val dx = Math.round((sx - baseX) * zoom)
+            val dy = Math.round((sy - baseY) * zoom)
+            if (Math.abs(dx) > 200_000L || Math.abs(dy) > 200_000L) return null
+            return moved(box0, dx.toInt(), dy.toInt())
+        }
     }
 
     /** The box after the page scrolled: [dx] / [dy] are the change of the scroll position in view pixels (a page that scrolls DOWN has a positive dy and its content moves UP). */

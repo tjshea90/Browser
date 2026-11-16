@@ -41,6 +41,7 @@ import app.kestrel.browser.diag.Health
 import app.kestrel.browser.web.FullscreenTurner
 import app.kestrel.browser.web.NativePlayerStats
 import app.kestrel.browser.web.PlayerControlsView
+import app.kestrel.browser.web.PlayerFactory
 import app.kestrel.browser.web.QualitySheet
 import app.kestrel.core.media.FullscreenTurn
 import app.kestrel.core.media.QualityLabel
@@ -145,20 +146,8 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     // ---------------------------------------------------------------------------------------- the player
 
     private fun buildPlayer(url: String, headerLines: List<String>, startMs: Long, maxH: Int, pick: QualityLabel.Rung?, auto: Boolean) {
-        val headers = HashMap<String, String>()
-        for (l in headerLines) { val c = l.indexOf(':'); if (c > 0) headers[l.substring(0, c).trim()] = l.substring(c + 1).trim() }
-        val http = DefaultHttpDataSource.Factory().setUserAgent(userAgent()).setDefaultRequestProperties(headers).setAllowCrossProtocolRedirects(true).setConnectTimeoutMs(15_000).setReadTimeoutMs(20_000)
-        val data = DefaultDataSource.Factory(this, http)
-        val item = MediaItem.fromUri(url)
-        val hls = url.substringBefore('?').lowercase().endsWith(".m3u8") || url.contains(".m3u8?", true) || url.contains("/hls/", true)
-        val source: MediaSource = if (hls) HlsMediaSource.Factory(data).createMediaSource(item) else ProgressiveMediaSource.Factory(data).createMediaSource(item)
-        // hardware decoders first (a software one only when nothing else decodes the format); no extension decoders (software FFmpeg / AV1 on four A53 cores is not a plan)
-        val selector = MediaCodecSelector { mime, secure, tunneling -> MediaCodecUtil.getDecoderInfos(mime, secure, tunneling).sortedBy { if (it.hardwareAccelerated && !it.softwareOnly) 0 else 1 } }
-        val renderers = DefaultRenderersFactory(this).setEnableDecoderFallback(true).setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF).setMediaCodecSelector(selector)
-        // buffers: ExoPlayer's defaults allow 50 s on the Java heap; this app's heap class is 128 MB and the tablet has 2 GB: 15 to 30 s, 16 MiB at most
-        val load = DefaultLoadControl.Builder().setAllocator(DefaultAllocator(true, C.DEFAULT_BUFFER_SEGMENT_SIZE)).setBufferDurationsMs(15_000, 30_000, 1_500, 3_000)
-            .setTargetBufferBytes(16 * 1024 * 1024).setPrioritizeTimeOverSizeThresholds(false).build()
-        val p = ExoPlayer.Builder(this, renderers).setLoadControl(load).setHandleAudioBecomingNoisy(true).setAudioAttributes(AudioAttributes.DEFAULT, true).build()
+        val built = PlayerFactory.create(this, url, headerLines)             // ANS55f: shared with the player inside the page
+        val p = built.player; val source = built.source
         // the picture size to start with: the one the person picked last time (ANS53d, remembered), else what the page's list said (720 when it said nothing). The cap is on the LONGER side of a 16:9 picture so that a
         // portrait film is held to the same class as a landscape one (a cap on the height alone would drop every portrait rung of a 720p class).
         // ANS53d.2: a picture picked in the page's quality list wins over what was remembered (and is remembered itself, like a pick made in this player); Automatic from that list forgets the old pick
@@ -217,11 +206,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         player = p
     }
 
-    /** The size cap for Automatic: both sides at most 16:9 of [capH], so portrait and landscape films fall in the same class. */
-    private fun applyCap(p: ExoPlayer) {
-        val longCap = capH * 16 / 9
-        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setMaxVideoSize(longCap, longCap).setMaxVideoFrameRate(60).build()
-    }
+    private fun applyCap(p: ExoPlayer) = PlayerFactory.applyCap(p, capH)
 
     // ---------------------------------------------------------------------------------------- ANS53d: the quality list
 
@@ -305,8 +290,6 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         } catch (e: Throwable) { say("quality-failed", e.javaClass.simpleName) }
     }
 
-    /** The engine's own user agent, so a server that looks at it sees the browser the person is using. */
-    private fun userAgent(): String { val v = Flavor.engineVersion.substringBefore('.').filter { it.isDigit() }.ifEmpty { "128" }; return "Mozilla/5.0 (Android ${android.os.Build.VERSION.RELEASE}; Mobile; rv:$v.0) Gecko/$v.0 Firefox/$v.0" }
 
     private fun fail(why: String) {
         if (!priv) { NativePlayerStats.errors++; NativePlayerStats.last = why }

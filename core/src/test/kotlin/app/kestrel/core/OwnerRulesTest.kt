@@ -392,9 +392,11 @@ class OwnerRulesTest {
         assertTrue("the sheet's second button comes only from the build that can play", flow.contains("override fun canPlay(choice: VideoPanel.Choice): Boolean = nativeTarget(choice) != null"))
         assertTrue(source("app/src/main/kotlin/app/kestrel/browser/ui/VideoPanel.kt").contains("fun canPlay(choice: Choice): Boolean = false"))
         val player = source("geckoapp/src/main/kotlin/app/kestrel/browser/NativePlayerActivity.kt")
-        assertTrue("hardware decoders first, no software extension decoders", player.contains("it.hardwareAccelerated && !it.softwareOnly") && player.contains("EXTENSION_RENDERER_MODE_OFF"))
-        assertTrue("small buffers: 15 to 30 s, 16 MiB at most (the app heap class is 128 MB)", player.contains("setBufferDurationsMs(15_000, 30_000, 1_500, 3_000)") && player.contains("setTargetBufferBytes(16 * 1024 * 1024)"))
-        assertTrue("sound off when the screen is left, audio focus and headphones handled", player.contains("override fun onPause() {") && player.contains("player?.pause()") && player.contains("AudioAttributes.DEFAULT, true") && player.contains("setHandleAudioBecomingNoisy(true)"))
+        val factory = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerFactory.kt")   // ANS55f: the ExoPlayer is built in ONE place now, for the full-screen screen and the player inside the page
+        val playerAndFactory = player + factory
+        assertTrue("hardware decoders first, no software extension decoders", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerFactory.kt").let { it.contains("it.hardwareAccelerated && !it.softwareOnly") && it.contains("EXTENSION_RENDERER_MODE_OFF") } && player.contains("PlayerFactory.create(this, url, headerLines)"))
+        assertTrue("small buffers: 15 to 30 s, 16 MiB at most (the app heap class is 128 MB)", playerAndFactory.contains("setBufferDurationsMs(15_000, 30_000, 1_500, 3_000)") && playerAndFactory.contains("setTargetBufferBytes(16 * 1024 * 1024)"))
+        assertTrue("sound off when the screen is left, audio focus and headphones handled", player.contains("override fun onPause() {") && player.contains("player?.pause()") && playerAndFactory.contains("AudioAttributes.DEFAULT, true") && playerAndFactory.contains("setHandleAudioBecomingNoisy(true)"))
         assertTrue("a private tab's film is not counted or logged", player.contains("private fun say(event: String, text: String) { if (!priv) Health.log") && player.contains("if (!priv) { NativePlayerStats.plays++"))
         val manifest = source("geckoapp/src/main/AndroidManifest.xml")
         assertTrue("its own window, not exported, handles the turn itself", manifest.contains("android:name=\".NativePlayerActivity\"") && manifest.substringAfter("android:name=\".NativePlayerActivity\"").substringBefore("/>").let { it.contains("android:exported=\"false\"") && it.contains("orientation|screenSize") })
@@ -490,6 +492,42 @@ class OwnerRulesTest {
         assertTrue("a pick from the page's list wins over the remembered cap and is matched against what the stream really offers", np.contains("pick != null -> QualityLabel.pClass(pick.w, pick.h)") && np.contains("QualityLabel.nearest(w, rowsNow.map { it.first })") && np.contains("fun launch(from: Context, url: String, headers: List<String>, startMs: Long, maxH: Int, priv: Boolean, w: Int, h: Int, pick: QualityLabel.Rung? = null, auto: Boolean = false, fromPage: Boolean = false)"))
     }
 
+    // ANS55f (owner message 55: "Can the player be inside the website so the video plays but I still see the website around it?"): Kestrel's own player over the page's own video box (research/ANS55_INLINE_PLAYER.md)
+    @Test fun ownerMessage55TheFilmPlaysInsideThePage() {
+        val flow = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/VideoFlow.kt")
+        val host = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/InlineHost.kt")
+        val view = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/InlinePlayer.kt")
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        val shields = "geckoapp/src/main/assets/kestrel-shields/"
+        val gate = source(shields + "gate-main.js"); val content = source(shields + "content.js"); val bg = source(shields + "background.js")
+        val box = source("core/src/main/kotlin/app/kestrel/core/media/InlineBox.kt")
+        assertTrue("the film starts inside the page ONLY through the hand-over, after the person's tap (the press check comes first), never for a playlist that came late or a page that went full screen",
+            flow.indexOf("a.inline.start(") > flow.indexOf("if (!pressed) return decline(") && flow.contains("why != WebHandOver.Why.LATE && why != WebHandOver.Why.FULLSCREEN"))
+        assertTrue("the person's setting decides: Settings > Play web videos inside the page, on by default, saved with the backup",
+            source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("bool(\"web_inline\", true)") && source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("Play web videos inside the page")
+                && source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"web_inline\", T.BOOL)") && flow.contains("a.prefs.webInline && geometry != null"))
+        assertTrue("the page's box comes from the gate and is checked twice (the content script's ranges, the background page's top-frame flag); a box in a frame, under a fixed or sticky ancestor or in a scroller of its own is never placed",
+            gate.contains("function geomOf(el)") && gate.contains("cs.position === 'fixed' || cs.position === 'sticky'") && content.contains("function geo(a)") && bg.contains("tp: sender.frameId === 0 ? 1 : 0") && flow.contains("m.optInt(\"tp\") != 1") && box.contains("!p.follows"))
+        assertTrue("the overlay follows the page by the engine's compositor (CompositorScrollDelegate), never by a message of the page's script (a busy page would lag)",
+            host.contains("GeckoSession.CompositorScrollDelegate") && host.contains("InlineBox.Track(") && !host.contains("pageScrolled") && !view.contains("runtime.sendMessage"))
+        assertTrue("the picture is a media-overlay SurfaceView (above the engine's own surface, below the window's views) and never stretched",
+            view.contains("setZOrderMediaOverlay(true)") && view.contains("InlineBox.letterbox(") && view.contains("a point until the shape of the picture is known"))
+        assertTrue("a drag or a second finger that starts on the picture goes to the page (it scrolls or zooms as if nothing lay over it); a short tap is the controls'",
+            view.contains("private fun startPass()") && view.contains("ACTION_POINTER_DOWN -> if (!passing) startPass()") && host.contains("engine.dispatchTouchEvent(c)") && view.contains("model.onTap("))
+        for (why in listOf("inline.backPressed()", "inline.stop(\"the app was left\")", "inline.stop(\"the screen turned\")", "inline.stop(\"another page is in front\")", "inline.stop(\"the page changed\")", "inline.stop(\"the tab list opened\")", "inline.stop(\"the page went full screen\")", "inline.stop(\"closing\")"))
+            assertTrue("every way the page stops being what the person sees ends the film: $why", act.contains(why))
+        assertTrue("a pinch, a scroll that cannot be followed or a box scrolled out of view ends the film, a box mostly out of view pauses it",
+            host.contains("the page was pinched") && view.contains("stop(\"scrolled out of view\")") && view.contains("mostly out of view: paused") && box.contains("Math.abs(zoom - zoomRef) > zoomRef * 0.03"))
+        assertTrue("a private tab's film is not logged or counted by the inline player",
+            view.contains("private fun say(event: String, text: String) { if (!priv) Health.log") && view.contains("if (!priv) { NativePlayerStats.plays++") && host.contains("if (!p) { WebHandStats.lastInlineEnd = why"))
+        assertTrue("no picture for 7 s, or an error before the first picture, gives the film back to the page's own player",
+            view.contains("> 7_000L") && view.contains("stop(\"no picture\", failed = true)") && view.contains("stop(\"failed before the first picture\", failed = true)") && host.contains("a.nativeFilmFailed()"))
+        assertTrue("the full-screen button hands the same second to the full-screen player; the film that is up is not started twice; a new film replaces the old one",
+            host.contains("NativePlayerActivity.launch(a, u, h, positionMs") && flow.contains("a.inline.url == d.url") && host.contains("if (view.active) view.stop(\"a new film\")"))
+        assertTrue("the film is released at once when it ends (no sound after it) and its place is kept for 'pressed again continues'", view.contains("try { p.release() }") && view.contains("NativePlayerActivity.lastPositionMs = pos"))
+        assertTrue("Diagnostics counts the films inside the page", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/WebHandStats.kt").contains("inside the page: \$inline film(s)"))
+    }
+
     @Test fun ownerMessage54IsActedOn() {
         val dir = "geckoapp/src/main/assets/kestrel-shields/"
         // the screen never turns by itself by default; the options box has an x
@@ -515,7 +553,7 @@ class OwnerRulesTest {
         assertTrue("Diagnostics has its line", source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("WebHandStats.line(prefs.webVideoMode)"))
         // the engine's own controls start a film with no tap event reaching the page (lab run 43826954106): the trusted play event of the element is the press; a film pressed again continues where the person stopped
         assertTrue("the gate treats the engine's own play event as the press (closed element with controls: open + ask; handed over before + a tap behind it: ask again; the page's own play() is the replacement's)", gate.contains("function nativePlay(el, ev)") && gate.contains("el.addEventListener('play', function (ev) { nativePlay(el, ev); }, true)") && gate.contains("r.viaPlay = dnow.call(Date)") && gate.contains("again = r.open && r.yesAt > 0"))
-        assertTrue("a hand-over needs a tap of the person a few seconds before: a page's script can fake the gate's question, not a finger", flow.contains("a.lastPressAt == 0L || now - a.lastPressAt > WebHandOver.pressWindowMs(why)") && source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").let { it.contains("tapInPage(ev)) lastPressAt = SystemClock.uptimeMillis()") && it.contains("KEYCODE_MEDIA_PLAY_PAUSE -> lastPressAt = SystemClock.uptimeMillis()") })
+        assertTrue("a hand-over needs a tap of the person a few seconds before: a page's script can fake the gate's question, not a finger", flow.contains("a.lastPressAt != 0L && now - a.lastPressAt <= WebHandOver.pressWindowMs(why)") && flow.contains("if (!pressed) return decline(tab, \"no tap of the person just before\")") && source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").let { it.contains("tapInPage(ev)) lastPressAt = SystemClock.uptimeMillis()") && it.contains("KEYCODE_MEDIA_PLAY_PAUSE -> lastPressAt = SystemClock.uptimeMillis()") })
         // the review of the hand-over code (2026-11-16): a faked question, a button that is no play button, a late yes, a bar that never asked, a press that is used up
         assertTrue("a question the page's script could have faked is relayed only while a person touched the document (user activation or our own trusted listeners)", content.contains("function touched()") && content.contains("navigator.userActivation") && content.contains("|| !touched()) return;"))
         assertTrue("only a play control asks first (a word play in its label, class or id, or a button that says Play): Mute, Share and Get started over the picture do not", gate.contains("function playWord(s)") && !gate.contains("if (n.nodeName === 'BUTTON' || (n.getAttribute && n.getAttribute('role') === 'button')) return true;"))

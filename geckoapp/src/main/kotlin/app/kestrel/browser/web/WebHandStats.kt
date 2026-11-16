@@ -16,12 +16,17 @@ object WebHandStats {
     @Volatile var failed = 0
     @Volatile var lastDeclined = ""
     @Volatile var lastTaken = ""
+    /** ANS55f: films that played INSIDE the page, how many of them went on in the full-screen player from its button, and how the last one ended (a short word). */
+    @Volatile var inline = 0
+    @Volatile var inlineFull = 0
+    @Volatile var lastInlineEnd = ""
 
     fun line(mode: Int): String {
         val m = when (mode) { 0 -> "Kestrel's player whenever it can"; 1 -> "Kestrel's player in full screen only"; else -> "the page's own player" }
         val taken = byPlay + byPress + byKestrel + byFullscreen + late
         if (asked == 0 && taken == 0 && failed == 0) return "Web videos in Kestrel's own player (Settings > Web videos play in: $m): no film asked yet"
         return "Web videos in Kestrel's own player (Settings > Web videos play in: $m): $asked questions from pages, $taken films taken over (by the page's play() $byPlay, a press on the player $byPress, Kestrel's own bar $byKestrel, full screen $byFullscreen, a playlist that came late $late), " +
-            "$repeats asked again while it was up, $declined left to the page's own player (last reason: ${lastDeclined.ifEmpty { "none" }}), $failed failed before the first picture and went back to the page; last taken: ${lastTaken.ifEmpty { "none" }}"
+            "$repeats asked again while it was up, $declined left to the page's own player (last reason: ${lastDeclined.ifEmpty { "none" }}), $failed failed before the first picture and went back to the page; last taken: ${lastTaken.ifEmpty { "none" }}; " +
+            "inside the page: $inline film(s), $inlineFull went on in full screen from the button, last ended: ${lastInlineEnd.ifEmpty { "none yet" }}"
     }
 }

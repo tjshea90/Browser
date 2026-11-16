@@ -510,6 +510,15 @@ def page_ho(variant, tag):
                 "ms.addEventListener('sourceopen', function () { apRep('sourceopen'); var sb = ms.addSourceBuffer('video/mp4; codecs=\"avc1.4d401f,mp4a.40.2\"');"
                 " fetch('/clip/frag.mp4?c=@Q@').then(function (r) { return r.arrayBuffer(); }).then(function (b) { apRep('fetched', { bytes: b.byteLength }); sb.addEventListener('updateend', function () { try { if (!sb.updating && ms.readyState === 'open') ms.endOfStream(); } catch (e) {} }); sb.appendBuffer(b); }); });"
                 "document.getElementById('btn').onclick = function () { var how = 'overlay'; v.muted = true; " + play_js + " };</script>")
+    elif variant == "inline":
+        # ANS55f (owner message 55: the player inside the website): a tall page, the film's own play button in the middle of the text. Kestrel's player plays INSIDE the page over this box and follows its scroll; the page
+        # says where its box is (view pixels = CSS pixels x devicePixelRatio) at load and 450 ms after every scroll (kind=ap ev=rect: l, t, w, h, sy), for the driver to compare with the overlay's own numbers
+        body = ("<p style='margin:8px;height:70px'>text above the film</p>"
+                "<div id=player style='position:relative;width:100%;height:300px'><video id=v playsinline poster='/img/1.svg' src='@FILM@' style='@BOX@'></video>" + ov + "</div>"
+                "<div style='height:2600px;background:linear-gradient(#fff,#bde)'><p style='margin:8px'>text below the film</p></div>"
+                "<script>var v = document.getElementById('v'); apHook(v); document.getElementById('btn').onclick = function () { var how = 'overlay'; " + play_js + " };"
+                "function rectNow() { var r = v.getBoundingClientRect(), d = window.devicePixelRatio || 1; apRep('rect', { l: Math.round(r.left * d), t: Math.round(r.top * d), w: Math.round(r.width * d), h: Math.round(r.height * d), sy: Math.round(window.scrollY * 100) / 100 }); }"
+                "var rt = 0; window.addEventListener('scroll', function () { clearTimeout(rt); rt = setTimeout(rectNow, 450); }, { passive: true }); setTimeout(rectNow, 2400);</script>")
     else:
         body = "<p>unknown variant</p>"
     state = ("<script>setInterval(function () { var v = document.getElementById('v'); if (v) apRep('state', { paused: v.paused ? 1 : 0, t: (v.currentTime || 0).toFixed(1) }); }, 2000);"

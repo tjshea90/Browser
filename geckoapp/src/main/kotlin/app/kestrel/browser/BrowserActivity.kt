@@ -332,6 +332,9 @@ open class BrowserActivity : Activity(), DockListener {
     internal var current: Tab? = null
         private set
     private val video = app.kestrel.browser.web.VideoFlow(this)
+    /** ANS55f (owner message 55): Kestrel's own player inside the page, over the page's video box. Made with the page area (onCreate); VideoFlow starts it, the hooks below end it. */
+    internal lateinit var inline: app.kestrel.browser.web.InlineHost
+    internal fun nativeFilmFailed() = video.nativeFailed()
 
     /** For tests (same module): the selected tab. */
     internal val currentTab: Tab? get() = current
@@ -612,6 +615,7 @@ open class BrowserActivity : Activity(), DockListener {
     override fun onPause() {
         super.onPause()
         onScreenNow = false; turnSettler.abandon(); releaseGeckoHold("the app was left"); turnResizeAwaited = false; stopFrameWatch()
+        if (::inline.isInitialized) inline.stop("the app was left")      // ANS55f: SND1: no sound when the app is not in front
         Health.log("life", "pause"); fsTurner.paused()
         captureLook(current, "pause", LastLookRules.LEAVE_MIN_AGE_MS.toLong()) // EY-1: the page as it is left, before anything else (the read-back is a few hundred ms at most)
         app.kestrel.browser.net.WifiBoost.set(this, false)
@@ -711,6 +715,7 @@ open class BrowserActivity : Activity(), DockListener {
         val cfgAt = SystemClock.uptimeMillis()
         super.onConfigurationChanged(newConfig)
         val landscape = newConfig.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        if (::inline.isInitialized) inline.stop("the screen turned")      // ANS55f: the box is somewhere else after a turn
         try { turnSettler.configChanged(landscape); if (turnSettler.turning) holdGeckoView() } catch (e: Throwable) { Health.log("fullscreen", "turn-settler-failed", e.toString().take(80)); try { turnSettler.abandon() } catch (x: Throwable) { /* nothing more to do */ } } // ROT1: pause the video and cover the page BEFORE the engine re-lays out (a failure must never leave the cover up)
         GeckoEngine.runtimeOrNull()?.let { try { it.orientationChanged() } catch (e: Throwable) { Health.log("fullscreen", "orientation-notify-failed", e.toString().take(80)) } }
         Health.log("life", "config", "orientation=${if (landscape) "landscape" else "portrait"} fullscreen=$fullscreenOn" + (SystemClock.uptimeMillis() - cfgAt).let { if (it >= 50L) ", the app's own handling took $it ms" else "" })   // ANS51f
@@ -718,6 +723,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     override fun onDestroy() {
+        if (::inline.isInitialized) inline.stop("closing")
         try { fsTurner.exit() } catch (e: Exception) { /* RV8: leave the orientation as Android had it */ }
         if (::player.isInitialized) player.fullscreen(false)
         turnSettler.abandon(); releaseGeckoHold("closing"); stopFrameWatch(); Io.main.removeCallbacks(turnAwaitTimeout); Io.main.removeCallbacks(strayCheck); Io.main.removeCallbacks(barsCheck); Io.main.removeCallbacks(rehideAfterTurn); Io.main.removeCallbacks(vpUndo) // alpha49 review: no timer of ours may fire against a dead activity
@@ -803,6 +809,7 @@ open class BrowserActivity : Activity(), DockListener {
             "exitfs" -> Io.main.post { Health.log("lab", "exitfs", "fullscreenOn=$fullscreenOn"); try { current?.session?.exitFullScreen() } catch (e: Exception) { Health.log("lab", "exitfs-failed", e.toString().take(80)) } }
             "vfmt" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); val p = arg.split(','); prefs.videoCodecs = (p.getOrNull(0)?.toIntOrNull() ?: 0).coerceIn(0, 2); prefs.videoFps30 = p.getOrNull(1) == "1"; DeviceVideo.labLimits = if (p.getOrNull(2) == "tablet") app.kestrel.core.media.VideoLimits.Limits.decode("2048x1088@522000;2048x1088@522000;2048x1088@244800;-") else null; GeckoEngine.applyVideo(applicationContext, prefs); Health.log("lab", "vfmt", app.kestrel.browser.web.VideoFormats.policy(applicationContext, prefs)) } // ANS52g: the lab plays the owner's two settings and (tablet) the chip limits of the real tablet: the emulator has no hardware decoders
             "webmode" -> { val arg = (i.getStringExtra("kestrel_arg") ?: "").toIntOrNull() ?: 0; i.removeExtra("kestrel_arg"); prefs.webVideoMode = arg; Health.log("lab", "webmode", "mode $arg (0 Kestrel's player whenever it can = the default, 1 only in full screen, 2 the page's own player)") }   // ANS54e lab: where web videos play
+            "webinline" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); prefs.webInline = arg != "0"; Health.log("lab", "webinline", "inside the page: ${prefs.webInline}") }   // ANS55f lab: Settings > Play web videos inside the page
             "fsturn" -> { val arg = (i.getStringExtra("kestrel_arg") ?: "").toIntOrNull() ?: 1; i.removeExtra("kestrel_arg"); prefs.fullscreenTurn = arg; Health.log("lab", "fsturn", "mode $arg (0 automatic, 1 follow the tablet = the default, 2 off)") }   // ANS54e.1 lab: the full-screen turn mode
             "vpress" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); prefs.videoPressToPlay = arg != "0"; GeckoEngine.applyVideo(applicationContext, prefs); Health.log("lab", "vpress", if (prefs.videoPressToPlay) "on: videos start only when pressed" else "off") } // ANS53: the lab plays both settings (the lab turns the rule off for every suite but its own)
             "vcap" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); prefs.videoCap = arg.toIntOrNull() ?: 0; Health.log("lab", "vcap", "mode ${prefs.videoCap} -> ${app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs)} px") } // ANS52h: the lab plays the picture size cap setting (0 Automatic, 1 off, 2 480p, 3 720p, 4 1080p)
@@ -879,6 +886,8 @@ open class BrowserActivity : Activity(), DockListener {
         content.addView(restoreOverlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) // above the page, below Home / error screens
         pullChip = PullChip(this, pal)
         content.addView(pullChip, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
+        inline = app.kestrel.browser.web.InlineHost(this, content, geckoView)   // ANS55f: above the page, below Home / error screens, the mini panel and every sheet (so they cover it)
+        content.addView(inline.view, FrameLayout.LayoutParams(1, 1, Gravity.TOP or Gravity.START))
         geckoView.pull = pullListener
         geckoView.pullEnabled = {
             val t = current
@@ -1096,7 +1105,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     /** A new page began in [tab]: what the old page offered to save is no longer on offer (TabDelegates.onPageStart). */
-    internal fun pageStarted(tab: Tab) { video.clearTab(tab); tab.scrollY = 0; tab.gecko.vpOk = false } // (a new page has not told its size yet: the turn wait needs the proof again)
+    internal fun pageStarted(tab: Tab) { if (::inline.isInitialized && inline.tabOrNull === tab) inline.stop("the page changed"); video.clearTab(tab); tab.scrollY = 0; tab.gecko.vpOk = false } // (a new page has not told its size yet: the turn wait needs the proof again)
 
     internal fun newTabAndShow(privateTab: Boolean = false): Tab { val t = newTabInternal(null, privateTab); show(t); focusUrlBar(); return t }
 
@@ -1190,6 +1199,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     private fun attachContent(tab: Tab) {
+        if (::inline.isInitialized && inline.active && (inline.tabOrNull !== tab || homeShown(tab) || tab.error != null)) inline.stop("another page is in front")   // ANS55f
         if (!tab.isNewTab && !(tab.showHome && tab.session == null)) { // AQ1: a tab restored on Home has no engine session yet and gets none until Back: nothing loads behind the Home screen at start
             val s = ensureSession(tab)
             if (geckoView.session !== s) { geckoView.releaseSession(); geckoView.setSession(s) }
@@ -1821,6 +1831,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onTabs() {
         hideKeyboard()
+        if (::inline.isInitialized) inline.stop("the tab list opened")      // ANS55f
         val cur = current
         tabGrid.visibility = View.VISIBLE
         tabGrid.open(tabs, cur)
@@ -2974,6 +2985,7 @@ open class BrowserActivity : Activity(), DockListener {
             }
             endFullScreenOf(null, "Back: the full-screen page is not in front or has no session") // then Back does its ordinary job
         }
+        if (::inline.isInitialized && inline.backPressed()) return true   // ANS55f: Back closes the film inside the page first (a page that goes full screen has ended it already: the order never matters)
         if (::miniNav.isInitialized && miniNav.onBackPressed()) return true // the small keyboard closes first
         if (sheet.isShowing) { sheet.dismiss(); return true }
         if (downloadsView?.parent != null) { closeDownloads(); return true }
@@ -3037,6 +3049,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (!on && fullscreenTab != null && fullscreenTab !== tab) return // the late "ends" of a tab we already left: the full screen of the tab in front goes on
         fullscreenTab = if (on) tab else null
         fullscreenOn = on
+        if (on && ::inline.isInitialized) inline.stop("the page went full screen")      // ANS55f
         miniNav.available = !on && prefs.miniNavToggle
         dock.visibility = if (on) View.GONE else View.VISIBLE
         progress.visibility = if (on) View.GONE else View.VISIBLE

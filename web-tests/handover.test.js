@@ -300,3 +300,64 @@ test('the content script checks what the page says: a bad address is dropped, nu
   assert.equal(q[0].s, '', 'not an http(s) address'); assert.ok(!/[<>]/.test(q[0].m)); assert.equal(q[0].w, 0, 'out of range'); assert.equal(q[0].h, 0); assert.equal(q[0].d, 0);
   assert.equal(q[1].y, 'play', 'an unknown reason is a play');
 });
+
+// ---- ANS55f (owner message 55: the player inside the website): the question says where the film's box is
+const PLAYER_AT = (wrap, tail) => '<div style="height:400px">top</div>' + wrap + '<div id="player" style="position:relative;width:320px;height:180px"><video id="v" src="https://cdn.example/a.mp4" style="display:block;width:320px;height:180px"></video>'
+  + '<button id="btn" style="position:absolute;left:100px;top:60px;width:120px;height:60px">Play</button></div>' + tail + '<div style="height:2000px">more</div>'
+  + '<script>document.getElementById("btn").onclick = function () { document.getElementById("v").play().catch(function () {}); };</script>';
+
+test('the question carries the film\'s box and where the page is scrolled: eleven numbers, a plain page follows the root scroll (fx 0)', async () => {
+  const page = await open(PLAYER_AT('', ''), GUARD_HO, 'yes');
+  await settle(page, 300);
+  await page.evaluate(() => window.scrollTo(0, 150));
+  await settle(page, 200);
+  await tapOn(page, '#btn'); await settle(page, 500);
+  const q = await vhand(page);
+  assert.equal(q.length, 1);
+  const g = q[0].g;
+  assert.ok(Array.isArray(g) && g.length === 11, 'g: ' + JSON.stringify(g));
+  assert.ok(Math.abs(g[0] - 0) < 1 && Math.abs(g[1] - 250) < 1, 'x, y of the box in the viewport: ' + g[0] + ', ' + g[1] + ' (400 above it, scrolled 150)');
+  assert.equal(g[2], 320); assert.equal(g[3], 180);
+  assert.equal(g[4], 1, 'visual viewport scale'); assert.equal(g[5], 0); assert.equal(g[6], 0);
+  assert.ok(g[7] >= 300, 'visual viewport width in CSS px: ' + g[7]);
+  assert.equal(g[8], 0); assert.equal(g[9], 150, 'where the visual viewport sits in the document (the page is scrolled 150)');
+  assert.equal(g[10], 0, 'nothing fixed, sticky or scrolling of its own around it');
+  assert.equal(q[0].tp, undefined, 'tp is the background page\'s: the content script sends no claim about the frame');
+});
+
+test('a film under a fixed or sticky ancestor, or inside a scroller of its own, is told as fx 1 (the box does not move with the page\'s scroll)', async () => {
+  const cases = [
+    ['fixed', '<div style="position:fixed;left:0;top:100px;width:340px;height:200px">', '</div>'],
+    ['sticky', '<div style="position:sticky;top:0;width:340px;height:200px">', '</div>'],
+    ['a horizontal scroller (carousel)', '<div style="overflow-x:auto;width:340px;height:200px"><div style="width:900px">', '</div></div>'],
+    ['a vertical scroller', '<div style="overflow-y:scroll;width:340px;height:120px"><div style="height:600px">', '</div></div>'],
+  ];
+  for (const [name, a, b] of cases) {
+    const page = await open(PLAYER_AT(a, b), GUARD_HO, 'yes');
+    await settle(page, 300);
+    await page.evaluate(() => { const v = document.getElementById('v'); v.scrollIntoView(); });
+    await tapOn(page, '#btn'); await settle(page, 500);
+    const q = await vhand(page);
+    assert.ok(q.length >= 1, name + ': asked');
+    assert.equal(q[0].g && q[0].g[10], 1, name + ': fx ' + JSON.stringify(q[0].g));
+    await page.context().close();
+  }
+});
+
+test('the content script drops a box that is not eleven numbers in range (the film then plays in the full-screen player)', async () => {
+  const page = await open('<div>x</div>', GUARD_HO, 'no');
+  await settle(page, 300);
+  await page.evaluate(() => {
+    const ask = (d) => document.dispatchEvent(new CustomEvent('__kst_gate_ask_v1', { detail: JSON.stringify(d) }));
+    ask({ i: 1, y: 'play', s: 'https://x.example/a.mp4', g: [0, 0, 320, 180, 1, 0, 0, 564, 0, 0] });                 // ten numbers
+    ask({ i: 2, y: 'play', s: 'https://x.example/a.mp4', g: [0, 0, 320, 180, 1, 0, 0, 564, 0, 0, 2] });                // fx out of range
+    ask({ i: 3, y: 'play', s: 'https://x.example/a.mp4', g: [0, 0, 320, 180, 1, 0, 0, 564, 0, 'x', 0] });             // not a number
+    ask({ i: 4, y: 'play', s: 'https://x.example/a.mp4', g: [0, 0, 320, 180, 0, 0, 0, 564, 0, 0, 0] });               // scale 0
+    ask({ i: 5, y: 'play', s: 'https://x.example/a.mp4', g: [0.123456, -20.5, 320, 180, 1, 0, 0, 564, 0, 12.987, 0] }); // fine (rounded to 2 decimals)
+  });
+  await settle(page, 500);
+  const q = await vhand(page);
+  assert.equal(q.length, 5);
+  assert.deepEqual(q.slice(0, 4).map((x) => x.g), [null, null, null, null]);
+  assert.deepEqual(q[4].g, [0.12, -20.5, 320, 180, 1, 0, 0, 564, 0, 12.99, 0]);
+});
