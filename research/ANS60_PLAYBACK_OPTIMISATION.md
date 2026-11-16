@@ -55,3 +55,12 @@ The effects above are expected from the mechanisms, not measured. The next table
 Sources (read 2026-11-16): Media3 `DefaultLoadControl.Builder.setBackBuffer` and `LoadControl` reference (developer.android.com/reference/androidx/media3/exoplayer/LoadControl); `DefaultBandwidthMeter` and `InitialBitrateSupplier`
 reference; Akamai, "Enhancing Video Streaming Quality for ExoPlayer, Part 2: buffering strategy"; the Media3 1.9.0 release notes (late-frame drop threshold); `C.WakeMode` reference and Android's "Play media in the background" (WifiLock advice);
 the ExoPlayer team's blog on asynchronous MediaCodec operation.
+
+## 7. A lab finding on the way (not a playback change): the first page after a Settings change can still see the old format policy
+
+Lab run 43960432251 (alpha61 candidate, suite vp) failed 14 checks of the page-format scene (cp) in two of its four modes (h264only and auto-nochip: the page had seen the policy of the mode BEFORE, in both of its passes);
+the two other modes passed in the same run and every earlier run had passed (alpha60: 101 of 101). Nothing of alpha61 touches that path. Cause (read in `kestrel-shields/background.js`, lines 28-48 and 592-616 and `guardAnswer`):
+the extension asks the app for the page answer (flags + the video format policy `codecCfg`) when a page STARTS, NOT awaited ("the answer beats the document's first bytes over a hotspot"), and a page's own content script
+asks `guard` at its start, which is answered at once from the cached flags with whatever `codecCfg` the extension knew before the new answer came back. On the tablet over a hotspot the app's answer (a few ms) wins; on the lab's
+localhost server (first bytes in under a millisecond, a busy 2-core emulator) the page now and then wins. Effect for the owner: after changing "Video formats" in Settings, the FIRST page that starts within a few ms of the answer
+can offer the old formats; the next page is right. Not fixed in the extension (a bounded wait for an in-flight ask in `guardAnswer` would do it: TASKS.md ANS60e); the lab now loads one throw-away page of the same host before the page that is judged.
