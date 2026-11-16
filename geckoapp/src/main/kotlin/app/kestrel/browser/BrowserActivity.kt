@@ -663,6 +663,66 @@ open class BrowserActivity : Activity(), DockListener {
     private val touchSlop by lazy { android.view.ViewConfiguration.get(this).scaledTouchSlop }
     private val touchRelease = Runnable { Neon.touching(false) }
 
+    // ---- ANS57 (owner message 57; research/ANS57_VLC_GESTURES.md): VLC-style gestures for a film that is full screen IN THE PAGE with Kestrel's controls over the engine: long press then drag = the precise seek, a
+    // vertical drag on the left = brightness, on the right = volume. A touch is the page's until it BECOMES a gesture (a tap, a double tap and the controls work as before); then the page is told its touch is over
+    // (a cancel) and every event of the gesture is ours.
+    private var pageGestures: app.kestrel.browser.web.VideoGestures? = null
+    private var pageGestureTouch = false          // this touch began on the picture (not on a control or a sheet): it may become a gesture
+    private var pageTouchTaken = false            // it did: the page has had its cancel
+    private var pageGestureDownTime = 0L
+    private var pageGestureX = 0f
+    private var pageGestureY = 0f
+
+    private fun pageGesturesOrNull(): app.kestrel.browser.web.VideoGestures? {
+        pageGestures?.let { return it }
+        if (!::playerView.isInitialized || !::player.isInitialized) return null
+        val g = app.kestrel.browser.web.VideoGestures(this, object : app.kestrel.browser.web.VideoGestures.Surface {
+            override val viewWidth: Int get() = playerView.width
+            override val viewHeight: Int get() = playerView.height
+            override fun positionMs(): Long = player.positionMs()
+            override fun lengthMs(): Long = player.lengthMs()
+            override fun seekBy(deltaMs: Long) { player.gestureSeek(deltaMs) }
+            override fun showInfo(text: String?) { playerView.showInfo(text) }
+            override fun showLevel(kind: app.kestrel.core.player.GestureMath.Level, fraction: Float) { playerView.showLevel(kind, fraction) }
+            override fun haptic() { playerView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS) }
+            override fun gestureChanged(active: Boolean) { if (active) takePageTouch() }
+        }, holdFirst = false)
+        pageGestures = g
+        return g
+    }
+
+    /** The page is told that its touch is over (it may have begun a long press or a drag of its own). */
+    private fun takePageTouch() {
+        if (pageTouchTaken) return
+        pageTouchTaken = true
+        val c = android.view.MotionEvent.obtain(pageGestureDownTime, SystemClock.uptimeMillis(), android.view.MotionEvent.ACTION_CANCEL, pageGestureX, pageGestureY, 0)
+        try { super.dispatchTouchEvent(c) } finally { c.recycle() }
+    }
+
+    private fun pageFilmGestureTouch(ev: android.view.MotionEvent): Boolean {
+        val a = ev.actionMasked
+        if (a == android.view.MotionEvent.ACTION_DOWN) {
+            pageTouchTaken = false
+            pageGestureTouch = fullscreenOn && ::player.isInitialized && player.active && prefs.videoGestures && !player.controlAt(ev.x, ev.y) && !(::qualitySheet.isInitialized && qualitySheet.isOpen)
+            if (pageGestureTouch) pageGestureDownTime = ev.downTime
+        }
+        if (!pageGestureTouch) return false
+        val g = pageGesturesOrNull() ?: run { pageGestureTouch = false; return false }
+        pageGestureX = ev.x; pageGestureY = ev.y
+        val ours = g.onTouch(ev)
+        val ends = a == android.view.MotionEvent.ACTION_UP || a == android.view.MotionEvent.ACTION_CANCEL
+        if (ours) takePageTouch()
+        if (ours || pageTouchTaken) {
+            if (ends) {                                                  // the touch ends here: the glows are let go as after any touch (they were held still when the finger went down)
+                pageGestureTouch = false
+                lastTouchAt = SystemClock.uptimeMillis(); Io.main.removeCallbacks(touchRelease); Io.main.postDelayed(touchRelease, 350L)
+            }
+            return true
+        }
+        if (ends) pageGestureTouch = false
+        return false
+    }
+
     /**
      * Holds the neon still while a finger is down and for 1.5 s after a drag (a fling): the page's scrolling
      * must never share frames with our glow. [lastTouchAt] also keeps the post-load preview capture (a GPU read-back) away from a scroll in progress.
@@ -678,6 +738,7 @@ open class BrowserActivity : Activity(), DockListener {
             }
             return true
         }
+        if (pageFilmGestureTouch(ev)) return true                    // ANS57: a long press + drag, or a vertical drag, on a film in the page's own full screen
         when (ev.actionMasked) {
             android.view.MotionEvent.ACTION_DOWN -> {
                 turnSettler.touchedScreen() // ROT1: a finger during a turn is the person taking over: nothing is played for them
@@ -3055,6 +3116,7 @@ open class BrowserActivity : Activity(), DockListener {
         fullscreenTab = if (on) tab else null
         fullscreenOn = on
         if (on && ::inline.isInitialized) inline.stop("the page went full screen")      // ANS55f
+        if (!on) pageGestures?.stop()                                                          // ANS57: the window's brightness is the tablet's again
         miniNav.available = !on && prefs.miniNavToggle
         dock.visibility = if (on) View.GONE else View.VISIBLE
         progress.visibility = if (on) View.GONE else View.VISIBLE
