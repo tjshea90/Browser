@@ -76,7 +76,7 @@ Method: web sources read 2026-11-16; no code run, no device. DOCUMENTED = read i
 | transition_animation_scale 0 (adb) | measurement only | none | INF A4 A5 | test in lab |
 | FrameMetrics listener plus timing layout() | finds the real stall | tiny | DOC A9 | yes |
 | thermal status and sustained-performance support in Diagnostics | tests throttling | none | DOC A10 | yes |
-| setFixedSize on GeckoView's SurfaceView, requestNewSurface | stretches the picture or recreates the surface | flicker | DOC A1 G13 | no |
+| setFixedSize, requestNewSurface | stretches the picture, or recreates the surface | flicker | DOC A1 G13 | no |
 
 ## What I could not verify
 
