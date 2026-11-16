@@ -785,7 +785,7 @@ open class BrowserActivity : Activity(), DockListener {
         playerView = app.kestrel.browser.web.PlayerControlsView(this).apply { visibility = View.GONE }
         content.addView(playerView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         player = app.kestrel.browser.web.PlayerController(playerView,
-            { fullscreenTab?.let { t -> try { t.session?.exitFullScreen() } catch (e: Exception) { Health.log("player", "exit-failed", e.toString().take(80)) } } },
+            { exitFullscreenFromControls() },
             { shown -> fsTurner.controlledShow(shown) })
         fsTurner.ownedByPlayer = { player.active }
         val cover = FrameLayout(this).apply { setBackgroundColor(0xFF000000.toInt()); visibility = View.GONE; alpha = 0f; isClickable = true; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO } // ROT1: topmost in the page area; it takes the touch (review of alpha53: the tap that ends a long wait must not reach the page nobody can see)
@@ -1291,6 +1291,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** VP1: the page's report of a full-screen film or a tap on it (a Shields worker thread): the UI thread takes it, the ANSWER (what the controls want done) is read from the controller's queue right now. */
     private fun playerMessage(m: org.json.JSONObject): String {
+        if (prefs.fsControls != 0) return "{\"on\":0}"                        // the person chose the page's own controls (Settings): the page script ends its session and gives the page its bar and its taps back
         Io.main.post { if (fullscreenOn && fullscreenTab != null && tabOfReport(m.optString("p")) === fullscreenTab) player.onMessage(m) }
         return if (::player.isInitialized) player.reply() else "{\"s\":0}"
     }
@@ -2739,6 +2740,14 @@ open class BrowserActivity : Activity(), DockListener {
     override fun onBackPressed() { if (!handleBack()) moveTaskToBack(true) }
 
     /** @return true if the back press did something. */
+    /** The controls' exit button: the same as Back (ask the page, and end it here when the engine does not answer, RV2). */
+    private fun exitFullscreenFromControls() {
+        val ft = fullscreenTab ?: return
+        Health.log("fullscreen", "exit-button", "asking the page to leave full screen")
+        try { ft.session?.exitFullScreen() } catch (e: Exception) { Health.log("fullscreen", "exit-failed", e.toString().take(80)) }
+        Io.main.postDelayed({ if (fullscreenOn && fullscreenTab === ft) endFullScreenOf(ft, "the engine did not answer the exit button") }, 600L)
+    }
+
     private fun handleBack(): Boolean {
         // FS1: Back leaves full screen first, like every video player (it used to go back in the page's history, which only left full screen by leaving the page)
         if (fullscreenOn) {

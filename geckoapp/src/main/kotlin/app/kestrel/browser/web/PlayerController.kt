@@ -24,6 +24,10 @@ class PlayerController(
     /** The rotate button follows the controls: shown with them, gone with them. */
     private val rotateButton: (Boolean) -> Unit,
 ) : PlayerModel.Host, PlayerControlsView.Listener {
+    /** The full screen belongs to a private tab: nothing of it is logged or counted (the person's film is nobody's business, not even Diagnostics'). Set by the activity before [fullscreen]. */
+    @Volatile var quiet = false
+    private fun say(event: String, text: String) { if (!quiet) Health.log("player", event, text) }
+
     private val model = PlayerModel(this)
     private val controlsTick = Runnable { model.controlsTimer(); flush() }
     private val tapTick = Runnable { model.tapTimer(); flush() }
@@ -62,7 +66,7 @@ class PlayerController(
         model.setHideAfter(accessibilityMs())
         model.start(true)
         scheduleWatchdog()
-        Health.log("player", "start", "a full-screen film: Kestrel's controls")
+        say("start", "a full-screen film: Kestrel's controls")
     }
 
     private fun end(why: String) {
@@ -71,8 +75,8 @@ class PlayerController(
         model.stop(); commands.clear()
         view.show(false, false); view.visibility = View.GONE
         rotateButton(false)
-        last = "$why after ${(SystemClock.uptimeMillis() - started) / 1000} s: $reports reports, $taps taps, ${model.seeks} seeks, ${model.commands} commands, the page's own controls put away: most $awayMax element(s)"
-        Health.log("player", "stop", last)
+        last = if (quiet) "a private tab's full screen ended (nothing of it is kept)" else "$why after ${(SystemClock.uptimeMillis() - started) / 1000} s: $reports reports, $taps taps, ${model.seeks} seeks, ${model.commands} commands, the page's own controls put away: most $awayMax element(s)"
+        say("stop", last)
     }
 
     /** The longest Android's accessibility settings ask a control to stay (API 29: "Time to take action"): the controls never hide sooner than that. */
@@ -96,7 +100,7 @@ class PlayerController(
     fun turnEnded() { if (activeFlag) { model.turnEnded(); flush() } }
 
     /** The bars are hidden for the film (Hide mode) and a swipe can pull the navigation bar up over it: the controls' bottom row keeps [px] free (0 = the bars stay: nothing to keep free). */
-    fun setBottomInset(px: Int) { if (px != lastInset) { lastInset = px; Health.log("player", "inset", if (px > 0) "the system bars are hidden: the controls keep $px px free at the bottom for a pulled-up navigation bar" else "the system bars stay: the controls use the whole page area") }; view.setBottomInset(px) }
+    fun setBottomInset(px: Int) { if (px != lastInset) { lastInset = px; say("inset", if (px > 0) "the system bars are hidden: the controls keep $px px free at the bottom for a pulled-up navigation bar" else "the system bars stay: the controls use the whole page area") }; view.setBottomInset(px) }
     private var lastInset = 0
 
     // ---------------------------------------------------------------------------------------- the page (UI thread)
@@ -112,11 +116,11 @@ class PlayerController(
                 val len = m.optDouble("d", -1.0)
                 model.onSample(PlayerModel.Sample(m.optDouble("t", 0.0), len, m.optDouble("b", 0.0), m.optInt("pa") == 1, m.optInt("e") == 1, m.optInt("m") == 1, m.optInt("v", 100), m.optDouble("r", 1.0),
                     m.optInt("rs", 4), m.optInt("ms") == 1, m.optInt("l") == 1 || len == -2.0, m.optInt("w"), m.optInt("h"), SystemClock.uptimeMillis(), m.optInt("ak", 0)))
-                if (reports == 1) Health.log("player", "first-report", "film ${m.optInt("w")}x${m.optInt("h")}, length ${m.optDouble("d")}, ${if (m.optInt("ms") == 1) "media source" else "plain file"}")
+                if (reports == 1) say("first-report", "film ${m.optInt("w")}x${m.optInt("h")}, length ${m.optDouble("d")}, ${if (m.optInt("ms") == 1) "media source" else "plain file"}")
                 val aw = m.optInt("aw", 0)
-                if (aw != away) { away = aw; if (aw > awayMax) awayMax = aw; Health.log("player", "away", "the page's own player controls put away: $aw element(s)") }
+                if (aw != away) { away = aw; if (aw > awayMax) awayMax = aw; say("away", "the page's own player controls put away: $aw element(s)") }
             }
-            "vtap" -> { taps++; Health.log("player", "tap", "x=${m.optInt("x", 500)}"); model.onTap(m.optInt("x", 500)) }
+            "vtap" -> { taps++; say("tap", "x=${m.optInt("x", 500)}"); model.onTap(m.optInt("x", 500)) }
         }
         flush()
     }
@@ -129,7 +133,10 @@ class PlayerController(
         if (c != null) {
             sb.append(",\"c\":[")
             var n = 0
-            while (c != null && n < 8) { if (n > 0) sb.append(','); sb.append(c); n++; c = commands.poll() }
+            while (c != null) {                                    // (at most 8 in one answer: the rest waits in the queue for the next one)
+                if (n > 0) sb.append(','); sb.append(c); n++
+                c = if (n < 8) commands.poll() else null
+            }
             sb.append(']')
         }
         return sb.append('}').toString()
@@ -143,7 +150,7 @@ class PlayerController(
     override fun scheduleTap(ms: Long) { Io.main.removeCallbacks(tapTick); Io.main.postDelayed(tapTick, ms) }
     override fun cancelTap() { Io.main.removeCallbacks(tapTick) }
     override fun applyControls(shown: Boolean, animate: Boolean) {
-        if (shown != shownFlag) Health.log("player", if (shown) "shown" else "hidden", if (animate) "fade" else "at once")
+        if (shown != shownFlag) say(if (shown) "shown" else "hidden", if (animate) "fade" else "at once")
         shownFlag = shown
         view.show(shown, animate)
         rotateButton(shown)
@@ -151,7 +158,7 @@ class PlayerController(
     }
     override fun changed() { refresh() }
     override fun feedback(zone: PlayerRules.Zone, burst: Int) { view.flash(zone, burst) }
-    override fun log(event: String, text: String) { Health.log("player", event, text) }
+    override fun log(event: String, text: String) { say(event, text) }
 
     // ---------------------------------------------------------------------------------------- the view's listener (UI thread)
 
@@ -165,7 +172,7 @@ class PlayerController(
     // ---------------------------------------------------------------------------------------- inside
 
     /** Move what the model queued for the page into the thread-safe queue the worker thread reads. */
-    private fun flush() { for (c in model.drain()) { val j = c.json(); commands.add(j); Health.log("player", "cmd", j) } }
+    private fun flush() { for (c in model.drain()) { val j = c.json(); commands.add(j); say("cmd", j) } }
 
     private fun refresh() {
         if (!activeFlag) return
