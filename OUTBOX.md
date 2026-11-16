@@ -2371,3 +2371,9 @@
 ## 2026-11-16T22:45:26Z
 > Heartbeat fired; nothing to resume since this session is current. I'm waiting for the final lab run (due about 22:58 UTC), and the ship script for alpha61 is prepared.
 <!-- sha:ae720ad23bff -->
+
+## 2026-11-16T23:00:49Z
+> The lab run finished and is clean: all 12 scenes passed, 367 checks, 0 failed, no crashes. The gestures passed 27 of 27 and the quality list inside the page passed 10 of 10. The two earlier failures are fixed, and neither was an app bug.
+>
+> I'm now running the release checks. Next is the signed build on GitHub (about 15 to 20 minutes), and then I'll send you the link.
+<!-- sha:a7b42253c5ac -->
