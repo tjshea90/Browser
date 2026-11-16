@@ -76,6 +76,14 @@
             </intent-filter>
         </activity>
 
+        <!-- ANS52i: Kestrel's own player (Media3 on a SurfaceView): a screen of its own, started by the Save video sheet; it handles a turn itself so the picture only resizes, never restarts -->
+        <activity
+            android:name=".NativePlayerActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|locale|layoutDirection"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:theme="@android:style/Theme.Black.NoTitleBar" />
+
         <service
             android:name=".download.DownloadService"
             android:exported="false"
