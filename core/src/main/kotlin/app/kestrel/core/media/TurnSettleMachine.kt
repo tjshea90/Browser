@@ -13,6 +13,8 @@ package app.kestrel.core.media
  * [TurnSettle.HINT_AFTER_MS] the host shows a small progress ring ([Host.hint]). How long the page took is kept for Diagnostics.
  */
 class TurnSettleMachine<T : Any>(private val h: Host<T>) {
+    private companion object { const val LATE_MAX_MS = 30_000L }
+
     interface Host<T : Any> {
         /** A monotonic clock in milliseconds. */
         fun now(): Long
@@ -71,6 +73,11 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
     var lagWorstMs = 0L; private set
     var gaveUp = 0; private set            // turns that waited the whole cap for a page that never said it
     var nudges = 0; private set
+    var silent = 0; private set            // ANS51c: turns whose page had said NOTHING when the old rule let the cover go ([TurnSettle.SILENT_MS])
+    var lateCount = 0; private set         // ... of which the page spoke later (after the cover had gone) and the time was measured
+    var lateLastMs = 0L; private set       // from the start of that turn to the page's first word
+    var lateWorstMs = 0L; private set
+    private var lateFrom = 0L              // the start of the last silent turn while its page has not spoken yet (0 = none waits)
     var last = "no turn under a video yet"; private set
 
     /** A turn is going on (the cover is up). */
@@ -93,6 +100,7 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
         val t = h.now()
         // a turn while one goes on is a new turn for the clocks (review of alpha53: a rotation at 6.9 s of the first one got 0.1 s of cover, and a touch counted from the first): the video is paused once
         if (!active) { active = true; touched = false; hinted = false }
+        lateFrom = 0L                                                      // (a page that was still silent from the turn before is now measured by THIS turn)
         startedAt = t; confirmedAt = 0L; nudged = false; heard = 0
         lastChangeAt = t
         confirmed = false                                                  // a new turn (or one more while it goes on): the page has to say it has the new size again
@@ -111,9 +119,19 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
 
     /** ROT2: the full-screen page reported its viewport; [matchesView] = it is the view's size now. Only a matching report that comes after the last size change confirms the turn. */
     fun pageReported(matchesView: Boolean) {
-        if (!active) return
+        if (!active) { lateWord(); return }
         heard++
         if (matchesView) { if (!confirmed) { confirmed = true; confirmedAt = h.now() } } else confirmed = false
+    }
+
+    /** ANS51c (owner message 51: the tablet's page said its first word 3.6 s and 7.8 s after a turn, and the line said "0 ms, 0 turns measured"): the first report of a page whose turn was let go while it was still silent. */
+    private fun lateWord() {
+        if (lateFrom == 0L) return
+        val lag = h.now() - lateFrom
+        lateFrom = 0L
+        if (lag < 0L || lag > LATE_MAX_MS) return                           // (a report that comes half a minute later has nothing to do with that turn)
+        lateCount++; lateLastMs = lag; if (lag > lateWorstMs) lateWorstMs = lag
+        h.log("turn-late-word", "the page said its first word $lag ms after the turn began (the cover had gone after $lastMs ms)")
     }
 
     /** A finger came down: the person takes over (nothing is played for them). After about a second of waiting for the picture it also ends the wait: the cover goes. */
@@ -159,7 +177,7 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
         if (expects) {
             if (confirmed && confirmedAt > 0L) { val lag = confirmedAt - startedAt; lagTurns++; lagLastMs = lag; if (lag > lagWorstMs) lagWorstMs = lag }
             else if (!byTouch) gaveUp++
-        }
+        } else if (!byTouch && heard == 0 && h.expectsPageReport()) { silent++; lateFrom = startedAt }   // ANS51c: the page was expected to speak and said nothing: counted, and its first word later is timed
         val p = paused; paused = null
         var resumed = false
         if (p != null) {
@@ -175,5 +193,6 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
 
     /** One Diagnostics line. */
     fun line(): String = "Turning under a video: $turns turns met a full-screen page or a playing video, video paused $pausedCount times, played again $resumedCount, left paused $skippedResume; " +
-        "the page took ${lagLastMs} ms to have the new size after the last turn (worst $lagWorstMs ms, $lagTurns turns measured, $gaveUp gave up after ${TurnSettle.PAGE_CAP_MS / 1000} s, engine nudged $nudges times); last: $last"
+        "the page took ${lagLastMs} ms to have the new size after the last turn (worst $lagWorstMs ms, $lagTurns turns measured, $gaveUp gave up after ${TurnSettle.PAGE_CAP_MS / 1000} s, engine nudged $nudges times); " +
+        "silent pages: $silent turns where the page said nothing for ${TurnSettle.SILENT_MS / 1000} s, of which $lateCount spoke later (first word ${lateLastMs} ms after the turn began, worst $lateWorstMs ms); last: $last"
 }
