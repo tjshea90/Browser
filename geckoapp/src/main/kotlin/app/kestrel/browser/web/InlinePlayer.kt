@@ -96,8 +96,9 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
         if (player != null) stop("a new film")
         this.url = url; this.priv = priv
         ack = 0; muted = false; firstPictureAt = 0L; playingSince = 0L; picW = 0; picH = 0; pixelRatio = 1f; pausedByEdge = false; passing = false
+        startedAt = SystemClock.uptimeMillis()
         place(box)
-        val p: ExoPlayer
+        var p: ExoPlayer? = null
         try {
             val built = PlayerFactory.create(context, url, headerLines)
             p = built.player
@@ -141,10 +142,10 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
             p.playWhenReady = true
         } catch (e: Throwable) {
             say("failed", "the player could not start: ${e.javaClass.simpleName}")
+            try { p?.release() } catch (x: Throwable) { /* gone */ }
             return false
         }
         player = p
-        startedAt = SystemClock.uptimeMillis()
         NativePlayerStats.firstPictureMs = -1L
         if (!priv) { NativePlayerStats.plays++; NativePlayerStats.last = "playing inside the page"; WebHandStats.inline++ }
         keepScreenOn = true

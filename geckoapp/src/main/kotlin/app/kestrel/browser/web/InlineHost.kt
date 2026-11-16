@@ -35,6 +35,8 @@ class InlineHost(private val a: BrowserActivity, private val content: FrameLayou
         override fun onScrollChanged(session: GeckoSession, update: GeckoSession.ScrollPositionUpdate) { onScroll(session, update) }
     }
 
+    fun viewSize(): String = "${engine.width}x${engine.height}"
+
     /** Where [page] sits in the view now (null: it cannot be told: the film plays in the full-screen screen). */
     fun boxFor(page: InlineBox.Page): InlineBox.Rect? = InlineBox.toView(page, engine.width, engine.height)
 

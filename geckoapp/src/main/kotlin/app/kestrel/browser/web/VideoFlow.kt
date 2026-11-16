@@ -396,10 +396,11 @@ class VideoFlow(private val a: BrowserActivity) {
         }
         // ANS55f (owner message 55): INSIDE the page when the box can be told (the person's choice, Settings > Play web videos inside the page): the film plays over the page's own video box; else (a frame, a
         // fixed or scrolling box, a zoomed page, a small thumbnail, a film that came late or went full screen) the full-screen screen takes it as before
+        if (a.prefs.webInline && geometry == null && why != WebHandOver.Why.LATE && why != WebHandOver.Why.FULLSCREEN && !tab.isPrivateTab) Health.log("inline", "not-inline", "the page told no box (a film in a frame, or the question carried no numbers): full-screen player")
         if (a.prefs.webInline && geometry != null && why != WebHandOver.Why.LATE && why != WebHandOver.Why.FULLSCREEN && !a.isFullscreenOf(tab)) {
             val box = a.inline.boxFor(geometry)
             if (box != null && a.inline.start(tab, d.url, headers, startMs, geometry, box)) { a.lastPressAt = 0L; return true }
-            if (!tab.isPrivateTab) Health.log("inline", "not-inline", if (box == null) "the box cannot be placed (frame, fixed or scrolling box, zoomed page, small or off screen): full-screen player" else "the inline player did not start: full-screen player")
+            if (!tab.isPrivateTab) Health.log("inline", "not-inline", if (box == null) "the box cannot be placed (frame, fixed or scrolling box, zoomed page, small or off screen): full-screen player; page box ${geometry.w.toInt()}x${geometry.h.toInt()} at ${geometry.x.toInt()},${geometry.y.toInt()}, visual viewport scale ${"%.3f".format(geometry.vvScale)} width ${geometry.vvW.toInt()}, scroll ${geometry.pageX.toInt()},${geometry.pageY.toInt()}, follows ${geometry.follows}, view ${a.inline.viewSize()}" else "the inline player did not start: full-screen player")
         }
         NativePlayerActivity.launch(a, d.url, headers, startMs, if (d.kind == MediaKind.HLS) 720 else 1080, tab.isPrivateTab, 0, 0, fromPage = true)
         a.lastPressAt = 0L
