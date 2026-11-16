@@ -105,7 +105,7 @@ class PlayerGesturesTest {
         assertEquals(j4, jump); assertEquals(100_000L + j4, target); assertEquals(1.0, coef, 1e-9); assertTrue("about 40 s", jump in 40_400L..40_700L)
         assertTrue("nothing has moved yet", h.commits.isEmpty())
         g.move(500f + 126f, 300f)                                      // back to 2 cm: smaller
-        assertEquals(5343L, h.previews.last().first)
+        assertEquals(GestureMath.jumpMs(GestureMath.cm(126.0, 160.0), 1.0), h.previews.last().first)
         g.move(500f + 252f, 300f); g.up(500f + 252f, 300f)
         assertEquals(listOf(j4), h.commits); assertEquals(1, h.finished)
     }
