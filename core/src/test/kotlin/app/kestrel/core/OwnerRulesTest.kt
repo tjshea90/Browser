@@ -381,6 +381,6 @@ class OwnerRulesTest {
         // g: no page look is read back while a page is full screen (the tablet's log: two 'look-saved' during a film; the read-back competes with the decoder and saves the film's frame as the page's look)
         assertTrue(body(act, "private fun captureLook(tab: Tab?, why: String, minGapMs: Long = LastLookRules.MIN_GAP_MS.toLong()) {").contains("if (fullscreenOn) return"))
         // f: how long the app's own part and the engine's part of a turn take is written down
-        assertTrue(source("geckoapp/src/main/kotlin/app/kestrel/browser/web/KestrelGeckoView.kt").contains("the engine's part took") && act.contains("the app's own handling took"))
+        assertTrue(source("geckoapp/src/main/kotlin/app/kestrel/browser/web/KestrelGeckoView.kt").let { it.contains("override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int)") && it.contains("the engine view's own layout") } && act.contains("the app's own handling took"))
     }
 }

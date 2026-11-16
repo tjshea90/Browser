@@ -82,12 +82,20 @@ class KestrelGeckoView(ctx: Context) : GeckoView(ctx) {
     var sizeListener: (() -> Unit)? = null
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        val t0 = android.os.SystemClock.uptimeMillis()
-        super.onSizeChanged(w, h, oldw, oldh)                                  // (GeckoView hands the new surface size to its compositor here and waits for it)
-        val took = android.os.SystemClock.uptimeMillis() - t0
-        // ANS51f (owner message 51: `ui late-beat 2021 ms` at a turn on the tablet): how long the ENGINE's part of a size change blocked the UI thread, so the next report says whether the stall is GeckoView's surface or our own views
-        Health.log("gecko", "size", "${w}x$h (was ${oldw}x$oldh)" + (if (took >= 100L) ", the engine's part took $took ms" else ""))
-        if (took >= 100L) Health.count("gecko.sizeSlow")
+        super.onSizeChanged(w, h, oldw, oldh)
+        Health.log("gecko", "size", "${w}x$h (was ${oldw}x$oldh)")
         sizeListener?.invoke()
+    }
+
+    /**
+     * ANS52 (research/VIDEO_ACCEL_DEVICE.md, correction 1: GeckoView 160 has no onSizeChanged / onLayout of its own, so timing the super call of onSizeChanged measures nothing): the engine's surface is a child
+     * SurfaceView; its setFrame runs INSIDE this layout and calls surfaceChanged at once, which hands the new size to the compositor and waits for the reply (a synchronous IPC). So the time this layout takes is the
+     * UI thread's wait on the engine. A line is written from 100 ms on, and the Diagnostics counter says how often it happened.
+     */
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        val t0 = android.os.SystemClock.uptimeMillis()
+        super.onLayout(changed, l, t, r, b)
+        val took = android.os.SystemClock.uptimeMillis() - t0
+        if (took >= 100L) { Health.log("gecko", "layout", "${r - l}x${b - t} took $took ms (the engine view's own layout: its surface hands the new size to the compositor and waits for the answer)"); Health.count("gecko.layoutSlow") }
     }
 }
