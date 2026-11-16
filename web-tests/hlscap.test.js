@@ -85,10 +85,12 @@ test('not a master playlist, no cap, not text: null, the original goes through',
   assert.equal(rewriteMaster('{"not":"a playlist"}', 640), null);
 });
 
-test('a stream tag with no address right behind it is left alone, and so is what comes after', () => {
+test('a stream tag with no address at all is left alone; a comment before the address no longer hides it (as hls.js reads it)', () => {
   const odd = ['#EXTM3U', '#EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080', '# a comment where the address should be', 'late.m3u8', '#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280x720', 'ok720.m3u8', '#EXT-X-STREAM-INF:BANDWIDTH=9000000,RESOLUTION=3840x2160', ''];
   const r = rewriteMaster(text(odd), 1313);
-  assert.equal(r, null, 'the 1080 tag has no address line (a comment follows) and the 4K tag is the last line: neither can be taken out cleanly');
+  assert.equal(r.text, text(['#EXTM3U', '#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280x720', 'ok720.m3u8', '#EXT-X-STREAM-INF:BANDWIDTH=9000000,RESOLUTION=3840x2160', '']),
+    'the 1080p rung (tag, comment and address) is out; the 4K tag is the last line and has no address: it cannot be taken out cleanly and stays as it was');
+  assert.equal(r.dropped, 1);
 });
 
 test('rewriting twice changes nothing more; a big ladder is fast', () => {
