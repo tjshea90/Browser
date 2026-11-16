@@ -1,20 +1,22 @@
-# COMPAT1: the first compatibility run (lab run 43747605584, 2026-11-15, commit d288355b) - NOT usable beyond the first four sites
+# Compat lab run 1 (GitHub run 43784927532, code of alpha55, 2026-11-16 01:13 to 03:01 UTC)
 
-Owner message 45: "I want Kestrel to be a polished daily browser with web page compatibility for all sites and good speed. Run github runners with emulators matching my hardware setup, but keep in mind that most of the time I have fast wifi on ..."
-Suite `compat`: about a hundred well-known sites, each loaded with Shields ON and again with Shields OFF for that site, from a cold cache, on the runner's own fast link (no shaping), Android 10 emulator 600 x 1024 at 170 dpi, 2 GB, 2 cores, software GL. Report tables: speed, pages that did not load correctly, Shields on / off verdicts, scrolling, memory, script errors.
+What was run: `android.yml app=lab lab_suite=compat` (every site twice, Shields on and off, then the soak), emulator Android 10 with 2 cores and a 576 MB heap limit (a good boot), runner link unshaped.
 
-## What came back
-- 51 scenes in 74 minutes: **ok 5, timeout 39, crash 7**. Four sites loaded and were measured (google-search 0.5 s, bing-search 1.4 s, wikipedia-article 2.9 s, duckduckgo 3.1 s to finish; first paint 1.1-1.5 s). From the first Yahoo page on the emulator went under: the emulated phone's own system process (`system_server`) was killed three times (SIGKILL by the guest kernel / lmkd: `Zygote: Process ... exited due to signal 9`), the driver restarted the emulator from a clean disk each time, and every later load timed out at 50 s.
-- App memory was NOT the cause: app PSS 210-300 MB (peak 458 MB on latimes), but the guest's MemAvailable fell to 166-500 MB: Android + the software GPU (SwiftShader) + 2 GB is too little for a hundred heavy pages in a row. The tablet has a real GPU; this is a limit of the lab.
-- The 'java crash' and 'am_anr' issues are NOT crashes of Kestrel: `FATAL EXCEPTION` was `com.android.phone` dying with the system (`DeadSystemException`) and an `svc power stayon true` shell command without permission; the ANR on yahoo-finance-ttwo was the UI thread waiting in `HardwareRenderer.nSyncAndDrawFrame` (the software GPU drawing), 2042 ms, then input dispatching timed out. The same software-GL read-back problem as lab finding 11 in `EMU_LAB.md`.
-- yahoo-finance-ttwo: 436 script errors, wikipedia-article: 237 (mostly `Cross-Origin Request Blocked`: what a content blocker produces on purpose when it refuses a cross-site request; not judged).
-- Scrolling on the four pages (software GL, only for comparison): 619 frames, 6.0 % of the screen updates over 50 ms, 2.3 % over 100 ms.
+## Result in one paragraph
 
-## What was changed in the lab because of it (this commit)
-1. `emu-lab.yml`: the emulator gets **4 GB** for suite `compat` (`EMU_RAM`); the other suites keep the tablet's 2 GB.
-2. The driver closes every tab after each site (every VIEW intent opens a NEW tab: eight heavy pages in eight tabs), sets the debug switch `nolook` (Last look's picture read-back stalls the UI thread for seconds on software GL), and waits 90 s (was 50) for a page.
-3. `crash_lines` counts a `FATAL EXCEPTION` only when the process is the app's.
-4. Next compat run: `lab_minutes` 120.
+Inconclusive for compatibility. 53 scenes in 105 minutes: 5 ok, 4 crash, 44 timeout, 29 issues (7 high). The emulated phone's own system (system_server) died 3 times and the emulator was started again from a clean disk 3 times: the 2-core runner was overloaded. Only 4 of 26 sites loaded at all (wikipedia-article, google-search, bing-search, duckduckgo: identical with Shields on and off, no script-error difference, no broken pictures). 22 sites timed out or crashed with Shields on AND off (the runner's own probe got http 403 / 402 for apnews, usatoday, politico, axios: data-centre addresses are blocked; the rest timed out after the first Yahoo scenes had overloaded the emulator). No site was found worse with Shields on ("Suspects: none"), but 22 of 26 sites are simply unmeasured.
 
-## Not judged yet (needs the next run)
-Shields false positives (the ON / OFF table), blank pages, broken pictures, script errors per site, scrolling per site, speed of the heavy sites.
+## What is useful anyway
+
+1. The heavy Yahoo Finance quote page on the EMULATOR showed what the tablet shows after a turn: `yahoo-finance-ttwo: the UI thread was blocked 1 time(s), worst 2051 ms`, and 28 s into the page an ANR (`Input dispatching timed out ... Wait queue head age 20240 ms`, logged at +110 s of the run): the app's UI thread does not process input for many seconds on a heavy page. The same family as the tablet's `ui slow 887 ms` / `ui late-beat 2021 ms` at a turn: the UI thread waits on the engine's synchronous handshakes (research/VIDEO_ACCEL_DEVICE.md: SurfaceView.surfaceChanged -> GeckoSession.onSurfaceChanged -> sync IPC ResumeAndResize). alpha56 writes `gecko layout WxH took N ms` and the FrameMetrics of the frames around a turn, so the next report names the phase.
+2. Cold start on the emulator: `ui slow 928 ms`, `ui late-beat 1370 ms` at +1.3 to +1.9 s: the same ~1 s block at the start as on the tablet (865 / 1012 ms): the engine runtime's creation.
+3. `Real video: 119 looks at 3 site(s), 14 min watched, 22801 frames, dropped 28.9 %`: software decoding on the emulator (no MediaTek decoders), not a statement about the tablet.
+4. App memory stayed between 227 and 380 MB PSS over 105 minutes (no leak seen), lowest MemAvailable 1660 MB.
+5. Blocker numbers on the Yahoo page: 991 requests judged in the engine (average 437 us, slowest 71 ms), 70 asked the app one by one (each held 263 ms on average): the one-by-one asks are the slow ones.
+
+## Lessons for the lab (LAB2 / PD1)
+
+- The compat suite is too heavy for a 2-core runner: 26 sites x 2 modes x up to 90 s. After the first ANR everything times out. Next design: at most about 8 sites per run, the heaviest page (Yahoo) LAST, restart the emulator after any ANR or system restart BEFORE the next scene (the lab restarted it but later scenes still failed: look at the order and the wait after a restart), skip sites whose runner probe says 403 / 402 (they are not measurable from a data centre), and keep Shields-off runs only for sites that loaded.
+- A second kind of measurement is needed for compatibility: the owner's tablet itself (Diagnostics 'Page report' lines list blocked requests, failed loads and script errors per page).
+
+TASKS: LAB2e stays open with this note; a smaller second compat run is LAB2f.
