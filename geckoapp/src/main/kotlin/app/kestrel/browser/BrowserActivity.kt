@@ -690,7 +690,7 @@ open class BrowserActivity : Activity(), DockListener {
             override fun lengthMs(): Long = player.lengthMs()
             override fun seekBy(deltaMs: Long) { player.gestureSeek(deltaMs) }
             override fun showInfo(text: String?) { playerView.showInfo(text) }
-            override fun showLevel(kind: app.kestrel.core.player.GestureMath.Level, fraction: Float) { playerView.showLevel(kind, fraction) }
+            override fun showLevel(kind: app.kestrel.core.player.GestureMath.Level, fraction: Float) { playerView.showLevel(kind, fraction); player.gestureNote("gesture-level", "${kind.name.lowercase()} ${Math.round(fraction * 100)} %") }
             override fun haptic() { playerView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS) }
             override fun gestureChanged(active: Boolean) { if (active) takePageTouch() }
         }, holdFirst = false)

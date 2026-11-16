@@ -1810,7 +1810,8 @@ class Soak:
         cmds = ev("player", "cmd", m)
         check("a double tap on the right side skips 10 s forward", any('"skip"' in c["rest"] and '"d":10' in c["rest"] for c in cmds), "commands %s" % [c["rest"][:30] for c in cmds])
         check("the film really jumped (the page saw 'seeked')", len(rows("v-seeked")) > seeks0, "no seeked row")
-        check("the double tap toggled the controls exactly once (its first tap, at once) and the second tap only seeked", len(ev("player", "shown", m)) + len(ev("player", "hidden", m)) - sh0 == 1, "toggles after the double tap: %d" % (len(ev("player", "shown", m)) + len(ev("player", "hidden", m)) - sh0))
+        tg = len(ev("player", "shown", m)) + len(ev("player", "hidden", m)) - sh0
+        check("ANS53c + ANS57a: the first tap of the double tap showed the controls at once, the seek put them away again (two toggles) and the film stays clear", tg == 2 and not is_shown(), "toggles after the double tap: %d, controls shown now: %s" % (tg, is_shown()))
         self.shot("kp-7-double-tap-right")
         m = self.log.size()
         double_tap(int(vw * 0.15), cy - 120); time.sleep(1.4)
@@ -1901,6 +1902,22 @@ class Soak:
         turned = [e["rest"][:60] for e in e3("fullscreen", "turn", m4) if "to=6" in e["rest"] or "became known" in e["rest"]]
         check("ANS54e.1: with the default (follow the tablet) a wide film in full screen held upright stays upright, nothing turned it", bool(lk4 and lk4["h"] > lk4["w"]) and not turned, "the screen is %s, turn lines %s" % (lk4, turned))
         self.shot("kp-14-follow-default-upright")
+        # ANS57 (owner message 57): the VLC-style gestures over the page's own full screen, Kestrel's controls over the engine (the screen is upright: raw touches are in the panel's own orientation)
+        sw4, sh4 = self.screen
+        time.sleep(3.0)
+        mg = self.log.size()
+        self.ph.a.sh("input swipe %d %d %d %d 600" % (int(sw4 * 0.85), 800, int(sw4 * 0.85), 460), timeout=20); time.sleep(1.6)
+        lv = [e for e in e3("player", "gesture-level", mg) if e["rest"].startswith("volume")]
+        check("ANS57c: in the page's own full screen a drag up on the right side changes the volume (VLC)", len(lv) >= 2, "lines %s" % [e["ev"] + ":" + e["rest"] for e in health_events(self.log.since(mg), "player")][:5])
+        mg = self.log.size()
+        self.ph.a.sh("input swipe %d %d %d %d 600" % (int(sw4 * 0.15), 800, int(sw4 * 0.15), 480), timeout=20); time.sleep(1.6)
+        lb = [e for e in e3("player", "gesture-level", mg) if e["rest"].startswith("brightness")]
+        check("ANS57c: a drag up on the left side changes the brightness", len(lb) >= 2, "lines %s" % [e["ev"] + ":" + e["rest"] for e in health_events(self.log.since(mg), "player")][:5])
+        mg = self.log.size()
+        self.ph.hold_drag(self.screen, 150, 600, 230); time.sleep(2.2)
+        sk = e3("player", "gesture-seek", mg)
+        check("ANS57b: a long press and a drag right over the page's own full screen seeks (a 'gesture-seek' line)", bool(sk), "player lines %s" % [e["ev"] + ":" + e["rest"][:40] for e in health_events(self.log.since(mg), "player")][:6])
+        self.shot("kp-15-gestures-page-full-screen")
         self.ph.key("KEYCODE_BACK"); time.sleep(2)
         self.ph.debug("fsturn", "0")
         self.kp_results = checks
