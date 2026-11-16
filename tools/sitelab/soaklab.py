@@ -528,6 +528,16 @@ def page_ho(variant, tag):
     return (head + body.replace("@FILM@", film).replace("@BOX@", box).replace("@Q@", q) + state).encode()
 
 
+def page_pv(tag):
+    """ANS58c (owner message 58: a private tab was reloaded and logged out after the app was left): a page whose 'login' is a session cookie. It reports (kind=ap ev=cookie had=1|0) whether the cookie was there when the page
+    loaded and sets it when it was not, so a second load that finds it (had=1) proves the login survived and a load that does not (had=0) is a logged-out tab."""
+    head = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Login lab</title>"
+            "<body style='font:20px sans-serif;margin:14px'><h2 id=h>login lab</h2><input id=pw type=password placeholder=password style='font-size:22px;width:90%'>") + AP_JS
+    body = ("<script>var had = /kst_login=/.test(document.cookie); if (!had) document.cookie = 'kst_login=signed-in-' + Date.now() + '; path=/';"
+            "document.getElementById('h').textContent = had ? 'still logged in' : 'logged out (new login)'; apRep('cookie', { had: had ? 1 : 0 });</script>")
+    return (head + body).encode()
+
+
 def page_dl():
     links = "".join("<p><a href='/dl/%dmb.bin'>%d MB file</a></p>" % (n, n) for n in (1, 5, 20)) + "<p><a href='/dl/slow.bin'>5 MB, slowly</a></p>"
     return ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Soak downloads</title><body style='font:20px sans-serif;margin:14px'><h1>Downloads</h1>" + links).encode()
@@ -660,6 +670,8 @@ class H(http.server.BaseHTTPRequestHandler):
                 return self._send(page_ap((q.get("v") or ["autoplay"])[0], (q.get("tag") or ["x"])[0]))
             if p == "/ho":
                 return self._send(page_ho((q.get("v") or ["file"])[0], (q.get("tag") or ["x"])[0]))
+            if p == "/pv":
+                return self._send(page_pv((q.get("tag") or ["x"])[0]))
             if p == "/formats":
                 return self._send(page_formats((q.get("tag") or ["x"])[0]))
             if p == "/video/audible":

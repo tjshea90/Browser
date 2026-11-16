@@ -801,6 +801,7 @@ class Soak:
         self.ho_events = []                   # (page, what the page saw of the tap): which tap events the engine lets a page see
         self.ho_box = (0.0, 0.0)               # the picture of the page just shown (width, height in device pixels)
         self.ho_line = ""
+        self.pv_results = []                  # ANS58c: a private tab keeps its login when the app is left (suite pv)
         self.gp_results = []                  # ANS57: VLC-style gestures (suite gp)
         self.gp_nums = []
         self.ip_results = []                  # ANS55f: the film plays INSIDE the page over the page's own video box (suite ip)
@@ -2750,6 +2751,60 @@ class Soak:
         self.record({"kind": "video-gestures", "name": "vlc-style-gestures", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks, "numbers": nums})
         self.check_alive("vlc-style-gestures")
 
+
+    # ANS58c (owner message 58: "When I logged in, switched to a different app and came back to Kestrel, it reloaded the page and I was logged out", in a PRIVATE tab): the engine forgets private logins when its last private
+    # session closes, and the memory handling used to put the tab in front to sleep (close its session) when Android asked the app for memory after it was left. Page /pv: its login is a session cookie and it reports
+    # whether the cookie was there when it loaded. The app is sent away (Home), Android's trim COMPLETE is sent to it, and it comes back: a private tab must be untouched (no second load, the cookie still there); a normal tab
+    # (control) may be put to sleep and reloads, and keeps its cookie on disk.
+    def pv_scene(self):
+        checks = []
+        def check(name, ok, detail=""):
+            checks.append({"check": name, "ok": bool(ok), "detail": detail if not ok else ""})
+            if not ok:
+                self.issue("high", "private-tab", "%s %s" % (name, detail))
+        ev = lambda layer, name, since: health_events(self.log.since(since), layer, name)
+        pkg = self.a.pkg
+        def cookie_rows(rm, tag):
+            return [r for r in self.lab.since(rm) if r.get("kind") == "ap" and r.get("ev") == "cookie" and str(r.get("tag", "")).startswith(tag)]
+        def away_and_back(label):
+            self.ph.key("KEYCODE_HOME"); time.sleep(3)
+            self.ph.a.sh("am send-trim-memory %s MODERATE" % pkg, timeout=20); time.sleep(1.5)
+            self.ph.a.sh("am send-trim-memory %s COMPLETE" % pkg, timeout=20); time.sleep(3)
+            self.ph.start_app(); time.sleep(6)
+        # ---- a PRIVATE tab
+        m, rm = self.log.size(), self.lab.size()
+        self.ph.debug("privtab", "%s/pv?v=pv&tag=pvp" % self.lab_base); time.sleep(9)
+        r1 = cookie_rows(rm, "pvp")
+        check("the private tab loaded the login page and was logged out the first time (no cookie yet)", bool(r1) and str(r1[-1].get("had")) == "0", "cookie rows %s" % [(r.get("had")) for r in r1])
+        check("a private session anchor was opened with the first private tab ('tabs private-anchor opened')", any("opened" in e["rest"] for e in ev("tabs", "private-anchor", m)), "anchor lines %s" % [e["rest"][:40] for e in ev("tabs", "private-anchor", m)])
+        self.shot("pv-1-private-logged-in")
+        m2, rm2 = self.log.size(), self.lab.size()
+        away_and_back("private")
+        kept = ev("tabs", "private-kept", m2); slept = ev("tabs", "hibernate", m2)
+        r2 = cookie_rows(rm2, "pvp")
+        check("the app was left and Android asked for memory: the private tab was NOT put to sleep ('tabs private-kept', no 'tabs hibernate')", bool(kept) and not slept, "private-kept %d, hibernate %d, trim lines %s" % (len(kept), len(slept), [e["rest"][:40] for e in ev("mem", "trim", m2)][:3]))
+        check("back in the app the private page was not reloaded (no second load) and so still logged in", not r2, "the page loaded again: cookie rows %s" % [(r.get("had")) for r in r2])
+        self.shot("pv-2-private-after-trim")
+        # a reload by the person: the cookie is still there (the engine kept the private login)
+        m3, rm3 = self.log.size(), self.lab.size()
+        self.ph.key("KEYCODE_F5") ; time.sleep(0.5)
+        self.ph.debug("privtab", "%s/pv?v=pv&tag=pvp2" % self.lab_base); time.sleep(9)       # (a second private tab: the same private jar)
+        r3 = cookie_rows(rm3, "pvp2")
+        check("a second private tab sees the first one's login (the same private cookie jar)", bool(r3) and str(r3[-1].get("had")) == "1", "cookie rows %s" % [(r.get("had")) for r in r3])
+        # ---- the control: a NORMAL tab may be put to sleep, and keeps its cookie (stored on disk)
+        m4, rm4 = self.log.size(), self.lab.size()
+        self.ph.debug("normtab", "%s/pv?v=pv&tag=pvn" % self.lab_base); time.sleep(9)
+        rn1 = cookie_rows(rm4, "pvn")
+        check("(control) a normal tab loaded the login page", bool(rn1), "no cookie rows")
+        m5, rm5 = self.log.size(), self.lab.size()
+        away_and_back("normal")
+        rn2 = cookie_rows(rm5, "pvn")
+        check("(control) a normal tab that was put to sleep reloads on return and its login is still there (cookie on disk)", (not rn2) or str(rn2[-1].get("had")) == "1", "cookie rows %s, hibernate lines %d" % ([(r.get("had")) for r in rn2], len(ev("tabs", "hibernate", m5))))
+        self.shot("pv-3-normal-after-trim")
+        self.pv_results = checks
+        self.record({"kind": "private-tab", "name": "private-tab-keeps-its-login", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
+        self.check_alive("private-tab-keeps-its-login")
+
     # ---- the whole run
     # ---- VC1 / LP1 (owner message 44): a video with no controls gets Kestrel's own bar when it is tapped; a long press on a video opens the video options and never the floating panel
     VBAR_PAGES = [("naked", "/video/vc?kind=naked", "shown"), ("shadow-root", "/video/vc?kind=shadow", "shown"), ("shadow-root + frame over it", "/video/vc?kind=shadow&ad=1", "shown"), ("own controls", "/video/vc?kind=own", "own")]
@@ -3144,6 +3199,14 @@ class Soak:
             L.append("| :- | :- | :- |")
             for c in self.np_results:
                 L.append("| %s | %s | %s |" % (c["check"], "ok" if c["ok"] else "**FAILED**", (c["detail"] or "")[:160].replace("|", "/")))
+            L.append("")
+        if self.pv_results:
+            L.append("## A private tab keeps its login when the app is left (ANS58c, owner message 58), on the real engine")
+            L.append("")
+            L.append("| check | result | detail |")
+            L.append("| :- | :- | :- |")
+            for c in self.pv_results:
+                L.append("| %s | %s | %s |" % (c["check"], "ok" if c["ok"] else "**FAILED**", (c["detail"] or "")[:200].replace("|", "/")))
             L.append("")
         if self.gp_results:
             L.append("## VLC-style gestures in Kestrel's players (ANS57, owner message 57), on the real engine")
@@ -3654,7 +3717,7 @@ class FakeAdb:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "vp"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "vp"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -3666,7 +3729,7 @@ def main():
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
-        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "vp") else "all")
+        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "vp") else "all")
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
@@ -3704,6 +3767,8 @@ def main():
             s.ip_scene()                                     # (ANS55f: the film inside the page)
         if a.suite in ("gp", "vp"):
             s.gp_scene()                                     # (ANS57: VLC-style gestures)
+        if a.suite == "pv":
+            s.pv_scene()                                     # (ANS58c: a private tab keeps its login when the app is left)
         if a.suite == "yh":
             s.yahoo_fullscreen()                             # (only the live Yahoo Finance player in full screen with Kestrel's controls: about 4 minutes)
         if a.suite == "fsy":
