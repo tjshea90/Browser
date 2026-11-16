@@ -1,22 +1,22 @@
-# CHECKPOINT 2474 — read me first, then TASKS.md
+# CHECKPOINT 2475 — read me first, then TASKS.md
 
-**Written:** 2026-11-16T04:14:02Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `d1771930` (this checkpoint is the commit after it)
+**Written:** 2026-11-16T04:24:01Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `462aade2` (this checkpoint is the commit after it)
 
 ## Just done
-alpha56 RELEASED and recorded: https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha56 (run 43801663211 green, APK 94.95 MB, certificate verified, BUILDLOG line written); TASKS ANS51 / ANS51g / ANS52f ticked; HANDOFF says RELEASED; the final plain-words answer to owner messages 51 and 52 follows with the Release link on its own line
+ANS52g designed (research/VIDEO_ACCELERATION.md section 'ANS52g design'), claimed, sub-rows ANS52g.1-5 written in TASKS; the existing Settings row 'Video formats offered to sites' only sets engine prefs and cannot hide VP9 on this tablet (Gecko forces it with a hardware decoder), so the page script enforces it
 
 ## Do this next
-wait for the owner's tablet report on alpha56 (Diagnostics lines: Full-screen video controls, Turning under a video, Frames around turns, Real video, Video decoders, Heat and speed, Kestrel's own player; the Save video sheet's 'Play in Kestrel's player (test)' on the Yahoo film and a light page); meanwhile alpha57: ANS52g page-world codec / fps policy (codec-main.js world MAIN + a content.js config event like guard-main.js, Settings row, web tests, lab proof), ANS52h HLS picture cap (webRequest.filterResponseData in background.js, gzip = disconnect, Settings row default 720p), the np suite also for an HLS stream (ffmpeg hls clip in soaklab) and the three-way test; the page freeze + position hand-back for the native player; heartbeat trig_01Y8CFHKVb6hmQmEEM78p6gv, send_later trig_015YaAfScTQXziSPN7zQ5u86 (04:20Z, its job is done: say so and stand down)
+ANS52g.2: write geckoapp/src/main/assets/kestrel-shields/codec-main.js (MAIN world, no browser API, policy string '<mode><fps30>|<avc>|<hevc>|<vp9>|<av1>' with codec = '-' or '<long>x<short>@<blocks per s>', config event __kst_codec_cfg_v1 in, report event __kst_codec_rep_v1 out, wraps MediaSource.isTypeSupported, canPlayType, mediaCapabilities.decodingInfo) + manifest entry like guard-main.js + web-tests/codec.test.js; heartbeat trig_01Y8CFHKVb6hmQmEEM78p6gv already updated to the alpha56 state
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M HANDOFF.md
      M TASKS.md
 
 ## Last ten checkpoints
 ```
+  ec1665a5 ckpt 2474: alpha56 RELEASED and recorded: https://github.com/tjshea90/Browser/releases/
   e4d999c9 ckpt 2473: alpha56 re-dispatched on ckpt 2472 (the re-run of the first attempt failed w
   5bcc109b ckpt 2472: gated kestrel-g-v0.3.0-alpha56 (gecko code 157) and pushed it: handoff self-
   e074b402 ckpt 2471: alpha57 work started while alpha56 builds on GitHub (run 43799695061: test-j
@@ -26,5 +26,7 @@ wait for the owner's tablet report on alpha56 (Diagnostics lines: Full-screen vi
   774f1e17 ckpt 2467: ANS52a/a2 CODED + tested: (a) BrowserActivity.holdGeckoView/releaseGeckoHold
   5235b647 ckpt 2466: owner message 52 (rotation still laggy / glitchy, status bar icons stuck in 
   609cad71 ckpt 2465: evidence file corrected (ONE full screen with four control sessions, three w
-  82385186 ckpt 2464: ANS51h: no page-look read-back while a page is full screen (the tablet's log
 ```
+
+(3 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
