@@ -6,7 +6,7 @@ package app.kestrel.core.media
  * player (which CAN choose) at the film's position with that picture. Pure, so the rules are pinned by a test; the Android side only feeds it the playlist and the page's report.
  */
 object PageQuality {
-    /** The pictures a master playlist offers, one row each, biggest first. A variant with no sound-free picture size (audio only, or no RESOLUTION) is not a picture. */
+    /** The pictures a master playlist offers, one row each, biggest first. A variant without a picture size (audio only, or no RESOLUTION) is not a picture. */
     fun rungs(variants: List<Hls.Variant>): List<QualityLabel.Rung> = QualityLabel.rows(
         variants.filter { !it.audioOnly && (it.width > 0 || it.height > 0) }
             .map { QualityLabel.Rung(it.width, it.height, if (it.frameRate > 0.0) it.frameRate.toFloat() else -1f, if (it.avgBandwidth > 0L) it.avgBandwidth else it.bandwidth) })
