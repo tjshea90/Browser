@@ -26,6 +26,7 @@
     Object.defineProperty(window, '__kstCodec', { value: 1 });
   } catch (e) { return; }
 
+  var later = window.setTimeout;     // the page's own copy of the timer may be replaced later: this one is ours
   var policy = null;                 // null = not told yet (or told nonsense): every answer is the engine's own
   var cache = {};                    // type string -> verdict ('' = not refused), so a player that asks the same thing a hundred times costs one parse; emptied when the policy changes
   var cacheSize = 0;
