@@ -1804,3 +1804,7 @@
 > - A caption, speed and quality entry for films with no playlist address (VP12).
 > - A few older rows: VP10, ROT2e, ANS48, SOAK1d, LAB2f, and the optional video-speed experiments (ANS52j).
 <!-- sha:a6fec1c4bb30 -->
+
+## 2026-11-16T07:53:56Z
+> Hand-over lab run 43826954106 is running (about 8 minutes). Waiting on its results before the final full lab pass and the alpha58 release.
+<!-- sha:1f5f3c41de01 -->
