@@ -67,6 +67,10 @@ class Phone:
     def debug(self, what, arg=None):
         return self.a.sh("am start -n %s/%s --es kestrel_debug %s%s" % (self.pkg, ACT, what, (" --es kestrel_arg %s" % shlex.quote(arg)) if arg else ""), timeout=30)
 
+    def debug_native(self, what, arg=None):
+        """A debug command for the screen of Kestrel's own player that is in front (single top: the running screen gets it, no second one is made)."""
+        return self.a.sh("am start --activity-single-top -n %s/app.kestrel.browser.NativePlayerActivity --es kestrel_debug %s%s" % (self.pkg, what, (" --es kestrel_arg %s" % shlex.quote(arg)) if arg else ""), timeout=30)
+
     def tap(self, x, y):
         self.a.sh("input tap %d %d" % (x, y), timeout=15)
 
@@ -1741,7 +1745,6 @@ class Soak:
         taps_here = [e for e in ev("player", "tap") if "on the screen itself" in e["rest"]]
         ms_list = [int(mm.group(1)) for mm in (re.search(r"itself, (\d+) ms after", e["rest"]) for e in taps_here) if mm]
         check("ANS53c: taps on the picture are answered on the glass itself, within 150 ms of the finger lifting (the lab's times: %s)" % ms_list[-8:], bool(ms_list) and max(ms_list) <= 150, "no tap on the glass was logged" if not ms_list else "worst %d ms" % max(ms_list))
-        shown_fades = [e for e in ev("player", "shown") if "fade" in e["rest"]]
         # mute and exit
         ensure_shown()
         m = self.log.size(); self.ph.tap(vw - 40, 26 + vh - 40); time.sleep(1.2)

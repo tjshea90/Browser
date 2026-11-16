@@ -225,8 +225,8 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         say("tracks", "$distinct picture(s) on offer: ${QualityLabel.rows(rowsNow.map { it.first }).joinToString(" | ") { QualityLabel.text(it) }}")
     }
 
-    private fun openQuality() {
-        val p = player ?: return
+    private fun qualityRows(): List<QualitySheet.Row> {
+        val p = player ?: return emptyList()
         val rows = ArrayList<QualitySheet.Row>()
         val nowFmt = p.videoFormat
         val now = QualityLabel.now(if (nowFmt != null) QualityLabel.Rung(nowFmt.width, nowFmt.height, nowFmt.frameRate, 0L) else null)
@@ -238,6 +238,12 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
             val playable = where.first.isTrackSupported(where.second)
             rows.add(QualitySheet.Row(t, if (playable) "" else "this tablet cannot play it smoothly", chosen != null && QualityLabel.text(chosen!!) == t, playable, rung))
         }
+        return rows
+    }
+
+    private fun openQuality() {
+        val rows = qualityRows()
+        if (rows.isEmpty()) return
         model.pin(true)
         sheet.show("Quality", rows, "Kestrel remembers your pick for the next films. A smaller picture and a lower frame rate are lighter for this tablet and for the hotspot.")
         say("quality-open", "${rows.size} row(s)")
@@ -377,6 +383,19 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         super.onConfigurationChanged(c)
         say("config", "orientation=${if (c.orientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"}")
         fit()
+    }
+
+    /** DEBUG builds only (the emulator lab drives the screen without finger coordinates): `am start --activity-single-top -n .../NativePlayerActivity --es kestrel_debug qopen|qpick|rotate [--es kestrel_arg N]`. */
+    override fun onNewIntent(i: Intent) {
+        super.onNewIntent(i)
+        if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) == 0) return
+        val what = i.getStringExtra("kestrel_debug") ?: return
+        val n = (i.getStringExtra("kestrel_arg") ?: "").toIntOrNull() ?: 0
+        when (what) {
+            "qopen" -> openQuality()
+            "qpick" -> { val rows = qualityRows(); if (n in rows.indices) pickQuality(rows[n]) else say("quality-failed", "no row $n of ${rows.size}") }
+            "rotate" -> onRotate()
+        }
     }
 
     override fun onBackPressed() { if (::sheet.isInitialized && sheet.isOpen) sheet.dismiss() else super.onBackPressed() }
