@@ -2263,3 +2263,7 @@
 ## 2026-11-16T18:50:08Z
 > vp is 16 minutes in; waiting another six before checking again.
 <!-- sha:98a6543e8023 -->
+
+## 2026-11-16T18:58:54Z
+> The alpha60 release build (run 43934390638) is running on GitHub; I've recorded in the checkpoint that it's been dispatched, so nobody dispatches it twice. Checking its progress after a timer.
+<!-- sha:880fd09f8df4 -->
