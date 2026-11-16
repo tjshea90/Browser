@@ -389,13 +389,81 @@ def page_hlsfetch(tag):
 </script>""") % {"tag": tag.replace("<", "").replace("&", "")[:30], "tag_js": json.dumps(tag[:30])}).encode()
 
 
+# ANS53a / ANS53b (owner message 53): the pages of the "videos start only when pressed" lab. Each variant is a way a page starts or loads a video by itself; the lab drives the screen, looks at media.jsonl
+# (bytes of video files that went out) and at what the page's events say. /report rows: kind=ap, v = the variant, tag = the run, ev = loadstart | loadedmetadata | progress | playing | sourceopen | fetched | rejected |
+# layout (where the picture and the button are on the SCREEN, in device pixels, for the driver's taps).
+AP_FILM = "/clip/landscape.mp4"
+AP_JS = """
+<script>
+(function () {
+  var Q = new URLSearchParams(location.search), V = Q.get('v') || 'autoplay', TAG = Q.get('tag') || 'x';
+  function rep(ev, extra) {
+    var o = { kind: 'ap', v: V, tag: TAG, ev: ev, t: Date.now() };
+    if (extra) for (var k in extra) o[k] = extra[k];
+    try { new Image().src = '/report?' + Object.keys(o).map(function (k) { return k + '=' + encodeURIComponent(o[k]); }).join('&'); } catch (e) {}
+  }
+  window.apRep = rep;
+  window.apHook = function (v) {
+    ['loadstart', 'loadedmetadata', 'loadeddata', 'canplay', 'playing', 'error', 'stalled'].forEach(function (e) { v.addEventListener(e, function () { rep(e, { rs: v.readyState, ns: v.networkState }); }); });
+  };
+  function screenOf(el) {
+    var r = el.getBoundingClientRect(), d = window.devicePixelRatio || 1, ox = window.mozInnerScreenX || 0, oy = window.mozInnerScreenY || 0;
+    return { x: Math.round((ox + r.left + r.width / 2) * d), y: Math.round((oy + r.top + r.height / 2) * d), w: Math.round(r.width * d), h: Math.round(r.height * d) };
+  }
+  window.apLayout = function () {
+    var v = document.getElementById('v'), b = document.getElementById('btn'), o = { dpr: window.devicePixelRatio || 1 };
+    if (v) { var a = screenOf(v); o.vx = a.x; o.vy = a.y; o.vw = a.w; o.vh = a.h; }
+    if (b) { var c = screenOf(b); o.bx = c.x; o.by = c.y; }
+    rep('layout', o);
+  };
+  setTimeout(window.apLayout, 1800);
+  setTimeout(window.apLayout, 4500);
+})();
+</script>"""
+
+
+def page_ap(variant, tag):
+    box = "display:block;width:100%;height:300px;background:#0b2a4a;object-fit:contain"
+    head = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Press lab %s</title>"
+            "<body style='margin:0;font:15px sans-serif;background:#fff'><h3 style='margin:6px 8px'>press lab: %s</h3>" % (variant, variant))
+    if variant == "autoplay":
+        body = "<video id=v autoplay muted loop playsinline poster='/img/1.svg' src='%s' style='%s'></video>" % (AP_FILM, box)
+    elif variant == "preload-auto":
+        body = "<video id=v preload=auto controls playsinline poster='/img/1.svg' src='%s' style='%s'></video>" % (AP_FILM, box)
+    elif variant == "preload-meta":
+        body = "<video id=v preload=metadata controls playsinline poster='/img/1.svg' src='%s' style='%s'></video>" % (AP_FILM, box)
+    elif variant == "no-attr":
+        body = "<video id=v controls playsinline poster='/img/1.svg' src='%s' style='%s'></video>" % (AP_FILM, box)
+    elif variant == "script":
+        body = ("<video id=v muted playsinline poster='/img/1.svg' style='%s'></video><script>var v = document.getElementById('v'); apHook(v); v.src = '%s'; v.muted = true; "
+                "function go() { var p = v.play(); if (p && p.then) p.then(function () { apRep('playing-promise'); }, function (e) { apRep('rejected', { name: e.name }); }); }"
+                "setTimeout(go, 1200); setTimeout(go, 3200); setTimeout(go, 5200);</script>") % (box, AP_FILM)
+    elif variant == "mse":
+        body = ("<video id=v muted playsinline poster='/img/1.svg' style='%s'></video><button id=btn style='margin:12px 8px;padding:16px 28px;font-size:20px'>Play</button>"
+                "<script>var v = document.getElementById('v'); apHook(v);"
+                "var ms = new MediaSource(); v.src = URL.createObjectURL(ms);"
+                "ms.addEventListener('sourceopen', function () { apRep('sourceopen'); var sb = ms.addSourceBuffer('video/mp4; codecs=\"avc1.4d401f,mp4a.40.2\"');"
+                " fetch('/clip/frag.mp4').then(function (r) { return r.arrayBuffer(); }).then(function (b) { apRep('fetched', { bytes: b.byteLength }); sb.addEventListener('updateend', function () { try { if (!sb.updating && ms.readyState === 'open') ms.endOfStream(); } catch (e) {} }); sb.appendBuffer(b); }); });"
+                "document.getElementById('btn').onclick = function () { v.muted = true; var p = v.play(); if (p && p.then) p.then(function () { apRep('playing-promise'); }, function (e) { apRep('rejected', { name: e.name }); }); };</script>") % box
+    elif variant == "button":
+        body = ("<video id=v muted playsinline preload=none poster='/img/1.svg' src='%s' style='%s'></video><button id=btn style='margin:12px 8px;padding:16px 28px;font-size:20px'>Play</button>"
+                "<script>var v = document.getElementById('v'); apHook(v); document.getElementById('btn').onclick = function () { var p = v.play(); if (p && p.then) p.then(function () { apRep('playing-promise'); }, function (e) { apRep('rejected', { name: e.name }); }); };</script>") % (AP_FILM, box)
+    elif variant == "iframe":
+        body = "<iframe id=f src='/ap?v=autoplay&tag=%s-inner' style='display:block;width:100%%;height:320px;border:0;background:#222'></iframe>" % tag
+    else:
+        body = "<p>unknown variant</p>"
+    if variant in ("iframe",):
+        return (head + body).encode()                                     # (the inner page reports itself)
+    return (head + body + AP_JS + ("<script>apHook(document.getElementById('v'));</script>" if variant in ("autoplay", "preload-auto", "preload-meta", "no-attr") else "")).encode()
+
+
 def page_dl():
     links = "".join("<p><a href='/dl/%dmb.bin'>%d MB file</a></p>" % (n, n) for n in (1, 5, 20)) + "<p><a href='/dl/slow.bin'>5 MB, slowly</a></p>"
     return ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Soak downloads</title><body style='font:20px sans-serif;margin:14px'><h1>Downloads</h1>" + links).encode()
 
 
 def index():
-    rows = ["/page/text", "/page/images", "/page/iframes", "/page/form", "/video/landscape", "/video/portrait", "/video/big", "/formats?tag=index", "/fs", "/fsbox?kind=shadow", "/dl/page", "/dl/1mb.bin", "/dl/5mb.bin", "/dl/20mb.bin", "/dl/slow.bin"]
+    rows = ["/page/text", "/page/images", "/page/iframes", "/page/form", "/video/landscape", "/video/portrait", "/video/big", "/formats?tag=index", "/ap?v=autoplay&tag=index", "/fs", "/fsbox?kind=shadow", "/dl/page", "/dl/1mb.bin", "/dl/5mb.bin", "/dl/20mb.bin", "/dl/slow.bin"]
     return ("<!doctype html><meta charset=utf-8><title>Soak lab</title><body style='font:18px sans-serif'><h1>Soak lab</h1>" + "".join("<p><a href='%s'>%s</a></p>" % (r, r) for r in rows)).encode()
 
 
@@ -517,6 +585,8 @@ class H(http.server.BaseHTTPRequestHandler):
                         self.wfile.write(z)
                     return
                 return self._send(body, "application/vnd.apple.mpegurl")
+            if p == "/ap":
+                return self._send(page_ap((q.get("v") or ["autoplay"])[0], (q.get("tag") or ["x"])[0]))
             if p == "/formats":
                 return self._send(page_formats((q.get("tag") or ["x"])[0]))
             if p == "/video/audible":
