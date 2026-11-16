@@ -54,6 +54,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     private val controls = PlayerControlsView(ctx).apply { inline = true }
     private var player: ExoPlayer? = null
     private var quality: PlayerQuality? = null            // ANS60c: the quality list (the same rules as the full-screen player's)
+    private var meter: PlaybackMeter? = null              // ANS60d: what the playback really did (start-up, waits, link speed), one line per film
     private val model = PlayerModel(this)
     private var priv = false
     var url = ""; private set
@@ -161,6 +162,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
                 }
                 override fun onTracksChanged(tracks: androidx.media3.common.Tracks) { controls.showQuality = q.onTracks(p, tracks) }       // one picture only (a plain file): no button
             })
+            meter = PlaybackMeter(priv) { e, t -> say(e, t) }.also { p.addAnalyticsListener(it) }
             p.addAnalyticsListener(object : AnalyticsListener {
                 override fun onVideoDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
                     val hw = try { MediaCodecList(MediaCodecList.ALL_CODECS).codecInfos.firstOrNull { it.name == decoderName }?.isHardwareAccelerated } catch (e: Throwable) { null }
@@ -207,6 +209,8 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
         main.removeCallbacks(ticker); main.removeCallbacks(controlsTick); main.removeCallbacks(longPressRun)
         gestures?.stop()                                                           // ANS57: a gesture in progress ends, the window's brightness is the tablet's again
         var pos = 0L
+        try { meter?.finish(p) } catch (e: Throwable) { /* gone */ }
+        meter = null
         try {
             pos = p.currentPosition.coerceAtLeast(0L)
             val dc = p.videoDecoderCounters

@@ -95,6 +95,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     private var debugTouch: android.content.BroadcastReceiver? = null
     private var fromPage = false                              // ANS54e: started for a film of a web page: a failure before the first picture goes back to the page (RESULT_FAILED)
     private lateinit var quality: PlayerQuality                    // ANS53d / ANS60c: the quality list (shared with the player inside the page)
+    private var meter: app.kestrel.browser.web.PlaybackMeter? = null     // ANS60d: what the playback really did (start-up, waits, link speed), one line per film
 
     private val controlsTick = Runnable { model.controlsTimer(); flush() }
     private val ticker = object : Runnable {
@@ -187,6 +188,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
             }
             override fun onTracksChanged(tracks: Tracks) { controls.showQuality = quality.onTracks(p, tracks) }          // one picture only (a plain file): nothing to choose, no button
         })
+        meter = app.kestrel.browser.web.PlaybackMeter(priv) { e, t -> say(e, t) }.also { p.addAnalyticsListener(it) }
         p.addAnalyticsListener(object : AnalyticsListener {
             override fun onVideoDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
                 val hw = try { MediaCodecList(MediaCodecList.ALL_CODECS).codecInfos.firstOrNull { it.name == decoderName }?.isHardwareAccelerated } catch (e: Throwable) { null }
@@ -382,6 +384,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         val p = player
         player = null
         if (p != null) {
+            try { meter?.finish(p) } catch (e: Throwable) { /* gone */ }
             try {
                 val dc = p.videoDecoderCounters
                 if (!priv) { NativePlayerStats.framesShown += (dc?.renderedOutputBufferCount ?: 0).toLong(); NativePlayerStats.playedMs += p.currentPosition.coerceAtLeast(0L) }
