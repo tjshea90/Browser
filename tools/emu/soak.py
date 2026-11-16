@@ -1701,14 +1701,16 @@ class Soak:
         self.ph.open_url("%s/fsbox?kind=shadow&nobar=1" % self.lab_base)
         self.fsbox_wait(rmark2); time.sleep(2)
         m = self.log.size()
+        lm = m                                                                       # (is_shown() counts the shown / hidden lines of THIS pass)
         self.ph.tap(w // 2, 140); time.sleep(2.5); self.ph.dismiss_cling()
         check("Hide mode: the controls show at full screen start", bool(ev("player", "shown", m)), "")
         # Android 10 does not tell an app that a transient navigation bar was pulled up (lab run 43776782679, picture kp-11), so the controls keep the bar's height free at the bottom the whole time the bars are hidden
         check("Hide mode: the controls keep the navigation bar's height free at the bottom", any("free at the bottom" in e["rest"] for e in ev("player", "inset", m)), "inset lines: %s" % [e["rest"][:60] for e in ev("player", "inset", m)])
         self.shot("kp-10-hide-mode")
-        ensure_shown()                                                               # (the controls are up when the bar is pulled over them)
         lk = self.ph.look()
         sw, sh = (lk["w"], lk["h"]) if lk else (w, h)
+        ensure_shown()
+        self.ph.tap(sw // 2, sh // 2); time.sleep(1.0)                               # the big button pauses: the controls stay up while the film is paused, so the picture shows them with the bar over the bottom
         self.ph.a.sh("input swipe %d %d %d %d 250" % (sw // 2, sh - 2, sw // 2, sh - 160), timeout=20); time.sleep(0.6)   # pull the navigation bar up
         self.shot("kp-11-navigation-bar-pulled-up")                                  # the picture shows whether the bottom row is clear of the bar
         self.ph.key("KEYCODE_BACK"); time.sleep(2)
