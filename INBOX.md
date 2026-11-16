@@ -1527,3 +1527,9 @@ Counters: frames.jank=73  gecko.firstComposite=12  look.hide=1  look.saved=7  lo
 +147.351s frames 10s frames=362 jank=9 worst=153ms
 +157.362s frames 10s frames=383 jank=4 worst=275ms
 ```
+
+## 2026-11-16T02:42:12Z
+```
+The rotation from portrait to landscape is still very laggy and glitchy and resizes to the wrong size for a long pause. The video itself was very laggy in full screen. When I rotated to landscape, the Android symbols at the top such as the battery and wifi symbols were stuck in the middle of the screen and the video was cropped to about the same point for several moments
+Figure out what other browsers do for video acceleration and smooth video inside the browser and full screen. Can any third party code or software help? Research how to make the video smooth and optimized for the hardware
+```
