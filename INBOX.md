@@ -1813,3 +1813,8 @@ Counters: frames.jank=46  gecko.firstComposite=8  look.saved=14  mem.trim=1  mem
 
 Also, even when I selected a totally different video, it opened the player with the old video still playing in the same spot
 ```
+
+## 2026-11-16T17:04:36Z
+```
+Make it so if I double tap on the right side or left side of a video to fast forward or rewind 10 seconds, it automatically closes the video player controls. It should recognize that if I'm only fast forwarding or rewinding the video, I'm not selecting video controls so the video should stay visible without controls on top. Build a feature similar to vlc media player which I can do a more accurate fast forward or rewind in larger and smaller increments by long pressing around the middle of the screen and dragging right to fast forward and left to rewind. The farther I drag, the more it fast forwards or rewinds. Model it from his vlc media player handles this. Finally, just like vlc media player, if I drag up or down on the left side of the video, it increases or decreases video brightness, and if I drag up or down on the right side of the video, it increases or decreases volume. Model this off how vlc media player handles this. 
+```
