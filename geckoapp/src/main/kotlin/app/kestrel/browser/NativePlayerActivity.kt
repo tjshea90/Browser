@@ -141,6 +141,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
             override fun showInfo(text: String?) { controls.showInfo(text) }
             override fun showLevel(kind: app.kestrel.core.player.GestureMath.Level, fraction: Float) { controls.showLevel(kind, fraction); say("gesture-level", "${kind.name.lowercase()} ${Math.round(fraction * 100)} %") }
             override fun haptic() { stage.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS) }
+            override fun gestureChanged(active: Boolean) { if (active) { model.gestureBegan() } }
         }, holdFirst = false)
         stage.setOnTouchListener { v, e -> if (gesturesOn) { gestures.onTouch(e); true } else onStageTouch(v, e) }
         stage.addOnLayoutChangeListener { _, l, t, r, bt, ol, ot, orr, ob -> if (r - l != orr - ol || bt - t != ob - ot) fit() }

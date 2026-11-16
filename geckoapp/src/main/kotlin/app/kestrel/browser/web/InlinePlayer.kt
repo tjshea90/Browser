@@ -83,6 +83,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
             override fun showInfo(text: String?) { controls.showInfo(text) }
             override fun showLevel(kind: GestureMath.Level, fraction: Float) { controls.showLevel(kind, fraction); say("gesture-level", "${kind.name.lowercase()} ${Math.round(fraction * 100)} %") }
             override fun haptic() { performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS) }
+            override fun gestureChanged(active: Boolean) { if (active) { model.gestureBegan() } }
             override fun passThrough() { startPass() }
             override fun longHold() { if (!longFired) { longFired = true; performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS); say("long-press", "a finger rested on the picture: the download options"); host?.onLongPress() } }
         }, holdFirst = true, edgeDp = 6f)

@@ -89,6 +89,15 @@ class PlayerModelTest {
         assertTrue(m.shown)
     }
 
+    @Test fun aGestureThatBeginsPutsTheControlsAway() {
+        val h = Host(); val m = model(h)
+        m.onSample(sample(h, t = 30.0))
+        assertTrue(m.shown)
+        m.gestureBegan()
+        assertFalse("the long press that armed the precise seek, or a brightness drag, keeps the picture clear", m.shown); assertFalse(h.lastAnimate)
+        m.gestureBegan(); assertFalse(m.shown)
+    }
+
     @Test fun theLeftSeekAlsoClosesThemAndTheSkipButtonsDoNot() {
         val h = Host(); val m = model(h)
         m.onSample(sample(h, t = 30.0))

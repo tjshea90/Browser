@@ -151,6 +151,8 @@ class PlayerModel(private val h: Host) {
         if (last != null) { optPos = target; optPosSeq = seq; optPosUntil = h.now() + OPT_WAIT_MS }
         controls.interacted()
     }
+    /** ANS57: a gesture of the film began (the precise seek armed, a brightness or volume drag): the controls go and the picture stays clear (VLC hides its overlay for these too). */
+    fun gestureBegan() { controls.seekGesture(); h.changed() }
     fun skipButton(forward: Boolean) { skip(if (forward) PlayerRules.SKIP_S else -PlayerRules.SKIP_S); h.changed() }
     fun seekFraction(f: Double) {
         val v = view()

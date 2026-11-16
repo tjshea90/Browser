@@ -210,6 +210,7 @@ class PlayerController(
     fun positionMs(): Long = (model.view().timeS * 1000.0).toLong().coerceAtLeast(0L)
     fun lengthMs(): Long { val v = model.view(); return if (v.kind == app.kestrel.core.player.DurationView.Kind.KNOWN) (v.lengthS * 1000.0).toLong() else 0L }
     fun gestureNote(event: String, text: String) { say(event, text) }
+    fun gestureBegan() { if (activeFlag) { model.gestureBegan() } }
     fun gestureSeek(deltaMs: Long) { if (activeFlag) { model.skip(deltaMs / 1000.0); flush(); say("gesture-seek", "the precise seek moved the film by ${deltaMs / 1000} s") } }
 
     /** ANS53d.2: the film is handed to Kestrel's own player: the page's copy stops (its pause command goes with the next answer; the activity also pauses the media session). */
