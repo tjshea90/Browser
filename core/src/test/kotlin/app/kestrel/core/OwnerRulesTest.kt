@@ -161,7 +161,7 @@ class OwnerRulesTest {
         val rule = source("core/src/main/kotlin/app/kestrel/core/media/FullscreenTurn.kt")
         assertTrue("the screen follows the sensor, whatever Android's rotation lock says", rule.contains("Plan(FULL_SENSOR, false)") && rule.contains("const val FULL_SENSOR = 10"))
         assertTrue("Settings has the choice", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("""choice("Turn the screen for full-screen video""""))
-        assertTrue("it is on (automatic) by default", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("""sp.getInt("fs_turn", 0)"""))
+        assertTrue("it follows the tablet by default and never turns the screen by itself (owner messages 53 and 54)", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("""sp.getInt("fs_turn2", app.kestrel.core.media.FullscreenTurn.MODE_FOLLOW)"""))
         assertFalse("the manifest never pins the screen: the page, the person and the rotate button decide", source("geckoapp/src/main/AndroidManifest.xml").contains("screenOrientation"))
     }
 
