@@ -137,7 +137,7 @@ object GeckoEngine {
                 try { when { v == "true" || v == "false" -> org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref(n, v == "true", u); v.toIntOrNull() != null -> org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref(n, v.toInt(), u); else -> org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref(n, v, u) } } catch (e: Exception) { /* debug only */ }
             }
             // the device's decoder list: from the stored answer at once (above), from Android (off the UI thread) when this system build has not been asked yet; a changed answer re-applies the codec rule
-            if (DeviceVideo.hardware(ctx) == null) Io.exec { if (DeviceVideo.read(ctx)) applyVideo(ctx, Prefs.get(ctx)) }
+            if (DeviceVideo.hardware(ctx) == null || DeviceVideo.limits(ctx) == null) Io.exec { if (DeviceVideo.read(ctx)) applyVideo(ctx, Prefs.get(ctx)) } // ANS52g: the limits are asked for too (an update from before them has only the four letters stored)
             // DEBUG builds only (the emulator rig, research/TYPING.md): `setprop debug.kestrel.iwvisual 0` makes the keyboard resize the page's LAYOUT, `1` only the visible area (read back in Diagnostics)
             app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.iwvisual")?.let { v ->
                 if (v == "0" || v == "1") try { org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("dom.interactive_widget_default_resizes_visual", v == "1", org.mozilla.geckoview.GeckoPreferenceController.PREF_BRANCH_DEFAULT) } catch (e: Exception) { /* debug only */ }
