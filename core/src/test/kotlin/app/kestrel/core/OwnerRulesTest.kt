@@ -266,6 +266,11 @@ class OwnerRulesTest {
         assertTrue("only the page that IS full screen drives the controls", act.contains("tabOfReport(m.optString(\"p\")) === fullscreenTab"))
         val ctl = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerController.kt")
         assertTrue("nothing is drawn until a film reports, and a page that stops reporting takes the controls away", ctl.contains("if (m.optString(\"k\") != \"vst\") return; begin()") && ctl.contains("SILENT_END_MS"))
+        // lab run 43776782679 (second press on the big button asked "pause" again): the relay put the page ADDRESS into `p` over the film's paused flag, so the app read every film as "not paused". The paused flag is `pa`
+        // in everything the app gets, `p` is the address, and the number of the last carried-out command is `ak` all the way to the model.
+        assertTrue("the relay names the paused flag pa, keeps ak, and leaves p for the address", bg.contains("pa: m.p === 1 ? 1 : 0") && bg.contains("ak: n(m.ak, 0, 2000000000)") && bg.contains("o.p = String(page).slice(0, 300)"))
+        assertTrue("the controller reads pa (never p: that is the address) and ak", ctl.contains("m.optInt(\"pa\") == 1") && ctl.contains("m.optInt(\"ak\", 0)") && !ctl.contains("optInt(\"p\")"))
+        assertTrue("the page script sends ak and numbers the commands it carried out", vp.contains("ak: S ? S.ack | 0 : 0") && vp.contains("if (c.i > s.ack) s.ack = c.i | 0;"))
         val vb = source(dir + "videobar.js")
         assertTrue("the injected bar draws nothing while Kestrel's controls own the film", vb.contains("if (kpOwns()) { if (bar) hide(); return; }") && vb.contains("if (kpOwns()) return;"))
         assertTrue("the pref defaults to Kestrel's", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("sp.getInt(\"fs_controls\", 0)"))
