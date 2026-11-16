@@ -103,6 +103,8 @@ class Prefs private constructor(ctx: Context) {
     var videoPressToPlay: Boolean get() = bool("vid_press_play", true); set(v) = put("vid_press_play", v)
     /** ANS54e (owner message 54: "I want the web video players to use this"): where a film of a web page plays: 0 = in Kestrel's own player whenever it can (default), 1 = there only in full screen, 2 = in the page's own player (core/media/WebHandOver). */
     var webVideoMode: Int get() = app.kestrel.core.media.WebHandOver.cleanMode(sp.getInt("web_in_kestrel", app.kestrel.core.media.WebHandOver.ALWAYS)); set(v) = put("web_in_kestrel", app.kestrel.core.media.WebHandOver.cleanMode(v))
+    /** ANS55f (owner message 55): a film Kestrel's own player takes over from a page plays INSIDE the page, over the page's own video box (default), instead of in the full-screen player. */
+    var webInline: Boolean get() = bool("web_inline", true); set(v) = put("web_inline", v)
     /** Protected video (Widevine DRM, Netflix-style players): 0 ask each time a site wants it (only when the device has Widevine), 1 never. */
     var videoDrm: Int get() = sp.getInt("vid_drm", 0).coerceIn(0, 1); set(v) = put("vid_drm", v.coerceIn(0, 1))
     /** Which codecs a site is offered: 0 automatic (not one that would run in software on this device), 1 H.264 only, 2 everything the engine can decode (core/media/VideoPolicy). */
