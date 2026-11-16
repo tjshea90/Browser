@@ -1,13 +1,13 @@
-# CHECKPOINT 2491 — read me first, then TASKS.md
+# CHECKPOINT 2492 — read me first, then TASKS.md
 
-**Written:** 2026-11-16T06:41:03Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `461f4da5` (this checkpoint is the commit after it)
+**Written:** 2026-11-16T06:41:48Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `c002903d` (this checkpoint is the commit after it)
 
 ## Just done
-ALPHA57 CANDIDATE: version 158 / 0.3.0-alpha57 (extension 1.0.158); lab run 2 (43816308648) = 7 of 7 scenes ok, 0 issues on the real engine (research/ANS53_LAB_VP1.md); independent gate review fixed (research/ANS53_GATE_REVIEW.md: audio exempt, MediaSource-only blob hold, stream gets autoplay, tap scoping + 30 s, 1.2 s gesture grace, late-answer wait, fail-closed relay, caps); web suite 551/551, gradle :core :app :geckoapp all green; ANS53c/d/f ticked with lab evidence
+lab run 3 dispatched: 43818471174 (suite vp, head c002903d = ckpt 2491 = the alpha57 candidate)
 
 ## Do this next
-dispatch lab run 3 (suite vp) on this head to prove the reviewed gate on the real engine (new: variant 'bar' = press on the engine's own control bar, mse page held through the createObjectURL wrapper, fail-closed relay): mcp__github__actions_run_trigger android.yml ref ccr-b3c2484c-sbew36 app=lab lab_suite=vp lab_minutes=10 lab_net=full full_build=false; poll get_workflow_job; if 0 issues: bash ship.sh gecko "<note from scratchpad ship/note_draft.txt, final>" then ONE fresh dispatch app=gecko full_build=true note=<same>; wait for tag + jobs; get_release_by_tag; bash tools/record-release.sh <tag> "<IDENTICAL note>"; answer the owner (all of message 53) with the Release link on its own line; heartbeat trig_01Y8CFHKVb6hmQmEEM78p6gv
+poll get_workflow_job for the lab job of run 43818471174 (find its id with mcp__github__actions_list list_workflow_jobs resource_id 43818471174, workflow_jobs_filter latest, perPage 3; started 06:41Z, about 13 min); then artifact emulator-lab-text -> python3 -I tools/emu/fetch_artifact.py <url> <empty dir>; expect 0 issues, check the ap table (bar variant, mse held), then ship: bash ship.sh gecko NOTE (NOTE = scratchpad ship/note_draft.txt final), ONE fresh dispatch app=gecko full_build=true note=NOTE ref ccr-b3c2484c-sbew36, wait for tag (git ls-remote --tags origin) + all jobs success (list_workflow_jobs), get_release_by_tag, bash tools/record-release.sh TAG NOTE (identical), answer owner message 53 point by point with the Release link on its own line; heartbeat trig_01Y8CFHKVb6hmQmEEM78p6gv
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ dispatch lab run 3 (suite vp) on this head to prove the reviewed gate on the rea
 
 ## Last ten checkpoints
 ```
+  c002903d ckpt 2491: ALPHA57 CANDIDATE: version 158 / 0.3.0-alpha57 (extension 1.0.158); lab run 
   152027b8 ckpt 2490: lab run 2 dispatched: 43816308648 (android.yml app=lab lab_suite=vp, head 99
   99c99a77 ckpt 2489: pre-dispatch checks green for lab run 2: web suite 542/542, gradle :core :ap
   a1776ee8 ckpt 2488: lab run 43812820865 read (research/ANS53_LAB_VP1.md): kp 27/27 + cp + hls + 
@@ -25,8 +26,4 @@ dispatch lab run 3 (suite vp) on this head to prove the reviewed gate on the rea
   50a021f2 ckpt 2484: ANS53 wiring verified: player web tests fixed (27/27), full web suite 541/54
   36604289 ckpt 2483: ANS53a/b CODED (not yet run on the emulator): gate-main.js (world MAIN: prel
   36b6723f ckpt 2482: ANS53 first batch CODED (unit tests green: core player + QualityLabel; gecko
-  6052291b ckpt 2481: owner message 53 (04:59Z, on alpha56: 'The video player is much better now';
 ```
-
-(15 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
