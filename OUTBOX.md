@@ -1903,3 +1903,22 @@
 > - **You do:** create an empty private repo (name it `Kestrel-Private`) and install the Claude GitHub app on it.
 > - **I do:** repoint the save scripts and move the files, then check that a cold resume still works.
 <!-- sha:11f199acb5ae -->
+
+## 2026-11-16T23:43:53Z
+> I can't move the files yet, because the private repo doesn't exist and I can't create it. I also won't clean the history, since it isn't easy or safe.
+>
+> **History cleaning:** every branch, release tag and the build log points at the commits that hold those files. Rewriting them would mean force-pushing over all of it, and my project rules forbid that. It also wouldn't clear caches or copies others may already have. So the old text stays in the public history. Group 1 contains your messages and my replies, nothing like keys or photos. If that ever matters, the clean fix is a brand-new repo started from today's code, which is your call to make.
+>
+> **What you need to do (about 3 minutes):**
+> 1. On github.com, create a **new repository** named `Kestrel-Private`, set to **Private**, with a README added.
+> 2. Go to https://github.com/apps/claude/installations/select_target. Pick your account and give the Claude app access to `Kestrel-Private`. Keep `Browser` selected too.
+> 3. Tell me when that's done.
+>
+> **What I'll do after that:**
+> - Clone it beside this repo and point the save scripts at it, so your messages, my replies and the old handoff archives are saved there from then on.
+> - Remove those three paths from this public repo going forward and add them to `.gitignore`.
+> - The scripts will fail loudly if the private clone is missing, not quietly fall back to the public repo.
+> - Run the tooling self-test and a cold-resume check.
+>
+> Until then everything keeps working as it does now, and the new messages still go into the public repo.
+<!-- sha:86942a620e02 -->
