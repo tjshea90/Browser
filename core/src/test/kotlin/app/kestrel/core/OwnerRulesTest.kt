@@ -513,5 +513,8 @@ class OwnerRulesTest {
         val np = source("geckoapp/src/main/kotlin/app/kestrel/browser/NativePlayerActivity.kt")
         assertTrue("Kestrel's player ends with RESULT_FAILED when it fails before its first picture, and the browser leaves that page to its own player for two minutes", np.contains("if (fromPage && firstPictureAt == 0L) { setResult(RESULT_FAILED)") && flow.contains("handOverOffUntil = SystemClock.uptimeMillis() + 120_000L") && source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("NativePlayerActivity.RESULT_FAILED) video.nativeFailed()"))
         assertTrue("Diagnostics has its line", source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("WebHandStats.line(prefs.webVideoMode)"))
+        // the engine's own controls start a film with no tap event reaching the page (lab run 43826954106): the trusted play event of the element is the press; a film pressed again continues where the person stopped
+        assertTrue("the gate treats the engine's own play event as the press (closed element with controls: open + ask; handed over before + a tap behind it: ask again; the page's own play() is the replacement's)", gate.contains("function nativePlay(el, ev)") && gate.contains("el.addEventListener('play', function (ev) { nativePlay(el, ev); }, true)") && gate.contains("r.viaPlay = dnow.call(Date)") && gate.contains("again = r.open && r.yesAt > 0"))
+        assertTrue("a film pressed again continues where Kestrel's player stopped (RAM only, never for a private tab)", flow.contains("WebHandOver.resumeMs(d.startMs, d.url, NativePlayerActivity.lastUrl") && flow.contains("if (tab.isPrivateTab) d.startMs") && np.contains("if (priv) lastUrl = \"\" else { lastUrl = shownUrl"))
     }
 }
