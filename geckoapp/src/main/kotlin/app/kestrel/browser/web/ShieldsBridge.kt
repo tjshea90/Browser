@@ -235,8 +235,9 @@ class ShieldsBridge(
         // 256 = a DEBUG build (the emulator lab): the page sends a page-health probe once it has loaded (LAB2; never set in a release build),
         // 64 = Kestrel's own video bar may show on a tapped video whose page has no controls, 128 = also where the page has some (VC1, videobar.js; follows ONLY the Settings row "Video controls"),
         // 512 = Kestrel's own controls over a FULL-SCREEN video (VP1, player.js; follows ONLY the Settings row "Full-screen video controls"),
+        // 1024 = no video loads or starts before the person presses it (ANS53a / ANS53b, gate-main.js; follows ONLY the Settings switch "Videos start only when I press play": it is not a Shields feature, every site has it),
         // 16 = a tap on a video player's bar may move the video when the page does not (YS1, seekbar.js; follows ONLY the Settings switch "Tap the video bar to jump": it is not a Shields feature, a site with Shields off keeps it)
-        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0) or (if (prefs().tapSeek) 16 else 0) or (if (prefs().measureScroll) 32 else 0) or (if (prefs().fsControls == 0) 512 else 0) or (if (prefs().videoControls != 2) 64 else 0) or (if (prefs().videoControls == 1) 128 else 0) or (if (labBuild()) 256 else 0)
+        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0) or (if (prefs().tapSeek) 16 else 0) or (if (prefs().measureScroll) 32 else 0) or (if (prefs().fsControls == 0) 512 else 0) or (if (prefs().videoControls != 2) 64 else 0) or (if (prefs().videoControls == 1) 128 else 0) or (if (labBuild()) 256 else 0) or (if (prefs().videoPressToPlay) 1024 else 0)
         val on = s.shieldsUp && s.blockAds && snap?.fs?.isPageAllowed(host) != true
         return (if (on) "1:" else "0:") + gen + ":" + (if (snap != null) contentId(snap) else "") + ":" + guard + ":" + videoPolicy() + ":" + pictureCap()
     }
@@ -358,11 +359,13 @@ class ShieldsBridge(
         val videoFormats: String = "",
         /** ANS52h: what the picture size cap did to HLS master playlists (the extension's counts, text). */
         val pictureCap: String = "",
+        /** ANS53a / ANS53b: what the page-side gate held back and opened (the extension's counts, text). */
+        val startGate: String = "",
     ) {
         companion object {
             fun from(m: JSONObject) = EngineStats(
                 m.optInt("g"), m.optLong("n"), m.optLong("us"), m.optLong("mx"), m.optLong("sl"), m.optLong("lg"), m.optLong("lu"), m.optInt("er"),
-                m.optLong("ld"), m.optInt("by"), m.optInt("pl"), m.optInt("off") != 0, m.optString("w").take(400), System.currentTimeMillis(), m.optString("lt").take(240), m.optString("rv").take(320), m.optString("vx").take(240), m.optString("hx").take(300),
+                m.optLong("ld"), m.optInt("by"), m.optInt("pl"), m.optInt("off") != 0, m.optString("w").take(400), System.currentTimeMillis(), m.optString("lt").take(240), m.optString("rv").take(320), m.optString("vx").take(240), m.optString("hx").take(300), m.optString("vg").take(300),
             )
         }
     }

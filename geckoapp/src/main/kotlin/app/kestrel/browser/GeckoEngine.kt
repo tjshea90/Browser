@@ -299,6 +299,10 @@ object GeckoEngine {
         fun tri(name: String, v: Boolean?) = pref(name) { if (v == null) org.mozilla.geckoview.GeckoPreferenceController.clearGeckoUserPref(name) else org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref(name, v, u) }
         tri("media.mediasource.vp9.enabled", if (d.vp9 == null && DeviceVideo.labLimits != null) true else d.vp9) // DEBUG lab only (labLimits is never set in a release build): the emulator plays the tablet, where a hardware VP9 decoder makes Gecko offer VP9 whatever this preference says
         tri("media.av1.enabled", d.av1)
+        // ANS53a / ANS53b: with the rule on the engine itself starts nothing by itself (5 = muted starts too) and fetches nothing before play (preload none, also for preload=auto); the page-side gate does the rest
+        tri("media.autoplay.default", if (prefs.videoPressToPlay) 5 else null)
+        tri("media.preload.default", if (prefs.videoPressToPlay) 1 else null)
+        tri("media.preload.auto", if (prefs.videoPressToPlay) 1 else null)
         tri("media.hevc.enabled", d.hevc)
         if (prefs.calmPages) {
             pref("ui.prefersReducedMotion") { org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref("ui.prefersReducedMotion", 1, u) }

@@ -329,7 +329,8 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         // waiting for a "playing" event that never came, so its loading symbol stayed on top of the video; the emulator showed it: muted autoplay and a muted script play() were refused (NotAllowedError).
         // Muted start = allowed (as in every browser; Settings > Video turns it off); a start WITH sound and no tap stays refused (a tap always works).
         when (perm.permission) {
-            PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE -> return GeckoResult.fromValue(if (a.prefs.videoMutedAutoplay) PermissionDelegate.ContentPermission.VALUE_ALLOW else PermissionDelegate.ContentPermission.VALUE_DENY)
+            // ANS53a (owner message 53: "Never, on any site, ever, anywhere in the app, automatically load a video and start playing it"): with the rule on (the default) a muted start is refused too; the old Settings row only counts with the rule off
+            PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE -> return GeckoResult.fromValue(if (!a.prefs.videoPressToPlay && a.prefs.videoMutedAutoplay) PermissionDelegate.ContentPermission.VALUE_ALLOW else PermissionDelegate.ContentPermission.VALUE_DENY)
             PermissionDelegate.PERMISSION_AUTOPLAY_AUDIBLE -> return GeckoResult.fromValue(PermissionDelegate.ContentPermission.VALUE_DENY)
             PermissionDelegate.PERMISSION_MEDIA_KEY_SYSTEM_ACCESS -> {
                 // Protected video (Widevine through Android's own MediaDrm): only when the device has it and the owner has not turned it off; asked per request because it identifies the tablet to the site's licence server.
