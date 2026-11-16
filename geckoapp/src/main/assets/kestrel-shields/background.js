@@ -36,6 +36,7 @@ function askCfg(host) {
     // generation 0 = the app's lists are still loading: the answer is provisional (the site allow-list is not known yet), so it is asked again in a few seconds instead of after a minute
     cfgMode.set(host, mode); cfgAt.set(host, (parseInt(parts[1], 10) > 0) ? Date.now() : Date.now() - CFG_TTL + 3000);
     cfgFlags.set(host, parseInt(parts[3], 10) || 0);
+    if (parts.length > 4) codecCfg = String(parts[4]).slice(0, 160); // an answer of an older app (or for no host) has no 5th field: the last policy stays
     noteGeneration(parseInt(parts[1], 10) || 0);
     if (mode !== MODE_LEGACY) wantImage(parseInt(parts[1], 10) || 0, parts[2] || '');
     return mode;
