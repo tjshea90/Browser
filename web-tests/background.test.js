@@ -1374,3 +1374,115 @@ test('ANS52g: what the pages refused is summed, clamped and handed to the app as
   assert.match(vx, /^questions 10 \(counted when something was refused\), refused 8: above the decoder's limit 5, not H\.264 1, above 30 fps 2; last: [a-z0-9 x@.]{0,30}$/);
   assert.ok(vx.length <= 240 && vx.indexOf('<') < 0);
 });
+
+// ---------------------------------------------------------------- ANS52h: the picture size cap for HLS master playlists
+const HLS_MASTER = ['#EXTM3U', '#EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080,CODECS="avc1.640028,mp4a.40.2"', 'v1080.m3u8', '#EXT-X-STREAM-INF:BANDWIDTH=3500000,RESOLUTION=1280x720,CODECS="avc1.64001f,mp4a.40.2"', 'v720.m3u8', '#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=640x360', 'v360.m3u8', ''].join('\n');
+const HLS_MEDIA = ['#EXTM3U', '#EXT-X-TARGETDURATION:6', '#EXTINF:6.0,', 'seg1.ts', '#EXT-X-ENDLIST', ''].join('\n');
+const hlsApp = (cap) => (m) => (m.k === 'cfg' ? `1:1:${ID}:1:${VPOLICY}${cap === undefined ? '' : ':' + cap}` : standardApp()(m));
+const hlsReq = (id, extra) => Object.assign({ url: 'https://cdn.example/v/master.m3u8?t=1', requestId: id, statusCode: 200, method: 'GET', tabId: 1, frameId: 0, type: 'xmlhttprequest' }, extra || {});
+const buf = (x) => { const b = Buffer.isBuffer(x) ? x : Buffer.from(String(x), 'utf8'); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); };
+/** feeds [chunks] through the filter of a request and stops it */
+function runFilter(h, id, chunks, extra) {
+  const before = h.filters.length;
+  const r = h.listeners.hlsHeaders(hlsReq(id, extra));
+  const fl = h.filters[before];
+  if (fl) { for (const c of chunks) fl.ondata({ data: buf(c) }); fl.onstop(); }
+  return { r, fl };
+}
+const stText = async (h) => { await h.flushTimers(); const st = h.of('st'); return st.length ? st[st.length - 1].hx : ''; };
+
+test('ANS52h: the listener is blocking, narrow (addresses that name a .m3u8, the three request kinds a player uses) and does nothing while no cap is told', async () => {
+  const h = await onPage(hlsApp(0));
+  assert.deepEqual(h.listeners.hlsSpec, ['blocking']);
+  assert.deepEqual(JSON.parse(JSON.stringify(h.listeners.hlsFilter.urls)), ['http://*/*.m3u8*', 'https://*/*.m3u8*']);
+  assert.deepEqual(JSON.parse(JSON.stringify(h.listeners.hlsFilter.types)).sort(), ['media', 'other', 'xmlhttprequest']);
+  const { r } = runFilter(h, 'a1', [HLS_MASTER]);
+  eq(r, {}, 'the response is not touched');
+  assert.equal(h.filters.length, 0, 'cap 0 = off: no filter at all');
+  const old = await onPage(guardApp());                                 // an app that sends no 6th field
+  runFilter(old, 'a2', [HLS_MASTER]);
+  assert.equal(old.filters.length, 0);
+  for (const nonsense of ['abc', '5', '-1', '99999999', '']) { const x = await onPage(hlsApp(nonsense)); runFilter(x, 'a3', [HLS_MASTER]); assert.equal(x.filters.length, 0, 'told "' + nonsense + '": off'); }
+});
+
+test('ANS52h: with the cap on, the master playlist reaches the page without the rungs above it, written once, then closed', async () => {
+  const h = await onPage(hlsApp(1313));
+  const { r, fl } = runFilter(h, 'b1', [HLS_MASTER.slice(0, 90), HLS_MASTER.slice(90, 250), HLS_MASTER.slice(250)]);   // the playlist arrives in three pieces
+  eq(r, {});
+  assert.equal(h.filters.length, 1);
+  assert.equal(fl.written.length, 1, 'nothing was written while the playlist was still coming');
+  assert.equal(fl.body(), ['#EXTM3U', '#EXT-X-STREAM-INF:BANDWIDTH=3500000,RESOLUTION=1280x720,CODECS="avc1.64001f,mp4a.40.2"', 'v720.m3u8', '#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=640x360', 'v360.m3u8', ''].join('\n'));
+  assert.equal(fl.closed, true); assert.equal(fl.disconnected, false);
+  const hx = await stText(h);
+  assert.match(hx, /^playlists looked at 1, cut 1 \(1 rungs taken out, last 3 -> 2 at 1313\), left as they were: not a master list 0, nothing above the cap 0, not text 0, too big 0, errors 0$/);
+});
+
+test('ANS52h: a list that is no master list, a master list within the cap and bytes that are no text go through exactly as they came', async () => {
+  const h = await onPage(hlsApp(1313));
+  const a = runFilter(h, 'c1', [HLS_MEDIA.slice(0, 20), HLS_MEDIA.slice(20)]).fl;
+  assert.equal(a.body(), HLS_MEDIA); assert.equal(a.closed, true);
+  const small = ['#EXTM3U', '#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=640x360', 'v360.m3u8', ''].join('\n');
+  const b = runFilter(h, 'c2', [small]).fl;
+  assert.equal(b.body(), small); assert.equal(b.closed, true);
+  const gz = Buffer.from([0x1f, 0x8b, 0x08, 0x00, 0xde, 0xad, 0xbe, 0xef, 0xff, 0xfe]);   // gzip bytes (an invalid UTF-8 text)
+  const c = runFilter(h, 'c3', [gz]).fl;
+  assert.deepEqual([...Buffer.concat(c.written)], [...gz]); assert.equal(c.closed, true);
+  const html = runFilter(h, 'c4', ['<html>not a playlist at all</html>']).fl;
+  assert.equal(html.body(), '<html>not a playlist at all</html>');
+  const empty = runFilter(h, 'c5', []).fl;
+  assert.equal(empty.written.length, 0); assert.equal(empty.closed, true);
+  const hx = await stText(h);
+  assert.match(hx, /cut 0 \(0 rungs taken out\), left as they were: not a master list 1, nothing above the cap 1, not text 3, too big 0, errors 0/);
+});
+
+test('ANS52h: a body above 512 KB is passed on untouched from the first byte (no playlist is that big), also the part that came after', async () => {
+  const h = await onPage(hlsApp(1313));
+  const big = 'x'.repeat(300000);
+  const { fl } = runFilter(h, 'd1', [big, big, 'tail'], {});
+  assert.equal(fl.body(), big + big + 'tail');
+  assert.equal(fl.closed, true);
+  assert.match(await stText(h), /too big 1/);
+});
+
+test('ANS52h: only a 200 answer to a GET from a tab is filtered', async () => {
+  const h = await onPage(hlsApp(1313));
+  for (const extra of [{ statusCode: 206 }, { statusCode: 304 }, { statusCode: 404 }, { method: 'POST' }, { tabId: -1 }]) {
+    const n = h.filters.length;
+    eq(h.listeners.hlsHeaders(hlsReq('e' + Math.random(), extra)), {});
+    assert.equal(h.filters.length, n, JSON.stringify(extra));
+  }
+  assert.equal(h.filters.length, 0);
+});
+
+test('ANS52h: whatever goes wrong, the page is not the one to notice: no stream filters in this engine, a stream error, a throw while rewriting', async () => {
+  const none = harness(hlsApp(1313), { noFilter: true });
+  none.mainFrame(PAGE); await until(() => none.of('cfg').length >= 1, 'cfg'); await tick(10);
+  eq(none.listeners.hlsHeaders(hlsReq('f1')), {});
+  const h = await onPage(hlsApp(1313));
+  h.listeners.hlsHeaders(hlsReq('f2'));
+  const fl = h.filters[0];
+  fl.ondata({ data: buf(HLS_MASTER) });
+  fl.onerror();                                                          // the connection broke
+  assert.equal(fl.disconnected, true);
+  const h2 = await onPage(hlsApp(1313));
+  h2.listeners.hlsHeaders(hlsReq('f3'));
+  const f3 = h2.filters[0];
+  f3.ondata({ data: 'not a buffer' });                                   // a data event the extension cannot read
+  assert.equal(f3.disconnected, true);
+  assert.match(await stText(h2), /errors 1/);
+});
+
+test('ANS52h: the cap follows the app\'s newest answer (a Settings change reaches the next page that asks)', async () => {
+  let cap = 1313;
+  const h = harness((m) => (m.k === 'cfg' ? `1:1:${ID}:1:${VPOLICY}:${cap}` : standardApp()(m)));
+  h.mainFrame(PAGE); await until(() => h.of('cfg').length >= 1, 'cfg'); await tick(10);
+  assert.equal(runFilter(h, 'g1', [HLS_MASTER]).fl.body().indexOf('v1080') < 0, true);
+  cap = 0;
+  await h.message({ k: 'guard', h: 'another.example' }, -1);             // a host the extension has not asked about yet: the app's answer carries the new cap
+  const n = h.filters.length;
+  runFilter(h, 'g2', [HLS_MASTER]);
+  assert.equal(h.filters.length, n, 'off again: no filter');
+  cap = 1920;
+  await h.message({ k: 'guard', h: 'third.example' }, -1);
+  assert.equal(runFilter(h, 'g3', [HLS_MASTER]).fl.body(), HLS_MASTER, 'a cap above every rung changes nothing');
+});
