@@ -805,6 +805,7 @@ open class BrowserActivity : Activity(), DockListener {
         Io.main.removeCallbacks(saveRunnable)
         Io.main.removeCallbacks(lookScrollTimer); Io.main.removeCallbacks(lookCheckTick); Io.main.removeCallbacks(lookNoteShow)
         for (t in tabs) { try { t.session?.close() } catch (e: Exception) { /* already gone */ }; t.session = null }
+        try { privateAnchor?.close() } catch (e: Throwable) { /* gone */ }; privateAnchor = null
         super.onDestroy()
         if (!isChangingConfigurations) { ProcessLife.uiAlive = false; ProcessLife.uiVisible = false; ProcessLife.maybeExit() } // swiped away: leave unless a download is still running
     }
@@ -2245,7 +2246,7 @@ open class BrowserActivity : Activity(), DockListener {
                 }
             }
             M.SETTINGS -> showSettings()
-            M.CLOSE_ALL -> { for (x in tabs.toList()) { x.session?.let { s -> if (geckoView.session === s) geckoView.releaseSession(); try { s.close() } catch (e: Exception) { /* ignore */ } }; x.session = null }; tabs.clear(); current = null; show(newTabInternal()) }
+            M.CLOSE_ALL -> { for (x in tabs.toList()) { x.session?.let { s -> if (geckoView.session === s) geckoView.releaseSession(); try { s.close() } catch (e: Exception) { /* ignore */ } }; x.session = null }; tabs.clear(); syncPrivateAnchor(); current = null; show(newTabInternal()) }
         }
     }
 

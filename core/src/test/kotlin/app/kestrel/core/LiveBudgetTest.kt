@@ -67,4 +67,14 @@ class LiveBudgetTest {
         for (level in listOf(5, 10, 15, 20, 40, 60, 80)) for (mb in listOf(-1, 100, 400, 900)) for (b in 2..8)
             assertTrue("afterTrim($level,$mb,$b)", LiveBudget.afterTrim(level, mb, b) <= b)
     }
+
+    // ANS58c (owner message 58: "When I logged in, switched to a different app and came back to Kestrel, it reloaded the page and I was logged out", in a private tab): the engine forgets private logins when its last private session closes
+    @Test fun aPrivateTabIsNeverPutToSleepAndTheTabInFrontOnlyWhenItIsNormal() {
+        org.junit.Assert.assertTrue("an old normal tab may sleep", app.kestrel.core.tabs.LiveBudget.mayHibernate(isCurrent = false, hasLiveChild = false, isPrivate = false))
+        org.junit.Assert.assertFalse("the tab in front never (by the budget)", app.kestrel.core.tabs.LiveBudget.mayHibernate(isCurrent = true, hasLiveChild = false, isPrivate = false))
+        org.junit.Assert.assertFalse("one with a live pop-up child never", app.kestrel.core.tabs.LiveBudget.mayHibernate(isCurrent = false, hasLiveChild = true, isPrivate = false))
+        org.junit.Assert.assertFalse("a private tab never: it would come back logged out", app.kestrel.core.tabs.LiveBudget.mayHibernate(isCurrent = false, hasLiveChild = false, isPrivate = true))
+        org.junit.Assert.assertTrue("the app was left and Android wants memory: a normal tab in front may sleep (its history and cookies are kept)", app.kestrel.core.tabs.LiveBudget.mayHibernateInBackground(isPrivate = false))
+        org.junit.Assert.assertFalse("a private tab in front may not (the owner was logged out by exactly this)", app.kestrel.core.tabs.LiveBudget.mayHibernateInBackground(isPrivate = true))
+    }
 }
