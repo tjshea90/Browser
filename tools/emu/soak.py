@@ -715,6 +715,7 @@ class Soak:
         self.slow_results = []
         self.kp_results = []
         self.kp_wake = []                      # (label, the wake-lock lines of `dumpsys power`) while the film plays in full screen and after it ended
+        self.kp_ff = []                        # ANS52a: ms from each turn to the app window's first frame at the new size (kp scene)
         self.kp_pic_path = ""                  # ANS51b: how the film's picture size reached automatic turning (known at entry, or from the player's first report)
         self.yahoo_fs = None
         self.shields_mode = "on"
@@ -1701,6 +1702,17 @@ class Soak:
         vw, vh, land = box()
         check("portrait now", not land, "the screen is still sideways")
         self.shot("kp-6-portrait-after-turn")
+        # ANS52a (owner message 52: after a turn the status bar icons stayed in the middle of the screen and the video was cropped at the old width for several moments): the engine's view is held at its old size for the first
+        # frame of a turn, the cover and the bars are drawn at the new size at once, and the view gets its new size behind the cover. The emulator's engine is fast, so this proves the mechanism, not the tablet's seconds.
+        ff_ms = []
+        for e in ev("fullscreen", "turn-first-frame"):
+            mm = re.search(r"new size (\d+) ms", e["rest"])
+            if mm:
+                ff_ms.append(int(mm.group(1)))
+        holds = ev("fullscreen", "turn-hold"); rels = ev("fullscreen", "turn-hold-released")
+        check("ANS52a: a turn holds the engine's view at its old size for the first frame and gives it the new size after that frame", bool(holds) and len(rels) >= len(holds), "holds %d, released %d" % (len(holds), len(rels)))
+        check("ANS52a: the app's window drew its first frame at the new size within 3 s of every turn (times %s ms)" % ff_ms, bool(ff_ms) and max(ff_ms) < 3000, "first-frame lines: %s" % ff_ms)
+        self.kp_ff = ff_ms
         # double taps: a double tap on a side seeks and must NOT toggle the controls; in the middle it plays / pauses
         time.sleep(4.0)                                                              # (they hide by themselves)
         cx, cy = vw // 2, 26 + vh // 2
@@ -2150,6 +2162,9 @@ class Soak:
             L.append("")
             if self.kp_pic_path:
                 L.append("The film's picture size for automatic turning (ANS51b): %s." % self.kp_pic_path)
+                L.append("")
+            if self.kp_ff:
+                L.append("First frame at the new size after each turn (ANS52a), ms: %s." % ", ".join(str(x) for x in self.kp_ff))
                 L.append("")
             if self.kp_wake:
                 L.append("Wake locks of the emulated phone (`dumpsys power`), for the question whether the screen stays on while a film plays (the lab keeps the screen on by itself with `svc power stayon`, so read the lock names, not the screen):")
