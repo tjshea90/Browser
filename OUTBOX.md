@@ -2267,3 +2267,7 @@
 ## 2026-11-16T18:58:54Z
 > The alpha60 release build (run 43934390638) is running on GitHub; I've recorded in the checkpoint that it's been dispatched, so nobody dispatches it twice. Checking its progress after a timer.
 <!-- sha:880fd09f8df4 -->
+
+## 2026-11-16T19:06:02Z
+> Tests are green and the signed APK build is running; I'll check the build job in five minutes.
+<!-- sha:c5b21b6b783e -->
