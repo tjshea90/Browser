@@ -2171,3 +2171,7 @@
 ## 2026-11-16T18:09:13Z
 > Waiting for that timer; the lab run should finish around 18:14Z. I'll read its report as soon as the artifacts appear.
 <!-- sha:624cef88341b -->
+
+## 2026-11-16T18:09:42Z
+> Still waiting: the lab run is about 5 minutes in, and the web tests are still going. I'll read the report when the timer fires.
+<!-- sha:c47c9fb40b7a -->
