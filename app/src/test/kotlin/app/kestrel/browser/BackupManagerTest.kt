@@ -145,16 +145,16 @@ class BackupManagerTest {
 
     @Test fun theVideoSwitchesDefaultToTheBrowserNormsAndSurviveABackup() {
         // an untouched install: muted autoplay allowed, formats automatic, DRM asks, page animations normal
-        assertTrue(prefs.videoMutedAutoplay); assertEquals(0, prefs.videoCodecs); assertEquals(0, prefs.videoDrm); assertFalse(prefs.calmPages); assertFalse(prefs.videoFps30)
-        prefs.videoMutedAutoplay = false; prefs.videoCodecs = 1; prefs.videoDrm = 1; prefs.calmPages = true; prefs.videoFps30 = true
+        assertTrue(prefs.videoMutedAutoplay); assertEquals(0, prefs.videoCodecs); assertEquals(0, prefs.videoDrm); assertFalse(prefs.calmPages); assertFalse(prefs.videoFps30); assertEquals(0, prefs.videoCap)
+        prefs.videoMutedAutoplay = false; prefs.videoCodecs = 1; prefs.videoDrm = 1; prefs.calmPages = true; prefs.videoFps30 = true; prefs.videoCap = 3
         val d = BackupManager.build(db, prefs, emptyList(), "x")
-        assertEquals(false, d.settings["vid_muted_auto"]); assertEquals(1L, d.settings["vid_codecs"]); assertEquals(1L, d.settings["vid_drm"]); assertEquals(true, d.settings["calm_pages"]); assertEquals(true, d.settings["vid_fps30"])
+        assertEquals(false, d.settings["vid_muted_auto"]); assertEquals(1L, d.settings["vid_codecs"]); assertEquals(1L, d.settings["vid_drm"]); assertEquals(true, d.settings["calm_pages"]); assertEquals(true, d.settings["vid_fps30"]); assertEquals(3L, d.settings["video_cap"])
         val text = BackupCodec.encode(d)
         sp().edit().clear().commit()
         BackupManager.restore(db, prefs, BackupCodec.decode(text))
-        assertFalse(prefs.videoMutedAutoplay); assertEquals(1, prefs.videoCodecs); assertEquals(1, prefs.videoDrm); assertTrue(prefs.calmPages); assertTrue(prefs.videoFps30)
+        assertFalse(prefs.videoMutedAutoplay); assertEquals(1, prefs.videoCodecs); assertEquals(1, prefs.videoDrm); assertTrue(prefs.calmPages); assertTrue(prefs.videoFps30); assertEquals(3, prefs.videoCap)
         prefs.videoCodecs = 9; prefs.videoDrm = 5
-        assertEquals("out of range values are clamped", 2, prefs.videoCodecs); assertEquals(1, prefs.videoDrm)
+        assertEquals("out of range values are clamped", 2, prefs.videoCodecs); assertEquals(1, prefs.videoDrm); prefs.videoCap = 9; assertEquals(4, prefs.videoCap)
     }
 
     @Test fun theDescriptionIsPlainAndGetsTheGrammarRight() {
