@@ -4,3 +4,7 @@
 11-15 06:00:00.000  4242  4242 D KestrelHealth: +31.274s page loaded host=localhost paint=880ms done=2040ms blocked=4 visit=1 ok=true
 11-15 06:00:00.000  4242  4242 D KestrelHealth: +71.567s engine runtime-ready
 11-15 06:00:00.000  4242  4242 D KestrelHealth: +71.869s engine runtime-ready
+11-15 06:00:00.000  4242  4242 D KestrelHealth: +0.053s engine runtime-ready
+11-15 06:00:00.000  4242  4242 D KestrelHealth: +31.553s fullscreen turn to=-1 (as Android had it) was=10 why=full screen ends: put back what Android had
+11-15 06:00:00.000  4242  4242 D KestrelHealth: +31.553s life config orientation=portrait fullscreen=false
+11-15 06:00:00.000  4242  4242 D KestrelHealth: +31.654s page loaded host=localhost paint=880ms done=2040ms blocked=4 visit=1 ok=true
