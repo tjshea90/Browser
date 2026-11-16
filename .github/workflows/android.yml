@@ -43,7 +43,7 @@ on:
       lab_suite:
         description: 'Only for app = lab. smoke = one page + the Diagnostics text; fs = the full-screen turning checks; vc = the video controls and the long press on a video (owner message 44) with a walk down the Yahoo Finance page; snd = sound while the app is left (owner message 45); kp = the full-screen video controls Kestrel draws itself (owner message 49), taps and double taps and buttons and turning; fsy = a full-screen player box (web component) turned sideways and back, on a system that hides its bars and on one that keeps them (owner message 46), then the sound check; compat = every well-known site twice (Shields on, then off) with speed, errors, scrolling, memory, broken-page checks (the minutes are the whole budget); soak = the long run of pages, videos and downloads; all = everything'
         type: choice
-        options: [smoke, fs, vc, snd, fsy, kp, compat, soak, all]
+        options: [smoke, fs, vc, snd, fsy, kp, yh, compat, soak, all]
         default: smoke
       lab_minutes:
         description: 'Only for app = lab: how long the soak part runs, in minutes (60 = one hour)'
