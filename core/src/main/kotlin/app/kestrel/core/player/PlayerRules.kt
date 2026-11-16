@@ -17,7 +17,7 @@ object PlayerRules {
     /** ... and for this long after the screen has turned (the picture was covered meanwhile). */
     const val AFTER_TURN_MS = 2500L
 
-    /** Two taps this close are a double tap (Android's own double-tap timeout on API 29 is 300 ms, Chromium uses it too): the single tap waits this long before it toggles the controls. */
+    /** Two taps this close, on the same LEFT or RIGHT side, are a double tap (Android's own double-tap timeout on API 29 is 300 ms): the second one seeks. Since ANS53c the first tap does NOT wait for it: it toggles the controls at once. */
     const val DOUBLE_TAP_MS = 300L
 
     /** After a double tap that seeked, further taps on the same side seek again at once until this long passes without one (Shaka 500 ms, YouTube alike). */

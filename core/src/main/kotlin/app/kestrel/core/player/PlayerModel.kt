@@ -13,8 +13,6 @@ class PlayerModel(private val h: Host) {
         fun now(): Long
         fun scheduleControls(ms: Long)
         fun cancelControls()
-        fun scheduleTap(ms: Long)
-        fun cancelTap()
         /** The controls show or hide ([animate] = fade). */
         fun applyControls(shown: Boolean, animate: Boolean)
         /** The numbers the controls draw changed: draw again. */
@@ -63,8 +61,6 @@ class PlayerModel(private val h: Host) {
     })
     private val taps = TapMachine(object : TapMachine.Host {
         override fun now() = h.now()
-        override fun schedule(delayMs: Long) = h.scheduleTap(delayMs)
-        override fun cancel() = h.cancelTap()
         override fun single() { controls.tap(); singles++ }
         override fun seek(zone: Zone, burst: Int) { skip(if (zone == Zone.LEFT) -PlayerRules.SKIP_S else PlayerRules.SKIP_S); h.feedback(zone, burst); seeks++ }
         override fun playPause() { this@PlayerModel.playPause() }
@@ -137,7 +133,6 @@ class PlayerModel(private val h: Host) {
     // ---- the person
     /** A tap on the picture reached the app: [xPermille] = the place across the picture, 0..1000. */
     fun onTap(xPermille: Int) { if (active) taps.tap(xPermille.coerceIn(0, 1000) / 1000.0) }
-    fun tapTimer() { taps.tick() }
     fun controlsTimer() { controls.tick() }
 
     fun playPause() {

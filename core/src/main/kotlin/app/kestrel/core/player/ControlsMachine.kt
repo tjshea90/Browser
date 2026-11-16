@@ -46,10 +46,10 @@ class ControlsMachine(private val h: Host) {
         if (shown) { shown = false; h.apply(false, false) }
     }
 
-    /** A tap on the picture (already told apart from a double tap and from a tap on a control). */
+    /** A tap on the picture (already told apart from a double tap and from a tap on a control). ANS53c: they come and go AT ONCE, no fade (the owner: "zero delay"); only the clock's own hide fades. */
     fun tap() {
         if (!active || turning) return
-        if (shown) hide(true) else show(hideAfterMs)
+        if (shown) hide(false) else show(hideAfterMs, false)
     }
 
     /** What the video does now; only a CHANGE is acted on. */
@@ -90,9 +90,9 @@ class ControlsMachine(private val h: Host) {
     /** A fixed time stays what it is, unless the person's accessibility setting asks for longer. */
     private fun scaled(base: Long) = if (hideAfterMs > PlayerRules.HIDE_AFTER_MS) maxOf(base, hideAfterMs) else base
 
-    private fun show(forMs: Long) {
+    private fun show(forMs: Long, animate: Boolean = true) {
         deadline = h.now() + forMs
-        if (!shown) { shown = true; h.apply(true, true) }
+        if (!shown) { shown = true; h.apply(true, animate) }
         if (forMs > 0L && autoHide()) h.schedule(forMs) else h.cancel()
     }
 
