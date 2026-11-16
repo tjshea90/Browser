@@ -2890,7 +2890,8 @@ class Soak:
         m5, rm5 = self.log.size(), self.lab.size()
         away_and_back("normal")
         rn2 = cookie_rows(rm5, "pvn")
-        check("ANS59: a REGULAR tab is not put to sleep either by a trip to another app (no 'tabs hibernate' line) and is not reloaded on return", not ev("tabs", "hibernate", m5) and not rn2, "hibernate lines %d, the page loaded again: cookie rows %s" % (len(ev("tabs", "hibernate", m5)), [(r.get("had")) for r in rn2]))
+        slept_n = [e for e in ev("tabs", "hibernate", m5) if e["kv"].get("tab") == nid]
+        check("ANS59: a REGULAR tab (id %s) is not put to sleep either by a trip to another app (no 'tabs hibernate' line for it) and is not reloaded on return" % nid, bool(nid) and not slept_n and not rn2, "tab id %s, hibernate lines for it %d, the page loaded again: cookie rows %s" % (nid, len(slept_n), [(r.get("had")) for r in rn2]))
         self.shot("pv-3-normal-after-trim")
         self.pv_results = checks
         self.record({"kind": "private-tab", "name": "private-tab-keeps-its-login", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
