@@ -77,7 +77,7 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
     var lateCount = 0; private set         // ... of which the page spoke later (after the cover had gone) and the time was measured
     var lateLastMs = 0L; private set       // from the start of that turn to the page's first word
     var lateWorstMs = 0L; private set
-    private var lateFrom = 0L              // the start of the last silent turn while its page has not spoken yet (0 = none waits)
+    private var lateFrom = -1L             // the start of the last silent turn while its page has not spoken yet (-1 = none waits)
     var last = "no turn under a video yet"; private set
 
     /** A turn is going on (the cover is up). */
@@ -100,7 +100,7 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
         val t = h.now()
         // a turn while one goes on is a new turn for the clocks (review of alpha53: a rotation at 6.9 s of the first one got 0.1 s of cover, and a touch counted from the first): the video is paused once
         if (!active) { active = true; touched = false; hinted = false }
-        lateFrom = 0L                                                      // (a page that was still silent from the turn before is now measured by THIS turn)
+        lateFrom = -1L                                                     // (a page that was still silent from the turn before is now measured by THIS turn)
         startedAt = t; confirmedAt = 0L; nudged = false; heard = 0
         lastChangeAt = t
         confirmed = false                                                  // a new turn (or one more while it goes on): the page has to say it has the new size again
@@ -126,9 +126,9 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
 
     /** ANS51c (owner message 51: the tablet's page said its first word 3.6 s and 7.8 s after a turn, and the line said "0 ms, 0 turns measured"): the first report of a page whose turn was let go while it was still silent. */
     private fun lateWord() {
-        if (lateFrom == 0L) return
+        if (lateFrom < 0L) return
         val lag = h.now() - lateFrom
-        lateFrom = 0L
+        lateFrom = -1L
         if (lag < 0L || lag > LATE_MAX_MS) return                           // (a report that comes half a minute later has nothing to do with that turn)
         lateCount++; lateLastMs = lag; if (lag > lateWorstMs) lateWorstMs = lag
         h.log("turn-late-word", "the page said its first word $lag ms after the turn began (the cover had gone after $lastMs ms)")
