@@ -21,6 +21,7 @@ var cfgMode = new Map();   // page host -> MODE_*
 var cfgAt = new Map();     // page host -> when the answer arrived
 var cfgFlags = new Map();  // page host -> flags from the app (1 = the pop-up and redirect guard applies, 2 = embeds wait for a tap, 4 = stand-ins for blocked files and scriptlets are allowed)
 var cfgWait = new Map();   // page host -> promise of the answer being fetched
+var codecCfg = '';         // ANS52g: the video format policy the app last sent with a page answer (5th field; "" = none), handed to the pages as `cx` (codec-main.js)
 var CFG_MAX = 300;
 var CFG_TTL = 60000;       // a Shields switch changed in Settings reaches pages that are already open within this time (a switch on the page itself reloads it at once)
 function askCfg(host) {
