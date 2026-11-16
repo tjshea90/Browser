@@ -67,14 +67,14 @@ class FilmHealthTest {
         val f = FilmHealth()
         f.onReport(0, 1, 100, 0, 1920, 1080, 0L)
         var t = 0L; var tf = 100; var df = 0
-        for (i in 1..14) { t += 1000L; tf += 30; df += if (i == 5) 3 else 0; f.onReport(0, 1, tf, df, 1920, 1080, t); assertNull("not before 15 s: $t", f.takeLook(t, false)) }
+        for (i in 1..14) { t += 1000L; tf += 30; df += if (i == 5) 3 else 0; f.onReport(0, 1, tf, df, 1920, 1080, t); assertNull("not before 15 s: $t", f.takeLook(false)) }
         t += 1000L; tf += 30; f.onReport(0, 1, tf, df, 1920, 1080, t)
-        val l = f.takeLook(t, false)
+        val l = f.takeLook(false)
         assertNotNull(l)
         assertEquals(450, l!!.frames); assertEquals(3, l.dropped); assertEquals(15, l.seconds); assertEquals(1920, l.w); assertEquals(1080, l.h)
-        assertNull("what was taken is gone", f.takeLook(t, true))
+        assertNull("what was taken is gone", f.takeLook(true))
         t += 5000L; tf += 150; f.onReport(0, 1, tf, df, 1920, 1080, t)
-        val last = f.takeLook(t, true)                                    // the full screen ended: the rest is told too
+        val last = f.takeLook(true)                                    // the full screen ended: the rest is told too
         assertNotNull(last); assertEquals(150, last!!.frames); assertEquals(5, last.seconds)
     }
 
