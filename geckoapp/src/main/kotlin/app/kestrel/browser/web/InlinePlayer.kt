@@ -42,6 +42,10 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
         fun toPage(e: MotionEvent)
         /** A finger rested on the picture (a long press, LP1): the download options of the film open, as for a long press on the page's own video. */
         fun onLongPress()
+        /** ANS60c: the quality button was pressed: show these rows (the host draws the list over the page area and gives the pick to [pickQuality]); [closeQuality] ends it. */
+        fun openQuality(rows: List<QualitySheet.Row>)
+        fun closeQuality()
+        fun qualityOpen(): Boolean
     }
 
     var host: Listener? = null
@@ -49,6 +53,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     private val surface = SurfaceView(ctx).apply { setZOrderMediaOverlay(true) }   // above the engine's own surface (a regular one), still below the window's own views
     private val controls = PlayerControlsView(ctx).apply { inline = true }
     private var player: ExoPlayer? = null
+    private var quality: PlayerQuality? = null            // ANS60c: the quality list (the same rules as the full-screen player's)
     private val model = PlayerModel(this)
     private var priv = false
     var url = ""; private set
@@ -134,7 +139,11 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
         try {
             val built = PlayerFactory.create(context, url, headerLines)
             p = built.player
-            PlayerFactory.applyCap(p, capH)
+            val prefs = app.kestrel.browser.data.Prefs.get(context.applicationContext)
+            val q = PlayerQuality(priv, { prefs.inlineMaxH }, { prefs.inlineMaxH = it }, { e, t -> say(e, t) })       // (the person's own pick inside the page is remembered apart from the full-screen player's)
+            quality = q
+            q.begin(p, capH, null, false)                                                                            // Automatic, at most capH (480 in a small box) unless the person picked a size before
+            controls.showQuality = false
             p.addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(state: Int) { sample() }
                 override fun onPlayerError(error: PlaybackException) {
@@ -150,6 +159,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
                         fit()
                     }
                 }
+                override fun onTracksChanged(tracks: androidx.media3.common.Tracks) { controls.showQuality = q.onTracks(p, tracks) }       // one picture only (a plain file): no button
             })
             p.addAnalyticsListener(object : AnalyticsListener {
                 override fun onVideoDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
@@ -193,6 +203,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     fun stop(why: String, fullscreen: Boolean = false, failed: Boolean = false) {
         val p = player ?: return
         player = null
+        quality = null; controls.showQuality = false
         main.removeCallbacks(ticker); main.removeCallbacks(controlsTick); main.removeCallbacks(longPressRun)
         gestures?.stop()                                                           // ANS57: a gesture in progress ends, the window's brightness is the tablet's again
         var pos = 0L
@@ -313,6 +324,20 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     override fun onSeek(fraction: Double) { model.seekFraction(fraction); flush() }
     override fun onPin(on: Boolean) { model.pin(on) }
     override fun onFullscreen() { stop("the full-screen button", fullscreen = true) }
+    /** ANS60c (owner message 60): the quality list in the regular player size. */
+    override fun onQuality() {
+        val p = player ?: return; val q = quality ?: return
+        if (host?.qualityOpen() == true) { host?.closeQuality(); return }
+        val rows = q.rows(p)
+        if (rows.isEmpty()) return
+        model.pin(true)
+        host?.openQuality(rows)
+        say("quality-open", "${rows.size} row(s)")
+    }
+    /** A row of the list was picked (the host's sheet says so): that picture, and the list closes. */
+    fun pickQuality(row: QualitySheet.Row) { val p = player ?: return; quality?.pick(p, row); host?.closeQuality() }
+    /** The list closed (a pick, the x, a tap outside, Back, the end of the film). */
+    fun qualityClosed() { if (player != null) model.pin(false) }
 
     // ---------------------------------------------------------------------------------------- touch
 
