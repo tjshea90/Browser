@@ -213,7 +213,7 @@ test('a frame gets its own copy (about:blank frames the page makes included)', a
   const page = await open(P(1, false));
   const r = await page.evaluate(() => {
     const f = document.createElement('iframe'); document.body.appendChild(f);
-    return typeof f.contentWindow.MediaSource.isTypeSupported;
+    return f.contentWindow.MediaSource.isTypeSupported('video/webm; codecs="vp9"');
   });
-  assert.equal(r, 'function');
+  assert.equal(r, false, 'the frame the page made is covered too (the engine stand-in would say yes)');
 });
