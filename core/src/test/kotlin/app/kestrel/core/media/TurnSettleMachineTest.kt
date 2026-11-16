@@ -241,14 +241,15 @@ class TurnSettleMachineTest {
     }
 
     // review of alpha53: a page whose report is dropped (a single-page site whose address differs) must not keep the cover up for the whole cap
-    @Test fun aPageThatSaysNothingAtAllIsLetGoAfterThreeSecondsByTheOldRule() {
+    @Test fun aPageThatSaysNothingAtAllIsLetGoAfterTheSilentLimitByTheOldRuleAndIsNeverNudged() {
         val h = Host().apply { playing = true; expects = true }
         val m = machine(h)
         m.configChanged(true)
         while (m.turning && h.clock < 10_000) h.wait(m, TurnSettle.TICK_MS)
         assertFalse(m.turning)
-        assertTrue("about the silent limit, far short of the page cap: ${h.clock}", h.clock >= TurnSettle.SILENT_MS && h.clock < TurnSettle.SILENT_MS + 2 * TurnSettle.TICK_MS)
+        assertTrue("about the silent limit, short of the page cap: ${h.clock}", h.clock >= TurnSettle.SILENT_MS && h.clock < TurnSettle.SILENT_MS + 2 * TurnSettle.TICK_MS)
         assertEquals(listOf("tab1"), h.resumed)
+        assertEquals("ANS52: a page that said nothing is not nudged (a busy script thread cannot use two more size changes)", 0, h.nudges); assertEquals(0, m.nudges)
     }
 
     // ANS51c (owner message 51): the real tablet's page said its first word 3.56 s and 7.8 s after a turn; the line said "0 ms, 0 turns measured, 0 gave up" because nothing counted a page that was let go while silent
@@ -258,13 +259,13 @@ class TurnSettleMachineTest {
         m.configChanged(true)
         while (m.turning && h.clock < 10_000) h.wait(m, TurnSettle.TICK_MS)
         assertEquals("the page said nothing, the old rule let the cover go", 1, m.silent); assertEquals(0, m.lateCount)
-        h.clock = 3560L
-        m.pageReported(true)                                         // the tablet's first word, after the cover had gone
-        assertEquals(1, m.lateCount); assertEquals(3560L, m.lateLastMs); assertEquals(3560L, m.lateWorstMs)
+        h.clock = 7800L
+        m.pageReported(true)                                         // the tablet's second turn: the first word came 7.8 s after the turn, after the cover had gone
+        assertEquals(1, m.lateCount); assertEquals(7800L, m.lateLastMs); assertEquals(7800L, m.lateWorstMs)
         m.pageReported(true)                                         // the next report is an ordinary one: not measured again
         assertEquals(1, m.lateCount)
-        assertTrue(m.line(), m.line().contains("silent pages: 1 turns") && m.line().contains("1 spoke later") && m.line().contains("first word 3560 ms"))
-        assertTrue(h.logs.toString(), h.logs.any { it.startsWith("turn-late-word:") && it.contains("3560") })
+        assertTrue(m.line(), m.line().contains("silent pages: 1 turns") && m.line().contains("1 spoke later") && m.line().contains("first word 7800 ms"))
+        assertTrue(h.logs.toString(), h.logs.any { it.startsWith("turn-late-word:") && it.contains("7800") })
     }
 
     @Test fun aPageThatSpokeBeforeTheLimitIsNotSilentAndAPageThatIsNotExpectedIsNeither() {
