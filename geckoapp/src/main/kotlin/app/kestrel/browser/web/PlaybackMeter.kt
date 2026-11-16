@@ -19,7 +19,7 @@ class PlaybackMeter(private val priv: Boolean, private val say: (String, String)
     private var readyMs = -1L
     private var firstFrameAt = 0L
     private var wantPlay = true
-    private var seeking = false
+    private var seekAt = 0L                                    // when the person last sought or changed the picture (uptime ms, 0 = never)
     private var stallStartedAt = 0L
     private var stalls = 0
     private var stalledMs = 0L
@@ -30,9 +30,15 @@ class PlaybackMeter(private val priv: Boolean, private val say: (String, String)
     private var dropped = 0
     private var finished = false
 
+    /**
+     * A buffering that begins right after a seek or a picture change is that move's own, not the network failing. A TIME window, not a flag that waits for the next READY (review of alpha61): a seek inside the buffer
+     * (the 10 s back buffer makes most of them) and a picture change that keeps playing never buffer, so such a flag swallowed the first REAL stall that followed.
+     */
+    private fun justMoved(now: Long) = seekAt != 0L && now - seekAt < MOVE_WINDOW_MS
+
     /** The person picked another picture (or the cap changed): the wait that follows is the new picture arriving, not the network failing. */
     override fun onTrackSelectionParametersChanged(eventTime: AnalyticsListener.EventTime, trackSelectionParameters: androidx.media3.common.TrackSelectionParameters) {
-        if (firstFrameAt != 0L) { seeking = true; endStall(SystemClock.uptimeMillis(), counted = false) }
+        if (firstFrameAt != 0L) { val now = SystemClock.uptimeMillis(); seekAt = now; endStall(now, counted = false) }
     }
 
     override fun onPlayWhenReadyChanged(eventTime: AnalyticsListener.EventTime, playWhenReady: Boolean, reason: Int) {
@@ -41,7 +47,7 @@ class PlaybackMeter(private val priv: Boolean, private val say: (String, String)
     }
 
     override fun onPositionDiscontinuity(eventTime: AnalyticsListener.EventTime, oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
-        if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT) { seeking = true; endStall(SystemClock.uptimeMillis(), counted = false) }
+        if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT) { val now = SystemClock.uptimeMillis(); seekAt = now; endStall(now, counted = false) }
     }
 
     override fun onPlaybackStateChanged(eventTime: AnalyticsListener.EventTime, state: Int) {
@@ -49,9 +55,9 @@ class PlaybackMeter(private val priv: Boolean, private val say: (String, String)
         when (state) {
             Player.STATE_READY -> {
                 if (readyMs < 0L) { readyMs = now - startedAt; say("ready", "playable $readyMs ms after the start") }
-                endStall(now, counted = true); seeking = false
+                endStall(now, counted = true)
             }
-            Player.STATE_BUFFERING -> if (firstFrameAt != 0L && !seeking && wantPlay && stallStartedAt == 0L) stallStartedAt = now
+            Player.STATE_BUFFERING -> if (firstFrameAt != 0L && !justMoved(now) && wantPlay && stallStartedAt == 0L) stallStartedAt = now
             else -> endStall(now, counted = false)
         }
     }
@@ -94,4 +100,9 @@ class PlaybackMeter(private val priv: Boolean, private val say: (String, String)
     }
 
     private fun mbit(bps: Long): String = if (bps <= 0L) "-" else { val t = (bps + 50_000L) / 100_000L; "${t / 10}.${t % 10} Mbit/s" }
+
+    private companion object {
+        /** A seek out of the buffer starts buffering at once (a few ms); two seconds is generous. */
+        const val MOVE_WINDOW_MS = 2000L
+    }
 }
