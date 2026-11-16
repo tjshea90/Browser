@@ -661,6 +661,7 @@ open class BrowserActivity : Activity(), DockListener {
     /** ANS54e: did this touch end inside the page view (not in the toolbar, a sheet or a menu)? */
     private fun tapInPage(ev: android.view.MotionEvent): Boolean {
         if (!::geckoView.isInitialized || !geckoView.isShown) return false
+        if (::inline.isInitialized && inline.sheet.isOpen) return false                                         // ANS60c: a tap on the film's quality list is no tap on the page
         if (::inline.isInitialized && inline.active && inline.covers(ev.rawX, ev.rawY)) return false          // a tap on the film's own buttons is no tap on the page: it must not renew the press window
         val loc = IntArray(2); geckoView.getLocationOnScreen(loc)
         return ev.rawX >= loc[0] && ev.rawX <= loc[0] + geckoView.width && ev.rawY >= loc[1] && ev.rawY <= loc[1] + geckoView.height
@@ -967,6 +968,7 @@ open class BrowserActivity : Activity(), DockListener {
         content.addView(pullChip, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         inline = app.kestrel.browser.web.InlineHost(this, geckoView)   // ANS55f: above the page, below Home / error screens, the mini panel and every sheet (so they cover it)
         content.addView(inline.view, FrameLayout.LayoutParams(1, 1, Gravity.TOP or Gravity.LEFT))
+        content.addView(inline.sheet, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))   // ANS60c: the quality list of the film inside the page, over it
         geckoView.pull = pullListener
         geckoView.pullEnabled = {
             val t = current

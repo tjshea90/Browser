@@ -16,6 +16,8 @@ import org.mozilla.geckoview.GeckoSession
  */
 class InlineHost(private val a: BrowserActivity, private val engine: KestrelGeckoView) : InlinePlayer.Listener {
     val view = InlinePlayer(a).also { it.host = this }
+    /** ANS60c (owner message 60: the quality list in the regular player size): drawn over the whole page area (the film's box is too small for it), above the film; a pick goes to the film, Back and a tap outside close it. */
+    val sheet = QualitySheet(a).apply { listener = object : QualitySheet.Listener { override fun onPick(row: QualitySheet.Row) { view.pickQuality(row) } override fun onDismiss() { view.qualityClosed() } } }
     private var tab: Tab? = null
     private var session: GeckoSession? = null
     private var track: InlineBox.Track? = null
@@ -48,7 +50,7 @@ class InlineHost(private val a: BrowserActivity, private val engine: KestrelGeck
         this.box = boxNow; this.track = InlineBox.Track(boxNow, page.pageX, page.pageY); this.playing = url; this.pageUrl = tab.url.substringBefore('#')
         updates = 0; lastLogAt = 0L
         try { s.compositorScrollDelegate = scrollDelegate } catch (e: Throwable) { if (!tab.isPrivateTab) Health.log("inline", "scroll-delegate-failed", e.toString().take(80)); cleanup(); return false }
-        val cap = Math.min(a.prefs.nativeMaxH.let { if (it > 0) it else 480 }, 480).coerceAtLeast(240)       // a box is small: 480p is plenty and a slow link thanks it
+        val cap = 480                                                                                          // a box is small: 480p is plenty and a slow link thanks it (a size the person picked in the list inside the page is remembered and wins)
         if (!view.start(url, headerLines, startMs, tab.isPrivateTab, boxNow, cap)) { cleanup(); return false }
         a.inlineChanged()
         if (!tab.isPrivateTab) Health.log("inline", "placed", "page box ${page.w.toInt()}x${page.h.toInt()} css at ${page.x.toInt()},${page.y.toInt()} scroll ${page.pageX.toInt()},${page.pageY.toInt()} -> view $boxNow in ${engine.width}x${engine.height}")
@@ -68,8 +70,16 @@ class InlineHost(private val a: BrowserActivity, private val engine: KestrelGeck
         return rawX >= loc[0] && rawX <= loc[0] + view.width && rawY >= loc[1] && rawY <= loc[1] + view.height
     }
 
-    /** Back closes the film inside the page first (true = it did). */
-    fun backPressed(): Boolean { if (!view.active) return false; view.stop("Back"); return true }
+    /** Back closes the quality list first, then the film inside the page (true = it closed one of them). */
+    fun backPressed(): Boolean {
+        if (sheet.isOpen) { sheet.dismiss(); return true }
+        if (!view.active) return false
+        view.stop("Back"); return true
+    }
+
+    override fun openQuality(rows: List<QualitySheet.Row>) { sheet.show("Quality", rows, "Kestrel remembers your pick for the next films inside a page. A smaller picture and a lower frame rate are lighter for this tablet and for the hotspot.") }
+    override fun closeQuality() { sheet.dismiss() }
+    override fun qualityOpen(): Boolean = sheet.isOpen
 
     private fun cleanup() {
         try { session?.compositorScrollDelegate = null } catch (e: Throwable) { /* the session is gone */ }
@@ -77,6 +87,7 @@ class InlineHost(private val a: BrowserActivity, private val engine: KestrelGeck
     }
 
     override fun onEnded(why: String, positionMs: Long, fullscreen: Boolean, failed: Boolean) {
+        sheet.dismiss()                                                    // (a list of a film that is gone)
         val t = tab; val u = playing; val h = headers; val p = priv
         cleanup()
         a.inlineChanged()
