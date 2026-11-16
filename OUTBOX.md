@@ -2179,3 +2179,7 @@
 ## 2026-11-16T18:09:51Z
 > Those were older timers firing; the lab run itself isn't finished. I'll hold until the 230-second timer completes and then read the artifacts.
 <!-- sha:eab33a3a0fcd -->
+
+## 2026-11-16T18:10:05Z
+> Web tests: 576 of 576 pass, and the JVM suites passed earlier, both on the current head. Only the lab run remains; waiting for its timer.
+<!-- sha:8095b65f3000 -->
