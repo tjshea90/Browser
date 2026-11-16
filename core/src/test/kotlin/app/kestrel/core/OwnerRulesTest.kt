@@ -489,4 +489,29 @@ class OwnerRulesTest {
         assertTrue("the activity opens the list over the controls, closes it first on Back, and a tap on the sheet is not a tap on the picture", act.contains("qualitySheet.show(\"Quality\"") && act.contains("if (::qualitySheet.isInitialized && qualitySheet.isOpen) { qualitySheet.dismiss(); return true }") && ctl.contains("fun controlAt(wx: Float, wy: Float): Boolean = sheetOpen() ||"))
         assertTrue("a pick from the page's list wins over the remembered cap and is matched against what the stream really offers", np.contains("pick != null -> QualityLabel.pClass(pick.w, pick.h)") && np.contains("QualityLabel.nearest(w, rowsNow.map { it.first })") && np.contains("fun launch(from: Context, url: String, headers: List<String>, startMs: Long, maxH: Int, priv: Boolean, w: Int, h: Int, pick: QualityLabel.Rung? = null, auto: Boolean = false)"))
     }
+
+    @Test fun ownerMessage54IsActedOn() {
+        val dir = "geckoapp/src/main/assets/kestrel-shields/"
+        // the screen never turns by itself by default; the options box has an x
+        val prefs = source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt")
+        assertTrue("follow the tablet is the default of the full-screen turn mode, under a new key", prefs.contains("sp.getInt(\"fs_turn2\", app.kestrel.core.media.FullscreenTurn.MODE_FOLLOW)"))
+        assertTrue("the quality box has an x that closes it", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/QualitySheet.kt").let { it.contains("\\u2715") && it.contains("setOnClickListener { dismiss() }") })
+        // web videos play in Kestrel's own player: setting, flag, protocol
+        assertTrue("a setting with its row, on (Kestrel's player) by default", prefs.contains("sp.getInt(\"web_in_kestrel\", app.kestrel.core.media.WebHandOver.ALWAYS)") && source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("choice(\"Web videos play in\""))
+        val bridge = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt")
+        assertTrue("flag 2048 follows the setting and the press-to-play rule; the question is answered on the UI thread", bridge.contains("2048 else 0") && bridge.contains("early.optString(\"k\") == \"vh\"") && bridge.contains("Io.ui { val ok = try { handOver(early) }"))
+        val gate = source(dir + "gate-main.js")
+        assertTrue("the gate asks before a press starts a film: the play() of a press on the player, a play button over the picture, the engine's own controls, Kestrel's bar; no answer in 700 ms = the page plays", gate.contains("ASK_EVENT") && gate.contains("function askPlay(el, args)") && gate.contains("}, 700)") && gate.contains("function playLike(t, el)") && gate.contains("ask(el, 'kestrel'"))
+        assertTrue("a yes keeps the element closed and interrupts the page's play() (AbortError); a late yes still pauses", gate.contains("'AbortError'") && gate.contains("if (!finishAsk(q, yes) && yes) pauseEl(q.el)"))
+        val content = source(dir + "content.js")
+        assertTrue("the content script checks the question (address http(s), numbers, a few dozen per document) and relays it as vhand", content.contains("k: 'vhand'") && content.contains("asked >= 60") && content.contains("/^https?:\\/\\//i.test(q.s)"))
+        assertTrue("the background page adds the page and the frame and answers {h: 0|1} (anything else is no)", source(dir + "background.js").let { it.contains("m.k !== 'vhand'") && it.contains("k: 'vh'") && it.contains("ho: told && (f & 2048) !== 0") })
+        // the app: the decision is core's, the start is VideoFlow's, a failure goes back to the page
+        val flow = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/VideoFlow.kt")
+        assertTrue("VideoFlow decides with the pure rules, never twice, never for a tab that is not in front", flow.contains("WebHandOver.decide(mode, why, el, knownIn(tab, frame))") && flow.contains("NativePlayerStats.active || now - NativePlayerStats.launchedAt < 3000L") && flow.contains("tab !== a.current"))
+        assertTrue("a film that went full screen in the page moves over at its first report; a playlist that comes late within 6 s of a refused press too", flow.contains("fun handOverFullscreen(") && flow.contains("fun lateHandOver(").not().not() && flow.contains("SystemClock.uptimeMillis() - r.at > 6000L") && source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("player.onFirstReport = { t, d -> fullscreenTab?.let"))
+        val np = source("geckoapp/src/main/kotlin/app/kestrel/browser/NativePlayerActivity.kt")
+        assertTrue("Kestrel's player ends with RESULT_FAILED when it fails before its first picture, and the browser leaves that page to its own player for two minutes", np.contains("if (fromPage && firstPictureAt == 0L) { setResult(RESULT_FAILED)") && flow.contains("handOverOffUntil = SystemClock.uptimeMillis() + 120_000L") && source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("NativePlayerActivity.RESULT_FAILED) video.nativeFailed()"))
+        assertTrue("Diagnostics has its line", source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("WebHandStats.line(prefs.webVideoMode)"))
+    }
 }
