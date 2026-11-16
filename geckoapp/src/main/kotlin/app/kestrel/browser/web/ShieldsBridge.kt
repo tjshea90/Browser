@@ -116,7 +116,7 @@ class ShieldsBridge(
                 return@post
             }
             val reply: Any = try {
-                val m = parse(raw)
+                val m = early ?: parse(raw)                                // (one parse per message: this is the lane of every request the blocker judges)
                 if (m == null) "" else when (m.optString("k")) {
                     "req" -> if (shouldBlock(m.optString("u"), m.optString("t"), m.optString("p"))) "1" else "0"
                     "cfg" -> pageConfig(m.optString("h"))

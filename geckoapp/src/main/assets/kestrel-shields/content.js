@@ -448,10 +448,15 @@
     }, true);
     // ANS54e: the gate asks whether Kestrel's own player takes the film the person pressed. Any page script can dispatch the same event, so everything is checked here (the address must be http(s), numbers are
     // clamped, a document gets a few dozen questions) and only the answer of the app goes back. The app decides; a refusal or no answer means the page plays the film itself.
-    var AEV = '__kst_gate_ask_v1', NEV = '__kst_gate_ans_v1', asked = 0;
+    var AEV = '__kst_gate_ask_v1', NEV = '__kst_gate_ans_v1', asked = 0, seenAt = 0;
+    // The gate runs in the PAGE's world: any script of the page can dispatch its question. A genuine question follows a press, so it is relayed only while the engine itself says a person touched this document a moment ago
+    // (navigator.userActivation: a script cannot set it) or while our own listeners saw a trusted tap, key or play of the engine's own controls in the last 12 s (the activation lasts 5 s; a slow page answers a tap later).
+    function seen(e) { if (e && e.isTrusted) seenAt = Date.now(); }
+    ['pointerup', 'click', 'keydown', 'touchend', 'play'].forEach(function (t) { try { window.addEventListener(t, seen, { capture: true, passive: true }); } catch (x) { /* ignore */ } });
+    function touched() { try { var ua = navigator.userActivation; if (ua && typeof ua.isActive === 'boolean' && ua.isActive) return true; } catch (x) { /* an older engine */ } return Date.now() - seenAt < 12000; }
     document.addEventListener(AEV, function (e) {
       try {
-        if (!ho || asked >= 60 || typeof e.detail !== 'string' || e.detail.length > 3000) return;
+        if (!ho || asked >= 60 || typeof e.detail !== 'string' || e.detail.length > 3000 || !touched()) return;
         var q = JSON.parse(e.detail), id = q.i | 0;
         if (!(id > 0 && id < 1000000)) return;
         function num(v, hi) { v = +v; return (v >= 0 && v <= hi) ? v : 0; }

@@ -464,6 +464,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         if (::turner.isInitialized) turner.exit()
         say("stop", "Kestrel's own player ended")
         NativePlayerStats.active = false
+        NativePlayerStats.launchedAt = 0L
         super.onDestroy()
     }
 
@@ -493,7 +494,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
                 .putExtra(EXTRA_MAX_H, maxH).putExtra(EXTRA_PRIVATE, priv).putExtra(EXTRA_W, w).putExtra(EXTRA_H, h)
             if (pick != null) i.putExtra(EXTRA_PICK, QualityLabel.encode(pick))
             if (auto) i.putExtra(EXTRA_AUTO, true)
-            NativePlayerStats.launchedAt = SystemClock.uptimeMillis(); NativePlayerStats.launchedUrl = url
+            NativePlayerStats.launchedAt = SystemClock.uptimeMillis(); NativePlayerStats.launchedUrl = if (priv) "" else url
             if (fromPage && from is Activity) { i.putExtra(EXTRA_FROM_PAGE, true); from.startActivityForResult(i, REQ_PAGE_FILM) } else from.startActivity(i)
         }
     }

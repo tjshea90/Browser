@@ -66,7 +66,7 @@ class VideoFlow(private val a: BrowserActivity) {
     }
 
     /** What the tab's list held is gone (a new page): the list is emptied and everything learned about its entries is forgotten, so the same address on the next page is read afresh. UI thread. */
-    fun clearTab(tab: Tab) { tab.gecko.pictureW = 0; tab.gecko.pictureH = 0; tab.gecko.picturePlayed = false; val keys = tab.media.keys(); tab.media.clear(); forget(keys); looks.remove(tab.id); val p = tab.id.toString() + "|"; maybeAsked.removeAll { it.startsWith(p) } }
+    fun clearTab(tab: Tab) { tab.gecko.pictureW = 0; tab.gecko.pictureH = 0; tab.gecko.picturePlayed = false; val keys = tab.media.keys(); tab.media.clear(); forget(keys); looks.remove(tab.id); val p = tab.id.toString() + "|"; maybeAsked.removeAll { it.startsWith(p) }; if (lastRefused?.tabId == tab.id) lastRefused = null }
 
     private fun forget(keys: List<String>) {
         for (k in keys) { lookedKeys.remove(k); streamInfo.remove(k); probed.remove(k); sized.remove(k); masterRungs.remove(k); masterAsked.remove(k); childUrls.remove(k)?.forEach { children.remove(it) } }
@@ -329,7 +329,7 @@ class VideoFlow(private val a: BrowserActivity) {
     // ---- ANS54e (owner message 54: "I want the web video players to use this"; research/ANS54_DESIGN.md): the film a page is about to play is played by Kestrel's own player when it can. The page's gate asks (`vh`: the
     // element, what the person did), WebHandOver (core, tested) decides, and a yes starts NativePlayerActivity; the page keeps its element closed. Catch-alls: a film that went full screen in the page, and a playlist the
     // sniffer sees within 6 s after a press that had to be refused for want of a stream. UI thread.
-    private class Refused(val tabId: Long, val at: Long, val frame: String, val el: WebHandOver.Element)
+    private class Refused(val tabId: Long, val page: String, val at: Long, val frame: String, val el: WebHandOver.Element)   // (the page too: a link tapped a moment later is not the page whose press was refused)
     private var lastRefused: Refused? = null
 
     private fun elementOf(m: JSONObject) = WebHandOver.Element(m.optString("s"), m.optInt("b") == 1, m.optString("m"), m.optInt("l") == 1, m.optInt("w"), m.optInt("h"), m.optDouble("t", 0.0), m.optDouble("d", 0.0))
@@ -356,13 +356,13 @@ class VideoFlow(private val a: BrowserActivity) {
         if (mode == WebHandOver.NEVER) return decline(tab, "the setting says the page's own player")
         if (tab !== a.current || tab.isNewTab || a.onHomeScreen(tab)) return decline(tab, "not the page in front")
         val now = SystemClock.uptimeMillis()
-        if (a.lastPressAt == 0L || now - a.lastPressAt > WebHandOver.pressWindowMs(why)) return decline(tab, "no tap of the person just before")   // a page's script can fake the question, not a finger
-        if (NativePlayerStats.active || now - NativePlayerStats.launchedAt < 3000L) { if (!tab.isPrivateTab) WebHandStats.repeats++; return true }   // it is up (or just started): the page keeps its element closed, no second player
         if (now < tab.gecko.handOverOffUntil) return decline(tab, "Kestrel's player failed on this page a moment ago")
+        if (NativePlayerStats.active || now - NativePlayerStats.launchedAt < 3000L) { if (!tab.isPrivateTab) WebHandStats.repeats++; return true }   // it is up (or just started): the page keeps its element closed, no second player
+        if (a.lastPressAt == 0L || now - a.lastPressAt > WebHandOver.pressWindowMs(why)) return decline(tab, "no tap of the person just before")   // a page's script can fake the question, not a finger (the tap counts once: it is used up below)
         val known = knownIn(tab, frame).let { k -> if (why == WebHandOver.Why.LATE) k.filter { it.durationMs >= WebHandOver.FILM_MS } else k }   // (a playlist that comes late must be known to be as long as a film: it may be an advertisement)
         val d = WebHandOver.decide(mode, why, el, known)
         if (d == null) {
-            lastRefused = if (el.blob && why != WebHandOver.Why.FULLSCREEN && why != WebHandOver.Why.LATE && mode == WebHandOver.ALWAYS) Refused(tab.id, now, frame, el) else null
+            lastRefused = if (el.blob && why != WebHandOver.Why.FULLSCREEN && why != WebHandOver.Why.LATE && mode == WebHandOver.ALWAYS && !tab.isPrivateTab) Refused(tab.id, tab.url.substringBefore('#'), now, frame, el) else null
             return decline(tab, if (mode == WebHandOver.FULLSCREEN && why != WebHandOver.Why.FULLSCREEN) "the setting says full screen only" else if (el.loop) "a loop clip" else if (el.blob) "no stream known (yet)" else "not a file or stream Kestrel's player plays")
         }
         lastRefused = null
@@ -378,6 +378,7 @@ class VideoFlow(private val a: BrowserActivity) {
             Health.log("video", "hand-over", "${why.name.lowercase()} ${if (d.kind == MediaKind.HLS) "HLS" else "file"} from ${startMs / 1000} s (${d.note})")
         }
         NativePlayerActivity.launch(a, d.url, headers, startMs, if (d.kind == MediaKind.HLS) 720 else 1080, tab.isPrivateTab, 0, 0, fromPage = true)
+        a.lastPressAt = 0L
         if (a.isFullscreenOf(tab)) a.exitFullscreenFromControls()                  // a film that was full screen in the page: the page's full screen ends, Kestrel's player takes the screen
         return true
     }
@@ -393,7 +394,7 @@ class VideoFlow(private val a: BrowserActivity) {
     /** A film-length playlist the sniffer saw within 10 s after a press that was refused for want of a stream (a player that asks for its playlist only after the click): the film moves over now, the page's media session is paused. */
     private fun lateHandOver(tab: Tab, c: MediaCandidate) {
         val r = lastRefused ?: return
-        if (r.tabId != tab.id || SystemClock.uptimeMillis() - r.at > 10_000L || c.frame != r.frame) return
+        if (r.tabId != tab.id || r.page != tab.url.substringBefore('#') || SystemClock.uptimeMillis() - r.at > 10_000L || c.frame != r.frame) return
         lastRefused = null
         if (start(tab, WebHandOver.Why.LATE, r.el, c.frame)) try { tab.gecko.mediaSession?.pause() } catch (e: Throwable) { /* none */ }
     }
@@ -402,6 +403,7 @@ class VideoFlow(private val a: BrowserActivity) {
     fun nativeFailed() {
         val t = a.current ?: return
         t.gecko.handOverOffUntil = SystemClock.uptimeMillis() + 120_000L
+        NativePlayerStats.launchedAt = 0L                                              // (it is over: a press now is a new one, not the same launch)
         if (!t.isPrivateTab) WebHandStats.failed++
         a.toast("Kestrel's own player could not play this film. Press play again: the page's own player will.")
     }

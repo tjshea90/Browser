@@ -1019,7 +1019,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || (sender.frameId === 0 ? docOf(sender.url) : ''), frame = sender.frameId === 0 ? '' : docOf(sender.url);
   var o = { k: 'vh', y: (m.y === 'press' || m.y === 'kestrel') ? m.y : 'play', s: (typeof m.s === 'string' && /^https?:\/\//i.test(m.s) && m.s.length <= 2000) ? m.s : '', b: m.b === 1 ? 1 : 0,
     m: String(m.m || '').replace(/[^A-Za-z0-9\/.+;=, -]/g, '').slice(0, 60), l: m.l === 1 ? 1 : 0, w: Math.round(n(m.w, 20000)), h: Math.round(n(m.h, 20000)), t: n(m.t, 1e7), d: n(m.d, 1e7),
-    p: String(page).slice(0, 300), f: String(frame).slice(0, 300) };
+    p: String(page).slice(0, 300), f: String(frame).slice(0, 2000) };       // (the frame is matched against the sniffed streams of that frame, whose address is not cut at 300: knownIn compares them whole)
   return send(o).then(function (r) { try { var j = r ? JSON.parse(r) : null; return { h: (j && j.h === 1) ? 1 : 0 }; } catch (e) { return { h: 0 }; } }, function () { return { h: 0 }; });
 });
 
