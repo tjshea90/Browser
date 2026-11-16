@@ -527,13 +527,13 @@ class H(http.server.BaseHTTPRequestHandler):
                 name = p[7:]
                 src = (q.get("src") or [""])[0] or "/clip/%s.mp4" % name
                 return self._send(page_video(name, src.replace("'", "%27")))
+            if p == "/clip/frag.mp4":
+                return self._file(os.path.join(OUT, "frag.mp4"), "video/mp4")
             if p.startswith("/clip/") and p.endswith(".mp4"):
                 name = p[6:-4]
                 if name in CLIPS:
                     return self._file(os.path.join(OUT, CLIPS[name][2]), "video/mp4")
                 return self._send(b"unknown clip", "text/plain", 404)
-            if p == "/clip/frag.mp4":
-                return self._file(os.path.join(OUT, "frag.mp4"), "video/mp4")
             if p == "/clip/tone.m4a":
                 return self._file(os.path.join(OUT, "tone.m4a"), "audio/mp4")
             if p == "/blank":
