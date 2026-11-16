@@ -320,7 +320,7 @@ window.KestrelVB = window.KestrelVB || (function () {
       try { var s = v.seekable; if (s && s.length) { var a = s.start(0), b = s.end(s.length - 1); if (b - a > 30 && b < 4294967296) return { a: a, b: b, live: true }; } } catch (e) { /* no range */ }
       return null;
     }
-    function playIt(v) { try { var p = v.play(); if (p && p.catch) p.catch(function () {}); } catch (e) { /* the page decides */ } }
+    function playIt(v) { try { if (VF && VF.gate) VF.gate(v); var p = v.play(); if (p && p.catch) p.catch(function () {}); } catch (e) { /* the page decides */ } }
 
     function fsTarget(v) {            // the player's box: the nearest ancestor about as big as the picture (through shadow hosts), or the video itself
       var r = v.getBoundingClientRect(), n = v;

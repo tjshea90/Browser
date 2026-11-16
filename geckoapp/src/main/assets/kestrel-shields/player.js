@@ -205,7 +205,7 @@ window.KestrelVP = window.KestrelVP || (function () {
       if (!v || !c) return;
       try {
         switch (c.a) {
-          case 'play': { var p = v.play(); if (p && p.catch) p.catch(noop); break; }
+          case 'play': { if (VF && VF.gate) VF.gate(v); var p = v.play(); if (p && p.catch) p.catch(noop); break; }
           case 'pause': v.pause(); break;
           case 'seek': if (isFinite(c.t)) v.currentTime = Math.max(0, +c.t); break;
           case 'skip': {

@@ -165,5 +165,9 @@ window.KestrelVF = window.KestrelVF || (function () {
     if (document.readyState === 'complete') go(); else window.addEventListener('load', go);
   }
 
-  return { at: at, all: all, covered: covered, rect: rect, rootOf: rootOf, playing: playing, srcOf: srcOf, bare: bare, probe: probe, pressedAt: 0 };
+  // ANS53a / ANS53b: the person pressed a control of Kestrel's own (the video bar, the full-screen controls, the one-press-plays help): the page-side gate (gate-main.js) lets THIS film load and start. The event goes
+  // to the element itself (gate-main.js listens there, also inside a shadow tree); a play() of ours does not pass through the page's replacement of play(), so it has to be told.
+  function gate(el) { try { el.dispatchEvent(new CustomEvent('__kst_gate_v1')); } catch (e) { /* never break the page */ } }
+
+  return { at: at, all: all, covered: covered, rect: rect, rootOf: rootOf, playing: playing, srcOf: srcOf, bare: bare, probe: probe, gate: gate, pressedAt: 0 };
 })();

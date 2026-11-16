@@ -518,6 +518,7 @@
     }
     function startMedia(v) {
       try {
+        if (window.KestrelVF && window.KestrelVF.gate) window.KestrelVF.gate(v);       // ANS53a/b: the person's press: the page-side gate lets this film load
         var p = v.play();
         // a frame that was not pressed itself may be refused sound: start it muted rather than not at all
         if (p && p.catch) p.catch(function () { try { v.muted = true; var q = v.play(); if (q && q.catch) q.catch(function () { /* ignore */ }); } catch (e) { /* ignore */ } });
