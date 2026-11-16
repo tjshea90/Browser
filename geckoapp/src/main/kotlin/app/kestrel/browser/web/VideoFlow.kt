@@ -92,7 +92,7 @@ class VideoFlow(private val a: BrowserActivity) {
     /** Called on the Shields worker thread. */
     fun seen(c: MediaCandidate) = Io.ui {
         val t = tabOf(c.page) ?: return@ui
-        if (t.media.add(c)) { a.refreshDownloadButton(); if (c.fromMarkup) verifySoon(t); if (c.kind == MediaKind.HLS) { lookSoon(t); lateHandOver(t, c) } }
+        if (t.media.add(c)) { a.refreshDownloadButton(); if (c.fromMarkup) verifySoon(t); if (c.kind == MediaKind.HLS) lookSoon(t) }
     }
 
     // ---- RX3-V5 (research/FINDER_LAB.md section 3): the early look. A stream playlist the page asked for is read at idle (a few KB: the master and its lowest quality) so that live, protected and clip-sized streams
@@ -143,6 +143,7 @@ class VideoFlow(private val a: BrowserActivity) {
         val live = problem == Hls.Problem.LIVE
         val drm = problem == Hls.Problem.DRM || problem == Hls.Problem.SAMPLE_AES
         if (t.media.applyStream(c.url, live, drm, durationMs, adMs, breaks, heights)) { a.refreshDownloadButton(); refresh(t) }
+        if (!drm && durationMs >= WebHandOver.FILM_MS) lateHandOver(t, c)       // ANS54e: a film-length stream the sniffer saw right after a press that was refused for want of one
         Health.log("media", "look", "${c.kind} live=$live drm=$drm length=${durationMs / 1000}s heights=${heights.size} advertising=${adMs / 1000}s in $breaks breaks counted=${t.media.usableCount()} of ${t.media.size} playing=${t.media.primary()?.let { (it.durationMs / 1000).toString() + "s" } ?: "none"}")
     }
 
@@ -357,7 +358,8 @@ class VideoFlow(private val a: BrowserActivity) {
         val now = SystemClock.uptimeMillis()
         if (NativePlayerStats.active || now - NativePlayerStats.launchedAt < 3000L) { if (!tab.isPrivateTab) WebHandStats.repeats++; return true }   // it is up (or just started): the page keeps its element closed, no second player
         if (now < tab.gecko.handOverOffUntil) return decline(tab, "Kestrel's player failed on this page a moment ago")
-        val d = WebHandOver.decide(mode, why, el, knownIn(tab, frame))
+        val known = knownIn(tab, frame).let { k -> if (why == WebHandOver.Why.LATE) k.filter { it.durationMs >= WebHandOver.FILM_MS } else k }   // (a playlist that comes late must be known to be as long as a film: it may be an advertisement)
+        val d = WebHandOver.decide(mode, why, el, known)
         if (d == null) {
             lastRefused = if (el.blob && why != WebHandOver.Why.FULLSCREEN && why != WebHandOver.Why.LATE && mode == WebHandOver.ALWAYS) Refused(tab.id, now, frame, el) else null
             return decline(tab, if (mode == WebHandOver.FULLSCREEN && why != WebHandOver.Why.FULLSCREEN) "the setting says full screen only" else if (el.loop) "a loop clip" else if (el.blob) "no stream known (yet)" else "not a file or stream Kestrel's player plays")
@@ -384,10 +386,10 @@ class VideoFlow(private val a: BrowserActivity) {
         return start(tab, WebHandOver.Why.FULLSCREEN, WebHandOver.Element(src, false, p?.mime.orEmpty(), false, 0, 0, timeS, lengthS), p?.frame.orEmpty())
     }
 
-    /** A playlist the sniffer saw right after a press that was refused for want of a stream (a player that asks for its playlist only after the click): the film moves over now, the page's media session is paused. */
+    /** A film-length playlist the sniffer saw within 10 s after a press that was refused for want of a stream (a player that asks for its playlist only after the click): the film moves over now, the page's media session is paused. */
     private fun lateHandOver(tab: Tab, c: MediaCandidate) {
         val r = lastRefused ?: return
-        if (r.tabId != tab.id || SystemClock.uptimeMillis() - r.at > 6000L || c.frame != r.frame) return
+        if (r.tabId != tab.id || SystemClock.uptimeMillis() - r.at > 10_000L || c.frame != r.frame) return
         lastRefused = null
         if (start(tab, WebHandOver.Why.LATE, r.el, c.frame)) try { tab.gecko.mediaSession?.pause() } catch (e: Throwable) { /* none */ }
     }
