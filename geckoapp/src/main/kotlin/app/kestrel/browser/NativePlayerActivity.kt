@@ -85,6 +85,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     private var framesAtStart = 0L
     private lateinit var turner: FullscreenTurner
     private lateinit var sheet: QualitySheet
+    private var fromPage = false                              // ANS54e: started for a film of a web page: a failure before the first picture goes back to the page (RESULT_FAILED)
     private var chosen: QualityLabel.Rung? = null          // the picture the person picked (null = Automatic)
     private var capH = 720
     private var wanted: QualityLabel.Rung? = null        // ANS53d.2: the picture picked in the list of the page's film, applied as soon as the stream says what it offers
@@ -105,6 +106,8 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         val i = intent
         val url = i.getStringExtra(EXTRA_URL).orEmpty()
         priv = i.getBooleanExtra(EXTRA_PRIVATE, false)
+        fromPage = i.getBooleanExtra(EXTRA_FROM_PAGE, false)
+        NativePlayerStats.active = true
         picW = i.getIntExtra(EXTRA_W, 0); picH = i.getIntExtra(EXTRA_H, 0)
         if (url.isEmpty()) { finish(); return }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -176,6 +179,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
                 if (!priv) { NativePlayerStats.errors++; NativePlayerStats.last = "error ${error.errorCodeName}" }
                 say("error", "${error.errorCodeName}: ${error.message.orEmpty().take(120)}")
                 sample()
+                if (fromPage && firstPictureAt == 0L) { setResult(RESULT_FAILED); say("back-to-page", "failed before the first picture: the page's own player takes over"); finish() }   // ANS54e
             }
             override fun onVideoSizeChanged(size: VideoSize) {
                 if (size.width > 0 && size.height > 0) {
@@ -304,6 +308,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     private fun fail(why: String) {
         if (!priv) { NativePlayerStats.errors++; NativePlayerStats.last = why }
         say("failed", why)
+        if (fromPage) setResult(RESULT_FAILED)
         finish()
     }
 
@@ -455,6 +460,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         model.stop()
         if (::turner.isInitialized) turner.exit()
         say("stop", "Kestrel's own player ended")
+        NativePlayerStats.active = false
         super.onDestroy()
     }
 
@@ -467,17 +473,21 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         const val EXTRA_PICK = "pq"            // ANS53d.2: the picture picked in the page's quality list, QualityLabel.encode
         const val EXTRA_AUTO = "au"            // ANS53d.2: Automatic picked in that list (the remembered cap is forgotten)
         const val EXTRA_W = "w"
+        const val EXTRA_FROM_PAGE = "fp"        // ANS54e: started for a film of a web page (the result says whether it failed)
+        const val RESULT_FAILED = 7001
+        const val REQ_PAGE_FILM = 1003
         const val EXTRA_H = "hh"
 
         /** Where the last play stopped (for a page that wants to continue from there). */
         @Volatile var lastPositionMs = 0L
 
-        fun launch(from: Context, url: String, headers: List<String>, startMs: Long, maxH: Int, priv: Boolean, w: Int, h: Int, pick: QualityLabel.Rung? = null, auto: Boolean = false) {
+        fun launch(from: Context, url: String, headers: List<String>, startMs: Long, maxH: Int, priv: Boolean, w: Int, h: Int, pick: QualityLabel.Rung? = null, auto: Boolean = false, fromPage: Boolean = false) {
             val i = Intent(from, NativePlayerActivity::class.java).putExtra(EXTRA_URL, url).putExtra(EXTRA_HEADERS, headers.toTypedArray()).putExtra(EXTRA_START_MS, startMs)
                 .putExtra(EXTRA_MAX_H, maxH).putExtra(EXTRA_PRIVATE, priv).putExtra(EXTRA_W, w).putExtra(EXTRA_H, h)
             if (pick != null) i.putExtra(EXTRA_PICK, QualityLabel.encode(pick))
             if (auto) i.putExtra(EXTRA_AUTO, true)
-            from.startActivity(i)
+            NativePlayerStats.launchedAt = SystemClock.uptimeMillis(); NativePlayerStats.launchedUrl = url
+            if (fromPage && from is Activity) { i.putExtra(EXTRA_FROM_PAGE, true); from.startActivityForResult(i, REQ_PAGE_FILM) } else from.startActivity(i)
         }
     }
 }

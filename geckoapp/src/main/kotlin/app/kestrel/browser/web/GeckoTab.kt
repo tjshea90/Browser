@@ -24,6 +24,8 @@ class GeckoTabData {
     var pageStartedAt = 0L
     var pageStartUrl = ""
     var pictureH = 0
+    /** ANS54e: Kestrel's own player failed on a film of this page (before its first picture): until this uptime the page's own player plays its films (no second hand-over). */
+    @Volatile var handOverOffUntil = 0L
     var picturePlayed = false
     var fieldInput: app.kestrel.browser.PageFieldInput? = null // AU3: sees the page's text field gain and lose focus; the mini keyboard types through it
 }

@@ -20,6 +20,10 @@ object NativePlayerStats {
     @Volatile var qualityPicks = 0
     @Volatile var lastQuality = ""
     @Volatile var rotates = 0
+    /** ANS54e: Kestrel's own player screen is up now / was started at this uptime (ms) for this address: a page that asks again meanwhile gets a yes and no second player. */
+    @Volatile var active = false
+    @Volatile var launchedAt = 0L
+    @Volatile var launchedUrl = ""
 
     fun line(): String {
         if (plays == 0 && errors == 0) return "Kestrel's own player: $last"
