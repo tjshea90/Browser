@@ -64,8 +64,8 @@ class Phone:
     def start_app(self):
         return self.a.sh("am start -n %s/%s" % (self.pkg, ACT), timeout=30)
 
-    def debug(self, what, arg=None):
-        return self.a.sh("am start -n %s/%s --es kestrel_debug %s%s" % (self.pkg, ACT, what, (" --es kestrel_arg %s" % shlex.quote(arg)) if arg else ""), timeout=30)
+    def debug(self, what, arg=None, pick=None):
+        return self.a.sh("am start -n %s/%s --es kestrel_debug %s%s%s" % (self.pkg, ACT, what, (" --es kestrel_arg %s" % shlex.quote(arg)) if arg else "", (" --es kestrel_pick %s" % shlex.quote(pick)) if pick else ""), timeout=30)
 
     def debug_native(self, what, arg=None):
         """A debug command for the screen of Kestrel's own player that is in front (single top: the running screen gets it, no second one is made)."""
@@ -1872,6 +1872,20 @@ class Soak:
             check("ANS53d: and Automatic gives the choice back", any("Automatic" in q["rest"] for q in ev("native", "quality", m)), "lines: %s" % [q["rest"][:60] for q in ev("native", "quality", m)])
         m = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(3)
         check("Back ends Kestrel's own player", bool(ev("native", "stop", m)), "no 'native stop' line")
+        if hls:
+            # ANS53d.2 (owner message 53: a quality button in the page's own controls): the page's list hands the film over with a pick; the lab drives the same launch (an address of the lab server + the pick as text)
+            m = self.log.size()
+            self.ph.debug("nativeurl", "%s/hls/film/master.m3u8" % self.lab_base, pick="320,180,0,0")
+            t_end = time.time() + 25
+            while time.time() < t_end and not ev("native", "pick-applied", m):
+                time.sleep(1)
+            sq = ev("native", "start-quality", m)
+            check("ANS53d.2: a pick made in the page's list reaches Kestrel's own player (the cap follows it)", any("picked in the page's list" in q["rest"] and "cap 180p" in q["rest"] for q in sq), "lines: %s" % [q["rest"][:90] for q in sq])
+            pa = ev("native", "pick-applied", m)
+            check("ANS53d.2: the picture it names is found among the stream's pictures and played", any("180p -> 180p" in q["rest"] for q in pa), "lines: %s" % [q["rest"][:90] for q in pa])
+            self.shot("np-7-handover-pick")
+            m = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(3)
+            check("ANS53d.2: Back ends that player too", bool(ev("native", "stop", m)), "no 'native stop' line")
         self.dump_diag("np-hls" if hls else "np")
         diag = ""
         try:
