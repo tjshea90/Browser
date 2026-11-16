@@ -41,6 +41,8 @@ const settle = (page, ms) => page.waitForTimeout(ms || 250);
 // what play() does, without waiting for a film that never gets a byte in these pages (a pending promise is the engine waiting for data)
 const PLAY = "(el) => Promise.race([el.play().then(() => 'ok', (e) => e.name + ': ' + e.message.slice(0, 40)), new Promise((r) => setTimeout(() => r('pending'), 300))])";
 
+// NOTE: Playwright's evaluate() runs with a user activation (CDP userGesture), so anything that must happen WITHOUT one is done by the page's own timer at load.
+const LATE_PLAY = '<script>setTimeout(function () { var v = document.getElementById("v"); v.play().then(function () { window.__r = "ok"; }, function (e) { window.__r = e.name + ": " + e.message.slice(0, 40); }); }, 150);</script>';
 const VID = '<video id="v" style="display:block;width:320px;height:180px"></video>';
 const MSE = `<video id="v" style="display:block;width:320px;height:180px"></video><div id="far" style="width:300px;height:100px;margin-top:40px">elsewhere</div>
   <script>window.ms = new MediaSource(); window.opened = 0; ms.addEventListener('sourceopen', function () { window.opened++; });
@@ -60,9 +62,9 @@ test('a MediaSource attach is held: the player gets no sourceopen, so a script p
 });
 
 test('play() without a user activation is refused like the engine would, with a user activation it opens the element and goes through', async () => {
-  const page = await open(MSE);
-  const refused = await page.evaluate(`(${PLAY})(document.getElementById('v'))`);
-  assert.match(refused, /^NotAllowedError: The play method is not allowed/);
+  const page = await open(MSE + LATE_PLAY);
+  await settle(page, 600);
+  assert.match(await page.evaluate(() => window.__r), /^NotAllowedError: The play method is not allowed/);
   assert.equal(await page.evaluate(() => window.opened), 0);
   await tapOn(page, '#far');                                                // a real tap on the page (not on the picture): a transient user activation
   const r = await page.evaluate(`(${PLAY})(document.getElementById('v'))`);
@@ -88,11 +90,14 @@ test('autoplay in the markup and set by a script is not applied while the elemen
   assert.deepEqual(st, { vAttr: false, vPaused: true, wAttr: false, wProp: true, wPaused: true }, 'the page thinks its autoplay is set; the engine never saw it');
 });
 
-test('load() is held and a `play()` after a tap on the picture runs it', async () => {
-  const page = await open(VID);
-  await page.evaluate(() => { const v = document.getElementById('v'); window.__loads = 0; v.addEventListener('loadstart', () => window.__loads++); v.src = 'https://cdn.example/a.mp4'; v.load(); });
-  await settle(page, 400);
-  assert.deepEqual(page.media, [], 'preload none: the file is not asked for');
+test('load() is held and a new element is made safe at once; a tap on the picture lets the page\'s own source load', async () => {
+  const page = await open(VID + '<script>var v = document.getElementById("v"); v.src = "https://cdn.example/a.mp4"; v.load();</script>');
+  await settle(page, 500);
+  assert.deepEqual(page.media, [], 'preload none (forced): the file is not asked for, not even its first bytes');
+  assert.equal(await page.evaluate(() => document.getElementById('v').getAttribute('preload')), 'none');
+  await tapOn(page, '#v'); await settle(page, 600);
+  assert.deepEqual(page.media, ['/a.mp4'], 'after the press the page\'s own load runs');
+  assert.equal(await page.evaluate(() => document.getElementById('v').hasAttribute('preload')), false, 'and the engine\'s own default is back: the page never set one');
 });
 
 test('Kestrel\'s own controls open an element with __kst_gate_v1 on it, also one inside a closed shadow tree', async () => {
@@ -139,9 +144,8 @@ test('the setting off lets everything go at once, also what was held before, and
 });
 
 test('what was held and opened is counted and reported once as numbers', async () => {
-  const page = await open(MSE);
-  await settle(page, 300);
-  await page.evaluate(`(${PLAY})(document.getElementById('v'))`);
+  const page = await open(MSE + LATE_PLAY);
+  await settle(page, 600);
   await tapOn(page, '#v');
   await page.waitForFunction(() => window.__reports.length > 0, null, { timeout: 5000 });
   const rep = await page.evaluate(() => window.__reports);
