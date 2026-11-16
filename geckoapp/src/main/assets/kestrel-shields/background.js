@@ -305,6 +305,13 @@ browser.runtime.onMessage.addListener(function (m, sender) {
     if (m.s !== 1) return guardAnswer(gh, (top && pageHost(top)) || '');
     return guardAnswer(gh, (top && pageHost(top)) || '').then(function (r) { skipAsked++; if (r && r.skip === true) skipYes++; markStats(); return r; });
   }
+  if (m.k === 'vcx') { // ANS52g: what the page-side video format policy refused (numbers and one short word; content.js checked them), summed over all pages and frames
+    var vn = function (x) { x = +x; return x >= 0 && x <= 1000000000 ? Math.floor(x) : 0; };
+    vcx.reports++; vcx.asked += vn(m.a); vcx.size += vn(m.s); vcx.mode += vn(m.m); vcx.fps += vn(m.f);
+    vcx.last = String(m.w || '').replace(/[^a-z0-9 x@.]/g, '').slice(0, 30);
+    markStats();
+    return undefined;
+  }
   if (m.k === 'dom') { // a media address found in the page itself (content.js): handed to the app like a sniffed one, marked so the app can drop ad networks
     var fid = sender ? sender.frameId : 0;
     var mp = docOf(m.p);                                                      // the document the script runs in (the player's page for a frame)
