@@ -101,3 +101,14 @@ test('rewriting twice changes nothing more; a big ladder is fast', () => {
   assert.equal(r.dropped, 1500);
   assert.ok(Date.now() - t0 < 500, 'took ' + (Date.now() - t0) + ' ms');
 });
+
+test('review: blank lines and comments between the tag and the address, as hls.js reads them, are part of the rung; a whitespace line is no address', () => {
+  const odd = ['#EXTM3U', '#EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080', '', '# a comment', 'v1080.m3u8', '#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280x720', 'v720.m3u8', ''];
+  const r = rewriteMaster(text(odd), 1313);
+  assert.equal(r.text, text(['#EXTM3U', '#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280x720', 'v720.m3u8', '']), 'the whole rung goes, blank and comment lines with it');
+  const spaced = ['#EXTM3U', '#EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080', '   ', '#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280x720', 'v720.m3u8', ''];
+  const q = rewriteMaster(text(spaced), 1313);
+  assert.equal(q, null, 'a tag with only blank lines before the next tag has no address: nothing is cut, nothing is left orphaned');
+  const low = ['#EXTM3U', '#EXT-X-STREAM-INF:BANDWIDTH=6000000,resolution=1920x1080', 'a.m3u8', '#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280X720', 'b.m3u8'];
+  assert.equal(rewriteMaster(text(low), 1313), null, 'lower-case names are kept (safe)');
+});

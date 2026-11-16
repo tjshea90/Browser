@@ -1393,7 +1393,7 @@ const stText = async (h) => { await h.flushTimers(); const st = h.of('st'); retu
 
 test('ANS52h: the listener is blocking, narrow (addresses that name a .m3u8, the three request kinds a player uses) and does nothing while no cap is told', async () => {
   const h = await onPage(hlsApp(0));
-  assert.deepEqual(JSON.parse(JSON.stringify(h.listeners.hlsSpec)), ['blocking']);
+  assert.deepEqual(JSON.parse(JSON.stringify(h.listeners.hlsSpec)), ['blocking', 'responseHeaders']);
   assert.deepEqual(JSON.parse(JSON.stringify(h.listeners.hlsFilter.urls)), ['http://*/*.m3u8*', 'https://*/*.m3u8*']);
   assert.deepEqual(JSON.parse(JSON.stringify(h.listeners.hlsFilter.types)).sort(), ['media', 'other', 'xmlhttprequest']);
   const { r } = runFilter(h, 'a1', [HLS_MASTER]);
@@ -1487,4 +1487,17 @@ test('ANS52h: the cap follows the app\'s newest answer (a Settings change reache
   cap = 1920;
   await h.message({ k: 'guard', h: 'third.example' }, -1);
   assert.equal(runFilter(h, 'g3', [HLS_MASTER]).fl.body(), HLS_MASTER, 'a cap above every rung changes nothing');
+});
+
+test('ANS52h review: a response that says it is bigger than a master list is not held at all, and a throw while rewriting hands the bytes over as they came', async () => {
+  const h = await onPage(hlsApp(1313));
+  eq(h.listeners.hlsHeaders(hlsReq('r1', { responseHeaders: [{ name: 'Content-Type', value: 'video/mp2t' }, { name: 'Content-Length', value: '9000000' }] })), {});
+  assert.equal(h.filters.length, 0, 'no filter, no buffering for a body that announces itself as big');
+  h.listeners.hlsHeaders(hlsReq('r2', { responseHeaders: [{ name: 'Content-Length', value: '812' }] }));
+  assert.equal(h.filters.length, 1, 'a small one is filtered');
+  const h2 = await onPage(hlsApp(1313));
+  h2.ctx.KestrelHls.rewriteMaster = () => { throw new Error('boom'); };      // a bug in the rewrite must not reach the page
+  const { fl } = runFilter(h2, 'r3', [HLS_MASTER]);
+  assert.equal(fl.body(), HLS_MASTER); assert.equal(fl.closed, true);
+  assert.match(await stText(h2), /errors 1/);
 });

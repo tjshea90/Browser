@@ -217,3 +217,18 @@ test('a frame gets its own copy (about:blank frames the page makes included)', a
   });
   assert.equal(r, false, 'the frame the page made is covered too (the engine stand-in would say yes)');
 });
+
+test('review: a frame rate written as a fraction is read as one (30000/1001 is 29.97, not 30000), and type strings that are names on Object.prototype are just types', async () => {
+  const page = await open(P(0, false));
+  assert.equal(await mse(page, 'video/mp4; codecs="avc1.640028"; width=1920; height=1080; framerate=30000/1001'), true);
+  assert.equal(await mse(page, 'video/mp4; codecs="avc1.640028"; width=1920; height=1080; framerate=60000/1001'), true, 'H.264 does 1080p64');
+  assert.equal(await mse(page, 'video/webm; codecs="vp09.00.40.08"; width=1920; height=1080; framerate=60000/1001'), false, 'VP9 does only 1080p30: 59.94 is above it');
+  assert.equal(await mse(page, 'video/webm; codecs="vp09.00.40.08"; width=1920; height=1080; framerate=30000/1001'), true);
+  const f = await open(P(0, true));
+  assert.equal(await mse(f, 'video/mp4; codecs="avc1.640028"; width=1280; height=720; framerate=30000/1001'), true, '29.97 is not above 30');
+  assert.equal(await mse(f, 'video/mp4; codecs="avc1.640028"; width=1280; height=720; framerate=60000/1001'), false);
+  for (const odd of ['constructor', 'toString', '__proto__', 'valueOf', 'hasOwnProperty']) {
+    assert.equal(await mse(page, odd), true, odd);
+    assert.equal(await can(page, odd), 'probably', odd);
+  }
+});

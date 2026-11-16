@@ -427,7 +427,7 @@ class OwnerRulesTest {
     @Test fun thePictureSizeCapOnlyTouchesMasterPlaylistsAndNeverBreaksThePage() {
         val dir = "geckoapp/src/main/assets/kestrel-shields/"
         val bg = source(dir + "background.js")
-        assertTrue("narrow and blocking: only addresses that name a .m3u8 are held, only a 200 GET from a tab, only while the app's cap is on", bg.contains("urls: ['http://*/*.m3u8*', 'https://*/*.m3u8*']") && bg.contains("}, ['blocking']);") && bg.contains("if (!(hlsCap > 0) || d.statusCode !== 200 || d.method !== 'GET' || d.tabId < 0) return {};"))
+        assertTrue("narrow and blocking: only addresses that name a .m3u8 are held, only a 200 GET from a tab, only while the app's cap is on", bg.contains("urls: ['http://*/*.m3u8*', 'https://*/*.m3u8*']") && bg.contains("}, ['blocking', 'responseHeaders']);") && bg.contains("if (!(hlsCap > 0) || d.statusCode !== 200 || d.method !== 'GET' || d.tabId < 0) return {};"))
         assertTrue("any doubt hands the bytes over as they came: not text, too big, no master list, a stream error, a throw", bg.contains("{ fatal: true }") && bg.contains("hls.notText++; hlsWrite(f, chunks); f.close(); return;") && bg.contains("var HLS_MAX_BYTES = 524288;") && bg.contains("f.onerror = function () { hls.err++; try { f.disconnect(); }"))
         assertTrue("the cap is the sixth field of the page answer, and nonsense means off", bg.contains("if (parts.length > 5) { var hc = parseInt(parts[5], 10); hlsCap = (hc >= 320 && hc <= 20000) ? hc : 0; }"))
         val manifest = source(dir + "manifest.json")
