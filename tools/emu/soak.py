@@ -282,6 +282,46 @@ class Phone:
         self.a.sh("; ".join(cmds), timeout=30)
         return True
 
+    def raw_path(self, points, screen, hold_s=0.5, step_s=0.035):
+        """ANS57: ONE finger down at points[0], still for hold_s, then moved through the other points (a pause of step_s between them) and lifted: the events are written to the touch device in one shell, so the timing is
+        exact (`input swipe` cannot hold first). The device's own orientation: use it with the screen upright. true = sent."""
+        dev = self.touch_dev()
+        if not dev or not points:
+            return False
+        path, mx, my = dev
+        sw, sh = screen
+        def ev(tt, c, v):
+            return struct.pack("<qqHHi", 0, 0, tt, c, v)
+        def raw(p):
+            return int(round(p[0] / float(sw) * mx)), int(round(p[1] / float(sh) * my))
+        rx, ry = raw(points[0])
+        chunks = [(ev(3, 0x2f, 0) + ev(3, 0x39, 50) + ev(3, 0x35, rx) + ev(3, 0x36, ry) + ev(3, 0x3a, 100) + ev(0, 0, 0), hold_s)]
+        for p in points[1:]:
+            rx, ry = raw(p)
+            chunks.append((ev(3, 0x35, rx) + ev(3, 0x36, ry) + ev(0, 0, 0), step_s))
+        chunks.append((ev(3, 0x39, -1) + ev(0, 0, 0), 0.0))
+        with tempfile.TemporaryDirectory() as td:
+            f = os.path.join(td, "kp.bin")
+            with open(f, "wb") as fh:
+                fh.write(b"".join(c for c, _ in chunks))
+            self.a.run("push", f, "/data/local/tmp/kp.bin", timeout=30)
+        cmds = []
+        at = 0
+        for c, pause in chunks:
+            n = len(c) // 24
+            cmds.append("dd if=/data/local/tmp/kp.bin of=%s bs=24 skip=%d count=%d 2>/dev/null" % (path, at, n))
+            if pause > 0:
+                cmds.append("sleep %s" % pause)
+            at += n
+        cmds.append("rm -f /data/local/tmp/kp.bin")
+        self.a.sh("; ".join(cmds), timeout=60)
+        return True
+
+    def drag_right(self, x, y, px, hold_s=0.5, dy=0, steps=14):
+        """The raw path of a long press at (x, y) and a drag by [px] pixels sideways (and [dy] up or down), for the precise seek."""
+        pts = [(x, y)] + [(x + px * (i + 1) / float(steps), y + dy * (i + 1) / float(steps)) for i in range(steps)]
+        return self.raw_path(pts, self.screen_size_cache, hold_s=hold_s)
+
     def hogs_running(self):
         """How many of our busy loops are alive (ps), so the report can say whether the emulator was really slowed down."""
         out = self.a.sh("ps -A -o PID,ARGS 2>/dev/null | grep -c 'while :; do :; done'", timeout=15)
