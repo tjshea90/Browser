@@ -321,6 +321,57 @@ def page_formats(tag):
 </script>""") % {"tag": tag.replace("<", "").replace("&", "")[:30], "tag_js": json.dumps(tag[:30]), "rows": json.dumps([list(r) for r in FMT_ROWS])}).encode()
 
 
+# ANS52h (owner message 52): the picture size cap for HLS pages. The server answers the playlists a page's player asks for: a master list with four rungs (1920, 1280, 960 and 640 pixels wide, an audio-only
+# rung and a picture strip), the same one gzip-compressed (a CDN does that: Gecko may hand the extension's filter the decoded bytes or the raw ones, the lab says which), a media list, and a master list that is
+# already within every cap. /hlsfetch asks for them like hls.js does (XMLHttpRequest) and reports what arrived.
+HLS_RUNGS = [(1920, 1080, 6000000), (1280, 720, 3500000), (960, 540, 2000000), (640, 360, 1000000)]
+
+
+def hls_master(small=False):
+    lines = ["#EXTM3U", "#EXT-X-VERSION:5", "#EXT-X-INDEPENDENT-SEGMENTS"]
+    for w, h, bw in (HLS_RUNGS[-2:] if small else HLS_RUNGS):
+        lines += ['#EXT-X-STREAM-INF:BANDWIDTH=%d,AVERAGE-BANDWIDTH=%d,RESOLUTION=%dx%d,CODECS="avc1.64001f,mp4a.40.2",FRAME-RATE=29.970' % (bw, bw * 9 // 10, w, h), "v%d.m3u8?lab=1" % h]
+    lines += ['#EXT-X-STREAM-INF:BANDWIDTH=140000,CODECS="mp4a.40.2"', "audio.m3u8"]
+    if not small:
+        lines += ['#EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=600000,RESOLUTION=1920x1080,CODECS="avc1.640028",URI="i1080.m3u8"']
+    return ("\n".join(lines) + "\n").encode()
+
+
+def hls_media():
+    return ("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:6\n#EXT-X-MEDIA-SEQUENCE:0\n" + "".join("#EXTINF:6.0,\nseg%d.ts\n" % i for i in range(20)) + "#EXT-X-ENDLIST\n").encode()
+
+
+def page_hlsfetch(tag):
+    """Asks for the four playlists twice (1.5 s and 5 s after the page started) with XMLHttpRequest and reports the size of what arrived, how many rungs it names and the longest picture side (kind=hls)."""
+    return (("""<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Soak hls</title>
+<body style='font:14px monospace;margin:10px'><h3>hls %(tag)s</h3><pre id=o>waiting</pre>
+<script>
+(function () {
+  var TAG = %(tag_js)s, NAMES = ['master', 'master-gz', 'media', 'master-small'];
+  function one(name, pass, done) {
+    var x = new XMLHttpRequest();
+    x.open('GET', '/hls/' + name + '.m3u8?t=' + Date.now() + pass);
+    x.onload = function () {
+      var t = x.responseText || '', rungs = (t.match(/#EXT-X-STREAM-INF/g) || []).length, longest = 0, m, re = /RESOLUTION=(\\d+)x(\\d+)/g;
+      while ((m = re.exec(t))) longest = Math.max(longest, +m[1], +m[2]);
+      done(name + ':' + x.status + ':' + t.length + ':' + rungs + ':' + longest + ':' + (/#EXT-X-I-FRAME-STREAM-INF/.test(t) ? 1 : 0));
+    };
+    x.onerror = function () { done(name + ':err:0:0:0:0'); };
+    x.send();
+  }
+  function round(pass) {
+    var out = [], i = 0;
+    (function next() {
+      if (i >= NAMES.length) { try { new Image().src = '/report?kind=hls&tag=' + encodeURIComponent(TAG) + '&pass=' + pass + '&d=' + encodeURIComponent(out.join(',')) + '&t=' + Date.now(); } catch (e) {} document.getElementById('o').textContent = TAG + ' ' + pass + '\\n' + out.join('\\n'); return; }
+      one(NAMES[i++], pass, function (r) { out.push(r); next(); });
+    })();
+  }
+  setTimeout(function () { round('a'); }, 1500);
+  setTimeout(function () { round('b'); }, 5000);
+})();
+</script>""") % {"tag": tag.replace("<", "").replace("&", "")[:30], "tag_js": json.dumps(tag[:30])}).encode()
+
+
 def page_dl():
     links = "".join("<p><a href='/dl/%dmb.bin'>%d MB file</a></p>" % (n, n) for n in (1, 5, 20)) + "<p><a href='/dl/slow.bin'>5 MB, slowly</a></p>"
     return ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Soak downloads</title><body style='font:20px sans-serif;margin:14px'><h1>Downloads</h1>" + links).encode()
@@ -414,6 +465,24 @@ class H(http.server.BaseHTTPRequestHandler):
                 return self._send(page_form())
             if p.startswith("/img/") and p.endswith(".svg"):
                 return self._send(svg(int(p[5:-4] or 0)), "image/svg+xml")
+            if p == "/hlsfetch":
+                return self._send(page_hlsfetch((q.get("tag") or ["x"])[0]))
+            if p.startswith("/hls/") and p.endswith(".m3u8") and p[5:-5] in ("master", "master-gz", "media", "master-small"):
+                name = p[5:-5]
+                body = hls_media() if name == "media" else hls_master(name == "master-small")
+                if name == "master-gz":
+                    import gzip
+                    z = gzip.compress(body)
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/vnd.apple.mpegurl")
+                    self.send_header("Content-Encoding", "gzip")
+                    self.send_header("Content-Length", str(len(z)))
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    if self.command != "HEAD":
+                        self.wfile.write(z)
+                    return
+                return self._send(body, "application/vnd.apple.mpegurl")
             if p == "/formats":
                 return self._send(page_formats((q.get("tag") or ["x"])[0]))
             if p == "/video/audible":
