@@ -2163,3 +2163,7 @@
 ## 2026-11-16T17:48:43Z
 > Waiting for the emulator run to finish.
 <!-- sha:117df21e9e41 -->
+
+## 2026-11-16T18:00:25Z
+> Your answers change the architecture (one app, internet permission inside the keyboard) and the activation model (a Gboard-style toggle in any app, not a per-app list), and they set a goal of fewest presses for received messages. I'm finding every place in the plan that depends on the old design.
+<!-- sha:0ea3954a47b5 -->
