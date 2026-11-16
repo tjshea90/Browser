@@ -42,31 +42,23 @@ object InlineBox {
         return box
     }
 
-    /** View pixels per CSS pixel for this page (the visual viewport is [Page.vvW] CSS pixels wide in a view [viewW] pixels wide). */
-    fun perCss(p: Page, viewW: Int): Double = if (p.vvW > 0.0) viewW / p.vvW else 0.0
-
-    /** What the numbers of the engine's compositor scroll updates mean. CSS = the page's own CSS pixels (what window.scrollY says); SCREEN = pixels of the screen at the update's zoom. Settled by the emulator lab (ANS55f). */
-    enum class ScrollUnit { CSS, SCREEN }
-    @JvmField var scrollUnit = ScrollUnit.CSS
-
     /**
-     * Follows the page's scroll with the engine's compositor updates (no message from the page: a starved page script is exactly what makes the page's own player lag). [box0] is the box at the press (view
-     * pixels), [baseX] / [baseY] the visual viewport's place in the document at that moment (CSS pixels), [k0] the view pixels per CSS pixel then. The first update's zoom is remembered; a zoom that differs
-     * from it by more than 3 % (a pinch) makes [at] return null: the box can no longer be told, the overlay closes.
+     * Follows the page's scroll with the engine's compositor updates (GeckoSession.CompositorScrollDelegate; no message from the page: a starved page script is exactly what makes the page's own player lag).
+     * The engine's documented numbers: scrollX / scrollY in CSS pixels, zoom = screen pixels per CSS pixel ("multiply scrollX / scrollY by zoom to get screen pixels"). [box0] is the box at the press (view
+     * pixels), [baseX] / [baseY] the visual viewport's place in the document at that moment (CSS pixels). The first update's zoom is remembered; a zoom that differs from it by more than 3 % (a pinch) makes
+     * [at] return null: the box can no longer be told and the overlay closes.
      */
-    class Track(val box0: Rect, private val baseX: Double, private val baseY: Double, private val k0: Double) {
+    class Track(val box0: Rect, private val baseX: Double, private val baseY: Double) {
         private var zoomRef = 0.0
-        /** The box for the compositor's scroll position ([sx], [sy]) at [zoom], or null when it cannot be told (a pinch, nonsense numbers). */
+        /** The box for the compositor's scroll position ([sx], [sy] in CSS pixels) at [zoom], or null when it cannot be told (a pinch, nonsense numbers). */
         fun at(sx: Double, sy: Double, zoom: Double): Rect? {
-            if (!(zoom > 0.0) || k0 <= 0.0 || sx.isNaN() || sy.isNaN()) return null
+            if (!(zoom > 0.0) || sx.isNaN() || sy.isNaN()) return null
             if (zoomRef == 0.0) zoomRef = zoom
             else if (Math.abs(zoom - zoomRef) > zoomRef * 0.03) return null
-            val cssX = if (scrollUnit == ScrollUnit.CSS) sx else sx / zoom
-            val cssY = if (scrollUnit == ScrollUnit.CSS) sy else sy / zoom
-            val dx = Math.round((cssX - baseX) * k0).toInt()
-            val dy = Math.round((cssY - baseY) * k0).toInt()
-            if (Math.abs(dx) > 200_000 || Math.abs(dy) > 200_000) return null
-            return moved(box0, dx, dy)
+            val dx = Math.round((sx - baseX) * zoom)
+            val dy = Math.round((sy - baseY) * zoom)
+            if (Math.abs(dx) > 200_000L || Math.abs(dy) > 200_000L) return null
+            return moved(box0, dx.toInt(), dy.toInt())
         }
     }
 
