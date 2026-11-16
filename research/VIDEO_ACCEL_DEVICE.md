@@ -113,7 +113,7 @@ Prefixes: AOSP = https://raw.githubusercontent.com/aosp-mirror/platform_framewor
 - G8 G160 gfx/webrender_bindings/RenderAndroidSurfaceTextureHost.cpp ; G9 G160 mobile/android/geckoview/src/main/AndroidManifest_overlay.jinja
 - G10 G160 mobile/android/geckoview/src/main/java/org/mozilla/gecko/gfx/AndroidVsync.java ; G11 G160 mobile/android/geckoview/src/main/java/org/mozilla/gecko/process/MemoryController.java
 - G12 https://firefox-source-docs.mozilla.org/mobile/android/geckoview/design/priority-hint.html
-- G13 G160 mobile/android/geckoview/src/main/java/org/mozilla/geckoview/GeckoView.java ; G14 Gmain mobile/android/geckoview/src/main/java/org/mozilla/gecko/SurfaceViewWrapper.java ; G15 Gmain .../org/mozilla/geckoview/GeckoDisplay.java ; G16 G160 .../org/mozilla/geckoview/GeckoSession.java
+- G13 G160 mobile/android/geckoview/src/main/java/org/mozilla/geckoview/GeckoView.java ; G14 Gmain mobile/android/geckoview/src/main/java/org/mozilla/gecko/SurfaceViewWrapper.java ; G15 Gmain mobile/android/geckoview/src/main/java/org/mozilla/geckoview/GeckoDisplay.java ; G16 G160 mobile/android/geckoview/src/main/java/org/mozilla/geckoview/GeckoSession.java
 - G17 Gmain widget/android/nsWindow.cpp ; G18 Gmain gfx/layers/ipc/PUiCompositorController.ipdl and G160 gfx/layers/ipc/UiCompositorControllerParent.cpp
 - G19 https://bugzilla.mozilla.org/show_bug.cgi?id=1614958 ; G20 https://bugzilla.mozilla.org/show_bug.cgi?id=1594860 ; G21 https://bugzilla.mozilla.org/show_bug.cgi?id=1766127 ; G22 https://bugzilla.mozilla.org/show_bug.cgi?id=1331109
 - G24 G160 gfx/thebes/gfxAndroidPlatform.cpp
