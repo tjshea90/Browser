@@ -1774,8 +1774,8 @@ class Soak:
             lk = self.ph.look()
             land = bool(lk and lk["w"] > lk["h"])
             return (973, 574, land) if land else (600, 947, land)
-        def double_tap(x, y):                                                       # two `input tap` processes at once: their taps land a few tens of ms apart (one after the other costs 150-300 ms each, too slow)
-            self.ph.a.sh("input tap %d %d & input tap %d %d & wait" % (x, y, x, y), timeout=30)
+        def double_tap(x, y):                                                       # the app plays both taps 90 ms apart on its own clock (Phone.double_tap); two parallel `input tap` processes landed 0.3 s apart on a busy emulator
+            self.ph.double_tap(x, y)
         def ensure_shown():                                                         # a tap on an empty place of the picture (away from every control) when they are hidden
             if is_shown():
                 return
