@@ -1923,3 +1923,18 @@
 ## 2026-11-16T10:12:43Z
 > The owner-facing answer is already given; I'm saving the session handoff notes (done by a helper) and will confirm the saved paths when it reports back.
 <!-- sha:d264dac5b6b0 -->
+
+## 2026-11-16T15:31:19Z
+> Alpha58 is released and your message 54 is answered above. The session handoff is also saved and pushed (last checkpoint 2516), so a new session can pick up from the files alone.
+>
+> - **What the handoff tool did:** it replaced the auto-managed "Session Learnings" block in `CLAUDE.md` and `AGENTS.md` with this session's decisions. That would have dropped the earlier mini-panel, open-space and slow-script decisions from `CLAUDE.md`, so I put them back by hand in a separate section above the auto block, along with the emulator line. They also remain in the repo's history.
+> - **Not run on your tablet:** I only tested it on the emulator, so I'm waiting on your report for how it feels there.
+> - **What I need from you:**
+>   - the Diagnostics line "Web videos in Kestrel's own player" after you've watched a few videos
+>   - which sites still play in the page
+> - **Still open:**
+>   - films with no playlist address, such as YouTube-style ones (VP12)
+>   - improving from the long-run soak findings (SOAK1d)
+>   - the fast-wifi lab program (LAB2f)
+>   - VP10, ROT2e, ANS48 and ANS52j in `TASKS.md`
+<!-- sha:414ea24b1c97 -->
