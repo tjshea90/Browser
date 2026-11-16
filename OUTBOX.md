@@ -2243,3 +2243,7 @@
 >
 > The translation service, the Mexican-Spanish clean-up and the friendly-"tú" checks are unchanged from the previous version.
 <!-- sha:eea4b3e3c27e -->
+
+## 2026-11-16T18:27:04Z
+> Unit suites are running on the version-bumped head while the lab works; I'll read the gp report when its timer fires.
+<!-- sha:f4374e7ec231 -->
