@@ -52,7 +52,7 @@ class QualityLabelTest {
     }
 
     @Test fun textFromOutsideIsNeverTrusted() {
-        for (bad in listOf<String?>(null, "", "1,2,3", "a,b,c,d", "1280,720,30000", "1280,720,30000,5,6", "-1,720,0,0", "99999,720,0,0", "1280,720,-5,0", "1280,720,0,-9", "1280,720,2000000,0"))
+        for (bad in listOf<String?>(null, "", "1,2,3", "a,b,c,d", "1280,720,30000", "1280,720,30000,5,6", "-1,720,0,0", "99999,720,0,0", "1280,720,-5,0", "1280,720,0,-9", "1280,720,2000000,0", "0,0,30000,5"))
             assertNull("'$bad'", QualityLabel.decode(bad))
     }
 

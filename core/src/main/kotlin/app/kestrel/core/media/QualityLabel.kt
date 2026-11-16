@@ -51,6 +51,7 @@ object QualityLabel {
         val w = p[0].toIntOrNull() ?: return null; val h = p[1].toIntOrNull() ?: return null
         val f = p[2].toIntOrNull() ?: return null; val b = p[3].toLongOrNull() ?: return null
         if (w < 0 || h < 0 || w > 16384 || h > 16384 || f < 0 || f > 1_000_000 || b < 0L) return null
+        if (pClass(w, h) <= 0) return null                           // a pick always names a picture
         return Rung(w, h, if (f > 0) f / 1000f else -1f, b)
     }
 
