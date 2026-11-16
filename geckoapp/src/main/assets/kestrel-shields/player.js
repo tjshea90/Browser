@@ -26,19 +26,18 @@ window.KestrelVP = window.KestrelVP || (function () {
     var EVS = ['pointerdown', 'pointerup', 'pointercancel', 'mousedown', 'mouseup', 'click', 'dblclick', 'touchstart', 'touchend'];
     var FILM_EVENTS = ['play', 'pause', 'playing', 'ended', 'seeked', 'volumechange', 'ratechange', 'durationchange', 'loadedmetadata', 'emptied', 'waiting', 'error'];
 
-    var cfg = null, cfgWait = [], cfgFailedAt = 0;
+    var cfgWait = [];
     var S = null;                       // the session: one full-screen film under Kestrel's controls
     function noop() {}
 
-    // ------------------------------------------------------------------------------------------ what the app says (once per page; a failed answer is not kept)
+    // ------------------------------------------------------------------------------------------ what the app says (asked again at every full screen: a Settings change must reach a page that is already open)
     function ask(cb) {
-      if (cfg) { cb(cfg); return; }
       cfgWait.push(cb);
       if (cfgWait.length > 1) return;
-      function done(c, keep) { if (keep) cfg = c; else cfgFailedAt = Date.now(); var w = cfgWait; cfgWait = []; for (var i = 0; i < w.length; i++) { try { w[i](c); } catch (e) { /* never break the page */ } } }
+      function done(c) { var w = cfgWait; cfgWait = []; for (var i = 0; i < w.length; i++) { try { w[i](c); } catch (e) { /* never break the page */ } } }
       try {
-        browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { done({ kp: !!(r && r.kp === true) }, !!r); }, function () { done({ kp: false }, false); });
-      } catch (e) { done({ kp: false }, false); }
+        browser.runtime.sendMessage({ k: 'guard', h: location.hostname }).then(function (r) { done({ kp: !!(r && r.kp === true) }); }, function () { done({ kp: false }); });
+      } catch (e) { done({ kp: false }); }
     }
 
     // ------------------------------------------------------------------------------------------ the film that is full screen
@@ -90,7 +89,7 @@ window.KestrelVP = window.KestrelVP || (function () {
 
     // ------------------------------------------------------------------------------------------ the session
     function start(v, fs) {
-      S = { v: v, fs: fs, shown: 0, timer: 0, soonTimer: 0, fit: null, down: null, taps: 0, tapWin: 0, ls: [], reports: 0, gone: [], native: false, awayAt: 0, ack: 0 };
+      S = { v: v, fs: fs, shown: 0, timer: 0, soonTimer: 0, fit: null, down: null, taps: 0, tapWin: 0, ls: [], reports: 0, gone: [], native: false, awayAt: 0, ack: 0, busyUntil: 0, pickedAt: Date.now() };
       for (var i = 0; i < FILM_EVENTS.length; i++) { v.addEventListener(FILM_EVENTS[i], soon, { passive: true }); S.ls.push(FILM_EVENTS[i]); }
       for (var j = 0; j < EVS.length; j++) window.addEventListener(EVS[j], onEvent, { capture: true, passive: true });
       window.addEventListener('resize', fitSoon, { passive: true });
@@ -115,7 +114,13 @@ window.KestrelVP = window.KestrelVP || (function () {
     function loop() {
       var s = S;
       if (!s) return;
-      s.timer = setTimeout(function () { if (S !== s) return; report(); loop(); }, s.shown ? C.busy : C.idle);
+      s.timer = setTimeout(function () { if (S !== s) return; report(); loop(); }, (s.shown || Date.now() < s.busyUntil) ? C.busy : C.idle);
+    }
+    function speedUp(s, ms) {                             // a tap, or the app showing its controls: the next answers carry commands, so for a moment the reports come at the quick pace and one comes soon
+      s.busyUntil = Date.now() + ms;
+      try { if (s.timer) clearTimeout(s.timer); } catch (e) { /* ignore */ }
+      loop();
+      soon();
     }
     function soon() {                                     // a film event: the state goes soon, once for a burst of them
       var s = S;
@@ -142,8 +147,13 @@ window.KestrelVP = window.KestrelVP || (function () {
     function report() {
       var s = S;
       if (!s) return;
-      if (!s.v.isConnected) { stop(); return; }
+      if (!s.v.isConnected) { if (!repick(s, true)) stop(); return; }
       s.reports++;
+      if (Date.now() - s.pickedAt >= 1000) {                                  // an ad element that ended and a film that plays in another element, a page that swapped its element
+        var r0 = null; try { r0 = s.v.getBoundingClientRect(); } catch (e0) { r0 = null; }
+        if (s.v.ended || (r0 && (r0.width < 10 || r0.height < 10)) || (s.v.paused && Date.now() - s.pickedAt >= 3000)) { if (repick(s, false)) return; }
+        s.pickedAt = Date.now();
+      }
       if (!s.fit && s.reports < 8) fit(s.v);                                  // (the picture's size may be known only after the first reports)
       if (Date.now() - s.awayAt >= 900) putAway(s);                           // (a page that makes its controls late, or again)
       send(sample(s.v));
@@ -153,9 +163,20 @@ window.KestrelVP = window.KestrelVP || (function () {
       var s = S;
       if (!s || !r || typeof r !== 'object') return;
       if (r.on === 0) { stop(); return; }
-      if (typeof r.s === 'number') s.shown = r.s ? 1 : 0;
+      if (typeof r.s === 'number') { var was = s.shown; s.shown = r.s ? 1 : 0; if (s.shown && !was) speedUp(s, 0); }
       var c = r.c;
       if (c && c.length) for (var i = 0; i < c.length && i < 8; i++) run(c[i]);
+    }
+    function repick(s, gone) {                            // the film of this full screen is another element now: the session moves to it (the app's count of carried-out commands goes along)
+      var fs = null, v2 = null;
+      try { fs = fullscreenEl(); v2 = fs ? pickVideo(fs) : null; } catch (e) { v2 = null; }
+      s.pickedAt = Date.now();
+      if (!fs || !v2 || v2 === s.v) return false;
+      var ack = s.ack;
+      stop();
+      start(v2, fs);
+      if (S) S.ack = ack;
+      return true;
     }
     function seekEnd(v) { try { var s = v.seekable; return s && s.length ? s.end(s.length - 1) : 0; } catch (e) { return 0; } }
     function run(c) {
@@ -182,12 +203,20 @@ window.KestrelVP = window.KestrelVP || (function () {
     }
 
     // ------------------------------------------------------------------------------------------ the taps
+    function bigLayer(el) {                              // a layer over (nearly) the whole picture is the film's, not a button
+      try { var f = S.fs.getBoundingClientRect(), r = el.getBoundingClientRect(); return r.width >= 0.95 * f.width && r.height >= 0.9 * f.height; } catch (e) { return false; }
+    }
     function interactive(el) {
       var t = el.tagName, role = el.getAttribute ? (el.getAttribute('role') || '') : '';
       if ((t === 'A' || t === 'AREA') && el.hasAttribute('href')) return true;
       if (/^(BUTTON|INPUT|SELECT|TEXTAREA|OPTION|LABEL|SUMMARY)$/.test(t)) return true;
       if (/^(link|button|checkbox|radio|menuitem|menuitemcheckbox|menuitemradio|tab|switch|textbox|searchbox|combobox|listbox|option)$/i.test(role)) return true;
-      return !!(el.isContentEditable);
+      if (el.isContentEditable) return true;
+      try {
+        if ((el.hasAttribute('onclick') || (el.hasAttribute('tabindex') && el.tabIndex >= 0)) && !bigLayer(el)) return true;
+        if (window.getComputedStyle(el).cursor === 'pointer' && !bigLayer(el)) return true;
+      } catch (e) { /* not an element with a style */ }
+      return false;
     }
     function nameOf(el) {
       var c = el.className; if (c && c.baseVal !== undefined) c = c.baseVal;
@@ -237,19 +266,20 @@ window.KestrelVP = window.KestrelVP || (function () {
       var fx = r.width > 0 ? (x - r.left) / r.width : 0.5;
       fx = Math.max(0, Math.min(1, fx));
       send({ k: 'vtap', x: Math.round(fx * 1000) });
+      speedUp(s, 1800);
     }
 
     // ------------------------------------------------------------------------------------------ the page's own controls are put away
     // The page's player draws controls of its own (YouTube's chrome, Shaka's UI, video.js, JW Player, Plyr, MediaElement ...) and a `<video controls>` has the engine's bar: two sets of controls on one screen, one of
     // them not hiding when the person taps (Shaka keeps its bar up on a tap), is what the owner called a screen that is not given to the video. While Kestrel's controls own the film the page's are not shown, and they
     // are given back when full screen ends. Done through the element's own style (the page's content security policy does not stop that) and looked for again every second (a page makes them late, or again). Captions,
-    // "Skip ad", next / previous, settings and every other button of the page are NOT in the list.
+    // "Skip ad", next / previous and every other control of the page OUTSIDE those containers stay (a caption or quality button that lives INSIDE a hidden container goes with it: on some sites Settings > Full-screen video controls > the page's own brings them back).
     var CHROME = '.ytp-chrome-top,.ytp-chrome-bottom,.ytp-gradient-top,.ytp-gradient-bottom,.ytp-pause-overlay,.player-controls-top,.player-controls-bottom,.player-controls-background,' +
       '.shaka-controls-container,.shaka-play-button-container,.vjs-control-bar,.vjs-big-play-button,.jw-controls,.jw-controls-backdrop,.plyr__controls,.plyr__control--overlaid,' +
       '.mejs__controls,.mejs__overlay-play,.fp-controls';
     function putAway(s) {
       s.awayAt = Date.now();
-      try { if (s.v.controls && !s.native) { s.native = true; s.v.controls = false; } } catch (e0) { /* the engine's bar stays */ }
+      try { if (s.v.controls) { s.native = true; s.v.controls = false; } } catch (e0) { /* the engine's bar stays */ }
       for (var g = 0; g < s.gone.length; g++) {                                // a page that sets the element's display again (inline, without !important) gets it taken away again
         try { var st = s.gone[g].el.style; if (st.getPropertyValue('display') !== 'none' || st.getPropertyPriority('display') !== 'important') st.setProperty('display', 'none', 'important'); } catch (e6) { /* gone */ }
       }
