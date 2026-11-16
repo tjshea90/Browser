@@ -361,6 +361,8 @@ class OwnerRulesTest {
         assertTrue(source(dir + "background.js").contains("lt: n(m.lt, 0, 3600000), pc: n(m.pc, 0, 3600000), tf: n(m.tf, 0, 2000000000), df: n(m.df, 0, 2000000000)"))
         assertTrue(pc.contains("health.onReport(m.optInt(\"lt\"), m.optInt(\"pc\"), m.optInt(\"tf\", -1), m.optInt(\"df\", -1)") && pc.contains("${'$'}{health.line()}") && pc.contains("if (quiet) return"))
         assertTrue("the frames reach the Real video line", act.contains("player.onLook = { page, frames, dropped, seconds, w, h -> filmLook(page, frames, dropped, seconds, w, h) }") && act.contains("videoQuality.add(host, frames, dropped, 0, seconds, w, h"))
+        // g: no page look is read back while a page is full screen (the tablet's log: two 'look-saved' during a film; the read-back competes with the decoder and saves the film's frame as the page's look)
+        assertTrue(body(act, "private fun captureLook(tab: Tab?, why: String, minGapMs: Long = LastLookRules.MIN_GAP_MS.toLong()) {").contains("if (fullscreenOn) return"))
         // f: how long the app's own part and the engine's part of a turn take is written down
         assertTrue(source("geckoapp/src/main/kotlin/app/kestrel/browser/web/KestrelGeckoView.kt").contains("the engine's part took") && act.contains("the app's own handling took"))
     }
