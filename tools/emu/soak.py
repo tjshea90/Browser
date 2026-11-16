@@ -1813,6 +1813,21 @@ class Soak:
         m = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(3)
         check("ANS53d.2: Back ends Kestrel's own player", bool(e3("native", "stop", m)), "native stop lines %d" % len(e3("native", "stop", m)))
         self.ph.key("KEYCODE_BACK"); time.sleep(2)
+        # ANS54e.1 (owner messages 53 and 54: "it automatically went to landscape orientation, even though I was holding my tablet in portrait orientation and didn't rotate it"): the DEFAULT is follow the tablet.
+        # A wide film in full screen, the tablet held upright: the screen stays upright and nothing turned it.
+        self.ph.debug("fsturn", "1"); time.sleep(1.0)
+        self.ph.physical(0, 9.81, 0); time.sleep(2)
+        rmark4 = self.lab.size()
+        self.ph.open_url("%s/fsbox?kind=shadow&nobar=1" % self.lab_base)
+        self.fsbox_wait(rmark4); time.sleep(2)
+        m4 = self.log.size()
+        self.ph.tap(w // 2, 140); time.sleep(5.5); self.ph.dismiss_cling()
+        lk4 = self.ph.look()
+        turned = [e["rest"][:60] for e in e3("fullscreen", "turn", m4) if "to=6" in e["rest"] or "became known" in e["rest"]]
+        check("ANS54e.1: with the default (follow the tablet) a wide film in full screen held upright stays upright, nothing turned it", bool(lk4 and lk4["h"] > lk4["w"]) and not turned, "the screen is %s, turn lines %s" % (lk4, turned))
+        self.shot("kp-14-follow-default-upright")
+        self.ph.key("KEYCODE_BACK"); time.sleep(2)
+        self.ph.debug("fsturn", "0")
         self.kp_results = checks
         self.record({"kind": "player", "name": "kestrel-player", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
         self.check_alive("kestrel-player")
