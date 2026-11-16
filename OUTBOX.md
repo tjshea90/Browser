@@ -2389,3 +2389,45 @@
 ## 2026-11-16T23:03:42Z
 > The alpha61 build is running on GitHub, and my notes are updated. The next check is at about 23:17 UTC, when I verify the Release and its APK.
 <!-- sha:fb8a1f4ded24 -->
+
+## 2026-11-16T23:21:10Z
+> Alpha61 is out, and I checked it myself rather than relying on the run being green. The signed build passed every job on GitHub, including the check that the APK carries your certificate, and the Release page shows the 95 MB APK. It's recorded in the build log. Thanks for trying it. The emulator can't show speed, so I don't claim any speedup beyond your "it works well".
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha61
+>
+> What I did for each of your four points:
+>
+> 1. **Gestures without a long press.** In Kestrel's player and in the player inside a page, drag sideways to seek. The farther you drag, the bigger the jump, and dragging up or down at the same time makes it finer. Drag up or down on the left side for brightness and on the right side for volume.
+>    - **The trade-off:** inside a page, dragging on the film no longer scrolls the page, except in the middle strip of the film.
+>    - **If it bothers you:** Settings > "Gestures inside the page need a long press" brings the old way back.
+> 2. **Hint text.** A finger resting on the left now says "Slide up or down for brightness". On the right it says "Slide up or down for volume", and in the middle "Slide left or right to seek". It disappears as soon as you move.
+> 3. **Quality inside the page.** The small player now has a Quality button, left of the full-screen button, with the same list as full screen. Back closes the list first. Your pick is remembered for films in pages, separately from the full-screen pick.
+> 4. **Playback tuning for the tablet.**
+>    - **Back button and left-drag:** the last 10 seconds you played stay in memory, so the 10 s back button, double tap on the left, and drag-left land at once instead of re-downloading.
+>    - **Starting speed:** the player starts from a guess of 4 Mbit/s, which fits your 5 Mbit/s hotspot, and keeps what it measures for the next film.
+>    - **Stuck connections:** a quiet connection is dropped after 10 seconds instead of 20.
+>    - **Other:** the Wi-Fi chip is kept awake while a film plays, and Android's codec list is read once while Kestrel is idle.
+>    - **Diagnostics:** it now records, for every film, how long until it could play, how many times and how long it waited for the network, the link speed, the picture size and the dropped pictures. Those numbers are how we find out what is really slow.
+>
+> What was and wasn't tested:
+>
+> - **Emulator:** the full video suite on the real Firefox engine in an Android 10 emulator passed 367 checks with 0 failures, including 27 of 27 for the gestures and 10 of 10 for the quality list inside the page.
+> - **Review:** a separate review of the new code found five small bugs (for example, the time shown after a seek counted the jump twice), and I fixed them before shipping.
+> - **Earlier test failures:** two earlier lab failures were problems in the test setup, not in the app.
+> - **Your tablet:** nothing was tried on it by me. Only your general "it works well" so far.
+>
+> If you have a minute, I'd like to know:
+>
+> - whether dragging on the film instead of scrolling the page bothers you;
+> - how the Quality button inside a page works for you;
+> - the Diagnostics "Kestrel's own player" line and the stats lines after a film.
+>
+> Still open:
+>
+> - slow Cloudflare check and typing lag (unmeasured);
+> - going back to the small player after full screen;
+> - YouTube-style films with no playlist address;
+> - the rotation, soak, compat-run and picture-cap follow-ups from earlier rounds;
+> - the first page after changing the video formats setting can still use the old setting;
+> - on Android 16 only, Back with the quality list open would leave the player.
+<!-- sha:20d6d6514cda -->
