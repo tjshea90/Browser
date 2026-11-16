@@ -64,6 +64,20 @@
         "https://*/*"
       ],
       "js": [
+        "codec-main.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": true,
+      "match_origin_as_fallback": true,
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
         "scriptlets-main.js"
       ],
       "run_at": "document_start",
