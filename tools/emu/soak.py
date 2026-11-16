@@ -725,6 +725,9 @@ class Soak:
         self.hs_results = []                   # ANS52h: the picture size cap for HLS pages on the real engine (suite cp, second part)
         self.hs_table = []
         self.hs_line = ""
+        self.ap_results = []                   # ANS53a / ANS53b: videos start only when pressed (suite ap)
+        self.ap_table = []
+        self.ap_line = ""
         self.kp_wake = []                      # (label, the wake-lock lines of `dumpsys power`) while the film plays in full screen and after it ended
         self.kp_ff = []                        # ANS52a: ms from each turn to the app window's first frame at the new size (kp scene)
         self.kp_pic_path = ""                  # ANS51b: how the film's picture size reached automatic turning (known at entry, or from the player's first report)
@@ -2023,6 +2026,88 @@ class Soak:
         self.record({"kind": "hls", "name": "hls-picture-cap", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
         self.check_alive("hls-picture-cap")
 
+    # ANS53a / ANS53b (owner message 53: "Never, on any site, ever, anywhere in the app, automatically load a video and start playing it" and "No data should ever be used downloading or buffering videos on web sites
+    # unless I press play"): the real engine, the rule ON. Every lab page below is a way a page starts or loads a video by itself (autoplay, preload auto / metadata / nothing said, a script that calls play() with no
+    # finger, a script player over a MediaSource, a play button outside the picture, all of it in a frame). The lab server writes every request for a film file with its bytes to media.jsonl; the driver checks that
+    # NOT ONE BYTE went out and nothing played before a press, then taps (the picture, or the page's own button) and checks that the film is asked for and, where the page has a play button, plays. Last: the rule off
+    # gives the old behaviour (so the switch works), and the Diagnostics line counts what was held.
+    AP_CASES = [("autoplay", "picture"), ("preload-auto", "picture"), ("preload-meta", "picture"), ("no-attr", "picture"), ("script", "picture"), ("mse", "button"), ("button", "button"), ("iframe", "picture")]
+
+    def ap_scene(self):
+        checks = []
+        def check(name, ok, detail=""):
+            checks.append({"check": name, "ok": bool(ok), "detail": detail if not ok else ""})
+            if not ok:
+                self.issue("high", "press-to-play", "%s %s" % (name, detail))
+        media = LabReport(os.path.join(self.out, "lab", "media.jsonl"))
+        films = ("/clip/landscape.mp4", "/clip/frag.mp4")
+        def film_bytes(mark):
+            rows = [r for r in media.since(mark) if r.get("method") == "GET" and r.get("path") in films]
+            return sum(int(r.get("bytes") or 0) for r in rows), len(rows)
+        self.ph.debug("vpress", "1"); time.sleep(2.0)
+        for variant, how in self.AP_CASES:
+            tag = "ap-" + variant
+            rm, mm = self.lab.size(), media.size()
+            self.ph.open_url("%s/ap?v=%s&tag=%s" % (self.lab_base, variant, tag))
+            t0 = time.time()
+            while time.time() - t0 < 30 and not [r for r in self.lab.since(rm) if r.get("kind") == "ap" and r.get("ev") == "layout" and str(r.get("tag", "")).startswith(tag)]:
+                time.sleep(1)
+            time.sleep(7)                                                              # (long enough for the page's own timers: the script variant plays at 1.2 s, 3.2 s and 5.2 s)
+            rows = [r for r in self.lab.since(rm) if r.get("kind") == "ap" and str(r.get("tag", "")).startswith(tag)]
+            evs = [r.get("ev") for r in rows]
+            n0, req0 = film_bytes(mm)
+            self.shot("ap-%s-before" % variant)
+            check("%s: not one byte of the film was asked for before a press (%d request(s))" % (variant, req0), n0 == 0, "%d bytes in %d request(s)" % (n0, req0))
+            check("%s: nothing played by itself" % variant, "playing" not in evs and "playing-promise" not in evs, "events %s" % sorted(set(evs)))
+            if variant == "script":
+                rej = [r for r in rows if r.get("ev") == "rejected"]
+                check("script: the page's own play() calls without a finger were refused (NotAllowedError)", len(rej) >= 1 and all(r.get("name") == "NotAllowedError" for r in rej), "rejected rows %s" % [(r.get("name")) for r in rej])
+            if variant == "mse":
+                check("mse: the script player was kept from fetching (no 'sourceopen', no 'fetched')", "sourceopen" not in evs and "fetched" not in evs, "events %s" % sorted(set(evs)))
+            lay = [r for r in rows if r.get("ev") == "layout"]
+            if not lay:
+                check("%s: the page told where its picture is (for the tap)" % variant, False, "no layout row")
+                continue
+            L = lay[-1]
+            tx, ty = (int(L.get("bx") or 0), int(L.get("by") or 0)) if how == "button" else (int(L.get("vx") or 0), int(L.get("vy") or 0))
+            if tx <= 0 or ty <= 0:
+                tx, ty = self.screen[0] // 2, 260
+            m2 = media.size(); r2 = self.lab.size()
+            self.ph.tap(tx, ty); time.sleep(9)
+            n1, req1 = film_bytes(m2)
+            rows2 = [r for r in self.lab.since(r2) if r.get("kind") == "ap" and str(r.get("tag", "")).startswith(tag)]
+            ev2 = [r.get("ev") for r in rows2]
+            self.shot("ap-%s-after" % variant)
+            check("%s: after the press the film is asked for (%d bytes)" % (variant, n1), n1 > 0, "no byte after a tap at %d,%d (page events %s)" % (tx, ty, sorted(set(ev2))))
+            if variant in ("mse", "button"):
+                check("%s: and it plays (the page's own play button)" % variant, "playing" in ev2 or "playing-promise" in ev2, "events %s" % sorted(set(ev2)))
+            if variant == "mse":
+                check("mse: the script player now fetched its film", "sourceopen" in ev2 and "fetched" in ev2, "events %s" % sorted(set(ev2)))
+            self.ap_table.append((variant, "button" if how == "button" else "picture", n0, n1, "yes" if ("playing" in ev2 or "playing-promise" in ev2) else "no"))
+        # the switch off: the old behaviour (a muted autoplay video loads and plays by itself), proof that the switch really is the rule
+        self.ph.debug("vpress", "0"); time.sleep(2.0)
+        rm, mm = self.lab.size(), media.size()
+        self.ph.open_url("%s/ap?v=autoplay&tag=ap-off" % self.lab_base)
+        time.sleep(12)
+        n_off, req_off = film_bytes(mm)
+        evs_off = [r.get("ev") for r in self.lab.since(rm) if r.get("kind") == "ap" and str(r.get("tag", "")).startswith("ap-off")]
+        check("off: with the rule switched off the page's muted autoplay video loads and plays by itself again (%d bytes)" % n_off, n_off > 0 and "playing" in evs_off, "bytes %d, events %s" % (n_off, sorted(set(evs_off))))
+        self.ap_table.append(("autoplay, rule OFF", "-", n_off, n_off, "yes" if "playing" in evs_off else "no"))
+        self.ph.debug("vpress", "1"); time.sleep(1.5)
+        self.dump_diag("ap")
+        diag = ""
+        try:
+            diag = open(os.path.join(self.out, "diagnostics-ap.txt")).read()
+        except OSError:
+            pass
+        line = [ln for ln in diag.splitlines() if ln.startswith("Videos start only when pressed")]
+        self.ap_line = line[-1] if line else ""
+        check("Diagnostics counts what the gate did (refused plays and opened by the person)", bool(line) and re.search(r"refused ([1-9]\d*) plays", line[-1]) is not None and re.search(r"opened by the person: ([1-9]\d*)", line[-1]) is not None, "line: %s" % (line[-1][-300:] if line else "none"))
+        self.ph.debug("vpress", "0")
+        self.ap_results = checks
+        self.record({"kind": "press-to-play", "name": "videos-start-only-when-pressed", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
+        self.check_alive("videos-start-only-when-pressed")
+
     # ---- the whole run
     # ---- VC1 / LP1 (owner message 44): a video with no controls gets Kestrel's own bar when it is tapped; a long press on a video opens the video options and never the floating panel
     VBAR_PAGES = [("naked", "/video/vc?kind=naked", "shown"), ("shadow-root", "/video/vc?kind=shadow", "shown"), ("shadow-root + frame over it", "/video/vc?kind=shadow&ad=1", "shown"), ("own controls", "/video/vc?kind=own", "own")]
@@ -2263,6 +2348,8 @@ class Soak:
         else:
             say("engine ready after %.0f s" % eng)
         time.sleep(5)
+        if eng is not None and self.a.suite != "ap":
+            self.ph.debug("vpress", "0"); time.sleep(1.5)          # ANS53: the other scenes were written for pages whose videos start by themselves; the rule has its own suite (ap)
         self.main_pid = (self.ph.pids() or [None])[0]
         self.record({"kind": "start", "name": "app-start", "status": "ok" if eng else "no-engine", "engine_ready_s": round(eng, 1) if eng else None})
 
@@ -2411,6 +2498,22 @@ class Soak:
             L.append("| :- | :- | :- |")
             for c in self.np_results:
                 L.append("| %s | %s | %s |" % (c["check"], "ok" if c["ok"] else "**FAILED**", (c["detail"] or "")[:160].replace("|", "/")))
+            L.append("")
+        if self.ap_results:
+            L.append("## Videos start only when pressed (ANS53a / ANS53b, owner message 53), on the real engine")
+            L.append("")
+            L.append("| check | result | detail |")
+            L.append("| :- | :- | :- |")
+            for c in self.ap_results:
+                L.append("| %s | %s | %s |" % (c["check"], "ok" if c["ok"] else "**FAILED**", (c["detail"] or "")[:160].replace("|", "/")))
+            L.append("")
+            if self.ap_line:
+                L.append("Diagnostics line: %s" % self.ap_line[:700])
+                L.append("")
+            L.append("| page | pressed | film bytes before the press | film bytes after | played |")
+            L.append("| :- | :- | -: | -: | :- |")
+            for row in self.ap_table:
+                L.append("| %s | %s | %s | %s | %s |" % row)
             L.append("")
         if self.hs_results:
             L.append("## The picture size cap for HLS pages on the real engine (ANS52h, owner message 52)")
@@ -2861,7 +2964,7 @@ class FakeAdb:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "vp"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "vp"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -2903,6 +3006,8 @@ def main():
         if a.suite in ("cp", "vp"):
             s.cp_scene()
             s.hls_scene()
+        if a.suite in ("ap", "vp"):
+            s.ap_scene()
         if a.suite == "yh":
             s.yahoo_fullscreen()                             # (only the live Yahoo Finance player in full screen with Kestrel's controls: about 4 minutes)
         if a.suite == "fsy":
