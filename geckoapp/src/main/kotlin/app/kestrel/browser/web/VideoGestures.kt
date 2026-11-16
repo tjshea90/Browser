@@ -66,7 +66,10 @@ class VideoGestures(private val activity: Activity, private val s: Surface, priv
     fun onTouch(e: MotionEvent): Boolean {
         val was = engine.active
         when (e.actionMasked) {
-            MotionEvent.ACTION_DOWN -> { main.removeCallbacks(clearInfo); if (engine.active) engine.cancel(); engine.cfg = config(); engine.down(e.x, e.y, e.eventTime) }       // (a touch whose end was lost: its info goes)
+            MotionEvent.ACTION_DOWN -> {
+                if (pillWaiting) { main.removeCallbacks(clearInfo); clearInfo.run() }              // a new touch within 0.9 s of a seek: the old jump text goes now (a tap or a page scroll never calls finished(), which would have cleared it: review of alpha61)
+                if (engine.active) engine.cancel(); engine.cfg = config(); engine.down(e.x, e.y, e.eventTime)       // (a touch whose end was lost: its info goes)
+            }
             MotionEvent.ACTION_MOVE -> engine.move(e.x, e.y, e.eventTime)
             MotionEvent.ACTION_UP -> engine.up(e.x, e.y, e.eventTime)
             MotionEvent.ACTION_CANCEL -> engine.cancel()
