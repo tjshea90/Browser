@@ -1874,3 +1874,8 @@ The release is out. It works well
 ```
 How difficult would it be to turn this entire repo private and continue updating the browser as I've been doing
 ```
+
+## 2026-11-16T23:36:39Z
+```
+Set up everything you can now, then give me a step by step guide for everything I need to do. I'm not too worried about security, so easier and less secure is fine
+```
