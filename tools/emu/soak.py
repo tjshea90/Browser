@@ -2693,9 +2693,9 @@ class Soak:
         check("A: a vertical drag in the middle changes nothing (VLC's dead zone)", not ev("native", "gesture-level", m), "lines %s" % [e["rest"] for e in ev("native", "gesture-level", m)][:3])
         # ANS60a (owner message 60: "make the seek, brightness, and volume gestures in the video player work without a long press"): a plain sideways drag SEEKS
         m = self.log.size()
-        self.ph.a.sh("input swipe %d %d %d %d 500" % (150, 500, 450, 500), timeout=20); time.sleep(1.5)
+        self.ph.a.sh("input swipe %d %d %d %d 500" % (150, 500, 350, 500), timeout=20); time.sleep(1.5)                  # 3 cm: about 15 s (the five-minute film must not reach its end before the 6 cm test)
         j0 = jumps(ev("native", "gesture-seek", m))
-        check("A: a plain sideways drag (no long press at all) seeks forward (%s)" % j0[-1:], bool(j0) and j0[-1] >= 25 and any('"skip"' in c["rest"] for c in ev("native", "cmd", m)), "seek lines %s, cmd lines %s" % ([e["rest"] for e in ev("native", "gesture-seek", m)][:3], [c["rest"][:30] for c in ev("native", "cmd", m)][:3]))
+        check("A: a plain sideways drag (no long press at all) seeks forward (%s)" % j0[-1:], bool(j0) and 8 <= j0[-1] <= 30 and any('"skip"' in c["rest"] for c in ev("native", "cmd", m)), "seek lines %s, cmd lines %s" % ([e["rest"] for e in ev("native", "gesture-seek", m)][:3], [c["rest"][:30] for c in ev("native", "cmd", m)][:3]))
         # ANS60b (owner message 60: "it should say slide up or down for brightness or volume respectively"): a finger that rests is told what it can do on ITS side
         for label, hx, words in (("left", 150, "Slide up or down for brightness"), ("right", 450, "Slide up or down for volume"), ("middle", 300, "Slide left or right to seek")):
             m = self.log.size()
