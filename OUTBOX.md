@@ -2168,3 +2168,20 @@
 > - your captions/speed decision
 > - the 2-hour compatibility emulator run, which I'll read when it ends
 <!-- sha:fec521e24be8 -->
+
+## 2026-11-16T01:27:20Z
+> Those two heartbeat reminders were stale. Everything they list is already done, so I redid nothing.
+>
+> Where things stand:
+>
+> - **alpha55** is released and answered. Your repeated message is answered too, point by point.
+> - **Compat emulator run** is still going. I set a reminder for 03:30 UTC to read it and write `research/COMPAT_RUN1.md`.
+> - **Next release, not shipped yet.** While waiting I added a few small fixes for the next release, with tests passing:
+>   - A video that fails now keeps its controls up and says "This video stopped", instead of a ring that spins forever.
+>   - The controls fade in 200 ms instead of 160.
+>   - The emulator test now records whether the screen is kept awake while a film plays.
+>   - A stuck-screen safety net: if the app ever stops taking a page's reports, the page gets its own bar and taps back after four refusals instead of being left with no controls.
+> - **Emulator check.** I queued one emulator run to prove these changes; it starts after the compat run finishes. I won't ask you to reinstall for these until that run passes.
+>
+> Still waiting on you: the tablet test of alpha55 with its four Diagnostics lines, and your decision on a captions or speed button.
+<!-- sha:419542fca405 -->
