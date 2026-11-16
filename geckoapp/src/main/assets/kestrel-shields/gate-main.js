@@ -41,7 +41,7 @@
   var REFUSED = 'The play method is not allowed by the user agent or the platform in the current context, possibly because the user denied permission.';
   var INTERRUPTED = 'The play() request was interrupted: Kestrel\'s own player plays this video.';
 
-  function rec(el) { var r = recs.get(el); if (!r) { r = { open: false, src: null, hasSrc: false, preload: null, hasPreload: false, autoplay: false, hasAutoplay: false, load: false, tracked: false, adopted: false, forced: false, ask: null, askedAt: 0, noUntil: 0, yesAt: 0 }; recs.set(el, r); } return r; }
+  function rec(el) { var r = recs.get(el); if (!r) { r = { open: false, src: null, hasSrc: false, preload: null, hasPreload: false, autoplay: false, hasAutoplay: false, load: false, tracked: false, adopted: false, forced: false, ask: null, askedAt: 0, noUntil: 0, yesAt: 0, viaPlay: 0 }; recs.set(el, r); } return r; }
   function peek(el) { try { return recs.get(el); } catch (e) { return undefined; } }
   function isBlob(v) { var u = (typeof v === 'string') ? v : ((v !== null && v !== undefined) ? String(v) : ''); return mseUrls[u] === 1; }   // only a MediaSource's address (see the createObjectURL wrapper below)
   function isMediaEl(x) { return !!x && x.nodeType === 1 && x.nodeName === 'VIDEO'; }
@@ -124,6 +124,7 @@
     if (gated.length >= 400) { var keep = []; for (var i = 0; i < gated.length; i++) if (gated[i].isConnected && !rec(gated[i]).open) keep.push(gated[i]); gated = keep; }
     if (gated.length < 400) gated.push(el);
     try { el.addEventListener(OPEN_EVENT, function () { var was = rec(el).open; openEl(el, 'kestrel'); if (!was && hand) ask(el, 'kestrel', function (h) { if (h) pauseEl(el); }); }, true); } catch (e) { /* ignore */ }   // Kestrel's own controls, also for a film inside a shadow tree
+    try { el.addEventListener('play', function (ev) { nativePlay(el, ev); }, true); } catch (e) { /* ignore */ }                    // the engine's own controls (nativePlay below)
   }
 
   // ---------------------------------------------------------------- opening
@@ -229,6 +230,21 @@
     });
   }
   function askPress(el) { ask(el, 'press', function (handed) { if (handed) pauseEl(el); }); }
+  // The engine's OWN controls (a tap on a <video controls>) start the film without any pointer event reaching the listeners of the page (lab run 43826954106, Gecko: not one `pointerup` or `click` arrived, so pressAt
+  // never ran and the app was never asked). The engine's own `play` event IS that press: a closed element cannot play by itself (autoplay is held, a play() of the page goes through the replacement below, which
+  // opens it first and stamps viaPlay), so a trusted `play` of a closed element with controls is the person pressing those controls. After a hand-over (the element is open and the app said yes) the same event with a
+  // tap behind it is the person pressing play again; one that the page's own play() made (viaPlay) is decided by the replacement, and a film that plays here after a no is left alone.
+  function nativePlay(el, ev) {
+    try {
+      if (!ev || !ev.isTrusted || !on) return;
+      var r = rec(el), again = r.open && r.yesAt > 0;
+      if (r.open && !again) return;
+      if (dnow.call(Date) - r.viaPlay < 1500) return;
+      if (again ? !activation() : !(el.controls || activation())) return;
+      if (!r.open) openEl(el, 'press');
+      if (hand && dnow.call(Date) - r.askedAt > 400) askPress(el);
+    } catch (e) { /* ignore */ }
+  }
   try {
     document.addEventListener(ANS_EVENT, function (e) {
       try {
@@ -330,6 +346,7 @@
       try {
         if (on && isMediaEl(this)) {
           var r = rec(this);
+          r.viaPlay = dnow.call(Date);
           if (hand && r.yesAt && dnow.call(Date) - r.yesAt < 1500) return Promise.reject(new DOMException(INTERRUPTED, 'AbortError'));   // the app took this press over a moment ago: the page's own play() that follows it is the same press
           if (!r.open) {
             if (!r.adopted) adopt(this);
