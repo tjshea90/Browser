@@ -95,8 +95,14 @@ configurations.all {
     }
 }
 
+// ANS52i (research/VIDEO_ACCEL_THIRDPARTY.md): Kestrel's own player runs on Media3 ExoPlayer. 1.11.1 is the version GeckoView 160's own POM names (the engine's HLS player is built on it and its classes already
+// travel in the APK), so naming the two modules we call adds no second copy: keep this equal to what `./gradlew :geckoapp:dependencies` shows for media3 under GeckoView.
+val media3Version = "1.11.1"
+
 dependencies {
     implementation(project(":core"))
+    implementation("androidx.media3:media3-exoplayer:$media3Version")
+    implementation("androidx.media3:media3-exoplayer-hls:$media3Version")
     implementation("org.mozilla.geckoview:geckoview-$geckoAbi:$geckoVersion") {
         exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
         exclude(group = "com.google.android.gms") // WebAuthn via Google Play services: this tablet has none, and this project never depends on GMS
