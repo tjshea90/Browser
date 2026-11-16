@@ -1303,3 +1303,227 @@ Make sure to respond to this message I already sent earlier. Some of the fixes m
 
 On alpha51, the video player first falsely reported that the video was 4 seconds long when it was over one minute. When I first opened full screen it stretched the video to fill the screen which messed up the aspect ratio. But when I went to landscape mode then back, it turned to its normal aspect ratio. The rotation from portrait to landscape and back is buggy and slow. The video was slow and laggy. The controls now show up in both orientations. When the controls are showing and I tap the video, the controls should disappear and dedicate the whole screen to the video, just like other video plays. This video player needs an audit and overhaul. Do whatever research necessary such as reviewing the logic and coding and behavior of other well known and well coded browser video players. Do a significant overhaul and make the video player run efficiently and smoothly with controls easily accessible but each time I tap the screen it should toggle playback controls shown or hidden, just like other popular video players.
 ```
+
+## 2026-11-16T02:11:09Z
+```
+Kestrel diagnostics  2026-11-16 02:10:52 UTC  (app running 160 s)
+App: app.kestrel.browser.gecko 0.3.0-alpha55 (code 156)
+Device: alps 711, Android 10 (API 29), armeabi-v7a/armeabi
+Display: 600x973 px, 170 dpi, font scale 1.2
+Memory: total 1954 MB, available 591 MB, low=false, threshold 144 MB; MemAvailable 575640 kB; low-RAM device=true; app heap 18/128 MB
+Keyboard: com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME
+Processes: main#17989, :utility_disable_art_image_#18510, :gpu_disable_art_image_#18122, :sandboxed_tab_disable_art_image_3#18080, :crashhelper_disable_art_image_#18036, :media#18469
+Cold start (ms since the process started): app 153 | activity 293 | frame 765 | look 958 | runtime 1783 | open 1717 | paint 15827 | stop 4407
+Last look (the saved picture of the page, EY-1): on, 1 stored, shown at start 1, shown after a revive 0, taken 7, hidden 1
+Back: no presses yet
+YouTube ads: none seen yet
+Other players' ads: none seen yet
+Tap on a video bar: none seen yet
+Full-screen turning (Automatic): 1 full screens, turned sideways by Kestrel 0, by the page's own request 0, by the rotate button 0, handed back to the tablet 0; last: as Android had it - full screen ends: put back what Android had
+Full-screen system bars: kept: Settings > System bars in full-screen video is on Keep (the default); the page is laid out between the bars
+Turning under a video: 2 turns met a full-screen page or a playing video, video paused 0 times, played again 0, left paused 0; the page took 0 ms to have the new size after the last turn (worst 0 ms, 0 turns measured, 0 gave up after 7 s, engine nudged 2 times); last: settled after 3086 ms, nothing was paused
+Turning, the page's own pause (every video, also a muted one): 2 turns met by pages, videos played again 2, left paused 0, turns with nothing to pause 0
+Full-screen page size (the engine sizes a page that goes full screen to the display; the page tells what it got): 5 checks, 0 wrong, the engine was given a real size change 0 times; last: right (page 600x947 = view 600x947); reports outside full screen: 1 were the view's size, 0 were not
+Full-screen video controls (Kestrel's own): 4 full screens, 0 taps on the picture (7 single, 0 double-tap seeks), 1 commands to the page, 13 reports now; last: full screen ended after 5 s: 13 reports, 0 taps, 0 seeks, 1 commands, the page's own controls put away: most 3 element(s)
+Sound while the page is not in front: the engine suspends it itself; the app paused 0 video(s) the engine left playing; last: nothing needed pausing yet
+Video controls (Automatic): Kestrel's bar shown 0 times, the page had controls of its own 1 times; used: play 0, pause 0, seek 0, mute 0, full 0
+Real video: nothing played yet this run (the numbers fill in while a video plays on a page); Video: codecs offered to sites: VP9 as the engine decides, no AV1 (software only here), H.265 as the engine decides [hardware decoders AHVi]; page animations normal; muted autoplay allowed; protected video ask
+Real scrolling: off (Settings > Measure scrolling on real pages turns it on for a while)
+Scriptlets in the lists: 10014 calls stored (154 of them trusted-only); skipped: 374 not supported (trusted-replace-argument 88, trusted-rpnt 23, trusted-replace-outbound-text 21, trusted-set 21, xml-prune 21, trusted-create-html 20)
+YouTube scriptlet calls loaded: www.youtube.com 29, m.youtube.com 10
+Engine: GeckoView 160.0; live sessions 1 of 1 tabs (the memory budget keeps up to 5 ready, MemAvailable 562 MB, setting automatic); current https://finance.yahoo.com/quote/TTWO/
+Network: Fast Wi-Fi profile: LinkMeter's tunnel is the active network, so lookups use the phone's own resolver, HTTP/3 and IPv6 are off, downloads give a loading page more room (1000 KB/s) and the phone helper rests. (VPN active: true, LinkMeter tunnel recognised: true, downloads yield to a loading page at 1000 KB/s)
+Wi-Fi lock: HIGH_PERF (radio kept out of power save, also with the screen off), held now=false, taken 0 time(s) by downloads. Keep Wi-Fi awake in front: not held, taken 0 time(s) this run
+Download windows: no window boundary seen yet this run (a download needs more than one window)
+Video size estimates: no stream download has finished yet this run
+Engine prefs: version=9(i), av1.enabled=false(b), processCount=1(i), prefersReducedMotion=null(?), prefetch-next=true(b), size_factor=20(i), discard_factor=1(i), min_expiration_ms=180000(i), disk.capacity=512000(i), push.enabled=false(b), webauthn=false(b), y_skate_size_multiplier=4.0(s), y_stationary_size_multiplier=3.0(s), content_response_timeout=300(i), max_velocity_inches_per_ms=0.07(s), gc_on_memory_pressure=false(b), gpu-process.enabled=true(b), software=false(b), cache_readahead_limit=60(i), cache_resume_threshold=30(i), max_total_viewers=6(i), contentViewerTimeout=3600(i), memory.capacity=65536(i), decode_bytes_at_a_time=65536(i), numscrollportheights=2(i), numscrollportwidths=1(i), top=1500.0(s), bottom=1500.0(s), precache-shaders=true(b), proxy.type=5(i), failover_timeout=10(i), autoconfig_url=(s), trr.mode=0(i), enable=false(b), disableIPv6=true(b), interactive_widget_default_resizes_visual=true(b), allow_unload_listeners=true(b), require_no_opener=true(b), ship_allow_beforeunload_listeners=true(b), max_entries=50(i), dnsCacheExpiration=60(i), dnsCacheEntries=3200(i), gc_parallel_marking=false(b), bytecode_cache.strategy=1(i), jxl.enabled=false(b), accept=(s), allow_double_tap_zooming=false(b), autozoom=true(b), prefetch_dns_for_anchor_https_document=true(b), cache.size=16384(i), fallback_delay=500(i), speculation_rules.enabled=false(b), dry_run=false(b), vp9.enabled=false(b), hevc.enabled=true(b), android-media-codec.enabled=true(b), preferred=true(b), hls.enabled=true(b), eme.enabled=true(b), require-app-approval=true(b), default=1(i), blocking_policy=0(i), request=true(b), rdd-process.enabled=false(b), utility-process.enabled=true(b), default-size=10(i), suspend-background-video.enabled=true(b), prefersReducedMotion=null(?), animation_mode=normal(s), all=false(b), compositor=false(b), accelerated=true(b), disabled=false(b), ion=true(b), baselinejit=true(b), blinterp=true(b), wasm=true(b), wasm_optimizingjit=true(b), early-hints.enabled=true(b), echconfig.enabled=true(b), enable_kyber=true(b), http2.enabled=true(b), trackingTable=moztest-track-simple,ads-track-digest256,analytics-track-digest256,social-track-digest256(s), trackingAnnotationTable=moztest-track-simple,ads-track-digest256,social-track-digest256,analytics-track-digest256,content-track-digest256(s), trackingprotection.enabled=false(b), strict_list.enabled=true(b), baseline.enabled=true(b), convenience.enabled=true(b), allow-lock=true(b), malware.enabled=true(b), phishing.enabled=true(b), downloads.enabled=false(b), malwareTable=goog-malware-proto,goog-unwanted-proto,moztest-harmful-simple,moztest-malware-simple,moztest-unwanted-simple(s), phishTable=goog-phish-proto,moztest-phish-simple(s)
+Engine scroll/network prefs: touch_start_tolerance=0.06, touch_move_tolerance=0.03, fling_stop_on_tap_threshold=0.05, fling_min_velocity_threshold=0.5, velocity_bias=1.0, displayport_expiry_ms=180000, prefer_jank_minimal_displayports=true, min_skate_speed=1.0, allow_immediate_handoff=false, fling_friction=0.004, chrome_fling_physics.friction=0.015, chrome_fling_physics.inflexion=0.35, chrome_fling_physics.stop_threshold=0.1, paint_skipping.enabled=true, layout.display-list.retain=true, dom.ipc.processPriorityManager.enabled=true, browser.cache.memory.capacity=65536, layout.frame_rate=-1, http.max-connections=128, http.max-persistent-connections-per-server=6, http.speculative-parallel-limit=20, http.pacing.requests.enabled=true, dnsCacheEntries=3200, dnsCacheExpiration=60, layout.css.scroll-anchoring.enabled=true, dom.lazy-loading.margin.top=1500.0, image.cache.size=20971520
+Video: codecs offered to sites: VP9 as the engine decides, no AV1 (software only here), H.265 as the engine decides [hardware decoders AHVi]; page animations normal; muted autoplay allowed; protected video ask
+Storage: 1.52 GB free of 27.75 GB; free + caches Android can clear: 1.52 GB; Android says an app may still use 1.03 GB (it keeps 500.0 MB free after an install: by its rule min(5 % of the storage, 500 MB) = 500.0 MB; settings: sys_storage_threshold_percentage=default, sys_storage_threshold_max_bytes=default); this app: package 90.4 MB + unpacked libraries 131.7 MB + data 73.7 MB + cache 496.8 MB; an install or update needs free >= reserve + 2 x (package + libraries) + about 32 MB. An update of this size would need about 885.8 MB free: it fits; uninstalling first would leave about 2.21 GB against 976.2 MB (that works).
+Storage tidy: last 2026-11-15 20:33: after an update, freed 20 KB (engine files 20 KB); it looks at update files, old installers, engine cache older than 21 days, crash reports older than 7 days, previews of closed tabs and stopped downloads older than 14 days, about once a day and right after an update
+CPU by process, % of ONE core (this tablet has 4; read every 5 s while the browser is on screen, last 5 min): parent avg 39 / peak 215 | busy moments: 2 min 29 s ago parent 215 % [Gecko 100, Cache2 I/O 15, URL Classifier 13] | reading: a page that lags while 'tab' sits near 100 (its thread 'Web Content' is the page's own script and layout) is limited by that one thread, which cannot use the other cores; a lag while every process is low is the network or the player; decoder or 'WR' threads busy = the picture is drawn or decoded in software
+Glide typing: not used yet this run
+Mini keyboard in page fields: not opened yet this run
+Blocker: fast mode, list #1, 4552 KB, engine ready from the saved copy in 561 ms (no transfer from the app). 1006 requests judged in the engine (average 901 us, slowest 29000 us, 43 over 2 ms), 0 asked the app one by one, 0 errors. Extension listeners (calls, time held): req 1007 (1192000 us), rcv 73 (109000 us), snd 71 (24000 us), done 483 (66000 us), err 48 (9000 us). Revalidations and waits: pages 1, requests 483, from cache 438, 304 seen when headers arrived 1 and when completed 0 (0 ms in all); scriptlet waits before a page 0 (0 ms in all, slowest 0 ms, 0 hit the 250 ms ceiling). page guard: declared in the manifest (page world, every frame, from the first script), 0 blocked | scriptlets: declared in the manifest (page world, every frame), 1 pages ran 1 calls, 1 before the page's first script, 1 sites set up early (1 kept, 1 asks), 1 blocked files answered with a stand-in | saved copy 1.156.1794755630027.194573.221.29042.10089.314.8
+Page report (the last pages: what Shields blocked, what failed to load, scripts that threw; a private tab is never listed):
+  finance.yahoo.com/quote/TTWO/ (2 min ago): 837 requests, 14 blocked by Shields, no failed loads, 5 script errors
+    blocked: script s.yimg.com/du/ay/wnsrvbjmeprtfrnfx.js; script securepubads.g.doubleclick.net/tag/js/gpt.js; script s.yimg.com/aaq/prebid/prebid-current.js; script s.yimg.com/ss/analytics-3.90.0.js; script consent.cmp.oath.com/version/7.0.2/cmp.js; script s.yimg.com/oa/consent.js; script s.yimg.com/aaq/vzm/cs_2.1.3.js; script s.yimg.com/cx/pv/perf-vitals_4.1.0.js; script s.yimg.com/ss/analytics-3.90.0.js; xmlhttprequest i.clean.gg/1a; ... 4 more
+    script errors: file not usable: script consent.cmp.oath.com/version/7.0.2/cmp.js; file not usable: script s.yimg.com/oa/consent.js; file not usable: script s.yimg.com/ss/analytics-3.90.0.js; file not usable: script s.yimg.com/aaq/vzm/cs_2.1.3.js; file not usable: script s.yimg.com/cx/pv/perf-vitals_4.1.0.js
+Firefox's own tracking protection, this page: on; blocked 5: securepubads.g.doubleclick.net/tag/js/gpt.js [email tracker]; ping.chartbeat.net/ping?.. [analytics]; static.chartbeat.com/js/chartbeat_video.js [analytics]; ping.chartbeat.net/ping?.. [analytics]; ping.chartbeat.net/ping?.. [analytics] (a page that is missing pictures or buttons: switch Shields off for this site from the shield icon)
+Neon glow: holding still: finger on screen, a full-screen page covers them; system animation scale off (the glow ignores it)
+Page view: attached=true session=true windowFocus=true
+Page loads (newest last; time from tap to first paint / to load finished):
+  finance.yahoo.com  paint 10 s, done 16 s, 13 blocked
+Pages: Pages load directly (switched off).
+Phone link: mode=off, paired=false, address=10.97.182.19:8780, reachable=false, rtt=0 ms, clock offset=0 ms, last error=none, rows on the phone=0
+Counters: frames.jank=73  gecko.firstComposite=12  look.hide=1  look.saved=7  look.start=1  mem.trim=4  mem.trim.10=2  mem.trim.20=1  mem.trim.5=1  turn.page.played=2  turn.page.turns=2  ui.late=3  videobar.pageHasControls=1
+
+-- last 400 events (167 recorded) --
++0.142s start activity cold 293 ms
++0.142s start heap java heap limit 128 MB, memory class 128 MB
++0.500s tabs early-cover finance.yahoo.com
++0.537s tabs look-shown tab=3 600x947 y=1968
++0.553s engine warm-start https://finance.yahoo.com/
++0.578s life resume
++0.579s health watchdog-start
++0.614s start frame cold 765 ms
++0.656s gecko view-attached
++0.728s gecko size 600x824 (was 0x0)
++0.807s start look cold 958 ms
++0.807s tabs look-drawn tab=3 start
++1.311s engine scroll-feel level=1 skate=4.0 still=3.0 bias=1.0 wait=300 expiry=180000 vel=0.07
++1.314s engine network-profile standard trr=2 http3=true noIPv6=false pageYield=150
++1.449s ui slow 865ms
++1.566s start open cold 1717 ms
++1.575s tabs cover-show tab=3 thumb=true picture=false
++1.575s tabs look-adopted tab=3
++1.594s engine network-profile fast-wifi trr=0 http3=false noIPv6=false pageYield=150
++1.596s engine network-profile fast-wifi-tunnel trr=0 http3=false noIPv6=true pageYield=1000
++1.598s engine runtime-create
++1.632s engine runtime-ready
++1.632s start runtime cold 1783 ms
++1.642s gecko size 600x884 (was 600x824)
++1.660s win focus true
++1.726s engine phone-proxy pages direct
++1.741s ui late-beat 1012ms
++1.743s gecko size 600x824 (was 600x884)
++4.256s start stop cold 4407 ms
++4.763s gecko first-composite trim=0@-
++4.776s gecko first-composite trim=0@-
++5.111s gecko first-composite trim=0@-
++7.368s gecko first-composite trim=0@-
++9.607s cosmetic css finance.yahoo.com top=true len=22047 tokens=true scriptlets=true
++10.652s frames 10s frames=69 jank=14 worst=1092ms
++11.868s cpu busy parent 215 % [Gecko 100, Cache2 I/O 15, URL Classifier 13]
++13.475s shields ext-state page guard: declared in the manifest (page world, every frame, from the first script), 0 blocked | scriptlets: declared in the manifest (page world, every frame), 1 pages ran 1 calls, 1 before the page's first script, 1 sites set up early (1 kept, 1 asks), 1 blocked files answered with a stand-in | saved copy 1.156.1794755630027.194573.221.29042.10089.314.8
++14.702s win focus false
++14.757s life pause
++15.234s mem trim level=20 avail=531MB thr=144MB low=false trim=20@0s
++15.317s life stop
++15.317s health watchdog-stop
++15.676s start paint cold 15827 ms
++17.210s tabs cover-hide tab=3 why=look-tick y=0/1968 after=1534ms
++17.210s tabs look-hide tab=3 why=look-tick y=0/1968 after=1534ms
++21.784s page loaded host=finance.yahoo.com paint=10744ms done=16852ms blocked=13 visit=1 ok=true
++22.063s life resume
++22.063s health watchdog-start
++22.080s engine warm https://finance.yahoo.com/
++22.291s win focus true
++22.382s cosmetic gen finance.yahoo.com tokens=300 css=545
++22.769s cosmetic gen finance.yahoo.com tokens=300 css=274
++22.792s gecko first-composite trim=20@7s
++23.076s cosmetic gen finance.yahoo.com tokens=125 css=289
++23.727s tabs look-saved tab=3 why=settled ok=true y=0
++25.270s pull down scrollable=6 overscroll=3 handled=1 -> canScrollUp=false
++26.165s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++27.415s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++28.876s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++30.181s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++30.723s tabs look-saved tab=3 why=settled ok=true y=926
++31.375s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++33.115s frames 10s frames=33 jank=6 worst=212ms
++35.702s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++36.826s tabs look-saved tab=3 why=settled ok=true y=1426
++37.397s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++39.361s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++41.022s tabs look-saved tab=3 why=settled ok=true y=1981
++43.071s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++43.133s frames 10s frames=57 jank=2 worst=38ms
++46.972s media list-ok manifest.prod.boltdns.net http=200 set=1/3 referer=finance.yahoo.com
++46.978s media look HLS live=false drm=false length=89s heights=0 advertising=0s in 0 breaks counted=5 of 5 playing=none
++47.270s media list-ok manifest.prod.boltdns.net http=200 set=1/3 referer=finance.yahoo.com
++47.273s media look HLS live=false drm=false length=89s heights=0 advertising=0s in 0 breaks counted=5 of 5 playing=none
++47.523s media list-ok manifest.prod.boltdns.net http=200 set=1/3 referer=finance.yahoo.com
++47.528s media look HLS live=false drm=false length=89s heights=0 advertising=0s in 0 breaks counted=5 of 5 playing=none
++53.167s frames 10s frames=105 jank=7 worst=64ms
++54.688s pull down scrollable=7 overscroll=3 handled=2 -> canScrollUp=true
++54.706s videobar own
++55.309s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++56.568s tabs look-saved tab=3 why=settled ok=true y=1877
++58.655s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++59.088s fullscreen turn to=10 (follows the tablet) was=-1 why=full screen starts (video 0x0, screen portrait, setting 0)
++59.088s fullscreen bars kept: Settings > System bars in full-screen video is on Keep (the default); the page is laid out between the bars
++59.094s gecko size 600x947 (was 600x824)
++59.291s gecko first-composite trim=20@44s
++61.363s player shown fade
++61.368s player start a full-screen film: Kestrel's controls
++61.371s player first-report film 1920x1080, length 89.52, media source
++61.371s player away the page's own player controls put away: 3 element(s)
++62.507s fullscreen viewport right: page 600x947, view 600x947
++63.395s frames 10s frames=38 jank=4 worst=350ms
++64.868s player hidden fade
++65.671s player tap x=583
++65.971s player shown fade
++66.638s player tap x=585
++66.938s player hidden fade
++69.024s player tap x=647
++69.325s player shown fade
++71.098s player tap x=545
++71.399s player hidden fade
++72.285s player tap x=625
++72.585s player shown fade
++73.944s player tap x=578
++74.245s player hidden fade
++76.504s life config orientation=landscape fullscreen=true
++76.760s gecko size 1024x523 (was 600x947)
++77.309s ui slow 887ms
++78.409s mem trim level=5 avail=443MB thr=144MB low=false trim=5@0s
++78.420s gecko first-composite trim=5@0s
++78.480s ui late-beat 2021ms
++78.863s mem trim level=10 avail=438MB thr=144MB low=false trim=10@0s
++79.302s fullscreen turn-nudge the page has not taken the new size 2538 ms after the last size change: the engine is given a real size change
++79.326s gecko size 1024x522 (was 1024x523)
++79.577s player stop the page stopped reporting after 18 s: 58 reports, 6 taps, 0 seeks, 0 commands, the page's own controls put away: most 3 element(s)
++79.580s fullscreen turn-settled settled after 3113 ms, nothing was paused
++79.582s gecko size 1024x523 (was 1024x522)
++80.015s gecko first-composite trim=10@1s
++80.028s player shown fade
++80.063s player start a full-screen film: Kestrel's controls
++80.063s player first-report film 1920x1080, length 89.52, media source
++80.063s player away the page's own player controls put away: 3 element(s)
++80.839s mem trim level=10 avail=464MB thr=144MB low=false trim=10@0s
++83.594s player hidden fade
++83.616s frames 10s frames=18 jank=9 worst=2005ms
++85.076s player stop the page stopped reporting after 5 s: 2 reports, 0 taps, 0 seeks, 0 commands, the page's own controls put away: most 3 element(s)
++94.990s player shown fade
++94.990s player start a full-screen film: Kestrel's controls
++94.991s player first-report film 1920x1080, length 89.52, media source
++94.991s player away the page's own player controls put away: 3 element(s)
++95.422s videobar turn played n=1
++96.432s tabs look-saved tab=3 why=settled ok=true y=1884
++99.740s player hidden fade
++113.561s player tap x=614
++113.862s player shown fade
++113.961s frames 10s frames=19 jank=1 worst=86ms
++117.394s player hidden fade
++118.844s life config orientation=portrait fullscreen=true
++118.939s gecko size 600x947 (was 1024x523)
++119.790s ui slow 898ms
++119.828s gecko first-composite trim=10@38s
++120.079s ui late-beat 933ms
++121.512s fullscreen turn-nudge the page has not taken the new size 2573 ms after the last size change: the engine is given a real size change
++121.517s gecko size 600x946 (was 600x947)
++121.892s player shown fade
++121.894s fullscreen turn-settled settled after 3086 ms, nothing was paused
++121.894s player stop the page stopped reporting after 26 s: 42 reports, 1 taps, 0 seeks, 0 commands, the page's own controls put away: most 3 element(s)
++121.895s gecko first-composite trim=10@41s
++121.897s gecko size 600x947 (was 600x946)
++122.525s gecko first-composite trim=10@41s
++126.680s player shown fade
++126.681s player start a full-screen film: Kestrel's controls
++126.681s player first-report film 640x360, length 89.52, media source
++126.681s player away the page's own player controls put away: 3 element(s)
++126.704s frames 10s frames=30 jank=8 worst=916ms
++129.522s videobar turn played n=1
++131.127s player cmd {"a":"pause","i":1}
++131.392s tabs look-saved tab=3 why=settled ok=true y=1868
++131.672s fullscreen back-exit asking the page to leave full screen
++131.688s player stop full screen ended after 5 s: 13 reports, 0 taps, 0 seeks, 1 commands, the page's own controls put away: most 3 element(s)
++131.802s fullscreen turn to=-1 (as Android had it) was=10 why=full screen ends: put back what Android had
++131.848s gecko size 600x824 (was 600x947)
++132.021s gecko first-composite trim=10@51s
++135.741s video decoders AHVi 26 decoder(s) in 140 ms, widevine=true
++137.347s frames 10s frames=56 jank=9 worst=375ms
++147.351s frames 10s frames=362 jank=9 worst=153ms
++157.362s frames 10s frames=383 jank=4 worst=275ms
+```
