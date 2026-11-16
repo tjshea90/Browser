@@ -2972,7 +2972,6 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     private fun handleBack(): Boolean {
-        if (::inline.isInitialized && inline.backPressed()) return true   // ANS55f: Back closes the film inside the page first
         // FS1: Back leaves full screen first, like every video player (it used to go back in the page's history, which only left full screen by leaving the page)
         if (fullscreenOn) {
             if (::qualitySheet.isInitialized && qualitySheet.isOpen) { qualitySheet.dismiss(); return true }   // ANS53d.2: the quality list closes first (Back from it is not "leave full screen")
@@ -2986,6 +2985,7 @@ open class BrowserActivity : Activity(), DockListener {
             }
             endFullScreenOf(null, "Back: the full-screen page is not in front or has no session") // then Back does its ordinary job
         }
+        if (::inline.isInitialized && inline.backPressed()) return true   // ANS55f: Back closes the film inside the page first (a page that goes full screen has ended it already: the order never matters)
         if (::miniNav.isInitialized && miniNav.onBackPressed()) return true // the small keyboard closes first
         if (sheet.isShowing) { sheet.dismiss(); return true }
         if (downloadsView?.parent != null) { closeDownloads(); return true }
