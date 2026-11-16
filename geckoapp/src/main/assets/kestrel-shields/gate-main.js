@@ -86,7 +86,7 @@
   // ---------------------------------------------------------------- the originals
   var oSetAttr = eproto.setAttribute, oRemoveAttr = eproto.removeAttribute, oGetAttr = eproto.getAttribute, oHasAttr = eproto.hasAttribute;
   var oLoad = proto.load;
-  var dSrc = null, dPreload = null;
+  var dSrc = null, dPreload = null, dAutoplay = null;
 
   function track(el) {
     var r = rec(el);
@@ -108,6 +108,9 @@
       r.forced = false;
       if (r.hasSrc) { var s = r.src; r.hasSrc = false; r.src = null; r.load = false; if (dSrc) dSrc.set.call(el, s); else oSetAttr.call(el, 'src', s); }
       else if (r.load) { r.load = false; if (el.networkState === 0) oLoad.call(el); }                 // (giving the preload back already resumes a load that was waiting; a second load() would start it again and ask for the file twice)
+      // the person's rule is OFF (Settings): the page's own autoplay comes back, as in any other browser (lab run 43812820865: a muted hero loop loaded but never started with the rule off). A press on the picture, the page's own play()
+      // and Kestrel's own controls start nothing by this: the person pressed a play button, or the page plays at the person's request; a tap on a hero loop that has no play button is not a request to play it.
+      if (r.hasAutoplay) { var wantAuto = r.autoplay; r.hasAutoplay = false; if (why === 'off' && wantAuto) { if (dAutoplay) dAutoplay.set.call(el, true); else oSetAttr.call(el, 'autoplay', ''); } }
     } catch (e) { /* the page decides */ }
     touch();
   }
@@ -153,7 +156,7 @@
         return s.call(this, v);
       };
     });
-  defAccessor(proto, 'autoplay',
+  dAutoplay = defAccessor(proto, 'autoplay',
     function (g) { return function () { var r = peek(this); return (r && r.hasAutoplay && !r.open) ? r.autoplay : g.call(this); }; },
     function (s) {
       return function (v) {

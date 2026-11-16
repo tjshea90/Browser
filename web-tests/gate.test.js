@@ -129,6 +129,21 @@ test('a stream (camera, call) is never held and its play() is not refused by the
   assert.ok(!/^The play method is not allowed by the user agent or the platform in the current context, possibly because the user denied permission\./.test(r), r);
 });
 
+test('the setting off gives the page\'s autoplay back (markup and script); a tap on a hero loop with no play button does not start it', async () => {
+  const HTML = '<video id="v" autoplay muted loop src="https://cdn.example/a.mp4" style="display:block;width:320px;height:180px"></video><video id="w" style="display:block;width:320px;height:180px"></video><script>var w=document.getElementById("w"); w.autoplay=true; w.muted=true; w.src="https://cdn.example/b.mp4";</script>';
+  const state = (page) => page.evaluate(() => { const v = document.getElementById('v'), w = document.getElementById('w'); return { vAttr: v.hasAttribute('autoplay'), wAttr: w.hasAttribute('autoplay'), wProp: w.autoplay }; });
+  const hero = await open(HTML);
+  await settle(hero, 500);
+  assert.deepEqual(await state(hero), { vAttr: false, wAttr: false, wProp: true }, 'closed: the engine never sees an autoplay');
+  await tapOn(hero, '#v'); await settle(hero, 400);
+  assert.equal((await state(hero)).vAttr, false, 'a tap on a loop with no play button does not hand its autoplay back (the person did not press a play button)');
+  const off = await open(HTML);
+  await settle(off, 500);
+  await off.evaluate(() => document.dispatchEvent(new CustomEvent('__kst_gate_cfg_v1', { detail: '0' })));
+  await settle(off, 500);
+  assert.deepEqual(await state(off), { vAttr: true, wAttr: true, wProp: true }, 'rule off: the page\'s own autoplay is back, for the markup and for the script');
+});
+
 test('the setting off lets everything go at once, also what was held before, and elements that come later are not touched', async () => {
   const page = await open(MSE);
   await settle(page, 300);
