@@ -33,7 +33,11 @@ class FullscreenTurner(
     private val mode: () -> Int,
     /** The picture of the video that plays on the front tab, "0 x 0" when nobody knows yet. */
     private val picture: () -> Pair<Int, Int>,
+    /** The front tab is a private tab: its film's size is not written down (review of alpha56: a private tab keeps no line about its page). */
+    private val isPrivate: () -> Boolean = { false },
 ) {
+    private fun shape(w: Int, h: Int): String = if (isPrivate()) (if (w > 0 && h > 0) "size known" else "size unknown") else "${w}x$h"
+
     var on = false; private set
     private var saved = FullscreenTurn.UNSPECIFIED     // what the activity asked for before full screen
     private var requested = FullscreenTurn.UNSPECIFIED // what we asked for last (Android's number)
@@ -70,7 +74,7 @@ class FullscreenTurner(
         pendingSite = null
         val (w, h) = picture()
         val plan = FullscreenTurn.onEnter(mode(), siteLock, w, h, screenLandscape())
-        apply(plan.request, plan.release, "full screen starts (video ${w}x$h, screen ${if (screenLandscape()) "landscape" else "portrait"}, setting ${mode()})")
+        apply(plan.request, plan.release, "full screen starts (video ${shape(w, h)}, screen ${if (screenLandscape()) "landscape" else "portrait"}, setting ${mode()})")
         if (plan.request == FullscreenTurn.SENSOR_LANDSCAPE && siteLock == null) turnedByUs++
         showButton()
     }
@@ -91,7 +95,7 @@ class FullscreenTurner(
         if (!on || siteLock != null || armed || requested != FullscreenTurn.FULL_SENSOR || FullscreenTurn.cleanMode(mode()) != FullscreenTurn.MODE_AUTO) return
         val (w, h) = picture()
         val plan = FullscreenTurn.onEnter(mode(), null, w, h, screenLandscape())
-        if (plan.request != FullscreenTurn.FULL_SENSOR) { turnedByUs++; apply(plan.request, plan.release, "the video's picture became known (${w}x$h)") }
+        if (plan.request != FullscreenTurn.FULL_SENSOR) { turnedByUs++; apply(plan.request, plan.release, "the video's picture became known (${shape(w, h)})") }
     }
 
     // ---------------------------------------------------------------------------------------- what the engine tells us (UI thread)

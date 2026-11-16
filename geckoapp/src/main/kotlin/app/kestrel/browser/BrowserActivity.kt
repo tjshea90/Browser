@@ -343,7 +343,7 @@ open class BrowserActivity : Activity(), DockListener {
     private lateinit var geckoView: KestrelGeckoView
     private var fullscreenOn = false
     /** FS1 (owner message 43): the screen follows the tablet (and the rotate button) while a page is full screen; the picture size comes from what the page told about its playing video. */
-    private val fsTurner = app.kestrel.browser.web.FullscreenTurner(this, { prefs.fullscreenTurn }, { current?.gecko?.let { Pair(it.pictureW, it.pictureH) } ?: Pair(0, 0) })
+    private val fsTurner = app.kestrel.browser.web.FullscreenTurner(this, { prefs.fullscreenTurn }, { current?.gecko?.let { Pair(it.pictureW, it.pictureH) } ?: Pair(0, 0) }, { current?.isPrivateTab == true })
     internal fun fullscreenPictureKnown() { fsTurner.pictureKnown() }
     /** ROT1 (owner message 46): while the screen turns under a full-screen page or a playing video the video is paused, the page area is covered with black, and both are let go once the area is still. */
     private var turnCover: View? = null
@@ -1365,12 +1365,14 @@ open class BrowserActivity : Activity(), DockListener {
      * ANS51b (owner message 51: the tablet's Diagnostics said "full screen starts (video 0x0 ...)" for a film in a shadow root that the old video finder never sees, so Automatic turning did nothing and the owner turned the
      * tablet by hand twice): the film's picture size from the full-screen player's own report (its video element's size, 2.3 s into the full screen on the tablet) is what FS1 needs. Main thread.
      */
+    private var filmPictureTold = false          // this full screen has had its first report (reset when a full screen begins: review of alpha56, a second film on the same page must turn too)
     private fun filmPicture(m: org.json.JSONObject) {
         if (m.optString("k") != "vst") return
         val t = fullscreenTab ?: return
         val w = m.optInt("w"); val h = m.optInt("h")
         if (w <= 0 || h <= 0) return
-        val first = t.gecko.pictureW == 0 || !t.gecko.picturePlayed
+        val first = !filmPictureTold
+        filmPictureTold = true
         t.gecko.pictureW = w; t.gecko.pictureH = h; t.gecko.picturePlayed = true      // the film that plays in full screen is the picture that counts (a stream that steps down to a smaller size keeps its shape)
         if (first) {
             if (!t.isPrivateTab) Health.log("fullscreen", "film-picture", "${w}x$h from the full-screen player's report")
@@ -2917,7 +2919,7 @@ open class BrowserActivity : Activity(), DockListener {
         player.quiet = fullscreenTab?.isPrivateTab == true || (!on && player.quiet)   // a private tab's full screen is not logged or counted (kept until it has ended)
         player.fullscreen(on, prefs.fsControls == 0)                          // VP1: Kestrel's controls over the film (drawn once the page reports one)
         if (!on) player.quiet = false
-        if (on) { fsTurner.enter(); if (prefs.fullscreenBars == 1) checkBarsSoon() else { fsBarsNote = "kept: Settings > System bars in full-screen video is on Keep (the default); the page is laid out between the bars" ; Health.log("fullscreen", "bars", fsBarsNote) } } else { fsTurner.exit(); Io.main.removeCallbacks(barsCheck) } // FS1: the screen follows the tablet while a page is full screen
+        if (on) { filmPictureTold = false; fsTurner.enter(); if (prefs.fullscreenBars == 1) checkBarsSoon() else { fsBarsNote = "kept: Settings > System bars in full-screen video is on Keep (the default); the page is laid out between the bars" ; Health.log("fullscreen", "bars", fsBarsNote) } } else { fsTurner.exit(); Io.main.removeCallbacks(barsCheck) } // FS1: the screen follows the tablet while a page is full screen
     }
 
     /**
