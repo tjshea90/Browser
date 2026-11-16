@@ -43,8 +43,18 @@ object LiveBudget {
      */
     fun mayHibernate(isCurrent: Boolean, hasLiveChild: Boolean, isPrivate: Boolean): Boolean = !isCurrent && !hasLiveChild && !isPrivate
 
-    /** ANS58c: may the tab in front be put to sleep because the app was left and Android wants memory (onTrimMemory MODERATE and worse)? A normal tab keeps its history and its cookies on disk and comes back; a private tab does not. */
-    fun mayHibernateInBackground(isPrivate: Boolean): Boolean = !isPrivate
+    /** Android says every background app is about to be ended (ComponentCallbacks2.TRIM_MEMORY_COMPLETE). */
+    const val TRIM_COMPLETE = 80
+
+    /** A tab in front is put to sleep after the app was left only when the app has been away at least this long. */
+    const val AWAY_BEFORE_SLEEP_MS = 30L * 60_000L
+
+    /**
+     * ANS58c + ANS59 (owner message 59: "It should work for regular tabs in addition to private tabs"): may the tab in front be put to sleep because the app was left and Android wants memory? Switching to another app and
+     * coming back must find the page as it was, for a regular tab as much as for a private one. A private tab never (it would come back logged out). A regular tab only after a LONG absence ([AWAY_BEFORE_SLEEP_MS]) and
+     * only when Android says the background apps are about to be ended ([TRIM_COMPLETE]); below that the page stays in memory and Android may end its process itself (then it is brought back with its history, as before).
+     */
+    fun mayHibernateInBackground(isPrivate: Boolean, awayMs: Long, level: Int): Boolean = !isPrivate && level >= TRIM_COMPLETE && awayMs >= AWAY_BEFORE_SLEEP_MS
 
     /**
      * How many live tabs to keep after a memory callback ([level] is `ComponentCallbacks2.onTrimMemory`'s argument), given the [budget] above and the available memory.

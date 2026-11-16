@@ -68,13 +68,18 @@ class LiveBudgetTest {
             assertTrue("afterTrim($level,$mb,$b)", LiveBudget.afterTrim(level, mb, b) <= b)
     }
 
-    // ANS58c (owner message 58: "When I logged in, switched to a different app and came back to Kestrel, it reloaded the page and I was logged out", in a private tab): the engine forgets private logins when its last private session closes
-    @Test fun aPrivateTabIsNeverPutToSleepAndTheTabInFrontOnlyWhenItIsNormal() {
-        org.junit.Assert.assertTrue("an old normal tab may sleep", app.kestrel.core.tabs.LiveBudget.mayHibernate(isCurrent = false, hasLiveChild = false, isPrivate = false))
-        org.junit.Assert.assertFalse("the tab in front never (by the budget)", app.kestrel.core.tabs.LiveBudget.mayHibernate(isCurrent = true, hasLiveChild = false, isPrivate = false))
-        org.junit.Assert.assertFalse("one with a live pop-up child never", app.kestrel.core.tabs.LiveBudget.mayHibernate(isCurrent = false, hasLiveChild = true, isPrivate = false))
-        org.junit.Assert.assertFalse("a private tab never: it would come back logged out", app.kestrel.core.tabs.LiveBudget.mayHibernate(isCurrent = false, hasLiveChild = false, isPrivate = true))
-        org.junit.Assert.assertTrue("the app was left and Android wants memory: a normal tab in front may sleep (its history and cookies are kept)", app.kestrel.core.tabs.LiveBudget.mayHibernateInBackground(isPrivate = false))
-        org.junit.Assert.assertFalse("a private tab in front may not (the owner was logged out by exactly this)", app.kestrel.core.tabs.LiveBudget.mayHibernateInBackground(isPrivate = true))
+    // ANS58c + ANS59 (owner messages 58 and 59: "When I logged in, switched to a different app and came back to Kestrel, it reloaded the page and I was logged out" - "It should work for regular tabs in addition to private tabs")
+    @Test fun aPrivateTabIsNeverPutToSleepAndARegularTabInFrontNotByAQuickTripToAnotherApp() {
+        val b = app.kestrel.core.tabs.LiveBudget
+        org.junit.Assert.assertTrue("an old regular tab may sleep by the budget", b.mayHibernate(isCurrent = false, hasLiveChild = false, isPrivate = false))
+        org.junit.Assert.assertFalse("the tab in front never (by the budget)", b.mayHibernate(isCurrent = true, hasLiveChild = false, isPrivate = false))
+        org.junit.Assert.assertFalse("one with a live pop-up child never", b.mayHibernate(isCurrent = false, hasLiveChild = true, isPrivate = false))
+        org.junit.Assert.assertFalse("a private tab never: it would come back logged out", b.mayHibernate(isCurrent = false, hasLiveChild = false, isPrivate = true))
+        val half = 10L * 60_000L; val long = 40L * 60_000L
+        org.junit.Assert.assertFalse("a private tab in front never, however long the app was away", b.mayHibernateInBackground(isPrivate = true, awayMs = long, level = 80))
+        org.junit.Assert.assertFalse("a REGULAR tab in front is not put to sleep by Android's moderate trim after a short trip to another app", b.mayHibernateInBackground(isPrivate = false, awayMs = 20_000L, level = 60))
+        org.junit.Assert.assertFalse("not even at the worst trim after a short trip", b.mayHibernateInBackground(isPrivate = false, awayMs = half, level = 80))
+        org.junit.Assert.assertFalse("not after a long absence either while Android only says moderate", b.mayHibernateInBackground(isPrivate = false, awayMs = long, level = 60))
+        org.junit.Assert.assertTrue("a regular tab after a long absence when Android is about to end background apps: it may go to sleep (its history and cookies are kept)", b.mayHibernateInBackground(isPrivate = false, awayMs = long, level = 80))
     }
 }

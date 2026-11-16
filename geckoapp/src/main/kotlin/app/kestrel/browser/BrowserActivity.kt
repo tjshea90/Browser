@@ -937,7 +937,7 @@ open class BrowserActivity : Activity(), DockListener {
         // LiveBudget.afterTrim decides how many tabs stay live from the level AND the memory the kernel reports as available (it used to close every other tab at any level >= 10).
         if (level >= 15) BackPictures.clear() // the system wants memory: the pictures are the first thing to give back
         if (level >= 10) enforceLiveLimit(LiveBudget.afterTrim(level, Health.memAvailableMb(), liveBudget())) // a popup's opener must survive (window.opener): enforceLiveLimit skips those
-        if (level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE && !window.decorView.hasWindowFocus()) current?.let { if (LiveBudget.mayHibernateInBackground(it.isPrivateTab)) hibernate(it) }   // ANS58c: a private tab in front stays (its logins)
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE && !window.decorView.hasWindowFocus()) current?.let { if (LiveBudget.mayHibernateInBackground(it.isPrivateTab, if (pausedAt == 0L) 0L else SystemClock.uptimeMillis() - pausedAt, level)) hibernate(it) }   // ANS58c / ANS59: a private tab in front never sleeps, a regular one only after a long absence at the worst trim
     }
 
     // ================================================================== UI construction

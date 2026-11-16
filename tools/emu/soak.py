@@ -2790,15 +2790,15 @@ class Soak:
         self.ph.debug("privtab", "%s/pv?v=pv&tag=pvp2" % self.lab_base); time.sleep(9)       # (a second private tab: the same private jar)
         r3 = cookie_rows(rm3, "pvp2")
         check("a second private tab sees the first one's login (the same private cookie jar)", bool(r3) and str(r3[-1].get("had")) == "1", "cookie rows %s" % [(r.get("had")) for r in r3])
-        # ---- the control: a NORMAL tab may be put to sleep, and keeps its cookie (stored on disk)
+        # ---- ANS59 (owner message 59: "It should work for regular tabs in addition to private tabs"): a NORMAL tab is not put to sleep or reloaded by a quick trip to another app either
         m4, rm4 = self.log.size(), self.lab.size()
         self.ph.debug("normtab", "%s/pv?v=pv&tag=pvn" % self.lab_base); time.sleep(9)
         rn1 = cookie_rows(rm4, "pvn")
-        check("(control) a normal tab loaded the login page", bool(rn1), "no cookie rows")
+        check("a regular tab loaded the login page", bool(rn1), "no cookie rows")
         m5, rm5 = self.log.size(), self.lab.size()
         away_and_back("normal")
         rn2 = cookie_rows(rm5, "pvn")
-        check("(control) a normal tab that was put to sleep reloads on return and its login is still there (cookie on disk)", (not rn2) or str(rn2[-1].get("had")) == "1", "cookie rows %s, hibernate lines %d" % ([(r.get("had")) for r in rn2], len(ev("tabs", "hibernate", m5))))
+        check("ANS59: a REGULAR tab is not put to sleep either by a trip to another app (no 'tabs hibernate' line) and is not reloaded on return", not ev("tabs", "hibernate", m5) and not rn2, "hibernate lines %d, the page loaded again: cookie rows %s" % (len(ev("tabs", "hibernate", m5)), [(r.get("had")) for r in rn2]))
         self.shot("pv-3-normal-after-trim")
         self.pv_results = checks
         self.record({"kind": "private-tab", "name": "private-tab-keeps-its-login", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
