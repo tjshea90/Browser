@@ -1287,3 +1287,19 @@ test('RX3-G1: the manifest declares the pop-up guard and the scriptlet library f
   }
   assert.ok(m.content_scripts[0].js.includes('content.js'), 'content.js comes first: it listens for the guard\'s ready event');
 });
+
+test('VP1: the full-screen film state is relayed as clamped numbers: the PAUSED flag is pa (p is the page address, as in every message), the number of the last carried-out command is ak, and the app\'s JSON answer comes back parsed', async () => {
+  const h = harness((m) => (m.k === 'vst' ? '{"s":1,"c":[{"a":"pause","i":3}]}' : standardApp()(m)));
+  h.mainFrame(PAGE, { requestId: '1' });
+  await ready(h);
+  const r = await h.message({ k: 'vst', t: 12.34, d: 60, b: 20, p: 1, e: 0, m: 1, v: 100, r: 1, rs: 4, ms: 0, l: 0, w: 640, h: 360, ak: 7, junk: 'x' }, 1, PAGE, 0);
+  assert.deepEqual(r, { s: 1, c: [{ a: 'pause', i: 3 }] }, 'the answer reaches the page parsed');
+  const got = h.of('vst')[0];
+  assert.deepEqual(Object.keys(got).sort(), ['ak', 'b', 'd', 'e', 'h', 'k', 'l', 'm', 'ms', 'p', 'pa', 'r', 'rs', 't', 'v', 'w'], 'only the known numbers go on: ' + JSON.stringify(got));
+  assert.equal(got.pa, 1, 'paused'); assert.equal(got.ak, 7); assert.equal(got.m, 1); assert.equal(got.t, 12.34);
+  assert.equal(typeof got.p, 'string', 'p is the page address'); assert.ok(got.p.indexOf('example.com') >= 0, got.p);
+  const t = await h.message({ k: 'vst', t: 1e12, d: -2, b: -5, p: 0, ak: -3 }, 1, PAGE, 0);
+  const g2 = h.of('vst')[1];
+  assert.equal(g2.t, 0, 'clamped'); assert.equal(g2.d, -2, 'infinite is kept as -2'); assert.equal(g2.ak, 0); assert.equal(g2.pa, 0);
+  assert.ok(t);
+});
