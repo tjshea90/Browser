@@ -111,7 +111,7 @@ Prefixes: AOSP = https://raw.githubusercontent.com/aosp-mirror/platform_framewor
 - G4 G160 modules/libpref/init/StaticPrefList.yaml
 - G5 Gmain modules/libpref/init/StaticPrefList.yaml ; G6 Gmain mobile/android/app/geckoview-prefs.js ; G7 Gmain dom/media/platforms/PDMFactory.cpp
 - G8 G160 gfx/webrender_bindings/RenderAndroidSurfaceTextureHost.cpp ; G9 G160 mobile/android/geckoview/src/main/AndroidManifest_overlay.jinja
-- G10 G160 mobile/android/geckoview/src/main/java/org/mozilla/gecko/gfx/AndroidVsync.java ; G11 G160 .../org/mozilla/gecko/process/MemoryController.java
+- G10 G160 mobile/android/geckoview/src/main/java/org/mozilla/gecko/gfx/AndroidVsync.java ; G11 G160 mobile/android/geckoview/src/main/java/org/mozilla/gecko/process/MemoryController.java
 - G12 https://firefox-source-docs.mozilla.org/mobile/android/geckoview/design/priority-hint.html
 - G13 G160 mobile/android/geckoview/src/main/java/org/mozilla/geckoview/GeckoView.java ; G14 Gmain mobile/android/geckoview/src/main/java/org/mozilla/gecko/SurfaceViewWrapper.java ; G15 Gmain .../org/mozilla/geckoview/GeckoDisplay.java ; G16 G160 .../org/mozilla/geckoview/GeckoSession.java
 - G17 Gmain widget/android/nsWindow.cpp ; G18 Gmain gfx/layers/ipc/PUiCompositorController.ipdl and G160 gfx/layers/ipc/UiCompositorControllerParent.cpp
