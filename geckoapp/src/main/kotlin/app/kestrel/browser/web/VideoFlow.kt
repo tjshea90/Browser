@@ -218,7 +218,7 @@ class VideoFlow(private val a: BrowserActivity) {
     }
 
     /** Anything worth offering on this tab's page? (the menu shows its entry only then) */
-    fun available(t: Tab?): Boolean = t != null && !t.isNewTab && t.media.usableCount() > 0
+    fun available(t: Tab?): Boolean = t != null && !a.onHomeScreen(t) && t.media.usableCount() > 0   // ANS53e: not under the Home screen either
 
     /**
      * A long press on a video or audio element goes straight to the sheet, aimed at THAT file: its own address (when the page gave one) is the exact match, everything else the page loaded

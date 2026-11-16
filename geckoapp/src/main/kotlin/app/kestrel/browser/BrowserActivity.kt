@@ -1864,6 +1864,8 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** The Home screen is showing (new tab, or the Home button was pressed): its big field is the one to type in. */
     private fun homeShown(t: Tab? = current): Boolean = t != null && (t.isNewTab || t.showHome)
+    /** ANS53e: the Home screen is what the owner sees for this tab (a new tab, or the Home button over a page that is still alive underneath): nothing of that page is on offer then. */
+    internal fun onHomeScreen(t: Tab?): Boolean = homeShown(t)
     private val activeField: EditText get() = if (homeShown()) home.field else dock.urlField
     private fun typing(): Boolean = dock.urlField.hasFocus() || home.field.hasFocus()
 
@@ -2548,14 +2550,14 @@ open class BrowserActivity : Activity(), DockListener {
      */
     internal fun refreshDownloadButton() {
         val t = current
-        val n = if (t == null || t.isNewTab || t.media.isEmpty()) 0 else t.media.usableCount()
+        val n = if (t == null || homeShown(t) || t.media.isEmpty()) 0 else t.media.usableCount()   // ANS53e: also not on the Home screen (the page behind it is alive, but the owner is not looking at it)
         dock.setDownloadCount(n)
     }
 
     /** The dock's download icon was tapped: the list of what the page offers, or a hint when nothing was found yet. */
     override fun onDownload() {
         val t = current ?: return
-        if (t.isNewTab) { toast("Open a page with a video first."); return }
+        if (homeShown(t)) { toast("Open a page with a video first."); return }   // ANS53e: new tab or Home over a page: that page's videos are not on offer
         video.show(t)
     }
 
