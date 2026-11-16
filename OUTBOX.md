@@ -2336,3 +2336,7 @@
 ## 2026-11-16T21:49:40Z
 > About 21 minutes into the vp run; waiting a few more.
 <!-- sha:e060e197c09c -->
+
+## 2026-11-16T22:04:28Z
+> Status: lab video suite (vp, run 43966056564) is running on the alpha61 candidate with the format-scene fix, and an independent review of the alpha61 code changes is running in parallel. I'll pick up when either reports (a wake is scheduled for 22:25Z).
+<!-- sha:a7bf829e320a -->
