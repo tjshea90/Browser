@@ -180,7 +180,9 @@ class PlayerGesturesTest {
         val h = Host(); val g = PlayerGestures(h, full())
         g.down(850f, 400f); g.move(870f, 380f)                          // 45 degrees: neither rule yet
         assertTrue(h.levels.isEmpty() && h.previews.isEmpty())
-        g.move(872f, 300f)                                              // now steep and far enough: the volume
+        g.move(872f, 300f)                                              // now steep and far enough: it IS the volume (the first 5 % is the dead start: no change yet)
+        assertTrue(h.levels.isEmpty() && h.previews.isEmpty())
+        g.move(872f, 280f)
         assertEquals(Level.VOLUME, h.levels.last().first)
         g.move(1000f, 301f); assertTrue("once it is a level it stays one, sideways or not", h.previews.isEmpty())
         val h2 = Host(); val g2 = PlayerGestures(h2, full())
