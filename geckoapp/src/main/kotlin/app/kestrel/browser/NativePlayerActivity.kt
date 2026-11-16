@@ -21,6 +21,8 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -36,9 +38,12 @@ import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.upstream.DefaultAllocator
 import app.kestrel.browser.data.Prefs
 import app.kestrel.browser.diag.Health
+import app.kestrel.browser.web.FullscreenTurner
 import app.kestrel.browser.web.NativePlayerStats
 import app.kestrel.browser.web.PlayerControlsView
+import app.kestrel.browser.web.QualitySheet
 import app.kestrel.core.media.FullscreenTurn
+import app.kestrel.core.media.QualityLabel
 import app.kestrel.core.player.PlayerModel
 import app.kestrel.core.player.PlayerRules
 
@@ -50,6 +55,11 @@ import app.kestrel.core.player.PlayerRules
  * It is a separate screen (its own window) so a turn of the tablet resizes ONE SurfaceView and nothing else (no engine handshake, no page reflow). The controls are the same as in full screen ([PlayerControlsView] and the pure
  * [PlayerModel] of core/player): a tap shows or hides them, a double tap on a side jumps 10 s, the middle plays or pauses; here the commands go to the player instead of to a page.
  * Media3 1.11.1 is the version GeckoView already carries (no new copy rides in the APK). Never for DRM, never for a stream that has no address of its own (an MSE blob): the page's own player stays the fallback.
+ *
+ * ANS53f (owner message 53, on alpha56: "The video opened Fullscreen in portrait orientation but stretched vertically so the aspect ratio was wrong, but then quickly switched to landscape, even though my tablet was being
+ * held in portrait ... It should have played in portrait. There was no option to go from the landscape mode to portrait. Even rotating the tablet didn't change it."): the screen now FOLLOWS THE TABLET from the first
+ * moment (no forced landscape for a wide film: the owner holds the tablet the way he wants), a rotate button turns it the other way for good ([FullscreenTurner], the rules of page full screen), the picture is never
+ * stretched (the surface is a point until the picture's shape is known, then letterboxed to it). ANS53d: a quality button lists every picture the stream offers (resolution, frame rate, bit rate) and plays the one picked.
  *
  * Started with [launch]; ends with Back or the exit button; sound stops when the screen is left (SND1); a private tab's film is not counted or logged.
  */
@@ -73,6 +83,11 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     private var downY = 0f
     private var downT = 0L
     private var framesAtStart = 0L
+    private lateinit var turner: FullscreenTurner
+    private lateinit var sheet: QualitySheet
+    private var chosen: QualityLabel.Rung? = null          // the picture the person picked (null = Automatic)
+    private var capH = 720
+    private var rowsNow: List<Pair<QualityLabel.Rung, Pair<Tracks.Group, Int>>> = emptyList()
 
     private val controlsTick = Runnable { model.controlsTimer(); flush() }
     private val ticker = object : Runnable {
@@ -94,13 +109,16 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val prefs = Prefs.get(applicationContext)
         if (prefs.fullscreenBars == 1) hideBars()
-        turnFor(picW, picH, prefs.fullscreenTurn)
+        turner = FullscreenTurner(this, { FullscreenTurn.MODE_FOLLOW }, { Pair(picW, picH) }, { priv }).also { it.ownedByPlayer = { true } }   // ANS53f: always follow the tablet; the rotate button is drawn by the controls
+        turner.enter()
 
         stage = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         surface = SurfaceView(this)
-        stage.addView(surface, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER))
-        controls = PlayerControlsView(this).apply { listener = this@NativePlayerActivity }
+        stage.addView(surface, FrameLayout.LayoutParams(1, 1, Gravity.CENTER))              // ANS53f: a point until the shape of the picture is known (fit()): a surface that fills the screen first stretches the first frames
+        controls = PlayerControlsView(this).apply { listener = this@NativePlayerActivity; showRotate = true }
         stage.addView(controls, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        sheet = QualitySheet(this).apply { listener = object : QualitySheet.Listener { override fun onPick(row: QualitySheet.Row) { pickQuality(row) } override fun onDismiss() { model.pin(false) } } }
+        stage.addView(sheet, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         stage.setOnTouchListener { v, e -> onStageTouch(v, e) }
         stage.addOnLayoutChangeListener { _, l, t, r, bt, ol, ot, orr, ob -> if (r - l != orr - ol || bt - t != ob - ot) fit() }
         setContentView(stage)
@@ -134,8 +152,11 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         val load = DefaultLoadControl.Builder().setAllocator(DefaultAllocator(true, C.DEFAULT_BUFFER_SEGMENT_SIZE)).setBufferDurationsMs(15_000, 30_000, 1_500, 3_000)
             .setTargetBufferBytes(16 * 1024 * 1024).setPrioritizeTimeOverSizeThresholds(false).build()
         val p = ExoPlayer.Builder(this, renderers).setLoadControl(load).setHandleAudioBecomingNoisy(true).setAudioAttributes(AudioAttributes.DEFAULT, true).build()
-        val cap = maxH.coerceIn(240, 1080)
-        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setMaxVideoSize(Int.MAX_VALUE, cap).setMaxVideoFrameRate(60).build()
+        // the picture size to start with: the one the person picked last time (ANS53d, remembered), else what the page's list said (720 when it said nothing). The cap is on the LONGER side of a 16:9 picture so that a
+        // portrait film is held to the same class as a landscape one (a cap on the height alone would drop every portrait rung of a 720p class).
+        val remembered = Prefs.get(applicationContext).nativeMaxH
+        capH = (if (remembered > 0) remembered else maxH).coerceIn(144, 2160)
+        applyCap(p)
         p.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) { ended = true }
@@ -148,13 +169,12 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
             }
             override fun onVideoSizeChanged(size: VideoSize) {
                 if (size.width > 0 && size.height > 0) {
-                    val first = picW == 0
                     picW = size.width; picH = size.height; pixelRatio = if (size.pixelWidthHeightRatio > 0f) size.pixelWidthHeightRatio else 1f
                     if (!priv) { NativePlayerStats.width = picW; NativePlayerStats.height = picH }
-                    if (first) turnFor(picW, picH, Prefs.get(applicationContext).fullscreenTurn)
-                    fit()
+                    fit()                                              // (ANS53f: no turning to landscape here any more: the screen follows the tablet)
                 }
             }
+            override fun onTracksChanged(tracks: Tracks) { updateRows(tracks) }
         })
         p.addAnalyticsListener(object : AnalyticsListener {
             override fun onVideoDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
@@ -178,6 +198,71 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         p.prepare()
         p.playWhenReady = true
         player = p
+    }
+
+    /** The size cap for Automatic: both sides at most 16:9 of [capH], so portrait and landscape films fall in the same class. */
+    private fun applyCap(p: ExoPlayer) {
+        val longCap = capH * 16 / 9
+        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setMaxVideoSize(longCap, longCap).setMaxVideoFrameRate(60).build()
+    }
+
+    // ---------------------------------------------------------------------------------------- ANS53d: the quality list
+
+    /** The pictures the stream offers (every video track of every group), with where each sits, biggest first. */
+    private fun updateRows(tracks: Tracks) {
+        val all = ArrayList<Pair<QualityLabel.Rung, Pair<Tracks.Group, Int>>>()
+        for (g in tracks.groups) {
+            if (g.type != C.TRACK_TYPE_VIDEO) continue
+            for (i in 0 until g.length) {
+                val f = g.getTrackFormat(i)
+                if (f.width <= 0 && f.height <= 0) continue
+                all.add(Pair(QualityLabel.Rung(f.width, f.height, f.frameRate, (if (f.averageBitrate > 0) f.averageBitrate else f.bitrate).toLong().coerceAtLeast(0L)), Pair(g, i)))
+            }
+        }
+        rowsNow = all.sortedWith(compareByDescending<Pair<QualityLabel.Rung, Pair<Tracks.Group, Int>>> { QualityLabel.pClass(it.first.w, it.first.h) }.thenByDescending { it.first.fps }.thenByDescending { it.first.bps })
+        val distinct = QualityLabel.rows(rowsNow.map { it.first }).size
+        controls.showQuality = distinct >= 2              // one picture only (a plain file): nothing to choose
+        say("tracks", "$distinct picture(s) on offer: ${QualityLabel.rows(rowsNow.map { it.first }).joinToString(" | ") { QualityLabel.text(it) }}")
+    }
+
+    private fun openQuality() {
+        val p = player ?: return
+        val rows = ArrayList<QualitySheet.Row>()
+        val nowFmt = p.videoFormat
+        val now = QualityLabel.now(if (nowFmt != null) QualityLabel.Rung(nowFmt.width, nowFmt.height, nowFmt.frameRate, 0L) else null)
+        rows.add(QualitySheet.Row("Automatic", (if (chosen == null) now else "") .ifEmpty { "the player picks, at most ${capH}p" }, chosen == null, true, null))
+        var seen = HashSet<String>()
+        for ((rung, where) in rowsNow) {
+            val t = QualityLabel.text(rung)
+            if (!seen.add(t)) continue
+            val playable = where.first.isTrackSupported(where.second)
+            rows.add(QualitySheet.Row(t, if (playable) "" else "this tablet cannot play it smoothly", chosen != null && QualityLabel.text(chosen!!) == t, playable, rung))
+        }
+        model.pin(true)
+        sheet.show("Quality", rows, "Kestrel remembers your pick for the next films. A smaller picture and a lower frame rate are lighter for this tablet and for the hotspot.")
+        say("quality-open", "${rows.size} row(s)")
+    }
+
+    private fun pickQuality(row: QualitySheet.Row) {
+        val p = player ?: return
+        val rung = row.tag as? QualityLabel.Rung
+        try {
+            val b = p.trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_VIDEO)
+            if (rung == null) { chosen = null; Prefs.get(applicationContext).nativeMaxH = 0; capH = maxOf(capH, 720) }
+            else {
+                val match = rowsNow.firstOrNull { QualityLabel.text(it.first) == row.title }
+                if (match != null) b.setOverrideForType(TrackSelectionOverride(match.second.first.mediaTrackGroup, listOf(match.second.second)))
+                chosen = rung
+                val cls = QualityLabel.pClass(rung.w, rung.h)
+                Prefs.get(applicationContext).nativeMaxH = cls
+                capH = cls
+            }
+            p.trackSelectionParameters = b.build()
+            applyCap(p)
+            if (!priv) { NativePlayerStats.qualityPicks++; NativePlayerStats.lastQuality = if (rung == null) "Automatic" else QualityLabel.text(rung) }
+            say("quality", if (rung == null) "Automatic" else row.title)
+        } catch (e: Throwable) { say("quality-failed", e.javaClass.simpleName) }
+        sheet.dismiss()
     }
 
     /** The engine's own user agent, so a server that looks at it sees the browser the person is using. */
@@ -251,6 +336,8 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     override fun onExit() { finish() }
     override fun onSeek(fraction: Double) { model.seekFraction(fraction); flush() }
     override fun onPin(on: Boolean) { model.pin(on) }
+    override fun onRotate() { turner.rotatePressed(); if (!priv) NativePlayerStats.rotates++; say("rotate", "the rotate button") }
+    override fun onQuality() { if (sheet.isShown) sheet.dismiss() else openQuality() }
 
     /** A tap on the picture (anything the controls themselves did not take): the model decides show / hide / double-tap seek. */
     private fun onStageTouch(v: View, e: MotionEvent): Boolean {
@@ -272,19 +359,12 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     private fun fit() {
         if (!::stage.isInitialized || !::surface.isInitialized) return
         val w = stage.width; val h = stage.height
-        if (w <= 0 || h <= 0 || picW <= 0 || picH <= 0) return
+        if (w <= 0 || h <= 0 || picW <= 0 || picH <= 0) return                  // (shape unknown: the surface stays a point)
         val pw = picW * pixelRatio
         val scale = Math.min(w / pw, h / picH.toFloat())
         val lp = surface.layoutParams as FrameLayout.LayoutParams
         val nw = (pw * scale).toInt().coerceAtLeast(1); val nh = (picH * scale).toInt().coerceAtLeast(1)
         if (lp.width != nw || lp.height != nh) { lp.width = nw; lp.height = nh; lp.gravity = Gravity.CENTER; surface.layoutParams = lp }
-    }
-
-    /** A wide film turns the screen sideways (both landscape ways), any other follows the tablet: the rules of full screen (core FullscreenTurn). */
-    private fun turnFor(w: Int, h: Int, mode: Int) {
-        val landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val plan = FullscreenTurn.onEnter(mode, null, w, h, landscape)
-        requestedOrientation = if (plan.request == FullscreenTurn.UNSPECIFIED) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR else plan.request
     }
 
     @Suppress("DEPRECATION")
@@ -299,11 +379,16 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         fit()
     }
 
+    override fun onBackPressed() { if (::sheet.isInitialized && sheet.isShown) sheet.dismiss() else super.onBackPressed() }
+
+    override fun onResume() { super.onResume(); if (::turner.isInitialized) turner.resumed() }
+
     // ---------------------------------------------------------------------------------------- the end
 
     override fun onPause() {
         // SND1: no sound when the screen is not in front
         try { player?.pause() } catch (e: Throwable) { /* gone */ }
+        if (::turner.isInitialized) turner.paused()
         sample()
         super.onPause()
     }
@@ -322,6 +407,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
             try { p.release() } catch (e: Throwable) { /* gone */ }
         }
         model.stop()
+        if (::turner.isInitialized) turner.exit()
         say("stop", "Kestrel's own player ended")
         super.onDestroy()
     }
