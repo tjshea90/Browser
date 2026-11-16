@@ -392,9 +392,11 @@ class OwnerRulesTest {
         assertTrue("the sheet's second button comes only from the build that can play", flow.contains("override fun canPlay(choice: VideoPanel.Choice): Boolean = nativeTarget(choice) != null"))
         assertTrue(source("app/src/main/kotlin/app/kestrel/browser/ui/VideoPanel.kt").contains("fun canPlay(choice: Choice): Boolean = false"))
         val player = source("geckoapp/src/main/kotlin/app/kestrel/browser/NativePlayerActivity.kt")
+        val factory = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerFactory.kt")   // ANS55f: the ExoPlayer is built in ONE place now, for the full-screen screen and the player inside the page
+        val playerAndFactory = player + factory
         assertTrue("hardware decoders first, no software extension decoders", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerFactory.kt").let { it.contains("it.hardwareAccelerated && !it.softwareOnly") && it.contains("EXTENSION_RENDERER_MODE_OFF") } && player.contains("PlayerFactory.create(this, url, headerLines)"))
-        assertTrue("small buffers: 15 to 30 s, 16 MiB at most (the app heap class is 128 MB)", player.contains("setBufferDurationsMs(15_000, 30_000, 1_500, 3_000)") && player.contains("setTargetBufferBytes(16 * 1024 * 1024)"))
-        assertTrue("sound off when the screen is left, audio focus and headphones handled", player.contains("override fun onPause() {") && player.contains("player?.pause()") && player.contains("AudioAttributes.DEFAULT, true") && player.contains("setHandleAudioBecomingNoisy(true)"))
+        assertTrue("small buffers: 15 to 30 s, 16 MiB at most (the app heap class is 128 MB)", playerAndFactory.contains("setBufferDurationsMs(15_000, 30_000, 1_500, 3_000)") && playerAndFactory.contains("setTargetBufferBytes(16 * 1024 * 1024)"))
+        assertTrue("sound off when the screen is left, audio focus and headphones handled", player.contains("override fun onPause() {") && player.contains("player?.pause()") && playerAndFactory.contains("AudioAttributes.DEFAULT, true") && playerAndFactory.contains("setHandleAudioBecomingNoisy(true)"))
         assertTrue("a private tab's film is not counted or logged", player.contains("private fun say(event: String, text: String) { if (!priv) Health.log") && player.contains("if (!priv) { NativePlayerStats.plays++"))
         val manifest = source("geckoapp/src/main/AndroidManifest.xml")
         assertTrue("its own window, not exported, handles the turn itself", manifest.contains("android:name=\".NativePlayerActivity\"") && manifest.substringAfter("android:name=\".NativePlayerActivity\"").substringBefore("/>").let { it.contains("android:exported=\"false\"") && it.contains("orientation|screenSize") })
@@ -517,7 +519,7 @@ class OwnerRulesTest {
         assertTrue("a pinch, a scroll that cannot be followed or a box scrolled out of view ends the film, a box mostly out of view pauses it",
             host.contains("the page was pinched") && view.contains("stop(\"scrolled out of view\")") && view.contains("mostly out of view: paused") && box.contains("Math.abs(zoom - zoomRef) > zoomRef * 0.03"))
         assertTrue("a private tab's film is not logged or counted by the inline player",
-            view.contains("private fun say(event: String, text: String) { if (!priv) Health.log") && view.contains("if (!priv) { NativePlayerStats.plays++") && host.contains("if (!priv) { WebHandStats.lastInlineEnd = why"))
+            view.contains("private fun say(event: String, text: String) { if (!priv) Health.log") && view.contains("if (!priv) { NativePlayerStats.plays++") && host.contains("if (!p) { WebHandStats.lastInlineEnd = why"))
         assertTrue("no picture for 7 s, or an error before the first picture, gives the film back to the page's own player",
             view.contains("> 7_000L") && view.contains("stop(\"no picture\", failed = true)") && view.contains("stop(\"failed before the first picture\", failed = true)") && host.contains("a.nativeFilmFailed()"))
         assertTrue("the full-screen button hands the same second to the full-screen player; the film that is up is not started twice; a new film replaces the old one",
