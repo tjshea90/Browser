@@ -1,6 +1,6 @@
 # Video acceleration and rotation on the MT8168B tablet (research, 2026-11-16)
 
-Method: web sources read on 2026-11-16, no code run, no device. DOCUMENTED = I read it in the cited source. INFERRED = my reasoning from documented facts. [D] = the owner's Diagnostics pastes in the repo (INBOX.md 2026-11-13 and 2026-11-14, research/TABLET_DIAG_2026-11-16.md, docs/hardware/hardware_.txt). Keys like [A1] are in "Sources" at the end (URL = prefix + path). Android = tag android-10.0.0_r47; Gecko = tag FIREFOX_160_0_RELEASE unless "main".
+Method: web sources read 2026-11-16; no code run, no device. DOCUMENTED = read in the cited source; INFERRED = my reasoning from documented facts (DOC and INF in the table mean the same). [D] = the Diagnostics pastes in the repo (INBOX.md, research/TABLET_DIAG_2026-11-16.md, docs/hardware/hardware_.txt). Keys like [A1] are listed under Sources (URL = prefix + path). Android = tag android-10.0.0_r47; Gecko = tag FIREFOX_160_0_RELEASE unless marked main.
 
 ## Summary (12 lines)
 
