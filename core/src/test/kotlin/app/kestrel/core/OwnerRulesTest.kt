@@ -473,7 +473,9 @@ class OwnerRulesTest {
         // f, d: Kestrel's own player
         val np = source("geckoapp/src/main/kotlin/app/kestrel/browser/NativePlayerActivity.kt")
         assertTrue("it follows the tablet (no forced landscape), has the rotate button and a surface that is a point until the shape is known", np.contains("FullscreenTurner(this, { FullscreenTurn.MODE_FOLLOW }") && !np.contains("SENSOR_LANDSCAPE") && np.contains("FrameLayout.LayoutParams(1, 1, Gravity.CENTER)") && np.contains("showRotate = true") && np.contains("override fun onRotate() { turner.rotatePressed()"))
-        assertTrue("it lists every picture of the stream and carries the pick out as a track override, remembered", np.contains("TrackSelectionOverride(") && np.contains("Prefs.get(applicationContext).nativeMaxH = cls") && np.contains("controls.showQuality = distinct >= 2"))
+        val pq = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerQuality.kt")
+        assertTrue("it lists every picture of the stream and carries the pick out as a track override, remembered (one class, PlayerQuality, for the full-screen player and the player inside the page: ANS60c)",
+            pq.contains("TrackSelectionOverride(") && pq.contains("remember(cls)") && pq.contains("return distinct >= 2") && np.contains("controls.showQuality = quality.onTracks(p, tracks)") && np.contains("Prefs.get(applicationContext).nativeMaxH = it"))
         // the independent review of the gate (research/ANS53_GATE_REVIEW.md)
         assertTrue("only VIDEO is gated (a music player's next track must play), only a MediaSource's blob: address is held, a stream gets its autoplay back", gate.contains("x.nodeName === 'VIDEO'") && !gate.contains("'AUDIO'") && gate.contains("defMethod(URL, 'createObjectURL'") && gate.contains("openEl(this, 'stream')"))
         assertTrue("a tap opens the video it landed on or in, a tap on the player counts 30 s, a gesture 1.2 s although the activation was used up, a play() before the app's answer waits for it", gate.contains("sameBox(el, target)") && gate.contains("pressedRecently(this)") && gate.contains("lastGesture < 1200") && gate.contains("else if (!told)"))
@@ -588,6 +590,20 @@ class OwnerRulesTest {
                 source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"video_gestures_hold\", T.BOOL)"))
         assertTrue("what the gestures show: VLC's text (+0:25 (1:23:45) x0.3), a level bar with its icon and percentage, in the one controls view",
             source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerControlsView.kt").let { it.contains("fun showInfo(text: String?)") && it.contains("fun showLevel(kind: GestureMath.Level, fraction: Float)") && it.contains("drawSunIcon") })
+    }
+
+    // ANS60c (owner message 60: "put the video quality controls in the regular player size when it is not in full screen. Right now I can only select quality in full screen.")
+    @Test fun ownerMessage60QualityInTheRegularPlayerSize() {
+        val ip = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/InlinePlayer.kt"); val host = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/InlineHost.kt")
+        val pc = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerControlsView.kt"); val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("the player inside the page has the quality list: the same PlayerQuality rules, a button that shows when the stream offers more than one picture, the pick remembered apart from the full-screen player's",
+            ip.contains("PlayerQuality(priv, { prefs.inlineMaxH }, { prefs.inlineMaxH = it }") && ip.contains("controls.showQuality = q.onTracks(p, tracks)") && ip.contains("override fun onQuality()") && ip.contains("fun pickQuality(row: QualitySheet.Row)") &&
+                source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("sp.getInt(\"inline_max_h\", 0)") && source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"inline_max_h\", T.INT, 0, 2160)"))
+        assertTrue("the controls draw and hit-test the quality button inside the page too (left of the full-screen button), no longer only in full screen",
+            pc.contains("if (showQuality) { drawDisc(c, quality, pressed == Hit.QUALITY)") && pc.contains("showQuality && inside(quality, dp(8f)) -> Hit.QUALITY") && pc.contains("if (inline) quality.offset(") && !pc.contains("showQuality && !inline"))
+        assertTrue("the list is drawn over the page area above the film (the box is too small), Back closes it before the film, a film that ends closes it, a tap on it is no tap on the page",
+            host.contains("val sheet = QualitySheet(a)") && host.contains("if (sheet.isOpen) { sheet.dismiss(); return true }") && host.contains("sheet.dismiss()                                                    // (a list of a film that is gone)") &&
+                act.contains("content.addView(inline.sheet,") && act.contains("inline.sheet.isOpen) return false"))
     }
 
     @Test fun ownerMessage54IsActedOn() {
