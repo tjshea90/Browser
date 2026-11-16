@@ -628,6 +628,17 @@ class VideoFlow(private val a: BrowserActivity) {
         if (c != null && c.kind == MediaKind.FILE) pick(tab, c, "lab-found-video")
     }
 
+    /** LAB (ANS52i): the best row of the Save video sheet, played in Kestrel's own player (the lab cannot press the sheet's button). */
+    fun labPlayBest(tab: Tab) {
+        val ranked = MediaRank.rank(candidates(tab, null), null, tab.media.primary())
+        val c = ranked.main.firstOrNull() ?: ranked.exact
+        Health.log("lab", "nativeplay", "main=${ranked.main.size} other=${ranked.other.size} usable=${tab.media.usableCount()} of ${tab.media.size} pick=${if (c == null) "none" else "${c.kind} ${c.height}p"}")
+        if (c != null && c.kind == MediaKind.FILE) {
+            val headers = MediaHeaders.sets(c, tab.url).firstOrNull()?.map { "${it.key}: ${it.value}" }.orEmpty()
+            NativePlayerActivity.launch(a, c.url, headers, 0L, 1080, tab.isPrivateTab, c.width, c.height)
+        }
+    }
+
     private fun pick(tab: Tab, c: MediaCandidate, stem: String) {
         a.sheet.dismiss()
         tab.media.touch(c.url)

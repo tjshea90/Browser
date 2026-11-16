@@ -783,6 +783,8 @@ open class BrowserActivity : Activity(), DockListener {
                 }
             }
             "exitfs" -> Io.main.post { Health.log("lab", "exitfs", "fullscreenOn=$fullscreenOn"); try { current?.session?.exitFullScreen() } catch (e: Exception) { Health.log("lab", "exitfs-failed", e.toString().take(80)) } }
+            "nativeplay" -> Io.main.post { current?.let { video.labPlayBest(it) } } // ANS52i: the best row of the sheet in Kestrel's own player
+            "nativeurl" -> { val u = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); if (u.startsWith("http://127.0.0.1") || u.startsWith("http://10.0.2.2")) Io.main.post { NativePlayerActivity.launch(this, u, emptyList(), 0L, 720, false, 0, 0) } } // ANS52i lab: an address of the lab server
             "videodl" -> Io.main.post { current?.let { video.labDownloadBest(it) } } // SOAK1: "find the video" and one tap on the first row of the Save video sheet
             "apkcheck" -> { // RX4-X1: what the Downloads list would do with this file (a file in the app's own folder: a copy of an installer, a disguised copy, a plain video)
                 val name = (i.getStringExtra("kestrel_arg") ?: "").substringAfterLast('/'); i.removeExtra("kestrel_arg")
@@ -2273,6 +2275,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(strayLine())
         out.add(videoBarLine())
         out.add(videoQuality.line(GeckoEngine.videoPolicyText))
+        out.add(app.kestrel.browser.web.NativePlayerStats.line())   // ANS52i
         out.add("Video decoders (what the tablet's own chips declare they can do): " + DeviceVideo.describe(applicationContext))   // ANS52: hardware first, with the sizes and frame rates the vendor claims and measured
         out.add(scrollGaps.line(prefs.measureScroll))
         out.add(app.kestrel.browser.shield.ScriptletSummary.read(applicationContext).ifEmpty { "Scriptlets in the lists: no compile report yet (the bundled lists are used until the first update)" })
