@@ -127,8 +127,10 @@ class PlayerController(
 
     /** The answer for the page, from any thread: what the controls want done, whether they are shown. */
     fun reply(): String {
-        if (!armed && !activeFlag) return "{\"s\":0}"
-        val sb = StringBuilder(64).append("{\"s\":").append(if (shownFlag) 1 else 0)
+        if (!armed && !activeFlag) return "{\"s\":0,\"a\":0}"
+        // a = 1 while the controls own this film: a page that hears a = 0 four times in a row (the app does not take its reports: another tab, an app that is not ready, a bug) puts its own bar and its taps back
+        // instead of leaving a full-screen page with no controls at all (review of alpha55, F1)
+        val sb = StringBuilder(64).append("{\"s\":").append(if (shownFlag) 1 else 0).append(",\"a\":").append(if (activeFlag) 1 else 0)
         var c = commands.poll()
         if (c != null) {
             sb.append(",\"c\":[")

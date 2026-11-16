@@ -17,7 +17,7 @@ window.KestrelVP = window.KestrelVP || (function () {
   try {
     var VF = window.KestrelVF;
     if (!VF || !window.addEventListener || !document.createElement) return api;
-    var C = { idle: 1000, busy: 250, tapMs: 450, slop: 14, soon: 60, askRetry: 4000 };                  // the clocks (a test shortens them through window.__kstVPcfg)
+    var C = { idle: 1000, busy: 250, tapMs: 450, slop: 14, soon: 60, askRetry: 4000, giveUp: 4 };                  // the clocks (a test shortens them through window.__kstVPcfg)
     try { if (window.__kstVPcfg) for (var key in window.__kstVPcfg) C[key] = window.__kstVPcfg[key]; } catch (e0) { /* optional */ }
     api.c = C;
 
@@ -89,7 +89,7 @@ window.KestrelVP = window.KestrelVP || (function () {
 
     // ------------------------------------------------------------------------------------------ the session
     function start(v, fs) {
-      S = { v: v, fs: fs, shown: 0, timer: 0, soonTimer: 0, fit: null, down: null, taps: 0, tapWin: 0, ls: [], reports: 0, gone: [], native: false, awayAt: 0, ack: 0, busyUntil: 0, pickedAt: Date.now() };
+      S = { v: v, fs: fs, shown: 0, timer: 0, soonTimer: 0, fit: null, down: null, taps: 0, tapWin: 0, ls: [], reports: 0, gone: [], native: false, awayAt: 0, ack: 0, busyUntil: 0, pickedAt: Date.now(), refused: 0 };
       for (var i = 0; i < FILM_EVENTS.length; i++) { v.addEventListener(FILM_EVENTS[i], soon, { passive: true }); S.ls.push(FILM_EVENTS[i]); }
       for (var j = 0; j < EVS.length; j++) window.addEventListener(EVS[j], onEvent, { capture: true, passive: true });
       window.addEventListener('resize', fitSoon, { passive: true });
@@ -158,11 +158,13 @@ window.KestrelVP = window.KestrelVP || (function () {
       if (Date.now() - s.awayAt >= 900) putAway(s);                           // (a page that makes its controls late, or again)
       send(sample(s.v));
     }
-    // the app's answer: { c: [commands], s: shown 1 | 0, on: 0 = the controls are not Kestrel's here }
+    // the app's answer: { c: [commands], s: shown 1 | 0, a: 1 = the controls own this film | 0 = not (yet), on: 0 = the controls are not Kestrel's here }
     function answer(r) {
       var s = S;
       if (!s || !r || typeof r !== 'object') return;
       if (r.on === 0) { stop(); return; }
+      if (r.a === 1) s.refused = 0;
+      else if (r.a === 0 && ++s.refused >= C.giveUp) { stop(); return; }      // the app has not taken the last few reports (it says a = 0): this page goes back to its own bar and its own taps
       if (typeof r.s === 'number') { var was = s.shown; s.shown = r.s ? 1 : 0; if (s.shown && !was) speedUp(s, 0); }
       var c = r.c;
       if (c && c.length) for (var i = 0; i < c.length && i < 8; i++) run(c[i]);

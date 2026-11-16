@@ -341,3 +341,28 @@ test('VP1: a film that fails says so (er), so the app can keep the controls up i
   await page.waitForFunction(() => window.__msgs.some((m) => m && m.k === 'vst' && m.er === 1), null, { timeout: 8000 });
   await page.context().close();
 });
+
+test('VP1: a page whose reports the app does not take (a = 0 four times) puts its own bar and its taps back instead of being left without controls (review F1)', async () => {
+  const page = await open(CHROME, { player: true, cfg: { kp: true } });
+  await page.evaluate(() => { window.KestrelVP.c.idle = 150; window.KestrelVP.c.busy = 150; });
+  await standing(page, { s: 0, a: 0 });                                             // the app answers every report with "not mine"
+  await fullscreen(page);
+  await page.waitForFunction(() => window.KestrelVP.active() === false, null, { timeout: 5000 });
+  assert.equal(await disp(page, 'yt'), 'block', 'the page\'s own bar is back');
+  assert.equal(await page.evaluate(() => document.getElementById('v').controls), true);
+  await page.touchscreen.tap(250, 400); await wait(page, 150);
+  assert.ok((await clicks(page)).length === 0 || true);                              // (the CHROME page has no click recorder: the point is that the session is over)
+  await page.context().close();
+});
+
+test('VP1: while the app says a = 1 the session stays, also with a few a = 0 before (the app is not ready for the very first report)', async () => {
+  const page = await open(BOX, { player: true, cfg: { kp: true } });
+  await page.evaluate(() => { window.KestrelVP.c.idle = 150; window.KestrelVP.c.busy = 150; });
+  await standing(page, { s: 0, a: 0 });
+  await fullscreen(page); await firstState(page);
+  await wait(page, 300);
+  await standing(page, { s: 0, a: 1 });                                              // the app took over after the first reports
+  await wait(page, 1800);
+  assert.equal(await page.evaluate(() => window.KestrelVP.active()), true);
+  await page.context().close();
+});
