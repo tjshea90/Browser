@@ -596,6 +596,7 @@ open class BrowserActivity : Activity(), DockListener {
         UpdateManager.maybeAutoCheck(this, prefs.autoUpdateCheck, NetworkMonitor.state != NetworkMonitor.State.OFFLINE) // NO_INTERNET is only a guess (a hotspot can fail Android's connectivity probe and still work): try
         Io.main.postDelayed({ maybeShowUpdateNotice() }, 2500) // news the background look found while the app was closed
         Io.main.postDelayed({ maybeRefreshLists() }, 90_000)   // well after start-up: the page the owner opened first comes first
+        if (!decodersWarmed) Io.main.postDelayed({ if (!decodersWarmed) { decodersWarmed = true; Io.exec { app.kestrel.browser.web.PlayerFactory.warm() } } }, 20_000)     // ANS60d: the first film of a run does not pay for the codec list
         Io.main.removeCallbacks(tidyRunnable); Io.main.postDelayed(tidyRunnable, 25_000) // AO4: old update files, stale cache, closed tabs' pictures; due about once a day and after an update
     }
 
@@ -658,6 +659,7 @@ open class BrowserActivity : Activity(), DockListener {
     private var lastTouchAt = 0L
     /** ANS54e: when the person last ended a tap (a short touch that did not drag) or pressed a key that plays; 0 = not yet. A page's script can fake the gate's question, not a finger (core WebHandOver.pressWindowMs). */
     @Volatile internal var lastPressAt = 0L
+    private var decodersWarmed = false                       // ANS60d: Android's codec list was asked once in the idle time (PlayerFactory.warm)
     /** ANS54e: did this touch end inside the page view (not in the toolbar, a sheet or a menu)? */
     private fun tapInPage(ev: android.view.MotionEvent): Boolean {
         if (!::geckoView.isInitialized || !geckoView.isShown) return false
