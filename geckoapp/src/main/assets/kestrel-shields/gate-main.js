@@ -39,8 +39,9 @@
   var lastTap = { t: 0, target: null };                  // the last real tap or key press: when, and what it landed on
   var mseUrls = Object.create(null), mseCount = 0;       // blob: addresses made from a MediaSource
   var REFUSED = 'The play method is not allowed by the user agent or the platform in the current context, possibly because the user denied permission.';
+  var INTERRUPTED = 'The play() request was interrupted: Kestrel\'s own player plays this video.';
 
-  function rec(el) { var r = recs.get(el); if (!r) { r = { open: false, src: null, hasSrc: false, preload: null, hasPreload: false, autoplay: false, hasAutoplay: false, load: false, tracked: false, adopted: false, forced: false, ask: null, askedAt: 0, noUntil: 0 }; recs.set(el, r); } return r; }
+  function rec(el) { var r = recs.get(el); if (!r) { r = { open: false, src: null, hasSrc: false, preload: null, hasPreload: false, autoplay: false, hasAutoplay: false, load: false, tracked: false, adopted: false, forced: false, ask: null, askedAt: 0, noUntil: 0, yesAt: 0 }; recs.set(el, r); } return r; }
   function peek(el) { try { return recs.get(el); } catch (e) { return undefined; } }
   function isBlob(v) { var u = (typeof v === 'string') ? v : ((v !== null && v !== undefined) ? String(v) : ''); return mseUrls[u] === 1; }   // only a MediaSource's address (see the createObjectURL wrapper below)
   function isMediaEl(x) { return !!x && x.nodeType === 1 && x.nodeName === 'VIDEO'; }
@@ -202,7 +203,7 @@
     if (q.done) return false;
     q.done = true;
     var cbs = q.cbs; q.cbs = [];
-    try { var rq = rec(q.el); rq.noUntil = yes ? 0 : Math.max(rq.noUntil, dnow.call(Date) + 15000); } catch (e) { /* ignore */ }
+    try { var rq = rec(q.el); rq.noUntil = yes ? 0 : Math.max(rq.noUntil, dnow.call(Date) + 15000); rq.yesAt = yes ? dnow.call(Date) : 0; } catch (e) { /* ignore */ }
     for (var i = 0; i < cbs.length; i++) { try { cbs[i](yes); } catch (e) { /* ignore */ } }
     return true;
   }
@@ -222,7 +223,7 @@
   function askPlay(el, args) {
     return new Promise(function (resolve, reject) {
       ask(el, 'play', function (handed) {
-        if (handed) { pauseEl(el); reject(new DOMException('The play() request was interrupted: Kestrel\'s own player plays this video.', 'AbortError')); return; }
+        if (handed) { pauseEl(el); reject(new DOMException(INTERRUPTED, 'AbortError')); return; }
         try { openEl(el, 'play'); var p = playOrig.apply(el, args); if (p && typeof p.then === 'function') p.then(resolve, reject); else resolve(); } catch (x) { reject(x); }
       });
     });
@@ -329,6 +330,7 @@
       try {
         if (on && isMediaEl(this)) {
           var r = rec(this);
+          if (hand && r.yesAt && dnow.call(Date) - r.yesAt < 1500) return Promise.reject(new DOMException(INTERRUPTED, 'AbortError'));   // the app took this press over a moment ago: the page's own play() that follows it is the same press
           if (!r.open) {
             if (!r.adopted) adopt(this);
             track(this);
