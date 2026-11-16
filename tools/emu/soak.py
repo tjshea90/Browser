@@ -318,89 +318,42 @@ class Phone:
                 cmds.append("sleep %s" % pause)
             at += n
         cmds.append("rm -f /data/local/tmp/kp.bin")
-        out = self.a.sh("; ".join(cmds), timeout=60) or ""
-        self.note_touch("raw %s: %s" % (path, " | ".join(l for l in out.splitlines() if "records" not in l)[:160] or "dd printed no error"))
+        self.a.sh("; ".join(cmds), timeout=60)          # (needs a ROOT adb shell: 'Permission denied' otherwise; the lab uses hold_drag instead)
         return True
 
     # ---- ANS57 lab: a finger that RESTS first and then moves (`input swipe` cannot rest).
-    # Lab runs 43918159286 and 43921764750 (2026-11-16): every path written with dd to the touch device (raw_path) became NO event in the app - not even a vertical drag, which needs no timer - while `input swipe` always
-    # reached it; the earlier guess (a late timer on a busy UI thread) was wrong. diagnostics-touch.txt (artifact) now says what this Android has. The way that works is `input motionevent` (Android 10 has it): DOWN, a rest, MOVEs, UP,
-    # each a process of its own (the events carry the moment they were made, 150-400 ms apart), so the path is a few steps only. The raw way stays as the second choice.
-    touch_pref = None
+    # Lab runs 43918159286, 43921764750 and 43925029376 (2026-11-16): a path written with dd to the touch device (raw_path) failed with 'Permission denied' (the lab's adb shell is not root) and Android 10's `input` has no
+    # `motionevent`; `input swipe` and `input tap` always worked. The debug build plays the finger path itself (geckoapp web/DebugTouch: real MotionEvents handed to the Activity in front, `am start ... --es kestrel_debug touch`).
     touch_log = []
 
-    def note_touch(self, text):
-        self.touch_log.append(text)
-        say("touch:", text)
-
-    def has_motionevent(self):
-        if getattr(self, "_motion", None) is None:
-            out = self.a.sh("input 2>&1 | head -40", timeout=30) or ""
-            self._motion = "motionevent" in out
-            self.input_usage = out
-        return self._motion
-
-    def touch_methods(self):
-        return (["motion"] if self.has_motionevent() else []) + ["raw"]
-
-    def motion_path(self, points, hold_s=0.5, end_hold_s=0.0):
-        """ONE finger down at points[0], still for hold_s, moved through the other points (no pause: a process start is the pause), still for end_hold_s at the last (a picture can be taken) and lifted."""
+    def touch_script(self, points, hold_s=0.5, step_s=0.1, end_hold_s=0.0):
+        """DebugTouch words: finger down at points[0], rest hold_s, the other points step_s apart, rest end_hold_s at the last, finger up."""
         pts = [(int(round(px)), int(round(py))) for px, py in points]
-        cmds = ["input motionevent DOWN %d %d" % pts[0]]
+        words = ["D%d,%d" % pts[0]]
         if hold_s > 0:
-            cmds.append("sleep %s" % hold_s)
+            words.append("W%d" % int(hold_s * 1000))
         for px, py in pts[1:]:
-            cmds.append("input motionevent MOVE %d %d" % (px, py))
+            words.append("M%d,%d" % (px, py))
+            if step_s > 0:
+                words.append("W%d" % int(step_s * 1000))
         if end_hold_s > 0:
-            cmds.append("sleep %s" % end_hold_s)
-        cmds.append("input motionevent UP %d %d" % pts[-1])
-        out = self.a.sh("{ " + "; ".join(cmds) + "; } 2>&1", timeout=90) or ""
-        self.note_touch("motion %s -> %s: %s" % (pts[0], pts[-1], out.strip()[:160] or "no error printed"))
-        return out
+            words.append("W%d" % int(end_hold_s * 1000))
+        words.append("U%d,%d" % pts[-1])
+        return " ".join(words)
 
-    def hold_drag(self, screen, x, y, dx, dy=0, hold_s=0.5, steps=14, step_s=0.035, end_hold_s=0.0, method=None):
-        """A long press at (x, y) and a drag by [dx] pixels sideways and [dy] up or down (negative = up): the precise seek and, held first, the level drags. Returns the way used ('motion' or 'raw')."""
-        method = method or self.touch_pref or self.touch_methods()[0]
-        if method == "motion":
-            n = max(1, min(steps, 6))
-            self.motion_path([(x, y)] + [(x + dx * (i + 1) / float(n), y + dy * (i + 1) / float(n)) for i in range(n)], hold_s=hold_s, end_hold_s=end_hold_s)
-            return "motion"
+    def hold_drag(self, screen, x, y, dx, dy=0, hold_s=0.5, steps=10, step_s=0.1, end_hold_s=0.0, target="main"):
+        """A long press at (x, y) and a drag by [dx] pixels sideways and [dy] up or down (negative = up): the precise seek and, held first, the level drags. [target] = the screen in front: 'native' (Kestrel's own
+        player) or 'main' (the browser). Returns when the path is over (the app plays it on its own clock)."""
         pts = [(x, y)] + [(x + dx * (i + 1) / float(steps), y + dy * (i + 1) / float(steps)) for i in range(steps)]
-        self.raw_path(pts, screen, hold_s=hold_s, step_s=step_s, end_hold_s=end_hold_s)
-        return "raw"
-
-    def touch_probe(self, outdir):
-        """diagnostics-touch.txt: the touch devices, what `input` knows, and whether the kernel hands a raw event to a reader (getevent) - the facts behind 'which way reaches the app'."""
-        lines = []
-        dev = self.touch_dev()
-        lines.append("touch_dev(): %s" % (dev,))
-        lines.append("has_motionevent: %s" % self.has_motionevent())
-        lines.append("--- input usage ---")
-        lines.append(getattr(self, "input_usage", "") or "")
-        lines.append("--- getevent -p ---")
-        lines.append((self.a.sh("getevent -p 2>&1", timeout=30) or "")[:4000])
-        if dev:
-            path = dev[0]
-            # a finger down and up in the status bar (harmless) written with dd while getevent listens: do the events appear?
-            mx, my = dev[1], dev[2]
-            def ev(t, c, v):
-                return struct.pack("<qqHHi", 0, 0, t, c, v)
-            down = ev(3, 0x2f, 0) + ev(3, 0x39, 77) + ev(3, 0x35, int(mx * 0.5)) + ev(3, 0x36, int(my * 0.004)) + ev(3, 0x3a, 100) + ev(0, 0, 0)
-            up = ev(3, 0x39, -1) + ev(0, 0, 0)
-            with tempfile.TemporaryDirectory() as td:
-                f = os.path.join(td, "pr.bin")
-                with open(f, "wb") as fh:
-                    fh.write(down + up)
-                self.a.run("push", f, "/data/local/tmp/pr.bin", timeout=30)
-            shell = ("getevent -l -c 5 %s > /data/local/tmp/ge.txt 2>&1 & sleep 1; "
-                     "dd if=/data/local/tmp/pr.bin of=%s bs=24 skip=0 count=6 2>&1; sleep 0.3; dd if=/data/local/tmp/pr.bin of=%s bs=24 skip=6 count=2 2>&1; sleep 1.2; cat /data/local/tmp/ge.txt; rm -f /data/local/tmp/pr.bin /data/local/tmp/ge.txt") % (path, path, path)
-            lines.append("--- loopback: 8 raw events written to %s while getevent listened ---" % path)
-            lines.append((self.a.sh(shell, timeout=40) or "")[:2000])
-        try:
-            with open(os.path.join(outdir, "diagnostics-touch.txt"), "w") as fh:
-                fh.write("\n".join(lines) + "\n")
-        except Exception as e:
-            say("diagnostics-touch.txt not written:", e)
+        script = self.touch_script(pts, hold_s=hold_s, step_s=step_s, end_hold_s=end_hold_s)
+        if target == "native":
+            self.debug_native("touch", script)
+        else:
+            self.debug("touch", script)
+        lasts = hold_s + steps * step_s + end_hold_s
+        self.touch_log.append(script[:60])
+        time.sleep(lasts + 0.4)
+        return lasts
 
     def hogs_running(self):
         """How many of our busy loops are alive (ps), so the report can say whether the emulator was really slowed down."""
