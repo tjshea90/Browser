@@ -2247,3 +2247,7 @@
 ## 2026-11-16T18:27:04Z
 > Unit suites are running on the version-bumped head while the lab works; I'll read the gp report when its timer fires.
 <!-- sha:f4374e7ec231 -->
+
+## 2026-11-16T18:27:16Z
+> Unit suites are green on the alpha60 head. The gp lab run is about a minute old; I'll read it when the timer fires, around 18:33Z.
+<!-- sha:666db3187239 -->
