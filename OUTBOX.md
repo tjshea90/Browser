@@ -2195,3 +2195,7 @@
 ## 2026-11-16T18:11:44Z
 > Artifacts aren't up yet; the lab is probably spending extra time on the new hold-and-drag steps. Waiting for the next timer.
 <!-- sha:260e18066562 -->
+
+## 2026-11-16T18:12:07Z
+> Waiting on that timer (about 18:13Z), then I'll pull the lab artifacts.
+<!-- sha:7eddf33de597 -->
