@@ -309,11 +309,11 @@ class VideoFlow(private val a: BrowserActivity) {
 
     /**
      * The film the page plays and the pictures it offers; null when no film is known, it is no HLS stream, or the stream offers one picture only (nothing to choose). The film is the one that really plays
-     * ([MediaList.primary]), else the page's only counted HLS stream. A playlist the app has not read yet is asked for once (the early look reads the first few, a page with more may not get to it). UI thread.
+     * ([MediaList.primary]), else the longest counted HLS stream of the page. A playlist the app has not read yet is asked for once (the early look reads the first few, a page with more may not get to it). UI thread.
      */
     fun pageFilm(tab: Tab): PageFilm? {
         if (tab.isNewTab || a.onHomeScreen(tab)) return null
-        val c = tab.media.primary()?.takeIf { it.kind == MediaKind.HLS } ?: tab.media.usable().filter { it.kind == MediaKind.HLS }.singleOrNull() ?: return null
+        val c = tab.media.primary()?.takeIf { it.kind == MediaKind.HLS } ?: tab.media.usable().filter { it.kind == MediaKind.HLS }.maxByOrNull { it.durationMs } ?: return null   // (clip-sized streams are not counted: the longest counted one is the film)
         val r = masterRungs[c.key]
         if (r == null) {
             if (masterAsked.add(c.key)) fetchPlaylist(tab, c, c.url, { Hls.parse(it, c.url) != null }) { text, _ -> (text?.let { Hls.parse(it, c.url) } as? Hls.MasterPlaylist)?.let { noteMaster(c, it.master) } }
