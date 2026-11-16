@@ -21,15 +21,15 @@ class FilmHealthTest {
 
     @Test fun aCounterThatGoesDownIsANewElementNotNegativeFrames() {
         val f = FilmHealth()
-        f.onReport(0, 1, 500, 10, 640, 360, 0L); f.onReport(0, 1, 800, 12, 640, 360, 1000L)
-        assertEquals(300L, f.frames)
-        f.onReport(0, 1, 40, 0, 640, 360, 2000L)                       // the page swapped its element: its counters start again
-        assertEquals("nothing is taken from the totals, the baseline is taken again", 300L, f.frames)
-        f.onReport(0, 1, 100, 1, 640, 360, 3000L)
-        assertEquals(360L, f.frames); assertEquals(3L, f.dropped)
+        f.onReport(0, 1, 500, 10, 640, 360, 0L); f.onReport(0, 1, 560, 12, 640, 360, 2000L)
+        assertEquals(60L, f.frames)
+        f.onReport(0, 1, 40, 0, 640, 360, 3000L)                       // the page swapped its element: its counters start again
+        assertEquals("nothing is taken from the totals, the baseline is taken again", 60L, f.frames)
+        f.onReport(0, 1, 70, 1, 640, 360, 4000L)
+        assertEquals(90L, f.frames); assertEquals(3L, f.dropped)
         f.newSession()
-        f.onReport(0, 1, 9000, 0, 640, 360, 4000L)                       // a new full screen: a new baseline, the run's totals stay
-        assertEquals(360L, f.frames)
+        f.onReport(0, 1, 9000, 0, 640, 360, 5000L)                       // a new full screen: a new baseline, the run's totals stay
+        assertEquals(90L, f.frames)
     }
 
     @Test fun aJumpOfTheCounterThatNoDisplayCouldShowIsASwappedElementNotFrames() {
