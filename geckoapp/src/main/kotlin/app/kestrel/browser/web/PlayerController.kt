@@ -89,7 +89,7 @@ class PlayerController(
     private fun scheduleWatchdog() { if (!watchOn && activeFlag) { watchOn = true; Io.main.postDelayed(watchdog, 1000L) } }
     private fun checkAlive() {
         if (!activeFlag) return
-        if (SystemClock.uptimeMillis() - lastReportAt > SILENT_END_MS) { end("the page stopped reporting"); return }
+        if (PlayerRules.pageGone(SystemClock.uptimeMillis() - lastReportAt)) { end("the page stopped reporting"); return }
         scheduleWatchdog()
     }
 
@@ -189,7 +189,6 @@ class PlayerController(
         Io.main.postDelayed(ticker, 250L)
     }
 
-    private companion object { const val SILENT_END_MS = 3500L }
 
     /** One Diagnostics line. */
     fun line(): String = "Full-screen video controls (Kestrel's own): ${model.sessions} full screens, $taps taps on the picture (${model.singles} single, ${model.seeks} double-tap seeks), ${model.commands} commands to the page, $reports reports now; last: $last"
