@@ -2,6 +2,7 @@ package app.kestrel.core.player
 
 import app.kestrel.core.player.PlayerRules.Zone
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -47,5 +48,14 @@ class PlayerRulesTest {
         assertTrue("a burst lasts longer than the double tap window", PlayerRules.BURST_MS > PlayerRules.DOUBLE_TAP_MS)
         assertEquals(10.0, PlayerRules.SKIP_S, 0.0)
         assertTrue("the middle zone is wide enough for a thumb", 1.0 - 2 * PlayerRules.SIDE > 0.25)
+    }
+
+    /** ANS51d: the tablet's Yahoo page said nothing for 3.5 s, 5 s, 14 s and 7.8 s after turns (owner message 51) and came back every time. */
+    @Test fun aPageThatIsOnlyBusyIsWaitedForAndAGonePageIsNot() {
+        assertFalse("the 3.5 s of the old limit are a busy page, not a gone one", PlayerRules.pageGone(3500L))
+        assertFalse("5 s", PlayerRules.pageGone(5000L)); assertFalse("7.8 s (the tablet's second turn)", PlayerRules.pageGone(7800L))
+        assertFalse("the limit itself is still waiting", PlayerRules.pageGone(PlayerRules.PAGE_GONE_MS))
+        assertTrue("a page silent past the limit is gone (the controls must not hang over a dead page for ever)", PlayerRules.pageGone(PlayerRules.PAGE_GONE_MS + 1))
+        assertTrue("but not for ever", PlayerRules.PAGE_GONE_MS in 8000L..20000L)
     }
 }
