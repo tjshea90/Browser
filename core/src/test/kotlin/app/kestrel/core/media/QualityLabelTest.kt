@@ -64,7 +64,7 @@ class QualityLabelTest {
         assertEquals("a class the stream does not have: the biggest one below", 4, QualityLabel.nearest(Rung(854, 480, 30f, 1_500_000L), offered))
         assertEquals("below everything: the smallest one above", 4, QualityLabel.nearest(Rung(320, 180, 30f, 0L), offered))
         assertEquals("a portrait pick finds the same class", 0, QualityLabel.nearest(Rung(1080, 1920, 30f, 0L), offered))
-        assertEquals("a rate nobody says is no difference", 2, QualityLabel.nearest(Rung(1280, 720, -1f, 3_000_000L), listOf(Rung(1280, 720, -1f, 3_000_000L).copy(fps = -1f)).let { listOf(Rung(1920, 1080, 30f, 0L), Rung(640, 360, 30f, 0L), Rung(1280, 720, 30f, 2_900_000L)) }).let { it + 0 })
+        assertEquals("a rate nobody says is no difference", 2, QualityLabel.nearest(Rung(1280, 720, -1f, 3_000_000L), listOf(Rung(1920, 1080, 30f, 0L), Rung(640, 360, 30f, 0L), Rung(1280, 720, 30f, 2_900_000L))))
         assertEquals("nothing offered", -1, QualityLabel.nearest(Rung(1280, 720, 30f, 0L), emptyList()))
         assertEquals("nothing with a picture", -1, QualityLabel.nearest(Rung(1280, 720, 30f, 0L), listOf(Rung(0, 0, 0f, 100_000L))))
     }
