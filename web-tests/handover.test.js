@@ -170,6 +170,88 @@ test('a play() the page makes itself after a hand-over is the replacement\'s bus
   assert.equal((await vhand(page)).length, 1, 'the page\'s own play() is not asked again by the engine\'s play event');
 });
 
+// ---- the independent review of the hand-over (2026-11-16): each of these failed before the fix
+test('a question that a script of the page makes up is not relayed while nobody touched the page; the same question right after a real tap is (the evidence is a person\'s touch of this document)', async () => {
+  const FORGE = '<div id="x" style="width:200px;height:100px">x</div><script>function forge(n) { document.dispatchEvent(new CustomEvent("__kst_gate_ask_v1", { detail: JSON.stringify({ i: n, y: "play", s: "https://evil.example/x.mp4", b: 0, w: 640, h: 360 }) })); } setTimeout(function () { forge(7); }, 150);</script>';
+  const quiet = await open(FORGE, GUARD_HO, 'yes');
+  await settle(quiet, 700);
+  assert.equal((await vhand(quiet)).length, 0, 'no touch, no relay');
+  const touched = await open(FORGE, GUARD_HO, 'yes');
+  await tapOn(touched, '#x'); await touched.evaluate(() => forge(8)); await settle(touched, 500);
+  assert.equal((await vhand(touched)).length, 1, 'after a real tap the document may ask (the app then wants a finger of its own)');
+});
+
+test('Mute, Share or Get started over the picture is no play control: no question, and nothing starts', async () => {
+  const html = PLAYER.replace('<button id="btn"', '<button id="mute" style="position:absolute;left:8px;top:8px;width:70px;height:40px">Mute</button><button id="btn"');
+  const page = await open(html, GUARD_HO, 'yes');
+  await settle(page, 300);
+  await tapOn(page, '#mute'); await settle(page, 500);
+  assert.equal((await vhand(page)).length, 0);
+  await tapOn(page, '#btn'); await settle(page, 500);
+  assert.equal((await vhand(page)).length, 1, 'the Play button still asks');
+});
+
+test('players that name their play control with the word play ask first: aria-label, class and id', async () => {
+  for (const attrs of ['aria-label="Play video"', 'class="vjs-big-play-button"', 'id="PlayButton"', 'title="Play"']) {
+    const html = PLAYER.replace('<button id="btn"', '<button ' + attrs + ' id="btn2"').replace('>Play</button>', '></button>');
+    const page = await open(html, GUARD_HO, 'yes');
+    await settle(page, 300);
+    await tapOn(page, '#btn2'); await settle(page, 500);
+    assert.equal((await vhand(page)).length, 1, attrs);
+  }
+});
+
+test('Kestrel\'s own bar asks when the press that showed it has opened the element already', async () => {
+  const page = await open('<video id="v" src="https://cdn.example/a.wav" style="display:block;width:320px;height:180px"></video>', GUARD_HO, 'yes');
+  await settle(page, 300);
+  await tapOn(page, '#v'); await settle(page, 400);                               // (a tap on a bare film: the element opens, nothing is asked: it has no play button)
+  assert.equal((await vhand(page)).length, 0);
+  await page.evaluate(() => { document.getElementById('v').dispatchEvent(new Event('__kst_gate_v1')); }); await settle(page, 500);
+  const q = await vhand(page);
+  assert.equal(q.length, 1); assert.equal(q[0].y, 'kestrel');
+  assert.ok(await page.evaluate(() => window.__pauses) >= 1);
+});
+
+test('a yes that came late counts as a yes: the engine\'s play button pressed again asks again', async () => {
+  const page = await open(CONTROLS, GUARD_HO, 'late');                              // (the app answers after 1.2 s: the page plays for a moment, the late yes stops it)
+  await nativePlay(page); await settle(page, 1900);
+  assert.equal((await vhand(page)).length, 1);
+  await nativePlay(page); await settle(page, 400);
+  assert.equal((await vhand(page)).length, 2, 'asked again');
+});
+
+test('after a yes the page\'s own play() is interrupted until the person presses again (not for 1.5 s only)', async () => {
+  const page = await open(PLAYER, GUARD_HO, 'yes');
+  await settle(page, 300);
+  await tapOn(page, '#btn'); await settle(page, 700);                              // yes: AbortError
+  assert.equal(await result(page), 'AbortError');
+  await page.evaluate(() => { window.__r = ''; const p = document.getElementById('v').play(); p.then(() => { window.__r = 'ok'; }, (e) => { window.__r = e.name; }); });
+  await settle(page, 500);
+  assert.equal(await result(page), 'AbortError', 'a play() two seconds later, with no new press, is still the same film');
+  await tapOn(page, '#far'); await settle(page, 200);                               // a new tap of the person
+  await page.evaluate(() => { window.__r = ''; const p = document.getElementById('v').play(); p.then(() => { window.__r = 'ok'; }, (e) => { window.__r = e.name; }); });
+  await settle(page, 600);
+  assert.notEqual(await result(page), 'AbortError', 'after a new press the page decides again: ' + await result(page));
+});
+
+test('a script player on the engine\'s own controls keeps its source held until the app has answered (yes: held for good, no: it opens)', async () => {
+  const html = '<video id="v" controls style="display:block;width:320px;height:180px"></video><script>window.ms = new MediaSource(); window.opened = 0; ms.addEventListener("sourceopen", function () { window.opened++; }); document.getElementById("v").src = URL.createObjectURL(ms);</script>';
+  const yes = await open(html, GUARD_HO, 'yes');
+  await settle(yes, 300);
+  await nativePlay(yes); await settle(yes, 800);
+  assert.equal(await yes.evaluate(() => window.opened), 0, 'yes: no sourceopen, no segment');
+  const late = await open(html, GUARD_HO, 'late');
+  await settle(late, 300);
+  await nativePlay(late); await settle(late, 300);
+  assert.equal(await late.evaluate(() => window.opened), 0, 'while the app thinks the source is held');
+  await settle(late, 700);
+  assert.equal(await late.evaluate(() => window.opened), 1, 'no answer in 700 ms: the page\'s player may go');
+  const no = await open(html, GUARD_HO, 'no');
+  await settle(no, 300);
+  await nativePlay(no); await settle(no, 700);
+  assert.equal(await no.evaluate(() => window.opened), 1, 'no: it opens');
+});
+
 test('a video without controls is not asked about when it is merely tapped (a hero loop has no play button)', async () => {
   const page = await open('<video id="v" autoplay muted loop src="https://cdn.example/a.mp4" style="display:block;width:320px;height:180px"></video>', GUARD_HO, 'yes');
   await settle(page, 300);
