@@ -2101,3 +2101,50 @@
 ## 2026-11-16T17:04:31Z
 > Draft release note for alpha60 is written, with the test results still to be filled in; waiting for the emulator run.
 <!-- sha:deed9114c4b6 -->
+
+## 2026-11-16T17:19:46Z
+> I updated the plan with your answers and sent it as `KEYBOARD-APP-PLAN.md` (use this one; it replaces the earlier file). I read your `tjshea90/LinkMeter` repo read-only and changed nothing in it, and I didn't run any of its translation code or call the services.
+>
+> ## What LinkMeter uses, now in the plan
+> - **MyMemory first:** it's a free service with no account, asked for Mexican Spanish (`es-MX`). It allows about 5,000 characters a day, and each request is capped at 500 bytes.
+> - **Google Translate as the fallback:** the free endpoint behind Gboard's translation, used when MyMemory is used up or unreachable.
+> - **A Mexican-Spanish safety layer on every result:**
+>   - "coger" is vulgar in Mexico, so it becomes "agarrar".
+>   - "coche" becomes "carro".
+>   - "ordenador" becomes "computadora".
+>   - "vosotros" forms become "ustedes".
+> - **Plain texting words are spelled out before sending to Google:** "idk", "tbh" and so on.
+> - The plan tells the new session to port this code and its roughly 56,000 tests to Kotlin and require the same results.
+> - **Friendly "tú":** the services answer in "tú" for casual English. I added a test list and a guard that asks the other service if an answer comes back formal.
+>
+> ## "Enter translates, Enter again sends"
+> LinkMeter's Send logic is ported as is. The first Enter replaces your English with the Spanish for you to check, and Undo and "Send my English" are there. The second Enter sends. It follows the same rules as LinkMeter, and it's off everywhere until you switch an app on.
+>
+> ## What a keyboard cannot do (the plan says so plainly)
+> - **Apps with their own Send button:** most texting apps, including LinkMeter, have one. The keyboard can translate on Enter, but you tap the app's own Send yourself.
+> - **LinkMeter itself:** it already translates on its own, so the keyboard skips it. Otherwise the text would be translated twice.
+> - **Long-pressing any message in any app:** this is impossible for a keyboard. The plan gives three routes that do work:
+>   - the text-selection menu, which shows "Translate to English" wherever an app allows selecting text;
+>   - copy the message, then use the keyboard's translate button;
+>   - select text in the box you're typing in.
+>
+>   LinkMeter's own long press stays as it is.
+>
+> ## What I removed
+> All the offline-model, test-first, fine-tune, and large-AI-model translation material is gone. The old Spanish-typing material was already removed in the last round.
+>
+> ## Things to know
+> - **Internet permission:** I kept the keyboard free of any internet permission, so it can't send what you type anywhere. Translation lives in a second tiny app, Swoop Translate, which is the only one that can use the internet. If you'd rather have one app like LinkMeter, say so and the plan changes.
+> - **Service limits:** MyMemory's free allowance is small, and over a carrier hotspot the shared address may use it up faster. Google's endpoint is unofficial and could change or block you. The plan covers both with clear messages and tests, but I couldn't try live requests from here.
+> - **LinkMeter's own notes:** they say the translation hadn't been tried on your tablet when written, so your real use is the only real test.
+>
+> ## Questions for you
+> The new ones are in section 15, and the defaults let work start:
+> - **Q15:** keep the internet permission in the separate tiny app (my default) or put it in the keyboard?
+> - **Q16:** in which apps do you want translate-on-Enter? The default is none until you switch each one on.
+> - **Q17:** is it OK that in apps with their own Send button you tap Send yourself?
+> - **Q18:** is it OK to translate received messages through the selection menu or by copying, instead of long-pressing any bubble?
+> - **Q19:** should LinkMeter's message box change so Enter sends there too? The default is no. That would be a change in the other repo, and I'd only do it if you ask.
+>
+> Still open from before: your repo setup (steps in the plan), then a new session with the file attached.
+<!-- sha:998bcb1804a1 -->
