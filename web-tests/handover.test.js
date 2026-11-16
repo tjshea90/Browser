@@ -18,8 +18,9 @@ after(async () => { await browser.close(); });
 
 /**
  * [html]: the body. [guard]: what the background page answers to `guard` (gt: the rule is on, ho: the app may take films over). [handAnswer]: 'yes' | 'no' | 'never' | 'late' (a yes after 1.2 s) for `vhand`.
+ * [opts].noPointer: the gate never gets a pointer, click or key event (Gecko's engine controls: lab run 43826954106 saw none reach the page); the engine's own controls still work on the element.
  */
-async function open(html, guard, handAnswer) {
+async function open(html, guard, handAnswer, opts) {
   const context = await browser.newContext({ hasTouch: false });
   await context.route('https://**/*', (r) => {
     const u = new URL(r.request().url());
@@ -49,7 +50,9 @@ async function open(html, guard, handAnswer) {
   await page.addInitScript({ content: VFIND });
   await page.addInitScript({ content: CONTENT });
   // the gate lives in the page's world and must not see the extension API
-  await page.addInitScript({ content: `(function(){var b=window.browser;try{delete window.browser;}catch(e){window.browser=undefined;}${GATE};window.browser=b;})();` });
+  const np = !!(opts && opts.noPointer);
+  const NP_ON = 'var ael=window.addEventListener;window.addEventListener=function(t){if(/^(pointerdown|pointerup|click|keydown)$/.test(t))return;return ael.apply(this,arguments);};', NP_OFF = 'window.addEventListener=ael;';
+  await page.addInitScript({ content: `(function(){var b=window.browser;try{delete window.browser;}catch(e){window.browser=undefined;}${np ? NP_ON : ''}${GATE};${np ? NP_OFF : ''}window.browser=b;})();` });
   await page.goto('https://site.example/');
   return page;
 }
@@ -123,6 +126,43 @@ test('the engine\'s own controls: a press opens the video, the app is asked, a y
   const q = await vhand(page);
   assert.equal(q.length, 1); assert.equal(q[0].y, 'press');
   assert.ok(await page.evaluate(() => window.__pauses) >= 1, 'paused after the yes');
+});
+
+const CONTROLS = '<video id="v" controls src="https://cdn.example/a.mp4" style="display:block;width:320px;height:180px"></video>';
+test('the engine\'s own controls start the film with no tap event reaching the page (Gecko): the engine\'s play event is the press', async () => {
+  const page = await open(CONTROLS, GUARD_HO, 'yes', { noPointer: true });
+  await settle(page, 300);
+  assert.equal(await page.evaluate(() => document.getElementById('v').getAttribute('preload')), 'none', 'closed until pressed');
+  await tapOn(page, '#v'); await settle(page, 700);
+  const q = await vhand(page);
+  assert.equal(q.length, 1, JSON.stringify(q)); assert.equal(q[0].y, 'press'); assert.equal(q[0].s, 'https://cdn.example/a.mp4');
+  assert.ok(await page.evaluate(() => window.__pauses) >= 1, 'a yes pauses the page\'s copy');
+});
+
+test('the same press with the rule\'s hand-over flag off opens the element and asks nothing', async () => {
+  const page = await open(CONTROLS, { on: true, top: 'site.example', gt: true, ho: false }, 'yes', { noPointer: true });
+  await settle(page, 300);
+  await tapOn(page, '#v'); await settle(page, 600);
+  assert.equal((await vhand(page)).length, 0);
+  assert.equal(await page.evaluate(() => document.getElementById('v').getAttribute('preload')), null, 'opened by the engine\'s own play: the page\'s own preload is back');
+});
+
+test('after a yes the engine\'s play button pressed again asks again; after a no the film is left alone (no question for every pause and play)', async () => {
+  const yes = await open(CONTROLS, GUARD_HO, 'yes', { noPointer: true });
+  await tapOn(yes, '#v'); await settle(yes, 700);
+  await tapOn(yes, '#v'); await settle(yes, 700);
+  assert.equal((await vhand(yes)).length, 2, 'asked again: the film comes back to Kestrel\'s player');
+  const no = await open(CONTROLS, GUARD_HO, 'no', { noPointer: true });
+  await tapOn(no, '#v'); await settle(no, 700);           // plays here (the app said no)
+  await tapOn(no, '#v'); await settle(no, 400);           // pause
+  await tapOn(no, '#v'); await settle(no, 700);           // play again
+  assert.equal((await vhand(no)).length, 1, 'one question, not one for every play');
+});
+
+test('a play() the page makes itself is decided by the replacement, not asked a second time by the engine\'s play event', async () => {
+  const page = await open(PLAYER, GUARD_HO, 'no', { noPointer: true });
+  await tapOn(page, '#btn'); await settle(page, 900);
+  assert.equal((await vhand(page)).length, 0, 'no pointer event reached the gate: the page\'s own play() is not a press it saw (no question), it plays as the activation allows');
 });
 
 test('a video without controls is not asked about when it is merely tapped (a hero loop has no play button)', async () => {
