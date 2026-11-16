@@ -416,7 +416,7 @@ AP_JS = """
     return { x: Math.round((ox + r.left + r.width / 2) * d), y: Math.round((oy + r.top + r.height / 2) * d), w: Math.round(r.width * d), h: Math.round(r.height * d) };
   }
   window.apLayout = function () {
-    var v = document.getElementById('v'), b = document.getElementById('btn'), o = { dpr: window.devicePixelRatio || 1 };
+    var v = document.getElementById('v'), b = document.getElementById('btn'), o = { dpr: window.devicePixelRatio || 1, ox: window.mozInnerScreenX || 0, oy: window.mozInnerScreenY || 0 };
     if (v) { var a = screenOf(v); o.vx = a.x; o.vy = a.y; o.vw = a.w; o.vh = a.h; }
     if (b) { var c = screenOf(b); o.bx = c.x; o.by = c.y; }
     rep('layout', o);

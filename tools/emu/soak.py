@@ -2112,6 +2112,8 @@ class Soak:
             tx, ty = (int(L.get("bx") or 0), int(L.get("by") or 0)) if how == "button" else (int(L.get("vx") or 0), int(L.get("vy") or 0))
             if tx <= 0 or ty <= 0:
                 tx, ty = self.screen[0] // 2, 260
+            elif float(L.get("oy") or 0) < 5:
+                ty += 25                                    # the engine named no screen offset (mozInnerScreenY = 0): the page area starts under the 25 px status bar
             m2 = media.size(); r2 = self.lab.size()
             self.ph.tap(tx, ty); time.sleep(9)
             n1, req1 = film_bytes(m2)
