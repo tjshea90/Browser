@@ -2211,7 +2211,7 @@ class Soak:
     # page gate, the app decides (core WebHandOver) and starts NativePlayerActivity; the page keeps its element closed. Proof on the real engine: Health lines `video hand-over`, `native start`, the page's own events.
     # ANS55 (owner message 55: Yahoo showed the time and a black picture): hlsdecoy = a master with a long token and, next to it, short-address lists of the sound and of the pictures (the master must win, with a picture);
     # audioonly = the only list is the film's sound (Kestrel's player has nothing to show: it must give the film back to the page after 7 s)
-    HO_CASES = [("file", "picture", "native"), ("overlay", "button", "native"), ("hls", "button", "native-hls"), ("hlsdecoy", "button", "native-hls"), ("unknown", "button", "page"), ("audioonly", "button", "nopic"), ("bad", "picture", "fail")]
+    HO_CASES = [("file", "picture", "native"), ("overlay", "button", "native"), ("hls", "button", "native-hls"), ("hlsdecoy", "button", "native-hls"), ("hlstwo", "button", "native-hls"), ("unknown", "button", "page"), ("audioonly", "button", "nopic"), ("bad", "picture", "fail")]
 
     def ho_scene(self):
         checks = []
@@ -2260,7 +2260,10 @@ class Soak:
                 check("%s: Kestrel's own player started%s" % (variant, " on the stream" if expect == "native-hls" else " on the file"), bool(started) and (expect != "native-hls" or any("HLS" in e["rest"] for e in started)), "native start lines %s" % [e["rest"][:60] for e in started])
                 if variant != "file":                                                      # (the engine's own controls may start a plain film for a moment before the answer pauses it)
                     check("%s: the page's own player never started it (no 'playing', no 'sourceopen', no 'fetched')" % variant, not any(x in ev2 for x in ("playing", "playing-promise", "sourceopen", "fetched")), "events %s" % sorted(set(ev2)))
-                if variant in ("hls", "hlsdecoy"):
+                if variant == "hlstwo":
+                    check("hlstwo: the page selected another video: Kestrel's player was given THAT video's list (the newest master, master2), not the first one", any("master2.m3u8" in e["rest"] for e in taken), "hand-over lines %s" % [e["rest"][:120] for e in taken][:1])
+                    check("hlstwo: and it starts at the beginning (nothing of the first video is resumed)", any(" from 0 s " in e["rest"] for e in taken), "hand-over lines %s" % [e["rest"][:120] for e in taken][:1])
+                if variant in ("hls", "hlsdecoy", "hlstwo"):
                     check("%s: the stream chosen is a MASTER list (the hand-over line says so), not one of the lists of the sound or the pictures" % variant, any("master list" in e["rest"] for e in taken), "hand-over lines %s" % [e["rest"][:90] for e in taken][:1])
                     check("%s: Kestrel's player offers the pictures of the master (the 'native tracks' line names at least one)" % variant, any(re.search(r"[1-9]\d* picture", e["rest"]) for e in ev("native", "tracks", m)), "tracks lines %s" % [e["rest"][:60] for e in ev("native", "tracks", m)][:2])
                 if variant in ("overlay", "hls", "hlsdecoy"):

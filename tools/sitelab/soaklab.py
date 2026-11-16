@@ -81,6 +81,10 @@ def make_clips():
             subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", land, "-vn", "-c:a", "aac", "-b:a", "64k", "-f", "hls", "-hls_time", "4", "-hls_playlist_type", "vod", "-hls_segment_filename", os.path.join(hdir, "aud%d.ts"), os.path.join(hdir, "aud.m3u8")], check=False)
         print("soaklab: hls film %s" % ("ok" if os.path.exists(os.path.join(hdir, "master.m3u8")) else "FAILED"), flush=True)
         print("soaklab: hls sound list %s" % ("ok" if os.path.exists(os.path.join(hdir, "aud.m3u8")) else "FAILED"), flush=True)
+        # ANS56: a page that moves on to ANOTHER video asks for that video's master list last: the same film under a second name
+        if os.path.exists(os.path.join(hdir, "master.m3u8")):
+            with open(os.path.join(hdir, "master.m3u8")) as src, open(os.path.join(hdir, "master2.m3u8"), "w") as dst:
+                dst.write(src.read())
     tone = os.path.join(OUT, "tone.m4a")          # SND1: sound without a picture
     if not os.path.exists(tone):
         subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=120", "-c:a", "aac", "-b:a", "64k", "-movflags", "+faststart", tone], check=False)
@@ -492,12 +496,14 @@ def page_ho(variant, tag):
     elif variant == "overlay":
         body = ("<div id=player style='position:relative;width:100%;height:300px'><video id=v playsinline poster='/img/1.svg' src='@FILM@' style='@BOX@'></video>" + ov + "</div>"
                 "<script>var v = document.getElementById('v'); apHook(v); document.getElementById('btn').onclick = function () { var how = 'overlay'; " + play_js + " };</script>")
-    elif variant in ("hls", "unknown", "hlsdecoy", "audioonly"):
+    elif variant in ("hls", "unknown", "hlsdecoy", "audioonly", "hlstwo"):
         # hlsdecoy = Yahoo's way (Shaka + Brightcove): a master with a long token in its address, and next to it the lists of the sound and of the two pictures with SHORT addresses and other tokens than the master names;
         # audioonly = a page whose only list is the film's sound (Kestrel's player would show nothing: it gives the film back after 7 s)
         ask = {"hls": "fetch('/hls/film/master.m3u8').then(function (r) { return r.text(); }).then(function (t) { apRep('playlist', { bytes: t.length }); });",
                "hlsdecoy": "var tok = new Array(420).join('a'); fetch('/hls/film/master.m3u8?tok=' + tok).then(function (r) { return r.text(); }).then(function (t) { apRep('playlist', { bytes: t.length }); fetch('/hls/film/aud.m3u8?bc=0'); fetch('/hls/film/index.m3u8?bc=1'); fetch('/hls/film/low.m3u8?bc=2'); });",
-               "audioonly": "fetch('/hls/film/aud.m3u8?bc=0').then(function (r) { return r.text(); }).then(function (t) { apRep('playlist', { bytes: t.length }); });"}.get(variant, "")
+               "audioonly": "fetch('/hls/film/aud.m3u8?bc=0').then(function (r) { return r.text(); }).then(function (t) { apRep('playlist', { bytes: t.length }); });",
+               # hlstwo = the page played one video (its master asked for first) and the person then selected another: that video's master (master2) is asked for last
+               "hlstwo": "fetch('/hls/film/master.m3u8?v=1').then(function (r) { return r.text(); }).then(function () { setTimeout(function () { fetch('/hls/film/master2.m3u8?v=2').then(function (r) { return r.text(); }).then(function (t) { apRep('playlist', { bytes: t.length }); }); }, 1500); });"}.get(variant, "")
         body = ("<div id=player style='position:relative;width:100%;height:300px'><video id=v playsinline poster='/img/1.svg' style='@BOX@'></video>" + ov + "</div>"
                 "<script>var v = document.getElementById('v'); apHook(v); " + ask +
                 "var ms = new MediaSource(); v.src = URL.createObjectURL(ms);"

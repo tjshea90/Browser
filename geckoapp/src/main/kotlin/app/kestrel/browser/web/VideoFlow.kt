@@ -380,7 +380,7 @@ class VideoFlow(private val a: BrowserActivity) {
         if (!tab.isPrivateTab) {
             when (why) { WebHandOver.Why.PLAY -> WebHandStats.byPlay++; WebHandOver.Why.PRESS -> WebHandStats.byPress++; WebHandOver.Why.KESTREL -> WebHandStats.byKestrel++; WebHandOver.Why.FULLSCREEN -> WebHandStats.byFullscreen++; WebHandOver.Why.LATE -> WebHandStats.late++ }
             WebHandStats.lastTaken = "${if (d.kind == MediaKind.HLS) "a stream" else "a file"}, ${d.note}, from ${startMs / 1000} s"
-            Health.log("video", "hand-over", "${why.name.lowercase()} ${if (d.kind == MediaKind.HLS) "HLS" else "file"} from ${startMs / 1000} s (${d.note}) on ${UrlParts.hostOf(d.url) ?: "?"}")   // (the host names which list was chosen: Diagnostics of owner message 55 could not tell)
+            Health.log("video", "hand-over", "${why.name.lowercase()} ${if (d.kind == MediaKind.HLS) "HLS" else "file"} from ${startMs / 1000} s (${d.note}) on ${UrlParts.hostOf(d.url) ?: "?"} ${d.url.substringBefore('?').substringBefore('#').trimEnd('/').substringAfterLast('/').take(40)}")   // (the host and the last piece of the address name which list was chosen: the Diagnostics of owner message 55 could not tell)
         }
         NativePlayerActivity.launch(a, d.url, headers, startMs, if (d.kind == MediaKind.HLS) 720 else 1080, tab.isPrivateTab, 0, 0, fromPage = true)
         a.lastPressAt = 0L

@@ -45,7 +45,8 @@ class WebHandOverTest {
         assertEquals(true, WebHandOver.looksLikeMaster("https://x.example/master/index.m3u8"))
         assertEquals(true, WebHandOver.looksLikeMaster("https://x.example/a_master_b.m3u8"))
         assertEquals("only the path says it, not the query", false, WebHandOver.looksLikeMaster("https://x.example/rendition.m3u8?name=master"))
-        assertEquals(false, WebHandOver.looksLikeMaster("https://x.example/masterclass/a.m3u8"))
+        assertEquals("master2, master_hd, masterplaylist: the name starts with master", true, WebHandOver.looksLikeMaster("https://x.example/hls/master2.m3u8") && WebHandOver.looksLikeMaster("https://x.example/hls/master_hd.m3u8") && WebHandOver.looksLikeMaster("https://x.example/hls/masterplaylist.m3u8"))
+        assertEquals("the host does not count", false, WebHandOver.looksLikeMaster("https://master.example/hls/a.m3u8"))
     }
 
     @Test fun aHandOverNeedsAFreshTapOfThePerson() {

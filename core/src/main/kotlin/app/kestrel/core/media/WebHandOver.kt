@@ -80,7 +80,7 @@ object WebHandOver {
     }
 
     /** The address of a playlist that has not been read yet says master ("master.m3u8", "/master/"): a hint for the moment before the early look, never against a list that was read. */
-    fun looksLikeMaster(url: String): Boolean = Regex("(^|[/_.-])master([/_.-]|$)", RegexOption.IGNORE_CASE).containsMatchIn(url.substringBefore('?').substringAfter("://"))
+    fun looksLikeMaster(url: String): Boolean = Regex("(^|[/_.-])master", RegexOption.IGNORE_CASE).containsMatchIn(url.substringBefore('?').substringAfter("://").substringAfter('/', ""))
 
     private fun directOf(el: Element): Known? {
         val u = el.src
