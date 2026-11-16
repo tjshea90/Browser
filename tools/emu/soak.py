@@ -2209,7 +2209,9 @@ class Soak:
 
     # ANS54e (owner message 54: "I want the web video players to use this"): a film that a page is about to play is played by Kestrel's own player. Pages: /ho?v=<variant> (soaklab.page_ho). The press goes through the
     # page gate, the app decides (core WebHandOver) and starts NativePlayerActivity; the page keeps its element closed. Proof on the real engine: Health lines `video hand-over`, `native start`, the page's own events.
-    HO_CASES = [("file", "picture", "native"), ("overlay", "button", "native"), ("hls", "button", "native-hls"), ("unknown", "button", "page"), ("bad", "picture", "fail")]
+    # ANS55 (owner message 55: Yahoo showed the time and a black picture): hlsdecoy = a master with a long token and, next to it, short-address lists of the sound and of the pictures (the master must win, with a picture);
+    # audioonly = the only list is the film's sound (Kestrel's player has nothing to show: it must give the film back to the page after 7 s)
+    HO_CASES = [("file", "picture", "native"), ("overlay", "button", "native"), ("hls", "button", "native-hls"), ("hlsdecoy", "button", "native-hls"), ("unknown", "button", "page"), ("audioonly", "button", "nopic"), ("bad", "picture", "fail")]
 
     def ho_scene(self):
         checks = []
@@ -2258,7 +2260,10 @@ class Soak:
                 check("%s: Kestrel's own player started%s" % (variant, " on the stream" if expect == "native-hls" else " on the file"), bool(started) and (expect != "native-hls" or any("HLS" in e["rest"] for e in started)), "native start lines %s" % [e["rest"][:60] for e in started])
                 if variant != "file":                                                      # (the engine's own controls may start a plain film for a moment before the answer pauses it)
                     check("%s: the page's own player never started it (no 'playing', no 'sourceopen', no 'fetched')" % variant, not any(x in ev2 for x in ("playing", "playing-promise", "sourceopen", "fetched")), "events %s" % sorted(set(ev2)))
-                if variant in ("overlay", "hls"):
+                if variant in ("hls", "hlsdecoy"):
+                    check("%s: the stream chosen is a MASTER list (the hand-over line says so), not one of the lists of the sound or the pictures" % variant, any("master list" in e["rest"] for e in taken), "hand-over lines %s" % [e["rest"][:90] for e in taken][:1])
+                    check("%s: Kestrel's player offers the pictures of the master (the 'native tracks' line names at least one)" % variant, any(re.search(r"[1-9]\d* picture", e["rest"]) for e in ev("native", "tracks", m)), "tracks lines %s" % [e["rest"][:60] for e in ev("native", "tracks", m)][:2])
+                if variant in ("overlay", "hls", "hlsdecoy"):
                     check("%s: the page's play() was interrupted (AbortError), not refused" % variant, any(r.get("ev") == "rejected" and r.get("name") == "AbortError" for r in rows2), "rows %s" % [(r.get("ev"), r.get("name")) for r in rows2][:6])
                 check("%s: Kestrel's own player showed its first picture" % variant, bool(ev("native", "first-picture", m)), "no 'native first-picture' line")
                 m2 = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(6)
@@ -2284,6 +2289,18 @@ class Soak:
                     m5 = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(3)
                     check("file: Back ends it again", bool(ev("native", "stop", m5)), "no 'native stop' line")
                 self.ho_table.append((variant, "yes: " + ("stream" if expect == "native-hls" else "file"), "no", "yes" if ev("native", "first-picture", m) else "no"))
+            elif expect == "nopic":
+                check("%s: the film was handed over (its only list is the film's sound)" % variant, bool(taken) and bool(started), "hand-over lines %d, native start lines %d" % (len(taken), len(started)))
+                t_end = time.time() + 24
+                while time.time() < t_end and not [e for e in ev("native", "failed", m) if "no picture" in e["rest"]]:
+                    time.sleep(1)
+                gave = [e for e in ev("native", "failed", m) if "no picture" in e["rest"]]
+                check("%s: no picture after 7 s of playing: Kestrel's player gave the film back (a 'native failed ... no picture' line)" % variant, bool(gave), "native lines %s" % [e["ev"] + ": " + e["rest"][:50] for e in health_events(self.log.since(m), "native")][:8])
+                m3, r3 = self.log.size(), self.lab.size()
+                time.sleep(3); self.ph.tap(*at); time.sleep(9)
+                ev3 = [r.get("ev") for r in self.lab.since(r3) if r.get("kind") == "ap" and str(r.get("tag", "")).startswith(tag)]
+                check("%s: pressed again, the page's own player plays the film (not another Kestrel player: the two minutes of the page)" % variant, "sourceopen" in ev3 and "fetched" in ev3 and not ev("native", "start", m3), "events %s, native start lines %d" % (sorted(set(ev3)), len(ev("native", "start", m3))))
+                self.ho_table.append((variant, "yes, then given back (no picture)", "yes (after the give-back)", "no"))
             elif expect == "page":
                 check("%s: nothing to take over (no playlist anywhere): no hand-over and no second player" % variant, not taken and not started, "hand-over lines %s, native start lines %d" % ([e["rest"][:50] for e in taken], len(started)))
                 check("%s: the page's own player plays it, as before" % variant, "sourceopen" in ev2 and "fetched" in ev2 and ("playing" in ev2 or "playing-promise" in ev2), "events %s" % sorted(set(ev2)))
