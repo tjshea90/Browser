@@ -1335,9 +1335,9 @@ test('ANS52g: the video format policy rides in the fifth field of the page answe
   assert.equal((await h.message({ k: 'guard', h: 'movie.example' })).cx, VPOLICY);
   // a new policy (a Settings change) arrives with the next answer for any host; an empty one means none
   policy = '10|-|-|-|-';
-  assert.equal((await h.message({ k: 'guard', h: 'other.example' })).cx, '10|-|-|-|-');
+  assert.equal((await h.message({ k: 'guard', h: 'other.example' }, -1)).cx, '10|-|-|-|-');
   policy = '';
-  assert.equal((await h.message({ k: 'guard', h: 'third.example' })).cx, '', 'told "none"');
+  assert.equal((await h.message({ k: 'guard', h: 'third.example' }, -1)).cx, '', 'told "none"');
 });
 
 test('ANS52g: an answer of an older app (four fields) keeps the policy that was told before; nobody has a policy before the first answer', async () => {
@@ -1345,12 +1345,12 @@ test('ANS52g: an answer of an older app (four fields) keeps the policy that was 
   h.mainFrame(PAGE);
   await until(() => h.of('cfg').length >= 1, 'cfg');
   await tick(10);
-  assert.equal((await h.message({ k: 'guard', h: 'new.example' })).cx, VPOLICY);
-  assert.equal((await h.message({ k: 'guard', h: 'old.example' })).cx, VPOLICY, 'four fields: nothing new was said');
+  assert.equal((await h.message({ k: 'guard', h: 'new.example' }, -1)).cx, VPOLICY);
+  assert.equal((await h.message({ k: 'guard', h: 'old.example' }, -1)).cx, VPOLICY, 'four fields: nothing new was said');
   const fresh = harness((m) => (m.k === 'cfg' ? `1:1:${ID}:1` : standardApp()(m)));
   fresh.mainFrame(PAGE);
   await until(() => fresh.of('cfg').length >= 1, 'cfg');
-  assert.equal((await fresh.message({ k: 'guard', h: 'old.example' })).cx, '');
+  assert.equal((await fresh.message({ k: 'guard', h: 'old.example' }, -1)).cx, '');
 });
 
 test('ANS52g: what the pages refused is summed, clamped and handed to the app as `vx` of the stats message; nothing is said until a page reports', async () => {
