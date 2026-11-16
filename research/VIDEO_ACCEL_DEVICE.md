@@ -51,7 +51,7 @@ Method: web sources read 2026-11-16; no code run, no device. DOCUMENTED = read i
 
 - DOCUMENTED [A13]: AOSP Go defaults: ro.config.low_ram = true, ro.lmk.critical_upgrade, upgrade_pressure 40, downgrade_pressure 60, kill_heaviest_task = false, heapgrowthlimit 128m (= memory class 128 [D]); no zram property is set there, so swap is vendor-defined and unknown. I found nothing saying the flag disables hardware layers.
 - INFERRED: the tablet runs parent, :gpu, :tab, :utility, :media and :crashhelper [D G9]; process churn changes the cached-process count Android uses for trim levels 5/10/15 (the app's LiveBudget.kt says the same); Gecko ignores levels 5 and 10 [G11].
-- DOCUMENTED [G10]: Gecko's vsync is Choreographer on the main Looper. INFERRED: a full-screen overlay, glows or Shields work on the UI thread directly cost video frames. Lab: same file with Kestrel's controls hidden and shown, FrameMetrics + dumpsys gfxinfo; also try Developer options "Disable HW overlays".
+- DOCUMENTED [G10]: Gecko's vsync is Choreographer on the main Looper. INFERRED: a full-screen overlay, glows or Shields work on the UI thread directly cost video frames. Lab: one file with Kestrel's controls hidden and shown, FrameMetrics and dumpsys gfxinfo; also Developer options "Disable HW overlays".
 - DOCUMENTED [A10]: API 29 has PowerManager.getCurrentThermalStatus() and a listener; isSustainedPerformanceModeSupported (API 24). I found nothing MT8168-specific on governor or thermal limits.
 - INFERRED [D]: the Boltdns stream fell from 1080p to 640x360 on the 5 Mbit/s hotspot, so the link, not the decoder, limits quality.
 
