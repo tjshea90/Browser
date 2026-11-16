@@ -71,7 +71,7 @@ Gecko pref values below were read on Gecko main (GH/modules/libpref/init/StaticP
 | External player by intent | Firefox add-ons | Own intent; headers only for MX Player | Direct URLs only; extra app |
 | Server-side compression | Opera | No | None |
 
-Order I would try (each needs the tablet): (1) log the pref values above and onFirstComposite timing around a turn; (2) A/B the AImageReader pref; (3) the Media3 HLS experiment; (4) a native SurfaceView player for sniffed direct URLs, behind a setting.
+Order I would try (each needs the tablet): (1) log those pref values and onFirstComposite timing around a turn; (2) A/B the AImageReader pref; (3) the Media3 HLS experiment; (4) a native SurfaceView player for sniffed direct URLs.
 
 ## What I could not verify
 - Whether GeckoView 160 has gfx.video.aimage-reader-gpu-process-android, or its default (only a bug title).
