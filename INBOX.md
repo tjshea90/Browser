@@ -1822,4 +1822,7 @@ There is another claude account working on this repo. Do not interfere with it o
 ## 2026-11-16T16:51:41Z
 ```
 Q1 come up with a simple but cool name for the keyboard q2 private GitHub repo, I haven't made it yet and I don't know the extra steps I need to make it work private q3 I only want it to translate to Mexican Spanish when I turn the setting on, I will not type Spanish. If the Spanish translation is offline, I need a very good model that produces good Mexican Spanish without strange translations or word by word without context
+## 2026-11-16T17:04:36Z
+```
+Make it so if I double tap on the right side or left side of a video to fast forward or rewind 10 seconds, it automatically closes the video player controls. It should recognize that if I'm only fast forwarding or rewinding the video, I'm not selecting video controls so the video should stay visible without controls on top. Build a feature similar to vlc media player which I can do a more accurate fast forward or rewind in larger and smaller increments by long pressing around the middle of the screen and dragging right to fast forward and left to rewind. The farther I drag, the more it fast forwards or rewinds. Model it from his vlc media player handles this. Finally, just like vlc media player, if I drag up or down on the left side of the video, it increases or decreases video brightness, and if I drag up or down on the right side of the video, it increases or decreases volume. Model this off how vlc media player handles this. 
 ```

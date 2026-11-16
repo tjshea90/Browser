@@ -39,6 +39,8 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
         fun onEnded(why: String, positionMs: Long, fullscreen: Boolean, failed: Boolean)
         /** A drag or a pinch began on the picture: [e] is the touch in this view's own coordinates, to give to the page (the host moves it into the engine view's). */
         fun toPage(e: MotionEvent)
+        /** A finger rested on the picture (a long press, LP1): the download options of the film open, as for a long press on the page's own video. */
+        fun onLongPress()
     }
 
     var host: Listener? = null
@@ -63,7 +65,9 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     private var downT = 0L
     private var passing = false
     private var downCopy: MotionEvent? = null
+    private var longFired = false
     private val density = resources.displayMetrics.density
+    private val longPressRun = Runnable { if (!passing && player != null && !longFired) { longFired = true; performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS); say("long-press", "a finger rested on the picture: the download options"); host?.onLongPress() } }
 
     val active: Boolean get() = player != null
     val positionMs: Long get() = try { player?.currentPosition?.coerceAtLeast(0L) ?: 0L } catch (e: Throwable) { 0L }
@@ -161,7 +165,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     fun stop(why: String, fullscreen: Boolean = false, failed: Boolean = false) {
         val p = player ?: return
         player = null
-        main.removeCallbacks(ticker); main.removeCallbacks(controlsTick)
+        main.removeCallbacks(ticker); main.removeCallbacks(controlsTick); main.removeCallbacks(longPressRun)
         var pos = 0L
         try {
             pos = p.currentPosition.coerceAtLeast(0L)
@@ -287,7 +291,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     override fun onTouchEvent(e: MotionEvent): Boolean {
         val slop = 12f * density
         when (e.actionMasked) {
-            MotionEvent.ACTION_DOWN -> { downX = e.x; downY = e.y; downT = e.eventTime; passing = false; downCopy?.recycle(); downCopy = MotionEvent.obtain(e) }
+            MotionEvent.ACTION_DOWN -> { downX = e.x; downY = e.y; downT = e.eventTime; passing = false; longFired = false; downCopy?.recycle(); downCopy = MotionEvent.obtain(e); main.removeCallbacks(longPressRun); main.postDelayed(longPressRun, android.view.ViewConfiguration.getLongPressTimeout().toLong()) }
             MotionEvent.ACTION_MOVE -> if (!passing && (Math.abs(e.x - downX) > slop || Math.abs(e.y - downY) > slop)) startPass()
             MotionEvent.ACTION_POINTER_DOWN -> if (!passing) startPass()
         }
@@ -295,14 +299,16 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
             host?.toPage(e)
             if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) { passing = false }
         } else if (e.actionMasked == MotionEvent.ACTION_UP) {
-            if (e.eventTime - downT <= 450L && Math.abs(e.x - downX) <= slop && Math.abs(e.y - downY) <= slop && width > 0) { model.onTap((e.x * 1000f / width).toInt()); flush() }
+            main.removeCallbacks(longPressRun)
+            if (!longFired && e.eventTime - downT <= 450L && Math.abs(e.x - downX) <= slop && Math.abs(e.y - downY) <= slop && width > 0) { model.onTap((e.x * 1000f / width).toInt()); flush() }
             downCopy?.recycle(); downCopy = null
-        } else if (e.actionMasked == MotionEvent.ACTION_CANCEL) { downCopy?.recycle(); downCopy = null }
+        } else if (e.actionMasked == MotionEvent.ACTION_CANCEL) { main.removeCallbacks(longPressRun); downCopy?.recycle(); downCopy = null }
         return true
     }
 
     private fun startPass() {
         passing = true
+        main.removeCallbacks(longPressRun)
         downCopy?.let { host?.toPage(it); it.recycle() }                   // the page never saw the finger go down: it is told now, then it gets every move
         downCopy = null
     }

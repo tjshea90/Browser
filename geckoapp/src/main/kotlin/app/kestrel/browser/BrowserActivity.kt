@@ -335,6 +335,8 @@ open class BrowserActivity : Activity(), DockListener {
     /** ANS55f (owner message 55): Kestrel's own player inside the page, over the page's video box. Made with the page area (onCreate); VideoFlow starts it, the hooks below end it. */
     internal lateinit var inline: app.kestrel.browser.web.InlineHost
     internal fun nativeFilmFailed() = video.nativeFailed()
+    /** ANS55f / LP1: a long press on the film inside the page opens the download options of that film, as a long press on the page's own video does. */
+    internal fun inlineLongPress(t: Tab, url: String) = video.longPress(t, url, null) { }
 
     /** For tests (same module): the selected tab. */
     internal val currentTab: Tab? get() = current
@@ -2266,6 +2268,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     private fun showList(bookmarks: Boolean) {
+        if (::inline.isInitialized) inline.stop("a screen opened over the page")      // ANS55f: nothing plays under Settings, the lists or Downloads
         val panel = listPanel ?: ListPanel(this, pal, object : ListPanel.Listener {
             override fun open(url: String) { closeList(); current?.let { navigateTo(it, url) } }
             override fun delete(url: String) { Io.exec { if (listIsBookmarks) db?.removeBookmark(url) else db?.deleteHistory(url); reloadList() } }
@@ -2292,6 +2295,7 @@ open class BrowserActivity : Activity(), DockListener {
     private var settingsSkinPrivate = false
 
     private fun showSettings() {
+        if (::inline.isInitialized) inline.stop("a screen opened over the page")      // ANS55f: nothing plays under Settings, the lists or Downloads
         // the colours are fixed when the view is built: Settings now opens in private windows too, so a view built for the other skin is thrown away and built again
         if (settingsView != null && settingsSkinPrivate != skinPrivate) { settingsView?.let { detach(it) }; settingsView = null }
         val v = settingsView ?: SettingsView(this, pal, prefs, settingsListener).also { settingsView = it; settingsSkinPrivate = skinPrivate }
@@ -2355,6 +2359,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     private fun showDiagnostics() {
+        if (::inline.isInitialized) inline.stop("a screen opened over the page")      // ANS55f: nothing plays under Settings, the lists or Downloads
         GeckoEngine.readBackPrefs { diagView?.refresh() }
         Io.exec { if (DeviceVideo.read(applicationContext, force = true)) GeckoEngine.applyVideo(applicationContext, prefs); app.kestrel.browser.diag.StorageInfo.read(this); Io.ui { diagView?.refresh() } }
         val v = diagView ?: DiagnosticsView(this, pal, ::engineFacts, { refreshScreen("diagnostics") }, { closeDiagnostics() }).also { diagView = it }
@@ -2985,7 +2990,6 @@ open class BrowserActivity : Activity(), DockListener {
             }
             endFullScreenOf(null, "Back: the full-screen page is not in front or has no session") // then Back does its ordinary job
         }
-        if (::inline.isInitialized && inline.backPressed()) return true   // ANS55f: Back closes the film inside the page first (a page that goes full screen has ended it already: the order never matters)
         if (::miniNav.isInitialized && miniNav.onBackPressed()) return true // the small keyboard closes first
         if (sheet.isShowing) { sheet.dismiss(); return true }
         if (downloadsView?.parent != null) { closeDownloads(); return true }
@@ -2995,6 +2999,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (tabGrid.visibility == View.VISIBLE) { hideTabGrid(); return true }
         if (findBar.visibility == View.VISIBLE) { closeFind(); return true }
         if (suggestions.visibility == View.VISIBLE || home.suggest.visibility == View.VISIBLE || typing()) { hideSuggestions(); clearUrlFocus(); updateUi(); return true }
+        if (::inline.isInitialized && inline.backPressed()) return true   // ANS55f: Back closes the film inside the page, after everything that lies over the page (the sheet, the keyboard, the tab list...) and before the page itself goes back
         val t = current ?: return false
         if (t.showHome && !t.isNewTab) { t.showHome = false; attachContent(t); updateUi(); scheduleSave(); return true } // Home laid over a page: Back returns to the page
         if (t.error != null) {
@@ -3429,6 +3434,7 @@ open class BrowserActivity : Activity(), DockListener {
     private var downloadsView: DownloadsScreen? = null
 
     private fun showDownloads() {
+        if (::inline.isInitialized) inline.stop("a screen opened over the page")      // ANS55f: nothing plays under Settings, the lists or Downloads
         if (downloadsView?.parent != null) return
         hideKeyboard()
         val v = DownloadsScreen(this, pal, object : DownloadsScreen.Listener {

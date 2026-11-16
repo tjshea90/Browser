@@ -78,6 +78,8 @@ class InlineHost(private val a: BrowserActivity, private val content: FrameLayou
         }
     }
 
+    override fun onLongPress() { val t = tab ?: return; a.inlineLongPress(t, playing) }
+
     override fun toPage(e: MotionEvent) {
         val c = MotionEvent.obtain(e)
         try {
@@ -85,6 +87,9 @@ class InlineHost(private val a: BrowserActivity, private val content: FrameLayou
             engine.dispatchTouchEvent(c)
         } finally { c.recycle() }
     }
+
+    // the place the overlay came to rest at (350 ms after the last update): one line for the diagnostics and the emulator lab, whatever the rate limit of the 'scroll' lines skipped
+    private val settled = Runnable { val b = box; if (b != null && view.active && !priv) Health.log("inline", "scroll-settled", "view $b") }
 
     private fun onScroll(s: GeckoSession, u: GeckoSession.ScrollPositionUpdate) {
         if (!view.active || s !== session) return
@@ -94,6 +99,7 @@ class InlineHost(private val a: BrowserActivity, private val content: FrameLayou
         if (b == null) { Health.log("inline", "scroll-lost", "scroll ${u.scrollX},${u.scrollY} zoom ${u.zoom}: the page was pinched or the box cannot be told"); view.stop("the page was pinched or its scroll could not be followed"); return }
         box = b
         view.move(b)
+        view.removeCallbacks(settled); view.postDelayed(settled, 350L)
         if (!priv && (updates++ < 4 || now - lastLogAt > 250L)) { lastLogAt = now; Health.log("inline", "scroll", "scroll ${"%.1f".format(u.scrollX)},${"%.1f".format(u.scrollY)} zoom ${"%.3f".format(u.zoom)} src ${u.source} -> view $b") }
         view.edge(InlineBox.edgeFor(b, engine.width, engine.height))
     }

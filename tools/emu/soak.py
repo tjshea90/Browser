@@ -2444,9 +2444,9 @@ class Soak:
         self.ph.swipe(vx, vy + dy + 60, vx, vy + dy - 60, 1500); time.sleep(3.2)                  # (slow: a short scroll, hardly any fling: the box stays mostly in view)
         scr = ev("inline", "scroll", m2)
         rect1 = page_rect(self.lab.since(r2))
-        check("inline: a drag that starts on the picture scrolled the PAGE (its own scroll moved: %s)" % (rect1[4] if rect1 else None), bool(rect1) and rect1[4] > 60, "page rect rows after the drag: %s" % rect1)
+        check("inline: a drag that starts on the picture scrolled the PAGE (its own scroll moved: %s)" % (rect1[4] if rect1 else None), bool(rect1) and rect1[4] > 60, "page rect rows after the drag: %s" % (rect1,))
         check("inline: the engine's compositor told the overlay about the scroll ('inline scroll' lines: %d)" % len(scr), len(scr) >= 1, "no 'inline scroll' line: %s" % [e["ev"] + ": " + e["rest"][:60] for e in health_events(self.log.since(m2), "inline")][:6])
-        vb2 = view_box(scr)
+        vb2 = view_box(ev("inline", "scroll-settled", m2)) or view_box(scr)                  # (the box the overlay came to rest at; the rate-limited 'scroll' lines may stop a little before the end)
         nums.append("after the drag: overlay %s, page %s, first scroll line %s" % (vb2, rect1, scr[0]["rest"][:90] if scr else None))
         check("inline: after the scroll the overlay is where the page's video box is (overlay %s, page %s)" % (vb2, rect1[:4] if rect1 else None), close(vb2, rect1, 8), "overlay %s page %s" % (vb2, rect1))
         if rect1 and rect0:
@@ -2463,6 +2463,18 @@ class Soak:
         shown3 = ev("inline", "shown", m3)
         check("inline: a tap on the picture shows the controls ('inline shown' line with the buttons' places)", bool(shown3), "lines %s" % [e["ev"] for e in health_events(self.log.since(m3), "inline")])
         mm = re.search(r"close at (\d+),(\d+) full screen at (\d+),(\d+)", shown3[-1]["rest"]) if shown3 else None
+        # ---- 3b. a long press on the picture opens the film's download options (LP1), the film plays on; Back closes the sheet first
+        m3b = self.log.size()
+        self.ph.long_press(cx, cy + 90, 900); time.sleep(3.5)
+        sheet = bool(ev("video", "sheet-shown", m3b)) or bool(ev("video", "sheet-empty", m3b))
+        check("inline: a long press on the picture opens the film's download options ('inline long-press' and a sheet line)", bool(ev("inline", "long-press", m3b)) and sheet, "inline long-press %d, sheet lines %d, video lines %s" % (len(ev("inline", "long-press", m3b)), int(sheet), [e["ev"] for e in health_events(self.log.since(m3b), "video")][:6]))
+        self.shot("ip-sheet")
+        m3c = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(2)
+        check("inline: Back closes the sheet and the film plays on (no 'inline stop')", not ev("inline", "stop", m3c), "stop lines %s" % [e["rest"][:60] for e in ev("inline", "stop", m3c)])
+        m3d = self.log.size(); self.ph.tap(cx, cy); time.sleep(1.5)                 # (the controls hid themselves meanwhile: a tap shows them again, with their places)
+        shown4 = ev("inline", "shown", m3d)
+        if shown4:
+            mm = re.search(r"close at (\d+),(\d+) full screen at (\d+),(\d+)", shown4[-1]["rest"]) or mm
         # ---- 4. the full-screen button: the same film, the same second
         if mm:
             fx, fy = int(mm.group(3)), int(mm.group(4))
@@ -2481,7 +2493,7 @@ class Soak:
         by_now = by + dy + ((rect_now[1] - rect0[1]) if (rect_now and rect0) else 0)
         m6 = self.log.size(); self.ph.tap(bx, by_now); time.sleep(7.5)
         check("inline: pressed again with the page in front, the film plays inside the page again (continuing where it stopped)", bool(ev("inline", "start", m6)) and bool(re.search(r"from [1-9]\d* s", " ".join(e["rest"] for e in ev("inline", "start", m6)))), "inline start lines %s" % [e["rest"][:100] for e in ev("inline", "start", m6)])
-        m7 = self.log.size(); self.ph.tap(cx, by_now - (by + dy - (vy + dy)) if False else by_now); time.sleep(1.5)
+        m7 = self.log.size(); self.ph.tap(cx, by_now); time.sleep(1.5)
         sh7 = ev("inline", "shown", m7)
         mm7 = re.search(r"close at (\d+),(\d+) full screen at (\d+),(\d+)", sh7[-1]["rest"]) if sh7 else None
         if mm7:
