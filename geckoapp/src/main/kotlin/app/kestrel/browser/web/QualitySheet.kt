@@ -50,7 +50,7 @@ class QualitySheet(ctx: Context) : FrameLayout(ctx) {
         addView(panel, LayoutParams(dp(330f), LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply { topMargin = dp(70f); rightMargin = dp(14f); leftMargin = dp(14f); bottomMargin = dp(18f) })
     }
 
-    val isShown: Boolean get() = visibility == VISIBLE
+    val isOpen: Boolean get() = visibility == VISIBLE
 
     /** Fill the panel and show it. */
     fun show(title: String, rows: List<Row>, note: String) {

@@ -337,7 +337,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     override fun onSeek(fraction: Double) { model.seekFraction(fraction); flush() }
     override fun onPin(on: Boolean) { model.pin(on) }
     override fun onRotate() { turner.rotatePressed(); if (!priv) NativePlayerStats.rotates++; say("rotate", "the rotate button") }
-    override fun onQuality() { if (sheet.isShown) sheet.dismiss() else openQuality() }
+    override fun onQuality() { if (sheet.isOpen) sheet.dismiss() else openQuality() }
 
     /** A tap on the picture (anything the controls themselves did not take): the model decides show / hide / double-tap seek. */
     private fun onStageTouch(v: View, e: MotionEvent): Boolean {
@@ -379,7 +379,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         fit()
     }
 
-    override fun onBackPressed() { if (::sheet.isInitialized && sheet.isShown) sheet.dismiss() else super.onBackPressed() }
+    override fun onBackPressed() { if (::sheet.isInitialized && sheet.isOpen) sheet.dismiss() else super.onBackPressed() }
 
     override fun onResume() { super.onResume(); if (::turner.isInitialized) turner.resumed() }
 
