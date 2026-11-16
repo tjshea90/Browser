@@ -73,7 +73,7 @@ class InlineHost(private val a: BrowserActivity, private val content: FrameLayou
             NativePlayerStats.launchedAt = SystemClock.uptimeMillis()
             NativePlayerActivity.launch(a, u, h, positionMs, if (PlayerFactory.isHls(u)) 720 else 1080, p, 0, 0, fromPage = true)
         } else if (failed) {
-            a.video.nativeFailed()                                              // the page's own player plays its films for two minutes, and the person is told
+            a.nativeFilmFailed()                                              // the page's own player plays its films for two minutes, and the person is told
         }
     }
 
