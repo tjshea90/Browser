@@ -1813,3 +1813,8 @@ Counters: frames.jank=46  gecko.firstComposite=8  look.saved=14  mem.trim=1  mem
 
 Also, even when I selected a totally different video, it opened the player with the old video still playing in the same spot
 ```
+
+## 2026-11-16T16:16:28Z
+```
+There is another claude account working on this repo. Do not interfere with it or write anything to the repo. Consider the best way to adopt the keyboard from the browser app and make it a separate app for my tablet which I can use as my main default keyboard. I will eventually build it and put the project in its own repo. Research the keyboard as it is now, how to turn it into a dedicated keyboard app, missing features that I can add to make it comparable or better than Google Gboard, how to improve the glide typing learning engine so that the more I type, the better it is at predicting the correct words based on both more commonly typed words with similar finger glide patterns, commonly typed words in general, smart predictions based on the context of the sentence already typed so far, etc. also consider how to make the app as lightweight as possible and fast. Optimize it for my hardware. I want it to have features like Gboard, including but not limited to an option to translate to Mexican Spanish. Write a detailed plan and report on how to adopt and build this app and how to improve it and all the steps to take. Send me the report as a file which I can attach to a new claude session with no context and optimized for claude to read and understand and know exactly what to do and how to read your findings
+```
