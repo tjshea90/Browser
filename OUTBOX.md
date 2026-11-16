@@ -2048,3 +2048,49 @@
 ## 2026-11-16T16:52:54Z
 > Your answers are clear, and the translation-quality requirement changes the plan, so I'll research it properly before updating the report. First I'm checking the strongest offline translation models, whether they fit your tablet, GitHub's private-repo limits, and the keyboard name.
 <!-- sha:a95e4167d154 -->
+
+## 2026-11-16T17:00:32Z
+> I've updated the plan with your three answers and sent it as `KEYBOARD-APP-PLAN.md`; use this one instead of the earlier file. I couldn't run any translation model here, so the translation quality claims are estimates and search results, and the plan tests quality before building anything.
+>
+> ## Your answers
+>
+> **Q1, the name: Swoop.** It fits glide typing, and kestrels swoop, so it echoes your browser. I found no Android keyboard with that name. The apps are `app.swoop.keyboard` and, if you want them, the translator add-ons `app.swoop.translate` and `app.swoop.online`. The repo name is `swoop-keyboard`. You can rename it later.
+>
+> **Q2, private repo.** Section 11.0 is a click-by-click list. The short version:
+> 1. On GitHub tap **+**, then **New repository**. Name it `swoop-keyboard`, choose **Private**, and leave README, .gitignore and license all off.
+> 2. Let Claude in at https://github.com/apps/claude/installations/select_target by choosing "Only select repositories" and adding it. Also check GitHub is connected at https://claude.ai/connect-github.
+> 3. Start a new Claude Code session on that repo, attach the file, and say the start phrase.
+>
+> A private repo has two side effects:
+> - **Downloading APKs:** a release link on a private repo only works while you're signed in to GitHub in that browser, so sign in once in the Kestrel browser. The plan describes a workaround if that's a nuisance.
+> - **Build minutes:** private repos get 2,000 free build minutes a month, which is plenty for building the app. That figure is from older GitHub docs, so check your usage page.
+>
+> **Q3, no Spanish typing, translation only when you turn it on.**
+> - I removed everything about Spanish layouts and dictionaries.
+> - The setting is off by default. When it's off there is no button, nothing running, and no network use.
+>
+> ## Translation quality (this is the part to read)
+>
+> A modern translator doesn't translate word by word; it translates whole sentences. The real risks are idioms translated literally, wrong politeness level, losing context between sentences, and Spain-style words in Mexican text.
+>
+> - **Offline on your tablet.** With 2 GB of RAM and a slow processor, the best model that fits is about 75–240 million parameters. It would be a good translator for ordinary messages, but not as good as a large AI model on idioms, slang and context.
+> - **Large AI models don't fit.** Google's new open TranslateGemma 4B needs about 2 GB on its own, so it doesn't fit.
+> - **Online option.** The tablet's weak spot is the one thing a large model fixes. Claude Sonnet 5.5 costs about a third of a cent per message, and Haiku 5.5 about 1/70 of a cent. It would sit in a separate app so the keyboard itself stays free of internet access. The catch is that it needs an Anthropic account and key, and your text goes to Anthropic.
+> - **Test before building.** The plan has no engine work until a blind test passes.
+>   - A session writes 150 test texts plus correct Mexican answers, and you fix them.
+>   - GitHub's servers 
+> [... 469 characters omitted ...]
+> lgar in Mexico) and handles "$" amounts and dates. It starts from a seed word list that you need to review.
+>
+> ## Not done
+> - I couldn't test the models hands-on. The sandbox's safety check blocked a script that tried to reach model sites, and I didn't work around it. That's why the test runs on GitHub's servers.
+> - Items I couldn't confirm are marked in the file's appendix.
+>
+> ## Open questions
+> Q4–Q14 in section 15 all have defaults, so none blocks starting. The ones that matter most:
+> - **Q4:** should translation use friendly "tú" or formal "usted" by default, and should it ever translate Spanish into English?
+> - **Q5:** are you willing to add the online app after you've seen the test results? I'd ask again then.
+> - **Q13:** what phone do you have, or how much RAM? A big-RAM phone could run a better offline translator than the tablet.
+>
+> Everything else from the first plan carries over unchanged.
+<!-- sha:53dc0e3b90d3 -->
