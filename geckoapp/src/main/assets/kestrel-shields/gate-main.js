@@ -107,7 +107,7 @@
       else if (r.forced) { oRemoveAttr.call(el, 'preload'); }                               // the page said nothing: the engine's own default again
       r.forced = false;
       if (r.hasSrc) { var s = r.src; r.hasSrc = false; r.src = null; r.load = false; if (dSrc) dSrc.set.call(el, s); else oSetAttr.call(el, 'src', s); }
-      else if (r.load) { r.load = false; oLoad.call(el); }
+      else if (r.load) { r.load = false; if (el.networkState === 0) oLoad.call(el); }                 // (giving the preload back already resumes a load that was waiting; a second load() would start it again and ask for the file twice)
     } catch (e) { /* the page decides */ }
     touch();
   }
