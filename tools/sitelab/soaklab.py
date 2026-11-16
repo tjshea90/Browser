@@ -55,6 +55,17 @@ def make_clips():
                         "-pix_fmt", "yuv420p", "-b:v", "1500k" if name == "big" else "600k", "-g", "50", "-c:a", "aac", "-b:a", "64k",
                         "-movflags", "+faststart", path], check=False)
         print("soaklab: clip %s %s" % (name, "ok" if os.path.exists(path) else "FAILED"), flush=True)
+    # ANS52i: the landscape clip as an HLS film (4 s segments, one rung and a master list that names it), for Kestrel's own player: the owner's Yahoo film is an HLS stream
+    land = os.path.join(OUT, CLIPS["landscape"][2])
+    hdir = os.path.join(OUT, "hls-film")
+    if os.path.exists(land) and not os.path.exists(os.path.join(hdir, "master.m3u8")):
+        os.makedirs(hdir, exist_ok=True)
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", land, "-c", "copy", "-f", "hls", "-hls_time", "4", "-hls_playlist_type", "vod",
+                        "-hls_segment_filename", os.path.join(hdir, "seg%d.ts"), os.path.join(hdir, "index.m3u8")], check=False)
+        if os.path.exists(os.path.join(hdir, "index.m3u8")):
+            with open(os.path.join(hdir, "master.m3u8"), "w") as f:
+                f.write('#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH=700000,RESOLUTION=640x360,CODECS="avc1.4d401e,mp4a.40.2"\nindex.m3u8\n')
+        print("soaklab: hls film %s" % ("ok" if os.path.exists(os.path.join(hdir, "master.m3u8")) else "FAILED"), flush=True)
     tone = os.path.join(OUT, "tone.m4a")          # SND1: sound without a picture
     if not os.path.exists(tone):
         subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=120", "-c:a", "aac", "-b:a", "64k", "-movflags", "+faststart", tone], check=False)
@@ -465,6 +476,11 @@ class H(http.server.BaseHTTPRequestHandler):
                 return self._send(page_form())
             if p.startswith("/img/") and p.endswith(".svg"):
                 return self._send(svg(int(p[5:-4] or 0)), "image/svg+xml")
+            if p.startswith("/hls/film/") and p.count("/") == 3 and (p.endswith(".m3u8") or p.endswith(".ts")):
+                fn = os.path.join(OUT, "hls-film", p[len("/hls/film/"):])
+                if os.path.dirname(os.path.abspath(fn)) == os.path.abspath(os.path.join(OUT, "hls-film")) and os.path.exists(fn):
+                    return self._file(fn, "application/vnd.apple.mpegurl" if p.endswith(".m3u8") else "video/mp2t")
+                return self._send(b"no such file (ffmpeg missing?)", "text/plain", 404)
             if p == "/hlsfetch":
                 return self._send(page_hlsfetch((q.get("tag") or ["x"])[0]))
             if p.startswith("/hls/") and p.endswith(".m3u8") and p[5:-5] in ("master", "master-gz", "media", "master-small"):

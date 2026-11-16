@@ -1778,37 +1778,43 @@ class Soak:
         self.record({"kind": "player", "name": "kestrel-player", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
         self.check_alive("kestrel-player")
 
-    def np_scene(self):
+    def np_scene(self, hls=False):
         """ANS52i (owner message 52, research/VIDEO_ACCELERATION.md plan item 6): Kestrel's own player. The lab's plain video page loads its clip, the app's sniffer finds the file, the lab command hands the best row to the player
         (the same path as the Save video sheet's second button), and the player is checked: it starts, a decoder starts, the first picture comes, the controls show and hide by taps, the big button and the 10 s buttons make
         commands that the player carries out (the film's position moves), Back ends it and the browser is back. The emulator has no MediaTek decoders: 'plays' and 'no errors' count, smoothness does not."""
         w, h = self.screen
         checks = []
         def check(name, ok, detail=""):
+            name = ("HLS: " + name) if hls else name
             checks.append({"check": name, "ok": bool(ok), "detail": detail if not ok else ""})
             if not ok:
                 self.issue("high", "native-player", "%s %s" % (name, detail))
         self.ph.setting("system", "accelerometer_rotation", 0); self.ph.setting("system", "user_rotation", 0)
         self.ph.a.sh("setprop debug.kestrel.nohide 0"); self.ph.debug("bars", "keep"); time.sleep(2)
         self.ph.physical(0, 9.81, 0); time.sleep(2)
-        self.ph.open_url("%s/video/landscape" % self.lab_base)                     # a page with the lab's clip (the sniffer sees the file when the page loads it)
-        time.sleep(7)
+        if not hls:
+            self.ph.open_url("%s/video/landscape" % self.lab_base)                 # a page with the lab's clip (the sniffer sees the file when the page loads it)
+            time.sleep(7)
         lm = self.log.size()
         ev = lambda layer, name, since=None: health_events(self.log.since(lm if since is None else since), layer, name)
-        self.ph.debug("nativeplay")
+        if hls:
+            self.ph.debug("nativeurl", "%s/hls/film/master.m3u8" % self.lab_base)  # the HLS film of the lab server (an address of the lab server only: the intent refuses any other)
+        else:
+            self.ph.debug("nativeplay")
         t_end = time.time() + 25
         while time.time() < t_end and not ev("native", "first-picture"):
             time.sleep(1)
         time.sleep(1.5)
         self.shot("np-1-started")
-        check("the best row of the page was handed to Kestrel's own player", bool(ev("lab", "nativeplay")) and bool(ev("native", "start")), "lab lines %s, native start lines %d" % ([e["rest"][:80] for e in ev("lab", "nativeplay")], len(ev("native", "start"))))
+        check("the best row of the page was handed to Kestrel's own player" if not hls else "the HLS master list was handed to Kestrel's own player", (hls or bool(ev("lab", "nativeplay"))) and bool(ev("native", "start")), "lab lines %s, native start lines %d" % ([e["rest"][:80] for e in ev("lab", "nativeplay")], len(ev("native", "start"))))
         check("a video decoder started", bool(ev("native", "decoder")), "no 'native decoder' line (%s)" % [e["rest"][:60] for e in ev("native", "error")])
         check("the first picture came", bool(ev("native", "first-picture")), "no 'native first-picture' line")
         check("the controls showed when it started", bool(ev("native", "shown")), "no 'native shown' line")
         lk = self.ph.look()
         land = bool(lk and lk["w"] > lk["h"])
         vw, vh = (973, 574) if land else (600, 947)
-        check("a wide film turned the screen sideways", land, "the screen is %s" % (lk,))
+        if not hls:                                                                # (the lab command for an address passes no picture size, so nothing can turn the screen by itself)
+            check("a wide film turned the screen sideways", land, "the screen is %s" % (lk,))
         time.sleep(4.5)
         check("the controls hide by themselves", bool(ev("native", "hidden")), "no 'native hidden' line after 6 s")
         ex, ey = int(vw * 0.25), 26 + int(vh * 0.2)
@@ -1828,18 +1834,18 @@ class Soak:
         self.shot("np-3-after-skip")
         m = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(3)
         check("Back ends Kestrel's own player", bool(ev("native", "stop", m)), "no 'native stop' line")
-        self.dump_diag("np")
+        self.dump_diag("np-hls" if hls else "np")
         diag = ""
         try:
-            diag = open(os.path.join(self.out, "diagnostics-np.txt")).read()
+            diag = open(os.path.join(self.out, "diagnostics-np-hls.txt" if hls else "diagnostics-np.txt")).read()
         except OSError:
             pass
         line = [ln for ln in diag.splitlines() if ln.startswith("Kestrel's own player:")]
         check("Diagnostics says how it went (frames shown, decoder)", bool(line) and "frames shown" in line[-1], "line: %s" % (line[-1][:200] if line else "none"))
         self.np_line = line[-1] if line else ""
-        self.np_results = checks
-        self.record({"kind": "player", "name": "kestrel-native-player", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
-        self.check_alive("kestrel-native-player")
+        self.np_results = self.np_results + checks
+        self.record({"kind": "player", "name": "kestrel-native-player-hls" if hls else "kestrel-native-player", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
+        self.check_alive("kestrel-native-player-hls" if hls else "kestrel-native-player")
 
     # ANS52g (owner message 52, research/VIDEO_ACCELERATION.md section "ANS52g design"): the page script that answers "no" to a video format the settings or the tablet's chips rule out, on the REAL engine. The emulator has no
     # hardware decoders, so the debug intent `vfmt` (arg "<mode>,<30 fps switch>,<tablet|none>") plays the owner's two settings and, with `tablet`, the chip limits of the real tablet (VP9 1080p30, H.264 1080p64). The
@@ -2843,7 +2849,7 @@ class FakeAdb:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "vp"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -2879,9 +2885,10 @@ def main():
             s.fullscreen_bars()
         if a.suite == "kp":
             s.kp_scene()
-        if a.suite == "np":
+        if a.suite in ("np", "vp"):
             s.np_scene()
-        if a.suite == "cp":
+            s.np_scene(hls=True)
+        if a.suite in ("cp", "vp"):
             s.cp_scene()
             s.hls_scene()
         if a.suite == "yh":
