@@ -128,7 +128,7 @@ class Phone:
             for x in range(8, w - 8, 10):
                 r, g, b = data[base + x * 4], data[base + x * 4 + 1], data[base + x * 4 + 2]
                 n += 1
-                if r > 200 and g < 70 and b < 70:
+                if r > 55 and g < 0.3 * r and b < 0.3 * r:      # red, bright or dimmed: Kestrel's full-screen controls lay a dark scrim over the bottom edge for a few seconds after a turn (lab run 43778698760 read it as a stale page)
                     hit += 1
             if n and hit >= 0.7 * n:
                 red.append(y)
@@ -157,7 +157,7 @@ class Phone:
             for x in range(8, w - 8, 10):
                 r, g, b = data[base + x * 4], data[base + x * 4 + 1], data[base + x * 4 + 2]
                 n += 1
-                if r > 200 and g < 70 and b < 70:
+                if r > 55 and g < 0.3 * r and b < 0.3 * r:      # red, bright or dimmed: Kestrel's full-screen controls lay a dark scrim over the bottom edge for a few seconds after a turn (lab run 43778698760 read it as a stale page)
                     hit += 1
                 if inarea and x < w - 60:
                     seen += 1
