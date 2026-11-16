@@ -65,11 +65,14 @@ object PlayerFactory {
      * meets and keeps the answer for the rest of the run. Asking for H.264 and AAC (what nearly every web film is) while the app is idle moves that cost out of the first press. Background thread; nothing is shown.
      */
     fun warm() {
+        val tid = android.os.Process.myTid()
+        val was = try { android.os.Process.getThreadPriority(tid) } catch (e: Throwable) { android.os.Process.THREAD_PRIORITY_DEFAULT }
         try {
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
             MediaCodecUtil.getDecoderInfos("video/avc", false, false)
             MediaCodecUtil.getDecoderInfos("audio/mp4a-latm", false, false)
         } catch (e: Throwable) { /* nothing to warm: the player asks for itself */ }
+        finally { try { android.os.Process.setThreadPriority(was) } catch (e: Throwable) { /* gone */ } }          // (a pool thread goes on to other work: its own priority back)
     }
 
     /** The size cap for Automatic: both sides at most 16:9 of [capH], so portrait and landscape films fall in the same class. */
