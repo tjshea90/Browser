@@ -80,7 +80,7 @@ object WebHandOver {
      * A hand-over needs a tap of the person (or a key that plays) at most this long ago: a page's script can fake the gate's question, but not a finger (owner message 53: nothing starts unless the person presses).
      * Full screen and a playlist that comes late follow the tap by a while.
      */
-    fun pressWindowMs(why: Why): Long = if (why == Why.FULLSCREEN || why == Why.LATE) 20_000L else 8_000L
+    fun pressWindowMs(why: Why): Long = if (why == Why.FULLSCREEN || why == Why.LATE) 30_000L else 15_000L
 
     const val RESUME_WINDOW_MS = 30 * 60_000L      // a film pressed again within this long after Kestrel's player ended continues where the person stopped
 
