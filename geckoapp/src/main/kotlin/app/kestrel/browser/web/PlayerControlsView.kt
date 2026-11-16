@@ -38,7 +38,16 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
         fun onRotate() {}
         /** ANS53d: the quality button (drawn only while [showQuality]). */
         fun onQuality() {}
+        /** ANS55f: the full-screen button of the player inside the page (drawn only while [inline]). */
+        fun onFullscreen() {}
     }
+
+    /**
+     * ANS55f (owner message 55: the player inside the website): the controls of Kestrel's player drawn over the page's own video box. The exit button becomes a close x, a full-screen button sits left of it, and everything
+     * is scaled to the size of the box (a 530 x 300 box gets the full-size controls, a 260 x 150 one the smaller ones). No rotate or quality button here (the full-screen player has them).
+     */
+    var inline = false
+        set(v) { if (field != v) { field = v; layoutParts(); invalidate() } }
 
     /** ANS53f: Kestrel's own player shows a rotate button at the top left (the page's full screen has its own, a separate view). */
     var showRotate = false
@@ -64,7 +73,7 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
     private var spin = 0f
     private var bottomInset = 0f                  // the navigation bar pulled up over the film (Hide mode): the controls sit above it
 
-    private enum class Hit { NONE, PLAY, BACK, FORWARD, MUTE, EXIT, TRACK, ROTATE, QUALITY }
+    private enum class Hit { NONE, PLAY, BACK, FORWARD, MUTE, EXIT, TRACK, ROTATE, QUALITY, FULL }
 
     private val bottomScrim = Paint()               // the two scrims keep their gradient (made once per size, not once per frame: a fade draws ten frames, a report every 250 ms one more)
     private val topScrim = Paint()
@@ -78,6 +87,7 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
 
     // the places of the controls (px), computed from the size
     private val play = RectF(); private val back = RectF(); private val forward = RectF(); private val mute = RectF(); private val exit = RectF(); private val trackBox = RectF(); private val rotate = RectF(); private val quality = RectF()
+    private val full = RectF()                  // ANS55f: the full-screen button of the inline player (left of the close x)
     private var trackL = 0f; private var trackR = 0f; private var rowY = 0f
     private var curX = 0f; private var durRight = 0f
 
@@ -147,28 +157,34 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) { layoutParts() }
 
+    private var sc = 1f                                       // ANS55f: the size of the controls against the full-size ones (1 = full screen; smaller in a small box)
+    private fun bottomScrimH() = (if (inline) Math.min(dp(150f) * sc, height * 0.42f) else dp(150f)) + bottomInset
+    private fun topScrimH() = if (inline) Math.min(dp(90f) * sc, height * 0.28f) else dp(90f)
+
     private fun buildScrims(w: Float, h: Float) {
-        val bottomH = dp(150f) + bottomInset
+        val bottomH = bottomScrimH()
         bottomScrim.shader = LinearGradient(0f, h - bottomH, 0f, h, 0x00000000, 0xB3000000.toInt(), Shader.TileMode.CLAMP)
-        topScrim.shader = LinearGradient(0f, 0f, 0f, dp(90f), 0x8C000000.toInt(), 0x00000000, Shader.TileMode.CLAMP)
+        topScrim.shader = LinearGradient(0f, 0f, 0f, topScrimH(), 0x8C000000.toInt(), 0x00000000, Shader.TileMode.CLAMP)
     }
 
     private fun layoutParts() {
         bottomScrim.shader = null; topScrim.shader = null                    // (the size or the lifted bottom changed: the next draw makes them again)
         val w = width.toFloat(); val h = height.toFloat() - bottomInset
         if (w <= 0f || h <= 0f) return
+        sc = if (inline) (Math.min(w, h * 1.7f) / dp(520f)).coerceIn(0.62f, 1f) else 1f
         val cx = w / 2f; val cy = h / 2f
-        val pr = dp(38f); val sr = dp(28f); val gap = dp(30f)
+        val pr = dp(38f) * sc; val sr = dp(28f) * sc; val gap = dp(30f) * sc
         play.set(cx - pr, cy - pr, cx + pr, cy + pr)
         back.set(cx - pr - gap - 2 * sr, cy - sr, cx - pr - gap, cy + sr)
         forward.set(cx + pr + gap, cy - sr, cx + pr + gap + 2 * sr, cy + sr)
-        val er = dp(24f); val margin = dp(14f)
+        val er = dp(24f) * sc; val margin = dp(14f) * sc
         exit.set(w - margin - 2 * er, margin, w - margin, margin + 2 * er)
-        quality.set(exit.left - dp(10f) - 2 * er, margin, exit.left - dp(10f), margin + 2 * er)
+        quality.set(exit.left - dp(10f) * sc - 2 * er, margin, exit.left - dp(10f) * sc, margin + 2 * er)
+        full.set(quality)
         rotate.set(margin, margin, margin + 2 * er, margin + 2 * er)
-        rowY = h - dp(38f)
+        rowY = h - dp(38f) * sc
         mute.set(w - margin - 2 * er, rowY - er, w - margin, rowY + er)
-        curX = dp(20f)
+        curX = dp(20f) * sc
         val curW = text.measureText("0:00:00") + dp(2f)
         durRight = mute.left - dp(6f)
         trackL = curX + curW + dp(12f)
@@ -191,12 +207,12 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
     private fun drawControls(c: Canvas, v: PlayerModel.View, w: Float, h: Float) {
         val a = (alphaNow * 255).toInt().coerceIn(0, 255)
         // the scrims: dark at the edges, so white controls read over any picture
-        val bottomH = dp(150f) + bottomInset
+        val bottomH = bottomScrimH()
         if (bottomScrim.shader == null) buildScrims(w, h)
         bottomScrim.alpha = a
         c.drawRect(0f, h - bottomH, w, h, bottomScrim)
         topScrim.alpha = a
-        c.drawRect(0f, 0f, w, dp(90f), topScrim)
+        c.drawRect(0f, 0f, w, topScrimH(), topScrim)
         fill.alpha = (0x73 * alphaNow).toInt(); ink.alpha = a; line.alpha = a; text.alpha = a
 
         // the middle cluster
@@ -208,10 +224,11 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
         }
         drawDisc(c, back, pressed == Hit.BACK); drawSkipIcon(c, back, false)
         drawDisc(c, forward, pressed == Hit.FORWARD); drawSkipIcon(c, forward, true)
-        // top right: leave full screen
-        drawDisc(c, exit, pressed == Hit.EXIT); drawExitIcon(c, exit)
-        if (showQuality) { drawDisc(c, quality, pressed == Hit.QUALITY); drawQualityIcon(c, quality) }
-        if (showRotate) { drawDisc(c, rotate, pressed == Hit.ROTATE); drawRotateIcon(c, rotate) }
+        // top right: leave full screen (inline: close the player, and a full-screen button left of it)
+        drawDisc(c, exit, pressed == Hit.EXIT); if (inline) drawCloseIcon(c, exit) else drawExitIcon(c, exit)
+        if (inline) { drawDisc(c, full, pressed == Hit.FULL); drawFullIcon(c, full) }
+        if (showQuality && !inline) { drawDisc(c, quality, pressed == Hit.QUALITY); drawQualityIcon(c, quality) }
+        if (showRotate && !inline) { drawDisc(c, rotate, pressed == Hit.ROTATE); drawRotateIcon(c, rotate) }
         // the row at the bottom: time, track, length, mute
         val shownT = if (scrub >= 0.0 && v.kind == DurationView.Kind.KNOWN) PlayerRules.timeAt(scrub, v.lengthS) else v.timeS
         c.drawText(PlayerRules.formatTime(shownT), curX, rowY + dp(5f), text)
@@ -298,6 +315,19 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
         }
     }
 
+    private fun drawCloseIcon(c: Canvas, r: RectF) {    // ANS55f: an x: close the player inside the page
+        val cx = r.centerX(); val cy = r.centerY(); val u = dp(1f) * Math.max(sc, 0.8f); val a = 6.5f * u
+        c.drawLine(cx - a, cy - a, cx + a, cy + a, line); c.drawLine(cx - a, cy + a, cx + a, cy - a, line)
+    }
+
+    private fun drawFullIcon(c: Canvas, r: RectF) {     // ANS55f: four corners pointing out: go full screen
+        val cx = r.centerX(); val cy = r.centerY(); val u = dp(1f) * Math.max(sc, 0.8f); val a = 3f * u; val b = 8f * u
+        for (sx in intArrayOf(-1, 1)) for (sy in intArrayOf(-1, 1)) {
+            c.drawLine(cx + sx * b, cy + sy * b, cx + sx * b, cy + sy * a, line)
+            c.drawLine(cx + sx * b, cy + sy * b, cx + sx * a, cy + sy * b, line)
+        }
+    }
+
     private fun drawQualityIcon(c: Canvas, r: RectF) {   // three sliders with a knob each: "settings"
         val cx = r.centerX(); val cy = r.centerY()
         for (i in -1..1) {
@@ -353,8 +383,9 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
             inside(back, dp(8f)) -> Hit.BACK
             inside(forward, dp(8f)) -> Hit.FORWARD
             inside(exit, dp(8f)) -> Hit.EXIT
-            showQuality && inside(quality, dp(8f)) -> Hit.QUALITY
-            showRotate && inside(rotate, dp(8f)) -> Hit.ROTATE
+            inline && inside(full, dp(8f)) -> Hit.FULL
+            showQuality && !inline && inside(quality, dp(8f)) -> Hit.QUALITY
+            showRotate && !inline && inside(rotate, dp(8f)) -> Hit.ROTATE
             inside(mute, dp(6f)) -> Hit.MUTE
             v != null && v.kind == DurationView.Kind.KNOWN && inside(trackBox, 0f) -> Hit.TRACK
             else -> Hit.NONE
@@ -394,6 +425,7 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
                     Hit.EXIT -> if (up == Hit.EXIT) listener?.onExit()
                     Hit.QUALITY -> if (up == Hit.QUALITY) listener?.onQuality()
                     Hit.ROTATE -> if (up == Hit.ROTATE) listener?.onRotate()
+                    Hit.FULL -> if (up == Hit.FULL) listener?.onFullscreen()
                     Hit.NONE -> {}
                 }
                 return hit != Hit.NONE
