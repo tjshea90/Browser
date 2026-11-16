@@ -438,4 +438,39 @@ class OwnerRulesTest {
         assertTrue("the activity tells the extension what the setting and the screen make of it", source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").let { it.contains("pictureCap = { app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs) }") && it.contains("VideoFormats.capLine(applicationContext, prefs)") })
         assertTrue("the setting is Automatic by default and has its row", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("sp.getInt(\"video_cap\", 0).coerceIn(0, 4)") && source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("choice(\"Picture size from sites\""))
     }
+
+    /** ANS53a-f (owner message 53, on alpha56): nothing starts or loads before a press, the controls are instant, the download button follows the page in front, Kestrel's own player follows the tablet and lists its pictures. */
+    @Test fun ownerMessage53IsActedOn() {
+        val dir = "geckoapp/src/main/assets/kestrel-shields/"
+        // a, b: the gate
+        val manifest = source(dir + "manifest.json")
+        assertTrue("declared in the page's own world, every frame, from the first script", manifest.substringAfter("\"gate-main.js\"").substringBefore("}").let { it.contains("\"world\": \"MAIN\"") && it.contains("\"all_frames\": true") && it.contains("\"run_at\": \"document_start\"") })
+        val gate = source(dir + "gate-main.js")
+        assertTrue("a MediaSource source is held, play() without an activation is refused like the engine would, preload is none, autoplay is not applied", gate.contains("isBlob(v)") && gate.contains("NotAllowedError") && gate.contains("s.call(this, 'none')") && gate.contains("openEl(this, 'play')"))
+        assertTrue("a real tap on the picture and Kestrel's own controls open an element; a stream is never held", gate.contains("pressAt(e.clientX, e.clientY)") && gate.contains("OPEN_EVENT") && gate.contains("rec(this).open = true"))
+        assertTrue("closed until the content script says the rule is off", gate.contains("var on = true;") && gate.contains("d === '0'"))
+        for (f in listOf("content.js", "videobar.js", "player.js")) assertTrue("$f tells the gate before its own play()", source(dir + f).contains("gate("))
+        assertTrue("the content script hands over the rule (gt) and relays seven checked numbers", source(dir + "content.js").let { it.contains("r.gt === false") && it.contains("p.length !== 7") && it.contains("k: 'vgt'") })
+        assertTrue("the background page reads flag 1024 and counts what was held", source(dir + "background.js").let { it.contains("gt: (f & 1024) !== 0") && it.contains("vg: vgtText()") })
+        val bridge = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt")
+        assertTrue("flag 1024 follows the Settings switch only", bridge.contains("(if (prefs().videoPressToPlay) 1024 else 0)"))
+        assertTrue("the engine is told: autoplay 5, preload none", source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoEngine.kt").let { it.contains("triInt(\"media.autoplay.default\", if (prefs.videoPressToPlay) 5 else null)") && it.contains("triInt(\"media.preload.default\"") && it.contains("triInt(\"media.preload.auto\"") })
+        assertTrue("a muted start is refused too while the rule is on", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt").contains("if (!a.prefs.videoPressToPlay && a.prefs.videoMutedAutoplay) PermissionDelegate.ContentPermission.VALUE_ALLOW else PermissionDelegate.ContentPermission.VALUE_DENY"))
+        assertTrue("on by default, with its switch", source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("bool(\"vid_press_play\", true)") && source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("toggle(\"Videos start only when I press play\""))
+        // c: instant controls
+        val tap = source("core/src/main/kotlin/app/kestrel/core/player/TapMachine.kt")
+        assertTrue("a tap toggles at once: no timer in the tap machine", !tap.contains("schedule") && tap.contains("        h.single()\n"))
+        assertTrue("and without a fade", source("core/src/main/kotlin/app/kestrel/core/player/ControlsMachine.kt").contains("if (shown) hide(false) else show(hideAfterMs, false)"))
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("the activity answers a tap on the glass itself", act.contains("player.appTap((downX * 1000f / window.decorView.width.coerceAtLeast(1)).toInt()"))
+        val ctl = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerController.kt")
+        assertTrue("the page's copy of that tap is matched by the time of the touch and dropped, a tap on a page button is put back", ctl.contains("matchesAppTap(ts)") && ctl.contains("model.undoTap(prevShown)"))
+        assertTrue("the page script names the time of the touch and the taps on its own buttons", source(dir + "player.js").let { it.contains("ts: e ? stamp(e) : 0") && it.contains("pg: 1") })
+        // e: the download button
+        assertTrue("the button, the sheet and the menu entry ignore a page under the Home screen", body(act, "internal fun refreshDownloadButton() {").contains("homeShown(t)") && body(act, "override fun onDownload() {").contains("homeShown(t)") && source("geckoapp/src/main/kotlin/app/kestrel/browser/web/VideoFlow.kt").contains("!a.onHomeScreen(t)"))
+        // f, d: Kestrel's own player
+        val np = source("geckoapp/src/main/kotlin/app/kestrel/browser/NativePlayerActivity.kt")
+        assertTrue("it follows the tablet (no forced landscape), has the rotate button and a surface that is a point until the shape is known", np.contains("FullscreenTurner(this, { FullscreenTurn.MODE_FOLLOW }") && !np.contains("SENSOR_LANDSCAPE") && np.contains("FrameLayout.LayoutParams(1, 1, Gravity.CENTER)") && np.contains("showRotate = true") && np.contains("override fun onRotate() { turner.rotatePressed()"))
+        assertTrue("it lists every picture of the stream and carries the pick out as a track override, remembered", np.contains("TrackSelectionOverride(") && np.contains("Prefs.get(applicationContext).nativeMaxH = cls") && np.contains("controls.showQuality = distinct >= 2"))
+    }
 }
