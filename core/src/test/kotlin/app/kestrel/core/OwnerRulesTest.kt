@@ -94,7 +94,7 @@ class OwnerRulesTest {
         val manifest = source("geckoapp/src/main/assets/kestrel-shields/manifest.json")
         val entry = Regex("""\{[^{}]*"seekbar\.js"[^{}]*\}""").find(manifest)?.value ?: ""
         assertTrue("seekbar.js runs in every http(s) page and frame from document start: $entry", entry.contains("\"all_frames\": true") && entry.contains("document_start") && entry.contains("https://*/*"))
-        assertFalse("and on YouTube too (it is the owner's case): $entry", entry.contains("exclude_matches"))
+        assertFalse("and on YouTube too (it is the owner's case): $entry", entry.contains("youtube"))          // (ANS58: the human-check hosts are excluded from every script; a video site never is)
         val js = source("geckoapp/src/main/assets/kestrel-shields/seekbar.js")
         for (banned in listOf("preventDefault", "stopPropagation", "stopImmediatePropagation", "dispatchEvent", ".click(", "fastSeek")) assertFalse("the script never cancels, stops or fakes a page event ($banned)", js.contains(banned))
         assertTrue("the video is moved only after the app said yes", body(js, "function settle(d, x) {").contains("askApp(function (yes) {") && js.contains("r.seek === true"))
