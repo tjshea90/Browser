@@ -2348,3 +2348,7 @@
 ## 2026-11-16T22:31:59Z
 > Waiting for the unit-test run to finish; next is the final lab run on this head.
 <!-- sha:07e0013c0827 -->
+
+## 2026-11-16T22:32:48Z
+> The JVM test run is still going. I'll continue as soon as it finishes.
+<!-- sha:2f07b7757a0e -->
