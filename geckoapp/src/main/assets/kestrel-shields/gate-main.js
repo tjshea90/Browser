@@ -123,7 +123,7 @@
     r.tracked = true;
     if (gated.length >= 400) { var keep = []; for (var i = 0; i < gated.length; i++) if (gated[i].isConnected && !rec(gated[i]).open) keep.push(gated[i]); gated = keep; }
     if (gated.length < 400) gated.push(el);
-    try { el.addEventListener(OPEN_EVENT, function () { var was = rec(el).open; openEl(el, 'kestrel'); if (!was && hand) ask(el, 'kestrel', function (h) { if (h) pauseEl(el); }); }, true); } catch (e) { /* ignore */ }   // Kestrel's own controls, also for a film inside a shadow tree
+    try { el.addEventListener(OPEN_EVENT, function () { var r2 = rec(el); openEl(el, 'kestrel'); if (hand && el.paused && dnow.call(Date) >= r2.noUntil) ask(el, 'kestrel', function (h) { if (h) pauseEl(el); }); }, true); } catch (e) { /* ignore */ }   // Kestrel's own controls, also for a film inside a shadow tree (the tap that showed the bar has opened the element already: the bar's play asks whenever the film is not playing and the app has not said no a moment ago)
     try { el.addEventListener('play', function (ev) { nativePlay(el, ev); }, true); } catch (e) { /* ignore */ }                    // the engine's own controls (nativePlay below)
   }
 
@@ -163,6 +163,11 @@
             var rr = rec(el), nowT = dnow.call(Date);
             if (nowT - rr.askedAt > 400 && nowT >= rr.noUntil) ask(el, 'press', function (handed) { if (!handed) openEl(el, 'press'); });
             else if (!(rr.ask && !rr.ask.done) && !rr.open && nowT < rr.noUntil) openEl(el, 'press');             // (the app said no a moment ago: the film plays here; the same press seen again after a yes changes nothing)
+          }
+          else if (hand && el.controls && rec(el).hasSrc) {                                                      // a script player (a held MediaSource) on the engine's own controls: its source stays held while the app thinks; no = it opens
+            var r3 = rec(el), n3 = dnow.call(Date);
+            if (n3 - r3.askedAt > 400 && n3 >= r3.noUntil) ask(el, 'press', function (handed) { if (handed) pauseEl(el); else openEl(el, 'press'); });
+            else if (!(r3.ask && !r3.ask.done)) openEl(el, 'press');
           }
           else { openEl(el, 'press'); if (hand && el.controls) askPress(el); }
         }   // (a cookie button or a menu that merely sits over the picture opens nothing)
@@ -210,13 +215,15 @@
   }
   // a new press on this player (a tap on its box that came after the last question) and the film is not playing yet
   function wantsAsk(el) { var r = rec(el); return hand && el.paused && lastTap.t > r.askedAt + 400 && dnow.call(Date) >= r.noUntil && pressedRecently(el); }
-  // does the tap's target look like a play button that sits over the picture (not the picture itself)?
+  // does the tap's target look like a PLAY control that sits over the picture (not the picture itself, and not Mute, Share or Get started)? A word 'play' in its own label, title, class or id (vjs-big-play-button,
+  // ytp-large-play-button, aria-label Play video, PlayButton), or a button whose short text says Play. Walks up to the player's box. (Players that name their button otherwise are asked when their play() comes.)
+  function playWord(s) { var w = String(s).toLowerCase().split(/[^a-z]+/); for (var i = 0; i < w.length; i++) if (/^(button|btn|big|large|center|centre|video|main)?play(button|btn|icon|overlay)?$/.test(w[i])) return true; return false; }
   function playLike(t, el) {
     try {
       for (var n = t, i = 0; n && n !== el && i < 6; i++, n = n.parentElement) {
-        if (n.nodeName === 'BUTTON' || (n.getAttribute && n.getAttribute('role') === 'button')) return true;
-        var cls = (typeof n.className === 'string') ? n.className : '';
-        if (/play|start|poster|big-?button|cover/i.test(String(n.getAttribute ? (n.getAttribute('aria-label') || '') + ' ' + (n.getAttribute('title') || '') : '') + ' ' + cls + ' ' + (n.id || ''))) return true;
+        var g = n.getAttribute ? (n.getAttribute('aria-label') || '') + ' ' + (n.getAttribute('title') || '') : '';
+        if (playWord(g + ' ' + ((typeof n.className === 'string') ? n.className : '') + ' ' + (n.id || ''))) return true;
+        if ((n.nodeName === 'BUTTON' || (n.getAttribute && n.getAttribute('role') === 'button')) && n.textContent && n.textContent.length <= 24 && playWord(n.textContent)) return true;
       }
     } catch (e) { /* ignore */ }
     return false;
@@ -241,8 +248,11 @@
       if (r.open && !again) return;
       if (dnow.call(Date) - r.viaPlay < 1500) return;
       if (again ? !activation() : !(el.controls || activation())) return;
+      if (r.ask && !r.ask.done) return;                                                    // a question for this very press is in the air: its answer decides
+      var fresh = dnow.call(Date) - r.askedAt > 400;
+      if (!r.open && hand && r.hasSrc && fresh) { ask(el, 'press', function (handed) { if (handed) pauseEl(el); else openEl(el, 'press'); }); return; }   // a script player's source stays held until the app has answered
       if (!r.open) openEl(el, 'press');
-      if (hand && dnow.call(Date) - r.askedAt > 400) askPress(el);
+      if (hand && fresh) askPress(el);
     } catch (e) { /* ignore */ }
   }
   try {
@@ -251,7 +261,10 @@
         var d = String(e && e.detail).split('|'), q = asks[+d[0]];
         if (!q) return;
         var yes = d[1] === '1';
-        if (!finishAsk(q, yes) && yes) pauseEl(q.el);                                    // too late for the page's play() (it went through): the film is Kestrel's now, stop the page's copy
+        if (!finishAsk(q, yes) && yes) {                                                  // too late for the page's play() (it went through): the film is Kestrel's now, stop the page's copy
+          pauseEl(q.el);
+          try { var rl = rec(q.el); rl.yesAt = dnow.call(Date); rl.noUntil = 0; } catch (x) { /* ignore */ }   // (and it is a yes for the next press, not the 30 s of a timeout)
+        }
         delete asks[+d[0]];
       } catch (x) { /* ignore */ }
     }, true);
@@ -347,7 +360,7 @@
         if (on && isMediaEl(this)) {
           var r = rec(this);
           r.viaPlay = dnow.call(Date);
-          if (hand && r.yesAt && dnow.call(Date) - r.yesAt < 1500) return Promise.reject(new DOMException(INTERRUPTED, 'AbortError'));   // the app took this press over a moment ago: the page's own play() that follows it is the same press
+          if (hand && r.yesAt && lastTap.t <= r.yesAt + 400) return Promise.reject(new DOMException(INTERRUPTED, 'AbortError'));   // the app took this film over and the person has not pressed again since: a play() of the page (the same press, a handler that waits, a resume by itself) is interrupted
           if (!r.open) {
             if (!r.adopted) adopt(this);
             track(this);
