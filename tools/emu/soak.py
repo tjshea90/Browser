@@ -382,7 +382,6 @@ class Phone:
         if dev:
             path = dev[0]
             # a finger down and up in the status bar (harmless) written with dd while getevent listens: do the events appear?
-            sw, sh = self.screen_size_hint()
             mx, my = dev[1], dev[2]
             def ev(t, c, v):
                 return struct.pack("<qqHHi", 0, 0, t, c, v)
@@ -402,9 +401,6 @@ class Phone:
                 fh.write("\n".join(lines) + "\n")
         except Exception as e:
             say("touch-probe.txt not written:", e)
-
-    def screen_size_hint(self):
-        return (600, 1024)
 
     def hogs_running(self):
         """How many of our busy loops are alive (ps), so the report can say whether the emulator was really slowed down."""
