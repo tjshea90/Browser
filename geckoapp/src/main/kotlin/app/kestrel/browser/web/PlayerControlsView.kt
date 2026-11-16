@@ -251,6 +251,7 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
         c.drawRoundRect(rect, dp(16f), dp(16f), pill)
         val cx = left + panelW / 2f
         val icon = RectF(cx - dp(14f) * sz, top + dp(10f) * sz, cx + dp(14f) * sz, top + dp(10f) * sz + dp(28f) * sz)
+        ink.alpha = 255; line.alpha = 255; ink.color = 0xFFFFFFFF.toInt()
         if (kind == GestureMath.Level.BRIGHTNESS) drawSunIcon(c, icon) else drawMuteIcon(c, icon, levelValue <= 0.001f)
         val oldSize = text.textSize; val oldA = text.alpha
         text.textSize = dp(13f) * sz; text.alpha = 255

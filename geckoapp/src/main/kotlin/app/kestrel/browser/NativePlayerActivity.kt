@@ -43,6 +43,7 @@ import app.kestrel.browser.web.NativePlayerStats
 import app.kestrel.browser.web.PlayerControlsView
 import app.kestrel.browser.web.PlayerFactory
 import app.kestrel.browser.web.QualitySheet
+import app.kestrel.browser.web.VideoGestures
 import app.kestrel.core.media.FullscreenTurn
 import app.kestrel.core.media.QualityLabel
 import app.kestrel.core.player.PlayerModel
@@ -88,6 +89,8 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     private var framesAtStart = 0L
     private lateinit var turner: FullscreenTurner
     private lateinit var sheet: QualitySheet
+    private lateinit var gestures: VideoGestures                      // ANS57: VLC-style gestures (long press + drag = precise seek, vertical drags = brightness / volume)
+    private var gesturesOn = true
     private var fromPage = false                              // ANS54e: started for a film of a web page: a failure before the first picture goes back to the page (RESULT_FAILED)
     private var chosen: QualityLabel.Rung? = null          // the picture the person picked (null = Automatic)
     private var capH = 720
@@ -127,7 +130,19 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         stage.addView(controls, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         sheet = QualitySheet(this).apply { listener = object : QualitySheet.Listener { override fun onPick(row: QualitySheet.Row) { pickQuality(row) } override fun onDismiss() { model.pin(false) } } }
         stage.addView(sheet, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        stage.setOnTouchListener { v, e -> onStageTouch(v, e) }
+        gesturesOn = prefs.videoGestures
+        gestures = VideoGestures(this, object : VideoGestures.Surface {
+            override val viewWidth: Int get() = stage.width
+            override val viewHeight: Int get() = stage.height
+            override fun positionMs(): Long = try { player?.currentPosition?.coerceAtLeast(0L) ?: 0L } catch (e: Throwable) { 0L }
+            override fun lengthMs(): Long { val p = player ?: return 0L; if (p.isCurrentMediaItemLive) return 0L; val d = p.duration; return if (d == C.TIME_UNSET || d <= 0L) 0L else d }
+            override fun tap(xFraction: Double) { model.onTap((xFraction * 1000).toInt()); flush() }
+            override fun seekBy(deltaMs: Long) { model.skip(deltaMs / 1000.0); flush(); say("gesture-seek", "the precise seek moved the film by ${deltaMs / 1000} s") }
+            override fun showInfo(text: String?) { controls.showInfo(text) }
+            override fun showLevel(kind: app.kestrel.core.player.GestureMath.Level, fraction: Float) { controls.showLevel(kind, fraction); say("gesture-level", "${kind.name.lowercase()} ${Math.round(fraction * 100)} %") }
+            override fun haptic() { stage.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS) }
+        }, holdFirst = false)
+        stage.setOnTouchListener { v, e -> if (gesturesOn) { gestures.onTouch(e); true } else onStageTouch(v, e) }
         stage.addOnLayoutChangeListener { _, l, t, r, bt, ol, ot, orr, ob -> if (r - l != orr - ol || bt - t != ob - ot) fit() }
         setContentView(stage)
 
@@ -439,6 +454,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
 
     override fun onDestroy() {
         main.removeCallbacks(ticker); main.removeCallbacks(controlsTick)
+        if (::gestures.isInitialized) gestures.stop()                          // ANS57: the window's brightness is the tablet's again
         val p = player
         player = null
         if (p != null) {
