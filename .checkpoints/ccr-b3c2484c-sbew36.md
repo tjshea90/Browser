@@ -1,13 +1,13 @@
-# CHECKPOINT 2533 — read me first, then TASKS.md
+# CHECKPOINT 2534 — read me first, then TASKS.md
 
-**Written:** 2026-11-16T17:25:03Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `b7ed26ea` (this checkpoint is the commit after it)
+**Written:** 2026-11-16T17:28:32Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `7ed492b4` (this checkpoint is the commit after it)
 
 ## Just done
-ANS57 coded end to end + lab scene written: gp suite (soak.py gp_scene: A = Kestrel's full-screen player on the 5-minute lab clip /clip/long.mp4, B = film inside the page /ho?v=inlinelong; raw_path/hold_drag real finger paths; volume/brightness drags, dead zone, plain sideways drag does nothing, hold + drag right/left, farther = more, an inch up = finer, double tap puts the controls away), kp scene updated (double tap = two toggles and clear film; page full-screen gestures), OwnerRulesTest ownerMessage57 + review guard green, ELEVEN review fixes in
+ANS57: lab suite gp DISPATCHED: run 43918159286 (head 55e61f02, started 17:25Z, expect done ~17:33Z). Since that head: PlayerModel.gestureBegan (controls go when the precise seek arms or a level drag begins) + test, wired in the three hosts; all unit suites green, compile ok
 
 ## Do this next
-Dispatch lab gp (android.yml app=lab lab_suite=gp lab_minutes=1) on this head; read emulator-lab-text report (gp section + numbers); fix; then lab vp (all video suites: kp np cp ap ho ip gp in ONE boot) as the release-candidate regression; then bump geckoapp/build.gradle.kts versionCode 161 / alpha60 + tools/sync-ext-version.sh, fill TESTED_PLACEHOLDER in docs/handoff/ALPHA60_RELEASE_NOTE.txt (add the gestures paragraph), bash ship.sh gecko with that note, ONE dispatch (app=gecko full_build=true), verify tag + jobs + release APK, record-release, tick ANS55c/d/f5 + ANS57a-f, answer owner 55 + 57 in plain words (Release link on its own line, not on the tablet, open items).
+Read lab gp run 43918159286 (list_workflow_run_artifacts -> emulator-lab-text -> download_workflow_run_artifact -> python3 -I tools/emu/fetch_artifact.py "<url with & not \u0026>" <empty dir>; read report.md gp section + numbers + shots). Fix findings, push, re-run gp if needed, then lab vp (all video) as the release-candidate regression, then alpha60 ship per the earlier next.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ Dispatch lab gp (android.yml app=lab lab_suite=gp lab_minutes=1) on this head; r
 
 ## Last ten checkpoints
 ```
+  55e61f02 ckpt 2533: ANS57 coded end to end + lab scene written: gp suite (soak.py gp_scene: A = 
   33203ec9 ckpt 2532: ANS57 glue coded + compiles: VideoLevels (music-stream volume, window bright
   0e7f4377 ckpt 2531: ANS55f: lab suite ip run 2 (43914267812): ALL 21 CHECKS OK on the real engin
   45054263 ckpt 2530: owner message 57 written into TASKS.md (ANS57a-f): double tap on a side must
@@ -25,8 +26,7 @@ Dispatch lab gp (android.yml app=lab lab_suite=gp lab_minutes=1) on this head; r
   441aa19c ckpt 2526: ANS55f step 2 coded and COMPILES (:geckoapp:compileDebugKotlin ok): PlayerFa
   16795a42 ckpt 2525: ANS55f step 1 done: gate-main.js geomOf + content.js geo() + background.js g
   50071840 ckpt 2524: alpha59 SHIPPED and RECORDED: Release kestrel-g-v0.3.0-alpha59 (code 160, ru
-  2e6fccf5 ckpt 2523: alpha59 RELEASE DISPATCHED (ONE time): android.yml run 43905841979 (run 174,
 ```
 
-(4 automatic checkpoint(s) since the last deliberate one — the
+(2 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
