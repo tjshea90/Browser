@@ -86,7 +86,7 @@ Method: web sources read 2026-11-16; no code run, no device. DOCUMENTED = read i
 - The vendor overlay (config_navBarCanMove, allowSeamlessRotationDespiteNavBarMoving) and whether this modified build really shows the screenshot freeze. Test: adb shell dumpsys window (mDisplayFrozen, nav bar), adb shell screenrecord during a turn.
 - Where the 0.9-2 s goes (relayout Binder wait, sync IPC wait, render thread): needs Perfetto (sched, gfx, view, wm, binder) or timing around layout(). Whether WebRender re-renders the old display list at the new size.
 - The AOSP source of the trim-level computation (updateLowMemStateLocked was not opened); Fenix rotation handling; whether Chrome sets rotationAnimation.
-- DVFS, thermal trips, zram, memory pressure: cat /proc/swaps, /proc/pressure/memory, the cpufreq scaling_governor, dumpsys thermalservice.
+- DVFS, thermal trips, zram, memory pressure, per-process memory of the six processes: cat /proc/swaps, /proc/pressure/memory, the cpufreq scaling_governor, dumpsys thermalservice, dumpsys meminfo.
 - media.* defaults for android-media-codec, rdd, video-queue came from main, not the 160 tag; the tablet's read-back matches.
 
 ## Sources
