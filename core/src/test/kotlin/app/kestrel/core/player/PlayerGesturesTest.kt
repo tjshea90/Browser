@@ -204,7 +204,7 @@ class PlayerGesturesTest {
 
     @Test fun insideThePageTheMiddleStripIsThePagesAndEverythingElseIsStillTheFilms() {
         val h = Host(); val g = PlayerGestures(h, inPage())
-        g.down(500f, 400f); g.move(502f, 370f)                          // steep in the middle strip: the page scrolls
+        g.down(500f, 400f); g.move(502f, 360f)                          // steep in the middle strip (and past the 5 % dead start): the page scrolls
         assertEquals(1, h.passed); assertTrue(h.levels.isEmpty() && h.previews.isEmpty())
         g.move(503f, 300f); g.up(503f, 300f); assertTrue("no tap, no level, no seek", h.taps.isEmpty() && h.levels.isEmpty() && h.previews.isEmpty())
         val h2 = Host(); val g2 = PlayerGestures(h2, inPage())
@@ -213,6 +213,28 @@ class PlayerGesturesTest {
         val h3 = Host(); val g3 = PlayerGestures(h3, inPage())
         g3.down(500f, 300f); g3.move(500f + 252f, 302f); g3.up(500f + 252f, 302f)
         assertEquals("sideways is the seek, never the page's", 1, h3.commits.size); assertEquals(0, h3.passed)
+    }
+
+    // review of alpha61: the middle strip used to decide at the FIRST steep sample (the finger rolls 3 px sideways and 9 px down on its way to a long sideways drag) and the seek was lost; the dead start now holds there too
+    @Test fun aSidewaysDragThatBeginsWithAWobbleIsStillTheSeekAlsoInTheMiddleStrip() {
+        for (cfg in listOf(full(), inPage())) {
+            val h = Host(); val g = PlayerGestures(h, cfg)
+            g.down(500f, 300f); h.clock += 20
+            g.move(503f, 309f)                                          // steep, but 9 px is far from the 5 % (30 px) of the range
+            assertEquals("not the page's yet", 0, h.passed); assertTrue(h.levels.isEmpty() && h.previews.isEmpty())
+            h.clock += 20; g.move(560f, 311f); h.clock += 20; g.move(500f + 252f, 312f); g.up(500f + 252f, 312f)
+            assertEquals("the seek was not lost", 1, h.commits.size); assertEquals(0, h.passed)
+        }
+    }
+
+    // review of alpha61 (the opt-in long-press-first rule): armed by the rest, then a drag that begins in the dead strip: the arming must END (finished) or the next gesture skips its 'began' call and the controls stay up
+    @Test fun anArmedFingerThatDragsInTheDeadStripEndsItsArming() {
+        val h = Host(); val g = PlayerGestures(h, holdFirst())
+        g.down(500f, 400f); g.wait(h, 360); assertEquals(listOf(GestureHint.SEEK), h.shown); assertEquals(1, h.ticks)
+        g.move(502f, 300f)
+        assertEquals("the arming ended at once", 1, h.finished); assertFalse(g.active)
+        g.move(502f, 250f); g.up(502f, 250f)
+        assertEquals("and only once", 1, h.finished); assertTrue(h.levels.isEmpty() && h.previews.isEmpty() && h.commits.isEmpty())
     }
 
     // ---- ANS60b: the hint follows the side
