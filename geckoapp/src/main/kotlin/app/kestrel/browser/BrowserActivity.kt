@@ -492,6 +492,7 @@ open class BrowserActivity : Activity(), DockListener {
         Health.log("start", "heap", "java heap limit ${Runtime.getRuntime().maxMemory() shr 20} MB, memory class ${getSystemService(ActivityManager::class.java)?.memoryClass ?: -1} MB") // (a lab run died of a 16 MB heap limit: the limit is on record now)
         window.setBackgroundDrawableResource(R.color.window_bg) // the cold-start window showed the shield; from here on it is plain black behind every page and panel
         ProcessLife.uiAlive = true; ProcessLife.cancel()
+        debugTouch = app.kestrel.browser.web.DebugTouch.attach(this)                // DEBUG builds only: the emulator lab plays a finger path through a broadcast (web/DebugTouch)
         prefs = Prefs.get(this)
         coldStartClear()
         Shields.init(this)
@@ -1295,6 +1296,7 @@ open class BrowserActivity : Activity(), DockListener {
     // the anchor, stays open while any private tab exists: a session that has to be replaced (the page's process was killed while the app was away) can then never be the last one. It loads nothing and is never shown;
     // it closes when the last private tab is gone (the engine then forgets what was private, as before).
     private var privateAnchor: GeckoSession? = null
+    private var debugTouch: android.content.BroadcastReceiver? = null
     private fun syncPrivateAnchor() {
         val need = tabs.any { it.isPrivateTab }
         if (need && privateAnchor == null) {
