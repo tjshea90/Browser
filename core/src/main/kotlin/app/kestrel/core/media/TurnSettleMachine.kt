@@ -178,7 +178,7 @@ class TurnSettleMachine<T : Any>(private val h: Host<T>) {
         if (!active) return
         val n = h.now()
         if (h.resizePending()) lastChangeAt = n                             // ANS52a: the engine's view has not got its new size yet: the page area is not still
-        val expects = h.expectsPageReport() && !(heard == 0 && n - startedAt >= TurnSettle.SILENT_MS)       // a page that said nothing at all for 3 s is not reporting: the old rule
+        val expects = h.expectsPageReport() && !(heard == 0 && n - startedAt >= TurnSettle.SILENT_MS)       // a page that said nothing at all for SILENT_MS is not reporting: the old rule
         if (TurnSettle.settled(n - lastChangeAt, n - startedAt, expects, confirmed)) { finish(n, expects); return }
         // ANS52 (owner message 52, the tablet's two nudges: both for a page that had said NOTHING, a busy script thread that two more size changes cannot help and each of which is one more reflow of a heavy page): the engine is
         // given a real size change only when the page SPOKE and its size was the wrong one (the undelivered-size case this nudge was made for)
