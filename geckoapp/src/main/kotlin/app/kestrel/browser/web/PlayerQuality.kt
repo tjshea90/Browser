@@ -1,6 +1,5 @@
 package app.kestrel.browser.web
 
-import android.content.Context
 import androidx.media3.common.C
 import androidx.media3.common.Tracks
 import androidx.media3.common.TrackSelectionOverride
@@ -15,7 +14,6 @@ import app.kestrel.core.media.QualityLabel
  * small box in a page ask for 1080p); [say] = a line for Diagnostics (nothing for a private tab).
  */
 class PlayerQuality(
-    private val ctx: Context,
     private val priv: Boolean,
     private val remembered: () -> Int,
     private val remember: (Int) -> Unit,
