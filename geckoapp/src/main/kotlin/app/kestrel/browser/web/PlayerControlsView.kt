@@ -45,7 +45,7 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
 
     /**
      * ANS55f (owner message 55: the player inside the website): the controls of Kestrel's player drawn over the page's own video box. The exit button becomes a close x, a full-screen button sits left of it, and everything
-     * is scaled to the size of the box (a 530 x 300 box gets the full-size controls, a 260 x 150 one the smaller ones). No rotate or quality button here (the full-screen player has them).
+     * is scaled to the size of the box (a 530 x 300 box gets the full-size controls, a 260 x 150 one the smaller ones). ANS60c: the quality button sits left of the full-screen button. No rotate button here (the full-screen player has it).
      */
     var inline = false
         set(v) { if (field != v) { field = v; layoutParts(); invalidate() } }
@@ -148,10 +148,10 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
 
     val controlsShown: Boolean get() = shownTarget
 
-    /** ANS55f lab: the centres of the close x and of the full-screen button in SCREEN pixels (x, y, x, y): the emulator lab taps them like a finger would. */
+    /** ANS55f lab: the centres of the close x, of the full-screen button and (ANS60c) of the quality button in SCREEN pixels (x, y, x, y, x, y): the emulator lab taps them like a finger would. */
     fun buttonCentres(): IntArray {
         val loc = IntArray(2); getLocationOnScreen(loc)
-        return intArrayOf((loc[0] + exit.centerX()).toInt(), (loc[1] + exit.centerY()).toInt(), (loc[0] + full.centerX()).toInt(), (loc[1] + full.centerY()).toInt())
+        return intArrayOf((loc[0] + exit.centerX()).toInt(), (loc[1] + exit.centerY()).toInt(), (loc[0] + full.centerX()).toInt(), (loc[1] + full.centerY()).toInt(), (loc[0] + quality.centerX()).toInt(), (loc[1] + quality.centerY()).toInt())
     }
 
     /** ANS53c: is [wx], [wy] (window coordinates) on one of the SHOWN controls? Then the touch is theirs and is not a tap on the picture. */
@@ -189,6 +189,7 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
         exit.set(w - margin - 2 * er, margin, w - margin, margin + 2 * er)
         quality.set(exit.left - dp(10f) * sc - 2 * er, margin, exit.left - dp(10f) * sc, margin + 2 * er)
         full.set(quality)
+        if (inline) quality.offset(-(2 * er + dp(10f) * sc), 0f)            // ANS60c: inside the page the full-screen button takes the first place left of the x and the quality button the next
         rotate.set(margin, margin, margin + 2 * er, margin + 2 * er)
         rowY = h - dp(38f) * sc
         mute.set(w - margin - 2 * er, rowY - er, w - margin, rowY + er)
@@ -302,7 +303,7 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
         // top right: leave full screen (inline: close the player, and a full-screen button left of it)
         drawDisc(c, exit, pressed == Hit.EXIT); if (inline) drawCloseIcon(c, exit) else drawExitIcon(c, exit)
         if (inline) { drawDisc(c, full, pressed == Hit.FULL); drawFullIcon(c, full) }
-        if (showQuality && !inline) { drawDisc(c, quality, pressed == Hit.QUALITY); drawQualityIcon(c, quality) }
+        if (showQuality) { drawDisc(c, quality, pressed == Hit.QUALITY); drawQualityIcon(c, quality) }
         if (showRotate && !inline) { drawDisc(c, rotate, pressed == Hit.ROTATE); drawRotateIcon(c, rotate) }
         // the row at the bottom: time, track, length, mute
         val shownT = if (scrub >= 0.0 && v.kind == DurationView.Kind.KNOWN) PlayerRules.timeAt(scrub, v.lengthS) else v.timeS
@@ -459,7 +460,7 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
             inside(forward, dp(8f)) -> Hit.FORWARD
             inside(exit, dp(8f)) -> Hit.EXIT
             inline && inside(full, dp(8f)) -> Hit.FULL
-            showQuality && !inline && inside(quality, dp(8f)) -> Hit.QUALITY
+            showQuality && inside(quality, dp(8f)) -> Hit.QUALITY
             showRotate && !inline && inside(rotate, dp(8f)) -> Hit.ROTATE
             inside(mute, dp(6f)) -> Hit.MUTE
             v != null && v.kind == DurationView.Kind.KNOWN && inside(trackBox, 0f) -> Hit.TRACK
