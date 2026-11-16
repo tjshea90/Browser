@@ -93,10 +93,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     private var gesturesOn = true
     private var debugTouch: android.content.BroadcastReceiver? = null
     private var fromPage = false                              // ANS54e: started for a film of a web page: a failure before the first picture goes back to the page (RESULT_FAILED)
-    private var chosen: QualityLabel.Rung? = null          // the picture the person picked (null = Automatic)
-    private var capH = 720
-    private var wanted: QualityLabel.Rung? = null        // ANS53d.2: the picture picked in the list of the page's film, applied as soon as the stream says what it offers
-    private var rowsNow: List<Pair<QualityLabel.Rung, Pair<Tracks.Group, Int>>> = emptyList()
+    private lateinit var quality: PlayerQuality                    // ANS53d / ANS60c: the quality list (shared with the player inside the page)
 
     private val controlsTick = Runnable { model.controlsTimer(); flush() }
     private val ticker = object : Runnable {
@@ -167,20 +164,8 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     private fun buildPlayer(url: String, headerLines: List<String>, startMs: Long, maxH: Int, pick: QualityLabel.Rung?, auto: Boolean) {
         val built = PlayerFactory.create(this, url, headerLines)             // ANS55f: shared with the player inside the page
         val p = built.player; val source = built.source
-        // the picture size to start with: the one the person picked last time (ANS53d, remembered), else what the page's list said (720 when it said nothing). The cap is on the LONGER side of a 16:9 picture so that a
-        // portrait film is held to the same class as a landscape one (a cap on the height alone would drop every portrait rung of a 720p class).
-        // ANS53d.2: a picture picked in the page's quality list wins over what was remembered (and is remembered itself, like a pick made in this player); Automatic from that list forgets the old pick
-        val prefs = Prefs.get(applicationContext)
-        val remembered = prefs.nativeMaxH
-        capH = when {
-            pick != null -> QualityLabel.pClass(pick.w, pick.h).coerceIn(144, 2160)
-            auto -> maxOf(maxH, 720).coerceIn(144, 2160)
-            else -> (if (remembered > 0) remembered else maxH).coerceIn(144, 2160)
-        }
-        if (pick != null) { prefs.nativeMaxH = capH; wanted = pick } else if (auto) prefs.nativeMaxH = 0
-        if (!priv && (pick != null || auto)) { NativePlayerStats.qualityPicks++; NativePlayerStats.lastQuality = if (pick != null) QualityLabel.text(pick) else "Automatic" }
-        say("start-quality", if (pick != null) "picked in the page's list: ${QualityLabel.text(pick)} (cap ${capH}p)" else if (auto) "Automatic, picked in the page's list (cap ${capH}p)" else "no pick (cap ${capH}p)")
-        applyCap(p)
+        quality = PlayerQuality(priv, { Prefs.get(applicationContext).nativeMaxH }, { Prefs.get(applicationContext).nativeMaxH = it }, { e, t -> say(e, t) })
+        quality.begin(p, maxH, pick, auto)             // the picture size to start with (remembered pick, the page's list, or maxH) and the cap of Automatic
         p.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) { ended = true }
@@ -199,7 +184,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
                     fit()                                              // (ANS53f: no turning to landscape here any more: the screen follows the tablet)
                 }
             }
-            override fun onTracksChanged(tracks: Tracks) { updateRows(tracks) }
+            override fun onTracksChanged(tracks: Tracks) { controls.showQuality = quality.onTracks(p, tracks) }          // one picture only (a plain file): nothing to choose, no button
         })
         p.addAnalyticsListener(object : AnalyticsListener {
             override fun onVideoDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
@@ -225,46 +210,9 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         player = p
     }
 
-    private fun applyCap(p: ExoPlayer) = PlayerFactory.applyCap(p, capH)
+    // ---------------------------------------------------------------------------------------- ANS53d: the quality list (the rules are PlayerQuality's)
 
-    // ---------------------------------------------------------------------------------------- ANS53d: the quality list
-
-    /** The pictures the stream offers (every video track of every group), with where each sits, biggest first. */
-    private fun updateRows(tracks: Tracks) {
-        val all = ArrayList<Pair<QualityLabel.Rung, Pair<Tracks.Group, Int>>>()
-        for (g in tracks.groups) {
-            if (g.type != C.TRACK_TYPE_VIDEO) continue
-            for (i in 0 until g.length) {
-                val f = g.getTrackFormat(i)
-                if (f.width <= 0 && f.height <= 0) continue
-                all.add(Pair(QualityLabel.Rung(f.width, f.height, f.frameRate, (if (f.averageBitrate > 0) f.averageBitrate else f.bitrate).toLong().coerceAtLeast(0L)), Pair(g, i)))
-            }
-        }
-        rowsNow = all.sortedWith(compareByDescending<Pair<QualityLabel.Rung, Pair<Tracks.Group, Int>>> { QualityLabel.pClass(it.first.w, it.first.h) }.thenByDescending { it.first.fps }.thenByDescending { it.first.bps })
-        val distinct = QualityLabel.rows(rowsNow.map { it.first }).size
-        controls.showQuality = distinct >= 2              // one picture only (a plain file): nothing to choose
-        wanted?.let { w ->
-            val idx = QualityLabel.nearest(w, rowsNow.map { it.first })
-            if (idx >= 0) { wanted = null; applyRung(rowsNow[idx].first, rowsNow[idx].second); say("pick-applied", "the page's pick ${QualityLabel.text(w)} -> ${QualityLabel.text(rowsNow[idx].first)}") }
-        }
-        say("tracks", "$distinct picture(s) on offer: ${QualityLabel.rows(rowsNow.map { it.first }).joinToString(" | ") { QualityLabel.text(it) }}")
-    }
-
-    private fun qualityRows(): List<QualitySheet.Row> {
-        val p = player ?: return emptyList()
-        val rows = ArrayList<QualitySheet.Row>()
-        val nowFmt = p.videoFormat
-        val now = QualityLabel.now(if (nowFmt != null) QualityLabel.Rung(nowFmt.width, nowFmt.height, nowFmt.frameRate, 0L) else null)
-        rows.add(QualitySheet.Row("Automatic", (if (chosen == null) now else "") .ifEmpty { "the player picks, at most ${capH}p" }, chosen == null, true, null))
-        var seen = HashSet<String>()
-        for ((rung, where) in rowsNow) {
-            val t = QualityLabel.text(rung)
-            if (!seen.add(t)) continue
-            val playable = where.first.isTrackSupported(where.second)
-            rows.add(QualitySheet.Row(t, if (playable) "" else "this tablet cannot play it smoothly", chosen != null && QualityLabel.text(chosen!!) == t, playable, rung))
-        }
-        return rows
-    }
+    private fun qualityRows(): List<QualitySheet.Row> { val p = player ?: return emptyList(); return quality.rows(p) }
 
     private fun openQuality() {
         val rows = qualityRows()
@@ -276,39 +224,9 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
 
     private fun pickQuality(row: QualitySheet.Row) {
         val p = player ?: return
-        val rung = row.tag as? QualityLabel.Rung
-        try {
-            val b = p.trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_VIDEO)
-            if (rung == null) { chosen = null; Prefs.get(applicationContext).nativeMaxH = 0; capH = maxOf(capH, 720) }
-            else {
-                val match = rowsNow.firstOrNull { QualityLabel.text(it.first) == row.title }
-                if (match != null) b.setOverrideForType(TrackSelectionOverride(match.second.first.mediaTrackGroup, listOf(match.second.second)))
-                chosen = rung
-                val cls = QualityLabel.pClass(rung.w, rung.h)
-                Prefs.get(applicationContext).nativeMaxH = cls
-                capH = cls
-            }
-            p.trackSelectionParameters = b.build()
-            applyCap(p)
-            if (!priv) { NativePlayerStats.qualityPicks++; NativePlayerStats.lastQuality = if (rung == null) "Automatic" else QualityLabel.text(rung) }
-            say("quality", if (rung == null) "Automatic" else row.title)
-        } catch (e: Throwable) { say("quality-failed", e.javaClass.simpleName) }
+        quality.pick(p, row)
         sheet.dismiss()
     }
-
-    /** ANS53d.2: play exactly this picture of the stream (the one the page's list named, matched against what the stream really offers): a track override, the cap follows it. */
-    private fun applyRung(rung: QualityLabel.Rung, where: Pair<Tracks.Group, Int>) {
-        val p = player ?: return
-        try {
-            p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_VIDEO).setOverrideForType(TrackSelectionOverride(where.first.mediaTrackGroup, listOf(where.second))).build()
-            chosen = rung
-            val cls = QualityLabel.pClass(rung.w, rung.h)
-            Prefs.get(applicationContext).nativeMaxH = cls
-            capH = cls
-            applyCap(p)
-        } catch (e: Throwable) { say("quality-failed", e.javaClass.simpleName) }
-    }
-
 
     private fun fail(why: String) {
         if (!priv) { NativePlayerStats.errors++; NativePlayerStats.last = why }
