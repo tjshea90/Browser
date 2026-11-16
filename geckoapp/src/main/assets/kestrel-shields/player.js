@@ -89,7 +89,7 @@ window.KestrelVP = window.KestrelVP || (function () {
 
     // ------------------------------------------------------------------------------------------ the session
     function start(v, fs) {
-      S = { v: v, fs: fs, shown: 0, timer: 0, soonTimer: 0, fit: null, down: null, taps: 0, tapWin: 0, ls: [], reports: 0, gone: [], native: false, awayAt: 0, ack: 0, busyUntil: 0, pickedAt: Date.now(), refused: 0 };
+      S = { v: v, fs: fs, shown: 0, timer: 0, soonTimer: 0, fit: null, down: null, taps: 0, tapWin: 0, ls: [], reports: 0, gone: [], native: false, awayAt: 0, ack: 0, busyUntil: 0, pickedAt: Date.now(), refused: 0, late: 0, dueAt: 0 };
       for (var i = 0; i < FILM_EVENTS.length; i++) { v.addEventListener(FILM_EVENTS[i], soon, { passive: true }); S.ls.push(FILM_EVENTS[i]); }
       for (var j = 0; j < EVS.length; j++) window.addEventListener(EVS[j], onEvent, { capture: true, passive: true });
       window.addEventListener('resize', fitSoon, { passive: true });
@@ -114,7 +114,13 @@ window.KestrelVP = window.KestrelVP || (function () {
     function loop() {
       var s = S;
       if (!s) return;
-      s.timer = setTimeout(function () { if (S !== s) return; report(); loop(); }, (s.shown || Date.now() < s.busyUntil) ? C.busy : C.idle);
+      var ms = (s.shown || Date.now() < s.busyUntil) ? C.busy : C.idle;
+      s.dueAt = Date.now() + ms;
+      s.timer = setTimeout(function () { if (S !== s) return; lateBy(s, s.dueAt); report(); loop(); }, ms);
+    }
+    function lateBy(s, due) {                              // ANS51e: how late the page's own timer ran = how long its script thread was busy (the tablet's Yahoo page went quiet for 3.5 to 14 s after a turn); the longest since the last report goes with it
+      var l = Date.now() - due;
+      if (l > s.late) s.late = l;
     }
     function speedUp(s, ms) {                             // a tap, or the app showing its controls: the next answers carry commands, so for a moment the reports come at the quick pace and one comes soon
       s.busyUntil = Date.now() + ms;
@@ -125,7 +131,8 @@ window.KestrelVP = window.KestrelVP || (function () {
     function soon() {                                     // a film event: the state goes soon, once for a burst of them
       var s = S;
       if (!s || s.soonTimer) return;
-      s.soonTimer = setTimeout(function () { s.soonTimer = 0; if (S === s) report(); }, C.soon);
+      var due = Date.now() + C.soon;
+      s.soonTimer = setTimeout(function () { s.soonTimer = 0; if (S === s) { lateBy(s, due); report(); } }, C.soon);
     }
 
     // ------------------------------------------------------------------------------------------ what the page tells (numbers only)
@@ -137,8 +144,10 @@ window.KestrelVP = window.KestrelVP || (function () {
       var d = v.duration, live = 0, dd = -1, b = 0;
       if (d === Infinity) { live = 1; dd = -2; } else if (d > 0) dd = r2(d);
       try { var br = v.buffered; if (br && br.length) b = br.end(br.length - 1); } catch (e) { /* none */ }
+      var tf = 0, df = 0;                                                    // ANS51e: the film's own count of frames shown and dropped (cumulative for the element)
+      try { if (v.getVideoPlaybackQuality) { var q = v.getVideoPlaybackQuality(); tf = q.totalVideoFrames | 0; df = q.droppedVideoFrames | 0; } } catch (e2) { /* none */ }
       return { k: 'vst', t: r2(v.currentTime || 0), d: dd, b: r2(b), p: v.paused ? 1 : 0, e: v.ended ? 1 : 0, m: (v.muted || v.volume === 0) ? 1 : 0, v: Math.round((v.volume || 0) * 100),
-               r: r2(v.playbackRate || 1), rs: v.readyState | 0, ms: isMse(v) ? 1 : 0, l: live, w: v.videoWidth | 0, h: v.videoHeight | 0, ak: S ? S.ack | 0 : 0, aw: S ? S.gone.length : 0, er: v.error ? 1 : 0 };   // ak = the last command of the app carried out
+               r: r2(v.playbackRate || 1), rs: v.readyState | 0, ms: isMse(v) ? 1 : 0, l: live, w: v.videoWidth | 0, h: v.videoHeight | 0, ak: S ? S.ack | 0 : 0, aw: S ? S.gone.length : 0, er: v.error ? 1 : 0, tf: tf, df: df };   // ak = the last command of the app carried out
     }
     function send(m) {
       var s = S;
@@ -149,6 +158,7 @@ window.KestrelVP = window.KestrelVP || (function () {
       if (!s) return;
       if (!s.v.isConnected) { if (!repick(s, true)) stop(); return; }
       s.reports++;
+      var t0 = Date.now();
       if (Date.now() - s.pickedAt >= 1000) {                                  // an ad element that ended and a film that plays in another element, a page that swapped its element
         var r0 = null; try { r0 = s.v.getBoundingClientRect(); } catch (e0) { r0 = null; }
         if (s.v.ended || (r0 && (r0.width < 10 || r0.height < 10)) || (s.v.paused && Date.now() - s.pickedAt >= 3000)) { if (repick(s, false)) return; }
@@ -156,7 +166,10 @@ window.KestrelVP = window.KestrelVP || (function () {
       }
       if (!s.fit && s.reports < 8) fit(s.v);                                  // (the picture's size may be known only after the first reports)
       if (Date.now() - s.awayAt >= 900) putAway(s);                           // (a page that makes its controls late, or again)
-      send(sample(s.v));
+      var m = sample(s.v);
+      m.lt = s.late; s.late = 0;                                              // ANS51e: the longest lateness of this script's timers since the last report, and what this report itself cost (fit, put away, sample), in ms
+      m.pc = Date.now() - t0;
+      send(m);
     }
     // the app's answer: { c: [commands], s: shown 1 | 0, a: 1 = the controls own this film | 0 = not (yet), on: 0 = the controls are not Kestrel's here }
     function answer(r) {
