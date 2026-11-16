@@ -1500,6 +1500,8 @@ class Soak:
                         if began(fm):
                             entered = True
                             break
+            if entered:
+                break
         self.shot("yahoofs-full")
         states = []
         if entered:
