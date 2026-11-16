@@ -13,6 +13,7 @@
 # MUST NEVER BLOCK: always exit 0, no stdout (a hook's stdout is read as JSON).
 set -uo pipefail
 D="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; cd "$D" || exit 0
+bash "$D/tools/private.sh" setup >&2 || true   # PRIV1: INBOX/OUTBOX/.handoff are links into the private repo
 [ -e .git ] || exit 0
 
 INPUT="$(cat)"

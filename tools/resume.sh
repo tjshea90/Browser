@@ -11,6 +11,7 @@
 # tools/test_handoff.sh checks the size. Keep this short; narrative belongs in CHECKPOINT.md / TASKS.md / HANDOFF.md / CLAUDE.md.
 set -uo pipefail
 D="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; cd "$D" || exit 0
+bash "$D/tools/private.sh" setup >&2 || true   # PRIV1: INBOX/OUTBOX/.handoff are links into the private repo
 . tools/appinfo.sh 2>/dev/null || true
 
 TEXT_MODE=0
