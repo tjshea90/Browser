@@ -2183,3 +2183,7 @@
 ## 2026-11-16T18:10:05Z
 > Web tests: 576 of 576 pass, and the JVM suites passed earlier, both on the current head. Only the lab run remains; waiting for its timer.
 <!-- sha:8095b65f3000 -->
+
+## 2026-11-16T18:10:52Z
+> Not finished yet (about 6 minutes in); I'll wait for the next timer rather than poll.
+<!-- sha:c11149ffc72a -->
