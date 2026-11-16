@@ -2446,7 +2446,7 @@ class Soak:
         rect1 = page_rect(self.lab.since(r2))
         check("inline: a drag that starts on the picture scrolled the PAGE (its own scroll moved: %s)" % (rect1[4] if rect1 else None), bool(rect1) and rect1[4] > 60, "page rect rows after the drag: %s" % rect1)
         check("inline: the engine's compositor told the overlay about the scroll ('inline scroll' lines: %d)" % len(scr), len(scr) >= 1, "no 'inline scroll' line: %s" % [e["ev"] + ": " + e["rest"][:60] for e in health_events(self.log.since(m2), "inline")][:6])
-        vb2 = view_box(scr)
+        vb2 = view_box(ev("inline", "scroll-settled", m2)) or view_box(scr)                  # (the box the overlay came to rest at; the rate-limited 'scroll' lines may stop a little before the end)
         nums.append("after the drag: overlay %s, page %s, first scroll line %s" % (vb2, rect1, scr[0]["rest"][:90] if scr else None))
         check("inline: after the scroll the overlay is where the page's video box is (overlay %s, page %s)" % (vb2, rect1[:4] if rect1 else None), close(vb2, rect1, 8), "overlay %s page %s" % (vb2, rect1))
         if rect1 and rect0:
