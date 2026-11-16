@@ -338,4 +338,30 @@ class OwnerRulesTest {
         assertTrue("RW4: the frame sends the video menu itself and only while the panel was not told", content.contains("if (told) return;") && bg.contains("r.src.length <= 2000"))
         assertTrue("RW11: an answer that did not come is not kept", bar.contains("done({ on: false, always: false }, false)"))
     }
+
+    /** ANS51 (owner message 51: the real tablet's Diagnostics of alpha55): what was changed because of those numbers stays changed. */
+    @Test fun theNumbersOfTheTabletsDiagnosticsAreActedOn() {
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        val dir = "geckoapp/src/main/assets/kestrel-shields/"
+        // b: the entry said "video 0x0" for a film in a shadow root, so automatic turning did nothing: the player's own report tells the picture
+        val msg = body(act, "private fun playerMessage(m: org.json.JSONObject): String {")
+        assertTrue(msg, msg.contains("player.onMessage(m); filmPicture(m)"))
+        val fp = body(act, "private fun filmPicture(m: org.json.JSONObject) {")
+        assertTrue(fp, fp.contains("t.gecko.pictureW = w; t.gecko.pictureH = h; t.gecko.picturePlayed = true") && fp.contains("fullscreenPictureKnown()") && fp.contains("m.optString(\"k\") != \"vst\""))
+        // c: a silent page is counted and its late first word is measured (the line said "0 ms, 0 turns measured")
+        val machine = source("core/src/main/kotlin/app/kestrel/core/media/TurnSettleMachine.kt")
+        assertTrue(machine.contains("if (!active) { lateWord(); return }") && machine.contains("silent++; lateFrom = startedAt") && machine.contains("silent pages: "))
+        assertTrue("the silent limit and the nudge were NOT changed on a guess (research/TABLET_DIAG_2026-11-16.md)", source("core/src/main/kotlin/app/kestrel/core/media/TurnSettle.kt").let { it.contains("const val SILENT_MS = 3000L") && it.contains("const val NUDGE_AFTER_MS = 2500L") })
+        // d: a page that is only busy does not end the session (it did four times in 160 s and every restart popped the controls up)
+        val pc = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerController.kt")
+        assertTrue(pc.contains("PlayerRules.pageGone(SystemClock.uptimeMillis() - lastReportAt)") && !pc.contains("SILENT_END_MS"))
+        // e: stalls, the script's own cost and the film's frames travel from the page to Diagnostics and to "Real video"
+        val vp = source(dir + "player.js")
+        assertTrue(vp.contains("m.lt = s.late; s.late = 0;") && vp.contains("m.pc = Date.now() - t0;") && vp.contains("tf: tf, df: df") && vp.contains("getVideoPlaybackQuality"))
+        assertTrue(source(dir + "background.js").contains("lt: n(m.lt, 0, 3600000), pc: n(m.pc, 0, 3600000), tf: n(m.tf, 0, 2000000000), df: n(m.df, 0, 2000000000)"))
+        assertTrue(pc.contains("health.onReport(m.optInt(\"lt\"), m.optInt(\"pc\"), m.optInt(\"tf\", -1), m.optInt(\"df\", -1)") && pc.contains("${'$'}{health.line()}") && pc.contains("if (quiet) return"))
+        assertTrue("the frames reach the Real video line", act.contains("player.onLook = { page, frames, dropped, seconds, w, h -> filmLook(page, frames, dropped, seconds, w, h) }") && act.contains("videoQuality.add(host, frames, dropped, 0, seconds, w, h"))
+        // f: how long the app's own part and the engine's part of a turn take is written down
+        assertTrue(source("geckoapp/src/main/kotlin/app/kestrel/browser/web/KestrelGeckoView.kt").contains("the engine's part took") && act.contains("the app's own handling took"))
+    }
 }
