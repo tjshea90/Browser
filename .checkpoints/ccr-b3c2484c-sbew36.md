@@ -1,15 +1,13 @@
-# CHECKPOINT 2522 — read me first, then TASKS.md
+# CHECKPOINT 2523 — read me first, then TASKS.md
 
-**Written:** 2026-11-16T16:17:07Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `29dfc29f` (this checkpoint is the commit after it)
+**Written:** 2026-11-16T16:17:45Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `d0daa8b8` (this checkpoint is the commit after it)
 
 ## Just done
-gated kestrel-g-v0.3.0-alpha59 (gecko code 160) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
+alpha59 RELEASE DISPATCHED (ONE time): android.yml run 43905841979 (run 174, app=gecko full_build=true, head d0daa8b8, queued 16:17Z); lab ho run 43903287513 (head 09476513): 53 check rows ok, 0 issues incl. hlsdecoy, audioonly, hlstwo; web 573/573; ship gates ok
 
 ## Do this next
-TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref ccr-b3c2484c-sbew36, inputs {"app":"gecko","full_build":"true","note":"alpha59: your message 55 (on alpha58). (1) FIXED: the black picture on Yahoo. Yahoo gives the browser a main list of the film and, next to it, separate lists for the picture, the sound and the subtitles, all as long as the film; Kestrel's player was handed the sound or the subtitles list, so it showed the time and nothing else. Now it always takes the main list (the one that offers pictures), and if a film ever plays for 7 seconds with no picture, Kestrel's player hands it back to the page, which plays it, with a short message. (2) FIXED: choosing another video resumed the old one where it had stopped: the newest main list the page asked for is the film now, so each video gets its own stream and starts at the beginning. (3) NOT YET: you asked for the player inside the page, with the page around it, instead of full screen. I am building that now (the video will sit over the page's own video box and follow the page when you scroll, with a full-screen button); it comes in the next release. Until then it still opens full screen; Settings > Web videos play in > The page's own player keeps the page's own player. TESTED: unit tests, 573 web tests in headless browsers and 53 emulator checks of the hand-over on the real Firefox engine, including a copy of Yahoo's list layout (a main list with a long address next to short sound and picture lists), a page that moves on to another video (it gets that video's own stream and starts at the beginning) and a stream with sound but no picture. I also looked at the real Yahoo page from the build machine to find the cause. NOT on your tablet: please try the same Yahoo video again and send the Diagnostics line Web videos in Kestrel's own player (it now names the site of the list it took)."}.
-When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha59), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha59 "alpha59: your message 55 (on alpha58). (1) FIXED: the black picture on Yahoo. Yahoo gives the browser a main list of the film and, next to it, separate lists for the picture, the sound and the subtitles, all as long as the film; Kestrel's player was handed the sound or the subtitles list, so it showed the time and nothing else. Now it always takes the main list (the one that offers pictures), and if a film ever plays for 7 seconds with no picture, Kestrel's player hands it back to the page, which plays it, with a short message. (2) FIXED: choosing another video resumed the old one where it had stopped: the newest main list the page asked for is the film now, so each video gets its own stream and starts at the beginning. (3) NOT YET: you asked for the player inside the page, with the page around it, instead of full screen. I am building that now (the video will sit over the page's own video box and follow the page when you scroll, with a full-screen button); it comes in the next release. Until then it still opens full screen; Settings > Web videos play in > The page's own player keeps the page's own player. TESTED: unit tests, 573 web tests in headless browsers and 53 emulator checks of the hand-over on the real Firefox engine, including a copy of Yahoo's list layout (a main list with a long address next to short sound and picture lists), a page that moves on to another video (it gets that video's own stream and starts at the beginning) and a stream with sound but no picture. I also looked at the real Yahoo page from the build machine to find the cause. NOT on your tablet: please try the same Yahoo video again and send the Diagnostics line Web videos in Kestrel's own player (it now names the site of the list it took)."
-NEVER ship kestrel-g-v0.3.0-alpha59 twice (check BUILDLOG.md and the Releases first).
+do NOT dispatch alpha59 again unless run 43905841979 ends WITHOUT a tag. Wait for it (git ls-remote --tags origin | grep alpha59; actions_list list_workflow_jobs 43905841979 latest perPage 8 is ~6 KB; get_release_by_tag kestrel-g-v0.3.0-alpha59): tag + test-jvm + test-js + build-gecko success + APK on the release; ONLY THEN bash tools/record-release.sh kestrel-g-v0.3.0-alpha59 "$(cat docs/handoff/ALPHA59_RELEASE_NOTE.txt)"; tick ANS55a-c,e and ANS56a-b in TASKS; HANDOFF alpha59 bullet; answer owner messages 55 + 56 (Release link on its own line; the inline player is NOT in alpha59: say so). Meanwhile build the inline player (ANS55f): PlayerFactory + InlinePlayer + PlayerControlsView flags + BrowserActivity overlay + gate geometry; draft design in research/ANS55_INLINE_PLAYER.md
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -18,6 +16,7 @@ NEVER ship kestrel-g-v0.3.0-alpha59 twice (check BUILDLOG.md and the Releases fi
 
 ## Last ten checkpoints
 ```
+  d0daa8b8 ckpt 2522: gated kestrel-g-v0.3.0-alpha59 (gecko code 160) and pushed it: handoff self-
   c4c4f1df ckpt 2521: pre-ship: alpha59: your message 55 (on alpha58). (1) FIXED: the black pictur
   04ffa9c9 ckpt 2520: lab ho run dispatched: 43903287513 (head 09476513 = ckpt 2519, started 16:03
   09476513 ckpt 2519: owner message 56 written into TASKS.md (ANS56a-b): 'even when I selected a t
@@ -27,8 +26,4 @@ NEVER ship kestrel-g-v0.3.0-alpha59 twice (check BUILDLOG.md and the Releases fi
   3eb91380 ckpt 2515: alpha58 SHIPPED and RECORDED: Release kestrel-g-v0.3.0-alpha58 (code 159, AP
   8dccb965 ckpt 2514: alpha58 RELEASE DISPATCHED AGAIN (the first run 43843245891 made no release:
   596e4e4a ckpt 2513: release run 43843245891 FAILED before any build: GitHub's web-test job faile
-  d639fb36 ckpt 2512: alpha58 RELEASE DISPATCHED (ONE time): android.yml run 43843245891 (run 170,
 ```
-
-(1 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
