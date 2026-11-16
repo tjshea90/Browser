@@ -472,6 +472,12 @@ class OwnerRulesTest {
         val np = source("geckoapp/src/main/kotlin/app/kestrel/browser/NativePlayerActivity.kt")
         assertTrue("it follows the tablet (no forced landscape), has the rotate button and a surface that is a point until the shape is known", np.contains("FullscreenTurner(this, { FullscreenTurn.MODE_FOLLOW }") && !np.contains("SENSOR_LANDSCAPE") && np.contains("FrameLayout.LayoutParams(1, 1, Gravity.CENTER)") && np.contains("showRotate = true") && np.contains("override fun onRotate() { turner.rotatePressed()"))
         assertTrue("it lists every picture of the stream and carries the pick out as a track override, remembered", np.contains("TrackSelectionOverride(") && np.contains("Prefs.get(applicationContext).nativeMaxH = cls") && np.contains("controls.showQuality = distinct >= 2"))
+        // lab run 43812820865: the rule OFF must give the page's own autoplay back; the lab drives the player screen through a DEBUG-only exported activity, the release stays closed
+        assertTrue("the rule off gives the page's autoplay back (markup and script)", gate.contains("why === 'off' && wantAuto") && gate.contains("dAutoplay.set.call(el, true)"))
+        val mainManifest = source("geckoapp/src/main/AndroidManifest.xml")
+        val npDecl = mainManifest.substring(mainManifest.indexOf("android:name=\".NativePlayerActivity\""), mainManifest.indexOf("android:name=\".NativePlayerActivity\"") + 500)
+        assertTrue("the release manifest keeps the player screen closed to other apps", npDecl.contains("android:exported=\"false\""))
+        assertTrue("only the DEBUG variant opens it (the lab's am start)", source("geckoapp/src/debug/AndroidManifest.xml").let { it.contains("app.kestrel.browser.NativePlayerActivity") && it.contains("android:exported=\"true\"") })
         // d.2: the page's own full-screen controls get the list too (a hand-over: the page's player cannot be told to change its picture)
         val flow = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/VideoFlow.kt")
         assertTrue("the pictures come from the film's master playlist and a pick starts Kestrel's own player at the page's second with that picture", flow.contains("PageQuality.rungs(master.variants)") && flow.contains("fun pageFilm(tab: Tab): PageFilm?") && flow.contains("NativePlayerActivity.launch(a, c.url, headers, startMs, 720, tab.isPrivateTab, tab.gecko.pictureW, tab.gecko.pictureH, rung, rung == null)"))
