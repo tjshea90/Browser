@@ -1654,6 +1654,16 @@ class Soak:
             self.kp_wake.append((label, [ln.strip()[:150] for ln in out.splitlines() if ln.strip()][:8]))
         check("a full-screen film got Kestrel's controls", bool(ev("player", "start")), "no 'player start' line")
         check("the controls show when full screen begins", bool(ev("player", "shown")), "no 'player shown' line")
+        # ANS51b (owner message 51): the old video finder does not see a film inside a web component (the tablet's entry said 'video 0x0'), so automatic turning must get the size from the player's own first report: the
+        # screen goes sideways by itself a moment after full screen began. Either the entry knew the size (a turn 'to=6' at once) or a 'film-picture' line and a 'picture became known' turn follow.
+        t_end = time.time() + 10
+        while time.time() < t_end and not any("became known" in e["rest"] or "to=6" in e["rest"] for e in ev("fullscreen", "turn")):
+            time.sleep(0.5)
+        turns = ev("fullscreen", "turn"); fpic = ev("fullscreen", "film-picture")
+        entry0 = [e for e in turns if "why=full screen starts" in e["rest"] and "video 0x0" in e["rest"]]
+        check("the wide film turned the screen sideways by itself", any("became known" in e["rest"] or "to=6" in e["rest"] for e in turns), "turn lines: %s" % [e["rest"][:90] for e in turns])
+        check("a picture that was unknown at entry came from the player's report", (not entry0) or bool(fpic), "entry said video 0x0 and there is no 'film-picture' line (lines: %s)" % [e["rest"][:90] for e in turns])
+        self.kp_pic_path = "unknown at entry, from the player's report: %s" % [e["rest"][:40] for e in fpic] if entry0 else "known at entry"
         self.shot("kp-1-entered")
         time.sleep(4.5)
         wake("the film plays in full screen")
