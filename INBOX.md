@@ -1814,6 +1814,14 @@ Counters: frames.jank=46  gecko.firstComposite=8  look.saved=14  mem.trim=1  mem
 Also, even when I selected a totally different video, it opened the player with the old video still playing in the same spot
 ```
 
+## 2026-11-16T16:16:28Z
+```
+There is another claude account working on this repo. Do not interfere with it or write anything to the repo. Consider the best way to adopt the keyboard from the browser app and make it a separate app for my tablet which I can use as my main default keyboard. I will eventually build it and put the project in its own repo. Research the keyboard as it is now, how to turn it into a dedicated keyboard app, missing features that I can add to make it comparable or better than Google Gboard, how to improve the glide typing learning engine so that the more I type, the better it is at predicting the correct words based on both more commonly typed words with similar finger glide patterns, commonly typed words in general, smart predictions based on the context of the sentence already typed so far, etc. also consider how to make the app as lightweight as possible and fast. Optimize it for my hardware. I want it to have features like Gboard, including but not limited to an option to translate to Mexican Spanish. Write a detailed plan and report on how to adopt and build this app and how to improve it and all the steps to take. Send me the report as a file which I can attach to a new claude session with no context and optimized for claude to read and understand and know exactly what to do and how to read your findings
+```
+
+## 2026-11-16T16:51:41Z
+```
+Q1 come up with a simple but cool name for the keyboard q2 private GitHub repo, I haven't made it yet and I don't know the extra steps I need to make it work private q3 I only want it to translate to Mexican Spanish when I turn the setting on, I will not type Spanish. If the Spanish translation is offline, I need a very good model that produces good Mexican Spanish without strange translations or word by word without context
 ## 2026-11-16T17:04:36Z
 ```
 Make it so if I double tap on the right side or left side of a video to fast forward or rewind 10 seconds, it automatically closes the video player controls. It should recognize that if I'm only fast forwarding or rewinding the video, I'm not selecting video controls so the video should stay visible without controls on top. Build a feature similar to vlc media player which I can do a more accurate fast forward or rewind in larger and smaller increments by long pressing around the middle of the screen and dragging right to fast forward and left to rewind. The farther I drag, the more it fast forwards or rewinds. Model it from his vlc media player handles this. Finally, just like vlc media player, if I drag up or down on the left side of the video, it increases or decreases video brightness, and if I drag up or down on the right side of the video, it increases or decreases volume. Model this off how vlc media player handles this. 
@@ -1822,4 +1830,7 @@ Make it so if I double tap on the right side or left side of a video to fast for
 ## 2026-11-16T17:38:06Z
 ```
 I went to a web site in private mode, the cloudflare verification was very slow, and while it was loading my password typing was lagging very bad. When I logged in, switched to a different app and came back to Kestrel, it reloaded the page and I was logged out
+## 2026-11-16T17:11:52Z
+```
+Q4 make it friendly tu, q5 for Mexican Spanish translations only, do not translate offline. Use the same service that my linkmeter app uses (read the repo) and also the same method such as press enter and it automatically translates then press enter again and it sends. Also make it so I can long press Spanish messages and translate them to English just like the linkmeter app does. Put all of this into the file for claude
 ```

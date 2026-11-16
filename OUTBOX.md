@@ -1959,6 +1959,32 @@
 > The web tests pass (573 of 573); the emulator run for "a different video gets its own stream" is in progress.
 <!-- sha:e6e9f19fa4be -->
 
+## 2026-11-16T16:33:54Z
+> The report is done and sent as one Markdown file: `/tmp/claude-0/-home-user-Browser/12796fbc-bb0d-552d-b005-24654337a327/scratchpad/KEYBOARD-APP-PLAN.md`. It's about 20,000 words. I wrote no code and ran no tests, nothing was run on your tablet, and my web checks were search results only, not full pages.
+>
+> The new session should open with this: "Read KEYBOARD-APP-PLAN.md completely, then do section 11 (bootstrap) and continue with section 12 in order." Sections 0, 1, 2 and 12 are the minimum it needs.
+>
+> ## What I found
+> - **Most of the hard part already exists.** The browser has a complete glide engine in pure Kotlin: the decoder, an 83k-word list with word pairs, and learning of your words, pairs, triples, corrections, glide shapes and thumb habit. It has 122 unit tests and a learning-file export. It has no Android dependencies, so it moves to a new app unchanged.
+> - **The missing parts** are everything that makes it a system keyboard. That means the Android keyboard service, tap-typing prediction and autocorrect, suggestions, emoji, clipboard, and any layout beyond English QWERTY. I listed 12 specific gaps in the report, including that the code only handles letters a–z, which blocks Spanish accents and ñ until it's changed.
+>
+> ## What the plan recommends
+> - **Build on the browser's engine** instead of forking HeliBoard, FlorisBoard or FUTO. HeliBoard is GPL-3.0 and its glide engine is a closed library it doesn't ship. FUTO's licence restricts forks, and FlorisBoard uses Jetpack Compose, which is too heavy for 2 GB.
+> - **No internet permission in the keyboard.** A keyboard sees everything you type, so it can't send it anywhere. Translation therefore runs offline.
+> - **Learning upgrades** to get the "better the more I type" behaviour:
+>   - a per-key touch model;
+>   - shape memory that carries over between similar words, so a habit learned on "for" also helps "four" and "form";
+>   - word-pair and three-word context, plus a topic signal for the sentence so far;
+>   - a way to measure accuracy on your real thumb without the data leaving the device.
+> - **Translation to Mexican Spanish.** It uses an offline translation model in its own process, plus a Mexican-Spanish clean-up layer. A generic Latin-American model isn't Mexican by itself, and DeepL says so about its own. Whether such a model runs on a 32-bit ARM tablet is unverified, so the plan starts with a test on your tablet.
+> - **Phased task list** of about 30–40 sessions, with five checkpoints where it stops for you to test.
+>
+> ## What you should know
+> - **I didn't touch the Kestrel repo.** Its own hooks did write there. Its message-capture hook committed your message into `INBOX.md` on my session branch `claude/laughing-cori-u22au1`, and a similar hook will record this reply into `OUTBOX.md` on the same branch. That branch is mine, not the other account's, and you can delete it. The report itself was written outside the repo.
+> - **Your Spanish decision.** In the browser project you once said "Do not include Spanish". I treated your new translate request as overriding that, but whether you want to type in Spanish too is an open question in the report.
+> - **Safety and signing.** A broken keyboard on a tablet with no other keyboard locks you out of typing, so the plan builds the escape hatches first. The new app should be signed with a private key, not the browser's public one. Otherwise any APK could silently replace your keyboard, and changing keys later erases what it learned.
+> - **Questions to answer early.** Q1 is the app name. Q2 is a private or public GitHub repo, where I recommend private. Q3 is whether you want to type in Spanish or only translate. The full list, with defaults, is section 15.
+<!-- sha:03a0e0a3ae17 -->
 ## 2026-11-16T16:07:10Z
 > Waiting for the emulator run (expected around 16:14 UTC).
 <!-- sha:7735f2ff8dd0 -->
@@ -2019,6 +2045,55 @@
 > - ANS52j
 <!-- sha:50a847bda896 -->
 
+## 2026-11-16T16:52:54Z
+> Your answers are clear, and the translation-quality requirement changes the plan, so I'll research it properly before updating the report. First I'm checking the strongest offline translation models, whether they fit your tablet, GitHub's private-repo limits, and the keyboard name.
+<!-- sha:a95e4167d154 -->
+
+## 2026-11-16T17:00:32Z
+> I've updated the plan with your three answers and sent it as `KEYBOARD-APP-PLAN.md`; use this one instead of the earlier file. I couldn't run any translation model here, so the translation quality claims are estimates and search results, and the plan tests quality before building anything.
+>
+> ## Your answers
+>
+> **Q1, the name: Swoop.** It fits glide typing, and kestrels swoop, so it echoes your browser. I found no Android keyboard with that name. The apps are `app.swoop.keyboard` and, if you want them, the translator add-ons `app.swoop.translate` and `app.swoop.online`. The repo name is `swoop-keyboard`. You can rename it later.
+>
+> **Q2, private repo.** Section 11.0 is a click-by-click list. The short version:
+> 1. On GitHub tap **+**, then **New repository**. Name it `swoop-keyboard`, choose **Private**, and leave README, .gitignore and license all off.
+> 2. Let Claude in at https://github.com/apps/claude/installations/select_target by choosing "Only select repositories" and adding it. Also check GitHub is connected at https://claude.ai/connect-github.
+> 3. Start a new Claude Code session on that repo, attach the file, and say the start phrase.
+>
+> A private repo has two side effects:
+> - **Downloading APKs:** a release link on a private repo only works while you're signed in to GitHub in that browser, so sign in once in the Kestrel browser. The plan describes a workaround if that's a nuisance.
+> - **Build minutes:** private repos get 2,000 free build minutes a month, which is plenty for building the app. That figure is from older GitHub docs, so check your usage page.
+>
+> **Q3, no Spanish typing, translation only when you turn it on.**
+> - I removed everything about Spanish layouts and dictionaries.
+> - The setting is off by default. When it's off there is no button, nothing running, and no network use.
+>
+> ## Translation quality (this is the part to read)
+>
+> A modern translator doesn't translate word by word; it translates whole sentences. The real risks are idioms translated literally, wrong politeness level, losing context between sentences, and Spain-style words in Mexican text.
+>
+> - **Offline on your tablet.** With 2 GB of RAM and a slow processor, the best model that fits is about 75–240 million parameters. It would be a good translator for ordinary messages, but not as good as a large AI model on idioms, slang and context.
+> - **Large AI models don't fit.** Google's new open TranslateGemma 4B needs about 2 GB on its own, so it doesn't fit.
+> - **Online option.** The tablet's weak spot is the one thing a large model fixes. Claude Sonnet 5.5 costs about a third of a cent per message, and Haiku 5.5 about 1/70 of a cent. It would sit in a separate app so the keyboard itself stays free of internet access. The catch is that it needs an Anthropic account and key, and your text goes to Anthropic.
+> - **Test before building.** The plan has no engine work until a blind test passes.
+>   - A session writes 150 test texts plus correct Mexican answers, and you fix them.
+>   - GitHub's servers 
+> [... 469 characters omitted ...]
+> lgar in Mexico) and handles "$" amounts and dates. It starts from a seed word list that you need to review.
+>
+> ## Not done
+> - I couldn't test the models hands-on. The sandbox's safety check blocked a script that tried to reach model sites, and I didn't work around it. That's why the test runs on GitHub's servers.
+> - Items I couldn't confirm are marked in the file's appendix.
+>
+> ## Open questions
+> Q4–Q14 in section 15 all have defaults, so none blocks starting. The ones that matter most:
+> - **Q4:** should translation use friendly "tú" or formal "usted" by default, and should it ever translate Spanish into English?
+> - **Q5:** are you willing to add the online app after you've seen the test results? I'd ask again then.
+> - **Q13:** what phone do you have, or how much RAM? A big-RAM phone could run a better offline translator than the tablet.
+>
+> Everything else from the first plan carries over unchanged.
+<!-- sha:53dc0e3b90d3 -->
 ## 2026-11-16T16:53:27Z
 > Still waiting on the emulator run and the review. I'll continue when they finish.
 <!-- sha:af56b43a1f10 -->
@@ -2038,3 +2113,49 @@
 ## 2026-11-16T17:36:37Z
 > Waiting for the timer, the web tests and the emulator run.
 <!-- sha:dfbcf74a08d4 -->
+## 2026-11-16T17:19:46Z
+> I updated the plan with your answers and sent it as `KEYBOARD-APP-PLAN.md` (use this one; it replaces the earlier file). I read your `tjshea90/LinkMeter` repo read-only and changed nothing in it, and I didn't run any of its translation code or call the services.
+>
+> ## What LinkMeter uses, now in the plan
+> - **MyMemory first:** it's a free service with no account, asked for Mexican Spanish (`es-MX`). It allows about 5,000 characters a day, and each request is capped at 500 bytes.
+> - **Google Translate as the fallback:** the free endpoint behind Gboard's translation, used when MyMemory is used up or unreachable.
+> - **A Mexican-Spanish safety layer on every result:**
+>   - "coger" is vulgar in Mexico, so it becomes "agarrar".
+>   - "coche" becomes "carro".
+>   - "ordenador" becomes "computadora".
+>   - "vosotros" forms become "ustedes".
+> - **Plain texting words are spelled out before sending to Google:** "idk", "tbh" and so on.
+> - The plan tells the new session to port this code and its roughly 56,000 tests to Kotlin and require the same results.
+> - **Friendly "tú":** the services answer in "tú" for casual English. I added a test list and a guard that asks the other service if an answer comes back formal.
+>
+> ## "Enter translates, Enter again sends"
+> LinkMeter's Send logic is ported as is. The first Enter replaces your English with the Spanish for you to check, and Undo and "Send my English" are there. The second Enter sends. It follows the same rules as LinkMeter, and it's off everywhere until you switch an app on.
+>
+> ## What a keyboard cannot do (the plan says so plainly)
+> - **Apps with their own Send button:** most texting apps, including LinkMeter, have one. The keyboard can translate on Enter, but you tap the app's own Send yourself.
+> - **LinkMeter itself:** it already translates on its own, so the keyboard skips it. Otherwise the text would be translated twice.
+> - **Long-pressing any message in any app:** this is impossible for a keyboard. The plan gives three routes that do work:
+>   - the text-selection menu, which shows "Translate to English" wherever an app allows selecting text;
+>   - copy the message, then use the keyboard's translate button;
+>   - select text in the box you're typing in.
+>
+>   LinkMeter's own long press stays as it is.
+>
+> ## What I removed
+> All the offline-model, test-first, fine-tune, and large-AI-model translation material is gone. The old Spanish-typing material was already removed in the last round.
+>
+> ## Things to know
+> - **Internet permission:** I kept the keyboard free of any internet permission, so it can't send what you type anywhere. Translation lives in a second tiny app, Swoop Translate, which is the only one that can use the internet. If you'd rather have one app like LinkMeter, say so and the plan changes.
+> - **Service limits:** MyMemory's free allowance is small, and over a carrier hotspot the shared address may use it up faster. Google's endpoint is unofficial and could change or block you. The plan covers both with clear messages and tests, but I couldn't try live requests from here.
+> - **LinkMeter's own notes:** they say the translation hadn't been tried on your tablet when written, so your real use is the only real test.
+>
+> ## Questions for you
+> The new ones are in section 15, and the defaults let work start:
+> - **Q15:** keep the internet permission in the separate tiny app (my default) or put it in the keyboard?
+> - **Q16:** in which apps do you want translate-on-Enter? The default is none until you switch each one on.
+> - **Q17:** is it OK that in apps with their own Send button you tap Send yourself?
+> - **Q18:** is it OK to translate received messages through the selection menu or by copying, instead of long-pressing any bubble?
+> - **Q19:** should LinkMeter's message box change so Enter sends there too? The default is no. That would be a change in the other repo, and I'd only do it if you ask.
+>
+> Still open from before: your repo setup (steps in the plan), then a new session with the file attached.
+<!-- sha:998bcb1804a1 -->
