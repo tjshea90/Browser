@@ -43,6 +43,8 @@ class FilmHealth {
         if (lastTf < 0 || totalFrames < lastTf || droppedFrames < lastDf) { lastTf = totalFrames; lastDf = droppedFrames; return }   // the first look at this element (or a new one): only a baseline
         val df = totalFrames - lastTf; val dd = droppedFrames - lastDf
         lastTf = totalFrames; lastDf = droppedFrames
+        // a film cannot show more frames than a display can draw: a jump like that is another element (an ad element at 150 frames, then the film's element at 1800: the page swapped elements without telling us), only a new baseline
+        if (df > MAX_FPS * maxOf(1L, dt / 1000L) + 60L) return
         if (df <= 0) return
         frames += df; dropped += dd.coerceAtMost(df)
         lookFrames += df; lookDropped += dd.coerceAtMost(df); lookMs += dt
@@ -73,5 +75,7 @@ class FilmHealth {
         const val LOOK_MS = 15_000L
         /** One report counts for at most this much film time (a stall of the page is not film time). */
         const val MAX_STEP_MS = 10_000L
+        /** No film shows more frames per second than this: a bigger jump of the counter is a swapped element. */
+        const val MAX_FPS = 120L
     }
 }

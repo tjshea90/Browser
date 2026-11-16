@@ -32,6 +32,18 @@ class FilmHealthTest {
         assertEquals(360L, f.frames)
     }
 
+    @Test fun aJumpOfTheCounterThatNoDisplayCouldShowIsASwappedElementNotFrames() {
+        val f = FilmHealth()
+        f.onReport(0, 1, 150, 0, 640, 360, 0L); f.onReport(0, 1, 180, 0, 640, 360, 1000L)       // an ad element: 30 frames in a second
+        assertEquals(30L, f.frames)
+        f.onReport(0, 1, 1800, 0, 640, 360, 2000L)                                               // the page swapped to the film's element, already at 1800: not 1620 frames in one second
+        assertEquals("only a new baseline", 30L, f.frames)
+        f.onReport(0, 1, 1830, 0, 640, 360, 3000L)
+        assertEquals(60L, f.frames)
+        f.onReport(0, 1, 2100, 2, 640, 360, 13_000L)                                              // a long gap (a stalled page): 270 frames over the 10 s step are fine
+        assertEquals(330L, f.frames)
+    }
+
     @Test fun droppedNeverExceedsShown() {
         val f = FilmHealth()
         f.onReport(0, 1, 10, 0, 640, 360, 0L)

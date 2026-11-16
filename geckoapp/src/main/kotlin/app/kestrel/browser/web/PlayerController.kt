@@ -52,12 +52,13 @@ class PlayerController(
     /** ANS51e: how the page's script and the film did (stalls, the player script's own cost, frames shown and dropped), measured inside the page. */
     private val health = FilmHealth()
     private var lookPage = ""
+    private var lookShadow = false     // the film sits in a web component's shadow tree: only then is its frame count new to "Real video" (the page script of the old video finder counts every other film already; review of alpha56: double counting)
     /** The frames of the film for the "Real video" statistics: (page address, frames, dropped, seconds, picture width, height); the activity turns the address into a host. Never called for a private tab. */
     var onLook: (String, Int, Int, Int, Int, Int) -> Unit = { _, _, _, _, _, _ -> }
     private fun deliverLook(force: Boolean) {
         if (quiet) return
         val l = health.takeLook(force) ?: return
-        onLook(lookPage, l.frames, l.dropped, l.seconds, l.w, l.h)
+        if (lookShadow) onLook(lookPage, l.frames, l.dropped, l.seconds, l.w, l.h)
     }
 
     init { view.listener = this }
@@ -131,7 +132,7 @@ class PlayerController(
                     m.optInt("rs", 4), m.optInt("ms") == 1, m.optInt("l") == 1 || len == -2.0, m.optInt("w"), m.optInt("h"), SystemClock.uptimeMillis(), m.optInt("ak", 0), m.optInt("er") == 1))
                 if (!quiet) {
                     health.onReport(m.optInt("lt"), m.optInt("pc"), m.optInt("tf", -1), m.optInt("df", -1), m.optInt("w"), m.optInt("h"), SystemClock.uptimeMillis())
-                    lookPage = m.optString("p"); deliverLook(false)
+                    lookPage = m.optString("p"); lookShadow = m.optInt("sh") == 1; deliverLook(false)
                     val lt = m.optInt("lt")
                     if (lt >= FilmHealth.STALL_MS) say("stall", "the page's script was busy for about $lt ms (its timer ran that late)")
                 }
