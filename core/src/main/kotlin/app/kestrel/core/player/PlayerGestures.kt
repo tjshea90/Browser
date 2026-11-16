@@ -287,7 +287,7 @@ class PlayerGestures(private val h: Host, var cfg: Config) {
 
     private fun vertical(x: Float, y: Float, armed: Boolean = false) {
         if (s != S.LEVEL) return
-        val kind = levelKind ?: run { s = S.IGNORED; return }
+        val kind = levelKind ?: run { s = S.IGNORED; h.finished(); return }               // (the long-press-first rule armed the gestures, then the drag began in the dead strip: the armed state ends here, the host clears what the arming showed; review of alpha61)
         if (armed) lastY = startY
         val dy = y - lastY
         if (dy != 0f) { lastY = y; h.level(kind, GestureMath.levelDelta(dy.toDouble(), cfg.rangePx.toDouble())) }
