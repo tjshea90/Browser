@@ -35,7 +35,7 @@ test('VP1: a full-screen film tells the app its state (numbers only); nothing be
   await fullscreen(page);
   const m = await firstState(page);
   assert.equal(m.k, 'vst'); assert.equal(m.d, 60); assert.equal(m.p, 1); assert.equal(m.e, 0); assert.equal(m.ms, 0); assert.equal(m.l, 0); assert.ok(m.rs >= 3, 'ready state ' + m.rs);
-  assert.deepEqual(Object.keys(m).sort(), ['ak', 'aw', 'b', 'd', 'e', 'er', 'h', 'k', 'l', 'm', 'ms', 'p', 'r', 'rs', 't', 'v', 'w'], 'only numbers: ' + JSON.stringify(m));
+  assert.deepEqual(Object.keys(m).sort(), ['ak', 'aw', 'b', 'd', 'df', 'e', 'er', 'h', 'k', 'l', 'lt', 'm', 'ms', 'p', 'pc', 'r', 'rs', 't', 'tf', 'v', 'w'], 'only numbers: ' + JSON.stringify(m));
   await page.context().close();
 });
 
@@ -330,6 +330,24 @@ test('VP2: the page\'s own controls are found inside nested shadow trees below t
   await page.waitForFunction(() => window.__deep() === 'none', null, { timeout: 5000 });
   await page.evaluate(() => document.exitFullscreen());
   await page.waitForFunction(() => window.__deep() === 'flex', null, { timeout: 5000 });
+  await page.context().close();
+});
+
+test('ANS51e: the report says how late the page\'s own timer ran (a busy page), what the script itself cost, and the film\'s frames shown and dropped (numbers only)', async () => {
+  const page = await open(BOX, { player: true, cfg: { kp: true } });
+  await page.evaluate(() => { window.KestrelVP.c.idle = 300; window.KestrelVP.c.busy = 100; });
+  await fullscreen(page); await firstState(page);
+  await wait(page, 900);
+  let all = await states(page);
+  assert.ok(all.length >= 3, 'reports came: ' + all.length);
+  assert.ok(all.every((m) => m.lt >= 0 && m.lt < 600), 'a free page: its timers are on time: ' + JSON.stringify(all.map((m) => m.lt)));
+  assert.ok(all.every((m) => m.pc >= 0 && m.pc < 250), 'the script\'s own work is small: ' + JSON.stringify(all.map((m) => m.pc)));
+  assert.ok(all.every((m) => Number.isInteger(m.tf) && Number.isInteger(m.df) && m.df <= m.tf + 5), 'frames shown / dropped are numbers');
+  await page.evaluate(() => { const t = Date.now(); while (Date.now() - t < 1700) { /* a page whose script thread is busy */ } });
+  await wait(page, 900);
+  all = await states(page);
+  assert.ok(all.some((m) => m.lt >= 1000), 'the first report after the busy time says the timer ran about 1.7 s late: ' + JSON.stringify(all.map((m) => m.lt)));
+  assert.ok(all[all.length - 1].lt < 600, 'and the next ones are on time again (the number is the longest SINCE the last report)');
   await page.context().close();
 });
 
