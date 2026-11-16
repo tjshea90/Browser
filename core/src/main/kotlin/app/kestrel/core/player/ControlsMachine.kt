@@ -72,7 +72,7 @@ class ControlsMachine(private val h: Host) {
     }
 
     /** The screen turned: the cover is up, the controls go at once. */
-    fun turnStarted() { turning = true; h.cancel(); if (shown) { shown = false; h.apply(false, false) } }
+    fun turnStarted() { turning = true; pinned = false; h.cancel(); if (shown) { shown = false; h.apply(false, false) } }     // (a finger on a control when the screen turned: its lift will not come)
 
     /** The cover is gone: the controls show for a moment. */
     fun turnEnded() { turning = false; if (active) show(scaled(PlayerRules.AFTER_TURN_MS)) }

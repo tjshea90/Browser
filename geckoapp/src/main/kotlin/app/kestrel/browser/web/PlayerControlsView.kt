@@ -102,6 +102,7 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
     fun show(shown: Boolean, animate: Boolean) {
         shownTarget = shown
         fade?.cancel()
+        if (!shown && pressed != Hit.NONE) { pressed = Hit.NONE; scrub = -1.0; listener?.onPin(false) }   // a finger was on a control when the controls went (a turn of the screen): its lift would be dropped, so let go of the pin here
         if (!animate) { alphaNow = if (shown) 1f else 0f; if (!shown) { pressed = Hit.NONE; scrub = -1.0 }; invalidate(); return }
         val to = if (shown) 1f else 0f
         fade = ValueAnimator.ofFloat(alphaNow, to).apply {

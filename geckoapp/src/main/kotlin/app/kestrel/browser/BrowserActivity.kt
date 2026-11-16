@@ -2830,7 +2830,9 @@ open class BrowserActivity : Activity(), DockListener {
         applyImmersive(on)
         root.requestApplyInsets() // FSB1: the padding follows the bars: zero while the system hides them, their size while it keeps them
         vpTries = 0; Io.main.removeCallbacks(vpUndo); vpUndo.run() // FB4: a new full screen starts clean (the view is back to its full height)
+        player.quiet = fullscreenTab?.isPrivateTab == true || (!on && player.quiet)   // a private tab's full screen is not logged or counted (kept until it has ended)
         player.fullscreen(on, prefs.fsControls == 0)                          // VP1: Kestrel's controls over the film (drawn once the page reports one)
+        if (!on) player.quiet = false
         if (on) { fsTurner.enter(); if (prefs.fullscreenBars == 1) checkBarsSoon() else { fsBarsNote = "kept: Settings > System bars in full-screen video is on Keep (the default); the page is laid out between the bars" ; Health.log("fullscreen", "bars", fsBarsNote) } } else { fsTurner.exit(); Io.main.removeCallbacks(barsCheck) } // FS1: the screen follows the tablet while a page is full screen
     }
 
