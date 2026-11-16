@@ -98,7 +98,7 @@ Prefixes: AOSP = https://raw.githubusercontent.com/aosp-mirror/platform_framewor
 - H3 https://developer.android.com/reference/android/media/MediaCodecInfo.VideoCapabilities
 - H4 AOSP media/java/android/media/MediaCodecInfo.java
 - A1 AOSP core/java/android/view/SurfaceView.java ; A2 AOSP core/java/com/android/internal/view/SurfaceCallbackHelper.java ; A3 AOSP core/java/android/view/ViewRootImpl.java
-- A4 AOSP services/core/java/com/android/server/wm/WindowManagerService.java ; A5 same dir DisplayContent.java ; A6 DisplayPolicy.java ; A7 ScreenRotationAnimation.java
+- A4 AOSP services/core/java/com/android/server/wm/WindowManagerService.java ; A5 AOSP services/core/java/com/android/server/wm/DisplayContent.java ; A6 AOSP services/core/java/com/android/server/wm/DisplayPolicy.java ; A7 AOSP services/core/java/com/android/server/wm/ScreenRotationAnimation.java
 - A8 https://developer.android.com/reference/android/view/WindowManager.LayoutParams
 - A9 https://developer.android.com/reference/android/view/FrameMetrics
 - A10 https://developer.android.com/reference/android/os/PowerManager
