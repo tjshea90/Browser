@@ -37,6 +37,16 @@ object LiveBudget {
     const val MAX = 8
 
     /**
+     * ANS58c (owner message 58: "When I logged in, switched to a different app and came back to Kestrel, it reloaded the page and I was logged out", in a PRIVATE tab): may the memory handling put this tab to
+     * sleep (close its engine session) to keep the budget? Never the tab in front, never one with a live pop-up child (window.opener), and never a PRIVATE tab: the engine forgets everything private (cookies,
+     * logins) when its last private session closes, so a private tab that was put to sleep comes back logged out. It stays live whatever the budget says; the person closes it.
+     */
+    fun mayHibernate(isCurrent: Boolean, hasLiveChild: Boolean, isPrivate: Boolean): Boolean = !isCurrent && !hasLiveChild && !isPrivate
+
+    /** ANS58c: may the tab in front be put to sleep because the app was left and Android wants memory (onTrimMemory MODERATE and worse)? A normal tab keeps its history and its cookies on disk and comes back; a private tab does not. */
+    fun mayHibernateInBackground(isPrivate: Boolean): Boolean = !isPrivate
+
+    /**
      * How many live tabs to keep after a memory callback ([level] is `ComponentCallbacks2.onTrimMemory`'s argument), given the [budget] above and the available memory.
      * 10 RUNNING_LOW and 20 UI_HIDDEN ("the user left the app") do not mean the memory is short on a device with this little RAM (Android derives them from how many
      * cached processes there are), so they change nothing by themselves; the levels that say "the system is short" shrink the set only when the free memory agrees.

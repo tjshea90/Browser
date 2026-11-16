@@ -934,7 +934,7 @@ open class BrowserActivity : Activity(), DockListener {
         // LiveBudget.afterTrim decides how many tabs stay live from the level AND the memory the kernel reports as available (it used to close every other tab at any level >= 10).
         if (level >= 15) BackPictures.clear() // the system wants memory: the pictures are the first thing to give back
         if (level >= 10) enforceLiveLimit(LiveBudget.afterTrim(level, Health.memAvailableMb(), liveBudget())) // a popup's opener must survive (window.opener): enforceLiveLimit skips those
-        if (level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE && !window.decorView.hasWindowFocus()) current?.let { hibernate(it) }
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE && !window.decorView.hasWindowFocus()) current?.let { if (LiveBudget.mayHibernateInBackground(it.isPrivateTab)) hibernate(it) }   // ANS58c: a private tab in front stays (its logins)
     }
 
     // ================================================================== UI construction
@@ -1284,7 +1284,27 @@ open class BrowserActivity : Activity(), DockListener {
         findBar.visibility = if (tab.findOpen) View.VISIBLE else View.GONE
     }
 
+    // ANS58c (owner message 58): the engine forgets everything private (cookies, logins) when its LAST private session closes. A private tab is never put to sleep by the memory handling, and ONE hidden private session,
+    // the anchor, stays open while any private tab exists: a session that has to be replaced (the page's process was killed while the app was away) can then never be the last one. It loads nothing and is never shown;
+    // it closes when the last private tab is gone (the engine then forgets what was private, as before).
+    private var privateAnchor: GeckoSession? = null
+    private fun syncPrivateAnchor() {
+        val need = tabs.any { it.isPrivateTab }
+        if (need && privateAnchor == null) {
+            try {
+                val a = GeckoSession(GeckoSessionSettings.Builder().usePrivateMode(true).build())
+                a.open(GeckoEngine.runtime(this)); privateAnchor = a
+                Health.log("tabs", "private-anchor", "opened: the engine keeps the private logins while a private tab exists")
+            } catch (e: Throwable) { Health.log("tabs", "private-anchor-failed", e.toString().take(80)) }
+        } else if (!need && privateAnchor != null) {
+            try { privateAnchor?.close() } catch (e: Throwable) { /* gone */ }
+            privateAnchor = null
+            Health.log("tabs", "private-anchor", "closed: the last private tab is gone, the engine forgets what was private")
+        }
+    }
+
     private fun createSession(tab: Tab): GeckoSession {
+        if (tab.isPrivateTab) syncPrivateAnchor()
         val settings = GeckoSessionSettings.Builder()
             .usePrivateMode(tab.isPrivateTab)
             .useTrackingProtection(true)                       // the engine's own tracking protection; syncEngineProtection() switches it off for sites whose Shields are down
@@ -1669,7 +1689,7 @@ open class BrowserActivity : Activity(), DockListener {
         var count = live.size
         for (t in live) {
             if (count <= max) break
-            if (t === current || hasLiveChild(t)) continue
+            if (!LiveBudget.mayHibernate(t === current, hasLiveChild(t), t.isPrivateTab)) continue            // ANS58c: never a private tab (its logins would go)
             Health.count("tabs.hibernate"); Health.log("tabs", "hibernate", "tab=${t.id} live=$count max=$max avail=${Health.memAvailableMb()}MB")
             hibernate(t)
             count--
@@ -1679,17 +1699,13 @@ open class BrowserActivity : Activity(), DockListener {
     /** Free a tab's engine session but keep what is needed to bring it back (session state with its history, or at least its URL). */
     private fun hibernate(tab: Tab) {
         val s = tab.session ?: return
+        if (tab.isPrivateTab) { Health.count("tabs.privateKept"); Health.log("tabs", "private-kept", "a private tab is not put to sleep: the engine would forget its logins"); return }   // ANS58c (owner message 58)
         endFullScreenOf(tab, "the tab was put to sleep")
         if (::inline.isInitialized && inline.tabOrNull === tab) inline.stop("the tab was put to sleep")
         BackPictures.dropTab(tab.id)
         if (geckoView.session === s) geckoView.releaseSession()
         try { s.close() } catch (e: Exception) { /* already gone */ }
         tab.session = null
-        if (tab.isPrivateTab) { // a private tab keeps no history: its back stack and form data are dropped. The address stays (it is on screen and in the tab grid anyway) so the tab loads it again instead of coming back blank behind a full address bar
-            tab.gecko.state = null
-            if (tab.url.isNotEmpty()) tab.pendingLoad = tab.url
-            return
-        }
         if (tab.gecko.state == null && tab.url.isNotEmpty()) tab.pendingLoad = tab.url
     }
 
@@ -1713,6 +1729,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (idx < 0) return
         endFullScreenOf(tab, "the tab was closed")
         tabs.removeAt(idx)
+        syncPrivateAnchor()                                                      // ANS58c: the last private tab is gone: the anchor goes too
         if (tab === restoringTab) hideRestoring("closed")
         tab.thumb = null
         val appCtx = applicationContext
