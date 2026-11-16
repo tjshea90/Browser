@@ -1292,8 +1292,25 @@ open class BrowserActivity : Activity(), DockListener {
     /** VP1: the page's report of a full-screen film or a tap on it (a Shields worker thread): the UI thread takes it, the ANSWER (what the controls want done) is read from the controller's queue right now. */
     private fun playerMessage(m: org.json.JSONObject): String {
         if (prefs.fsControls != 0) return "{\"on\":0}"                        // the person chose the page's own controls (Settings): the page script ends its session and gives the page its bar and its taps back
-        Io.main.post { if (fullscreenOn && fullscreenTab != null && tabOfReport(m.optString("p")) === fullscreenTab) player.onMessage(m) }
+        Io.main.post { if (fullscreenOn && fullscreenTab != null && tabOfReport(m.optString("p")) === fullscreenTab) { player.onMessage(m); filmPicture(m) } }
         return if (::player.isInitialized) player.reply() else "{\"s\":0}"
+    }
+
+    /**
+     * ANS51b (owner message 51: the tablet's Diagnostics said "full screen starts (video 0x0 ...)" for a film in a shadow root that the old video finder never sees, so Automatic turning did nothing and the owner turned the
+     * tablet by hand twice): the film's picture size from the full-screen player's own report (its video element's size, 2.3 s into the full screen on the tablet) is what FS1 needs. Main thread.
+     */
+    private fun filmPicture(m: org.json.JSONObject) {
+        if (m.optString("k") != "vst") return
+        val t = fullscreenTab ?: return
+        val w = m.optInt("w"); val h = m.optInt("h")
+        if (w <= 0 || h <= 0) return
+        val first = t.gecko.pictureW == 0 || !t.gecko.picturePlayed
+        t.gecko.pictureW = w; t.gecko.pictureH = h; t.gecko.picturePlayed = true      // the film that plays in full screen is the picture that counts (a stream that steps down to a smaller size keeps its shape)
+        if (first) {
+            if (!t.isPrivateTab) Health.log("fullscreen", "film-picture", "${w}x$h from the full-screen player's report")
+            fullscreenPictureKnown()
+        }
     }
 
     internal fun onPageViewport(m: org.json.JSONObject) {
