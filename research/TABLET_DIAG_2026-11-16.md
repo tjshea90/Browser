@@ -1,7 +1,7 @@
 # The tablet's Diagnostics of alpha55 (owner message 51, 2026-11-16 02:10 UTC): what the numbers say
 
 Source: the owner pasted the whole Diagnostics screen of the real tablet (alps 711, Android 10, 2 GB, app heap 18 of 128 MB) with no words. The paste is verbatim in INBOX.md (line "Kestrel diagnostics 2026-11-16 02:10:52 UTC").
-The app had run 160 s. One page: a finance.yahoo.com quote page with a Boltdns HLS film (89.5 s long), watched in full screen four times. Nothing below is a guess: every number is a line of that paste.
+The app had run 160 s. One page: a finance.yahoo.com quote page with a Boltdns HLS film (89.5 s long), watched in ONE full screen (59 s to 132 s of the run; the controls session started four times in it, three of them restarts). Nothing below is a guess: every number is a line of that paste.
 This is the FIRST real-tablet measurement of the new full-screen player (VP1) and of a manual turn under a video.
 
 ## What works (on the real tablet)
