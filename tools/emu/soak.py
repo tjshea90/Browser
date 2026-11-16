@@ -2539,6 +2539,8 @@ class Soak:
         time.sleep(5)
         if eng is not None and self.a.suite not in ("ap", "ho"):
             self.ph.debug("vpress", "0"); time.sleep(1.5)          # ANS53: the other scenes were written for pages whose videos start by themselves; the rule has its own suite (ap)
+        if eng is not None and self.a.suite != "ho":
+            self.ph.debug("webmode", "2"); time.sleep(1.0)           # ANS54e: the older scenes test the PAGE's players, gate and controls: Kestrel's own player must not take their films over (suite ho tests exactly that)
         if eng is not None:
             self.ph.debug("fsturn", "0"); time.sleep(1.0)          # ANS54e.1: the DEFAULT is now "follow the tablet" (never turn by itself); the older scenes check the automatic turning, so they ask for it; the default has its own check (kp)
         self.main_pid = (self.ph.pids() or [None])[0]
