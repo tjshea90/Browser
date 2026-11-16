@@ -24,6 +24,12 @@ class PlayerController(
     private val exitFullscreen: () -> Unit,
     /** The rotate button follows the controls: shown with them, gone with them. */
     private val rotateButton: (Boolean) -> Unit,
+    /** ANS53d.2: does the page's film offer pictures to pick from (the Quality button is drawn only then)? Asked when the controls start and when the activity says the media list changed ([refreshQuality]). */
+    private val qualityAvailable: () -> Boolean = { false },
+    /** ANS53d.2: the Quality button was pressed; the film's position and length in seconds as the page last said them (0 / -1 = not known). */
+    private val qualityPressed: (Double, Double) -> Unit = { _, _ -> },
+    /** ANS53d.2: a sheet is open over the controls: touches on the glass are its, not taps on the picture. */
+    private val sheetOpen: () -> Boolean = { false },
 ) : PlayerModel.Host, PlayerControlsView.Listener {
     /** The full screen belongs to a private tab: nothing of it is logged or counted (the person's film is nobody's business, not even Diagnostics'). Set by the activity before [fullscreen]. */
     @Volatile var quiet = false
@@ -84,6 +90,7 @@ class PlayerController(
         activeFlag = true; started = SystemClock.uptimeMillis(); reports = 0; taps = 0; away = 0; awayMax = 0; lastReportAt = started
         java.util.Arrays.fill(appTapEpoch, 0L); lastAppTapUptime = 0L; lastToggled = false
         health.newSession()
+        view.showQuality = qualityAvailable()
         view.visibility = View.VISIBLE
         model.setHideAfter(accessibilityMs())
         model.start(true)
@@ -180,7 +187,20 @@ class PlayerController(
     }
 
     /** Is [wx], [wy] (window coordinates) on one of the shown controls? Such a touch is the controls' own: the activity does not count it as a tap on the picture. */
-    fun controlAt(wx: Float, wy: Float): Boolean = view.controlAtWindow(wx, wy)
+    fun controlAt(wx: Float, wy: Float): Boolean = sheetOpen() || view.controlAtWindow(wx, wy)
+
+    /** ANS53d.2: the media list changed: the Quality button follows it (a film's playlist read a moment after the full screen began). */
+    fun refreshQuality() {
+        if (!activeFlag) return
+        val v = qualityAvailable()
+        if (v != view.showQuality) { view.showQuality = v; view.invalidate(); say("quality-button", if (v) "shown: the film offers pictures to pick from" else "gone") }
+    }
+
+    /** ANS53d.2: keep the controls up while the quality list is open. */
+    fun pinControls(on: Boolean) { model.pin(on) }
+
+    /** ANS53d.2: the film is handed to Kestrel's own player: the page's copy stops (its pause command goes with the next answer; the activity also pauses the media session). */
+    fun pausePage() { if (activeFlag && model.view().playing) { model.playPause(); flush() } }
 
     /** The answer for the page, from any thread: what the controls want done, whether they are shown. */
     fun reply(): String {
@@ -225,6 +245,7 @@ class PlayerController(
     override fun onExit() { exitFullscreen() }
     override fun onSeek(fraction: Double) { model.seekFraction(fraction); flush() }
     override fun onPin(on: Boolean) { model.pin(on) }
+    override fun onQuality() { val v = model.view(); say("quality-pressed", "at ${v.timeS.toInt()} s"); qualityPressed(v.timeS, v.lengthS) }
 
     // ---------------------------------------------------------------------------------------- inside
 
