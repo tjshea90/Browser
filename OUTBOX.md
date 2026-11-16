@@ -2131,3 +2131,40 @@
 > - the 2-hour compat emulator run, which I dispatched and will read when it ends
 > - the three GitHub settings only you can change: a private signing key, a protected `release` environment, and the pin-actions-to-a-commit-SHA policy
 <!-- sha:643319a2f82c -->
+
+## 2026-11-16T01:23:42Z
+> I already answered this in the alpha55 reply, which crossed with your repeat. Here is it sentence by sentence, with what was already fixed in earlier alphas so nothing is redone.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha55
+>
+> - **"Falsely reported 4 seconds."** Fixed in alpha55. The old bar printed whatever length the stream had received so far, and an ad has its own length. The new controls show a length only when it has stayed the same for 2 seconds and is never shorter than what has played or buffered. Live streams say LIVE. This is covered by unit and browser tests, but I haven't seen it on the page you used.
+> - **"Stretched on first full screen, normal after landscape and back."** Fixed earlier, in alpha52. The engine sized the page to the whole display until the first real size change, so the app now gives it one. That was proven in the emulator then. Alpha55 adds a second guard that shows the whole picture when a page's box has the wrong shape. I haven't re-checked it on your tablet.
+> - **"Rotation buggy and slow."** Fixed in steps:
+>   - alpha51 paused the video and nudged the page.
+>   - alpha53 keeps the black cover and the pause until the page really has the new size.
+>   - alpha54 made one turn of the screen per move of the tablet.
+>   - alpha55 hides the controls under the cover and shows them again for 2.5 seconds afterwards, and they no longer depend on the page's layout.
+>   - In the emulator a turn settles in about 0.7 seconds. The live Yahoo page needed 1.7 to 3 seconds, and the cover waited for it. I haven't measured it on your tablet.
+> - **"Slow and laggy."** Not proven. I removed what Kestrel itself added around a playing video: the old bar measured layout four times a second and wrote to the page, and the new controls redraw only when something shown changed. The numbers that decide it are yours: the Diagnostics lines "Real video" and "CPU by process".
+> - **"Controls show up in both orientations."** Kept. Alpha55 draws them in the app, and the emulator pictures show both orientations.
+> - **"Tap hides the controls and gives the whole screen to the video."** Done in alpha55. It passed all 22 emulator checks twice on the real Firefox engine, and the site's own bar is put away so nothing else sits on the picture.
+> - **"Audit and research."** The three research files are in the repo. Your message made me check that the research and the code actually line up, so I did that now:
+>   - `research/VIDEO_PLAYER_AUDIT.md` section 1 now gives each of your observations its real status.
+>   - Section 5 compares 23 behaviours of the best players with Kestrel. Each is marked as matching, different on purpose, or a gap with a decision.
+>
+> The check found three small gaps, now fixed in code but not yet released, because I won't make you reinstall for them. I'll ship them with the next release.
+>
+> - **Failed video.** A video that fails (a flaky link) keeps the controls up and says "This video stopped", instead of a ring that spins forever.
+> - **Fade length.** The fade is 200 ms, as the research suggests.
+> - **Wake locks.** The emulator test now records whether the screen is kept awake while a film plays.
+>
+> Two things the big players have that Kestrel lacks: a captions button and a playback-speed button. Each adds a control to a small screen, so tell me if you want them. Captions matter most, because a site's own caption button goes away with its bar.
+>
+> I haven't run any of this on the tablet: speed and smoothness, rotation timing, the real navigation bar, your hotspot, or YouTube's own player.
+>
+> Still open:
+> - your test of alpha55 and its four Diagnostics lines
+> - your tablet report on alpha53/54 (the "Turning under a video", "Full-screen page size" and "Full-screen system bars" lines)
+> - your captions/speed decision
+> - the 2-hour compatibility emulator run, which I'll read when it ends
+<!-- sha:fec521e24be8 -->
