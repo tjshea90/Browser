@@ -88,7 +88,7 @@ class UpdateCheckTest {
         Flavor.updateTagPrefix = "kestrel-g-v"
     }
 
-    @After fun stop() { running = false; server.close(); UpdateManager.apiBase = "https://api.github.com/repos/tjshea90/Browser"; Flavor.updateTagPrefix = "kestrel-v" }
+    @After fun stop() { running = false; server.close(); UpdateManager.apiBase = "https://api.github.com/repos/tjshea90/Kestrel-Releases"; Flavor.updateTagPrefix = "kestrel-v" }
 
     private fun ctx(installedCode: Long): Context {
         val c = org.robolectric.RuntimeEnvironment.getApplication()
