@@ -82,6 +82,8 @@ class ShieldsBridge(
     private val videoPolicy: () -> String = { "" },
     /** ANS52h: the picture size cap for HLS master playlists in pixels of the longer side (core/media/PictureCap; 0 = none); the 6th field of every page answer. Worker thread, cheap. */
     private val pictureCap: () -> Int = { 0 },
+    /** ANS54e: the page's gate asks whether Kestrel's own player takes the film the person pressed (`vh`: y = play | press | kestrel, s = the element's address, b = a blob: source, ... p = the page, f = the frame): true = it was started, keep the page's element closed. UI thread (the answer waits for it). */
+    private val handOver: (JSONObject) -> Boolean = { false },
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -108,6 +110,11 @@ class ShieldsBridge(
         val handler = handlerFor(raw)
         val result = GeckoResult<Any>(handler)
         handler.post {
+            val early = try { parse(raw) } catch (e: Exception) { null }
+            if (early != null && early.optString("k") == "vh") {          // ANS54e: decided on the UI thread (the tabs and the sniffed streams live there); the engine's request waits for the answer, the page script gives up after 700 ms
+                Io.ui { val ok = try { handOver(early) } catch (e: Exception) { Log.w(Io.TAG, "hand over", e); false }; result.complete(if (ok) "{\"h\":1}" else "{\"h\":0}") }
+                return@post
+            }
             val reply: Any = try {
                 val m = parse(raw)
                 if (m == null) "" else when (m.optString("k")) {
@@ -236,8 +243,9 @@ class ShieldsBridge(
         // 64 = Kestrel's own video bar may show on a tapped video whose page has no controls, 128 = also where the page has some (VC1, videobar.js; follows ONLY the Settings row "Video controls"),
         // 512 = Kestrel's own controls over a FULL-SCREEN video (VP1, player.js; follows ONLY the Settings row "Full-screen video controls"),
         // 1024 = no video loads or starts before the person presses it (ANS53a / ANS53b, gate-main.js; follows ONLY the Settings switch "Videos start only when I press play": it is not a Shields feature, every site has it),
+        // 2048 = the page's gate may ASK the app whether Kestrel's own player takes the film the person pressed (ANS54e, gate-main.js; needs the press-to-play rule and a Settings row "Web videos play in" other than "The page's own player"),
         // 16 = a tap on a video player's bar may move the video when the page does not (YS1, seekbar.js; follows ONLY the Settings switch "Tap the video bar to jump": it is not a Shields feature, a site with Shields off keeps it)
-        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0) or (if (prefs().tapSeek) 16 else 0) or (if (prefs().measureScroll) 32 else 0) or (if (prefs().fsControls == 0) 512 else 0) or (if (prefs().videoControls != 2) 64 else 0) or (if (prefs().videoControls == 1) 128 else 0) or (if (labBuild()) 256 else 0) or (if (prefs().videoPressToPlay) 1024 else 0)
+        val guard = (if (prefs().blockPopups && s.shieldsUp) 1 else 0) or (if (s.shieldsUp && s.waitEmbeds) 2 else 0) or (if (s.shieldsUp && prefs().shieldScripts) 4 else 0) or (if (s.shieldsUp && prefs().skipVideoAds) 8 else 0) or (if (prefs().tapSeek) 16 else 0) or (if (prefs().measureScroll) 32 else 0) or (if (prefs().fsControls == 0) 512 else 0) or (if (prefs().videoControls != 2) 64 else 0) or (if (prefs().videoControls == 1) 128 else 0) or (if (labBuild()) 256 else 0) or (if (prefs().videoPressToPlay) 1024 else 0) or (if (prefs().videoPressToPlay && prefs().webVideoMode != app.kestrel.core.media.WebHandOver.NEVER) 2048 else 0)
         val on = s.shieldsUp && s.blockAds && snap?.fs?.isPageAllowed(host) != true
         return (if (on) "1:" else "0:") + gen + ":" + (if (snap != null) contentId(snap) else "") + ":" + guard + ":" + videoPolicy() + ":" + pictureCap()
     }
