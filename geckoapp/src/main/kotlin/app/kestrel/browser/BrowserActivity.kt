@@ -2937,9 +2937,9 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     private fun handleBack(): Boolean {
-        if (::qualitySheet.isInitialized && qualitySheet.isOpen) { qualitySheet.dismiss(); return true }   // ANS53d.2: the quality list closes first
         // FS1: Back leaves full screen first, like every video player (it used to go back in the page's history, which only left full screen by leaving the page)
         if (fullscreenOn) {
+            if (::qualitySheet.isInitialized && qualitySheet.isOpen) { qualitySheet.dismiss(); return true }   // ANS53d.2: the quality list closes first (Back from it is not "leave full screen")
             val ft = fullscreenTab
             if (ft != null && ft === current && ft.session != null) {
                 Health.log("fullscreen", "back-exit", "asking the page to leave full screen")
