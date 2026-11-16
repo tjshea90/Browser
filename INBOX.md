@@ -1854,3 +1854,8 @@ The video player works well. YouTube works well. A couple small improvements:
 3) put the video quality controls in the regular player size when it is not in full screen. Right now I can only select quality in full screen. 
 4) it works well now, but see if there are any additional ways to make playback smoother or faster or more optimized for my hardware. I want it as optimized as possible
 ```
+
+## 2026-11-16T22:43:10Z
+```
+Is it done yet
+```
