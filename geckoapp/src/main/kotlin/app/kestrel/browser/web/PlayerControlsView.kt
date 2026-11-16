@@ -146,6 +146,12 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
 
     val controlsShown: Boolean get() = shownTarget
 
+    /** ANS55f lab: the centres of the close x and of the full-screen button in WINDOW pixels (x, y, x, y): the emulator lab taps them like a finger would. */
+    fun buttonCentres(): IntArray {
+        val loc = IntArray(2); getLocationInWindow(loc)
+        return intArrayOf((loc[0] + exit.centerX()).toInt(), (loc[1] + exit.centerY()).toInt(), (loc[0] + full.centerX()).toInt(), (loc[1] + full.centerY()).toInt())
+    }
+
     /** ANS53c: is [wx], [wy] (window coordinates) on one of the SHOWN controls? Then the touch is theirs and is not a tap on the picture. */
     fun controlAtWindow(wx: Float, wy: Float): Boolean {
         if (alphaNow < 0.5f || !shownTarget) return false

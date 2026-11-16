@@ -262,7 +262,10 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     override fun now() = SystemClock.uptimeMillis()
     override fun scheduleControls(ms: Long) { main.removeCallbacks(controlsTick); main.postDelayed(controlsTick, ms) }
     override fun cancelControls() { main.removeCallbacks(controlsTick) }
-    override fun applyControls(shown: Boolean, animate: Boolean) { controls.show(shown, animate) }
+    override fun applyControls(shown: Boolean, animate: Boolean) {
+        controls.show(shown, animate)
+        if (!priv) { val b = controls.buttonCentres(); say(if (shown) "shown" else "hidden", if (shown) "close at ${b[0]},${b[1]} full screen at ${b[2]},${b[3]} (window pixels)" else "at once") }
+    }
     override fun changed() { controls.update(model.view()) }
     override fun feedback(zone: PlayerRules.Zone, burst: Int) { controls.flash(zone, burst) }
     override fun log(event: String, text: String) { say(event, text) }
