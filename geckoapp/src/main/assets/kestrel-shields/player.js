@@ -277,7 +277,7 @@ window.KestrelVP = window.KestrelVP || (function () {
     // "Skip ad", next / previous and every other control of the page OUTSIDE those containers stay (a caption or quality button that lives INSIDE a hidden container goes with it: on some sites Settings > Full-screen video controls > the page's own brings them back).
     var CHROME = '.ytp-chrome-top,.ytp-chrome-bottom,.ytp-gradient-top,.ytp-gradient-bottom,.ytp-pause-overlay,.player-controls-top,.player-controls-bottom,.player-controls-background,' +
       '.shaka-controls-container,.shaka-play-button-container,.vjs-control-bar,.vjs-big-play-button,.jw-controls,.jw-controls-backdrop,.plyr__controls,.plyr__control--overlaid,' +
-      '.mejs__controls,.mejs__overlay-play,.fp-controls';
+      '.mejs__controls,.mejs__overlay-play,.fp-controls,.evp-modern-ui-overlay__chrome,.evp-modern-ui__bar';      // (the last two: finance.yahoo.com's player shell, found in lab run 43783051807 and a probe of the live page)
     function chromeIn(root, depth, out) {                // the page's control elements inside [root], also inside the shadow trees below it (open or closed: Firefox gives a content script both)
       var list = null, all = null, i, sr;
       try { list = root.querySelectorAll(CHROME); } catch (e) { list = null; }
