@@ -5,6 +5,7 @@ import android.media.MediaCodecInfo
 import android.media.MediaCodecList
 import android.media.MediaDrm
 import android.os.Build
+import app.kestrel.core.media.VideoLimits
 import app.kestrel.core.media.VideoPolicy
 import java.util.UUID
 
@@ -17,7 +18,7 @@ import java.util.UUID
  * normal start reads four letters instead of asking again. Diagnostics > Video > "Read the decoders again" forces it.
  */
 object DeviceVideo {
-    private class Dec(val name: String, val mime: String, val hardware: Boolean, val vendor: Boolean, val secure: Boolean, val size: String)
+    private class Dec(val name: String, val mime: String, val hardware: Boolean, val vendor: Boolean, val secure: Boolean, val size: String, val limit: VideoLimits.Limit? = null)
 
     private val CODECS = listOf(
         "video/avc" to "H.264", "video/hevc" to "H.265", "video/x-vnd.on2.vp9" to "VP9", "video/x-vnd.on2.vp8" to "VP8", "video/av01" to "AV1", "video/mp4v-es" to "MPEG-4", "video/mpeg2" to "MPEG-2",
@@ -27,9 +28,11 @@ object DeviceVideo {
     @Volatile private var list: List<Dec>? = null
     @Volatile private var widevine = false
     @Volatile private var hw: VideoPolicy.Hardware? = null
+    @Volatile private var lim: VideoLimits.Limits? = null
     @Volatile private var readMs = -1L
 
     private const val KEY_HW = "vid_hw"
+    private const val KEY_LIM = "vid_lim"
     private const val KEY_WV = "vid_wv"
     private const val KEY_FP = "vid_fp"
     private const val KEY_DESC = "vid_desc"
@@ -40,6 +43,17 @@ object DeviceVideo {
         val p = ctx.getSharedPreferences("kestrel_video", Context.MODE_PRIVATE)
         if (p.getString(KEY_FP, null) != Build.FINGERPRINT) return null
         return VideoPolicy.Hardware.decode(p.getString(KEY_HW, null))?.also { hw = it; widevine = p.getBoolean(KEY_WV, false) }
+    }
+
+    /**
+     * ANS52g: what the hardware decoders declare per codec (core/media/VideoLimits), as the page-side video format policy needs it: from this run's probe, else from the stored answer for this system build, else null
+     * (not read yet: the policy then knows no limit and the engine's own answers stand). Cheap; safe on any thread.
+     */
+    fun limits(ctx: Context): VideoLimits.Limits? {
+        lim?.let { return it }
+        val p = ctx.getSharedPreferences("kestrel_video", Context.MODE_PRIVATE)
+        if (p.getString(KEY_FP, null) != Build.FINGERPRINT) return null
+        return VideoLimits.Limits.decode(p.getString(KEY_LIM, null))?.also { lim = it }
     }
 
     /** True once a probe found the Widevine scheme (the DRM prompt is only worth showing then). Unknown (never probed) counts as false until [read] ran. */
@@ -57,13 +71,14 @@ object DeviceVideo {
                     if (CODECS.none { it.first.equals(type, true) }) continue
                     val caps = try { info.getCapabilitiesForType(type) } catch (e: Exception) { null }
                     var size = ""
+                    var limit: VideoLimits.Limit? = null
                     var secure = false
                     if (caps != null) {
                         secure = try { caps.isFeatureSupported(MediaCodecInfo.CodecCapabilities.FEATURE_SecurePlayback) } catch (e: Exception) { false }
                         val vc = caps.videoCapabilities
-                        if (vc != null) size = sizeText(vc)
+                        if (vc != null) { size = sizeText(vc); limit = limitOf(vc) }
                     }
-                    decs.add(Dec(info.name, type.lowercase(), hardware = info.isHardwareAccelerated, vendor = info.isVendor, secure = secure, size = size))
+                    decs.add(Dec(info.name, type.lowercase(), hardware = info.isHardwareAccelerated, vendor = info.isVendor, secure = secure, size = size, limit = limit))
                 }
             }
         } catch (e: Throwable) { app.kestrel.browser.diag.Health.log("video", "probe-failed", e.toString().take(140)) }
@@ -74,13 +89,37 @@ object DeviceVideo {
         val changed = hw?.encode() != fresh.encode()
         if (decs.isNotEmpty()) { // a probe that found nothing (service not ready) is not remembered
             hw = fresh
-            ctx.getSharedPreferences("kestrel_video", Context.MODE_PRIVATE).edit().putString(KEY_HW, fresh.encode()).putBoolean(KEY_WV, widevine).putString(KEY_FP, Build.FINGERPRINT).putString(KEY_DESC, textOf(decs).take(1500)).apply()
+            val limits = limitsOf(decs)
+            lim = limits
+            ctx.getSharedPreferences("kestrel_video", Context.MODE_PRIVATE).edit().putString(KEY_HW, fresh.encode()).putString(KEY_LIM, limits.encode()).putBoolean(KEY_WV, widevine).putString(KEY_FP, Build.FINGERPRINT).putString(KEY_DESC, textOf(decs).take(1500)).apply()
         }
         app.kestrel.browser.diag.Health.log("video", "decoders", "${fresh.encode()} ${decs.size} decoder(s) in $readMs ms, widevine=$widevine")
         return changed
     }
 
     private fun has(decs: List<Dec>, mime: String) = decs.any { it.mime == mime && it.hardware }
+
+    /**
+     * ANS52g: the most one decoder declares, as the two numbers the page-side policy compares a stream with: the largest picture, and the macroblock rate (the declared frame rate at a size times that size's
+     * 16 x 16 blocks). The rate is taken at three sizes and the highest wins: a frame rate cap of the vendor binds at the small sizes, the block rate at the large ones, so the true limit is the largest product.
+     */
+    private fun limitOf(vc: MediaCodecInfo.VideoCapabilities): VideoLimits.Limit? = try {
+        val maxW = vc.supportedWidths.upper
+        val maxH = vc.supportedHeights.upper
+        var best: VideoLimits.Limit? = null
+        for ((w, h) in listOf(640 to 360, 1280 to 720, 1920 to 1080)) {
+            if (!vc.isSizeSupported(w, h)) continue
+            val l = VideoLimits.Limit.of(maxW, maxH, w, h, vc.getSupportedFrameRatesFor(w, h).upper) ?: continue
+            if (best == null || l.blocksPerSecond > best.blocksPerSecond) best = l
+        }
+        best
+    } catch (e: Throwable) { null }
+
+    /** The better of the HARDWARE decoders of each codec (a software decoder's numbers say nothing about what the chip can do). */
+    private fun limitsOf(decs: List<Dec>): VideoLimits.Limits {
+        fun of(mime: String): VideoLimits.Limit? = decs.filter { it.mime == mime && it.hardware }.mapNotNull { it.limit }.reduceOrNull { a, b -> a.max(b) }
+        return VideoLimits.Limits(of("video/avc"), of("video/hevc"), of("video/x-vnd.on2.vp9"), of("video/av01"))
+    }
 
     /**
      * ANS52 (owner message 52: "optimized for the hardware"): what the decoder CAN do at the sizes that matter, as the vendor declares it: the largest size, whether 720p and 1080p are supported at all, the highest frame
