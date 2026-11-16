@@ -62,7 +62,7 @@ class PlayerModel(private val h: Host) {
     private val taps = TapMachine(object : TapMachine.Host {
         override fun now() = h.now()
         override fun single() { controls.tap(); singles++ }
-        override fun seek(zone: Zone, burst: Int) { skip(if (zone == Zone.LEFT) -PlayerRules.SKIP_S else PlayerRules.SKIP_S); h.feedback(zone, burst); seeks++ }
+        override fun seek(zone: Zone, burst: Int) { skip(if (zone == Zone.LEFT) -PlayerRules.SKIP_S else PlayerRules.SKIP_S); controls.seekGesture(); h.feedback(zone, burst); seeks++ }   // ANS57a: the controls go, the film stays clear
     })
 
     private val queue = ArrayList<Cmd>()

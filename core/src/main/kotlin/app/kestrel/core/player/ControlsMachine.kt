@@ -52,6 +52,16 @@ class ControlsMachine(private val h: Host) {
         if (shown) hide(false) else show(hideAfterMs, false)
     }
 
+    /**
+     * ANS57a (owner message 57: "if I double tap on the right side or left side of a video to fast forward or rewind 10 seconds, it automatically closes the video player controls ... I'm not selecting video
+     * controls so the video should stay visible without controls on top"): a seek made by tapping the picture is not a use of the controls. The first tap of the double tap had brought them up (every tap toggles at
+     * once, ANS53c), the seek sends them away again at once and they stay away through the burst; the "10 s" flash is alone on the picture. (The seek BUTTONS are another thing: they are controls, the clock restarts.)
+     */
+    fun seekGesture() {
+        if (!active || turning) return
+        hide(false)
+    }
+
     /** ANS53c: the app showed or hid the controls at once for a tap, and the page then said that tap was on one of ITS OWN buttons (skip ad ...): they go back to what they were, at once. */
     fun restore(was: Boolean) {
         if (!active || turning) return

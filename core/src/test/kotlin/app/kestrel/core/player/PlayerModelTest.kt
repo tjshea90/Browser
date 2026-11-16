@@ -70,6 +70,37 @@ class PlayerModelTest {
         assertTrue("it toggles at once and seeks nothing", m.drain().isEmpty()); assertTrue(m.shown)
     }
 
+    // ANS57a (owner message 57): a double tap that only seeks must not leave the controls on top of the film
+    @Test fun aDoubleTapSeekClosesTheControlsAndTheyStayClosedThroughTheBurst() {
+        val h = Host(); val m = model(h)
+        m.onSample(sample(h, t = 30.0))
+        h.clock += 4000; h.tickControls(m, 0)
+        m.onTap(500); if (m.shown) m.onTap(500)                        // (whatever they were: hidden now)
+        assertFalse(m.shown)
+        h.clock += 600
+        m.onTap(900)                                                    // the first tap of the double tap brings them up at once ...
+        assertTrue("ANS53c still holds: the first tap shows them at once", m.shown)
+        h.clock += 100; m.onTap(900)                                    // ... the second tap seeks and sends them away at once
+        assertEquals(listOf("RIGHT 1"), h.feedback); assertEquals(10.0, m.drain()[0].d, 0.0)
+        assertFalse("the video stays visible without controls on top", m.shown); assertFalse("and they went at once, no fade", h.lastAnimate)
+        h.clock += 200; m.onTap(900); m.drain()                         // the burst: a third tap seeks again, the controls stay away
+        assertFalse(m.shown); assertEquals(listOf("RIGHT 1", "RIGHT 2"), h.feedback)
+        h.clock += 5000; m.onTap(100)                                   // a later single tap on the left brings them up as ever (nothing is stuck)
+        assertTrue(m.shown)
+    }
+
+    @Test fun theLeftSeekAlsoClosesThemAndTheSkipButtonsDoNot() {
+        val h = Host(); val m = model(h)
+        m.onSample(sample(h, t = 30.0))
+        assertTrue(m.shown)
+        m.skipButton(true); m.drain()
+        assertTrue("the 10 s BUTTON is a control: the controls stay up (their clock restarts)", m.shown)
+        m.onTap(100); assertFalse("the first tap of a double tap hides them as they were up", m.shown)
+        h.clock += 100; m.onTap(100)
+        assertEquals(-10.0, m.drain()[0].d, 0.0)
+        assertFalse(m.shown)
+    }
+
     @Test fun theLeftSideSeeksBackAndTheMiddleHasNoDoubleTapMeaning() {
         val h = Host(); val m = model(h)
         m.onSample(sample(h, t = 30.0))
