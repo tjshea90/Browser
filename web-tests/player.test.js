@@ -35,7 +35,7 @@ test('VP1: a full-screen film tells the app its state (numbers only); nothing be
   await fullscreen(page);
   const m = await firstState(page);
   assert.equal(m.k, 'vst'); assert.equal(m.d, 60); assert.equal(m.p, 1); assert.equal(m.e, 0); assert.equal(m.ms, 0); assert.equal(m.l, 0); assert.ok(m.rs >= 3, 'ready state ' + m.rs);
-  assert.deepEqual(Object.keys(m).sort(), ['ak', 'aw', 'b', 'd', 'df', 'e', 'er', 'h', 'k', 'l', 'lt', 'm', 'ms', 'p', 'pc', 'r', 'rs', 't', 'tf', 'v', 'w'], 'only numbers: ' + JSON.stringify(m));
+  assert.deepEqual(Object.keys(m).sort(), ['ak', 'aw', 'b', 'd', 'df', 'e', 'er', 'h', 'k', 'l', 'lt', 'm', 'ms', 'p', 'pc', 'r', 'rs', 'sh', 't', 'tf', 'v', 'w'], 'only numbers: ' + JSON.stringify(m));
   await page.context().close();
 });
 
@@ -362,13 +362,39 @@ test('VP1: a film that fails says so (er), so the app can keep the controls up i
 
 test('VP1: a page whose reports the app does not take (a = 0 four times) puts its own bar and its taps back instead of being left without controls (review F1)', async () => {
   const page = await open(CHROME, { player: true, cfg: { kp: true } });
-  await page.evaluate(() => { window.KestrelVP.c.idle = 150; window.KestrelVP.c.busy = 150; });
+  await page.evaluate(() => { window.KestrelVP.c.idle = 150; window.KestrelVP.c.busy = 150; window.KestrelVP.c.giveUpMs = 700; });
   await standing(page, { s: 0, a: 0 });                                             // the app answers every report with "not mine"
   await fullscreen(page);
   await page.waitForFunction(() => window.KestrelVP.active() === false, null, { timeout: 5000 });
   assert.equal(await disp(page, 'yt'), 'block', 'the page\'s own bar is back');
   assert.equal(await page.evaluate(() => document.getElementById('v').controls), true);
   await page.context().close();
+});
+
+test('VP1: a = 0 for a few reports is not enough to give up while it lasts less than the give-up time (the app\'s UI thread can be busy for a couple of seconds at the start of a full screen; review of alpha56)', async () => {
+  const page = await open(BOX, { player: true, cfg: { kp: true } });
+  await page.evaluate(() => { window.KestrelVP.c.idle = 100; window.KestrelVP.c.busy = 100; window.KestrelVP.c.giveUpMs = 2500; });
+  await standing(page, { s: 0, a: 0 });
+  await fullscreen(page); await firstState(page);
+  await wait(page, 1200);                                                            // ten refusals in a row, but only 1.2 s of them
+  assert.equal(await page.evaluate(() => window.KestrelVP.active()), true, 'still the controls\' film');
+  await standing(page, { s: 0, a: 1 });
+  await wait(page, 300);
+  await standing(page, { s: 0, a: 0 });
+  await wait(page, 1200);
+  assert.equal(await page.evaluate(() => window.KestrelVP.active()), true, 'the run of refusals starts again after an a = 1');
+  await page.context().close();
+});
+
+test('ANS51e: the report says whether the film sits in a shadow tree (sh), because only then is its frame count new to the Real video line (review of alpha56)', async () => {
+  const light = await open(BOX, { player: true, cfg: { kp: true } });
+  await fullscreen(light); await firstState(light);
+  assert.equal((await states(light))[0].sh, 0, 'a film in the light tree');
+  await light.context().close();
+  const shadow = await open(SHADOW, { player: true, cfg: { kp: true } });
+  await fullscreen(shadow, 'host'); await firstState(shadow);
+  assert.equal((await states(shadow))[0].sh, 1, 'a film in a web component');
+  await shadow.context().close();
 });
 
 test('VP1: while the app says a = 1 the session stays, also with a few a = 0 before (the app is not ready for the very first report)', async () => {
