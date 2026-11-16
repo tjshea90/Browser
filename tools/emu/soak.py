@@ -323,7 +323,7 @@ class Phone:
 
     # ---- ANS57 lab: a finger that RESTS first and then moves (`input swipe` cannot rest).
     # Lab runs 43918159286, 43921764750 and 43925029376 (2026-11-16): a path written with dd to the touch device (raw_path) failed with 'Permission denied' (the lab's adb shell is not root) and Android 10's `input` has no
-    # `motionevent`; `input swipe` and `input tap` always worked. The debug build plays the finger path itself (geckoapp web/DebugTouch: real MotionEvents handed to the Activity in front, `am start ... --es kestrel_debug touch`).
+    # `motionevent`; `input swipe` and `input tap` always worked. The debug build plays the finger path itself (geckoapp web/DebugTouch: real MotionEvents handed to the Activity in front, an `am broadcast` to the screen with the window focus).
     touch_log = []
 
     def touch_script(self, points, hold_s=0.5, step_s=0.1, end_hold_s=0.0):
@@ -342,14 +342,12 @@ class Phone:
         return " ".join(words)
 
     def hold_drag(self, screen, x, y, dx, dy=0, hold_s=0.5, steps=10, step_s=0.1, end_hold_s=0.0, target="main"):
-        """A long press at (x, y) and a drag by [dx] pixels sideways and [dy] up or down (negative = up): the precise seek and, held first, the level drags. [target] = the screen in front: 'native' (Kestrel's own
-        player) or 'main' (the browser). Returns when the path is over (the app plays it on its own clock)."""
+        """A long press at (x, y) and a drag by [dx] pixels sideways and [dy] up or down (negative = up): the precise seek and, held first, the level drags. [target] is only a note for the reader ('native' = Kestrel's
+        own player, 'main' = the browser): the screen that has the window focus plays the path. Returns when the path is over (the app plays it on its own clock)."""
         pts = [(x, y)] + [(x + dx * (i + 1) / float(steps), y + dy * (i + 1) / float(steps)) for i in range(steps)]
         script = self.touch_script(pts, hold_s=hold_s, step_s=step_s, end_hold_s=end_hold_s)
-        if target == "native":
-            self.debug_native("touch", script)
-        else:
-            self.debug("touch", script)
+        # a BROADCAST, not `am start` (starting the screen again pauses it: a film inside the page stopped with 'the app was left', lab run 43927135769); only the screen with the window focus plays it
+        self.a.sh("am broadcast -a app.kestrel.browser.DEBUG_TOUCH -p %s --es script %s" % (self.pkg, shlex.quote(script)), timeout=30)
         lasts = hold_s + steps * step_s + end_hold_s
         self.touch_log.append(script[:60])
         time.sleep(lasts + 0.4)
