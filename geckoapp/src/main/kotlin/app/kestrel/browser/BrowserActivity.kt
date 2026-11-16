@@ -375,6 +375,7 @@ open class BrowserActivity : Activity(), DockListener {
         val w = geckoView.width; val h = geckoView.height
         if (w <= 0 || h <= 0 || !geckoView.isAttachedToWindow) return
         turnHolding = true; turnResizeAwaited = true; turnHoldAt = SystemClock.uptimeMillis()
+        startFrameWatch()
         lp.width = w; lp.height = h; geckoView.layoutParams = lp
         turnRootW = root.width; turnRootH = root.height
         val vto = root.viewTreeObserver
@@ -397,6 +398,48 @@ open class BrowserActivity : Activity(), DockListener {
         Io.main.removeCallbacks(turnHoldTimeout); Io.main.postDelayed(turnHoldTimeout, app.kestrel.core.media.TurnSettle.HOLD_MAX_MS)
         Io.main.removeCallbacks(turnAwaitTimeout); Io.main.postDelayed(turnAwaitTimeout, app.kestrel.core.media.TurnSettle.HOLD_MAX_MS + 1500L)
         Health.log("fullscreen", "turn-hold", "the engine's view stays ${w}x$h for the first frame of the turn (the cover and the bars are drawn at the new size at once)")
+    }
+
+    // ---- ANS52 (research/VIDEO_ACCEL_DEVICE.md section C: which phase of the first frames after a turn is slow, and does the window manager's 2 s freeze timeout fire): FrameMetrics of this window, only from the start of a turn
+    // for 8 s, from a helper thread; a line for the first draw of the window and for every frame of 100 ms and over (at most 12 lines per turn), and the worst values for Diagnostics.
+    private val frameThread by lazy { android.os.HandlerThread("kestrel-frames").also { it.start() } }
+    private var frameWatchOn = false
+    private var frameWatchLogged = 0
+    @Volatile private var slowFrames = 0
+    @Volatile private var worstFrameMs = 0L
+    @Volatile private var worstLayoutMs = 0L
+    @Volatile private var worstDrawMs = 0L
+    @Volatile private var worstSyncMs = 0L
+    @Volatile private var worstDelayMs = 0L
+    private val frameListener = android.view.Window.OnFrameMetricsAvailableListener { _, fm, _ ->
+        val first = fm.getMetric(android.view.FrameMetrics.FIRST_DRAW_FRAME) == 1L
+        val total = fm.getMetric(android.view.FrameMetrics.TOTAL_DURATION) / 1_000_000L
+        if (first || total >= 100L) {
+            val layout = fm.getMetric(android.view.FrameMetrics.LAYOUT_MEASURE_DURATION) / 1_000_000L
+            val draw = fm.getMetric(android.view.FrameMetrics.DRAW_DURATION) / 1_000_000L
+            val sync = fm.getMetric(android.view.FrameMetrics.SYNC_DURATION) / 1_000_000L
+            val delay = fm.getMetric(android.view.FrameMetrics.UNKNOWN_DELAY_DURATION) / 1_000_000L
+            slowFrames++
+            if (total > worstFrameMs) worstFrameMs = total
+            if (layout > worstLayoutMs) worstLayoutMs = layout
+            if (draw > worstDrawMs) worstDrawMs = draw
+            if (sync > worstSyncMs) worstSyncMs = sync
+            if (delay > worstDelayMs) worstDelayMs = delay
+            if (frameWatchLogged < 12) { frameWatchLogged++; Health.log("fullscreen", "turn-frame", "${if (first) "first draw of the window" else "slow frame"}: total $total ms (layout+measure $layout, draw $draw, sync $sync, waited before it $delay)") }
+        }
+    }
+    private val frameWatchStop = Runnable { stopFrameWatch() }
+    private fun startFrameWatch() {
+        if (!frameWatchOn) {
+            try { window.addOnFrameMetricsAvailableListener(frameListener, android.os.Handler(frameThread.looper)); frameWatchOn = true; frameWatchLogged = 0 } catch (e: Throwable) { Health.log("fullscreen", "frame-watch-failed", e.toString().take(80)); return }
+        }
+        Io.main.removeCallbacks(frameWatchStop); Io.main.postDelayed(frameWatchStop, 8000L)
+    }
+    private fun stopFrameWatch() {
+        Io.main.removeCallbacks(frameWatchStop)
+        if (!frameWatchOn) return
+        try { window.removeOnFrameMetricsAvailableListener(frameListener) } catch (e: Throwable) { /* gone with the window */ }
+        frameWatchOn = false
     }
 
     private fun releaseGeckoHold(why: String) {
@@ -565,7 +608,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     override fun onPause() {
         super.onPause()
-        onScreenNow = false; turnSettler.abandon(); releaseGeckoHold("the app was left"); turnResizeAwaited = false
+        onScreenNow = false; turnSettler.abandon(); releaseGeckoHold("the app was left"); turnResizeAwaited = false; stopFrameWatch()
         Health.log("life", "pause"); fsTurner.paused()
         captureLook(current, "pause", LastLookRules.LEAVE_MIN_AGE_MS.toLong()) // EY-1: the page as it is left, before anything else (the read-back is a few hundred ms at most)
         app.kestrel.browser.net.WifiBoost.set(this, false)
@@ -659,7 +702,7 @@ open class BrowserActivity : Activity(), DockListener {
     override fun onDestroy() {
         try { fsTurner.exit() } catch (e: Exception) { /* RV8: leave the orientation as Android had it */ }
         if (::player.isInitialized) player.fullscreen(false)
-        turnSettler.abandon(); releaseGeckoHold("closing"); Io.main.removeCallbacks(turnAwaitTimeout); Io.main.removeCallbacks(strayCheck); Io.main.removeCallbacks(barsCheck); Io.main.removeCallbacks(rehideAfterTurn); Io.main.removeCallbacks(vpUndo) // alpha49 review: no timer of ours may fire against a dead activity
+        turnSettler.abandon(); releaseGeckoHold("closing"); stopFrameWatch(); Io.main.removeCallbacks(turnAwaitTimeout); Io.main.removeCallbacks(strayCheck); Io.main.removeCallbacks(barsCheck); Io.main.removeCallbacks(rehideAfterTurn); Io.main.removeCallbacks(vpUndo) // alpha49 review: no timer of ours may fire against a dead activity
         if (::downloadPopup.isInitialized) downloadPopup.detach()
         UpdateManager.removeListener(updateListener)
         kbProbe.detach()
@@ -2222,6 +2265,8 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(fsTurner.line())
         out.add(fsBarsLine())
         out.add(turnSettler.line())
+        out.add("Frames around turns (FrameMetrics, 8 s from each turn): $slowFrames first draws and frames of 100 ms and over; worst frame $worstFrameMs ms (layout+measure $worstLayoutMs ms, draw $worstDrawMs ms, sync $worstSyncMs ms, waited before it $worstDelayMs ms)")
+        out.add("Heat and speed: " + try { val pm = getSystemService(android.os.PowerManager::class.java); "thermal status ${pm.currentThermalStatus} (0 none, 1 light, 2 moderate, 3 severe, 4 critical, 5 emergency, 6 shutdown), sustained-performance mode ${if (pm.isSustainedPerformanceModeSupported) "supported" else "not supported"}" } catch (e: Throwable) { "not readable" })
         out.add(turnPageLine())
         out.add(viewportLine())
         out.add(player.line())
