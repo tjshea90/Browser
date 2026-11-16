@@ -71,6 +71,14 @@ class QualitySheet(ctx: Context) : FrameLayout(ctx) {
 
     fun dismiss() { if (visibility != VISIBLE) return; visibility = GONE; listener?.onDismiss() }
 
+    /** ANS60c lab: the centres of the rows in SCREEN pixels (x, y, x, y, ...), top row first: the emulator lab taps them like a finger would. */
+    fun rowCentres(): IntArray {
+        val out = ArrayList<Int>()
+        val loc = IntArray(2)
+        for (i in 0 until list.childCount) { val r = list.getChildAt(i); r.getLocationOnScreen(loc); out.add(loc[0] + r.width / 2); out.add(loc[1] + r.height / 2) }
+        return out.toIntArray()
+    }
+
     private fun rowView(r: Row): View {
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL

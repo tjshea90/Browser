@@ -77,7 +77,10 @@ class InlineHost(private val a: BrowserActivity, private val engine: KestrelGeck
         view.stop("Back"); return true
     }
 
-    override fun openQuality(rows: List<QualitySheet.Row>) { sheet.show("Quality", rows, "Kestrel remembers your pick for the next films inside a page. A smaller picture and a lower frame rate are lighter for this tablet and for the hotspot.") }
+    override fun openQuality(rows: List<QualitySheet.Row>) {
+        sheet.show("Quality", rows, "Kestrel remembers your pick for the next films inside a page. A smaller picture and a lower frame rate are lighter for this tablet and for the hotspot.")
+        if (!priv) sheet.post { Health.log("inline", "quality-rows", "rows at ${sheet.rowCentres().toList().chunked(2).joinToString(" ") { "${it[0]},${it[1]}" }} (screen pixels)") }     // (the emulator lab taps them)
+    }
     override fun closeQuality() { sheet.dismiss() }
     override fun qualityOpen(): Boolean = sheet.isOpen
 
