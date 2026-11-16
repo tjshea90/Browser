@@ -203,8 +203,8 @@ window.KestrelVP = window.KestrelVP || (function () {
     }
 
     // ------------------------------------------------------------------------------------------ the taps
-    function bigLayer(el) {                              // a layer over (nearly) the whole picture is the film's, not a button
-      try { var f = S.fs.getBoundingClientRect(), r = el.getBoundingClientRect(); return r.width >= 0.95 * f.width && r.height >= 0.9 * f.height; } catch (e) { return false; }
+    function bigLayer(el) {                              // a layer over a good part of the picture (a quarter of the screen or more) is the film's, not a button
+      try { var f = S.fs.getBoundingClientRect(), r = el.getBoundingClientRect(); return (r.width >= 0.95 * f.width && r.height >= 0.9 * f.height) || r.width * r.height >= 0.25 * f.width * f.height; } catch (e) { return false; }
     }
     function interactive(el) {
       var t = el.tagName, role = el.getAttribute ? (el.getAttribute('role') || '') : '';
@@ -212,6 +212,7 @@ window.KestrelVP = window.KestrelVP || (function () {
       if (/^(BUTTON|INPUT|SELECT|TEXTAREA|OPTION|LABEL|SUMMARY)$/.test(t)) return true;
       if (/^(link|button|checkbox|radio|menuitem|menuitemcheckbox|menuitemradio|tab|switch|textbox|searchbox|combobox|listbox|option)$/i.test(role)) return true;
       if (el.isContentEditable) return true;
+      if (t === 'VIDEO' || (S && el === S.v)) return false;                // the film itself is never a button, whatever cursor the page gives it
       try {
         if ((el.hasAttribute('onclick') || (el.hasAttribute('tabindex') && el.tabIndex >= 0)) && !bigLayer(el)) return true;
         if (window.getComputedStyle(el).cursor === 'pointer' && !bigLayer(el)) return true;
