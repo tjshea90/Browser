@@ -472,6 +472,10 @@ class OwnerRulesTest {
         val np = source("geckoapp/src/main/kotlin/app/kestrel/browser/NativePlayerActivity.kt")
         assertTrue("it follows the tablet (no forced landscape), has the rotate button and a surface that is a point until the shape is known", np.contains("FullscreenTurner(this, { FullscreenTurn.MODE_FOLLOW }") && !np.contains("SENSOR_LANDSCAPE") && np.contains("FrameLayout.LayoutParams(1, 1, Gravity.CENTER)") && np.contains("showRotate = true") && np.contains("override fun onRotate() { turner.rotatePressed()"))
         assertTrue("it lists every picture of the stream and carries the pick out as a track override, remembered", np.contains("TrackSelectionOverride(") && np.contains("Prefs.get(applicationContext).nativeMaxH = cls") && np.contains("controls.showQuality = distinct >= 2"))
+        // the independent review of the gate (research/ANS53_GATE_REVIEW.md)
+        assertTrue("only VIDEO is gated (a music player's next track must play), only a MediaSource's blob: address is held, a stream gets its autoplay back", gate.contains("x.nodeName === 'VIDEO'") && !gate.contains("'AUDIO'") && gate.contains("defMethod(URL, 'createObjectURL'") && gate.contains("openEl(this, 'stream')"))
+        assertTrue("a tap opens the video it landed on or in, a tap on the player counts 30 s, a gesture 1.2 s although the activation was used up, a play() before the app's answer waits for it", gate.contains("sameBox(el, target)") && gate.contains("pressedRecently(this)") && gate.contains("lastGesture < 1200") && gate.contains("else if (!told)"))
+        assertTrue("an app that did not answer leaves the gate closed", source(dir + "background.js").contains("gt: !told || (f & 1024) !== 0"))
         // lab run 43812820865: the rule OFF must give the page's own autoplay back; the lab drives the player screen through a DEBUG-only exported activity, the release stays closed
         assertTrue("the rule off gives the page's autoplay back (markup and script)", gate.contains("why === 'off' && wantAuto") && gate.contains("dAutoplay.set.call(el, true)"))
         val mainManifest = source("geckoapp/src/main/AndroidManifest.xml")
