@@ -107,6 +107,8 @@ class Prefs private constructor(ctx: Context) {
     var videoFps30: Boolean get() = bool("vid_fps30", false); set(v) = put("vid_fps30", v)
     /** ANS52h: the picture size cap for HLS pages (core/media/PictureCap): 0 Automatic (no picture bigger than the screen can show, with a little to spare), 1 off, 2 480p, 3 720p, 4 1080p. A master playlist is answered without the rungs above it. */
     var videoCap: Int get() = sp.getInt("video_cap", 0).coerceIn(0, 4); set(v) = put("video_cap", v.coerceIn(0, 4))
+    /** ANS53d: the picture class (shorter side in pixels: 480, 720, 1080) the owner picked last in Kestrel's own player; 0 = Automatic. The next film starts at no more than that. */
+    var nativeMaxH: Int get() = sp.getInt("native_max_h", 0).coerceIn(0, 4320); set(v) = put("native_max_h", v.coerceIn(0, 4320))
     /** FS1 (owner message 43): how the screen turns while a page shows a video full screen: 0 follow the tablet (also with auto-rotate off) and turn a wide video sideways when the tablet is held upright, 1 follow the tablet only, 2 only what a site asks for (core/media/FullscreenTurn). */
     var fullscreenTurn: Int get() = app.kestrel.core.media.FullscreenTurn.cleanMode(sp.getInt("fs_turn", 0)); set(v) = put("fs_turn", app.kestrel.core.media.FullscreenTurn.cleanMode(v))
     /** FB1 (owner message 47): what a full-screen page does with the system bars: 0 keep them (the page is laid out between the status bar and the navigation bar, nothing of a player is ever under them; the default: the owner's tablet kept drawing both bars over a page that had asked for them to go), 1 hide them (the picture fills the screen; only where the system really hides them). */

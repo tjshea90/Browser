@@ -16,12 +16,16 @@ object NativePlayerStats {
     @Volatile var height = 0
     @Volatile var playedMs = 0L
     @Volatile var last = "not used yet (Save video sheet > Play in Kestrel's player)"
+    /** ANS53d / ANS53f: how often the person picked a quality, which one last, and how often the rotate button was pressed. */
+    @Volatile var qualityPicks = 0
+    @Volatile var lastQuality = ""
+    @Volatile var rotates = 0
 
     fun line(): String {
         if (plays == 0 && errors == 0) return "Kestrel's own player: $last"
         val pct = if (framesShown <= 0L) "-" else { val t = (framesDropped * 1000 + framesShown / 2) / framesShown; "${t / 10}.${t % 10} %" }
         val dec = if (decoder.isEmpty()) "no decoder yet" else decoder + when (decoderHardware) { true -> " (hardware)"; false -> " (software)"; else -> "" }
         return "Kestrel's own player: $plays plays, $errors errors; decoder $dec; last picture ${width}x$height, first picture ${if (firstPictureMs >= 0) "$firstPictureMs ms" else "-"} after the start; " +
-            "${playedMs / 1000} s played, $framesShown frames shown, $framesDropped dropped ($pct); last: $last"
+            "${playedMs / 1000} s played, $framesShown frames shown, $framesDropped dropped ($pct); quality picked $qualityPicks time(s)${if (lastQuality.isNotEmpty()) " (last: $lastQuality)" else ""}, rotate button $rotates time(s); last: $last"
     }
 }
