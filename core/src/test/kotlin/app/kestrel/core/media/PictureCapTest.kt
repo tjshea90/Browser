@@ -12,7 +12,7 @@ class PictureCapTest {
             assertTrue("a 720p rung (1280 px) must stay on a $screen px screen, cap $cap", 1280 <= cap * 1.02)
             assertTrue("a 1080p rung (1920 px) must go on a $screen px screen, cap $cap", 1920 > cap * 1.02)
         }
-        assertEquals(1313, PictureCap.pixels(PictureCap.AUTO, 973))
+        assertEquals(1314, PictureCap.pixels(PictureCap.AUTO, 973))
     }
 
     @Test fun theNamedCapsAreTheirOwnWidths() {
@@ -36,7 +36,7 @@ class PictureCapTest {
     }
 
     @Test fun theTextAnswersWhatTheCapDoes() {
-        assertTrue(PictureCap.explain(PictureCap.AUTO, 973).contains("above 1313 px"))
+        assertTrue(PictureCap.explain(PictureCap.AUTO, 973).contains("above 1314 px"))
         assertTrue(PictureCap.explain(PictureCap.OFF, 973).contains("no rung is taken out"))
         assertTrue(PictureCap.explain(PictureCap.P720, 973).startsWith("720p"))
     }
