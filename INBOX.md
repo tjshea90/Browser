@@ -1839,3 +1839,8 @@ Q4 make it friendly tu, q5 for Mexican Spanish translations only, do not transla
 ```
 It should work for regular tabs in addition to private tabs
 ```
+
+## 2026-11-16T17:59:37Z
+```
+Q15 put everything into one keyboard app q16 translate can be in any app but only if I turn on translate, just like on Gboard q17 this is ok q18 I want the easiest way to translate to English, fewest presses q19 do not change linkmeter
+```
