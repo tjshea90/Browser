@@ -123,7 +123,7 @@
     var c = verdict.indexOf('|'), why = verdict.slice(0, c);
     lastWord = verdict.slice(c + 1).slice(0, 40);
     if (why === 'size') refusedSize++; else if (why === 'mode') refusedMode++; else refusedFps++;
-    if (!timer && reports < 8) { try { timer = setTimeout(flush, 2000); } catch (e) { /* no timers */ } }
+    if (!timer && reports < 8) { try { timer = later.call(window, flush, 2000); } catch (e) { /* no timers */ } }
   }
 
   // ---------------------------------------------------------------- the wrappers
