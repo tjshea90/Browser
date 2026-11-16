@@ -3,9 +3,9 @@
 ## Summary (10 lines)
 1. Chrome puts Android video on its own SurfaceView/SurfaceControl layer that SurfaceFlinger can show as a hardware overlay (no GPU composition of the picture). Gecko on Android has no such path (overlay bugs open since 2019); it draws each frame from a SurfaceTexture, one frame at a time. (sec 1 and 2, DOCUMENTED)
 2. Chrome decodes into AImageReader buffers; Gecko is migrating (pref gfx.video.aimage-reader-gpu-process-android, GPU-process MediaCodec in 161) but it is unfinished. (sec 1 and 2, DOCUMENTED)
-3. Rotation: Chrome batches size changes into one update, embeds fullscreen on a black fallback and, as far as the code shows, posts the resize to viz without waiting. Gecko resizes through a synchronous IPC to the compositor and its Javadoc says surfaceChanged may block. The 0.9-2 s UI stalls are most likely engine-side.
-4. Only a Kestrel-owned SurfaceView plus MediaPlayer or Media3 gives the overlay path on this tablet, for sniffed direct URLs (Samsung's popup player works so). No MSE blob streams, no DRM; framework HLS is MPEG-TS only.
-5. External players by intent: only MX Player documents a headers extra; VLC and mpv-android document none.
+3. Rotation: Chrome batches size changes into one update, embeds fullscreen on a black fallback and, as far as the code shows, posts the resize to viz without waiting. Gecko resizes through a synchronous IPC to the compositor and its Javadoc says surfaceChanged may block. The 0.9-2 s UI stalls are most likely engine-side. (sec 1 and 2, DOCUMENTED; the stall cause INFERRED)
+4. Only a Kestrel-owned SurfaceView plus MediaPlayer or Media3 gives the overlay path on this tablet, for sniffed direct URLs (Samsung's popup player works so). No MSE blob streams, no DRM; framework HLS is MPEG-TS only. (sec 3 and 4; the effect INFERRED)
+5. External players by intent: only MX Player documents a headers extra; VLC and mpv-android document none. (sec 4, DOCUMENTED)
 6. Sites do not cap quality to the screen by default (hls.js: capLevelToPlayerSize and capLevelOnFPSDrop false). VP9/AV1 off is done; a 60 fps block and a quality cap by extension are the page-level levers. Opera compresses server-side (not possible here).
 7. Gecko Android still has its own HLS player (moved from ExoPlayer2 to Media3 in 151); it runs only when a page gives a video an HLS address directly. Forcing it on hls.js pages is an untested experiment that would take page script out of the video path.
 8. I found no browser that freezes the page behind a fullscreen element.
