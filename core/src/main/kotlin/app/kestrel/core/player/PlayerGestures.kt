@@ -212,9 +212,9 @@ class PlayerGestures(private val h: Host, var cfg: Config) {
         val dx = x - startX; val dy = y - startY
         val coef = if (dx == 0f) Double.MAX_VALUE else abs(dy / dx).toDouble()
         if (coef > GestureMath.STEEP) {
+            if (abs(dy) / cfg.rangePx.toDouble() < GestureMath.VERTICAL_START) return                                     // (the first 5 % is the dead start, as in VLC; also in the middle strip: a sideways drag that begins with a small vertical wobble is still a seek, review of alpha61)
             val kind = GestureMath.levelAt(startX / cfg.widthPx.toDouble())
             if (kind == null) { if (cfg.middlePasses) { s = S.PASSED; h.passThrough() } else s = S.IGNORED; return }      // the middle strip: no level there
-            if (abs(dy) / cfg.rangePx.toDouble() < GestureMath.VERTICAL_START) return                                     // (the first 5 % is the dead start, as in VLC)
             levelKind = kind; s = S.LEVEL; lastY = y
         } else if (GestureMath.cm(abs(dx).toDouble(), cfg.xdpi.toDouble()) >= GestureMath.SEEK_MIN_CM) {
             s = S.SCRUB; scrub(x, y)
