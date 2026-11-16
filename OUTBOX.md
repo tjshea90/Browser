@@ -2271,3 +2271,36 @@
 ## 2026-11-16T19:06:02Z
 > Tests are green and the signed APK build is running; I'll check the build job in five minutes.
 <!-- sha:c5b21b6b783e -->
+
+## 2026-11-16T20:15:20Z
+> Alpha60 is out, and it installs over your current Kestrel G.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha60
+>
+> **Message 55: can the player be inside the website?** Yes. When you press play, Kestrel's own player now draws over the page's own video box, with the page above, below and around it. It follows the page when you scroll, and dragging on the film scrolls the page. Tapping the film shows its controls, including a full-screen button and an x to close it. Back closes the film first. Where the film can't be placed safely (a video in an embedded frame, a fixed or sticky box, a pinch-zoomed or desktop-layout page, a small thumbnail), it still opens full screen as before. Settings > "Play web videos inside the page" turns it off.
+>
+> **Message 57: double tap and VLC-style drags.** All three work in the full-screen player, in the player inside the page, and in a page's own full screen with Kestrel's controls.
+> - **Double tap:** a double tap on a side jumps 10 seconds and puts the controls away.
+> - **Precise seek:** rest a finger about a third of a second (you feel a tick), then drag sideways. About 1 cm is 3 s, 4 cm is 40 s, and 8 cm is 10 minutes, and left rewinds. Drag a little up or down at the same time for a finer step. The film moves when you let go, and VLC's text (for example +0:25 (1:23:45)) shows where it will land.
+> - **Brightness and volume:** drag up or down on the left side for brightness and on the right for volume, with a bar and a percentage. The middle strip does nothing, as in VLC.
+>
+> Inside the page a plain drag still scrolls the page, so there you rest first and then drag. Settings > "Video gestures" turns them off.
+>
+> **Message 58: logged out after switching apps.** When Android asked Kestrel for memory after you left it, Kestrel closed the page in front. On your return it reloaded, and a private login is forgotten once its last private page closes. That no longer happens, and I proved it on the real engine in the emulator. **I could not measure the slow Cloudflare check or the laggy typing.** My one change is that Kestrel's own scripts no longer run inside the human-check frames of Cloudflare, hCaptcha, reCAPTCHA and similar. That is a guess, not a proven fix.
+>
+> **Message 59: regular tabs too.** Yes, the same rule now covers regular tabs. A regular tab is only put to sleep after you have been away 30 minutes or more and Android is about to end background apps. A private tab is never put to sleep. If Android ends the whole app (the tablet has only 2 GB), pages reload and private logins are gone. Nothing can prevent that.
+>
+> **What was tested:** all unit tests and the 576 page-script tests pass. The emulator lab (real Firefox engine, Android 10, not your tablet) passed 349 checks with 0 failed. **Nothing was tried on your tablet.**
+>
+> **Please try on the tablet:**
+> - Press play on the Yahoo video and check the film sits over its box, follows the scroll, and the full-screen button, x and Back behave.
+> - Try the double tap, the rest-then-drag seek, and the two vertical drags.
+> - Switch to another app and come back, once in a private tab and once in a regular tab.
+> - Send the whole Diagnostics right after a slow Cloudflare check. It lists CPU by process and UI stalls.
+>
+> **Still open:**
+> - The slow Cloudflare check and laggy typing (unmeasured).
+> - After the full-screen button, returning to the film inside the page.
+> - Films with no direct address, as on YouTube (VP12).
+> - Older, smaller items: VP10, ROT2e, ANS48, SOAK1d, LAB2f and ANS52j.
+<!-- sha:984e951d6ec1 -->
