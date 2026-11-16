@@ -32,6 +32,7 @@ object DeviceVideo {
     private const val KEY_HW = "vid_hw"
     private const val KEY_WV = "vid_wv"
     private const val KEY_FP = "vid_fp"
+    private const val KEY_DESC = "vid_desc"
 
     /** Hardware decoders as known right now: from this run's probe, else from the stored answer for this system build, else null (unknown). Cheap; safe on any thread. */
     fun hardware(ctx: Context): VideoPolicy.Hardware? {
@@ -60,7 +61,7 @@ object DeviceVideo {
                     if (caps != null) {
                         secure = try { caps.isFeatureSupported(MediaCodecInfo.CodecCapabilities.FEATURE_SecurePlayback) } catch (e: Exception) { false }
                         val vc = caps.videoCapabilities
-                        if (vc != null) size = try { "${vc.supportedWidths.upper}x${vc.supportedHeights.upper}" + (try { vc.getSupportedFrameRatesFor(1280, 720).upper.toInt().let { "@$it" } } catch (e: Exception) { "" }) } catch (e: Exception) { "" }
+                        if (vc != null) size = sizeText(vc)
                     }
                     decs.add(Dec(info.name, type.lowercase(), hardware = info.isHardwareAccelerated, vendor = info.isVendor, secure = secure, size = size))
                 }
@@ -73,13 +74,51 @@ object DeviceVideo {
         val changed = hw?.encode() != fresh.encode()
         if (decs.isNotEmpty()) { // a probe that found nothing (service not ready) is not remembered
             hw = fresh
-            ctx.getSharedPreferences("kestrel_video", Context.MODE_PRIVATE).edit().putString(KEY_HW, fresh.encode()).putBoolean(KEY_WV, widevine).putString(KEY_FP, Build.FINGERPRINT).apply()
+            ctx.getSharedPreferences("kestrel_video", Context.MODE_PRIVATE).edit().putString(KEY_HW, fresh.encode()).putBoolean(KEY_WV, widevine).putString(KEY_FP, Build.FINGERPRINT).putString(KEY_DESC, textOf(decs).take(1500)).apply()
         }
         app.kestrel.browser.diag.Health.log("video", "decoders", "${fresh.encode()} ${decs.size} decoder(s) in $readMs ms, widevine=$widevine")
         return changed
     }
 
     private fun has(decs: List<Dec>, mime: String) = decs.any { it.mime == mime && it.hardware }
+
+    /**
+     * ANS52 (owner message 52: "optimized for the hardware"): what the decoder CAN do at the sizes that matter, as the vendor declares it: the largest size, whether 720p and 1080p are supported at all, the highest frame
+     * rate it claims there and, where the vendor measured it (media_codecs_performance.xml), the range it really achieves, plus the performance points of API 29. Words only, no address.
+     */
+    private fun sizeText(vc: MediaCodecInfo.VideoCapabilities): String {
+        val sb = StringBuilder()
+        try { sb.append(vc.supportedWidths.upper).append('x').append(vc.supportedHeights.upper) } catch (e: Exception) { sb.append('?') }
+        for ((w, h, lab) in listOf(Triple(1280, 720, "720p"), Triple(1920, 1080, "1080p"))) {
+            val ok = try { vc.isSizeSupported(w, h) } catch (e: Exception) { false }
+            if (!ok) { sb.append(", ").append(lab).append(" not supported"); continue }
+            val sup = try { vc.getSupportedFrameRatesFor(w, h).upper.toInt() } catch (e: Exception) { -1 }
+            val ach = try { vc.getAchievableFrameRatesFor(w, h) } catch (e: Exception) { null }
+            sb.append(", ").append(lab).append(" up to ").append(sup).append(" fps")
+            if (ach != null) sb.append(" (measured ").append(ach.lower.toInt()).append('-').append(ach.upper.toInt()).append(')')
+        }
+        try { val pp = vc.supportedPerformancePoints; if (pp != null && pp.isNotEmpty()) sb.append(", points ").append(pp.take(3).joinToString(" ") { it.toString() }) } catch (e: Throwable) { /* not declared */ }
+        return sb.toString()
+    }
+
+    /** One Diagnostics line: the video decoders of this tablet with what each can do (hardware first). Empty list = not read yet. */
+    fun describe(ctx: Context): String {
+        val l = list
+        if (l == null) {
+            val p = ctx.getSharedPreferences("kestrel_video", Context.MODE_PRIVATE)
+            return if (p.getString(KEY_FP, null) == Build.FINGERPRINT) (p.getString(KEY_DESC, null) ?: "not read yet") else "not read yet"
+        }
+        return textOf(l)
+    }
+
+    private fun textOf(decs: List<Dec>): String {
+        val video = decs.filter { d -> CODECS.take(7).any { it.first == d.mime } }
+        if (video.isEmpty()) return "no video decoder found"
+        fun label(m: String) = CODECS.firstOrNull { it.first == m }?.second ?: m
+        val hardware = video.filter { it.hardware }.joinToString(" | ") { "${label(it.mime)} ${it.name}${if (it.secure) " (secure ok)" else ""}: ${it.size}" }
+        val software = video.filter { !it.hardware }.joinToString(", ") { "${label(it.mime)} ${it.name}" }
+        return "hardware: " + (hardware.ifEmpty { "none" }) + "; software only: " + (software.ifEmpty { "none" })
+    }
 
     private fun readDrm() {
         val uuid = UUID(java.lang.Long.parseUnsignedLong("EDEF8BA979D64ACE", 16), java.lang.Long.parseUnsignedLong("A3C827DCD51D21ED", 16))

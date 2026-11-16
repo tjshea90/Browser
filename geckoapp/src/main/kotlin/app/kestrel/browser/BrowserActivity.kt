@@ -2228,6 +2228,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(strayLine())
         out.add(videoBarLine())
         out.add(videoQuality.line(GeckoEngine.videoPolicyText))
+        out.add("Video decoders (what the tablet's own chips declare they can do): " + DeviceVideo.describe(applicationContext))   // ANS52: hardware first, with the sizes and frame rates the vendor claims and measured
         out.add(scrollGaps.line(prefs.measureScroll))
         out.add(app.kestrel.browser.shield.ScriptletSummary.read(applicationContext).ifEmpty { "Scriptlets in the lists: no compile report yet (the bundled lists are used until the first update)" })
         Engine.peek()?.let { fs -> out.add("YouTube scriptlet calls loaded: www.youtube.com " + fs.scriptletsFor("www.youtube.com").size + ", m.youtube.com " + fs.scriptletsFor("m.youtube.com").size) }
