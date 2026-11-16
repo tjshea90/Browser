@@ -98,7 +98,7 @@ class WebHandOverTest {
     }
 
     @Test fun theLongestFilmWins() {
-        val longer = Known("https://v.example/long/master.m3u8", MediaKind.HLS, 5_400_000L, true)
+        val longer = Known("https://v.example/long/master.m3u8", MediaKind.HLS, 5_400_000L, true, master = true)       // (found at the same moment as the others: the longest then)
         assertEquals(longer.url, WebHandOver.decide(WebHandOver.ALWAYS, Why.PLAY, el(blob = true), listOf(film, longer, unknownLength))!!.url)
     }
 
