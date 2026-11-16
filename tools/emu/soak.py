@@ -1914,7 +1914,10 @@ class Soak:
             for name in self.CP_KEPT[label]:
                 b, a = base.get(name), rows.get(name)
                 if b and a:
-                    check("%s: %s is left to the engine (%s)" % (label, name, "/".join(b)), a == b, "engine %s, with the policy %s" % (b, a))
+                    cols = (0, 1, 2)
+                    if name.startswith("vp9") and label in ("auto-nochip", "h264only"):    # there the engine's own VP9 preference (off unless a chip makes Gecko offer it) decides isTypeSupported, not the page script
+                        cols = (1, 2)
+                    check("%s: %s is left to the engine (%s)" % (label, name, "/".join(b)), all(a[i] == b[i] for i in cols), "engine %s, with the policy %s (columns %s)" % (b, a, cols))
             for name, a in sorted(rows.items()):
                 self.cp_table.append((label, name) + tuple(a))
         for name, b in sorted(base.items()):

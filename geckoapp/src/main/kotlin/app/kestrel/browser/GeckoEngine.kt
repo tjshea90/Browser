@@ -297,7 +297,7 @@ object GeckoEngine {
         videoPolicyText = "Video: codecs offered to sites: ${d.why} [hardware decoders ${hw?.encode() ?: "unknown"}]; page animations ${if (prefs.calmPages) "calm (reduce-motion, GIFs once)" else "normal"}; muted autoplay ${if (prefs.videoMutedAutoplay) "allowed" else "blocked"}; protected video ${if (prefs.videoDrm == 0) "ask" else "never"}"
         fun pref(name: String, set: () -> Unit) { try { set() } catch (e: Exception) { app.kestrel.browser.diag.Health.log("engine", "video-pref-failed", "$name ${e.toString().take(100)}") } }
         fun tri(name: String, v: Boolean?) = pref(name) { if (v == null) org.mozilla.geckoview.GeckoPreferenceController.clearGeckoUserPref(name) else org.mozilla.geckoview.GeckoPreferenceController.setGeckoPref(name, v, u) }
-        tri("media.mediasource.vp9.enabled", d.vp9)
+        tri("media.mediasource.vp9.enabled", if (d.vp9 == null && DeviceVideo.labLimits != null) true else d.vp9) // DEBUG lab only (labLimits is never set in a release build): the emulator plays the tablet, where a hardware VP9 decoder makes Gecko offer VP9 whatever this preference says
         tri("media.av1.enabled", d.av1)
         tri("media.hevc.enabled", d.hevc)
         if (prefs.calmPages) {
