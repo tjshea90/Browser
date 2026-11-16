@@ -20,6 +20,8 @@ import app.kestrel.core.media.MediaNames
 import app.kestrel.core.media.MediaRank
 import app.kestrel.core.media.MediaSniff
 import app.kestrel.core.media.Mp4Probe
+import app.kestrel.core.media.PageQuality
+import app.kestrel.core.media.QualityLabel
 import app.kestrel.core.media.SizeEstimate
 import app.kestrel.core.media.StreamSource
 import app.kestrel.core.url.UrlParts
@@ -43,6 +45,8 @@ class VideoFlow(private val a: BrowserActivity) {
     private val sized = HashSet<String>()               // files whose length was already asked for (found in the page markup, never requested)
     private val children = HashSet<String>()            // addresses of the variant / audio playlists of masters we have read: they are not rows of their own
     private val childUrls = HashMap<String, List<String>>() // master key -> its children (forgotten together with it)
+    private val masterRungs = HashMap<String, List<QualityLabel.Rung>>() // ANS53d.2: master key -> the pictures its playlist offers (the quality list of a film that plays in the page)
+    private val masterAsked = HashSet<String>()          // ANS53d.2: masters whose pictures were already asked for
     private var panel: VideoPanel? = null
     private var panelTab: Tab? = null
     private var panelPressed: String? = null
@@ -62,7 +66,7 @@ class VideoFlow(private val a: BrowserActivity) {
     fun clearTab(tab: Tab) { tab.gecko.pictureW = 0; tab.gecko.pictureH = 0; tab.gecko.picturePlayed = false; val keys = tab.media.keys(); tab.media.clear(); forget(keys); looks.remove(tab.id); val p = tab.id.toString() + "|"; maybeAsked.removeAll { it.startsWith(p) } }
 
     private fun forget(keys: List<String>) {
-        for (k in keys) { lookedKeys.remove(k); streamInfo.remove(k); probed.remove(k); sized.remove(k); childUrls.remove(k)?.forEach { children.remove(it) } }
+        for (k in keys) { lookedKeys.remove(k); streamInfo.remove(k); probed.remove(k); sized.remove(k); masterRungs.remove(k); masterAsked.remove(k); childUrls.remove(k)?.forEach { children.remove(it) } }
     }
 
     /**
@@ -117,6 +121,7 @@ class VideoFlow(private val a: BrowserActivity) {
                 when (val pl = text?.let { Hls.parse(it, c.url) }) {
                     is Hls.MediaPlaylist -> noteLook(t, c, pl.media, IntArray(0))
                     is Hls.MasterPlaylist -> {
+                        noteMaster(c, pl.master)
                         val vs = pl.master.variants
                         val heights = vs.filter { !it.audioOnly }.map { it.height }.filter { it > 0 }.distinct().toIntArray()   // RX3-V4: what a blob: player's picture height is matched against
                         val probe = vs.filter { !it.audioOnly }.minByOrNull { it.bandwidth } ?: vs.minByOrNull { it.bandwidth }
@@ -292,6 +297,40 @@ class VideoFlow(private val a: BrowserActivity) {
         NativePlayerActivity.launch(a, target.url, headers, 0L, target.maxH, tab.isPrivateTab, target.w, target.h)
     }
 
+    // ---- ANS53d.2 (owner message 53: "put a setting for video quality in the player controls for as many videos as possible"; research/ANS53_DESIGN.md): the quality list of a film that plays in the PAGE. The page's own
+    // player cannot be told to change its picture, so the list is a hand-over to Kestrel's own player, which can: the pictures the film's HLS master playlist offers, a pick starts it at the page's position with that picture.
+    class PageFilm(val cand: MediaCandidate, val rungs: List<QualityLabel.Rung>)
+
+    /** A master playlist was read: remember the pictures it offers; the Quality button of an open full screen follows. */
+    private fun noteMaster(c: MediaCandidate, master: Hls.Master) {
+        val r = PageQuality.rungs(master.variants)
+        if (masterRungs.put(c.key, r) != r) a.refreshPlayerQuality()
+    }
+
+    /**
+     * The film the page plays and the pictures it offers; null when no film is known, it is no HLS stream, or the stream offers one picture only (nothing to choose). The film is the one that really plays
+     * ([MediaList.primary]), else the page's only counted HLS stream. A playlist the app has not read yet is asked for once (the early look reads the first few, a page with more may not get to it). UI thread.
+     */
+    fun pageFilm(tab: Tab): PageFilm? {
+        if (tab.isNewTab || a.onHomeScreen(tab)) return null
+        val c = tab.media.primary()?.takeIf { it.kind == MediaKind.HLS } ?: tab.media.usable().filter { it.kind == MediaKind.HLS }.singleOrNull() ?: return null
+        val r = masterRungs[c.key]
+        if (r == null) {
+            if (masterAsked.add(c.key)) fetchPlaylist(tab, c, c.url, { Hls.parse(it, c.url) != null }) { text, _ -> (text?.let { Hls.parse(it, c.url) } as? Hls.MasterPlaylist)?.let { noteMaster(c, it.master) } }
+            return null
+        }
+        return if (PageQuality.hasChoice(r)) PageFilm(c, r) else null
+    }
+
+    /** A row of the page's quality list was picked ([rung] null = Automatic): the page's film stops and Kestrel's own player goes on from [startMs] with that picture. */
+    fun playPicked(tab: Tab, film: PageFilm, rung: QualityLabel.Rung?, startMs: Long) {
+        val c = film.cand
+        val headers = MediaHeaders.sets(c, tab.url).firstOrNull()?.map { "${it.key}: ${it.value}" }.orEmpty()
+        try { tab.gecko.mediaSession?.pause() } catch (e: Throwable) { /* a page film without a media session is silent: nothing plays sound */ }
+        if (!tab.isPrivateTab) Health.log("video", "native-quality", "${if (rung == null) "Automatic" else QualityLabel.text(rung)} from ${startMs / 1000} s")
+        NativePlayerActivity.launch(a, c.url, headers, startMs, 720, tab.isPrivateTab, tab.gecko.pictureW, tab.gecko.pictureH, rung, rung == null)
+    }
+
     /** What the page loaded that is worth considering, plus the pressed element's own file even when the usual size rules would hide it. */
     private fun candidates(tab: Tab, pressedUrl: String?): List<MediaCandidate> {
         val items = ArrayList(tab.media.usable())
@@ -422,7 +461,7 @@ class VideoFlow(private val a: BrowserActivity) {
             when (pl) {
                 null -> { streamInfo[c.key] = Loaded.Failed(whyNotRead(status)); refresh(tab) }
                 is Hls.MediaPlaylist -> { streamInfo[c.key] = ready(tab, c, null, pl.media, text, null); refresh(tab); sizeBareStream(tab, c, pl.media, text) }
-                is Hls.MasterPlaylist -> loadVariants(tab, c, pl.master, requestHeaders(tab, c))
+                is Hls.MasterPlaylist -> { noteMaster(c, pl.master); loadVariants(tab, c, pl.master, requestHeaders(tab, c)) }
             }
         }
         return Loaded.Loading
