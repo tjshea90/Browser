@@ -135,6 +135,9 @@ class PlayerModel(private val h: Host) {
     fun onTap(xPermille: Int) { if (active) taps.tap(xPermille.coerceIn(0, 1000) / 1000.0) }
     fun controlsTimer() { controls.tick() }
 
+    /** ANS53c: the tap that just toggled the controls was on one of the page's own buttons: put them back as they were ([was] = shown before the tap). */
+    fun undoTap(was: Boolean) { if (active) controls.restore(was) }
+
     fun playPause() {
         val v = view()
         val want = !v.playing

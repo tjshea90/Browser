@@ -988,7 +988,7 @@ browser.runtime.onMessage.addListener(function (m, sender) {
   if (!m || (m.k !== 'vst' && m.k !== 'vtap') || !sender || !sender.tab) return undefined;
   function n(v, lo, hi) { v = +v; return (v >= lo && v <= hi) ? v : lo; }
   var tabId = sender.tab.id, page = (tabId >= 0 && tabTop.get(tabId)) || docOf(sender.url);
-  var o = m.k === 'vtap' ? { k: 'vtap', x: n(m.x, 0, 1000) } : {
+  var o = m.k === 'vtap' ? { k: 'vtap', x: n(m.x, 0, 1000), pg: m.pg === 1 ? 1 : 0, ts: n(m.ts, 0, 4e12) } : {
     k: 'vst', t: n(m.t, 0, 1e10), d: (m.d === -1 || m.d === -2) ? m.d : n(m.d, 0, 1e10), b: n(m.b, 0, 1e10), pa: m.p === 1 ? 1 : 0, e: m.e === 1 ? 1 : 0, m: m.m === 1 ? 1 : 0, v: n(m.v, 0, 100),
     r: n(m.r, 0.1, 16), rs: n(m.rs, 0, 4), ms: m.ms === 1 ? 1 : 0, l: m.l === 1 ? 1 : 0, w: n(m.w, 0, 20000), h: n(m.h, 0, 20000), ak: n(m.ak, 0, 2000000000), aw: n(m.aw, 0, 1000), er: m.er === 1 ? 1 : 0,
     lt: n(m.lt, 0, 60000), pc: n(m.pc, 0, 60000), tf: n(m.tf, 0, 2000000000), df: n(m.df, 0, 2000000000), sh: m.sh === 1 ? 1 : 0 };   // ANS51e: lt = how late the page's own timer ran (ms), pc = the player script's own work in a report (ms), tf / df = frames shown / dropped by the film

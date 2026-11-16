@@ -52,6 +52,12 @@ class ControlsMachine(private val h: Host) {
         if (shown) hide(false) else show(hideAfterMs, false)
     }
 
+    /** ANS53c: the app showed or hid the controls at once for a tap, and the page then said that tap was on one of ITS OWN buttons (skip ad ...): they go back to what they were, at once. */
+    fun restore(was: Boolean) {
+        if (!active || turning) return
+        if (was && !shown) show(hideAfterMs, false) else if (!was && shown) hide(false)
+    }
+
     /** What the video does now; only a CHANGE is acted on. */
     fun state(playingNow: Boolean, bufferingNow: Boolean, endedNow: Boolean) {
         val wasPlaying = playing; val wasEnded = ended; val could = autoHide()

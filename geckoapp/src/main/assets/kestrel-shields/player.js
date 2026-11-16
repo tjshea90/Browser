@@ -265,7 +265,7 @@ window.KestrelVP = window.KestrelVP || (function () {
     function onEvent(e) {
       try {
         if (!S || !e.isTrusted || !insideFs(e)) return;
-        if (classify(e) !== 'film') { S.down = null; return; }                // the page's own button: the page gets it, untouched
+        if (classify(e) !== 'film') { S.down = null; if (e.type === 'pointerup') pageTap(e); return; }   // the page's own button: the page gets it, untouched (the app is told, so a toggle it made for this tap at once is put back)
         e.stopImmediatePropagation();                                        // the page's player would toggle (or not) ITS controls: Kestrel's are the controls now
         var ty = e.type;
         if (ty === 'pointerdown') {
@@ -274,20 +274,21 @@ window.KestrelVP = window.KestrelVP || (function () {
           var d = S.down; S.down = null;
           if (!d || d.id !== e.pointerId) return;
           if (Date.now() - d.t > C.tapMs || Math.abs(e.clientX - d.x) > C.slop || Math.abs(e.clientY - d.y) > C.slop) return;
-          tap(e.clientX, e.clientY);
+          tap(e.clientX, e.clientY, e);
         } else if (ty === 'pointercancel') S.down = null;
       } catch (x) { /* never break the page */ }
     }
-    function tap(x, y) {
+    // when the finger really lifted, in epoch milliseconds (the page may run this handler late: a busy page); the app matches it with the tap it saw on the glass itself
+    function stamp(e) { try { var t = (window.performance && performance.timeOrigin) ? performance.timeOrigin + e.timeStamp : 0; return (t > 1e12 && t < 4e12) ? Math.round(t) : Date.now(); } catch (x) { return Date.now(); } }
+    function budget() { var s = S; if (!s) return false; var now = Date.now(); if (now - s.tapWin > 1000) { s.tapWin = now; s.taps = 0; } return ++s.taps <= 10; }   // at most ten taps a second: a finger cannot, a script should not
+    function pageTap(e) { if (!S || !budget()) return; send({ k: 'vtap', pg: 1, ts: stamp(e) }); }
+    function tap(x, y, e) {
       var s = S;
-      if (!s) return;
-      var now = Date.now();                                                   // at most ten taps a second: a finger cannot, a script should not
-      if (now - s.tapWin > 1000) { s.tapWin = now; s.taps = 0; }
-      if (++s.taps > 10) return;
+      if (!s || !budget()) return;
       var r = s.fs.getBoundingClientRect();
       var fx = r.width > 0 ? (x - r.left) / r.width : 0.5;
       fx = Math.max(0, Math.min(1, fx));
-      send({ k: 'vtap', x: Math.round(fx * 1000) });
+      send({ k: 'vtap', x: Math.round(fx * 1000), ts: e ? stamp(e) : 0 });
       speedUp(s, 1800);
     }
 
