@@ -112,6 +112,25 @@ class Phone:
                 pairs += 1; diff += (a != b)
         return {"dominant": round(dom, 3), "colours": sum(1 for v in cnt.values() if v >= len(flat) * 0.01), "edges": round(diff / float(max(1, pairs)), 3)}
 
+    def crop(self, x0, y0, x1, y1, step=8):
+        """ANS55f: the raw framebuffer sampled on a grid inside a rectangle (screen pixels) -> a list of (r, g, b), or None (no picture)."""
+        data = self.a.run("exec-out", "screencap", timeout=40, binary=True)
+        if not data or len(data) < 1000:
+            return None
+        try:
+            w, h, _fmt = struct.unpack("<III", data[:12])
+        except struct.error:
+            return None
+        off = 12 if len(data) - 12 >= w * h * 4 else 16
+        if w < 100 or h < 200 or len(data) - off < w * h * 4:
+            return None
+        out = []
+        for y in range(max(0, y0), min(h, y1), step):
+            base = off + y * w * 4
+            for x in range(max(0, x0), min(w, x1), step):
+                out.append((data[base + x * 4], data[base + x * 4 + 1], data[base + x * 4 + 2]))
+        return out or None
+
     def red_rows(self):
         """FSB1 (owner message 46): the lab page /fsbox draws a 6 px RED strip on the bottom edge of its full-screen box. The framebuffer is read raw: how many pixel rows have a long red run, where the first and the last
         are, and how tall the screen is -> (count, first_y, last_y, height); None = no picture. No strip at all = the bottom of the page is under a system bar."""
@@ -505,6 +524,13 @@ def tail(host):
     """The part of a host that survives redirects between www. / m. / regional names: the last two labels."""
     p = host.split(".")
     return ".".join(p[-2:]) if len(p) >= 2 else host
+
+
+def grid_diff(a, b):
+    """ANS55f: how different two pixel grids (Phone.crop) are: the mean over the samples of the biggest channel difference (0 = the same picture)."""
+    if not a or not b or len(a) != len(b):
+        return -1.0
+    return sum(max(abs(p[0] - q[0]), abs(p[1] - q[1]), abs(p[2] - q[2])) for p, q in zip(a, b)) / float(len(a))
 
 
 def pctl(vals, p):
@@ -2222,7 +2248,7 @@ class Soak:
         ev = lambda layer, name, since: health_events(self.log.since(since), layer, name)
         self.ph.setting("system", "accelerometer_rotation", 0); self.ph.setting("system", "user_rotation", 0)
         self.ph.physical(0, 9.81, 0)
-        self.ph.debug("vpress", "1"); self.ph.debug("webmode", "0"); time.sleep(2.5)
+        self.ph.debug("vpress", "1"); self.ph.debug("webmode", "0"); self.ph.debug("webinline", "0"); time.sleep(2.5)       # (ANS55f: this scene proves the FULL-SCREEN way; the inline way is ip_scene)
         def press(variant, how, tag):
             rm = self.lab.size()
             self.ph.open_url("%s/ho?v=%s&tag=%s" % (self.lab_base, variant, tag))
@@ -2341,6 +2367,156 @@ class Soak:
         self.ho_results = checks
         self.record({"kind": "web-hand-over", "name": "web-videos-in-kestrels-player", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
         self.check_alive("web-videos-in-kestrels-player")
+
+
+    # ANS55f (owner message 55: "Can the player be inside the website so the video plays but I still see the website around it?"): Kestrel's own player plays INSIDE the page over the page's own video box. Page: /ho?v=inline (a
+    # tall page, the film's own play button in the middle of the text; it reports its box at load and after every scroll). Proof on the real engine: the overlay's box equals the page's box (Health `inline placed`), a moving
+    # picture is drawn inside it (two screen pictures differ), a drag that starts on the picture scrolls the page and the overlay follows by the engine's compositor (Health `inline scroll` against the page's own rect), a tap
+    # shows the controls (real button coordinates are in the Health line), the full-screen button hands the film to the full-screen screen at the same second, the close x and Back end it, and a box scrolled out of view ends it.
+    def ip_scene(self):
+        checks, nums = [], []
+        def check(name, ok, detail=""):
+            checks.append({"check": name, "ok": bool(ok), "detail": detail if not ok else ""})
+            if not ok:
+                self.issue("high", "inline-player", "%s %s" % (name, detail))
+        ev = lambda layer, name, since: health_events(self.log.since(since), layer, name)
+        box_re = re.compile(r"view \[(-?\d+),(-?\d+) (\d+)x(\d+)\]")
+        def view_box(lines):
+            for e in reversed(lines):
+                m = box_re.search(e["rest"])
+                if m:
+                    return tuple(int(v) for v in m.groups())
+            return None
+        def page_rect(rows):
+            rr = [r for r in rows if r.get("kind") == "ap" and r.get("ev") == "rect" and str(r.get("tag", "")).startswith("ip")]
+            if not rr:
+                return None
+            r = rr[-1]
+            return (int(float(r.get("l") or 0)), int(float(r.get("t") or 0)), int(float(r.get("w") or 0)), int(float(r.get("h") or 0)), float(r.get("sy") or 0))
+        close = lambda a, b, tol=6: a is not None and b is not None and all(abs(x - y) <= tol for x, y in zip(a[:4], b[:4]))
+        self.ph.setting("system", "accelerometer_rotation", 0); self.ph.setting("system", "user_rotation", 0)
+        self.ph.physical(0, 9.81, 0)
+        self.ph.debug("vpress", "1"); self.ph.debug("webmode", "0"); self.ph.debug("webinline", "1"); time.sleep(2.5)
+        rm = self.lab.size()
+        self.ph.open_url("%s/ho?v=inline&tag=ip" % self.lab_base)
+        t0 = time.time(); L = None
+        while time.time() - t0 < 40:
+            lay = [r for r in self.lab.since(rm) if r.get("kind") == "ap" and r.get("ev") == "layout" and str(r.get("tag", "")).startswith("ip")]
+            if lay and time.time() - t0 > 7 and page_rect(self.lab.since(rm)):
+                L = lay[-1]; break
+            time.sleep(1)
+        if L is None:
+            check("inline: the page told where its film is (layout and rect rows)", False, "no rows")
+            self.record({"kind": "inline-player", "name": "film-inside-the-page", "status": "failed", "checks": checks})
+            return
+        dpr = float(L.get("dpr") or 1); oy = float(L.get("oy") or 0)
+        vx, vy, vw, vh = (int(float(L.get(k) or 0)) for k in ("vx", "vy", "vw", "vh"))
+        bx, by = int(float(L.get("bx") or 0)), int(float(L.get("by") or 0))
+        dy = 25 if oy < 5 else 0                                                    # (the page area starts below the status bar when the engine does not say where it is)
+        rect0 = page_rect(self.lab.since(rm))
+        nums.append("page: dpr %.3f box at rest %s, centre on screen %d,%d size %dx%d" % (dpr, rect0, vx, vy + dy, vw, vh))
+        self.shot("ip-before")
+        before = self.ph.crop(vx - vw // 2 + 30, vy + dy - vh // 2 + 30, vx + vw // 2 - 30, vy + dy + vh // 2 - 30)
+        def start_film(label):
+            m, r = self.log.size(), self.lab.size()
+            self.ph.tap(bx, by + dy); time.sleep(7.5)
+            return m, r
+        # ---- 1. the press: inside the page, over the box
+        m1, r1 = start_film("press")
+        started, placed = ev("inline", "start", m1), ev("inline", "placed", m1)
+        check("inline: the film plays INSIDE the page ('inline start' line) and the full-screen player was not started", bool(started) and not ev("native", "start", m1), "inline start %d, native start %d, hand-over lines %s" % (len(started), len(ev("native", "start", m1)), [e["rest"][:60] for e in ev("video", "hand-over", m1)][:1]))
+        vb = view_box(placed)
+        nums.append("overlay box %s, page box %s" % (vb, rect0[:4] if rect0 else None))
+        check("inline: the overlay's box equals the page's own video box (view pixels within 6: overlay %s, page %s)" % (vb, rect0[:4] if rect0 else None), close(vb, rect0), "overlay %s page %s" % (vb, rect0))
+        check("inline: the first picture came", bool(ev("inline", "first-picture", m1)), "no 'inline first-picture' line: %s" % [e["ev"] + ": " + e["rest"][:60] for e in health_events(self.log.since(m1), "inline")][:6])
+        shown = ev("inline", "shown", m1)
+        self.shot("ip-playing")
+        a1 = self.ph.crop(vx - vw // 2 + 30, vy + dy - vh // 2 + 30, vx + vw // 2 - 30, vy + dy + vh // 2 - 30); time.sleep(1.3)
+        a2 = self.ph.crop(vx - vw // 2 + 30, vy + dy - vh // 2 + 30, vx + vw // 2 - 30, vy + dy + vh // 2 - 30)
+        d12, d01 = grid_diff(a1, a2), grid_diff(before, a1)
+        nums.append("pixels in the box: playing vs 1.3 s later %.1f, before the press vs playing %.1f" % (d12, d01))
+        check("inline: a MOVING picture is drawn in the box (two screen pictures 1.3 s apart differ: %.1f)" % d12, d12 > 3.0, "difference %.1f (0 = the same picture: the film is not visible there)" % d12)
+        check("inline: the picture in the box is not the page's own (before the press vs playing differ: %.1f)" % d01, d01 > 6.0, "difference %.1f" % d01)
+        # ---- 2. a drag that starts ON the picture scrolls the page, the overlay follows
+        m2, r2 = self.log.size(), self.lab.size()
+        self.ph.swipe(vx, vy + dy + 70, vx, vy + dy - 130, 450); time.sleep(3.2)
+        scr = ev("inline", "scroll", m2)
+        rect1 = page_rect(self.lab.since(r2))
+        check("inline: a drag that starts on the picture scrolled the PAGE (its own scroll moved: %s)" % (rect1[4] if rect1 else None), bool(rect1) and rect1[4] > 60, "page rect rows after the drag: %s" % rect1)
+        check("inline: the engine's compositor told the overlay about the scroll ('inline scroll' lines: %d)" % len(scr), len(scr) >= 1, "no 'inline scroll' line: %s" % [e["ev"] + ": " + e["rest"][:60] for e in health_events(self.log.since(m2), "inline")][:6])
+        vb2 = view_box(scr)
+        nums.append("after the drag: overlay %s, page %s, first scroll line %s" % (vb2, rect1, scr[0]["rest"][:90] if scr else None))
+        check("inline: after the scroll the overlay is where the page's video box is (overlay %s, page %s)" % (vb2, rect1[:4] if rect1 else None), close(vb2, rect1, 8), "overlay %s page %s" % (vb2, rect1))
+        if rect1 and rect0:
+            sh = rect1[1] - rect0[1]
+            n1 = self.ph.crop(vx - vw // 2 + 30, vy + dy + sh - vh // 2 + 30, vx + vw // 2 - 30, vy + dy + sh + vh // 2 - 30); time.sleep(1.3)
+            n2 = self.ph.crop(vx - vw // 2 + 30, vy + dy + sh - vh // 2 + 30, vx + vw // 2 - 30, vy + dy + sh + vh // 2 - 30)
+            nd = grid_diff(n1, n2)
+            self.shot("ip-scrolled")
+            check("inline: the film still plays in its new place (two screen pictures 1.3 s apart differ: %.1f)" % nd, nd > 3.0, "difference %.1f" % nd)
+        # ---- 3. a tap on the picture shows the controls; their real coordinates are in the Health line
+        m3 = self.log.size()
+        cx, cy = vx, vy + dy + ((rect1[1] - rect0[1]) if (rect1 and rect0) else 0)
+        self.ph.tap(cx, cy); time.sleep(1.5)
+        shown3 = ev("inline", "shown", m3)
+        check("inline: a tap on the picture shows the controls ('inline shown' line with the buttons' places)", bool(shown3), "lines %s" % [e["ev"] for e in health_events(self.log.since(m3), "inline")])
+        mm = re.search(r"close at (\d+),(\d+) full screen at (\d+),(\d+)", shown3[-1]["rest"]) if shown3 else None
+        # ---- 4. the full-screen button: the same film, the same second
+        if mm:
+            fx, fy = int(mm.group(3)), int(mm.group(4))
+            m4 = self.log.size()
+            self.ph.tap(fx, fy); time.sleep(8)
+            stop4 = ev("inline", "stop", m4); st4 = ev("native", "start", m4)
+            check("inline: the full-screen button ended the inline player ('inline stop ... full-screen button')", any("full-screen button" in e["rest"] for e in stop4), "stop lines %s" % [e["rest"][:60] for e in stop4])
+            check("inline: and the full-screen player started on the same film", bool(st4) and bool(ev("native", "first-picture", m4)), "native start %d, first-picture %d" % (len(st4), len(ev("native", "first-picture", m4))))
+            m5 = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(4)
+            check("inline: Back leaves the full-screen player and the page is in front again", bool(ev("native", "stop", m5)), "no 'native stop' line")
+        else:
+            check("inline: the full-screen button's place was in the Health line", False, "shown line %s" % (shown3[-1]["rest"][:80] if shown3 else None))
+        # ---- 5. press again: inside the page again, then the close x
+        self.ph.debug("webinline", "1"); time.sleep(1)
+        rect_now = page_rect(self.lab.since(rm)) or rect0
+        by_now = by + dy + ((rect_now[1] - rect0[1]) if (rect_now and rect0) else 0)
+        m6 = self.log.size(); self.ph.tap(bx, by_now); time.sleep(7.5)
+        check("inline: pressed again with the page in front, the film plays inside the page again (continuing where it stopped)", bool(ev("inline", "start", m6)) and bool(re.search(r"from [1-9]\d* s", " ".join(e["rest"] for e in ev("inline", "start", m6)))), "inline start lines %s" % [e["rest"][:100] for e in ev("inline", "start", m6)])
+        m7 = self.log.size(); self.ph.tap(cx, by_now - (by + dy - (vy + dy)) if False else by_now); time.sleep(1.5)
+        sh7 = ev("inline", "shown", m7)
+        mm7 = re.search(r"close at (\d+),(\d+) full screen at (\d+),(\d+)", sh7[-1]["rest"]) if sh7 else None
+        if mm7:
+            m8 = self.log.size(); self.ph.tap(int(mm7.group(1)), int(mm7.group(2))); time.sleep(2.5)
+            check("inline: the close x ends the film inside the page (and nothing else starts)", any("close button" in e["rest"] for e in ev("inline", "stop", m8)) and not ev("native", "start", m8), "stop lines %s" % [e["rest"][:60] for e in ev("inline", "stop", m8)])
+        else:
+            check("inline: the close x's place was in the Health line", False, "shown lines %s" % [e["rest"][:60] for e in sh7])
+        # ---- 6. Back closes the film inside the page first (the page itself stays)
+        m9 = self.log.size(); self.ph.tap(bx, by_now); time.sleep(7)
+        started9 = bool(ev("inline", "start", m9))
+        m10 = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(2.5)
+        check("inline: Back ends the film inside the page first ('inline stop Back'), the page stays", started9 and any(e["rest"].startswith("Back") for e in ev("inline", "stop", m10)), "started %s, stop lines %s" % (started9, [e["rest"][:50] for e in ev("inline", "stop", m10)]))
+        # ---- 7. scrolled out of view: the film ends
+        m11 = self.log.size(); self.ph.tap(bx, by_now); time.sleep(7)
+        for _ in range(3):
+            self.ph.swipe(self.screen[0] // 2, int(self.screen[1] * 0.75), self.screen[0] // 2, int(self.screen[1] * 0.15), 300); time.sleep(1.2)
+        time.sleep(2.5)
+        check("inline: scrolled far away the box leaves the view and the film ends ('inline stop scrolled out of view')", any("scrolled out of view" in e["rest"] for e in ev("inline", "stop", m11)), "stop lines %s, scroll lines %d" % ([e["rest"][:60] for e in ev("inline", "stop", m11)], len(ev("inline", "scroll", m11))))
+        # ---- 8. the setting: off = full screen as before
+        self.ph.debug("webinline", "0"); time.sleep(1.5)
+        self.ph.open_url("%s/ho?v=inline&tag=ip-off" % self.lab_base); time.sleep(11)
+        m12 = self.log.size(); self.ph.tap(bx, by + dy); time.sleep(8)
+        check("inline: with Settings > Play web videos inside the page off the film opens full screen (no inline start, a native start)", not ev("inline", "start", m12) and bool(ev("native", "start", m12)), "inline start %d, native start %d" % (len(ev("inline", "start", m12)), len(ev("native", "start", m12))))
+        self.ph.key("KEYCODE_BACK"); time.sleep(3)
+        self.ph.debug("webinline", "1"); time.sleep(1.5)
+        self.dump_diag("ip")
+        diag = ""
+        try:
+            diag = open(os.path.join(self.out, "diagnostics-ip.txt")).read()
+        except OSError:
+            pass
+        line = [ln for ln in diag.splitlines() if ln.startswith("Web videos in Kestrel's own player")]
+        check("inline: Diagnostics counts the films inside the page", bool(line) and re.search(r"inside the page: ([1-9]\d*) film", line[-1]) is not None, "line: %s" % (line[-1][-160:] if line else "none"))
+        self.ip_nums = nums
+        self.ip_results = checks
+        self.record({"kind": "inline-player", "name": "film-inside-the-page", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks, "numbers": nums})
+        self.check_alive("film-inside-the-page")
 
     # ---- the whole run
     # ---- VC1 / LP1 (owner message 44): a video with no controls gets Kestrel's own bar when it is tapped; a long press on a video opens the video options and never the floating panel
@@ -3224,7 +3400,7 @@ class FakeAdb:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "vp"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "vp"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -3236,7 +3412,7 @@ def main():
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
-        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "vp") else "all")
+        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "vp") else "all")
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
@@ -3270,6 +3446,8 @@ def main():
             s.ap_scene()
         if a.suite in ("ho", "vp"):
             s.ho_scene()
+        if a.suite in ("ip", "vp"):
+            s.ip_scene()                                     # (ANS55f: the film inside the page)
         if a.suite == "yh":
             s.yahoo_fullscreen()                             # (only the live Yahoo Finance player in full screen with Kestrel's controls: about 4 minutes)
         if a.suite == "fsy":
