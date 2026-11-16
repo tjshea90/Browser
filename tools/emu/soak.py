@@ -2091,7 +2091,9 @@ class Soak:
     # finger, a script player over a MediaSource, a play button outside the picture, all of it in a frame). The lab server writes every request for a film file with its bytes to media.jsonl; the driver checks that
     # NOT ONE BYTE went out and nothing played before a press, then taps (the picture, or the page's own button) and checks that the film is asked for and, where the page has a play button, plays. Last: the rule off
     # gives the old behaviour (so the switch works), and the Diagnostics line counts what was held.
-    AP_CASES = [("autoplay", "picture"), ("preload-auto", "picture"), ("preload-meta", "picture"), ("no-attr", "picture"), ("script", "picture"), ("mse", "button"), ("button", "button"), ("iframe", "picture")]
+    # (page, what the person presses, what must follow): "play" = the film is asked for and plays; "still" = a hero loop with no play button of any kind: a stray tap on it starts nothing and loads nothing
+    AP_CASES = [("autoplay", "picture", "still"), ("preload-auto", "picture", "play"), ("preload-meta", "picture", "play"), ("no-attr", "picture", "play"), ("script", "button", "play"),
+                ("mse", "button", "play"), ("button", "button", "play"), ("iframe", "picture", "still")]
 
     def ap_scene(self):
         checks = []
@@ -2101,11 +2103,11 @@ class Soak:
                 self.issue("high", "press-to-play", "%s %s" % (name, detail))
         media = LabReport(os.path.join(self.out, "lab", "media.jsonl"))
         films = ("/clip/landscape.mp4", "/clip/frag.mp4")
-        def film_bytes(mark):
-            rows = [r for r in media.since(mark) if r.get("method") == "GET" and r.get("path") in films]
+        def film_bytes(mark):                                                          # (a request that returns ONE byte is the app's own question "how big is this file" (Range 0-0): no video data)
+            rows = [r for r in media.since(mark) if r.get("method") == "GET" and r.get("path") in films and int(r.get("bytes") or 0) > 1]
             return sum(int(r.get("bytes") or 0) for r in rows), len(rows)
         self.ph.debug("vpress", "1"); time.sleep(2.0)
-        for variant, how in self.AP_CASES:
+        for variant, how, after in self.AP_CASES:
             tag = "ap-" + variant
             rm, mm = self.lab.size(), media.size()
             self.ph.open_url("%s/ap?v=%s&tag=%s" % (self.lab_base, variant, tag))
@@ -2121,7 +2123,7 @@ class Soak:
             check("%s: nothing played by itself" % variant, "playing" not in evs and "playing-promise" not in evs, "events %s" % sorted(set(evs)))
             if variant == "script":
                 rej = [r for r in rows if r.get("ev") == "rejected"]
-                check("script: the page's own play() calls without a finger were refused (NotAllowedError)", len(rej) >= 1 and all(r.get("name") == "NotAllowedError" for r in rej), "rejected rows %s" % [(r.get("name")) for r in rej])
+                check("script: the page's own play() calls without a finger were refused (NotAllowedError, %d times)" % len(rej), len(rej) >= 2 and all(r.get("name") == "NotAllowedError" for r in rej), "rejected rows %s" % [(r.get("name")) for r in rej])
             if variant == "mse":
                 check("mse: the script player was kept from fetching (no 'sourceopen', no 'fetched')", "sourceopen" not in evs and "fetched" not in evs, "events %s" % sorted(set(evs)))
             lay = [r for r in rows if r.get("ev") == "layout"]
@@ -2140,17 +2142,22 @@ class Soak:
             rows2 = [r for r in self.lab.since(r2) if r.get("kind") == "ap" and str(r.get("tag", "")).startswith(tag)]
             ev2 = [r.get("ev") for r in rows2]
             self.shot("ap-%s-after" % variant)
-            check("%s: after the press the film is asked for (%d bytes)" % (variant, n1), n1 > 0, "no byte after a tap at %d,%d (page events %s)" % (tx, ty, sorted(set(ev2))))
-            if variant in ("mse", "button"):
-                check("%s: and it plays (the page's own play button)" % variant, "playing" in ev2 or "playing-promise" in ev2, "events %s" % sorted(set(ev2)))
+            played = "playing" in ev2 or "playing-promise" in ev2
+            if after == "still":
+                check("%s: a hero loop has no play button: a tap on it loads nothing and starts nothing (%d bytes)" % (variant, n1), n1 == 0 and not played, "bytes %d, events %s" % (n1, sorted(set(ev2))))
+            else:
+                check("%s: after the press the film is asked for (%d bytes)" % (variant, n1), n1 > 0, "no byte after a tap at %d,%d (page events %s)" % (tx, ty, sorted(set(ev2))))
+                check("%s: and it plays" % variant, played, "events %s" % sorted(set(ev2)))
             if variant == "mse":
                 check("mse: the script player now fetched its film", "sourceopen" in ev2 and "fetched" in ev2, "events %s" % sorted(set(ev2)))
-            self.ap_table.append((variant, "button" if how == "button" else "picture", n0, n1, "yes" if ("playing" in ev2 or "playing-promise" in ev2) else "no"))
+            if variant == "script":
+                check("script: the page's own play() inside the press went through", any(r.get("ev") == "playing-promise" and r.get("how") == "button" for r in rows2), "rows %s" % [(r.get("ev"), r.get("how"), r.get("name")) for r in rows2][:6])
+            self.ap_table.append((variant, "button" if how == "button" else "picture", n0, n1, "yes" if played else "no"))
         # the switch off: the old behaviour (a muted autoplay video loads and plays by itself), proof that the switch really is the rule
         self.ph.debug("vpress", "0"); time.sleep(2.0)
         rm, mm = self.lab.size(), media.size()
         self.ph.open_url("%s/ap?v=autoplay&tag=ap-off" % self.lab_base)
-        time.sleep(12)
+        time.sleep(14)
         n_off, req_off = film_bytes(mm)
         evs_off = [r.get("ev") for r in self.lab.since(rm) if r.get("kind") == "ap" and str(r.get("tag", "")).startswith("ap-off")]
         check("off: with the rule switched off the page's muted autoplay video loads and plays by itself again (%d bytes)" % n_off, n_off > 0 and "playing" in evs_off, "bytes %d, events %s" % (n_off, sorted(set(evs_off))))
