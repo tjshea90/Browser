@@ -1,13 +1,13 @@
-# CHECKPOINT 2525 — read me first, then TASKS.md
+# CHECKPOINT 2526 — read me first, then TASKS.md
 
-**Written:** 2026-11-16T16:30:15Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `75320db5` (this checkpoint is the commit after it)
+**Written:** 2026-11-16T16:36:22Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `430cb0fa` (this checkpoint is the commit after it)
 
 ## Just done
-ANS55f step 1 done: gate-main.js geomOf + content.js geo() + background.js g/tp relay (11 numbers: x,y,w,h,vvScale,vvOffX,vvOffY,vvW,pageX,pageY,fx); web-tests/handover.test.js 25/25 incl. 3 new geometry tests; core InlineBox.Track tests green
+ANS55f step 2 coded and COMPILES (:geckoapp:compileDebugKotlin ok): PlayerFactory (activity uses it), PlayerControlsView inline mode (close x, full-screen button, scale), InlinePlayer view, InlineHost (CompositorScrollDelegate follow, touch pass-through, stop reasons), VideoFlow.start inline branch + repeat guards + pageOf(g,tp), BrowserActivity hooks (back, pause, config, attachContent, pageStarted, tab list, page fullscreen, destroy), Prefs web_inline + BackupManager spec + Settings toggle, WebHandStats inline counters
 
 ## Do this next
-ANS55f step 2: Kotlin. (a) VideoFlow.handOver/start: parse m.optJSONArray("g") + m.optInt("tp") into InlineBox.Page (follows = tp==1 && fx==0); (b) PlayerFactory.create(ctx,url,headerLines) extracted from NativePlayerActivity.buildPlayer (activity uses it); (c) PlayerControlsView inline flag (close x + full-screen button + size scale, Listener.onFullscreen); (d) InlinePlayer view + InlineVideo host in BrowserActivity (content.addView before home, CompositorScrollDelegate, touch forwarding, stop hooks); (e) VideoFlow.start inline branch; Prefs web_inline + Settings row; then core+Robolectric tests, OwnerRulesTest guards, lab suite ip, ship alpha60. Do NOT redispatch alpha59.
+Run the unit suites (./gradlew --offline -q :core:test :app:testDebugUnitTest :geckoapp:testDebugUnitTest) and fix guard tests that read NativePlayerActivity/VideoFlow source text; add OwnerRulesTest guards for the inline rules (needs a real tap, private not logged, stop hooks, no page message moves the overlay); then lab: soaklab page with a tall scrollable page + HLS/file video in the middle, new suite ip in tools/emu/soak.py + android.yml lab_suite, checks: overlay box == element box at rest (Health 'inline placed'), after a known scroll (Health 'inline scroll' view box vs page-reported rect in lab evt log), screenshot pixels in the box = film colours, full-screen button hands same second to activity, Back closes inline first, scroll out of view stops, second film replaces first. Then ship alpha60 (versionCode 161).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ ANS55f step 2: Kotlin. (a) VideoFlow.handOver/start: parse m.optJSONArray("g") +
 
 ## Last ten checkpoints
 ```
+  16795a42 ckpt 2525: ANS55f step 1 done: gate-main.js geomOf + content.js geo() + background.js g
   50071840 ckpt 2524: alpha59 SHIPPED and RECORDED: Release kestrel-g-v0.3.0-alpha59 (code 160, ru
   2e6fccf5 ckpt 2523: alpha59 RELEASE DISPATCHED (ONE time): android.yml run 43905841979 (run 174,
   d0daa8b8 ckpt 2522: gated kestrel-g-v0.3.0-alpha59 (gecko code 160) and pushed it: handoff self-
@@ -25,8 +26,7 @@ ANS55f step 2: Kotlin. (a) VideoFlow.handOver/start: parse m.optJSONArray("g") +
   f7ab7a01 ckpt 2518: ANS55e fix coded (core tests + gecko compile green): Yahoo/Brightcove root c
   5851f383 ckpt 2517: owner message 55 (alpha58 on the tablet: Yahoo video black, resumed the wron
   6f31c2fb ckpt 2516: session handoff saved by the handoff tool (.handoff/handoff.md + json + arch
-  3eb91380 ckpt 2515: alpha58 SHIPPED and RECORDED: Release kestrel-g-v0.3.0-alpha58 (code 159, AP
 ```
 
-(5 automatic checkpoint(s) since the last deliberate one — the
+(9 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
