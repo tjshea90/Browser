@@ -2225,3 +2225,23 @@
 >
 > Next I'm having an independent reviewer read the alpha56 diff while the lab queue runs.
 <!-- sha:fe7264e02123 -->
+
+## 2026-11-16T02:41:56Z
+> Correction to my interim answer: your paste shows one full screen, not four. The controls session started four times inside it, and three of those were restarts after the 3.5 s watchdog (the limit for a silent page). The fix for that is in the alpha56 code.
+>
+> **Still running**
+> - The independent code review of the alpha56 changes.
+> - The compat lab run, which ends around 03:25 UTC.
+> - The kp lab run on this bundle, queued behind it. It now includes a check that the late automatic sideways turn works on the real engine.
+>
+> **One more fix from your log:** the page's "last look" picture was being read back twice while the film was full screen. That wasted CPU and saved the film's frame as the page's look. It no longer happens in full screen.
+>
+> **Next**
+> - Once the lab run is green and the review is handled, I ship alpha56 and send you the Release link with the final answer to message 51.
+> - A scheduled wake at 04:20 UTC picks this up in case this session is cut off.
+>
+> **Open from you**
+> - Please repeat the video test when alpha56 arrives, on Yahoo and on one light video page, and send the same four Diagnostics lines.
+> - Tell me if the 300 ms tap delay feels slow, so I can make the first tap act at once.
+> - VP12 (caption and quality buttons while Kestrel's controls own the film) still needs your decision.
+<!-- sha:c7a85d3a4736 -->
