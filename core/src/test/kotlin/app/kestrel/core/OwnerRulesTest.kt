@@ -383,4 +383,21 @@ class OwnerRulesTest {
         // f: how long the app's own part and the engine's part of a turn take is written down
         assertTrue(source("geckoapp/src/main/kotlin/app/kestrel/browser/web/KestrelGeckoView.kt").let { it.contains("override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int)") && it.contains("the engine view's own layout") } && act.contains("the app's own handling took"))
     }
+
+    /** ANS52i (owner message 52): Kestrel's own player is offered only for what it can play, never touches DRM or a stream without an address, keeps its memory small and its sound off when the screen is left. */
+    @Test fun kestrelsOwnPlayerIsOfferedOnlyForWhatItCanPlayAndStaysSmall() {
+        val flow = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/VideoFlow.kt")
+        val target = body(flow, "private fun nativeTarget(choice: VideoPanel.Choice): NativeTarget? {")
+        assertTrue(target, target.contains("t.kind != MediaKind.FILE || t.audioOnly") && target.contains("c.kind != MediaKind.HLS || t.audioOnly") && !target.contains("MediaKind.DASH"))
+        assertTrue("the sheet's second button comes only from the build that can play", flow.contains("override fun canPlay(choice: VideoPanel.Choice): Boolean = nativeTarget(choice) != null"))
+        assertTrue(source("app/src/main/kotlin/app/kestrel/browser/ui/VideoPanel.kt").contains("fun canPlay(choice: Choice): Boolean = false"))
+        val player = source("geckoapp/src/main/kotlin/app/kestrel/browser/NativePlayerActivity.kt")
+        assertTrue("hardware decoders first, no software extension decoders", player.contains("it.hardwareAccelerated && !it.softwareOnly") && player.contains("EXTENSION_RENDERER_MODE_OFF"))
+        assertTrue("small buffers: 15 to 30 s, 16 MiB at most (the app heap class is 128 MB)", player.contains("setBufferDurationsMs(15_000, 30_000, 1_500, 3_000)") && player.contains("setTargetBufferBytes(16 * 1024 * 1024)"))
+        assertTrue("sound off when the screen is left, audio focus and headphones handled", player.contains("override fun onPause() {") && player.contains("player?.pause()") && player.contains("AudioAttributes.DEFAULT, true") && player.contains("setHandleAudioBecomingNoisy(true)"))
+        assertTrue("a private tab's film is not counted or logged", player.contains("private fun say(event: String, text: String) { if (!priv) Health.log") && player.contains("if (!priv) { NativePlayerStats.plays++"))
+        val manifest = source("geckoapp/src/main/AndroidManifest.xml")
+        assertTrue("its own window, not exported, handles the turn itself", manifest.contains("android:name=\".NativePlayerActivity\"") && manifest.substringAfter("android:name=\".NativePlayerActivity\"").substringBefore("/>").let { it.contains("android:exported=\"false\"") && it.contains("orientation|screenSize") })
+        assertTrue("Media3 is the version the engine carries", source("geckoapp/build.gradle.kts").contains("val media3Version = \"1.11.1\""))
+    }
 }
