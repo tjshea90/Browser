@@ -470,6 +470,37 @@ def page_ap(variant, tag):
     return (head + body.replace("@FILM@", film).replace("@FRAG@", frag).replace("@BOX@", box)).encode()
 
 
+def page_ho(variant, tag):
+    """ANS54e (owner message 54: web video players should be Kestrel's own player): pages whose film Kestrel's own player may take over. Reports through AP_JS (kind=ap, tag). Variants:
+    file = a film file with the engine's own controls; overlay = a film file with a play button of the page's own over the picture; hls = a script player (blob: source) whose page also asks for the lab's HLS
+    master list at load, like hls.js; unknown = a script player with NO playlist anywhere (YouTube-style: nothing to hand over); bad = a film address that does not exist (Kestrel's player fails, the page takes over)."""
+    q = urllib.parse.quote(tag, safe="")
+    film = "/clip/landscape.mp4?c=%s" % q
+    box = "display:block;width:100%;height:300px;background:#0b2a4a;object-fit:contain"
+    head = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Hand-over lab %s</title>"
+            "<body style='margin:0;font:15px sans-serif;background:#fff'><h3 style='margin:6px 8px'>hand-over lab: %s</h3>" % (variant, variant)) + AP_JS
+    ov = ("<button id=btn class='big-play-button' aria-label='Play video' style='position:absolute;left:30%;top:35%;width:40%;height:30%;font-size:22px'>Play</button>")
+    play_js = "var p = v.play(); if (p && p.then) p.then(function () { apRep('playing-promise', { how: how }); }, function (e) { apRep('rejected', { name: e.name, how: how }); });"
+    if variant == "file":
+        body = "<video id=v controls playsinline poster='/img/1.svg' src='@FILM@' style='@BOX@'></video><script>apHook(document.getElementById('v'));</script>"
+    elif variant == "bad":
+        body = "<video id=v controls playsinline poster='/img/1.svg' src='/clip/missing-%s.mp4' style='@BOX@'></video><script>apHook(document.getElementById('v'));</script>" % q
+    elif variant == "overlay":
+        body = ("<div id=player style='position:relative;width:100%;height:300px'><video id=v playsinline poster='/img/1.svg' src='@FILM@' style='@BOX@'></video>" + ov + "</div>"
+                "<script>var v = document.getElementById('v'); apHook(v); document.getElementById('btn').onclick = function () { var how = 'overlay'; " + play_js + " };</script>")
+    elif variant in ("hls", "unknown"):
+        ask = "fetch('/hls/film/master.m3u8').then(function (r) { return r.text(); }).then(function (t) { apRep('playlist', { bytes: t.length }); });" if variant == "hls" else ""
+        body = ("<div id=player style='position:relative;width:100%;height:300px'><video id=v playsinline poster='/img/1.svg' style='@BOX@'></video>" + ov + "</div>"
+                "<script>var v = document.getElementById('v'); apHook(v); " + ask +
+                "var ms = new MediaSource(); v.src = URL.createObjectURL(ms);"
+                "ms.addEventListener('sourceopen', function () { apRep('sourceopen'); var sb = ms.addSourceBuffer('video/mp4; codecs=\"avc1.4d401f,mp4a.40.2\"');"
+                " fetch('/clip/frag.mp4?c=@Q@').then(function (r) { return r.arrayBuffer(); }).then(function (b) { apRep('fetched', { bytes: b.byteLength }); sb.addEventListener('updateend', function () { try { if (!sb.updating && ms.readyState === 'open') ms.endOfStream(); } catch (e) {} }); sb.appendBuffer(b); }); });"
+                "document.getElementById('btn').onclick = function () { var how = 'overlay'; v.muted = true; " + play_js + " };</script>")
+    else:
+        body = "<p>unknown variant</p>"
+    return (head + body.replace("@FILM@", film).replace("@BOX@", box).replace("@Q@", q)).encode()
+
+
 def page_dl():
     links = "".join("<p><a href='/dl/%dmb.bin'>%d MB file</a></p>" % (n, n) for n in (1, 5, 20)) + "<p><a href='/dl/slow.bin'>5 MB, slowly</a></p>"
     return ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Soak downloads</title><body style='font:20px sans-serif;margin:14px'><h1>Downloads</h1>" + links).encode()
@@ -600,6 +631,8 @@ class H(http.server.BaseHTTPRequestHandler):
                 return self._send(body, "application/vnd.apple.mpegurl")
             if p == "/ap":
                 return self._send(page_ap((q.get("v") or ["autoplay"])[0], (q.get("tag") or ["x"])[0]))
+            if p == "/ho":
+                return self._send(page_ho((q.get("v") or ["file"])[0], (q.get("tag") or ["x"])[0]))
             if p == "/formats":
                 return self._send(page_formats((q.get("tag") or ["x"])[0]))
             if p == "/video/audible":
