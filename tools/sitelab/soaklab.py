@@ -498,7 +498,8 @@ def page_ho(variant, tag):
                 "document.getElementById('btn').onclick = function () { var how = 'overlay'; v.muted = true; " + play_js + " };</script>")
     else:
         body = "<p>unknown variant</p>"
-    return (head + body.replace("@FILM@", film).replace("@BOX@", box).replace("@Q@", q)).encode()
+    state = "<script>setInterval(function () { var v = document.getElementById('v'); if (v) apRep('state', { paused: v.paused ? 1 : 0, t: (v.currentTime || 0).toFixed(1) }); }, 2000);</script>"   # (where the page's own video is, every 2 s)
+    return (head + body.replace("@FILM@", film).replace("@BOX@", box).replace("@Q@", q) + state).encode()
 
 
 def page_dl():

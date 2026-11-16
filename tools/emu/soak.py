@@ -2252,7 +2252,10 @@ class Soak:
             if expect in ("native", "native-hls"):
                 check("%s: Kestrel's own player took the film over (a 'video hand-over' line: %s)" % (variant, [e["rest"][:50] for e in taken][:1]), bool(taken), "no 'video hand-over' line (page events %s)" % sorted(set(ev2)))
                 check("%s: Kestrel's own player started%s" % (variant, " on the stream" if expect == "native-hls" else " on the file"), bool(started) and (expect != "native-hls" or any("HLS" in e["rest"] for e in started)), "native start lines %s" % [e["rest"][:60] for e in started])
-                check("%s: the page's own player never played it (no 'playing', no 'sourceopen', no 'fetched')" % variant, not any(x in ev2 for x in ("playing", "playing-promise", "sourceopen", "fetched")), "events %s" % sorted(set(ev2)))
+                states = [r for r in rows2 if r.get("ev") == "state"]
+                check("%s: the page's own video is paused (its last report: %s)" % (variant, [(r.get("paused"), r.get("t")) for r in states][-1:]), bool(states) and str(states[-1].get("paused")) == "1", "state rows %s" % [(r.get("paused"), r.get("t")) for r in states][-4:])
+                if variant != "file":                                                      # (the engine's own controls may start a plain film for a moment before the answer pauses it)
+                    check("%s: the page's own player never started it (no 'playing', no 'sourceopen', no 'fetched')" % variant, not any(x in ev2 for x in ("playing", "playing-promise", "sourceopen", "fetched")), "events %s" % sorted(set(ev2)))
                 if variant in ("overlay", "hls"):
                     check("%s: the page's play() was interrupted (AbortError), not refused" % variant, any(r.get("ev") == "rejected" and r.get("name") == "AbortError" for r in rows2), "rows %s" % [(r.get("ev"), r.get("name")) for r in rows2][:6])
                 check("%s: Kestrel's own player showed its first picture" % variant, bool(ev("native", "first-picture", m)), "no 'native first-picture' line")
