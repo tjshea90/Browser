@@ -1853,7 +1853,7 @@ class Soak:
         "auto-tablet": ["vp9-720p30", "vp9-720p60", "vp9-1080p30", "avc-720p30", "avc-720p60", "avc-1080p60", "vp9-bare", "avc-bare", "audio-aac"],
         "h264only": ["avc-720p30", "avc-720p60", "avc-1080p60", "avc-bare", "audio-aac"],
         "fps30": ["vp9-720p30", "vp9-1080p30", "avc-720p30", "vp9-bare", "avc-bare", "audio-aac"],
-        "auto-nochip": [r[0] for r in [("vp9-720p30",), ("vp9-720p60",), ("vp9-1080p30",), ("vp9-1080p60",), ("vp9-1440p30",), ("vp9-4k30",), ("vp9-bare",), ("avc-720p30",), ("avc-720p60",), ("avc-1080p60",), ("avc-4k30",), ("avc-bare",), ("audio-aac",)]],
+        "auto-nochip": ["vp9-720p30", "vp9-720p60", "vp9-1080p30", "vp9-1080p60", "vp9-1440p30", "vp9-4k30", "vp9-bare", "avc-720p30", "avc-720p60", "avc-1080p60", "avc-4k30", "avc-bare", "audio-aac"],   # no limit known: nothing is refused
     }
 
     def cp_scene(self):

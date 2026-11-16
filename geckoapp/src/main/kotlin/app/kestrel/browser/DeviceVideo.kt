@@ -49,7 +49,11 @@ object DeviceVideo {
      * ANS52g: what the hardware decoders declare per codec (core/media/VideoLimits), as the page-side video format policy needs it: from this run's probe, else from the stored answer for this system build, else null
      * (not read yet: the policy then knows no limit and the engine's own answers stand). Cheap; safe on any thread.
      */
+    /** DEBUG builds only (the emulator lab, intent `vfmt`): stands in for the chips' limits, because the emulator has no hardware decoders. Always null in a release build: nothing sets it. */
+    @Volatile var labLimits: VideoLimits.Limits? = null
+
     fun limits(ctx: Context): VideoLimits.Limits? {
+        labLimits?.let { return it }
         lim?.let { return it }
         val p = ctx.getSharedPreferences("kestrel_video", Context.MODE_PRIVATE)
         if (p.getString(KEY_FP, null) != Build.FINGERPRINT) return null
