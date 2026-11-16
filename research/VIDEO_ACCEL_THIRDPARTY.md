@@ -1,7 +1,7 @@
 # Video smoothness on the MT8168B tablet: third-party and platform options
 
 Research only, 2026-11-16. No code changed. Tags: [D#] DOCUMENTED (I read source #, list at the end), [S] seen only as a search-result summary (page not opened), [I] INFERRED, [M] MEASURED by me (method in the last section).
-Local files: [L1] research/VIDEO_AUDIT.md section 9, [L2] research/TABLET_DIAG_2026-11-16.md, [L3] research/VIDEO_DOWNLOADER.md and DOWNLOADS.md, PHONE_OFFLOAD.md, [L4] geckoapp/build.gradle.kts, the Gradle cache and the cached GeckoView AAR.
+Local files: [L1] research/VIDEO_AUDIT.md section 9, [L2] research/TABLET_DIAG_2026-11-16.md, [L3] research/VIDEO_DOWNLOADER.md, DOWNLOADS.md, PHONE_OFFLOAD.md, [L4] geckoapp/build.gradle.kts, the extension manifest, the Gradle cache and the cached GeckoView AAR, [L5] research/VIDEO_SMOOTHNESS.md section 1, [L6] core/.../media/MediaList.kt.
 
 ## Summary
 
