@@ -788,6 +788,7 @@ open class BrowserActivity : Activity(), DockListener {
             { exitFullscreenFromControls() },
             { shown -> fsTurner.controlledShow(shown) })
         fsTurner.ownedByPlayer = { player.active }
+        player.onLook = { page, frames, dropped, seconds, w, h -> filmLook(page, frames, dropped, seconds, w, h) }
         val cover = FrameLayout(this).apply { setBackgroundColor(0xFF000000.toInt()); visibility = View.GONE; alpha = 0f; isClickable = true; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO } // ROT1: topmost in the page area; it takes the touch (review of alpha53: the tap that ends a long wait must not reach the page nobody can see)
         // ROT2: a small ring after about a second, so a black screen that waits for the engine does not look frozen
         val ring = android.widget.ProgressBar(this).apply { isIndeterminate = true; visibility = View.GONE; indeterminateTintList = android.content.res.ColorStateList.valueOf(0xFF9A9A9A.toInt()) }
@@ -1219,6 +1220,12 @@ open class BrowserActivity : Activity(), DockListener {
 
     // ---------------------------------------------------------------- RX4-M0a: how real videos play (content.js reads getVideoPlaybackQuality every 15 s and sends the DIFFERENCE as numbers; private tabs are dropped before)
     private val videoQuality = app.kestrel.core.media.VideoQuality()
+    /** ANS51e: the frames a film shown by Kestrel's own full-screen player showed and dropped (its page script reads `getVideoPlaybackQuality`): the old video finder never sees a film inside a shadow root, and "Real video" said "nothing played yet" for a film of a minute. */
+    private fun filmLook(page: String, frames: Int, dropped: Int, seconds: Int, w: Int, h: Int) {
+        val host = UrlParts.hostOf(page) ?: return
+        videoQuality.add(host, frames, dropped, 0, seconds, w, h, SystemClock.uptimeMillis())
+        Health.log("video", "quality", "$host frames=$frames dropped=$dropped corrupt=0 secs=$seconds ${w}x$h (the full-screen player)")
+    }
     private fun onVideoQuality(m: org.json.JSONObject) {
         val host = UrlParts.hostOf(m.optString("p")) ?: return
         videoQuality.add(host, m.optInt("t"), m.optInt("d"), m.optInt("c"), m.optInt("s"), m.optInt("w"), m.optInt("h"), SystemClock.uptimeMillis())
