@@ -145,14 +145,14 @@ class BackupManagerTest {
 
     @Test fun theVideoSwitchesDefaultToTheBrowserNormsAndSurviveABackup() {
         // an untouched install: muted autoplay allowed, formats automatic, DRM asks, page animations normal
-        assertTrue(prefs.videoMutedAutoplay); assertEquals(0, prefs.videoCodecs); assertEquals(0, prefs.videoDrm); assertFalse(prefs.calmPages)
-        prefs.videoMutedAutoplay = false; prefs.videoCodecs = 1; prefs.videoDrm = 1; prefs.calmPages = true
+        assertTrue(prefs.videoMutedAutoplay); assertEquals(0, prefs.videoCodecs); assertEquals(0, prefs.videoDrm); assertFalse(prefs.calmPages); assertFalse(prefs.videoFps30)
+        prefs.videoMutedAutoplay = false; prefs.videoCodecs = 1; prefs.videoDrm = 1; prefs.calmPages = true; prefs.videoFps30 = true
         val d = BackupManager.build(db, prefs, emptyList(), "x")
-        assertEquals(false, d.settings["vid_muted_auto"]); assertEquals(1L, d.settings["vid_codecs"]); assertEquals(1L, d.settings["vid_drm"]); assertEquals(true, d.settings["calm_pages"])
+        assertEquals(false, d.settings["vid_muted_auto"]); assertEquals(1L, d.settings["vid_codecs"]); assertEquals(1L, d.settings["vid_drm"]); assertEquals(true, d.settings["calm_pages"]); assertEquals(true, d.settings["vid_fps30"])
         val text = BackupCodec.encode(d)
         sp().edit().clear().commit()
         BackupManager.restore(db, prefs, BackupCodec.decode(text))
-        assertFalse(prefs.videoMutedAutoplay); assertEquals(1, prefs.videoCodecs); assertEquals(1, prefs.videoDrm); assertTrue(prefs.calmPages)
+        assertFalse(prefs.videoMutedAutoplay); assertEquals(1, prefs.videoCodecs); assertEquals(1, prefs.videoDrm); assertTrue(prefs.calmPages); assertTrue(prefs.videoFps30)
         prefs.videoCodecs = 9; prefs.videoDrm = 5
         assertEquals("out of range values are clamped", 2, prefs.videoCodecs); assertEquals(1, prefs.videoDrm)
     }
