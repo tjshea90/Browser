@@ -1510,7 +1510,19 @@ class Soak:
                                "viewport": [e["rest"][:120] for e in health_events(lines, "fullscreen", "viewport")][-3:]})
             self.ph.key("KEYCODE_BACK"); time.sleep(3)
         self.ph.physical(0, 9.81, 0)
-        self.yahoo_fs = {"entered": entered, "how": how, "states": states}
+        # VP1 / VP2: did Kestrel's own controls start on the live player, and how many of the page's own player controls did they put away (Health 'player away' lines: the number of elements)?
+        yl = self.log.since(lmark)
+        started = bool(health_events(yl, "player", "start"))
+        away_n = []
+        for e in health_events(yl, "player", "away"):
+            mm = re.search(r"(\d+) element", e["rest"])
+            if mm:
+                away_n.append(int(mm.group(1)))
+        if entered and not started:
+            self.issue("high", "full-screen-controls", "the live Yahoo player went full screen but Kestrel's controls did not start", shot=True)
+        elif entered and not any(n > 0 for n in away_n):
+            self.issue("medium", "full-screen-controls", "Kestrel's controls started on the live Yahoo player but none of the page's own player controls were put away (away lines: %s)" % away_n, shot=True)
+        self.yahoo_fs = {"entered": entered, "how": how, "states": states, "kp_started": started, "away": away_n}
         self.record({"kind": "yahoo", "name": "yahoo-fullscreen", "status": "ok", "note": "full screen %s (%s); %d turn(s) photographed" % ("began" if entered else "did NOT begin", how[:90], len(states))})
         self.check_alive("yahoo-fullscreen")
 
@@ -2154,6 +2166,7 @@ class Soak:
             L.append("## The owner's Yahoo Finance player in full screen, turned sideways and back (message 46; pictures yahoofs-*)")
             L.append("")
             L.append("- full screen %s (%s)" % ("began" if y["entered"] else "did NOT begin", y["how"]))
+            L.append("- Kestrel's own controls %s; the page's own player controls put away (elements, in the order the page made them): %s" % ("started" if y.get("kp_started") else "did NOT start", y.get("away") or "none"))
             for st in y["states"]:
                 L.append("- %s: video paused for the turn %d time(s); %s; page-area size changes %d; bars: %s" % (st["state"], st["paused"], st["settled"][0] or "no 'turn settled' line", st["sizes"], st["bars"][0] or "-"))
             L.append("")
@@ -2502,7 +2515,7 @@ class FakeAdb:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -2538,6 +2551,8 @@ def main():
             s.fullscreen_bars()
         if a.suite == "kp":
             s.kp_scene()
+        if a.suite == "yh":
+            s.yahoo_fullscreen()                             # (only the live Yahoo Finance player in full screen with Kestrel's controls: about 4 minutes)
         if a.suite == "fsy":
             s.kp_scene()
             s.yahoo_fullscreen()
