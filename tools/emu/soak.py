@@ -1796,7 +1796,14 @@ class Soak:
         self.ph.tap(w // 2, 140); time.sleep(3.5); self.ph.dismiss_cling()
         e3 = lambda layer, name, since: health_events(self.log.since(since), layer, name)
         check("ANS53d.2: the page's HLS stream was read and the full-screen controls offer the Quality button", bool(e3("player", "quality-button", m0)), "no 'player quality-button' line (media lines: %s)" % [e["rest"][:70] for e in e3("media", "list-ok", m0)][:3])
-        m = self.log.size(); self.ph.debug("pagequality"); time.sleep(1.8)
+        vw3, vh3, land3 = box()                                                       # (the wide film turned the screen sideways by itself)
+        if not len(e3("player", "shown", m0)) > len(e3("player", "hidden", m0)):       # the controls hide by themselves: a tap on an empty place brings them back
+            self.ph.tap(int(vw3 * 0.25), 26 + int(vh3 * 0.2)); time.sleep(0.9)
+        m = self.log.size(); self.ph.tap(vw3 - 102, 26 + 41); time.sleep(1.8)           # the Quality button: top right, left of the exit button (24 dp discs, 14 dp margin, 10 dp apart; 1 dp = 1.0625 px)
+        tapped = bool(e3("video", "quality-open", m))
+        if not tapped:
+            self.ph.debug("pagequality"); time.sleep(1.8)                              # (the tap missed: the same call by the debug command, so the rest is still proven)
+        check("ANS53d.2: a tap on the Quality button (top right, left of the exit button) opens the list", tapped, "the tap at %d,%d opened nothing" % (vw3 - 102, 67))
         check("ANS53d.2: the quality list opens over the controls with Automatic and the two pictures", any("3 row(s)" in e["rest"] for e in e3("video", "quality-open", m)), "lines: %s" % [e["rest"][:60] for e in e3("video", "quality-open", m)])
         self.shot("kp-12-quality-list-over-controls")
         m = self.log.size(); self.ph.debug("pagepick", "2"); time.sleep(10)
