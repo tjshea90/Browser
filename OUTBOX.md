@@ -1883,3 +1883,39 @@
 ## 2026-11-16T10:03:08Z
 > Android build in progress; I'll confirm the tag and the published APK before recording or announcing anything.
 <!-- sha:2cf57785815d -->
+
+## 2026-11-16T10:09:42Z
+> Your message 54 is answered in alpha58, which is built, signed and published. I haven't run any of it on your tablet. Everything was tested on a Firefox-engine emulator and in headless browsers, so how it feels on the tablet (smoothness, decoder) is still unchecked.
+>
+> Open this page on the tablet and tap the `.apk`; it installs over your current Kestrel G:
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha58
+>
+> **Your points, one by one**
+>
+> - **(a) The web player was slow and laggy.** When you press play on a video in a web page, Kestrel's own player now takes the film over. It's the smooth one from the download button's "Play in Kestrel's player". Back returns you to the page. Press play on the page again and it continues where you stopped.
+>   - **Works for:** a plain video file, a stream the page asked for (a player that loads a playlist), and a film that goes full screen.
+>   - **Stays in the page, as before:** YouTube-style players that hide their stream, and protected (DRM) films. Those can still lag.
+>   - **If Kestrel's player can't play a film,** it goes back to the page, which plays it for the next two minutes. A site that needs your login for the video file could do this.
+>   - **Setting:** Settings > "Web videos play in": Kestrel's player whenever it can (default), only in full screen, or the page's own player. It only works while "Videos start only when I press play" is on.
+>   - **Your tap only:** an independent review found that a page's script could have faked the request and opened the player without you. That is fixed. Only your own tap on the page can start it now.
+> - **(b) Full screen turned sideways by itself.** "Turn the screen for full-screen video" now starts as "Follow the tablet", so portrait stays portrait. "Automatic" is still there if you want it.
+> - **(c) The resolution box didn't close and froze.** That was the site's own box, and the freeze was the site's code on a busy page. Films that move to Kestrel's player use Kestrel's own Quality list instead, and it now has an x button that closes it.
+> - **(d) Your feedback** that Kestrel's player is smooth and upright is why I modelled the web player on it. Thank you.
+> - **(e) Your request** is what (a) delivers.
+>
+> **What was tested**
+> - Unit tests and 573 web tests in headless browsers.
+> - An independent code review: 9 real problems found, all fixed.
+> - About 270 emulator checks. Everything about the new hand-over passed on the emulator, including the plain video with the engine's own play button, a play button over the picture, a script player with a stream, a player with nothing to take over, a broken address, pressing again, and the setting.
+> - A few older emulator checks of Kestrel's controls missed on a timing detail in some runs (a different one each time). I widened their wait, and the one re-run still missed one, so those aren't fully clean.
+> - I have not tried your own sites, only test pages.
+>
+> **What I need from you:** the Diagnostics line "Web videos in Kestrel's own player" after you've watched a few videos, and which sites still play in the page.
+>
+> **Still open**
+> - Films with no playlist address (the YouTube-style ones: their quality and caption menus; VP12).
+> - Improving from the long-run soak findings (SOAK1d).
+> - The fast-wifi lab program (LAB2f).
+> - Older items still open in TASKS.md: VP10, ROT2e, ANS48, ANS52j.
+<!-- sha:75b6aab7ec25 -->
