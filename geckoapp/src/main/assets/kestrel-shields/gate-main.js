@@ -60,7 +60,7 @@
       var d = Object.getOwnPropertyDescriptor(obj, name);
       if (!d || !d.get || !d.set) return null;
       var g = makeGet(d.get), s = makeSet(d.set);
-      mask(g, name, d.get); mask(s, name, d.set);
+      mask(g, 'get ' + name, d.get); mask(s, 'set ' + name, d.set);
       Object.defineProperty(obj, name, { get: g, set: s, configurable: d.configurable, enumerable: d.enumerable });
       return d;
     } catch (e) { return null; }
@@ -244,7 +244,11 @@
           for (var i = 0; i < records.length; i++) { var add = records[i].addedNodes; for (var j = 0; j < add.length && j < 400; j++) scan(add[j]); }
         });
       }
-      if (observer) { observer.observe(root, { childList: true, subtree: true }); scan(root.nodeType === 1 ? root : root.documentElement); }
+      if (observer) {
+        observer.observe(root, { childList: true, subtree: true });
+        var list = root.querySelectorAll ? root.querySelectorAll('video,audio') : [];      // what is in the tree already (a shadow root that is filled before it is watched)
+        for (var i = 0; i < list.length && i < 60; i++) adopt(list[i]);
+      }
     } catch (e) { /* ignore */ }
   }
   watch(document);
