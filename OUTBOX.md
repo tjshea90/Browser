@@ -2189,3 +2189,39 @@
 ## 2026-11-16T02:08:00Z
 > Nothing new needs doing at this 02:07 UTC heartbeat. The compat emulator run is still going (55 minutes in) and I have nothing new from you. alpha55 is released, your message is answered, and everything is saved and pushed. I'll read the compat run when my 03:30 UTC reminder fires.
 <!-- sha:d1c934c7cf53 -->
+
+## 2026-11-16T02:37:59Z
+> **Message 51, your tablet's Diagnostics of alpha55.** The new controls work on your tablet. Turning the tablet under a video is slow, and most of that slowness is not the controls.
+>
+> **What the numbers show**
+> - **Works:** The controls started in 4 of 4 full screens. Each tap showed or hid them (7 taps). The pause button reached the page. Yahoo's own play bar was put away (3 elements). The page had the right size every time (5 checks, 0 wrong). The film paused and played again at both turns.
+> - **Slow turns:** Each turn kept the black cover for about 3.1 s (3113 ms and 3086 ms).
+>   - Right after the size changed, the app's own screen froze for 0.9–2 s. The app shows the same kind of 1 s freeze at start, so I suspect the engine's surface resize rather than our views.
+>   - Android trimmed memory at those moments.
+>   - The Yahoo page then went silent for 3.5–14 s and sent no reports. The film only came back about 19 s after the first turn.
+> - **Automatic sideways turning never fired:** At the start of full screen the app did not know the film's shape (`video 0x0`), because Yahoo's player hides its video from the old finder. The player's own first report knew it 2.3 s later (1920x1080). You turned the tablet by hand both times, and each manual turn cost the 3.1 s cover.
+> - **Controls restarting:** The 3.5 s watchdog (the limit for a silent page) ended and restarted the controls session 4 times in 160 s. Each restart popped the controls up on their own.
+> - **Not measured at all:** Whether frames were dropped ("Real video" said nothing played) and what the page was busy with. "CPU by process" only sees the app's own process on Android 10.
+>
+> **Changed, coded and tested, shipping as alpha56 after one emulator check**
+> 1. Automatic turning now takes the film's size from the player's own first report.
+> 2. A busy page no longer ends the controls (limit 3.5 s → 12 s).
+> 3. Diagnostics now count turns where the page stays silent, and time the page's first report after the cover lifts.
+> 4. The controls script now reports numbers measured inside the page: how late its own timer runs, what the script itself costs, and frames shown and dropped (this also fills "Real video").
+> 5. Log lines now say how long the engine's part and the app's part of a turn take.
+>
+> I deliberately did not change the 3 s wait for a silent page or the 1 px size nudge. Your data can't say which way is better; the new numbers will.
+>
+> A tap shows or hides the controls 300 ms after the tap by design, because that is the double-tap window for seeking. Tell me if it feels slow and I'll make the first tap act at once.
+>
+> **Not proven:** Speed on your tablet, and whether the late automatic turn works on Yahoo's real page. The emulator check proves it on a lab page only.
+>
+> **What I need from you:** When alpha56 is out, please repeat the test on a light video page as well as Yahoo, and send the same Diagnostics lines.
+>
+> **Still open**
+> - The compat lab run is in progress.
+> - The kp lab run on this bundle is queued behind the compat run.
+> - VP12 (caption and quality buttons while Kestrel's controls own the film) still needs your decision.
+>
+> Next I'm having an independent reviewer read the alpha56 diff while the lab queue runs.
+<!-- sha:fe7264e02123 -->
