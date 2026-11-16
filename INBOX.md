@@ -1559,3 +1559,250 @@ However, when I press the download button and select play in kestrel's player (t
 
 Can you model the in-site video player on the Kestrel player from the download button and the "play in kestrel's player (test)" button? This is a much better video player. I want the web video players to use this
 ```
+
+## 2026-11-16T15:35:25Z
+```
+The video player isn't working. I opened a video on Yahoo and it showed the time of the video and it was playing but the video was black. It showed no video. When I went back and switched to another video, it simply resumed the other video which was still black. It also opened the player in full screen. Can the player be inside the website so the video plays but I still see the website around it? 
+
+Kestrel diagnostics  2026-11-16 15:34:26 UTC  (app running 246 s)
+App: app.kestrel.browser.gecko 0.3.0-alpha58 (code 159)
+Device: alps 711, Android 10 (API 29), armeabi-v7a/armeabi
+Display: 600x973 px, 170 dpi, font scale 1.2
+Memory: total 1954 MB, available 684 MB, low=false, threshold 144 MB; MemAvailable 716652 kB; low-RAM device=true; app heap 24/128 MB
+Keyboard: com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME
+Processes: main#5479, :utility_disable_art_image_#5949, :gpu_disable_art_image_#5659, :sandboxed_tab_disable_art_image_8#5585, :crashhelper_disable_art_image_#5541, :media#5967
+Cold start (ms since the process started): app 105 | activity 300 | frame 693 | look - | runtime 1587 | open 9657 | paint 19383 | stop 9875
+Last look (the saved picture of the page, EY-1): on, 1 stored, shown at start 0, shown after a revive 0, taken 14, hidden 0
+Back: 1 press, 0% kept (instant), 0% reloaded from the cache, 0% from the network
+YouTube ads: none seen yet
+Other players' ads: none seen yet
+Tap on a video bar: none seen yet
+Full-screen turning (follow the tablet only): 0 full screens, turned sideways by Kestrel 0, by the page's own request 0, by the rotate button 0, handed back to the tablet 0; last: no full screen yet
+Full-screen system bars: no full screen yet
+Turning under a video: 0 turns met a full-screen page or a playing video, video paused 0 times, played again 0, left paused 0; the page took 0 ms to have the new size after the last turn (worst 0 ms, 0 turns measured, 0 gave up after 7 s, engine nudged 0 times); first frame at the new size: last 0 ms, worst 0 ms, 0 turns (until then the system shows the old frames); silent pages: 0 turns where the page said nothing for 6 s, of which 0 spoke later (first word 0 ms after the turn began, worst 0 ms); last: no turn under a video yet
+Frames around turns (FrameMetrics, 8 s from each turn): 0 first draws and frames of 100 ms and over; worst frame 0 ms (layout+measure 0 ms, draw 0 ms, sync 0 ms, waited before it 0 ms)
+Heat and speed: thermal status 0 (0 none, 1 light, 2 moderate, 3 severe, 4 critical, 5 emergency, 6 shutdown), sustained-performance mode not supported
+Turning, the page's own pause (every video, also a muted one): 0 turns met by pages, videos played again 0, left paused 0, turns with nothing to pause 0
+Full-screen page size (the engine sizes a page that goes full screen to the display; the page tells what it got): 0 checks, 0 wrong, the engine was given a real size change 0 times; last: no full-screen page has told its size yet; reports outside full screen: 1 were the view's size, 0 were not
+Full-screen video controls (Kestrel's own): 0 full screens, taps on the picture: 0 single and 0 double-tap seeks, 0 commands sent to the page; the last full screen: 0 reports, 0 taps; taps answered on the screen itself 0 (average 0 ms from the finger lifting, worst 0 ms), the page's own copies dropped 0, put back after a page button 0; page health: no report yet; last: no full-screen film under Kestrel's controls yet
+Web videos in Kestrel's own player (Settings > Web videos play in: Kestrel's player whenever it can): 3 questions from pages, 3 films taken over (by the page's play() 2, a press on the player 0, Kestrel's own bar 1, full screen 0, a playlist that came late 0), 0 asked again while it was up, 0 left to the page's own player (last reason: none), 0 failed before the first picture and went back to the page; last taken: a stream, the stream the frame asked for, from 76 s
+Sound while the page is not in front: the engine suspends it itself; the app paused 0 video(s) the engine left playing; last: nothing needed pausing yet
+Video controls (Automatic): Kestrel's bar shown 3 times, the page had controls of its own 0 times; used: play 1, pause 0, seek 0, mute 0, full 0
+Real video: nothing played yet this run (the numbers fill in while a video plays on a page); Video: codecs offered to sites: VP9 as the engine decides, no AV1 (software only here), H.265 as the engine decides [hardware decoders AHVi]; page animations normal; muted autoplay allowed; protected video ask
+Kestrel's own player: 3 plays, 0 errors; decoder no decoder yet; last picture 0x0, first picture - after the start; 231 s played, 0 frames shown, 0 dropped (-); quality picked 0 time(s), rotate button 0 time(s); last: ended after 3 s
+Video decoders (what the tablet's own chips declare they can do): hardware: H.264 OMX.MTK.VIDEO.DECODER.AVC: 2048x1088, 720p up to 145 fps (measured 100-200), 1080p up to 64 fps (measured 50-100), points PerformancePoint(1920x1088@30) | H.265 OMX.MTK.VIDEO.DECODER.HEVC: 2048x1088, 720p up to 145 fps (measured 100-200), 1080p up to 64 fps (measured 50-100), points PerformancePoint(1920x1088@30) | MPEG-2 OMX.MTK.VIDEO.DECODER.MPEG2: 1920x1088, 720p up to 60 fps, 1080p up to 30 fps, points PerformancePoint(1920x1088@30) | MPEG-4 OMX.MTK.VIDEO.DECODER.MPEG4: 896x896, 720p not supported, 1080p not supported, points PerformancePoint(1920x1088@30) | VP8 OMX.MTK.VIDEO.DECODER.VPX: 2048x1088, 720p up to 960 fps (measured 65-142), 1080p up to 960 fps (measured 23-79), points PerformancePoint(1920x1088@30) | VP9 OMX.MTK.VIDEO.DECODER.VP9: 2048x1088, 720p up to 68 fps (measured 50-100), 1080p up to 30 fps (measured 50-100), points PerformancePoint(1920x1088@30); software only: AV1 c2.android.av1.decoder, H.264 c2.android.avc.decoder, H.264 OMX.google.h264.decoder, H.265 c2.android.hevc.decoder, H.265 OMX.google.hevc.decoder, VP8 c2.android.vp8.decoder, VP8 OMX.google.vp8.decoder, VP9 c2.android.vp9.decoder, VP9 OMX.google.vp9.decoder
+Video formats offered to sites (a page script answers "no" for what the settings and the tablet's chips rule out): Automatic (a codec is answered no above what its hardware decoder declares); H.264 up to 2048x1088, 1080p 64 fps, H.265 up to 2048x1088, 1080p 65 fps, VP9 up to 2048x1088, 1080p 30 fps, AV1 none; frame rate not capped; told to pages: 00|2048x1088@522240|2048x1088@533845|2048x1088@244800|-; refused so far: nothing yet (no page asked for a format outside the limits since the app started)
+Picture size cap for HLS pages (the extension takes rungs out of a stream's master playlist): Automatic (screen 973 px): an HLS rung whose longer side is above 1314 px is taken out (not below the smallest); told to the extension: 1314; so far: playlists looked at 18, cut 3 (3 rungs taken out, last 4 -> 3 at 1314), left as they were: not a master list 15, nothing above the cap 0, not text 0, too big 0, errors 0
+Videos start only when pressed (ON: autoplay is refused, preload is none, a script player is kept from fetching until a press): held back 0 (preload / autoplay of the markup), 0 script players kept from starting to fetch, refused 2 plays that nobody pressed; opened by the person: 3 (play button 2, a tap on the picture 1, Kestrel's controls 0)
+Real scrolling: off (Settings > Measure scrolling on real pages turns it on for a while)
+Scriptlets in the lists: 10016 calls stored (154 of them trusted-only); skipped: 374 not supported (trusted-replace-argument 88, trusted-rpnt 23, trusted-replace-outbound-text 21, trusted-set 21, xml-prune 21, trusted-create-html 20)
+YouTube scriptlet calls loaded: www.youtube.com 29, m.youtube.com 10
+Engine: GeckoView 160.0; live sessions 1 of 1 tabs (the memory budget keeps up to 5 ready, MemAvailable 699 MB, setting automatic); current https://finance.yahoo.com/quote/TTWO/
+Network: Fast Wi-Fi profile: LinkMeter's tunnel is the active network, so lookups use the phone's own resolver, HTTP/3 and IPv6 are off, downloads give a loading page more room (1000 KB/s) and the phone helper rests. (VPN active: true, LinkMeter tunnel recognised: true, downloads yield to a loading page at 1000 KB/s)
+Wi-Fi lock: HIGH_PERF (radio kept out of power save, also with the screen off), held now=false, taken 0 time(s) by downloads. Keep Wi-Fi awake in front: not held, taken 0 time(s) this run
+Download windows: no window boundary seen yet this run (a download needs more than one window)
+Video size estimates: no stream download has finished yet this run
+Engine prefs: version=9(i), av1.enabled=false(b), processCount=1(i), prefersReducedMotion=null(?), prefetch-next=true(b), size_factor=20(i), discard_factor=1(i), min_expiration_ms=180000(i), disk.capacity=512000(i), push.enabled=false(b), webauthn=false(b), y_skate_size_multiplier=4.0(s), y_stationary_size_multiplier=3.0(s), content_response_timeout=300(i), max_velocity_inches_per_ms=0.07(s), gc_on_memory_pressure=false(b), gpu-process.enabled=true(b), software=false(b), cache_readahead_limit=60(i), cache_resume_threshold=30(i), max_total_viewers=6(i), contentViewerTimeout=3600(i), memory.capacity=65536(i), decode_bytes_at_a_time=65536(i), numscrollportheights=2(i), numscrollportwidths=1(i), top=1500.0(s), bottom=1500.0(s), precache-shaders=true(b), proxy.type=5(i), failover_timeout=10(i), autoconfig_url=(s), trr.mode=0(i), enable=false(b), disableIPv6=true(b), interactive_widget_default_resizes_visual=true(b), allow_unload_listeners=true(b), require_no_opener=true(b), ship_allow_beforeunload_listeners=true(b), max_entries=50(i), dnsCacheExpiration=60(i), dnsCacheEntries=3200(i), gc_parallel_marking=false(b), bytecode_cache.strategy=1(i), jxl.enabled=false(b), accept=(s), allow_double_tap_zooming=false(b), autozoom=true(b), prefetch_dns_for_anchor_https_document=true(b), cache.size=16384(i), fallback_delay=500(i), speculation_rules.enabled=false(b), dry_run=false(b), vp9.enabled=false(b), hevc.enabled=true(b), android-media-codec.enabled=true(b), preferred=true(b), hls.enabled=true(b), eme.enabled=true(b), require-app-approval=true(b), default=5(i), blocking_policy=0(i), request=true(b), rdd-process.enabled=false(b), utility-process.enabled=true(b), default-size=10(i), suspend-background-video.enabled=true(b), prefersReducedMotion=null(?), animation_mode=normal(s), all=false(b), compositor=false(b), accelerated=true(b), disabled=false(b), ion=true(b), baselinejit=true(b), blinterp=true(b), wasm=true(b), wasm_optimizingjit=true(b), early-hints.enabled=true(b), echconfig.enabled=true(b), enable_kyber=true(b), http2.enabled=true(b), trackingTable=moztest-track-simple,ads-track-digest256,analytics-track-digest256,social-track-digest256(s), trackingAnnotationTable=moztest-track-simple,ads-track-digest256,social-track-digest256,analytics-track-digest256,content-track-digest256(s), trackingprotection.enabled=false(b), strict_list.enabled=true(b), baseline.enabled=true(b), convenience.enabled=true(b), allow-lock=true(b), malware.enabled=true(b), phishing.enabled=true(b), downloads.enabled=false(b), malwareTable=goog-malware-proto,goog-unwanted-proto,moztest-harmful-simple,moztest-malware-simple,moztest-unwanted-simple(s), phishTable=goog-phish-proto,moztest-phish-simple(s)
+Engine scroll/network prefs: touch_start_tolerance=0.06, touch_move_tolerance=0.03, fling_stop_on_tap_threshold=0.05, fling_min_velocity_threshold=0.5, velocity_bias=1.0, displayport_expiry_ms=180000, prefer_jank_minimal_displayports=true, min_skate_speed=1.0, allow_immediate_handoff=false, fling_friction=0.004, chrome_fling_physics.friction=0.015, chrome_fling_physics.inflexion=0.35, chrome_fling_physics.stop_threshold=0.1, paint_skipping.enabled=true, layout.display-list.retain=true, dom.ipc.processPriorityManager.enabled=true, browser.cache.memory.capacity=65536, layout.frame_rate=-1, http.max-connections=128, http.max-persistent-connections-per-server=6, http.speculative-parallel-limit=20, http.pacing.requests.enabled=true, dnsCacheEntries=3200, dnsCacheExpiration=60, layout.css.scroll-anchoring.enabled=true, dom.lazy-loading.margin.top=1500.0, image.cache.size=20971520
+Video: codecs offered to sites: VP9 as the engine decides, no AV1 (software only here), H.265 as the engine decides [hardware decoders AHVi]; page animations normal; muted autoplay allowed; protected video ask
+Storage: 1.96 GB free of 27.75 GB; free + caches Android can clear: 1.96 GB; Android says an app may still use 1.47 GB (it keeps 500.0 MB free after an install: by its rule min(5 % of the storage, 500 MB) = 500.0 MB; settings: sys_storage_threshold_percentage=default, sys_storage_threshold_max_bytes=default); this app: package 90.6 MB + unpacked libraries 131.7 MB + data 71.3 MB + cache 497.9 MB; an install or update needs free >= reserve + 2 x (package + libraries) + about 32 MB. An update of this size would need about 886.0 MB free: it fits; uninstalling first would leave about 2.65 GB against 976.6 MB (that works).
+Storage tidy: last 2026-11-16 10:30: after an update, nothing to remove; it looks at update files, old installers, engine cache older than 21 days, crash reports older than 7 days, previews of closed tabs and stopped downloads older than 14 days, about once a day and right after an update
+CPU by process, % of ONE core (this tablet has 4; read every 5 s while the browser is on screen, last 5 min): parent avg 65 / peak 227 | busy moments: 3 min 51 s ago parent 227 % [Gecko 99, URL Classifier 11, Cache2 I/O 11]; 3 min 46 s ago parent 113 % [Gecko 29, AndroidUI 14, kestrel-io 7]; 3 min 36 s ago parent 74 % [Gecko 10, kestrel-io 7, AndroidUI 7]; 2 min 34 s ago parent 77 % [HeapTaskDaemon 8, Gecko 5, AndroidUI 5] | reading: a page that lags while 'tab' sits near 100 (its thread 'Web Content' is the page's own script and layout) is limited by that one thread, which cannot use the other cores; a lag while every process is low is the network or the player; decoder or 'WR' threads busy = the picture is drawn or decoded in software
+Glide typing: not used yet this run
+Mini keyboard in page fields: not opened yet this run
+Blocker: fast mode, list #1, 4534 KB, loaded in 1479 ms, 1 transfer(s). 1377 requests judged in the engine (average 801 us, slowest 19000 us, 54 over 2 ms), 0 asked the app one by one, 0 errors. Extension listeners (calls, time held): req 1380 (1388000 us), rcv 133 (138000 us), snd 135 (15000 us), done 644 (40000 us), err 98 (12000 us). Revalidations and waits: pages 3, requests 644, from cache 533, 304 seen when headers arrived 1 and when completed 0 (0 ms in all); scriptlet waits before a page 1 (47 ms in all, slowest 47 ms, 0 hit the 250 ms ceiling). page guard: declared in the manifest (page world, every frame, from the first script), 0 blocked | scriptlets: declared in the manifest (page world, every frame), 1 pages ran 1 calls, 1 before the page's first script, 1 sites set up early (1 kept, 2 asks), 1 blocked files answered with a stand-in | image 1 from the app: 18 chunks, waiting for the app 1024 ms (its encode 257 ms), base64 decode 336
+Page report (the last pages: what Shields blocked, what failed to load, scripts that threw; a private tab is never listed):
+  finance.yahoo.com/quote/TTWO/ (3 min ago): 917 requests, 27 blocked by Shields, no failed loads, 8 script errors
+    blocked: script s.yimg.com/du/ay/wnsrvbjmeprtfrnfx.js; script securepubads.g.doubleclick.net/tag/js/gpt.js; script s.yimg.com/aaq/prebid/prebid-current.js; script s.yimg.com/ss/analytics-3.90.0.js; script consent.cmp.oath.com/version/7.0.2/cmp.js; script s.yimg.com/oa/consent.js; script s.yimg.com/aaq/vzm/cs_2.1.3.js; script s.yimg.com/cx/pv/perf-vitals_4.1.0.js; script s.yimg.com/ss/analytics-3.90.0.js; xmlhttprequest i.clean.gg/1a; ... 17 more
+    script errors: file not usable: script consent.cmp.oath.com/version/7.0.2/cmp.js; file not usable: script s.yimg.com/oa/consent.js; file not usable: script s.yimg.com/ss/analytics-3.90.0.js; file not usable: script s.yimg.com/aaq/vzm/cs_2.1.3.js; file not usable: script s.yimg.com/cx/pv/perf-vitals_4.1.0.js; file not usable: script s.yimg.com/rx/ev/lib/comscore-7-15-0-min.js; file not usable: script imasdk.googleapis.com/js/sdkloader/ima3.js; file not usable: script static.chartbeat.com/js/chartbeat_video.js
+Firefox's own tracking protection, this page: on; blocked 7: securepubads.g.doubleclick.net/tag/js/gpt.js [email tracker]; ping.chartbeat.net/ping?.. [analytics]; static.chartbeat.com/js/chartbeat_video.js [analytics]; ping.chartbeat.net/ping?.. [analytics]; ping.chartbeat.net/ping?.. [analytics]; static.chartbeat.com/js/chartbeat_video.js [analytics]; static.chartbeat.com/js/chartbeat_video.js [analytics] (a page that is missing pictures or buttons: switch Shields off for this site from the shield icon)
+Neon glow: holding still: finger on screen, a full-screen page covers them; system animation scale off (the glow ignores it)
+Page view: attached=true session=true windowFocus=true
+Page loads (newest last; time from tap to first paint / to load finished):
+  finance.yahoo.com  paint -, done 0.2 s, 0 blocked
+  finance.yahoo.com  paint 8.7 s, done 16 s, 13 blocked, visit #2
+Pages: Pages load directly (switched off).
+Phone link: mode=off, paired=false, address=10.97.182.19:8780, reachable=false, rtt=0 ms, clock offset=0 ms, last error=none, rows on the phone=0
+Counters: frames.jank=46  gecko.firstComposite=8  look.saved=14  mem.trim=1  mem.trim.20=1  tabstate.restored=1  ui.late=1  videobar.act.play=1  videobar.shown=3
+
+-- last 400 events (179 recorded) --
++0.200s start activity cold 300 ms
++0.201s start heap java heap limit 128 MB, memory class 128 MB
++0.549s tabs early-cover-skipped left on Home
++0.561s life resume
++0.562s health watchdog-start
++0.593s start frame cold 693 ms
++0.653s gecko view-attached
++0.731s gecko size 600x824 (was 0x0)
++1.315s engine network-profile fast-wifi trr=0 http3=false noIPv6=false pageYield=150
++1.319s engine network-profile fast-wifi-tunnel trr=0 http3=false noIPv6=true pageYield=1000
++1.329s engine runtime-create
++1.436s ui late-beat 733ms
++1.463s engine scroll-feel level=1 skate=4.0 still=3.0 bias=1.0 wait=300 expiry=180000 vel=0.07
++1.464s engine network-profile fast-wifi-tunnel trr=0 http3=false noIPv6=true pageYield=1000
++1.487s engine runtime-ready
++1.488s start runtime cold 1587 ms
++1.500s gecko size 600x884 (was 600x824)
++1.514s win focus true
++1.629s engine phone-proxy pages direct
++9.557s start open cold 9657 ms
++9.566s tabs state-restored tab=3 entries=1 index=0
++9.598s gecko size 600x824 (was 600x884)
++9.769s gecko first-composite trim=0@-
++9.775s start stop cold 9875 ms
++9.950s gecko first-composite trim=0@-
++10.549s gecko first-composite trim=0@-
++10.579s page loaded host=finance.yahoo.com paint=-1ms done=189ms blocked=0 visit=1 ok=false
++10.605s frames 10s frames=83 jank=10 worst=1287ms
++11.408s shields ext-state page guard: declared in the manifest (page world, every frame, from the first script), 0 blocked | scriptlets: declared in the manifest (page world, every frame), 1 sites set up early (1 kept, 2 asks) | image 1 from the app: 18 chunks, waiting for the app 1024 ms (its encode 257 ms), base64 decode 336 ms, verify+warm-up 41 ms
++12.395s gecko first-composite trim=0@-
++14.473s cosmetic css finance.yahoo.com top=true len=22047 tokens=true scriptlets=true
++16.750s cpu busy parent 227 % [Gecko 99, URL Classifier 11, Cache2 I/O 11]
++16.886s shields ext-state page guard: declared in the manifest (page world, every frame, from the first script), 0 blocked | scriptlets: declared in the manifest (page world, every frame), 1 pages ran 1 calls, 1 before the page's first script, 1 sites set up early (1 kept, 2 asks), 1 blocked files answered with a stand-in | image 1 from the app: 18 chunks, waiting for the app 1024 ms (its encode 257 ms), base64 decode 336 
++19.284s start paint cold 19383 ms
++19.854s pull down scrollable=6 overscroll=3 handled=1 -> canScrollUp=false
++20.712s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++21.451s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++22.135s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++23.946s frames 10s frames=75 jank=6 worst=41ms
++24.906s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++26.295s storage tidy after an update, nothing to remove
++26.569s cosmetic gen finance.yahoo.com tokens=300 css=657
++27.235s page loaded host=finance.yahoo.com paint=8669ms done=16621ms blocked=13 visit=2 ok=true
++27.480s cosmetic gen finance.yahoo.com tokens=300 css=317
++27.901s tabs look-saved tab=3 why=settled ok=true y=0
++28.712s cosmetic gen finance.yahoo.com tokens=114 css=134
++28.984s pull down scrollable=3 overscroll=3 handled=1 -> canScrollUp=true
++30.001s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++31.228s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++32.633s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++33.619s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++34.333s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++35.155s frames 10s frames=39 jank=2 worst=47ms
++35.503s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++35.551s tabs look-saved tab=3 why=settled ok=true y=3612
++36.847s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++37.738s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++38.414s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++39.403s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++41.335s tabs look-saved tab=3 why=settled ok=true y=0
++48.239s pull down scrollable=6 overscroll=3 handled=1 -> canScrollUp=false
++49.710s tabs look-saved tab=3 why=settled ok=true y=207
++50.421s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++51.587s media list-ok manifest.prod.boltdns.net http=200 set=1/3 referer=finance.yahoo.com
++51.593s media look HLS live=false drm=false length=163s heights=0 advertising=0s in 0 breaks counted=4 of 4 playing=none
++51.649s media list-ok manifest.prod.boltdns.net http=200 set=1/3 referer=finance.yahoo.com
++51.654s media look HLS live=false drm=false length=163s heights=0 advertising=0s in 0 breaks counted=4 of 4 playing=none
++51.808s media list-ok edge.api.brightcove.com http=200 set=1/3 referer=finance.yahoo.com
++51.948s media look HLS live=false drm=false length=163s heights=4 advertising=0s in 0 breaks counted=4 of 4 playing=none
++52.486s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++54.449s tabs look-saved tab=3 why=settled ok=true y=333
++54.622s media list-ok manifest.prod.boltdns.net http=200 set=1/3 referer=finance.yahoo.com
++54.624s media look HLS live=false drm=false length=163s heights=0 advertising=0s in 0 breaks counted=6 of 6 playing=none
++54.708s media list-ok manifest.prod.boltdns.net http=200 set=1/3 referer=finance.yahoo.com
++54.709s media look HLS live=false drm=false length=163s heights=0 advertising=0s in 0 breaks counted=6 of 6 playing=none
++54.780s media list-ok manifest.prod.boltdns.net http=200 set=1/3 referer=finance.yahoo.com
++54.782s media look HLS live=false drm=false length=163s heights=0 advertising=0s in 0 breaks counted=6 of 6 playing=none
++56.354s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++56.372s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++57.428s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++58.340s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++58.452s tabs look-saved tab=3 why=settled ok=true y=1058
++59.307s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++60.194s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++60.603s frames 10s frames=43 jank=1 worst=42ms
++61.792s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++63.238s tabs look-saved tab=3 why=settled ok=true y=1915
++67.061s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++67.109s video hand-over play HLS from 0 s (the stream the frame asked for)
++67.148s life pause
++67.337s fullscreen turn to=10 (follows the tablet) was=-1 why=full screen starts (video 0x0, screen portrait, setting 1)
++67.443s native start-quality no pick (cap 1080p)
++67.454s native shown fade
++67.456s native start Kestrel's own player started (HLS)
++67.785s win focus false
++67.914s videobar shown
++68.022s life stop
++68.022s health watchdog-stop
++68.210s tabs look-saved tab=3 why=pause ok=true y=1915
++68.381s native tracks 0 picture(s) on offer: 
++71.886s native hidden fade
++73.702s native shown at once
++77.204s native hidden fade
++78.473s native shown at once
++80.043s native cmd {"a":"seek","t":70.81,"i":1}
++82.683s life resume
++82.684s health watchdog-start
++82.687s engine warm https://finance.yahoo.com/
++82.792s win focus true
++82.874s native hidden at once
++82.877s fullscreen turn to=-1 (as Android had it) was=10 why=full screen ends: put back what Android had
++82.877s native stop Kestrel's own player ended
++82.960s gecko first-composite trim=0@-
++84.338s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++85.362s tabs look-saved tab=3 why=settled ok=true y=2039
++87.137s pull down scrollable=7 overscroll=3 handled=1 -> canScrollUp=true
++92.709s frames 10s frames=81 jank=2 worst=114ms
++93.769s cpu busy parent 77 % [HeapTaskDaemon 8, Gecko 5, AndroidUI 5]
++95.462s tabs look-saved tab=3 why=settled ok=true y=0
++96.977s pull down scrollable=5 overscroll=3 handled=1 -> canScrollUp=true
++97.298s video hand-over play HLS from 71 s (the stream the frame asked for)
++97.328s life pause
++97.447s fullscreen turn to=10 (follows the tablet) was=-1 why=full screen starts (video 0x0, screen portrait, setting 1)
++97.487s native start-quality no pick (cap 1080p)
++97.494s native shown fade
++97.495s native start Kestrel's own player started (HLS)
++97.662s win focus false
++97.903s native tracks 0 picture(s) on offer: 
++97.917s videobar shown
++97.929s life stop
++97.930s health watchdog-stop
++98.116s tabs look-saved tab=3 why=pause ok=true y=1
++101.408s native hidden fade
++102.316s native shown at once
++105.029s life resume
++105.030s health watchdog-start
++105.154s win focus true
++105.209s gecko first-composite trim=0@-
++105.282s native hidden at once
++105.285s fullscreen turn to=-1 (as Android had it) was=10 why=full screen ends: put back what Android had
++105.285s native stop Kestrel's own player ended
++106.642s pull down scrollable=5 overscroll=3 handled=2 -> canScrollUp=true
++107.162s videobar shown
++108.697s pull down scrollable=5 overscroll=0 handled=2 -> canScrollUp=true
++108.893s video hand-over kestrel HLS from 76 s (the stream the frame asked for)
++108.924s life pause
++108.974s videobar act play
++109.067s fullscreen turn to=10 (follows the tablet) was=-1 why=full screen starts (video 0x0, screen portrait, setting 1)
++109.092s native start-quality no pick (cap 1080p)
++109.099s native shown fade
++109.099s native start Kestrel's own player started (HLS)
++109.153s win focus false
++109.830s native tracks 0 picture(s) on offer: 
++109.879s life stop
++109.879s health watchdog-stop
++109.962s tabs look-saved tab=3 why=pause ok=true y=1
++112.281s life resume
++112.282s health watchdog-start
++112.389s win focus true
++112.445s gecko first-composite trim=0@-
++112.486s native hidden at once
++112.490s fullscreen turn to=-1 (as Android had it) was=10 why=full screen ends: put back what Android had
++112.490s native stop Kestrel's own player ended
++113.086s tabs back-arm tab=3 to=finance.yahoo.com picture=false pictures=0 y=2043 notKept=no
++118.412s pull down scrollable=5 overscroll=3 handled=1 -> canScrollUp=true
++119.816s life pause
++119.869s win focus false
++120.203s mem trim level=20 avail=681MB thr=144MB low=false trim=20@0s
++120.212s life stop
++120.212s health watchdog-stop
++120.483s tabs look-saved tab=3 why=pause ok=true y=1
++235.039s life resume
++235.040s health watchdog-start
++235.046s engine warm https://finance.yahoo.com/
++235.256s win focus true
++236.059s gecko first-composite trim=20@115s
++236.370s tabs look-saved tab=3 why=settled ok=true y=1375
++237.689s video decoders AHVi 26 decoder(s) in 195 ms, widevine=true
++245.052s frames 10s frames=98 jank=25 worst=575ms
+```
