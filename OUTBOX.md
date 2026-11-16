@@ -2304,3 +2304,14 @@
 > - Whether the first tap should show or hide the controls at once (it waits 300 ms for a double tap).
 > - Captions and quality buttons while Kestrel's controls own the film.
 <!-- sha:2290f1d9a234 -->
+
+## 2026-11-16T04:58:22Z
+> Alpha57 status: the page codec policy (ANS52g) and the HLS picture-size cap (ANS52h) are coded and unit-tested locally. The emulator proof run on the real Firefox engine (run 43806840560) is booting now. An independent review of the diff is running in parallel, and I'm woken at 05:08Z to read both.
+>
+> Nothing from alpha57 has been tried on the tablet yet, so I'm not asking you to test it.
+>
+> Open items I'm holding:
+> - Your tablet report on alpha56: the Diagnostics lines, and the Save video sheet's "Play in Kestrel's player (test)".
+> - After the lab read: alpha57 itself (codec policy + 720p HLS cap) and its release.
+> - Older rows: VP10, VP12, ROT2e, ANS48, SOAK1d, LAB2f.
+<!-- sha:92431e68186c -->
