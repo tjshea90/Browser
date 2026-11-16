@@ -32,6 +32,7 @@ class QualitySheet(ctx: Context) : FrameLayout(ctx) {
     private val panel = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
     private val list = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
     private val titleView = TextView(ctx)
+    private val closeView = TextView(ctx)
     private val noteView = TextView(ctx)
     private val scroll = ScrollView(ctx)
 
@@ -44,7 +45,12 @@ class QualitySheet(ctx: Context) : FrameLayout(ctx) {
         titleView.apply { setTextColor(0xFFFFFFFF.toInt()); textSize = 17f; typeface = Typeface.DEFAULT_BOLD; setPadding(dp(18f), dp(4f), dp(18f), dp(8f)) }
         noteView.apply { setTextColor(0xFFA6B0B8.toInt()); textSize = 12.5f; setPadding(dp(18f), dp(8f), dp(18f), dp(4f)) }
         scroll.addView(list, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-        panel.addView(titleView, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        // ANS54e.2 (owner message 54: "pressed the x button to close the resolution options box, it didn't close"): a box of options has an x, on the title row, 48 dp to touch (Back and a tap outside still close it too)
+        val head = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        head.addView(titleView, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        closeView.apply { text = "\u2715"; textSize = 20f; setTextColor(0xFFFFFFFF.toInt()); gravity = Gravity.CENTER; contentDescription = "Close"; setOnClickListener { dismiss() } }
+        head.addView(closeView, LinearLayout.LayoutParams(dp(48f), dp(48f)))
+        panel.addView(head, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         panel.addView(scroll, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
         panel.addView(noteView, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         addView(panel, LayoutParams(dp(330f), LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply { topMargin = dp(70f); rightMargin = dp(14f); leftMargin = dp(14f); bottomMargin = dp(18f) })
