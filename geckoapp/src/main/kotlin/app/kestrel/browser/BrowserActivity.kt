@@ -917,6 +917,7 @@ open class BrowserActivity : Activity(), DockListener {
             { qualitySheet.isOpen })
         fsTurner.ownedByPlayer = { player.active }
         player.onLook = { page, frames, dropped, seconds, w, h -> filmLook(page, frames, dropped, seconds, w, h) }
+        player.onFirstReport = { t, d -> fullscreenTab?.let { ft -> if (ft === current && ft.url.isNotEmpty()) video.handOverFullscreen(ft, t, d) } }   // ANS54e: a film that went full screen in the page and was not handed over before moves to Kestrel's own player now
         val cover = FrameLayout(this).apply { setBackgroundColor(0xFF000000.toInt()); visibility = View.GONE; alpha = 0f; isClickable = true; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO } // ROT1: topmost in the page area; it takes the touch (review of alpha53: the tap that ends a long wait must not reach the page nobody can see)
         // ROT2: a small ring after about a second, so a black screen that waits for the engine does not look frozen
         val ring = android.widget.ProgressBar(this).apply { isIndeterminate = true; visibility = View.GONE; indeterminateTintList = android.content.res.ColorStateList.valueOf(0xFF9A9A9A.toInt()) }
@@ -2299,6 +2300,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(turnPageLine())
         out.add(viewportLine())
         out.add(player.line())
+        out.add(app.kestrel.browser.web.WebHandStats.line(prefs.webVideoMode))   // ANS54e
         out.add(strayLine())
         out.add(videoBarLine())
         out.add(videoQuality.line(GeckoEngine.videoPolicyText))
@@ -2934,7 +2936,10 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** @return true if the back press did something. */
     /** The controls' exit button: the same as Back (ask the page, and end it here when the engine does not answer, RV2). */
-    private fun exitFullscreenFromControls() {
+    /** ANS54e: is [tab] the page that is full screen now? */
+    internal fun isFullscreenOf(tab: Tab): Boolean = fullscreenOn && fullscreenTab === tab
+
+    internal fun exitFullscreenFromControls() {
         val ft = fullscreenTab ?: return
         Health.log("fullscreen", "exit-button", "asking the page to leave full screen")
         try { ft.session?.exitFullScreen() } catch (e: Exception) { Health.log("fullscreen", "exit-failed", e.toString().take(80)) }
@@ -3184,6 +3189,7 @@ open class BrowserActivity : Activity(), DockListener {
     @Deprecated("framework callback")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == NativePlayerActivity.REQ_PAGE_FILM) { if (resultCode == NativePlayerActivity.RESULT_FAILED) video.nativeFailed(); return }   // ANS54e: Kestrel's own player could not start a web page's film
         if (backup.onResult(requestCode, resultCode, data)) return
         if (keyboardFlow.onResult(requestCode, resultCode, data)) return
         if (requestCode == REQ_FILE) {

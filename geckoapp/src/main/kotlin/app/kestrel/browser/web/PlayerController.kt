@@ -75,6 +75,9 @@ class PlayerController(
         if (lookShadow) onLook(lookPage, l.frames, l.dropped, l.seconds, l.w, l.h)
     }
 
+    /** ANS54e: the page's first report of the full-screen film (its position and length in seconds): the activity may hand the film to Kestrel's own player. */
+    var onFirstReport: (Double, Double) -> Unit = { _, _ -> }
+
     init { view.listener = this }
 
     // ---------------------------------------------------------------------------------------- the activity
@@ -153,7 +156,7 @@ class PlayerController(
                     val lt = m.optInt("lt")
                     if (lt >= FilmHealth.STALL_MS) say("stall", "the page's script was busy for about $lt ms (its timer ran that late)")
                 }
-                if (reports == 1) say("first-report", "film ${m.optInt("w")}x${m.optInt("h")}, length ${m.optDouble("d")}, ${if (m.optInt("ms") == 1) "media source" else "plain file"}")
+                if (reports == 1) { say("first-report", "film ${m.optInt("w")}x${m.optInt("h")}, length ${m.optDouble("d")}, ${if (m.optInt("ms") == 1) "media source" else "plain file"}"); if (!quiet) onFirstReport(m.optDouble("t", 0.0), m.optDouble("d", 0.0)) }
                 val aw = m.optInt("aw", 0)
                 if (aw != away) { away = aw; if (aw > awayMax) awayMax = aw; say("away", "the page's own player controls put away: $aw element(s)") }
             }

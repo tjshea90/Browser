@@ -21,6 +21,9 @@ import app.kestrel.core.media.MediaRank
 import app.kestrel.core.media.MediaSniff
 import app.kestrel.core.media.Mp4Probe
 import app.kestrel.core.media.PageQuality
+import app.kestrel.core.media.WebHandOver
+import org.json.JSONObject
+import android.os.SystemClock
 import app.kestrel.core.media.QualityLabel
 import app.kestrel.core.media.SizeEstimate
 import app.kestrel.core.media.StreamSource
@@ -89,7 +92,7 @@ class VideoFlow(private val a: BrowserActivity) {
     /** Called on the Shields worker thread. */
     fun seen(c: MediaCandidate) = Io.ui {
         val t = tabOf(c.page) ?: return@ui
-        if (t.media.add(c)) { a.refreshDownloadButton(); if (c.fromMarkup) verifySoon(t); if (c.kind == MediaKind.HLS) lookSoon(t) }
+        if (t.media.add(c)) { a.refreshDownloadButton(); if (c.fromMarkup) verifySoon(t); if (c.kind == MediaKind.HLS) { lookSoon(t); lateHandOver(t, c) } }
     }
 
     // ---- RX3-V5 (research/FINDER_LAB.md section 3): the early look. A stream playlist the page asked for is read at idle (a few KB: the master and its lowest quality) so that live, protected and clip-sized streams
@@ -320,6 +323,81 @@ class VideoFlow(private val a: BrowserActivity) {
             return null
         }
         return if (PageQuality.hasChoice(r)) PageFilm(c, r) else null
+    }
+
+    // ---- ANS54e (owner message 54: "I want the web video players to use this"; research/ANS54_DESIGN.md): the film a page is about to play is played by Kestrel's own player when it can. The page's gate asks (`vh`: the
+    // element, what the person did), WebHandOver (core, tested) decides, and a yes starts NativePlayerActivity; the page keeps its element closed. Catch-alls: a film that went full screen in the page, and a playlist the
+    // sniffer sees within 6 s after a press that had to be refused for want of a stream. UI thread.
+    private class Refused(val tabId: Long, val at: Long, val frame: String, val el: WebHandOver.Element)
+    private var lastRefused: Refused? = null
+
+    private fun elementOf(m: JSONObject) = WebHandOver.Element(m.optString("s"), m.optInt("b") == 1, m.optString("m"), m.optInt("l") == 1, m.optInt("w"), m.optInt("h"), m.optDouble("t", 0.0), m.optDouble("d", 0.0))
+
+    /** The streams the sniffer saw in [frame] ("" = the page itself) that a hand-over may use: playlists of films (the variants listed in a master are no films of their own), not DRM, not flagged as decoys. */
+    private fun knownIn(tab: Tab, frame: String): List<WebHandOver.Known> =
+        tab.media.usable().filter { it.frame == frame && it.kind == MediaKind.HLS && it.url !in children }.map { WebHandOver.Known(it.url, it.kind, it.durationMs, !it.drm && !it.decoy) }
+
+    /** The page's gate asks whether Kestrel's own player takes the film the person pressed: true = it has been started (or is up already), the page keeps its element closed. */
+    fun handOver(m: JSONObject): Boolean {
+        val tab = tabOf(m.optString("p")) ?: return decline(null, "page not found")
+        val why = when (m.optString("y")) { "press" -> WebHandOver.Why.PRESS; "kestrel" -> WebHandOver.Why.KESTREL; else -> WebHandOver.Why.PLAY }
+        if (!tab.isPrivateTab) WebHandStats.asked++
+        return start(tab, why, elementOf(m), m.optString("f"))
+    }
+
+    private fun decline(tab: Tab?, why: String): Boolean {
+        if (tab == null || !tab.isPrivateTab) { WebHandStats.declined++; WebHandStats.lastDeclined = why }
+        return false
+    }
+
+    private fun start(tab: Tab, why: WebHandOver.Why, el: WebHandOver.Element, frame: String): Boolean {
+        val mode = a.prefs.webVideoMode
+        if (mode == WebHandOver.NEVER) return decline(tab, "the setting says the page's own player")
+        if (tab !== a.current || tab.isNewTab || a.onHomeScreen(tab)) return decline(tab, "not the page in front")
+        val now = SystemClock.uptimeMillis()
+        if (NativePlayerStats.active || now - NativePlayerStats.launchedAt < 3000L) { if (!tab.isPrivateTab) WebHandStats.repeats++; return true }   // it is up (or just started): the page keeps its element closed, no second player
+        if (now < tab.gecko.handOverOffUntil) return decline(tab, "Kestrel's player failed on this page a moment ago")
+        val d = WebHandOver.decide(mode, why, el, knownIn(tab, frame))
+        if (d == null) {
+            lastRefused = if (el.blob && why != WebHandOver.Why.FULLSCREEN && why != WebHandOver.Why.LATE && mode == WebHandOver.ALWAYS) Refused(tab.id, now, frame, el) else null
+            return decline(tab, if (mode == WebHandOver.FULLSCREEN && why != WebHandOver.Why.FULLSCREEN) "the setting says full screen only" else if (el.loop) "a loop clip" else if (el.blob) "no stream known (yet)" else "not a file or stream Kestrel's player plays")
+        }
+        lastRefused = null
+        val seed = tab.media.find(d.url) ?: MediaCandidate(d.url, d.kind, "", -1, tab.url, frame, System.currentTimeMillis())
+        val headers = MediaHeaders.sets(seed, tab.url).firstOrNull()?.map { "${it.key}: ${it.value}" }.orEmpty()
+        try { tab.gecko.mediaSession?.pause() } catch (e: Throwable) { /* the page's own film may have no media session */ }
+        if (!tab.isPrivateTab) {
+            when (why) { WebHandOver.Why.PLAY -> WebHandStats.byPlay++; WebHandOver.Why.PRESS -> WebHandStats.byPress++; WebHandOver.Why.KESTREL -> WebHandStats.byKestrel++; WebHandOver.Why.FULLSCREEN -> WebHandStats.byFullscreen++; WebHandOver.Why.LATE -> WebHandStats.late++ }
+            WebHandStats.lastTaken = "${if (d.kind == MediaKind.HLS) "a stream" else "a file"}, ${d.note}, from ${d.startMs / 1000} s"
+            Health.log("video", "hand-over", "${why.name.lowercase()} ${if (d.kind == MediaKind.HLS) "HLS" else "file"} from ${d.startMs / 1000} s (${d.note})")
+        }
+        NativePlayerActivity.launch(a, d.url, headers, d.startMs, if (d.kind == MediaKind.HLS) 720 else 1080, tab.isPrivateTab, 0, 0, fromPage = true)
+        if (a.isFullscreenOf(tab)) a.exitFullscreenFromControls()                  // a film that was full screen in the page: the page's full screen ends, Kestrel's player takes the screen
+        return true
+    }
+
+    /** A page film went full screen in the page and was not handed over before (its stream was not known at the press): at the first report of the film (its position is known now) it moves to Kestrel's player. */
+    fun handOverFullscreen(tab: Tab, timeS: Double, lengthS: Double): Boolean {
+        if (a.prefs.webVideoMode == WebHandOver.NEVER) return false
+        val p = tab.media.primary()
+        val src = if (p != null && p.kind == MediaKind.FILE) p.url else ""
+        return start(tab, WebHandOver.Why.FULLSCREEN, WebHandOver.Element(src, false, p?.mime.orEmpty(), false, 0, 0, timeS, lengthS), p?.frame.orEmpty())
+    }
+
+    /** A playlist the sniffer saw right after a press that was refused for want of a stream (a player that asks for its playlist only after the click): the film moves over now, the page's media session is paused. */
+    private fun lateHandOver(tab: Tab, c: MediaCandidate) {
+        val r = lastRefused ?: return
+        if (r.tabId != tab.id || SystemClock.uptimeMillis() - r.at > 6000L || c.frame != r.frame) return
+        lastRefused = null
+        if (start(tab, WebHandOver.Why.LATE, r.el, c.frame)) try { tab.gecko.mediaSession?.pause() } catch (e: Throwable) { /* none */ }
+    }
+
+    /** Kestrel's own player ended with an error before its first picture for a film of this page: the page's own player plays its films for two minutes, and the person is told. */
+    fun nativeFailed() {
+        val t = a.current ?: return
+        t.gecko.handOverOffUntil = SystemClock.uptimeMillis() + 120_000L
+        if (!t.isPrivateTab) WebHandStats.failed++
+        a.toast("Kestrel's own player could not play this film. Press play again: the page's own player will.")
     }
 
     /** A row of the page's quality list was picked ([rung] null = Automatic): the page's film stops and Kestrel's own player goes on from [startMs] with that picture. */
