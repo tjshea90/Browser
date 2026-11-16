@@ -851,14 +851,15 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
   try {
     if (!(hlsCap > 0) || d.statusCode !== 200 || d.method !== 'GET' || d.tabId < 0) return {};
     var f = browser.webRequest.filterResponseData(d.requestId), chunks = [], total = 0, rest = false, cap = hlsCap;
-    hls.seen++;
+    hls.seen++; markStats();
     f.ondata = function (e) {
       try {
+        if (!e || !e.data || typeof e.data.byteLength !== 'number') throw new Error('no data');
         if (rest) { f.write(e.data); return; }
         total += e.data.byteLength;
         if (total > HLS_MAX_BYTES) { rest = true; hls.big++; hlsWrite(f, chunks); chunks = []; f.write(e.data); return; } // too big for a master list: everything goes through, as it came
         chunks.push(e.data);
-      } catch (x) { hls.err++; try { f.disconnect(); } catch (y) { /* gone */ } }
+      } catch (x) { hls.err++; try { if (!rest) hlsWrite(f, chunks); chunks = []; rest = true; f.disconnect(); } catch (y) { /* gone */ } } // what was buffered goes on as it came, the rest is not filtered any more
     };
     f.onstop = function () {
       try {

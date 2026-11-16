@@ -1393,7 +1393,7 @@ const stText = async (h) => { await h.flushTimers(); const st = h.of('st'); retu
 
 test('ANS52h: the listener is blocking, narrow (addresses that name a .m3u8, the three request kinds a player uses) and does nothing while no cap is told', async () => {
   const h = await onPage(hlsApp(0));
-  assert.deepEqual(h.listeners.hlsSpec, ['blocking']);
+  assert.deepEqual(JSON.parse(JSON.stringify(h.listeners.hlsSpec)), ['blocking']);
   assert.deepEqual(JSON.parse(JSON.stringify(h.listeners.hlsFilter.urls)), ['http://*/*.m3u8*', 'https://*/*.m3u8*']);
   assert.deepEqual(JSON.parse(JSON.stringify(h.listeners.hlsFilter.types)).sort(), ['media', 'other', 'xmlhttprequest']);
   const { r } = runFilter(h, 'a1', [HLS_MASTER]);
@@ -1467,8 +1467,10 @@ test('ANS52h: whatever goes wrong, the page is not the one to notice: no stream 
   const h2 = await onPage(hlsApp(1313));
   h2.listeners.hlsHeaders(hlsReq('f3'));
   const f3 = h2.filters[0];
+  f3.ondata({ data: buf('#EXTM3U\n') });
   f3.ondata({ data: 'not a buffer' });                                   // a data event the extension cannot read
   assert.equal(f3.disconnected, true);
+  assert.equal(f3.body(), '#EXTM3U\n', 'what had been read goes on as it came');
   assert.match(await stText(h2), /errors 1/);
 });
 
