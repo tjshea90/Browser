@@ -35,7 +35,7 @@ test('VP1: a full-screen film tells the app its state (numbers only); nothing be
   await fullscreen(page);
   const m = await firstState(page);
   assert.equal(m.k, 'vst'); assert.equal(m.d, 60); assert.equal(m.p, 1); assert.equal(m.e, 0); assert.equal(m.ms, 0); assert.equal(m.l, 0); assert.ok(m.rs >= 3, 'ready state ' + m.rs);
-  assert.deepEqual(Object.keys(m).sort(), ['ak', 'b', 'd', 'e', 'h', 'k', 'l', 'm', 'ms', 'p', 'r', 'rs', 't', 'v', 'w'], 'only numbers: ' + JSON.stringify(m));
+  assert.deepEqual(Object.keys(m).sort(), ['ak', 'aw', 'b', 'd', 'e', 'h', 'k', 'l', 'm', 'ms', 'p', 'r', 'rs', 't', 'v', 'w'], 'only numbers: ' + JSON.stringify(m));
   await page.context().close();
 });
 
@@ -220,6 +220,9 @@ test('VP2: the page\'s own player controls are not shown while Kestrel\'s are (a
   await fullscreen(page); await firstState(page);
   await page.waitForFunction(() => window.KestrelVP.away() >= 2, null, { timeout: 5000 });
   assert.equal(await disp(page, 'yt'), 'none'); assert.equal(await disp(page, 'shaka'), 'none');
+  await page.waitForFunction(() => window.__msgs.some((m) => m && m.k === 'vst' && m.aw >= 2), null, { timeout: 4000 });   // the reports say how many of the page's own controls are put away
+  await page.evaluate(() => { document.getElementById('yt').style.display = 'block'; });                                  // a page that sets the display again gets it taken away again
+  await page.waitForFunction(() => getComputedStyle(document.getElementById('yt')).display === 'none', null, { timeout: 4000 });
   assert.equal(await disp(page, 'cc'), 'block', 'a captions button is the page\'s');
   assert.equal(await disp(page, 'outside'), 'block', 'a player that is not in the full-screen box is not touched');
   assert.equal(await page.evaluate(() => document.getElementById('v').controls), false, 'the engine\'s own bar is off');

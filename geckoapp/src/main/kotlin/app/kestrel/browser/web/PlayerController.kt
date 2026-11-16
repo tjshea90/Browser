@@ -41,6 +41,8 @@ class PlayerController(
     // what Diagnostics says
     private var reports = 0
     private var taps = 0
+    private var away = 0                           // page elements (its own player controls) put away right now
+    private var awayMax = 0
     private var last = "no full-screen film under Kestrel's controls yet"
 
     init { view.listener = this }
@@ -55,7 +57,7 @@ class PlayerController(
     }
 
     private fun begin() {
-        activeFlag = true; started = SystemClock.uptimeMillis(); reports = 0; taps = 0; lastReportAt = started
+        activeFlag = true; started = SystemClock.uptimeMillis(); reports = 0; taps = 0; away = 0; awayMax = 0; lastReportAt = started
         view.visibility = View.VISIBLE
         model.setHideAfter(accessibilityMs())
         model.start(true)
@@ -69,7 +71,7 @@ class PlayerController(
         model.stop(); commands.clear()
         view.show(false, false); view.visibility = View.GONE
         rotateButton(false)
-        last = "$why after ${(SystemClock.uptimeMillis() - started) / 1000} s: $reports reports, $taps taps, ${model.seeks} seeks, ${model.commands} commands"
+        last = "$why after ${(SystemClock.uptimeMillis() - started) / 1000} s: $reports reports, $taps taps, ${model.seeks} seeks, ${model.commands} commands, the page's own controls put away: most $awayMax element(s)"
         Health.log("player", "stop", last)
     }
 
@@ -111,6 +113,8 @@ class PlayerController(
                 model.onSample(PlayerModel.Sample(m.optDouble("t", 0.0), len, m.optDouble("b", 0.0), m.optInt("pa") == 1, m.optInt("e") == 1, m.optInt("m") == 1, m.optInt("v", 100), m.optDouble("r", 1.0),
                     m.optInt("rs", 4), m.optInt("ms") == 1, m.optInt("l") == 1 || len == -2.0, m.optInt("w"), m.optInt("h"), SystemClock.uptimeMillis(), m.optInt("ak", 0)))
                 if (reports == 1) Health.log("player", "first-report", "film ${m.optInt("w")}x${m.optInt("h")}, length ${m.optDouble("d")}, ${if (m.optInt("ms") == 1) "media source" else "plain file"}")
+                val aw = m.optInt("aw", 0)
+                if (aw != away) { away = aw; if (aw > awayMax) awayMax = aw; Health.log("player", "away", "the page's own player controls put away: $aw element(s)") }
             }
             "vtap" -> { taps++; Health.log("player", "tap", "x=${m.optInt("x", 500)}"); model.onTap(m.optInt("x", 500)) }
         }
