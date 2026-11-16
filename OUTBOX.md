@@ -2377,3 +2377,7 @@
 >
 > I'm now running the release checks. Next is the signed build on GitHub (about 15 to 20 minutes), and then I'll send you the link.
 <!-- sha:a7b42253c5ac -->
+
+## 2026-11-16T23:01:00Z
+> The ship checks for alpha61 are still running (unit tests, version gate, push). I'll continue as soon as they report.
+<!-- sha:407200af081a -->
