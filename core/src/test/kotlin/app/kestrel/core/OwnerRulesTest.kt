@@ -541,6 +541,16 @@ class OwnerRulesTest {
         assertTrue("the neon glow holds still while the film plays inside the page", act.contains("inline.active)))") && host.contains("a.inlineChanged()"))
     }
 
+    // ANS58c (owner message 58: "When I logged in, switched to a different app and came back to Kestrel, it reloaded the page and I was logged out", in a private tab)
+    @Test fun aPrivateTabIsNeverPutToSleepByTheMemoryHandlingAndAnAnchorSessionKeepsThePrivateLogins() {
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        val rules = source("core/src/main/kotlin/app/kestrel/core/tabs/LiveBudget.kt")
+        assertTrue("the rule: never a private tab, by the budget or because the app was left", rules.contains("fun mayHibernate(isCurrent: Boolean, hasLiveChild: Boolean, isPrivate: Boolean): Boolean = !isCurrent && !hasLiveChild && !isPrivate") && rules.contains("fun mayHibernateInBackground(isPrivate: Boolean): Boolean = !isPrivate"))
+        assertTrue("hibernate itself refuses a private tab, the live limit and the trim handler ask the rule", act.contains("if (tab.isPrivateTab) { Health.count(\"tabs.privateKept\")") && act.contains("LiveBudget.mayHibernate(t === current, hasLiveChild(t), t.isPrivateTab)") && act.contains("LiveBudget.mayHibernateInBackground(it.isPrivateTab)"))
+        assertTrue("one hidden private session stays open while any private tab exists (a replaced session is never the last one: the engine forgets private logins then) and goes with the last private tab",
+            act.contains("private var privateAnchor: GeckoSession? = null") && act.contains("private fun syncPrivateAnchor()") && act.contains("if (tab.isPrivateTab) syncPrivateAnchor()") && act.contains("syncPrivateAnchor()                                                      // ANS58c") && act.contains("try { privateAnchor?.close() }"))
+    }
+
     // ANS57 (owner message 57: VLC-style gestures; research/ANS57_VLC_GESTURES.md)
     @Test fun ownerMessage57VlcStyleGestures() {
         val math = source("core/src/main/kotlin/app/kestrel/core/player/PlayerGestures.kt")

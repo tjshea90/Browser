@@ -2787,7 +2787,6 @@ class Soak:
         self.shot("pv-2-private-after-trim")
         # a reload by the person: the cookie is still there (the engine kept the private login)
         m3, rm3 = self.log.size(), self.lab.size()
-        self.ph.key("KEYCODE_F5") ; time.sleep(0.5)
         self.ph.debug("privtab", "%s/pv?v=pv&tag=pvp2" % self.lab_base); time.sleep(9)       # (a second private tab: the same private jar)
         r3 = cookie_rows(rm3, "pvp2")
         check("a second private tab sees the first one's login (the same private cookie jar)", bool(r3) and str(r3[-1].get("had")) == "1", "cookie rows %s" % [(r.get("had")) for r in r3])
