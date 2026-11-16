@@ -35,7 +35,7 @@ test('VP1: a full-screen film tells the app its state (numbers only); nothing be
   await fullscreen(page);
   const m = await firstState(page);
   assert.equal(m.k, 'vst'); assert.equal(m.d, 60); assert.equal(m.p, 1); assert.equal(m.e, 0); assert.equal(m.ms, 0); assert.equal(m.l, 0); assert.ok(m.rs >= 3, 'ready state ' + m.rs);
-  assert.deepEqual(Object.keys(m).sort(), ['ak', 'aw', 'b', 'd', 'e', 'h', 'k', 'l', 'm', 'ms', 'p', 'r', 'rs', 't', 'v', 'w'], 'only numbers: ' + JSON.stringify(m));
+  assert.deepEqual(Object.keys(m).sort(), ['ak', 'aw', 'b', 'd', 'e', 'er', 'h', 'k', 'l', 'm', 'ms', 'p', 'r', 'rs', 't', 'v', 'w'], 'only numbers: ' + JSON.stringify(m));
   await page.context().close();
 });
 
@@ -330,5 +330,14 @@ test('VP2: the page\'s own controls are found inside nested shadow trees below t
   await page.waitForFunction(() => window.__deep() === 'none', null, { timeout: 5000 });
   await page.evaluate(() => document.exitFullscreen());
   await page.waitForFunction(() => window.__deep() === 'flex', null, { timeout: 5000 });
+  await page.context().close();
+});
+
+test('VP1: a film that fails says so (er), so the app can keep the controls up instead of a ring that spins for ever (research: stays while failed)', async () => {
+  const page = await open(BOX, { player: true, cfg: { kp: true } });
+  await fullscreen(page); await firstState(page);
+  assert.equal((await states(page))[0].er, 0, 'a good film has no error');
+  await page.evaluate(() => { const v = document.getElementById('v'); v.removeAttribute('src'); v.src = 'https://cdn.example/broken.bin'; v.load(); });
+  await page.waitForFunction(() => window.__msgs.some((m) => m && m.k === 'vst' && m.er === 1), null, { timeout: 8000 });
   await page.context().close();
 });

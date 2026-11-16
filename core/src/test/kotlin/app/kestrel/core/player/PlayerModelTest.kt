@@ -142,6 +142,20 @@ class PlayerModelTest {
         m.skip(-1000.0); assertEquals("never before the start", 0.0, m.view().timeS, 1e-6)
     }
 
+    @Test fun aFilmThatFailedIsNotPlayingHasNoRingAndKeepsTheControlsUp() {
+        // research: the controls stay while a film is paused, ended or FAILED; a failed film used to read as "buffering" (a ring that spins for ever)
+        val h = Host(); val m = model(h)
+        m.onSample(sample(h, t = 12.0))
+        h.tickControls(m, PlayerRules.HIDE_AFTER_MS + 100)
+        assertFalse("a playing film hides them after a while", m.shown)
+        h.clock += 500; m.onSample(PlayerModel.Sample(12.0, 65.0, 20.0, false, false, false, 100, 1.0, 0, false, false, 1280, 720, h.clock, 0, true))   // readyState 0 and an error
+        val v = m.view()
+        assertTrue(v.failed); assertFalse("not playing", v.playing); assertFalse("and no ring", v.buffering)
+        assertTrue("the controls come and stay", m.shown)
+        h.tickControls(m, 60_000)
+        assertTrue("for as long as it stays failed", m.shown)
+    }
+
     @Test fun aReportThatNamesTheCommandCountsAtOnceAndEverythingIsNumbered() {
         val h = Host(); val m = model(h)
         m.onSample(sample(h, t = 2.0))
