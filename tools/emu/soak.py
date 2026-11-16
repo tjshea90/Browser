@@ -1657,7 +1657,9 @@ class Soak:
         m = self.log.size(); self.ph.tap(vw // 2 - step, 26 + vh // 2); time.sleep(1.2)
         check("and the 10 s button back skips back", any('"d":-10' in c["rest"] for c in ev("player", "cmd", m)), "commands %s" % [c["rest"][:30] for c in ev("player", "cmd", m)])
         # the real turn to portrait (the sensor hand-back waits 650 ms)
-        self.ph.physical(9.81, 0, 0); time.sleep(3.0)
+        self.ph.physical(9.81, 0, 0); time.sleep(1.7)
+        self.shot("kp-5b-landscape-controls")                                        # the controls come back about 0.7 s after the turn settled and stay 2.5 s
+        time.sleep(1.3)
         self.ph.physical(0, 9.81, 0); time.sleep(3.0)
         vw, vh, land = box()
         check("portrait now", not land, "the screen is still sideways")
