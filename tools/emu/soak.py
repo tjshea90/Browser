@@ -729,6 +729,7 @@ class Soak:
         self.ho_results = []                   # ANS54e: web videos play in Kestrel's own player (suite ho)
         self.ho_table = []
         self.ho_events = []                   # (page, what the page saw of the tap): which tap events the engine lets a page see
+        self.ho_box = (0.0, 0.0)               # the picture of the page just shown (width, height in device pixels)
         self.ho_line = ""
         self.ap_table = []
         self.ap_line = ""
@@ -2231,6 +2232,7 @@ class Soak:
             if not lay:
                 return None
             L = lay[-1]
+            self.ho_box = (float(L.get("vw") or 0), float(L.get("vh") or 0))
             tx, ty = (int(L.get("bx") or 0), int(L.get("by") or 0)) if how == "button" else (int(L.get("vx") or 0), int(L.get("vy") or 0))
             if tx <= 0 or ty <= 0:
                 tx, ty = self.screen[0] // 2, 260
@@ -2254,18 +2256,26 @@ class Soak:
             if expect in ("native", "native-hls"):
                 check("%s: Kestrel's own player took the film over (a 'video hand-over' line: %s)" % (variant, [e["rest"][:50] for e in taken][:1]), bool(taken), "no 'video hand-over' line (page events %s)" % sorted(set(ev2)))
                 check("%s: Kestrel's own player started%s" % (variant, " on the stream" if expect == "native-hls" else " on the file"), bool(started) and (expect != "native-hls" or any("HLS" in e["rest"] for e in started)), "native start lines %s" % [e["rest"][:60] for e in started])
-                states = [r for r in rows2 if r.get("ev") == "state"]
-                check("%s: the page's own video is paused (its last report: %s)" % (variant, [(r.get("paused"), r.get("t")) for r in states][-1:]), bool(states) and str(states[-1].get("paused")) == "1", "state rows %s" % [(r.get("paused"), r.get("t")) for r in states][-4:])
                 if variant != "file":                                                      # (the engine's own controls may start a plain film for a moment before the answer pauses it)
                     check("%s: the page's own player never started it (no 'playing', no 'sourceopen', no 'fetched')" % variant, not any(x in ev2 for x in ("playing", "playing-promise", "sourceopen", "fetched")), "events %s" % sorted(set(ev2)))
                 if variant in ("overlay", "hls"):
                     check("%s: the page's play() was interrupted (AbortError), not refused" % variant, any(r.get("ev") == "rejected" and r.get("name") == "AbortError" for r in rows2), "rows %s" % [(r.get("ev"), r.get("name")) for r in rows2][:6])
                 check("%s: Kestrel's own player showed its first picture" % variant, bool(ev("native", "first-picture", m)), "no 'native first-picture' line")
-                m2 = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(3)
+                m2 = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(6)
                 check("%s: Back ends Kestrel's own player and the page is in front again" % variant, bool(ev("native", "stop", m2)), "no 'native stop' line")
+                # (the page's own timers stand still while Kestrel's player is in front: its report of where its element is comes after Back)
+                states = [r for r in self.lab.since(r2) if r.get("kind") == "ap" and str(r.get("tag", "")).startswith(tag) and r.get("ev") == "state"]
+                check("%s: the page's own video is paused (its last report: %s)" % (variant, [(r.get("paused"), r.get("t")) for r in states][-1:]), bool(states) and str(states[-1].get("paused")) == "1", "state rows %s" % [(r.get("paused"), r.get("t")) for r in states][-4:])
                 if variant == "file":                                                       # (the film is Kestrel's now: the engine's own play button pressed again asks the app again, the page's element was paused by the first yes)
                     m4, r4 = self.log.size(), self.lab.size()
-                    time.sleep(2); self.ph.tap(*at); time.sleep(9)
+                    # lab run 2: a tap in the middle of the paused picture only showed the engine's bar (touch events, no play): the bar's own play button is at its left end, a finger's width above the picture's bottom edge
+                    bar_at = (max(24, at[0] - int(self.ho_box[0]) // 2 + 40), at[1] + int(self.ho_box[1]) // 2 - 30) if self.ho_box[0] else at
+                    time.sleep(2)
+                    for pt in (bar_at, at, bar_at):
+                        self.ph.tap(*pt); time.sleep(4.5)
+                        if ev("video", "hand-over", m4):
+                            break
+                    time.sleep(3)
                     t4, s4 = ev("video", "hand-over", m4), ev("native", "start", m4)
                     self.ho_events.append(("file, pressed again", ", ".join("%s>%s" % (r.get("type"), r.get("tgt")) for r in self.lab.since(r4) if r.get("kind") == "ap" and r.get("ev") == "evt") or "nothing at all"))
                     check("file: pressed again with the page in front, Kestrel's own player takes the film again", bool(t4) and bool(s4), "hand-over lines %d, native start lines %d" % (len(t4), len(s4)))
