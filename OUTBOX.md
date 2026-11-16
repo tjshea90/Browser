@@ -2078,3 +2078,56 @@
 > - the 2-hour site-compatibility run, which is still running on the emulator
 > - the owner-only GitHub steps (private signing key, protected `release` environment)
 <!-- sha:efd2cdceb2f7 -->
+
+## 2026-11-16T01:13:55Z
+> alpha55 is out, with Kestrel's own full-screen video controls. They passed all 22 emulator checks on the real Firefox engine, but I haven't run them on your tablet.
+>
+> https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha55
+>
+> It installs over alpha54. Your points from message 49:
+>
+> - **Tap toggles the controls.** Each tap on the picture shows or hides them, and they hide on their own after 3.5 seconds while the film plays. They stay up while the film is paused, ended or buffering.
+> - **No controls after rotating.** The app now draws the controls over the picture, so they are the same in portrait and landscape and don't depend on the page's layout.
+> - **Seeking and buttons.** Double-tap the left or right side to jump 10 seconds, and double-tap the middle to play or pause. There are also play/pause and 10-second buttons, a seek bar you can drag with the time and length, mute, and a button to leave full screen.
+> - **Navigation bar covering the controls.** With the default setting (bars kept) nothing can cover them. With "Hide", the controls keep room for the navigation bar you pull up.
+> - **"4 seconds" length.** A streamed film's length only shows once it has stayed the same for 2 seconds. Live streams say LIVE.
+> - **Stretched picture.** A film whose box has another shape than its picture is now shown whole.
+> - **The site's own bar.** It is put away while Kestrel's controls show, so there is one set of controls. I added Yahoo Finance's player bar to that list.
+> - **Slow and laggy.** I made the controls lighter (they redraw only when something shown changed, and the page reports once a second while they're hidden). I couldn't find or prove a cause, so I can't say it's fixed.
+> - **Rotation.** The slow, glitchy rotation was addressed in alpha52–54, not in this release.
+> - **Research.** The notes on how YouTube-style players, Chrome and Firefox do this are in `research/VIDEO_PLAYER_AUDIT.md`.
+>
+> The emulator found three real bugs, now fixed:
+>
+> - The page's address overwrote the film's "paused" flag, so the app thought every film was playing.
+> - A second press on the play button could repeat the first.
+> - Android 10 gives no signal when the navigation bar is pulled up over a film.
+>
+> An independent code review also found 12 more problems, and I fixed all of them. For testing: 479 browser-script tests and the Kotlin tests pass, and I probed the live Yahoo player in a headless browser.
+>
+> What I did not test on your tablet:
+>
+> - speed and smoothness, since the emulator's engine is much faster than yours
+> - the real navigation bar
+> - your hotspot
+> - YouTube's own player
+>
+> On the emulator, Yahoo's bar was still visible after a turn in the last run that opened the live player. I then hid its player bar, and a headless-browser check on the live page confirmed that. The last two emulator runs didn't open that player, so it isn't re-confirmed in Firefox.
+>
+> One trade-off: caption and quality buttons that sit inside a site's own bar go away with it. "Settings > Full-screen video controls > the page's own" brings them back for those. I can add a captions button to Kestrel's controls if you want one.
+>
+> Please try a video in full screen (tap, double-tap, turn the tablet, pause, drag the seek bar), then send me these Diagnostics lines:
+>
+> - Full-screen video controls
+> - Turning under a video
+> - Full-screen page size
+> - CPU by process
+>
+> Still open:
+>
+> - your tablet test of alpha55
+> - your tablet report on alpha53/54 (Diagnostics lines "Turning under a video", "Full-screen page size" and "Full-screen system bars")
+> - the captions-button question
+> - the 2-hour compat emulator run, which I dispatched and will read when it ends
+> - the three GitHub settings only you can change: a private signing key, a protected `release` environment, and the pin-actions-to-a-commit-SHA policy
+<!-- sha:643319a2f82c -->
