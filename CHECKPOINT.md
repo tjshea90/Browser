@@ -1,22 +1,22 @@
-# CHECKPOINT 2543 — read me first, then TASKS.md
+# CHECKPOINT 2544 — read me first, then TASKS.md
 
-**Written:** 2026-11-16T18:04:36Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `49771a07` (this checkpoint is the commit after it)
+**Written:** 2026-11-16T18:06:02Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `6537ebb9` (this checkpoint is the commit after it)
 
 ## Just done
-lab touch fix coded (not yet run): raw dd finger paths never reached the app in gp/gv runs 43918159286 + 43921764750, so hold+drag seek and the inline level drags were never proven; Phone.motion_path (input motionevent) + touch-probe.txt + way probe in gp_scene, vertical drags back to input swipe with photos, pv scene checks the tab ids (privtab/normtab log tab=N), BrowserActivity.onDestroy logs 'life destroy finishing= config=' and a non-finishing destroy keeps the process 2 min (cancelled by the next onCreate); compile + selftest green
+dispatched lab gv run 43925029376 (head 3c1b38d8: input motionevent finger path, touch-probe.txt, pv tab ids, life destroy log); release note ALPHA60 has the private/regular tab, challenge-frame paragraphs (TESTED_PLACEHOLDER still to fill); JVM unit suites running in the background
 
 ## Do this next
-1) dispatch lab gv (android.yml app=lab lab_suite=gv) on this head and read touch-probe.txt + report; fix what it shows; 2) then lab vp; 3) ship alpha60 (note TESTED_PLACEHOLDER + private/regular tab paragraph); 4) answer owner 55, 57, 58, 59.
+1) when run 43925029376 ends (about 18:13Z): download emulator-lab-text (artifacts via mcp__github__actions_list list_workflow_run_artifacts, then download_workflow_run_artifact + python3 -I tools/emu/fetch_artifact.py), read touch-probe.txt + report.md (gp A/B hold+drag seek, volume/brightness, pv private+regular tab ids); fix what it shows; 2) lab vp (all video suites) once gv is green; 3) web tests (cd web-tests && npm test) + JVM suites on the final head; 4) ship alpha60: versionCode 161 / 0.3.0-alpha60, tools/sync-ext-version.sh, fill TESTED_PLACEHOLDER in docs/handoff/ALPHA60_RELEASE_NOTE.txt, bash ship.sh gecko, ONE dispatch, record-release.sh; 5) answer owner 55, 57, 58, 59.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M TASKS.md
-     M research/ANS57_VLC_GESTURES.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  3c1b38d8 ckpt 2543: lab touch fix coded (not yet run): raw dd finger paths never reached the app
   dcf083e4 ckpt 2542: ANS59a coded: regular tabs are not put to sleep by a trip to another app eit
   421a0dd9 ckpt 2541: owner message 59 written into TASKS.md (ANS59a-b): 'It should work for regul
   66aa33a7 ckpt 2540: ANS58a/b first cheap measure: kestrel-shields manifest exclude_matches for t
@@ -26,8 +26,7 @@ lab touch fix coded (not yet run): raw dd finger paths never reached the app in 
   3fb0e402 ckpt 2536: ANS57 lab scene: the gesture info and the level bars are now photographed wh
   9a20b91e ckpt 2535: ANS57 lab gp run 1 (43918159286): volume / brightness drags, dead zone, plai
   e3cd26c4 ckpt 2534: ANS57: lab suite gp DISPATCHED: run 43918159286 (head 55e61f02, started 17:2
-  55e61f02 ckpt 2533: ANS57 coded end to end + lab scene written: gp suite (soak.py gp_scene: A = 
 ```
 
-(8 automatic checkpoint(s) since the last deliberate one — the
+(1 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
