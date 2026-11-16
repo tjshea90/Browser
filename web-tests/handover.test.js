@@ -177,6 +177,8 @@ test('a question that a script of the page makes up is not relayed while nobody 
   await settle(quiet, 700);
   assert.equal((await vhand(quiet)).length, 0, 'no touch, no relay');
   const touched = await open(FORGE, GUARD_HO, 'yes');
+  await settle(touched, 500);                                                      // (the page's own timer has fired by now: nobody had touched the page yet)
+  assert.equal((await vhand(touched)).length, 0);
   await tapOn(touched, '#x'); await touched.evaluate(() => forge(8)); await settle(touched, 500);
   assert.equal((await vhand(touched)).length, 1, 'after a real tap the document may ask (the app then wants a finger of its own)');
 });
@@ -191,12 +193,12 @@ test('Mute, Share or Get started over the picture is no play control: no questio
   assert.equal((await vhand(page)).length, 1, 'the Play button still asks');
 });
 
-test('players that name their play control with the word play ask first: aria-label, class and id', async () => {
+test('players that name their play control with the word play ask first: aria-label, class, id and title', async () => {
   for (const attrs of ['aria-label="Play video"', 'class="vjs-big-play-button"', 'id="PlayButton"', 'title="Play"']) {
-    const html = PLAYER.replace('<button id="btn"', '<button ' + attrs + ' id="btn2"').replace('>Play</button>', '></button>');
+    const html = '<div id="player" style="position:relative;width:320px;height:180px"><video id="v" src="https://cdn.example/a.wav" style="display:block;width:320px;height:180px"></video><button ' + attrs + ' style="position:absolute;left:100px;top:60px;width:120px;height:60px"></button></div>';
     const page = await open(html, GUARD_HO, 'yes');
     await settle(page, 300);
-    await tapOn(page, '#btn2'); await settle(page, 500);
+    await tapOn(page, 'button'); await settle(page, 500);
     assert.equal((await vhand(page)).length, 1, attrs);
   }
 });
