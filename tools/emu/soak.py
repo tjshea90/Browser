@@ -324,7 +324,7 @@ class Phone:
 
     # ---- ANS57 lab: a finger that RESTS first and then moves (`input swipe` cannot rest).
     # Lab runs 43918159286 and 43921764750 (2026-11-16): every path written with dd to the touch device (raw_path) became NO event in the app - not even a vertical drag, which needs no timer - while `input swipe` always
-    # reached it; the earlier guess (a late timer on a busy UI thread) was wrong. touch-probe.txt (artifact) now says what this Android has. The way that works is `input motionevent` (Android 10 has it): DOWN, a rest, MOVEs, UP,
+    # reached it; the earlier guess (a late timer on a busy UI thread) was wrong. diagnostics-touch.txt (artifact) now says what this Android has. The way that works is `input motionevent` (Android 10 has it): DOWN, a rest, MOVEs, UP,
     # each a process of its own (the events carry the moment they were made, 150-400 ms apart), so the path is a few steps only. The raw way stays as the second choice.
     touch_pref = None
     touch_log = []
@@ -370,7 +370,7 @@ class Phone:
         return "raw"
 
     def touch_probe(self, outdir):
-        """touch-probe.txt: the touch devices, what `input` knows, and whether the kernel hands a raw event to a reader (getevent) - the facts behind 'which way reaches the app'."""
+        """diagnostics-touch.txt: the touch devices, what `input` knows, and whether the kernel hands a raw event to a reader (getevent) - the facts behind 'which way reaches the app'."""
         lines = []
         dev = self.touch_dev()
         lines.append("touch_dev(): %s" % (dev,))
@@ -397,10 +397,10 @@ class Phone:
             lines.append("--- loopback: 8 raw events written to %s while getevent listened ---" % path)
             lines.append((self.a.sh(shell, timeout=40) or "")[:2000])
         try:
-            with open(os.path.join(outdir, "touch-probe.txt"), "w") as fh:
+            with open(os.path.join(outdir, "diagnostics-touch.txt"), "w") as fh:
                 fh.write("\n".join(lines) + "\n")
         except Exception as e:
-            say("touch-probe.txt not written:", e)
+            say("diagnostics-touch.txt not written:", e)
 
     def hogs_running(self):
         """How many of our busy loops are alive (ps), so the report can say whether the emulator was really slowed down."""
@@ -2687,7 +2687,7 @@ class Soak:
         self.ph.physical(0, 9.81, 0); self.ph.debug("vpress", "1"); self.ph.debug("webmode", "0"); time.sleep(2.5)
         self.ph.a.sh("media volume --stream 3 --set 4 2>/dev/null", timeout=15)
         sw, sh = self.screen
-        self.ph.touch_probe(self.out)                                              # touch-probe.txt: what this Android's touch devices and `input` offer
+        self.ph.touch_probe(self.out)                                              # diagnostics-touch.txt: what this Android's touch devices and `input` offer
         def double_tap(x, y):
             self.ph.a.sh("input tap %d %d & input tap %d %d & wait" % (x, y, x, y), timeout=30)
         def jumps(lines):
@@ -2752,7 +2752,7 @@ class Soak:
                 self.ph.touch_pref = way
                 break
         else:
-            self.issue("medium", "tooling", "the lab could not rest a finger on the glass (neither input motionevent nor the raw touch device reached the app): %s (touch-probe.txt)" % self.ph.touch_log[-3:])
+            self.issue("medium", "tooling", "the lab could not rest a finger on the glass (neither input motionevent nor the raw touch device reached the app): %s (diagnostics-touch.txt)" % self.ph.touch_log[-3:])
         # long press, then drag right: the precise seek; the film moves when the finger lets go
         m = self.log.size()
         with_shot("gp-A-4-seek-info-while-dragging", lambda: self.ph.hold_drag(self.screen, 150, 500, XCM, end_hold_s=3.0), 3.2); time.sleep(2.5)
