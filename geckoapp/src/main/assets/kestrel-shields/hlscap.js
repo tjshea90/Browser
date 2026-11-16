@@ -32,8 +32,11 @@
     for (i = 0; i < lines.length; i++) {
       var l = lines[i];
       if (l.indexOf(STREAM_INF) === 0) {
-        var u = lines[i + 1];
-        if (u !== undefined && u !== '' && u.charAt(0) !== '#') rungs.push({ at: i, n: 2, size: longSide(l), frame: false });
+        // the address is the next line that is neither blank nor a comment (hls.js reads it so; the spec says "immediately", sites are not always so careful); another stream tag first = this one has none
+        var j = i + 1, seen = 0;
+        while (j < lines.length && seen < 4 && (lines[j].replace(/\s+/g, '') === '' || (lines[j].charAt(0) === '#' && lines[j].indexOf(STREAM_INF) !== 0 && lines[j].indexOf(FRAME_INF) !== 0))) { j++; seen++; }
+        var u = lines[j];
+        if (u !== undefined && u.replace(/\s+/g, '') !== '' && u.charAt(0) !== '#') rungs.push({ at: i, n: j - i + 1, size: longSide(l), frame: false });
       } else if (l.indexOf(FRAME_INF) === 0) {
         rungs.push({ at: i, n: 1, size: longSide(l), frame: true });
       }

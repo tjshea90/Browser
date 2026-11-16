@@ -28,7 +28,7 @@
 
   var later = window.setTimeout;     // the page's own copy of the timer may be replaced later: this one is ours
   var policy = null;                 // null = not told yet (or told nonsense): every answer is the engine's own
-  var cache = {};                    // type string -> verdict ('' = not refused), so a player that asks the same thing a hundred times costs one parse; emptied when the policy changes
+  var cache = Object.create(null);   // type string -> verdict ('' = not refused), so a player that asks the same thing a hundred times costs one parse; emptied when the policy changes (no prototype: 'constructor' is a type string like any other)
   var cacheSize = 0;
   var asked = 0, refusedSize = 0, refusedMode = 0, refusedFps = 0, lastWord = '', reports = 0, timer = 0;
 
@@ -64,8 +64,10 @@
     return (lower.indexOf('video/webm') === 0) ? 'webm' : '';
   }
   function hint(lower, name) {
-    var m = new RegExp(';\\s*' + name + '\\s*=\\s*"?(\\d+(?:\\.\\d+)?)').exec(lower);
-    return m ? +m[1] : 0;
+    var m = new RegExp(';\\s*' + name + '\\s*=\\s*"?(\\d+(?:\\.\\d+)?)(?:\\s*/\\s*(\\d+(?:\\.\\d+)?))?').exec(lower);
+    if (!m) return 0;
+    var v = m[2] ? (+m[1]) / (+m[2]) : +m[1];                  // a fraction such as framerate=30000/1001 is 29.97 (review of alpha57: read as 30000 it refused every format)
+    return v > 0 && v < 1e6 ? v : 0;
   }
   function over(lim, w, h, fps) {
     if (!(w > 0 && h > 0)) return false;                      // no size told: nothing to judge
@@ -96,7 +98,7 @@
       v = decide(kind, w, h, f);
       if (v) v = v + '|' + kind + (w > 0 && h > 0 ? ' ' + w + 'x' + h : '') + (f > 0 ? '@' + (Math.round(f * 10) / 10) : '');
     }
-    if (cacheSize >= 200) { cache = {}; cacheSize = 0; }
+    if (cacheSize >= 200) { cache = Object.create(null); cacheSize = 0; }
     cache[key] = v; cacheSize++;
     return v;
   }
@@ -190,9 +192,9 @@
     document.addEventListener(CFG_EVENT, function (e) {
       try {
         var d = e && e.detail;
-        if (d === '') { policy = null; cache = {}; cacheSize = 0; return; }   // told "none": the engine answers everything
+        if (d === '') { policy = null; cache = Object.create(null); cacheSize = 0; return; }   // told "none": the engine answers everything
         var p = parsePolicy(d);
-        if (p) { policy = p; cache = {}; cacheSize = 0; }                    // nonsense (also from the page itself) keeps what was told before
+        if (p) { policy = p; cache = Object.create(null); cacheSize = 0; }   // nonsense (also from the page itself) keeps what was told before
       } catch (x) { /* keep what was told before */ }
     }, true);
     document.dispatchEvent(new CustomEvent(READY_EVENT));

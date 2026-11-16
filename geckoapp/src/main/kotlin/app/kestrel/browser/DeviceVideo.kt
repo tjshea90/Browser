@@ -111,7 +111,7 @@ object DeviceVideo {
         val maxW = vc.supportedWidths.upper
         val maxH = vc.supportedHeights.upper
         var best: VideoLimits.Limit? = null
-        for ((w, h) in listOf(640 to 360, 1280 to 720, 1920 to 1080)) {
+        for ((w, h) in listOf(640 to 360, 1280 to 720, 1920 to 1080, maxW to maxH)) {      // (the largest size too: a vendor's frame rate cap can bind at all the small ones and the largest shows the block rate)
             if (!vc.isSizeSupported(w, h)) continue
             val l = VideoLimits.Limit.of(maxW, maxH, w, h, vc.getSupportedFrameRatesFor(w, h).upper) ?: continue
             if (best == null || l.blocksPerSecond > best.blocksPerSecond) best = l

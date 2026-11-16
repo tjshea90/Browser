@@ -850,6 +850,8 @@ function hlsWrite(f, chunks) { for (var i = 0; i < chunks.length; i++) f.write(c
 browser.webRequest.onHeadersReceived.addListener(function (d) {
   try {
     if (!(hlsCap > 0) || d.statusCode !== 200 || d.method !== 'GET' || d.tabId < 0) return {};
+    var rh = d.responseHeaders || [], i;
+    for (i = 0; i < rh.length; i++) if (rh[i].name.length === 14 && rh[i].name.toLowerCase() === 'content-length') { var cl = parseInt(rh[i].value, 10); if (cl > HLS_MAX_BYTES) { hls.seen++; hls.big++; markStats(); return {}; } }   // it says it is big: not a master list, not held for a moment
     var f = browser.webRequest.filterResponseData(d.requestId), chunks = [], total = 0, rest = false, cap = hlsCap;
     hls.seen++; markStats();
     f.ondata = function (e) {
@@ -880,7 +882,7 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
     f.onerror = function () { hls.err++; try { f.disconnect(); } catch (x) { /* gone */ } };
   } catch (e) { hls.err++; }
   return {};
-}, { urls: ['http://*/*.m3u8*', 'https://*/*.m3u8*'], types: ['xmlhttprequest', 'media', 'other'] }, ['blocking']);
+}, { urls: ['http://*/*.m3u8*', 'https://*/*.m3u8*'], types: ['xmlhttprequest', 'media', 'other'] }, ['blocking', 'responseHeaders']);
 
 // What the page's own <video> says about the file it plays (picture size, length, the label next to a <source>): relayed by content.js.
 browser.runtime.onMessage.addListener(function (m) {
