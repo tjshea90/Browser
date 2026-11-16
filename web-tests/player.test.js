@@ -350,8 +350,6 @@ test('VP1: a page whose reports the app does not take (a = 0 four times) puts it
   await page.waitForFunction(() => window.KestrelVP.active() === false, null, { timeout: 5000 });
   assert.equal(await disp(page, 'yt'), 'block', 'the page\'s own bar is back');
   assert.equal(await page.evaluate(() => document.getElementById('v').controls), true);
-  await page.touchscreen.tap(250, 400); await wait(page, 150);
-  assert.ok((await clicks(page)).length === 0 || true);                              // (the CHROME page has no click recorder: the point is that the session is over)
   await page.context().close();
 });
 
