@@ -1830,7 +1830,7 @@ class Soak:
         lm = self.log.size()
         ev = lambda layer, name, since=None: health_events(self.log.since(lm if since is None else since), layer, name)
         if hls:
-            self.ph.debug("nativeurl", "%s/hls/film/master.m3u8" % self.lab_base)  # the HLS film of the lab server (an address of the lab server only: the intent refuses any other)
+            self.ph.debug("nativeurl", "%s/hls/film/master.m3u8" % self.lab_base.replace("localhost", "127.0.0.1"))  # the HLS film of the lab server (the intent takes only 127.0.0.1 / 10.0.2.2: lab run 43812820865 lost the whole HLS scene to "localhost")
         else:
             self.ph.debug("nativeplay")
         t_end = time.time() + 25
@@ -1895,7 +1895,7 @@ class Soak:
         if hls:
             # ANS53d.2 (owner message 53: a quality button in the page's own controls): the page's list hands the film over with a pick; the lab drives the same launch (an address of the lab server + the pick as text)
             m = self.log.size()
-            self.ph.debug("nativeurl", "%s/hls/film/master.m3u8" % self.lab_base, pick="320,180,0,0")
+            self.ph.debug("nativeurl", "%s/hls/film/master.m3u8" % self.lab_base.replace("localhost", "127.0.0.1"), pick="320,180,0,0")
             t_end = time.time() + 25
             while time.time() < t_end and not ev("native", "pick-applied", m):
                 time.sleep(1)
