@@ -24,6 +24,28 @@ class ControlsMachineTest {
     /** What the app's timer does: wait [ms], then tick if a tick was asked for. */
     private fun Host.wait(c: ControlsMachine, ms: Long) { clock += ms; if (scheduled != null) { scheduled = null; c.tick() } }
 
+    @Test fun aTapShowsAndHidesTheControlsAtOnceWithoutAFade() {
+        val h = Host(); val c = m(h)
+        h.applies.clear()
+        c.tap(); assertEquals("ANS53c (owner message 53: zero delay): a hiding tap is at once, no fade", listOf("hide"), h.applies)
+        h.applies.clear()
+        c.tap(); assertEquals("and a showing tap is at once as well", listOf("show"), h.applies)
+        // the clock's own hide keeps the fade
+        h.wait(c, PlayerRules.HIDE_AFTER_MS)
+        assertEquals(listOf("show", "hide+fade"), h.applies)
+    }
+
+    @Test fun restoreGivesBackWhatAnAnsweredTapChanged() {
+        val h = Host(); val c = m(h)
+        c.tap(); assertFalse(h.shown)
+        c.restore(true); assertTrue("the tap was on a button of the page: they are back", h.shown)
+        c.restore(true); assertTrue("restoring what already is does nothing", h.shown)
+        c.tap(); assertFalse(h.shown); c.tap(); assertTrue(h.shown)
+        c.restore(false); assertFalse("and the other way round", h.shown)
+        c.turnStarted(); h.applies.clear(); c.restore(true)
+        assertTrue("under the cover of a turn nothing comes back", h.applies.isEmpty())
+    }
+
     @Test fun fullScreenShowsTheControlsAndAPlayingFilmHidesThemByItself() {
         val h = Host(); val c = m(h)
         assertTrue(h.shown); assertEquals(PlayerRules.AFTER_ENTER_MS, h.scheduled)
