@@ -219,9 +219,9 @@ class PlayerGesturesTest {
     @Test fun aRestingFingerIsToldWhatItCanDoAtThatPlaceAndLettingGoIsNoTap() {
         val h = Host(); val g = PlayerGestures(h, full())
         g.down(150f, 300f); g.wait(h, 360)
-        assertEquals(listOf(GestureHint.BRIGHTNESS), h.shown); assertEquals("no tick: nothing is armed", 0, h.ticks); assertFalse(g.active)
+        assertEquals(listOf(GestureHint.BRIGHTNESS), h.shown); assertEquals("no tick: nothing is armed", 0, h.ticks); assertTrue("a rest that was told its hint is the film's: a page must not take it for a tap of its own", g.active)
         g.wait(h, 100); g.up(150f, 300f)
-        assertEquals("the hint goes when the finger lets go", null, h.hints.last().first); assertTrue("a press that was held is no tap", h.taps.isEmpty()); assertTrue(h.commits.isEmpty())
+        assertFalse(g.active); assertEquals("the hint goes when the finger lets go", null, h.hints.last().first); assertTrue("a press that was held is no tap", h.taps.isEmpty()); assertTrue(h.commits.isEmpty())
         val h2 = Host(); val g2 = PlayerGestures(h2, full()); g2.down(850f, 300f); g2.wait(h2, 360); assertEquals(listOf(GestureHint.VOLUME), h2.shown)
         val h3 = Host(); val g3 = PlayerGestures(h3, full()); g3.down(500f, 300f); g3.wait(h3, 360); assertEquals(listOf(GestureHint.SEEK), h3.shown)
     }

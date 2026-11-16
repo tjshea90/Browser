@@ -359,6 +359,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     private fun startPass() {
         passing = true
         main.removeCallbacks(longPressRun)
+        gestures?.abandon()                                                        // (the page has the finger now: no hint, no rest timer of ours)
         downCopy?.let { host?.toPage(it); it.recycle() }                   // the page never saw the finger go down: it is told now, then it gets every move
         downCopy = null
     }

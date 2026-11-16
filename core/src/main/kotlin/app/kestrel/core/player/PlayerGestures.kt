@@ -163,8 +163,8 @@ class PlayerGestures(private val h: Host, var cfg: Config) {
     private var hinted = false
     private var armedAt = 0L
 
-    /** A gesture of ours is going on (the host takes every touch until it ends). */
-    val active: Boolean get() = s == S.SCRUB || s == S.LEVEL || s == S.ARMED
+    /** A gesture of ours is going on (the host takes every touch until it ends); a finger that rests and has been told what it can do is ours too (a page that sees only a rest must not take it for a tap of its own). */
+    val active: Boolean get() = s == S.SCRUB || s == S.LEVEL || s == S.ARMED || (s == S.PENDING && hinted)
     /** The finger is on the glass and the touch has not been given away. */
     val tracking: Boolean get() = s != S.IDLE && s != S.PASSED && s != S.IGNORED
 

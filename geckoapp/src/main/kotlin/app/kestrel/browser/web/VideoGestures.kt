@@ -69,10 +69,13 @@ class VideoGestures(private val activity: Activity, private val s: Surface, priv
             MotionEvent.ACTION_MOVE -> engine.move(e.x, e.y, e.eventTime)
             MotionEvent.ACTION_UP -> engine.up(e.x, e.y, e.eventTime)
             MotionEvent.ACTION_CANCEL -> engine.cancel()
-            MotionEvent.ACTION_POINTER_DOWN -> if (engine.active) engine.cancel()           // a second finger ends our gesture (a pinch is not ours)
+            MotionEvent.ACTION_POINTER_DOWN -> { main.removeCallbacks(holdRun); engine.cancel() }      // a second finger ends our gesture, also a rest that was still undecided (a pinch is not ours)
         }
         return was || engine.active
     }
+
+    /** The touch was given to the page: our timer and our judgement of it end (no hint may appear over a page scroll). */
+    fun abandon() { main.removeCallbacks(holdRun); engine.cancel() }
 
     /** The view is going away or the film ended: nothing is left running. */
     fun stop() {
