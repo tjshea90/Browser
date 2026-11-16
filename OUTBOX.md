@@ -2175,3 +2175,7 @@
 ## 2026-11-16T18:09:42Z
 > Still waiting: the lab run is about 5 minutes in, and the web tests are still going. I'll read the report when the timer fires.
 <!-- sha:c47c9fb40b7a -->
+
+## 2026-11-16T18:09:51Z
+> Those were older timers firing; the lab run itself isn't finished. I'll hold until the 230-second timer completes and then read the artifacts.
+<!-- sha:eab33a3a0fcd -->
