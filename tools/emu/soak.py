@@ -2862,15 +2862,18 @@ class Soak:
         # ---- a PRIVATE tab
         m, rm = self.log.size(), self.lab.size()
         self.ph.debug("privtab", "%s/pv?v=pv&tag=pvp" % self.lab_base); time.sleep(9)
+        pid = (ev("lab", "privtab", m) or [{"kv": {}}])[-1]["kv"].get("tab")          # the new tab's id (the app says it: `tab=N`)
         r1 = cookie_rows(rm, "pvp")
         check("the private tab loaded the login page and was logged out the first time (no cookie yet)", bool(r1) and str(r1[-1].get("had")) == "0", "cookie rows %s" % [(r.get("had")) for r in r1])
         check("a private session anchor was opened with the first private tab ('tabs private-anchor opened')", any("opened" in e["rest"] for e in ev("tabs", "private-anchor", m)), "anchor lines %s" % [e["rest"][:40] for e in ev("tabs", "private-anchor", m)])
         self.shot("pv-1-private-logged-in")
         m2, rm2 = self.log.size(), self.lab.size()
         away_and_back("private")
-        kept = ev("tabs", "private-kept", m2); slept = ev("tabs", "hibernate", m2)
+        # (another, regular tab may be put to sleep by the live-tab budget: only THIS tab's id counts)
+        slept = [e for e in ev("tabs", "hibernate", m2) if e["kv"].get("tab") == pid]
+        trims = ev("mem", "trim", m2)
         r2 = cookie_rows(rm2, "pvp")
-        check("the app was left and Android asked for memory: the private tab was NOT put to sleep ('tabs private-kept', no 'tabs hibernate')", bool(kept) and not slept, "private-kept %d, hibernate %d, trim lines %s" % (len(kept), len(slept), [e["rest"][:40] for e in ev("mem", "trim", m2)][:3]))
+        check("the app was left and Android asked for memory (trim 20 / 60 / 80): the private tab (id %s) was NOT put to sleep (no 'tabs hibernate' line for it)" % pid, bool(pid) and len(trims) >= 3 and not slept, "private tab id %s, hibernate lines for it %d, trim lines %s" % (pid, len(slept), [e["rest"][:40] for e in trims][:3]))
         check("back in the app the private page was not reloaded (no second load) and so still logged in", not r2, "the page loaded again: cookie rows %s" % [(r.get("had")) for r in r2])
         self.shot("pv-2-private-after-trim")
         # a reload by the person: the cookie is still there (the engine kept the private login)
@@ -2881,6 +2884,7 @@ class Soak:
         # ---- ANS59 (owner message 59: "It should work for regular tabs in addition to private tabs"): a NORMAL tab is not put to sleep or reloaded by a quick trip to another app either
         m4, rm4 = self.log.size(), self.lab.size()
         self.ph.debug("normtab", "%s/pv?v=pv&tag=pvn" % self.lab_base); time.sleep(9)
+        nid = (ev("lab", "normtab", m4) or [{"kv": {}}])[-1]["kv"].get("tab")
         rn1 = cookie_rows(rm4, "pvn")
         check("a regular tab loaded the login page", bool(rn1), "no cookie rows")
         m5, rm5 = self.log.size(), self.lab.size()
