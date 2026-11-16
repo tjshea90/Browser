@@ -109,6 +109,8 @@ class Prefs private constructor(ctx: Context) {
     var videoGestures: Boolean get() = bool("video_gestures", true); set(v) = put("video_gestures", v)
     /** ANS60a (owner message 60: "make the seek, brightness, and volume gestures in the video player work without a long press"): false (default) = no long press anywhere; true = inside the page a plain drag scrolls the page and the gestures need the long press first (the alpha60 rule). */
     var videoGesturesHold: Boolean get() = bool("video_gestures_hold", false); set(v) = put("video_gestures_hold", v)
+    /** ANS60c (owner message 60: the quality list in the regular player size): the picture class the person picked in the player INSIDE the page (0 = none: Automatic, at most 480p in a small box); kept apart from the full-screen player's pick. */
+    var inlineMaxH: Int get() = sp.getInt("inline_max_h", 0).coerceIn(0, 2160); set(v) = put("inline_max_h", v.coerceIn(0, 2160))
     /** Protected video (Widevine DRM, Netflix-style players): 0 ask each time a site wants it (only when the device has Widevine), 1 never. */
     var videoDrm: Int get() = sp.getInt("vid_drm", 0).coerceIn(0, 1); set(v) = put("vid_drm", v.coerceIn(0, 1))
     /** Which codecs a site is offered: 0 automatic (not one that would run in software on this device), 1 H.264 only, 2 everything the engine can decode (core/media/VideoPolicy). */
