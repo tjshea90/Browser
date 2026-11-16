@@ -37,6 +37,17 @@
         "http://*/*",
         "https://*/*"
       ],
+      "exclude_matches": [
+        "https://challenges.cloudflare.com/*",
+        "https://*.hcaptcha.com/*",
+        "https://www.google.com/recaptcha/*",
+        "https://www.recaptcha.net/recaptcha/*",
+        "https://*.arkoselabs.com/*",
+        "https://*.funcaptcha.com/*",
+        "https://*.captcha-delivery.com/*",
+        "https://*.perimeterx.net/*",
+        "https://*.px-cloud.net/*"
+      ],
       "js": [
         "vfind.js",
         "content.js"
@@ -49,6 +60,17 @@
       "matches": [
         "http://*/*",
         "https://*/*"
+      ],
+      "exclude_matches": [
+        "https://challenges.cloudflare.com/*",
+        "https://*.hcaptcha.com/*",
+        "https://www.google.com/recaptcha/*",
+        "https://www.recaptcha.net/recaptcha/*",
+        "https://*.arkoselabs.com/*",
+        "https://*.funcaptcha.com/*",
+        "https://*.captcha-delivery.com/*",
+        "https://*.perimeterx.net/*",
+        "https://*.px-cloud.net/*"
       ],
       "js": [
         "guard-main.js"
@@ -64,6 +86,17 @@
         "http://*/*",
         "https://*/*"
       ],
+      "exclude_matches": [
+        "https://challenges.cloudflare.com/*",
+        "https://*.hcaptcha.com/*",
+        "https://www.google.com/recaptcha/*",
+        "https://www.recaptcha.net/recaptcha/*",
+        "https://*.arkoselabs.com/*",
+        "https://*.funcaptcha.com/*",
+        "https://*.captcha-delivery.com/*",
+        "https://*.perimeterx.net/*",
+        "https://*.px-cloud.net/*"
+      ],
       "js": [
         "gate-main.js"
       ],
@@ -78,6 +111,17 @@
         "http://*/*",
         "https://*/*"
       ],
+      "exclude_matches": [
+        "https://challenges.cloudflare.com/*",
+        "https://*.hcaptcha.com/*",
+        "https://www.google.com/recaptcha/*",
+        "https://www.recaptcha.net/recaptcha/*",
+        "https://*.arkoselabs.com/*",
+        "https://*.funcaptcha.com/*",
+        "https://*.captcha-delivery.com/*",
+        "https://*.perimeterx.net/*",
+        "https://*.px-cloud.net/*"
+      ],
       "js": [
         "codec-main.js"
       ],
@@ -91,6 +135,17 @@
       "matches": [
         "http://*/*",
         "https://*/*"
+      ],
+      "exclude_matches": [
+        "https://challenges.cloudflare.com/*",
+        "https://*.hcaptcha.com/*",
+        "https://www.google.com/recaptcha/*",
+        "https://www.recaptcha.net/recaptcha/*",
+        "https://*.arkoselabs.com/*",
+        "https://*.funcaptcha.com/*",
+        "https://*.captcha-delivery.com/*",
+        "https://*.perimeterx.net/*",
+        "https://*.px-cloud.net/*"
       ],
       "js": [
         "scriptlets-main.js"
@@ -119,6 +174,17 @@
         "https://*/*"
       ],
       "exclude_matches": [
+        "https://challenges.cloudflare.com/*",
+        "https://*.hcaptcha.com/*",
+        "https://www.google.com/recaptcha/*",
+        "https://www.recaptcha.net/recaptcha/*",
+        "https://*.arkoselabs.com/*",
+        "https://*.funcaptcha.com/*",
+        "https://*.captcha-delivery.com/*",
+        "https://*.perimeterx.net/*",
+        "https://*.px-cloud.net/*"
+      ],
+      "exclude_matches": [
         "*://*.youtube.com/*",
         "*://*.youtube-nocookie.com/*",
         "*://*.youtubekids.com/*"
@@ -135,6 +201,17 @@
         "http://*/*",
         "https://*/*"
       ],
+      "exclude_matches": [
+        "https://challenges.cloudflare.com/*",
+        "https://*.hcaptcha.com/*",
+        "https://www.google.com/recaptcha/*",
+        "https://www.recaptcha.net/recaptcha/*",
+        "https://*.arkoselabs.com/*",
+        "https://*.funcaptcha.com/*",
+        "https://*.captcha-delivery.com/*",
+        "https://*.perimeterx.net/*",
+        "https://*.px-cloud.net/*"
+      ],
       "js": [
         "seekbar.js"
       ],
@@ -146,6 +223,17 @@
       "matches": [
         "http://*/*",
         "https://*/*"
+      ],
+      "exclude_matches": [
+        "https://challenges.cloudflare.com/*",
+        "https://*.hcaptcha.com/*",
+        "https://www.google.com/recaptcha/*",
+        "https://www.recaptcha.net/recaptcha/*",
+        "https://*.arkoselabs.com/*",
+        "https://*.funcaptcha.com/*",
+        "https://*.captcha-delivery.com/*",
+        "https://*.perimeterx.net/*",
+        "https://*.px-cloud.net/*"
       ],
       "js": [
         "vfind.js",
