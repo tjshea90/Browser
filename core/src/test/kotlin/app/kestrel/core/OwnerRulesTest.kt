@@ -447,7 +447,7 @@ class OwnerRulesTest {
         assertTrue("declared in the page's own world, every frame, from the first script", manifest.substringAfter("\"gate-main.js\"").substringBefore("}").let { it.contains("\"world\": \"MAIN\"") && it.contains("\"all_frames\": true") && it.contains("\"run_at\": \"document_start\"") })
         val gate = source(dir + "gate-main.js")
         assertTrue("a MediaSource source is held, play() without an activation is refused like the engine would, preload is none, autoplay is not applied", gate.contains("isBlob(v)") && gate.contains("NotAllowedError") && gate.contains("s.call(this, 'none')") && gate.contains("openEl(this, 'play')"))
-        assertTrue("a real tap on the picture and Kestrel's own controls open an element; a stream is never held", gate.contains("pressAt(e.clientX, e.clientY)") && gate.contains("OPEN_EVENT") && gate.contains("rec(this).open = true"))
+        assertTrue("a real tap on the picture and Kestrel's own controls open an element; a stream is never held", gate.contains("pressAt(e.clientX, e.clientY, tg)") && gate.contains("OPEN_EVENT") && gate.contains("r.open = true"))
         assertTrue("closed until the content script says the rule is off", gate.contains("var on = true;") && gate.contains("d === '0'"))
         for (f in listOf("content.js", "videobar.js", "player.js")) assertTrue("$f tells the gate before its own play()", source(dir + f).contains("gate("))
         assertTrue("the content script hands over the rule (gt) and relays seven checked numbers", source(dir + "content.js").let { it.contains("r.gt === false") && it.contains("p.length !== 7") && it.contains("k: 'vgt'") })
