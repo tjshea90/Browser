@@ -1538,3 +1538,15 @@ Figure out what other browsers do for video acceleration and smooth video inside
 ```
 The rotation from portrait to landscape is still very laggy and glitchy and resizes to the wrong size for a long pause. The video itself was very laggy in full screen. When I rotated to landscape, the Android symbols at the top such as the battery and wifi symbols were stuck in the middle of the screen and the video was cropped to about the same point for several moments
 ```
+
+## 2026-11-16T04:59:28Z
+```
+ The video player is much better now on alpha56. Build the following:
+1) the site automatically loaded and started playing the video. This is bad. Never, on any site, ever, anywhere in the app, automatically load a video and start playing it. Only play a video if I press the play button on the video. 
+2) videos should not be downloaded or buffered at all until I press the play button. No data should ever be used downloading or buffering videos on web sites unless I press play. Only the usual picture/frame of the video that usually shows on web sites should be downloaded, like other browsers do. 
+3) when I press on the video to bring up the player controls, there is a delay. Make them pop up immediately, zero delay. When I press on a video that is playing, the controls should come up instantly. When I press on the video again, the controls should disappear instantly. 
+4) put a setting for video quality in the player controls for as many videos as possible. My hardware can't handle the Yahoo video smoothly, it should be good to have a quality setting to change as many quality options as available, such as resolution, bitrate, and frames per second. 
+1) I'm on the home screen, yet the video download button is lit up for a web page I'm no longer on. This was already supposed to be fixed. Only show downloadable videos for the page I'm currently viewing. When I navigate away from that page, the downloadable videos should drop out of the list and only downloadable videos from the current site should be added to the list. 
+2) I did the "play in kestrel's player" test while my tablet was in portrait orientation. The video opened Fullscreen in portrait orientation but stretched vertically so the aspect ratio was wrong, but then quickly switched to landscape, even though my tablet was being held in portrait orientation. It should have played in portrait. There was no option to go from the landscape mode to portrait. Even rotating the tablet didn't change it. 
+3) other than the errors above, the "play in kestrel's player" test was very smooth. The video played well and noticeably smoother than when it was inside the website. 
+```
