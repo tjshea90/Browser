@@ -31,7 +31,7 @@
   var dirty = false, timer = 0, reportsLeft = 6, lastGesture = 0;
   var REFUSED = 'The play method is not allowed by the user agent or the platform in the current context, possibly because the user denied permission.';
 
-  function rec(el) { var r = recs.get(el); if (!r) { r = { open: false, src: null, hasSrc: false, preload: null, hasPreload: false, autoplay: false, hasAutoplay: false, load: false, tracked: false, adopted: false }; recs.set(el, r); } return r; }
+  function rec(el) { var r = recs.get(el); if (!r) { r = { open: false, src: null, hasSrc: false, preload: null, hasPreload: false, autoplay: false, hasAutoplay: false, load: false, tracked: false, adopted: false, forced: false }; recs.set(el, r); } return r; }
   function peek(el) { try { return recs.get(el); } catch (e) { return undefined; } }
   function isBlob(v) { return typeof v === 'string' ? /^blob:/i.test(v) : (v !== null && v !== undefined && /^blob:/i.test(String(v))); }
   function isMediaEl(x) { return !!x && x.nodeType === 1 && (x.nodeName === 'VIDEO' || x.nodeName === 'AUDIO'); }
@@ -104,6 +104,8 @@
     r.open = true; N.opened++; N[why] = (N[why] || 0) + 1;
     try {
       if (r.hasPreload) { if (dPreload) dPreload.set.call(el, r.preload); else oSetAttr.call(el, 'preload', r.preload); }
+      else if (r.forced) { oRemoveAttr.call(el, 'preload'); }                               // the page said nothing: the engine's own default again
+      r.forced = false;
       if (r.hasSrc) { var s = r.src; r.hasSrc = false; r.src = null; r.load = false; if (dSrc) dSrc.set.call(el, s); else oSetAttr.call(el, 'src', s); }
       else if (r.load) { r.load = false; oLoad.call(el); }
     } catch (e) { /* the page decides */ }
@@ -130,6 +132,7 @@
         try {
           if (on && isMediaEl(this)) {
             var r = rec(this);
+            if (!r.open && !r.adopted) adopt(this);
             if (!r.open && isBlob(v)) { r.src = String(v); r.hasSrc = true; N.deferred++; track(this); touch(); return; }
             if (r.hasSrc && !isBlob(v)) { r.hasSrc = false; r.src = null; }
           }
@@ -174,6 +177,7 @@
           var r = rec(this);
           if (!r.open) {
             var n = String(name).toLowerCase();
+            if (!r.adopted && (n === 'src' || n === 'autoplay')) adopt(this);
             if (n === 'src' && isBlob(value)) { r.src = String(value); r.hasSrc = true; N.deferred++; track(this); touch(); return; }
             if (n === 'preload') { r.preload = String(value); r.hasPreload = true; track(this); return orig.call(this, 'preload', 'none'); }
             if (n === 'autoplay') { r.autoplay = true; r.hasAutoplay = true; track(this); return; }
@@ -191,7 +195,7 @@
   });
   defMethod(proto, 'load', function (orig) {
     return function () {
-      try { if (on && isMediaEl(this)) { var r = rec(this); if (!r.open) { r.load = true; track(this); touch(); return; } } } catch (e) { /* the engine decides */ }
+      try { if (on && isMediaEl(this)) { var r = rec(this); if (!r.open) { if (!r.adopted) adopt(this); r.load = true; track(this); touch(); return; } } } catch (e) { /* the engine decides */ }
       return orig.apply(this, arguments);
     };
   });
@@ -201,6 +205,7 @@
         if (on && isMediaEl(this)) {
           var r = rec(this);
           if (!r.open) {
+            if (!r.adopted) adopt(this);
             track(this);
             if (activation()) openEl(this, 'play');
             else { N.refused++; touch(); return Promise.reject(new DOMException(REFUSED, 'NotAllowedError')); }
@@ -221,7 +226,8 @@
     var changed = false;
     try {
       var p = oGetAttr.call(el, 'preload');
-      if (p !== null && String(p).toLowerCase() !== 'none') { r.preload = p; r.hasPreload = true; oSetAttr.call(el, 'preload', 'none'); changed = true; }
+      if (p === null) { oSetAttr.call(el, 'preload', 'none'); r.forced = true; }                     // (no attribute: the engine's default is `metadata`, which fetches bytes)
+      else if (String(p).toLowerCase() !== 'none') { r.preload = p; r.hasPreload = true; oSetAttr.call(el, 'preload', 'none'); changed = true; }
       if (oHasAttr.call(el, 'autoplay')) { r.autoplay = true; r.hasAutoplay = true; oRemoveAttr.call(el, 'autoplay'); changed = true; }
     } catch (e) { /* ignore */ }
     if (changed) { N.held++; touch(); }
