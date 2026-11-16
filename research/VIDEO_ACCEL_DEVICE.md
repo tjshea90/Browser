@@ -28,7 +28,7 @@ Method: web sources read 2026-11-16; no code run, no device. DOCUMENTED = read i
 
 ## B. Gecko settings (defaults are Firefox 160 on Android; the tablet's read-back [D] agrees; names Kestrel already sets are not repeated)
 
-- DOCUMENTED: the name "media.suspend-bkgnd-video.*" does not exist; the real ones are media.suspend-background-video.enabled = true and .delay-ms = 10000 (background tabs only) [G4].
+- DOCUMENTED: "media.suspend-bkgnd-video.*" does not exist; the real names are media.suspend-background-video.enabled = true and .delay-ms = 10000 (background tabs only) [G4].
 - DOCUMENTED: Java MediaCodec decoders are tried first (media.android-media-codec.enabled and .preferred = true on release; preferred inserts the Java module before ffvpx) [G5 G7]. RDD (media.rdd-process.enabled), GPU decoding (media.gpu-process-decoder) and the utility MediaCodec path are off on release Android; the utility process does audio only [G5]. The ":media" process is the Java MediaManager service [G9].
 - DOCUMENTED: a decoded frame is a SurfaceTexture; WebRender's render thread (GPU process) calls UpdateTexImage and samples the external texture without a copy [G8]; media.video-queue.send-to-compositor-size = 1 on Android because "SurfaceTexture contains only one" frame [G5]. A late render thread therefore delays or drops video directly.
 - DOCUMENTED [G4]: gfx.webrender.compositor = false and layer-compositor = false (native compositors are Windows, macOS, GTK only); gfx.webrender.software = false; program-binary-disk = true; max-partial-present-rects = 1; layers.gpu-process.enabled = true (read once at start); layout.frame_rate = -1 (vsync).
