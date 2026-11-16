@@ -451,7 +451,7 @@ class OwnerRulesTest {
         assertTrue("closed until the content script says the rule is off", gate.contains("var on = true;") && gate.contains("d === '0'"))
         for (f in listOf("content.js", "videobar.js", "player.js")) assertTrue("$f tells the gate before its own play()", source(dir + f).contains("gate("))
         assertTrue("the content script hands over the rule (gt) and relays seven checked numbers", source(dir + "content.js").let { it.contains("r.gt === false") && it.contains("p.length !== 7") && it.contains("k: 'vgt'") })
-        assertTrue("the background page reads flag 1024 and counts what was held", source(dir + "background.js").let { it.contains("gt: (f & 1024) !== 0") && it.contains("vg: vgtText()") })
+        assertTrue("the background page reads flag 1024 and counts what was held", source(dir + "background.js").let { it.contains("gt: !told || (f & 1024) !== 0") && it.contains("vg: vgtText()") })
         val bridge = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/ShieldsBridge.kt")
         assertTrue("flag 1024 follows the Settings switch only", bridge.contains("(if (prefs().videoPressToPlay) 1024 else 0)"))
         assertTrue("the engine is told: autoplay 5, preload none", source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoEngine.kt").let { it.contains("triInt(\"media.autoplay.default\", if (prefs.videoPressToPlay) 5 else null)") && it.contains("triInt(\"media.preload.default\"") && it.contains("triInt(\"media.preload.auto\"") })
