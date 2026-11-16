@@ -61,7 +61,7 @@ Local files: [L1] research/VIDEO_AUDIT.md section 9, [L2] research/TABLET_DIAG_2
 Stable 3.7.7 (2026-10-01), 4.0.0-eap29 in preview [D20]. The 3.7.6 AAR is 92,876,086 bytes with every ABI, so about 23 MB for armeabi-v7a [D20, I]. LGPL-2.1 [D21]; dependencies annotation 1.7.1, legacy-support-v4 1.0.0, kotlin-stdlib 2.2.10 [D21]; minSdk not found. Hardware decoding is MediaCodec directly [D22], so it cannot beat Media3. A 2017 report shows OMX.MTK HEVC choppy at 4K with "buffer deadlock prevented" [D22]. No headers or cookies by intent [D23]. Verdict: no.
 
 ## 4. ijkplayer / FFmpeg players
-README: LGPLv2.1 or later, FFmpeg n3.4, MediaCodec API 16+, Android API 9 to 23, tag k0.8.8; last commit 2021-04-26; the Gradle snippet is not on Maven Central (404) [D25]. Unmaintained, old FFmpeg, no benefit over Media3. Verdict: no.
+README: LGPLv2.1 or later, FFmpeg n3.4, MediaCodec API 16+, Android API 9 to 23, tag k0.8.8; last commit 2021-04-26; its artifact path is 404 on Maven Central [D25]. Unmaintained, old FFmpeg, no benefit over Media3. Verdict: no.
 
 ## 5. mpv-android
 MIT app, "not a library/module (AAR) you can import" [D26]. F-Droid APK 117 MiB (2026-09-17), 51 MiB in April; Android 6.0 or newer [D26]. Verdict: no.
