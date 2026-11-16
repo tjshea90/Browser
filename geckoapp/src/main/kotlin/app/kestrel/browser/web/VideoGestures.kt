@@ -46,7 +46,8 @@ class VideoGestures(private val activity: Activity, private val s: Surface, priv
     val levels = VideoLevels(activity)
     private val engine = PlayerGestures(this, config())
     private val holdRun = Runnable { engine.hold() }
-    private val clearInfo = Runnable { s.showInfo(null) }
+    private var pillWaiting = false                        // the jump text of the last seek is on the picture and clears itself after RESULT_MS
+    private val clearInfo = Runnable { pillWaiting = false; s.showInfo(null) }
     private var vol = -1f
     private var br = -1f
     private var committed = false
