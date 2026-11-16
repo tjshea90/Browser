@@ -2026,3 +2026,7 @@
 ## 2026-11-16T17:04:31Z
 > Draft release note for alpha60 is written, with the test results still to be filled in; waiting for the emulator run.
 <!-- sha:deed9114c4b6 -->
+
+## 2026-11-16T17:26:30Z
+> Waiting for the background tests and the emulator run to finish.
+<!-- sha:bc2e2601950b -->
