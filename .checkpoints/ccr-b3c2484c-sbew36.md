@@ -1,13 +1,13 @@
-# CHECKPOINT 2467 — read me first, then TASKS.md
+# CHECKPOINT 2468 — read me first, then TASKS.md
 
-**Written:** 2026-11-16T02:55:57Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `3b85ec83` (this checkpoint is the commit after it)
+**Written:** 2026-11-16T03:07:35Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `50719db2` (this checkpoint is the commit after it)
 
 ## Just done
-ANS52a/a2 CODED + tested: (a) BrowserActivity.holdGeckoView/releaseGeckoHold keep the engine's view at its OLD size for the first traversal of a turn that gets the cover, so the app window draws the cover and the bars at the new size at once and the blocking GeckoView resize (0.9-2 s on the tablet) happens behind the cover; TurnSettler.firstFrame + Health turn-first-frame + 'first frame at the new size' in the Diagnostics line; Host.resizePending keeps the cover while the view waits for its size; (a2) SILENT_MS 3 s -> 6 s and the 1 px nudge only for a page that spoke with a wrong size; kp lab scene gets 2 checks (turn-hold/released + first frame < 3 s); core + geckoapp suites green; research agents (browsers, third-party, device/rotation) and the alpha56 review agent still running
+independent review of the alpha56 diff (agent): 0 major, 6 minor, all fixed or noted (ANS51i): late automatic turn on the first report of EVERY full screen, only shadow-tree films add to Real video (player.js sh), FilmHealth re-baselines on impossible counter jumps (MAX_FPS 120), lateness via performance.now() + hidden pages skipped + relay clamp 60 s, private tab film size not logged (FullscreenTurner.isPrivate), page gives up on a=0 only after 4 refusals AND 8 s, vacuous late-word test fixed + 30 s boundary test; web player/background 112 pass; core + geckoapp suites green; research/VIDEO_ACCEL_BROWSERS.md arrived (Chrome overlay SurfaceView vs Gecko SurfaceTexture, GeckoView resize is a sync IPC = engine side, no browser freezes the page behind fullscreen, native SurfaceView player = only overlay route, hls.js quality cap off by default)
 
 ## Do this next
-(1) dispatch ONE kp lab run on this commit (app=lab lab_suite=kp; it replaces the pending run 43793291701 of the older commit; the compat run 43784927532 still holds the lab until ~03:25Z); (2) when the research agents report (research/VIDEO_ACCEL_BROWSERS.md, VIDEO_ACCEL_THIRDPARTY.md, VIDEO_ACCEL_DEVICE.md) write research/VIDEO_ACCELERATION.md = ranked plan + decisions, TASKS ANS52e rows, implement the cheap safe steps; (3) review agent a8e537c38b2ece4e6 findings -> verify, fix, test; (4) 03:30Z compat read (trig_019ZZh4wE2UHrvMLbwxEFmrV); then bump 157/alpha56, ship, record, final answers to messages 51 AND 52; send_later trig_015YaAfScTQXziSPN7zQ5u86 04:20Z; heartbeat trig_01Y8CFHKVb6hmQmEEM78p6gv
+(1) re-dispatch the kp lab run on this commit (app=lab lab_suite=kp; replaces the pending run of ckpt 2467; compat 43784927532 ends ~03:25Z and the kp run starts then, ~03:30Z); (2) wait for research/VIDEO_ACCEL_THIRDPARTY.md and VIDEO_ACCEL_DEVICE.md (agents afaefa37656873089, ad317141a0c1e1348), then write research/VIDEO_ACCELERATION.md (ranked plan with evidence) and TASKS ANS52e rows; (3) 03:30Z compat read (trig_019ZZh4wE2UHrvMLbwxEFmrV); (4) bump 157/alpha56 only after kp is green, ship, record, final answers to owner messages 51 and 52; send_later trig_015YaAfScTQXziSPN7zQ5u86 04:20Z; heartbeat trig_01Y8CFHKVb6hmQmEEM78p6gv
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ ANS52a/a2 CODED + tested: (a) BrowserActivity.holdGeckoView/releaseGeckoHold kee
 
 ## Last ten checkpoints
 ```
+  774f1e17 ckpt 2467: ANS52a/a2 CODED + tested: (a) BrowserActivity.holdGeckoView/releaseGeckoHold
   5235b647 ckpt 2466: owner message 52 (rotation still laggy / glitchy, status bar icons stuck in 
   609cad71 ckpt 2465: evidence file corrected (ONE full screen with four control sessions, three w
   82385186 ckpt 2464: ANS51h: no page-look read-back while a page is full screen (the tablet's log
@@ -25,7 +26,6 @@ ANS52a/a2 CODED + tested: (a) BrowserActivity.holdGeckoView/releaseGeckoHold kee
   36982a2b ckpt 2460: stuck-screen safety net (review F1 beyond the Settings toggle): the app's an
   0c425e84 ckpt 2459: owner message 50 (the alpha51 half of message 49 sent again: 'some of the fi
   7ee3a4a1 ckpt 2458: alpha55 RELEASED and recorded: Release kestrel-g-v0.3.0-alpha55 (run 4378408
-  90d4d6e8 ckpt 2457: gated kestrel-g-v0.3.0-alpha55 (gecko code 156) and pushed it: handoff self-
 ```
 
 (8 automatic checkpoint(s) since the last deliberate one — the
