@@ -11,8 +11,42 @@ import org.junit.Test
 /** ANS54e: which films a page hands to Kestrel's own player (owner message 54: "I want the web video players to use this"). */
 class WebHandOverTest {
     private fun el(src: String = "", blob: Boolean = false, mime: String = "", loop: Boolean = false, w: Int = 640, h: Int = 360, t: Double = 0.0, d: Double = 0.0) = Element(src, blob, mime, loop, w, h, t, d)
-    private val film = Known("https://v.example/film/master.m3u8", MediaKind.HLS, 600_000L, true)
-    private val unknownLength = Known("https://v.example/other/master.m3u8", MediaKind.HLS, 0L, true)
+    private val film = Known("https://v.example/film/master.m3u8", MediaKind.HLS, 600_000L, true, master = true)
+    private val unknownLength = Known("https://v.example/other/master.m3u8", MediaKind.HLS, 0L, true, master = true)
+
+    @Test fun aMasterBeatsTheRenditionListsNextToIt() {
+        // Yahoo / Brightcove (owner message 55: the player showed the time and a black picture): the master and, next to it, the lists of the picture, the sound and the subtitles, every one as long as the film. The
+        // shortest address used to win that tie and Kestrel's player was given the subtitles.
+        val master = Known("https://edge.api.example/playback/v1/videos/6408451794112/master.m3u8?token=abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnop", MediaKind.HLS, 163_000L, true, master = true, seenAt = 100)
+        val video = Known("https://manifest.example/v5/a/b/6s/rendition.m3u8?t=1", MediaKind.HLS, 163_000L, true, seenAt = 101)
+        val sound = Known("https://manifest.example/v5/a/c/6s/rendition.m3u8?t=2", MediaKind.HLS, 163_000L, true, seenAt = 102)
+        val subs = Known("https://manifest.example/v5/a/d/rendition.m3u8?t=3", MediaKind.HLS, 163_000L, true, seenAt = 103)
+        val d = WebHandOver.decide(WebHandOver.ALWAYS, Why.PRESS, el(blob = true), listOf(master, video, sound, subs))!!
+        assertEquals(master.url, d.url); assertEquals(true, d.note.contains("master"))
+        assertEquals("the order they were found in does not matter", master.url, WebHandOver.decide(WebHandOver.ALWAYS, Why.PRESS, el(blob = true), listOf(subs, sound, video, master))!!.url)
+        assertNull("only renditions known and no master: several bare lists are no film", WebHandOver.decide(WebHandOver.ALWAYS, Why.PRESS, el(blob = true), listOf(video, sound, subs)))
+        assertNull("a bare list that comes late is never taken (it may be the first of several)", WebHandOver.decide(WebHandOver.ALWAYS, Why.LATE, el(blob = true), listOf(video)))
+        assertEquals("a bare list that is the only list is the film (a page that plays a media list directly)", video.url, WebHandOver.decide(WebHandOver.ALWAYS, Why.PRESS, el(blob = true), listOf(video))!!.url)
+    }
+
+    @Test fun aPlayerThatMovesOnToAnotherVideoGetsTheNewestMaster() {
+        val a = Known("https://v.example/a/master.m3u8", MediaKind.HLS, 163_000L, true, master = true, seenAt = 100)
+        val b = Known("https://v.example/b/master.m3u8", MediaKind.HLS, 90_000L, true, master = true, seenAt = 200)
+        assertEquals(b.url, WebHandOver.decide(WebHandOver.ALWAYS, Why.PRESS, el(blob = true), listOf(a, b))!!.url)
+        assertEquals(b.url, WebHandOver.decide(WebHandOver.ALWAYS, Why.PRESS, el(blob = true), listOf(b, a))!!.url)
+        val ad = Known("https://v.example/ad/master.m3u8", MediaKind.HLS, 15_000L, true, master = true, seenAt = 300)
+        assertEquals("a newer advertisement is not the film", b.url, WebHandOver.decide(WebHandOver.ALWAYS, Why.PRESS, el(blob = true), listOf(a, b, ad))!!.url)
+        val aAgain = Known(a.url, MediaKind.HLS, 163_000L, true, master = true, seenAt = 400)
+        assertEquals("the first video asked for again is the newest news", a.url, WebHandOver.decide(WebHandOver.ALWAYS, Why.PRESS, el(blob = true), listOf(aAgain, b))!!.url)
+    }
+
+    @Test fun theAddressOfAnUnreadPlaylistMayHintAtAMaster() {
+        assertEquals(true, WebHandOver.looksLikeMaster("https://x.example/hls/master.m3u8?a=1"))
+        assertEquals(true, WebHandOver.looksLikeMaster("https://x.example/master/index.m3u8"))
+        assertEquals(true, WebHandOver.looksLikeMaster("https://x.example/a_master_b.m3u8"))
+        assertEquals("only the path says it, not the query", false, WebHandOver.looksLikeMaster("https://x.example/rendition.m3u8?name=master"))
+        assertEquals(false, WebHandOver.looksLikeMaster("https://x.example/masterclass/a.m3u8"))
+    }
 
     @Test fun aHandOverNeedsAFreshTapOfThePerson() {
         assertEquals(15_000L, WebHandOver.pressWindowMs(Why.PRESS)); assertEquals(15_000L, WebHandOver.pressWindowMs(Why.PLAY)); assertEquals(15_000L, WebHandOver.pressWindowMs(Why.KESTREL))
