@@ -1875,3 +1875,7 @@
 ## 2026-11-16T09:50:31Z
 > Waiting for the release build to finish; I'll verify the tag, all build jobs and the published APK before recording or announcing anything.
 <!-- sha:441450ac36c8 -->
+
+## 2026-11-16T09:58:07Z
+> Waiting for the release run (about five minutes between checks).
+<!-- sha:a0ffb8fc909d -->
