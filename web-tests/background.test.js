@@ -9,7 +9,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const SHIELDS = path.join(__dirname, '..', 'geckoapp', 'src', 'main', 'assets', 'kestrel-shields');
-const SRC = ['engine.js', 'redirects.js', 'background.js'].map((f) => fs.readFileSync(path.join(SHIELDS, f), 'utf8')).join('\n'); // the order of the manifest's background scripts
+const SRC = ['engine.js', 'redirects.js', 'hlscap.js', 'background.js'].map((f) => fs.readFileSync(path.join(SHIELDS, f), 'utf8')).join('\n'); // the order of the manifest's background scripts
 const IMAGE = fs.readFileSync(path.join(__dirname, 'fixtures', 'mini.kex'));
 const ID = '1.111.1700000000000.1.2.3.4.5.6';
 // objects built inside the vm context have another Object.prototype: compare them as JSON
@@ -48,12 +48,19 @@ function fakeIdb(store) {
   };
 }
 
-/** @param app (message) => reply string (may be async). @param opts { idb: Map } */
+/** A webRequest StreamFilter as the extension sees it: what the extension writes is collected, close() and disconnect() are noted. */
+function fakeStreamFilter(id) {
+  const f = { id, written: [], closed: false, disconnected: false, write(b) { f.written.push(Buffer.from(new Uint8Array(b))); }, close() { f.closed = true; }, disconnect() { f.disconnected = true; } };
+  f.body = () => Buffer.concat(f.written).toString('utf8');
+  return f;
+}
+
+/** @param app (message) => reply string (may be async). @param opts { idb: Map, noFilter: true = filterResponseData throws } */
 function harness(app, opts) {
   opts = opts || {};
-  const sent = [], raws = [], timers = [], tabMsgs = [], listeners = {}, clock = { now: 1700000000000 };
+  const sent = [], raws = [], timers = [], tabMsgs = [], listeners = {}, clock = { now: 1700000000000 }, filters = [];
   const ctx = {
-    console, Promise, Map, Set, Uint8Array, ArrayBuffer, Int32Array, Math, Date: { now: () => clock.now }, JSON, parseInt, Object, Error, RegExp, String, Array,
+    console, Promise, Map, Set, Uint8Array, ArrayBuffer, Int32Array, Math, Date: { now: () => clock.now }, JSON, parseInt, Object, Error, RegExp, String, Array, TextDecoder, TextEncoder,
     performance: { now: () => Number(process.hrtime.bigint()) / 1e6 },
     atob: (s) => Buffer.from(s, 'base64').toString('latin1'),
     // short timers (the chunk-transfer yields) run at once; the 500 ms / 5 s batching timers wait until the test runs them
@@ -78,7 +85,9 @@ function harness(app, opts) {
       webRequest: {
         onBeforeRequest: { addListener: (f) => { listeners.before = f; } },
         onBeforeSendHeaders: { addListener: (f) => { listeners.sendHeaders = f; } },
-        onHeadersReceived: { addListener: (f) => { listeners.headers = f; } },
+        // the sniffer's listener is not blocking; ANS52h's (the picture size cap of HLS master playlists) is: kept apart so the old tests keep calling `listeners.headers`
+        onHeadersReceived: { addListener: (f, filter, spec) => { if (spec && spec.indexOf('blocking') >= 0) { listeners.hlsHeaders = f; listeners.hlsFilter = filter; listeners.hlsSpec = spec; } else listeners.headers = f; } },
+        filterResponseData: (id) => { if (opts.noFilter) throw new Error('no stream filters here'); const fl = fakeStreamFilter(id); filters.push(fl); return fl; },
         onErrorOccurred: { addListener: (f) => { listeners.error = f; } },
         onCompleted: { addListener: (f) => { listeners.completed = f; } },
       },
@@ -88,7 +97,7 @@ function harness(app, opts) {
   vm.runInContext(SRC, ctx);
   const req = (type, url, page) => listeners.before({ type, url, tabId: 1, frameId: 0, documentUrl: page, frameAncestors: [{ url: page, frameId: 0 }] });
   return {
-    sent, raws, ctx, listeners, clock, tabMsgs,
+    sent, raws, ctx, listeners, clock, tabMsgs, filters,
     mainFrame: (url, extra) => listeners.before(Object.assign({ type: 'main_frame', url, tabId: 1, frameId: 0 }, extra || {})),
     /** a message from a content script (the first listener that answers wins, like the browser) */
     message: (m, tabId, senderUrl, frameId) => { for (const f of listeners.message || []) { const r = f(m, { tab: tabId === undefined ? { id: 1 } : (tabId < 0 ? undefined : { id: tabId }), url: senderUrl, frameId: frameId === undefined ? 0 : frameId }); if (r !== undefined) return r; } return undefined; },
