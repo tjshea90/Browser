@@ -79,5 +79,5 @@ Order I would try (each needs the tablet): (1) log the pref values above and onF
 - Whether the sync IPC, rather than EGL surface work or page reflow, is the main part of the 0.9-2 s stall.
 - Whether Gecko's Media3 HLS in 160 handles the owner's streams (headers, cookies) and what it costs.
 - Chrome's actual rotation timeout (declaration not visible) and any Android Go video adaptation (found none beyond the decoder having no low-end branch).
-- Via, X Browser, Alook, UC, Mixerbox internals; Samsung, Opera and Brave current behaviour (search excerpts, 2015-2026 sources).
+- Via, X Browser, Alook, UC, Mixerbox internals; Opera GX and Edge video features (none found); Samsung, Opera and Brave current behaviour (search excerpts, 2015-2026 sources).
 - Whether an overlay or native player really removes the lag: lab clips decoded with 0 of 150 frames dropped (research/VIDEO_SMOOTHNESS.md), so page script stalls may dominate.
