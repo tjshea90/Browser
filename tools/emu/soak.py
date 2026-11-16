@@ -715,6 +715,9 @@ class Soak:
         self.slow_results = []
         self.kp_results = []
         self.np_results = []                   # ANS52i: Kestrel's own player (suite np)
+        self.cp_results = []                   # ANS52g: the page's video format policy on the real engine (suite cp)
+        self.cp_table = []                     # (label, row, mse, can, mc) of every case
+        self.cp_line = ""
         self.kp_wake = []                      # (label, the wake-lock lines of `dumpsys power`) while the film plays in full screen and after it ended
         self.kp_ff = []                        # ANS52a: ms from each turn to the app window's first frame at the new size (kp scene)
         self.kp_pic_path = ""                  # ANS51b: how the film's picture size reached automatic turning (known at entry, or from the player's first report)
@@ -1835,6 +1838,94 @@ class Soak:
         self.record({"kind": "player", "name": "kestrel-native-player", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
         self.check_alive("kestrel-native-player")
 
+    # ANS52g (owner message 52, research/VIDEO_ACCELERATION.md section "ANS52g design"): the page script that answers "no" to a video format the settings or the tablet's chips rule out, on the REAL engine. The emulator has no
+    # hardware decoders, so the debug intent `vfmt` (arg "<mode>,<30 fps switch>,<tablet|none>") plays the owner's two settings and, with `tablet`, the chip limits of the real tablet (VP9 1080p30, H.264 1080p64). The
+    # lab page /formats asks the three questions a player asks for a table of types and reports the answers; every case is compared with the case "engine" (policy off = the engine's own answers), so a "no" can only
+    # be the policy's.
+    CP_CASES = [("engine", "2,0,none"), ("auto-tablet", "0,0,tablet"), ("h264only", "1,0,tablet"), ("fps30", "0,1,tablet"), ("auto-nochip", "0,0,none")]
+    CP_REFUSED = {                                          # rows the policy must answer no (where the engine said yes), per case
+        "auto-tablet": ["vp9-1080p60", "vp9-1440p30", "vp9-4k30", "avc-4k30"],
+        "h264only": ["vp9-720p30", "vp9-720p60", "vp9-1080p30", "vp9-1080p60", "vp9-1440p30", "vp9-4k30", "vp9-bare", "avc-4k30"],
+        "fps30": ["vp9-720p60", "vp9-1080p60", "avc-720p60", "avc-1080p60", "vp9-1440p30", "vp9-4k30", "avc-4k30"],
+        "auto-nochip": [],
+    }
+    CP_KEPT = {                                             # rows that must stay exactly as the engine says
+        "auto-tablet": ["vp9-720p30", "vp9-720p60", "vp9-1080p30", "avc-720p30", "avc-720p60", "avc-1080p60", "vp9-bare", "avc-bare", "audio-aac"],
+        "h264only": ["avc-720p30", "avc-720p60", "avc-1080p60", "avc-bare", "audio-aac"],
+        "fps30": ["vp9-720p30", "vp9-1080p30", "avc-720p30", "vp9-bare", "avc-bare", "audio-aac"],
+        "auto-nochip": [r[0] for r in [("vp9-720p30",), ("vp9-720p60",), ("vp9-1080p30",), ("vp9-1080p60",), ("vp9-1440p30",), ("vp9-4k30",), ("vp9-bare",), ("avc-720p30",), ("avc-720p60",), ("avc-1080p60",), ("avc-4k30",), ("avc-bare",), ("audio-aac",)]],
+    }
+
+    def cp_scene(self):
+        checks = []
+        def check(name, ok, detail=""):
+            checks.append({"check": name, "ok": bool(ok), "detail": detail if not ok else ""})
+            if not ok:
+                self.issue("high", "video-formats", "%s %s" % (name, detail))
+        got = {}                                            # label -> pass -> {row: (mse, can, mc)}
+        for label, arg in self.CP_CASES:
+            self.ph.debug("vfmt", arg)
+            time.sleep(2.5)
+            rmark = self.lab.size()
+            self.ph.open_url("%s/formats?tag=%s" % (self.lab_base, label))
+            t0 = time.time()
+            while time.time() - t0 < 40 and not [r for r in self.lab.since(rmark) if r.get("kind") == "fmt" and r.get("tag") == label and r.get("pass") == "b"]:
+                time.sleep(1)
+            time.sleep(1)
+            self.shot("cp-" + label)
+            passes = {}
+            for r in self.lab.since(rmark):
+                if r.get("kind") != "fmt" or r.get("tag") != label:
+                    continue
+                rows = {}
+                for item in (r.get("d") or "").split(","):
+                    f = item.split(":")
+                    if len(f) == 4:
+                        rows[f[0]] = (f[1], f[2], f[3])
+                passes[r.get("pass")] = rows
+            got[label] = passes
+            check("%s: the page asked its questions (two passes)" % label, "a" in passes and "b" in passes and len(passes.get("b", {})) >= 13, "passes %s" % {k: len(v) for k, v in passes.items()})
+        base = got.get("engine", {}).get("b", {})
+        check("the engine itself answers yes to H.264 720p30 (the proof below is not vacuous)", base.get("avc-720p30", ("0",))[0] == "1", "engine row %s" % (base.get("avc-720p30"),))
+        yes = lambda t: t not in ("0", "-", "x", "e")           # an answer that says "yes" in any of the three forms (1, probably, maybe)
+        for label, _ in self.CP_CASES[1:]:
+            rows = got.get(label, {}).get("b", {})
+            informative = 0
+            for name in self.CP_REFUSED[label]:
+                b, a = base.get(name), rows.get(name)
+                if not b or not a:
+                    check("%s: row %s was answered" % (label, name), False, "missing row")
+                    continue
+                for qi, q in enumerate(("isTypeSupported", "canPlayType", "decodingInfo")):
+                    if a[qi] == "x" or not yes(b[qi]):
+                        continue                                # not asked, or the engine says no anyway: nothing to prove
+                    informative += 1
+                    check("%s: %s answers no to %s" % (label, q, name), not yes(a[qi]), "engine said %s, with the policy %s" % (b[qi], a[qi]))
+            check("%s: at least 6 refusals were proven against yes answers of the engine" % label, informative >= 6 or not self.CP_REFUSED[label], "only %d informative answers" % informative)
+            for name in self.CP_KEPT[label]:
+                b, a = base.get(name), rows.get(name)
+                if b and a:
+                    check("%s: %s is left to the engine (%s)" % (label, name, "/".join(b)), a == b, "engine %s, with the policy %s" % (b, a))
+            for name, a in sorted(rows.items()):
+                self.cp_table.append((label, name) + tuple(a))
+        for name, b in sorted(base.items()):
+            self.cp_table.append(("engine", name) + tuple(b))
+        late = [l for l, _ in self.CP_CASES[1:] if got.get(l, {}).get("a") != got.get(l, {}).get("b")]
+        check("the policy was already there at the page's first questions (1.5 s after it started)", not late, "pass a differs from pass b in %s" % late)
+        self.dump_diag("cp")
+        diag = ""
+        try:
+            diag = open(os.path.join(self.out, "diagnostics-cp.txt")).read()
+        except OSError:
+            pass
+        line = [ln for ln in diag.splitlines() if ln.startswith("Video formats offered to sites")]
+        self.cp_line = line[-1] if line else ""
+        check("Diagnostics says what the page script refused (the counts came back through the extension)", bool(line) and "refused so far: questions" in line[-1], "line: %s" % (line[-1][-300:] if line else "none"))
+        self.ph.debug("vfmt", "0,0,none")                     # the owner's defaults again
+        self.cp_results = checks
+        self.record({"kind": "formats", "name": "video-formats-policy", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
+        self.check_alive("video-formats-policy")
+
     # ---- the whole run
     # ---- VC1 / LP1 (owner message 44): a video with no controls gets Kestrel's own bar when it is tapped; a long press on a video opens the video options and never the floating panel
     VBAR_PAGES = [("naked", "/video/vc?kind=naked", "shown"), ("shadow-root", "/video/vc?kind=shadow", "shown"), ("shadow-root + frame over it", "/video/vc?kind=shadow&ad=1", "shown"), ("own controls", "/video/vc?kind=own", "own")]
@@ -2223,6 +2314,24 @@ class Soak:
             L.append("| :- | :- | :- |")
             for c in self.np_results:
                 L.append("| %s | %s | %s |" % (c["check"], "ok" if c["ok"] else "**FAILED**", (c["detail"] or "")[:160].replace("|", "/")))
+            L.append("")
+        if self.cp_results:
+            L.append("## The page's video format policy on the real engine (ANS52g, owner message 52)")
+            L.append("")
+            L.append("| check | result | detail |")
+            L.append("| :- | :- | :- |")
+            for c in self.cp_results:
+                L.append("| %s | %s | %s |" % (c["check"], "ok" if c["ok"] else "**FAILED**", (c["detail"] or "")[:160].replace("|", "/")))
+            L.append("")
+            if self.cp_line:
+                L.append("Diagnostics line: %s" % self.cp_line[:600])
+                L.append("")
+            L.append("Answers per case (isTypeSupported / canPlayType / decodingInfo; 1 or probably = yes, 0 or - = no, x = not asked):")
+            L.append("")
+            L.append("| case | type | isTypeSupported | canPlayType | decodingInfo |")
+            L.append("| :- | :- | :- | :- | :- |")
+            for row in self.cp_table:
+                L.append("| %s | %s | %s | %s | %s |" % row)
             L.append("")
         if self.kp_results:
             L.append("## Kestrel's own full-screen controls on the real engine (VP1, owner message 49)")
@@ -2635,7 +2744,7 @@ class FakeAdb:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -2673,6 +2782,8 @@ def main():
             s.kp_scene()
         if a.suite == "np":
             s.np_scene()
+        if a.suite == "cp":
+            s.cp_scene()
         if a.suite == "yh":
             s.yahoo_fullscreen()                             # (only the live Yahoo Finance player in full screen with Kestrel's controls: about 4 minutes)
         if a.suite == "fsy":
