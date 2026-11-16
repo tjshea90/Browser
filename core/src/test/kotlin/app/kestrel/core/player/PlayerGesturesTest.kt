@@ -125,7 +125,7 @@ class PlayerGesturesTest {
         g.move(500f + 252f, 300f); val plain = h.previews.last().first
         g.move(500f + 252f, 300f - 160f)                              // one inch up as well
         val fine = h.previews.last()
-        assertEquals(plain / 3, fine.first, 2L); assertEquals(3.0, fine.third, 1e-9)
+        assertTrue("a third of it: ${fine.first} against ${plain / 3}", Math.abs(plain / 3 - fine.first) <= 2L); assertEquals(3.0, fine.third, 1e-9)
     }
 
     @Test fun theJumpIsClampedToTheFilmAndALiveStreamHasNoPreciseSeek() {
