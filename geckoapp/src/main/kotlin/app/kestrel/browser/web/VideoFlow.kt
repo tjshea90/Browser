@@ -3,6 +3,7 @@ package app.kestrel.browser.web
 import android.app.AlertDialog
 import app.kestrel.browser.BrowserActivity
 import app.kestrel.browser.Io
+import app.kestrel.browser.NativePlayerActivity
 import app.kestrel.browser.diag.Health
 import app.kestrel.browser.ui.VideoPanel
 import app.kestrel.browser.download.DownloadController
@@ -262,6 +263,7 @@ class VideoFlow(private val a: BrowserActivity) {
     // with its screen. What can be handed over: a plain video file, or an HLS stream (its master playlist: the player picks the quality, capped at the row's height, 720 p when the row has none). Never DASH (no module in the
     // APK), never audio only, never what has no address (an MSE blob): those rows have no second button.
     private class NativeTarget(val url: String, val cand: MediaCandidate?, val maxH: Int, val w: Int, val h: Int)
+    private val PLAYABLE_FILES = setOf("mp4", "m4v", "mov", "webm", "mkv")
 
     private fun nativeTarget(choice: VideoPanel.Choice): NativeTarget? {
         return when (val t = choice.tag) {
