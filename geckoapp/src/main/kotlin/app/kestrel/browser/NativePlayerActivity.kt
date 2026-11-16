@@ -76,6 +76,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     private var muted = false
     private var startedAt = 0L
     private var firstPictureAt = 0L
+    private var playingSince = 0L                              // ANS55: since when the clock runs with no first picture (a list of the sound or of subtitles plays on and shows nothing)
     private var picW = 0
     private var picH = 0
     private var pixelRatio = 1f
@@ -318,6 +319,13 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
 
     private fun sample() {
         val p = player ?: return
+        // ANS55 (owner message 55: Yahoo's film showed its time and a black picture): the clock runs and no picture ever came = a stream with nothing to show (a sound or subtitles list was handed over), not a film for
+        // this screen. 7 s of playing without a first frame (the player may join a slow picture up to 5 s late) and the page's own player takes the film back.
+        if (fromPage && firstPictureAt == 0L && p.isPlaying) {
+            val now = SystemClock.uptimeMillis()
+            if (playingSince == 0L) playingSince = now
+            else if (now - playingSince > 7_000L) { playingSince = 0L; fail("no picture: the clock ran for 7 s and no picture came (a stream with no video)"); return }
+        } else if (!p.isPlaying) playingSince = 0L
         val state = p.playbackState
         val dur = p.duration
         val live = p.isCurrentMediaItemLive

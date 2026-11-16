@@ -124,6 +124,7 @@ class VideoFlow(private val a: BrowserActivity) {
                 when (val pl = text?.let { Hls.parse(it, c.url) }) {
                     is Hls.MediaPlaylist -> noteLook(t, c, pl.media, IntArray(0))
                     is Hls.MasterPlaylist -> {
+                        c.master = true
                         noteMaster(c, pl.master)
                         val vs = pl.master.variants
                         val heights = vs.filter { !it.audioOnly }.map { it.height }.filter { it > 0 }.distinct().toIntArray()   // RX3-V4: what a blob: player's picture height is matched against
@@ -336,7 +337,10 @@ class VideoFlow(private val a: BrowserActivity) {
 
     /** The streams the sniffer saw in [frame] ("" = the page itself) that a hand-over may use: playlists of films (the variants listed in a master are no films of their own), not DRM, not flagged as decoys. */
     private fun knownIn(tab: Tab, frame: String): List<WebHandOver.Known> =
-        tab.media.usable().filter { it.frame == frame && it.kind == MediaKind.HLS && it.url !in children }.map { WebHandOver.Known(it.url, it.kind, it.durationMs, !it.drm && !it.decoy) }
+        tab.media.usable().filter { it.frame == frame && it.kind == MediaKind.HLS && it.url !in children }.map {
+            // ANS55: a MASTER list is the film (the early look read it as one; before that the address may say master), a bare list is one rendition (the picture, the sound, the subtitles: Brightcove / Yahoo)
+            WebHandOver.Known(it.url, it.kind, it.durationMs, !it.drm && !it.decoy, it.master || (!it.looked && WebHandOver.looksLikeMaster(it.url)), it.lastSeenAt)
+        }
 
     /** The page's gate asks whether Kestrel's own player takes the film the person pressed: true = it has been started (or is up already), the page keeps its element closed. */
     fun handOver(m: JSONObject): Boolean {
@@ -362,7 +366,8 @@ class VideoFlow(private val a: BrowserActivity) {
         val known = knownIn(tab, frame).let { k -> if (why == WebHandOver.Why.LATE) k.filter { it.durationMs >= WebHandOver.FILM_MS } else k }   // (a playlist that comes late must be known to be as long as a film: it may be an advertisement)
         val d = WebHandOver.decide(mode, why, el, known)
         if (d == null) {
-            lastRefused = if (el.blob && why != WebHandOver.Why.FULLSCREEN && why != WebHandOver.Why.LATE && mode == WebHandOver.ALWAYS && !tab.isPrivateTab) Refused(tab.id, tab.url.substringBefore('#'), now, frame, el) else null
+            // (a playlist that came late and was refused is one more list, not the end of the press that is waiting for its film: that memory stays until its ten seconds are over)
+            if (why != WebHandOver.Why.LATE) lastRefused = if (el.blob && why != WebHandOver.Why.FULLSCREEN && mode == WebHandOver.ALWAYS && !tab.isPrivateTab) Refused(tab.id, tab.url.substringBefore('#'), now, frame, el) else null
             return decline(tab, if (mode == WebHandOver.FULLSCREEN && why != WebHandOver.Why.FULLSCREEN) "the setting says full screen only" else if (el.loop) "a loop clip" else if (el.blob) "no stream known (yet)" else "not a file or stream Kestrel's player plays")
         }
         lastRefused = null
@@ -547,7 +552,7 @@ class VideoFlow(private val a: BrowserActivity) {
             when (pl) {
                 null -> { streamInfo[c.key] = Loaded.Failed(whyNotRead(status)); refresh(tab) }
                 is Hls.MediaPlaylist -> { streamInfo[c.key] = ready(tab, c, null, pl.media, text, null); refresh(tab); sizeBareStream(tab, c, pl.media, text) }
-                is Hls.MasterPlaylist -> { noteMaster(c, pl.master); loadVariants(tab, c, pl.master, requestHeaders(tab, c)) }
+                is Hls.MasterPlaylist -> { c.master = true; noteMaster(c, pl.master); loadVariants(tab, c, pl.master, requestHeaders(tab, c)) }
             }
         }
         return Loaded.Loading
