@@ -20,6 +20,7 @@ PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8091
 OUT = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else os.path.abspath("soaklab-out")
 os.makedirs(OUT, exist_ok=True)
 REPORT = os.path.join(OUT, "report.jsonl")
+MEDIA_LOG = os.path.join(OUT, "media.jsonl")        # ANS53: every request for a video file and how many bytes of it went out (the lab proves that nothing is asked for before a press)
 LOCK = threading.Lock()
 # The owner's hotspot (research/EMU_LAB.md): LAB_RATE_KBPS = how fast the lab serves its clips and downloads (0 = full speed), LAB_DELAY_MS = one round trip before each answer.
 # The emulator's own network shaping does not touch what comes through `adb reverse`, so the lab server shapes its own answers (the workflow sets both when net = hotspot).
@@ -55,6 +56,11 @@ def make_clips():
                         "-pix_fmt", "yuv420p", "-b:v", "1500k" if name == "big" else "600k", "-g", "50", "-c:a", "aac", "-b:a", "64k",
                         "-movflags", "+faststart", path], check=False)
         print("soaklab: clip %s %s" % (name, "ok" if os.path.exists(path) else "FAILED"), flush=True)
+    # ANS53: the same clip as a FRAGMENTED mp4: what a script player (hls.js, video.js, Shaka) appends to a MediaSource
+    frag = os.path.join(OUT, "frag.mp4")
+    if os.path.exists(os.path.join(OUT, CLIPS["landscape"][2])) and not os.path.exists(frag):
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", os.path.join(OUT, CLIPS["landscape"][2]), "-c", "copy", "-movflags", "frag_keyframe+empty_moov+default_base_moof", frag], check=False)
+        print("soaklab: fragmented clip %s" % ("ok" if os.path.exists(frag) else "FAILED"), flush=True)
     # ANS52i: the landscape clip as an HLS film (4 s segments, one rung and a master list that names it), for Kestrel's own player: the owner's Yahoo film is an HLS stream
     land = os.path.join(OUT, CLIPS["landscape"][2])
     hdir = os.path.join(OUT, "hls-film")
@@ -417,6 +423,14 @@ class H(http.server.BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(body)
 
+    def log_media(self, sent):
+        try:
+            with LOCK:
+                with open(MEDIA_LOG, "a") as f:
+                    f.write(json.dumps({"t": round(time.time(), 2), "path": urllib.parse.urlparse(self.path).path, "method": self.command, "range": self.headers.get("Range") or "", "bytes": sent}) + "\n")
+        except OSError:
+            pass
+
     def _file(self, path, ctype):
         """A file with Range support (a <video> asks for ranges)."""
         if not os.path.exists(path):
@@ -439,19 +453,23 @@ class H(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Range", "bytes %d-%d/%d" % (start, end, size))
         self.end_headers()
         if self.command == "HEAD":
+            self.log_media(0)
             return
         sent, t0 = 0, time.time()
-        with open(path, "rb") as f:
-            f.seek(start)
-            left = n
-            while left > 0:
-                chunk = f.read(min(16384 if RATE else 65536, left))
-                if not chunk:
-                    break
-                self.wfile.write(chunk)
-                left -= len(chunk)
-                sent += len(chunk)
-                pace(sent, t0, RATE)
+        try:
+            with open(path, "rb") as f:
+                f.seek(start)
+                left = n
+                while left > 0:
+                    chunk = f.read(min(16384 if RATE else 65536, left))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    left -= len(chunk)
+                    sent += len(chunk)
+                    pace(sent, t0, RATE)
+        finally:
+            self.log_media(sent)
 
     def do_HEAD(self):
         self.do_GET()
@@ -514,6 +532,8 @@ class H(http.server.BaseHTTPRequestHandler):
                 if name in CLIPS:
                     return self._file(os.path.join(OUT, CLIPS[name][2]), "video/mp4")
                 return self._send(b"unknown clip", "text/plain", 404)
+            if p == "/clip/frag.mp4":
+                return self._file(os.path.join(OUT, "frag.mp4"), "video/mp4")
             if p == "/clip/tone.m4a":
                 return self._file(os.path.join(OUT, "tone.m4a"), "audio/mp4")
             if p == "/blank":
