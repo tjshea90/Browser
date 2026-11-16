@@ -715,6 +715,7 @@ class Soak:
         self.slow_results = []
         self.kp_results = []
         self.kp_wake = []                      # (label, the wake-lock lines of `dumpsys power`) while the film plays in full screen and after it ended
+        self.kp_pic_path = ""                  # ANS51b: how the film's picture size reached automatic turning (known at entry, or from the player's first report)
         self.yahoo_fs = None
         self.shields_mode = "on"
         self.quiet_issues = False
@@ -2147,6 +2148,9 @@ class Soak:
             for c in self.kp_results:
                 L.append("| %s | %s | %s |" % (c["check"], "ok" if c["ok"] else "**FAILED**", (c["detail"] or "")[:160].replace("|", "/")))
             L.append("")
+            if self.kp_pic_path:
+                L.append("The film's picture size for automatic turning (ANS51b): %s." % self.kp_pic_path)
+                L.append("")
             if self.kp_wake:
                 L.append("Wake locks of the emulated phone (`dumpsys power`), for the question whether the screen stays on while a film plays (the lab keeps the screen on by itself with `svc power stayon`, so read the lock names, not the screen):")
                 L.append("")
