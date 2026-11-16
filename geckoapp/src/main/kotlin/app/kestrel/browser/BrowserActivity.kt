@@ -807,7 +807,10 @@ open class BrowserActivity : Activity(), DockListener {
         for (t in tabs) { try { t.session?.close() } catch (e: Exception) { /* already gone */ }; t.session = null }
         try { privateAnchor?.close() } catch (e: Throwable) { /* gone */ }; privateAnchor = null
         super.onDestroy()
-        if (!isChangingConfigurations) { ProcessLife.uiAlive = false; ProcessLife.uiVisible = false; ProcessLife.maybeExit() } // swiped away: leave unless a download is still running
+        Health.log("life", "destroy", "finishing=$isFinishing config=$isChangingConfigurations")      // ANS58/59: tells a swipe-away from the system taking the screen away (Diagnostics)
+        // swiped away (finishing): leave after 2 s unless a download is still running. A screen the SYSTEM destroyed (not finishing, not a turn) is not a quit: the person may be on their way back, so the process stays two
+        // minutes (the next onCreate cancels the exit); it used to end itself 2 s later and the way back was a cold start (every tab reloaded, session logins gone)
+        if (!isChangingConfigurations) { ProcessLife.uiAlive = false; ProcessLife.uiVisible = false; ProcessLife.maybeExit(if (isFinishing) 2000L else 120_000L) }
     }
 
     /**
