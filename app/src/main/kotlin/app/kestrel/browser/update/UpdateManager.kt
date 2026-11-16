@@ -121,7 +121,7 @@ object UpdateManager {
 
     private const val DAY_MS = 24L * 3600 * 1000
     /** The GitHub API base of this repository; a test points it at a local server. */
-    @Volatile internal var apiBase = "https://api.github.com/repos/tjshea90/Kestrel-Releases"
+    @Volatile internal var apiBase = "https://api.github.com/repos/tjshea90/Browser"
     const val ACTION_RESULT = "app.kestrel.browser.update.RESULT"
 
     fun addListener(l: () -> Unit) { listeners.add(l) }
