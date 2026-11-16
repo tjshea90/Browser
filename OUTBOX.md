@@ -1812,3 +1812,14 @@
 ## 2026-11-16T08:01:22Z
 > Still running; I'll check the result in about two and a half minutes.
 <!-- sha:c3d6be92b07e -->
+
+## 2026-11-16T08:43:13Z
+> Status: the plain-video fix works on the real engine and I'm now in the verification stretch before alpha58.
+>
+> - **Running now:** the full emulator video run (about 12 more minutes) and an independent review of the new code.
+> - **Found and fixed on the way:**
+>   - A page script could have faked the "open Kestrel's player" question without you touching anything. Now only your own tap can start it.
+>   - A film you press play on again continues where you stopped.
+> - **Next:** read both results, fix anything they find, then ship alpha58 and answer your message 54 point by point with the download link.
+> - **Not yet verified:** nothing has run on your tablet; every result so far is from the emulator.
+<!-- sha:4303d0a887f5 -->
