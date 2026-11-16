@@ -1,0 +1,25 @@
+# ANS54 (owner message 54, 2026-11-16 07:24Z, on alpha57): web videos use Kestrel's own player
+
+## What the owner said (verbatim in INBOX.md and TASKS.md ANS54a-f)
+The page's player is "very slow and laggy"; full screen "automatically went to landscape ... even though I was holding my tablet in portrait"; "when I selected a resolution then pressed the x button to close the resolution options box, it didn't close, it froze for a while"; "when I press the download button and select play in kestrel's player (test), it is nearly perfect"; THE REQUEST: "model the in-site video player on the Kestrel player ... I want the web video players to use this".
+
+## Reading
+- The lag, the frozen resolution box and the x that did not answer are the SITE's player (script on a starved page thread: lt / pc numbers of alpha55-56). Kestrel's own player (Media3 on a SurfaceView, hardware decoder, no page in the way) is the fix, so the request is: when a page's film can be played by it, it IS played by it.
+- The landscape-by-itself is the Settings default 'Turn the screen for full-screen video: Automatic' (a wide film turns the screen sideways). The owner has now asked three times for the opposite (messages 53, 54): FOLLOW THE TABLET, never turn by itself. New default; Automatic stays selectable.
+- The quality list of alpha57 (QualitySheet) has no x button at all: add one (close = x, Back, tap outside).
+
+## Design
+Setting (Settings > Video): 'Web videos play in': Kestrel's player (default) / Kestrel's player only in full screen / the page's own player (Prefs `web_in_kestrel` 0 / 1 / 2; flag 2048 of the guard answer = the page script may ask).
+
+Who decides: the APP (it knows the sniffed playlists, the tab, the setting); the page script (gate-main.js, world MAIN) only reports a press and waits for the answer.
+1. Ask points in the gate: (a) `play()` that the person's press caused (inside the activation AND the last tap landed on / in this video's player box within 2.5 s; a page that plays its hero video after ANY tap is not a press on it), held until the answer (700 ms at most; no answer = the page plays); (b) a press on a video with the engine's own controls (opens, then asks; a 'no' changes nothing, a 'yes' pauses the element at once); (c) Kestrel's own controls (VF.gate: opens, asks, pauses on yes).
+2. Message path: gate-main.js -> event __kst_gate_ask_v1 -> content.js (checks, relays `vhand`) -> background.js (adds the top page and the frame) -> native `vh` -> BrowserActivity (UI thread) -> answer `{h: 1|0}` back the same way; `h: 1` = Kestrel's player has been started for this film, the page keeps the element CLOSED (play() is rejected with AbortError, which players read as 'interrupted': no error screen).
+3. The decision is pure (core/media/WebHandOver, tested): mode, loop clips and tiny boxes are never handed over; a direct file / .m3u8 address of the element wins unless a film-length HLS stream of the same frame is known (an advertisement in the same element); a blob: (MediaSource) source needs a known HLS stream of the same frame (not DRM, not an ad-sized clip); DASH, DRM and unknown blob streams are not handed over (the page plays them as before); background tabs and a second ask while Kestrel's player is up never start a second one.
+4. Catch-alls: (a) full screen of a page film that was not handed over (its stream became known late): at the first `vst` report (position known) the film moves to Kestrel's player and the page's full screen is left; (b) a playlist sniffed within 6 s after a press that was answered 'no' (players that ask for their playlist only after the click): late hand-over, the page's media session is paused.
+5. Failure: Kestrel's player is started for a result; an error before the first picture ends it with RESULT_FAILED and the browser says so (toast) and does not hand that page over again for two minutes: the next press plays in the page's own player. Cookies are not shared with the engine (a stream that needs them fails this way).
+6. Back from Kestrel's player lands on the page with its video closed and paused (the page shows its play button).
+
+Not handed over, by design: YouTube-style streams (blob + signed DASH without a playlist address), DRM, DASH (no module in the APK), loop clips and thumbnails. VP12 (the site's own quality / caption menu for those) stays open.
+
+## Proof plan
+web-tests/gate.test.js (ask / answer / timeout / no-ask cases), content / background relay tests, core WebHandOverTest, OwnerRulesTest guards, lab suite `ho` (press on a controls film, on an MSE page with a known HLS stream, on an MSE page with none, setting Never, a failing address, the late hand-over) inside `vp`.

@@ -1,21 +1,23 @@
-# CHECKPOINT 2496 — read me first, then TASKS.md
+# CHECKPOINT 2497 — read me first, then TASKS.md
 
-**Written:** 2026-11-16T07:26:42Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `eadd70bf` (this checkpoint is the commit after it)
+**Written:** 2026-11-16T07:30:26Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `519b8caa` (this checkpoint is the commit after it)
 
 ## Just done
-owner message 54 written into TASKS.md as ANS54a-f in his words (a: page player slow and laggy, b: full screen went landscape by itself while held in portrait, c: the resolution box did not close with X and froze, d: Kestrel's own player is nearly perfect (feedback), e: THE REQUEST make web video players use Kestrel's player, f: answer + alpha58 link)
+ANS54 design written (research/ANS54_DESIGN.md) and sub-rows ANS54e.1-7 in TASKS.md
 
 ## Do this next
-design ANS54e first (research/ANS54_DESIGN.md): read gate-main.js press path, content.js/background.js relay, ShieldsBridge messages, BrowserActivity fullScreenChanged / onFullScreen, VideoFlow.pageFilm / nativeTarget, NativePlayerActivity launch + failure path, Prefs fsTurn default (FullscreenTurn Automatic = wide film starts sideways: the owner wants follow-the-tablet), QualitySheet (no X button); plan = hand over web films to NativePlayerActivity on press (gate asks the app first) and at full screen (catch-all), fallback to the page on a native error, a Settings choice; then code + tests + lab + ship alpha58
+implement in this order, ckpt after each: e.1 fs_turn2 default Follow (Prefs, BackupManager spec+test, SettingsView text), e.2 QualitySheet x, e.3 core WebHandOver + test, e.4 gate ask / content relay / background vhand / ShieldsBridge vh / flag 2048 / Prefs web_in_kestrel / Settings row + web tests, e.5 VideoFlow.handOver + catch-alls, e.6 failure fallback, e.7 lab suite ho + ship alpha58 (code 159)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
      M TASKS.md
+    ?? research/ANS54_DESIGN.md
 
 ## Last ten checkpoints
 ```
+  519b8caa ckpt 2496: owner message 54 written into TASKS.md as ANS54a-f in his words (a: page pla
   201e537f ckpt 2495: alpha57 SHIPPED and recorded: Release kestrel-g-v0.3.0-alpha57 (code 158, AP
   eb5df864 ckpt 2494: alpha57 RELEASE DISPATCHED (ONE time): android.yml run 43820755532 (app=geck
   efc4f774 ckpt 2493: gated kestrel-g-v0.3.0-alpha57 (gecko code 158) and pushed it: handoff self-
@@ -25,8 +27,4 @@ design ANS54e first (research/ANS54_DESIGN.md): read gate-main.js press path, co
   99c99a77 ckpt 2489: pre-dispatch checks green for lab run 2: web suite 542/542, gradle :core :ap
   a1776ee8 ckpt 2488: lab run 43812820865 read (research/ANS53_LAB_VP1.md): kp 27/27 + cp + hls + 
   55fe4f13 ckpt 2487: lab extras for the NEXT dispatch (the in-flight run 43812820865 uses ckpt 24
-  a7dfeb23 ckpt 2486: lab run 43812820865 dispatched (android.yml app=lab lab_suite=vp, ref ccr-b3
 ```
-
-(2 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
