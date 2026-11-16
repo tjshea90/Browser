@@ -1884,3 +1884,8 @@ Set up everything you can now, then give me a step by step guide for everything 
 ```
 Can you make the testing and builds on a public repo for the free minutes and anything sensitive in the private repo
 ```
+
+## 2026-11-16T23:43:04Z
+```
+Group 1 only. Clean the history only if it is easy to do without breaking anything
+```
