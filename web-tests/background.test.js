@@ -1217,7 +1217,8 @@ test('RX4-M0b: cache hits and 304 answers are counted (when the headers arrive a
   h.listeners.completed({ requestId: '6', statusCode: 304, fromCache: false, url: 'https://cdn.example/6.js', tabId: 1, frameId: 0, type: 'script', timeStamp: 1150 });
   h.listeners.completed({ requestId: '7', statusCode: 200, fromCache: true, url: 'https://cdn.example/7.js', tabId: 1, frameId: 0, type: 'script', timeStamp: 1012 });
   h.listeners.error({ requestId: '8', error: 'NS_ERROR_ABORT', url: 'https://cdn.example/8.js', tabId: 1, frameId: 0, type: 'script' });
-  await h.flushTimers();
+  // the stats timer is only set once something calls markStats(), which in this test happens when the image transfer ends: wait for it instead of flushing the timers once (a 4-in-6 flake before, found 2026-11-16)
+  for (let i = 0; i < 100 && h.of('st').length === 0; i++) { await tick(10); await h.flushTimers(); }
   const st = h.of('st'); assert.ok(st.length > 0, 'a stats message was sent');
   const rv = st[st.length - 1].rv;
   assert.ok(/pages 1, requests 2, from cache 1, 304 seen when headers arrived 1 and when completed 1 \(140 ms in all\)/.test(rv), rv);
