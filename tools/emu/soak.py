@@ -2463,6 +2463,14 @@ class Soak:
         shown3 = ev("inline", "shown", m3)
         check("inline: a tap on the picture shows the controls ('inline shown' line with the buttons' places)", bool(shown3), "lines %s" % [e["ev"] for e in health_events(self.log.since(m3), "inline")])
         mm = re.search(r"close at (\d+),(\d+) full screen at (\d+),(\d+)", shown3[-1]["rest"]) if shown3 else None
+        # ---- 3b. a long press on the picture opens the film's download options (LP1), the film plays on; Back closes the sheet first
+        m3b = self.log.size()
+        self.ph.long_press(cx, cy + 90, 900); time.sleep(3.5)
+        sheet = bool(ev("video", "sheet-shown", m3b)) or bool(ev("video", "sheet-empty", m3b))
+        check("inline: a long press on the picture opens the film's download options ('inline long-press' and a sheet line)", bool(ev("inline", "long-press", m3b)) and sheet, "inline long-press %d, sheet lines %d, video lines %s" % (len(ev("inline", "long-press", m3b)), int(sheet), [e["ev"] for e in health_events(self.log.since(m3b), "video")][:6]))
+        self.shot("ip-sheet")
+        m3c = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(2)
+        check("inline: Back closes the sheet and the film plays on (no 'inline stop')", not ev("inline", "stop", m3c), "stop lines %s" % [e["rest"][:60] for e in ev("inline", "stop", m3c)])
         # ---- 4. the full-screen button: the same film, the same second
         if mm:
             fx, fy = int(mm.group(3)), int(mm.group(4))
