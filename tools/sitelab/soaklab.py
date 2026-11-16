@@ -272,13 +272,62 @@ def page_vc(kind, ad):
     return (head + body.replace("__CLIP__", clip) + "<p style='margin:10px'>The clip plays by itself (muted).</p></body></html>").encode()
 
 
+# ANS52g (owner message 52): the video format policy on the real engine. Each row is a question a player asks: the type with the hints a site puts into it (width / height / framerate), as `MediaSource.isTypeSupported`,
+# `canPlayType` and (rows that have a size) `navigator.mediaCapabilities.decodingInfo` see it.
+FMT_ROWS = [
+    ("vp9-720p30", 'video/webm; codecs="vp09.00.30.08"', 1280, 720, 30), ("vp9-720p60", 'video/webm; codecs="vp09.00.30.08"', 1280, 720, 60),
+    ("vp9-1080p30", 'video/webm; codecs="vp09.00.40.08"', 1920, 1080, 30), ("vp9-1080p60", 'video/webm; codecs="vp09.00.40.08"', 1920, 1080, 60),
+    ("vp9-1440p30", 'video/webm; codecs="vp09.00.50.08"', 2560, 1440, 30), ("vp9-4k30", 'video/webm; codecs="vp09.00.51.08"', 3840, 2160, 30),
+    ("vp9-bare", 'video/webm; codecs="vp9"', 0, 0, 0),
+    ("avc-720p30", 'video/mp4; codecs="avc1.4d401f"', 1280, 720, 30), ("avc-720p60", 'video/mp4; codecs="avc1.4d4020"', 1280, 720, 60),
+    ("avc-1080p60", 'video/mp4; codecs="avc1.640028"', 1920, 1080, 60), ("avc-4k30", 'video/mp4; codecs="avc1.640033"', 3840, 2160, 30),
+    ("avc-bare", 'video/mp4; codecs="avc1.640028"', 0, 0, 0),
+    ("audio-aac", 'audio/mp4; codecs="mp4a.40.2"', 0, 0, 0),
+]
+
+
+def page_formats(tag):
+    """The questions are asked twice (1.5 s and 5 s after the page started: the policy reaches the page a few tens of milliseconds after its first script, a late one shows as a difference) and each pass is sent to
+    /report (kind=fmt, d = name:isTypeSupported:canPlayType:decodingInfo, one per row; mc 'x' = no such question for the row, 'e' = the engine threw)."""
+    return (("""<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Soak formats</title>
+<body style='font:14px monospace;margin:10px'><h3>formats %(tag)s</h3><pre id=o>waiting</pre>
+<script>
+(function () {
+  var ROWS = %(rows)s, TAG = %(tag_js)s;
+  function ask(pass) {
+    var out = [], pend = [];
+    ROWS.forEach(function (r) {
+      var type = r[1] + (r[2] ? '; width=' + r[2] + '; height=' + r[3] : '') + (r[4] ? '; framerate=' + r[4] : ''), row = { n: r[0], mse: 'x', can: 'x', mc: 'x' };
+      try { row.mse = MediaSource.isTypeSupported(type) ? '1' : '0'; } catch (e) { row.mse = 'e'; }
+      try { row.can = document.createElement(r[1].indexOf('audio/') === 0 ? 'audio' : 'video').canPlayType(type) || '-'; } catch (e) { row.can = 'e'; }
+      if (r[2]) {
+        try {
+          pend.push(navigator.mediaCapabilities.decodingInfo({ type: 'file', video: { contentType: r[1], width: r[2], height: r[3], framerate: r[4], bitrate: 2000000 } })
+            .then(function (x) { row.mc = x && x.supported ? '1' : '0'; }, function () { row.mc = 'e'; }));
+        } catch (e) { row.mc = 'e'; }
+      }
+      out.push(row);
+    });
+    Promise.all(pend).then(function () { finish(pass, out); }, function () { finish(pass, out); });
+  }
+  function finish(pass, out) {
+    var d = out.map(function (r) { return r.n + ':' + r.mse + ':' + r.can.replace(/[^a-z-]/g, '') + ':' + r.mc; }).join(',');
+    document.getElementById('o').textContent = TAG + ' ' + pass + '\n' + out.map(function (r) { return r.n + '  mse ' + r.mse + '  can ' + r.can + '  mc ' + r.mc; }).join('\n');
+    try { new Image().src = '/report?kind=fmt&tag=' + encodeURIComponent(TAG) + '&pass=' + pass + '&d=' + encodeURIComponent(d) + '&t=' + Date.now(); } catch (e) {}
+  }
+  setTimeout(function () { ask('a'); }, 1500);
+  setTimeout(function () { ask('b'); }, 5000);
+})();
+</script>""") % {"tag": tag.replace("<", "").replace("&", "")[:30], "tag_js": json.dumps(tag[:30]), "rows": json.dumps([list(r) for r in FMT_ROWS])}).encode()
+
+
 def page_dl():
     links = "".join("<p><a href='/dl/%dmb.bin'>%d MB file</a></p>" % (n, n) for n in (1, 5, 20)) + "<p><a href='/dl/slow.bin'>5 MB, slowly</a></p>"
     return ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Soak downloads</title><body style='font:20px sans-serif;margin:14px'><h1>Downloads</h1>" + links).encode()
 
 
 def index():
-    rows = ["/page/text", "/page/images", "/page/iframes", "/page/form", "/video/landscape", "/video/portrait", "/video/big", "/fs", "/fsbox?kind=shadow", "/dl/page", "/dl/1mb.bin", "/dl/5mb.bin", "/dl/20mb.bin", "/dl/slow.bin"]
+    rows = ["/page/text", "/page/images", "/page/iframes", "/page/form", "/video/landscape", "/video/portrait", "/video/big", "/formats?tag=index", "/fs", "/fsbox?kind=shadow", "/dl/page", "/dl/1mb.bin", "/dl/5mb.bin", "/dl/20mb.bin", "/dl/slow.bin"]
     return ("<!doctype html><meta charset=utf-8><title>Soak lab</title><body style='font:18px sans-serif'><h1>Soak lab</h1>" + "".join("<p><a href='%s'>%s</a></p>" % (r, r) for r in rows)).encode()
 
 
@@ -365,6 +414,8 @@ class H(http.server.BaseHTTPRequestHandler):
                 return self._send(page_form())
             if p.startswith("/img/") and p.endswith(".svg"):
                 return self._send(svg(int(p[5:-4] or 0)), "image/svg+xml")
+            if p == "/formats":
+                return self._send(page_formats((q.get("tag") or ["x"])[0]))
             if p == "/video/audible":
                 return self._send(page_audible((q.get("kind") or ["video"])[0]))
             if p == "/video/vc":
