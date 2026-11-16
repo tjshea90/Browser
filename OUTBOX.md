@@ -1958,3 +1958,30 @@
 ## 2026-11-16T16:05:21Z
 > The web tests pass (573 of 573); the emulator run for "a different video gets its own stream" is in progress.
 <!-- sha:e6e9f19fa4be -->
+
+## 2026-11-16T16:33:54Z
+> The report is done and sent as one Markdown file: `/tmp/claude-0/-home-user-Browser/12796fbc-bb0d-552d-b005-24654337a327/scratchpad/KEYBOARD-APP-PLAN.md`. It's about 20,000 words. I wrote no code and ran no tests, nothing was run on your tablet, and my web checks were search results only, not full pages.
+>
+> The new session should open with this: "Read KEYBOARD-APP-PLAN.md completely, then do section 11 (bootstrap) and continue with section 12 in order." Sections 0, 1, 2 and 12 are the minimum it needs.
+>
+> ## What I found
+> - **Most of the hard part already exists.** The browser has a complete glide engine in pure Kotlin: the decoder, an 83k-word list with word pairs, and learning of your words, pairs, triples, corrections, glide shapes and thumb habit. It has 122 unit tests and a learning-file export. It has no Android dependencies, so it moves to a new app unchanged.
+> - **The missing parts** are everything that makes it a system keyboard. That means the Android keyboard service, tap-typing prediction and autocorrect, suggestions, emoji, clipboard, and any layout beyond English QWERTY. I listed 12 specific gaps in the report, including that the code only handles letters a–z, which blocks Spanish accents and ñ until it's changed.
+>
+> ## What the plan recommends
+> - **Build on the browser's engine** instead of forking HeliBoard, FlorisBoard or FUTO. HeliBoard is GPL-3.0 and its glide engine is a closed library it doesn't ship. FUTO's licence restricts forks, and FlorisBoard uses Jetpack Compose, which is too heavy for 2 GB.
+> - **No internet permission in the keyboard.** A keyboard sees everything you type, so it can't send it anywhere. Translation therefore runs offline.
+> - **Learning upgrades** to get the "better the more I type" behaviour:
+>   - a per-key touch model;
+>   - shape memory that carries over between similar words, so a habit learned on "for" also helps "four" and "form";
+>   - word-pair and three-word context, plus a topic signal for the sentence so far;
+>   - a way to measure accuracy on your real thumb without the data leaving the device.
+> - **Translation to Mexican Spanish.** It uses an offline translation model in its own process, plus a Mexican-Spanish clean-up layer. A generic Latin-American model isn't Mexican by itself, and DeepL says so about its own. Whether such a model runs on a 32-bit ARM tablet is unverified, so the plan starts with a test on your tablet.
+> - **Phased task list** of about 30–40 sessions, with five checkpoints where it stops for you to test.
+>
+> ## What you should know
+> - **I didn't touch the Kestrel repo.** Its own hooks did write there. Its message-capture hook committed your message into `INBOX.md` on my session branch `claude/laughing-cori-u22au1`, and a similar hook will record this reply into `OUTBOX.md` on the same branch. That branch is mine, not the other account's, and you can delete it. The report itself was written outside the repo.
+> - **Your Spanish decision.** In the browser project you once said "Do not include Spanish". I treated your new translate request as overriding that, but whether you want to type in Spanish too is an open question in the report.
+> - **Safety and signing.** A broken keyboard on a tablet with no other keyboard locks you out of typing, so the plan builds the escape hatches first. The new app should be signed with a private key, not the browser's public one. Otherwise any APK could silently replace your keyboard, and changing keys later erases what it learned.
+> - **Questions to answer early.** Q1 is the app name. Q2 is a private or public GitHub repo, where I recommend private. Q3 is whether you want to type in Spanish or only translate. The full list, with defaults, is section 15.
+<!-- sha:03a0e0a3ae17 -->
