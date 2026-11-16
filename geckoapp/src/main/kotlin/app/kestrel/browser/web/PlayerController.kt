@@ -5,6 +5,7 @@ import android.view.View
 import app.kestrel.browser.Io
 import app.kestrel.browser.diag.Health
 import app.kestrel.core.player.PlayerModel
+import app.kestrel.core.player.FilmHealth
 import app.kestrel.core.player.PlayerRules
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -48,6 +49,16 @@ class PlayerController(
     private var away = 0                           // page elements (its own player controls) put away right now
     private var awayMax = 0
     private var last = "no full-screen film under Kestrel's controls yet"
+    /** ANS51e: how the page's script and the film did (stalls, the player script's own cost, frames shown and dropped), measured inside the page. */
+    private val health = FilmHealth()
+    private var lookPage = ""
+    /** The frames of the film for the "Real video" statistics: (page address, frames, dropped, seconds, picture width, height); the activity turns the address into a host. Never called for a private tab. */
+    var onLook: (String, Int, Int, Int, Int, Int) -> Unit = { _, _, _, _, _, _ -> }
+    private fun deliverLook(force: Boolean) {
+        if (quiet) return
+        val l = health.takeLook(force) ?: return
+        onLook(lookPage, l.frames, l.dropped, l.seconds, l.w, l.h)
+    }
 
     init { view.listener = this }
 
@@ -62,6 +73,7 @@ class PlayerController(
 
     private fun begin() {
         activeFlag = true; started = SystemClock.uptimeMillis(); reports = 0; taps = 0; away = 0; awayMax = 0; lastReportAt = started
+        health.newSession()
         view.visibility = View.VISIBLE
         model.setHideAfter(accessibilityMs())
         model.start(true)
@@ -70,6 +82,7 @@ class PlayerController(
     }
 
     private fun end(why: String) {
+        deliverLook(true)
         activeFlag = false; shownFlag = false
         Io.main.removeCallbacks(controlsTick); Io.main.removeCallbacks(tapTick); Io.main.removeCallbacks(ticker); Io.main.removeCallbacks(watchdog); tickerOn = false; watchOn = false
         model.stop(); commands.clear()
@@ -116,6 +129,12 @@ class PlayerController(
                 val len = m.optDouble("d", -1.0)
                 model.onSample(PlayerModel.Sample(m.optDouble("t", 0.0), len, m.optDouble("b", 0.0), m.optInt("pa") == 1, m.optInt("e") == 1, m.optInt("m") == 1, m.optInt("v", 100), m.optDouble("r", 1.0),
                     m.optInt("rs", 4), m.optInt("ms") == 1, m.optInt("l") == 1 || len == -2.0, m.optInt("w"), m.optInt("h"), SystemClock.uptimeMillis(), m.optInt("ak", 0), m.optInt("er") == 1))
+                if (!quiet) {
+                    health.onReport(m.optInt("lt"), m.optInt("pc"), m.optInt("tf", -1), m.optInt("df", -1), m.optInt("w"), m.optInt("h"), SystemClock.uptimeMillis())
+                    lookPage = m.optString("p"); deliverLook(false)
+                    val lt = m.optInt("lt")
+                    if (lt >= FilmHealth.STALL_MS) say("stall", "the page's script was busy for about $lt ms (its timer ran that late)")
+                }
                 if (reports == 1) say("first-report", "film ${m.optInt("w")}x${m.optInt("h")}, length ${m.optDouble("d")}, ${if (m.optInt("ms") == 1) "media source" else "plain file"}")
                 val aw = m.optInt("aw", 0)
                 if (aw != away) { away = aw; if (aw > awayMax) awayMax = aw; say("away", "the page's own player controls put away: $aw element(s)") }
@@ -191,5 +210,6 @@ class PlayerController(
 
 
     /** One Diagnostics line. */
-    fun line(): String = "Full-screen video controls (Kestrel's own): ${model.sessions} full screens, $taps taps on the picture (${model.singles} single, ${model.seeks} double-tap seeks), ${model.commands} commands to the page, $reports reports now; last: $last"
+    fun line(): String = "Full-screen video controls (Kestrel's own): ${model.sessions} full screens, taps on the picture: ${model.singles} single and ${model.seeks} double-tap seeks, ${model.commands} commands sent to the page; " +
+        "the last full screen: $reports reports, $taps taps; ${health.line()}; last: $last"
 }
