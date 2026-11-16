@@ -67,7 +67,7 @@ README: LGPLv2.1 or later, FFmpeg n3.4, MediaCodec API 16+, Android API 9 to 23,
 MIT app, "not a library/module (AAR) you can import" [D26]. F-Droid APK 117 MiB (2026-09-17), 51 MiB in April; Android 6.0 or newer [D26]. Verdict: no.
 
 ## 6. External player by intent
-VLC: ACTION_VIEW with title, position, from_start; returns extra_position when closed; no header or cookie extra documented [D23]. MX Player: `headers` String[] pairs, `position`, `return_result`; for http(s) the class name must be set [S, D24]. Costs: the film address (often a token) leaves the browser; the apps are not on a tablet without Play Store [I]; the app switch is slow and position comes back only on close. Verdict: no.
+VLC: ACTION_VIEW with title, position, from_start; returns extra_position when closed; no header or cookie extra documented [D23]. MX Player: `headers` String[] pairs, `position`, `return_result`; for http(s) the class name must be set [S, D24]. Costs: the film address (often a token) leaves the browser; the apps would have to be sideloaded on a tablet without Play Store [I]; position comes back only on close. DRM: only Media3 has a documented Widevine path here (HLS and DASH) [D8, D9]. Verdict: no.
 
 ## 7. NewPipeExtractor / yt-dlp style extractors
 GPL-3.0; needs core-library desugaring below minSdk 33 and a Rhino keep rule [D27]. YouTube's terms forbid accessing or downloading except as the Service allows, circumventing it, and automated access [D29]. YouTube enforces PO tokens per client and says it is "continuously updating the implementation and enforcement" [D28]. Plainly: do not ship this. YouTube keeps playing in its own page; use its quality menu.
