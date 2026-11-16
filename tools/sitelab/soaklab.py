@@ -76,7 +76,11 @@ def make_clips():
                 f.write('#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH=700000,RESOLUTION=640x360,FRAME-RATE=25.000,CODECS="avc1.4d401e,mp4a.40.2"\nindex.m3u8\n')
                 if os.path.exists(os.path.join(hdir, "low.m3u8")):
                     f.write('#EXT-X-STREAM-INF:BANDWIDTH=300000,RESOLUTION=320x180,FRAME-RATE=25.000,CODECS="avc1.4d400d,mp4a.40.2"\nlow.m3u8\n')
+        # ANS55 (owner message 55): the sound of the film as a list of its own, as long as the film, like the rendition lists Brightcove (Yahoo) puts next to its master
+        if os.path.exists(os.path.join(hdir, "index.m3u8")):
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", land, "-vn", "-c:a", "aac", "-b:a", "64k", "-f", "hls", "-hls_time", "4", "-hls_playlist_type", "vod", "-hls_segment_filename", os.path.join(hdir, "aud%d.ts"), os.path.join(hdir, "aud.m3u8")], check=False)
         print("soaklab: hls film %s" % ("ok" if os.path.exists(os.path.join(hdir, "master.m3u8")) else "FAILED"), flush=True)
+        print("soaklab: hls sound list %s" % ("ok" if os.path.exists(os.path.join(hdir, "aud.m3u8")) else "FAILED"), flush=True)
     tone = os.path.join(OUT, "tone.m4a")          # SND1: sound without a picture
     if not os.path.exists(tone):
         subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=120", "-c:a", "aac", "-b:a", "64k", "-movflags", "+faststart", tone], check=False)
@@ -471,7 +475,7 @@ def page_ap(variant, tag):
 
 
 def page_ho(variant, tag):
-    """ANS54e (owner message 54: web video players should be Kestrel's own player): pages whose film Kestrel's own player may take over. Reports through AP_JS (kind=ap, tag). Variants:
+    """ANS54e (owner message 54: web video players should be Kestrel's own player): pages whose film Kestrel's own player may take over. Reports through AP_JS (kind=ap, tag). Variants (ANS55: also hlsdecoy and audioonly, see below):
     file = a film file with the engine's own controls; overlay = a film file with a play button of the page's own over the picture; hls = a script player (blob: source) whose page also asks for the lab's HLS
     master list at load, like hls.js; unknown = a script player with NO playlist anywhere (YouTube-style: nothing to hand over); bad = a film address that does not exist (Kestrel's player fails, the page takes over)."""
     q = urllib.parse.quote(tag, safe="")
@@ -488,8 +492,12 @@ def page_ho(variant, tag):
     elif variant == "overlay":
         body = ("<div id=player style='position:relative;width:100%;height:300px'><video id=v playsinline poster='/img/1.svg' src='@FILM@' style='@BOX@'></video>" + ov + "</div>"
                 "<script>var v = document.getElementById('v'); apHook(v); document.getElementById('btn').onclick = function () { var how = 'overlay'; " + play_js + " };</script>")
-    elif variant in ("hls", "unknown"):
-        ask = "fetch('/hls/film/master.m3u8').then(function (r) { return r.text(); }).then(function (t) { apRep('playlist', { bytes: t.length }); });" if variant == "hls" else ""
+    elif variant in ("hls", "unknown", "hlsdecoy", "audioonly"):
+        # hlsdecoy = Yahoo's way (Shaka + Brightcove): a master with a long token in its address, and next to it the lists of the sound and of the two pictures with SHORT addresses and other tokens than the master names;
+        # audioonly = a page whose only list is the film's sound (Kestrel's player would show nothing: it gives the film back after 7 s)
+        ask = {"hls": "fetch('/hls/film/master.m3u8').then(function (r) { return r.text(); }).then(function (t) { apRep('playlist', { bytes: t.length }); });",
+               "hlsdecoy": "var tok = new Array(420).join('a'); fetch('/hls/film/master.m3u8?tok=' + tok).then(function (r) { return r.text(); }).then(function (t) { apRep('playlist', { bytes: t.length }); fetch('/hls/film/aud.m3u8?bc=0'); fetch('/hls/film/index.m3u8?bc=1'); fetch('/hls/film/low.m3u8?bc=2'); });",
+               "audioonly": "fetch('/hls/film/aud.m3u8?bc=0').then(function (r) { return r.text(); }).then(function (t) { apRep('playlist', { bytes: t.length }); });"}.get(variant, "")
         body = ("<div id=player style='position:relative;width:100%;height:300px'><video id=v playsinline poster='/img/1.svg' style='@BOX@'></video>" + ov + "</div>"
                 "<script>var v = document.getElementById('v'); apHook(v); " + ask +
                 "var ms = new MediaSource(); v.src = URL.createObjectURL(ms);"
