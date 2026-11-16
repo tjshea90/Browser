@@ -30,6 +30,11 @@ class PlaybackMeter(private val priv: Boolean, private val say: (String, String)
     private var dropped = 0
     private var finished = false
 
+    /** The person picked another picture (or the cap changed): the wait that follows is the new picture arriving, not the network failing. */
+    override fun onTrackSelectionParametersChanged(eventTime: AnalyticsListener.EventTime, trackSelectionParameters: androidx.media3.common.TrackSelectionParameters) {
+        if (firstFrameAt != 0L) { seeking = true; endStall(SystemClock.uptimeMillis(), counted = false) }
+    }
+
     override fun onPlayWhenReadyChanged(eventTime: AnalyticsListener.EventTime, playWhenReady: Boolean, reason: Int) {
         wantPlay = playWhenReady
         if (!playWhenReady) endStall(SystemClock.uptimeMillis(), counted = false)             // (a pause while waiting is not the network's fault)

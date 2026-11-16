@@ -2701,7 +2701,7 @@ class Soak:
             m = self.log.size()
             self.ph.hold_drag(self.screen, hx, 500, 0, steps=1, hold_s=0.6, target="native")
             hl = [e["rest"] for e in ev("native", "gesture-hint", m)]
-            check("A: a finger resting on the %s side is told '%s' (never 'slide left or right to seek' on a side)" % (label, words), any(words in h for h in hl) and (label == "middle" or not any("left or right" in h for h in hl)), "hint lines %s" % hl[:3])
+            check("A: a finger resting on the %s is told '%s'%s" % (label if label == "middle" else label + " side", words, "" if label == "middle" else " (never 'slide left or right to seek' on a side)"), any(words in h for h in hl) and (label == "middle" or not any("left or right" in h for h in hl)), "hint lines %s" % hl[:3])
         # the rest first (as in alpha60) still works, then drags without it
         m = self.log.size()
         with_shot("gp-A-4-seek-info-while-dragging", lambda: self.ph.hold_drag(self.screen, 150, 500, XCM, end_hold_s=3.0, target="native"), 2.6); time.sleep(0.5)
@@ -2844,6 +2844,8 @@ class Soak:
             self.record({"kind": "inline-quality", "name": "quality-inside-the-page", "status": "failed", "checks": checks})
             return
         vx, vy = int(float(L.get("vx") or 0)), int(float(L.get("vy") or 0)); bx, by = int(float(L.get("bx") or 0)), int(float(L.get("by") or 0))
+        vw, vh = int(float(L.get("vw") or 0)), int(float(L.get("vh") or 0))
+        tx, ty = vx - vw // 3, vy - vh // 4                                         # (a place on the picture that is no button: the middle holds the play button, a tap there pauses the film)
         m1 = self.log.size(); self.ph.tap(bx, by); time.sleep(9)
         check("the film (an HLS stream with two pictures) plays INSIDE the page", bool(ev("inline", "start", m1)) and bool(ev("inline", "first-picture", m1)), "inline lines %s, native start %d" % ([e["ev"] for e in health_events(self.log.since(m1), "inline")][:8], len(ev("native", "start", m1))))
         tr = ev("inline", "tracks", m1)
@@ -2852,7 +2854,7 @@ class Soak:
         check("the stream offers more than one picture ('inline tracks')", bool(mt) and int(mt.group(1)) >= 2, "tracks lines %s" % [e["rest"][:80] for e in tr])
         def show_controls():
             for _ in range(3):
-                mm0 = self.log.size(); self.ph.tap(vx, vy); time.sleep(1.5)
+                mm0 = self.log.size(); self.ph.tap(tx, ty); time.sleep(1.5)
                 sh, hd = ev("inline", "shown", mm0), ev("inline", "hidden", mm0)
                 if sh and (not hd or sh[-1]["t"] > hd[-1]["t"]):
                     return sh[-1]
