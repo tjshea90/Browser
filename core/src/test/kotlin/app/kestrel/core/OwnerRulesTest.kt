@@ -528,6 +528,44 @@ class OwnerRulesTest {
         assertTrue("Diagnostics counts the films inside the page", source("geckoapp/src/main/kotlin/app/kestrel/browser/web/WebHandStats.kt").contains("inside the page: \$inline film(s)"))
     }
 
+    // ANS55f review (2026-11-16, ship-code-reviewer): what the independent review of the inline player found, pinned
+    @Test fun theFilmInsideThePageStartsOnlyWhileThePageIsInFrontAndEndsWhenItsAddressChanges() {
+        val flow = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/VideoFlow.kt")
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        val host = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/InlineHost.kt")
+        assertTrue("a film starts (inside the page or full screen) only while the app is in front and nothing lies over the page: a late answer after Home or a page script's own question starts nothing",
+            flow.contains("if (!a.pageInFront()) return decline(") && act.contains("internal fun pageInFront(): Boolean = onScreenNow && tabGrid.visibility != View.VISIBLE") && act.contains("!sheet.isShowing"))
+        assertTrue("a tap on the film's own buttons does not renew the 15 s press window", act.contains("inline.active && inline.covers(ev.rawX, ev.rawY)) return false"))
+        assertTrue("an address change without a page load (pushState, #link) ends the film; so does a killed or hibernated page process",
+            host.contains("fun addressChanged(") && source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt").contains("a.pageAddressChanged(tab, url)") && act.contains("inline.stop(\"the page's process went\")") && act.contains("inline.stop(\"the tab was put to sleep\")"))
+        assertTrue("the neon glow holds still while the film plays inside the page", act.contains("inline.active)))") && host.contains("a.inlineChanged()"))
+    }
+
+    // ANS57 (owner message 57: VLC-style gestures; research/ANS57_VLC_GESTURES.md)
+    @Test fun ownerMessage57VlcStyleGestures() {
+        val math = source("core/src/main/kotlin/app/kestrel/core/player/PlayerGestures.kt")
+        assertTrue("VLC's numbers: 3 s base + 10 min at 8 cm on the fourth power, 1 cm dead zone, steep = more than 2, 5 % to begin a vertical drag, 1.25 of the range, left 3/7 brightness, right 3/7 volume",
+            math.contains("SEEK_BASE_MS = 3000.0") && math.contains("SEEK_SCALE_MS = 600000.0") && math.contains("SEEK_REF_CM = 8.0") && math.contains(".pow(4)") && math.contains("SEEK_MIN_CM = 1.0") && math.contains("STEEP = 2.0") &&
+                math.contains("VERTICAL_START = 0.05") && math.contains("LEVEL_FACTOR = 1.25") && math.contains("LEFT_END = 3.0 / 7.0") && math.contains("RIGHT_START = 4.0 / 7.0"))
+        assertTrue("the film is moved only when the finger lets go; the long press (350 ms) arms the precise seek and a sideways drag without it does nothing", math.contains("seekCommit(jump)") && math.contains("HOLD_MS = 350L") && math.contains("sideways without the long press: nothing"))
+        val model = source("core/src/main/kotlin/app/kestrel/core/player/PlayerModel.kt")
+        assertTrue("a double tap on a side seeks AND puts the controls away (the owner: I'm not selecting video controls); the skip buttons do not", model.contains("controls.seekGesture(); h.feedback(zone, burst)") && source("core/src/main/kotlin/app/kestrel/core/player/ControlsMachine.kt").contains("fun seekGesture()"))
+        val np = source("geckoapp/src/main/kotlin/app/kestrel/browser/NativePlayerActivity.kt"); val ip = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/InlinePlayer.kt")
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt"); val vg = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/VideoGestures.kt"); val lv = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/VideoLevels.kt")
+        assertTrue("the full-screen player, the player inside the page (hold first: a plain drag scrolls the page) and the page's own full screen all use the one engine",
+            np.contains("VideoGestures(this") && np.contains("holdFirst = false") && ip.contains("holdFirst = true") && act.contains("if (pageFilmGestureTouch(ev)) return true") && act.contains("holdFirst = false)"))
+        assertTrue("the page's own full screen: the page is told its touch is over (a cancel) when a gesture begins, a finger on a control or a sheet is never a gesture, the neon glows are let go",
+            act.contains("private fun takePageTouch()") && act.contains("ACTION_CANCEL, pageGestureX, pageGestureY, 0)") && act.contains("!player.controlAt(ev.x, ev.y)") && act.contains("Io.main.postDelayed(touchRelease, 350L)"))
+        assertTrue("volume = the music stream, brightness = the window of the activity; both given back when the film ends",
+            lv.contains("AudioManager.STREAM_MUSIC") && lv.contains("lp.screenBrightness = f.coerceIn(0.01f, 1f)") && lv.contains("BRIGHTNESS_OVERRIDE_NONE") && vg.contains("levels.restore()") &&
+                np.contains("gestures.stop()") && ip.contains("gestures?.stop()") && act.contains("pageGestures?.stop()"))
+        assertTrue("a setting switches them off (Settings > Video gestures, on by default, in the backup)",
+            source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("bool(\"video_gestures\", true)") && source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("toggle(\"Video gestures\"") &&
+                source("app/src/main/kotlin/app/kestrel/browser/data/BackupManager.kt").contains("Spec(\"video_gestures\", T.BOOL)") && np.contains("gesturesOn = prefs.videoGestures"))
+        assertTrue("what the gestures show: VLC's text (+0:25 (1:23:45) x0.3), a level bar with its icon and percentage, in the one controls view",
+            source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerControlsView.kt").let { it.contains("fun showInfo(text: String?)") && it.contains("fun showLevel(kind: GestureMath.Level, fraction: Float)") && it.contains("drawSunIcon") })
+    }
+
     @Test fun ownerMessage54IsActedOn() {
         val dir = "geckoapp/src/main/assets/kestrel-shields/"
         // the screen never turns by itself by default; the options box has an x
