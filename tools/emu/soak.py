@@ -2640,7 +2640,6 @@ class Soak:
         self.ph.physical(0, 9.81, 0); self.ph.debug("vpress", "1"); self.ph.debug("webmode", "0"); time.sleep(2.5)
         self.ph.a.sh("media volume --stream 3 --set 4 2>/dev/null", timeout=15)
         sw, sh = self.screen
-        self.ph.touch_probe(self.out)                                              # diagnostics-touch.txt: what this Android's touch devices and `input` offer
         def double_tap(x, y):
             self.ph.a.sh("input tap %d %d & input tap %d %d & wait" % (x, y, x, y), timeout=30)
         def jumps(lines):
@@ -2695,20 +2694,13 @@ class Soak:
         m = self.log.size()
         self.ph.a.sh("input swipe %d %d %d %d 500" % (150, 500, 450, 500), timeout=20); time.sleep(1.5)
         check("A: a sideways drag WITHOUT the long press does not seek", not jumps(ev("native", "gesture-seek", m)) and not any('"skip"' in c["rest"] for c in ev("native", "cmd", m)), "seek lines %s" % [e["rest"] for e in ev("native", "gesture-seek", m)][:3])
-        # which way of resting a finger reaches the app? the first that makes the engine say 'gesture-armed' (a short drag, under the 1 cm dead zone: nothing moves)
-        for way in self.ph.touch_methods():
-            mp = self.log.size()
-            self.ph.hold_drag(self.screen, 150, 500, 40, method=way); time.sleep(1.5)
-            got = bool(ev("native", "gesture-armed", mp))
-            nums.append("touch way %s: %s" % (way, "the app saw the long press" if got else "the app saw nothing"))
-            if got:
-                self.ph.touch_pref = way
-                break
-        else:
-            self.issue("medium", "tooling", "the lab could not rest a finger on the glass (neither input motionevent nor the raw touch device reached the app): %s (diagnostics-touch.txt)" % self.ph.touch_log[-3:])
+        # a finger that rests about a third of a second arms the precise seek (the app ticks and says 'gesture-armed'); a short drag under VLC's 1 cm dead zone, so nothing moves
+        m = self.log.size()
+        self.ph.hold_drag(self.screen, 150, 500, 40, target="native")
+        check("A: a finger that rests a third of a second arms the precise seek ('gesture-armed')", bool(ev("native", "gesture-armed", m)), "native lines %s" % [e["ev"] for e in health_events(self.log.since(m), "native")][:8])
         # long press, then drag right: the precise seek; the film moves when the finger lets go
         m = self.log.size()
-        with_shot("gp-A-4-seek-info-while-dragging", lambda: self.ph.hold_drag(self.screen, 150, 500, XCM, end_hold_s=3.0), 3.2); time.sleep(2.5)
+        with_shot("gp-A-4-seek-info-while-dragging", lambda: self.ph.hold_drag(self.screen, 150, 500, XCM, end_hold_s=3.0, target="native"), 2.6); time.sleep(0.5)
         j1 = jumps(ev("native", "gesture-seek", m))
         nums.append("A hold + 4 cm right: jumps %s" % j1)
         check("A: a long press and a drag right of about 4 cm jumps forward by tens of seconds (%s)" % j1[-1:], bool(j1) and 25 <= j1[-1] <= 60, "seek lines %s, cmd lines %s" % ([e["rest"][:50] for e in ev("native", "gesture-seek", m)], [c["rest"][:30] for c in ev("native", "cmd", m)][:3]))
@@ -2716,17 +2708,17 @@ class Soak:
         self.shot("gp-A-4-after-seek")
         # a longer drag jumps farther
         m = self.log.size()
-        self.ph.hold_drag(self.screen, 80, 500, int(XCM * 1.5)); time.sleep(2.0)
+        self.ph.hold_drag(self.screen, 80, 500, int(XCM * 1.5), target="native"); time.sleep(1.0)
         j2 = jumps(ev("native", "gesture-seek", m))
         check("A: the farther the drag the bigger the jump (6 cm: %s s against 4 cm: %s s)" % (j2[-1:], j1[-1:]), bool(j2) and bool(j1) and j2[-1] > j1[-1], "jumps %s %s" % (j1, j2))
         # left = rewind
         m = self.log.size()
-        self.ph.hold_drag(self.screen, 450, 500, -XCM); time.sleep(2.0)
+        self.ph.hold_drag(self.screen, 450, 500, -XCM, target="native"); time.sleep(1.0)
         j3 = jumps(ev("native", "gesture-seek", m))
         check("A: a long press and a drag LEFT rewinds (%s)" % j3[-1:], bool(j3) and j3[-1] < -20, "jumps %s" % j3)
         # moving also up or down: finer
         m = self.log.size()
-        self.ph.hold_drag(self.screen, 150, 700, XCM, dy=-170); time.sleep(2.0)
+        self.ph.hold_drag(self.screen, 150, 700, XCM, dy=-170, target="native"); time.sleep(1.0)
         j4 = jumps(ev("native", "gesture-seek", m))
         nums.append("A fine: plain %s s, with 1 inch up %s s" % (j1[-1:], j4))
         check("A: a drag that also goes an inch up is finer (about a third: %s s against %s s)" % (j4[-1:], j1[-1:]), bool(j4) and bool(j1) and 0 < j4[-1] < j1[-1] * 0.6, "jumps %s %s" % (j1, j4))
