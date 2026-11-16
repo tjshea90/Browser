@@ -64,3 +64,14 @@ the extension asks the app for the page answer (flags + the video format policy 
 asks `guard` at its start, which is answered at once from the cached flags with whatever `codecCfg` the extension knew before the new answer came back. On the tablet over a hotspot the app's answer (a few ms) wins; on the lab's
 localhost server (first bytes in under a millisecond, a busy 2-core emulator) the page now and then wins. Effect for the owner: after changing "Video formats" in Settings, the FIRST page that starts within a few ms of the answer
 can offer the old formats; the next page is right. Not fixed in the extension (a bounded wait for an in-flight ask in `guardAnswer` would do it: TASKS.md ANS60e); the lab now loads one throw-away page of the same host before the page that is judged.
+
+## 8. Independent review of the alpha61 code (read-only agent, 2026-11-16) and what was done with it
+
+No high findings; 300k fuzzed touch sequences left the gesture engine consistent in the default mode. Fixed before shipping: the jump text after a precise seek said twice the jump (it read the player's position AFTER the seek had
+masked it to the target: VideoGestures.seekCommit now takes the target first); a jump text stayed on the picture after a quick new touch (the touch now clears it); a sideways drag from the MIDDLE strip that began with a small
+vertical wobble was handed away at its first steep sample (the 5 % dead start now holds there too, as it already did at the sides); in the opt-in long-press-first rule an armed finger that dragged into the dead strip never
+ended its arming (PlayerGestures.vertical now says finished()); PlaybackMeter swallowed the first REAL stall after a seek inside the buffer or a picture change that kept playing (a flag that waited for the next READY:
+now a 2 s window). Known and left as they are: (a) the 10 s back buffer shares the 16 MiB byte ceiling with the forward buffer, so at 4 Mbit/s and above the forward part shrinks (about 14 to 22 s at 4 Mbit/s,
+about 6 s at 5 Mbit/s with a 10 s keyframe distance): the new stats line says how much was buffered ahead at the end of each film, that is the number to decide a change of the ceiling or of the back buffer from;
+(b) tapping "Automatic" in the list inside the page lifts the picture cap from the box's 480p to 720p for the rest of that film (the row says so: at most 720p); (c) NativePlayerActivity uses onBackPressed, which Android 16
+does not call for an app that targets API 36 (predictive back): Back with the quality list open would leave the player instead of closing the list there; the tablet (API 29) is not affected, TASKS.md ANS60f.
