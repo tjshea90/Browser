@@ -1,21 +1,22 @@
-# CHECKPOINT 2454 — read me first, then TASKS.md
+# CHECKPOINT 2455 — read me first, then TASKS.md
 
-**Written:** 2026-11-16T00:09:23Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `a27ad5a0` (this checkpoint is the commit after it)
+**Written:** 2026-11-16T00:31:44Z · **tests:** 1 RED: test_handoff.sh (0 green)
+**Branch:** `ccr-b3c2484c-sbew36` · **builds on:** `745728d1` (this checkpoint is the commit after it)
 
 ## Just done
-kp lab run 5 (43778006356, 512 MB heap boot): 22 of 22 checks GREEN on the real Firefox engine, 0 issues (tap toggle, big button pause/play, 10 s buttons both ways, double tap right/left/middle with real seeks, mute, exit, page chrome put away and given back, Hide mode keeps the nav bar's height free). Root cause of the earlier 'second press pauses again': background.js relay overwrote the film's paused flag p with the page address (now pa; guard + relay tests). Scene fix for picture kp-11 (pause first so the controls stay up while the bar is pulled over the film). TASKS VP2/VP3/VP4 ticked with the run id; HANDOFF + research docs have the lab findings; heartbeat prompt updated; release note draft in scratchpad note55.txt
+lab fsy run 43778698760: kp scene 22/22 ok again, sound ok, Yahoo live player went full screen (page had the new size after 1.7-1.9 s, turn waits for it) with Kestrel's controls over it, BUT Yahoo's own bottom bar (play, volume, CC) was still visible under/next to Kestrel's row in picture yahoofs-full (headless Chromium test of the real player.js on the live Yahoo DOM hides .shaka-controls-container fine, so the Firefox page differs somehow): player.js now counts the elements it put away (aw in every report, relay + Health 'player away' + Diagnostics), takes display:none !important back onto an element the page re-shows, lab suite yh = only the live Yahoo scene with a check (controls started, away count); fsy's old 'tap shows Kestrel bar' check now accepts the native controls; red-strip test sees a dimmed strip (the controls' scrim made 'right' read 'stale': the slow-turn scene's 3 high issues were that, plus renice read back -10 so the scene does not slow only the engine); landscape picture kp-5b added; version bumped to 156 / alpha55 in geckoapp/build.gradle.kts; all Kotlin suites + web-tests (472) green before the last small edits (player/background tests 99 ok after)
 
 ## Do this next
-dispatch android.yml app=lab lab_suite=fsy lab_minutes=10 lab_net=full ref=ccr-b3c2484c-sbew36 (kp scene again + live Yahoo full screen + slow turn + sound): read report.md (heap line first), look at the Yahoo pictures (does Shaka's own bar get put away, do Kestrel's controls look right on the real page) and slow-turn verdict; then full suites (gradle + web-tests), bump geckoapp/build.gradle.kts to versionCode 156 / 0.3.0-alpha55, bash ship.sh gecko "", dispatch app=gecko, wait green, record-release, FINAL answer to owner message 49; heartbeat trig_01Y8CFHKVb6hmQmEEM78p6gv
+dispatch android.yml app=lab lab_suite=yh lab_minutes=5 lab_net=full (ref ccr-b3c2484c-sbew36), read report.md section 'The owner's Yahoo Finance player': 'Kestrel's own controls started; page controls put away: [..]' and picture yahoofs-full; if away is empty or Yahoo's bar is still visible: find the real Firefox DOM (add a debug dump) or hide generic control elements; the independent code review agent a75f62ac18ae8368d is still running (apply its real findings); then full suites, bash ship.sh gecko with scratchpad note55.txt, dispatch app=gecko, record-release, final answer to owner message 49
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M TASKS.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  8eab718d ckpt 2454: kp lab run 5 (43778006356, 512 MB heap boot): 22 of 22 checks GREEN on the r
   b74a874d ckpt 2453: kp lab run 3 (43776782679, good boot 512 MB heap): 18 of 21 checks pass on t
   4b0bd9aa ckpt 2452: kp lab run 2 (43775890786) read: it says NOTHING about the controls: the emu
   05a26786 ckpt 2451: VP1 lab scene kp fixed after the first real-engine run (soak.py kp_scene: pa
@@ -25,7 +26,6 @@ dispatch android.yml app=lab lab_suite=fsy lab_minutes=10 lab_net=full ref=ccr-b
   17392233 ckpt 2447: pre-ship: alpha54: fixes from an independent check of alpha53 (the new video
   aa9dfa02 ckpt 2446: owner message 49 (video player audit + overhaul request, with observations o
   4e91027c ckpt 2445: ROT3 coded (not shipped): FullscreenTurner waits 650 ms of the tablet stayin
-  f1e253aa ckpt 2444: alpha53 RELEASED and recorded (run 43770059374 green); owner message 48 ANSW
 ```
 
 (7 automatic checkpoint(s) since the last deliberate one — the
