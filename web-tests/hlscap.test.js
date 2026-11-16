@@ -36,7 +36,8 @@ test('the named caps: 720p keeps 1280 wide, 480p keeps only 640 and under, 1080p
   assert.deepEqual(kept(854), ['v360.m3u8?x=1'], '960 is more than 2 % above 854');
   assert.deepEqual(kept(1920), ['(unchanged)']);
   assert.equal(rewriteMaster(text(MASTER), 1920), null);
-  assert.deepEqual(kept(870), ['v540.m3u8?x=1', 'v360.m3u8?x=1'], '960 is within the 2 % slack of 940');
+  assert.deepEqual(kept(945), ['v540.m3u8?x=1', 'v360.m3u8?x=1'], '960 is within the 2 % slack of 945 (963.9)');
+  assert.deepEqual(kept(930), ['v360.m3u8?x=1'], '960 is above 930 plus 2 % (948.6)');
 });
 
 test('every rung with a picture above the cap: the smallest one stays, so the film still plays', () => {
@@ -48,7 +49,9 @@ test('every rung with a picture above the cap: the smallest one stays, so the fi
   assert.equal(rewriteMaster(text(['#EXTM3U', '#EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080', 'only.m3u8', '']), 640), null);
   // rungs of equal size above the cap: one of them stays
   const twin = ['#EXTM3U', '#EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080', 'a.m3u8', '#EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080', 'b.m3u8'];
-  assert.equal(rewriteMaster(text(twin), 640), null, 'both are the smallest: nothing dropped except what is bigger');
+  assert.equal(rewriteMaster(text(twin), 640), null, 'both are the smallest: both stay');
+  const mixed = ['#EXTM3U', '#EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080', 'a.m3u8', '#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280x720', 'b.m3u8', '#EXT-X-STREAM-INF:BANDWIDTH=2500000,RESOLUTION=1280x720', 'c.m3u8'];
+  assert.equal(rewriteMaster(text(mixed), 640).text, text(mixed.slice(0, 1).concat(mixed.slice(3))), 'the 1080p rung goes, both 720p rungs stay');
 });
 
 test('a portrait film is judged by its longer side, a rung with no picture size is never dropped', () => {

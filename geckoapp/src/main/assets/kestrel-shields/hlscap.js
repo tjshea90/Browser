@@ -7,7 +7,7 @@
 // The rules (never an error for the page: a text this file does not understand is handed back as it was, null):
 //  - only a MASTER playlist (it has `#EXT-X-STREAM-INF`); a media playlist, a segment list, any other text: null;
 //  - a rung is the `#EXT-X-STREAM-INF:` line and the address line right after it; it goes when its RESOLUTION's LONGER side is more than 2 % above the cap (a portrait film is judged by its long side too);
-//  - a rung with no RESOLUTION (audio only, or a site that leaves it out) always stays, and so does at least the SMALLEST rung that has one: a master whose rungs are all above the cap loses all but the smallest;
+//  - a rung with no RESOLUTION (audio only, or a site that leaves it out) always stays, and so do the rungs of the SMALLEST size that has one: a master whose rungs are all above the cap loses all but those;
 //  - `#EXT-X-I-FRAME-STREAM-INF:` lines (the picture strip a seek bar shows) above the cap go as well; everything else (EXT-X-MEDIA, the audio groups, comments, the order, the line endings) stays byte for byte;
 //  - a stream-inf tag with no address line right after it is left alone.
 // Conservative ES5 (it runs in the background page of the extension, but the same rule as every script of the extension).
@@ -40,15 +40,15 @@
     }
     var limit = cap * SLACK, pictures = [], over = 0;
     for (i = 0; i < rungs.length; i++) if (!rungs[i].frame && rungs[i].size > 0) { pictures.push(rungs[i]); if (rungs[i].size > limit) over++; }
-    var keep = null;
-    if (pictures.length > 0 && over === pictures.length) {            // every rung with a picture is too big: the smallest one stays
-      keep = pictures[0];
-      for (i = 1; i < pictures.length; i++) if (pictures[i].size < keep.size) keep = pictures[i];
+    var floor = 0;                                                     // every rung with a picture is too big: those of the SMALLEST size stay (all of them, so the player keeps its choice of bit rates)
+    if (pictures.length > 0 && over === pictures.length) {
+      floor = pictures[0].size;
+      for (i = 1; i < pictures.length; i++) if (pictures[i].size < floor) floor = pictures[i].size;
     }
     var gone = {}, dropped = 0, frames = 0;
     for (i = 0; i < rungs.length; i++) {
       var r = rungs[i];
-      if (r.size > limit && r !== keep) {
+      if (r.size > limit && r.size > floor) {
         for (var k = 0; k < r.n; k++) gone[r.at + k] = true;
         if (r.frame) frames++; else dropped++;
       }
