@@ -125,6 +125,13 @@ class PlayerControlsView(ctx: Context) : View(ctx) {
 
     val controlsShown: Boolean get() = shownTarget
 
+    /** ANS53c: is [wx], [wy] (window coordinates) on one of the SHOWN controls? Then the touch is theirs and is not a tap on the picture. */
+    fun controlAtWindow(wx: Float, wy: Float): Boolean {
+        if (alphaNow < 0.5f || !shownTarget) return false
+        val loc = IntArray(2); getLocationInWindow(loc)
+        return hitTest(wx - loc[0], wy - loc[1]) != Hit.NONE
+    }
+
     // ---------------------------------------------------------------------------------------- geometry
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) { layoutParts() }

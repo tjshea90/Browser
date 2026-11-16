@@ -42,6 +42,15 @@ class PlayerController(
     private val watchdog = object : Runnable { override fun run() { watchOn = false; checkAlive() } }
     private var watchOn = false
 
+    // ANS53c (owner message 53: "zero delay"): a tap on the picture is seen on the glass itself by the activity and answered at once; the page's own message for the same tap (it comes through the page's script thread, the
+    // extension and the app: a few tens of ms on a quiet page, seconds on a busy one) is matched by the time of the touch and dropped, and the tap that was on one of the page's own buttons is put back.
+    private val appTapEpoch = LongArray(4)
+    private var appTapIdx = 0
+    private var lastAppTapUptime = 0L
+    private var prevShown = false
+    private var lastToggled = false
+    private var appTaps = 0; private var dupTaps = 0; private var undoneTaps = 0; private var appTapMsTotal = 0L; private var appTapMsWorst = 0L
+
     // what Diagnostics says
     private var reports = 0
     private var taps = 0
@@ -73,6 +82,7 @@ class PlayerController(
 
     private fun begin() {
         activeFlag = true; started = SystemClock.uptimeMillis(); reports = 0; taps = 0; away = 0; awayMax = 0; lastReportAt = started
+        java.util.Arrays.fill(appTapEpoch, 0L); lastAppTapUptime = 0L; lastToggled = false
         health.newSession()
         view.visibility = View.VISIBLE
         model.setHideAfter(accessibilityMs())
@@ -139,10 +149,38 @@ class PlayerController(
                 val aw = m.optInt("aw", 0)
                 if (aw != away) { away = aw; if (aw > awayMax) awayMax = aw; say("away", "the page's own player controls put away: $aw element(s)") }
             }
-            "vtap" -> { taps++; say("tap", "x=${m.optInt("x", 500)}"); model.onTap(m.optInt("x", 500)) }
+            "vtap" -> {
+                val ts = m.optLong("ts", 0L)
+                if (m.optInt("pg") == 1) {                                  // a tap on one of the page's own buttons (skip ad ...): what the app toggled for it at once is put back
+                    if (matchesAppTap(ts) && lastToggled) { lastToggled = false; undoneTaps++; model.undoTap(prevShown); say("tap-undone", "the page said that tap was on one of its own buttons") }
+                } else if (matchesAppTap(ts)) { dupTaps++ }                  // the same tap the app already answered on the glass
+                else { taps++; say("tap", "x=${m.optInt("x", 500)} (the page's message)"); model.onTap(m.optInt("x", 500)) }
+            }
         }
         flush()
     }
+
+    /** ANS53c: the activity saw a tap on the glass (UI thread): [xPermille] across the picture, [epochMs] = when the finger lifted, [msSinceUp] = how long ago that was when this ran. The controls answer AT ONCE. */
+    fun appTap(xPermille: Int, epochMs: Long, msSinceUp: Long) {
+        if (!activeFlag || !armed) return
+        appTapEpoch[appTapIdx and 3] = epochMs; appTapIdx++
+        lastAppTapUptime = SystemClock.uptimeMillis()
+        appTaps++; taps++; appTapMsTotal += msSinceUp.coerceAtLeast(0L); if (msSinceUp > appTapMsWorst) appTapMsWorst = msSinceUp
+        prevShown = model.shown; val before = model.singles
+        model.onTap(xPermille.coerceIn(0, 1000))
+        lastToggled = model.singles != before
+        say("tap", "x=$xPermille (on the screen itself, ${msSinceUp.coerceAtLeast(0L)} ms after the finger lifted)")
+        flush()
+    }
+
+    /** The page's message names the time of the touch (`ts`, epoch ms); an older page script names none: then the tap just before it is meant. */
+    private fun matchesAppTap(ts: Long): Boolean {
+        if (ts > 0L) { for (e in appTapEpoch) if (e > 0L && Math.abs(e - ts) <= 450L) return true; return false }
+        return SystemClock.uptimeMillis() - lastAppTapUptime < 900L
+    }
+
+    /** Is [wx], [wy] (window coordinates) on one of the shown controls? Such a touch is the controls' own: the activity does not count it as a tap on the picture. */
+    fun controlAt(wx: Float, wy: Float): Boolean = view.controlAtWindow(wx, wy)
 
     /** The answer for the page, from any thread: what the controls want done, whether they are shown. */
     fun reply(): String {
@@ -209,5 +247,5 @@ class PlayerController(
 
     /** One Diagnostics line. */
     fun line(): String = "Full-screen video controls (Kestrel's own): ${model.sessions} full screens, taps on the picture: ${model.singles} single and ${model.seeks} double-tap seeks, ${model.commands} commands sent to the page; " +
-        "the last full screen: $reports reports, $taps taps; ${health.line()}; last: $last"
+        "the last full screen: $reports reports, $taps taps; taps answered on the screen itself $appTaps (average ${if (appTaps > 0) appTapMsTotal / appTaps else 0} ms from the finger lifting, worst $appTapMsWorst ms), the page's own copies dropped $dupTaps, put back after a page button $undoneTaps; ${health.line()}; last: $last"
 }
