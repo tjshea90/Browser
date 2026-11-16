@@ -189,8 +189,10 @@
   try {
     document.addEventListener(CFG_EVENT, function (e) {
       try {
-        var p = parsePolicy(e && e.detail);
-        policy = p; cache = {}; cacheSize = 0;
+        var d = e && e.detail;
+        if (d === '') { policy = null; cache = {}; cacheSize = 0; return; }   // told "none": the engine answers everything
+        var p = parsePolicy(d);
+        if (p) { policy = p; cache = {}; cacheSize = 0; }                    // nonsense (also from the page itself) keeps what was told before
       } catch (x) { /* keep what was told before */ }
     }, true);
     document.dispatchEvent(new CustomEvent(READY_EVENT));
