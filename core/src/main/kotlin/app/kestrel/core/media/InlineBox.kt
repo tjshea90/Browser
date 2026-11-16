@@ -22,8 +22,8 @@ object InlineBox {
         override fun toString() = "[$l,$t ${w}x$h]"
     }
 
-    const val MIN_W = 200            // a box smaller than this is a thumbnail, not a film
-    const val MIN_H = 112
+    const val MIN_W = 240            // a box smaller than this is a thumbnail, not a film (the controls need room: ANS55f)
+    const val MIN_H = 135
     const val SCALE_OK_LOW = 0.97    // the page is not pinch-zoomed (the visual viewport scale is 1)
     const val SCALE_OK_HIGH = 1.03
 
