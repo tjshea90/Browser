@@ -679,4 +679,18 @@ class OwnerRulesTest {
         val storage = source("app/src/main/kotlin/app/kestrel/browser/diag/StorageInfo.kt")
         assertTrue("the cold-start cache purge does not walk cache2/entries (10-40k files)", storage.contains("d.name == \"entries\" && d.parentFile?.name == \"cache2\""))
     }
+
+    /** LAB7 (owner: "If there is a way to make the install and updates take even longer, but the browser run faster, do it."): Android compiles an app at install only the methods its profile marks HOT. */
+    @Test fun lab7WholeAppIsCompiledAtInstall() {
+        val prof = source("geckoapp/src/main/baseline-prof.txt")
+        val rule = "HL**;->**(**)**"
+        assertEquals("the profile file ends with the ONE catch-all rule that marks every method hot (measured: 2553 of 14996 methods were hot without it; compile 2 s on the emulator, 13 MB of compiled code, no start-up regression)", rule, prof.lineSequence().filter { it.isNotBlank() }.last())
+        assertEquals("exactly one copy of the rule", 1, prof.lineSequence().count { it == rule })
+        assertTrue("the rule has no S flag and no P flag: the start-up and post-start-up flags of the lab's rules must keep ordering the compiled code (a method named by several rules gets the union)", !rule.startsWith("HS") && !rule.startsWith("HP"))
+        assertTrue("the regeneration tool keeps the rule", source("tools/profile-to-baseline.py").contains("CATCH_ALL = '$rule'"))
+        assertTrue("the lab's variant tool names the same rule", source("tools/emu/profvariant.py").contains("WILDCARD = \"$rule\""))
+        val gate = source("tools/check-profile-coverage.sh")
+        assertTrue("the release gate reads the profile R8 wrote and fails when the rule does not expand", gate.contains("minifyReleaseWithR8/baseline-prof.txt") && gate.contains("MIN_PCT") && gate.contains(rule))
+        assertTrue("the release workflow runs that gate right after the release build", source(".github/workflows/android.yml").contains("bash tools/check-profile-coverage.sh"))
+    }
 }
