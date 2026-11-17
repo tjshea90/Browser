@@ -20,6 +20,7 @@ import app.kestrel.browser.download.MediaStoreSinks
 import app.kestrel.core.download.Sink
 import app.kestrel.browser.data.Prefs
 import app.kestrel.browser.ProcessLife
+import app.kestrel.core.update.DexMetadata
 import app.kestrel.core.update.Release
 import app.kestrel.core.update.ReleaseAsset
 import app.kestrel.core.update.EngineWatch
@@ -414,6 +415,7 @@ object UpdateManager {
                 sp(app).edit().putString("verified", offer.tag).apply()
                 set(app, Phase.READY, offer, f.length(), f.length())
                 UpdateNotifier.ready(app, offer)
+                Thread({ ensureDm(app, offer) }, "kestrel-update-dm").apply { isDaemon = true }.start() // LAB6: the 7 KB start-up profile of this release, fetched while the network works (best effort)
                 maybeInstallByItself(app)
             } finally { verifying.set(false) }
         }, "kestrel-update-verify").apply { isDaemon = true }.start()
@@ -451,7 +453,7 @@ object UpdateManager {
             val ph = state.phase
             if (ph == Phase.DOWNLOADING || ph == Phase.INSTALLING) return 0L
             val offer = state.offer?.takeIf { it.versionCode > installedCode(app) }
-            val keep = if (offer == null) emptySet() else setOf(offer.apkName, offer.apkName + ".part")
+            val keep = if (offer == null) emptySet() else setOf(offer.apkName, offer.apkName + ".part") + (offer.dmName?.let { setOf(it, "$it.part") } ?: emptySet())
             for (f in dir(app).listFiles() ?: emptyArray()) {
                 if (f.name in keep) continue
                 val n = f.length()
@@ -464,6 +466,58 @@ object UpdateManager {
             }
         } catch (e: Exception) { /* a tidy never breaks the updater */ }
         return freed
+    }
+
+    private fun sha256(b: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(b).joinToString("") { "%02x".format(it) }
+
+    private fun readAtMost(input: java.io.InputStream, max: Long): ByteArray? {
+        val out = java.io.ByteArrayOutputStream()
+        val buf = ByteArray(8192)
+        var total = 0L
+        while (true) {
+            val n = input.read(buf)
+            if (n < 0) break
+            total += n
+            if (total > max) return null
+            out.write(buf, 0, n)
+        }
+        return out.toByteArray()
+    }
+
+    private fun dmOk(b: ByteArray, offer: UpdateOffer): Boolean = DexMetadata.isPlausible(b) && (offer.dmSha256 == null || sha256(b) == offer.dmSha256)
+
+    /**
+     * LAB6 (research/LAB5_PACKAGING.md, core/DexMetadata): the dex-metadata file of [offer]'s release, the start-up profile Android compiles WHILE INSTALLING. Found in the update folder when already fetched, else fetched now
+     * (8 s to connect, 10 s to read, at most 1 MB). null for anything that is not a clean, checked file (a release without one, an Android version its format does not fit, a refusal in the last two weeks, no network, a wrong
+     * checksum): the install is then exactly what it always was. Never throws.
+     */
+    @Synchronized private fun ensureDm(app: Context, offer: UpdateOffer): File? {
+        val name = offer.dmName ?: return null
+        val url = offer.dmUrl ?: return null
+        if (!DexMetadata.mayAttach(Build.VERSION.SDK_INT, sp(app).getLong("dm_refused_at", 0L), System.currentTimeMillis())) return null
+        return try {
+            val f = File(dir(app), name)
+            if (f.isFile) {
+                if (dmOk(f.readBytes(), offer)) return f
+                f.delete()
+            }
+            if (offer.dmSize > DexMetadata.MAX_BYTES) return null
+            val c = open(url).apply { connectTimeout = 8_000; readTimeout = 10_000 }
+            val bytes: ByteArray? = try {
+                if (c.responseCode == 200) c.inputStream.use { readAtMost(it, DexMetadata.MAX_BYTES) } else { Health.log("update", "dm", "not fetched: HTTP ${c.responseCode}"); null }
+            } finally { c.disconnect() }
+            if (bytes == null) return null
+            if (!dmOk(bytes, offer)) { Health.log("update", "dm", "the fetched file failed our own checks (${bytes.size} bytes): not used"); return null }
+            dir(app).mkdirs()
+            val tmp = File(dir(app), "$name.part")
+            tmp.writeBytes(bytes)
+            if (!tmp.renameTo(f)) { f.delete(); if (!tmp.renameTo(f)) { tmp.delete(); return null } }
+            Health.log("update", "dm", "fetched $name (${bytes.size} bytes)")
+            f
+        } catch (e: Exception) {
+            Health.log("update", "dm", "not fetched: ${e.javaClass.simpleName}")
+            null
+        }
     }
 
     private fun sha256(f: File): String {
@@ -568,9 +622,13 @@ object UpdateManager {
                 val dropOwnCopy = sp0.plan.fitsDropping && sp0.plan.shortBy <= 0 // only enough room if our own copy goes once the installer has its own
                 // Sessions left over from earlier tries each still hold a full staged copy of the APK: give that space back first.
                 for (old in pi.mySessions) try { pi.abandonSession(old.sessionId) } catch (e: Exception) { /* already gone */ }
+                // LAB6: the start-up profile rides along so Android compiles the update while installing. Not when our own copy has to go early (a refused file could then not be retried without downloading 95 MB again): that
+                // install stays exactly what it was.
+                val dm = if (dropOwnCopy) null else ensureDm(app, offer)
+                Health.log("update", "dm", if (dm != null) "attached ${dm.name} (${dm.length()} bytes) to the install" else "no file for this install")
                 val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
                     setAppPackageName(app.packageName)
-                    setSize(apk.length())
+                    setSize(apk.length() + (dm?.length() ?: 0L))
                 }
                 id = pi.createSession(params)
                 pi.openSession(id).use { session ->
@@ -578,6 +636,8 @@ object UpdateManager {
                         apk.inputStream().use { it.copyTo(out, 128 * 1024) }
                         session.fsync(out)
                     }
+                    if (dm != null) session.openWrite("kestrel-update.dm", 0, dm.length()).use { out -> dm.inputStream().use { it.copyTo(out, 16 * 1024) }; session.fsync(out) }   // named after the APK: Android pairs them by name
+                    sp(app).edit().putBoolean("install_dm", dm != null).apply()
                     if (dropOwnCopy) { apk.delete(); sp(app).edit().remove("verified").apply() } // frees one APK of room for the installer's own check
                     val intent = Intent(app, InstallResultReceiver::class.java).setAction(ACTION_RESULT)
                     val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
@@ -645,6 +705,20 @@ object UpdateManager {
         fail(ctx.applicationContext, "Android could not install the update: ${message ?: "unknown reason"}.")
     }
 
+    /**
+     * LAB6, from [InstallResultReceiver]: the installer's failure names the dex metadata. When the install that just failed carried the file, the FILE was refused, not the update: remember that (no file for
+     * [DexMetadata.REFUSED_FOR_MS]) and install once more without it, a new session. false = no file was attached to that install (or this retry already happened): the failure is reported as it always was.
+     */
+    fun installRetryWithoutDm(ctx: Context): Boolean {
+        val app = ctx.applicationContext
+        val s = sp(app)
+        if (!s.getBoolean("install_dm", false)) return false
+        s.edit().putBoolean("install_dm", false).putLong("dm_refused_at", System.currentTimeMillis()).apply()
+        Health.log("update", "dm", "the installer refused the dex metadata file: installing again without it, none for two weeks")
+        install(app)
+        return true
+    }
+
     fun installCancelled(ctx: Context) {
         val o = state.offer ?: return
         val app = ctx.applicationContext
@@ -672,10 +746,12 @@ object UpdateManager {
 
     private fun offerToJson(o: UpdateOffer): String = JSONObject()
         .put("tag", o.tag).put("vn", o.versionName).put("vc", o.versionCode).put("apk", o.apkName).put("url", o.apkUrl)
-        .put("size", o.size).put("sha", o.sha256 ?: "").put("notes", o.notes).put("page", o.pageUrl).toString()
+        .put("size", o.size).put("sha", o.sha256 ?: "").put("notes", o.notes).put("page", o.pageUrl)
+        .put("dmn", o.dmName ?: "").put("dmu", o.dmUrl ?: "").put("dms", o.dmSize).put("dmh", o.dmSha256 ?: "").toString()
 
     private fun offerFromJson(s: String): UpdateOffer? = try {
         val j = JSONObject(s)
-        UpdateOffer(j.getString("tag"), j.getString("vn"), j.getLong("vc"), j.getString("apk"), j.getString("url"), j.getLong("size"), j.optString("sha").takeIf { it.isNotEmpty() }, j.optString("notes"), j.optString("page"))
+        UpdateOffer(j.getString("tag"), j.getString("vn"), j.getLong("vc"), j.getString("apk"), j.getString("url"), j.getLong("size"), j.optString("sha").takeIf { it.isNotEmpty() }, j.optString("notes"), j.optString("page"),
+            j.optString("dmn").takeIf { it.isNotEmpty() }, j.optString("dmu").takeIf { it.isNotEmpty() }, j.optLong("dms", -1L), j.optString("dmh").takeIf { it.isNotEmpty() })
     } catch (e: Exception) { null }
 }
