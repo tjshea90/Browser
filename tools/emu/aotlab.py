@@ -222,6 +222,154 @@ def dm_install_check(lab, pl, adb, a, say, rows, progress):
         progress()
 
 
+# variant -> (which APK, compile mode, what it is). LAB7a: the install-time compile is `speed-profile` (the system's own choice for an install: pm.dexopt.install), which compiles ONLY the methods marked HOT in the
+# profile; the profile decides how much is compiled. `speed` is the ceiling (everything), measured for its cost.
+BREADTH = [
+    ("verify", "base", "verify", "nothing compiled (what an update gets until the idle dexopt)"),
+    ("sp-current", "base", "speed-profile", "alpha65 profile: the lab's methods, only some marked hot"),
+    ("sp-allhot", "allhot", "speed-profile", "the same methods, ALL marked hot"),
+    ("sp-ours", "ours", "speed-profile", "all of them hot + every method of app.kestrel.** (wildcard)"),
+    ("speed", "base", "speed", "everything (ceiling)"),
+]
+
+
+def breadth_check(lab, pl, adb, srv, a, say, info, rows, mem, notes, progress):
+    """LAB7a. The RELEASE build (R8, not debuggable, the real profile) installed once per APK variant; for each variant `cmd package compile --reset`, the embedded profile put in place the way the library does (INSTALL_PROFILE),
+    `cmd package compile -f -m MODE`, then timed starts (alternating warm / dropped file cache) on the lab's ping page and one memory snapshot. Per variant: compile seconds, compiled code size, files, start times, PSS.
+    Variant APKs differ ONLY in assets/dexopt/baseline.prof (the profile rules of geckoapp/src/main/baseline-prof.txt, rewritten by R8). Fills [info] (one dict per compile), [rows] (one per start), [mem]."""
+    pkg = a.release_pkg
+    apks = {"base": a.release_apk, "allhot": a.apk_allhot, "ours": a.apk_ours}
+    present = {k: v for k, v in apks.items() if v and os.path.exists(v)}
+    page = "http://localhost:%d/ping" % a.port
+    prof = "/data/misc/profiles/cur/0/%s/primary.prof" % pkg
+    old = lab.pkg
+    lab.pkg = pkg
+    try:
+        for rnd in range(1, a.breadth_rounds + 1):
+            groups = [("base", ["verify", "sp-current", "speed"]), ("allhot", ["sp-allhot"]), ("ours", ["sp-ours"])]
+            if rnd % 2 == 0:                                   # round 2 the other way round: a drifting runner cannot favour one variant
+                groups = [(k, list(reversed(v))) for k, v in reversed(groups)]
+            for key, names in groups:
+                if key not in present:
+                    notes.append("round %d: no APK for %s: variants %s skipped" % (rnd, key, ",".join(names)))
+                    continue
+                adb.run("uninstall", pkg, timeout=120)
+                t0 = time.time()
+                out = adb.run("install", "-t", present[key], timeout=900)
+                say("install", key, out.strip()[:60], "%.0f s" % (time.time() - t0))
+                if "Success" not in out:
+                    notes.append("round %d: install of %s failed: %s" % (rnd, key, out.strip()[:120]))
+                    continue
+                for name in names:
+                    _, _, mode, what = next(b for b in BREADTH if b[0] == name)
+                    adb.sh("cmd package compile --reset %s" % pkg, timeout=300)
+                    prof_size = None
+                    lab.kill()
+                    if mode == "speed-profile":
+                        out = adb.sh("am broadcast -a androidx.profileinstaller.action.INSTALL_PROFILE %s/androidx.profileinstaller.ProfileInstallReceiver" % pkg, timeout=60)
+                        for _ in range(30):
+                            time.sleep(1.0)
+                            sz = adb.sh("ls -ln %s 2>/dev/null" % prof, timeout=30).split()
+                            if len(sz) >= 5 and sz[4].isdigit() and int(sz[4]) > 0:
+                                prof_size = int(sz[4])
+                                break
+                    t0 = time.time()
+                    adb.sh("cmd package compile -f -m %s %s" % (mode, pkg), timeout=1500)
+                    took = round(time.time() - t0, 1)
+                    st = parse_dexopt_status(adb.sh("dumpsys package dexopt", timeout=60), pkg)
+                    path = adb.sh("pm path %s" % pkg, timeout=30).strip().replace("package:", "")
+                    d = os.path.dirname(path) if path else ""
+                    files = ls_files(adb.sh("ls -lR %s/oat 2>/dev/null" % d, timeout=60)) if d else []
+                    rec = {"variant": name, "round": rnd, "apk": key, "mode": mode, "status": st[0], "compile_s": took, "oat_kb": sum(b for _, b in files) // 1024,
+                           "files": ["%s %d KB" % (n, b // 1024) for n, b in files], "profile_bytes": prof_size}
+                    info.append(rec)
+                    say("compiled", rec)
+                    lab.kill()
+                    first = start_probe(pl, adb, srv, pkg, page)       # unmeasured: the first run after a compile pays for the engine's caches
+                    say("first start (not counted)", first)
+                    time.sleep(10)
+                    for k in range(a.starts):
+                        cold = (k % 2 == 1)
+                        lab.kill()
+                        if cold:
+                            lab.drop_caches()
+                        time.sleep(2)
+                        r = start_probe(pl, adb, srv, pkg, page)
+                        r.update({"variant": name, "round": rnd, "cache": "cold" if cold else "warm"})
+                        rows.append(r)
+                        say("start", name, r["cache"], r["am_total_ms"], r["page_ms"])
+                        time.sleep(5)
+                    lab.kill()                                         # memory: a fresh warm start, settle 10 s after the page loaded
+                    r = start_probe(pl, adb, srv, pkg, page)
+                    time.sleep(10)
+                    lab.snapshot_memory(name, rnd)
+                    mem.append(dict(lab.mem[-1], variant=name, round=rnd))
+                    lab.kill()
+                    progress()
+    finally:
+        lab.pkg = old
+
+
+def update_check(lab, pl, adb, a, say, rows, notes, progress):
+    """LAB7b: how much slower is the FIRST launch after an update than a later one, and does a warm-up launch right after the update remove it? Two debug builds of the same code, the second with the next versionCode
+    and extension version (what an update looks like to the engine: a new install directory, a new built-in extension version). For each scenario: install the old build, launch it twice (the first builds the engine's
+    caches, the second is the steady state), `adb install -r` the new build (= the update), [warm-up: launch it once, wait, force-stop], then three launches; every launch reads the app's Health lines (engine ready,
+    page loaded). Also records Gecko's start-up cache files and compatibility.ini before and after the update (what the engine thinks changed). Fills [rows]."""
+    pkg = a.pkg
+    page = "http://localhost:%d/page/text" % a.port
+
+    def state(label):
+        out = adb.sh("find /data/data/%s -maxdepth 6 -name 'startupCache*' -o -maxdepth 6 -name compatibility.ini -o -maxdepth 6 -name extensions.json -o -maxdepth 6 -name 'scriptCache*' 2>/dev/null | head -14" % pkg, timeout=60)
+        lines = []
+        for p in out.split():
+            ls = adb.sh("ls -ln --time-style=+%%H:%%M:%%S %s 2>/dev/null | head -4" % p, timeout=30).strip().replace("\n", " | ")
+            lines.append(ls[:150])
+            if p.endswith("compatibility.ini"):
+                ini = adb.sh("cat %s 2>/dev/null" % p, timeout=30).strip().replace("\n", " ; ")
+                lines.append("compatibility.ini: " + ini[:260])
+        return "%s: %s" % (label, " || ".join(lines) if lines else "no start-up cache / compatibility.ini found under /data/data/%s" % pkg)
+
+    for rnd in range(1, a.update_rounds + 1):
+        for scen in (["plain", "warmup"] if rnd % 2 else ["warmup", "plain"]):
+            say("=== update round %d scenario %s" % (rnd, scen))
+            adb.run("uninstall", pkg, timeout=120)
+            out = adb.run("install", "-t", a.old_apk, timeout=900)
+            if "Success" not in out:
+                notes.append("update round %d %s: install of the old build failed: %s" % (rnd, scen, out.strip()[:120]))
+                continue
+
+            def go(label, wait_after, count=True):
+                lab.kill()
+                r = lab.launch(page, 120)
+                r.update({"scenario": scen, "round": rnd, "launch": label, "counted": count})
+                rows.append(r)
+                say("launch", scen, label, {k: r.get(k) for k in ("am_total_ms", "runtime_ready_s", "page_loaded_s", "ui_block_ms")}, "CRASH" if r.get("crash") else "")
+                time.sleep(wait_after)
+                return r
+            go("old build, 1st launch ever", 20)
+            go("old build, 2nd launch (steady state)", 20)
+            if rnd == 1 and scen == "plain":
+                notes.append(state("before the update (old build, after 2 launches)"))
+            lab.kill()
+            t0 = time.time()
+            out = adb.run("install", "-r", "-t", a.new_apk, timeout=900)
+            took = round(time.time() - t0, 1)
+            if "Success" not in out:
+                notes.append("update round %d %s: the update failed: %s" % (rnd, scen, out.strip()[:120]))
+                continue
+            if rnd == 1 and scen == "plain":
+                notes.append("the update itself (adb install -r of the debug build) took %.1f s; " % took + state("right after the update"))
+            if scen == "warmup":
+                go("warm-up launch (not counted)", 25, count=False)
+            go("new build, launch 1", 20)
+            go("new build, launch 2", 20)
+            go("new build, launch 3", 5)
+            if rnd == 1 and scen == "plain":
+                notes.append(state("after 3 launches of the new build"))
+            lab.kill()
+            progress()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="aot-out")
