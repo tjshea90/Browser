@@ -101,7 +101,7 @@ def start_server(port, root, scratch):
 
     PING_PAGE = (b"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'><title>ping</title>"
                  b"<body style='font:20px sans-serif'>Kestrel lab ping page<script>addEventListener('load',function(){var i=new Image();"
-                 b"i.src='/report?loaded='+Date.now();});</script></body>")
+                 b"i.src='/report?loaded='+Date.now()+'&q='+encodeURIComponent(location.search);});</script></body>")
 
     class H(http.server.BaseHTTPRequestHandler):
         def log_message(self, *a):
