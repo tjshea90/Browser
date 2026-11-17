@@ -1,13 +1,13 @@
-# CHECKPOINT 2618 — read me first, then TASKS.md
+# CHECKPOINT 2619 — read me first, then TASKS.md
 
-**Written:** 2026-11-17T09:17:48Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-e89b9dfe-pl3lk5` · **builds on:** `2c0bfa9d` (this checkpoint is the commit after it)
+**Written:** 2026-11-17T09:21:41Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-e89b9dfe-pl3lk5` · **builds on:** `45b46ddf` (this checkpoint is the commit after it)
 
 ## Just done
-LAB5b: more lab tooling committed (no run yet): suite 'sweep' = tools/emu/prefsweep.py (variants from tools/emu/sweep-variants.txt, base + base2 twin = noise floor, rotated rounds, /bench2 ruler, smaps_rollup per process, config read-back; selftest ok, report dry-run ok), debug-only GeckoPrefs override channel debug.kestrel.gp1..gp8, ART profile collection step at the end of every non-pack/sweep lab run (SIGUSR1 + cmd package dump-profiles + profman --dump-classes-and-methods into lab-out/profile/). The 'pack' run (44053244976, A today / B omni stored / C libs in APK / D both) is running; agents: start path, extension, prefs, packaging running
+LAB5c-1 (first real app change, measured by a same-APK A/B): GeckoEngine.prewarmConfig parses the engine config (files/gecko-config.yaml) with GeckoView's own DebugConfig.fromFile on a background thread from GeckoApp.onCreate (UI process only), so SnakeYAML's class loading + static init (GeckoView reads its YAML config with SnakeYAML ON THE UI THREAD inside GeckoRuntime.create; run-9 profile caught Yaml.load there) happens off the UI thread; plus permanent Health lines 'engine runtime-create-took' (UI thread) and 'engine config-warm' (background); debug kill switch debug.kestrel.nowarm=1; GeckoPrefs.writeConfig is @Synchronized. FROM THE RUN-9 PROFILE (start-up ui prof): 1.25 s of the emulator's block is Android's first-draw renderer sync (HardwareRenderer.setStopped, platform), then Yaml.load, then GeckoNetworkManager.getDhcpInfo binder call. prefsweep.py now takes '@prop=value' variants and records create_ms / warm_yaml_ms; sweep-variants.txt = base, base2, nowarm. Compiles; NOT yet measured
 
 ## Do this next
-1) read the pack run when done (PACK-REPORT.md); 2) digest the 4 agent reports; 3) write the first sweep-variants.txt from the prefs agent's list and dispatch lab_suite=sweep lab_minutes=5 (rounds); 4) dispatch a daily run to collect the ART profile raw material, convert to geckoapp/src/main/baseline-prof.txt + profileinstaller, A/B in packlab (cmd package compile -m speed-profile)
+Queue order (one pending slot per ref): pack run 44053244976 running -> daily (queued, has the ART profile step) -> when the daily STARTS dispatch lab_suite=sweep lab_minutes=5 (the nowarm A/B); read PACK-REPORT.md first (omni stored / libs); agents' reports pending
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ LAB5b: more lab tooling committed (no run yet): suite 'sweep' = tools/emu/prefsw
 
 ## Last ten checkpoints
 ```
+  da746ada ckpt 2618: LAB5b: more lab tooling committed (no run yet): suite 'sweep' = tools/emu/pr
   96e097e3 ckpt 2617: LAB5b: pref-sweep tooling started: GeckoPrefs.writeConfig reads debug.kestre
   97f31512 ckpt 2616: LAB5b: packaging A/B lab built and wired: geckoapp/build.gradle.kts has two 
   1cf2f4fd ckpt 2615: LAB5 (owner message 2026-11-17T06:42:30Z: improve the browser as much as pos
@@ -25,7 +26,6 @@ LAB5b: more lab tooling committed (no run yet): suite 'sweep' = tools/emu/prefsw
   3cdec9fe ckpt 2611: run 9 read: degraded run (emulator restarted, no network, Google A/B all 60 
   ede3c889 ckpt 2610: OWNER RESCHEDULE (usage running out, 2026-11-17 04:58Z): ALL work moved to O
   8bf31a36 ckpt 2609: LAB4b: decisions recorded: ANS60e NOT done (would delay every navigation's g
-  b68aca47 ckpt 2608: LAB4a/b: run 8 (44017705030, instrumented app, fixed lab order, fast link) i
 ```
 
 (4 automatic checkpoint(s) since the last deliberate one — the
