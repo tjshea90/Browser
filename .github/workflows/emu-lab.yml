@@ -175,6 +175,16 @@ jobs:
           EMU_CMD="emulator -avd $AVD_NAME -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data -gpu swiftshader_indirect -accel on -netdelay none -netspeed full -no-metrics $EMU_EXTRA"
           python3 -u -I tools/emu/soak.py --out "$RUNNER_TEMP/lab-out" --suite "$SUITE" --minutes "$MINUTES" --net "$NET" --pkg "$PKG" --port 8091 --profile "$PROFILE" --emu-cmd "$EMU_CMD" --apk "$APK" 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
 
+      - name: The report for this build (LAB3d)
+        if: always()
+        run: |
+          OUT="$RUNNER_TEMP/lab-out"
+          mkdir -p "$OUT"
+          cp "$RUNNER_TEMP/device-props.txt" "$OUT/device-props.txt" 2>/dev/null || true
+          # reads the run's own files (events, Health lines, logcat, Diagnostics) and the repository's last baseline; never fails the job
+          python3 -I tools/emu/buildreport.py --out "$OUT" --repo-root "$PWD" --baseline research/lab-baseline.json --suite "$SUITE" --profile "$PROFILE" --net "$NET" --run-id "$GITHUB_RUN_ID" --sha "$GITHUB_SHA" 2>&1 | tail -25 || true
+          if [ -f "$OUT/BUILD-REPORT.md" ]; then head -c 900000 "$OUT/BUILD-REPORT.md" >> "$GITHUB_STEP_SUMMARY"; fi
+
       - name: Put the report on the run's summary page
         if: always()
         run: |
@@ -203,6 +213,18 @@ jobs:
             ${{ runner.temp }}/lab-out/soaklab.log
             ${{ runner.temp }}/lab-out/lab/report.jsonl
           retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Keep the build report (30 days)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: build-report
+          path: |
+            ${{ runner.temp }}/lab-out/BUILD-REPORT.md
+            ${{ runner.temp }}/lab-out/build-report.json
+            ${{ runner.temp }}/lab-out/device-props.txt
+          retention-days: 30
           if-no-files-found: ignore
 
       - name: Keep the screenshots of the problem moments (3 days)
