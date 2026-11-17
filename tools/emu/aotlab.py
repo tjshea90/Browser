@@ -434,77 +434,8 @@ def main():
         """Written after every round / install: a cancelled run (the lab run 44069383826 was, after 9 minutes) keeps what it measured. Order of the phases = order of value: the release path, compile at install, then the debug A/B."""
         L = ["# Ahead-of-time compile A/B (LAB5b)", "",
              "%d rounds x %d starts per mode (alternating warm / cold file cache). **Emulator numbers: read the differences between modes of THIS run.**" % (a.rounds, a.starts), ""]
-        if upd_rows or upd_notes:
-            L.append("## LAB7b: the first launch after an update (debug build with Health lines: the old build is used twice, then `adb install -r` of the next version)")
-            L.append("")
-            L.append("| Scenario | Launch | n | am start -W ms | engine ready s | page loaded s | worst UI block ms | failed |")
-            L.append("| :- | :- | -: | -: | -: | -: | -: | -: |")
-            keys = ("am_total_ms", "runtime_ready_s", "page_loaded_s", "ui_block_ms")
-            order = ["old build, 1st launch ever", "old build, 2nd launch (steady state)", "warm-up launch (not counted)", "new build, launch 1", "new build, launch 2", "new build, launch 3"]
-            for scen in ("plain", "warmup"):
-                steady = {k: med([r.get(k) for r in upd_rows if r["scenario"] == scen and r["launch"].startswith("old build, 2nd") and not r.get("crash")]) for k in keys}
-                for ln_name in order:
-                    rs = [r for r in upd_rows if r["scenario"] == scen and r["launch"] == ln_name]
-                    if not rs:
-                        continue
-                    ok = [r for r in rs if not r.get("crash")]
-                    m = {k: med([r.get(k) for r in ok]) for k in keys}
-
-                    def f(k, fmt, m=m, ln_name=ln_name, steady=steady):
-                        v = m.get(k)
-                        if v is None:
-                            return "-"
-                        return (fmt % v) + (pct(v, steady.get(k)) if ln_name.startswith("new build") else "")
-                    L.append("| %s | %s | %d | %s | %s | %s | %s | %d |" % (scen, ln_name, len(ok), f("am_total_ms", "%.0f"), f("runtime_ready_s", "%.2f"), f("page_loaded_s", "%.2f"), f("ui_block_ms", "%.0f"), len(rs) - len(ok)))
-            L.append("")
-            L.append("(percentages: the new build's launch against the SAME scenario's old-build steady state; `warmup` = one extra launch of the new build right after the update, force-stopped after 25 s, before the counted launches)")
-            L.append("")
-            for n in upd_notes:
-                L.append("- " + n)
-            L.append("")
-        if br_info or br_rows:
-            L.append("## LAB7a: how much Android compiles at install, and what it costs (the RELEASE build; emulator: read the DIFFERENCES, the tablet's cores are slower)")
-            L.append("")
-            L.append("| Variant | what | status | compile s | compiled code MB | start -W warm ms | start -W cold ms | page loaded warm ms | page loaded cold ms | PSS app MB | PSS all MB |")
-            L.append("| :- | :- | :- | -: | -: | -: | -: | -: | -: | -: | -: |")
-
-            def vstat(name):
-                inf = [i for i in br_info if i["variant"] == name]
-                srs = [r for r in br_rows if r["variant"] == name]
-                mm = [m for m in br_mem if m.get("variant") == name]
-
-                def sm(key, cache):
-                    vals = [r[key] for r in srs if r["cache"] == cache and r.get(key) is not None]
-                    return med(vals) if vals else None
-                app = [next((p.get("pss_kb") for p in m.get("procs", []) if p.get("name") == "app"), None) for m in mm]
-                return {"status": ",".join(sorted(set(str(i["status"]) for i in inf))) or "-", "compile_s": med([i["compile_s"] for i in inf]) if inf else None,
-                        "oat_mb": (med([i["oat_kb"] for i in inf]) / 1024.0) if inf else None,
-                        "am_warm": sm("am_total_ms", "warm"), "am_cold": sm("am_total_ms", "cold"), "pg_warm": sm("page_ms", "warm"), "pg_cold": sm("page_ms", "cold"),
-                        "pss_app": (med([x for x in app if x is not None]) / 1024.0) if any(x is not None for x in app) else None,
-                        "pss_all": (med([m.get("total_pss_kb") for m in mm]) / 1024.0) if mm else None}
-            base_name = "sp-current"
-            bs = vstat(base_name)
-            for name, apkkey, mode, what in BREADTH:
-                s = vstat(name)
-                if s["status"] == "-" and s["am_warm"] is None:
-                    continue
-
-                def c(k, fmt):
-                    v = s.get(k)
-                    if v is None:
-                        return "-"
-                    return (fmt % v) + (pct(v, bs.get(k)) if name != base_name else "")
-                L.append("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (name, what, s["status"], c("compile_s", "%.1f"), c("oat_mb", "%.1f"), c("am_warm", "%.0f"), c("am_cold", "%.0f"),
-                                                                                 c("pg_warm", "%.0f"), c("pg_cold", "%.0f"), c("pss_app", "%.0f"), c("pss_all", "%.0f")))
-            L.append("")
-            L.append("(percentages against `%s`, the profile alpha65 ships; n = %d starts per cache state per variant and round; compile s = `cmd package compile -f -m MODE` on the emulator's 2 vCPUs)" % (base_name, a.starts // 2))
-            L.append("")
-            seen = set()
-            for i in br_info:
-                if i["variant"] not in seen:
-                    seen.add(i["variant"])
-                    L.append("- files of %s: %s; profile written: %s bytes" % (i["variant"], ", ".join(i["files"]) or "none", i.get("profile_bytes")))
-            L.append("")
+        report_update(L, upd_rows, upd_notes, med)
+        report_breadth(L, br_info, br_rows, br_mem, a.starts, med)
         if rel_rows or rel_notes:
             L.append("## The release build, the embedded baseline profile (R8-rewritten rules, installed by androidx.profileinstaller): `am start -W` TotalTime")
             L.append("")
