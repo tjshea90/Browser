@@ -113,7 +113,7 @@ class DailyMixin:
         """A wait limit; the driver's selftest (a fake phone that never answers) must not wait it out."""
         return min(seconds, 1.5) if self.a.selftest else seconds
 
-    def d_wait_page(self, mark, timeout=60, want=None):
+    def d_wait_page(self, mark, timeout=60, want=None, ok_only=False):
         """The first 'page loaded' / 'page error' line since the log offset [mark]: (kind, kv, seconds) or (None, {}, seconds).
         want = a regex for the host the step expects: a line for another host is skipped (lab run 44005894797: the Google results page of the PREVIOUS step finished 9.6 s late and was taken for the
         article's own page); if no wanted line comes, the first other line is returned so the report says where the person really went."""
@@ -123,6 +123,8 @@ class DailyMixin:
         while time.time() - t0 < timeout:
             for e in health_events(self.log.since(mark), "page"):
                 if e["ev"] not in ("loaded", "error"):
+                    continue
+                if ok_only and e["ev"] == "loaded" and e["kv"].get("ok") == "false":     # (the Google results page first ends a fast 'ok=false' load, then loads for real)
                     continue
                 if want and not re.search(want, e["kv"].get("host", ""), re.I):
                     other = other or (e["ev"], e["kv"], time.time() - t0)
@@ -556,6 +558,25 @@ class DailyMixin:
                          "blocked": max([r["blocked"] for r in rows] or [0]), "done_samples": [r["done_ms"] for r in rows]}
         self.ph.shields("on", ["www.theguardian.com", "theguardian.com"])
         res["shields_ab"] = out
+        # the owner's most common page: a Google results page (anything typed that is not an address is searched on Google). Seconds from the request to the page that really loaded (ok=true).
+        gs = {"on": [], "off": []}
+        for rep in range(3):
+            for mode in ("on", "off"):
+                self.ph.shields(mode, ["www.google.com", "google.com"])
+                time.sleep(2)
+                self.ph.clear_cache()
+                self.ph.debug("closetabs")
+                time.sleep(4)
+                m3 = self.log.size()
+                self.ph.open_url("https://www.google.com/search?q=weather+in+london+today")
+                k, kv, secs = self.d_wait_page(m3, 60, want=r"google", ok_only=True)
+                gs[mode].append({"event": k, "ok": kv.get("ok"), "secs": round(secs, 2), "done_ms": ms_of(kv.get("done", "")), "blocked": num(kv.get("blocked"))})
+        gout = {}
+        for mode, rows in gs.items():
+            sv = sorted(r["secs"] for r in rows if r["event"] == "loaded")
+            gout[mode] = {"secs_median": sv[len(sv) // 2] if sv else None, "samples": [r["secs"] for r in rows], "blocked": max([r["blocked"] for r in rows] or [0]), "events": [r["event"] for r in rows]}
+        self.ph.shields("on", ["www.google.com", "google.com"])
+        res["shields_ab_google"] = gout
         return res
 
     def d_leave_and_return(self):

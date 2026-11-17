@@ -246,6 +246,12 @@ def main():
     noisy = sorted([l for l in public if l[5] and l[5] >= 15], key=lambda l: -l[5])[:4]
     if noisy:
         F.append(("console/noisy", "low", "compat", "pages with many script errors: " + ", ".join("%s (%d)" % (l[1] or l[0], l[5]) for l in noisy), "a Shields A/B on the same page tells whether our blocking causes them (LAB2c)", "Shields lists / scriptlets (research/ADBLOCK_ENGINE.md)"))
+    gab = (by.get("private-tab-and-shields-switch") or {}).get("shields_ab_google") or {}
+    if (gab.get("on") or {}).get("secs_median") and (gab.get("off") or {}).get("secs_median"):
+        gon, goff = gab["on"], gab["off"]
+        if gon["secs_median"] > goff["secs_median"] * 1.3 and gon["secs_median"] - goff["secs_median"] > 1.0:
+            F.append(("shields/google-slower", "high", "speed", "a Google results page took %.1f s with Shields ON against %.1f s OFF (median of 3; %d requests blocked)" % (gon["secs_median"], goff["secs_median"], gon.get("blocked", 0)),
+                      "samples on %s, off %s: the owner's most common page (typed text is searched on Google)" % (gon["samples"], goff["samples"]), "Shields rules / scriptlets for google.com (research/ADBLOCK_ENGINE.md), the 'asked the app one by one' path"))
     ab = (by.get("private-tab-and-shields-switch") or {}).get("shields_ab") or {}
     if ab.get("on", {}).get("done_ms", -1) > 0 and ab.get("off", {}).get("done_ms", -1) > 0:
         on, off = ab["on"], ab["off"]
@@ -354,7 +360,7 @@ def main():
         L.append("| :- | :- | -: | :- | -: | -: | -: | :- |")
         for e in steps:
             pg = "; ".join("%s %s/%s" % ((p.get("host") or "?")[:24], p.get("paint_ms"), p.get("done_ms")) if "error" not in p else "%s ERROR %s" % ((p.get("host") or "?")[:24], p.get("error")) for p in (e.get("pages") or [])[:3]) or "-"
-            extra = {k: v for k, v in e.items() if k in ("am_total_ms", "engine_ready_s", "nav_s", "host", "typing_s", "tap_to_picture_s", "switch_s", "resume_s", "page_reloaded", "max_pss", "min_avail", "hibernated", "tabs", "cards", "opened", "backs", "sites", "nodes", "kestrel_player_took_it", "field_focused", "downloads_screen", "typed_text_arrived", "page_reported_position", "typed", "control_found", "shields_ab", "opened", "private_indicator_on_screen", "switch_note", "cpuinfo", "busy_threads", "busy_total_pct", "blank_first_screen", "alive_after_screen_off", "engine_died", "after_trim_pss", "trim_lines")}
+            extra = {k: v for k, v in e.items() if k in ("am_total_ms", "engine_ready_s", "nav_s", "host", "typing_s", "tap_to_picture_s", "switch_s", "resume_s", "page_reloaded", "max_pss", "min_avail", "hibernated", "tabs", "cards", "opened", "backs", "sites", "nodes", "kestrel_player_took_it", "field_focused", "downloads_screen", "typed_text_arrived", "page_reported_position", "typed", "control_found", "shields_ab", "opened", "private_indicator_on_screen", "shields_ab_google", "switch_note", "cpuinfo", "busy_threads", "busy_total_pct", "blank_first_screen", "alive_after_screen_off", "engine_died", "after_trim_pss", "trim_lines")}
             L.append("| %s | %s | %s | %s | %s (%s) | %s | %s | %s |" % (e["name"], e.get("status"), e.get("wall_s"), pg, e.get("ui_stalls", 0), e.get("ui_worst_ms", 0), (e.get("console") or {}).get("errors", 0), e.get("pss", "-"),
                                                                           (e.get("note") or json.dumps(extra, default=str))[:230].replace("|", "/")))
     else:
