@@ -148,6 +148,39 @@ class DexMetadataFetchTest {
         assertFalse("a second failure is a failure, not another retry", UpdateManager.installRetryWithoutDm(c))
     }
 
+    private fun waitFor(what: String, ok: () -> Boolean) {
+        val end = System.currentTimeMillis() + 15_000
+        while (System.currentTimeMillis() < end) { org.robolectric.shadows.ShadowLooper.idleMainLooper(); if (ok()) return; Thread.sleep(25) }
+        throw AssertionError("timed out waiting for: $what (state ${UpdateManager.state.phase} ${UpdateManager.state.message})")
+    }
+
+    private fun readyInstall(c: Context, o: UpdateOffer) {
+        org.robolectric.Shadows.shadowOf(c.packageManager).setCanRequestPackageInstalls(true)
+        File(c.filesDir, "updates").mkdirs()
+        File(c.filesDir, "updates/${o.apkName}").writeBytes(ByteArray(2000) { 1 })
+        UpdateManager.setStateForTest(UpdateManager.State(UpdateManager.Phase.READY, o, 2000, 2000))
+    }
+
+    @Test fun theInstallHandsTheCheckedFileToTheSessionAndRemembersIt() {
+        val c = ctx()
+        val o = offer()
+        readyInstall(c, o)
+        UpdateManager.install(c)
+        waitFor("the install thread to commit") { sp(c).contains("install_dm") }
+        assertTrue("a file rode along", sp(c).getBoolean("install_dm", false))
+        assertEquals("fetched for the install (the network was asked once)", 1, hits.get())
+    }
+
+    @Test fun anInstallWithoutAFileSaysSoAndStaysWhatItWas() {
+        val c = ctx()
+        val o = offer(dmName = null, dmUrl = null)
+        readyInstall(c, o)
+        UpdateManager.install(c)
+        waitFor("the install thread to commit") { sp(c).contains("install_dm") }
+        assertFalse(sp(c).getBoolean("install_dm", true))
+        assertEquals(0, hits.get())
+    }
+
     private fun result(status: Int, message: String?): Intent = Intent().putExtra(PackageInstaller.EXTRA_STATUS, status).also { if (message != null) it.putExtra(PackageInstaller.EXTRA_STATUS_MESSAGE, message) }
 
     @Test fun theReceiverRetriesWithoutTheFileOnlyWhenTheInstallerRefusedTheFile() {
