@@ -113,7 +113,7 @@ jobs:
             ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI -PomniStored=true -PlibsInApk=true --console=plain
             cp geckoapp/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/apks/D.apk"
             ls -l "$RUNNER_TEMP/apks"
-          elif [ "$SUITE" = aot ]; then
+          elif [ "$SUITE" = aot ] && [ "$MINUTES" != dm ]; then
             # LAB7b: the update lab needs the SAME code twice, the second build with the NEXT versionCode and extension version = what an update looks like to the engine (a new install path, a new built-in extension version)
             mkdir -p "$RUNNER_TEMP/apks"
             ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI --console=plain
@@ -235,12 +235,14 @@ jobs:
             { echo "== $1"; unzip -l "$RUNNER_TEMP/apks/rel-$1.apk" 2>/dev/null | grep -E "dexopt|classes.*dex"; ls -l geckoapp/build/outputs/apk/release/baselineProfiles/*/*.dm 2>/dev/null; } >> "$RUNNER_TEMP/lab-out/profile-builds.txt"
           }
           buildrel base
-          python3 -I tools/emu/profvariant.py exercised geckoapp/src/main/baseline-prof.txt geckoapp/src/main/baseline-prof.txt
-          buildrel exercised
-          git checkout -- geckoapp/src/main/baseline-prof.txt
-          python3 -I tools/emu/profvariant.py all geckoapp/src/main/baseline-prof.txt geckoapp/src/main/baseline-prof.txt
-          buildrel all
-          git checkout -- geckoapp/src/main/baseline-prof.txt
+          if [ "$MINUTES" != dm ]; then
+            python3 -I tools/emu/profvariant.py exercised geckoapp/src/main/baseline-prof.txt geckoapp/src/main/baseline-prof.txt
+            buildrel exercised
+            git checkout -- geckoapp/src/main/baseline-prof.txt
+            python3 -I tools/emu/profvariant.py all geckoapp/src/main/baseline-prof.txt geckoapp/src/main/baseline-prof.txt
+            buildrel all
+            git checkout -- geckoapp/src/main/baseline-prof.txt
+          fi
           cat "$RUNNER_TEMP/lab-out/profile-builds.txt"
           # lab_minutes = dm: the quick check of the shipped profile through the updater's own install path (a PackageInstaller session with the .dm, LAB6/LAB7c); anything else: the full LAB7 run
           if [ "$MINUTES" = dm ]; then
