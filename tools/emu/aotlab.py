@@ -424,6 +424,7 @@ def main():
     page = "http://localhost:%d/page/text" % a.port
     rows, status, notes = [], {}, []
     rel_rows, rel_notes, dm_rows = [], [], []
+    br_info, br_rows, br_mem, upd_rows, upd_notes = [], [], [], [], []
     med = pl.median
 
     def say(*x):
