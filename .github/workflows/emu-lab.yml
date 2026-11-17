@@ -15,7 +15,7 @@ on:
       suite:
         description: 'smoke = one page + the Diagnostics text; fs = the full-screen turning checks; vc = the video controls and the long press on a video; snd = sound while the app is left; kp = the full-screen video controls Kestrel draws itself (owner message 49), taps and double taps and buttons and turning; fsy = a full-screen player box turned sideways and back, with the system bars hidden and kept (owner message 46), then the sound check; compat = every well-known site twice, Shields on then off, with speed, errors, scrolling and memory; soak = the long run (pages, videos, downloads); all = everything'
         type: choice
-        options: [smoke, fs, vc, snd, fsy, kp, yh, np, cp, ap, ho, vp, compat, soak, all]
+        options: [smoke, fs, vc, snd, fsy, kp, yh, np, cp, ap, ho, vp, compat, daily, soak, all]
         default: smoke
       minutes:
         description: 'How long the soak part runs, in minutes (60 = one hour)'
@@ -26,6 +26,11 @@ on:
         type: choice
         options: [full, hotspot]
         default: full
+      profile:
+        description: 'Which device: standard = the older lab (x86_64 Android 10, as every earlier run), tablet = as close to the owner tablet as an emulator gets (32-bit x86 Android 10 userland, low-RAM flag asked for, font scale 1.2, 2 GB, 600x973 at 170 dpi), auto = tablet for the daily suite and standard for the rest'
+        type: choice
+        options: [auto, tablet, standard]
+        default: auto
   workflow_call:
     inputs:
       suite:
@@ -37,6 +42,9 @@ on:
       net:
         type: string
         default: full
+      profile:
+        type: string
+        default: auto
 
 permissions:
   contents: read
@@ -70,21 +78,34 @@ jobs:
       - name: ffmpeg (the lab makes its own video clips)
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
 
+      - name: Choose the device profile (LAB3a)
+        env:
+          PROFILE_IN: ${{ inputs.profile }}
+          SUITE_IN: ${{ inputs.suite }}
+        run: |
+          P="$PROFILE_IN"
+          if [ -z "$P" ] || [ "$P" = auto ]; then if [ "$SUITE_IN" = daily ]; then P=tablet; else P=standard; fi; fi
+          # the tablet's userland is 32-bit (sys_mssi_t_32_ago, docs/HARDWARE.md): the x86 image is the 32-bit twin of that on an x86 host; standard keeps x86_64 so earlier runs stay comparable
+          if [ "$P" = tablet ]; then IMG=x86; else IMG=x86_64; fi
+          echo "PROFILE=$P" >> "$GITHUB_ENV"
+          echo "IMG_ABI=$IMG" >> "$GITHUB_ENV"
+          echo "device profile: $P (image android-29 default $IMG)"
+
       - name: Android emulator and the Android 10 system image
         run: |
           SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKM" --licenses >/dev/null 2>&1 || true
-          "$SDKM" "emulator" "platform-tools" "system-images;android-29;default;x86_64" 2>&1 | tr '\r' '\n' | tail -4
-          ls "$ANDROID_HOME/emulator/emulator" "$ANDROID_HOME/system-images/android-29/default/x86_64" | head -5
+          "$SDKM" "emulator" "platform-tools" "system-images;android-29;default;$IMG_ABI" 2>&1 | tr '\r' '\n' | tail -4
+          ls "$ANDROID_HOME/emulator/emulator" "$ANDROID_HOME/system-images/android-29/default/$IMG_ABI" | head -5
 
-      - name: Build the Kestrel G debug app for x86_64 (the real Firefox engine, GeckoView 160)
-        run: ./gradlew :geckoapp:assembleDebug -PgeckoAbi=x86_64 --console=plain
+      - name: Build the Kestrel G debug app for ${{ env.IMG_ABI || 'the emulator' }} (the real Firefox engine, GeckoView 160)
+        run: ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI --console=plain
 
       - name: Create the tablet-shaped emulator (Android 10, 600 x 1024 at 170 dpi, 2 GB, 2 cores)
         run: |
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
           mkdir -p "$ANDROID_AVD_HOME"
-          echo no | avdmanager create avd -n "$AVD_NAME" -k "system-images;android-29;default;x86_64" -d pixel --force
+          echo no | avdmanager create avd -n "$AVD_NAME" -k "system-images;android-29;default;$IMG_ABI" -d pixel --force
           avdmanager list avd | head -12
           CFG="$ANDROID_AVD_HOME/$AVD_NAME.avd/config.ini"
           [ -f "$CFG" ] || { echo "::error::no config.ini at $CFG"; find "$HOME" -name config.ini -path '*avd*' 2>/dev/null | head; exit 1; }
