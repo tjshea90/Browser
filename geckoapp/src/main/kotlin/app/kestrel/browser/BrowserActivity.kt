@@ -178,6 +178,21 @@ open class BrowserActivity : Activity(), DockListener {
             return t.gecko.fieldInput?.probe()
         }
         override fun navKeyboardChanged(showing: Boolean) { if (showing) hideKeyboard() } // the system keyboard goes down while the mini one is up
+        /**
+         * The Swoop keyboard (a separate app, docs/KEYBOARD-LINK.md): when it is the chosen system keyboard the panel's bar opens IT, floating over the page, for the page's focused text field or else the address bar;
+         * what is typed then goes through Android's own input path, so it is learned in Swoop's one memory. Not chosen, or switched off in Settings: false, and the panel's own keys open as before.
+         */
+        override fun navSwoop(open: Boolean): Boolean {
+            if (!prefs.swoopKeyboard) return false
+            val imm = getSystemService(InputMethodManager::class.java) ?: return false
+            if (!app.kestrel.browser.SwoopLink.isChosen(this@BrowserActivity)) return false
+            if (!open) { hideKeyboard(); return true }
+            val target: android.view.View
+            if (navPageField() != null) { target = geckoView; target.requestFocus(); imm.showSoftInput(target, 0) }
+            else { focusUrlBar(); target = activeField }
+            for (delay in longArrayOf(300L, 1100L)) target.postDelayed({ app.kestrel.browser.SwoopLink.sendFloat(imm, target) }, delay) // the keyboard must be bound to the field first; asking twice costs nothing (floating twice is floating once)
+            return true
+        }
         override fun navPrivateTab(): Boolean = current?.isPrivateTab == true
         // where the person put the panel and how big the keyboard is (AV1)
         override fun navKeyHaptics(): Boolean = prefs.keyHaptics
