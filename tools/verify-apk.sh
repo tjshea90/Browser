@@ -55,6 +55,14 @@ else
   echo "  note  no aapt2 here - package/version/manifest checks skipped"
 fi
 
+# Gecko's omni.ja must be STORED in the APK (LAB5, research/LAB5_PACKAGING.md): a deflated entry is inflated into a private heap buffer in every Gecko process that opens it (measured: warm start -11 %, memory -28 MB).
+if [ "$APP" = "gecko" ] && command -v unzip >/dev/null 2>&1; then
+  OMNI="$(unzip -v "$APK" assets/omni.ja 2>/dev/null | grep 'assets/omni.ja' | head -1)"
+  if [ -z "$OMNI" ]; then bad "assets/omni.ja is missing from the APK (the engine would not start)"
+  elif echo "$OMNI" | grep -q 'Stored'; then ok "assets/omni.ja is stored uncompressed (mapped from the APK, not inflated into every process)"
+  else bad "assets/omni.ja is DEFLATED in the APK (androidResources noCompress 'ja' lost?): every Gecko process would inflate 14.5 MB into private heap: $OMNI"; fi
+fi
+
 KB=$(( $(stat -c %s "$APK") / 1024 ))
 case "$APP" in web) BUDGET="${KESTREL_APK_BUDGET_KB:-6000}" ;; gecko) BUDGET="${KESTREL_GECKO_BUDGET_KB:-130000}" ;; courier) BUDGET="${KESTREL_COURIER_BUDGET_KB:-4000}" ;; esac
 [ "$KB" -le "$BUDGET" ] && ok "size ${KB} KB (budget ${BUDGET} KB)" || bad "size ${KB} KB exceeds the budget ${BUDGET} KB"
