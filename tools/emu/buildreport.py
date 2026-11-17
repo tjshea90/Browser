@@ -232,6 +232,13 @@ def main():
     if metrics["ui_late_worst_ms"] and metrics["ui_late_worst_ms"] >= 700 and not (metrics["ui_worst_ms"] or 0) >= 700:
         F.append(("speed/ui-late-beat", "medium", "speed", "the UI thread did not answer for %d ms in %d place(s) (late heartbeat, below the stall watchdog)" % (metrics["ui_late_worst_ms"], len(late_steps)),
                   "; ".join("%s (%d, worst %d ms)" % s for s in late_steps[:6]) + ". The tablet shows the same family at start (ui slow 865 ms)", hint_for("late-beat")))
+    idle = by.get("idle-cpu-60-seconds") or {}
+    if idle.get("busy_total_pct") and idle["busy_total_pct"] >= 6:
+        F.append(("speed/idle-cpu", "medium", "speed", "the app burns %.1f %% CPU for 60 s while doing nothing on a static page" % idle["busy_total_pct"],
+                  "busiest threads: " + ", ".join("%s %.1f%%" % (r["thread"], r["cpu"]) for r in (idle.get("busy_threads") or [])[:5]) + " (the tablet report of alpha33 showed 5 % idle)", "diag/Health.kt watchdog cadence, Neon animation, CpuMeter, engine threads"))
+    tour_blank = (by.get("site-tour-ten-public-sites") or {}).get("blank_first_screen") or []
+    if tour_blank:
+        F.append(("load/blank-first-screen", "medium", "load", "pages whose first screen is blank after loading: " + ", ".join(tour_blank), "screen sample: one colour over 97 % and no edges", "Shields cosmetic filters / scriptlets, a blocked first-party script (research/ADBLOCK_ENGINE.md)"))
     if metrics["scroll_gap100_per_1000_frames"] and metrics["scroll_gap100_per_1000_frames"] > 20:
         F.append(("scroll/gaps", "low", "scroll", "%.0f gaps over 100 ms per 1000 frames while scrolling (worst %s ms)" % (metrics["scroll_gap100_per_1000_frames"], metrics["scroll_worst_gap_ms"]), "SwiftShader software GL: an emulator number, the tablet measured 62-65 fps and 0 of 32 swipes with a gap over 100 ms (research/TABLET_DIAG_2026-11-13.md); watch the CHANGE between builds, not the value", hint_for("scroll")))
     if metrics["page_done_p90_ms"] and metrics["page_done_p90_ms"] > 12000:
@@ -347,7 +354,7 @@ def main():
         L.append("| :- | :- | -: | :- | -: | -: | -: | :- |")
         for e in steps:
             pg = "; ".join("%s %s/%s" % ((p.get("host") or "?")[:24], p.get("paint_ms"), p.get("done_ms")) if "error" not in p else "%s ERROR %s" % ((p.get("host") or "?")[:24], p.get("error")) for p in (e.get("pages") or [])[:3]) or "-"
-            extra = {k: v for k, v in e.items() if k in ("am_total_ms", "engine_ready_s", "nav_s", "host", "typing_s", "tap_to_picture_s", "switch_s", "resume_s", "page_reloaded", "max_pss", "min_avail", "hibernated", "tabs", "cards", "opened", "backs", "sites", "nodes", "kestrel_player_took_it", "field_focused", "downloads_screen", "typed_text_arrived", "page_reported_position", "typed", "control_found", "shields_ab", "opened", "private_indicator_on_screen", "switch_note", "alive_after_screen_off", "engine_died", "after_trim_pss", "trim_lines")}
+            extra = {k: v for k, v in e.items() if k in ("am_total_ms", "engine_ready_s", "nav_s", "host", "typing_s", "tap_to_picture_s", "switch_s", "resume_s", "page_reloaded", "max_pss", "min_avail", "hibernated", "tabs", "cards", "opened", "backs", "sites", "nodes", "kestrel_player_took_it", "field_focused", "downloads_screen", "typed_text_arrived", "page_reported_position", "typed", "control_found", "shields_ab", "opened", "private_indicator_on_screen", "switch_note", "cpuinfo", "busy_threads", "busy_total_pct", "blank_first_screen", "alive_after_screen_off", "engine_died", "after_trim_pss", "trim_lines")}
             L.append("| %s | %s | %s | %s | %s (%s) | %s | %s | %s |" % (e["name"], e.get("status"), e.get("wall_s"), pg, e.get("ui_stalls", 0), e.get("ui_worst_ms", 0), (e.get("console") or {}).get("errors", 0), e.get("pss", "-"),
                                                                           (e.get("note") or json.dumps(extra, default=str))[:230].replace("|", "/")))
     else:

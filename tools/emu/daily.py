@@ -18,6 +18,8 @@ import xml.etree.ElementTree as ET
 # bound by soak.py through bind(): the helpers of the driver
 health_events = console_summary = say = ms_of = host_of = tail = num = None
 CRASH_PATTERNS = []
+PUBLIC_PAGES = []
+TOUR_NAMES = ("npr-text", "hacker-news", "github-repo", "stackoverflow", "bbc-news", "guardian", "reddit", "weather-wttr", "duckduckgo", "yahoo-finance")   # Yahoo LAST (it blocked the emulator's UI thread 2 s in compat run 1)
 T0 = time.time()
 
 PUBLIC_READ = [("wikipedia-article", "en.wikipedia.org/wiki/Firefox"), ("mdn", "developer.mozilla.org/en-US/docs/Web/API/Screen/orientation")]
@@ -31,7 +33,7 @@ SCHEME_WORDS = ("tel:", "sms:", "mailto:", "market:", "intent:", "whatsapp", "si
 
 def bind(g):
     """The driver hands over its own helpers (a few names, no copy of its state)."""
-    for k in ("health_events", "console_summary", "say", "ms_of", "host_of", "tail", "num", "CRASH_PATTERNS", "T0"):
+    for k in ("health_events", "console_summary", "say", "ms_of", "host_of", "tail", "num", "CRASH_PATTERNS", "T0", "PUBLIC_PAGES"):
         globals()[k] = g[k]
 
 
@@ -608,6 +610,51 @@ class DailyMixin:
         time.sleep(3)
         return res
 
+    # ------------------------------------------------------------------ LAB4a: the other runs
+    def d_idle_cpu(self):
+        """The app does nothing for 60 s on a static page: what does it still cost? (candidate 5: the alpha33 tablet report showed the parent process at 5 % idle.) Raw per-thread lines are kept for the report."""
+        mark = self.log.size()
+        self.ph.debug("closetabs")
+        time.sleep(3)
+        self.ph.open_url("https://example.com/")
+        self.d_wait_page(mark, 40, want=r"example")
+        time.sleep(self.d_t(8))
+        out = self.ph.a.sh("top -H -b -n 2 -d 30", timeout=120)
+        cpu = self.ph.a.sh("dumpsys cpuinfo", timeout=60)
+        pkgn = self.a.pkg
+        app_lines = [ln.strip() for ln in cpu.splitlines() if pkgn in ln][:6]
+        it = out.split("Tasks:")                                    # toybox top prints a header per iteration: the LAST one covers the 30 s
+        last = it[-1] if len(it) > 1 else out
+        rows = []
+        for ln in last.splitlines():
+            m = re.match(r"\s*(\d+)\s+(\d+)\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S\s+([\d.]+)\s+[\d.]+\s+\S+\s+(\S+)", ln)
+            if m and float(m.group(3)) >= 0.5:
+                rows.append({"tid": int(m.group(2)), "cpu": float(m.group(3)), "thread": m.group(4)})
+        rows.sort(key=lambda r: -r["cpu"])
+        res = {"cpuinfo": app_lines, "busy_threads": rows[:8], "busy_total_pct": round(sum(r["cpu"] for r in rows), 1)}
+        if not rows and not app_lines:
+            res["note"] = "top / dumpsys cpuinfo gave nothing parseable: raw head kept"
+            res["raw_head"] = last[:400]
+        return res
+
+    def d_site_tour(self):
+        """LAB2d / LAB2f: ten different kinds of public site, one after the other, each loaded and read a little: what loads, how fast, what is blank or broken."""
+        wanted = [p for n in TOUR_NAMES for p in PUBLIC_PAGES if p[0] == n]
+        done, blank = [], []
+        for name, url, scrolls, dwell in wanted:
+            try:
+                ev = self.load_page("tour-" + name, url, min(scrolls, 3), min(dwell, 3), timeout=60, kind="page")
+                if ev is not None:
+                    done.append("%s:%s" % (name, ev.get("status")))
+                    sc = ev.get("screen") or {}
+                    if ev.get("status") in ("ok", "slow") and sc.get("dominant", 0) >= 0.97 and sc.get("edges", 1) < 0.02:
+                        blank.append(name)
+            except Exception as e:
+                done.append("%s:raised %r" % (name, e))
+            self.ph.debug("closetabs")                              # every VIEW intent opens a new tab: heavy pages in many tabs killed the emulator's system process once
+            time.sleep(2)
+        return {"sites": done, "blank_first_screen": blank}
+
     # ------------------------------------------------------------------ security and feature probes (LAB3c)
     def d_reach(self, url):
         """Can the runner open a TCP connection to the site? (urllib would refuse a bad certificate and call a reachable test site unreachable.)"""
@@ -766,7 +813,8 @@ class DailyMixin:
                 ("typing-in-a-form-field", self.d_form, "typing"), ("film-in-a-page-press-play", self.d_film_in_page, "video"), ("film-on-a-real-site", self.d_real_film, "video"),
                 ("download-then-downloads-screen", self.d_download, "usage"), ("app-screens-from-the-menu", self.d_settings_walk, "usage"),
                 ("private-tab-and-shields-switch", self.d_private_and_shields, "usage"), ("leave-the-app-and-return", self.d_leave_and_return, "usage"),
-                ("many-tabs-and-memory-warning", self.d_memory, "memory"), ("security-and-feature-probes", self.d_security, "security")]
+                ("many-tabs-and-memory-warning", self.d_memory, "memory"), ("idle-cpu-60-seconds", self.d_idle_cpu, "speed"), ("site-tour-ten-public-sites", self.d_site_tour, "load"),
+                ("security-and-feature-probes", self.d_security, "security")]
         for name, fn, area in plan:
             if time.time() > deadline:
                 self.record({"kind": "step", "name": name, "area": area, "status": "skipped", "note": "the day's time budget (%d min) was used up" % minutes})
