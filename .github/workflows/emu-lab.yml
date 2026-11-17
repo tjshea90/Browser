@@ -331,6 +331,7 @@ jobs:
             ${{ runner.temp }}/lab-out/sweep-results.json
             ${{ runner.temp }}/lab-out/AOT-REPORT.md
             ${{ runner.temp }}/lab-out/aot-results.json
+            ${{ runner.temp }}/lab-out/profile-builds.txt
           retention-days: 7
           if-no-files-found: ignore
 
