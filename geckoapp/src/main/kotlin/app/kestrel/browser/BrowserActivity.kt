@@ -179,14 +179,16 @@ open class BrowserActivity : Activity(), DockListener {
         }
         override fun navKeyboardChanged(showing: Boolean) { if (showing) hideKeyboard() } // the system keyboard goes down while the mini one is up
         /**
-         * The Swoop keyboard (a separate app, docs/KEYBOARD-LINK.md): when it is the chosen system keyboard the panel's bar opens IT, floating over the page, for the page's focused text field or else the address bar;
-         * what is typed then goes through Android's own input path, so it is learned in Swoop's one memory. Not chosen, or switched off in Settings: false, and the panel's own keys open as before.
+         * The Swoop keyboard (a separate app, docs/KEYBOARD-LINK.md), owner request 17: Kestrel ALWAYS types through it when it is installed. The panel's bar opens IT, floating over the page, for the page's focused
+         * text field or else the address bar; what is typed goes through Android's own input path, so it is learned in Swoop's one memory. Installed but not the chosen keyboard: Android's keyboard choice opens
+         * (an app cannot switch keyboards silently). Not installed, or switched off in Settings: false, and the panel's own small keyboard opens as the fallback.
          */
         override fun navSwoop(open: Boolean): Boolean {
             if (!prefs.swoopKeyboard) return false
             val imm = getSystemService(InputMethodManager::class.java) ?: return false
-            if (!app.kestrel.browser.SwoopLink.isChosen(this@BrowserActivity)) return false
+            if (!app.kestrel.browser.SwoopLink.isInstalled(this@BrowserActivity)) return false
             if (!open) { hideKeyboard(); return true }
+            if (!app.kestrel.browser.SwoopLink.isChosen(this@BrowserActivity)) { app.kestrel.browser.SwoopLink.offerChoice(this@BrowserActivity, imm); return true }
             val target: android.view.View
             if (navPageField() != null) { target = geckoView; target.requestFocus(); imm.showSoftInput(target, 0) }
             else { focusUrlBar(); target = activeField }
@@ -1005,7 +1007,7 @@ open class BrowserActivity : Activity(), DockListener {
         progress = NeonBar(this, pal.accent, pal.accentHi)
         Neon.pulse(progress.halo, 0.3f, 1f, 3400L)
         content = FrameLayout(this)
-        geckoView = KestrelGeckoView(this).apply { setAutofillEnabled(false) } // no logins are stored; GeckoView's autofill hooks only add window-focus churn (research/FREEZE.md 4.7)
+        geckoView = KestrelGeckoView(this).apply { setAutofillEnabled(false); privateTab = { current?.isPrivateTab == true } } // no logins are stored; GeckoView's autofill hooks only add window-focus churn (research/FREEZE.md 4.7)
         // ONE GeckoView, attached once and never removed: detaching it pauses/resumes the compositor through synchronous IPC while the keyboard resizes the window,
         // which is the race family behind "the screen stops updating while typing". Tabs swap with setSession; the Home screen and error screens are opaque overlays above it.
         content.addView(geckoView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
