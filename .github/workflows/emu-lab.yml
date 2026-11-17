@@ -15,7 +15,7 @@ on:
       suite:
         description: 'smoke = one page + the Diagnostics text; fs = the full-screen turning checks; vc = the video controls and the long press on a video; snd = sound while the app is left; kp = the full-screen video controls Kestrel draws itself (owner message 49), taps and double taps and buttons and turning; fsy = a full-screen player box turned sideways and back, with the system bars hidden and kept (owner message 46), then the sound check; compat = every well-known site twice, Shields on then off, with speed, errors, scrolling and memory; soak = the long run (pages, videos, downloads); all = everything'
         type: choice
-        options: [smoke, fs, vc, snd, fsy, kp, yh, np, cp, ap, ho, vp, compat, daily, soak, all]
+        options: [smoke, fs, vc, snd, fsy, kp, yh, np, cp, ap, ho, vp, compat, daily, pack, soak, all]
         default: smoke
       minutes:
         description: 'How long the soak part runs, in minutes (60 = one hour)'
@@ -100,7 +100,22 @@ jobs:
           ls "$ANDROID_HOME/emulator/emulator" "$ANDROID_HOME/system-images/android-29/default/$IMG_ABI" | head -5
 
       - name: Build the Kestrel G debug app for the emulator's ABI (the real Firefox engine, GeckoView 160)
-        run: ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI --console=plain
+        run: |
+          if [ "$SUITE" = pack ]; then
+            # LAB5b: the packaging A/B builds four APKs of the SAME code: A = today, B = omni.ja stored, C = native libraries kept in the APK, D = both (geckoapp/build.gradle.kts switches)
+            mkdir -p "$RUNNER_TEMP/apks"
+            ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI --console=plain
+            cp geckoapp/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/apks/A.apk"
+            ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI -PomniStored=true --console=plain
+            cp geckoapp/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/apks/B.apk"
+            ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI -PlibsInApk=true --console=plain
+            cp geckoapp/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/apks/C.apk"
+            ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI -PomniStored=true -PlibsInApk=true --console=plain
+            cp geckoapp/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/apks/D.apk"
+            ls -l "$RUNNER_TEMP/apks"
+          else
+            ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI --console=plain
+          fi
 
       - name: Create the tablet-shaped emulator (Android 10, 600 x 1024 at 170 dpi, 2 GB, 2 cores)
         run: |
@@ -158,6 +173,7 @@ jobs:
           emulator -version | head -2
 
       - name: Install the app and start the lab server
+        if: inputs.suite != 'pack'
         run: |
           export PATH="$ANDROID_HOME/platform-tools:$PATH"
           APK="$(ls geckoapp/build/outputs/apk/debug/*.apk | head -1)"
@@ -172,7 +188,16 @@ jobs:
           adb reverse tcp:8091 tcp:8091
           cat "$RUNNER_TEMP/lab-out/soaklab.log"
 
+      - name: Run the packaging lab (LAB5b)
+        if: inputs.suite == 'pack'
+        run: |
+          export PATH="$ANDROID_HOME/platform-tools:$PATH"
+          mkdir -p "$RUNNER_TEMP/lab-out"
+          python3 -u -I tools/emu/packlab.py --out "$RUNNER_TEMP/lab-out" --repo-root "$PWD" --pkg "$PKG" --rounds 3 --starts 4 --apk A="$RUNNER_TEMP/apks/A.apk" --apk B="$RUNNER_TEMP/apks/B.apk" --apk C="$RUNNER_TEMP/apks/C.apk" --apk D="$RUNNER_TEMP/apks/D.apk" 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
+          if [ -f "$RUNNER_TEMP/lab-out/PACK-REPORT.md" ]; then cat "$RUNNER_TEMP/lab-out/PACK-REPORT.md" >> "$GITHUB_STEP_SUMMARY"; fi
+
       - name: Run the lab (${{ inputs.suite }}, soak ${{ inputs.minutes }} min, net ${{ inputs.net }})
+        if: inputs.suite != 'pack'
         run: |
           export PATH="$ANDROID_HOME/platform-tools:$PATH"
           export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
@@ -182,7 +207,7 @@ jobs:
           python3 -u -I tools/emu/soak.py --out "$RUNNER_TEMP/lab-out" --suite "$SUITE" --minutes "$MINUTES" --net "$NET" --pkg "$PKG" --port 8091 --profile "$PROFILE" --emu-cmd "$EMU_CMD" --apk "$APK" 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
 
       - name: The report for this build (LAB3d)
-        if: always()
+        if: always() && inputs.suite != 'pack'
         run: |
           OUT="$RUNNER_TEMP/lab-out"
           mkdir -p "$OUT"
@@ -222,6 +247,8 @@ jobs:
             ${{ runner.temp }}/lab-out/device.json
             ${{ runner.temp }}/lab-out/lowram-attempt.txt
             ${{ runner.temp }}/lab-out/ui-*.txt
+            ${{ runner.temp }}/lab-out/PACK-REPORT.md
+            ${{ runner.temp }}/lab-out/pack-results.json
           retention-days: 7
           if-no-files-found: ignore
 
