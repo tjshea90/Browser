@@ -67,12 +67,11 @@ def selftest():
     print("aotlab selftest ok")
 
 
-def release_check(lab, pl, adb, a, say):
+def release_check(lab, pl, adb, a, say, rows, notes, progress):
     """The REAL path of the baseline profile, end to end on the release build: install it, let androidx.profileinstaller read assets/dexopt/baseline.prof (the R8-rewritten rules) and write it where Android
     looks for it (the INSTALL_PROFILE broadcast does what the library does itself 5 s after the first frame), compile with it, and compare against a plain `verify` of the SAME APK.
     Measured with the platform's own `am start -W` TotalTime (time to the first drawn frame of the activity, no log lines needed). Returns (rows, notes)."""
     pkg = a.release_pkg
-    rows, notes = [], []
     adb.run("uninstall", pkg, timeout=120)
     say("install release", adb.run("install", "-t", a.release_apk, timeout=900).strip()[:80])
     uid = adb.sh("stat -c %%u /data/data/%s" % pkg, timeout=30).strip()
@@ -118,17 +117,16 @@ def release_check(lab, pl, adb, a, say):
                     say("release start", mode, "cache=" + ("cold" if cold else "warm"), total)
                     time.sleep(6)
                 lab.kill()
+                progress()
     finally:
         lab.pkg = old
-    return rows, notes
 
 
-def dm_install_check(lab, pl, adb, a, say):
+def dm_install_check(lab, pl, adb, a, say, rows, progress):
     """Can the profile be compiled AT INSTALL TIME? A session install with `base.apk` + `base.dm` (what Google Play does, and what Kestrel's own updater could do): Android 10 compiles with the profile while installing
     (`[status=speed-profile] [reason=install-dm]`) instead of waiting for the idle-and-charging dexopt. Each given .dm is tried; also the plain install of the same APK for the install time and the compiled size.
     Returns (rows, notes)."""
     pkg = a.release_pkg
-    rows, notes = [], []
     apk = a.release_apk
     size = os.path.getsize(apk)
 
@@ -158,11 +156,12 @@ def dm_install_check(lab, pl, adb, a, say):
 
     rows.append(session_install("plain (no dm)", None))
     say("dm check", rows[-1])
+    progress()
     for dm in a.release_dm:
         label = "dm " + os.path.basename(os.path.dirname(dm)) + "/" + os.path.basename(dm)
         rows.append(session_install(label, dm))
         say("dm check", rows[-1])
-    return rows, notes
+        progress()
 
 
 def main():
