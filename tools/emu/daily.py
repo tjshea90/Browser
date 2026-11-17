@@ -73,6 +73,13 @@ class DailyMixin:
             pass
         return nodes
 
+    def d_address_node(self, nodes):
+        """The address control: lab run 44003337190 (ui-home.txt) showed it is a clickable EditText at the bottom of the page area, its text is the page's full address (or the hint on Home)."""
+        cands = [n for n in nodes if n["cls"] == "EditText" and n["click"]]
+        if cands:
+            return sorted(cands, key=lambda n: -n["b"][1])[0]
+        return self.d_find(r"Address\. Tap|Search or type address|Search Google or type", nodes)
+
     def d_find(self, pattern, nodes=None):
         rx = re.compile(pattern, re.I)
         for n in (nodes if nodes is not None else self.d_nodes()):
@@ -84,7 +91,7 @@ class DailyMixin:
         """Tap the address control, type like a person (key events, one string), press Enter. Returns (found_control, (x, y))."""
         n = None
         for attempt in range(3):                                   # (uiautomator cannot dump while a page animates: ask again a little later)
-            n = self.d_find(r"Address\. Tap|Search or type address|Search Google or type", self.d_nodes())
+            n = self.d_address_node(self.d_nodes())
             if n:
                 break
             time.sleep(2.5)
@@ -180,6 +187,24 @@ class DailyMixin:
         self.record(ev)
         return ev
 
+    def d_dismiss_dialogs(self, limit=4):
+        """The app asks before a page may use the camera, the microphone or the location: that is the wanted behaviour. Record each question's title, answer BLOCK, return the titles."""
+        titles = []
+        for _ in range(limit):
+            nodes = self.d_nodes()
+            title = next((n["text"] for n in nodes if n["id"].endswith("alertTitle")), None)
+            btn = self.d_find(r"^(BLOCK|DENY|DON.T ALLOW|NOT NOW|CANCEL)$", nodes)
+            if not title and not btn:
+                break
+            if title:
+                titles.append(title)
+            if btn:
+                self.ph.tap(*btn["c"])
+            else:
+                self.ph.key("KEYCODE_BACK")
+            time.sleep(1.5)
+        return titles
+
     def d_check(self, name, result, detail="", sev="high", area="security"):
         """One pass / fail / info row (a security or feature probe). A fail is an issue and a row of the report."""
         self.record({"kind": "sec" if area == "security" else "feat", "name": name, "status": "ok" if result != "fail" else "fail", "result": result, "detail": str(detail)[:300]})
@@ -238,8 +263,12 @@ class DailyMixin:
         return res
 
     def d_home(self):
+        home = self.d_find(r"^Home$")
+        if home:
+            self.ph.tap(*home["c"])                          # the Home screen of the browser (the page before it was the lab's calibration page)
+            time.sleep(3)
         nodes = self.d_dump("home")
-        has_search = self.d_find(r"Search or type address|Search", nodes) is not None
+        has_search = self.d_address_node(nodes) is not None
         has_menu = self.d_find(r"^Menu$", nodes) is not None
         if not (has_search and has_menu):
             self.issue("low", "access", "the Home screen's search box / Menu are not found by Android's accessibility tree (uiautomator): TalkBack would not find them either (nodes seen: %d)" % len(nodes))
@@ -584,6 +613,8 @@ class DailyMixin:
         t0 = time.time()
         while time.time() - t0 < self.d_t(45) and not [r for r in self.d_sec_rows(tag, r0) if r.get("name") == "battery-done"]:
             time.sleep(1.5)
+        asked = self.d_dismiss_dialogs()                       # (the battery's camera and location requests are still waiting for a tap)
+        time.sleep(3)
         rows = self.d_sec_rows(tag, r0)
         seen = set()
         chips = [e for e in health_events(self.log.since(m_sec), "guard", "chip-show")]
@@ -597,6 +628,12 @@ class DailyMixin:
             if nm == "popup-without-tap" and verdict in ("info", "fail"):       # lab run 43997607118: the app blocks the pop-up and shows its chip, but hands the page a stand-in window
                 verdict = "pass" if chips else "fail"
                 detail = ("window.open returned a stand-in and the app showed its blocked-page chip (%s)" % chips[0]["rest"][:60]) if chips else "window.open opened a window and no blocked-page chip was shown"
+            if nm in ("camera-microphone", "location") and verdict == "info":
+                hit = [t for t in asked if re.search("camera|microphone" if nm == "camera-microphone" else "location", t, re.I)]
+                if hit:
+                    verdict, detail = "pass", "the app asked the person first (dialog: '%s' with BLOCK / ALLOW) and nothing was granted without a tap" % hit[0][:90]
+                elif not asked:
+                    detail += "; no dialog was visible to the lab either"
             self.d_check(nm, verdict, detail, sev="medium" if nm.startswith("referer") else "high")
         if not rows:
             self.d_check("security-battery-ran", "fail", "the in-page battery reported nothing within 45 s", sev="medium", area="tooling")
@@ -668,8 +705,14 @@ class DailyMixin:
                 self.d_check(nm, "pass" if (up or blocked) else "info", detail + ("; the engine upgraded %d insecure picture request(s) to https" % len(up) if up else "; blocked %d" % len(blocked) if blocked else "; no mixed-content line seen"))
             else:
                 self.shot("daily-http-upgrade")
-                self.d_dump("after-http-upgrade")
-                self.d_check(nm, "info", detail + " (the address control's text is saved in ui-after-http-upgrade.txt to see whether the scheme became https)")
+                addr = self.d_address_node(self.d_dump("after-http-upgrade"))
+                shown = addr["text"] if addr else ""
+                if shown.startswith("https://"):
+                    self.d_check(nm, "pass", detail + "; typed http://example.com/, the address control shows %s" % shown[:80])
+                elif shown.startswith("http://"):
+                    self.d_check(nm, "fail", detail + "; typed http://example.com/ but the address control shows %s: the page was NOT upgraded to https" % shown[:80])
+                else:
+                    self.d_check(nm, "info", detail + "; the address control's text was %r" % shown[:80])
         after = self.dump_diag("sec-after-http")
         up_b = [ln for ln in before.splitlines() if re.search(r"upgrad", ln, re.I)]
         up_a = [ln for ln in after.splitlines() if re.search(r"upgrad", ln, re.I)]
