@@ -15,6 +15,24 @@ Every lab number is an x86 emulator with a software GPU and a fast link: read th
 | 6 | SnakeYAML warm-up thread (GeckoView parses the engine config with SnakeYAML on the UI thread) | run-9 stack profile caught `Yaml.load` in `GeckoRuntime.create`; A/B (sweep run 44059232336, n=3): engine ready 1.50 s with it off vs 1.49 / 1.61 s with it on = no difference on x86; kept on theory + the stack sample, NOT a measured gain | compile + tests; Diagnostics lines `engine runtime-create-took` and `engine config-warm` |
 | 7 | Start-path micro changes: the three SharedPreferences files are requested in `GeckoApp.onCreate`; the Recents icon is set 1.5 s after the engine is ready instead of inside the first-frame callback | audit | compile + tests |
 
+## The proof: the daily suite before and after (same lab code, same kind of runner)
+Before = run 44054301212 (commit da746ada: alpha63 + lab tooling, none of the LAB5c app changes). After = run 44062596768 (commit c83d9f96: all LAB5c changes). 72 scenes, a person's day on the emulated tablet. The runner's own bench page says the
+second runner was about 6 % slower (244 ms vs 229 ms), so differences under ~10 % are noise.
+| Metric | before | after | Reading |
+| :- | -: | -: | :- |
+| scenes ok / failed | 70 ok, 1 fail, 1 no-play | 71 ok, 0 fail, 1 no-play | the one failure (typed address without scheme) did not come back: a flake of the lab's tap, not the app |
+| page load done, median / p90 (ms) | 1784 / 4018 | 1777 / 4718 | same (p90 is one heavy page) |
+| page first paint, median (ms) | 439 | 514 | noise (runner 6 % slower, one outlier page) |
+| scroll gaps over 100 ms per 1000 frames | 20.4 | 17.6 | same or a little better; worst gap 2233 -> 1667 ms |
+| UI thread late heartbeats / worst (ms) | 6 / 2095 | 2 / 1771 | fewer |
+| cold start `am start -W`, engine ready | 2180 ms, 2.7 s | 2373 ms, 2.9 s | no gain on this emulator (+9 %, runner 6 % slower): the first launch after an install pays for first-run work in both; the tablet's interpreter-bound start is what the profile is for |
+| engine-create burst on the UI thread (`engine burst runtime+orientation`, first start) | 176 ms | 125 ms | the SnakeYAML warm-up thread (57-140 ms of YAML work done on another core) |
+| memory: max PSS / after the memory warning / lowest available | 309 / 302 / 476 MB | 303 / 291 / 489 MB | 2-4 % less, 13 MB more free; median app PSS per page 345 -> 335 MB |
+| security: pass / fail | 17 / 0 | 16 / 0 | the missing pass is `bad-certificate-self-signed`: the runner could not reach badssl.com that time (not measured, not failed) |
+| issues (high / medium / low) | 0 / 1 / 1 | 0 / 0 / 1 | |
+Plain reading: nothing got worse that the runs can see, memory is a little lower, the engine-create step is shorter; start-up time and page speed are the same on this fast x86 emulator. The wins this pass was after (the interpreter-bound start on the
+tablet's four slow cores, the 14.5 MB per engine process, per-page work in the extension) are only partly visible here and are NOT proven on the tablet.
+
 ## Measured and NOT adopted (the ledger)
 - Engine preferences nursery16 / gcpar / gcsmall / canvas64: sweep run 44059232336 (17 good starts, then the emulator went offline): every variant inside the noise of two identical configurations (memory +-45 MB, bench +-3 %): none adopted (research/LAB5_PREFSWEEP.md).
 - Native libraries kept in the APK (`-PlibsInApk=true`): no start-up gain (-4..-6 % inside the noise), no memory gain, +65 MB download on ARM32 (+103 MB in the x86 lab build). Opt-in switch stays.
@@ -24,6 +42,5 @@ Every lab number is an x86 emulator with a software GPU and a fast link: read th
 - A `.dm` file in the self-updater (compile at install): the platform path is measured by the `aot` suite (below); the updater change is NOT made (a failed install would block updates).
 
 ## Still to fill in (runs in flight when this file was written)
-- after-run daily on the changed code vs research/lab-baseline.json and run 11.
 - vp run (video hand-over after the extension change).
 - aot run: verify vs speed-profile vs speed, release build with the embedded profile, compile-at-install check.
