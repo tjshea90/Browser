@@ -176,49 +176,78 @@ def report_update(L, upd_rows, upd_notes, med):
 
 def report_breadth(L, br_info, br_rows, br_mem, starts, med):
     """The LAB7a section of AOT-REPORT.md (appended to the list of lines L)."""
-    if br_info or br_rows:
-        L.append("## LAB7a: how much Android compiles at install, and what it costs (the RELEASE build; emulator: read the DIFFERENCES, the tablet's cores are slower)")
+    if not (br_info or br_rows):
+        return
+    L.append("## LAB7a: how much Android compiles at install, and what it costs (the RELEASE build; emulator: read the DIFFERENCES, the tablet's cores are slower)")
+    L.append("")
+    L.append("| Variant | what | status | compile s | compiled code MB | start -W warm ms | start -W cold ms | page loaded warm ms | page loaded cold ms | link 1 ms | links 2-N ms | PSS app MB | PSS all MB |")
+    L.append("| :- | :- | :- | -: | -: | -: | -: | -: | -: | -: | -: | -: | -: |")
+
+    def vstat(name):
+        inf = [i for i in br_info if i["variant"] == name]
+        srs = [r for r in br_rows if r["variant"] == name and r.get("kind", "start") != "link"]
+        lks = [r for r in br_rows if r["variant"] == name and r.get("kind") == "link"]
+        mm = [m for m in br_mem if m.get("variant") == name]
+
+        def sm(key, cache):
+            vals = [r[key] for r in srs if r["cache"] == cache and r.get(key) is not None]
+            return med(vals) if vals else None
+
+        def lk(first):
+            vals = [r["page_ms"] for r in lks if (r["k"] == 1) == first and r.get("page_ms") is not None]
+            return med(vals) if vals else None
+        app = [next((p.get("pss_kb") for p in m.get("procs", []) if p.get("name") == "app"), None) for m in mm]
+        return {"status": ",".join(sorted(set(str(i["status"]) for i in inf))) or "-", "compile_s": med([i["compile_s"] for i in inf]) if inf else None,
+                "oat_mb": (med([i["oat_kb"] for i in inf]) / 1024.0) if inf else None,
+                "am_warm": sm("am_total_ms", "warm"), "am_cold": sm("am_total_ms", "cold"), "pg_warm": sm("page_ms", "warm"), "pg_cold": sm("page_ms", "cold"),
+                "link1": lk(True), "linkn": lk(False), "n": len(srs), "nl": len(lks), "ns": len(mm),
+                "pss_app": (med([x for x in app if x is not None]) / 1024.0) if any(x is not None for x in app) else None,
+                "pss_all": (med([m.get("total_pss_kb") for m in mm]) / 1024.0) if mm else None}
+    base_name = "sp-current"
+    bs = vstat(base_name)
+    names = [b for b in BREADTH]
+    counts = []
+    for name, apkkey, mode, what in names:
+        s = vstat(name)
+        if s["status"] == "-" and s["am_warm"] is None:
+            continue
+        counts.append("%s: %d starts, %d links, %d memory snapshots, %d compiles" % (name, s["n"], s["nl"], s["ns"], len([i for i in br_info if i["variant"] == name])))
+
+        def c(k, fmt, s=s, name=name):
+            v = s.get(k)
+            if v is None:
+                return "-"
+            return (fmt % v) + (pct(v, bs.get(k)) if name != base_name else "")
+        L.append("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (name, what, s["status"], c("compile_s", "%.1f"), c("oat_mb", "%.1f"), c("am_warm", "%.0f"), c("am_cold", "%.0f"),
+                                                                                     c("pg_warm", "%.0f"), c("pg_cold", "%.0f"), c("link1", "%.0f"), c("linkn", "%.0f"), c("pss_app", "%.0f"), c("pss_all", "%.0f")))
+    L.append("")
+    L.append("(percentages against `%s`, the profile alpha65 ships; medians; compile s = `cmd package compile -f -m MODE` on the emulator's 2 vCPUs; link N = a VIEW intent to the RUNNING app, host clock until the page reports its load)" % base_name)
+    L.append("")
+    for c_ in counts:
+        L.append("- samples " + c_)
+    L.append("")
+    cats = [c_ for c_ in MEM_CATS]
+    if any(m.get("cats") for m in br_mem):
+        L.append("### Memory by kind of the app process (PSS MB, median of the snapshots; `.oat mmap` = compiled code, `Dalvik Other` includes the JIT's code cache)")
         L.append("")
-        L.append("| Variant | what | status | compile s | compiled code MB | start -W warm ms | start -W cold ms | page loaded warm ms | page loaded cold ms | PSS app MB | PSS all MB |")
-        L.append("| :- | :- | :- | -: | -: | -: | -: | -: | -: | -: | -: |")
-
-        def vstat(name):
-            inf = [i for i in br_info if i["variant"] == name]
-            srs = [r for r in br_rows if r["variant"] == name]
-            mm = [m for m in br_mem if m.get("variant") == name]
-
-            def sm(key, cache):
-                vals = [r[key] for r in srs if r["cache"] == cache and r.get(key) is not None]
-                return med(vals) if vals else None
-            app = [next((p.get("pss_kb") for p in m.get("procs", []) if p.get("name") == "app"), None) for m in mm]
-            return {"status": ",".join(sorted(set(str(i["status"]) for i in inf))) or "-", "compile_s": med([i["compile_s"] for i in inf]) if inf else None,
-                    "oat_mb": (med([i["oat_kb"] for i in inf]) / 1024.0) if inf else None,
-                    "am_warm": sm("am_total_ms", "warm"), "am_cold": sm("am_total_ms", "cold"), "pg_warm": sm("page_ms", "warm"), "pg_cold": sm("page_ms", "cold"),
-                    "pss_app": (med([x for x in app if x is not None]) / 1024.0) if any(x is not None for x in app) else None,
-                    "pss_all": (med([m.get("total_pss_kb") for m in mm]) / 1024.0) if mm else None}
-        base_name = "sp-current"
-        bs = vstat(base_name)
-        for name, apkkey, mode, what in BREADTH:
-            s = vstat(name)
-            if s["status"] == "-" and s["am_warm"] is None:
+        L.append("| Variant | " + " | ".join(cats) + " |")
+        L.append("| :- | " + " | ".join("-:" for _ in cats) + " |")
+        for name, _, _, _ in names:
+            mm = [m.get("cats") for m in br_mem if m.get("variant") == name and m.get("cats")]
+            if not mm:
                 continue
-
-            def c(k, fmt):
-                v = s.get(k)
-                if v is None:
-                    return "-"
-                return (fmt % v) + (pct(v, bs.get(k)) if name != base_name else "")
-            L.append("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (name, what, s["status"], c("compile_s", "%.1f"), c("oat_mb", "%.1f"), c("am_warm", "%.0f"), c("am_cold", "%.0f"),
-                                                                             c("pg_warm", "%.0f"), c("pg_cold", "%.0f"), c("pss_app", "%.0f"), c("pss_all", "%.0f")))
+            vals = []
+            for cat in cats:
+                xs = [x[cat] for x in mm if cat in x]
+                vals.append("%.1f" % (med(xs) / 1024.0) if xs else "-")
+            L.append("| %s | %s |" % (name, " | ".join(vals)))
         L.append("")
-        L.append("(percentages against `%s`, the profile alpha65 ships; n = %d starts per cache state per variant and round; compile s = `cmd package compile -f -m MODE` on the emulator's 2 vCPUs)" % (base_name, starts // 2))
-        L.append("")
-        seen = set()
-        for i in br_info:
-            if i["variant"] not in seen:
-                seen.add(i["variant"])
-                L.append("- files of %s: %s; profile written: %s bytes" % (i["variant"], ", ".join(i["files"]) or "none", i.get("profile_bytes")))
-        L.append("")
+    seen = set()
+    for i in br_info:
+        if i["variant"] not in seen:
+            seen.add(i["variant"])
+            L.append("- files of %s: %s; profile written: %s bytes" % (i["variant"], ", ".join(i["files"]) or "none", i.get("profile_bytes")))
+    L.append("")
 
 
 def selftest():
