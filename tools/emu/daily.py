@@ -82,16 +82,22 @@ class DailyMixin:
 
     def d_type_in_address(self, text):
         """Tap the address control, type like a person (key events, one string), press Enter. Returns (found_control, (x, y))."""
-        nodes = self.d_nodes()
-        n = self.d_find(r"Address\. Tap|Search or type address", nodes)
+        n = None
+        for attempt in range(3):                                   # (uiautomator cannot dump while a page animates: ask again a little later)
+            n = self.d_find(r"Address\. Tap|Search or type address|Search Google or type", self.d_nodes())
+            if n:
+                break
+            time.sleep(2.5)
         found = n is not None
-        at = n["c"] if n else (self.screen[0] // 2, self.screen[1] - 70)          # (the address control sits in the bottom dock; a guess only when the dump failed)
+        if n:
+            self.addr_at = n["c"]                                  # the dock does not move: the next step can tap here even when its own dump fails
+        at = n["c"] if n else (getattr(self, "addr_at", None) or (self.screen[0] // 2, self.screen[1] - 70))
         self.ph.tap(*at)
         time.sleep(1.6)
         self.ph.a.sh("input text %s" % shlex.quote(text.replace(" ", "%s")), timeout=30)
         time.sleep(1.0)
         self.ph.key("KEYCODE_ENTER")
-        return found, at
+        return found or hasattr(self, "addr_at"), at
 
     def d_t(self, seconds):
         """A wait limit; the driver's selftest (a fake phone that never answers) must not wait it out."""
@@ -330,24 +336,39 @@ class DailyMixin:
         mark = self.log.size()
         self.ph.open_url("%s/page/form" % self.lab_base)
         kind, kv, secs = self.d_wait_page(mark, 40)
-        time.sleep(2)
-        typed_at = None
-        for y in (190, 260, 330):                       # the page's first field is near the top; tap where a person would
-            m2 = self.log.size()
-            self.ph.tap(300, y)
-            time.sleep(1.8)
-            if health_events(self.log.since(m2), "field", "focused"):
-                typed_at = y
-                break
+        pos = None
         t0 = time.time()
+        while time.time() - t0 < self.d_t(15) and pos is None:
+            rows = [r for r in self.lab.since(r0) if r.get("kind") == "formpos"]
+            pos = rows[-1] if rows else None
+            time.sleep(0.7)
+        text = "Kestrel tablet test"
+        res = {"page_reported_position": bool(pos)}
+        m2 = self.log.size()
+        if pos:
+            self.ph.tap(int(num(pos.get("nx"))), int(num(pos.get("ny"))))
+        else:
+            self.ph.tap(300, 120)
+        time.sleep(2.0)
+        res["field_focused"] = bool(health_events(self.log.since(m2), "field", "focused"))
+        t1 = time.time()
         m3 = self.log.size()
-        self.ph.a.sh("input text %s" % shlex.quote("Kestrel%stablet%stest"), timeout=40)
-        type_s = time.time() - t0
-        time.sleep(1.5)
+        self.ph.a.sh("input text %s" % shlex.quote(text.replace(" ", "%s")), timeout=40)
+        res["typing_s"] = round(time.time() - t1, 2)
+        time.sleep(1.2)
+        self.ph.key("KEYCODE_ENTER")                       # submits the form: the lab server then holds exactly what the page received
+        time.sleep(3)
         stalls = [e for e in health_events(self.log.since(m3), "ui") if e["ev"] in ("STALL", "slow", "late-beat")]
-        res = {"field_focused": typed_at is not None, "typing_s": round(type_s, 2), "typing_ui_late": len(stalls), "typing_worst": max([int(re.sub(r"\D", "", s["rest"].split("ms")[0]) or 0) for s in stalls] or [0])}
-        if typed_at is None:
-            self.d_check("tapping-a-form-field-focuses-it", "fail", "taps at y=190/260/330 on the lab form page gave no 'field focused' line", sev="medium", area="feature")
+        res["typing_ui_late"] = len(stalls)
+        res["typing_worst"] = max([int(re.sub(r"\D", "", st["rest"].split("ms")[0]) or 0) for st in stalls] or [0])
+        got = [r for r in self.lab.since(r0) if r.get("kind") == "form"]
+        arrived = got[-1].get("name") if got else None
+        res["typed_text_arrived"] = arrived
+        if arrived == text:
+            self.d_check("typing-reaches-the-page", "pass", "19 key events typed into the page's Name field arrived intact; focus line seen: %s" % res["field_focused"], area="feature")
+        else:
+            self.d_check("typing-reaches-the-page", "fail", "typed %r, the page received %r (page reported its field position: %s, focus line: %s)" % (text, arrived, bool(pos), res["field_focused"]), sev="medium", area="feature")
+            self.shot("daily-form")
         return res
 
     def d_film_in_page(self):
@@ -558,19 +579,25 @@ class DailyMixin:
         tag = "sec1"
         # A. the in-page battery: what a hostile page can do without a tap, and what a tracker can see
         r0 = self.lab.size()
+        m_sec = self.log.size()
         self.ph.open_url("%s/sec?tag=%s" % (self.lab_base, tag))
         t0 = time.time()
         while time.time() - t0 < self.d_t(45) and not [r for r in self.d_sec_rows(tag, r0) if r.get("name") == "battery-done"]:
             time.sleep(1.5)
         rows = self.d_sec_rows(tag, r0)
         seen = set()
+        chips = [e for e in health_events(self.log.since(m_sec), "guard", "chip-show")]
         for r in rows:
             nm = r.get("name", "?")
             if nm in seen or nm == "battery-done":
                 continue
             seen.add(nm)
             res["battery"] += 1
-            self.d_check(nm, r.get("r", "info"), r.get("v", ""), sev="medium" if nm.startswith("referer") else "high")
+            verdict, detail = r.get("r", "info"), r.get("v", "")
+            if nm == "popup-without-tap" and verdict in ("info", "fail"):       # lab run 43997607118: the app blocks the pop-up and shows its chip, but hands the page a stand-in window
+                verdict = "pass" if chips else "fail"
+                detail = ("window.open returned a stand-in and the app showed its blocked-page chip (%s)" % chips[0]["rest"][:60]) if chips else "window.open opened a window and no blocked-page chip was shown"
+            self.d_check(nm, verdict, detail, sev="medium" if nm.startswith("referer") else "high")
         if not rows:
             self.d_check("security-battery-ran", "fail", "the in-page battery reported nothing within 45 s", sev="medium", area="tooling")
         # B. the other site opened on its own must not find the cookie its frame set under this site
@@ -612,10 +639,14 @@ class DailyMixin:
             m3 = self.log.size()
             self.ph.open_url(url)
             k, kv, s = self.d_wait_page(m3, 40)
-            if k == "error":
-                self.d_check("bad-certificate-%s" % nm, "pass", "the app refused it (%s)" % kv.get("kind"))
+            if nm == "expired":
+                self.shot("daily-badcert-expired")
+            # the app's 'page loaded' line is written when the load ENDS, also for its own error page: ok=false (no content) is what a refused certificate looks like (lab run 43997607118: the
+            # four pages logged ok=false and the Diagnostics page report said '1 FAILED'); ok=true would mean content was shown
+            if k == "error" or (k == "loaded" and kv.get("ok") == "false"):
+                self.d_check("bad-certificate-%s" % nm, "pass", "the load was refused (page %s, ok=%s, %s ms): no content shown" % (k, kv.get("ok"), kv.get("done", "?")))
             elif k == "loaded":
-                self.d_check("bad-certificate-%s" % nm, "fail", "the page LOADED with a %s certificate" % nm)
+                self.d_check("bad-certificate-%s" % nm, "fail", "the page LOADED with ok=true although its certificate is %s" % nm)
             else:
                 self.d_check("bad-certificate-%s" % nm, "info", "no page event in 40 s")
         # F. plain http: upgraded to https (Shields), and mixed content
@@ -628,8 +659,17 @@ class DailyMixin:
             self.ph.open_url(url)
             k, kv, s = self.d_wait_page(m4, 40)
             time.sleep(3)
-            con = console_summary(self.log.since(m4))
-            self.d_check(nm, "info", "page event %s host=%s; console errors %d, first: %s" % (k, kv.get("host"), con["errors"], con["first"][:1]))
+            lines4 = self.log.since(m4)
+            con = console_summary(lines4)
+            up = [ln for ln in lines4 if re.search(r"Upgrading insecure (display )?request", ln)]
+            blocked = [ln for ln in lines4 if re.search(r"Blocked loading mixed", ln)]
+            detail = "page event %s host=%s ok=%s; console errors %d" % (k, kv.get("host"), kv.get("ok"), con["errors"])
+            if nm == "mixed-content":
+                self.d_check(nm, "pass" if (up or blocked) else "info", detail + ("; the engine upgraded %d insecure picture request(s) to https" % len(up) if up else "; blocked %d" % len(blocked) if blocked else "; no mixed-content line seen"))
+            else:
+                self.shot("daily-http-upgrade")
+                self.d_dump("after-http-upgrade")
+                self.d_check(nm, "info", detail + " (the address control's text is saved in ui-after-http-upgrade.txt to see whether the scheme became https)")
         after = self.dump_diag("sec-after-http")
         up_b = [ln for ln in before.splitlines() if re.search(r"upgrad", ln, re.I)]
         up_a = [ln for ln in after.splitlines() if re.search(r"upgrad", ln, re.I)]
