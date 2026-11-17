@@ -563,7 +563,8 @@ def main():
         with open(os.path.join(a.out, "AOT-REPORT.md"), "w") as f:
             f.write(text)
         with open(os.path.join(a.out, "aot-results.json"), "w") as f:
-            json.dump({"starts": rows, "compile": status, "notes": notes, "release": rel_rows, "release_notes": rel_notes, "dm_install": dm_rows}, f, indent=1)
+            json.dump({"starts": rows, "compile": status, "notes": notes, "release": rel_rows, "release_notes": rel_notes, "dm_install": dm_rows,
+                       "breadth": {"compile": br_info, "starts": br_rows, "memory": br_mem}, "update": {"rows": upd_rows, "notes": upd_notes}}, f, indent=1)
         return text
 
     def debug_ab():
