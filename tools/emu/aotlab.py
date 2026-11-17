@@ -378,31 +378,47 @@ BREADTH = [
 
 
 def breadth_check(lab, pl, adb, srv, a, say, info, rows, mem, notes, progress):
-    """LAB7a. The RELEASE build (R8, not debuggable, the real profile) installed once per APK variant; for each variant `cmd package compile --reset`, the embedded profile put in place the way the library does (INSTALL_PROFILE),
-    `cmd package compile -f -m MODE`, then timed starts (alternating warm / dropped file cache) on the lab's ping page and one memory snapshot. Per variant: compile seconds, compiled code size, files, start times, PSS.
-    Variant APKs differ ONLY in assets/dexopt/baseline.prof (the profile rules of geckoapp/src/main/baseline-prof.txt, rewritten by R8). Fills [info] (one dict per compile), [rows] (one per start), [mem]."""
+    """LAB7a. The RELEASE build (R8, not debuggable, the real profile) installed once per APK variant; for each variant `cmd package compile --reset`, the embedded profile put in place the way the library does
+    (INSTALL_PROFILE), `cmd package compile -f -m MODE`, then timed starts (alternating warm / dropped file cache) on the lab's ping page, then ONE more start followed by --link-probes links opened in the RUNNING app
+    (code that runs a few times per session), then two memory snapshots (PSS per process, and `dumpsys meminfo` per kind: .oat mmap = compiled code, Dalvik Other = the JIT's code cache). Variant APKs differ ONLY in
+    assets/dexopt/baseline.prof (the rules of geckoapp/src/main/baseline-prof.txt, rewritten by R8). --variants limits the list; the order alternates every round; a dead system server is waited for (recover).
+    Fills [info] (one dict per compile), [rows] (one per start / link), [mem] (one per snapshot)."""
     pkg = a.release_pkg
     apks = {"base": a.release_apk, "exercised": a.apk_exercised, "all": a.apk_all}
     present = {k: v for k, v in apks.items() if v and os.path.exists(v)}
+    want = [v.strip() for v in a.variants.split(",") if v.strip()] if a.variants else [b[0] for b in BREADTH]
     page = "http://localhost:%d/ping" % a.port
     prof = "/data/misc/profiles/cur/0/%s/primary.prof" % pkg
     old = lab.pkg
     lab.pkg = pkg
+
+    def install(key):
+        for attempt in (1, 2):
+            adb.run("uninstall", pkg, timeout=120)
+            t0 = time.time()
+            out = adb.run("install", "-t", present[key], timeout=900)
+            say("install", key, out.strip()[:60], "%.0f s" % (time.time() - t0))
+            if "Success" in out:
+                return True
+            notes.append("install of %s failed (attempt %d): %s ; df: %s" % (key, attempt, out.strip().replace("\n", " ")[:120], adb.sh("df /data | tail -1", timeout=30).strip()[:100]))
+            if attempt == 1 and not recover(adb, lab, a.port, say):
+                return False
+        return False
+
     try:
         for rnd in range(1, a.breadth_rounds + 1):
-            groups = [("base", ["verify", "sp-current", "speed"]), ("exercised", ["sp-exercised"]), ("all", ["sp-all"])]
-            if rnd % 2 == 0:                                   # round 2 the other way round: a drifting runner cannot favour one variant
+            groups = []
+            for key in ("base", "exercised", "all"):
+                names = [b[0] for b in BREADTH if b[1] == key and b[0] in want]
+                if names:
+                    groups.append((key, names))
+            if rnd % 2 == 0:                                   # every other round the other way round: a drifting runner cannot favour one variant
                 groups = [(k, list(reversed(v))) for k, v in reversed(groups)]
             for key, names in groups:
                 if key not in present:
                     notes.append("round %d: no APK for %s: variants %s skipped" % (rnd, key, ",".join(names)))
                     continue
-                adb.run("uninstall", pkg, timeout=120)
-                t0 = time.time()
-                out = adb.run("install", "-t", present[key], timeout=900)
-                say("install", key, out.strip()[:60], "%.0f s" % (time.time() - t0))
-                if "Success" not in out:
-                    notes.append("round %d: install of %s failed: %s" % (rnd, key, out.strip()[:120]))
+                if not install(key):
                     continue
                 for name in names:
                     _, _, mode, what = next(b for b in BREADTH if b[0] == name)
@@ -410,7 +426,7 @@ def breadth_check(lab, pl, adb, srv, a, say, info, rows, mem, notes, progress):
                     prof_size = None
                     lab.kill()
                     if mode == "speed-profile":
-                        out = adb.sh("am broadcast -a androidx.profileinstaller.action.INSTALL_PROFILE %s/androidx.profileinstaller.ProfileInstallReceiver" % pkg, timeout=60)
+                        adb.sh("am broadcast -a androidx.profileinstaller.action.INSTALL_PROFILE %s/androidx.profileinstaller.ProfileInstallReceiver" % pkg, timeout=60)
                         for _ in range(30):
                             time.sleep(1.0)
                             sz = adb.sh("ls -ln %s 2>/dev/null" % prof, timeout=30).split()
@@ -439,15 +455,26 @@ def breadth_check(lab, pl, adb, srv, a, say, info, rows, mem, notes, progress):
                             lab.drop_caches()
                         time.sleep(2)
                         r = start_probe(pl, adb, srv, pkg, page)
-                        r.update({"variant": name, "round": rnd, "cache": "cold" if cold else "warm"})
+                        r.update({"kind": "start", "variant": name, "round": rnd, "cache": "cold" if cold else "warm"})
                         rows.append(r)
                         say("start", name, r["cache"], r["am_total_ms"], r["page_ms"])
                         time.sleep(5)
-                    lab.kill()                                         # memory: a fresh warm start, settle 10 s after the page loaded
-                    r = start_probe(pl, adb, srv, pkg, page)
-                    time.sleep(10)
-                    lab.snapshot_memory(name, rnd)
-                    mem.append(dict(lab.mem[-1], variant=name, round=rnd))
+                    lab.kill()                                         # one fresh warm start, then links opened in the running app, then memory
+                    start_probe(pl, adb, srv, pkg, page)
+                    time.sleep(6)
+                    for k in range(1, a.link_probes + 1):
+                        r = link_probe(pl, adb, srv, pkg, a.port, k)
+                        r.update({"kind": "link", "k": k, "variant": name, "round": rnd})
+                        rows.append(r)
+                        say("link", name, k, r["page_ms"])
+                        time.sleep(4)
+                    for snap in (1, 2):
+                        time.sleep(10 if snap == 1 else 20)
+                        lab.snapshot_memory(name, rnd)
+                        rec_m = dict(lab.mem[-1], variant=name, round=rnd, snap=snap)
+                        pid = next((p for p, n in lab.pids() if n == pkg), None)
+                        rec_m["cats"] = parse_meminfo(adb.sh("dumpsys meminfo %d" % pid, timeout=60)) if pid else {}
+                        mem.append(rec_m)
                     lab.kill()
                     progress()
     finally:
@@ -547,6 +574,8 @@ def main():
     ap.add_argument("--update-rounds", type=int, default=2)
     ap.add_argument("--settle-s", type=int, default=70, help="LAB7b: how long the app stays up after a launch (Gecko writes its start-up cache some time after start-up, not at once)")
     ap.add_argument("--breadth-rounds", type=int, default=2)
+    ap.add_argument("--variants", default="", help="LAB7a: comma list of the variants to run (default all): verify, sp-current, sp-exercised, sp-all, speed")
+    ap.add_argument("--link-probes", type=int, default=4, help="LAB7a: links opened in the running app after the timed starts")
     ap.add_argument("--phases", default="release,dm", help="comma list of: update, breadth, release, dm, debug (the default is what the lab did before LAB7)")
     ap.add_argument("--rounds", type=int, default=3)
     ap.add_argument("--starts", type=int, default=4)
