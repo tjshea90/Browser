@@ -27,9 +27,17 @@ All ten loaded (`ok=true`). The two slow ones to look at on the tablet: kotlinla
 * `engine network-profile standard trr=2 http3=true` was chosen on the emulator's fast link (the fast-wifi profile works as designed).
 * Memory with one page open: Kestrel 238 to 257 MB PSS (debug build, emulator), Swoop 40 to 44 MB.
 
-## An emulator hang worth knowing about
-After about 40 minutes of opening pages the emulated Android's own `system_server` watchdog fired (`android.fg waiting to lock ActivityManagerService`, `*** GOODBYE!`) and every adb call timed out. It is the emulator
-host (2 vCPUs, software GL) as likely as memory pressure; the runs are now split into pieces (`suite=pages`, `suite=video`) and wait for Android to come back after a hang.
+## An emulator hang that repeats at ONE page (not shown to be a Kestrel defect)
+Loading `https://pypi.org/project/requests/` took the emulated Android down TWICE (the long run 44164818105 and the pages-only run 44186817159, both at the 11th site): `adb shell am start` timed out, the emulated
+`system_server` was killed by its own watchdog (`*** WATCHDOG KILLING SYSTEM PROCESS: Blocked in handler on main thread`, stack `SurfaceControl.nativeGetPhysicalDisplayIds < LightsService.<init> <
+SystemServer.startBootstrapServices`) and then died again at every restart: SurfaceFlinger on the emulator's software GL (SwiftShader) no longer answered. Kestrel and Swoop were gone afterwards, so every later site
+"failed". It is the emulator's graphics stack giving up on that page, on a machine with no GPU; the tablet's Mali GPU is not involved. The page was taken out of the simulation's list; the runs are split into
+pieces (`suite=pages`, `suite=video`, `suite=typing`) and a scene stops after three sites in a row that do not load.
+
+## One thing to look at in the Shields numbers
+apnews.com: 5911 ms with 54 requests blocked in the long run (Kestrel had been running for 30 minutes), but 123 748 ms (!) with 0 requests blocked in the pages-only run (Kestrel freshly started minutes before).
+The other sites show 0 blocked in both runs. If the filter lists are not yet active for the first pages after a fresh start, an ad-heavy page can take minutes; worth checking `shields ext-state` and the first-start
+list load before the first page (Health lines `shields ...`, `cosmetic ...`).
 
 ## What the simulation proved about the Swoop link (it is Kestrel code, so it belongs here)
 Typing and gliding through the real Swoop keyboard into page text boxes (text, search, textarea, contenteditable, url, e-mail) is exact (7 of 7 phrases, 20 of 20 glided words per box kind), the address box gives Swoop
