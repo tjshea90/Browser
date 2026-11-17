@@ -46,9 +46,26 @@ Recipe: debug builds take `debug.kestrel.gp1..gp8` = `name=value` (GeckoPrefs.wr
 of content-process utime+stime, PSS and scenario time. The lab is x86 KVM with 2 guest cores and SwiftShader on the same host cores: it cannot judge thread-count prefs (stylo, helpers, processCount), GPU prefs or network prefs;
 compare only within one run. Once-prefs (surfacecache.*, precache-shaders, processCount, utility-process) would need a debug YAML hook (exists now: the same gp channel writes into the YAML config).
 
-## Run 1 of the sweep (queued at 09:51Z, results below when read)
-Variants (tools/emu/sweep-variants.txt): base, base2 (noise twin), nowarm (the LAB5c-1 config warm-up switched off), nursery16, gcpar, gcsmall (the GC trio), canvas64. Rounds = 5.
-Results: (to be filled in from run artifact `sweep-results.json` / SWEEP-REPORT.md)
+## Run 1 of the sweep (run 44059232336, 2026-11-17 09:54Z; CANCELLED at 10:33Z after the emulator went offline)
+Variants: base, base2 (the same config twice = the noise floor), nowarm (the LAB5c-1 config warm-up thread switched off), nursery16, gcpar, gcsmall (the GC trio), canvas64. Ruler: /bench2 (8 kinds of work x 3 passes).
+17 good starts (rounds 1-2 complete, round 3 for nowarm / nursery16 / gcpar), then adb said `device offline` and every later start waited five minutes for nothing (no report was written: fixed in tools/emu/prefsweep.py,
+it now saves after every start, checks `adb get-state` and stops after two dead starts). Medians (n = 2-3 per variant, so only a LARGE effect could show):
+
+| Variant | n | bench pass 1 ms | bench pass 3 (warm) ms | engine ready s | total PSS MB (all app processes) |
+| :- | -: | -: | -: | -: | -: |
+| base | 2 | 2220 | 1242 | 1.49 | 514 (514, 515) |
+| base2 (same config) | 2 | 1974 | 1222 | 1.61 | 470 (460, 481) |
+| nowarm | 3 | 2187 | 1244 | 1.50 | 488 (488, 527, 413) |
+| nursery16 | 3 | 2126 | 1243 | 1.56 | 468 |
+| gcpar | 3 | 2202 | 1212 | 1.45 | 460 |
+| gcsmall | 2 | 2062 | 1198 | 1.50 | 456 |
+| canvas64 | 2 | 2006 | 1194 | 1.48 | 485 |
+
+Reading: the two copies of the SAME configuration differ by 45 MB of memory and 0.12 s of engine-ready time, the warm bench pass varies within +-3 %: every preference variant sits inside that noise. So (1) NO GC / nursery /
+canvas preference is adopted (nothing measurable on the emulator; a memory benefit would need more rounds, and a CPU cost cannot be judged here), and (2) `nowarm` (warm-up thread off) is not slower or faster than the
+other starts on x86: the theory behind GeckoEngine.prewarmConfig (SnakeYAML's class loading moves from the engine-start critical path into the idle time before the first frame) concerns the tablet's slow in-order CPU
+and an interpreter-only first run; the emulator cannot show it. It stays (no cost seen, a stack sample proved the cause); the owner's Diagnostics line `engine runtime-create-took` (UI thread) next to `engine config-warm`
+(background thread) lets the two be compared on the tablet.
 
 ## Decisions taken without a sweep (zero or negligible behaviour change, work removed)
 - `captchadetection.actor.enabled = false` ((b)1) - stack-evidence only: the actor is Mozilla telemetry and it runs MutationObservers in captcha frames (ANS58 jank).
