@@ -98,7 +98,7 @@ jobs:
           "$SDKM" "emulator" "platform-tools" "system-images;android-29;default;$IMG_ABI" 2>&1 | tr '\r' '\n' | tail -4
           ls "$ANDROID_HOME/emulator/emulator" "$ANDROID_HOME/system-images/android-29/default/$IMG_ABI" | head -5
 
-      - name: Build the Kestrel G debug app for ${{ env.IMG_ABI || 'the emulator' }} (the real Firefox engine, GeckoView 160)
+      - name: Build the Kestrel G debug app for the emulator's ABI (the real Firefox engine, GeckoView 160)
         run: ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI --console=plain
 
       - name: Create the tablet-shaped emulator (Android 10, 600 x 1024 at 170 dpi, 2 GB, 2 cores)
@@ -124,12 +124,28 @@ jobs:
       - name: Start the emulator and wait until Android 10 has booted
         run: |
           export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
-          nohup emulator -avd "$AVD_NAME" -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel on -netdelay none -netspeed full -no-metrics > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          BASE="-avd $AVD_NAME -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel on -netdelay none -netspeed full -no-metrics"
+          # LAB3a: the tablet is a low-RAM (Go) device: ask the emulator for ro.config.low_ram=true at boot. The read-back below says whether the image took it; if the emulator
+          # refuses the option it is started again without it (the run then says so in the report)
+          EXTRA=""
+          if [ "$PROFILE" = tablet ]; then EXTRA="-prop ro.config.low_ram=true"; fi
+          nohup emulator $BASE $EXTRA > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          EPID=$!
+          sleep 25
+          if ! kill -0 "$EPID" 2>/dev/null && [ -n "$EXTRA" ]; then
+            echo "::warning::the emulator did not start with $EXTRA: starting it without (the lab report will say the low-RAM flag is not set)"
+            tail -5 "$RUNNER_TEMP/emulator.log"
+            EXTRA=""
+            nohup emulator $BASE > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          fi
+          echo "EMU_EXTRA=$EXTRA" >> "$GITHUB_ENV"
           adb start-server
           adb wait-for-device
           timeout 600 bash -c 'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = 1 ]; do sleep 5; done' || { echo "::error::the emulator did not finish booting in 10 minutes"; tail -30 "$RUNNER_TEMP/emulator.log"; exit 1; }
           sleep 10
           adb shell getprop ro.build.version.release
+          echo "device facts (LAB3a): abi=$(adb shell getprop ro.product.cpu.abi | tr -d '\r') abilist=$(adb shell getprop ro.product.cpu.abilist | tr -d '\r') low_ram=$(adb shell getprop ro.config.low_ram | tr -d '\r') sdk=$(adb shell getprop ro.build.version.sdk | tr -d '\r') cores=$(adb shell nproc | tr -d '\r') mem=$(adb shell 'grep MemTotal /proc/meminfo' | tr -d '\r')"
+          adb shell getprop > "$RUNNER_TEMP/device-props.txt" 2>/dev/null || true
           echo "java heap properties of this boot:"; adb shell getprop | grep -i "dalvik.vm.heap" || true   # lab run 43753283814: the first emulator boot gave apps a 16 MB heap limit (the app died of OutOfMemoryError in a crash loop); the next one had 512 MB
           adb shell wm size
           adb shell wm density
@@ -156,8 +172,8 @@ jobs:
           export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
           APK="$PWD/$(ls geckoapp/build/outputs/apk/debug/*.apk | head -1)"
           # when the emulated phone's system keeps dying (lab runs 3 and 5) the driver starts this same emulator again from a clean disk and installs the app again
-          EMU_CMD="emulator -avd $AVD_NAME -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data -gpu swiftshader_indirect -accel on -netdelay none -netspeed full -no-metrics"
-          python3 -u -I tools/emu/soak.py --out "$RUNNER_TEMP/lab-out" --suite "$SUITE" --minutes "$MINUTES" --net "$NET" --pkg "$PKG" --port 8091 --emu-cmd "$EMU_CMD" --apk "$APK" 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
+          EMU_CMD="emulator -avd $AVD_NAME -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data -gpu swiftshader_indirect -accel on -netdelay none -netspeed full -no-metrics $EMU_EXTRA"
+          python3 -u -I tools/emu/soak.py --out "$RUNNER_TEMP/lab-out" --suite "$SUITE" --minutes "$MINUTES" --net "$NET" --pkg "$PKG" --port 8091 --profile "$PROFILE" --emu-cmd "$EMU_CMD" --apk "$APK" 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
 
       - name: Put the report on the run's summary page
         if: always()
