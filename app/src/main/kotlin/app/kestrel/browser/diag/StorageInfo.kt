@@ -118,6 +118,8 @@ object StorageInfo {
                 if (doomedHere) { val len = k.length(); if (k.delete()) freed += len }
             }
         }
+        val took = android.os.SystemClock.uptimeMillis() - t0
+        if (took >= 20 || freed > 0) Health.log("storage", "purge-doomed", "dirs=$n freed=${freed}B took=${took}ms") // the lab and the owner's Diagnostics can see what the walk costs
         return freed
     }
 
