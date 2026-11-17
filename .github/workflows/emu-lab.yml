@@ -130,15 +130,19 @@ jobs:
           # refuses the option it is started again without it (the run then says so in the report)
           EXTRA=""
           if [ "$PROFILE" = tablet ]; then EXTRA="-prop ro.config.low_ram=true"; fi
+          ASKED="$EXTRA"; OUTCOME="not asked"
           nohup emulator $BASE $EXTRA > "$RUNNER_TEMP/emulator.log" 2>&1 &
           EPID=$!
           sleep 25
+          if [ -n "$ASKED" ]; then OUTCOME="the emulator started with $ASKED"; fi
           if ! kill -0 "$EPID" 2>/dev/null && [ -n "$EXTRA" ]; then
             echo "::warning::the emulator did not start with $EXTRA: starting it without (the lab report will say the low-RAM flag is not set)"
+            OUTCOME="the emulator REFUSED $ASKED and was started without it: $(tail -3 "$RUNNER_TEMP/emulator.log" | tr '\n' ' ' | cut -c1-200)"
             tail -5 "$RUNNER_TEMP/emulator.log"
             EXTRA=""
             nohup emulator $BASE > "$RUNNER_TEMP/emulator.log" 2>&1 &
           fi
+          echo "$OUTCOME" > "$RUNNER_TEMP/lowram-attempt.txt"
           echo "EMU_EXTRA=$EXTRA" >> "$GITHUB_ENV"
           adb start-server
           adb wait-for-device
@@ -147,6 +151,7 @@ jobs:
           adb shell getprop ro.build.version.release
           echo "device facts (LAB3a): abi=$(adb shell getprop ro.product.cpu.abi | tr -d '\r') abilist=$(adb shell getprop ro.product.cpu.abilist | tr -d '\r') low_ram=$(adb shell getprop ro.config.low_ram | tr -d '\r') sdk=$(adb shell getprop ro.build.version.sdk | tr -d '\r') cores=$(adb shell nproc | tr -d '\r') mem=$(adb shell 'grep MemTotal /proc/meminfo' | tr -d '\r')"
           adb shell getprop > "$RUNNER_TEMP/device-props.txt" 2>/dev/null || true
+          echo "read-back after boot: ro.config.low_ram='$(adb shell getprop ro.config.low_ram | tr -d '\r')'" >> "$RUNNER_TEMP/lowram-attempt.txt"
           echo "java heap properties of this boot:"; adb shell getprop | grep -i "dalvik.vm.heap" || true   # lab run 43753283814: the first emulator boot gave apps a 16 MB heap limit (the app died of OutOfMemoryError in a crash loop); the next one had 512 MB
           adb shell wm size
           adb shell wm density
@@ -182,6 +187,7 @@ jobs:
           OUT="$RUNNER_TEMP/lab-out"
           mkdir -p "$OUT"
           cp "$RUNNER_TEMP/device-props.txt" "$OUT/device-props.txt" 2>/dev/null || true
+          cp "$RUNNER_TEMP/lowram-attempt.txt" "$OUT/lowram-attempt.txt" 2>/dev/null || true
           # reads the run's own files (events, Health lines, logcat, Diagnostics) and the repository's last baseline; never fails the job
           python3 -I tools/emu/buildreport.py --out "$OUT" --repo-root "$PWD" --baseline research/lab-baseline.json --suite "$SUITE" --profile "$PROFILE" --net "$NET" --run-id "$GITHUB_RUN_ID" --sha "$GITHUB_SHA" 2>&1 | tail -25 || true
           if [ -f "$OUT/BUILD-REPORT.md" ]; then head -c 900000 "$OUT/BUILD-REPORT.md" >> "$GITHUB_STEP_SUMMARY"; fi
@@ -213,6 +219,9 @@ jobs:
             ${{ runner.temp }}/lab-out/emulator-restart.txt
             ${{ runner.temp }}/lab-out/soaklab.log
             ${{ runner.temp }}/lab-out/lab/report.jsonl
+            ${{ runner.temp }}/lab-out/device.json
+            ${{ runner.temp }}/lab-out/lowram-attempt.txt
+            ${{ runner.temp }}/lab-out/ui-*.txt
           retention-days: 7
           if-no-files-found: ignore
 
@@ -225,6 +234,9 @@ jobs:
             ${{ runner.temp }}/lab-out/BUILD-REPORT.md
             ${{ runner.temp }}/lab-out/build-report.json
             ${{ runner.temp }}/lab-out/device-props.txt
+            ${{ runner.temp }}/lab-out/device.json
+            ${{ runner.temp }}/lab-out/lowram-attempt.txt
+            ${{ runner.temp }}/lab-out/ui-*.txt
           retention-days: 30
           if-no-files-found: ignore
 

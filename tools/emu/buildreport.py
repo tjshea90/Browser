@@ -96,7 +96,7 @@ def build_identity(root, sha, run_id):
     return {"app": "Kestrel G (Firefox engine)", "versionName": name, "versionCode": code, "commit": (sha or "")[:8], "run": run_id}
 
 
-def hardware_table(dev, health_text, net):
+def hardware_table(dev, health_text, net, lowram_note=""):
     """(what, the tablet, this run, verdict) rows: matched / partly / NOT matched, so nobody reads a number past its limits."""
     d = dev or {}
     def mem_mb():
@@ -109,12 +109,12 @@ def hardware_table(dev, health_text, net):
         ("Screen", "600x973 at 170 dpi", "%s, %s" % (d.get("wm_size", "?").replace("Physical size: ", ""), d.get("wm_density", "?").replace("Physical density: ", "")), "matched" if "600" in d.get("wm_size", "") and "170" in d.get("wm_density", "") else "check"),
         ("Font scale", "1.2", d.get("font_scale", "?"), "matched" if d.get("font_scale", "").startswith("1.2") else "NOT matched (1.0)"),
         ("RAM", "2 GB", ("%d MB" % mem_mb()) if mem_mb() else "?", "matched" if mem_mb() and 1700 <= mem_mb() <= 2100 else "check"),
-        ("Low-RAM (Go) flag", "ro.config.low_ram=true, memory class 128 MB", "low_ram=%s, app heap limit %s" % (d.get("low_ram") or "(unset)", ("%s MB" % heap.group(1)) if heap else "?"), "matched" if d.get("low_ram") == "true" else "NOT matched (AOSP image, not the Go edition: no Android 10 Go image exists for the emulator)"),
+        ("Low-RAM (Go) flag", "ro.config.low_ram=true, memory class 128 MB", "low_ram=%s, app heap limit %s" % (d.get("low_ram") or "(unset)", ("%s MB" % heap.group(1)) if heap else "?"), "matched" if d.get("low_ram") == "true" else "NOT matched (AOSP image, not the Go edition: no Android 10 Go image exists for the emulator)" + ((" - " + lowram_note) if lowram_note else "")),
         ("CPU", "4 x Cortex-A53 (MT8168B), in-order, about 2 GHz", "%s cores of an x86 host CPU (%s)" % (d.get("cores", "?"), d.get("cpu", "?")[:60]), "NOT matched: the host core is several times faster; only changes between builds mean something"),
         ("GPU", "Mali-G52 MC2", "SwiftShader software GL", "NOT matched: smoothness and GPU memory are not the tablet's"),
         ("Video decoders", "MediaTek hardware H.264 / VP9", "software decoders", "NOT matched: 'plays / does not play' counts, smoothness does not"),
         ("Google services", "none (no Play, no GMS)", "GMS present: %s" % d.get("gms", "?"), "matched" if d.get("gms") == "no" else "NOT matched"),
-        ("Storage", "unencrypted", d.get("crypto") or "(unset)", "matched" if d.get("crypto") in ("", "unencrypted", None) else "check"),
+        ("Storage", "unencrypted", d.get("crypto") or "(unset)", "matched" if d.get("crypto") in ("", "unencrypted", None) else "NOT matched (the emulator image is file-encrypted; no effect on speed worth chasing)"),
         ("Network", "phone hotspot, 5 Mbit/s cap (owner: mostly fast Wi-Fi now)", "shaped like the hotspot" if net == "hotspot" else "the runner's fast link (datacentre)", "partly" if net != "hotspot" else "matched"),
     ]
     return rows
@@ -152,15 +152,19 @@ def main():
 
     # ---- the numbers of the run
     loads = []                                            # every page the app finished loading: (name, paint, done, blocked, console errors)
+    LAB_HOSTS = ("localhost", "127.0.0.1")
     for e in steps:
-        for p in e.get("pages") or []:
-            if "error" not in p and p.get("done_ms", -1) >= 0:
-                loads.append((e["name"], p.get("host"), p.get("paint_ms"), p.get("done_ms"), p.get("blocked", 0), (e.get("console") or {}).get("errors", 0)))
+        pgs = e.get("pages") or []
+        for p in pgs:
+            # a page that ended 'ok=false' is a refused or failed load (a bad certificate, a blocked site): not a speed sample
+            if "error" not in p and p.get("done_ms", -1) >= 0 and p.get("ok") != "false":
+                loads.append((e["name"], p.get("host"), p.get("paint_ms"), p.get("done_ms"), p.get("blocked", 0), (e.get("console") or {}).get("errors", 0) if len(pgs) == 1 else None))
     for e in pages_ev:
         if e.get("status") in ("ok", "slow") and e.get("done_ms") is not None and e.get("shields", "on") == "on":
             loads.append((e.get("name"), e.get("url_host"), e.get("paint_ms"), e.get("done_ms"), e.get("blocked", 0), (e.get("console") or {}).get("errors", 0)))
-    paints = [l[2] for l in loads if l[2] is not None and l[2] >= 0]
-    dones = [l[3] for l in loads if l[3] is not None and l[3] >= 0]
+    public = [l for l in loads if (l[1] or "") not in LAB_HOSTS]          # the speed numbers are about real sites; the lab's own pages load in milliseconds and would flatter them
+    paints = [l[2] for l in public if l[2] is not None and l[2] >= 0]
+    dones = [l[3] for l in public if l[3] is not None and l[3] >= 0]
     scroll = collections.Counter()
     for e in steps + pages_ev:
         s = e.get("scroll")
@@ -169,14 +173,16 @@ def main():
                 scroll[k] += s.get(k, 0)
             scroll["worst_ms"] = max(scroll["worst_ms"], s.get("worst_ms", 0))
     stall_steps = [(e["name"], e.get("ui_stalls", 0), e.get("ui_worst_ms", 0)) for e in steps + pages_ev if e.get("ui_stalls")]
+    late_steps = [(e["name"], e.get("ui_late", 0), e.get("ui_worst_ms", 0)) for e in steps + pages_ev if e.get("ui_late")]
     by = {e["name"]: e for e in steps}
-    bench_total = statistics.median([b["ms"].get("total", 0) for b in bench if b.get("ms")]) if bench else None
+    bench_total = min([b["ms"].get("total", 0) for b in bench if b.get("ms") and b["ms"].get("total", 0) > 0] or [0]) or None   # the fastest = the steady state (the first runs while the engine and the JIT are still warming up)
     mem = by.get("many-tabs-and-memory-warning", {})
     metrics = {
-        "page_paint_p50_ms": pct(paints, 50), "page_paint_p90_ms": pct(paints, 90), "page_done_p50_ms": pct(dones, 50), "page_done_p90_ms": pct(dones, 90), "pages_loaded": len(loads),
+        "page_paint_p50_ms": pct(paints, 50), "page_paint_p90_ms": pct(paints, 90), "page_done_p50_ms": pct(dones, 50), "page_done_p90_ms": pct(dones, 90), "pages_loaded": len(public), "lab_pages_loaded": len(loads) - len(public),
         "scroll_gap50_per_1000_frames": (1000.0 * scroll["gaps50"] / scroll["frames"]) if scroll["frames"] else None,
         "scroll_gap100_per_1000_frames": (1000.0 * scroll["gaps100"] / scroll["frames"]) if scroll["frames"] else None, "scroll_worst_gap_ms": scroll["worst_ms"] or None,
         "ui_stall_count": sum(s[1] for s in stall_steps), "ui_worst_ms": max([s[2] for s in stall_steps] or [0]) or None,
+        "ui_late_beats": sum(s[1] for s in late_steps), "ui_late_worst_ms": max([s[2] for s in late_steps] or [0]) or None,
         "cold_start_am_total_ms": (by.get("cold-start") or {}).get("am_total_ms"), "cold_start_engine_ready_s": (by.get("cold-start") or {}).get("engine_ready_s"),
         "typing_21_chars_s": (by.get("typing-in-a-form-field") or {}).get("typing_s"), "film_tap_to_picture_s": (by.get("film-in-a-page-press-play") or {}).get("tap_to_picture_s"),
         "tab_switch_s": (by.get("several-tabs-and-switching") or {}).get("switch_s"), "resume_s": (by.get("leave-the-app-and-return") or {}).get("resume_s"),
@@ -223,11 +229,14 @@ def main():
                       "step '%s' ended '%s'" % (e["name"], e["status"]), e.get("note", ""), hint_for(e["name"])))
     if metrics["ui_worst_ms"] and metrics["ui_worst_ms"] >= 700:
         F.append(("speed/ui-stall", "medium", "speed", "the UI thread was blocked for up to %d ms (%d stalls)" % (metrics["ui_worst_ms"], metrics["ui_stall_count"]), "; ".join("%s x%d (%d ms)" % s for s in stall_steps[:6]), hint_for("STALL")))
+    if metrics["ui_late_worst_ms"] and metrics["ui_late_worst_ms"] >= 700 and not (metrics["ui_worst_ms"] or 0) >= 700:
+        F.append(("speed/ui-late-beat", "medium", "speed", "the UI thread did not answer for %d ms in %d place(s) (late heartbeat, below the stall watchdog)" % (metrics["ui_late_worst_ms"], len(late_steps)),
+                  "; ".join("%s (%d, worst %d ms)" % s for s in late_steps[:6]) + ". The tablet shows the same family at start (ui slow 865 ms)", hint_for("late-beat")))
     if metrics["scroll_gap100_per_1000_frames"] and metrics["scroll_gap100_per_1000_frames"] > 20:
         F.append(("scroll/gaps", "medium", "scroll", "%.0f gaps over 100 ms per 1000 frames while scrolling (worst %s ms)" % (metrics["scroll_gap100_per_1000_frames"], metrics["scroll_worst_gap_ms"]), "software GL on a fast host: if it is already bad here it is worse on the tablet", hint_for("scroll")))
     if metrics["page_done_p90_ms"] and metrics["page_done_p90_ms"] > 12000:
         F.append(("load/slow-p90", "medium", "speed", "the slowest tenth of page loads finished after %.1f s" % (metrics["page_done_p90_ms"] / 1000.0), "slowest: " + ", ".join("%s %.1fs" % (l[0], l[3] / 1000.0) for l in sorted(loads, key=lambda l: -l[3])[:4]), "page loading: Shields blocking cost (research/ADBLOCK_ENGINE.md), network profile"))
-    noisy = sorted([l for l in loads if l[5] and l[5] >= 15], key=lambda l: -l[5])[:4]
+    noisy = sorted([l for l in public if l[5] and l[5] >= 15], key=lambda l: -l[5])[:4]
     if noisy:
         F.append(("console/noisy", "low", "compat", "pages with many script errors: " + ", ".join("%s (%d)" % (l[1] or l[0], l[5]) for l in noisy), "a Shields A/B on the same page tells whether our blocking causes them (LAB2c)", "Shields lists / scriptlets (research/ADBLOCK_ENGINE.md)"))
     ab = (by.get("private-tab-and-shields-switch") or {}).get("shields_ab") or {}
@@ -303,9 +312,12 @@ def main():
     L.append("")
     L.append("| What | The owner's tablet | This run | Verdict |")
     L.append("| :- | :- | :- | :- |")
-    for r in hardware_table(dev, health, a.net):
+    lowram_note = " ".join(read(os.path.join(out, "lowram-attempt.txt")).split())[:240]
+    for r in hardware_table(dev, health, a.net, lowram_note):
         L.append("| %s | %s | %s | %s |" % r)
     if bench:
+        L.append("")
+        L.append("CPU calibration (the smallest total is used as the runner's speed, the first run is slowed by the app still warming up)")
         L.append("")
         L.append("CPU calibration page (a fixed amount of JavaScript, sort, JSON, regex, DOM and canvas work, timed in the page): " + "; ".join("%s total %s ms (loop %s, sort %s, json %s, dom %s, canvas %s)" % (b["name"], b["ms"].get("total"), b["ms"].get("loop"), b["ms"].get("sort"), b["ms"].get("json"), b["ms"].get("dom"), b["ms"].get("canvas")) for b in bench) +
                  ". Compare it between runs: a faster runner makes every page look faster.")
@@ -335,7 +347,7 @@ def main():
         L.append("| :- | :- | -: | :- | -: | -: | -: | :- |")
         for e in steps:
             pg = "; ".join("%s %s/%s" % ((p.get("host") or "?")[:24], p.get("paint_ms"), p.get("done_ms")) if "error" not in p else "%s ERROR %s" % ((p.get("host") or "?")[:24], p.get("error")) for p in (e.get("pages") or [])[:3]) or "-"
-            extra = {k: v for k, v in e.items() if k in ("am_total_ms", "engine_ready_s", "nav_s", "host", "typing_s", "tap_to_picture_s", "switch_s", "resume_s", "page_reloaded", "max_pss", "min_avail", "hibernated", "tabs", "cards", "opened", "backs", "sites", "nodes", "kestrel_player_took_it", "field_focused", "downloads_screen", "menu_items")}
+            extra = {k: v for k, v in e.items() if k in ("am_total_ms", "engine_ready_s", "nav_s", "host", "typing_s", "tap_to_picture_s", "switch_s", "resume_s", "page_reloaded", "max_pss", "min_avail", "hibernated", "tabs", "cards", "opened", "backs", "sites", "nodes", "kestrel_player_took_it", "field_focused", "downloads_screen", "typed_text_arrived", "page_reported_position", "typed", "control_found", "shields_ab", "opened", "private_tab_load", "alive_after_screen_off", "engine_died", "after_trim_pss", "trim_lines")}
             L.append("| %s | %s | %s | %s | %s (%s) | %s | %s | %s |" % (e["name"], e.get("status"), e.get("wall_s"), pg, e.get("ui_stalls", 0), e.get("ui_worst_ms", 0), (e.get("console") or {}).get("errors", 0), e.get("pss", "-"),
                                                                           (e.get("note") or json.dumps(extra, default=str))[:230].replace("|", "/")))
     else:
