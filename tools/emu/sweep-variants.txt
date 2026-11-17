@@ -1,0 +1,4 @@
+# The engine preference sweep (LAB5b): one variant per line, NAME=pref=value;pref=value (up to 8 prefs; pref=- removes a pref from the base config).
+# The FIRST TWO lines must stay base= and base2= (the same configuration twice: their gap is the run's noise floor). Edited per experiment; the run that used a file says so in research/LAB5_PREFSWEEP.md.
+base=
+base2=

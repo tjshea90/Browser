@@ -15,7 +15,7 @@ on:
       suite:
         description: 'smoke = one page + the Diagnostics text; fs = the full-screen turning checks; vc = the video controls and the long press on a video; snd = sound while the app is left; kp = the full-screen video controls Kestrel draws itself (owner message 49), taps and double taps and buttons and turning; fsy = a full-screen player box turned sideways and back, with the system bars hidden and kept (owner message 46), then the sound check; compat = every well-known site twice, Shields on then off, with speed, errors, scrolling and memory; soak = the long run (pages, videos, downloads); all = everything'
         type: choice
-        options: [smoke, fs, vc, snd, fsy, kp, yh, np, cp, ap, ho, vp, compat, daily, pack, soak, all]
+        options: [smoke, fs, vc, snd, fsy, kp, yh, np, cp, ap, ho, vp, compat, daily, pack, sweep, soak, all]
         default: smoke
       minutes:
         description: 'How long the soak part runs, in minutes (60 = one hour)'
@@ -173,7 +173,7 @@ jobs:
           emulator -version | head -2
 
       - name: Install the app and start the lab server
-        if: inputs.suite != 'pack'
+        if: inputs.suite != 'pack' && inputs.suite != 'sweep'
         run: |
           export PATH="$ANDROID_HOME/platform-tools:$PATH"
           APK="$(ls geckoapp/build/outputs/apk/debug/*.apk | head -1)"
@@ -196,8 +196,19 @@ jobs:
           python3 -u -I tools/emu/packlab.py --out "$RUNNER_TEMP/lab-out" --repo-root "$PWD" --pkg "$PKG" --rounds 3 --starts 4 --apk A="$RUNNER_TEMP/apks/A.apk" --apk B="$RUNNER_TEMP/apks/B.apk" --apk C="$RUNNER_TEMP/apks/C.apk" --apk D="$RUNNER_TEMP/apks/D.apk" 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
           if [ -f "$RUNNER_TEMP/lab-out/PACK-REPORT.md" ]; then cat "$RUNNER_TEMP/lab-out/PACK-REPORT.md" >> "$GITHUB_STEP_SUMMARY"; fi
 
+      - name: Run the engine preference sweep (LAB5b)
+        if: inputs.suite == 'sweep'
+        run: |
+          export PATH="$ANDROID_HOME/platform-tools:$PATH"
+          mkdir -p "$RUNNER_TEMP/lab-out"
+          ARGS=""
+          while IFS= read -r line; do case "$line" in ''|'#'*) continue;; esac; ARGS="$ARGS --variant $(printf '%q' "$line")"; done < tools/emu/sweep-variants.txt
+          echo "variants:$ARGS"
+          eval python3 -u -I tools/emu/prefsweep.py --out "$RUNNER_TEMP/lab-out" --repo-root "$PWD" --pkg "$PKG" --rounds "${MINUTES:-5}" $ARGS 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
+          if [ -f "$RUNNER_TEMP/lab-out/SWEEP-REPORT.md" ]; then cat "$RUNNER_TEMP/lab-out/SWEEP-REPORT.md" >> "$GITHUB_STEP_SUMMARY"; fi
+
       - name: Run the lab (${{ inputs.suite }}, soak ${{ inputs.minutes }} min, net ${{ inputs.net }})
-        if: inputs.suite != 'pack'
+        if: inputs.suite != 'pack' && inputs.suite != 'sweep'
         run: |
           export PATH="$ANDROID_HOME/platform-tools:$PATH"
           export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
@@ -207,7 +218,7 @@ jobs:
           python3 -u -I tools/emu/soak.py --out "$RUNNER_TEMP/lab-out" --suite "$SUITE" --minutes "$MINUTES" --net "$NET" --pkg "$PKG" --port 8091 --profile "$PROFILE" --emu-cmd "$EMU_CMD" --apk "$APK" 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
 
       - name: Keep the ART profile of this run (LAB5b, the methods the app really runs, raw material of a baseline profile)
-        if: always() && inputs.suite != 'pack'
+        if: always() && inputs.suite != 'pack' && inputs.suite != 'sweep'
         continue-on-error: true
         run: |
           export PATH="$ANDROID_HOME/platform-tools:$PATH"
@@ -234,7 +245,7 @@ jobs:
           wc -l "$OUT"/*.txt "$OUT"/*.out 2>/dev/null | tail -8
 
       - name: The report for this build (LAB3d)
-        if: always() && inputs.suite != 'pack'
+        if: always() && inputs.suite != 'pack' && inputs.suite != 'sweep'
         run: |
           OUT="$RUNNER_TEMP/lab-out"
           mkdir -p "$OUT"
@@ -277,6 +288,8 @@ jobs:
             ${{ runner.temp }}/lab-out/profile/**
             ${{ runner.temp }}/lab-out/PACK-REPORT.md
             ${{ runner.temp }}/lab-out/pack-results.json
+            ${{ runner.temp }}/lab-out/SWEEP-REPORT.md
+            ${{ runner.temp }}/lab-out/sweep-results.json
           retention-days: 7
           if-no-files-found: ignore
 
