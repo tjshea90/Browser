@@ -99,6 +99,8 @@ def selftest():
     assert parse_dexopt_status(sample, "app.kestrel.browser.gecko.debug") == ("speed-profile", "cmdline")
     assert parse_dexopt_status(sample, "com.other") == (None, None)
     assert sum_ls_bytes("/x/oat/x86_64:\ntotal 10\n-rw-r--r-- 1 system all 1000 2026-11-17 10:00 base.odex\n-rw-r--r-- 1 system all 24 2026-11-17 10:00 base.vdex\ndrwx------ 2 a b 4096 2026 d\n") == 1024
+    assert ls_files("/x/oat/x86_64:\ntotal 10\n-rw-r--r-- 1 system all 1000 2026-11-17 10:00 base.odex\n-rw-r--r-- 1 system all 24 2026-11-17 10:00 base.vdex\ndrwx------ 2 a b 4096 2026 d\n") == [("base.odex", 1000), ("base.vdex", 24)]
+    assert pct(110, 100) == " (+10 %)" and pct(None, 100) == "" and pct(5, 0) == ""
     print("aotlab selftest ok")
 
 
