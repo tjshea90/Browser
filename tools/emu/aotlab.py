@@ -59,8 +59,43 @@ def sum_ls_bytes(text):
     return total
 
 
+def ls_files(text):
+    """[(name, bytes)] of the regular files of an `ls -lR` listing (the oat directory: base.odex = compiled code, base.vdex = verified dex, base.art = app image if any)."""
+    out = []
+    for ln in text.splitlines():
+        if ln.startswith("-"):
+            parts = ln.split()
+            if len(parts) >= 8 and parts[4].isdigit():
+                out.append((parts[-1], int(parts[4])))
+    return out
+
+
+def pct(v, base):
+    """' (+12 %)' of v against base, '' when either is missing."""
+    if v is None or not base:
+        return ""
+    return " (%+.0f %%)" % ((v - base) / float(base) * 100.0)
+
+
+def start_probe(pl, adb, srv, pkg, url, wait_s=60):
+    """ONE start of the app on the lab's /ping page: `am start -W` TotalTime (first drawn frame) and the host-clock time from the command to the page's own load stamp (/report arriving at the lab server).
+    The RELEASE build writes no Health lines, so this is how its start is measured end to end (engine, session, page load); the adb round trip is the same for every variant. page_ms is None when the page never reported."""
+    n0 = len(srv.pings)
+    t0 = time.time()
+    out = adb.sh("am start -W -a android.intent.action.VIEW -d %s -p %s" % (url, pkg), timeout=120)
+    total, wait = pl.parse_am_start(out)
+    end = time.time() + wait_s
+    t1 = None
+    while time.time() < end:
+        if len(srv.pings) > n0:
+            t1 = srv.pings[n0][0]
+            break
+        time.sleep(0.2)
+    return {"am_total_ms": total, "am_wait_ms": wait, "page_ms": int(round((t1 - t0) * 1000)) if t1 else None}
+
+
 def selftest():
-    sample = "  [app.kestrel.browser.gecko.debug]\n    path: /data/app/x==/base.apk\n      x86_64: [status=speed-profile] [reason=cmdline]\n  [com.android.email]\n    path: y\n      x86_64: [status=quicken] [reason=prebuilt]\n"
+    sample ="  [app.kestrel.browser.gecko.debug]\n    path: /data/app/x==/base.apk\n      x86_64: [status=speed-profile] [reason=cmdline]\n  [com.android.email]\n    path: y\n      x86_64: [status=quicken] [reason=prebuilt]\n"
     assert parse_dexopt_status(sample, "app.kestrel.browser.gecko.debug") == ("speed-profile", "cmdline")
     assert parse_dexopt_status(sample, "com.other") == (None, None)
     assert sum_ls_bytes("/x/oat/x86_64:\ntotal 10\n-rw-r--r-- 1 system all 1000 2026-11-17 10:00 base.odex\n-rw-r--r-- 1 system all 24 2026-11-17 10:00 base.vdex\ndrwx------ 2 a b 4096 2026 d\n") == 1024
