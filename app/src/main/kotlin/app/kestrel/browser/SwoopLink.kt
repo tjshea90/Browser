@@ -40,6 +40,16 @@ object SwoopLink {
         return false
     }
 
+    /** The package of the installed Swoop (the release build before the debug build), or null. */
+    fun installedPackage(ctx: Context): String? {
+        val pm = ctx.packageManager
+        for (p in arrayOf(PKG, "$PKG.debug")) { try { pm.getPackageInfo(p, 0); return p } catch (e: Exception) { /* not this one */ } }
+        return null
+    }
+
+    /** The screen of Swoop that takes what another app learned (explicit intent only: it has no intent filter). */
+    const val RECEIVE_ACTIVITY = "app.swoop.keyboard.ReceiveLearnedActivity"
+
     /**
      * Swoop is installed but not the chosen keyboard: asks Android to let the person pick it. Not switched on yet: the system keyboard settings open (it must be switched on first); switched on: the keyboard
      * picker opens. An app cannot do more than that; after one choice nothing is asked again.

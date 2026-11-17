@@ -25,6 +25,8 @@ interface SettingsListener {
     /** Settings > "Export / Import what the keyboard learned" (AX1): a plain-text file of the words, word habits, corrections and glide shapes the keyboard learned, to take to another keyboard. */
     fun exportKeyboard() {}
     fun importKeyboard() {}
+    /** Settings > "Send what the keyboard learned to Swoop" (owner request 17): one explicit hand-over of the mini keyboard's memory to the Swoop app. */
+    fun handOverToSwoop() {}
     fun resetMiniGeometry() {}
     fun resetSiteShields()
     fun updateFiltersNow()
@@ -78,6 +80,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         button("Tidy storage now", "Deletes old update files and installers, cache older than 3 weeks, old crash reports, stopped downloads older than 2 weeks and pictures of closed tabs. It also happens by itself about once a day. Nothing you are using is touched.") { l.tidyStorage() }
         if (app.kestrel.browser.Flavor.hasMiniNav) button("Export what the keyboard learned", "Saves one plain-text file in Downloads with the words you use, the word pairs, the corrections you made and the shapes of your glides, to take to another keyboard. Do it before you uninstall Kestrel: what the keyboard learned is deleted with the app. The file lists words you typed: keep it private.") { l.exportKeyboard() }
         if (app.kestrel.browser.Flavor.hasMiniNav) button("Import what the keyboard learned", "Pick such a file from Downloads. It is added to what this keyboard already learned; the same file twice changes nothing.") { l.importKeyboard() }
+        if (app.kestrel.browser.Flavor.hasMiniNav && app.kestrel.browser.SwoopLink.isInstalled(ctx)) button("Send what the keyboard learned to Swoop", "One tap hands the words, word pairs and corrections this small keyboard learned before to your Swoop keyboard. Swoop shows what is in it and adds it only when you tap Import. From now on Kestrel types with Swoop itself, so there is nothing more to send.") { l.handOverToSwoop() }
         if (app.kestrel.browser.Flavor.hasMiniNav) button("Forget what the keyboard learned", "The mini keyboard's glide typing learns from the words you pick, keep and type, the shapes of your glides and how your thumb lands: it stays on this tablet. This deletes all of it; it starts learning again from the next word.") { confirm("Forget what the keyboard learned?", "Your own words, word habits, glide shapes and thumb habit for glide typing will be deleted.") { l.forgetGlide() } }
         button("Reset per-site Shields", "Forget the choices you made in the Shields panel") { confirm("Reset per-site Shields?", "Every site goes back to the defaults above.") { l.resetSiteShields() } }
 

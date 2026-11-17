@@ -37,6 +37,7 @@
         <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="market" /></intent>
     </queries>
 
+    <!-- placeholder replaced below -->
     <application
         android:name=".GeckoApp"
         android:allowBackup="false"

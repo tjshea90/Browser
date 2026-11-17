@@ -2598,6 +2598,7 @@ open class BrowserActivity : Activity(), DockListener {
         override fun restoreFromFile() { backup.restoreFromFile() }
         override fun exportKeyboard() { keyboardFlow.exportNow() }
         override fun importKeyboard() { keyboardFlow.importFromFile() }
+        override fun handOverToSwoop() { keyboardFlow.handOverToSwoop() }
         override fun updateFiltersNow() {
             toast("Checking the filter lists…")
             // own thread: compiling the lists can take several seconds on this CPU and must not hold up history writes on the IO thread
