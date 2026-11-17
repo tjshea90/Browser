@@ -4,6 +4,8 @@
 
 **Owner's request (message 43):** "put the browser in Android 10 emulators matching my hardware as much as possible running on GitHub runners and make them use the Kestrel app simulating browsing on a variety of web sites and videos and downloads for an hour, and log any issues with loading, speed, finding and downloading videos, crashing, etc. Then look for ways to improve it based on the simulated runs."
 
+**LAB3 (owner message 62, 2026-11-17): the `daily` suite, the device profile and the build report are described in research/LAB3_DAILY.md.**
+
 ## How to start it (nothing else is needed, no secret, no owner step)
 `mcp__github__actions_run_trigger`, `run_workflow`, owner `tjshea90`, repo `Browser`, workflow `android.yml`, `ref` = the session's branch, inputs `app=lab`, `full_build=false`, `lab_suite` = `smoke | fs | soak | all`, `lab_minutes` = how long the soak part runs (60 = one hour).
 Why through android.yml: GitHub dispatches only workflows it already knows on the DEFAULT branch (here `ccr-a57c163e-mtq8js`), and `emu-lab.yml` exists only on the session branches. `android.yml` is known, so it is the front door; it calls `.github/workflows/emu-lab.yml` (a reusable workflow, also directly dispatchable once it is on the default branch). A run uses the workflow files of the dispatched branch.
