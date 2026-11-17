@@ -94,6 +94,54 @@ def start_probe(pl, adb, srv, pkg, url, wait_s=60):
     return {"am_total_ms": total, "am_wait_ms": wait, "page_ms": int(round((t1 - t0) * 1000)) if t1 else None}
 
 
+def link_probe(pl, adb, srv, pkg, port, k, wait_s=40):
+    """Open ONE more link in the RUNNING app (a VIEW intent for /ping?k=N: onNewIntent, a new page in a live engine) and time it on the host clock until that page reports its own load. The code on this path
+    (new tab, session open, address handling) runs a few times per session, which is the kind of code a profile that marks it only post-start-up leaves to the interpreter. page_ms is None when no report came."""
+    n0 = len(srv.pings)
+    t0 = time.time()
+    adb.sh("am start -a android.intent.action.VIEW -d http://localhost:%d/ping?k=%d -p %s" % (port, k, pkg), timeout=60)
+    end = time.time() + wait_s
+    while time.time() < end:
+        for when, path in srv.pings[n0:]:
+            if ("k%%3D%d" % k) in path or ("k=%d" % k) in path:
+                return {"page_ms": int(round((when - t0) * 1000))}
+        time.sleep(0.2)
+    return {"page_ms": None}
+
+
+MEM_CATS = ("Native Heap", "Dalvik Heap", "Dalvik Other", ".so mmap", ".apk mmap", ".dex mmap", ".oat mmap", ".art mmap", "Other mmap", "Unknown", "TOTAL")
+
+
+def parse_meminfo(text):
+    """{category: PSS KB} from `dumpsys meminfo PID` (the first number of each row of the main table: Pss Total)."""
+    out = {}
+    for ln in text.splitlines():
+        m = re.match(r"^\s*(\.?[A-Za-z][A-Za-z ]*?)\s+(\d+)\s+\d+\s+\d+", ln)
+        if m and m.group(1) in MEM_CATS and m.group(1) not in out:
+            out[m.group(1)] = int(m.group(2))
+    return out
+
+
+def recover(adb, lab, port, say, wait_s=240):
+    """The emulator's system server dies now and then (`cmd: Can't find service`, lab runs 44059232336 and 44126148207). Wait for it to come back, become root again and open the adb reverse tunnel again. True when it is back."""
+    say("device trouble: waiting for the system to come back")
+    adb.run("wait-for-device", timeout=wait_s)
+    end = time.time() + wait_s
+    while time.time() < end:
+        if adb.sh("getprop sys.boot_completed", timeout=20).strip() == "1" and "package" in adb.sh("service list 2>/dev/null", timeout=30):
+            break
+        time.sleep(5)
+    else:
+        return False
+    adb.run("root", timeout=60)
+    time.sleep(3)
+    adb.run("wait-for-device", timeout=120)
+    lab.rooted = "uid=0" in adb.sh("id", timeout=30)
+    adb.run("reverse", "tcp:%d" % port, "tcp:%d" % port)
+    time.sleep(5)
+    return True
+
+
 def report_update(L, upd_rows, upd_notes, med):
     """The LAB7b section of AOT-REPORT.md (appended to the list of lines L)."""
     if upd_rows or upd_notes:
@@ -180,6 +228,8 @@ def selftest():
     assert sum_ls_bytes("/x/oat/x86_64:\ntotal 10\n-rw-r--r-- 1 system all 1000 2026-11-17 10:00 base.odex\n-rw-r--r-- 1 system all 24 2026-11-17 10:00 base.vdex\ndrwx------ 2 a b 4096 2026 d\n") == 1024
     assert ls_files("/x/oat/x86_64:\ntotal 10\n-rw-r--r-- 1 system all 1000 2026-11-17 10:00 base.odex\n-rw-r--r-- 1 system all 24 2026-11-17 10:00 base.vdex\ndrwx------ 2 a b 4096 2026 d\n") == [("base.odex", 1000), ("base.vdex", 24)]
     assert pct(110, 100) == " (+10 %)" and pct(None, 100) == "" and pct(5, 0) == ""
+    mi = parse_meminfo(" ** MEMINFO in pid 3263 [x] **\n                   Pss  Private  Private  SwapPss      Rss     Heap     Heap     Heap\n                 Total    Dirty    Clean    Dirty    Total     Size    Alloc     Free\n                ------   ------   ------   ------   ------   ------   ------   ------\n  Native Heap    35210    35124        0        0    35676    58996    45431    13564\n  Dalvik Heap     3141     3112        0        0     3500     8000     5000     3000\n       .oat mmap    2300        0     2300        0     5000\n     .art mmap     900      100      800        0     1000\n        TOTAL   180000   150000    20000        0   200000\n")
+    assert mi == {"Native Heap": 35210, "Dalvik Heap": 3141, ".oat mmap": 2300, ".art mmap": 900, "TOTAL": 180000}, mi
     # the LAB7 report sections render from synthetic rows (a typo found here costs nothing, one found in the lab run costs an hour)
     med = lambda v: (sorted(x for x in v if x is not None)[len([x for x in v if x is not None]) // 2] if [x for x in v if x is not None] else None)
     L = []
