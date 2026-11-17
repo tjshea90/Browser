@@ -123,43 +123,64 @@ def release_check(lab, pl, adb, a, say, rows, notes, progress):
 
 
 def dm_install_check(lab, pl, adb, a, say, rows, progress):
-    """Can the profile be compiled AT INSTALL TIME? A session install with `base.apk` + `base.dm` (what Google Play does, and what Kestrel's own updater could do): Android 10 compiles with the profile while installing
-    (`[status=speed-profile] [reason=install-dm]`) instead of waiting for the idle-and-charging dexopt. Each given .dm is tried; also the plain install of the same APK for the install time and the compiled size.
-    Returns (rows, notes)."""
+    """Can the profile be compiled AT INSTALL TIME, and what does the installer do with a bad file? (LAB6a) A PackageInstaller session with the APK and its `.dm` (dex metadata: what Google Play does and what Kestrel's
+    own updater would do). The updater writes `kestrel-update.apk`, so its names are used here too (a .dm is matched to its APK by name). Variants: a fresh install, an UPDATE over the installed copy, a .dm that is not a zip,
+    a zip with a garbage primary.prof, and the other profile format (the `0` file). For every one: did the install succeed, the answer text of the installer, the compile status and reason, the compiled code size and whether
+    the copy that was installed before is still intact after a failure. Fills [rows]."""
+    import random
+    import zipfile
     pkg = a.release_pkg
     apk = a.release_apk
     size = os.path.getsize(apk)
+    remote = "/data/local/tmp/aot-release.apk"
+    adb.run("push", apk, remote, timeout=900)
+    dm1 = next((d for d in a.release_dm if "/1/" in d.replace(os.sep, "/")), (a.release_dm[0] if a.release_dm else None))
+    dm0 = next((d for d in a.release_dm if "/0/" in d.replace(os.sep, "/")), None)
+    junk = os.path.join(os.path.abspath(a.out), "not-a-zip.dm")
+    with open(junk, "wb") as f:
+        f.write(bytes(random.Random(7).randrange(256) for _ in range(300)))
+    garbage = os.path.join(os.path.abspath(a.out), "garbage-profile.dm")
+    with zipfile.ZipFile(garbage, "w") as z:
+        z.writestr("primary.prof", bytes(random.Random(8).randrange(256) for _ in range(400)))
 
-    def session_install(label, dm_path):
-        adb.run("uninstall", pkg, timeout=120)
+    def state():
+        path = adb.sh("pm path %s" % pkg, timeout=30).strip().replace("package:", "")
+        vc = adb.sh("dumpsys package %s | grep -m1 versionCode" % pkg, timeout=30).strip()
+        st = parse_dexopt_status(adb.sh("dumpsys package dexopt", timeout=60), pkg)
+        d = os.path.dirname(path) if path else ""
+        oat = sum_ls_bytes(adb.sh("ls -lR %s/oat 2>/dev/null" % d, timeout=60)) if d else 0
+        return {"installed": bool(path), "version": vc[:60], "status": st[0], "reason": st[1], "oat_kb": oat // 1024}
+
+    def session(label, dm_path, fresh):
+        if fresh:
+            adb.run("uninstall", pkg, timeout=120)
+        before = state()
+        dsize = os.path.getsize(dm_path) if dm_path else 0
         t0 = time.time()
-        out = adb.run("shell", "pm", "install-create", "-r", "-t", "-S", str(size), timeout=60)
+        out = adb.run("shell", "pm", "install-create", "-r", "-t", "-S", str(size + dsize), timeout=60)
         m = re.search(r"\[(\d+)\]", out)
         if not m:
             return {"label": label, "ok": False, "why": "no session: " + out.strip()[:100]}
         sid = m.group(1)
-        remote = "/data/local/tmp/aot-release.apk"
-        adb.run("push", apk, remote, timeout=600)
-        r1 = adb.sh("pm install-write -S %d %s base.apk %s" % (size, sid, remote), timeout=600)
+        r1 = adb.sh("pm install-write -S %d %s kestrel-update.apk %s" % (size, sid, remote), timeout=600)
         if dm_path:
-            dsize = os.path.getsize(dm_path)
             adb.run("push", dm_path, "/data/local/tmp/aot-release.dm", timeout=60)
-            r1 += adb.sh("pm install-write -S %d %s base.dm /data/local/tmp/aot-release.dm" % (dsize, sid), timeout=60)
+            r1 += adb.sh("pm install-write -S %d %s kestrel-update.dm /data/local/tmp/aot-release.dm" % (dsize, sid), timeout=60)
         r2 = adb.sh("pm install-commit %s" % sid, timeout=900)
         took = round(time.time() - t0, 1)
-        ok = "Success" in r2
-        st = parse_dexopt_status(adb.sh("dumpsys package dexopt", timeout=60), pkg)
-        path = adb.sh("pm path %s" % pkg, timeout=30).strip().replace("package:", "")
-        d = os.path.dirname(path) if path else ""
-        oat = sum_ls_bytes(adb.sh("ls -lR %s/oat 2>/dev/null" % d, timeout=60)) if d else 0
-        return {"label": label, "ok": ok, "install_s": took, "status": st[0], "reason": st[1], "oat_kb": oat // 1024, "commit": r2.strip()[:160]}
+        after = state()
+        row = {"label": label, "ok": "Success" in r2, "install_s": took, "commit": (r2 + " " + r1).strip().replace("\n", " ")[:200], **{k: after[k] for k in ("status", "reason", "oat_kb")}}
+        row["intact"] = (before["installed"] and after["installed"] and before["version"] == after["version"]) if before["installed"] else None
+        return row
 
-    rows.append(session_install("plain (no dm)", None))
-    say("dm check", rows[-1])
-    progress()
-    for dm in a.release_dm:
-        label = "dm " + os.path.basename(os.path.dirname(dm)) + "/" + os.path.basename(dm)
-        rows.append(session_install(label, dm))
+    plan = [("plain, no dm (fresh install)", None, True)]
+    if dm1:
+        plan += [("dm 1 (fresh install)", dm1, True), ("dm 1 as an UPDATE over the installed copy", dm1, False)]
+    plan += [("dm that is not a zip, over the installed copy", junk, False), ("dm = zip with a garbage primary.prof, over the installed copy", garbage, False)]
+    if dm0:
+        plan += [("dm 0 (the other profile format), over the installed copy", dm0, False)]
+    for label, dm_path, fresh in plan:
+        rows.append(session(label, dm_path, fresh))
         say("dm check", rows[-1])
         progress()
 
@@ -174,6 +195,7 @@ def main():
     ap.add_argument("--release-pkg", default="app.kestrel.browser.gecko")
     ap.add_argument("--release-dm", action="append", default=[], help="a dex-metadata file AGP wrote next to the release build (outputs/apk/release/baselineProfiles/<n>/*.dm); each one is tried as `base.dm` in a PackageInstaller session")
     ap.add_argument("--debug-ab", action="store_true", help="also compile the DEBUG build three ways: NOT informative (a debuggable app only ever gets quicken: lab run 44074456934), costs 15+ minutes, off by default")
+    ap.add_argument("--dm-only", action="store_true", help="skip the timed starts of the release phase: only the compile-at-install installs (LAB6a, about 10 minutes with the release build)")
     ap.add_argument("--rounds", type=int, default=3)
     ap.add_argument("--starts", type=int, default=4)
     ap.add_argument("--port", type=int, default=8093)
@@ -238,10 +260,10 @@ def main():
         if dm_rows:
             L.append("## Compile at install: a PackageInstaller session with `base.apk` + `base.dm` (the dex metadata AGP writes next to the release build)")
             L.append("")
-            L.append("| Install | ok | install s | status | reason | compiled code KB | answer |")
-            L.append("| :- | :- | -: | :- | :- | -: | :- |")
+            L.append("| Install | ok | install s | status | reason | compiled code KB | old copy intact | answer of the installer |")
+            L.append("| :- | :- | -: | :- | :- | -: | :- | :- |")
             for r in dm_rows:
-                L.append("| %s | %s | %s | %s | %s | %s | %s |" % (r.get("label"), r.get("ok"), r.get("install_s", "-"), r.get("status"), r.get("reason"), r.get("oat_kb", "-"), (r.get("commit") or r.get("why") or "")[:90].replace("|", "/")))
+                L.append("| %s | %s | %s | %s | %s | %s | %s | %s |" % (r.get("label"), r.get("ok"), r.get("install_s", "-"), r.get("status"), r.get("reason"), r.get("oat_kb", "-"), r.get("intact"), (r.get("commit") or r.get("why") or "")[:160].replace("|", "/")))
             L.append("")
         if rows:
             L.append("## The debug build compiled three ways (a profile trained in this run)")
@@ -350,7 +372,8 @@ def main():
     try:
         if a.release_apk and os.path.exists(a.release_apk):
             try:
-                release_check(lab, pl, adb, a, say, rel_rows, rel_notes, write_report)
+                if not a.dm_only:
+                    release_check(lab, pl, adb, a, say, rel_rows, rel_notes, write_report)
             except Exception as e:                          # the other phases must still run and be reported
                 rel_notes.append("release check failed: %r" % (e,))
             write_report()

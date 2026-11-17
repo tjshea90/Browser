@@ -53,5 +53,21 @@ Method (tools/emu/aotlab.py, release phase): install the R8-minified release bui
   (3) on INSTALL_FAILED_BAD_DEX_METADATA retry the session WITHOUT it, (4) be tested on the tablet (Android Go may not honour it: then nothing is gained and nothing lost). It only helps updates FROM the build that carries the new updater, so it
   needs its own release; a blind change to the only delivery channel was judged too risky for an unattended run. Recorded as TASKS LAB6 for the owner's go.
 
+## LAB6 measured (aot run 44118008035, the installer variants with the updater's own names) and built
+Session installs with `pm install-create / install-write / install-commit`, named exactly as the updater names its files (`kestrel-update.apk` + `kestrel-update.dm`), x86 emulator, Android 10:
+| Install | result | compiled code |
+| :- | :- | -: |
+| plain, no file | Success, `[reason=install]` | 158 KB (nothing to compile) |
+| with AGP's `baselineProfiles/1/*.dm`, fresh install | Success, `[reason=install-dm]`, 3.0 s | 3,753 KB |
+| the same as an UPDATE over the installed copy (what the updater does) | Success, `[reason=install-dm]`, 2.9 s | 3,753 KB |
+| a `.dm` that is not a zip, as an update | `Failure [INSTALL_FAILED_BAD_DEX_METADATA: Failed parse during installPackageLI: Error opening .../base.dm: Invalid file]`; the installed copy stays intact | - |
+| a zip with a garbage `primary.prof` | Success, profile ignored | 158 KB |
+| `baselineProfiles/0/*.dm` (the other format) | Success, ignored | 158 KB |
+So: the pairing by name works, an update is compiled while it installs, a wrong file is either ignored or refused with a text that names the dex metadata and leaves the installed copy alone.
+Built (alpha65): the release script publishes `<apk name>.dm` (AGP's `baselineProfiles/1`, checked: small zip with `primary.prof`), `UpdateLogic.choose` puts the asset and GitHub's digest of it into the offer, `UpdateManager.ensureDm` fetches it after the APK is verified
+(8 s to connect, 10 s to read, 1 MB at most, digest and zip checked, kept next to the APK), `install()` writes it into the session on Android 9 to 11 only, and when the installer answers with `DEX_METADATA` in its text
+`InstallResultReceiver` installs ONCE more without the file and no file is attached for two weeks. No file is attached when our own copy has to be dropped early for room (that install stays what it was). Tests: core DexMetadataTest (8), app DexMetadataFetchTest (15).
+It only helps updates FROM a build that carries this updater: alpha64 -> alpha65 is still compiled by the idle dexopt; alpha65 -> alpha66 is the first compiled at install. NOT run on the tablet (Android Go may not honour the file: then nothing is gained, nothing is lost).
+
 ## Ranked build changes (as audited)
 1. `noCompress += "ja"` default ON - DONE, measured. 2. drop `libcrashtools.so` (optional, small). 3. baseline profile + verify-apk assert. 4. libs in APK (owner's call; not recommended). 5. startup profile only after 3.

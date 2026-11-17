@@ -219,7 +219,7 @@ jobs:
           [ -f "$REL" ] || REL=""
           DMARGS=""
           for d in geckoapp/build/outputs/apk/release/baselineProfiles/*/*.dm; do [ -f "$d" ] && DMARGS="$DMARGS --release-dm $PWD/$d"; done
-          python3 -u -I tools/emu/aotlab.py --out "$RUNNER_TEMP/lab-out" --repo-root "$PWD" --pkg "$PKG" --apk "$APK" --release-apk "$REL" $DMARGS --rounds "${MINUTES:-3}" --starts 4 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
+          python3 -u -I tools/emu/aotlab.py --out "$RUNNER_TEMP/lab-out" --repo-root "$PWD" --pkg "$PKG" --apk "$APK" --release-apk "$REL" $DMARGS --dm-only --rounds "${MINUTES:-3}" --starts 4 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
           if [ -f "$RUNNER_TEMP/lab-out/AOT-REPORT.md" ]; then cat "$RUNNER_TEMP/lab-out/AOT-REPORT.md" >> "$GITHUB_STEP_SUMMARY"; fi
 
       - name: Run the lab (${{ inputs.suite }}, soak ${{ inputs.minutes }} min, net ${{ inputs.net }})
