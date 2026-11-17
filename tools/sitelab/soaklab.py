@@ -512,10 +512,10 @@ def page_ho(variant, tag):
                 " fetch('/clip/frag.mp4?c=@Q@').then(function (r) { return r.arrayBuffer(); }).then(function (b) { apRep('fetched', { bytes: b.byteLength }); sb.addEventListener('updateend', function () { try { if (!sb.updating && ms.readyState === 'open') ms.endOfStream(); } catch (e) {} }); sb.appendBuffer(b); }); });"
                 "document.getElementById('btn').onclick = function () { var how = 'overlay'; v.muted = true; " + play_js + " };</script>")
     elif variant in ("preroll", "prerollhid"):
-        # ANS61 (owner message 61: "it played an advertisement video and I couldn't get to the real video"): a pre-roll plays on the SAME element as the film, the way an ad plugin does. The press sets the element's address to the
-        # advertisement (24 s) and plays it; when it ENDS the page puts the film (five minutes) on the element and plays it. preroll = the player says an ad plays (the ad-state class jw-flag-ads on its wrapper): Kestrel's
-        # player must not take it. prerollhid = nothing says ad (a plain class): Kestrel's player takes it, plays it to its end, and a second press must NOT hand the same advertisement over again. Reports ev=role r=ad|film
-        # when the element plays, ev=ad-ended when the advertisement ended.
+        # ANS61 (owner message 61: "it played an advertisement video and I couldn't get to the real video"): a pre-roll plays on the SAME element as the film, the way an ad plugin does. The advertisement (24 s) is on
+        # the element before the press and the press plays it; when it ENDS the page puts the film (five minutes) on the element and plays it. preroll = the player says an ad plays (the ad-state class jw-flag-ads
+        # on its wrapper): Kestrel's player must not take it. prerollhid = nothing says ad (a plain class): Kestrel's player takes it, plays it to its end, and a second press must NOT hand the same advertisement
+        # over again. Reports ev=role r=ad|film when the element plays, ev=ad-ended when the advertisement ended.
         cls = "jw-flag-ads" if variant == "preroll" else "jw-wrapper"
         # (the advertisement is set up BEFORE the press, as a player that shows "Ad: 0:24" and waits for the play button does: the gate asks at the press, before the page's own click handler runs)
         body = ("<div id=player style='position:relative;width:100%;height:300px'><video id=v playsinline poster='/img/1.svg' style='@BOX@'></video>" + ov + "</div>"
