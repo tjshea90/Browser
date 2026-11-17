@@ -423,6 +423,9 @@ def update_check(lab, pl, adb, a, say, rows, notes, progress):
                 lines.append("compatibility.ini: " + ini[:260])
         return "%s: %s" % (label, " || ".join(lines) if lines else "no start-up cache / compatibility.ini found under /data/data/%s" % pkg)
 
+    health_dir = os.path.join(os.path.abspath(a.out), "update-health")
+    os.makedirs(health_dir, exist_ok=True)
+    settle = a.settle_s
     for rnd in range(1, a.update_rounds + 1):
         for scen in (["plain", "warmup"] if rnd % 2 else ["warmup", "plain"]):
             say("=== update round %d scenario %s" % (rnd, scen))
@@ -432,18 +435,30 @@ def update_check(lab, pl, adb, a, say, rows, notes, progress):
                 notes.append("update round %d %s: install of the old build failed: %s" % (rnd, scen, out.strip()[:120]))
                 continue
 
-            def go(label, wait_after, count=True):
+            def go(label, stay, count=True, sample=False):
+                """Launch, then keep the app up for `stay` seconds (the engine writes its caches while it runs: Gecko's start-up cache is written some time after start-up, not at once), force-stopping at the start of the next call."""
                 lab.kill()
                 r = lab.launch(page, 120)
                 r.update({"scenario": scen, "round": rnd, "launch": label, "counted": count})
                 rows.append(r)
                 say("launch", scen, label, {k: r.get(k) for k in ("am_total_ms", "runtime_ready_s", "page_loaded_s", "ui_block_ms")}, "CRASH" if r.get("crash") else "")
-                time.sleep(wait_after)
+                if rnd == 1 and scen == "plain":                  # the Health lines of this launch, to see WHICH engine step is slower the first time
+                    try:
+                        with open(os.path.join(health_dir, "%s-%s.txt" % (scen, re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-"))), "w") as f:
+                            f.write(adb.run("logcat", "-d", "-v", "threadtime", "-s", "KestrelHealth:D", timeout=60))
+                    except Exception as e:
+                        say("health log not saved", e)
+                if sample:
+                    time.sleep(min(stay, 20))
+                    notes.append(state("%s, 20 s after the page loaded" % label))
+                    time.sleep(max(0, stay - 20))
+                else:
+                    time.sleep(stay)
                 return r
-            go("old build, 1st launch ever", 20)
-            go("old build, 2nd launch (steady state)", 20)
+            go("old build, 1st launch ever", settle, sample=(rnd == 1 and scen == "plain"))
+            go("old build, 2nd launch (steady state)", settle)
             if rnd == 1 and scen == "plain":
-                notes.append(state("before the update (old build, after 2 launches)"))
+                notes.append(state("before the update (old build, after 2 launches of %d s)" % settle))
             lab.kill()
             t0 = time.time()
             out = adb.run("install", "-r", "-t", a.new_apk, timeout=900)
@@ -454,9 +469,9 @@ def update_check(lab, pl, adb, a, say, rows, notes, progress):
             if rnd == 1 and scen == "plain":
                 notes.append("the update itself (adb install -r of the debug build) took %.1f s; " % took + state("right after the update"))
             if scen == "warmup":
-                go("warm-up launch (not counted)", 25, count=False)
-            go("new build, launch 1", 20)
-            go("new build, launch 2", 20)
+                go("warm-up launch (not counted)", settle, count=False)
+            go("new build, launch 1", settle, sample=(rnd == 1 and scen == "plain"))
+            go("new build, launch 2", min(settle, 40))
             go("new build, launch 3", 5)
             if rnd == 1 and scen == "plain":
                 notes.append(state("after 3 launches of the new build"))
@@ -480,6 +495,7 @@ def main():
     ap.add_argument("--apk-exercised", default="", help="LAB7a: the release build whose profile marks every method the lab ran as hot")
     ap.add_argument("--apk-all", default="", help="LAB7a: the release build with one extra wildcard rule (HL**;->**(**)**): every method hot")
     ap.add_argument("--update-rounds", type=int, default=2)
+    ap.add_argument("--settle-s", type=int, default=70, help="LAB7b: how long the app stays up after a launch (Gecko writes its start-up cache some time after start-up, not at once)")
     ap.add_argument("--breadth-rounds", type=int, default=2)
     ap.add_argument("--phases", default="release,dm", help="comma list of: update, breadth, release, dm, debug (the default is what the lab did before LAB7)")
     ap.add_argument("--rounds", type=int, default=3)
