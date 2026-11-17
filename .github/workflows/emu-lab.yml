@@ -256,7 +256,7 @@ jobs:
           if [ "$MODE" = dm ]; then
             python3 -u -I tools/emu/aotlab.py --out "$RUNNER_TEMP/lab-out" --repo-root "$PWD" --pkg "$PKG" --phases dm --dm-only --release-apk "$RUNNER_TEMP/apks/rel-shipped.apk" --release-dm "$RUNNER_TEMP/apks/rel-shipped.dm" 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
           elif [ "$MODE" = breadth ]; then
-            python3 -u -I tools/emu/aotlab.py --out "$RUNNER_TEMP/lab-out" --repo-root "$PWD" --pkg "$PKG" --phases breadth --breadth-rounds 6 --starts 4 --variants verify,sp-current,sp-all \
+            python3 -u -I tools/emu/aotlab.py --out "$RUNNER_TEMP/lab-out" --repo-root "$PWD" --pkg "$PKG" --phases breadth --breadth-rounds 6 --starts 4 --variants sp-current,sp-all \
               --release-apk "$RUNNER_TEMP/apks/rel-current.apk" --apk-all "$RUNNER_TEMP/apks/rel-all.apk" 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
           else
             python3 -u -I tools/emu/aotlab.py --out "$RUNNER_TEMP/lab-out" --repo-root "$PWD" --pkg "$PKG" --apk "$APK" --phases update,breadth --update-rounds 2 --breadth-rounds 2 --starts 4 \
