@@ -379,12 +379,11 @@ class VideoFlow(private val a: BrowserActivity) {
         val d = WebHandOver.decide(mode, why, el, known)
         // ANS61 (owner message 61: "it played an advertisement video and I couldn't get to the real video"): an advertisement is never handed over, and a clip Kestrel's player played to its end is not handed over a second
         // time (the same ad for ever): the page plays it itself, so its ad plugin can finish and go on to the film. The finder's own verdict on that very file (an ad box / decoration) counts like the page's ad state.
-        val now2 = SystemClock.uptimeMillis()
         val adWhy = when {
             d == null -> null
             tab.media.find(d.url)?.decoy == true -> "the finder marked this file as an advertisement or decoration"
             !tab.isPrivateTab && WebHandOver.playedThrough(d.url, NativePlayerActivity.lastUrl, NativePlayerActivity.lastPositionMs, NativePlayerActivity.lastDurationMs,
-                if (NativePlayerActivity.lastStoppedAt == 0L) -1L else now2 - NativePlayerActivity.lastStoppedAt) -> "Kestrel's player played this clip to its end a moment ago (an advertisement the page has to see finished)"
+                if (NativePlayerActivity.lastStoppedAt == 0L) -1L else now - NativePlayerActivity.lastStoppedAt) -> "Kestrel's player played this clip to its end a moment ago (an advertisement the page has to see finished)"
             else -> null
         }
         if (adWhy != null) { lastRefused = null; return decline(tab, adWhy) }
