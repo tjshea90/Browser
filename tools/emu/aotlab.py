@@ -119,7 +119,7 @@ def report_update(L, upd_rows, upd_notes, med):
                     return (fmt % v) + (pct(v, steady.get(k)) if ln_name.startswith("new build") else "")
                 L.append("| %s | %s | %d | %s | %s | %s | %s | %d |" % (scen, ln_name, len(ok), f("am_total_ms", "%.0f"), f("runtime_ready_s", "%.2f"), f("page_loaded_s", "%.2f"), f("ui_block_ms", "%.0f"), len(rs) - len(ok)))
         L.append("")
-        L.append("(percentages: the new build's launch against the SAME scenario's old-build steady state; `warmup` = one extra launch of the new build right after the update, force-stopped after 25 s, before the counted launches)")
+        L.append("(percentages: the new build's launch against the SAME scenario's old-build steady state; `warmup` = one extra launch of the new build right after the update, kept up as long as the other launches, before the counted launches)")
         L.append("")
         for n in upd_notes:
             L.append("- " + n)
