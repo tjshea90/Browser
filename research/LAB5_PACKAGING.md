@@ -38,5 +38,20 @@ Sources: a read-only audit of the GeckoView 160 AAR and the released alpha63 APK
   into `geckoapp/src/main/baseline-prof.txt`. AGP 8.2+ rewrites the rules through R8 (so collect from the unobfuscated build). The compiled profile must stay under 1.5 MB.
 - The lab collects the raw material at the end of every lab run (emu-lab.yml step "Keep the ART profile of this run": `lab-out/profile/`). Gain is estimated at 20-35 % of the Java-side start-up once compiled; unmeasured here.
 
+## Measured: the baseline profile on the release build and compile at install (aot run 44074456934, x86 emulator, Android 10)
+Method (tools/emu/aotlab.py, release phase): install the R8-minified release build for the emulator's ABI; `am broadcast ... androidx.profileinstaller.action.INSTALL_PROFILE` (does what the library does itself 5 s after the first frame);
+`cmd package compile -f -m speed-profile` vs `-m verify` of the SAME APK; `am start -W` TotalTime (time to the first drawn frame), 4 starts per cell, alternating warm / dropped file cache, two rounds in swapped order.
+- The embedded profile works end to end: ProfileInstaller wrote 5,728 bytes into `/data/misc/profiles/cur/0/<pkg>/primary.prof`; the compile answered `status=speed-profile`; compiled code 3,753 KB (verify: 97 KB) = the ~6,700 methods of the R8-rewritten rules.
+- Start (release build): warm 1898 -> 1671 ms (-12 %; verify [1697, 2062, 1770, 2027], speed-profile [1587, 1755, 1577, 1902]); after a dropped file cache 1884 -> 1884 ms (verify [1965, 1907, 1862, 1860], speed-profile [1926, 2083, 1835, 1841]).
+  The spread (+-10 %) is as large as the effect: read it as "the direction is right and it is not a loss", not as a promise. The emulator's x86 cores run interpreted code much faster than the tablet's in-order A53s, and a cold start is dominated by paging libxul in.
+- The DEBUG build cannot show this: a debuggable app only ever gets `quicken` (the 3-mode A/B of the same run reports `status=quicken` for speed-profile and speed): that phase is now off by default (`--debug-ab`).
+- COMPILE AT INSTALL works on Android 10: a PackageInstaller session with `base.apk` + `base.dm` (`pm install-create / install-write / install-commit`, what Google Play does) compiles with the profile WHILE INSTALLING:
+  plain session: `[status=speed-profile] [reason=install]` but only 158 KB of code (this Android asks for speed-profile at install and, with no profile, has nothing to compile); with AGP's `outputs/apk/release/baselineProfiles/1/geckoapp-release.dm`:
+  `[reason=install-dm]`, 3,753 KB compiled, install 3.8 s vs 3.5 s on the fast emulator; the `.../baselineProfiles/0/...dm` is accepted but ignored (158 KB: the other profile format). So on API 29 the `1` file is the right one.
+- What it would give: every update compiled the moment it is installed, instead of interpreter-bound until Android's idle-and-charging dexopt (which an owner who updates every day or two meets only some nights). NOT built: the in-app updater
+  (app/.../update/UpdateManager.kt install(): one session, `kestrel-update.apk`) would have to (1) fetch the small `.dm` (7 KB, a release asset the workflow would publish next to the APK), (2) write it into the session as `kestrel-update.dm`,
+  (3) on INSTALL_FAILED_BAD_DEX_METADATA retry the session WITHOUT it, (4) be tested on the tablet (Android Go may not honour it: then nothing is gained and nothing lost). It only helps updates FROM the build that carries the new updater, so it
+  needs its own release; a blind change to the only delivery channel was judged too risky for an unattended run. Recorded as TASKS LAB6 for the owner's go.
+
 ## Ranked build changes (as audited)
 1. `noCompress += "ja"` default ON - DONE, measured. 2. drop `libcrashtools.so` (optional, small). 3. baseline profile + verify-apk assert. 4. libs in APK (owner's call; not recommended). 5. startup profile only after 3.
