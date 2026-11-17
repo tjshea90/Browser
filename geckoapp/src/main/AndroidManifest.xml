@@ -37,7 +37,6 @@
         <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="market" /></intent>
     </queries>
 
-    <!-- placeholder replaced below -->
     <application
         android:name=".GeckoApp"
         android:allowBackup="false"
@@ -105,5 +104,11 @@
             android:name=".update.ReleaseCheckJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
+        <!-- Owner request 17: hands ONE file (what the mini keyboard learned) to the Swoop keyboard's "Add to Swoop" screen: not exported, a read grant comes with the intent, only cache/handover is served. -->
+        <provider
+            android:name="app.kestrel.browser.HandOverProvider"
+            android:authorities="${applicationId}.handover"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>
