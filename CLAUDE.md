@@ -34,6 +34,9 @@ Everything decided and still open: `BRIEF.md`. New to the project with no contex
   describe them in words). INBOX/OUTBOX copy chat text into the repo (keys redacted): never paste secrets in chat. `tools/secretscan.sh` blocks key-shaped text and unstages key files / files over 90 MB; never bypass it.
 - Compaction is normal: `tools/toobig.sh` saves everything first and the SessionStart hook re-injects the briefing. `ckpt` with an exact "next" when the context is about 60 % full.
 
+## Private files (PRIV1, 2026-11-16)
+INBOX.md, OUTBOX.md and .handoff/ are NOT in this public repo: they are symlinks into the PRIVATE repo tjshea90/Kestrel-Private (clone at ../kestrel-private), hidden from git by .git/info/exclude; `tools/private.sh` sets that up (every autosave, capture and resume) and pushes the clone. A new container: `add_repo` Kestrel-Private (push), then `git clone --depth 1 https://github.com/tjshea90/kestrel-private ../kestrel-private`; without the clone resume.sh warns loudly and nothing is saved. Never `git add -f` those paths.
+
 ## Many sessions and accounts at once (owner, 2026-11-11: "optimize this project for multiple Claude sessions and accounts")
 Every session has its own branch; the owner may run several accounts in parallel or one after another. The tooling does the merging so nobody starts from a stale state and nothing is overwritten:
 - `tools/sync.sh` (runs at session start and inside every `ckpt`) merges every other branch that has commits yours lacks: a cut-off session's whole tip (its half-finished change is the work to resume), an active session's last deliberate checkpoint only.
