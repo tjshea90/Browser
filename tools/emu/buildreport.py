@@ -24,6 +24,7 @@ SEV = {"high": 0, "medium": 1, "low": 2, "info": 3}
 
 # what a finding usually points at in the code (a starting place for the person who fixes it, not a diagnosis)
 CODE_HINTS = [
+    (r"^load ", "page loading: the network path (hotspot profile), Shields request handling (research/ADBLOCK_ENGINE.md), engine prefs (research/GECKO_SPEED.md); on the emulator also an overloaded phone (lab limit)"),
     (r"STALL|late-beat|ui slow|UI thread was blocked", "BrowserActivity (UI-thread work: a synchronous call into the engine), diag/Health.kt watchdog stack in the Diagnostics 'ui STALL' line names the call; research/FREEZE.md, research/VIDEO_ACCEL_DEVICE.md"),
     (r"captureLook|read-back|look slow", "BrowserActivity.captureLook / GeckoView.capturePixels (synchronous read-back; alpha48 back-off)"),
     (r"scroll", "GeckoEngine scroll prefs (research/SCROLL.md, GECKO_SPEED.md), page JS cost (content scripts), Shields cosmetic filters"),
@@ -194,7 +195,12 @@ def main():
         return ""
     LAB_AREAS = ("emulator", "tooling")
     seen = set()
+    slow_loads = collections.defaultdict(list)             # "<site> did not finish loading within N s" x 20 is ONE finding, not twenty
     for sev, area, text in issues:
+        m = re.match(r"^(\S+) did not finish loading within (\d+) s", text)
+        if m and area == "load":
+            slow_loads[(sev, m.group(2))].append(m.group(1))
+            continue
         key = "%s/%s/%s" % (sev, area, re.sub(r"\d+", "N", text)[:90])
         if key in seen:
             continue
@@ -202,6 +208,9 @@ def main():
         if area in LAB_AREAS:
             continue
         F.append((key, sev, area, text[:200], "lab issue line", hint_for(area + " " + text)))
+    for (sev, secs), names in slow_loads.items():
+        F.append(("load/timeout-%s" % secs, sev, "load", "%d page(s) did not finish loading within %s s: %s" % (len(names), secs, ", ".join(sorted(set(names))[:12]) + (" ..." if len(set(names)) > 12 else "")),
+                  "when the phone's own system restarted in the same run these are lab overload, not site faults (see the lab limits line)", hint_for("load")))
     for e in sec:
         if e.get("result") == "fail":
             F.append(("sec/" + e["name"], "high", "security", "%s FAILED" % e["name"], e.get("detail", ""), hint_for(e["name"])))
