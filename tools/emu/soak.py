@@ -2345,7 +2345,7 @@ class Soak:
     # page gate, the app decides (core WebHandOver) and starts NativePlayerActivity; the page keeps its element closed. Proof on the real engine: Health lines `video hand-over`, `native start`, the page's own events.
     # ANS55 (owner message 55: Yahoo showed the time and a black picture): hlsdecoy = a master with a long token and, next to it, short-address lists of the sound and of the pictures (the master must win, with a picture);
     # audioonly = the only list is the film's sound (Kestrel's player has nothing to show: it must give the film back to the page after 7 s)
-    HO_CASES = [("file", "picture", "native"), ("overlay", "button", "native"), ("hls", "button", "native-hls"), ("hlsdecoy", "button", "native-hls"), ("hlstwo", "button", "native-hls"), ("unknown", "button", "page"), ("audioonly", "button", "nopic"), ("bad", "picture", "fail")]
+    HO_CASES = [("file", "picture", "native"), ("overlay", "button", "native"), ("hls", "button", "native-hls"), ("hlsdecoy", "button", "native-hls"), ("hlstwo", "button", "native-hls"), ("unknown", "button", "page"), ("audioonly", "button", "nopic"), ("bad", "picture", "fail"), ("preroll", "button", "adpage"), ("prerollhid", "button", "adloop")]
 
     def ho_scene(self):
         checks = []
@@ -2442,6 +2442,33 @@ class Soak:
                 check("%s: nothing to take over (no playlist anywhere): no hand-over and no second player" % variant, not taken and not started, "hand-over lines %s, native start lines %d" % ([e["rest"][:50] for e in taken], len(started)))
                 check("%s: the page's own player plays it, as before" % variant, "sourceopen" in ev2 and "fetched" in ev2 and ("playing" in ev2 or "playing-promise" in ev2), "events %s" % sorted(set(ev2)))
                 self.ho_table.append((variant, "no: nothing to take over", "yes", "yes" if ("playing" in ev2 or "playing-promise" in ev2) else "no"))
+            elif expect in ("adpage", "adloop"):
+                # ANS61 (owner message 61): a pre-roll on the film's own element. adpage = the player says an ad plays: Kestrel's player must not take it, the page plays it, then the film. adloop = nothing says ad: Kestrel's
+                # player takes it and plays it to its end; pressed again the same advertisement is NOT handed over again (the page plays it, then the film).
+                roles = lambda since: [r.get("r") for r in self.lab.since(since) if r.get("kind") == "ap" and str(r.get("tag", "")).startswith(tag) and r.get("ev") == "role"]
+                def wait_roles(since, want, secs, also=None):
+                    t_end = time.time() + secs
+                    while time.time() < t_end and want not in roles(since) and not (also and also()):
+                        time.sleep(2)
+                    return want in roles(since)
+                if expect == "adpage":
+                    check("%s: the advertisement is NOT taken over (no 'video hand-over' line, no Kestrel player: the page's player says an ad plays)" % variant, not taken and not started, "hand-over lines %s, native start lines %d" % ([e["rest"][:60] for e in taken], len(started)))
+                    check("%s: the page's own player plays the advertisement itself" % variant, wait_roles(r2, "ad", 20), "roles %s, events %s" % (roles(r2), sorted(set(ev2))))
+                    got = wait_roles(r2, "film", 75, also=lambda: bool(ev("native", "start", m)))
+                    check("%s: after the advertisement the REAL film is reached (the page plays it, or Kestrel's player takes it)" % variant, got or bool(ev("native", "start", m)), "roles %s, native start lines %d, events %s" % (roles(r2), len(ev("native", "start", m)), sorted(set(r.get("ev") for r in self.lab.since(r2) if r.get("kind") == "ap" and str(r.get("tag", "")).startswith(tag)))))
+                    self.ho_table.append((variant, "no: an advertisement is never taken over", "yes, then the film", "yes" if (got or ev("native", "start", m)) else "no"))
+                else:
+                    check("%s: the first time nothing says ad, so Kestrel's player takes the advertisement" % variant, bool(taken) and bool(started), "hand-over lines %d, native start lines %d" % (len(taken), len(started)))
+                    time.sleep(34)                                                         # (the advertisement is 24 s: Kestrel's player plays it to its end and stays there)
+                    m2 = self.log.size(); self.ph.key("KEYCODE_BACK"); time.sleep(5)
+                    check("%s: Back ends Kestrel's player after the advertisement" % variant, bool(ev("native", "stop", m2)), "no 'native stop' line")
+                    m3, r3 = self.log.size(), self.lab.size()
+                    self.ph.tap(*at); time.sleep(9)
+                    check("%s: pressed again, the same advertisement is NOT handed over again (no hand-over line, no second Kestrel player)" % variant, not ev("video", "hand-over", m3) and not ev("native", "start", m3), "hand-over lines %s, native start lines %d" % ([e["rest"][:60] for e in ev("video", "hand-over", m3)], len(ev("native", "start", m3))))
+                    check("%s: the page plays the advertisement itself this time" % variant, wait_roles(r3, "ad", 20), "roles %s" % roles(r3))
+                    got = wait_roles(r3, "film", 75)
+                    check("%s: and then the REAL film plays (the way to the film is open)" % variant, got, "roles %s, events %s" % (roles(r3), sorted(set(r.get("ev") for r in self.lab.since(r3) if r.get("kind") == "ap" and str(r.get("tag", "")).startswith(tag)))))
+                    self.ho_table.append((variant, "yes the first time, not the second", "yes, then the film", "yes" if got else "no"))
             elif expect == "fail":
                 check("%s: Kestrel's own player was started for it" % variant, bool(taken) and bool(started), "hand-over lines %d, start lines %d" % (len(taken), len(started)))
                 t_end = time.time() + 12

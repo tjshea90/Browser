@@ -480,7 +480,7 @@ def page_ap(variant, tag):
 
 
 def page_ho(variant, tag):
-    """ANS54e (owner message 54: web video players should be Kestrel's own player): pages whose film Kestrel's own player may take over. Reports through AP_JS (kind=ap, tag). Variants (ANS55: also hlsdecoy and audioonly, see below):
+    """ANS54e (owner message 54: web video players should be Kestrel's own player): pages whose film Kestrel's own player may take over. Reports through AP_JS (kind=ap, tag). Variants (ANS55: also hlsdecoy and audioonly, see below; ANS61: preroll and prerollhid):
     file = a film file with the engine's own controls; overlay = a film file with a play button of the page's own over the picture; hls = a script player (blob: source) whose page also asks for the lab's HLS
     master list at load, like hls.js; unknown = a script player with NO playlist anywhere (YouTube-style: nothing to hand over); bad = a film address that does not exist (Kestrel's player fails, the page takes over)."""
     q = urllib.parse.quote(tag, safe="")
@@ -511,6 +511,17 @@ def page_ho(variant, tag):
                 "ms.addEventListener('sourceopen', function () { apRep('sourceopen'); var sb = ms.addSourceBuffer('video/mp4; codecs=\"avc1.4d401f,mp4a.40.2\"');"
                 " fetch('/clip/frag.mp4?c=@Q@').then(function (r) { return r.arrayBuffer(); }).then(function (b) { apRep('fetched', { bytes: b.byteLength }); sb.addEventListener('updateend', function () { try { if (!sb.updating && ms.readyState === 'open') ms.endOfStream(); } catch (e) {} }); sb.appendBuffer(b); }); });"
                 "document.getElementById('btn').onclick = function () { var how = 'overlay'; v.muted = true; " + play_js + " };</script>")
+    elif variant in ("preroll", "prerollhid"):
+        # ANS61 (owner message 61: "it played an advertisement video and I couldn't get to the real video"): a pre-roll plays on the SAME element as the film, the way an ad plugin does. The press sets the element's address to the
+        # advertisement (24 s) and plays it; when it ENDS the page puts the film (five minutes) on the element and plays it. preroll = the player says an ad plays (the ad-state class jw-flag-ads on its wrapper): Kestrel's
+        # player must not take it. prerollhid = nothing says ad (a plain class): Kestrel's player takes it, plays it to its end, and a second press must NOT hand the same advertisement over again. Reports ev=role r=ad|film
+        # when the element plays, ev=ad-ended when the advertisement ended.
+        cls = "jw-flag-ads" if variant == "preroll" else "jw-wrapper"
+        body = ("<div id=player style='position:relative;width:100%;height:300px'><video id=v playsinline poster='/img/1.svg' style='@BOX@'></video>" + ov + "</div>"
+                "<script>var v = document.getElementById('v'), wrap = document.getElementById('player'), stage = 0; apHook(v);"
+                "v.addEventListener('playing', function () { apRep('role', { r: v.currentSrc.indexOf('role=film') >= 0 ? 'film' : 'ad' }); });"
+                "v.addEventListener('ended', function () { if (stage === 1) { stage = 2; wrap.className = ''; apRep('ad-ended'); v.src = '/clip/long.mp4?c=@Q@&role=film'; var p2 = v.play(); if (p2 && p2.catch) p2.catch(function (e) { apRep('film-rejected', { name: e.name }); }); } });"
+                "document.getElementById('btn').onclick = function () { var how = 'overlay'; if (stage === 0) { stage = 1; wrap.className = '" + cls + "'; v.src = '/clip/landscape.mp4?c=@Q@&role=ad'; } " + play_js + " };</script>")
     elif variant in ("inline", "inlinelong", "inlinehls"):
         # ANS55f (owner message 55: the player inside the website): a tall page, the film's own play button in the middle of the text. Kestrel's player plays INSIDE the page over this box and follows its scroll; the page
         # says where its box is (view pixels = CSS pixels x devicePixelRatio) at load and 450 ms after every scroll (kind=ap ev=rect: l, t, w, h, sy), for the driver to compare with the overlay's own numbers
