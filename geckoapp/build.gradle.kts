@@ -17,11 +17,12 @@ val keystoreProps = Properties().apply {
 val geckoVersion = "160.0.20261104181552"
 // `-PgeckoAbi=x86` builds a debug APK for the x86 emulator; the tablet build is always armeabi-v7a.
 val geckoAbi = (findProperty("geckoAbi") as String?) ?: "armeabi-v7a"
-// LAB5 packaging experiments (research/LAB5_PACKAGING.md), both OFF unless the lab (or a release decision) turns them on:
-//  -PomniStored=true  stores assets/omni.ja UNCOMPRESSED in the APK (it is deflated today: 13.96 MB -> 14.51 MB, re-deflating a zip gains nothing). Gecko maps a stored entry straight from the APK (shared, evictable file pages);
-//                     a deflated one has to be inflated into a private heap buffer in every Gecko process that opens it.
-//  -PlibsInApk=true   native libraries stay uncompressed inside the APK (no extraction at install) instead of the legacy compressed-and-extracted layout.
-val omniStored = (findProperty("omniStored") as String?) == "true"
+// LAB5 packaging switches (research/LAB5_PACKAGING.md):
+//  -PomniStored=false (DEFAULT ON since alpha64) turns OFF the stored layout of assets/omni.ja. Stored = UNCOMPRESSED in the APK (it was deflated: 13.96 MB -> 14.51 MB, re-deflating a zip gains nothing). Gecko maps a stored entry
+//                     straight from the APK (shared, evictable file pages); a deflated one has to be inflated into a private heap buffer in EVERY Gecko process that opens it. Measured by the pack lab run
+//                     (same code, 4 builds): warm start -11 %, engine ready -12 %, memory after the page set -28 MB. tools/verify-apk.sh fails a build whose omni.ja is deflated.
+//  -PlibsInApk=true   (OFF) native libraries stay uncompressed inside the APK (no extraction at install) instead of the legacy compressed-and-extracted layout: +65 MB download, no start-up or memory gain in the lab. Opt-in only.
+val omniStored = (findProperty("omniStored") as String?) != "false"
 val libsInApk = (findProperty("libsInApk") as String?) == "true"
 
 android {
