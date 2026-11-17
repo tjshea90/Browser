@@ -97,6 +97,11 @@ def start_server(port, root, scratch):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     reports = []
+    pings = []                                                 # (host time, path) of every /report: the page-loaded stamp of a RELEASE build, which writes no Health lines (LAB7)
+
+    PING_PAGE = (b"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'><title>ping</title>"
+                 b"<body style='font:20px sans-serif'>Kestrel lab ping page<script>addEventListener('load',function(){var i=new Image();"
+                 b"i.src='/report?loaded='+Date.now();});</script></body>")
 
     class H(http.server.BaseHTTPRequestHandler):
         def log_message(self, *a):
@@ -124,8 +129,11 @@ def start_server(port, root, scratch):
                     return self._send(mod.page_bench2())
                 if p.startswith("/img/") and p.endswith(".svg"):
                     return self._send(mod.svg(int(p[5:-4] or 0)), "image/svg+xml")
+                if p == "/ping":
+                    return self._send(PING_PAGE)
                 if p == "/report":
                     reports.append(self.path)
+                    pings.append((time.time(), self.path))
                     return self._send(b"", "image/gif", 204)
                 return self._send(b"not found", "text/plain", 404)
             except (BrokenPipeError, ConnectionResetError):
@@ -136,6 +144,7 @@ def start_server(port, root, scratch):
         allow_reuse_address = True
 
     srv = S(("0.0.0.0", port), H)
+    srv.pings = pings
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return srv, reports
 

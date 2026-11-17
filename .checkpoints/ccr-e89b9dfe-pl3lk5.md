@@ -1,32 +1,29 @@
-# CHECKPOINT 2633 — read me first, then TASKS.md
+# CHECKPOINT 2637 — read me first, then TASKS.md
 
-**Written:** 2026-11-17T16:10:20Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-e89b9dfe-pl3lk5` · **builds on:** `1e6d8fa8` (this checkpoint is the commit after it)
+**Written:** 2026-11-17T16:29:11Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-e89b9dfe-pl3lk5` · **builds on:** `e40a5b70` (this checkpoint is the commit after it)
 
 ## Just done
-alpha65 SHIPPED and RECORDED (run 44120758574 all 7 jobs green, Release kestrel-g-v0.3.0-alpha65 has the APK 95.9 MB, .apk.sha256 and kestrel-g-0.3.0-alpha65.dm 6,766 bytes, BUILDLOG commit 4a810288); TASKS LAB6 ticked, HANDOFF alpha65 entry written. Owner message LAB7 is TASKS LAB7a-c.
+LAB7 CORRECTED lab run DISPATCHED ONCE: android.yml run 44126148207 (run_number 219, queued 16:28:23Z, head e40a5b70 = ckpt 2636, app=lab lab_suite=aot lab_profile=standard lab_net=full lab_minutes=3). The first lab run 44125632537 was cancelled on purpose (see ckpt 2636). DO NOT DISPATCH ANOTHER aot RUN UNTIL THIS ONE IS READ. Expected length ~100-120 min (builds: 2 debug + 3 release, update phase ~25 min, breadth ~50 min). Poll with list_workflow_jobs 44126148207 (small), never get_workflow_run.
 
 ## Do this next
-LAB7a+b in tools/emu/aotlab.py: (1) packlab.start_server: add /ping page + srv.pings timestamps (host-clock launch->page-loaded for the minified RELEASE build, no app change), (2) aotlab breadth_check(): verify / speed-profile (embedded profile) / all-hot (profman dump -> every line H -> --create-profile-from) / everything (profman --generate-test-profile 100 pct with --apk) / speed, each: compile seconds, oat files + KB, am start -W + ping n=6 alternating warm/cold, main-process PSS, (3) aotlab update_check(): debug APK old (vc N) + new (vc N+1, extension version bumped via tools/sync-ext-version.sh): install old, 2 runs, adb install -r new, launch #1/#2/#3 with Health marks, plus a run with a warm-up launch, record files/mozilla startupCache + compatibility.ini, (4) emu-lab.yml suite aot builds both debug APKs (restore build.gradle.kts + manifest after), android.yml/emu-lab.yml options unchanged (aot exists), (5) then dispatch ONE lab run (android.yml app=lab lab_suite=aot) and read the artifact
+wait for run 44126148207 (check list_workflow_jobs about every 25 min; a background sleep is the timer); then list_workflow_run_artifacts 44126148207, download emulator-lab-text via actions_get download_workflow_run_artifact, python3 -I tools/emu/fetch_artifact.py '<url>' <empty dir under /tmp/claude-0/-home-user/9ce0a565-d773-5bbd-9051-9693a437ee59/scratchpad/lab7>, read AOT-REPORT.md + profile-builds.txt + update-health/*.txt, write research/LAB7_RESULTS.md, decide (rule: research/LAB7_INSTALL_COMPILE.md section 3). alpha66 is the OTHER lane's (versionCode 167); ship this lane's result as alpha67 (versionCode 168) after alpha66 is out
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M HANDOFF.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  e40a5b70 ckpt 2636: LAB7 lab run 44125632537 CANCELLED ON PURPOSE and replaced by a corrected on
+  3206d5dd ckpt 2635: LAB7 lab run DISPATCHED ONCE (android.yml app=lab lab_suite=aot lab_profile=
+  eaa4e46d ckpt 2634: LAB7a+b lab code written and dry-run against a fake adb (aotlab.py breadth_c
+  a2313194 ckpt 2634: gated kestrel-g-v0.3.0-alpha66 (gecko code 167) and pushed it: handoff self-
+  60f8deca ckpt 2633: alpha65 SHIPPED and RECORDED (run 44120758574 all 7 jobs green, Release kest
   f7d26151 ckpt 2632: alpha65 run is android.yml run 44120758574 (run_number 216, started 16:00:17
   0fa23623 ckpt 2631: alpha65 DISPATCHED ONCE (compile at install = LAB6: release script publishes
   d32b8cf2 ckpt 2630: gated kestrel-g-v0.3.0-alpha65 (gecko code 166) and pushed it: handoff self-
   a6159180 ckpt 2629: OWNER SAID GO on LAB6 (compile at install through the updater). Recorded in 
   20e28803 ckpt 2628: LAB5 PASS COMPLETE. alpha64 shipped 11:52Z (https://github.com/tjshea90/Brow
-  cda703be ckpt 2627: alpha64 SHIPPED + RECORDED (Release kestrel-g-v0.3.0-alpha64, run 4407646379
-  e5e2e612 ckpt 2626: alpha64 DISPATCHED ONCE at 11:42Z: android.yml run 44076463792 (app=gecko fu
-  d9efb312 ckpt 2625: gated kestrel-g-v0.3.0-alpha64 (gecko code 165) and pushed it: handoff self-
-  4692623b ckpt 2624: RELEASE PREP (not shipped): versionCode 165 / versionName 0.3.0-alpha64 in g
-  1c468757 ckpt 2623: SWEEP READ (run 44059232336, cancelled after the emulator went offline: 17 g
 ```
-
-(1 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)

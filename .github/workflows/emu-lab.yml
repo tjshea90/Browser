@@ -113,6 +113,18 @@ jobs:
             ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI -PomniStored=true -PlibsInApk=true --console=plain
             cp geckoapp/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/apks/D.apk"
             ls -l "$RUNNER_TEMP/apks"
+          elif [ "$SUITE" = aot ]; then
+            # LAB7b: the update lab needs the SAME code twice, the second build with the NEXT versionCode and extension version = what an update looks like to the engine (a new install path, a new built-in extension version)
+            mkdir -p "$RUNNER_TEMP/apks"
+            ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI --console=plain
+            cp geckoapp/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/apks/old.apk"
+            VC="$(sed -n 's/^ *versionCode = \([0-9]*\).*/\1/p' geckoapp/build.gradle.kts | head -1)"
+            sed -i "s/^\( *versionCode = \)$VC/\1$((VC+1))/" geckoapp/build.gradle.kts
+            bash tools/sync-ext-version.sh
+            ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI --console=plain
+            cp geckoapp/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/apks/new.apk"
+            git checkout -- geckoapp/build.gradle.kts geckoapp/src/main/assets/kestrel-shields/manifest.json
+            echo "update pair: versionCode $VC -> $((VC+1))"; ls -l "$RUNNER_TEMP/apks"
           else
             ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI --console=plain
           fi
@@ -213,13 +225,25 @@ jobs:
           export PATH="$ANDROID_HOME/platform-tools:$PATH"
           mkdir -p "$RUNNER_TEMP/lab-out"
           APK="$PWD/$(ls geckoapp/build/outputs/apk/debug/*.apk | head -1)"
-          # the real release path: the R8-minified release build for the emulator's ABI (signed with the repository's public dev key), its embedded baseline profile
-          ./gradlew :geckoapp:assembleRelease -PgeckoAbi=$IMG_ABI --console=plain > "$RUNNER_TEMP/release-build.log" 2>&1 || tail -30 "$RUNNER_TEMP/release-build.log"
-          REL="$PWD/geckoapp/build/outputs/apk/release/geckoapp-release.apk"
-          [ -f "$REL" ] || REL=""
-          DMARGS=""
-          for d in geckoapp/build/outputs/apk/release/baselineProfiles/*/*.dm; do [ -f "$d" ] && DMARGS="$DMARGS --release-dm $PWD/$d"; done
-          python3 -u -I tools/emu/aotlab.py --out "$RUNNER_TEMP/lab-out" --repo-root "$PWD" --pkg "$PKG" --apk "$APK" --release-apk "$REL" $DMARGS --dm-only --rounds "${MINUTES:-3}" --starts 4 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
+          # LAB7a: THREE release builds (R8-minified, for the emulator's ABI, signed with the repository's public dev key) that differ only in the baseline profile rules (tools/emu/profvariant.py):
+          # base = the shipped rules, exercised = every method the lab ran marked hot, all = one wildcard rule that marks every method hot
+          mkdir -p "$RUNNER_TEMP/apks"
+          buildrel() {
+            ./gradlew :geckoapp:assembleRelease -PgeckoAbi=$IMG_ABI --console=plain > "$RUNNER_TEMP/release-build-$1.log" 2>&1 || tail -30 "$RUNNER_TEMP/release-build-$1.log"
+            cp geckoapp/build/outputs/apk/release/geckoapp-release.apk "$RUNNER_TEMP/apks/rel-$1.apk" 2>/dev/null || echo "::warning::release build $1 produced no APK"
+            { echo "== $1"; unzip -l "$RUNNER_TEMP/apks/rel-$1.apk" 2>/dev/null | grep -E "dexopt|classes.*dex"; ls -l geckoapp/build/outputs/apk/release/baselineProfiles/*/*.dm 2>/dev/null; } >> "$RUNNER_TEMP/lab-out/profile-builds.txt"
+          }
+          buildrel base
+          python3 -I tools/emu/profvariant.py exercised geckoapp/src/main/baseline-prof.txt geckoapp/src/main/baseline-prof.txt
+          buildrel exercised
+          git checkout -- geckoapp/src/main/baseline-prof.txt
+          python3 -I tools/emu/profvariant.py all geckoapp/src/main/baseline-prof.txt geckoapp/src/main/baseline-prof.txt
+          buildrel all
+          git checkout -- geckoapp/src/main/baseline-prof.txt
+          cat "$RUNNER_TEMP/lab-out/profile-builds.txt"
+          python3 -u -I tools/emu/aotlab.py --out "$RUNNER_TEMP/lab-out" --repo-root "$PWD" --pkg "$PKG" --apk "$APK" --phases update,breadth --update-rounds 2 --breadth-rounds 2 --starts 4 \
+            --old-apk "$RUNNER_TEMP/apks/old.apk" --new-apk "$RUNNER_TEMP/apks/new.apk" \
+            --release-apk "$RUNNER_TEMP/apks/rel-base.apk" --apk-exercised "$RUNNER_TEMP/apks/rel-exercised.apk" --apk-all "$RUNNER_TEMP/apks/rel-all.apk" 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
           if [ -f "$RUNNER_TEMP/lab-out/AOT-REPORT.md" ]; then cat "$RUNNER_TEMP/lab-out/AOT-REPORT.md" >> "$GITHUB_STEP_SUMMARY"; fi
 
       - name: Run the lab (${{ inputs.suite }}, soak ${{ inputs.minutes }} min, net ${{ inputs.net }})
@@ -307,6 +331,8 @@ jobs:
             ${{ runner.temp }}/lab-out/sweep-results.json
             ${{ runner.temp }}/lab-out/AOT-REPORT.md
             ${{ runner.temp }}/lab-out/aot-results.json
+            ${{ runner.temp }}/lab-out/profile-builds.txt
+            ${{ runner.temp }}/lab-out/update-health/*.txt
           retention-days: 7
           if-no-files-found: ignore
 

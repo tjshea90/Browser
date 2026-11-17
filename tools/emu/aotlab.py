@@ -59,11 +59,142 @@ def sum_ls_bytes(text):
     return total
 
 
+def ls_files(text):
+    """[(name, bytes)] of the regular files of an `ls -lR` listing (the oat directory: base.odex = compiled code, base.vdex = verified dex, base.art = app image if any)."""
+    out = []
+    for ln in text.splitlines():
+        if ln.startswith("-"):
+            parts = ln.split()
+            if len(parts) >= 8 and parts[4].isdigit():
+                out.append((parts[-1], int(parts[4])))
+    return out
+
+
+def pct(v, base):
+    """' (+12 %)' of v against base, '' when either is missing."""
+    if v is None or not base:
+        return ""
+    return " (%+.0f %%)" % ((v - base) / float(base) * 100.0)
+
+
+def start_probe(pl, adb, srv, pkg, url, wait_s=60):
+    """ONE start of the app on the lab's /ping page: `am start -W` TotalTime (first drawn frame) and the host-clock time from the command to the page's own load stamp (/report arriving at the lab server).
+    The RELEASE build writes no Health lines, so this is how its start is measured end to end (engine, session, page load); the adb round trip is the same for every variant. page_ms is None when the page never reported."""
+    n0 = len(srv.pings)
+    t0 = time.time()
+    out = adb.sh("am start -W -a android.intent.action.VIEW -d %s -p %s" % (url, pkg), timeout=120)
+    total, wait = pl.parse_am_start(out)
+    end = time.time() + wait_s
+    t1 = None
+    while time.time() < end:
+        if len(srv.pings) > n0:
+            t1 = srv.pings[n0][0]
+            break
+        time.sleep(0.2)
+    return {"am_total_ms": total, "am_wait_ms": wait, "page_ms": int(round((t1 - t0) * 1000)) if t1 else None}
+
+
+def report_update(L, upd_rows, upd_notes, med):
+    """The LAB7b section of AOT-REPORT.md (appended to the list of lines L)."""
+    if upd_rows or upd_notes:
+        L.append("## LAB7b: the first launch after an update (debug build with Health lines: the old build is used twice, then `adb install -r` of the next version)")
+        L.append("")
+        L.append("| Scenario | Launch | n | am start -W ms | engine ready s | page loaded s | worst UI block ms | failed |")
+        L.append("| :- | :- | -: | -: | -: | -: | -: | -: |")
+        keys = ("am_total_ms", "runtime_ready_s", "page_loaded_s", "ui_block_ms")
+        order = ["old build, 1st launch ever", "old build, 2nd launch (steady state)", "warm-up launch (not counted)", "new build, launch 1", "new build, launch 2", "new build, launch 3"]
+        for scen in ("plain", "warmup"):
+            steady = {k: med([r.get(k) for r in upd_rows if r["scenario"] == scen and r["launch"].startswith("old build, 2nd") and not r.get("crash")]) for k in keys}
+            for ln_name in order:
+                rs = [r for r in upd_rows if r["scenario"] == scen and r["launch"] == ln_name]
+                if not rs:
+                    continue
+                ok = [r for r in rs if not r.get("crash")]
+                m = {k: med([r.get(k) for r in ok]) for k in keys}
+
+                def f(k, fmt, m=m, ln_name=ln_name, steady=steady):
+                    v = m.get(k)
+                    if v is None:
+                        return "-"
+                    return (fmt % v) + (pct(v, steady.get(k)) if ln_name.startswith("new build") else "")
+                L.append("| %s | %s | %d | %s | %s | %s | %s | %d |" % (scen, ln_name, len(ok), f("am_total_ms", "%.0f"), f("runtime_ready_s", "%.2f"), f("page_loaded_s", "%.2f"), f("ui_block_ms", "%.0f"), len(rs) - len(ok)))
+        L.append("")
+        L.append("(percentages: the new build's launch against the SAME scenario's old-build steady state; `warmup` = one extra launch of the new build right after the update, kept up as long as the other launches, before the counted launches)")
+        L.append("")
+        for n in upd_notes:
+            L.append("- " + n)
+        L.append("")
+
+
+def report_breadth(L, br_info, br_rows, br_mem, starts, med):
+    """The LAB7a section of AOT-REPORT.md (appended to the list of lines L)."""
+    if br_info or br_rows:
+        L.append("## LAB7a: how much Android compiles at install, and what it costs (the RELEASE build; emulator: read the DIFFERENCES, the tablet's cores are slower)")
+        L.append("")
+        L.append("| Variant | what | status | compile s | compiled code MB | start -W warm ms | start -W cold ms | page loaded warm ms | page loaded cold ms | PSS app MB | PSS all MB |")
+        L.append("| :- | :- | :- | -: | -: | -: | -: | -: | -: | -: | -: |")
+
+        def vstat(name):
+            inf = [i for i in br_info if i["variant"] == name]
+            srs = [r for r in br_rows if r["variant"] == name]
+            mm = [m for m in br_mem if m.get("variant") == name]
+
+            def sm(key, cache):
+                vals = [r[key] for r in srs if r["cache"] == cache and r.get(key) is not None]
+                return med(vals) if vals else None
+            app = [next((p.get("pss_kb") for p in m.get("procs", []) if p.get("name") == "app"), None) for m in mm]
+            return {"status": ",".join(sorted(set(str(i["status"]) for i in inf))) or "-", "compile_s": med([i["compile_s"] for i in inf]) if inf else None,
+                    "oat_mb": (med([i["oat_kb"] for i in inf]) / 1024.0) if inf else None,
+                    "am_warm": sm("am_total_ms", "warm"), "am_cold": sm("am_total_ms", "cold"), "pg_warm": sm("page_ms", "warm"), "pg_cold": sm("page_ms", "cold"),
+                    "pss_app": (med([x for x in app if x is not None]) / 1024.0) if any(x is not None for x in app) else None,
+                    "pss_all": (med([m.get("total_pss_kb") for m in mm]) / 1024.0) if mm else None}
+        base_name = "sp-current"
+        bs = vstat(base_name)
+        for name, apkkey, mode, what in BREADTH:
+            s = vstat(name)
+            if s["status"] == "-" and s["am_warm"] is None:
+                continue
+
+            def c(k, fmt):
+                v = s.get(k)
+                if v is None:
+                    return "-"
+                return (fmt % v) + (pct(v, bs.get(k)) if name != base_name else "")
+            L.append("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (name, what, s["status"], c("compile_s", "%.1f"), c("oat_mb", "%.1f"), c("am_warm", "%.0f"), c("am_cold", "%.0f"),
+                                                                             c("pg_warm", "%.0f"), c("pg_cold", "%.0f"), c("pss_app", "%.0f"), c("pss_all", "%.0f")))
+        L.append("")
+        L.append("(percentages against `%s`, the profile alpha65 ships; n = %d starts per cache state per variant and round; compile s = `cmd package compile -f -m MODE` on the emulator's 2 vCPUs)" % (base_name, starts // 2))
+        L.append("")
+        seen = set()
+        for i in br_info:
+            if i["variant"] not in seen:
+                seen.add(i["variant"])
+                L.append("- files of %s: %s; profile written: %s bytes" % (i["variant"], ", ".join(i["files"]) or "none", i.get("profile_bytes")))
+        L.append("")
+
+
 def selftest():
-    sample = "  [app.kestrel.browser.gecko.debug]\n    path: /data/app/x==/base.apk\n      x86_64: [status=speed-profile] [reason=cmdline]\n  [com.android.email]\n    path: y\n      x86_64: [status=quicken] [reason=prebuilt]\n"
+    sample ="  [app.kestrel.browser.gecko.debug]\n    path: /data/app/x==/base.apk\n      x86_64: [status=speed-profile] [reason=cmdline]\n  [com.android.email]\n    path: y\n      x86_64: [status=quicken] [reason=prebuilt]\n"
     assert parse_dexopt_status(sample, "app.kestrel.browser.gecko.debug") == ("speed-profile", "cmdline")
     assert parse_dexopt_status(sample, "com.other") == (None, None)
     assert sum_ls_bytes("/x/oat/x86_64:\ntotal 10\n-rw-r--r-- 1 system all 1000 2026-11-17 10:00 base.odex\n-rw-r--r-- 1 system all 24 2026-11-17 10:00 base.vdex\ndrwx------ 2 a b 4096 2026 d\n") == 1024
+    assert ls_files("/x/oat/x86_64:\ntotal 10\n-rw-r--r-- 1 system all 1000 2026-11-17 10:00 base.odex\n-rw-r--r-- 1 system all 24 2026-11-17 10:00 base.vdex\ndrwx------ 2 a b 4096 2026 d\n") == [("base.odex", 1000), ("base.vdex", 24)]
+    assert pct(110, 100) == " (+10 %)" and pct(None, 100) == "" and pct(5, 0) == ""
+    # the LAB7 report sections render from synthetic rows (a typo found here costs nothing, one found in the lab run costs an hour)
+    med = lambda v: (sorted(x for x in v if x is not None)[len([x for x in v if x is not None]) // 2] if [x for x in v if x is not None] else None)
+    L = []
+    report_update(L, [{"scenario": "plain", "round": 1, "launch": "old build, 2nd launch (steady state)", "am_total_ms": 1000, "runtime_ready_s": 1.2, "page_loaded_s": 2.0, "ui_block_ms": 300},
+                      {"scenario": "plain", "round": 1, "launch": "new build, launch 1", "am_total_ms": 1500, "runtime_ready_s": 2.2, "page_loaded_s": 3.1, "ui_block_ms": 500},
+                      {"scenario": "plain", "round": 1, "launch": "new build, launch 2", "crash": ["x"]}], ["a note"], med)
+    txt = "\n".join(L)
+    assert "new build, launch 1" in txt and "(+50 %)" in txt and "a note" in txt, txt
+    L = []
+    report_breadth(L, [{"variant": "sp-current", "round": 1, "status": "speed-profile", "compile_s": 20.0, "oat_kb": 4000, "files": ["base.odex 3900 KB"], "profile_bytes": 5000},
+                       {"variant": "speed", "round": 1, "status": "speed", "compile_s": 80.0, "oat_kb": 20000, "files": ["base.odex 19000 KB"], "profile_bytes": None}],
+                   [{"variant": "sp-current", "round": 1, "cache": "warm", "am_total_ms": 1700, "page_ms": 3000}, {"variant": "speed", "round": 1, "cache": "warm", "am_total_ms": 1600, "page_ms": 2900}],
+                   [{"variant": "sp-current", "round": 1, "total_pss_kb": 500000, "procs": [{"name": "app", "pss_kb": 300000}]}], 4, med)
+    txt = "\n".join(L)
+    assert "| speed |" in txt and "(+300 %)" in txt and "files of speed" in txt, txt
     print("aotlab selftest ok")
 
 
@@ -185,6 +316,169 @@ def dm_install_check(lab, pl, adb, a, say, rows, progress):
         progress()
 
 
+# variant -> (which APK, compile mode, what it is). LAB7a: the install-time compile is `speed-profile` (the system's own choice for an install: pm.dexopt.install), which compiles ONLY the methods marked HOT in the
+# profile; the profile decides how much is compiled. `speed` is the ceiling (everything), measured for its cost.
+BREADTH = [
+    ("verify", "base", "verify", "nothing compiled (what an update gets until the idle dexopt)"),
+    ("sp-current", "base", "speed-profile", "alpha65 profile: only the methods marked hot (about 2.5k of 15k)"),
+    ("sp-exercised", "exercised", "speed-profile", "every method the lab ever ran marked hot (about 4.9k)"),
+    ("sp-all", "all", "speed-profile", "ALL methods marked hot (one wildcard rule, 15k), start-up / post-start-up flags kept"),
+    ("speed", "base", "speed", "everything (the ceiling)"),
+]
+
+
+def breadth_check(lab, pl, adb, srv, a, say, info, rows, mem, notes, progress):
+    """LAB7a. The RELEASE build (R8, not debuggable, the real profile) installed once per APK variant; for each variant `cmd package compile --reset`, the embedded profile put in place the way the library does (INSTALL_PROFILE),
+    `cmd package compile -f -m MODE`, then timed starts (alternating warm / dropped file cache) on the lab's ping page and one memory snapshot. Per variant: compile seconds, compiled code size, files, start times, PSS.
+    Variant APKs differ ONLY in assets/dexopt/baseline.prof (the profile rules of geckoapp/src/main/baseline-prof.txt, rewritten by R8). Fills [info] (one dict per compile), [rows] (one per start), [mem]."""
+    pkg = a.release_pkg
+    apks = {"base": a.release_apk, "exercised": a.apk_exercised, "all": a.apk_all}
+    present = {k: v for k, v in apks.items() if v and os.path.exists(v)}
+    page = "http://localhost:%d/ping" % a.port
+    prof = "/data/misc/profiles/cur/0/%s/primary.prof" % pkg
+    old = lab.pkg
+    lab.pkg = pkg
+    try:
+        for rnd in range(1, a.breadth_rounds + 1):
+            groups = [("base", ["verify", "sp-current", "speed"]), ("exercised", ["sp-exercised"]), ("all", ["sp-all"])]
+            if rnd % 2 == 0:                                   # round 2 the other way round: a drifting runner cannot favour one variant
+                groups = [(k, list(reversed(v))) for k, v in reversed(groups)]
+            for key, names in groups:
+                if key not in present:
+                    notes.append("round %d: no APK for %s: variants %s skipped" % (rnd, key, ",".join(names)))
+                    continue
+                adb.run("uninstall", pkg, timeout=120)
+                t0 = time.time()
+                out = adb.run("install", "-t", present[key], timeout=900)
+                say("install", key, out.strip()[:60], "%.0f s" % (time.time() - t0))
+                if "Success" not in out:
+                    notes.append("round %d: install of %s failed: %s" % (rnd, key, out.strip()[:120]))
+                    continue
+                for name in names:
+                    _, _, mode, what = next(b for b in BREADTH if b[0] == name)
+                    adb.sh("cmd package compile --reset %s" % pkg, timeout=300)
+                    prof_size = None
+                    lab.kill()
+                    if mode == "speed-profile":
+                        out = adb.sh("am broadcast -a androidx.profileinstaller.action.INSTALL_PROFILE %s/androidx.profileinstaller.ProfileInstallReceiver" % pkg, timeout=60)
+                        for _ in range(30):
+                            time.sleep(1.0)
+                            sz = adb.sh("ls -ln %s 2>/dev/null" % prof, timeout=30).split()
+                            if len(sz) >= 5 and sz[4].isdigit() and int(sz[4]) > 0:
+                                prof_size = int(sz[4])
+                                break
+                    t0 = time.time()
+                    adb.sh("cmd package compile -f -m %s %s" % (mode, pkg), timeout=1500)
+                    took = round(time.time() - t0, 1)
+                    st = parse_dexopt_status(adb.sh("dumpsys package dexopt", timeout=60), pkg)
+                    path = adb.sh("pm path %s" % pkg, timeout=30).strip().replace("package:", "")
+                    d = os.path.dirname(path) if path else ""
+                    files = ls_files(adb.sh("ls -lR %s/oat 2>/dev/null" % d, timeout=60)) if d else []
+                    rec = {"variant": name, "round": rnd, "apk": key, "mode": mode, "status": st[0], "compile_s": took, "oat_kb": sum(b for _, b in files) // 1024,
+                           "files": ["%s %d KB" % (n, b // 1024) for n, b in files], "profile_bytes": prof_size}
+                    info.append(rec)
+                    say("compiled", rec)
+                    lab.kill()
+                    first = start_probe(pl, adb, srv, pkg, page)       # unmeasured: the first run after a compile pays for the engine's caches
+                    say("first start (not counted)", first)
+                    time.sleep(10)
+                    for k in range(a.starts):
+                        cold = (k % 2 == 1)
+                        lab.kill()
+                        if cold:
+                            lab.drop_caches()
+                        time.sleep(2)
+                        r = start_probe(pl, adb, srv, pkg, page)
+                        r.update({"variant": name, "round": rnd, "cache": "cold" if cold else "warm"})
+                        rows.append(r)
+                        say("start", name, r["cache"], r["am_total_ms"], r["page_ms"])
+                        time.sleep(5)
+                    lab.kill()                                         # memory: a fresh warm start, settle 10 s after the page loaded
+                    r = start_probe(pl, adb, srv, pkg, page)
+                    time.sleep(10)
+                    lab.snapshot_memory(name, rnd)
+                    mem.append(dict(lab.mem[-1], variant=name, round=rnd))
+                    lab.kill()
+                    progress()
+    finally:
+        lab.pkg = old
+
+
+def update_check(lab, pl, adb, a, say, rows, notes, progress):
+    """LAB7b: how much slower is the FIRST launch after an update than a later one, and does a warm-up launch right after the update remove it? Two debug builds of the same code, the second with the next versionCode
+    and extension version (what an update looks like to the engine: a new install directory, a new built-in extension version). For each scenario: install the old build, launch it twice (the first builds the engine's
+    caches, the second is the steady state), `adb install -r` the new build (= the update), [warm-up: launch it once, wait, force-stop], then three launches; every launch reads the app's Health lines (engine ready,
+    page loaded). Also records Gecko's start-up cache files and compatibility.ini before and after the update (what the engine thinks changed). Fills [rows]."""
+    pkg = a.pkg
+    page = "http://localhost:%d/page/text" % a.port
+
+    def state(label):
+        out = adb.sh("find /data/data/%s -maxdepth 6 \\( -name 'startupCache*' -o -name compatibility.ini -o -name extensions.json -o -name 'scriptCache*' \\) 2>/dev/null | head -14" % pkg, timeout=60)
+        lines = []
+        for p in out.split():
+            ls = adb.sh("ls -ln %s 2>/dev/null | head -4" % p, timeout=30).strip().replace("\n", " | ")
+            lines.append(ls[:150])
+            if p.endswith("compatibility.ini"):
+                ini = adb.sh("cat %s 2>/dev/null" % p, timeout=30).strip().replace("\n", " ; ")
+                lines.append("compatibility.ini: " + ini[:260])
+        return "%s: %s" % (label, " || ".join(lines) if lines else "no start-up cache / compatibility.ini found under /data/data/%s" % pkg)
+
+    health_dir = os.path.join(os.path.abspath(a.out), "update-health")
+    os.makedirs(health_dir, exist_ok=True)
+    settle = a.settle_s
+    for rnd in range(1, a.update_rounds + 1):
+        for scen in (["plain", "warmup"] if rnd % 2 else ["warmup", "plain"]):
+            say("=== update round %d scenario %s" % (rnd, scen))
+            adb.run("uninstall", pkg, timeout=120)
+            out = adb.run("install", "-t", a.old_apk, timeout=900)
+            if "Success" not in out:
+                notes.append("update round %d %s: install of the old build failed: %s" % (rnd, scen, out.strip()[:120]))
+                continue
+
+            def go(label, stay, count=True, sample=False):
+                """Launch, then keep the app up for `stay` seconds (the engine writes its caches while it runs: Gecko's start-up cache is written some time after start-up, not at once), force-stopping at the start of the next call."""
+                lab.kill()
+                r = lab.launch(page, 120)
+                r.update({"scenario": scen, "round": rnd, "launch": label, "counted": count})
+                rows.append(r)
+                say("launch", scen, label, {k: r.get(k) for k in ("am_total_ms", "runtime_ready_s", "page_loaded_s", "ui_block_ms")}, "CRASH" if r.get("crash") else "")
+                if rnd == 1 and scen == "plain":                  # the Health lines of this launch, to see WHICH engine step is slower the first time
+                    try:
+                        with open(os.path.join(health_dir, "%s-%s.txt" % (scen, re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-"))), "w") as f:
+                            f.write(adb.run("logcat", "-d", "-v", "threadtime", "-s", "KestrelHealth:D", timeout=60))
+                    except Exception as e:
+                        say("health log not saved", e)
+                if sample:
+                    time.sleep(min(stay, 20))
+                    notes.append(state("%s, 20 s after the page loaded" % label))
+                    time.sleep(max(0, stay - 20))
+                else:
+                    time.sleep(stay)
+                return r
+            go("old build, 1st launch ever", settle, sample=(rnd == 1 and scen == "plain"))
+            go("old build, 2nd launch (steady state)", settle)
+            if rnd == 1 and scen == "plain":
+                notes.append(state("before the update (old build, after 2 launches of %d s)" % settle))
+            lab.kill()
+            t0 = time.time()
+            out = adb.run("install", "-r", "-t", a.new_apk, timeout=900)
+            took = round(time.time() - t0, 1)
+            if "Success" not in out:
+                notes.append("update round %d %s: the update failed: %s" % (rnd, scen, out.strip()[:120]))
+                continue
+            if rnd == 1 and scen == "plain":
+                notes.append("the update itself (adb install -r of the debug build) took %.1f s; " % took + state("right after the update"))
+            if scen == "warmup":
+                go("warm-up launch (not counted)", settle, count=False)
+            go("new build, launch 1", settle, sample=(rnd == 1 and scen == "plain"))
+            go("new build, launch 2", min(settle, 40))
+            go("new build, launch 3", 5)
+            if rnd == 1 and scen == "plain":
+                notes.append(state("after 3 launches of the new build"))
+            lab.kill()
+            progress()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="aot-out")
@@ -196,6 +490,14 @@ def main():
     ap.add_argument("--release-dm", action="append", default=[], help="a dex-metadata file AGP wrote next to the release build (outputs/apk/release/baselineProfiles/<n>/*.dm); each one is tried as `base.dm` in a PackageInstaller session")
     ap.add_argument("--debug-ab", action="store_true", help="also compile the DEBUG build three ways: NOT informative (a debuggable app only ever gets quicken: lab run 44074456934), costs 15+ minutes, off by default")
     ap.add_argument("--dm-only", action="store_true", help="skip the timed starts of the release phase: only the compile-at-install installs (LAB6a, about 10 minutes with the release build)")
+    ap.add_argument("--old-apk", default="", help="LAB7b: the debug build the update starts from")
+    ap.add_argument("--new-apk", default="", help="LAB7b: the same code with the NEXT versionCode and extension version (the update)")
+    ap.add_argument("--apk-exercised", default="", help="LAB7a: the release build whose profile marks every method the lab ran as hot")
+    ap.add_argument("--apk-all", default="", help="LAB7a: the release build with one extra wildcard rule (HL**;->**(**)**): every method hot")
+    ap.add_argument("--update-rounds", type=int, default=2)
+    ap.add_argument("--settle-s", type=int, default=70, help="LAB7b: how long the app stays up after a launch (Gecko writes its start-up cache some time after start-up, not at once)")
+    ap.add_argument("--breadth-rounds", type=int, default=2)
+    ap.add_argument("--phases", default="release,dm", help="comma list of: update, breadth, release, dm, debug (the default is what the lab did before LAB7)")
     ap.add_argument("--rounds", type=int, default=3)
     ap.add_argument("--starts", type=int, default=4)
     ap.add_argument("--port", type=int, default=8093)
@@ -232,6 +534,7 @@ def main():
     page = "http://localhost:%d/page/text" % a.port
     rows, status, notes = [], {}, []
     rel_rows, rel_notes, dm_rows = [], [], []
+    br_info, br_rows, br_mem, upd_rows, upd_notes = [], [], [], [], []
     med = pl.median
 
     def say(*x):
@@ -241,6 +544,8 @@ def main():
         """Written after every round / install: a cancelled run (the lab run 44069383826 was, after 9 minutes) keeps what it measured. Order of the phases = order of value: the release path, compile at install, then the debug A/B."""
         L = ["# Ahead-of-time compile A/B (LAB5b)", "",
              "%d rounds x %d starts per mode (alternating warm / cold file cache). **Emulator numbers: read the differences between modes of THIS run.**" % (a.rounds, a.starts), ""]
+        report_update(L, upd_rows, upd_notes, med)
+        report_breadth(L, br_info, br_rows, br_mem, a.starts, med)
         if rel_rows or rel_notes:
             L.append("## The release build, the embedded baseline profile (R8-rewritten rules, installed by androidx.profileinstaller): `am start -W` TotalTime")
             L.append("")
@@ -299,7 +604,8 @@ def main():
         with open(os.path.join(a.out, "AOT-REPORT.md"), "w") as f:
             f.write(text)
         with open(os.path.join(a.out, "aot-results.json"), "w") as f:
-            json.dump({"starts": rows, "compile": status, "notes": notes, "release": rel_rows, "release_notes": rel_notes, "dm_install": dm_rows}, f, indent=1)
+            json.dump({"starts": rows, "compile": status, "notes": notes, "release": rel_rows, "release_notes": rel_notes, "dm_install": dm_rows,
+                       "breadth": {"compile": br_info, "starts": br_rows, "memory": br_mem}, "update": {"rows": upd_rows, "notes": upd_notes}}, f, indent=1)
         return text
 
     def debug_ab():
@@ -369,21 +675,38 @@ def main():
                 write_report()
 
     text = ""
+    phases = set(p.strip() for p in a.phases.split(",") if p.strip())
     try:
+        # order of value: the first launch after an update (cheap, decisive), the breadth of the install-time compile, then the older checks
+        if "update" in phases:
+            if a.old_apk and a.new_apk and os.path.exists(a.old_apk) and os.path.exists(a.new_apk):
+                try:
+                    update_check(lab, pl, adb, a, say, upd_rows, upd_notes, write_report)
+                except Exception as e:
+                    upd_notes.append("update check failed: %r" % (e,))
+            else:
+                upd_notes.append("update check skipped: --old-apk / --new-apk missing")
+            write_report()
         if a.release_apk and os.path.exists(a.release_apk):
+            if "breadth" in phases:
+                try:
+                    breadth_check(lab, pl, adb, srv, a, say, br_info, br_rows, br_mem, upd_notes, write_report)
+                except Exception as e:
+                    upd_notes.append("breadth check failed: %r" % (e,))
+                write_report()
             try:
-                if not a.dm_only:
+                if "release" in phases and not a.dm_only:
                     release_check(lab, pl, adb, a, say, rel_rows, rel_notes, write_report)
             except Exception as e:                          # the other phases must still run and be reported
                 rel_notes.append("release check failed: %r" % (e,))
             write_report()
-            if a.release_dm:
+            if "dm" in phases and a.release_dm:
                 try:
                     dm_install_check(lab, pl, adb, a, say, dm_rows, write_report)
                 except Exception as e:
                     rel_notes.append("dm install check failed: %r" % (e,))
                 write_report()
-        if a.apk and a.debug_ab:
+        if a.apk and (a.debug_ab or "debug" in phases):
             try:
                 debug_ab()
             except Exception as e:
