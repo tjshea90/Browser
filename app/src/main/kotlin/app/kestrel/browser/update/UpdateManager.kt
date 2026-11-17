@@ -636,8 +636,11 @@ object UpdateManager {
                         apk.inputStream().use { it.copyTo(out, 128 * 1024) }
                         session.fsync(out)
                     }
-                    if (dm != null) session.openWrite("kestrel-update.dm", 0, dm.length()).use { out -> dm.inputStream().use { it.copyTo(out, 16 * 1024) }; session.fsync(out) }   // named after the APK: Android pairs them by name
+                    // Set BEFORE the write: whatever happens to the file from here on, an installer refusal that names it leads to the retry without it. A file that cannot be written at all is left out; the update goes on.
                     sp(app).edit().putBoolean("install_dm", dm != null).apply()
+                    if (dm != null) try {
+                        session.openWrite("kestrel-update.dm", 0, dm.length()).use { out -> dm.inputStream().use { it.copyTo(out, 16 * 1024) }; session.fsync(out) }   // named after the APK: Android pairs them by name
+                    } catch (e: Exception) { Health.log("update", "dm", "the file could not be written into the session (${e.javaClass.simpleName}): the update goes on without it") }
                     if (dropOwnCopy) { apk.delete(); sp(app).edit().remove("verified").apply() } // frees one APK of room for the installer's own check
                     val intent = Intent(app, InstallResultReceiver::class.java).setAction(ACTION_RESULT)
                     val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
