@@ -650,8 +650,8 @@ def main():
 
     def write_report():
         """Written after every round / install: a cancelled run (the lab run 44069383826 was, after 9 minutes) keeps what it measured. Order of the phases = order of value: the release path, compile at install, then the debug A/B."""
-        L = ["# Ahead-of-time compile A/B (LAB5b)", "",
-             "%d rounds x %d starts per mode (alternating warm / cold file cache). **Emulator numbers: read the differences between modes of THIS run.**" % (a.rounds, a.starts), ""]
+        L = ["# Ahead-of-time compile A/B (LAB5b, LAB7)", "",
+             "Update test: %d rounds. Breadth test: %d rounds x %d starts per variant (alternating warm / cold file cache). **Emulator numbers: read the differences between modes of THIS run.**" % (a.update_rounds, a.breadth_rounds, a.starts), ""]
         report_update(L, upd_rows, upd_notes, med)
         report_breadth(L, br_info, br_rows, br_mem, a.starts, med)
         if rel_rows or rel_notes:

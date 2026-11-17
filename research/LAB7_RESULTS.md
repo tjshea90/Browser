@@ -39,5 +39,23 @@ Four release builds (x86_64) that differ only in the profile rules; per variant:
 - Do NOT build the post-update warm-up (no penalty to remove).
 - Update path: the updater's `.dm` fetch already handles any size up to 1 MB; the new file is smaller. alpha65 -> alpha66 is the first update compiled at install; alpha66 -> alpha67 is the first compiled WHOLE.
 
-## Run 2 (confirmation; android.yml run 44137227924, `lab_minutes=breadth`): sp-current vs sp-all, 6 rounds, 4 starts per cache state, 4 links opened in the running app, 2 memory snapshots with `dumpsys meminfo` by kind
-(filled in when the run is read)
+## Run 2 (confirmation; android.yml run 44137227924, commit f003442b, 30 minutes, nothing died): sp-current vs sp-all, 6 rounds, 4 starts per cache state, 4 links opened in the running app, 2 memory snapshots with `dumpsys meminfo` by kind
+Per variant: 24 starts, 24 links, 12 memory snapshots, 6 compiles (medians; the order alternated every round). Percentages: sp-all against sp-current.
+| Measure | sp-current (alpha65 profile) | sp-all (catch-all rule) | Reading |
+| :- | -: | -: | :- |
+| compile at install (emulator, 2 vCPUs) | 1.2 s | 2.3 s (+92 %) | about 1 s more here; the tablet is slower, an estimate of 10-20 s more |
+| compiled code (odex) + app image (art) | 3.1 MB + 0.7 MB | 12.3 MB + 0.9 MB | +9 MB of storage |
+| start, `am start -W` warm / cold file cache | 1168 / 1142 ms | 1097 (-6 %) / 1175 (+3 %) ms | no change beyond the +-10 % noise |
+| start until the page reports its load, warm / cold | 2622 / 2652 ms | 2362 (-10 %) / 2740 (+3 %) ms | same |
+| a link opened in the RUNNING app, first / later ones | 262 / 200 ms | 248 (-5 %) / 194 (-3 %) ms | a little faster, same direction both times, inside the noise |
+| memory, PSS of the app process / of all processes | 270.7 / 398 MB | 270.9 (+0 %) / 405 (+2 %) MB | no change |
+| by kind (MB): native heap, Dalvik heap, JIT code cache (Dalvik Other), .oat mmap, .art mmap, .dex mmap | 21.5, 19.2, 0.9, 1.2, 4.0, 1.9 | 22.3, 17.5, 0.8, 1.1, 4.9, 7.3 | the compiled code is mapped from the file and only the touched pages count (1.1 MB of a 12 MB file); the extra dex pages (+5 MB) are paid back by the smaller Unknown (155.7 -> 148.8) and Dalvik heap |
+- Verdict: the decision rule of `LAB7_INSTALL_COMPILE.md` section 3 holds: compile far under 40 s, no start-up regression beyond the noise, PSS not higher, oat folder 12.3 MB (limit 25). The change is free in time and memory on the emulator and puts every method of the app in machine code from the first start.
+- What the emulator cannot show: its x86 cores run the interpreter much faster than the tablet's in-order Cortex-A53, so the GAIN is probably larger on the tablet than the -3..-10 % seen here; the cost on the tablet (install time, storage) is also larger than here but small in absolute terms (about 20 s, 9 MB). Neither is measured on the tablet.
+- Shipped as alpha67 (`geckoapp/src/main/baseline-prof.txt` ends with `HL**;->**(**)**`; gate `tools/check-profile-coverage.sh` runs in the release workflow right after the release build; `OwnerRulesTest.lab7WholeAppIsCompiledAtInstall`; Diagnostics line `start oat` lists the sizes of odex / vdex / art that Android made for the install, so the tablet can prove it: the whole app = an odex of about 3-4 times the size of the one the lab's own hot methods gave).
+
+## What was NOT done and why
+- A post-update warm-up (receiver + job that starts the engine once): the first launch after an update is not slower (section LAB7b), so there is nothing to remove.
+- `exercised` (every method the lab ran marked hot, 4880): compiles 6.0 MB; the catch-all covers it and the rest for 3 MB more; no reason to stop half way.
+- `speed` as the install filter: not selectable (the filter of an install is the system's own `pm.dexopt.install`); the catch-all profile gives the same code (12.3 MB vs 12.2 MB) through the profile.
+- Anything that makes the install longer for the engine's own files (Gecko's JS start-up cache): it already survives the update and refreshes while the app runs.
