@@ -39,8 +39,8 @@ Software decoders on an x86 emulator: NOT the tablet's hardware path. Only usefu
 Loading `https://pypi.org/project/requests/` took the emulated Android down TWICE (the long run 44164818105 and the pages-only run 44186817159, both at the 11th site): `adb shell am start` timed out, the emulated
 `system_server` was killed by its own watchdog (`*** WATCHDOG KILLING SYSTEM PROCESS: Blocked in handler on main thread`, stack `SurfaceControl.nativeGetPhysicalDisplayIds < LightsService.<init> <
 SystemServer.startBootstrapServices`) and then died again at every restart: SurfaceFlinger on the emulator's software GL (SwiftShader) no longer answered. Kestrel and Swoop were gone afterwards, so every later site
-"failed". It is the emulator's graphics stack giving up on that page, on a machine with no GPU; the tablet's Mali GPU is not involved. The page was taken out of the simulation's list; the runs are split into
-pieces (`suite=pages`, `suite=video`, `suite=typing`) and a scene stops after three sites in a row that do not load.
+"failed". It is the emulator's graphics stack giving up on that page, on a machine with no GPU; the tablet's Mali GPU is not involved. A 1080p film killed it the same way. Both were taken out of the
+simulation's lists; the runs are split into pieces (`suite=pages`, `suite=video`, `suite=typing`) and a scene stops after three sites in a row that do not load.
 
 ## One thing to look at in the Shields numbers
 apnews.com: 5911 ms with 54 requests blocked in the long run (Kestrel had been running for 30 minutes), but 123 748 ms (!) with 0 requests blocked in the pages-only run (Kestrel freshly started minutes before).
