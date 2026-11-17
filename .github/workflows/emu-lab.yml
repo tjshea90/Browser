@@ -206,7 +206,7 @@ jobs:
           EMU_CMD="emulator -avd $AVD_NAME -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data -gpu swiftshader_indirect -accel on -netdelay none -netspeed full -no-metrics $EMU_EXTRA"
           python3 -u -I tools/emu/soak.py --out "$RUNNER_TEMP/lab-out" --suite "$SUITE" --minutes "$MINUTES" --net "$NET" --pkg "$PKG" --port 8091 --profile "$PROFILE" --emu-cmd "$EMU_CMD" --apk "$APK" 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
 
-      - name: Keep the ART profile of this run (LAB5b: the methods the app really runs, the raw material of a baseline profile)
+      - name: Keep the ART profile of this run (LAB5b, the methods the app really runs, raw material of a baseline profile)
         if: always() && inputs.suite != 'pack'
         continue-on-error: true
         run: |
