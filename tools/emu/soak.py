@@ -2531,7 +2531,7 @@ class Soak:
         close = lambda a, b, tol=6: a is not None and b is not None and all(abs(x - y) <= tol for x, y in zip(a[:4], b[:4]))
         self.ph.setting("system", "accelerometer_rotation", 0); self.ph.setting("system", "user_rotation", 0)
         self.ph.physical(0, 9.81, 0)
-        self.ph.debug("vpress", "1"); self.ph.debug("webmode", "0"); self.ph.debug("webinline", "1"); time.sleep(2.5)
+        self.ph.debug("vpress", "1"); self.ph.debug("webmode", "0"); self.ph.debug("webinline", "1"); self.ph.debug("handreset", "1"); time.sleep(2.5)   # handreset: the earlier scenes played this clip to its end (alpha62 loop breaker: pressed again within 10 minutes it goes to the page, so nothing would be handed over)
         rm = self.lab.size()
         self.ph.open_url("%s/ho?v=inline&tag=ip" % self.lab_base)
         t0 = time.time(); L = None
