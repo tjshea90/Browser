@@ -144,7 +144,10 @@ def main():
         for pid, pname in lab.pids():
             d = pl.parse_smaps_rollup(lab.adb.sh("cat /proc/%d/smaps_rollup" % pid, timeout=30))
             if d:
-                procs.append({"name": pname.replace(a.pkg, "app"), "pss": d.get("Pss", 0), "anon": d.get("Pss_Anon", 0), "file": d.get("Pss_File", 0)})
+                # Android 10's kernel has no Pss_Anon / Pss_File (the pack run showed 0.0): `Anonymous` is the private heap, the rest of Rss the file-backed pages
+                anon = d.get("Pss_Anon") if d.get("Pss_Anon") is not None else d.get("Anonymous", 0)
+                filebacked = d.get("Pss_File") if d.get("Pss_File") is not None else max(0, d.get("Rss", 0) - d.get("Anonymous", 0))
+                procs.append({"name": pname.replace(a.pkg, "app"), "pss": d.get("Pss", 0), "anon": anon, "file": filebacked})
         cfg = lab.adb.sh("run-as %s cat files/gecko-config.yaml" % a.pkg, timeout=30)
         applied_ok = all(p.startswith("@") or ((p.split("=")[0] + ":") in cfg) or p.endswith("=-") for p in prefs)
         row = {"variant": name, "round": rnd, "am_total_ms": total, "runtime_ready_s": ready, "ui_block_ms": blk, "create_ms": create_ms, "warm_yaml_ms": warm_yaml_ms, "passes": passes, "procs": procs,
