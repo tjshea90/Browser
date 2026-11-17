@@ -692,5 +692,6 @@ class OwnerRulesTest {
         val gate = source("tools/check-profile-coverage.sh")
         assertTrue("the release gate reads the profile R8 wrote and fails when the rule does not expand", gate.contains("minifyReleaseWithR8/baseline-prof.txt") && gate.contains("MIN_PCT") && gate.contains(rule))
         assertTrue("the release workflow runs that gate right after the release build", source(".github/workflows/android.yml").contains("bash tools/check-profile-coverage.sh"))
+        assertTrue("Diagnostics says what Android compiled for this install (line `start oat`: the sizes of odex / vdex / art), so the owner can send proof from the tablet", source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("Health.log(\"start\", \"oat\", oatSizes())"))
     }
 }
