@@ -82,6 +82,7 @@ object GeckoEngine {
      */
     fun prewarmConfig(ctx: Context) {
         if (!configWarmStarted.compareAndSet(false, true)) return
+        if (app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.nowarm") == "1") return // DEBUG builds only: the lab's same-APK A/B (DebugProps answers null in a release build)
         val appContext = ctx.applicationContext
         Thread({
             try {

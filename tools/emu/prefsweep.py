@@ -92,9 +92,23 @@ def main():
     bad = []
     url = "http://localhost:%d/bench2" % a.port
 
+    raw_set = set()
+
     def set_props(prefs):
+        # `@name=value` tokens are raw system properties of the DEBUG app (code flags such as debug.kestrel.nowarm); everything else is an engine preference line for gp1..gp8
+        for name in list(raw_set):
+            lab.adb.sh("setprop %s ''" % name, timeout=30)
+        raw_set.clear()
+        eng = []
+        for tok in prefs:
+            if tok.startswith("@") and "=" in tok:
+                name, _, val = tok[1:].partition("=")
+                lab.adb.sh("setprop %s '%s'" % (name, val), timeout=30)
+                raw_set.add(name)
+            else:
+                eng.append(tok)
         for i in range(1, 9):
-            val = prefs[i - 1] if i - 1 < len(prefs) else ""
+            val = eng[i - 1] if i - 1 < len(eng) else ""
             lab.adb.sh("setprop debug.kestrel.gp%d %s" % (i, "'%s'" % val if val else "''"), timeout=30)
 
     def one(name, prefs, rnd):
@@ -118,6 +132,9 @@ def main():
         ready = next((e["t"] for e in ev if e["layer"] == "engine" and e["ev"] == "runtime-ready"), None)
         swept = [e["rest"] for e in ev if e["layer"] == "engine" and e["ev"] == "sweep"]
         blk = max([int(re.sub(r"\D", "", e["rest"].split("ms")[0]) or 0) for e in ev if e["layer"] == "ui" and e["ev"] in ("slow", "late-beat", "STALL")] or [0])
+        mm = lambda lay, evn, rx: next((float(m.group(1)) for e in ev if e["layer"] == lay and e["ev"] == evn for m in [re.search(rx, e["rest"])] if m), None)
+        create_ms = mm("engine", "runtime-create-took", r"(\d+)ms")
+        warm_yaml_ms = mm("engine", "config-warm", r"yaml=(\d+)ms")
         passes = []
         for r in got[:3]:
             q = dict(kv.split("=", 1) for kv in r.split("?", 1)[1].split("&") if "=" in kv)
@@ -129,8 +146,8 @@ def main():
             if d:
                 procs.append({"name": pname.replace(a.pkg, "app"), "pss": d.get("Pss", 0), "anon": d.get("Pss_Anon", 0), "file": d.get("Pss_File", 0)})
         cfg = lab.adb.sh("run-as %s cat files/gecko-config.yaml" % a.pkg, timeout=30)
-        applied_ok = all(((p.split("=")[0] + ":") in cfg) or p.endswith("=-") for p in prefs)
-        row = {"variant": name, "round": rnd, "am_total_ms": total, "runtime_ready_s": ready, "ui_block_ms": blk, "passes": passes, "procs": procs,
+        applied_ok = all(p.startswith("@") or ((p.split("=")[0] + ":") in cfg) or p.endswith("=-") for p in prefs)
+        row = {"variant": name, "round": rnd, "am_total_ms": total, "runtime_ready_s": ready, "ui_block_ms": blk, "create_ms": create_ms, "warm_yaml_ms": warm_yaml_ms, "passes": passes, "procs": procs,
                "total_pss_mb": round(sum(p["pss"] for p in procs) / 1024.0, 1), "anon_mb": round(sum(p["anon"] for p in procs) / 1024.0, 1), "applied": applied_ok, "sweep_line": swept[:1]}
         if len(passes) < 3:
             bad.append({"variant": name, "round": rnd, "why": "only %d bench passes reported" % len(passes)})
@@ -165,7 +182,7 @@ def report(rows, names, bad):
         return r["passes"][i].get(key) if len(r["passes"]) > i else None
     metrics = [("bench pass 1 (cold code) ms", lambda r: p(r, 0, "total")), ("bench pass 3 (warm) ms", lambda r: p(r, 2, "total")), ("JS-heavy parts pass 3 (oo+str+json+sorts) ms", lambda r: (sum(p(r, 2, k) or 0 for k in ("oo", "str", "json", "sorts")) if len(r["passes"]) > 2 else None)),
                ("alloc/GC part pass 3 ms", lambda r: p(r, 2, "alloc")), ("longest GC-like stall pass 3 ms", lambda r: p(r, 2, "gcmax")), ("style+layout parts pass 3 (dom+layout) ms", lambda r: (sum(p(r, 2, k) or 0 for k in ("dom", "layout")) if len(r["passes"]) > 2 else None)),
-               ("engine ready s", lambda r: r.get("runtime_ready_s")), ("start to bench done (am start -W) ms", lambda r: r.get("am_total_ms")), ("total PSS MB (all app processes)", lambda r: r.get("total_pss_mb")), ("anonymous PSS MB", lambda r: r.get("anon_mb")),
+               ("GeckoRuntime.create on the UI thread ms", lambda r: r.get("create_ms")), ("config warm-up (background thread, yaml part) ms", lambda r: r.get("warm_yaml_ms")), ("engine ready s", lambda r: r.get("runtime_ready_s")), ("start to bench done (am start -W) ms", lambda r: r.get("am_total_ms")), ("total PSS MB (all app processes)", lambda r: r.get("total_pss_mb")), ("anonymous PSS MB", lambda r: r.get("anon_mb")),
                ("worst UI block ms", lambda r: r.get("ui_block_ms"))]
     base = names[0]
     twin = names[1] if len(names) > 1 else None
