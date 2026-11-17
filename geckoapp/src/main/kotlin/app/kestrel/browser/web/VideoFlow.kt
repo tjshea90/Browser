@@ -333,7 +333,7 @@ class VideoFlow(private val a: BrowserActivity) {
     private class Refused(val tabId: Long, val page: String, val at: Long, val frame: String, val el: WebHandOver.Element)   // (the page too: a link tapped a moment later is not the page whose press was refused)
     private var lastRefused: Refused? = null
 
-    private fun elementOf(m: JSONObject) = WebHandOver.Element(m.optString("s"), m.optInt("b") == 1, m.optString("m"), m.optInt("l") == 1, m.optInt("w"), m.optInt("h"), m.optDouble("t", 0.0), m.optDouble("d", 0.0))
+    private fun elementOf(m: JSONObject) = WebHandOver.Element(m.optString("s"), m.optInt("b") == 1, m.optString("m"), m.optInt("l") == 1, m.optInt("w"), m.optInt("h"), m.optDouble("t", 0.0), m.optDouble("d", 0.0), m.optInt("a") == 1)
 
     /** The streams the sniffer saw in [frame] ("" = the page itself) that a hand-over may use: playlists of films (the variants listed in a master are no films of their own), not DRM, not flagged as decoys. */
     private fun knownIn(tab: Tab, frame: String): List<WebHandOver.Known> =
@@ -377,10 +377,21 @@ class VideoFlow(private val a: BrowserActivity) {
         if (!pressed) return decline(tab, "no tap of the person just before")   // a page's script can fake the question, not a finger (the tap counts once: it is used up below)
         val known = knownIn(tab, frame).let { k -> if (why == WebHandOver.Why.LATE) k.filter { it.durationMs >= WebHandOver.FILM_MS } else k }   // (a playlist that comes late must be known to be as long as a film: it may be an advertisement)
         val d = WebHandOver.decide(mode, why, el, known)
+        // ANS61 (owner message 61: "it played an advertisement video and I couldn't get to the real video"): an advertisement is never handed over, and a clip Kestrel's player played to its end is not handed over a second
+        // time (the same ad for ever): the page plays it itself, so its ad plugin can finish and go on to the film. The finder's own verdict on that very file (an ad box / decoration) counts like the page's ad state.
+        val now2 = SystemClock.uptimeMillis()
+        val adWhy = when {
+            d == null -> null
+            tab.media.find(d.url)?.decoy == true -> "the finder marked this file as an advertisement or decoration"
+            !tab.isPrivateTab && WebHandOver.playedThrough(d.url, NativePlayerActivity.lastUrl, NativePlayerActivity.lastPositionMs, NativePlayerActivity.lastDurationMs,
+                if (NativePlayerActivity.lastStoppedAt == 0L) -1L else now2 - NativePlayerActivity.lastStoppedAt) -> "Kestrel's player played this clip to its end a moment ago (an advertisement the page has to see finished)"
+            else -> null
+        }
+        if (adWhy != null) { lastRefused = null; return decline(tab, adWhy) }
         if (d == null) {
             // (a playlist that came late and was refused is one more list, not the end of the press that is waiting for its film: that memory stays until its ten seconds are over)
             if (why != WebHandOver.Why.LATE) lastRefused = if (el.blob && why != WebHandOver.Why.FULLSCREEN && mode == WebHandOver.ALWAYS && !tab.isPrivateTab) Refused(tab.id, tab.url.substringBefore('#'), now, frame, el) else null
-            return decline(tab, if (mode == WebHandOver.FULLSCREEN && why != WebHandOver.Why.FULLSCREEN) "the setting says full screen only" else if (el.loop) "a loop clip" else if (el.blob) "no stream known (yet)" else "not a file or stream Kestrel's player plays")
+            return decline(tab, if (mode == WebHandOver.FULLSCREEN && why != WebHandOver.Why.FULLSCREEN) "the setting says full screen only" else if (el.loop) "a loop clip" else if (el.ad) "an advertisement plays in the page's player" else if (WebHandOver.looksLikeAdAddress(el.src)) "the address names an advertisement" else if (el.blob) "no stream known (yet)" else "not a file or stream Kestrel's player plays")
         }
         lastRefused = null
         if (a.inline.active && a.inline.url == d.url) { if (!tab.isPrivateTab) WebHandStats.repeats++; a.lastPressAt = 0L; return true }   // ANS55f: the same film is up inside the page already
