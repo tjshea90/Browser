@@ -208,150 +208,167 @@ def main():
     pkg = a.pkg
     page = "http://localhost:%d/page/text" % a.port
     rows, status, notes = [], {}, []
+    rel_rows, rel_notes, dm_rows = [], [], []
+    med = pl.median
 
     def say(*x):
         print(time.strftime("[%H:%M:%S] "), *x, flush=True)
 
-    # ---- install once
-    adb.run("uninstall", pkg, timeout=120)
-    say("install", adb.run("install", "-t", a.apk, timeout=600).strip()[:80])
-    uid = adb.sh("stat -c %%u /data/data/%s" % pkg, timeout=30).strip()
-    prof_dir = "/data/misc/profiles/cur/0/%s" % pkg
-    prof = prof_dir + "/primary.prof"
-    kept = "/data/local/tmp/aot-trained.prof"
+    def write_report():
+        """Written after every round / install: a cancelled run (the lab run 44069383826 was, after 9 minutes) keeps what it measured. Order of the phases = order of value: the release path, compile at install, then the debug A/B."""
+        L = ["# Ahead-of-time compile A/B (LAB5b)", "",
+             "%d rounds x %d starts per mode (alternating warm / cold file cache). **Emulator numbers: read the differences between modes of THIS run.**" % (a.rounds, a.starts), ""]
+        if rel_rows or rel_notes:
+            L.append("## The release build, the embedded baseline profile (R8-rewritten rules, installed by androidx.profileinstaller): `am start -W` TotalTime")
+            L.append("")
+            L.append("| Mode | cache | n | TotalTime ms (median) |")
+            L.append("| :- | :- | -: | -: |")
+            for mode in ("verify", "speed-profile"):
+                for cache in ("warm", "cold"):
+                    rs = [r["am_total_ms"] for r in rel_rows if r["mode"] == mode and r["cache"] == cache and r["am_total_ms"] is not None]
+                    if rs:
+                        b = med([r["am_total_ms"] for r in rel_rows if r["mode"] == "verify" and r["cache"] == cache and r["am_total_ms"] is not None])
+                        v = med(rs)
+                        L.append("| %s | %s | %d | %.0f%s |" % (mode, cache, len(rs), v, (" (%+.0f %%)" % ((v - b) / b * 100.0)) if (mode != "verify" and b) else ""))
+            L.append("")
+            for n in rel_notes:
+                L.append("- " + n)
+            L.append("")
+        if dm_rows:
+            L.append("## Compile at install: a PackageInstaller session with `base.apk` + `base.dm` (the dex metadata AGP writes next to the release build)")
+            L.append("")
+            L.append("| Install | ok | install s | status | reason | compiled code KB | answer |")
+            L.append("| :- | :- | -: | :- | :- | -: | :- |")
+            for r in dm_rows:
+                L.append("| %s | %s | %s | %s | %s | %s | %s |" % (r.get("label"), r.get("ok"), r.get("install_s", "-"), r.get("status"), r.get("reason"), r.get("oat_kb", "-"), (r.get("commit") or r.get("why") or "")[:90].replace("|", "/")))
+            L.append("")
+        if rows:
+            L.append("## The debug build compiled three ways (a profile trained in this run)")
+            L.append("")
+            L.append("| Mode | status seen | compile s (median) | compiled code MB | cache | n | am start -W ms | engine ready s | page loaded s | worst UI block ms |")
+            L.append("| :- | :- | -: | -: | :- | -: | -: | -: | -: | -: |")
+            base = {}
+            for mode in MODES:
+                for cache in ("warm", "cold"):
+                    rs = [r for r in rows if r["mode"] == mode and r["cache"] == cache and not r.get("crash")]
+                    if not rs:
+                        continue
+                    m = {k: med([r.get(k) for r in rs]) for k in ("am_total_ms", "runtime_ready_s", "page_loaded_s", "ui_block_ms")}
+                    if mode == MODES[0]:
+                        base[cache] = m
 
-    # ---- training: two runs, each ends with SIGUSR1 so ART writes its profile
-    adb.sh("cmd package compile --reset %s" % pkg, timeout=300)
-    for cycle in (1, 2):
-        lab.kill()
-        r = lab.launch(page, 120)
-        say("training start", cycle, {k: r.get(k) for k in ("am_total_ms", "runtime_ready_s", "page_loaded_s")}, "CRASH" if r.get("crash") else "")
-        for p in ("/page/images", "/bench2", "/page/text"):
-            adb.sh("am start -a android.intent.action.VIEW -d http://localhost:%d%s -p %s" % (a.port, p, pkg), timeout=60)
-            time.sleep(8)
-        time.sleep(6)
-        pids = [int(x) for x in adb.sh("pidof %s" % pkg, timeout=30).split() if x.isdigit()] or [pid for pid, name in lab.pids() if name == pkg]
-        for pid in pids:
-            adb.sh("kill -s SIGUSR1 %d" % pid, timeout=30)
-        time.sleep(4)
-        size = adb.sh("ls -ln %s" % prof, timeout=30)
-        say("profile after cycle", cycle, size.strip()[:100])
-    adb.sh("cp %s %s" % (prof, kept), timeout=30)
-    trained = adb.sh("ls -ln %s" % kept, timeout=30).strip()
-    notes.append("trained profile: " + trained[:100])
-    lab.kill()
-
-    # ---- the modes
-    def prepare(mode):
-        adb.sh("cmd package compile --reset %s" % pkg, timeout=300)
-        if mode == "speed-profile":
-            adb.sh("mkdir -p %s; cp %s %s; chown %s:%s %s; chmod 600 %s; restorecon -R %s" % (prof_dir, kept, prof, uid, uid, prof, prof, prof_dir), timeout=60)
-        t0 = time.time()
-        out = adb.sh("cmd package compile -f -m %s %s" % (mode, pkg), timeout=900)
-        took = round(time.time() - t0, 1)
-        st = parse_dexopt_status(adb.sh("dumpsys package dexopt", timeout=60), pkg)
-        path = adb.sh("pm path %s" % pkg, timeout=30).strip().replace("package:", "")
-        d = os.path.dirname(path) if path else ""
-        oat = sum_ls_bytes(adb.sh("ls -lR %s/oat 2>/dev/null" % d, timeout=60)) if d else 0
-        status.setdefault(mode, []).append({"compile_s": took, "status": st[0], "reason": st[1], "oat_kb": oat // 1024, "out": out.strip()[:120]})
-        say("compiled", mode, status[mode][-1])
-
-    for rnd in range(1, a.rounds + 1):
-        order = MODES[(rnd - 1) % len(MODES):] + MODES[:(rnd - 1) % len(MODES)]
-        for mode in order:
-            say("=== round %d mode %s" % (rnd, mode))
-            prepare(mode)
-            lab.kill()
-            first = lab.launch(page, 120)              # unmeasured: the first run after a compile pays for caches
-            if first.get("crash"):
-                notes.append("round %d %s: first launch failed %s" % (rnd, mode, first["crash"]))
-                continue
-            time.sleep(4)
-            for k in range(a.starts):
-                cold = (k % 2 == 1)
-                lab.kill()
-                if cold:
-                    lab.drop_caches()
-                time.sleep(2)
-                r = lab.launch(page, 90)
-                r.update({"mode": mode, "round": rnd, "cache": "cold" if cold else "warm"})
-                rows.append(r)
-                say("start", mode, r["cache"], {x: r.get(x) for x in ("am_total_ms", "runtime_ready_s", "page_loaded_s", "ui_block_ms")}, "CRASH" if r.get("crash") else "")
-            lab.kill()
-
-    rel_rows, rel_notes = [], []
-    if a.release_apk and os.path.exists(a.release_apk):
-        try:
-            rel_rows, rel_notes = release_check(lab, pl, adb, a, say)
-        except Exception as e:                              # the debug A/B above must still be reported
-            rel_notes.append("release check failed: %r" % (e,))
-
-    dm_rows = []
-    if a.release_apk and os.path.exists(a.release_apk) and a.release_dm:
-        try:
-            dm_rows, _ = dm_install_check(lab, pl, adb, a, say)
-        except Exception as e:
-            rel_notes.append("dm install check failed: %r" % (e,))
-
-    med = pl.median
-    L = ["# Ahead-of-time compile A/B (LAB5b)", "",
-         "One APK, three compile states (`cmd package compile -f -m MODE`), %d rounds x %d starts per mode (alternating warm / cold file cache). **Emulator numbers: read the differences between modes of THIS run.**" % (a.rounds, a.starts), "",
-         "| Mode | status seen | compile s (median) | compiled code MB | cache | n | am start -W ms | engine ready s | page loaded s | worst UI block ms |", "| :- | :- | -: | -: | :- | -: | -: | -: | -: | -: |"]
-    base = {}
-    for mode in MODES:
-        for cache in ("warm", "cold"):
-            rs = [r for r in rows if r["mode"] == mode and r["cache"] == cache and not r.get("crash")]
-            if not rs:
-                continue
-            m = {k: med([r.get(k) for r in rs]) for k in ("am_total_ms", "runtime_ready_s", "page_loaded_s", "ui_block_ms")}
-            if mode == MODES[0]:
-                base[cache] = m
-
-            def d(k, fmt="%.0f"):
-                v = m.get(k)
-                if v is None:
-                    return "-"
-                s = fmt % v
-                b = base.get(cache, {}).get(k)
-                if b and mode != MODES[0]:
-                    s += " (%+.0f %%)" % ((v - b) / b * 100.0)
-                return s
-            st = status.get(mode, [])
-            L.append("| %s | %s | %s | %s | %s | %d | %s | %s | %s | %s |" % (mode, ",".join(sorted(set(str(s["status"]) for s in st))), med([s["compile_s"] for s in st]), "%.1f" % (med([s["oat_kb"] for s in st]) / 1024.0) if st else "-", cache, len(rs),
-                                                                              d("am_total_ms"), d("runtime_ready_s", "%.2f"), d("page_loaded_s", "%.2f"), d("ui_block_ms")))
-    L.append("")
-    if rel_rows or rel_notes:
-        L.append("## The release build, the embedded baseline profile (R8-rewritten rules, installed by androidx.profileinstaller): `am start -W` TotalTime")
-        L.append("")
-        L.append("| Mode | cache | n | TotalTime ms (median) |")
-        L.append("| :- | :- | -: | -: |")
-        for mode in ("verify", "speed-profile"):
-            for cache in ("warm", "cold"):
-                rs = [r["am_total_ms"] for r in rel_rows if r["mode"] == mode and r["cache"] == cache and r["am_total_ms"] is not None]
-                if rs:
-                    b = med([r["am_total_ms"] for r in rel_rows if r["mode"] == "verify" and r["cache"] == cache and r["am_total_ms"] is not None])
-                    v = med(rs)
-                    L.append("| %s | %s | %d | %.0f%s |" % (mode, cache, len(rs), v, (" (%+.0f %%)" % ((v - b) / b * 100.0)) if (mode != "verify" and b) else ""))
-        L.append("")
-        for n in rel_notes:
+                    def d(k, fmt="%.0f"):
+                        v = m.get(k)
+                        if v is None:
+                            return "-"
+                        t = fmt % v
+                        b = base.get(cache, {}).get(k)
+                        if b and mode != MODES[0]:
+                            t += " (%+.0f %%)" % ((v - b) / b * 100.0)
+                        return t
+                    st = status.get(mode, [])
+                    L.append("| %s | %s | %s | %s | %s | %d | %s | %s | %s | %s |" % (mode, ",".join(sorted(set(str(x["status"]) for x in st))), med([x["compile_s"] for x in st]), "%.1f" % (med([x["oat_kb"] for x in st]) / 1024.0) if st else "-", cache, len(rs),
+                                                                                      d("am_total_ms"), d("runtime_ready_s", "%.2f"), d("page_loaded_s", "%.2f"), d("ui_block_ms")))
+            L.append("")
+        for n in notes:
             L.append("- " + n)
-        L.append("")
-    if dm_rows:
-        L.append("## Compile at install: a PackageInstaller session with `base.apk` + `base.dm` (the dex metadata AGP writes next to the release build)")
-        L.append("")
-        L.append("| Install | ok | install s | status | reason | compiled code KB | answer |")
-        L.append("| :- | :- | -: | :- | :- | -: | :- |")
-        for r in dm_rows:
-            L.append("| %s | %s | %s | %s | %s | %s | %s |" % (r.get("label"), r.get("ok"), r.get("install_s", "-"), r.get("status"), r.get("reason"), r.get("oat_kb", "-"), (r.get("commit") or r.get("why") or "")[:90].replace("|", "/")))
-        L.append("")
-    for n in notes:
-        L.append("- " + n)
-    text = "\n".join(L) + "\n"
-    with open(os.path.join(a.out, "AOT-REPORT.md"), "w") as f:
-        f.write(text)
-    with open(os.path.join(a.out, "aot-results.json"), "w") as f:
-        json.dump({"starts": rows, "compile": status, "notes": notes, "release": rel_rows, "release_notes": rel_notes, "dm_install": dm_rows}, f, indent=1)
-    print("\n" + text, flush=True)
+        text = "\n".join(L) + "\n"
+        with open(os.path.join(a.out, "AOT-REPORT.md"), "w") as f:
+            f.write(text)
+        with open(os.path.join(a.out, "aot-results.json"), "w") as f:
+            json.dump({"starts": rows, "compile": status, "notes": notes, "release": rel_rows, "release_notes": rel_notes, "dm_install": dm_rows}, f, indent=1)
+        return text
+
+    def debug_ab():
+        adb.run("uninstall", pkg, timeout=120)
+        say("install", adb.run("install", "-t", a.apk, timeout=600).strip()[:80])
+        uid = adb.sh("stat -c %%u /data/data/%s" % pkg, timeout=30).strip()
+        prof_dir = "/data/misc/profiles/cur/0/%s" % pkg
+        prof = prof_dir + "/primary.prof"
+        kept = "/data/local/tmp/aot-trained.prof"
+
+        # training: two runs, each ends with SIGUSR1 so ART writes its profile
+        adb.sh("cmd package compile --reset %s" % pkg, timeout=300)
+        for cycle in (1, 2):
+            lab.kill()
+            r = lab.launch(page, 120)
+            say("training start", cycle, {k: r.get(k) for k in ("am_total_ms", "runtime_ready_s", "page_loaded_s")}, "CRASH" if r.get("crash") else "")
+            for p in ("/page/images", "/bench2", "/page/text"):
+                adb.sh("am start -a android.intent.action.VIEW -d http://localhost:%d%s -p %s" % (a.port, p, pkg), timeout=60)
+                time.sleep(8)
+            time.sleep(6)
+            pids = [int(x) for x in adb.sh("pidof %s" % pkg, timeout=30).split() if x.isdigit()] or [pid for pid, name in lab.pids() if name == pkg]
+            for pid in pids:
+                adb.sh("kill -s SIGUSR1 %d" % pid, timeout=30)
+            time.sleep(4)
+            size = adb.sh("ls -ln %s" % prof, timeout=30)
+            say("profile after cycle", cycle, size.strip()[:100])
+        adb.sh("cp %s %s" % (prof, kept), timeout=30)
+        notes.append("trained profile: " + adb.sh("ls -ln %s" % kept, timeout=30).strip()[:100])
+        lab.kill()
+
+        def prepare(mode):
+            adb.sh("cmd package compile --reset %s" % pkg, timeout=300)
+            if mode == "speed-profile":
+                adb.sh("mkdir -p %s; cp %s %s; chown %s:%s %s; chmod 600 %s; restorecon -R %s" % (prof_dir, kept, prof, uid, uid, prof, prof, prof_dir), timeout=60)
+            t0 = time.time()
+            out = adb.sh("cmd package compile -f -m %s %s" % (mode, pkg), timeout=900)
+            took = round(time.time() - t0, 1)
+            st = parse_dexopt_status(adb.sh("dumpsys package dexopt", timeout=60), pkg)
+            path = adb.sh("pm path %s" % pkg, timeout=30).strip().replace("package:", "")
+            d = os.path.dirname(path) if path else ""
+            oat = sum_ls_bytes(adb.sh("ls -lR %s/oat 2>/dev/null" % d, timeout=60)) if d else 0
+            status.setdefault(mode, []).append({"compile_s": took, "status": st[0], "reason": st[1], "oat_kb": oat // 1024, "out": out.strip()[:120]})
+            say("compiled", mode, status[mode][-1])
+
+        for rnd in range(1, a.rounds + 1):
+            order = MODES[(rnd - 1) % len(MODES):] + MODES[:(rnd - 1) % len(MODES)]
+            for mode in order:
+                say("=== round %d mode %s" % (rnd, mode))
+                prepare(mode)
+                lab.kill()
+                first = lab.launch(page, 120)              # unmeasured: the first run after a compile pays for caches
+                if first.get("crash"):
+                    notes.append("round %d %s: first launch failed %s" % (rnd, mode, first["crash"]))
+                    continue
+                time.sleep(4)
+                for k in range(a.starts):
+                    cold = (k % 2 == 1)
+                    lab.kill()
+                    if cold:
+                        lab.drop_caches()
+                    time.sleep(2)
+                    r = lab.launch(page, 90)
+                    r.update({"mode": mode, "round": rnd, "cache": "cold" if cold else "warm"})
+                    rows.append(r)
+                    say("start", mode, r["cache"], {x: r.get(x) for x in ("am_total_ms", "runtime_ready_s", "page_loaded_s", "ui_block_ms")}, "CRASH" if r.get("crash") else "")
+                lab.kill()
+                write_report()
+
+    text = ""
+    try:
+        if a.release_apk and os.path.exists(a.release_apk):
+            try:
+                release_check(lab, pl, adb, a, say, rel_rows, rel_notes, write_report)
+            except Exception as e:                          # the other phases must still run and be reported
+                rel_notes.append("release check failed: %r" % (e,))
+            write_report()
+            if a.release_dm:
+                try:
+                    dm_install_check(lab, pl, adb, a, say, dm_rows, write_report)
+                except Exception as e:
+                    rel_notes.append("dm install check failed: %r" % (e,))
+                write_report()
+        if a.apk:
+            try:
+                debug_ab()
+            except Exception as e:
+                notes.append("debug A/B failed: %r" % (e,))
+    except KeyboardInterrupt:
+        pass
+    finally:
+        text = write_report()
+        print("\n" + text, flush=True)
     return 0
 
 
