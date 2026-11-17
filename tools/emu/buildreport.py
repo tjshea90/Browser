@@ -210,7 +210,7 @@ def main():
         F.append((key, sev, area, text[:200], "lab issue line", hint_for(area + " " + text)))
     for (sev, secs), names in slow_loads.items():
         F.append(("load/timeout-%s" % secs, sev, "load", "%d page(s) did not finish loading within %s s: %s" % (len(names), secs, ", ".join(sorted(set(names))[:12]) + (" ..." if len(set(names)) > 12 else "")),
-                  "when the phone's own system restarted in the same run these are lab overload, not site faults (see the lab limits line)", hint_for("load")))
+                  "when the phone's own system restarted in the same run these are lab overload, not site faults (see the lab limits line)", hint_for("load x")))
     for e in sec:
         if e.get("result") == "fail":
             F.append(("sec/" + e["name"], "high", "security", "%s FAILED" % e["name"], e.get("detail", ""), hint_for(e["name"])))
