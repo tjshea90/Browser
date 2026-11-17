@@ -319,10 +319,10 @@ def update_check(lab, pl, adb, a, say, rows, notes, progress):
     page = "http://localhost:%d/page/text" % a.port
 
     def state(label):
-        out = adb.sh("find /data/data/%s -maxdepth 6 -name 'startupCache*' -o -maxdepth 6 -name compatibility.ini -o -maxdepth 6 -name extensions.json -o -maxdepth 6 -name 'scriptCache*' 2>/dev/null | head -14" % pkg, timeout=60)
+        out = adb.sh("find /data/data/%s -maxdepth 6 \\( -name 'startupCache*' -o -name compatibility.ini -o -name extensions.json -o -name 'scriptCache*' \\) 2>/dev/null | head -14" % pkg, timeout=60)
         lines = []
         for p in out.split():
-            ls = adb.sh("ls -ln --time-style=+%%H:%%M:%%S %s 2>/dev/null | head -4" % p, timeout=30).strip().replace("\n", " | ")
+            ls = adb.sh("ls -ln %s 2>/dev/null | head -4" % p, timeout=30).strip().replace("\n", " | ")
             lines.append(ls[:150])
             if p.endswith("compatibility.ini"):
                 ini = adb.sh("cat %s 2>/dev/null" % p, timeout=30).strip().replace("\n", " ; ")
