@@ -82,11 +82,11 @@ object GeckoEngine {
      */
     fun prewarmConfig(ctx: Context) {
         if (!configWarmStarted.compareAndSet(false, true)) return
-        val app = ctx.applicationContext
+        val appContext = ctx.applicationContext
         Thread({
             try {
                 val t0 = android.os.SystemClock.uptimeMillis()
-                val path = GeckoPrefs.writeConfig(app)
+                val path = GeckoPrefs.writeConfig(appContext)
                 val t1 = android.os.SystemClock.uptimeMillis()
                 org.mozilla.gecko.util.DebugConfig.fromFile(java.io.File(path))
                 val t2 = android.os.SystemClock.uptimeMillis()
