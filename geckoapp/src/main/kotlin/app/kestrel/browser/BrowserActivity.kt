@@ -1978,7 +1978,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (!force && t0 < readBackBlockedUntil) { if (!priv) Health.count("look.readBackSkipped"); return null }
         val r = geckoView.capturePixels()
         val took = SystemClock.uptimeMillis() - t0
-        if (!priv) Health.log("look", "read-back", "$why ${took}ms") // LAB4b: every call's cost, not only the slow ones (a synchronous call into the compositor, made on the UI thread)
+        if (!priv) { Health.count("look.readBack"); if (took >= 15) Health.log("look", "read-back", "$why ${took}ms") } // LAB4b: lab run 44017705030 measured 38 of them at 1-10 ms (median 2 ms): only the 15 ms and slower ones get a line, all of them are counted
         val back = LastLookRules.readBackBackoffMs(took)
         if (back > 0) { readBackBlockedUntil = t0 + took + back; if (!priv) { Health.count("look.readBackSlow"); Health.log("look", "slow-read-back", "$why took ${took} ms: no more read-backs for ${back / 1000} s") } }
         return r
