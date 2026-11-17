@@ -603,7 +603,29 @@ open class BrowserActivity : Activity(), DockListener {
         Io.main.postDelayed({ maybeShowUpdateNotice() }, 2500) // news the background look found while the app was closed
         Io.main.postDelayed({ maybeRefreshLists() }, 90_000)   // well after start-up: the page the owner opened first comes first
         if (!decodersWarmed) Io.main.postDelayed({ if (!decodersWarmed) { decodersWarmed = true; Io.exec { app.kestrel.browser.web.PlayerFactory.warm() } } }, 20_000)     // ANS60d: the first film of a run does not pay for the codec list
+        if (!artNoted) Io.main.postDelayed({ noteArtStatus() }, 30_000)  // LAB5: is this install compiled with the baseline profile yet? (one Health line per run)
         Io.main.removeCallbacks(tidyRunnable); Io.main.postDelayed(tidyRunnable, 25_000) // AO4: old update files, stale cache, closed tabs' pictures; due about once a day and after an update
+    }
+
+    private var artNoted = false
+
+    /**
+     * LAB5: has Android compiled this install with the baseline profile yet? The profile (assets/dexopt/baseline.prof, from the emulator lab's ART profile) is only turned into machine code by Android's idle-and-charging
+     * dexopt (or `cmd package compile -f -m speed-profile`); until then every start runs our code in the interpreter. One Health line per run, read from androidx.profileinstaller's own verifier (its worker thread):
+     * `start art profile-code=<0 none, 1 compiled with the profile, 2 waiting for the idle dexopt ...> embedded=<the APK has one> compiled=<yes/no>`. The owner's Diagnostics shows it, so a tablet that never compiles is visible.
+     */
+    private fun noteArtStatus() {
+        if (artNoted || isFinishing || isDestroyed) return
+        artNoted = true
+        try {
+            val fut = androidx.profileinstaller.ProfileVerifier.getCompilationStatusAsync()
+            fut.addListener({
+                try {
+                    val s = fut.get()
+                    Health.log("start", "art", "profile-code=${s.profileInstallResultCode} embedded=${s.appApkHasEmbeddedProfile()} compiled=${if (s.isCompiledWithProfile) "yes" else "no"} waiting=${if (s.hasProfileEnqueuedForCompilation()) "yes" else "no"}")
+                } catch (e: Throwable) { Health.log("start", "art", "unknown: ${e.javaClass.simpleName}") }
+            }, java.util.concurrent.Executor { r -> Io.exec { r.run() } })
+        } catch (e: Throwable) { Health.log("start", "art", "unavailable: ${e.javaClass.simpleName}") }
     }
 
     private val tidyRunnable = Runnable { runStorageTidy(false) }
