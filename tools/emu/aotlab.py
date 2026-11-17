@@ -94,6 +94,54 @@ def start_probe(pl, adb, srv, pkg, url, wait_s=60):
     return {"am_total_ms": total, "am_wait_ms": wait, "page_ms": int(round((t1 - t0) * 1000)) if t1 else None}
 
 
+def link_probe(pl, adb, srv, pkg, port, k, wait_s=40):
+    """Open ONE more link in the RUNNING app (a VIEW intent for /ping?k=N: onNewIntent, a new page in a live engine) and time it on the host clock until that page reports its own load. The code on this path
+    (new tab, session open, address handling) runs a few times per session, which is the kind of code a profile that marks it only post-start-up leaves to the interpreter. page_ms is None when no report came."""
+    n0 = len(srv.pings)
+    t0 = time.time()
+    adb.sh("am start -a android.intent.action.VIEW -d http://localhost:%d/ping?k=%d -p %s" % (port, k, pkg), timeout=60)
+    end = time.time() + wait_s
+    while time.time() < end:
+        for when, path in srv.pings[n0:]:
+            if ("k%%3D%d" % k) in path or ("k=%d" % k) in path:
+                return {"page_ms": int(round((when - t0) * 1000))}
+        time.sleep(0.2)
+    return {"page_ms": None}
+
+
+MEM_CATS = ("Native Heap", "Dalvik Heap", "Dalvik Other", ".so mmap", ".apk mmap", ".dex mmap", ".oat mmap", ".art mmap", "Other mmap", "Unknown", "TOTAL")
+
+
+def parse_meminfo(text):
+    """{category: PSS KB} from `dumpsys meminfo PID` (the first number of each row of the main table: Pss Total)."""
+    out = {}
+    for ln in text.splitlines():
+        m = re.match(r"^\s*(\.?[A-Za-z][A-Za-z ]*?)\s+(\d+)\s+\d+\s+\d+", ln)
+        if m and m.group(1) in MEM_CATS and m.group(1) not in out:
+            out[m.group(1)] = int(m.group(2))
+    return out
+
+
+def recover(adb, lab, port, say, wait_s=240):
+    """The emulator's system server dies now and then (`cmd: Can't find service`, lab runs 44059232336 and 44126148207). Wait for it to come back, become root again and open the adb reverse tunnel again. True when it is back."""
+    say("device trouble: waiting for the system to come back")
+    adb.run("wait-for-device", timeout=wait_s)
+    end = time.time() + wait_s
+    while time.time() < end:
+        if adb.sh("getprop sys.boot_completed", timeout=20).strip() == "1" and "package" in adb.sh("service list 2>/dev/null", timeout=30):
+            break
+        time.sleep(5)
+    else:
+        return False
+    adb.run("root", timeout=60)
+    time.sleep(3)
+    adb.run("wait-for-device", timeout=120)
+    lab.rooted = "uid=0" in adb.sh("id", timeout=30)
+    adb.run("reverse", "tcp:%d" % port, "tcp:%d" % port)
+    time.sleep(5)
+    return True
+
+
 def report_update(L, upd_rows, upd_notes, med):
     """The LAB7b section of AOT-REPORT.md (appended to the list of lines L)."""
     if upd_rows or upd_notes:
@@ -128,49 +176,78 @@ def report_update(L, upd_rows, upd_notes, med):
 
 def report_breadth(L, br_info, br_rows, br_mem, starts, med):
     """The LAB7a section of AOT-REPORT.md (appended to the list of lines L)."""
-    if br_info or br_rows:
-        L.append("## LAB7a: how much Android compiles at install, and what it costs (the RELEASE build; emulator: read the DIFFERENCES, the tablet's cores are slower)")
+    if not (br_info or br_rows):
+        return
+    L.append("## LAB7a: how much Android compiles at install, and what it costs (the RELEASE build; emulator: read the DIFFERENCES, the tablet's cores are slower)")
+    L.append("")
+    L.append("| Variant | what | status | compile s | compiled code MB | start -W warm ms | start -W cold ms | page loaded warm ms | page loaded cold ms | link 1 ms | links 2-N ms | PSS app MB | PSS all MB |")
+    L.append("| :- | :- | :- | -: | -: | -: | -: | -: | -: | -: | -: | -: | -: |")
+
+    def vstat(name):
+        inf = [i for i in br_info if i["variant"] == name]
+        srs = [r for r in br_rows if r["variant"] == name and r.get("kind", "start") != "link"]
+        lks = [r for r in br_rows if r["variant"] == name and r.get("kind") == "link"]
+        mm = [m for m in br_mem if m.get("variant") == name]
+
+        def sm(key, cache):
+            vals = [r[key] for r in srs if r["cache"] == cache and r.get(key) is not None]
+            return med(vals) if vals else None
+
+        def lk(first):
+            vals = [r["page_ms"] for r in lks if (r["k"] == 1) == first and r.get("page_ms") is not None]
+            return med(vals) if vals else None
+        app = [next((p.get("pss_kb") for p in m.get("procs", []) if p.get("name") == "app"), None) for m in mm]
+        return {"status": ",".join(sorted(set(str(i["status"]) for i in inf))) or "-", "compile_s": med([i["compile_s"] for i in inf]) if inf else None,
+                "oat_mb": (med([i["oat_kb"] for i in inf]) / 1024.0) if inf else None,
+                "am_warm": sm("am_total_ms", "warm"), "am_cold": sm("am_total_ms", "cold"), "pg_warm": sm("page_ms", "warm"), "pg_cold": sm("page_ms", "cold"),
+                "link1": lk(True), "linkn": lk(False), "n": len(srs), "nl": len(lks), "ns": len(mm),
+                "pss_app": (med([x for x in app if x is not None]) / 1024.0) if any(x is not None for x in app) else None,
+                "pss_all": (med([m.get("total_pss_kb") for m in mm]) / 1024.0) if mm else None}
+    base_name = "sp-current"
+    bs = vstat(base_name)
+    names = [b for b in BREADTH]
+    counts = []
+    for name, apkkey, mode, what in names:
+        s = vstat(name)
+        if s["status"] == "-" and s["am_warm"] is None:
+            continue
+        counts.append("%s: %d starts, %d links, %d memory snapshots, %d compiles" % (name, s["n"], s["nl"], s["ns"], len([i for i in br_info if i["variant"] == name])))
+
+        def c(k, fmt, s=s, name=name):
+            v = s.get(k)
+            if v is None:
+                return "-"
+            return (fmt % v) + (pct(v, bs.get(k)) if name != base_name else "")
+        L.append("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (name, what, s["status"], c("compile_s", "%.1f"), c("oat_mb", "%.1f"), c("am_warm", "%.0f"), c("am_cold", "%.0f"),
+                                                                                     c("pg_warm", "%.0f"), c("pg_cold", "%.0f"), c("link1", "%.0f"), c("linkn", "%.0f"), c("pss_app", "%.0f"), c("pss_all", "%.0f")))
+    L.append("")
+    L.append("(percentages against `%s`, the profile alpha65 ships; medians; compile s = `cmd package compile -f -m MODE` on the emulator's 2 vCPUs; link N = a VIEW intent to the RUNNING app, host clock until the page reports its load)" % base_name)
+    L.append("")
+    for c_ in counts:
+        L.append("- samples " + c_)
+    L.append("")
+    cats = [c_ for c_ in MEM_CATS]
+    if any(m.get("cats") for m in br_mem):
+        L.append("### Memory by kind of the app process (PSS MB, median of the snapshots; `.oat mmap` = compiled code, `Dalvik Other` includes the JIT's code cache)")
         L.append("")
-        L.append("| Variant | what | status | compile s | compiled code MB | start -W warm ms | start -W cold ms | page loaded warm ms | page loaded cold ms | PSS app MB | PSS all MB |")
-        L.append("| :- | :- | :- | -: | -: | -: | -: | -: | -: | -: | -: |")
-
-        def vstat(name):
-            inf = [i for i in br_info if i["variant"] == name]
-            srs = [r for r in br_rows if r["variant"] == name]
-            mm = [m for m in br_mem if m.get("variant") == name]
-
-            def sm(key, cache):
-                vals = [r[key] for r in srs if r["cache"] == cache and r.get(key) is not None]
-                return med(vals) if vals else None
-            app = [next((p.get("pss_kb") for p in m.get("procs", []) if p.get("name") == "app"), None) for m in mm]
-            return {"status": ",".join(sorted(set(str(i["status"]) for i in inf))) or "-", "compile_s": med([i["compile_s"] for i in inf]) if inf else None,
-                    "oat_mb": (med([i["oat_kb"] for i in inf]) / 1024.0) if inf else None,
-                    "am_warm": sm("am_total_ms", "warm"), "am_cold": sm("am_total_ms", "cold"), "pg_warm": sm("page_ms", "warm"), "pg_cold": sm("page_ms", "cold"),
-                    "pss_app": (med([x for x in app if x is not None]) / 1024.0) if any(x is not None for x in app) else None,
-                    "pss_all": (med([m.get("total_pss_kb") for m in mm]) / 1024.0) if mm else None}
-        base_name = "sp-current"
-        bs = vstat(base_name)
-        for name, apkkey, mode, what in BREADTH:
-            s = vstat(name)
-            if s["status"] == "-" and s["am_warm"] is None:
+        L.append("| Variant | " + " | ".join(cats) + " |")
+        L.append("| :- | " + " | ".join("-:" for _ in cats) + " |")
+        for name, _, _, _ in names:
+            mm = [m.get("cats") for m in br_mem if m.get("variant") == name and m.get("cats")]
+            if not mm:
                 continue
-
-            def c(k, fmt):
-                v = s.get(k)
-                if v is None:
-                    return "-"
-                return (fmt % v) + (pct(v, bs.get(k)) if name != base_name else "")
-            L.append("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (name, what, s["status"], c("compile_s", "%.1f"), c("oat_mb", "%.1f"), c("am_warm", "%.0f"), c("am_cold", "%.0f"),
-                                                                             c("pg_warm", "%.0f"), c("pg_cold", "%.0f"), c("pss_app", "%.0f"), c("pss_all", "%.0f")))
+            vals = []
+            for cat in cats:
+                xs = [x[cat] for x in mm if cat in x]
+                vals.append("%.1f" % (med(xs) / 1024.0) if xs else "-")
+            L.append("| %s | %s |" % (name, " | ".join(vals)))
         L.append("")
-        L.append("(percentages against `%s`, the profile alpha65 ships; n = %d starts per cache state per variant and round; compile s = `cmd package compile -f -m MODE` on the emulator's 2 vCPUs)" % (base_name, starts // 2))
-        L.append("")
-        seen = set()
-        for i in br_info:
-            if i["variant"] not in seen:
-                seen.add(i["variant"])
-                L.append("- files of %s: %s; profile written: %s bytes" % (i["variant"], ", ".join(i["files"]) or "none", i.get("profile_bytes")))
-        L.append("")
+    seen = set()
+    for i in br_info:
+        if i["variant"] not in seen:
+            seen.add(i["variant"])
+            L.append("- files of %s: %s; profile written: %s bytes" % (i["variant"], ", ".join(i["files"]) or "none", i.get("profile_bytes")))
+    L.append("")
 
 
 def selftest():
@@ -180,6 +257,8 @@ def selftest():
     assert sum_ls_bytes("/x/oat/x86_64:\ntotal 10\n-rw-r--r-- 1 system all 1000 2026-11-17 10:00 base.odex\n-rw-r--r-- 1 system all 24 2026-11-17 10:00 base.vdex\ndrwx------ 2 a b 4096 2026 d\n") == 1024
     assert ls_files("/x/oat/x86_64:\ntotal 10\n-rw-r--r-- 1 system all 1000 2026-11-17 10:00 base.odex\n-rw-r--r-- 1 system all 24 2026-11-17 10:00 base.vdex\ndrwx------ 2 a b 4096 2026 d\n") == [("base.odex", 1000), ("base.vdex", 24)]
     assert pct(110, 100) == " (+10 %)" and pct(None, 100) == "" and pct(5, 0) == ""
+    mi = parse_meminfo(" ** MEMINFO in pid 3263 [x] **\n                   Pss  Private  Private  SwapPss      Rss     Heap     Heap     Heap\n                 Total    Dirty    Clean    Dirty    Total     Size    Alloc     Free\n                ------   ------   ------   ------   ------   ------   ------   ------\n  Native Heap    35210    35124        0        0    35676    58996    45431    13564\n  Dalvik Heap     3141     3112        0        0     3500     8000     5000     3000\n       .oat mmap    2300        0     2300        0     5000\n     .art mmap     900      100      800        0     1000\n        TOTAL   180000   150000    20000        0   200000\n")
+    assert mi == {"Native Heap": 35210, "Dalvik Heap": 3141, ".oat mmap": 2300, ".art mmap": 900, "TOTAL": 180000}, mi
     # the LAB7 report sections render from synthetic rows (a typo found here costs nothing, one found in the lab run costs an hour)
     med = lambda v: (sorted(x for x in v if x is not None)[len([x for x in v if x is not None]) // 2] if [x for x in v if x is not None] else None)
     L = []
@@ -328,31 +407,47 @@ BREADTH = [
 
 
 def breadth_check(lab, pl, adb, srv, a, say, info, rows, mem, notes, progress):
-    """LAB7a. The RELEASE build (R8, not debuggable, the real profile) installed once per APK variant; for each variant `cmd package compile --reset`, the embedded profile put in place the way the library does (INSTALL_PROFILE),
-    `cmd package compile -f -m MODE`, then timed starts (alternating warm / dropped file cache) on the lab's ping page and one memory snapshot. Per variant: compile seconds, compiled code size, files, start times, PSS.
-    Variant APKs differ ONLY in assets/dexopt/baseline.prof (the profile rules of geckoapp/src/main/baseline-prof.txt, rewritten by R8). Fills [info] (one dict per compile), [rows] (one per start), [mem]."""
+    """LAB7a. The RELEASE build (R8, not debuggable, the real profile) installed once per APK variant; for each variant `cmd package compile --reset`, the embedded profile put in place the way the library does
+    (INSTALL_PROFILE), `cmd package compile -f -m MODE`, then timed starts (alternating warm / dropped file cache) on the lab's ping page, then ONE more start followed by --link-probes links opened in the RUNNING app
+    (code that runs a few times per session), then two memory snapshots (PSS per process, and `dumpsys meminfo` per kind: .oat mmap = compiled code, Dalvik Other = the JIT's code cache). Variant APKs differ ONLY in
+    assets/dexopt/baseline.prof (the rules of geckoapp/src/main/baseline-prof.txt, rewritten by R8). --variants limits the list; the order alternates every round; a dead system server is waited for (recover).
+    Fills [info] (one dict per compile), [rows] (one per start / link), [mem] (one per snapshot)."""
     pkg = a.release_pkg
     apks = {"base": a.release_apk, "exercised": a.apk_exercised, "all": a.apk_all}
     present = {k: v for k, v in apks.items() if v and os.path.exists(v)}
+    want = [v.strip() for v in a.variants.split(",") if v.strip()] if a.variants else [b[0] for b in BREADTH]
     page = "http://localhost:%d/ping" % a.port
     prof = "/data/misc/profiles/cur/0/%s/primary.prof" % pkg
     old = lab.pkg
     lab.pkg = pkg
+
+    def install(key):
+        for attempt in (1, 2):
+            adb.run("uninstall", pkg, timeout=120)
+            t0 = time.time()
+            out = adb.run("install", "-t", present[key], timeout=900)
+            say("install", key, out.strip()[:60], "%.0f s" % (time.time() - t0))
+            if "Success" in out:
+                return True
+            notes.append("install of %s failed (attempt %d): %s ; df: %s" % (key, attempt, out.strip().replace("\n", " ")[:120], adb.sh("df /data | tail -1", timeout=30).strip()[:100]))
+            if attempt == 1 and not recover(adb, lab, a.port, say):
+                return False
+        return False
+
     try:
         for rnd in range(1, a.breadth_rounds + 1):
-            groups = [("base", ["verify", "sp-current", "speed"]), ("exercised", ["sp-exercised"]), ("all", ["sp-all"])]
-            if rnd % 2 == 0:                                   # round 2 the other way round: a drifting runner cannot favour one variant
+            groups = []
+            for key in ("base", "exercised", "all"):
+                names = [b[0] for b in BREADTH if b[1] == key and b[0] in want]
+                if names:
+                    groups.append((key, names))
+            if rnd % 2 == 0:                                   # every other round the other way round: a drifting runner cannot favour one variant
                 groups = [(k, list(reversed(v))) for k, v in reversed(groups)]
             for key, names in groups:
                 if key not in present:
                     notes.append("round %d: no APK for %s: variants %s skipped" % (rnd, key, ",".join(names)))
                     continue
-                adb.run("uninstall", pkg, timeout=120)
-                t0 = time.time()
-                out = adb.run("install", "-t", present[key], timeout=900)
-                say("install", key, out.strip()[:60], "%.0f s" % (time.time() - t0))
-                if "Success" not in out:
-                    notes.append("round %d: install of %s failed: %s" % (rnd, key, out.strip()[:120]))
+                if not install(key):
                     continue
                 for name in names:
                     _, _, mode, what = next(b for b in BREADTH if b[0] == name)
@@ -360,7 +455,7 @@ def breadth_check(lab, pl, adb, srv, a, say, info, rows, mem, notes, progress):
                     prof_size = None
                     lab.kill()
                     if mode == "speed-profile":
-                        out = adb.sh("am broadcast -a androidx.profileinstaller.action.INSTALL_PROFILE %s/androidx.profileinstaller.ProfileInstallReceiver" % pkg, timeout=60)
+                        adb.sh("am broadcast -a androidx.profileinstaller.action.INSTALL_PROFILE %s/androidx.profileinstaller.ProfileInstallReceiver" % pkg, timeout=60)
                         for _ in range(30):
                             time.sleep(1.0)
                             sz = adb.sh("ls -ln %s 2>/dev/null" % prof, timeout=30).split()
@@ -389,15 +484,26 @@ def breadth_check(lab, pl, adb, srv, a, say, info, rows, mem, notes, progress):
                             lab.drop_caches()
                         time.sleep(2)
                         r = start_probe(pl, adb, srv, pkg, page)
-                        r.update({"variant": name, "round": rnd, "cache": "cold" if cold else "warm"})
+                        r.update({"kind": "start", "variant": name, "round": rnd, "cache": "cold" if cold else "warm"})
                         rows.append(r)
                         say("start", name, r["cache"], r["am_total_ms"], r["page_ms"])
                         time.sleep(5)
-                    lab.kill()                                         # memory: a fresh warm start, settle 10 s after the page loaded
-                    r = start_probe(pl, adb, srv, pkg, page)
-                    time.sleep(10)
-                    lab.snapshot_memory(name, rnd)
-                    mem.append(dict(lab.mem[-1], variant=name, round=rnd))
+                    lab.kill()                                         # one fresh warm start, then links opened in the running app, then memory
+                    start_probe(pl, adb, srv, pkg, page)
+                    time.sleep(6)
+                    for k in range(1, a.link_probes + 1):
+                        r = link_probe(pl, adb, srv, pkg, a.port, k)
+                        r.update({"kind": "link", "k": k, "variant": name, "round": rnd})
+                        rows.append(r)
+                        say("link", name, k, r["page_ms"])
+                        time.sleep(4)
+                    for snap in (1, 2):
+                        time.sleep(10 if snap == 1 else 20)
+                        lab.snapshot_memory(name, rnd)
+                        rec_m = dict(lab.mem[-1], variant=name, round=rnd, snap=snap)
+                        pid = next((p for p, n in lab.pids() if n == pkg), None)
+                        rec_m["cats"] = parse_meminfo(adb.sh("dumpsys meminfo %d" % pid, timeout=60)) if pid else {}
+                        mem.append(rec_m)
                     lab.kill()
                     progress()
     finally:
@@ -497,6 +603,8 @@ def main():
     ap.add_argument("--update-rounds", type=int, default=2)
     ap.add_argument("--settle-s", type=int, default=70, help="LAB7b: how long the app stays up after a launch (Gecko writes its start-up cache some time after start-up, not at once)")
     ap.add_argument("--breadth-rounds", type=int, default=2)
+    ap.add_argument("--variants", default="", help="LAB7a: comma list of the variants to run (default all): verify, sp-current, sp-exercised, sp-all, speed")
+    ap.add_argument("--link-probes", type=int, default=4, help="LAB7a: links opened in the running app after the timed starts")
     ap.add_argument("--phases", default="release,dm", help="comma list of: update, breadth, release, dm, debug (the default is what the lab did before LAB7)")
     ap.add_argument("--rounds", type=int, default=3)
     ap.add_argument("--starts", type=int, default=4)
@@ -542,8 +650,8 @@ def main():
 
     def write_report():
         """Written after every round / install: a cancelled run (the lab run 44069383826 was, after 9 minutes) keeps what it measured. Order of the phases = order of value: the release path, compile at install, then the debug A/B."""
-        L = ["# Ahead-of-time compile A/B (LAB5b)", "",
-             "%d rounds x %d starts per mode (alternating warm / cold file cache). **Emulator numbers: read the differences between modes of THIS run.**" % (a.rounds, a.starts), ""]
+        L = ["# Ahead-of-time compile A/B (LAB5b, LAB7)", "",
+             "Update test: %d rounds. Breadth test: %d rounds x %d starts per variant (alternating warm / cold file cache). **Emulator numbers: read the differences between modes of THIS run.**" % (a.update_rounds, a.breadth_rounds, a.starts), ""]
         report_update(L, upd_rows, upd_notes, med)
         report_breadth(L, br_info, br_rows, br_mem, a.starts, med)
         if rel_rows or rel_notes:

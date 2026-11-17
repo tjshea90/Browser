@@ -634,6 +634,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun noteArtStatus() {
         if (artNoted || isFinishing || isDestroyed) return
         artNoted = true
+        Io.exec { try { Health.log("start", "oat", oatSizes()) } catch (e: Throwable) { Health.log("start", "oat", "unknown: ${e.javaClass.simpleName}") } }
         try {
             val fut = androidx.profileinstaller.ProfileVerifier.getCompilationStatusAsync()
             fut.addListener({
@@ -643,6 +644,18 @@ open class BrowserActivity : Activity(), DockListener {
                 } catch (e: Throwable) { Health.log("start", "art", "unknown: ${e.javaClass.simpleName}") }
             }, java.util.concurrent.Executor { r -> Io.exec { r.run() } })
         } catch (e: Throwable) { Health.log("start", "art", "unavailable: ${e.javaClass.simpleName}") }
+    }
+
+    /**
+     * LAB7: what Android compiled for this install = the files in oat/<isa>/ next to the base APK (odex = compiled code, vdex = verified dex, art = app image). With the catch-all profile rule the whole app is compiled
+     * while it installs: an odex of roughly 4 times the size of the one the lab's own hot methods gave (about 3 MB on the emulator; 12 MB for everything). Diagnostics line `start oat`; "none" = not compiled yet (the idle
+     * dexopt will do it) or the folder is not readable.
+     */
+    private fun oatSizes(): String {
+        val oat = java.io.File(java.io.File(applicationInfo.sourceDir).parentFile ?: return "unknown", "oat")
+        val parts = ArrayList<String>()
+        oat.listFiles()?.sortedBy { it.name }?.forEach { isa -> isa.listFiles()?.sortedBy { it.name }?.forEach { f -> parts.add("${isa.name}/${f.name}=${f.length() / 1024}KB") } }
+        return if (parts.isEmpty()) "none" else parts.joinToString(" ")
     }
 
     private val tidyRunnable = Runnable { runStorageTidy(false) }
