@@ -93,8 +93,13 @@ class DailyMixin:
         self.ph.key("KEYCODE_ENTER")
         return found, at
 
+    def d_t(self, seconds):
+        """A wait limit; the driver's selftest (a fake phone that never answers) must not wait it out."""
+        return min(seconds, 1.5) if self.a.selftest else seconds
+
     def d_wait_page(self, mark, timeout=60):
         """The first 'page loaded' / 'page error' line since the log offset [mark]: (kind, kv, seconds) or (None, {}, seconds)."""
+        timeout = self.d_t(timeout)
         t0 = time.time()
         while time.time() - t0 < timeout:
             for e in health_events(self.log.since(mark), "page"):
@@ -195,7 +200,7 @@ class DailyMixin:
         self.ph.open_url("%s/bench?tag=%s" % (self.lab_base, tag))
         t0 = time.time()
         row = None
-        while time.time() - t0 < 60 and row is None:
+        while time.time() - t0 < self.d_t(60) and row is None:
             rows = [r for r in self.lab.since(r0) if r.get("kind") == "bench"]
             row = rows[-1] if rows else None
             time.sleep(1.0)
@@ -214,7 +219,7 @@ class DailyMixin:
         out = self.ph.a.sh("am start -W -n %s/%s" % (self.a.pkg, "app.kestrel.browser.MainActivity"), timeout=90)
         tot = re.search(r"TotalTime:\s*(\d+)", out)
         ready = None
-        while time.time() - t0 < 120:
+        while time.time() - t0 < self.d_t(120):
             if health_events(self.log.since(mark), "engine", "runtime-ready"):
                 ready = time.time() - t0
                 break
@@ -352,7 +357,7 @@ class DailyMixin:
         self.ph.open_url("%s/ho?v=file&tag=%s" % (self.lab_base, tag))
         t0 = time.time()
         lay = []
-        while time.time() - t0 < 40 and not lay:
+        while time.time() - t0 < self.d_t(40) and not lay:
             lay = [r for r in self.lab.since(rm) if r.get("kind") == "ap" and r.get("ev") == "layout" and str(r.get("tag", "")).startswith(tag)]
             time.sleep(1)
         if not lay:
@@ -367,7 +372,7 @@ class DailyMixin:
         t1 = time.time()
         self.ph.tap(tx, ty)
         first = None
-        while time.time() - t1 < 25 and first is None:
+        while time.time() - t1 < self.d_t(25) and first is None:
             for layer, ev in (("native", "first-picture"), ("inline", "placed")):
                 if health_events(self.log.since(m2), layer, ev):
                     first = time.time() - t1
@@ -488,7 +493,7 @@ class DailyMixin:
         m2 = self.log.size()
         self.ph.start_app()
         back = None
-        while time.time() - t0 < 20 and back is None:
+        while time.time() - t0 < self.d_t(20) and back is None:
             if health_events(self.log.since(m2), "life", "resume"):
                 back = time.time() - t0
             time.sleep(0.3)
@@ -536,6 +541,8 @@ class DailyMixin:
     def d_reach(self, url):
         """Can the runner open a TCP connection to the site? (urllib would refuse a bad certificate and call a reachable test site unreachable.)"""
         host = host_of(url)
+        if self.a.selftest:
+            return True
         try:
             socket.create_connection((host, 443), 8).close()
             return True
@@ -552,7 +559,7 @@ class DailyMixin:
         r0 = self.lab.size()
         self.ph.open_url("%s/sec?tag=%s" % (self.lab_base, tag))
         t0 = time.time()
-        while time.time() - t0 < 45 and not [r for r in self.d_sec_rows(tag, r0) if r.get("name") == "battery-done"]:
+        while time.time() - t0 < self.d_t(45) and not [r for r in self.d_sec_rows(tag, r0) if r.get("name") == "battery-done"]:
             time.sleep(1.5)
         rows = self.d_sec_rows(tag, r0)
         seen = set()
@@ -637,6 +644,8 @@ class DailyMixin:
 
     # ------------------------------------------------------------------ the whole day
     def daily(self, minutes):
+        if self.a.selftest:
+            minutes = max(minutes, 30)                          # (the fake phone: every step must run once so that a Python error in one shows)
         deadline = time.time() + minutes * 60
         self.ph.measure_on()
         time.sleep(2)
