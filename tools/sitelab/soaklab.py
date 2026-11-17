@@ -150,7 +150,9 @@ def page_form():
     return (b"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Soak form page</title>"
             b"<body style='font:18px sans-serif;margin:12px'><form action='/report' method='get'><input type=hidden name=kind value=form>"
             b"<p><label>Name <input name=name></label></p><p><label>Email <input type=email name=email></label></p>"
-            b"<p><select name=pick><option>one<option>two<option>three</select></p><p><textarea name=msg rows=4></textarea></p><button>Send</button></form></body>")
+            b"<p><select name=pick><option>one<option>two<option>three</select></p><p><textarea name=msg rows=4></textarea></p><button>Send</button></form>"
+            b"<script>setTimeout(function(){function s(el){var r=el.getBoundingClientRect(),d=window.devicePixelRatio||1,ox=window.mozInnerScreenX||0,oy=window.mozInnerScreenY||0;return [Math.round((ox+r.left+r.width/2)*d),Math.round((oy+r.top+r.height/2)*d)];}"
+            b"var a=s(document.querySelector('input[name=name]')),b=s(document.querySelector('textarea'));new Image().src='/report?kind=formpos&nx='+a[0]+'&ny='+a[1]+'&tx='+b[0]+'&ty='+b[1];},1200);</script></body>")
 
 
 REPORTER = """
@@ -571,7 +573,7 @@ function timed(name, p, ok, bad, ms) {  // a promise that must settle within ms:
   p.then(function (v) { if (done) return; done = true; clearTimeout(to); ok(v); }, function (e) { if (done) return; done = true; clearTimeout(to); bad(e); });
 }
 // 1. a pop-up without a tap must be blocked
-try { var w = window.open('/blank', 'kst_pop'); rep('popup-without-tap', w ? 'fail' : 'pass', w ? 'window.open opened a window' : 'blocked'); if (w) w.close(); } catch (e) { rep('popup-without-tap', 'pass', 'threw ' + e.name); }
+try { var w = window.open('/blank', 'kst_pop'); rep('popup-without-tap', w ? 'info' : 'pass', w ? 'window.open returned a window object (the driver decides: the app hands a blocked page a stand-in and shows its blocked-page chip)' : 'blocked (null)'); if (w) w.close(); } catch (e) { rep('popup-without-tap', 'pass', 'threw ' + e.name); }
 // 2. camera + microphone: never granted silently
 if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
   timed('camera-microphone', navigator.mediaDevices.getUserMedia({ video: true, audio: true }), function (s) { rep('camera-microphone', 'fail', 'GRANTED without a tap or a question'); try { s.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} }, function (e) { rep('camera-microphone', 'pass', 'refused: ' + e.name); }, 9000);
