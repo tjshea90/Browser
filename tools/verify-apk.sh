@@ -63,6 +63,15 @@ if [ "$APP" = "gecko" ] && command -v unzip >/dev/null 2>&1; then
   else bad "assets/omni.ja is DEFLATED in the APK (androidResources noCompress 'ja' lost?): every Gecko process would inflate 14.5 MB into private heap: $OMNI"; fi
 fi
 
+# The baseline profile (LAB5): geckoapp/src/main/baseline-prof.txt is compiled by AGP into assets/dexopt/baseline.prof (R8 rewrites the names; androidx libraries alone give 246 bytes, ours about 6 KB). Android turns it into machine
+# code in its idle-and-charging dexopt, so a missing or tiny file means every start runs our code in the interpreter for longer.
+if [ "$APP" = "gecko" ] && command -v unzip >/dev/null 2>&1; then
+  PROF="$(unzip -l "$APK" assets/dexopt/baseline.prof 2>/dev/null | awk '/assets\/dexopt\/baseline.prof/{print $1}' | head -1)"
+  if [ -z "$PROF" ]; then bad "assets/dexopt/baseline.prof is missing (geckoapp/src/main/baseline-prof.txt not compiled in?)"
+  elif [ "$PROF" -ge 2500 ]; then ok "baseline profile present (assets/dexopt/baseline.prof $PROF bytes)"
+  else bad "baseline profile is only $PROF bytes: our own rules did not get in (expected about 6000; the libraries alone give 246)"; fi
+fi
+
 KB=$(( $(stat -c %s "$APK") / 1024 ))
 case "$APP" in web) BUDGET="${KESTREL_APK_BUDGET_KB:-6000}" ;; gecko) BUDGET="${KESTREL_GECKO_BUDGET_KB:-130000}" ;; courier) BUDGET="${KESTREL_COURIER_BUDGET_KB:-4000}" ;; esac
 [ "$KB" -le "$BUDGET" ] && ok "size ${KB} KB (budget ${BUDGET} KB)" || bad "size ${KB} KB exceeds the budget ${BUDGET} KB"
