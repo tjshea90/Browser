@@ -15,7 +15,7 @@ the original, unobfuscated ones; a debuggable app still saves its profile): the 
 import re
 import sys
 
-RULE = re.compile(r'^(?:[HSP]{0,3}L[A-Za-z0-9_$/.\-]+;(?:->[A-Za-z0-9_$<>\-]+\([A-Za-z0-9_$/;\[\]]*\)[A-Za-z0-9_$/;\[]+)?)$')
+RULE = re.compile(r'^(?:[HSP]{0,3}L[A-Za-z0-9_$/.\-]+;(?:->[A-Za-z0-9_$<>\-]+\([A-Za-z0-9_$/;\[\]\-]*\)[A-Za-z0-9_$/;\[\-]+)?)$')   # '-' also inside a signature: the engine's synthetic accessor classes are named Outer-IA
 # classes of the tools around the app that never run in a release build
 DROP = ('Lapp/kestrel/browser/diag/DebugProps',)
 
