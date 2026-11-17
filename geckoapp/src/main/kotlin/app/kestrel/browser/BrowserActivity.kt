@@ -188,7 +188,7 @@ open class BrowserActivity : Activity(), DockListener {
             val imm = getSystemService(InputMethodManager::class.java) ?: return false
             if (!app.kestrel.browser.SwoopLink.isInstalled(this@BrowserActivity)) return false
             if (!open) { hideKeyboard(); return true }
-            if (!app.kestrel.browser.SwoopLink.isChosen(this@BrowserActivity)) { app.kestrel.browser.SwoopLink.offerChoice(this@BrowserActivity, imm); return true }
+            if (!app.kestrel.browser.SwoopLink.isChosen(this@BrowserActivity)) { app.kestrel.browser.SwoopLink.offerChoice(this@BrowserActivity, imm); Io.main.post { if (::miniNav.isInitialized) miniNav.swoopNotUp() }; return true }       // (the bar must not claim Swoop is up while the person is still choosing it)
             val target: android.view.View
             if (navPageField() != null) { target = geckoView; target.requestFocus(); imm.showSoftInput(target, 0) }
             else { focusUrlBar(); target = activeField }
