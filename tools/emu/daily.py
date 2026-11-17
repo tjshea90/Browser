@@ -631,10 +631,9 @@ class DailyMixin:
             if m and float(m.group(3)) >= 0.5:
                 rows.append({"tid": int(m.group(2)), "cpu": float(m.group(3)), "thread": m.group(4)})
         rows.sort(key=lambda r: -r["cpu"])
-        res = {"cpuinfo": app_lines, "busy_threads": rows[:8], "busy_total_pct": round(sum(r["cpu"] for r in rows), 1)}
+        res = {"cpuinfo": app_lines, "busy_threads": rows[:8], "busy_total_pct": round(sum(r["cpu"] for r in rows), 1), "raw_head": last[:900]}   # (the first real run: the raw text is kept to check the parser)
         if not rows and not app_lines:
-            res["note"] = "top / dumpsys cpuinfo gave nothing parseable: raw head kept"
-            res["raw_head"] = last[:400]
+            res["note"] = "top / dumpsys cpuinfo gave nothing parseable"
         return res
 
     def d_site_tour(self):
