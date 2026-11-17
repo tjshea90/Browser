@@ -1,13 +1,13 @@
-# CHECKPOINT 2588 — read me first, then TASKS.md
+# CHECKPOINT 2589 — read me first, then TASKS.md
 
-**Written:** 2026-11-17T01:37:25Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-e89b9dfe-pl3lk5` · **builds on:** `c6b2edcd` (this checkpoint is the commit after it)
+**Written:** 2026-11-17T01:38:10Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-e89b9dfe-pl3lk5` · **builds on:** `f1cb9443` (this checkpoint is the commit after it)
 
 ## Just done
-LAB3a/b/c code written: emu-lab.yml (profile input: tablet = 32-bit x86 Android 10 image + low-RAM prop attempt with fallback + font scale 1.2; 'daily' suite option; build-report step + 30-day artifact), android.yml (lab_profile, daily), tools/sitelab/soaklab.py (/sec battery + /sec/frame,read,echo,scheme,file + /bench CPU calibration; validated in headless Chromium), tools/emu/daily.py (DailyMixin: 15-step day of a person on the app's REAL defaults + 20 security/feature probes), soak.py hooks (--profile, daily suite, mixin loaded by path). Selftest on the fake phone runs all 15 steps with no Python error. NOT yet run on the real emulator.
+LAB3e: first daily-suite run DISPATCHED ONCE: android.yml run 43997001918 (app=lab lab_suite=daily lab_minutes=45 lab_net=full lab_profile=auto, ref ccr-e89b9dfe-pl3lk5, head f1cb9443): do NOT dispatch again until it ends; check with mcp__github__actions_list list_workflow_jobs resource_id 43997001918 (NOT list_workflow_runs: ~20 KB of release notes per call). Unproven risks: geckoview-x86 resolves, 32-bit x86 Android 10 image boots with KVM, emulator accepts -prop ro.config.low_ram=true (the workflow falls back without it), the ui-nodes of the real app
 
 ## Do this next
-LAB3d: write tools/emu/buildreport.py (reads events.jsonl, health-lines.txt, diagnostics-*.txt, device.json, summary.json from a lab run dir; writes BUILD-REPORT.md + build-report.json; compares with research/lab-baseline.json). Develop it against a REAL older artifact (fetch via mcp__github__actions_get download_workflow_run_artifact + python3 -I tools/emu/fetch_artifact.py <url> <empty dir>). Then dispatch android.yml app=lab lab_suite=daily lab_minutes=45 on this branch ccr-e89b9dfe-pl3lk5 (full_build=false).
+LAB3d: write tools/emu/buildreport.py against a real older artifact (try run 43784927532 compat or 43971358668 vp: mcp__github__actions_list list_workflow_run_artifacts, then actions_get download_workflow_run_artifact, python3 -I tools/emu/fetch_artifact.py <url> <empty dir under scratchpad>); when run 43997001918 ends download its artifacts emulator-lab-text + build-report and read ui-*.txt / events.jsonl
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ LAB3d: write tools/emu/buildreport.py (reads events.jsonl, health-lines.txt, dia
 
 ## Last ten checkpoints
 ```
+  f1cb9443 ckpt 2588: LAB3a/b/c code written: emu-lab.yml (profile input: tablet = 32-bit x86 Andr
   2d9c59f4 ckpt 2587: LAB3 (owner message 62: github runner + hardware-matched emulator + daily-us
   fe809368 ckpt 2586: alpha62 SHIPPED and RECORDED: Release kestrel-g-v0.3.0-alpha62 (code 163, ru
   a29d8d50 ckpt 2585: alpha62 build DISPATCHED ONCE: run 43989321170 (app=gecko full_build=true, h
@@ -25,8 +26,4 @@ LAB3d: write tools/emu/buildreport.py (reads events.jsonl, health-lines.txt, dia
   241f219d ckpt 2581: lab ho run 43986542855 DISPATCHED (head 977ab6a8, app=lab lab_suite=ho): pro
   977ab6a8 ckpt 2580: ANS61c: lab variants preroll (ad-state class, ad set up before the press) + 
   25e3ced5 ckpt 2579: ANS61: :core:test 1413/0 failed (OwnerRulesTest guard added), :geckoapp:comp
-  a86c1e78 ckpt 2578: ANS61b core+app+page done: WebHandOver ad rules (Element.ad, looksLikeAdAddr
 ```
-
-(9 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
