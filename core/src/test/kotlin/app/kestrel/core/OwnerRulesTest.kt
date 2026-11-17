@@ -644,4 +644,16 @@ class OwnerRulesTest {
         assertTrue("a film that plays 7 s with no first picture goes back to the page", np.contains("now - playingSince > 7_000L") && np.contains("fail(\"no picture:"))
         assertTrue("a film pressed again continues where Kestrel's player stopped (RAM only, never for a private tab)", flow.contains("WebHandOver.resumeMs(d.startMs, d.url, NativePlayerActivity.lastUrl") && flow.contains("if (tab.isPrivateTab) d.startMs") && np.contains("if (priv) lastUrl = \"\" else { lastUrl = shownUrl"))
     }
+
+    /** ANS61 (owner message 61: "it played an advertisement video and I couldn't get to the real video"): no advertisement goes to Kestrel's player, and a clip it played to its end is not handed over a second time. */
+    @Test fun noAdvertisementIsHandedToKestrelsPlayerAndNoClipForEver() {
+        val shields = "geckoapp/src/main/assets/kestrel-shields/"
+        val gate = source(shields + "gate-main.js"); val content = source(shields + "content.js"); val bg = source(shields + "background.js")
+        assertTrue("the gate tells the app when the page's player is in an ad state (class names only) and the question carries it as `a`", gate.contains("function adNow(el)") && gate.contains("'jw-flag-ads'") && gate.contains("'vjs-ad-playing'") && gate.contains("'ima-ad-container'") && gate.contains("a: adNow(el) ? 1 : 0"))
+        assertTrue("content.js and background.js pass the bit on as 0 or 1 only", content.contains("a: q.a === 1 ? 1 : 0") && bg.contains("a: m.a === 1 ? 1 : 0"))
+        val flow = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/VideoFlow.kt")
+        assertTrue("the app reads the bit into the element, asks the finder about the file, and breaks the loop with the clip Kestrel's player played to its end", flow.contains("m.optInt(\"a\") == 1)") && flow.contains("tab.media.find(d.url)?.decoy == true") && flow.contains("WebHandOver.playedThrough(d.url, NativePlayerActivity.lastUrl"))
+        val core = source("core/src/main/kotlin/app/kestrel/core/media/WebHandOver.kt")
+        assertTrue("the pure rule: an ad state or an ad address is never handed over (the long film of the frame is, when known), a short list under an ad state is the ad", core.contains("val adLike = el.ad || looksLikeAdAddress(direct.url)") && core.contains("adLike -> null") && core.contains("if (el.ad && !filmLong) null"))
+    }
 }
