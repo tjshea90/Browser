@@ -1,22 +1,22 @@
-# CHECKPOINT 2595 — read me first, then TASKS.md
+# CHECKPOINT 2596 — read me first, then TASKS.md
 
-**Written:** 2026-11-17T02:29:09Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-e89b9dfe-pl3lk5` · **builds on:** `55f60b95` (this checkpoint is the commit after it)
+**Written:** 2026-11-17T02:29:57Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-e89b9dfe-pl3lk5` · **builds on:** `b52ed4c3` (this checkpoint is the commit after it)
 
 ## Just done
-LAB3e: lab run 2 (43997607118) READ. The whole pipeline works on the real emulator (build, boot, 15-step day, report, artifacts). Real results: cold start am 1667 ms / engine ready 2.2 s, a 1178 ms late UI heartbeat at start (tablet 865 ms), film tap-to-picture 0.7 s, 0 UI stalls, memory peak 292 MB with 7 of 8 tabs hibernated, referer trimmed cross-site, GPC header sent, WebRTC masked, third-party cookie not shared, clipboard refused. FOUR lab false positives found by reading the raw logs and FIXED in the lab (not browser faults): bad certificates (the app logs 'page loaded ok=false' for its refused load; Diagnostics says FAILED), pop-up (the app blocks it and shows its chip, window.open returns a stand-in), form typing (taps missed; now uses page-reported coordinates and compares what arrived), per-page console error attribution; plus: low_ram not applied (outcome now recorded), ui-*.txt and device.json now kept in the artifacts, bench calibration uses the fastest run, UI late-beat finding added. Candidate 1 downgraded (data contradicts it), candidate 3 confirmed
+LAB3e: lab run 3 DISPATCHED ONCE: android.yml run 44003337190 (daily, head b52ed4c3, started 02:29Z) with the lab fixes (bad-cert / pop-up / form / mixed-content judged by the app's own signals; ui-*.txt + device.json + lowram-attempt.txt kept in the artifacts). The send_later wake at 03:05Z was written for run 2: it should read run 44003337190 instead. Scope decision: the owner asked for a REPORT (findings + ways to improve), so no app code changes and no APK release in this task; LAB3f-2/3 first steps (log readBack duration, time the start-up burst) are offered to the owner in the answer
 
 ## Do this next
-Dispatch lab run 3 ONCE (android.yml app=lab lab_suite=daily lab_minutes=45 lab_net=full lab_profile=auto, ref ccr-e89b9dfe-pl3lk5; get its id with list_workflow_runs perPage 1 + workflow_runs_filter branch), then read ui-*.txt for the real control names and fix the typed-address step; then baseline (buildreport --write-baseline research/lab-baseline.json), docs/handoff/LABREPORT_0.3.0-alpha62.md, LAB3g answer, delete heartbeat trig_01K9rvGwTaZNy2NbUQeBeWMg
+When run 44003337190 ends (~15 min): list_workflow_jobs 44003337190; download artifacts build-report + emulator-lab-text (list_workflow_run_artifacts, actions_get download_workflow_run_artifact, python3 -I tools/emu/fetch_artifact.py <url> <empty dir under the scratchpad>); read BUILD-REPORT.md + ui-*.txt + lowram-attempt.txt; fix the typed-address step from ui-*.txt if it still cannot find the control; rerun ONLY if a lab fault remains; then: python3 -I tools/emu/buildreport.py --out <dir> --repo-root . --suite daily --profile tablet --run-id N --notes research/LAB3_IMPROVEMENTS.md --write-baseline research/lab-baseline.json, copy BUILD-REPORT.md to docs/handoff/LABREPORT_0.3.0-alpha62.md, tick LAB3 items with evidence (tools/claim.sh style), answer the owner, delete heartbeat trig_01K9rvGwTaZNy2NbUQeBeWMg
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M TASKS.md
-     M research/LAB3_IMPROVEMENTS.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  b52ed4c3 ckpt 2595: LAB3e: lab run 2 (43997607118) READ. The whole pipeline works on the real em
   e61155d2 ckpt 2594: LAB3f: the speed ledger + 8 NEW ranked candidates are saved in research/LAB3
   a3b36287 ckpt 2593: LAB3 docs: research/LAB3_DAILY.md (how to start, what is matched / not, the 
   a1a955e8 ckpt 2592: LAB3e: lab run 2 DISPATCHED ONCE: android.yml run 43997607118 (app=lab lab_s
@@ -26,8 +26,4 @@ Dispatch lab run 3 ONCE (android.yml app=lab lab_suite=daily lab_minutes=45 lab_
   f1cb9443 ckpt 2588: LAB3a/b/c code written: emu-lab.yml (profile input: tablet = 32-bit x86 Andr
   2d9c59f4 ckpt 2587: LAB3 (owner message 62: github runner + hardware-matched emulator + daily-us
   fe809368 ckpt 2586: alpha62 SHIPPED and RECORDED: Release kestrel-g-v0.3.0-alpha62 (code 163, ru
-  a29d8d50 ckpt 2585: alpha62 build DISPATCHED ONCE: run 43989321170 (app=gecko full_build=true, h
 ```
-
-(3 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
