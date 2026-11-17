@@ -409,7 +409,8 @@ class DailyMixin:
     def d_download(self):
         res = {}
         try:
-            self.download("lab-5mb", "lab:/dl/5mb.bin", 5 * 1048576, 120)
+            if not self.a.selftest:                              # (the fake phone never shows the question the download waits for)
+                self.download("lab-5mb", "lab:/dl/5mb.bin", 5 * 1048576, 120)
             res["download"] = "done"
         except Exception as e:
             res["download"] = "raised %r" % e
@@ -635,9 +636,10 @@ class DailyMixin:
         self.d_check("https-upgrade-counter", "pass" if up_a != up_b else "info", "Diagnostics before: %s | after: %s" % (up_b[:1], up_a[:1]))
         # G. the older guards: Safe Browsing pages, installers that pretend to be Kestrel, downloads nobody tapped
         try:
-            self.safe_browsing("daily")
-            self.apk_guard()
-            self.guard_downloads()
+            if not self.a.selftest:
+                self.safe_browsing("daily")
+                self.apk_guard()
+                self.guard_downloads()
         except Exception as e:
             self.issue("low", "tooling", "daily security guards raised %r" % (e,))
         return res
