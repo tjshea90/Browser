@@ -634,21 +634,38 @@ def main():
                 write_report()
 
     text = ""
+    phases = set(p.strip() for p in a.phases.split(",") if p.strip())
     try:
+        # order of value: the first launch after an update (cheap, decisive), the breadth of the install-time compile, then the older checks
+        if "update" in phases:
+            if a.old_apk and a.new_apk and os.path.exists(a.old_apk) and os.path.exists(a.new_apk):
+                try:
+                    update_check(lab, pl, adb, a, say, upd_rows, upd_notes, write_report)
+                except Exception as e:
+                    upd_notes.append("update check failed: %r" % (e,))
+            else:
+                upd_notes.append("update check skipped: --old-apk / --new-apk missing")
+            write_report()
         if a.release_apk and os.path.exists(a.release_apk):
+            if "breadth" in phases:
+                try:
+                    breadth_check(lab, pl, adb, srv, a, say, br_info, br_rows, br_mem, upd_notes, write_report)
+                except Exception as e:
+                    upd_notes.append("breadth check failed: %r" % (e,))
+                write_report()
             try:
-                if not a.dm_only:
+                if "release" in phases and not a.dm_only:
                     release_check(lab, pl, adb, a, say, rel_rows, rel_notes, write_report)
             except Exception as e:                          # the other phases must still run and be reported
                 rel_notes.append("release check failed: %r" % (e,))
             write_report()
-            if a.release_dm:
+            if "dm" in phases and a.release_dm:
                 try:
                     dm_install_check(lab, pl, adb, a, say, dm_rows, write_report)
                 except Exception as e:
                     rel_notes.append("dm install check failed: %r" % (e,))
                 write_report()
-        if a.apk and a.debug_ab:
+        if a.apk and (a.debug_ab or "debug" in phases):
             try:
                 debug_ab()
             except Exception as e:
