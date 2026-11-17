@@ -1,21 +1,22 @@
-# CHECKPOINT 2614 — read me first, then TASKS.md
+# CHECKPOINT 2615 — read me first, then TASKS.md
 
-**Written:** 2026-11-17T08:32:44Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-a10e07b7-6zxjmi` · **builds on:** `c2465563` (this checkpoint is the commit after it)
+**Written:** 2026-11-17T09:03:14Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-e89b9dfe-pl3lk5` · **builds on:** `cc1424d3` (this checkpoint is the commit after it)
 
 ## Just done
-alpha63 SHIPPED + recorded (run 44046401335 green, release kestrel-g-v0.3.0-alpha63 has APK). Run 9 verdict: degraded lab run, no app cause found; no start-up/Google change made. LAB4d done; LAB3/4 items answered
+LAB5 (owner message 2026-11-17T06:42:30Z: improve the browser as much as possible from the emulated runs, run more emulations if they help, ultra fast / snappy / lightweight, full permission, no prompts, build the release after all research and coding) written into TASKS.md in his words as LAB5a-e BEFORE any code. State found at 09:00Z: the parallel session ccr-a10e07b7-6zxjmi already read run 9 (degraded: emulator restarted, no network, Google A/B all timeouts; start-up block on the emulator = software-GL render sync + 166 ms runtime create) and SHIPPED alpha63 (code 164, back gesture on Android 13+, diagnostics) at 08:32Z; its work is merged into this branch. The release at the end of THIS pass is alpha64 (code 165)
 
 ## Do this next
-Wait for the owner: tablet test of alpha63 (back gesture only matters on the Android 16 phone); owner decision: switch Neon glow idle pulse off (~4% CPU)? Then LAB3h/i lab fidelity follow-ups only if the owner wants more lab work
+Research first (LAB5a): spawn read-only research agents in parallel (packaging/omni.ja/startup-prof; UI-thread start path; extension per-frame cost; lab-measurable prefs), meanwhile inspect the alpha63 APK (omni.ja stored or deflated? native libs?) and read research/UPDATE_STORAGE.md, EXT_COST.md, COLD_START.md; then design the lab suites; no app code before the evidence
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  cc1424d3 ckpt 2614: alpha63 SHIPPED + recorded (run 44046401335 green, release kestrel-g-v0.3.0-
   12cd7f08 ckpt 2613: alpha63 dispatched ONCE (run_workflow app=gecko full_build=true ref ccr-a10e
   d59a6ddb ckpt 2612: gated kestrel-g-v0.3.0-alpha63 (gecko code 164) and pushed it: handoff self-
   3cdec9fe ckpt 2611: run 9 read: degraded run (emulator restarted, no network, Google A/B all 60 
@@ -25,5 +26,4 @@ Wait for the owner: tablet test of alpha63 (back gesture only matters on the And
   edacce50 ckpt 2607: LAB4a: run 7 (44010606968, instrumented app, hotspot, OLD lab order) CANCELL
   7f6901e6 ckpt 2606: LAB4a: run 6 (44010165696) was CANCELLED after 53 min in the lab step; its a
   c2e8ae15 ckpt 2605: LAB4b: ANS60f DONE in code (NOT testable on the Android 10 lab, compile-chec
-  4ada6834 ckpt 2604: LAB4b: instrumentation step verified: JVM suites :core:test :app:testDebugUn
 ```
