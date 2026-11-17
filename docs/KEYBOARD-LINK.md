@@ -33,5 +33,8 @@ A ContentProvider or bound service between the apps would have to be protected b
   * A private tab: `noLearn=true`; a normal tab: `noLearn=false`.
   * Memory: Swoop 40 to 44 MB PSS (debug build), Kestrel 238 to 257 MB with a page open.
   * 10 real sites loaded in Kestrel at full speed: first paint 0.2 to 2.8 s, load finished 0.25 to 5.9 s (apnews.com, with 54 requests blocked, is the slowest).
+  * A 10 second film pressed to play: Kestrel's own player started inside the page, first picture after 1.2 s, 0 stalls, 5 dropped frames of about 300 (a software decoder on the emulator, not the tablet's hardware).
+  * The emulator's own graphics (SwiftShader) gave up twice, on one particular web page and on a 1080p film (Android's system_server watchdog restart loop): an emulator limit, not shown to be a Kestrel defect; those two were taken out of the test lists.
+  * A Google results page asked Kestrel for the location: Kestrel showed its own Block / Allow question (the simulation taps Block).
   * Emulator numbers are NOT the tablet's (x86_64, software GPU, fast CPU): they are relative to other runs of the same kind.
 * NOT proven on a real tablet or phone: the panel -> Swoop floating round trip, the keyboard picker flow, the hand-over of the old learned file, Swoop's speed and memory in GeckoView fields on the MT8168B, real-thumb accuracy.
