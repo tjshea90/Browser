@@ -632,6 +632,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun noteArtStatus() {
         if (artNoted || isFinishing || isDestroyed) return
         artNoted = true
+        Io.exec { try { Health.log("start", "oat", oatSizes()) } catch (e: Throwable) { Health.log("start", "oat", "unknown: ${e.javaClass.simpleName}") } }
         try {
             val fut = androidx.profileinstaller.ProfileVerifier.getCompilationStatusAsync()
             fut.addListener({
