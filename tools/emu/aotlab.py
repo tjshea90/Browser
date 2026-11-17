@@ -123,6 +123,48 @@ def release_check(lab, pl, adb, a, say):
     return rows, notes
 
 
+def dm_install_check(lab, pl, adb, a, say):
+    """Can the profile be compiled AT INSTALL TIME? A session install with `base.apk` + `base.dm` (what Google Play does, and what Kestrel's own updater could do): Android 10 compiles with the profile while installing
+    (`[status=speed-profile] [reason=install-dm]`) instead of waiting for the idle-and-charging dexopt. Each given .dm is tried; also the plain install of the same APK for the install time and the compiled size.
+    Returns (rows, notes)."""
+    pkg = a.release_pkg
+    rows, notes = [], []
+    apk = a.release_apk
+    size = os.path.getsize(apk)
+
+    def session_install(label, dm_path):
+        adb.run("uninstall", pkg, timeout=120)
+        t0 = time.time()
+        out = adb.run("shell", "pm", "install-create", "-r", "-t", "-S", str(size), timeout=60)
+        m = re.search(r"\[(\d+)\]", out)
+        if not m:
+            return {"label": label, "ok": False, "why": "no session: " + out.strip()[:100]}
+        sid = m.group(1)
+        remote = "/data/local/tmp/aot-release.apk"
+        adb.run("push", apk, remote, timeout=600)
+        r1 = adb.sh("pm install-write -S %d %s base.apk %s" % (size, sid, remote), timeout=600)
+        if dm_path:
+            dsize = os.path.getsize(dm_path)
+            adb.run("push", dm_path, "/data/local/tmp/aot-release.dm", timeout=60)
+            r1 += adb.sh("pm install-write -S %d %s base.dm /data/local/tmp/aot-release.dm" % (dsize, sid), timeout=60)
+        r2 = adb.sh("pm install-commit %s" % sid, timeout=900)
+        took = round(time.time() - t0, 1)
+        ok = "Success" in r2
+        st = parse_dexopt_status(adb.sh("dumpsys package dexopt", timeout=60), pkg)
+        path = adb.sh("pm path %s" % pkg, timeout=30).strip().replace("package:", "")
+        d = os.path.dirname(path) if path else ""
+        oat = sum_ls_bytes(adb.sh("ls -lR %s/oat 2>/dev/null" % d, timeout=60)) if d else 0
+        return {"label": label, "ok": ok, "install_s": took, "status": st[0], "reason": st[1], "oat_kb": oat // 1024, "commit": r2.strip()[:160]}
+
+    rows.append(session_install("plain (no dm)", None))
+    say("dm check", rows[-1])
+    for dm in a.release_dm:
+        label = "dm " + os.path.basename(os.path.dirname(dm)) + "/" + os.path.basename(dm)
+        rows.append(session_install(label, dm))
+        say("dm check", rows[-1])
+    return rows, notes
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="aot-out")
@@ -131,6 +173,7 @@ def main():
     ap.add_argument("--apk", default="")
     ap.add_argument("--release-apk", default="", help="the R8-minified release build for the emulator's ABI: its EMBEDDED baseline profile is installed by androidx.profileinstaller and compiled (the real release path)")
     ap.add_argument("--release-pkg", default="app.kestrel.browser.gecko")
+    ap.add_argument("--release-dm", action="append", default=[], help="a dex-metadata file AGP wrote next to the release build (outputs/apk/release/baselineProfiles/<n>/*.dm); each one is tried as `base.dm` in a PackageInstaller session")
     ap.add_argument("--rounds", type=int, default=3)
     ap.add_argument("--starts", type=int, default=4)
     ap.add_argument("--port", type=int, default=8093)
@@ -244,6 +287,13 @@ def main():
         except Exception as e:                              # the debug A/B above must still be reported
             rel_notes.append("release check failed: %r" % (e,))
 
+    dm_rows = []
+    if a.release_apk and os.path.exists(a.release_apk) and a.release_dm:
+        try:
+            dm_rows, _ = dm_install_check(lab, pl, adb, a, say)
+        except Exception as e:
+            rel_notes.append("dm install check failed: %r" % (e,))
+
     med = pl.median
     L = ["# Ahead-of-time compile A/B (LAB5b)", "",
          "One APK, three compile states (`cmd package compile -f -m MODE`), %d rounds x %d starts per mode (alternating warm / cold file cache). **Emulator numbers: read the differences between modes of THIS run.**" % (a.rounds, a.starts), "",
@@ -287,13 +337,21 @@ def main():
         for n in rel_notes:
             L.append("- " + n)
         L.append("")
+    if dm_rows:
+        L.append("## Compile at install: a PackageInstaller session with `base.apk` + `base.dm` (the dex metadata AGP writes next to the release build)")
+        L.append("")
+        L.append("| Install | ok | install s | status | reason | compiled code KB | answer |")
+        L.append("| :- | :- | -: | :- | :- | -: | :- |")
+        for r in dm_rows:
+            L.append("| %s | %s | %s | %s | %s | %s | %s |" % (r.get("label"), r.get("ok"), r.get("install_s", "-"), r.get("status"), r.get("reason"), r.get("oat_kb", "-"), (r.get("commit") or r.get("why") or "")[:90].replace("|", "/")))
+        L.append("")
     for n in notes:
         L.append("- " + n)
     text = "\n".join(L) + "\n"
     with open(os.path.join(a.out, "AOT-REPORT.md"), "w") as f:
         f.write(text)
     with open(os.path.join(a.out, "aot-results.json"), "w") as f:
-        json.dump({"starts": rows, "compile": status, "notes": notes, "release": rel_rows, "release_notes": rel_notes}, f, indent=1)
+        json.dump({"starts": rows, "compile": status, "notes": notes, "release": rel_rows, "release_notes": rel_notes, "dm_install": dm_rows}, f, indent=1)
     print("\n" + text, flush=True)
     return 0
 
