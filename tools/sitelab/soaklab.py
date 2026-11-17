@@ -555,6 +555,149 @@ def page_dl():
     return ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Soak downloads</title><body style='font:20px sans-serif;margin:14px'><h1>Downloads</h1>" + links).encode()
 
 
+# ---- LAB3c / LAB3a: the security + feature battery and the CPU calibration of the daily suite -------------------------------------------------
+SEC_JS = r"""
+<script>
+var TAG = '@TAG@', NAMES = [];
+function rep(name, r, v) {            // r: pass | fail | info
+  NAMES.push(name);
+  try { new Image().src = '/report?kind=sec&tag=' + encodeURIComponent(TAG) + '&name=' + encodeURIComponent(name) + '&r=' + r + '&v=' + encodeURIComponent(String(v).slice(0, 300)) + '&t=' + Date.now(); } catch (e) {}
+  var li = document.createElement('li'); li.textContent = r + ' ' + name + ': ' + String(v).slice(0, 120); document.getElementById('out').appendChild(li);
+}
+function hash(str) { var h = 5381; for (var i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0; return (h >>> 0).toString(16); }
+function timed(name, p, ok, bad, ms) {  // a promise that must settle within ms: the settlement decides pass / fail, silence is info
+  var done = false;
+  var to = setTimeout(function () { if (!done) { done = true; rep(name, 'info', 'no answer in ' + ms + ' ms (a prompt may be waiting)'); } }, ms);
+  p.then(function (v) { if (done) return; done = true; clearTimeout(to); ok(v); }, function (e) { if (done) return; done = true; clearTimeout(to); bad(e); });
+}
+// 1. a pop-up without a tap must be blocked
+try { var w = window.open('/blank', 'kst_pop'); rep('popup-without-tap', w ? 'fail' : 'pass', w ? 'window.open opened a window' : 'blocked'); if (w) w.close(); } catch (e) { rep('popup-without-tap', 'pass', 'threw ' + e.name); }
+// 2. camera + microphone: never granted silently
+if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+  timed('camera-microphone', navigator.mediaDevices.getUserMedia({ video: true, audio: true }), function (s) { rep('camera-microphone', 'fail', 'GRANTED without a tap or a question'); try { s.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} }, function (e) { rep('camera-microphone', 'pass', 'refused: ' + e.name); }, 9000);
+} else { rep('camera-microphone', 'pass', 'no mediaDevices.getUserMedia in this page'); }
+// 3. location
+if (navigator.geolocation) {
+  var gdone = false;
+  navigator.geolocation.getCurrentPosition(function (p) { if (!gdone) { gdone = true; rep('location', 'fail', 'a position was given without a question'); } }, function (e) { if (!gdone) { gdone = true; rep('location', 'pass', 'refused: code ' + e.code); } }, { timeout: 8000 });
+  setTimeout(function () { if (!gdone) { gdone = true; rep('location', 'info', 'no answer in 10 s'); } }, 10000);
+} else { rep('location', 'pass', 'no geolocation object'); }
+// 4. notifications / push: the owner's brief says none
+try { rep('notifications', (typeof Notification === 'undefined' || Notification.permission !== 'granted') ? 'pass' : 'fail', typeof Notification === 'undefined' ? 'no Notification object' : 'permission = ' + Notification.permission); } catch (e) { rep('notifications', 'info', e.name); }
+rep('push-api', 'info', 'PushManager ' + ('PushManager' in window ? 'present' : 'absent') + ', serviceWorker ' + ('serviceWorker' in navigator ? 'present' : 'absent'));
+// 5. the clipboard cannot be read by a page that was not tapped
+if (navigator.clipboard && navigator.clipboard.readText) { timed('clipboard-read', navigator.clipboard.readText(), function () { rep('clipboard-read', 'fail', 'the page read the clipboard without a tap'); }, function (e) { rep('clipboard-read', 'pass', 'refused: ' + e.name); }, 5000); } else { rep('clipboard-read', 'pass', 'no async clipboard read'); }
+// 6. fingerprint surface: the values a tracker would use (info; the report compares them with research/SECURITY.md)
+try {
+  var c = document.createElement('canvas'); c.width = 200; c.height = 40; var x = c.getContext('2d'); x.textBaseline = 'top'; x.font = '16px Arial'; x.fillStyle = '#f60'; x.fillRect(10, 5, 80, 20); x.fillStyle = '#069'; x.fillText('Kestrel fp 1.23', 4, 8);
+  var h1 = hash(c.toDataURL()), h2 = hash(c.toDataURL());
+  rep('fp-canvas', 'info', 'two reads ' + (h1 === h2 ? 'identical' : 'DIFFERENT (randomised)') + ' ' + h1);
+} catch (e) { rep('fp-canvas', 'info', 'canvas ' + e.name); }
+var gl = ''; try { var cv = document.createElement('canvas'); var g = cv.getContext('webgl') || cv.getContext('experimental-webgl'); if (g) { var di = g.getExtension('WEBGL_debug_renderer_info'); gl = di ? g.getParameter(di.UNMASKED_VENDOR_WEBGL) + ' / ' + g.getParameter(di.UNMASKED_RENDERER_WEBGL) : 'masked ' + g.getParameter(g.VENDOR) + ' / ' + g.getParameter(g.RENDERER); } else gl = 'no webgl'; } catch (e) { gl = 'error ' + e.name; }
+rep('fp-webgl', 'info', gl);
+var tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone + ' off ' + new Date().getTimezoneOffset(); } catch (e) {}
+rep('fp-device', 'info', 'cores ' + navigator.hardwareConcurrency + ', memory ' + navigator.deviceMemory + ', screen ' + screen.width + 'x' + screen.height + ' dpr ' + devicePixelRatio + ', inner ' + innerWidth + 'x' + innerHeight + ', tz ' + tz + ', lang ' + (navigator.languages || []).join(',') + ', platform ' + navigator.platform + ', plugins ' + (navigator.plugins ? navigator.plugins.length : '?'));
+rep('fp-useragent', 'info', navigator.userAgent);
+rep('fp-apis', 'info', 'battery ' + ('getBattery' in navigator) + ', connection ' + ('connection' in navigator) + ', bluetooth ' + ('bluetooth' in navigator) + ', usb ' + ('usb' in navigator) + ', hid ' + ('hid' in navigator) + ', serial ' + ('serial' in navigator));
+var a = performance.now(), b = a, n = 0; while (b === a && n < 1e6) { b = performance.now(); n++; } rep('fp-timer', 'info', 'smallest clock step about ' + (b - a).toFixed(3) + ' ms');
+// 7. WebRTC must not hand a page the tablet's real network address
+try {
+  var pc = new RTCPeerConnection({ iceServers: [] }), seen = [];
+  pc.createDataChannel('x');
+  pc.onicecandidate = function (e) { if (e.candidate) seen.push(e.candidate.candidate); };
+  pc.createOffer().then(function (o) { return pc.setLocalDescription(o); });
+  setTimeout(function () {
+    var raw = seen.filter(function (c) { return /(\d{1,3}\.){3}\d{1,3}/.test(c) && !/\.local/.test(c); });
+    rep('webrtc-address', raw.length ? 'fail' : 'pass', raw.length ? 'raw local address in a candidate: ' + raw[0].slice(0, 100) : (seen.length ? 'only masked (.local) candidates' : 'no candidates'));
+    try { pc.close(); } catch (e) {}
+  }, 3500);
+} catch (e) { rep('webrtc-address', 'pass', 'no RTCPeerConnection: ' + e.name); }
+// 8. what a site sees in the request headers (same site and another site): the server answers with its own copy
+function echo(base, name) {
+  return fetch(base + '/sec/echo?from=' + name, { mode: 'cors', credentials: 'omit', referrerPolicy: 'unsafe-url' }).then(function (r) { return r.json(); }).then(function (j) {
+    var ref = j.referer || '';
+    if (name === 'cross') {
+      rep('referer-cross-site', /^https?:\/\/[^\/]+\/?$/.test(ref) || ref === '' ? 'pass' : 'fail', 'the other site was told: ' + (ref || '(nothing)') + ' (page asked for the full address)');
+    } else { rep('referer-same-site', 'info', 'same site was told: ' + (ref || '(nothing)')); }
+    rep('header-gpc-dnt-' + name, 'info', 'Sec-GPC ' + (j['sec-gpc'] || '-') + ', DNT ' + (j.dnt || '-') + ', Accept-Language ' + (j['accept-language'] || '-'));
+    if (name === 'same') { rep('header-useragent', 'info', j['user-agent'] || '-'); }
+  }, function (e) { rep('referer-' + name, 'info', 'the fetch failed: ' + e.name); });
+}
+echo('', 'same').then(function () { return echo('http://127.0.0.1:' + location.port, 'cross'); });
+// 9. a frame of another site sets a cookie (the driver then opens that other site on its own and must find NO cookie there)
+var fr = document.createElement('iframe'); fr.style.cssText = 'width:1px;height:1px;border:0'; fr.src = 'http://127.0.0.1:' + location.port + '/sec/frame?tag=' + encodeURIComponent(TAG); document.body.appendChild(fr);
+// 10. a script of another site cannot move this page away without a tap
+var f2 = document.createElement('iframe'); f2.style.cssText = 'width:1px;height:1px;border:0'; f2.src = 'http://127.0.0.1:' + location.port + '/sec/framebust'; document.body.appendChild(f2);
+setTimeout(function () { rep('frame-navigates-top', location.pathname === '/sec' ? 'pass' : 'fail', 'page is still ' + location.pathname); }, 4000);
+setTimeout(function () { rep('battery-done', 'info', NAMES.length + ' checks reported'); }, 12000);
+</script>
+"""
+
+
+def page_sec(tag):
+    head = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Security lab</title>"
+            "<body style='font:15px sans-serif;margin:10px'><h3>Security and feature checks</h3><ul id=out></ul>")
+    return (head + SEC_JS.replace("@TAG@", tag.replace("'", "").replace("<", ""))).encode()
+
+
+def page_sec_frame(tag):
+    """A page of ANOTHER site (127.0.0.1 while the top page is localhost) that sets a cookie and tries to read it back."""
+    js = ("<script>var t='" + tag.replace("'", "").replace("<", "") + "';var ok='no';try{document.cookie='kst_tp=1; path=/; max-age=3600; SameSite=None';ok=/kst_tp=1/.test(document.cookie)?'yes':'no';}catch(e){ok='threw '+e.name}"
+          "var ls='n/a';try{localStorage.setItem('kst_tp','1');ls=localStorage.getItem('kst_tp')==='1'?'yes':'no'}catch(e){ls='blocked '+e.name}"
+          "new Image().src='/report?kind=sec&tag='+encodeURIComponent(t)+'&name=third-party-cookie-frame&r=info&v='+encodeURIComponent('cookie readable inside the frame: '+ok+', localStorage: '+ls);</script>")
+    return ("<!doctype html><meta charset=utf-8><title>frame</title>" + js).encode()
+
+
+def page_sec_read(tag):
+    """The other site opened ON ITS OWN (first party): it must not see the cookie its frame set under another site."""
+    js = ("<script>var t='" + tag.replace("'", "").replace("<", "") + "';var has=/kst_tp=1/.test(document.cookie);var ls='?';try{ls=localStorage.getItem('kst_tp')==='1'?'yes':'no'}catch(e){ls='blocked'}"
+          "new Image().src='/report?kind=sec&tag='+encodeURIComponent(t)+'&name=third-party-cookie-read&r='+(has||ls==='yes'?'fail':'pass')+'&v='+encodeURIComponent('first-party visit found the frame cookie: '+has+', localStorage: '+ls);"
+          "document.write('<p>cookie found: '+has+'</p>');</script>")
+    return ("<!doctype html><meta charset=utf-8><title>read</title>" + js).encode()
+
+
+def page_sec_framebust():
+    return b"<!doctype html><meta charset=utf-8><script>try{top.location.href='/blank?busted=1'}catch(e){}</script>"
+
+
+def page_sec_scheme(tag):
+    """Addresses the app must not hand to other apps without a tap (LAB3c): the driver checks that the app stays in front afterwards."""
+    js = ("<script>var t='" + tag.replace("'", "").replace("<", "") + "';"
+          "var list=['intent://scan/#Intent;scheme=zxing;package=com.google.zxing.client.android;end','market://details?id=com.example.app','tel:+15551234567','sms:+15551234567','mailto:test@example.com','vnd.youtube://watch?v=abc','whatsapp://send?text=x','sip:test@example.com'];"
+          "var i=0;function next(){if(i>=list.length){new Image().src='/report?kind=sec&tag='+encodeURIComponent(t)+'&name=scheme-battery&r=info&v=tried+'+list.length+'+without+a+tap';return;}"
+          "try{var f=document.createElement('iframe');f.style.display='none';f.src=list[i];document.body.appendChild(f);}catch(e){}"
+          "try{window.location.href=list[i];}catch(e){}i++;setTimeout(next,900);}next();</script>")
+    return ("<!doctype html><meta charset=utf-8><title>schemes</title><body style='font:18px sans-serif'>trying addresses that belong to other apps, with no tap" + js).encode()
+
+
+def page_sec_file(tag):
+    """Stands in for a local file (the driver copies it to /sdcard/Download and opens file:// in the app): if the app runs it, the page phones home."""
+    js = ("<script>new Image().src='http://localhost:8091/report?kind=sec&tag=" + tag.replace("'", "").replace("<", "") + "&name=file-url-script&r=fail&v=a+file%3A%2F%2F+page+RAN+its+script';</script>")
+    return ("<!doctype html><meta charset=utf-8><title>file page</title><h1>FILE PAGE</h1>" + js).encode()
+
+
+def page_bench():
+    """LAB3a: a fixed amount of work, timed in the page, so every run says how fast ITS runner was. Two runs of different builds are only comparable after dividing by this."""
+    js = r"""<script>
+function t(f){var a=performance.now();f();return Math.round(performance.now()-a);}
+function run(){
+  var r={};
+  r.loop=t(function(){var s=0;for(var i=0;i<6e6;i++){s=(s+i*i)%1000003;}window.__s=s;});
+  r.sort=t(function(){var a=[];var x=12345;for(var i=0;i<150000;i++){x=(x*1103515245+12345)&0x7fffffff;a.push(x);}a.sort(function(p,q){return p-q;});});
+  r.json=t(function(){var o=[];for(var i=0;i<20000;i++)o.push({id:i,name:'item'+i,tags:['a','b','c'],v:i*1.5});var s=JSON.stringify(o);var p=JSON.parse(s);window.__p=p.length;});
+  r.regex=t(function(){var s='';for(var i=0;i<4000;i++)s+='user'+i+'@example.com, ';var m=s.match(/[a-z0-9]+@[a-z.]+/g);window.__m=m.length;});
+  r.dom=t(function(){var d=document.createElement('div');for(var i=0;i<4000;i++){var e=document.createElement('p');e.textContent='row '+i;e.style.color='#'+(i%10)+'00';d.appendChild(e);}document.body.appendChild(d);document.body.offsetHeight;document.body.removeChild(d);});
+  r.canvas=t(function(){var c=document.createElement('canvas');c.width=400;c.height=400;var x=c.getContext('2d');for(var i=0;i<1500;i++){x.fillStyle='rgb('+(i%255)+',100,150)';x.fillRect(i%380,(i*7)%380,20,20);}x.getImageData(0,0,400,400);});
+  r.total=r.loop+r.sort+r.json+r.regex+r.dom+r.canvas;
+  var q=Object.keys(r).map(function(k){return k+'='+r[k];}).join('&');
+  new Image().src='/report?kind=bench&'+q+'&t='+Date.now();
+  document.getElementById('o').textContent=JSON.stringify(r);
+}
+setTimeout(run,300);
+</script>"""
+    return ("<!doctype html><meta charset=utf-8><title>bench</title><body style='font:16px sans-serif'><p>CPU calibration</p><pre id=o>running</pre>" + js).encode()
+
+
 def index():
     rows = ["/page/text", "/page/images", "/page/iframes", "/page/form", "/video/landscape", "/video/portrait", "/video/big", "/formats?tag=index", "/ap?v=autoplay&tag=index", "/fs", "/fsbox?kind=shadow", "/dl/page", "/dl/1mb.bin", "/dl/5mb.bin", "/dl/20mb.bin", "/dl/slow.bin"]
     return ("<!doctype html><meta charset=utf-8><title>Soak lab</title><body style='font:18px sans-serif'><h1>Soak lab</h1>" + "".join("<p><a href='%s'>%s</a></p>" % (r, r) for r in rows)).encode()
@@ -717,6 +860,31 @@ class H(http.server.BaseHTTPRequestHandler):
                 return self._download(int(p[4:-6]) * 1024 * 1024, "kestrel-lab-%smb.bin" % p[4:-6], 0)
             if p == "/dl/slow.bin":
                 return self._download(5 * 1024 * 1024, "kestrel-lab-slow.bin", 400 * 1024)
+            if p == "/sec":
+                return self._send(page_sec((q.get("tag") or ["sec"])[0]))
+            if p == "/sec/frame":
+                return self._send(page_sec_frame((q.get("tag") or ["sec"])[0]))
+            if p == "/sec/read":
+                return self._send(page_sec_read((q.get("tag") or ["sec"])[0]))
+            if p == "/sec/framebust":
+                return self._send(page_sec_framebust())
+            if p == "/sec/scheme":
+                return self._send(page_sec_scheme((q.get("tag") or ["sec"])[0]))
+            if p == "/sec/file":
+                return self._send(page_sec_file((q.get("tag") or ["sec"])[0]))
+            if p == "/sec/echo":                      # what the request looked like to a site (the headers a tracker would see)
+                h = {k.lower(): v for k, v in self.headers.items()}
+                body = json.dumps({"referer": h.get("referer", ""), "sec-gpc": h.get("sec-gpc", ""), "dnt": h.get("dnt", ""), "user-agent": h.get("user-agent", ""), "accept-language": h.get("accept-language", ""),
+                                   "origin": h.get("origin", ""), "cookie": h.get("cookie", "")[:200]}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            if p == "/bench":
+                return self._send(page_bench())
             if p == "/report":
                 row = {k: v[0] for k, v in q.items()}
                 row["srv"] = round(time.time(), 2)
