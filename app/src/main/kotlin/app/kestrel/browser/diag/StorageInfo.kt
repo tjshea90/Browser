@@ -102,10 +102,15 @@ object StorageInfo {
      */
     fun purgeDoomedCache(ctx: Context): Long {
         var freed = 0L
+        val t0 = android.os.SystemClock.uptimeMillis()
         val stack = ArrayDeque<File>(); stack.add(ctx.applicationContext.cacheDir)
         var n = 0
         while (stack.isNotEmpty() && n < 100_000) {
-            val d = stack.removeLast(); n++
+            val d = stack.removeLast()
+            // LAB5 (research/LAB5_STARTUP.md row 2): `cache2/entries` is the LIVE network cache (up to 512 MB = 10-40k files) and nothing in it is ever doomed. Listing it cost a readdir plus a stat per file on every
+            // cold start, on the low-priority lane that competes with libxul paging in from the tablet's eMMC. Only `cache2/doomed` and `cache2/trash*` hold what this function removes.
+            if (d.name == "entries" && d.parentFile?.name == "cache2") continue
+            n++
             val kids = d.listFiles() ?: continue
             val doomedHere = d.parentFile?.name == "cache2" && (d.name == "doomed" || d.name.startsWith("trash"))
             for (k in kids) {
