@@ -69,7 +69,7 @@ if [ "$APP" = "gecko" ] && command -v unzip >/dev/null 2>&1; then
   PROF="$(unzip -l "$APK" assets/dexopt/baseline.prof 2>/dev/null | awk '/assets\/dexopt\/baseline.prof/{print $1}' | head -1)"
   if [ -z "$PROF" ]; then bad "assets/dexopt/baseline.prof is missing (geckoapp/src/main/baseline-prof.txt not compiled in?)"
   elif [ "$PROF" -ge 2500 ]; then ok "baseline profile present (assets/dexopt/baseline.prof $PROF bytes)"
-  else bad "baseline profile is only $PROF bytes: our own rules did not get in (expected about 6000; the libraries alone give 246)"; fi
+  else bad "baseline profile is only $PROF bytes: our own rules did not get in (expected about 3500 with the catch-all rule, 6000 without; the libraries alone give 246)"; fi
 fi
 
 KB=$(( $(stat -c %s "$APK") / 1024 ))
