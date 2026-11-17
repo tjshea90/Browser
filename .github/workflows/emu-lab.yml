@@ -231,6 +231,7 @@ jobs:
           buildrel() {
             ./gradlew :geckoapp:assembleRelease -PgeckoAbi=$IMG_ABI --console=plain > "$RUNNER_TEMP/release-build-$1.log" 2>&1 || tail -30 "$RUNNER_TEMP/release-build-$1.log"
             cp geckoapp/build/outputs/apk/release/geckoapp-release.apk "$RUNNER_TEMP/apks/rel-$1.apk" 2>/dev/null || echo "::warning::release build $1 produced no APK"
+            cp geckoapp/build/outputs/apk/release/baselineProfiles/1/geckoapp-release.dm "$RUNNER_TEMP/apks/rel-$1.dm" 2>/dev/null || true
             { echo "== $1"; unzip -l "$RUNNER_TEMP/apks/rel-$1.apk" 2>/dev/null | grep -E "dexopt|classes.*dex"; ls -l geckoapp/build/outputs/apk/release/baselineProfiles/*/*.dm 2>/dev/null; } >> "$RUNNER_TEMP/lab-out/profile-builds.txt"
           }
           buildrel base
@@ -241,9 +242,14 @@ jobs:
           buildrel all
           git checkout -- geckoapp/src/main/baseline-prof.txt
           cat "$RUNNER_TEMP/lab-out/profile-builds.txt"
+          # lab_minutes = dm: the quick check of the shipped profile through the updater's own install path (a PackageInstaller session with the .dm, LAB6/LAB7c); anything else: the full LAB7 run
+          if [ "$MINUTES" = dm ]; then
+            python3 -u -I tools/emu/aotlab.py --out "$RUNNER_TEMP/lab-out" --repo-root "$PWD" --pkg "$PKG" --phases dm --dm-only --release-apk "$RUNNER_TEMP/apks/rel-base.apk" --release-dm "$RUNNER_TEMP/apks/rel-base.dm" 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
+          else
           python3 -u -I tools/emu/aotlab.py --out "$RUNNER_TEMP/lab-out" --repo-root "$PWD" --pkg "$PKG" --apk "$APK" --phases update,breadth --update-rounds 2 --breadth-rounds 2 --starts 4 \
             --old-apk "$RUNNER_TEMP/apks/old.apk" --new-apk "$RUNNER_TEMP/apks/new.apk" \
             --release-apk "$RUNNER_TEMP/apks/rel-base.apk" --apk-exercised "$RUNNER_TEMP/apks/rel-exercised.apk" --apk-all "$RUNNER_TEMP/apks/rel-all.apk" 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
+          fi
           if [ -f "$RUNNER_TEMP/lab-out/AOT-REPORT.md" ]; then cat "$RUNNER_TEMP/lab-out/AOT-REPORT.md" >> "$GITHUB_STEP_SUMMARY"; fi
 
       - name: Run the lab (${{ inputs.suite }}, soak ${{ inputs.minutes }} min, net ${{ inputs.net }})
