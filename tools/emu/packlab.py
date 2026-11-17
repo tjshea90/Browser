@@ -144,6 +144,7 @@ def start_server(port, root, scratch):
         allow_reuse_address = True
 
     srv = S(("0.0.0.0", port), H)
+    srv.pings = pings
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return srv, reports
 
