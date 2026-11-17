@@ -19,6 +19,16 @@
 
 **Not achievable in the lab, found on the way:** a 32-bit userland (Mozilla ships no `geckoview-x86` for 160), the Go edition / low-RAM flag (the emulator accepts `-prop ro.config.low_ram=true`, Android 10 ignores it: read-back empty), the tablet's CPU / GPU / decoders.
 
+### Evidence from the stack samples (lab run 44017705030, instrumented app) - plans changed because of it
+
+| Idea | What the numbers said | Decision |
+| :- | :- | :- |
+| Candidate 2: take the synchronous read-back off the tap path | 38 read-backs in the day took 1-10 ms (median 2 ms); no UI block above 0.7 s was near one | REFUSED by data: the fix would gain nothing |
+| Candidate 3: slice the start-up engine burst | `engine burst runtime+orientation=56ms executor=0ms warmUp=0-1ms shields-install=10-19ms`: the burst is NOT the block. The two start-up block samples were `GeckoRuntime.create <- DebugConfig.fromFile <- GeckoEngine.runtime <- BrowserActivity.ensureSession <- attachContent <- show` (about 0.9 s into the block, UI thread, Gecko must be created there) and `HardwareRenderer.nSetStopped <- ViewRootImpl.performDraw` (Android's own first-draw renderer sync, 0.94 s) | not sliceable as designed; a 40 ms start-up profile (lab builds only) is added to say where the whole 1-1.4 s goes (run 9) |
+| Idle cost | the app uses 5.4 % CPU for 30 s on a static page: RenderThread 3.8 %, Binder 0.6 %, AndroidUI 0.6 %, watchdog thread 0.4 % | the RenderThread share is the owner-requested Neon pulse (10 Hz, deliberately not gated on idle: Neon.kt header). A decision for the owner, not a bug: Settings > Neon glow off removes most of it |
+| Shields on the typed Google search | the first Google results load ends fast with ok=false, then a second load takes 4.5 s with 9 requests blocked (emulator, datacentre address) | run 9 repeats it Shields ON / OFF three times each: if ON is slower the rule is fixed |
+| Yahoo Finance (heavy page) | run 6: froze the UI 2.1 s and ANR'd after nine other pages in a row; run 8 alone and last: no stall at all (loaded 1.9 s, 436 script errors) | not reproducible on its own: the lab keeps it as the last step; nothing to fix blind |
+
 ### Speed: what is already done, what was refused, and what is new (LAB3f, 2026-11-17)
 
 How this was made: one read-only research pass over research/SPEED2-4, GECKO_SPEED, GECKO_TUNING_2, HW_SPEED, SCROLL, COLD_START, PERF_JS, PERF_KOTLIN, EX_RESULTS, FREEZE, TYPING, VIDEO_SMOOTHNESS, ANS60, the REVIEW-EXTERNAL files, gecko-prefs.txt (config v9) and the ticked TASKS items, to build a ledger so nothing old is proposed again. Gains below are ESTIMATES until a lab run or the tablet measures them. Candidates 1 and 2 were checked against the code by reading (see "Checked"); the others are the research pass's reading only.
