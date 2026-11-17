@@ -29,6 +29,7 @@ object Health {
 
     const val WARN_MS = 700L
     const val STALL_MS = 2000L
+    @Volatile private var stackBudget = 24   // LAB4b: stack samples of slow (not yet stalled) UI beats, per process
 
     fun log(layer: String, event: String, detail: String = "") {
         val ms = SystemClock.elapsedRealtime() - startedAt // "+12.345s ...": built by hand, String.format costs about 50-100 us on this CPU and this runs for every touch that may start a pull
@@ -60,7 +61,7 @@ object Health {
         if (dog != null) return
         watching = true
         dog = Thread({
-            var postedAt = 0L; var warned = false; var stacked = false
+            var postedAt = 0L; var warned = false; var stacked = false; var blockSamples = 0; var lastSampleAt = 0L
             while (watching) {
                 val now = SystemClock.uptimeMillis()
                 if (postedAt == 0L) { postedAt = now; ackAt = 0L; main.post { ackAt = SystemClock.uptimeMillis() } }
@@ -69,7 +70,7 @@ object Health {
                 if (ackAt != 0L) {
                     val lag = ackAt - postedAt
                     if (lag >= WARN_MS) { log("ui", "late-beat", "${lag}ms"); count("ui.late") }
-                    postedAt = 0L; warned = false; stacked = false
+                    postedAt = 0L; warned = false; stacked = false; blockSamples = 0
                     try { Thread.sleep(250) } catch (e: InterruptedException) { break }
                 } else {
                     val waiting = n - postedAt
@@ -78,6 +79,11 @@ object Health {
                         log("ui", "STALL", "${waiting}ms: the UI thread is blocked at")
                         try { Looper.getMainLooper().thread.stackTrace.take(12).forEach { log("ui", "  at", it.toString()) } } catch (e: Exception) { /* best effort */ }
                     } else if (waiting >= WARN_MS && !warned) { warned = true; log("ui", "slow", "${waiting}ms") }
+                    // LAB4b: a block between 0.7 s and 2 s used to leave no stack (the lab and the tablet both show about 0.9 s at start-up): name it. At most 3 samples per block, 24 per process.
+                    if (waiting >= WARN_MS && !stacked && blockSamples < 3 && stackBudget > 0 && n - lastSampleAt >= 350) {
+                        blockSamples++; stackBudget--; lastSampleAt = n
+                        try { log("ui", "slow-at", "${waiting}ms " + Looper.getMainLooper().thread.stackTrace.take(9).joinToString(" < ") { it.className.substringAfterLast('.') + "." + it.methodName + ":" + it.lineNumber }) } catch (e: Exception) { /* best effort */ }
+                    }
                 }
             }
         }, "kestrel-watchdog").apply { isDaemon = true; priority = Thread.MIN_PRIORITY; start() }

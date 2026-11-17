@@ -521,13 +521,19 @@ open class BrowserActivity : Activity(), DockListener {
             setRecentsLook() // AO3: the icon and colour of this app's card in the Recents list
             Io.main.post {
                 Health.log("engine", "runtime-create")
+                val burst0 = SystemClock.uptimeMillis() // LAB4b: what each call of this start-up burst costs on the UI thread (the lab and the tablet show a block of about 0.9 s at start)
                 GeckoEngine.runtime(this).orientationController.delegate = object : OrientationController.OrientationDelegate { // FS1: screen.orientation.lock() from a full-screen player
                     override fun onOrientationLock(orientation: Int): GeckoResult<AllowOrDeny>? = GeckoResult.fromValue(if (fsTurner.siteLocked(orientation)) AllowOrDeny.ALLOW else AllowOrDeny.DENY)
                     override fun onOrientationUnlock() { fsTurner.siteUnlocked() }
                 }
+                val burst1 = SystemClock.uptimeMillis()
                 GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
+                val burst2 = SystemClock.uptimeMillis()
                 GeckoEngine.warmUp(this)
+                val burst3 = SystemClock.uptimeMillis()
                 ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, labBuild = { labBuild }, labProbe = { m -> onLabProbe(m) }, viewport = { m -> Io.main.post { onPageViewport(m) } }, player = { m -> playerMessage(m) }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }, videoPolicy = { app.kestrel.browser.web.VideoFormats.policy(applicationContext, prefs) }, pictureCap = { app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs) }, handOver = { m -> video.handOver(m) }))
+                val burst4 = SystemClock.uptimeMillis()
+                Health.log("engine", "burst", "runtime+orientation=${burst1 - burst0}ms executor=${burst2 - burst1}ms warmUp=${burst3 - burst2}ms shields-install=${burst4 - burst3}ms")
                 Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
             }
         }
@@ -1972,6 +1978,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (!force && t0 < readBackBlockedUntil) { if (!priv) Health.count("look.readBackSkipped"); return null }
         val r = geckoView.capturePixels()
         val took = SystemClock.uptimeMillis() - t0
+        if (!priv) Health.log("look", "read-back", "$why ${took}ms") // LAB4b: every call's cost, not only the slow ones (a synchronous call into the compositor, made on the UI thread)
         val back = LastLookRules.readBackBackoffMs(took)
         if (back > 0) { readBackBlockedUntil = t0 + took + back; if (!priv) { Health.count("look.readBackSlow"); Health.log("look", "slow-read-back", "$why took ${took} ms: no more read-backs for ${back / 1000} s") } }
         return r
