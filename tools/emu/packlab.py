@@ -219,7 +219,10 @@ class Lab:
         for pid, pname in self.pids():
             d = parse_smaps_rollup(self.adb.sh("cat /proc/%d/smaps_rollup" % pid, timeout=30))
             if d:
-                procs.append({"name": pname.replace(self.pkg, "app"), "pss_kb": d.get("Pss"), "pss_anon_kb": d.get("Pss_Anon"), "pss_file_kb": d.get("Pss_File"), "private_dirty_kb": d.get("Private_Dirty"), "rss_kb": d.get("Rss")})
+                # Android 10's kernel has no Pss_Anon / Pss_File: the anonymous (private heap) figure is `Anonymous`, the file-backed one the rest of Rss (run 10 showed 0.0 for both)
+                anon = d.get("Pss_Anon") if d.get("Pss_Anon") is not None else d.get("Anonymous")
+                filebacked = d.get("Pss_File") if d.get("Pss_File") is not None else max(0, (d.get("Rss") or 0) - (d.get("Anonymous") or 0))
+                procs.append({"name": pname.replace(self.pkg, "app"), "pss_kb": d.get("Pss"), "pss_anon_kb": anon, "pss_file_kb": filebacked, "private_dirty_kb": d.get("Private_Dirty"), "rss_kb": d.get("Rss")})
         tot = {k: sum((p[k] or 0) for p in procs) for k in ("pss_kb", "pss_anon_kb", "pss_file_kb", "private_dirty_kb", "rss_kb")}
         self.mem.append({"variant": name, "round": rnd, "procs": procs, **{"total_" + k: v for k, v in tot.items()}})
         say("memory", name, "total pss %d MB (anon %d, file %d), %d processes" % (tot["pss_kb"] // 1024, tot["pss_anon_kb"] // 1024, tot["pss_file_kb"] // 1024, len(procs)))
