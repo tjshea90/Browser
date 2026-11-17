@@ -11,6 +11,7 @@ import json
 import os
 import re
 import shlex
+import socket
 import time
 import xml.etree.ElementTree as ET
 
@@ -532,6 +533,15 @@ class DailyMixin:
         return res
 
     # ------------------------------------------------------------------ security and feature probes (LAB3c)
+    def d_reach(self, url):
+        """Can the runner open a TCP connection to the site? (urllib would refuse a bad certificate and call a reachable test site unreachable.)"""
+        host = host_of(url)
+        try:
+            socket.create_connection((host, 443), 8).close()
+            return True
+        except OSError:
+            return False
+
     def d_sec_rows(self, tag, since):
         return [r for r in self.lab.since(since) if r.get("kind") == "sec" and r.get("tag") == tag]
 
@@ -575,8 +585,11 @@ class DailyMixin:
             self.d_check("page-cannot-launch-other-apps", "pass", "the app stayed in front, no other app was started by the 8 addresses")
         # D. a file:// page must not run
         r1 = self.lab.size()
-        html = "<h1>FILE PAGE</h1><script>new Image().src=\\\"http://localhost:%d/report?kind=sec\\\\&tag=%s\\\\&name=file-url-script\\\\&r=fail\\\\&v=a+file+page+RAN\\\";</script>" % (self.port, tag)
-        self.ph.a.sh("mkdir -p /sdcard/Download; echo \"%s\" > /sdcard/Download/kestrel-file-test.html" % html.replace('"', '\\"'), timeout=30)
+        local = os.path.join(self.out, "file-test.html")
+        with open(local, "w") as f:
+            f.write("<!doctype html><title>file page</title><h1>FILE PAGE</h1><script>new Image().src='http://localhost:%d/report?kind=sec&tag=%s&name=file-url-script&r=fail&v=a+file+page+RAN';</script>" % (self.port, tag))
+        self.ph.a.sh("mkdir -p /sdcard/Download", timeout=30)
+        self.ph.a.run("push", local, "/sdcard/Download/kestrel-file-test.html", timeout=60)
         m2 = self.log.size()
         self.ph.open_url("file:///sdcard/Download/kestrel-file-test.html")
         time.sleep(8)
@@ -585,9 +598,8 @@ class DailyMixin:
         self.d_check("file-url-script-does-not-run", "fail" if ran else "pass", "a file:// page's script %s (the app said: %s)" % ("RAN and phoned home" if ran else "did not run", errs or "no error page"))
         # E. bad certificates are never clicked through
         for nm, url in BAD_CERTS:
-            up, note = self.upstream(url)
-            if up == "unreachable":
-                self.d_check("bad-certificate-%s" % nm, "info", "the runner cannot reach it (%s)" % note, area="security")
+            if not self.d_reach(url):
+                self.d_check("bad-certificate-%s" % nm, "info", "the runner cannot reach %s: not measured" % host_of(url), area="security")
                 continue
             m3 = self.log.size()
             self.ph.open_url(url)
@@ -601,9 +613,8 @@ class DailyMixin:
         # F. plain http: upgraded to https (Shields), and mixed content
         before = self.dump_diag("sec-before-http")
         for nm, url in (("http-upgrade", "http://example.com/"), ("mixed-content", "https://mixed.badssl.com/")):
-            up, note = self.upstream(url)
-            if up == "unreachable":
-                self.d_check(nm, "info", "the runner cannot reach it (%s)" % note)
+            if not self.d_reach(url):
+                self.d_check(nm, "info", "the runner cannot reach %s: not measured" % host_of(url))
                 continue
             m4 = self.log.size()
             self.ph.open_url(url)
