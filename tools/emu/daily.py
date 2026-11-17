@@ -19,7 +19,8 @@ import xml.etree.ElementTree as ET
 health_events = console_summary = say = ms_of = host_of = tail = num = None
 CRASH_PATTERNS = []
 PUBLIC_PAGES = []
-TOUR_NAMES = ("npr-text", "hacker-news", "github-repo", "stackoverflow", "bbc-news", "guardian", "reddit", "weather-wttr", "duckduckgo", "yahoo-finance")   # Yahoo LAST (it blocked the emulator's UI thread 2 s in compat run 1)
+TOUR_NAMES = ("npr-text", "hacker-news", "github-repo", "stackoverflow", "bbc-news", "guardian", "reddit", "weather-wttr", "duckduckgo")
+HEAVY_NAMES = ("yahoo-finance",)    # lab run 44010165696: this page froze the app's UI thread 2.1 s (an ANR on the emulator) and the emulated phone never recovered: it runs ALONE and LAST, after everything else
 T0 = time.time()
 
 PUBLIC_READ = [("wikipedia-article", "en.wikipedia.org/wiki/Firefox"), ("mdn", "developer.mozilla.org/en-US/docs/Web/API/Screen/orientation")]
@@ -618,31 +619,35 @@ class DailyMixin:
         time.sleep(3)
         self.ph.open_url("https://example.com/")
         self.d_wait_page(mark, 40, want=r"example")
-        time.sleep(self.d_t(8))
+        time.sleep(self.d_t(15))                                    # (the page is loaded and quiet: whatever the app still costs now is its idle cost)
         out = self.ph.a.sh("top -H -b -n 2 -d 30", timeout=120)
         cpu = self.ph.a.sh("dumpsys cpuinfo", timeout=60)
         pkgn = self.a.pkg
-        app_lines = [ln.strip() for ln in cpu.splitlines() if pkgn in ln][:6]
-        it = out.split("Tasks:")                                    # toybox top prints a header per iteration: the LAST one covers the 30 s
+        app_lines = [ln.strip() for ln in cpu.splitlines() if pkgn in ln][:6]      # (an average over the last minutes, loading included: context only)
+        it = out.split("Threads:")                                  # toybox top prints a header per iteration (no PID column: TID USER PR NI VIRT RES SHR S[%CPU] %MEM TIME+ THREAD PROCESS); the LAST one covers the 30 s
         last = it[-1] if len(it) > 1 else out
         rows = []
         for ln in last.splitlines():
-            m = re.match(r"\s*(\d+)\s+(\d+)\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S\s+([\d.]+)\s+[\d.]+\s+\S+\s+(\S+)", ln)
-            if m and float(m.group(3)) >= 0.5:
-                rows.append({"tid": int(m.group(2)), "cpu": float(m.group(3)), "thread": m.group(4)})
+            m = re.match(r"\s*(\d+)\s+(\S+)\s+-?\d+\s+-?\d+\s+\S+\s+\S+\s+\S+\s+\S\s+([\d.]+)\s+[\d.]+\s+\S+\s+(.+?)\s+(\S+)\s*$", ln)
+            if m and pkgn in m.group(5) and float(m.group(3)) >= 0.3:
+                rows.append({"tid": int(m.group(1)), "cpu": float(m.group(3)), "thread": m.group(4).strip()[:30], "process": m.group(5).replace(pkgn, "app")})
         rows.sort(key=lambda r: -r["cpu"])
-        res = {"cpuinfo": app_lines, "busy_threads": rows[:8], "busy_total_pct": round(sum(r["cpu"] for r in rows), 1), "raw_head": last[:900]}   # (the first real run: the raw text is kept to check the parser)
-        if not rows and not app_lines:
-            res["note"] = "top / dumpsys cpuinfo gave nothing parseable"
+        res = {"cpuinfo": app_lines, "busy_threads": rows[:8], "busy_total_pct": round(sum(r["cpu"] for r in rows), 1), "raw_head": last[:700]}
+        if not rows:
+            res["note"] = "no thread of the app used 0.3 % or more in the 30 s (or the top text did not parse: raw_head is kept)"
         return res
 
-    def d_site_tour(self):
-        """LAB2d / LAB2f: ten different kinds of public site, one after the other, each loaded and read a little: what loads, how fast, what is blank or broken."""
-        wanted = [p for n in TOUR_NAMES for p in PUBLIC_PAGES if p[0] == n]
+    def d_heavy_page(self):
+        """The one page known to block the UI thread for seconds (Yahoo Finance, 435 script errors): loaded and scrolled, the app's own stack samples (Health 'ui slow-at') name what the UI thread was doing."""
+        return self.d_site_tour(HEAVY_NAMES, "heavy-")
+
+    def d_site_tour(self, names=None, prefix="tour-"):
+        """LAB2d / LAB2f: nine different kinds of public site, one after the other, each loaded and read a little: what loads, how fast, what is blank or broken."""
+        wanted = [p for n in (names or TOUR_NAMES) for p in PUBLIC_PAGES if p[0] == n]
         done, blank = [], []
         for name, url, scrolls, dwell in wanted:
             try:
-                ev = self.load_page("tour-" + name, url, min(scrolls, 3), min(dwell, 3), timeout=60, kind="page")
+                ev = self.load_page(prefix + name, url, min(scrolls, 3), min(dwell, 3), timeout=60, kind="page")
                 if ev is not None:
                     done.append("%s:%s" % (name, ev.get("status")))
                     sc = ev.get("screen") or {}
@@ -812,8 +817,8 @@ class DailyMixin:
                 ("typing-in-a-form-field", self.d_form, "typing"), ("film-in-a-page-press-play", self.d_film_in_page, "video"), ("film-on-a-real-site", self.d_real_film, "video"),
                 ("download-then-downloads-screen", self.d_download, "usage"), ("app-screens-from-the-menu", self.d_settings_walk, "usage"),
                 ("private-tab-and-shields-switch", self.d_private_and_shields, "usage"), ("leave-the-app-and-return", self.d_leave_and_return, "usage"),
-                ("many-tabs-and-memory-warning", self.d_memory, "memory"), ("idle-cpu-60-seconds", self.d_idle_cpu, "speed"), ("site-tour-ten-public-sites", self.d_site_tour, "load"),
-                ("security-and-feature-probes", self.d_security, "security")]
+                ("many-tabs-and-memory-warning", self.d_memory, "memory"), ("idle-cpu-60-seconds", self.d_idle_cpu, "speed"),
+                ("security-and-feature-probes", self.d_security, "security"), ("site-tour-nine-public-sites", self.d_site_tour, "load"), ("heavy-page-yahoo-finance", self.d_heavy_page, "speed")]
         for name, fn, area in plan:
             if time.time() > deadline:
                 self.record({"kind": "step", "name": name, "area": area, "status": "skipped", "note": "the day's time budget (%d min) was used up" % minutes})

@@ -236,7 +236,7 @@ def main():
     if idle.get("busy_total_pct") and idle["busy_total_pct"] >= 6:
         F.append(("speed/idle-cpu", "medium", "speed", "the app burns %.1f %% CPU for 60 s while doing nothing on a static page" % idle["busy_total_pct"],
                   "busiest threads: " + ", ".join("%s %.1f%%" % (r["thread"], r["cpu"]) for r in (idle.get("busy_threads") or [])[:5]) + " (the tablet report of alpha33 showed 5 % idle)", "diag/Health.kt watchdog cadence, Neon animation, CpuMeter, engine threads"))
-    tour_blank = (by.get("site-tour-ten-public-sites") or {}).get("blank_first_screen") or []
+    tour_blank = (by.get("site-tour-nine-public-sites") or {}).get("blank_first_screen") or []
     if tour_blank:
         F.append(("load/blank-first-screen", "medium", "load", "pages whose first screen is blank after loading: " + ", ".join(tour_blank), "screen sample: one colour over 97 % and no edges", "Shields cosmetic filters / scriptlets, a blocked first-party script (research/ADBLOCK_ENGINE.md)"))
     if metrics["scroll_gap100_per_1000_frames"] and metrics["scroll_gap100_per_1000_frames"] > 20:
