@@ -518,7 +518,6 @@ open class BrowserActivity : Activity(), DockListener {
         // then attach the ad/tracker blocking extension to the app's filter engine.
         android.view.Choreographer.getInstance().postFrameCallback {
             StartTimeline.mark("frame")
-            setRecentsLook() // AO3: the icon and colour of this app's card in the Recents list
             Io.main.post {
                 Health.log("engine", "runtime-create")
                 val burst0 = SystemClock.uptimeMillis() // LAB4b: what each call of this start-up burst costs on the UI thread (the lab and the tablet show a block of about 0.9 s at start)
@@ -535,6 +534,7 @@ open class BrowserActivity : Activity(), DockListener {
                 val burst4 = SystemClock.uptimeMillis()
                 Health.log("engine", "burst", "runtime+orientation=${burst1 - burst0}ms executor=${burst2 - burst1}ms warmUp=${burst3 - burst2}ms shields-install=${burst4 - burst3}ms")
                 Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
+                Io.main.postDelayed({ if (!isFinishing && !isDestroyed) setRecentsLook() }, 1500) // AO3: the icon and colour of this app's card in the Recents list. LAB5: no longer inside the first-frame callback (a 192 px bitmap and a binder call, 5-15 ms before the first picture); nobody opens Recents in the first second and a half
             }
         }
         val firstTab = Tab(nextTabId++)
