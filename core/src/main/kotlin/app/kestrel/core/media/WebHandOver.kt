@@ -76,7 +76,8 @@ object WebHandOver {
 
     // ANS61: whole words of the PATH of a media address that name an advertisement ("/ads/spot.mp4", "preroll-30.mp4", "/advert/1.mp4"), and words that only an ad system writes anywhere in the address (a query too:
     // "?vast=1", "imasdk", "adunit", "adid"). The host never counts (a CDN host can be called anything), and a bare "ad=0" in a query is nothing.
-    private val AD_PATH_WORDS = Regex("""(?i)(?:^|[/._\-])(ads?|advert\w*|adserv\w*|preroll|pre-roll)(?:$|[/._\-])""")
+    private val AD_PATH_WORDS = Regex("""(?i)(?:^|[/._\-])(advert\w*|adserv\w*|preroll|pre-roll)(?:$|[/._\-])""")
+    private val AD_BARE_WORD = Regex("""(?i)(?:^|[/_])ads?(?:$|[/_.])""")        // "ad" / "ads" alone: a whole path piece or between underscores ("video_ad_15.mp4"), never between hyphens (a film called "ad-astra")
     private val AD_SYSTEM_WORDS = Regex("""(?i)(?:^|[/._\-=&?])(vast|vpaid|imasdk|adunit|adid)(?:$|[/._\-=&?])""")
 
     /** True when the address of a media file names an advertisement (see [AD_PATH_WORDS]): never handed to Kestrel's player, so the page's ad plugin can run its ad and go on to the film. */
@@ -84,7 +85,7 @@ object WebHandOver {
         val rest = url.substringBefore('#').substringAfter("://", url).substringAfter('/', "")
         if (rest.isEmpty()) return false
         val path = rest.substringBefore('?')
-        return AD_PATH_WORDS.containsMatchIn(path) || AD_SYSTEM_WORDS.containsMatchIn(rest)
+        return AD_PATH_WORDS.containsMatchIn(path) || AD_BARE_WORD.containsMatchIn(path) || AD_SYSTEM_WORDS.containsMatchIn(rest)
     }
 
     const val LOOP_CLIP_MAX_MS = 120_000L          // a clip up to this long that was played to its end is "an advertisement or a short clip": a second press on it goes to the page
