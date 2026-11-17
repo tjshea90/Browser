@@ -383,33 +383,25 @@ test('ANS61: the question says when the player is in an ad state (ad-state class
 });
 
 test('ANS61: an ad-state class on the element itself, or on the host of a shadow root around it, counts too; the class of a far-away branch does not', async () => {
-  const page = await open('<div class="jw-flag-ads"><div id="far" style="width:10px;height:10px"></div></div>'
-    + '<div id="host"></div><script>(function () { var h = document.getElementById("host"), r = h.attachShadow({ mode: "open" });'
-    + 'r.innerHTML = \'<video id="sv" src="https://cdn.example/a.mp4" style="display:block;width:320px;height:180px"></video>\'; h.className = "vjs-ad-playing"; })();</script>'
-    + '<video id="v2" class="ad-showing" src="https://cdn.example/b.mp4" style="display:block;width:320px;height:180px"></video>'
-    + '<video id="v3" src="https://cdn.example/c.mp4" style="display:block;width:320px;height:180px"></video>', GUARD_HO, 'no');
-  await settle(page, 300);
-  const facts = await page.evaluate(() => {
-    const out = {};
-    const seen = [];
-    document.addEventListener('__kst_gate_ask_v1', (e) => { try { const d = JSON.parse(e.detail); seen.push([d.s, d.a]); } catch (x) { /* ignore */ } }, true);
-    const vids = [document.getElementById('host').shadowRoot.getElementById('sv'), document.getElementById('v2'), document.getElementById('v3')];
-    for (const v of vids) { try { v.dispatchEvent(new Event('play')); } catch (x) { /* ignore */ } }
-    out.seen = seen; return out;
-  });
-  // the play event path of a closed element asks only for elements with controls; drive the question the way a page's own play() does
-  const asked = await page.evaluate(async () => {
-    const seen = [];
-    document.addEventListener('__kst_gate_ask_v1', (e) => { try { const d = JSON.parse(e.detail); seen.push([d.s, d.a]); } catch (x) { /* ignore */ } }, true);
-    const vids = [document.getElementById('host').shadowRoot.getElementById('sv'), document.getElementById('v2'), document.getElementById('v3')];
-    for (const v of vids) { try { await v.play().catch(() => {}); } catch (x) { /* ignore */ } }
-    return seen;
-  });
-  const bySrc = Object.fromEntries(asked);
-  assert.equal(bySrc['https://cdn.example/a.mp4'], 1, 'host of the shadow root carries vjs-ad-playing: ' + JSON.stringify(asked));
-  assert.equal(bySrc['https://cdn.example/b.mp4'], 1, 'the element itself carries ad-showing');
-  assert.equal(bySrc['https://cdn.example/c.mp4'], 0, 'a plain element next to an ad branch is no ad');
-  void facts;
+  const shadow = '<div id="player" style="position:relative;width:320px;height:180px"><div id="host" class="vjs-ad-playing"></div>'
+    + '<button id="btn" style="position:absolute;left:100px;top:60px;width:120px;height:50px">Play</button></div>'
+    + '<script>(function () { var r = document.getElementById("host").attachShadow({ mode: "open" });'
+    + 'r.innerHTML = \'<video id="sv" src="https://cdn.example/a.mp4" style="display:block;width:320px;height:180px"></video>\';'
+    + 'document.getElementById("btn").onclick = function () { r.getElementById("sv").play().catch(function () {}); }; })();</script>';
+  const cases = [
+    ['the host of a shadow root', shadow, 1],
+    ['the element itself', PLAYER.replace('<video id="v"', '<video id="v" class="ad-showing"'), 1],
+    ['a far-away branch', '<div class="jw-flag-ads"><div style="width:10px;height:10px"></div></div>' + PLAYER, 0],
+  ];
+  for (const [name, html, want] of cases) {
+    const page = await open(html, GUARD_HO, 'no');
+    await settle(page, 300);
+    await tapOn(page, '#btn'); await settle(page, 500);
+    const q = await vhand(page);
+    assert.equal(q.length, 1, name + ': one question ' + JSON.stringify(q));
+    assert.equal(q[0].a, want, name + ' -> a=' + q[0].a);
+    await page.context().close();
+  }
 });
 
 test('ANS61: content.js passes the ad bit on as 0 or 1 only', async () => {
