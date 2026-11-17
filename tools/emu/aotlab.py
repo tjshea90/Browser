@@ -67,12 +67,70 @@ def selftest():
     print("aotlab selftest ok")
 
 
+def release_check(lab, pl, adb, a, say):
+    """The REAL path of the baseline profile, end to end on the release build: install it, let androidx.profileinstaller read assets/dexopt/baseline.prof (the R8-rewritten rules) and write it where Android
+    looks for it (the INSTALL_PROFILE broadcast does what the library does itself 5 s after the first frame), compile with it, and compare against a plain `verify` of the SAME APK.
+    Measured with the platform's own `am start -W` TotalTime (time to the first drawn frame of the activity, no log lines needed). Returns (rows, notes)."""
+    pkg = a.release_pkg
+    rows, notes = [], []
+    adb.run("uninstall", pkg, timeout=120)
+    say("install release", adb.run("install", "-t", a.release_apk, timeout=900).strip()[:80])
+    uid = adb.sh("stat -c %%u /data/data/%s" % pkg, timeout=30).strip()
+    prof = "/data/misc/profiles/cur/0/%s/primary.prof" % pkg
+    page = "http://localhost:%d/page/text" % a.port
+    old = lab.pkg
+    lab.pkg = pkg                                           # the lab helpers kill / launch the package they were made for
+    try:
+        for rnd in range(1, a.rounds + 1):
+            for mode in (["verify", "speed-profile"] if rnd % 2 else ["speed-profile", "verify"]):
+                adb.sh("cmd package compile --reset %s" % pkg, timeout=300)
+                prof_size = None
+                if mode == "speed-profile":
+                    lab.kill()
+                    out = adb.sh("am broadcast -a androidx.profileinstaller.action.INSTALL_PROFILE %s/androidx.profileinstaller.ProfileInstallReceiver" % pkg, timeout=60)
+                    for _ in range(20):
+                        time.sleep(1.0)
+                        sz = adb.sh("ls -ln %s 2>/dev/null" % prof, timeout=30).split()
+                        if len(sz) >= 5 and sz[4].isdigit() and int(sz[4]) > 0:
+                            prof_size = int(sz[4])
+                            break
+                    notes.append("round %d: INSTALL_PROFILE -> %s ; profile written: %s bytes" % (rnd, out.strip().replace("\n", " ")[:90], prof_size))
+                out = adb.sh("cmd package compile -f -m %s %s" % (mode, pkg), timeout=900)
+                st = parse_dexopt_status(adb.sh("dumpsys package dexopt", timeout=60), pkg)
+                path = adb.sh("pm path %s" % pkg, timeout=30).strip().replace("package:", "")
+                d = os.path.dirname(path) if path else ""
+                oat = sum_ls_bytes(adb.sh("ls -lR %s/oat 2>/dev/null" % d, timeout=60)) if d else 0
+                info = {"mode": mode, "round": rnd, "status": st[0], "oat_kb": oat // 1024, "profile_bytes": prof_size}
+                say("release compiled", info)
+                notes.append("round %d %s: status=%s oat=%d KB" % (rnd, mode, st[0], oat // 1024))
+                lab.kill()
+                first = lab.launch(page, 120)               # (the release build writes no Health lines to logcat: page_loaded stays empty; am start -W is the measure)
+                time.sleep(3)
+                for k in range(a.starts):
+                    cold = (k % 2 == 1)
+                    lab.kill()
+                    if cold:
+                        lab.drop_caches()
+                    time.sleep(2)
+                    out = adb.sh("am start -W -a android.intent.action.VIEW -d %s -p %s" % (page, pkg), timeout=90)
+                    total, wait = pl.parse_am_start(out)
+                    rows.append({"mode": mode, "round": rnd, "cache": "cold" if cold else "warm", "am_total_ms": total, "am_wait_ms": wait})
+                    say("release start", mode, "cache=" + ("cold" if cold else "warm"), total)
+                    time.sleep(6)
+                lab.kill()
+    finally:
+        lab.pkg = old
+    return rows, notes
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="aot-out")
     ap.add_argument("--repo-root", default=".")
     ap.add_argument("--pkg", default="app.kestrel.browser.gecko.debug")
     ap.add_argument("--apk", default="")
+    ap.add_argument("--release-apk", default="", help="the R8-minified release build for the emulator's ABI: its EMBEDDED baseline profile is installed by androidx.profileinstaller and compiled (the real release path)")
+    ap.add_argument("--release-pkg", default="app.kestrel.browser.gecko")
     ap.add_argument("--rounds", type=int, default=3)
     ap.add_argument("--starts", type=int, default=4)
     ap.add_argument("--port", type=int, default=8093)
@@ -179,6 +237,13 @@ def main():
                 say("start", mode, r["cache"], {x: r.get(x) for x in ("am_total_ms", "runtime_ready_s", "page_loaded_s", "ui_block_ms")}, "CRASH" if r.get("crash") else "")
             lab.kill()
 
+    rel_rows, rel_notes = [], []
+    if a.release_apk and os.path.exists(a.release_apk):
+        try:
+            rel_rows, rel_notes = release_check(lab, pl, adb, a, say)
+        except Exception as e:                              # the debug A/B above must still be reported
+            rel_notes.append("release check failed: %r" % (e,))
+
     med = pl.median
     L = ["# Ahead-of-time compile A/B (LAB5b)", "",
          "One APK, three compile states (`cmd package compile -f -m MODE`), %d rounds x %d starts per mode (alternating warm / cold file cache). **Emulator numbers: read the differences between modes of THIS run.**" % (a.rounds, a.starts), "",
@@ -206,13 +271,29 @@ def main():
             L.append("| %s | %s | %s | %s | %s | %d | %s | %s | %s | %s |" % (mode, ",".join(sorted(set(str(s["status"]) for s in st))), med([s["compile_s"] for s in st]), "%.1f" % (med([s["oat_kb"] for s in st]) / 1024.0) if st else "-", cache, len(rs),
                                                                               d("am_total_ms"), d("runtime_ready_s", "%.2f"), d("page_loaded_s", "%.2f"), d("ui_block_ms")))
     L.append("")
+    if rel_rows or rel_notes:
+        L.append("## The release build, the embedded baseline profile (R8-rewritten rules, installed by androidx.profileinstaller): `am start -W` TotalTime")
+        L.append("")
+        L.append("| Mode | cache | n | TotalTime ms (median) |")
+        L.append("| :- | :- | -: | -: |")
+        for mode in ("verify", "speed-profile"):
+            for cache in ("warm", "cold"):
+                rs = [r["am_total_ms"] for r in rel_rows if r["mode"] == mode and r["cache"] == cache and r["am_total_ms"] is not None]
+                if rs:
+                    b = med([r["am_total_ms"] for r in rel_rows if r["mode"] == "verify" and r["cache"] == cache and r["am_total_ms"] is not None])
+                    v = med(rs)
+                    L.append("| %s | %s | %d | %.0f%s |" % (mode, cache, len(rs), v, (" (%+.0f %%)" % ((v - b) / b * 100.0)) if (mode != "verify" and b) else ""))
+        L.append("")
+        for n in rel_notes:
+            L.append("- " + n)
+        L.append("")
     for n in notes:
         L.append("- " + n)
     text = "\n".join(L) + "\n"
     with open(os.path.join(a.out, "AOT-REPORT.md"), "w") as f:
         f.write(text)
     with open(os.path.join(a.out, "aot-results.json"), "w") as f:
-        json.dump({"starts": rows, "compile": status, "notes": notes}, f, indent=1)
+        json.dump({"starts": rows, "compile": status, "notes": notes, "release": rel_rows, "release_notes": rel_notes}, f, indent=1)
     print("\n" + text, flush=True)
     return 0
 
