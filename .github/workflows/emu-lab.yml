@@ -113,6 +113,18 @@ jobs:
             ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI -PomniStored=true -PlibsInApk=true --console=plain
             cp geckoapp/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/apks/D.apk"
             ls -l "$RUNNER_TEMP/apks"
+          elif [ "$SUITE" = aot ]; then
+            # LAB7b: the update lab needs the SAME code twice, the second build with the NEXT versionCode and extension version = what an update looks like to the engine (a new install path, a new built-in extension version)
+            mkdir -p "$RUNNER_TEMP/apks"
+            ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI --console=plain
+            cp geckoapp/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/apks/old.apk"
+            VC="$(sed -n 's/^ *versionCode = \([0-9]*\).*/\1/p' geckoapp/build.gradle.kts | head -1)"
+            sed -i "s/^\( *versionCode = \)$VC/\1$((VC+1))/" geckoapp/build.gradle.kts
+            bash tools/sync-ext-version.sh
+            ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI --console=plain
+            cp geckoapp/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/apks/new.apk"
+            git checkout -- geckoapp/build.gradle.kts geckoapp/src/main/assets/kestrel-shields/manifest.json
+            echo "update pair: versionCode $VC -> $((VC+1))"; ls -l "$RUNNER_TEMP/apks"
           else
             ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI --console=plain
           fi
