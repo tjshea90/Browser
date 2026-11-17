@@ -233,7 +233,7 @@ def main():
         F.append(("speed/ui-late-beat", "medium", "speed", "the UI thread did not answer for %d ms in %d place(s) (late heartbeat, below the stall watchdog)" % (metrics["ui_late_worst_ms"], len(late_steps)),
                   "; ".join("%s (%d, worst %d ms)" % s for s in late_steps[:6]) + ". The tablet shows the same family at start (ui slow 865 ms)", hint_for("late-beat")))
     if metrics["scroll_gap100_per_1000_frames"] and metrics["scroll_gap100_per_1000_frames"] > 20:
-        F.append(("scroll/gaps", "medium", "scroll", "%.0f gaps over 100 ms per 1000 frames while scrolling (worst %s ms)" % (metrics["scroll_gap100_per_1000_frames"], metrics["scroll_worst_gap_ms"]), "software GL on a fast host: if it is already bad here it is worse on the tablet", hint_for("scroll")))
+        F.append(("scroll/gaps", "low", "scroll", "%.0f gaps over 100 ms per 1000 frames while scrolling (worst %s ms)" % (metrics["scroll_gap100_per_1000_frames"], metrics["scroll_worst_gap_ms"]), "SwiftShader software GL: an emulator number, the tablet measured 62-65 fps and 0 of 32 swipes with a gap over 100 ms (research/TABLET_DIAG_2026-11-13.md); watch the CHANGE between builds, not the value", hint_for("scroll")))
     if metrics["page_done_p90_ms"] and metrics["page_done_p90_ms"] > 12000:
         F.append(("load/slow-p90", "medium", "speed", "the slowest tenth of page loads finished after %.1f s" % (metrics["page_done_p90_ms"] / 1000.0), "slowest: " + ", ".join("%s %.1fs" % (l[0], l[3] / 1000.0) for l in sorted(loads, key=lambda l: -l[3])[:4]), "page loading: Shields blocking cost (research/ADBLOCK_ENGINE.md), network profile"))
     noisy = sorted([l for l in public if l[5] and l[5] >= 15], key=lambda l: -l[5])[:4]

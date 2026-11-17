@@ -110,16 +110,23 @@ class DailyMixin:
         """A wait limit; the driver's selftest (a fake phone that never answers) must not wait it out."""
         return min(seconds, 1.5) if self.a.selftest else seconds
 
-    def d_wait_page(self, mark, timeout=60):
-        """The first 'page loaded' / 'page error' line since the log offset [mark]: (kind, kv, seconds) or (None, {}, seconds)."""
+    def d_wait_page(self, mark, timeout=60, want=None):
+        """The first 'page loaded' / 'page error' line since the log offset [mark]: (kind, kv, seconds) or (None, {}, seconds).
+        want = a regex for the host the step expects: a line for another host is skipped (lab run 44005894797: the Google results page of the PREVIOUS step finished 9.6 s late and was taken for the
+        article's own page); if no wanted line comes, the first other line is returned so the report says where the person really went."""
         timeout = self.d_t(timeout)
         t0 = time.time()
+        other = None
         while time.time() - t0 < timeout:
             for e in health_events(self.log.since(mark), "page"):
-                if e["ev"] in ("loaded", "error"):
-                    return e["ev"], e["kv"], time.time() - t0
+                if e["ev"] not in ("loaded", "error"):
+                    continue
+                if want and not re.search(want, e["kv"].get("host", ""), re.I):
+                    other = other or (e["ev"], e["kv"], time.time() - t0)
+                    continue
+                return e["ev"], e["kv"], time.time() - t0
             time.sleep(1.0)
-        return None, {}, time.time() - t0
+        return other or (None, {}, time.time() - t0)
 
     def d_fling(self, n, up=True, ms=150, pause=1.1):
         for _ in range(n):
@@ -299,7 +306,7 @@ class DailyMixin:
         found, at = self.d_type_in_address(addr)
         if not found:
             self.ph.open_url("https://" + addr)                     # the lab cannot type: carry on with the person's reading
-        kind, kv, secs = self.d_wait_page(mark, 90)
+        kind, kv, secs = self.d_wait_page(mark, 90, want=r"wikipedia")
         res = {"typed": found, "page_event": kind, "host": kv.get("host", ""), "nav_s": round(secs, 1), "paint_ms": ms_of(kv.get("paint", "")), "done_ms": ms_of(kv.get("done", ""))}
         if kind == "loaded" and kv.get("host", "").endswith("wikipedia.org"):
             self.d_check("typed-address-without-scheme-loads", "pass", "%s -> %s (HTTPS-first)" % (addr, kv.get("host")), area="feature")
@@ -518,19 +525,26 @@ class DailyMixin:
         k, kv, s = self.d_wait_page(mark, 40)
         res["private_tab_load"] = k
         time.sleep(2)
-        # Shields on / off for one tracker-heavy page: what the blocking costs and saves (the compat suite does 26 sites; one is enough for a day)
+        # Shields on / off for one tracker-heavy page, three alternating repeats per mode (lab runs 2-3 had one each: too thin to say anything), medians reported
+        samples = {"on": [], "off": []}
+        for rep in range(3):
+            for mode in ("on", "off"):
+                self.ph.shields(mode, ["www.theguardian.com", "theguardian.com"])
+                time.sleep(2)
+                self.ph.clear_cache()
+                self.ph.debug("closetabs")
+                time.sleep(4)
+                m2 = self.log.size()
+                self.ph.open_url("https://www.theguardian.com/international")
+                k, kv, s_ = self.d_wait_page(m2, 90, want=r"theguardian")
+                self.d_fling(2, True, 150, 1.0)
+                samples[mode].append({"event": k, "done_ms": ms_of(kv.get("done", "")), "paint_ms": ms_of(kv.get("paint", "")), "blocked": num(kv.get("blocked"))})
         out = {}
-        for mode in ("on", "off"):
-            self.ph.shields(mode, ["www.theguardian.com", "theguardian.com"])
-            time.sleep(2)
-            self.ph.clear_cache()
-            self.ph.debug("closetabs")
-            time.sleep(4)
-            m2 = self.log.size()
-            self.ph.open_url("https://www.theguardian.com/international")
-            k, kv, s = self.d_wait_page(m2, 90)
-            self.d_fling(3, True, 150, 1.0)
-            out[mode] = {"event": k, "done_ms": ms_of(kv.get("done", "")), "paint_ms": ms_of(kv.get("paint", "")), "blocked": num(kv.get("blocked"))}
+        for mode, rows in samples.items():
+            dn = sorted(r["done_ms"] for r in rows if r["done_ms"] > 0)
+            pt = sorted(r["paint_ms"] for r in rows if r["paint_ms"] > 0)
+            out[mode] = {"event": rows[-1]["event"] if rows else None, "done_ms": dn[len(dn) // 2] if dn else -1, "paint_ms": pt[len(pt) // 2] if pt else -1,
+                         "blocked": max([r["blocked"] for r in rows] or [0]), "done_samples": [r["done_ms"] for r in rows]}
         self.ph.shields("on", ["www.theguardian.com", "theguardian.com"])
         res["shields_ab"] = out
         return res
