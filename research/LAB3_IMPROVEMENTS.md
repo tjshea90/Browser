@@ -1,3 +1,23 @@
+### What the daily lab measured on build 0.3.0-alpha62 (runs 43997607118 and 44003337190, emulator numbers: read the ratios and the behaviour, not the milliseconds)
+
+| Thing | Measured | Reading |
+| :- | :- | :- |
+| Cold start (force-stop, start) | `am start` total 1.67 s, engine ready 2.2 s; the UI thread did not answer for 1.18-1.25 s right at start | the same 1 s block the tablet shows (865 ms) = the start-up engine burst, candidate 3 |
+| A long article, first big page after a typed address | UI late heartbeats 877-1386 ms around the first large page | the same family: synchronous engine calls on the UI thread (candidate 2 adds the read-back at every navigation) |
+| UI thread blocked past the watchdog (STALL) | 0 in 15 steps | no hard freezes in this day |
+| Film pressed in a page | first picture 0.7 s after the tap; Kestrel's player: 195 frames, 0 dropped (software decoder) | start path is quick; hardware decoder start-up is tablet-only (candidate 4) |
+| Tab switch, resume from Home, screen off / on | 0.44-0.68 s; 0.32 s without a page reload; app alive after screen off | fine |
+| Shields on vs off, one heavy page, fast link (n = 2 per run, noisy) | on 1628 / 1763 ms, off 1265 / 1697 ms; 5 requests blocked with Shields on | blocking did NOT make the page faster here and may cost 4-28 %: on a fast link there is little to save, so the cost of judging each request shows; needs 5+ repeats before anyone acts (follow-up LAB3h) |
+| Memory with 8 heavy tabs | peak 291 MB PSS, 7 of 8 tabs hibernated, 280 MB after Android's RUNNING_CRITICAL warning, lowest available 471-543 MB | the live budget works; little more is handed back on a trim because the hibernating already happened (F04 is low) |
+| Blocking engine | 1139 requests judged in the engine, average 252 us, slowest 27 ms, 0 asked the app one by one, ready from the saved copy in 213 ms | candidate 1 is NOT needed |
+| Scrolling (software GL) | 8-14 gaps over 100 ms per 1000 frames (real-page bursts: 3.7 % over 100 ms, worst 1.28 s on theguardian.com) | an emulator number; the tablet's own measurement (62-65 fps, 0 of 32 swipes with a gap) stands |
+| Page paint / done on real sites | paint median 350-360 ms, done median 385-1235 ms, slowest tenth 1.9-4.4 s | emulator + datacentre link |
+| Security and privacy | 14 pass, 0 fail (run 3): bad certificates refused (4 of 4), pop-up blocked with the app's chip, mixed content upgraded to https, third-party cookie not shared, referrer trimmed cross-site, Global Privacy Control sent, WebRTC address masked, clipboard read refused, other-app launches without a tap refused, `file://` script did not run, camera / microphone / location asked with a BLOCK / ALLOW dialog | the privacy side of the brief holds on this build |
+
+**What the lab got wrong first and why it matters for reading any future report:** four early `FAIL`s were the lab's mistakes, not the browser's (a refused certificate logs the app's 'page loaded' line with ok=false; a blocked pop-up still hands the page a stand-in window; taps missed a form field; script errors were counted per step, not per page). Each was found by reading the raw Health lines against the app's own Diagnostics. Lesson: a security `FAIL` from the lab is a question to check against the logs, not a verdict.
+
+**Not achievable in the lab, found on the way:** a 32-bit userland (Mozilla ships no `geckoview-x86` for 160), the Go edition / low-RAM flag (the emulator accepts `-prop ro.config.low_ram=true`, Android 10 ignores it: read-back empty), the tablet's CPU / GPU / decoders.
+
 ### Speed: what is already done, what was refused, and what is new (LAB3f, 2026-11-17)
 
 How this was made: one read-only research pass over research/SPEED2-4, GECKO_SPEED, GECKO_TUNING_2, HW_SPEED, SCROLL, COLD_START, PERF_JS, PERF_KOTLIN, EX_RESULTS, FREEZE, TYPING, VIDEO_SMOOTHNESS, ANS60, the REVIEW-EXTERNAL files, gecko-prefs.txt (config v9) and the ticked TASKS items, to build a ledger so nothing old is proposed again. Gains below are ESTIMATES until a lab run or the tablet measures them. Candidates 1 and 2 were checked against the code by reading (see "Checked"); the others are the research pass's reading only.
