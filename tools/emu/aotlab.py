@@ -173,6 +173,7 @@ def main():
     ap.add_argument("--release-apk", default="", help="the R8-minified release build for the emulator's ABI: its EMBEDDED baseline profile is installed by androidx.profileinstaller and compiled (the real release path)")
     ap.add_argument("--release-pkg", default="app.kestrel.browser.gecko")
     ap.add_argument("--release-dm", action="append", default=[], help="a dex-metadata file AGP wrote next to the release build (outputs/apk/release/baselineProfiles/<n>/*.dm); each one is tried as `base.dm` in a PackageInstaller session")
+    ap.add_argument("--debug-ab", action="store_true", help="also compile the DEBUG build three ways: NOT informative (a debuggable app only ever gets quicken: lab run 44074456934), costs 15+ minutes, off by default")
     ap.add_argument("--rounds", type=int, default=3)
     ap.add_argument("--starts", type=int, default=4)
     ap.add_argument("--port", type=int, default=8093)
@@ -359,7 +360,7 @@ def main():
                 except Exception as e:
                     rel_notes.append("dm install check failed: %r" % (e,))
                 write_report()
-        if a.apk:
+        if a.apk and a.debug_ab:
             try:
                 debug_ab()
             except Exception as e:
