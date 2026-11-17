@@ -8,6 +8,10 @@ package app.kestrel.core.media
  *
  * What is handed over: a direct file or HLS address of the element, or - for a player written in script (a blob: source) - the (longest) HLS stream that frame asked for. What never is: loop clips and thumbnails
  * (the page's own box is tiny), DASH (no module in the APK), DRM, a blob: source with no stream known (YouTube-style players), and a second film while one is handed over already (the app checks that).
+ *
+ * ANS61 (owner message 61: "it played an advertisement video and I couldn't get to the real video"): an ADVERTISEMENT is never handed over. A pre-roll plays on the page's own element, so the address the gate reports
+ * at the press can be the ad's: [Element.ad] (the page's player says an ad plays), an address that looks like an ad file ([looksLikeAdAddress]) and a clip Kestrel's player just played to its end ([playedThrough]:
+ * pressed again it would be the same ad for ever) all send the film back to the page, whose ad plugin can then finish and go on to the film. With a long film of the frame known, that film is handed over instead.
  */
 object WebHandOver {
     /** The Settings choice "Web videos play in". */
@@ -23,9 +27,10 @@ object WebHandOver {
 
     /**
      * What the page script says about the element (the content script has checked the numbers): [src] = the address of the element's own source ("" = none or a blob:), [blob] = a MediaSource or a
-     * blob: address, [mime] = the type a `<source>` named ("" = none), [w] x [h] = its box in CSS pixels (0 = not laid out), [timeS] / [durS] = where it is and how long it is (0 = not known).
+     * blob: address, [mime] = the type a `<source>` named ("" = none), [w] x [h] = its box in CSS pixels (0 = not laid out), [timeS] / [durS] = where it is and how long it is (0 = not known),
+     * [ad] = the page's player says an advertisement plays in it (an ad-state class on the element or an ancestor, or the element inside an ad container: gate-main.js adNow).
      */
-    class Element(val src: String, val blob: Boolean, val mime: String, val loop: Boolean, val w: Int, val h: Int, val timeS: Double, val durS: Double)
+    class Element(val src: String, val blob: Boolean, val mime: String, val loop: Boolean, val w: Int, val h: Int, val timeS: Double, val durS: Double, val ad: Boolean = false)
 
     /**
      * A stream or file the sniffer saw in the element's frame: [usable] = not DRM, not a decoy; [durationMs] 0 = the early look has not read it yet; [master] = a MASTER playlist (it lists variants: the pictures),
@@ -51,16 +56,49 @@ object WebHandOver {
         if ((el.w in 1 until MIN_BOX_W) || (el.h in 1 until MIN_BOX_H)) return null
         val film = filmOf(known, why)
         val direct = directOf(el)
+        val filmLong = film != null && (film.durationMs <= 0L || film.durationMs >= FILM_MS)
         return when {
             direct != null -> {
                 val shortClip = el.durS > 0.0 && el.durS < AD_MAX_S
-                val filmLong = film != null && (film.durationMs <= 0L || film.durationMs >= FILM_MS)
-                if (shortClip && filmLong) make(film!!, el, "an advertisement is in the element: the film of the frame") else make(direct, el, "the element's own address")
+                val adLike = el.ad || looksLikeAdAddress(direct.url)
+                when {
+                    adLike && filmLong -> make(film!!, el, "an advertisement is in the element: the film of the frame")
+                    adLike -> null                                                           // ANS61: an advertisement and no film known: the page plays it (its ad plugin has to see it finished)
+                    shortClip && filmLong -> make(film!!, el, "an advertisement is in the element: the film of the frame")
+                    else -> make(direct, el, "the element's own address")
+                }
             }
-            el.blob && film != null -> make(film, el, "the stream the frame asked for" + (if (film.master) " (a master list)" else " (a bare list)"))
-            !el.blob && el.src.isEmpty() && (why == Why.FULLSCREEN || why == Why.LATE) && film != null -> make(film, el, "the stream the frame asked for (full screen)" + (if (film.master) " (a master list)" else " (a bare list)"))
+            el.blob && film != null -> if (el.ad && !filmLong) null else make(film, el, "the stream the frame asked for" + (if (film.master) " (a master list)" else " (a bare list)"))
+            !el.blob && el.src.isEmpty() && (why == Why.FULLSCREEN || why == Why.LATE) && film != null -> if (el.ad && !filmLong) null else make(film, el, "the stream the frame asked for (full screen)" + (if (film.master) " (a master list)" else " (a bare list)"))
             else -> null
         }
+    }
+
+    // ANS61: whole words of the PATH of a media address that name an advertisement ("/ads/spot.mp4", "preroll-30.mp4", "/advert/1.mp4"), and words that only an ad system writes anywhere in the address (a query too:
+    // "?vast=1", "imasdk", "adunit", "adid"). The host never counts (a CDN host can be called anything), and a bare "ad=0" in a query is nothing.
+    private val AD_PATH_WORDS = Regex("""(?i)(?:^|[/._\-])(ads?|advert\w*|adserv\w*|preroll|pre-roll)(?:$|[/._\-])""")
+    private val AD_SYSTEM_WORDS = Regex("""(?i)(?:^|[/._\-=&?])(vast|vpaid|imasdk|adunit|adid)(?:$|[/._\-=&?])""")
+
+    /** True when the address of a media file names an advertisement (see [AD_PATH_WORDS]): never handed to Kestrel's player, so the page's ad plugin can run its ad and go on to the film. */
+    fun looksLikeAdAddress(url: String): Boolean {
+        val rest = url.substringBefore('#').substringAfter("://", url).substringAfter('/', "")
+        if (rest.isEmpty()) return false
+        val path = rest.substringBefore('?')
+        return AD_PATH_WORDS.containsMatchIn(path) || AD_SYSTEM_WORDS.containsMatchIn(rest)
+    }
+
+    const val LOOP_CLIP_MAX_MS = 120_000L          // a clip up to this long that was played to its end is "an advertisement or a short clip": a second press on it goes to the page
+    const val LOOP_WINDOW_MS = 10 * 60_000L
+
+    /**
+     * ANS61 loop breaker: [url] is the address Kestrel's player played to its END a moment ago ([lastUrl], [lastPosMs] of [lastDurMs], stopped [sinceStopMs] ago; < 0 = never). A clip of at most two minutes that
+     * played through and is pressed again on the same page is, far more often than not, the advertisement the page's ad plugin never got to see finished (its play() was refused, the element stayed closed): handing it
+     * over again is an ad loop with no way to the film. So the page plays it itself this time. The queries do not count (an ad address carries a new token every time it is asked for).
+     */
+    fun playedThrough(url: String, lastUrl: String, lastPosMs: Long, lastDurMs: Long, sinceStopMs: Long): Boolean {
+        if (url.isEmpty() || lastUrl.isEmpty() || sinceStopMs !in 0L..LOOP_WINDOW_MS) return false
+        if (lastDurMs !in 1L..LOOP_CLIP_MAX_MS || lastPosMs < lastDurMs - 2_000L) return false
+        return url.substringBefore('?').substringBefore('#') == lastUrl.substringBefore('?').substringBefore('#')
     }
 
     /**
