@@ -47,5 +47,7 @@ minutes that Kestrel's player played to its end is not handed over again within 
 - Verdict LRU for the blocking engine: hit rate unknown, would need counters first.
 - A `.dm` file in the self-updater (compile at install): the platform path WORKS on Android 10 (aot run 44074456934: a PackageInstaller session with base.apk + AGP's baselineProfiles/1/*.dm = `reason=install-dm`, 3.75 MB compiled while installing, install +0.3 s); the updater change is NOT made (a failed install would block the only update channel; it needs its own release and a tablet test). TASKS LAB6.
 
-## Still to fill in
-- vp run (video hand-over after the extension change).
+## Open (for the owner or the next session)
+- LAB6 (needs the owner's go): compile at install through the updater (see research/LAB5_PACKAGING.md, the aot measurement): a release asset `.dm`, the updater writes it into the PackageInstaller session, retries without it on a bad-metadata failure, tablet test.
+- On the tablet: leave it charging overnight after the update, then send the Diagnostics lines `start art`, `engine runtime-create-took`, `engine config-warm`, `storage purge-doomed`; they say whether the profile was compiled and what the start still costs.
+- Owner decisions still open: switch the Neon idle pulse off (about 4 % of one core at idle in the lab; kept as the owner asked for it), and the tablet test of alpha62 (which site showed the advertisement).
