@@ -237,7 +237,9 @@ object GeckoEngine {
             "urlclassifier.trackingTable", "urlclassifier.trackingAnnotationTable", "privacy.trackingprotection.enabled", "privacy.annotate_channels.strict_list.enabled",
             "privacy.trackingprotection.allow_list.baseline.enabled", "privacy.trackingprotection.allow_list.convenience.enabled",
             // FS1: the engine accepts screen.orientation.lock() only with this on; RX4-X3: is the engine's own Safe Browsing (phishing / malware pages and downloads) switched on here
-            "dom.screenorientation.allow-lock", "browser.safebrowsing.malware.enabled", "browser.safebrowsing.phishing.enabled", "browser.safebrowsing.downloads.enabled", "urlclassifier.malwareTable", "urlclassifier.phishTable")
+            "dom.screenorientation.allow-lock", "browser.safebrowsing.malware.enabled", "browser.safebrowsing.phishing.enabled", "browser.safebrowsing.downloads.enabled", "urlclassifier.malwareTable", "urlclassifier.phishTable",
+            // LAB5: Mozilla's captcha-frame actor (telemetry only) and the login / form-history machinery are off (config v10)
+            "captchadetection.actor.enabled", "signon.rememberSignons", "browser.formfill.enable")
         try {
             org.mozilla.geckoview.GeckoPreferenceController.getGeckoPrefs(names).accept({ list ->
                 prefReadback = "Engine prefs: " + (list?.joinToString(", ") { "${shortPref(it.pref)}=${it.value.toString().take(if (it.pref.startsWith("urlclassifier")) 220 else 40)}(${when (it.type) { org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_BOOL -> "b"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_INT -> "i"; org.mozilla.geckoview.GeckoPreferenceController.PREF_TYPE_STRING -> "s"; else -> "?" }})" } ?: "none")
