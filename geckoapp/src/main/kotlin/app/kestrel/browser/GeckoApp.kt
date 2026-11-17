@@ -30,5 +30,6 @@ class GeckoApp : Application() {
         if (getProcessName() == packageName) app.kestrel.browser.diag.StartTimeline.appCreated()
         if (getProcessName() == packageName) ProcessLife.init(this)
         if (getProcessName() == packageName) Engine.start(this) // background thread: filter snapshot + Public Suffix List (malware list, per-site Shields)
+        if (getProcessName() == packageName) GeckoEngine.prewarmConfig(this) // LAB5: SnakeYAML (GeckoView's config reader) is loaded off the UI thread while the activity is being built
     }
 }

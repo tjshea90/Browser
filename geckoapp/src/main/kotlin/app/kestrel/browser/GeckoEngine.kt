@@ -71,6 +71,30 @@ object GeckoEngine {
     /** The runtime if the engine has started, else null (never starts it). */
     fun runtimeOrNull(): GeckoRuntime? = rt
 
+    private val configWarmStarted = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /**
+     * LAB5: GeckoRuntime.create reads our engine config (files/gecko-config.yaml) with SnakeYAML, a full reflection-based YAML library, ON THE UI THREAD (org.mozilla.gecko.util.DebugConfig.fromFile; a stack
+     * sample of the emulator lab caught it inside Yaml.load, research/LAB5_STARTUP.md). The first use of SnakeYAML in a process loads and initialises several hundred classes (regex tables, reflection
+     * caches) with the interpreter: cheap on the lab's x86, a good part of the 0.9 s start-up block on a Cortex-A53. Here the same file is parsed once on a background thread, started at Application.onCreate,
+     * so that class loading and static initialisation are done before the UI thread needs them; the result is discarded, nothing but warmth is kept. Only the UI process (the engine's child processes
+     * construct this Application too). Any failure is swallowed: the UI thread then simply pays the old cost.
+     */
+    fun prewarmConfig(ctx: Context) {
+        if (!configWarmStarted.compareAndSet(false, true)) return
+        val app = ctx.applicationContext
+        Thread({
+            try {
+                val t0 = android.os.SystemClock.uptimeMillis()
+                val path = GeckoPrefs.writeConfig(app)
+                val t1 = android.os.SystemClock.uptimeMillis()
+                org.mozilla.gecko.util.DebugConfig.fromFile(java.io.File(path))
+                val t2 = android.os.SystemClock.uptimeMillis()
+                app.kestrel.browser.diag.Health.log("engine", "config-warm", "write=${t1 - t0}ms yaml=${t2 - t1}ms (a background thread; the UI thread used to pay the yaml part inside GeckoRuntime.create)")
+            } catch (e: Throwable) { /* only a head start */ }
+        }, "kestrel-config-warm").apply { isDaemon = true; start() }
+    }
+
     fun runtime(ctx: Context): GeckoRuntime = rt ?: synchronized(this) { rt ?: create(ctx.applicationContext).also { rt = it } }
 
     private fun create(ctx: Context): GeckoRuntime {
@@ -119,7 +143,9 @@ object GeckoEngine {
             .fontSizeFactor(prefs.textZoom / 100f)
             .preferredColorScheme(colorScheme(prefs))
             .build()
+        val createAt = android.os.SystemClock.uptimeMillis()
         return GeckoRuntime.create(ctx, settings).also { r ->
+            app.kestrel.browser.diag.Health.log("engine", "runtime-create-took", "${android.os.SystemClock.uptimeMillis() - createAt}ms") // on the UI thread: the owner's Diagnostics show what it costs on the tablet
             r.settings.setFetchPriorityEnabled(true)                      // fetchpriority=high/low on img/script/link is honoured (GeckoView's Java default is false)
             r.settings.setFingerprintingProtection(true)                  // FPP in normal tabs too (the engine default is private tabs only)
             r.settings.setFingerprintingProtectionPrivateBrowsing(true)

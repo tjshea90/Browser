@@ -50,7 +50,7 @@ object GeckoPrefs {
     }
 
     /** Writes filesDir/gecko-config.yaml (if the content differs) and returns its path. */
-    fun writeConfig(ctx: Context): String {
+    @Synchronized fun writeConfig(ctx: Context): String { // (the config warm-up thread of GeckoEngine.prewarmConfig and the UI thread both call it)
         val text = try { ctx.assets.open("gecko-prefs.txt").bufferedReader().use { it.readText() } } catch (e: Exception) { "" }
         // DEBUG builds only (the emulator's pref sweep, LAB5b): `setprop debug.kestrel.gp1 "javascript.options.parallel_marking=true"` .. gp8 (one pref per property: a system property holds 91 characters),
         // then a restart. The same grammar as gecko-prefs.txt; `name=-` removes a pref. A release build never reads a property (DebugProps.get answers null).
