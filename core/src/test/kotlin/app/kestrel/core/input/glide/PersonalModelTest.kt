@@ -59,8 +59,8 @@ class PersonalModelTest {
         assertTrue("words ${m.wordCount}", m.wordCount <= 50)
         assertTrue("pairs ${m.pairCount}", m.pairCount <= 80)
         val d = PersonalModel()
-        repeat(7000) { d.add(null, "often") } // the total passes the decay point: everything halves
-        assertTrue(d.weightOf("often") < 4000f)
+        repeat(16000) { d.add(null, "often") } // the total passes the decay point: everything halves
+        assertTrue(d.weightOf("often") < 12000f)
     }
 
     @Test fun whatWasLearnedSurvivesSavingAndLoading() {
