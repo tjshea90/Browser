@@ -320,10 +320,10 @@ def dm_install_check(lab, pl, adb, a, say, rows, progress):
 # profile; the profile decides how much is compiled. `speed` is the ceiling (everything), measured for its cost.
 BREADTH = [
     ("verify", "base", "verify", "nothing compiled (what an update gets until the idle dexopt)"),
-    ("sp-current", "base", "speed-profile", "alpha65 profile: the lab's methods, only some marked hot"),
-    ("sp-allhot", "allhot", "speed-profile", "the same methods, ALL marked hot"),
-    ("sp-ours", "ours", "speed-profile", "all of them hot + every method of app.kestrel.** (wildcard)"),
-    ("speed", "base", "speed", "everything (ceiling)"),
+    ("sp-current", "base", "speed-profile", "alpha65 profile: only the methods marked hot (about 2.5k of 15k)"),
+    ("sp-exercised", "exercised", "speed-profile", "every method the lab ever ran marked hot (about 4.9k)"),
+    ("sp-all", "all", "speed-profile", "ALL methods marked hot (one wildcard rule, 15k), start-up / post-start-up flags kept"),
+    ("speed", "base", "speed", "everything (the ceiling)"),
 ]
 
 
@@ -332,7 +332,7 @@ def breadth_check(lab, pl, adb, srv, a, say, info, rows, mem, notes, progress):
     `cmd package compile -f -m MODE`, then timed starts (alternating warm / dropped file cache) on the lab's ping page and one memory snapshot. Per variant: compile seconds, compiled code size, files, start times, PSS.
     Variant APKs differ ONLY in assets/dexopt/baseline.prof (the profile rules of geckoapp/src/main/baseline-prof.txt, rewritten by R8). Fills [info] (one dict per compile), [rows] (one per start), [mem]."""
     pkg = a.release_pkg
-    apks = {"base": a.release_apk, "allhot": a.apk_allhot, "ours": a.apk_ours}
+    apks = {"base": a.release_apk, "exercised": a.apk_exercised, "all": a.apk_all}
     present = {k: v for k, v in apks.items() if v and os.path.exists(v)}
     page = "http://localhost:%d/ping" % a.port
     prof = "/data/misc/profiles/cur/0/%s/primary.prof" % pkg
@@ -340,7 +340,7 @@ def breadth_check(lab, pl, adb, srv, a, say, info, rows, mem, notes, progress):
     lab.pkg = pkg
     try:
         for rnd in range(1, a.breadth_rounds + 1):
-            groups = [("base", ["verify", "sp-current", "speed"]), ("allhot", ["sp-allhot"]), ("ours", ["sp-ours"])]
+            groups = [("base", ["verify", "sp-current", "speed"]), ("exercised", ["sp-exercised"]), ("all", ["sp-all"])]
             if rnd % 2 == 0:                                   # round 2 the other way round: a drifting runner cannot favour one variant
                 groups = [(k, list(reversed(v))) for k, v in reversed(groups)]
             for key, names in groups:
@@ -477,8 +477,8 @@ def main():
     ap.add_argument("--dm-only", action="store_true", help="skip the timed starts of the release phase: only the compile-at-install installs (LAB6a, about 10 minutes with the release build)")
     ap.add_argument("--old-apk", default="", help="LAB7b: the debug build the update starts from")
     ap.add_argument("--new-apk", default="", help="LAB7b: the same code with the NEXT versionCode and extension version (the update)")
-    ap.add_argument("--apk-allhot", default="", help="LAB7a: the release build whose profile marks every listed method hot")
-    ap.add_argument("--apk-ours", default="", help="LAB7a: ... plus a wildcard rule for every method of app.kestrel.**")
+    ap.add_argument("--apk-exercised", default="", help="LAB7a: the release build whose profile marks every method the lab ran as hot")
+    ap.add_argument("--apk-all", default="", help="LAB7a: the release build with one extra wildcard rule (HL**;->**(**)**): every method hot")
     ap.add_argument("--update-rounds", type=int, default=2)
     ap.add_argument("--breadth-rounds", type=int, default=2)
     ap.add_argument("--phases", default="release,dm", help="comma list of: update, breadth, release, dm, debug (the default is what the lab did before LAB7)")
