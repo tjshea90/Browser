@@ -27,7 +27,7 @@ on:
         options: [full, hotspot]
         default: full
       profile:
-        description: 'Which device: standard = the older lab (x86_64 Android 10, as every earlier run), tablet = as close to the owner tablet as an emulator gets (32-bit x86 Android 10 userland, low-RAM flag asked for, font scale 1.2, 2 GB, 600x973 at 170 dpi), auto = tablet for the daily suite and standard for the rest'
+        description: 'Which device: standard = the older lab (x86_64 Android 10, as every earlier run), tablet = as close to the owner tablet as an emulator gets (low-RAM flag asked for, font scale 1.2, 2 GB, 600x973 at 170 dpi; NOT 32-bit: no 32-bit x86 GeckoView exists), auto = tablet for the daily suite and standard for the rest'
         type: choice
         options: [auto, tablet, standard]
         default: auto
@@ -85,8 +85,9 @@ jobs:
         run: |
           P="$PROFILE_IN"
           if [ -z "$P" ] || [ "$P" = auto ]; then if [ "$SUITE_IN" = daily ]; then P=tablet; else P=standard; fi; fi
-          # the tablet's userland is 32-bit (sys_mssi_t_32_ago, docs/HARDWARE.md): the x86 image is the 32-bit twin of that on an x86 host; standard keeps x86_64 so earlier runs stay comparable
-          if [ "$P" = tablet ]; then IMG=x86; else IMG=x86_64; fi
+          # the tablet's userland is 32-bit (sys_mssi_t_32_ago, docs/HARDWARE.md) but NO 32-bit match is possible: Mozilla publishes no geckoview-x86 for GeckoView 160 (lab run 43997001918:
+          # "Could not find org.mozilla.geckoview:geckoview-x86:160.0.20261104181552"), so both profiles use x86_64; the report's hardware table says so
+          IMG=x86_64
           echo "PROFILE=$P" >> "$GITHUB_ENV"
           echo "IMG_ABI=$IMG" >> "$GITHUB_ENV"
           echo "device profile: $P (image android-29 default $IMG)"

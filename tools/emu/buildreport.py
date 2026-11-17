@@ -105,7 +105,7 @@ def hardware_table(dev, health_text, net):
     heap = re.search(r"limit (\d+) MB", health_text)
     rows = [
         ("Android version", "10 (API 29)", "Android %s (API %s)" % (d.get("android", "?"), d.get("sdk", "?")), "matched" if d.get("sdk") == "29" else "NOT matched"),
-        ("Userland", "32-bit (sys_mssi_t_32_ago, armeabi-v7a)", "%s-bit, ABI %s (%s)" % (d.get("bits", "?"), d.get("abi", "?"), d.get("abilist", "?")), "matched (32-bit x86)" if d.get("bits") == "32" else "partly (64-bit x86_64: memory use differs)"),
+        ("Userland", "32-bit (sys_mssi_t_32_ago, armeabi-v7a)", "%s-bit, ABI %s (%s)" % (d.get("bits", "?"), d.get("abi", "?"), d.get("abilist", "?")), "matched (32-bit x86)" if d.get("bits") == "32" else "NOT matched: 64-bit x86_64 (Mozilla publishes no 32-bit x86 GeckoView for 160: lab run 43997001918 could not resolve geckoview-x86); pointers are twice as big, so memory numbers read high"),
         ("Screen", "600x973 at 170 dpi", "%s, %s" % (d.get("wm_size", "?").replace("Physical size: ", ""), d.get("wm_density", "?").replace("Physical density: ", "")), "matched" if "600" in d.get("wm_size", "") and "170" in d.get("wm_density", "") else "check"),
         ("Font scale", "1.2", d.get("font_scale", "?"), "matched" if d.get("font_scale", "").startswith("1.2") else "NOT matched (1.0)"),
         ("RAM", "2 GB", ("%d MB" % mem_mb()) if mem_mb() else "?", "matched" if mem_mb() and 1700 <= mem_mb() <= 2100 else "check"),
