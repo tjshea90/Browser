@@ -130,7 +130,7 @@ def main():
             adb.sh("am start -a android.intent.action.VIEW -d http://localhost:%d%s -p %s" % (a.port, p, pkg), timeout=60)
             time.sleep(8)
         time.sleep(6)
-        pids = [pid for pid, name in lab.pids() if name == pkg]
+        pids = [int(x) for x in adb.sh("pidof %s" % pkg, timeout=30).split() if x.isdigit()] or [pid for pid, name in lab.pids() if name == pkg]
         for pid in pids:
             adb.sh("kill -s SIGUSR1 %d" % pid, timeout=30)
         time.sleep(4)
