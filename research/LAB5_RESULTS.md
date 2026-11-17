@@ -33,6 +33,12 @@ second runner was about 6 % slower (244 ms vs 229 ms), so differences under ~10 
 Plain reading: nothing got worse that the runs can see, memory is a little lower, the engine-create step is shorter; start-up time and page speed are the same on this fast x86 emulator. The wins this pass was after (the interpreter-bound start on the
 tablet's four slow cores, the 14.5 MB per engine process, per-page work in the extension) are only partly visible here and are NOT proven on the tablet.
 
+## The video suite on the changed code (vp run 44066133643)
+11 of 12 scenes ok: Kestrel's own player, the native player (file and HLS), the video format policy, the HLS picture cap, videos start only when pressed, web videos in Kestrel's player (the hand-over chain through the single
+extension listener), VLC-style gestures, the quality list inside the page, a private tab that keeps its login. The 12th, `film-inside-the-page`, failed: its Diagnostics line names the reason, alpha62's loop breaker (a clip of at most two
+minutes that Kestrel's player played to its end is not handed over again within ten minutes) meeting the lab replaying the same clip after the earlier scene. Not a LAB5 effect; the lab now clears that memory (debug command
+`handreset`) before the scene, and the scene is run again on its own (result below when read).
+
 ## Measured and NOT adopted (the ledger)
 - Engine preferences nursery16 / gcpar / gcsmall / canvas64: sweep run 44059232336 (17 good starts, then the emulator went offline): every variant inside the noise of two identical configurations (memory +-45 MB, bench +-3 %): none adopted (research/LAB5_PREFSWEEP.md).
 - Native libraries kept in the APK (`-PlibsInApk=true`): no start-up gain (-4..-6 % inside the noise), no memory gain, +65 MB download on ARM32 (+103 MB in the x86 lab build). Opt-in switch stays.
