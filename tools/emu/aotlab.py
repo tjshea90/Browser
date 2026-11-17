@@ -104,8 +104,8 @@ def release_check(lab, pl, adb, a, say):
                 say("release compiled", info)
                 notes.append("round %d %s: status=%s oat=%d KB" % (rnd, mode, st[0], oat // 1024))
                 lab.kill()
-                first = lab.launch(page, 120)               # (the release build writes no Health lines to logcat: page_loaded stays empty; am start -W is the measure)
-                time.sleep(3)
+                adb.sh("am start -W -a android.intent.action.VIEW -d %s -p %s" % (page, pkg), timeout=120)   # unmeasured first run after a compile (the release build writes no Health lines to logcat: am start -W is the measure)
+                time.sleep(15)
                 for k in range(a.starts):
                     cold = (k % 2 == 1)
                     lab.kill()

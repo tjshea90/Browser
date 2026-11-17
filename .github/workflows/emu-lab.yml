@@ -213,7 +213,11 @@ jobs:
           export PATH="$ANDROID_HOME/platform-tools:$PATH"
           mkdir -p "$RUNNER_TEMP/lab-out"
           APK="$PWD/$(ls geckoapp/build/outputs/apk/debug/*.apk | head -1)"
-          python3 -u -I tools/emu/aotlab.py --out "$RUNNER_TEMP/lab-out" --repo-root "$PWD" --pkg "$PKG" --apk "$APK" --rounds "${MINUTES:-3}" --starts 4 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
+          # the real release path: the R8-minified release build for the emulator's ABI (signed with the repository's public dev key), its embedded baseline profile
+          ./gradlew :geckoapp:assembleRelease -PgeckoAbi=$IMG_ABI --console=plain > "$RUNNER_TEMP/release-build.log" 2>&1 || tail -30 "$RUNNER_TEMP/release-build.log"
+          REL="$PWD/geckoapp/build/outputs/apk/release/geckoapp-release.apk"
+          [ -f "$REL" ] || REL=""
+          python3 -u -I tools/emu/aotlab.py --out "$RUNNER_TEMP/lab-out" --repo-root "$PWD" --pkg "$PKG" --apk "$APK" --release-apk "$REL" --rounds "${MINUTES:-3}" --starts 4 2>&1 | tee "$RUNNER_TEMP/lab-out/console.txt"
           if [ -f "$RUNNER_TEMP/lab-out/AOT-REPORT.md" ]; then cat "$RUNNER_TEMP/lab-out/AOT-REPORT.md" >> "$GITHUB_STEP_SUMMARY"; fi
 
       - name: Run the lab (${{ inputs.suite }}, soak ${{ inputs.minutes }} min, net ${{ inputs.net }})
