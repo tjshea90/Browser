@@ -129,8 +129,11 @@ def start_server(port, root, scratch):
                     return self._send(mod.page_bench2())
                 if p.startswith("/img/") and p.endswith(".svg"):
                     return self._send(mod.svg(int(p[5:-4] or 0)), "image/svg+xml")
+                if p == "/ping":
+                    return self._send(PING_PAGE)
                 if p == "/report":
                     reports.append(self.path)
+                    pings.append((time.time(), self.path))
                     return self._send(b"", "image/gif", 204)
                 return self._send(b"not found", "text/plain", 404)
             except (BrokenPipeError, ConnectionResetError):
