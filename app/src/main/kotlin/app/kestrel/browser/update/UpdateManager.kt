@@ -491,7 +491,7 @@ object UpdateManager {
      * (8 s to connect, 10 s to read, at most 1 MB). null for anything that is not a clean, checked file (a release without one, an Android version its format does not fit, a refusal in the last two weeks, no network, a wrong
      * checksum): the install is then exactly what it always was. Never throws.
      */
-    @Synchronized private fun ensureDm(app: Context, offer: UpdateOffer): File? {
+    @Synchronized internal fun ensureDm(app: Context, offer: UpdateOffer): File? {
         val name = offer.dmName ?: return null
         val url = offer.dmUrl ?: return null
         if (!DexMetadata.mayAttach(Build.VERSION.SDK_INT, sp(app).getLong("dm_refused_at", 0L), System.currentTimeMillis())) return null
