@@ -182,9 +182,7 @@
         "https://*.funcaptcha.com/*",
         "https://*.captcha-delivery.com/*",
         "https://*.perimeterx.net/*",
-        "https://*.px-cloud.net/*"
-      ],
-      "exclude_matches": [
+        "https://*.px-cloud.net/*",
         "*://*.youtube.com/*",
         "*://*.youtube-nocookie.com/*",
         "*://*.youtubekids.com/*"
