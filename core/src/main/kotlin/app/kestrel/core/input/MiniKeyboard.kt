@@ -117,6 +117,8 @@ class MiniKeyboardModel {
                 allSelected = false
                 shift = shiftLock
                 glideTail = null
+                // Owner, 2026-11-17 (M5, like Gboard): after ONE special character the keyboard goes straight back to the letters (digits stay: several are typed in a row; Backspace and Shift change nothing)
+                if (symbols && !(key.text.length == 1 && key.text[0].isDigit())) symbols = false
             }
             Key.Backspace -> {
                 val tail = glideTail
