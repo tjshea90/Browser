@@ -6,6 +6,11 @@
 
 **LAB3 (owner message 62, 2026-11-17): the `daily` suite, the device profile and the build report are described in research/LAB3_DAILY.md.**
 
+**LAB5 (owner message 2026-11-17T06:42Z, "ultra fast, snappy, lightweight"): three more suites, each answers ONE question with an A/B inside one run (x86 emulator: only differences count).**
+- `lab_suite=pack` (tools/emu/packlab.py): four builds of the same code (omni.ja stored or deflated, native libs in the APK or extracted): install size, cold starts warm / dropped cache, per-process memory. Read: research/LAB5_PACKAGING.md.
+- `lab_suite=sweep` (tools/emu/prefsweep.py, variants in tools/emu/sweep-variants.txt, `lab_minutes` = rounds): engine preferences and debug code flags (`@debug.kestrel.x=1`) against the same run's `base` and `base2` (the noise floor), ruler = the /bench2 page (tools/sitelab/soaklab.py). Read: research/LAB5_PREFSWEEP.md.
+- `lab_suite=aot` (tools/emu/aotlab.py, `lab_minutes` = rounds): one APK compiled as `verify` / `speed-profile` (a profile trained in the same run) / `speed`: what a baseline profile is worth. Every other run also keeps the ART profile it recorded (`lab-out/profile/`), the raw material of geckoapp/src/main/baseline-prof.txt (tools/profile-to-baseline.py).
+
 ## How to start it (nothing else is needed, no secret, no owner step)
 `mcp__github__actions_run_trigger`, `run_workflow`, owner `tjshea90`, repo `Browser`, workflow `android.yml`, `ref` = the session's branch, inputs `app=lab`, `full_build=false`, `lab_suite` = `smoke | fs | soak | all`, `lab_minutes` = how long the soak part runs (60 = one hour).
 Why through android.yml: GitHub dispatches only workflows it already knows on the DEFAULT branch (here `ccr-a57c163e-mtq8js`), and `emu-lab.yml` exists only on the session branches. `android.yml` is known, so it is the front door; it calls `.github/workflows/emu-lab.yml` (a reusable workflow, also directly dispatchable once it is on the default branch). A run uses the workflow files of the dispatched branch.

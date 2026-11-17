@@ -17,6 +17,13 @@ val keystoreProps = Properties().apply {
 val geckoVersion = "160.0.20261104181552"
 // `-PgeckoAbi=x86` builds a debug APK for the x86 emulator; the tablet build is always armeabi-v7a.
 val geckoAbi = (findProperty("geckoAbi") as String?) ?: "armeabi-v7a"
+// LAB5 packaging switches (research/LAB5_PACKAGING.md):
+//  -PomniStored=false (DEFAULT ON since alpha64) turns OFF the stored layout of assets/omni.ja. Stored = UNCOMPRESSED in the APK (it was deflated: 13.96 MB -> 14.51 MB, re-deflating a zip gains nothing). Gecko maps a stored entry
+//                     straight from the APK (shared, evictable file pages); a deflated one has to be inflated into a private heap buffer in EVERY Gecko process that opens it. Measured by the pack lab run
+//                     (same code, 4 builds): warm start -11 %, engine ready -12 %, memory after the page set -28 MB. tools/verify-apk.sh fails a build whose omni.ja is deflated.
+//  -PlibsInApk=true   (OFF) native libraries stay uncompressed inside the APK (no extraction at install) instead of the legacy compressed-and-extracted layout: +65 MB download, no start-up or memory gain in the lab. Opt-in only.
+val omniStored = (findProperty("omniStored") as String?) != "false"
+val libsInApk = (findProperty("libsInApk") as String?) == "true"
 
 android {
     namespace = "app.kestrel.browser"   // shared sources and resources use app.kestrel.browser.R
@@ -27,8 +34,8 @@ android {
         applicationId = "app.kestrel.browser.gecko"  // installs BESIDE the WebView build (app.kestrel.browser)
         minSdk = 29
         targetSdk = 36
-        versionCode = 164
-        versionName = "0.3.0-alpha63"
+        versionCode = 168
+        versionName = "0.3.0-alpha67"
         ndk { abiFilters += geckoAbi } // the tablet's userspace is 32-bit; only this engine build is bundled (~90 MB)
     }
 
@@ -63,9 +70,13 @@ android {
         assets.srcDir("../app/src/main/assets")
     }
 
+    androidResources {
+        if (omniStored) noCompress += "ja"
+    }
+
     packaging {
         // Compressed libs: the APK is ~92 MB instead of ~157 MB to download over the owner's metered hotspot; Android extracts them at install (extra ~135 MB on disk).
-        jniLibs { useLegacyPackaging = true }
+        jniLibs { useLegacyPackaging = !libsInApk }
         resources {
             excludes += setOf("kotlin/**", "META-INF/*.kotlin_module", "META-INF/*.version", "META-INF/com.android.tools/**", "DebugProbesKt.bin", "META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*")
         }
@@ -103,6 +114,8 @@ dependencies {
     implementation(project(":core"))
     implementation("androidx.media3:media3-exoplayer:$media3Version")
     implementation("androidx.media3:media3-exoplayer-hls:$media3Version")
+    // LAB5: already inside the APK (GeckoView pulls it in at runtime: it installs the baseline profile 5 s after the first frame); declared so the app can read ProfileVerifier (has Android compiled this install with the profile yet? Health line `start art`)
+    implementation("androidx.profileinstaller:profileinstaller:1.4.0")
     implementation("org.mozilla.geckoview:geckoview-$geckoAbi:$geckoVersion") {
         exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
         exclude(group = "com.google.android.gms") // WebAuthn via Google Play services: this tablet has none, and this project never depends on GMS

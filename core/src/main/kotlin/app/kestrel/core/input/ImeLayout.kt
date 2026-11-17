@@ -3,18 +3,26 @@ package app.kestrel.core.input
 import app.kestrel.core.input.editor.FieldKind
 import app.kestrel.core.input.editor.ImeActions
 
-enum class Page { LETTERS, SYMBOLS }
+/** The letters, the first page of symbols (digits and the everyday ones) and the second page of symbols (the rest). */
+enum class Page { LETTERS, SYMBOLS, SYMBOLS2 }
 
 /**
- * The keys of the SYSTEM keyboard (the browser's MiniKeyboardLayout is for an address bar and stays as the engine's reference layout). Rows 1-3 of the
- * letters page are the browser's own, so the glide decoder sees the same geometry; only the bottom row changes with the field (text, URL, e-mail) and
- * number / phone fields get a keypad. The action key ([Key.Go]) is labelled for what Enter does in the field (KB-104 decides which action).
+ * The keys of the SYSTEM keyboard (the browser's MiniKeyboardLayout is for an address bar and stays as the engine's reference layout).
+ *
+ * Owner, 2026-11-17, M1: "model the keyboard layout exactly like the attached photo (Gboard), except without the bottom bar, down arrow and globe (nothing under the space bar), and no emoji or voice button".
+ * The photo, measured: ten letter keys across (a digit hint in the corner of each), the home row indented half a key at both ends, Shift (1.5 keys) at the left and Backspace (1.5 keys) at the right
+ * of the bottom letter row, and under it ?123 (1.5, round, at the LEFT), comma, a very wide space bar, full stop and Enter (1.5, round, at the RIGHT). Every row is [ROW_UNITS] units wide, so a key
+ * of one unit is exactly one letter key and the three letter rows share one key pitch (see [MiniKeyboardGeometry.slots]). No number row unless the person switches it on (the digits are the
+ * hints on the top row, and a held top-row key types its digit).
+ *
+ * The action key ([Key.Go]) is labelled for what Enter does in the field (KB-104 decides which action). Number / phone fields get a keypad.
  */
 object ImeLayout {
     private fun ch(s: String, w: Float = 1f) = KeySpec(s, Key.Ch(s), w)
     private fun chars(s: String): List<KeySpec> = s.map { ch(it.toString()) }
+    private fun gap(w: Float) = KeySpec("", null, w)
     /**
-     * The globe (switch keyboard). Owner, 2026-11-17: "remove the bottom left button to change keyboards": it is OFF by default now (Settings > Layout brings it back, and the crash-loop safe mode always shows it, plan 12 KB-106);
+     * The globe (switch keyboard). Owner, 2026-11-17: "remove the bottom left button to change keyboards": it is OFF by default (Settings > Layout brings it back, and the crash-loop safe mode always shows it, plan 12 KB-106);
      * without it, HOLDING the space bar opens the keyboard picker. Its label is only a name; the view draws a globe.
      */
     const val GLOBE = "globe"
@@ -36,56 +44,73 @@ object ImeLayout {
         }
     }
 
-    /** The number row is a little thinner than the letter rows (it is only ever tapped, never glided over). */
+    /** The number row (only when switched on in Settings) is a little thinner than the letter rows (it is only ever tapped, never glided over). */
     const val NUMBER_ROW_WEIGHT = 0.72f
 
-    /** Row heights for [MiniKeyboardGeometry.boxes]: pass the SAME list to the view and to the decoder. */
+    /** Row heights for [MiniKeyboardGeometry.slots]: pass the SAME list to the view and to the decoder. */
     fun rowWeights(rows: List<List<KeySpec>>): List<Float> = if (hasNumberRow(rows)) List(rows.size) { if (it == 0) NUMBER_ROW_WEIGHT else 1f } else List(rows.size) { 1f }
     fun hasNumberRow(rows: List<List<KeySpec>>): Boolean = rows.size == 5
 
     /**
-     * The symbols of the "123" page, also offered as a grid when the full stop or the comma is HELD (see KeysView). (The owner asked to remove the 123 key and then took it back: "i need a way to get to the special
-     * symbols": the key and the page stay, the grid is a shortcut.)
+     * The symbols of the hold-the-full-stop grid (the quick way to a special character: hold "." or ",", slide to the symbol, let go). Every symbol of the two symbols pages is in it.
      */
-    private const val SYMBOL_ROW_3 = "<>[]{}\\|\u20AC\u00A3\u00A5"
+    private const val SYMBOL_ROW_3 = "<>[]{}\\|€£¥"
     val symbolRows: List<List<String>> = listOf("@#$%&-+()/", "*\"':;!?_=~", SYMBOL_ROW_3).map { r -> r.map { it.toString() } }
 
-    /**
-     * Every text row is this many units wide. (Owner, 2026-11-17, M1: the keyboard is modelled on Gboard's large layout: Backspace at the end of the first letter row, the action key at the end of the home row,
-     * a Shift key at both ends of the bottom letter row, and under it ONLY comma, space, full stop and the key for special characters at the bottom right: no globe, no emoji, no voice key, no bar under the space bar.)
-     */
-    const val ROW_UNITS = 11.5f
+    /** The key on the first symbols page that opens the second one (Gboard writes it "=\<"). On the second page the same key (labelled ?123) goes back. Both carry [Key.ToSymbols]: the view cycles the symbols pages. */
+    const val MORE_SYMBOLS = "=\\<"
 
-    fun rows(page: Page, shift: Boolean, kind: FieldKind, actionLabel: String = "⏎", numberRow: Boolean = true, showGlobe: Boolean = false): List<List<KeySpec>> {
+    /** Every text row is this many units wide: the photo's ten letter keys. */
+    const val ROW_UNITS = 10f
+
+    /** The width of the round keys (?123 / abc at the left, Enter at the right of the bottom row) and of Shift and Backspace: the photo has them 1.5 letter keys wide. */
+    const val WIDE_KEY = 1.5f
+
+    fun rows(page: Page, shift: Boolean, kind: FieldKind, actionLabel: String = "⏎", numberRow: Boolean = false, showGlobe: Boolean = false): List<List<KeySpec>> {
         if (kind == FieldKind.NUMBER || kind == FieldKind.PHONE) return keypad(kind, actionLabel, showGlobe)
-        val digits = if (numberRow) listOf("1234567890".map { ch(it.toString(), ROW_UNITS / 10f) }) else emptyList()
+        val digits = if (numberRow) listOf(chars("1234567890")) else emptyList()
         fun letters(s: String) = chars(if (shift) s.uppercase() else s)
-        // the bottom row: [globe if asked] [one or two small keys] [space: ALL the rest] [full stop, .com] [special characters / abc, bottom right]
-        fun bottom(vararg fixed: KeySpec, last: KeySpec): List<KeySpec> {
+        // the bottom row, as in the photo: [?123 / abc, round] [globe if asked] [small keys] [space: ALL the rest] [small keys] [action key, round]
+        fun bottom(first: KeySpec, before: List<KeySpec>, after: List<KeySpec>): List<KeySpec> {
             val g = if (showGlobe) listOf(globe) else emptyList()
-            val used = (g + fixed + last).sumOf { it.weight.toDouble() }.toFloat()
-            val space = KeySpec("space", Key.Ch(" "), ROW_UNITS - used)
-            val head = fixed.takeWhile { it.label != "." && it.label != ".com" }
-            val tail = fixed.drop(head.size)
-            return g + head + space + tail + last
+            val act = action(actionLabel, WIDE_KEY)
+            val used = (listOf(first) + g + before + after + act).sumOf { it.weight.toDouble() }.toFloat()
+            return listOf(first) + g + before + KeySpec("space", Key.Ch(" "), ROW_UNITS - used) + after + act
         }
-        fun act() = action(actionLabel, 2f)
-        if (page == Page.SYMBOLS) return digits + listOf(
-            chars("@#$%&-+()/") + KeySpec(back.label, back.key, 1.5f),
-            chars("*\"':;!?_=~") + action(actionLabel, 1.5f),
-            listOf(KeySpec("", null, 0.25f)) + chars(SYMBOL_ROW_3) + KeySpec("", null, 0.25f),
-            bottom(ch(",", 1.5f), ch(".", 1.5f), last = KeySpec("abc", Key.ToLetters, 2.5f)),
-        )
-        val toSymbols = KeySpec("?123", Key.ToSymbols, 2.5f)
+        val toLetters = KeySpec("abc", Key.ToLetters, WIDE_KEY)
+        if (page != Page.LETTERS) {
+            val stdBottom = bottom(toLetters, listOf(ch(",")), listOf(ch(".")))
+            // The pages are four rows tall like the letters page (the keyboard must not change height when the page changes); a number row, when it is on, sits above all of them.
+            val body = if (page == Page.SYMBOLS) {
+                if (numberRow) listOf(
+                    chars("@#$%&-+()/"),
+                    chars("*\"':;!?_=~"),
+                    listOf(KeySpec(MORE_SYMBOLS, Key.ToSymbols, WIDE_KEY)) + chars("<>[]{}|") + back,
+                    stdBottom,
+                ) else listOf(
+                    chars("1234567890"),
+                    chars("@#$%&-+()/"),
+                    listOf(KeySpec(MORE_SYMBOLS, Key.ToSymbols, WIDE_KEY)) + chars("*\"':;!?") + back,
+                    stdBottom,
+                )
+            } else listOf(
+                chars("~`|•√π÷×¶∆"),
+                chars("£¢€¥^°={}\\"),
+                listOf(KeySpec("?123", Key.ToSymbols, WIDE_KEY)) + chars("_<>[]©®") + back,
+                stdBottom,
+            )
+            return digits + body
+        }
+        val toSymbols = KeySpec("?123", Key.ToSymbols, WIDE_KEY)
         val bottomRow = when (kind) {
-            FieldKind.URL -> bottom(ch("/", 1.25f), ch(".", 1.25f), ch(".com", 1.75f), last = toSymbols)
-            FieldKind.EMAIL -> bottom(ch("@", 1.25f), ch(".", 1.25f), ch(".com", 1.75f), last = toSymbols)
-            else -> bottom(ch(",", 1.5f), ch(".", 1.5f), last = toSymbols)
+            FieldKind.URL -> bottom(toSymbols, listOf(ch("/")), listOf(ch("."), ch(".com", WIDE_KEY)))
+            FieldKind.EMAIL -> bottom(toSymbols, listOf(ch("@")), listOf(ch("."), ch(".com", WIDE_KEY)))
+            else -> bottom(toSymbols, listOf(ch(",")), listOf(ch(".")))
         }
         return digits + listOf(
-            letters("qwertyuiop") + back,
-            listOf(KeySpec("", null, 0.5f)) + letters("asdfghjkl") + act(),
-            listOf(KeySpec("⇧", Key.Shift, 2.25f)) + letters("zxcvbnm") + KeySpec("⇧", Key.Shift, 2.25f),
+            letters("qwertyuiop"),
+            listOf(gap(0.5f)) + letters("asdfghjkl") + gap(0.5f),
+            listOf(KeySpec("⇧", Key.Shift, WIDE_KEY)) + letters("zxcvbnm") + back,
             bottomRow,
         )
     }
