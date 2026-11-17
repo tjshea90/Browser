@@ -1,22 +1,23 @@
-# CHECKPOINT 2598 — read me first, then TASKS.md
+# CHECKPOINT 2599 — read me first, then TASKS.md
 
-**Written:** 2026-11-17T02:51:18Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-e89b9dfe-pl3lk5` · **builds on:** `2d31626a` (this checkpoint is the commit after it)
+**Written:** 2026-11-17T03:10:23Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-e89b9dfe-pl3lk5` · **builds on:** `bdc8a66c` (this checkpoint is the commit after it)
 
 ## Just done
-LAB3f: research/LAB3_IMPROVEMENTS.md now opens with the measured table of lab runs 2-3 (cold start 1.2 s UI block = candidate 3 confirmed, 0 hard stalls, film start 0.7 s, memory peak 291 MB with 7 of 8 tabs hibernated, blocker 0 asked one by one = candidate 1 not needed, security 14/0, Shields A/B n=2 hint that blocking costs time on a fast link) and the lab-lesson paragraph; TASKS LAB3h (repeat the Shields A/B 5x) and LAB3i (writable-system low-RAM profile) added. Run 4 is running (wake-up trig_019veErSUCaE1dD8TCLC9iQP at 03:07Z)
+LAB3e: lab run 4 (44005894797) READ: Security GREEN 16 pass / 0 fail, camera/microphone and location each raise a real BLOCK/ALLOW dialog (pass), Stability GREEN, Memory GREEN (peak 332 MB). FIFTH lab false positive found by reading the raw Health lines: typed-address FAIL was a stale event (the Google results page of the previous step finished 9.6 s late, the real en.wikipedia.org load came at +41 s): d_wait_page now takes a wanted host. Also: Shields A/B now 3 alternating repeats per mode with medians, http->https proven from the padlock description ('Connection is not secure' for http), tab-switch time only when an event was seen, private tab via its on-screen indicator, emulator-only scroll gaps rated low with the tablet's own measurement named
 
 ## Do this next
-At the wake-up: find run 4's id (list_workflow_runs perPage 1 filter branch + workflow_dispatch, the newest), list_workflow_jobs, download build-report + emulator-lab-text, FINALISE per the previous Do-this-next (buildreport --notes research/LAB3_IMPROVEMENTS.md --write-baseline research/lab-baseline.json, docs/handoff/LABREPORT_0.3.0-alpha62.md, tick LAB3a-g, answer the owner, delete triggers trig_01K9rvGwTaZNy2NbUQeBeWMg and trig_01TfmPuNRp4XY2gZATmURc6Z)
+Dispatch lab run 5 ONCE (same inputs; id via list_workflow_runs perPage 1 filter branch + workflow_dispatch), read it; if it shows no lab fault FINALISE: buildreport --notes research/LAB3_IMPROVEMENTS.md --write-baseline research/lab-baseline.json on the run-5 dir, copy BUILD-REPORT.md to docs/handoff/LABREPORT_0.3.0-alpha62.md, tick LAB3a-g with evidence, answer the owner, delete triggers trig_01K9rvGwTaZNy2NbUQeBeWMg and trig_01TfmPuNRp4XY2gZATmURc6Z and trig_019veErSUCaE1dD8TCLC9iQP. If run 5 still shows a lab fault, fix it and FINALISE anyway with that fault named (do not loop more than once more)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M TASKS.md
-     M research/LAB3_IMPROVEMENTS.md
+     M tools/emu/buildreport.py
+     M tools/emu/daily.py
 
 ## Last ten checkpoints
 ```
+  025bf31d ckpt 2598: LAB3f: research/LAB3_IMPROVEMENTS.md now opens with the measured table of la
   2d31626a ckpt 2597: LAB3e: lab run 3 (44003337190) READ: all four lab false positives gone, Secu
   d06f3696 ckpt 2596: LAB3e: lab run 3 DISPATCHED ONCE: android.yml run 44003337190 (daily, head b
   b52ed4c3 ckpt 2595: LAB3e: lab run 2 (43997607118) READ. The whole pipeline works on the real em
@@ -26,5 +27,7 @@ At the wake-up: find run 4's id (list_workflow_runs perPage 1 filter branch + wo
   c59a2c9a ckpt 2591: LAB3 run 1 (43997001918) failed at the Gradle step: Mozilla publishes NO gec
   3b71b73b ckpt 2590: LAB3d done: tools/emu/buildreport.py (build identity from geckoapp/build.gra
   a198ecf8 ckpt 2589: LAB3e: first daily-suite run DISPATCHED ONCE: android.yml run 43997001918 (a
-  f1cb9443 ckpt 2588: LAB3a/b/c code written: emu-lab.yml (profile input: tablet = 32-bit x86 Andr
 ```
+
+(1 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)

@@ -351,7 +351,11 @@ class DailyMixin:
                 if health_events(self.log.since(m2), "tabs", "cover-hide") or health_events(self.log.since(m2), "page", "painted"):
                     break
                 time.sleep(0.25)
-            res["switch_s"] = round(time.time() - t1, 2)
+            seen_evt = bool(health_events(self.log.since(m2), "tabs", "cover-hide") or health_events(self.log.since(m2), "page", "painted"))
+            if seen_evt:
+                res["switch_s"] = round(time.time() - t1, 2)
+            else:
+                res["switch_note"] = "no cover-hide / painted line within 6 s: the switch time is not known (lab run 44005894797 recorded the 6 s timeout as 6.25 s)"
             time.sleep(2)
         else:
             self.d_check("tab-grid-has-tab-cards", "fail", "the tab grid shows %d nodes but none looks like a tab card (clickable, 150 x 120 px or bigger)" % len(grid), sev="low", area="access")
@@ -522,9 +526,11 @@ class DailyMixin:
         res = {}
         mark = self.log.size()
         self.ph.debug("privtab", "https://example.com/")
-        k, kv, s = self.d_wait_page(mark, 40)
-        res["private_tab_load"] = k
-        time.sleep(2)
+        time.sleep(8)                                       # (a private tab is never logged by the app, by design: its page events do not exist)
+        res["private_indicator_on_screen"] = bool(self.d_find(r"Private tab|private", self.d_nodes()))
+        if not res["private_indicator_on_screen"]:
+            self.d_check("private-tab-shows-its-indicator", "info", "no 'Private tab' description found in the accessibility tree after opening one", area="feature")
+        time.sleep(1)
         # Shields on / off for one tracker-heavy page, three alternating repeats per mode (lab runs 2-3 had one each: too thin to say anything), medians reported
         samples = {"on": [], "off": []}
         for rep in range(3):
@@ -719,14 +725,17 @@ class DailyMixin:
                 self.d_check(nm, "pass" if (up or blocked) else "info", detail + ("; the engine upgraded %d insecure picture request(s) to https" % len(up) if up else "; blocked %d" % len(blocked) if blocked else "; no mixed-content line seen"))
             else:
                 self.shot("daily-http-upgrade")
-                addr = self.d_address_node(self.d_dump("after-http-upgrade"))
+                nodes5 = self.d_dump("after-http-upgrade")
+                addr = self.d_address_node(nodes5)
                 shown = addr["text"] if addr else ""
-                if shown.startswith("https://"):
-                    self.d_check(nm, "pass", detail + "; typed http://example.com/, the address control shows %s" % shown[:80])
-                elif shown.startswith("http://"):
-                    self.d_check(nm, "fail", detail + "; typed http://example.com/ but the address control shows %s: the page was NOT upgraded to https" % shown[:80])
+                # the address control shows the host only while it is not being edited; the padlock beside it says what the connection is (ui-home.txt: 'Connection is not secure' for http://)
+                lock = next((n["desc"] for n in nodes5 if re.match(r"Connection is", n["desc"])), "")
+                if shown.startswith("https://") or re.search(r"Connection is secure", lock, re.I):
+                    self.d_check(nm, "pass", detail + "; typed http://example.com/, the padlock says '%s' (address text %r)" % (lock, shown[:60]))
+                elif shown.startswith("http://") or re.search(r"not secure", lock, re.I):
+                    self.d_check(nm, "fail", detail + "; typed http://example.com/ and the padlock says '%s' (address text %r): NOT upgraded to https" % (lock, shown[:60]))
                 else:
-                    self.d_check(nm, "info", detail + "; the address control's text was %r" % shown[:80])
+                    self.d_check(nm, "info", detail + "; address text %r, padlock %r" % (shown[:60], lock))
         after = self.dump_diag("sec-after-http")
         up_b = [ln for ln in before.splitlines() if re.search(r"upgrad", ln, re.I)]
         up_a = [ln for ln in after.splitlines() if re.search(r"upgrad", ln, re.I)]
