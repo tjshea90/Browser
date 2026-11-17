@@ -90,9 +90,9 @@ def median(vals):
 
 
 # ------------------------------------------------------------------ the lab page server (the pages of tools/sitelab/soaklab.py, reused by path)
-def start_server(port, root):
-    sys.argv = ["soaklab", str(port), os.path.join(root, "lab-tmp")]
-    os.makedirs(sys.argv[2], exist_ok=True)
+def start_server(port, root, scratch):
+    sys.argv = ["soaklab", str(port), scratch]
+    os.makedirs(scratch, exist_ok=True)
     spec = importlib.util.spec_from_file_location("soaklab", os.path.join(root, "tools", "sitelab", "soaklab.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -354,7 +354,7 @@ def main():
     lab.adb.run("wait-for-device", timeout=120)
     lab.rooted = "uid=0" in lab.adb.sh("id", timeout=30)
     say("adb root:", lab.rooted)
-    srv, _ = start_server(a.port, os.path.abspath(a.repo_root))
+    srv, _ = start_server(a.port, os.path.abspath(a.repo_root), os.path.join(os.path.abspath(a.out), "lab-tmp"))
     lab.adb.run("reverse", "tcp:%d" % a.port, "tcp:%d" % a.port)
     for s in ("window_animation_scale", "transition_animation_scale", "animator_duration_scale"):
         lab.adb.sh("settings put global %s 0" % s)
