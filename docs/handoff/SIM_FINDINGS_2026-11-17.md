@@ -27,7 +27,15 @@ All ten loaded (`ok=true`). The two slow ones to look at on the tablet: kotlinla
 * `engine network-profile standard trr=2 http3=true` was chosen on the emulator's fast link (the fast-wifi profile works as designed).
 * Memory with one page open: Kestrel 238 to 257 MB PSS (debug build, emulator), Swoop 40 to 44 MB.
 
-## An emulator hang that repeats at ONE page (not shown to be a Kestrel defect)
+## Films (run 44188641740: the simulation presses play, because Kestrel never plays a film by itself)
+Software decoders on an x86 emulator: NOT the tablet's hardware path. Only useful as "does the machinery work end to end".
+* 360p, 790 kbit/s: Kestrel's own player started INSIDE the page over the page's video box (`inline start ... over [0,243 600x338]`), decoder `OMX.google.h264.decoder (software)` ready in 35 ms, first picture 1202 ms
+  after the start, playable after 931 ms, **0 stalls**, link estimate 17.1 Mbit/s, 5 dropped frames in a 10 s clip, `cpu busy parent 112 % [ExoPlayer:Playb 4]`; Back ended it (`inline stop Back (at 10 s)`) and the page's own
+  player was then reported `PLAYED`.
+* 720p: the page's own player played it: `video quality ... frames=300 dropped=0 corrupt=0 secs=10 1280x720`; one `ui STALL 2225ms` in `HardwareRenderer.nSyncAndDrawFrame` (software GL).
+* 1080p: the emulator's graphics died again (see below), so 1080p is not in the list any more.
+
+## An emulator hang that repeats (not shown to be a Kestrel defect)
 Loading `https://pypi.org/project/requests/` took the emulated Android down TWICE (the long run 44164818105 and the pages-only run 44186817159, both at the 11th site): `adb shell am start` timed out, the emulated
 `system_server` was killed by its own watchdog (`*** WATCHDOG KILLING SYSTEM PROCESS: Blocked in handler on main thread`, stack `SurfaceControl.nativeGetPhysicalDisplayIds < LightsService.<init> <
 SystemServer.startBootstrapServices`) and then died again at every restart: SurfaceFlinger on the emulator's software GL (SwiftShader) no longer answered. Kestrel and Swoop were gone afterwards, so every later site
