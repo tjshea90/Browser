@@ -48,7 +48,7 @@ class DexMetadataFetchTest {
         val c = ctx()
         File(c.filesDir, "updates").deleteRecursively()
         c.getSharedPreferences("kestrel_update", Context.MODE_PRIVATE).edit().clear().commit()
-        UpdateManager.state = UpdateManager.State(UpdateManager.Phase.IDLE)
+        UpdateManager.setStateForTest(UpdateManager.State(UpdateManager.Phase.IDLE))
     }
 
     @After fun stop() { running = false; try { server.close() } catch (e: Exception) { /* closed */ } }
