@@ -120,6 +120,8 @@ def start_server(port, root, scratch):
                     return self._send(mod.page_images())
                 if p == "/bench":
                     return self._send(mod.page_bench())
+                if p == "/bench2":
+                    return self._send(mod.page_bench2())
                 if p.startswith("/img/") and p.endswith(".svg"):
                     return self._send(mod.svg(int(p[5:-4] or 0)), "image/svg+xml")
                 if p == "/report":

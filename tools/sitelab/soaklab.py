@@ -700,6 +700,39 @@ setTimeout(run,300);
     return ("<!doctype html><meta charset=utf-8><title>bench</title><body style='font:16px sans-serif'><p>CPU calibration</p><pre id=o>running</pre>" + js).encode()
 
 
+def page_bench2():
+    """LAB5b: the richer ruler of the pref sweep (the older /bench stays as it is: lab-baseline.json depends on it). Seven kinds of work that real pages do, three passes each, so the JIT's warm-up shows
+    (pass 1 = cold code, pass 3 = warm). Reports /report?kind=bench2&pass=N&<part>=ms&gcmax=<longest single stall in ms>&total=ms. Deterministic: no random numbers, no network."""
+    js = r"""<script>
+var P = {};
+function lcg(seed) { var x = seed; return function () { x = (x * 1103515245 + 12345) & 0x7fffffff; return x; }; }
+function t(f) { var a = performance.now(); f(); return Math.round(performance.now() - a); }
+function Shape(w) { this.w = w; } Shape.prototype.area = function () { return this.w * this.w; };
+function Rect(w, h) { Shape.call(this, w); this.h = h; } Rect.prototype = Object.create(Shape.prototype); Rect.prototype.area = function () { return this.w * this.h; };
+function Circ(r) { Shape.call(this, r); } Circ.prototype = Object.create(Shape.prototype); Circ.prototype.area = function () { return 3 * this.w * this.w; };
+var TEXT = ''; for (var i = 0; i < 2500; i++) TEXT += 'The quick brown fox ' + i + ' jumps over the lazy dog; user' + i + '@example.com, price $' + (i % 97) + '.99\n';
+function oo() { var a = [], r = lcg(7); for (var i = 0; i < 3000; i++) a.push(i % 3 === 0 ? new Rect(i % 11 + 1, i % 7 + 1) : i % 3 === 1 ? new Circ(i % 5 + 1) : new Shape(i % 9 + 1)); var s = 0; for (var k = 0; k < 220; k++) for (var j = 0; j < a.length; j++) s += a[j].area(); window.__o = s; }
+function str() { var s = TEXT.split('\n'), n = 0; for (var i = 0; i < s.length; i++) { n += s[i].replace(/\d+/g, 'N').toUpperCase().length; var m = s[i].match(/[a-z0-9]+@[a-z.]+/); if (m) n += m[0].length; } window.__s = n + TEXT.indexOf('user2499'); }
+function json() { var o = []; for (var i = 0; i < 12000; i++) o.push({ id: i, name: 'item' + i, tags: ['a', 'b', 'c'], v: i * 1.5, nested: { x: i, y: [i, i + 1] } }); var q = JSON.stringify(o); window.__j = JSON.parse(q).length + q.length; }
+function alloc() { var keep = [], r = lcg(3), worst = 0, last = performance.now(); for (var i = 0; i < 260000; i++) { keep.push({ a: i, b: [i, i + 1], c: 'x' + i }); if (keep.length > 4000) keep.shift(); if ((i & 1023) === 0) { var now = performance.now(); if (now - last > worst) worst = now - last; last = now; } } P.gcmax = Math.round(worst); window.__a = keep.length; }
+function dom() { var css = ''; for (var i = 0; i < 300; i++) css += '.c' + (i % 40) + ' .d' + (i % 13) + ' > span:nth-child(' + (i % 5 + 1) + ') { color: #' + (100000 + i * 37).toString(16).slice(0, 6) + '; margin-left: ' + (i % 9) + 'px }\n'; var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st); var root = document.createElement('div'); for (var j = 0; j < 1800; j++) { var e = document.createElement('div'); e.className = 'c' + (j % 40) + ' d' + (j % 13); e.innerHTML = '<span>a</span><span>b</span><span>c</span>'; root.appendChild(e); } document.body.appendChild(root); root.offsetHeight; root.className = 'z1'; root.offsetHeight; for (var k = 0; k < 6; k++) { root.firstChild.className = 'c' + k + ' d' + k; root.offsetHeight; } document.body.removeChild(root); document.head.removeChild(st); }
+function layout() { var d = document.createElement('div'); d.style.width = '300px'; for (var i = 0; i < 160; i++) { var p = document.createElement('p'); p.textContent = TEXT.slice(i * 60, i * 60 + 400); d.appendChild(p); } document.body.appendChild(d); var h = 0; for (var w = 200; w < 560; w += 40) { d.style.width = w + 'px'; for (var j = 0; j < d.children.length; j += 8) h += d.children[j].getBoundingClientRect().height; } window.__l = h; document.body.removeChild(d); }
+function canvas() { var c = document.createElement('canvas'); c.width = 420; c.height = 420; var x = c.getContext('2d'); for (var i = 0; i < 1800; i++) { x.fillStyle = 'rgb(' + (i % 255) + ',90,160)'; x.fillRect(i % 400, (i * 7) % 400, 18, 18); if (i % 6 === 0) { x.beginPath(); x.arc(i % 380 + 20, (i * 3) % 380 + 20, 12, 0, 6.28); x.stroke(); } if (i % 90 === 0) x.fillText('Kestrel ' + i, 10, (i % 400) + 10); } x.getImageData(0, 0, 420, 420); }
+function sorts() { var a = [], r = lcg(11); for (var i = 0; i < 130000; i++) a.push(r() % 100000); a.sort(function (p, q) { return p - q; }); var f = new Float64Array(400000); for (var k = 0; k < f.length; k++) f[k] = Math.sqrt(k) * 1.0001; var s = 0; for (var m = 0; m < f.length; m++) s += f[m]; window.__f = s + a[500]; }
+var PARTS = [['oo', oo], ['str', str], ['json', json], ['alloc', alloc], ['dom', dom], ['layout', layout], ['canvas', canvas], ['sorts', sorts]];
+function pass(n) {
+  P = {}; var total = 0;
+  PARTS.forEach(function (p) { var ms = t(p[1]); P[p[0]] = ms; total += ms; });
+  P.total = total; P.pass = n;
+  var q = Object.keys(P).map(function (k) { return k + '=' + P[k]; }).join('&');
+  new Image().src = '/report?kind=bench2&' + q + '&t=' + Date.now();
+  document.getElementById('o').textContent += 'pass ' + n + ': ' + JSON.stringify(P) + '\n';
+}
+setTimeout(function () { pass(1); setTimeout(function () { pass(2); setTimeout(function () { pass(3); }, 400); }, 400); }, 500);
+</script>"""
+    return ("<!doctype html><meta charset=utf-8><title>bench2</title><body style='font:14px sans-serif'><p>CPU / memory ruler</p><pre id=o></pre>" + js).encode()
+
+
 def index():
     rows = ["/page/text", "/page/images", "/page/iframes", "/page/form", "/video/landscape", "/video/portrait", "/video/big", "/formats?tag=index", "/ap?v=autoplay&tag=index", "/fs", "/fsbox?kind=shadow", "/dl/page", "/dl/1mb.bin", "/dl/5mb.bin", "/dl/20mb.bin", "/dl/slow.bin"]
     return ("<!doctype html><meta charset=utf-8><title>Soak lab</title><body style='font:18px sans-serif'><h1>Soak lab</h1>" + "".join("<p><a href='%s'>%s</a></p>" % (r, r) for r in rows)).encode()
@@ -887,6 +920,8 @@ class H(http.server.BaseHTTPRequestHandler):
                 return
             if p == "/bench":
                 return self._send(page_bench())
+            if p == "/bench2":
+                return self._send(page_bench2())
             if p == "/report":
                 row = {k: v[0] for k, v in q.items()}
                 row["srv"] = round(time.time(), 2)
