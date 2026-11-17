@@ -159,20 +159,47 @@ def main():
         rows.append(row)
         pl.say("sweep", name, "round", rnd, "bench p1/p3 total", [p.get("total") for p in passes], "ready", ready, "pss", row["total_pss_mb"], "applied", applied_ok)
 
-    try:
-        for rnd in range(1, a.rounds + 1):
-            k = (rnd - 1) % len(variants)
-            for name, prefs in variants[k:] + variants[:k]:
-                one(name, prefs, rnd)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        set_props([])
+    def save():
+        """Written after EVERY start: a cancelled or killed run (lab run 44059232336: the emulator went offline after 17 good starts and every later one waited five minutes) keeps what it measured."""
         text = report(rows, names, bad)
         with open(os.path.join(a.out, "SWEEP-REPORT.md"), "w") as f:
             f.write(text)
         with open(os.path.join(a.out, "sweep-results.json"), "w") as f:
             json.dump({"rows": rows, "failures": bad, "variants": [{"name": n, "prefs": p} for n, p in variants]}, f, indent=1)
+        return text
+
+    def device_alive():
+        for attempt in range(3):
+            if lab.adb.run("get-state", timeout=15).strip() == "device":
+                return True
+            lab.adb.run("reconnect", "offline", timeout=15)
+            time.sleep(5)
+        return False
+
+    dead = 0
+    text = ""
+    try:
+        for rnd in range(1, a.rounds + 1):
+            k = (rnd - 1) % len(variants)
+            for name, prefs in variants[k:] + variants[:k]:
+                if not device_alive():
+                    dead += 1
+                    bad.append({"variant": name, "round": rnd, "why": "the emulator is offline (adb get-state): start skipped"})
+                    pl.say("EMULATOR OFFLINE before", name, "round", rnd)
+                    if dead >= 2:
+                        raise KeyboardInterrupt()           # nothing more can be measured: report what there is
+                    continue
+                dead = 0
+                one(name, prefs, rnd)
+                save()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        try:
+            set_props([])
+        except Exception:
+            pass
+        text = save()
         print("\n" + text, flush=True)
     return 0
 
