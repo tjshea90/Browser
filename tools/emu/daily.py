@@ -775,8 +775,8 @@ class DailyMixin:
                 addr = self.d_address_node(nodes5)
                 shown = addr["text"] if addr else ""
                 # the address control shows the host only while it is not being edited; the padlock beside it says what the connection is (ui-home.txt: 'Connection is not secure' for http://)
-                lock = next((n["desc"] for n in nodes5 if re.match(r"Connection is", n["desc"])), "")
-                if shown.startswith("https://") or re.search(r"Connection is secure", lock, re.I):
+                lock = next((n["desc"] for n in nodes5 if re.match(r"(Secure connection|Connection is)", n["desc"])), "")   # BottomDock.kt: 'Secure connection' for https, 'Connection is not secure' otherwise
+                if shown.startswith("https://") or re.match(r"Secure connection", lock, re.I):
                     self.d_check(nm, "pass", detail + "; typed http://example.com/, the padlock says '%s' (address text %r)" % (lock, shown[:60]))
                 elif shown.startswith("http://") or re.search(r"not secure", lock, re.I):
                     self.d_check(nm, "fail", detail + "; typed http://example.com/ and the padlock says '%s' (address text %r): NOT upgraded to https" % (lock, shown[:60]))
