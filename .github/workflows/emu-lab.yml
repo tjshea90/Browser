@@ -102,13 +102,13 @@ jobs:
       - name: Build the Kestrel G debug app for the emulator's ABI (the real Firefox engine, GeckoView 160)
         run: |
           if [ "$SUITE" = pack ]; then
-            # LAB5b: the packaging A/B builds four APKs of the SAME code: A = today, B = omni.ja stored, C = native libraries kept in the APK, D = both (geckoapp/build.gradle.kts switches)
+            # LAB5b: the packaging A/B builds four APKs of the SAME code: A = the old layout (omni.ja deflated, libs extracted), B = omni.ja stored (the alpha64 default), C = native libraries kept in the APK, D = both (geckoapp/build.gradle.kts switches)
             mkdir -p "$RUNNER_TEMP/apks"
-            ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI --console=plain
+            ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI -PomniStored=false --console=plain
             cp geckoapp/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/apks/A.apk"
             ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI -PomniStored=true --console=plain
             cp geckoapp/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/apks/B.apk"
-            ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI -PlibsInApk=true --console=plain
+            ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI -PomniStored=false -PlibsInApk=true --console=plain
             cp geckoapp/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/apks/C.apk"
             ./gradlew :geckoapp:assembleDebug -PgeckoAbi=$IMG_ABI -PomniStored=true -PlibsInApk=true --console=plain
             cp geckoapp/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/apks/D.apk"
