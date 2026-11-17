@@ -1,5 +1,10 @@
 # The engine preference sweep (LAB5b): one variant per line, NAME=token;token;... (up to 8 engine prefs 'pref=value', 'pref=-' removes a pref from the base config; '@debug.kestrel.x=1' sets a raw debug property = a code flag of the DEBUG app).
 # The FIRST TWO lines must stay base= and base2= (the same configuration twice: their gap is the run's noise floor). Edited per experiment; the experiment is recorded in research/LAB5_PREFSWEEP.md.
+# Run 1 (LAB5b, ruler = /bench2: object code, strings, JSON, allocation/GC, DOM+style, layout, canvas, sorts; it can judge GC, memory and CPU prefs, NOT bfcache / bytecode cache / forms / scroll images / gifs).
 base=
 base2=
 nowarm=@debug.kestrel.nowarm=1
+nursery16=javascript.options.mem.nursery.max_kb=16384
+gcpar=javascript.options.mem.gc_parallel_marking=true
+gcsmall=javascript.options.mem.gc_high_frequency_small_heap_growth=120;javascript.options.mem.gc_high_frequency_large_heap_growth=110;javascript.options.mem.gc_low_frequency_heap_growth=110
+canvas64=gfx.canvas.accelerated.cache-size=64
