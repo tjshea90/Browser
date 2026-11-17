@@ -55,6 +55,7 @@ object GeckoPrefs {
         // DEBUG builds only (the emulator's pref sweep, LAB5b): `setprop debug.kestrel.gp1 "javascript.options.parallel_marking=true"` .. gp8 (one pref per property: a system property holds 91 characters),
         // then a restart. The same grammar as gecko-prefs.txt; `name=-` removes a pref. A release build never reads a property (DebugProps.get answers null).
         val sweep = (1..8).mapNotNull { app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.gp$it") }
+        if (sweep.isNotEmpty()) app.kestrel.browser.diag.Health.log("engine", "sweep", sweep.joinToString(" ; "))
         var yaml = yaml(text, sweep) + labLines(app.kestrel.browser.data.Prefs.get(ctx))
         // DEBUG builds only (the emulator rig): `setprop debug.kestrel.moz_log "nsHttp:5,nsSocketTransport:5"` and restart makes Gecko log those modules to files/gecko-moz.log
         // (adb: run-as <package> cat files/gecko-moz.log). The value is restricted to module:level pairs so nothing else can ride into the engine's environment.
