@@ -7,7 +7,7 @@
 set -uo pipefail
 D="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; cd "$D" || exit 1
 SRC=geckoapp/src/main/baseline-prof.txt
-R8=geckoapp/build/intermediates/r8_art_profile/release/minifyReleaseWithR8/baseline-prof.txt
+R8="${PROFILE_R8_FILE:-geckoapp/build/intermediates/r8_art_profile/release/minifyReleaseWithR8/baseline-prof.txt}"
 MIN_HOT="${PROFILE_MIN_HOT:-3000}"        # the app really has about 15000; the lab's own rules alone give 2500
 MIN_PCT="${PROFILE_MIN_HOT_PCT:-95}"
 fail=0
