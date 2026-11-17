@@ -517,11 +517,12 @@ def page_ho(variant, tag):
         # player must not take it. prerollhid = nothing says ad (a plain class): Kestrel's player takes it, plays it to its end, and a second press must NOT hand the same advertisement over again. Reports ev=role r=ad|film
         # when the element plays, ev=ad-ended when the advertisement ended.
         cls = "jw-flag-ads" if variant == "preroll" else "jw-wrapper"
+        # (the advertisement is set up BEFORE the press, as a player that shows "Ad: 0:24" and waits for the play button does: the gate asks at the press, before the page's own click handler runs)
         body = ("<div id=player style='position:relative;width:100%;height:300px'><video id=v playsinline poster='/img/1.svg' style='@BOX@'></video>" + ov + "</div>"
-                "<script>var v = document.getElementById('v'), wrap = document.getElementById('player'), stage = 0; apHook(v);"
+                "<script>var v = document.getElementById('v'), wrap = document.getElementById('player'), stage = 1; apHook(v); wrap.className = '" + cls + "'; v.src = '/clip/landscape.mp4?c=@Q@&role=ad';"
                 "v.addEventListener('playing', function () { apRep('role', { r: v.currentSrc.indexOf('role=film') >= 0 ? 'film' : 'ad' }); });"
                 "v.addEventListener('ended', function () { if (stage === 1) { stage = 2; wrap.className = ''; apRep('ad-ended'); v.src = '/clip/long.mp4?c=@Q@&role=film'; var p2 = v.play(); if (p2 && p2.catch) p2.catch(function (e) { apRep('film-rejected', { name: e.name }); }); } });"
-                "document.getElementById('btn').onclick = function () { var how = 'overlay'; if (stage === 0) { stage = 1; wrap.className = '" + cls + "'; v.src = '/clip/landscape.mp4?c=@Q@&role=ad'; } " + play_js + " };</script>")
+                "document.getElementById('btn').onclick = function () { var how = 'overlay'; " + play_js + " };</script>")
     elif variant in ("inline", "inlinelong", "inlinehls"):
         # ANS55f (owner message 55: the player inside the website): a tall page, the film's own play button in the middle of the text. Kestrel's player plays INSIDE the page over this box and follows its scroll; the page
         # says where its box is (view pixels = CSS pixels x devicePixelRatio) at load and 450 ms after every scroll (kind=ap ev=rect: l, t, w, h, sy), for the driver to compare with the overlay's own numbers
