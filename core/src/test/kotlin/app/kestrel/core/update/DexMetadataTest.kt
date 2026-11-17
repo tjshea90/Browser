@@ -60,7 +60,7 @@ class DexMetadataTest {
         assertFalse("a folder inside", DexMetadata.isPlausible(zip("primary.prof" to ByteArray(100), "x/y.txt" to ByteArray(10))))
         assertFalse("a path that climbs", DexMetadata.isPlausible(zip("primary.prof" to ByteArray(100), "../evil" to ByteArray(10))))
         assertFalse("too many entries", DexMetadata.isPlausible(zip("primary.prof" to ByteArray(10), "a" to ByteArray(1), "b" to ByteArray(1), "c" to ByteArray(1), "d" to ByteArray(1), "e" to ByteArray(1), "f" to ByteArray(1))))
-        assertFalse("far too big", DexMetadata.isPlausible(zip("primary.prof" to ByteArray(DexMetadata.MAX_BYTES.toInt() + 10) { (it % 251).toByte() })))
+        assertFalse("far too big", DexMetadata.isPlausible(zip("primary.prof" to ByteArray(DexMetadata.MAX_BYTES.toInt() + 10).also { java.util.Random(1).nextBytes(it) })))
     }
 
     @Test fun theInstallersRefusalOfTheFileIsRecognisedByItsText() {
