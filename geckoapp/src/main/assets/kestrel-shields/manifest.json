@@ -123,7 +123,8 @@
         "https://*.px-cloud.net/*"
       ],
       "js": [
-        "codec-main.js"
+        "codec-main.js",
+        "quality-main.js"
       ],
       "run_at": "document_start",
       "all_frames": true,
@@ -237,6 +238,7 @@
         "vfind.js",
         "videobar.js",
         "turn.js",
+        "quality.js",
         "player.js"
       ],
       "run_at": "document_idle",
