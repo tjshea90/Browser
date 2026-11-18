@@ -56,7 +56,7 @@ async function open(body, o) {
           try { window.top.__all.push(m); } catch (e) { /* another origin */ }
           if (m && m.k === 'guard') {
             if ((window.top.__guardFails || 0) > 0) { window.top.__guardFails--; return Promise.reject(new Error('no answer')); }
-            return Promise.resolve({ on: true, top: location.hostname, skip: false, seek: true, vb: cfg.vb !== false, vba: !!cfg.vba, kp: (window.top.__kpOverride !== undefined ? window.top.__kpOverride === true : cfg.kp === true) });   // (a test can change what the app answers: window.top.__kpOverride)
+            return Promise.resolve({ on: true, top: location.hostname, skip: false, seek: true, vb: cfg.vb !== false, vba: !!cfg.vba, kp: (window.top.__kpOverride !== undefined ? window.top.__kpOverride === true : cfg.kp === true), gt: cfg.gt !== false, ho: cfg.ho === true, pp: cfg.pp === true });   // (a test can change what the app answers: window.top.__kpOverride)
           }
           if (m && m.k === 'ft') {                      // the background page: ask the top frame, answer {video, src} (http addresses only, like background.js)
             try {
