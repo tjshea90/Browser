@@ -93,6 +93,7 @@ object Health {
             var postedAt = 0L; var warned = false; var stacked = false; var blockSamples = 0; var lastSampleAt = 0L
             while (watching) {
                 val now = SystemClock.uptimeMillis()
+                try { LastRun.tick() } catch (e: Exception) { /* a help, never a risk */ }                  // CR1g: the memory sample every 15 s, from THIS thread
                 if (postedAt == 0L) { postedAt = now; ackAt = 0L; main.post { ackAt = SystemClock.uptimeMillis() } }
                 try { Thread.sleep(250) } catch (e: InterruptedException) { break }
                 val n = SystemClock.uptimeMillis()

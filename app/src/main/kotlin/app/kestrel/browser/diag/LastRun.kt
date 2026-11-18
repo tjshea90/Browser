@@ -27,6 +27,7 @@ object LastRun {
     const val KEEP_DAYS = 7
     private const val MAX_EVENTS = 40
     private const val LAZY_MS = 1500L
+    private const val TICK_MS = 15_000L
     private const val MAX_CHARS = 12_000
 
     private val lock = Any()
@@ -35,6 +36,10 @@ object LastRun {
         .apply { setKeepAliveTime(5, java.util.concurrent.TimeUnit.SECONDS); allowCoreThreadTimeOut(true) }
     @Volatile internal var lazyMs = LAZY_MS
     private var dir: File? = null
+    private var appCtx: Context? = null
+    private var lastFlushAt = 0L
+    private var memLine = ""
+    private var memPrev = ""
     private var pid = 0
     private var build = ""
     private var startedAt = 0L
@@ -87,7 +92,7 @@ object LastRun {
         val app = ctx.applicationContext
         val d = app.filesDir
         synchronized(lock) {
-            dir = d; pid = android.os.Process.myPid(); startedAt = now; state = "starting"; stateAt = now; events.clear(); flushQueued = false
+            dir = d; appCtx = app; pid = android.os.Process.myPid(); startedAt = now; state = "starting"; stateAt = now; events.clear(); flushQueued = false
             build = try {
                 @Suppress("DEPRECATION") val pi = app.packageManager.getPackageInfo(app.packageName, 0)
                 @Suppress("DEPRECATION") "${pi.versionName} (code ${pi.versionCode})"
@@ -118,6 +123,42 @@ object LastRun {
         } catch (e: Exception) { /* the report is a help, never a risk */ }
     }
 
+    /**
+     * CR1g (owner 2026-11-18: "the app just disappeared and went to the home screen", no crash note, no engine report, 1 GB "free"): an ending from outside leaves no hook, so the last SAMPLE is the evidence. Called by the
+     * UI watchdog thread (never the main thread) about every 250 ms while the app is in front; writes the note at most every [TICK_MS].
+     */
+    fun tick(now: Long = System.currentTimeMillis()) {
+        synchronized(lock) { if (dir == null || state != "fg" || now - lastFlushAt < TICK_MS) return; lastFlushAt = now }
+        Io.exec { flush(now) }
+    }
+
+    /** What the memory looks like right now, in one line: free / available / swap, the kernel's pressure figure when it has one, and the resident memory of every process of this app. */
+    internal fun memorySnapshot(ctx: Context?): String {
+        val sb = StringBuilder()
+        try {
+            val mi = java.io.File("/proc/meminfo").readLines()
+            fun kb(key: String): Long = mi.firstOrNull { it.startsWith("$key:") }?.substringAfter(':')?.trim()?.substringBefore(' ')?.toLongOrNull() ?: -1L
+            sb.append("free=").append(kb("MemFree") / 1024).append("MB avail=").append(kb("MemAvailable") / 1024).append("MB cached=").append(kb("Cached") / 1024).append("MB swapfree=").append(kb("SwapFree") / 1024).append("MB")
+        } catch (e: Exception) { sb.append("meminfo=?") }
+        try {
+            val psi = java.io.File("/proc/pressure/memory")
+            if (psi.canRead()) sb.append(" psi{").append(psi.readLines().joinToString(" ") { it.replace("total=", "t=") }).append('}')
+        } catch (e: Exception) { /* none on this kernel */ }
+        try {
+            val am = ctx?.getSystemService(android.app.ActivityManager::class.java)
+            val prefix = (ctx?.packageName ?: "") + ":"
+            var total = 0L
+            val parts = ArrayList<String>()
+            for (p in am?.runningAppProcesses ?: emptyList()) {
+                if (!(p.processName == ctx?.packageName || p.processName.startsWith(prefix))) continue
+                val rss = try { java.io.File("/proc/${p.pid}/status").readLines().firstOrNull { it.startsWith("VmRSS:") }?.substringAfter(':')?.trim()?.substringBefore(' ')?.toLongOrNull() ?: -1L } catch (e: Exception) { -1L }
+                if (rss >= 0) { total += rss; parts.add(p.processName.substringAfter(':', "main").substringBefore('_').take(14) + "=" + rss / 1024 + "MB") }
+            }
+            if (parts.isNotEmpty()) sb.append(" app{").append(parts.joinToString(" ")).append(" sum=").append(total / 1024).append("MB}")
+        } catch (e: Exception) { /* best effort */ }
+        return sb.toString().take(400)
+    }
+
     /** The process ends on purpose (nothing left to do, [app.kestrel.browser.ProcessLife]): written at once, on the caller's thread, because the next line kills the process. */
     fun markExit(now: Long = System.currentTimeMillis()) {
         synchronized(lock) { if (dir == null) return; state = "exit"; stateAt = now }
@@ -126,15 +167,20 @@ object LastRun {
 
     private fun flush(now: Long = System.currentTimeMillis()) {
         val avail = try { Health.memAvailableMb() } catch (e: Exception) { -1 }   // read before the lock is taken: it opens /proc/meminfo
+        val snap = memorySnapshot(synchronized(lock) { appCtx })                    // CR1g: the app's own memory, from this thread (never the main thread)
         val text: String
         val d: File
         synchronized(lock) {
             d = dir ?: return
             flushQueued = false
+            lastFlushAt = now
+            if (snap != memLine) { memPrev = memLine; memLine = snap }
             val sb = StringBuilder(2048)
             sb.append(HEADER).append('\n').append("pid=").append(pid).append('\n').append("build=").append(build).append('\n')
                 .append("started=").append(startedAt).append('\n').append("state=").append(state).append('\n').append("stateAt=").append(stateAt).append('\n').append("saved=").append(now).append('\n')
             sb.append("availMb=").append(avail).append('\n')
+            if (memPrev.isNotEmpty()) sb.append("mem0=").append(memPrev).append('\n')
+            if (memLine.isNotEmpty()) sb.append("mem=").append(memLine).append('\n')
             for (e in events) sb.append("ev=").append(e).append('\n')
             text = sb.toString()
         }
@@ -157,6 +203,7 @@ object LastRun {
         val started = kvLong(text, "started"); val stateAt = kvLong(text, "stateAt"); val saved = kvLong(text, "saved")
         val next = kvLong(text, "nextStart"); val bootAt = kvLong(text, "bootAt"); val crashAt = kvLong(text, "crashAt"); val engineAt = kvLong(text, "engineAt")
         val avail = kvLong(text, "availMb")
+        val mem = kv(text, "mem"); val mem0 = kv(text, "mem0")
         val last = maxOf(saved, stateAt)
         val ranMin = if (last > started && started > 0) (last - started) / 60_000 else 0
         val out = ArrayList<String>()
@@ -169,7 +216,11 @@ object LastRun {
         }
         out.add(head)
         out.add("  build ${kv(text, "build") ?: "?"}, started ${stamp(started)}, last note ${stamp(last)} (ran about $ranMin min), memory free at the last note: ${if (avail >= 0) "$avail MB" else "?"}")
+        if (mem != null) out.add("  memory at the last note: $mem")
+        if (mem0 != null && mem0 != mem) out.add("  memory at the note before: $mem0")
         if (abnormal) {
+            val sumMb = Regex("sum=(\\d+)MB").find(mem ?: "")?.groupValues?.get(1)?.toLongOrNull() ?: -1L
+            val lowMem = (avail in 0..300) || (Regex("avail=(\\d+)MB").find(mem ?: "")?.groupValues?.get(1)?.toLongOrNull() ?: Long.MAX_VALUE) in 0..300
             val crashed = crashAt in started..(if (next > 0) next else Long.MAX_VALUE) && crashAt > 0
             val engine = engineAt in started..(if (next > 0) next else Long.MAX_VALUE) && engineAt > 0
             val rebooted = bootAt > 0 && saved > 0 && bootAt > saved + 5_000   // a tablet that restarted came back at least some seconds after the last note
@@ -179,7 +230,8 @@ object LastRun {
                 crashed -> "Cause: an uncaught Java exception (the crash note is shown below as EARLIER CRASH)."
                 rebooted -> "Cause: the whole tablet restarted after the last note (empty battery or a restart), not the app."
                 engine -> "Cause: probably the engine: it wrote crash report(s) during this run (see Engine crash reports below; a page process crash alone does not close the app, a main process one does)."
-                else -> "Cause: NO crash note and NO engine crash report, so the process was most likely ended from outside: Android's memory killer (the tablet has 2 GB), or Force stop."
+                lowMem -> "Cause: NO crash note and NO engine crash report, and the memory was LOW at the last note: Android's memory killer ended the app (the memory line above shows who held it)."
+                else -> "Cause: NO crash note and NO engine crash report, so the process was ended from outside (a native crash that left no report, Android's memory killer, or Force stop)." + (if (sumMb >= 0) " The app held about $sumMb MB at the last note." else "")
             })
         }
         val ev = text.lineSequence().filter { it.startsWith("ev=") }.map { it.substring(3) }.toList()
