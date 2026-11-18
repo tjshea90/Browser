@@ -3559,6 +3559,79 @@ class Soak:
         self.dump_diag("smoke")
         return ev
 
+    def tb_scene(self):
+        """TP1 / UC1 / MT1 on the real engine (owner message 2026-11-18). TP1: "One of my tabs has the wrong preview. It shows the tab thumbnail for a site i went to before": tabs on three lab pages, the
+        tab in front moves to another page, the app is killed and started again - at every step Diagnostics' 'Tab previews' line must say 0 for the WRONG page. UC1: pressing the address bar shows the Copy
+        button and one tap puts the tab's whole address on the clipboard. MT1: the mini panel's tab tray lists the tabs, a row switches, the x closes, New tab opens a tab and the panel's keys."""
+        checks = []
+        def check(name, ok, detail=""):
+            checks.append({"check": name, "ok": bool(ok), "detail": detail if not ok else ""})
+            if not ok:
+                self.issue("high", "tabs", "%s %s" % (name, detail))
+        base = self.lab_base
+        pages = ["%s/page/text" % base, "%s/page/images" % base, "%s/page/iframes" % base]
+        self.ph.setting("system", "accelerometer_rotation", 0); self.ph.setting("system", "user_rotation", 0); time.sleep(1)
+        self.ph.debug("closetabs"); time.sleep(3)
+        for u in pages:
+            self.ph.debug("normtab", u); time.sleep(8)               # each new tab loads its page and is in front for a while
+        def previews(tag):
+            m = self.log.size()
+            self.ph.debug("previews"); time.sleep(2.5)
+            line = health_events(self.log.since(m), "lab", "previews")
+            rows = [e["rest"] for e in health_events(self.log.since(m), "lab", "preview")]
+            txt = line[-1]["rest"] if line else ""
+            mm = re.search(r"(\d+) for the WRONG page", txt)
+            wrong = int(mm.group(1)) if mm else -1
+            bad = [r for r in rows if "ok=False" in r]
+            check("TP1: %s: Diagnostics counts 0 previews for the wrong page" % tag, wrong == 0 and not bad, "line: %s; bad rows: %s" % (txt, bad[:3]))
+            return txt, rows
+        self.ph.debug("opengrid"); time.sleep(3.5)                    # the grid takes a fresh picture of the page in front
+        t0, r0 = previews("grid open on three tabs")
+        check("TP1: the tab in front has a preview of its page", any("has=True" in r and "ok=True" in r for r in r0), "rows: %s" % r0[-4:])
+        self.shot("tb-1-grid"); self.ph.key("KEYCODE_BACK"); time.sleep(1.5)
+        self.ph.open_url("%s/page/form" % base); time.sleep(1.0)    # the tab in front goes to ANOTHER page: its old picture must be gone at once
+        t1, r1 = previews("the tab went to another page")
+        cur = [r for r in r1 if "page/form" in r or "form" in r]
+        time.sleep(8); self.ph.debug("opengrid"); time.sleep(3.5)
+        t2, r2 = previews("the new page has been shown in the grid")
+        self.ph.key("KEYCODE_BACK"); time.sleep(1.5)
+        pids = self.ph.pids()                                         # a cold start: the previews come from disk
+        if pids:
+            self.adb.sh("kill -9 %d" % pids[0], timeout=20); time.sleep(2)
+        self.start_app(); time.sleep(4)
+        self.ph.debug("opengrid"); time.sleep(3.5)
+        t3, r3 = previews("after the app was killed and started again")
+        self.ph.key("KEYCODE_BACK"); time.sleep(1.5)
+        # UC1: the Copy button of the address bar
+        m = self.log.size()
+        self.ph.debug("copyurl"); time.sleep(3)
+        cu = health_events(self.log.since(m), "lab", "copyurl")
+        check("UC1: pressing the address bar shows the Copy button and one tap copies the tab's whole address", bool(cu) and "visible=True" in cu[-1]["rest"] and "exact=True" in cu[-1]["rest"], "line: %s" % (cu[-1]["rest"] if cu else "none"))
+        # MT1: the tab tray of the mini panel
+        self.ph.debug("minipanel", "1"); time.sleep(1.5)
+        m = self.log.size()
+        self.ph.debug("minitabs"); time.sleep(1.5)
+        mt = health_events(self.log.since(m), "lab", "minitabs"); op = health_events(self.log.since(m), "panel", "tray-open")
+        n0 = int(re.search(r"tabs=(\d+)", mt[-1]["rest"]).group(1)) if mt and re.search(r"tabs=(\d+)", mt[-1]["rest"]) else -1
+        check("MT1: the Tabs button opens the tray with a row for every tab", bool(mt) and "tray=True" in mt[-1]["rest"] and bool(op) and ("rows=%d" % n0) in op[-1]["rest"], "lab: %s panel: %s" % ([e["rest"] for e in mt], [e["rest"] for e in op]))
+        self.shot("tb-2-tray")
+        def act(what):
+            m2 = self.log.size(); self.ph.debug("trayact", what); time.sleep(2.0)
+            r = health_events(self.log.since(m2), "lab", "trayact")
+            return r[-1]["rest"] if r else ""
+        a1 = act("switch:0")
+        check("MT1: a row switches to that tab and puts the tray away", "ok=True" in a1 and "current=0" in a1 and "tray=False" in a1, a1)
+        self.ph.debug("minitabs"); time.sleep(1.0)
+        a2 = act("close:%d" % max(0, n0 - 1))
+        check("MT1: the x closes that tab and the tray stays", "ok=True" in a2 and ("tabs=%d" % (n0 - 1)) in a2 and "tray=True" in a2, a2)
+        a3 = act("new")
+        check("MT1: New tab opens a tab in front and the panel's keys", "ok=True" in a3 and ("tabs=%d" % n0) in a3 and "keys=True" in a3 and "tray=False" in a3, a3)
+        self.shot("tb-3-newtab")
+        self.ph.debug("minipanel", "0"); time.sleep(1)
+        t4, r4 = previews("at the end")
+        self.record({"kind": "tb", "name": "previews-copy-tabs", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
+        self.check_alive("tb scene")
+
     def lastrun_round(self):
         """CR1c on the real engine: the app is ended the way Android ends it for memory (kill -9 of the main process, nothing runs in it any more) once while it is in front and once while it is in the
         background, and the Diagnostics of the NEXT start must say which one it was (core: app/diag/LastRun.kt). Also reads the file the app keeps (files/last-run.txt) after the first kill."""
@@ -4323,7 +4396,7 @@ _install_daily()
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "new"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "new", "tb"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -4338,7 +4411,7 @@ def main():
         a.profile = "tablet" if a.suite in ("daily", "yt") else "standard"
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
-        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "new") else "all")
+        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "new", "tb") else "all")
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
@@ -4397,6 +4470,8 @@ def main():
             s.dm_scene()                                     # (DM1 / DM2: the download window and list stay away at a start; a new download brings the banner)
         if a.suite == "vs":
             s.vs_scene()                                     # (VS1: a vidsrc-style embed on the real engine: is the stream found and does one pick download it)
+        if a.suite in ("tb", "new2"):
+            s.tb_scene()                                     # (TP1 / UC1 / MT1: the right preview on every tab, the Copy button of the address bar, the tab tray of the mini panel)
         if a.suite == "lr":
             s.lastrun_round()                                # (CR1c: the app is killed from outside in front and in the background; the next Diagnostics must say how the last run ended)
         if a.suite == "yt":
