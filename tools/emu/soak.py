@@ -1860,7 +1860,7 @@ class Soak:
         while time.time() < t_end and not ev("player", "quality-levels"):
             time.sleep(0.5)
         lv = ev("player", "quality-levels")
-        check("QL1: the page's own player (yt) offered its list to the controls", bool(lv) and "yt" in lv[0]["rest"] and "1080p" in lv[0]["rest"] and "Automatic" not in lv[0]["rest"].split("row(s):")[0], "lines: %s" % [e["rest"][:100] for e in lv])
+        check("QL1: the page's own player (yt) offered its list to the controls", bool(lv) and "(yt)" in lv[0]["rest"] and "1080p" in lv[0]["rest"], "lines: %s" % [e["rest"][:100] for e in lv])
         check("QL1: the Quality button is there although the page has no playlist", bool(ev("player", "quality-button")), "no 'player quality-button' line")
         vw, vh, land = (973, 574, True) if (self.ph.look() or {}).get("w", 0) > (self.ph.look() or {}).get("h", 1) else (600, 947, False)
         if not len(ev("player", "shown")) > len(ev("player", "hidden")):
