@@ -21,7 +21,7 @@ import app.kestrel.browser.R
  * It is there only while the address field is pressed (has focus) and holds an address; one tap puts exactly what the field holds on the clipboard (the whole address, not the shortened text shown at rest, or what
  * was typed or pasted) and the button says "Copied" for a moment. It never takes the focus, so the keyboard and the selection stay as they are.
  */
-class CopyChip(ctx: Context, private val pal: Pal, private val field: EditText, private val restAddress: () -> String) : LinearLayout(ctx) {
+class CopyChip(ctx: Context, private var pal: Pal, private val field: EditText, private val restAddress: () -> String) : LinearLayout(ctx) {
     private val icon = ImageView(ctx)
     private val label = TextView(ctx)
     private val handler = Handler(Looper.getMainLooper())
@@ -29,15 +29,22 @@ class CopyChip(ctx: Context, private val pal: Pal, private val field: EditText, 
 
     init {
         orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; visibility = GONE
-        background = roundedBg(pal.card, ctx.dpf(14f), pal.accent, ctx.dp(1))
         setPadding(ctx.dp(8), 0, ctx.dp(10), 0)
         isClickable = true; isFocusable = false                       // (it must never take the focus, and with it the keyboard, away from the address field)
         contentDescription = "Copy the address"
-        icon.setImageResource(R.drawable.ic_copy); icon.setColorFilter(pal.accent)
+        icon.setImageResource(R.drawable.ic_copy)
         addView(icon, LayoutParams(ctx.dp(18), ctx.dp(18)))
-        label.text = "Copy"; label.setTextColor(pal.accent); label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f); label.setTypeface(label.typeface, Typeface.BOLD)
+        label.text = "Copy"; label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f); label.setTypeface(label.typeface, Typeface.BOLD)
         addView(label, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { marginStart = ctx.dp(4) })
         setOnClickListener { copy() }
+        setPal(pal)
+    }
+
+    /** The regular or the private skin. */
+    fun setPal(p: Pal) {
+        pal = p
+        background = roundedBg(p.card, context.dpf(14f), p.accent, context.dp(1))
+        icon.setColorFilter(p.accent); label.setTextColor(p.accent)
     }
 
     /** The address to copy: what the field holds while it is pressed (nothing in it = nothing to copy), else the page's own address. */

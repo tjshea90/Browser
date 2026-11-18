@@ -206,6 +206,7 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
         mask.setColorFilter(pal.accent)
         menu.dotColor = pal.accent
         chip.setPal(pal)
+        copyChip.setPal(pal)
         urlField.setTextColor(pal.fg)
         urlField.setHintTextColor(pal.muted)
         urlField.hint = if (pal.isPrivate) "Private: search or type address" else "Search or type address"
