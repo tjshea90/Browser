@@ -94,6 +94,21 @@ class DownloadPopup(private val ctx: Context, private val pal: Pal, private val 
         isClickable = true // the window never lets a tap fall through to the page behind it
     }
 
+    private val density = ctx.resources.displayMetrics.density
+    private val limits = FloatBox.Limits(minW = 200f, maxW = 420f, minH = 90f, maxH = 640f)
+    private val defaults = FloatBox.Default(right = 8f, top = 8f, w = WINDOW_DP.toFloat(), h = DEFAULT_LIST_DP.toFloat())
+    private var geo: FloatBox.Geo = FloatBox.load(l.geometry(), defaults)
+    private var lit = false
+    private val handle = object : View(ctx) {
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = ctx.dpf(2f); style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+        override fun onDraw(c: Canvas) {
+            paint.color = if (lit) pal.accentHi else pal.accent; paint.alpha = if (lit) 255 else 170
+            val w = width.toFloat(); val h = height.toFloat(); val p = ctx.dpf(5f)
+            for (k in 0..2) { val o = p + k * ctx.dpf(4.5f); c.drawLine(p, h - o, o, h - p, paint) }
+        }
+    }.apply { contentDescription = "Drag to resize the downloads window; double tap to put it back" }
+    private val box = FloatFrame(ctx)
+
     init {
         val head = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         val titleBox = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setOnClickListener { l.openManager() } }
@@ -115,20 +130,6 @@ class DownloadPopup(private val ctx: Context, private val pal: Pal, private val 
     }
 
     // ---- FD1: the window floats: moved by a finger on its title bar or by a long press anywhere on it, resized from the corner at its bottom left, remembered, brought back by a double tap on that corner
-    private val density = ctx.resources.displayMetrics.density
-    private val limits = FloatBox.Limits(minW = 200f, maxW = 420f, minH = 90f, maxH = 640f)
-    private val defaults = FloatBox.Default(right = 8f, top = 8f, w = WINDOW_DP.toFloat(), h = DEFAULT_LIST_DP.toFloat())
-    private var geo: FloatBox.Geo = FloatBox.load(l.geometry(), defaults)
-    private var lit = false
-    private val handle = object : View(ctx) {
-        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = ctx.dpf(2f); style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
-        override fun onDraw(c: Canvas) {
-            paint.color = if (lit) pal.accentHi else pal.accent; paint.alpha = if (lit) 255 else 170
-            val w = width.toFloat(); val h = height.toFloat(); val p = ctx.dpf(5f)
-            for (k in 0..2) { val o = p + k * ctx.dpf(4.5f); c.drawLine(p, h - o, o, h - p, paint) }
-        }
-    }.apply { contentDescription = "Drag to resize the downloads window; double tap to put it back" }
-    private val box = FloatFrame(ctx)
 
     /** The page area in dp (0 until the first layout). */
     private fun areaW() = view.width / density
@@ -233,6 +234,7 @@ class DownloadPopup(private val ctx: Context, private val pal: Pal, private val 
     private fun hideBanner() { handler.removeCallbacks(hideBannerLater); banner.visibility = View.GONE; refreshContainer(); place() }
 
     private fun refreshContainer() {
+        box.visibility = window.visibility                                       // FD1: the frame (and its corner mark) is there only while the window is
         view.visibility = if (banner.visibility == View.VISIBLE || window.visibility == View.VISIBLE) View.VISIBLE else View.GONE
     }
 

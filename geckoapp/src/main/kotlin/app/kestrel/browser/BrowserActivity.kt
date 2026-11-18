@@ -1114,8 +1114,10 @@ open class BrowserActivity : Activity(), DockListener {
         downloadPopup = DownloadPopup(this, pal, object : DownloadPopup.Listener {
             override fun openManager() { showDownloads() }
             override fun confirm(title: String, message: String, yes: String, then: () -> Unit) { askYesNo(title, message, yes, "Keep", { ok -> if (ok) then() }) }
+            override fun geometry(): IntArray? = prefs.dlGeom                                   // FD1: the window floats; where it was left and how big
+            override fun geometryChanged(g: IntArray?) { prefs.dlGeom = g }
         })
-        root.addView(downloadPopup.view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP))
+        root.addView(downloadPopup.view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         tabGrid = TabGrid(this, pal, { it.isPrivateTab }, object : TabGrid.Listener {
             override fun select(tab: Tab) { hideTabGrid(); show(tab) }
             override fun close(tab: Tab) {
@@ -2621,6 +2623,7 @@ open class BrowserActivity : Activity(), DockListener {
             if (::miniNav.isInitialized) miniNav.forgetLearned() else Io.exec { try { java.io.File(applicationContext.filesDir, "glide_personal.txt").delete() } catch (e: Exception) { } }
             toast("The keyboard forgot what it learned")
         }
+        override fun resetDownloadWindow() { prefs.dlGeom = null; if (::downloadPopup.isInitialized) downloadPopup.resetGeometry(); toast("The downloads window is back at the top right") }
         override fun resetMiniGeometry() { prefs.miniGeom = null; if (::miniNav.isInitialized) miniNav.resetGeometry(); toast("The mini keyboard is back under the top right corner") }
         override fun resetSiteShields() { Shields.clearAll(); toast("Per-site Shields reset") }
         override fun backupNow() { backup.backupNow() }

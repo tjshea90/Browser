@@ -157,6 +157,10 @@ class Prefs private constructor(ctx: Context) {
     var miniGeom: IntArray?
         get() = sp.getString("mini_geom", null)?.split(',')?.mapNotNull { it.trim().toIntOrNull() }?.takeIf { it.size == 4 }?.toIntArray()
         set(v) { if (v == null || v.size != 4) sp.edit().remove("mini_geom").apply() else put("mini_geom", v.joinToString(",")) }
+    /** FD1: where the person put the small download window and how big it is (gap to the right edge, gap to the top, width, height of the list, in dp); null = its first place and size. */
+    var dlGeom: IntArray?
+        get() = sp.getString("dl_geom", null)?.split(',')?.mapNotNull { it.trim().toIntOrNull() }?.takeIf { it.size == 4 }?.toIntArray()
+        set(v) { if (v == null || v.size != 4) sp.edit().remove("dl_geom").apply() else put("dl_geom", v.joinToString(",")) }
     /** AT1: how this thumb lands beside the key it aims at (in key pitches, x then y), learned from the words that were kept. */
     var glideHabit: FloatArray get() = floatArrayOf(sp.getFloat("glide_bx", 0f), sp.getFloat("glide_by", 0f)); set(v) { if (v.size == 2) sp.edit().putFloat("glide_bx", v[0]).putFloat("glide_by", v[1]).apply() }
     /** AT1: words typed letter by letter that the word list does not have ("word count" per line), so they can be glided next time. */
