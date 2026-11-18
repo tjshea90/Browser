@@ -59,6 +59,8 @@ class MediaCandidate(
      * take it out of the list any more. Only the person leaving the page ([MediaList.onNewPage]) or a stream that cannot be saved (live, protected) ends it.
      */
     var captured = false
+    /** VS2: a captured entry whose player frame went away (or whose page was loaded again): still offered, last in the list, until a new film-sized find of a live player takes its place ([MediaList.add]). */
+    var orphan = false
     /** What the dock badge counts: not decoration or an advertisement, not an address nobody has seen, not a stream that cannot be saved. A captured one counts whatever is learned later (unless it cannot be saved). */
     fun counts(): Boolean = (captured && !live && !drm) || (!decoy && verified && !unfit)
     /** RX3-V1: what the page's own element says it is for ([VideoRole]); null = no element said anything yet (or an older extension). The latest report wins. */
@@ -137,7 +139,7 @@ class MediaList(private val max: Int = 48) {
         val id = PageIdentity.of(url)
         val keep = if (id.isEmpty()) emptyList() else items.filter { it.captured && !it.live && !it.drm && PageIdentity.of(it.page) == id }
         val dropped = items.size - keep.size
-        for (c in keep) { c.played = false; c.element = 0; c.areaPx = 0L; c.playedSeq = 0 }
+        for (c in keep) { c.played = false; c.element = 0; c.areaPx = 0L; c.playedSeq = 0; c.orphan = true }
         items.clear(); items.addAll(keep); pending.clear(); blobs.clear(); version++
         return dropped
     }
@@ -153,8 +155,10 @@ class MediaList(private val max: Int = 48) {
     fun dropFrames(docs: Collection<String>): List<String> {
         if (docs.isEmpty()) return emptyList()
         capture()                                                       // (what the person could see a moment ago is kept: VS2)
-        val gone = items.filter { it.frame.isNotEmpty() && it.frame in docs && !it.captured }
-        if (gone.isEmpty()) return emptyList()
+        val inFrame = items.filter { it.frame.isNotEmpty() && it.frame in docs }
+        if (inFrame.isEmpty()) return emptyList()
+        val gone = inFrame.filter { !it.captured }
+        for (c in inFrame) if (c.captured) c.orphan = true             // kept, last in the list, until a live player offers a film of its own
         items.removeAll(gone.toSet()); version++
         return gone.map { it.key }
     }
@@ -186,11 +190,13 @@ class MediaList(private val max: Int = 48) {
             if (old.origin.isEmpty() && c.origin.isNotEmpty()) { old.origin = c.origin; changed = true }
             // the newest sighting names who asks NOW: an address found in a player's script, asked for later by the next server's player, belongs to the second one (a server switch drops by document)
             if (c.frame.isNotEmpty() && old.frame != c.frame) { old.frame = c.frame; old.page = c.page; changed = true }
+            if (old.orphan) { old.orphan = false; changed = true }                        // VS2: the player asked for it again: it is live again
             if (c.seenAt > old.lastSeenAt) old.lastSeenAt = c.seenAt                       // (ANS55: not a change of the list, only of its order of news)
             if (changed) version++
             return changed
         }
         items.add(0, c)
+        if (items.any { it.orphan } && (c.kind != MediaKind.FILE || c.length >= MIN_WITH_STREAM)) items.removeAll { it.orphan && !it.touched && !it.interest && it !== c }   // VS2: a live player offers a film of its own: the kept one of the player that went away has done its job
         pending.remove(c.key)?.let { applyTo(c, it.width, it.height, it.durationMs, it.label, it.role, it.played, it.element, it.areaPx) }
         while (items.size > max) removeLeastValuable()
         version++
@@ -336,7 +342,7 @@ class MediaList(private val max: Int = 48) {
     /**
      * What is worth offering: playlists and big files first. Tiny files (sounds, tracking clips) and, when the page has a stream, small clips next to it (ads, previews) are left out.
      */
-    fun usable(): List<MediaCandidate> = usableUnsorted().sortedWith(compareBy<MediaCandidate> { kindRank(it) }.thenByDescending { it.knownHeight }.thenByDescending { it.length })
+    fun usable(): List<MediaCandidate> = usableUnsorted().sortedWith(compareBy<MediaCandidate> { if (it.orphan) 1 else 0 }.thenBy { kindRank(it) }.thenByDescending { it.knownHeight }.thenByDescending { it.length })
 
     private fun usableUnsorted(): List<MediaCandidate> {
         val hasStream = items.any { it.kind != MediaKind.FILE }
