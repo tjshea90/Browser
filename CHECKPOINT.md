@@ -1,21 +1,22 @@
-# CHECKPOINT 2649 — read me first, then TASKS.md
+# CHECKPOINT 2650 — read me first, then TASKS.md
 
-**Written:** 2026-11-18T01:28:55Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-587430ac-royssd` · **builds on:** `92109d90` (this checkpoint is the commit after it)
+**Written:** 2026-11-18T01:30:17Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-587430ac-royssd` · **builds on:** `c2a91bcb` (this checkpoint is the commit after it)
 
 ## Just done
-CR1: waiting on two things. (1) lab run 44214894368 (yt suite, ends about 02:25Z). (2) full JVM suite in background (scratchpad jvm-suite.log, 'finished rc=0' at the end). Heartbeat: send_later trigger trig_014tWDqpP59iW4BtNv5mT9KD fires 02:24Z into this session.
+Owner message 2 of this session written into TASKS.md BEFORE any code: DM1 (download manager pops up by itself) and CR1e (the Diagnostics he pasted at 01:00:31Z, 24 s after a cold start: no crash note, no engine crash report, no gecko.kill/crash counters).
 
 ## Do this next
-at 02:24Z (or when the jvm-suite notification arrives): read jvm-suite.log; read lab run 44214894368 (list_workflow_jobs, artifact emulator-lab-text, report.md section 'YouTube: leaving the app'); fill research/CR1_YOUTUBE_CRASH.md 'Lab result'; tick CR1a/b/c; then alpha69 by the CLAUDE.md recipe (versionCode 170, name 0.3.0-alpha69, tools/sync-ext-version.sh, docs/handoff/ALPHA69_RELEASE_NOTE.txt ASCII, bash ship.sh gecko, ONE dispatch app=gecko full_build=true, verify, tools/record-release.sh) and answer the owner in plain words incl. what to send (Diagnostics lines 'Last run', 'EARLIER CRASH', 'Engine crash reports')
+DM1a: read the download popup code (downloadPopup.attach/resumed in geckoapp BrowserActivity onStart, MiniTracker, DownloadController.restore / resumeInterrupted, DownloadsView) and list every path that shows it without a new download; then CR1e analysis into research/CR1_YOUTUBE_CRASH.md; lab run 44214894368 + jvm-suite.log still pending, heartbeat trig_014tWDqpP59iW4BtNv5mT9KD at 02:24Z
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  c2a91bcb ckpt 2649: CR1: waiting on two things. (1) lab run 44214894368 (yt suite, ends about 02
   92109d90 ckpt 2648: CR1c CODED: app/diag/LastRun.kt (note of how the last run ended, written onl
   a5cabd37 ckpt 2647: CR1: lab run DISPATCHED ONCE: android.yml run 44214894368 (run_number 223, a
   f346b9f1 ckpt 2646: CR1: added the lab suite 'yt' (tools/emu/soak.py yt_journey + yt_after + mem
@@ -25,5 +26,4 @@ at 02:24Z (or when the jvm-suite notification arrives): read jvm-suite.log; read
   765d1c8a ckpt 2642: alpha67 DISPATCHED ONCE (android.yml app=gecko full_build=true, ref ccr-e89b
   d8340975 ckpt 2641: gated kestrel-g-v0.3.0-alpha67 (gecko code 168) and pushed it: handoff self-
   fd0ea0b5 ckpt 2640: Diagnostics line 'start oat' added (BrowserActivity.oatSizes: sizes of oat/<
-  63fdb931 ckpt 2639: LAB7 CONFIRMATION lab run DISPATCHED ONCE: android.yml run 44137227924 (run_
 ```
