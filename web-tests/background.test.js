@@ -1553,3 +1553,67 @@ test('ANS52h review: a response that says it is bigger than a master list is not
   assert.equal(fl.body(), HLS_MASTER); assert.equal(fl.closed, true);
   assert.match(await stText(h2), /errors 1/);
 });
+
+// ---------------------------------------------------------------- VP2 (owner message 2026-11-18: three doraby servers "just couldn't load the video"): a frame the person's click started
+const pframe = (h, url, frameId, parent) => h.listeners.before({ type: 'sub_frame', url, tabId: 1, frameId, parentFrameId: parent, requestId: String(900 + frameId), documentUrl: PAGE, frameAncestors: [{ url: PAGE, frameId: 0 }] });
+const EMB = 'https://vidfast.pro/tv/69740/1/1';
+
+test('VP2: a click in the top page and then a frame the page starts: the guard answer for THAT frame says the person pressed it, other frames are not told', async () => {
+  const h = await onPage();
+  await h.message({ k: 'ptap' }, 1, PAGE, 0);
+  h.clock.now += 1500;                                  // the page's script sets the iframe's address a moment later
+  pframe(h, EMB, 7, 0);
+  const a = await h.message({ k: 'guard', h: 'vidfast.pro' }, 1, EMB, 7);
+  assert.equal(a.pp, true);
+  const b = await h.message({ k: 'guard', h: 'ads.example' }, 1, 'https://ads.example/x', 9);
+  assert.ok(!b.pp, 'another frame');
+  const top = await h.message({ k: 'guard', h: 'example.com' }, 1, PAGE, 0);
+  assert.ok(!top.pp, 'the top page itself');
+});
+
+test('VP2: a frame that starts 9 s after the click is not the click\'s (the 8 s window)', async () => {
+  const h = await onPage();
+  await h.message({ k: 'ptap' }, 1, PAGE, 0);
+  h.clock.now += 9000;
+  pframe(h, EMB, 7, 0);
+  assert.ok(!(await h.message({ k: 'guard', h: 'vidfast.pro' }, 1, EMB, 7)).pp);
+});
+
+test('VP2: only a click in the TOP page counts, not one inside a frame, and a frame with no click before it is nobody\'s press', async () => {
+  const h = await onPage();
+  await h.message({ k: 'ptap' }, 1, 'https://ads.example/x', 5);   // a frame's own script (content.js sends it from the top frame only; the background page checks too)
+  pframe(h, EMB, 7, 0);
+  assert.ok(!(await h.message({ k: 'guard', h: 'vidfast.pro' }, 1, EMB, 7)).pp);
+});
+
+test('VP2: an embed inside a flagged embed is flagged too (within 12 s of its parent), a later one is not; a new page forgets all of it', async () => {
+  const h = await onPage();
+  await h.message({ k: 'ptap' }, 1, PAGE, 0);
+  pframe(h, EMB, 7, 0);
+  h.clock.now += 3000;
+  pframe(h, 'https://cloudnestra.com/prorcp/abc', 8, 7);
+  assert.equal((await h.message({ k: 'guard', h: 'cloudnestra.com' }, 1, 'https://cloudnestra.com/prorcp/abc', 8)).pp, true, 'the inner frame');
+  h.clock.now += 20000;
+  pframe(h, 'https://late.example/', 9, 7);
+  assert.ok(!(await h.message({ k: 'guard', h: 'late.example' }, 1, 'https://late.example/', 9)).pp, 'a frame started 20 s after its parent');
+  nav(h, 'https://other.example/page');
+  assert.ok(!(await h.message({ k: 'guard', h: 'vidfast.pro' }, 1, EMB, 7)).pp, 'a new page in the tab forgets');
+});
+
+test('VP2: the tap that goes to ANOTHER page starts nothing there: the new page\'s frames are not the click\'s', async () => {
+  const h = await onPage();
+  await h.message({ k: 'ptap' }, 1, PAGE, 0);
+  nav(h, 'https://news.example/story');
+  pframe(h, 'https://video.example/embed/1', 7, 0);
+  assert.ok(!(await h.message({ k: 'guard', h: 'video.example' }, 1, 'https://video.example/embed/1', 7)).pp);
+});
+
+test('NM1: a media message carries the addresses of the frames AROUND the one that asked (never the top page), nearest first', async () => {
+  const h = await onPage();
+  const inner = 'https://cloudnestra.com/prorcp/abc', outer = 'https://vidsrc.xyz/embed/tv/69740/1/2';
+  const d = Object.assign(hdr('https://cdn.example/x/master.m3u8', 'application/vnd.apple.mpegurl', -1), { type: 'xmlhttprequest', frameId: 8, parentFrameId: 7, documentUrl: inner, frameAncestors: [{ url: outer, frameId: 7 }, { url: PAGE, frameId: 0 }], requestId: '71' });
+  h.listeners.headers(d);
+  await until(() => h.of('media').length >= 1, 'the media message');
+  assert.equal(h.of('media')[0].fa, outer);
+  assert.equal(h.of('media')[0].f, inner);
+});
