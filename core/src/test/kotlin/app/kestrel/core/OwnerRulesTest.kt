@@ -718,4 +718,18 @@ class OwnerRulesTest {
         assertTrue("restored turns true after the interrupted downloads were carried on", ctl.indexOf("e.resumeInterrupted()") in 0 until ctl.indexOf("restored = true"))
         assertTrue("only the person's Resume / Retry / Restart can bring an old row into the window", ctl.contains("fun resume(ctx: Context, id: Long) { mini.requested(id)") && ctl.contains("fun restart(ctx: Context, id: Long) { mini.requested(id)"))
     }
+    /** QL1 (owner: "When i put YouTube video in full screen, it doesn't let me choose the video quality. I want to be able to choose the video quality on as many sites and videos as possible"). */
+    @Test fun ql1TheFullScreenQualityButtonComesFromThePagesOwnPlayerToo() {
+        val man = source("geckoapp/src/main/assets/kestrel-shields/manifest.json")
+        assertTrue("the page-world hook runs at document start in the MAIN world next to the codec policy, the adapters before player.js", man.contains("\"codec-main.js\",\n        \"quality-main.js\"") && man.contains("\"turn.js\",\n        \"quality.js\",\n        \"player.js\""))
+        val pj = source("geckoapp/src/main/assets/kestrel-shields/player.js")
+        assertTrue("the report carries the list, the pick and the family; the app's command ql reaches the adapter", pj.contains("m.q = qi.q") && pj.contains("m.qc = qi.c") && pj.contains("case 'ql':") && pj.contains("s.qa.set(c.q)"))
+        val q = source("geckoapp/src/main/assets/kestrel-shields/quality.js")
+        assertTrue("the families the owner's sites need: YouTube first, then the player libraries and <source> lists", listOf("ytAdapter", "jwAdapter", "vjsAdapter", "hlsAdapter", "dashAdapter", "shakaAdapter", "srcAdapter").all { q.contains(it) } && q.indexOf("ytAdapter, jwAdapter") > 0)
+        assertTrue("the page's text is cut short before it leaves the page", q.contains("MAXLABEL = 22") && q.contains("MAXID = 24"))
+        val pc = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerController.kt")
+        assertTrue("the list is cleaned by the core rules and a pick can only name a row of the held list", pc.contains("PageLevels.clean(raw)") && pc.contains("PageLevels.valid(id, pageLevels)"))
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("the Quality button shows for the page's own list as well as for a known playlist, and the page's list is opened first", act.contains("player.hasPageLevels() || fullscreenTab?.let { video.pageFilm(it) } != null") && act.contains("if (player.hasPageLevels()) { openPageLevels(); return }"))
+    }
 }
