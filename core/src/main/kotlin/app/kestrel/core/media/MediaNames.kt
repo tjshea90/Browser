@@ -28,16 +28,19 @@ object MediaNames {
      * PAGE names ("Watch Ozark Season 2 Episode 5 Online Free | Site" -> "Ozark S02E05"); the source's own name; else the page title without the site's noise and the quality ("Dune - Part Two (2024) - 720p"),
      * the host when the page has no title. [pageUrl] lets the address name the episode when the title does not.
      */
-    fun defaultStem(c: MediaCandidate, pageTitle: String, pageHost: String, qualityLabel: String, pageUrl: String = ""): String {
+    fun defaultStem(c: MediaCandidate, pageTitle: String, pageHost: String, qualityLabel: String, pageUrl: String = "", clues: NameClues? = null): String {
         val s = sourceStem(c)
         if (s.isNotEmpty()) EpisodeNames.fromRelease(s)?.let { return clean(it) }
+        EpisodeNames.fromClues(clues, framesOf(c), c.url, pageTitle, pageUrl, pageHost)?.let { return clean(it) }          // NM1: the episode the page marks / the player frame's address names
         EpisodeNames.fromPage(pageTitle, pageUrl, pageHost)?.let { return clean(it) }
         if (s.isNotEmpty()) return s
         return clean(MediaLabels.fileStem(EpisodeNames.cleanTitle(pageTitle, pageHost).ifEmpty { pageTitle }, pageHost, qualityLabel))
     }
 
     /** The default name of a stream's quality row (no extension): the episode the page names, else the cleaned page title and the quality. */
-    fun streamStem(pageTitle: String, pageUrl: String, pageHost: String, qualityLabel: String): String {
+    fun streamStem(pageTitle: String, pageUrl: String, pageHost: String, qualityLabel: String, c: MediaCandidate? = null, clues: NameClues? = null): String {
+        if (c != null) EpisodeNames.fromClues(clues, framesOf(c), c.url, pageTitle, pageUrl, pageHost)?.let { return clean(it) }   // NM1
+        else if (clues != null) EpisodeNames.fromClues(clues, emptyList(), "", pageTitle, pageUrl, pageHost)?.let { return clean(it) }
         EpisodeNames.fromPage(pageTitle, pageUrl, pageHost)?.let { return clean(it) }
         return clean(MediaLabels.fileStem(EpisodeNames.cleanTitle(pageTitle, pageHost).ifEmpty { pageTitle }, pageHost, qualityLabel))
     }
@@ -48,13 +51,17 @@ object MediaNames {
      * The name a plain file download is saved under. Only video files change: one named like a release ("Ozark.S02E05.1080p.WEB-GRP.mkv") becomes "Ozark S02E05.mkv"; one whose own name says nothing
      * ("video.mp4", "get_file") on a page that names the episode gets the episode's name. Everything else keeps the name the server gave.
      */
-    fun friendlyFileName(raw: String, mime: String?, pageTitle: String, pageUrl: String, pageHost: String): String {
+    /** The addresses of the player frames a candidate came through, nearest first: the document that asked for it, then the frames around it (never the top page). */
+    private fun framesOf(c: MediaCandidate): List<String> = (listOf(c.frame) + c.frameChain).filter { it.isNotEmpty() && it != c.page }.distinct()
+
+    fun friendlyFileName(raw: String, mime: String?, pageTitle: String, pageUrl: String, pageHost: String, clues: NameClues? = null): String {
         val dot = raw.lastIndexOf('.')
         if (dot <= 0 || raw.length - dot > 6) return raw
         val ext = raw.substring(dot + 1)
         if (ext.lowercase() !in VIDEO_EXT && mime?.startsWith("video/", ignoreCase = true) != true) return raw
         val stem = raw.substring(0, dot)
-        val better = EpisodeNames.fromRelease(stem) ?: (if (!isRealName(stem)) EpisodeNames.fromPage(pageTitle, pageUrl, pageHost) else null) ?: return raw
+        val better = EpisodeNames.fromRelease(stem)
+            ?: (if (!isRealName(stem)) (EpisodeNames.fromClues(clues, emptyList(), "", pageTitle, pageUrl, pageHost) ?: EpisodeNames.fromPage(pageTitle, pageUrl, pageHost)) else null) ?: return raw
         return clean(better) + "." + ext
     }
 

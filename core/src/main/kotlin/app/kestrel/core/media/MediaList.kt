@@ -16,6 +16,8 @@ class MediaCandidate(
     var frame: String = "",
     val seenAt: Long = 0,
 ) {
+    /** NM1: the addresses of the frames AROUND the one that asked (an embed inside an embed), nearest first, never the top page: each doraby server's embed address names the season and episode. */
+    var frameChain: List<String> = emptyList()
     /** The file name the SERVER gave it (Content-Disposition), "" when it gave none: the best name to offer when saving it. */
     var sourceName: String = ""
     var width = 0
