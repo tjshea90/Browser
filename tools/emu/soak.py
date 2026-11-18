@@ -3579,6 +3579,8 @@ class Soak:
             nocrash = ("NO crash note" in txt) if tag == "front" else (("NO crash note" not in txt) if tag == "freeze" else True)
             if tag == "freeze" and "ui STALL" not in note:
                 ok = False
+            if tag in ("front", "freeze") and "memory at the last note" not in txt:       # CR1g: the memory of every process of the app is in the note
+                self.issue("medium", "lastrun", "the Diagnostics after the %s kill has no 'memory at the last note' line (CR1g)" % tag, shot=False)
             rows.append((tag, ok and nocrash, "state line in the file: %s" % ([l for l in note.splitlines() if l.startswith("state=")] or ["none"])[0]))
             if not ok:
                 self.issue("high", "lastrun", "after the app was killed while %s the next Diagnostics did not say '%s'" % (tag, want), shot=False)
@@ -4382,7 +4384,7 @@ def main():
         if a.suite in ("ql", "vp"):
             s.ql_scene()                                     # (QL1: the Quality button from the page's own player list: YouTube-style player element on the real engine)
         if a.suite == "new":
-            s.dm_scene(); s.ql_scene(); s.vs_scene()         # (one boot for the checks of this session: DM1 / DM2, QL1, VS1 / VP2; the lab runs one job at a time per branch)
+            s.lastrun_round(); s.vs_scene(); s.ql_scene()    # (one boot for the checks of this session: CR1f/g the Last run note after a freeze and a kill, with the memory of every process; VS1 / VS2 / VP2 the finder and the capture; QL1; the lab runs one job at a time per branch)
         if a.suite == "dm":
             s.dm_scene()                                     # (DM1 / DM2: the download window and list stay away at a start; a new download brings the banner)
         if a.suite == "vs":
