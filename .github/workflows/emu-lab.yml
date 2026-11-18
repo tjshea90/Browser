@@ -15,7 +15,7 @@ on:
       suite:
         description: 'smoke = one page + the Diagnostics text; fs = the full-screen turning checks; vc = the video controls and the long press on a video; snd = sound while the app is left; kp = the full-screen video controls Kestrel draws itself (owner message 49), taps and double taps and buttons and turning; fsy = a full-screen player box turned sideways and back, with the system bars hidden and kept (owner message 46), then the sound check; compat = every well-known site twice, Shields on then off, with speed, errors, scrolling and memory; soak = the long run (pages, videos, downloads); all = everything'
         type: choice
-        options: [smoke, fs, vc, snd, fsy, kp, yh, np, cp, ap, ho, vp, compat, daily, yt, lr, ql, pack, sweep, aot, soak, all]
+        options: [smoke, fs, vc, snd, fsy, kp, yh, np, cp, ap, ho, vp, compat, daily, yt, lr, ql, vs, pack, sweep, aot, soak, all]
         default: smoke
       minutes:
         description: 'How long the soak part runs, in minutes (60 = one hour)'

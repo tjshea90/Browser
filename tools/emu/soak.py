@@ -1270,6 +1270,76 @@ class Soak:
         self.check_alive(name)
         self.record(r)
 
+    # ---- VS1: a vidsrc-style embed (movie page -> player frame -> CDN that wants the PLAYER's Referer, playlists as .txt, parts as .jpg, AES) on the real engine
+    def vs_scene(self):
+        """VS1 (owner message 2026-11-18: doraby.com + the vidsrc server, 'it can't find the video to download', his other app can): four ways an embed delivers its stream, each opened on its movie page. For each:
+        does the app's finder list the stream (before and after the one tap a click-to-play player needs), and does one pick download a real file? tools/sitelab/vidlab_srv.py serves the pages and the stream."""
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        gen = os.path.join(self.out, "vidgen")
+        try:
+            subprocess.run(["bash", os.path.join(root, "tools", "sitelab", "vidlab_gen.sh"), gen], check=True, timeout=240, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            self.issue("high", "tooling", "VS1: the lab streams could not be made (%r)" % (e,))
+            return
+        env = dict(os.environ, VIDLAB_GEN=gen, VIDLAB_LOG=os.path.join(self.out, "vidlab.log"))
+        srv = subprocess.Popen([sys.executable, "-I", os.path.join(root, "tools", "sitelab", "vidlab_srv.py")], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            time.sleep(4)
+            w, h = self.screen
+            for mode in ("auto", "click", "nest", "worker"):
+                before = self.ph.downloads(); lm = self.log.size()
+                self.ph.open_url("http://10.0.2.2:8000/watch3?v=%s" % mode)
+                t0 = time.time()
+                while time.time() - t0 < 25 and not [e for e in health_events(self.log.since(lm), "page", "loaded") if "10.0.2.2" in e["rest"]]:
+                    time.sleep(1.5)
+                time.sleep(7)                                           # the player frame, its script and (auto, nest, worker) its stream requests
+                r = {"kind": "vs", "name": "vidsrc-style-" + mode}
+                if mode == "click":
+                    m0 = self.log.size(); self.ph.debug("videodl"); time.sleep(3)
+                    first = health_events(self.log.since(m0), "lab", "videodl")
+                    r["before_press"] = first[-1]["rest"] if first else "no answer"
+                    self.ph.tap(w // 2, 26 + 40 + 150); time.sleep(7)    # the player's big Play button fills the frame
+                m1 = self.log.size(); self.ph.debug("videodl"); time.sleep(4)
+                said = health_events(self.log.since(m1), "lab", "videodl")
+                r["finder_said"] = said[-1]["rest"] if said else "no answer"
+                if not said or "pick=none" in said[-1]["rest"]:
+                    r["status"] = "not-found"
+                    self.issue("high", "finding-video", "VS1 %s: the finder offered NOTHING (%s)" % (mode, r["finder_said"]))
+                    self.record(r); continue
+                tapped = self.wait_dialog(m1, 40)                       # (a stream over plain http asks first)
+                if tapped:
+                    self.answer(True)
+                stream = health_events(self.log.since(m1), "lab", "videodl-stream")
+                r["stream_lines"] = [e["rest"][:100] for e in stream][-3:]
+                got = None; t1 = time.time()
+                while time.time() - t1 < 120:
+                    now = self.ph.downloads()
+                    new = {k: v for k, v in now.items() if k not in before and "lab-found-video" in k}
+                    if new:
+                        k, v = max(new.items(), key=lambda kv: kv[1])
+                        if v > 20000:
+                            time.sleep(4)
+                            k2, v2 = max({k_: v_ for k_, v_ in self.ph.downloads().items() if k_ in new}.items(), key=lambda kv: kv[1])
+                            if v2 == v: got = (k2, v2); break
+                    time.sleep(3)
+                if got is None:
+                    r["status"] = "dl-none"; r["note"] = "found, but no saved file: stream lines %s" % r["stream_lines"]
+                    self.issue("high", "download-video", "VS1 %s: the finder found it (%s) but the download produced no file (%s)" % (mode, r["finder_said"], r["stream_lines"]))
+                else:
+                    r.update(status="ok", file=got[0], size=got[1])
+                self.record(r)
+                self.ph.debug("closetabs"); time.sleep(3)
+        finally:
+            try: srv.terminate()
+            except Exception: pass
+            self.check_alive("vs scene")
+            try:
+                with open(os.path.join(self.out, "vidlab.log")) as f:
+                    lines = f.read().splitlines()
+                self.vs_log_tail = lines[-40:]
+            except OSError:
+                self.vs_log_tail = []
+
     # ---- CR1: a person's YouTube visit, repeated, with the things that happen around it on a 2 GB tablet
     def mem_hog(self, mb):
         """Takes `mb` MB of the emulated phone's RAM the way another app would (a file in the RAM-backed /dev). False when this phone does not let the shell do it."""
@@ -3927,6 +3997,20 @@ class Soak:
             for e in vs:
                 L.append("- %s: %s (the app saw playback: %s, videos the finder counted: %s)%s" % (e["name"], e["status"], e.get("app_saw_playing"), e.get("app_found_videos"), " - " + e["note"] if e.get("note") else ""))
             L.append("")
+        vsr = [e for e in ev if e.get("kind") == "vs"]
+        if vsr:
+            L.append("## A vidsrc-style embed: found and saved? (VS1)")
+            L.append("")
+            for e in vsr:
+                L.append("- %s: %s; finder: %s%s%s" % (e["name"], e.get("status"), e.get("finder_said"), ("; before the press: %s" % e["before_press"]) if e.get("before_press") else "", ("; saved %s (%s bytes)" % (e.get("file"), e.get("size"))) if e.get("file") else ("; " + e["note"] if e.get("note") else "")))
+            L.append("")
+            if getattr(self, "vs_log_tail", None):
+                L.append("The lab server's last requests (which Referer / Origin each one carried):")
+                L.append("")
+                L.append("```")
+                L.extend(self.vs_log_tail[-25:])
+                L.append("```")
+                L.append("")
         lr = [e for e in ev if e.get("kind") == "lastrun"]
         if lr:
             L.append("## How the last run ended (CR1c): the app killed from outside, the next Diagnostics")
@@ -4126,7 +4210,7 @@ _install_daily()
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -4141,7 +4225,7 @@ def main():
         a.profile = "tablet" if a.suite in ("daily", "yt") else "standard"
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
-        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql") else "all")
+        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs") else "all")
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
@@ -4194,6 +4278,8 @@ def main():
             s.compat_round(a.minutes)
         if a.suite in ("ql", "vp"):
             s.ql_scene()                                     # (QL1: the Quality button from the page's own player list: YouTube-style player element on the real engine)
+        if a.suite == "vs":
+            s.vs_scene()                                     # (VS1: a vidsrc-style embed on the real engine: is the stream found and does one pick download it)
         if a.suite == "lr":
             s.lastrun_round()                                # (CR1c: the app is killed from outside in front and in the background; the next Diagnostics must say how the last run ended)
         if a.suite == "yt":
