@@ -18,15 +18,19 @@ object MiniKeyboardGeometry {
      * The boxes of [rows] in a view [width] x [height] wide: [top] pixels stay free above the first row (the candidate strip), [gap] pixels lie between keys and between rows. A row's keys
      * share the width by their weights (a spec with a null key is just a gap of its weight).
      */
-    fun boxes(rows: List<List<KeySpec>>, width: Float, height: Float, gap: Float, top: Float = 0f): List<List<KeyBox>> {
+    fun boxes(rows: List<List<KeySpec>>, width: Float, height: Float, gap: Float, top: Float = 0f, rowWeights: List<Float>? = null): List<List<KeyBox>> {
         if (rows.isEmpty()) return emptyList()
-        val rowH = (height - top - gap * (rows.size - 1)) / rows.size
+        // [rowWeights] make a row taller or thinner than the others (the number row is thinner); null = all rows alike. Drawing, touching and the glide decoder all pass the same weights.
+        val weights = if (rowWeights != null && rowWeights.size == rows.size) rowWeights else List(rows.size) { 1f }
+        val heightTotal = weights.sum()
+        val usable = height - top - gap * (rows.size - 1)
         val out = ArrayList<List<KeyBox>>(rows.size)
         for ((i, row) in rows.withIndex()) {
-            val total = row.sumOf { it.weight.toDouble() }.toFloat()
-            val unit = (width - gap * (row.size - 1)) / total
+            val rowTotal = row.sumOf { it.weight.toDouble() }.toFloat()
+            val unit = (width - gap * (row.size - 1)) / rowTotal
             var x = 0f
-            val y = top + i * (rowH + gap)
+            val y = top + i * gap + usable * weights.take(i).sum() / heightTotal
+            val rowH = usable * weights[i] / heightTotal
             val line = ArrayList<KeyBox>(row.size)
             for (k in row) { val w = k.weight * unit; line.add(KeyBox(x, y, x + w, y + rowH)); x += w + gap }
             out.add(line)
