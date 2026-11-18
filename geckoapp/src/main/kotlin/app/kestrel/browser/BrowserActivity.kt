@@ -1460,6 +1460,7 @@ open class BrowserActivity : Activity(), DockListener {
         val s = createSession(tab)
         s.open(GeckoEngine.runtime(this))
         tab.session = s
+        tab.gecko.painted = false                                       // PV1: a session that has not painted yet needs the curtain when it is shown
         if (tab === current) StartTimeline.mark("open")
         var state = tab.gecko.state
         if (state == null) tab.gecko.stateJson?.let { state = stateFromDisk(tab, it) } // a tab that was saved by the last run: its Back stack and scroll position come back
@@ -1857,6 +1858,7 @@ open class BrowserActivity : Activity(), DockListener {
         tabs.removeAt(idx)
         syncPrivateAnchor()                                                      // ANS58c: the last private tab is gone: the anchor goes too
         if (tab === restoringTab) hideRestoring("closed")
+        if (tab === curtainTab) curtainDown("closed")
         tab.thumb = null
         val appCtx = applicationContext
         BackPictures.dropTab(tab.id)
@@ -3016,6 +3018,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (real && tab === restoringTab) {
             // the load ended (a page that never reported its first paint must not keep the preview up). The back cover (RX3-BK2) counts the end of the load as the paint and then still waits for the place: it never goes at the end of the load alone
             if (tab === backCover?.tab) backPainted("stop") else hideRestoring("page-stop")
+            if (tab === curtainTab) curtainDown("page-stop")
         }
         // A failed or blocked load is not a visit (typos and malware URLs would otherwise fill history and the top sites).
         if (!tab.isPrivateTab && tab.error == null && tab.url.startsWith("http")) { val u = withoutUserinfo(tab.url); val ti = tab.title; Io.exec { db?.recordVisit(u, ti) } }
