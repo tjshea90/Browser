@@ -560,7 +560,7 @@ open class BrowserActivity : Activity(), DockListener {
         val launch = urlFromIntent(intent)
         if (prefs.preconnect && launch != null) GeckoEngine.warmOrigin(launch)?.let { GeckoEngine.warmAtStart(it) } // the link that launched the app: its handshakes overlap with the engine starting (EX-2 B)
         if (launch == null) earlyCover() // closed on a page, now starting without a link: "Opening <host>" from the first frame, not the Home screen for a moment
-        if (intent?.getBooleanExtra(Notifier.EXTRA_OPEN_DOWNLOADS, false) == true) Io.main.post { showDownloads() }
+        if (openDownloadsAsked(intent, savedInstanceState != null)) Io.main.post { showDownloads() }
         handleUpdateIntent(intent)
         Io.fast {
             val text = try { sessionFile().takeIf { it.isFile }?.readText() } catch (e: Exception) { null }
@@ -899,10 +899,22 @@ open class BrowserActivity : Activity(), DockListener {
         if (hasFocus && fullscreenOn && prefs.fullscreenBars == 1) { applyImmersive(true); checkBarsSoon() } // FSB1: a system dialog, the volume panel or Recents may have brought the bars back (only when the person chose Hide): take them away again
     }
 
+    /**
+     * DM1 (owner: "the download manager pops up on browser restart or other times"): the tap on a download notification starts the app with "open Downloads" in its intent, and Android keeps that intent
+     * on the task and plays it AGAIN when it restarts the activity (after a crash, after the process was taken for memory, from Recents). Only the first delivery is a tap: the flag is taken out of the
+     * intent once it has been read, and a replay (saved state, or launched from history) is ignored (core ManagerIntent).
+     */
+    private fun openDownloadsAsked(i: Intent?, restoredState: Boolean): Boolean {
+        if (i == null) return false
+        val extra = i.getBooleanExtra(Notifier.EXTRA_OPEN_DOWNLOADS, false)
+        if (extra) i.removeExtra(Notifier.EXTRA_OPEN_DOWNLOADS)
+        return app.kestrel.core.download.ManagerIntent.shouldOpen(extra, restoredState, (i.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (intent.getBooleanExtra(Notifier.EXTRA_OPEN_DOWNLOADS, false)) showDownloads()
+        if (openDownloadsAsked(intent, false)) showDownloads()
         handleUpdateIntent(intent)
         labIntent(intent)
         urlFromIntent(intent)?.let { openInNewTabOrCurrent(it) }

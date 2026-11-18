@@ -18,7 +18,6 @@ import app.kestrel.core.download.Action
 import app.kestrel.core.download.DlState
 import app.kestrel.core.download.DownloadView
 import app.kestrel.core.download.Format
-import app.kestrel.core.download.MiniTracker
 
 /**
  * The small download window (owner message 26, AL2): "if I start any download at all, whether video or files, put a pop up at the top of the browser that a download has started, and
@@ -43,9 +42,11 @@ class DownloadPopup(private val ctx: Context, private val pal: Pal, private val 
     val view = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
 
     private val handler = Handler(Looper.getMainLooper())
-    private val tracker = MiniTracker()
+    private val tracker = DownloadController.mini      // DM1: one memory for the whole process, so a re-created window knows what is old news
     private var attached = false
-    private var closedByUser = false
+    private var closedByUser: Boolean
+        get() = DownloadController.miniHidden
+        set(v) { DownloadController.miniHidden = v }
     private var suppressed = false
     private var lastSig = ""
     private val rows = HashMap<Long, MiniRow>()
@@ -99,8 +100,7 @@ class DownloadPopup(private val ctx: Context, private val pal: Pal, private val 
         if (attached) return
         attached = true
         DownloadController.init(ctx)
-        tracker.begin(DownloadController.views())
-        DownloadController.addListener(listener)
+        DownloadController.addListener(listener)   // the first render that sees the last run's rows fully read starts the tracker (render)
         render()
     }
 
@@ -125,6 +125,8 @@ class DownloadPopup(private val ctx: Context, private val pal: Pal, private val 
 
     private fun render() {
         if (!attached) return
+        if (!DownloadController.restored) return                       // DM1: the rows of the last run are still being read: each of them would look like a new download
+        if (!tracker.began) tracker.begin(DownloadController.views())  // everything in the list now is old news
         val now = System.currentTimeMillis()
         val u = tracker.update(DownloadController.views(), now)
         val shown = ProcessLife.uiVisible && !suppressed
