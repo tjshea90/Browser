@@ -1836,6 +1836,62 @@ class Soak:
     # ---- VP1 (owner message 49): Kestrel's own full-screen controls on the real engine: a film with no controls of its own goes full screen (the app turns it sideways by itself), the controls show, hide by themselves,
     # toggle with a tap, a double tap seeks and plays / pauses, the screen is turned upright, the mute and exit buttons work. Pictures after every step; the app's own `player` lines and the film's own
     # events (the lab page reports seeked / pause / play and every click the PAGE gets) say what really happened.
+    def ql_scene(self):
+        """QL1 (owner message 2026-11-18: "When i put YouTube video in full screen, it doesn't let me choose the video quality ..."): a film in YouTube's player element (the lab page defines the player API on it,
+        as the real page does) goes full screen under Kestrel's controls; the Quality button must come from the page's OWN list, a pick must reach the page's player (the lab page reports each call it gets)."""
+        w, h = self.screen
+        checks = []
+        def check(name, ok, detail=""):
+            checks.append({"check": name, "ok": bool(ok), "detail": detail if not ok else ""})
+            if not ok:
+                self.issue("high", "quality", "%s %s" % (name, detail))
+        self.ph.setting("system", "accelerometer_rotation", 0); self.ph.setting("system", "user_rotation", 0)
+        self.ph.a.sh("setprop debug.kestrel.nohide 0"); self.ph.debug("bars", "keep"); self.ph.debug("fsturn", "1"); time.sleep(2)
+        self.ph.physical(0, 9.81, 0); time.sleep(2)
+        rmark = self.lab.size()
+        self.ph.open_url("%s/fsbox?kind=light&nobar=1&yt=1" % self.lab_base)
+        self.fsbox_wait(rmark); time.sleep(2)
+        lm = self.log.size()
+        self.ph.tap(w // 2, 140); time.sleep(5.5); self.ph.dismiss_cling()
+        ev = lambda layer, name, since=None: health_events(self.log.since(lm if since is None else since), layer, name)
+        calls = lambda: [r for r in self.lab.since(rmark) if r.get("kind") == "fsb" and r.get("ev") == "ytcall"]
+        check("QL1: the full-screen film got Kestrel's controls", bool(ev("player", "start")), "no 'player start' line")
+        t_end = time.time() + 12
+        while time.time() < t_end and not ev("player", "quality-levels"):
+            time.sleep(0.5)
+        lv = ev("player", "quality-levels")
+        check("QL1: the page's own player (yt) offered its list to the controls", bool(lv) and "yt" in lv[0]["rest"] and "1080p" in lv[0]["rest"] and "Automatic" not in lv[0]["rest"].split("row(s):")[0], "lines: %s" % [e["rest"][:100] for e in lv])
+        check("QL1: the Quality button is there although the page has no playlist", bool(ev("player", "quality-button")), "no 'player quality-button' line")
+        vw, vh, land = (973, 574, True) if (self.ph.look() or {}).get("w", 0) > (self.ph.look() or {}).get("h", 1) else (600, 947, False)
+        if not len(ev("player", "shown")) > len(ev("player", "hidden")):
+            self.ph.tap(int(vw * 0.25), 26 + int(vh * 0.2)); time.sleep(0.9)
+        m = self.log.size(); self.ph.tap(vw - 102, 26 + 41); time.sleep(1.8)
+        opened = bool(ev("video", "quality-open", m))
+        if not opened:
+            self.ph.debug("pagequality"); time.sleep(1.8)
+        op = ev("video", "quality-open", m)
+        check("QL1: the Quality button opens the list of the page's own player", bool(op) and "7 row(s) from the page's own player (yt)" in op[-1]["rest"], "lines: %s" % [e["rest"][:100] for e in op])
+        self.shot("ql-1-list")
+        n0 = len(calls())
+        m = self.log.size(); self.ph.debug("pagepick", "1"); time.sleep(3.5)                       # row 1 = 1080p (row 0 = Automatic)
+        got = [r for r in calls()[n0:] if r.get("fn") == "range"]
+        check("QL1: a pick of 1080p reached the page's player as setPlaybackQualityRange(hd1080, hd1080)", any(r.get("a") == "hd1080" and r.get("b") == "hd1080" for r in got), "calls: %s" % [(r.get("fn"), r.get("a"), r.get("b")) for r in calls()[n0:]])
+        check("QL1: the app logged the pick", bool(ev("player", "quality-page", m)), "no 'player quality-page' line")
+        # the controls come back (the sheet closed): open again, the check mark is on 1080p, then Automatic
+        if not len(ev("player", "shown")) > len(ev("player", "hidden")):
+            self.ph.tap(int(vw * 0.25), 26 + int(vh * 0.2)); time.sleep(0.9)
+        m = self.log.size(); self.ph.debug("pagequality"); time.sleep(1.8)
+        check("QL1: the list opens again", bool(ev("video", "quality-open", m)), "no second 'quality-open' line")
+        n1 = len(calls())
+        self.ph.debug("pagepick", "0"); time.sleep(3.5)
+        got2 = [r for r in calls()[n1:] if r.get("fn") == "range"]
+        check("QL1: Automatic gave the whole range back (tiny .. highres)", any(r.get("a") == "tiny" and r.get("b") == "highres" for r in got2), "calls: %s" % [(r.get("fn"), r.get("a"), r.get("b")) for r in calls()[n1:]])
+        self.shot("ql-2-after-auto")
+        self.ph.key("KEYCODE_BACK"); time.sleep(2)
+        self.ph.key("KEYCODE_BACK"); time.sleep(1.5)
+        self.record({"kind": "ql", "name": "quality-from-the-pages-own-player", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
+        self.check_alive("ql scene")
+
     def kp_scene(self):
         w, h = self.screen
         checks = []
@@ -4070,7 +4126,7 @@ _install_daily()
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -4085,7 +4141,7 @@ def main():
         a.profile = "tablet" if a.suite in ("daily", "yt") else "standard"
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
-        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr") else "all")
+        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql") else "all")
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
@@ -4136,6 +4192,8 @@ def main():
             s.audio_round()      # (the sound check rides along: its verdict is the page's own clock now, run 43745675957 showed the old one was wrong)
         if a.suite == "compat":
             s.compat_round(a.minutes)
+        if a.suite in ("ql", "vp"):
+            s.ql_scene()                                     # (QL1: the Quality button from the page's own player list: YouTube-style player element on the real engine)
         if a.suite == "lr":
             s.lastrun_round()                                # (CR1c: the app is killed from outside in front and in the background; the next Diagnostics must say how the last run ended)
         if a.suite == "yt":
