@@ -21,6 +21,7 @@ import app.kestrel.core.download.Config
 import app.kestrel.core.download.DEST_APP_PRIVATE
 import app.kestrel.core.download.DlState
 import app.kestrel.core.download.DownloadView
+import app.kestrel.core.download.MiniTracker
 import app.kestrel.core.download.Engine
 import app.kestrel.core.download.FetchRequest
 import app.kestrel.core.download.Fetcher
@@ -308,7 +309,7 @@ object DownloadController {
      * The small download window's memory lives as long as the PROCESS (DM1): a window re-created with the activity keeps what it knew, and a new process starts from "everything in the list is old news".
      * [restored] turns true once the rows of the last run have been read and the interrupted downloads have been carried on: until then the list is incomplete and must not be taken as the starting point.
      */
-    val mini = app.kestrel.core.download.MiniTracker()
+    val mini = MiniTracker()
     @Volatile var miniHidden = false
     @Volatile var restored = false
     @Volatile private var viewCache: List<DownloadView>? = null
