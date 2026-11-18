@@ -7,9 +7,11 @@ import org.junit.Assert.assertTrue
 class Rig(text: String = "", sel: Int = text.length, multiline: Boolean = true,
           kind: FieldKind = FieldKind.TEXT, action: Int = ImeActions.UNSPECIFIED, noEnter: Boolean = false, noSuggestions: Boolean = false, noLearn: Boolean = false, caps: Int = 0,
           /** The editor reports INSIDE each call (an editor in the keyboard's own process on Android 10): see [FakeEditor.inlineSink]. */
-          inlineReports: Boolean = false) {
+          inlineReports: Boolean = false,
+          /** The keyboard's own capitals (the start of an empty box, after . ! ?) in a box that asked for none. Off here so the many tests that type into an empty box stay about what they test; [AutoCapsTest] switches it on. */
+          sentenceCaps: Boolean = false) {
     val ed = FakeEditor(text, sel, multiline)
-    val c = InputController(ed)
+    val c = InputController(ed).also { it.sentenceCaps = sentenceCaps }
     var foreign = 0; private set        // selection reports the controller judged NOT to be its own
     var firstForeignInfo: String? = null; private set
 

@@ -295,6 +295,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         pageField = f; fieldIdentity = f?.identity ?: 0; learnedText = null
         if (f != null) { fieldOpenings++; lastFieldLabel = f.label } else addressOpenings++
         model.open(if (f != null) "" else address)
+        model.smartText = f != null && !f.password            // R22: sentence capitals, a lone I, no spaces inside quotes and the automatic space after punctuation are for text fields of pages, never the address bar
         keyboardShowing = true
         keys.visibility = VISIBLE
         applyGeometry()
@@ -426,7 +427,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         for ((w, n) in parsed.ownWords) if (!own.contains(w)) own.add(w, n)
         l.navGlideWordsChanged(own.serialize())
         val h = l.navGlideHabit(); val ph = parsed.habit
-        if (ph != null && (h == null || Math.abs(h[0]) + Math.abs(h[1]) < 0.01f)) l.navGlideHabitChanged(ph)
+        if (ph != null && (h == null || Math.abs(h[0]) + Math.abs(h[1]) < 0.01f)) l.navGlideHabitChanged(if (parsed.touch != null && parsed.touch!!.size == app.kestrel.core.input.glide.TouchField.SIZE) ph + parsed.touch!! else ph)   // R20d: the touch plane of the file comes along
         done(parsed.summary)
     }
 
@@ -512,7 +513,55 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         pendingWord = best.text; pendingWeight = 1f; pendingGuessed = null
         topGuess = best.text
         pendingPrev = lastGlidePrev; pendingPrev2 = lastGlidePrev2
-        keys.showCandidates(cands.map { it.text })
+        showGlideStrip(cands.map { it.text })
+        bar.invalidate()
+    }
+
+    // ------------------------------------------------------------------ the strip after a glide: [other guess] [predicted next word] [other guess] (R20b, ported by R22)
+    private var glideBest = ""
+    private var glideAlts: List<String> = emptyList()
+    private var glideNext: List<String> = emptyList()
+    private var glideNextWaiting = false
+    private var glideSeq = 0
+    /** The next words the strip shows: a tap on exactly one of them means "this word comes next", not a replacement of the glided word. */
+    private var glideNextShown: Set<String> = emptySet()
+
+    /** In the text field of a page the middle box predicts the next word after the glided one (the address bar and the passwords keep the plain list of guesses). */
+    private fun showGlideStrip(words: List<String>) {
+        glideNextShown = emptySet()
+        val g = glide
+        val f = pageField
+        if (g == null || f == null || f.password || words.isEmpty()) { keys.showCandidates(words); return }
+        glideBest = words[0]; glideAlts = words.drop(1).take(2); glideNext = emptyList(); glideNextWaiting = true
+        renderGlideStrip()
+        val (p2, p1) = model.previousTwo()
+        val my = ++glideSeq
+        g.suggest("", p1, p2, 4) { res -> post { if (my == glideSeq && keyboardShowing && model.glideActive) { glideNext = res.words; glideNextWaiting = false; renderGlideStrip() } } }
+    }
+
+    private fun renderGlideStrip() {
+        val taken = (listOf(glideBest) + glideAlts).map { it.lowercase() }
+        val next = glideNext.filter { it.lowercase() !in taken }
+        if (next.isEmpty() && !glideNextWaiting) { glideNextShown = emptySet(); keys.showCandidates(listOf(glideBest) + glideAlts); return }          // no prediction: the plain guesses
+        val fill = next.drop(1).iterator()
+        val left = glideAlts.getOrNull(0) ?: (if (fill.hasNext()) fill.next() else "")
+        val right = glideAlts.getOrNull(1) ?: (if (fill.hasNext()) fill.next() else "")
+        val mid = next.firstOrNull() ?: ""
+        glideNextShown = next.take(3).toSet()
+        keys.showCandidates(listOf(left, mid, right), accent = 1)                      // the middle box carries the accent outline: it is the one that adds a word
+    }
+
+    /** The middle box was tapped: the glided word stays (and is learned), the predicted word goes in after it with its space, and counts double like any word taken from the strip. */
+    private fun pickNextAfterGlide(word: String) {
+        confirmGlide()
+        syncField()
+        glideSeq++; glideNextShown = emptySet()
+        val (p2, p1) = model.previousTwo()
+        val before = model.text
+        if (!model.insertWord(word)) return
+        pageField?.let { sendEdit(it, before) }
+        glide?.let { g -> if (learnAllowed()) g.learn(p1, word.lowercase(), 2f, p2) }
+        keys.clearCandidates()
         bar.invalidate()
     }
 
@@ -520,6 +569,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
     private fun pickCandidate(word: String) {
         val g = glide
         syncField()
+        if (word in glideNextShown && model.glideActive) { pickNextAfterGlide(word); return }
         val before = model.text
         if (!model.swapGlide(word)) return
         pageField?.let { sendEdit(it, before) }
@@ -528,7 +578,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         afterUndo = false
         g?.stats?.onPicked()
         g?.accepted(word) { h -> post { l.navGlideHabitChanged(h) } }
-        keys.showCandidates(keys.candidateTexts().let { list -> listOf(word) + list.filter { it != word } }.take(3))
+        glideNextShown = emptySet(); glideSeq++
+        keys.showCandidates(keys.candidateTexts().let { list -> listOf(word) + list.filter { it != word && it.isNotEmpty() } }.take(3))
         bar.invalidate()
     }
 
@@ -684,6 +735,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         if (f != null) { fieldOpenings++; lastFieldLabel = f.label }
         learnedText = null
         model.open(if (f != null) "" else address)
+        model.smartText = f != null && !f.password
+        glideSeq++; glideNextShown = emptySet()
         pendingWord = null; afterUndo = false; retypeWatch = false
         keys.clearCandidates(); barMode(); keys.invalidate()
     }
@@ -1407,6 +1460,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         private var gx = FloatArray(256); private var gy = FloatArray(256); private var gn = 0
         private var fadeStart = 0L
         private var cands: List<String> = emptyList()
+        private var accentIdx = 0
         private var noWordUntil = 0L
         private var stripDown = -1
         private var bubbleKey: KeySpec? = null; private var bubbleText = ""   // the key under the finger, shown large above it (a thumb covers the key itself)
@@ -1514,7 +1568,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
         // ------------------------------------------------------------------ the strip of guesses
 
-        fun showCandidates(list: List<String>) { cands = list; noWordUntil = 0L; invalidate() }
+        /** [accent] is the box with the accent outline (the first by default; the middle one after a glide, where it is the predicted next word). An empty string is a box that is not filled: nothing is drawn there and it takes no touch. */
+        fun showCandidates(list: List<String>, accent: Int = 0) { cands = list; accentIdx = accent; noWordUntil = 0L; invalidate() }
         fun clearCandidates() { if (cands.isNotEmpty() || noWordUntil != 0L) { cands = emptyList(); noWordUntil = 0L; invalidate() } }
         fun showNoWord() { cands = emptyList(); noWordUntil = SystemClock.uptimeMillis() + NO_WORD_MS; handler.removeCallbacks(noWordOff); handler.postDelayed(noWordOff, NO_WORD_MS); invalidate() }
         fun candidateTexts(): List<String> = cands
@@ -1531,7 +1586,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         private fun chipAt(x: Float, y: Float): Int {
             if (y >= stripPx() || cands.isEmpty()) return -1
             val gap = context.dpf(3f)
-            for ((i, r) in chipBoxes().withIndex()) if (x >= r.left - gap / 2 && x < r.right + gap / 2) return i
+            for ((i, r) in chipBoxes().withIndex()) if (cands[i].isNotEmpty() && x >= r.left - gap / 2 && x < r.right + gap / 2) return i
             return -1
         }
 
@@ -1554,13 +1609,14 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             val r = context.dpf(6f)
             val boxes = chipBoxes()
             for ((i, w) in list.withIndex()) {
+                if (w.isEmpty()) continue
                 val rect = boxes[i]; val cw = rect.width()
                 fill.color = if (i == stripDown) (pal.accent and 0x00FFFFFF) or 0xAA000000.toInt() else 0xFF0E171E.toInt()
                 c.drawRoundRect(rect, r, r, fill)
-                line.strokeWidth = context.dpf(if (i == 0) 1.2f else 1f); line.color = if (i == 0) pal.accent else pal.deep
+                line.strokeWidth = context.dpf(if (i == accentIdx) 1.2f else 1f); line.color = if (i == accentIdx) pal.accent else pal.deep
                 box.set(rect); box.inset(context.dpf(0.6f), context.dpf(0.6f))
                 c.drawRoundRect(box, r, r, line)
-                text.color = if (i == stripDown) pal.accentHi else if (i == 0) pal.accentHi else pal.fg
+                text.color = if (i == stripDown) pal.accentHi else if (i == accentIdx) pal.accentHi else pal.fg
                 c.drawText(TextUtils.ellipsize(w, text, cw - context.dpf(8f), TextUtils.TruncateAt.END).toString(), rect.centerX(), rect.centerY() - (fm.ascent + fm.descent) / 2f, text)
             }
         }
