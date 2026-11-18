@@ -3582,12 +3582,12 @@ class Soak:
             txt = line[-1]["rest"] if line else ""
             mm = re.search(r"(\d+) for the WRONG page", txt)
             wrong = int(mm.group(1)) if mm else -1
-            bad = [r for r in rows if "ok=False" in r]
+            bad = [r for r in rows if "ok=false" in r.lower()]
             check("TP1: %s: Diagnostics counts 0 previews for the wrong page" % tag, wrong == 0 and not bad, "line: %s; bad rows: %s" % (txt, bad[:3]))
             return txt, rows
         self.ph.debug("opengrid"); time.sleep(3.5)                    # the grid takes a fresh picture of the page in front
         t0, r0 = previews("grid open on three tabs")
-        check("TP1: the tab in front has a preview of its page", any("has=True" in r and "ok=True" in r for r in r0), "rows: %s" % r0[-4:])
+        check("TP1: the tab in front has a preview of its page", any("has=true" in r.lower() and "ok=true" in r.lower() for r in r0), "rows: %s" % r0[-4:])
         self.shot("tb-1-grid"); self.ph.key("KEYCODE_BACK"); time.sleep(1.5)
         self.ph.open_url("%s/page/form" % base); time.sleep(1.0)    # the tab in front goes to ANOTHER page: its old picture must be gone at once
         t1, r1 = previews("the tab went to another page")
@@ -3606,26 +3606,26 @@ class Soak:
         m = self.log.size()
         self.ph.debug("copyurl"); time.sleep(3)
         cu = health_events(self.log.since(m), "lab", "copyurl")
-        check("UC1: pressing the address bar shows the Copy button and one tap copies the tab's whole address", bool(cu) and "visible=True" in cu[-1]["rest"] and "exact=True" in cu[-1]["rest"], "line: %s" % (cu[-1]["rest"] if cu else "none"))
+        check("UC1: pressing the address bar shows the Copy button and one tap copies the tab's whole address", bool(cu) and "visible=true" in cu[-1]["rest"].lower() and "exact=true" in cu[-1]["rest"].lower(), "line: %s" % (cu[-1]["rest"] if cu else "none"))
         # MT1: the tab tray of the mini panel
         self.ph.debug("minipanel", "1"); time.sleep(1.5)
         m = self.log.size()
         self.ph.debug("minitabs"); time.sleep(1.5)
         mt = health_events(self.log.since(m), "lab", "minitabs"); op = health_events(self.log.since(m), "panel", "tray-open")
         n0 = int(re.search(r"tabs=(\d+)", mt[-1]["rest"]).group(1)) if mt and re.search(r"tabs=(\d+)", mt[-1]["rest"]) else -1
-        check("MT1: the Tabs button opens the tray with a row for every tab", bool(mt) and "tray=True" in mt[-1]["rest"] and bool(op) and ("rows=%d" % n0) in op[-1]["rest"], "lab: %s panel: %s" % ([e["rest"] for e in mt], [e["rest"] for e in op]))
+        check("MT1: the Tabs button opens the tray with a row for every tab", bool(mt) and "tray=true" in mt[-1]["rest"].lower() and bool(op) and ("rows=%d" % n0) in op[-1]["rest"], "lab: %s panel: %s" % ([e["rest"] for e in mt], [e["rest"] for e in op]))
         self.shot("tb-2-tray")
         def act(what):
             m2 = self.log.size(); self.ph.debug("trayact", what); time.sleep(2.0)
             r = health_events(self.log.since(m2), "lab", "trayact")
             return r[-1]["rest"] if r else ""
         a1 = act("switch:0")
-        check("MT1: a row switches to that tab and puts the tray away", "ok=True" in a1 and "current=0" in a1 and "tray=False" in a1, a1)
+        check("MT1: a row switches to that tab and puts the tray away", "ok=true" in a1.lower() and "current=0" in a1 and "tray=false" in a1.lower(), a1)
         self.ph.debug("minitabs"); time.sleep(1.0)
         a2 = act("close:%d" % max(0, n0 - 1))
-        check("MT1: the x closes that tab and the tray stays", "ok=True" in a2 and ("tabs=%d" % (n0 - 1)) in a2 and "tray=True" in a2, a2)
+        check("MT1: the x closes that tab and the tray stays", "ok=true" in a2.lower() and ("tabs=%d" % (n0 - 1)) in a2 and "tray=true" in a2.lower(), a2)
         a3 = act("new")
-        check("MT1: New tab opens a tab in front and the panel's keys", "ok=True" in a3 and ("tabs=%d" % n0) in a3 and "keys=True" in a3 and "tray=False" in a3, a3)
+        check("MT1: New tab opens a tab in front and the panel's keys", "ok=true" in a3.lower() and ("tabs=%d" % n0) in a3 and "keys=true" in a3.lower() and "tray=false" in a3.lower(), a3)
         self.shot("tb-3-newtab")
         self.ph.debug("minipanel", "0"); time.sleep(1)
         # PV1: "I just opened a new private tab, and once i began to load a site, an old regular tab website i visited flashed": the page view keeps the last frame of the tab that used it before; a curtain must
@@ -3637,7 +3637,7 @@ class Soak:
         check("PV1: the curtain comes down again once the private tab has painted", bool(dn) and any(("first-paint" in e["rest"] or "page-stop" in e["rest"] or "first-composite" in e["rest"]) for e in dn), "curtain-down lines: %s" % [e["rest"] for e in dn])
         self.shot("tb-4-private")
         m = self.log.size()
-        self.ph.debug("switchtab", "0"); time.sleep(3)
+        self.ph.debug("switchtab", "1"); time.sleep(3)
         up2 = health_events(self.log.since(m), "tabs", "curtain-up")
         check("PV1: from the private tab back to a regular tab there is a curtain too (the private page is not seen on it)", any("private=false" in e["rest"].lower() for e in up2), "curtain-up lines: %s" % [e["rest"] for e in up2])
         t4, r4 = previews("at the end")
