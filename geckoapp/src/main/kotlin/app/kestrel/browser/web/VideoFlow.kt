@@ -202,12 +202,18 @@ class VideoFlow(private val a: BrowserActivity) {
         seed.frameChain = MediaNames.frameChainOf(m.optString("fa"))
         val sets = MediaHeaders.sets(seed, t.url)
         val host = UrlParts.hostOf(url) ?: ""
-        Health.log("media", "maybe", "$host type=${m.optString("c").substringBefore(';').take(32)} len=${seed.length} kind=${m.optString("ty")}")
-        fun attempt(i: Int, last: Int) {
-            if (i >= sets.size) { Health.log("media", "maybe-refused", "$host http=$last"); return }
+        val method = m.optString("mt")
+        Health.log("media", "maybe", "$host type=${m.optString("c").substringBefore(';').take(32)} len=${seed.length} kind=${m.optString("ty")} method=${method.ifEmpty { "?" }}")
+        if (!MediaHeaders.replayable(method)) { Health.log("media", "maybe-skipped", "$host the page asked with $method: an API call, not a stream"); return@ui }
+        fun attempt(i: Int, last: Int, notFound: Int) {
+            if (i >= sets.size) { Health.log("media", "maybe-refused", "$host http=$last sets=${sets.size}"); return }
             var status = -1
             DownloadController.fetchBytes(a, url, 0L, 4095L, sets[i], 1, t.isPrivateTab, onStatus = { status = it }) { bytes ->
-                if (bytes == null) { if (status == 401 || status == 403 || status == -1) attempt(i + 1, status.takeIf { it > 0 } ?: last) else Health.log("media", "maybe-refused", "$host http=$status"); return@fetchBytes }
+                if (bytes == null) {
+                    if (MediaHeaders.tryNextSet(status, notFound)) attempt(i + 1, status.takeIf { it > 0 } ?: last, if (status == 404 || status == 406) notFound + 1 else notFound)
+                    else Health.log("media", "maybe-refused", "$host http=$status set=${i + 1}/${sets.size}")
+                    return@fetchBytes
+                }
                 val s = MediaSniff.classifyBytes(bytes)
                 if (s == null) { Health.log("media", "maybe-no", "$host first=${bytes.size}"); return@fetchBytes }
                 val c = MediaCandidate(url, s.kind, s.mime, if (s.kind == MediaKind.FILE) seed.length else -1L, page, frame, System.currentTimeMillis())
@@ -216,7 +222,7 @@ class VideoFlow(private val a: BrowserActivity) {
                 if (t.media.add(c)) a.refreshDownloadButton()
             }
         }
-        attempt(0, 0)
+        attempt(0, 0, 0)
     }
 
     /** Called on the Shields worker thread. */

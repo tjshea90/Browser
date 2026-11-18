@@ -861,7 +861,7 @@ function maybeMedia(d, url, ct, size, ref, org) {
   q.n++;
   noteFrame(d.tabId, d.frameId, d.parentFrameId, d.documentUrl);
   var page = tabTop.get(d.tabId) || ((d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || ''));
-  send({ k: 'maybe', u: url, c: ct, l: size, p: page, f: docOf(d.documentUrl), fa: frameChainOf(d), rf: ref, og: org, ty: d.type }).catch(function () {});
+  send({ k: 'maybe', u: url, c: ct, l: size, p: page, f: docOf(d.documentUrl), fa: frameChainOf(d), rf: ref, og: org, ty: d.type, mt: String(d.method || '').replace(/[^A-Za-z]/g, '').slice(0, 8) }).catch(function () {});
 }
 
 browser.webRequest.onHeadersReceived.addListener(lstTimed(LST.rcv, function (d) {
