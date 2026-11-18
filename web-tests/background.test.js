@@ -1355,6 +1355,27 @@ test('VP1: the full-screen film state is relayed as clamped numbers: the PAUSED 
   assert.ok(t);
 });
 
+test('QL1: the page player quality list rides along in the full-screen report (rows, current pick, family), cut to the limits; without a list nothing is added (lab run 44233990309 found the list dropped here)', async () => {
+  const h = harness((m) => (m.k === 'vst' ? '{"s":1}' : standardApp()(m)));
+  h.mainFrame(PAGE, { requestId: '1' });
+  await ready(h);
+  const rows = [['auto', 'Automatic'], ['hd1080', '1080p60'], ['bad id!', 'x'], ['hd720', 'a'.repeat(60) + '<b>'], [5, 'no']];
+  for (let i = 0; i < 20; i++) rows.push(['r' + i, 'row ' + i]);
+  await h.message({ k: 'vst', t: 1, d: 60, p: 0, q: rows, qc: 'hd720', qf: 'yt' }, 1, PAGE, 0);
+  const g = h.of('vst')[0];
+  assert.equal(g.qf, 'yt'); assert.equal(g.qc, 'hd720');
+  assert.ok(Array.isArray(g.q) && g.q.length === 12, 'at most 12 rows: ' + JSON.stringify(g.q));
+  assert.deepEqual(g.q[0], ['auto', 'Automatic']); assert.deepEqual(g.q[1], ['hd1080', '1080p60']);
+  assert.ok(!g.q.some((r) => r[0] === 'bad id!' || typeof r[0] !== 'string'), 'a row with an odd id is dropped');
+  assert.ok(g.q[2][1].length <= 22 && g.q[2][1].indexOf('<') < 0, 'labels are cut: ' + g.q[2][1]);
+  await h.message({ k: 'vst', t: 1, d: 60, p: 0 }, 1, PAGE, 0);
+  const g2 = h.of('vst')[1];
+  assert.ok(!('q' in g2) && !('qc' in g2) && !('qf' in g2), 'a report with no list adds nothing: ' + JSON.stringify(g2));
+  await h.message({ k: 'vst', t: 1, d: 60, p: 0, q: 'x', qc: {}, qf: 'Y<T>' }, 1, PAGE, 0);
+  const g3 = h.of('vst')[2];
+  assert.ok(!('q' in g3) && !('qc' in g3) && !('qf' in g3), 'odd types add nothing: ' + JSON.stringify(g3));
+});
+
 test('VP1: a length of 2^32 seconds (the live marker) and a huge position reach the app as they are (review F8)', async () => {
   const h = harness((m) => (m.k === 'vst' ? '{"s":0}' : standardApp()(m)));
   h.mainFrame(PAGE, { requestId: '1' });

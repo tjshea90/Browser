@@ -1056,6 +1056,16 @@ onMsg(function (m, sender) {
     k: 'vst', t: n(m.t, 0, 1e10), d: (m.d === -1 || m.d === -2) ? m.d : n(m.d, 0, 1e10), b: n(m.b, 0, 1e10), pa: m.p === 1 ? 1 : 0, e: m.e === 1 ? 1 : 0, m: m.m === 1 ? 1 : 0, v: n(m.v, 0, 100),
     r: n(m.r, 0.1, 16), rs: n(m.rs, 0, 4), ms: m.ms === 1 ? 1 : 0, l: m.l === 1 ? 1 : 0, w: n(m.w, 0, 20000), h: n(m.h, 0, 20000), ak: n(m.ak, 0, 2000000000), aw: n(m.aw, 0, 1000), er: m.er === 1 ? 1 : 0,
     lt: n(m.lt, 0, 60000), pc: n(m.pc, 0, 60000), tf: n(m.tf, 0, 2000000000), df: n(m.df, 0, 2000000000), sh: m.sh === 1 ? 1 : 0 };   // ANS51e: lt = how late the page's own timer ran (ms), pc = the player script's own work in a report (ms), tf / df = frames shown / dropped by the film
+  if (m.k === 'vst') {                                      // QL1: the page's OWN quality list (player.js asked quality.js): rows [id, label], the current pick and the family, cut to the same limits the app checks again (PageLevels)
+    var qs = function (v, len) { return typeof v === 'string' ? v.replace(/[\u0000-\u001f<>]/g, ' ').slice(0, len) : ''; };
+    if (Array.isArray(m.q)) {
+      var rows = [];
+      for (var qi = 0; qi < m.q.length && rows.length < 12; qi++) { var qr = m.q[qi]; if (Array.isArray(qr) && typeof qr[0] === 'string' && /^[A-Za-z0-9_.:-]{1,24}$/.test(qr[0])) rows.push([qr[0], qs(qr[1], 22)]); }
+      if (rows.length) o.q = rows;
+    }
+    if (typeof m.qc === 'string') o.qc = qs(m.qc, 24);
+    if (typeof m.qf === 'string' && /^[a-z]{2,8}$/.test(m.qf)) o.qf = m.qf;
+  }
   o.p = String(page).slice(0, 300);                       // (`p` is the page's address in every message the app gets; the film's PAUSED flag is `pa`: lab run 43776782679 found the app reading the address as "not paused" for ever)
   return send(o).then(function (r) { try { return r ? JSON.parse(r) : undefined; } catch (e) { return undefined; } }, function () { return undefined; });
 });
