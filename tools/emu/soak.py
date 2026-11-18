@@ -1270,6 +1270,54 @@ class Soak:
         self.check_alive(name)
         self.record(r)
 
+    # ---- DM2: the download window and the Downloads list must not come up by themselves at a start (owner messages 2026-11-18)
+    def dm_scene(self):
+        """DM1 / DM2 (owner: "the download manager pops up on browser restart or other times" and "when i first open the browser, download manager and a stale download started message show up"): a NEW download
+        brings the 'Download started' banner (the positive control); after the app is ended from outside and started cold, with that finished download in the list, nothing of the download UI may come up
+        (Health: downloads banner / window / open-by-tap); a launch carrying the notification's 'open Downloads' flag opens the list once (a real tap), the same flag replayed from history does not."""
+        pkg = self.a.pkg
+        checks = []
+        def check(name, ok, detail=""):
+            checks.append({"check": name, "ok": bool(ok), "detail": detail if not ok else ""})
+            if not ok:
+                self.issue("high", "downloads", "%s %s" % (name, detail))
+        lm = self.log.size()
+        self.download("dm-lab-1mb", "lab:/dl/1mb.bin", 1048576, 60)
+        banner = health_events(self.log.since(lm), "downloads", "banner")
+        check("DM1: a NEW download brings the 'Download started' banner (the positive control)", bool(banner) and "new=1" in banner[0]["rest"], "banner lines: %s" % [e["rest"] for e in banner])
+        time.sleep(8)                                                   # the finished row lingers 6 s, then the window goes
+        self.shot("dm-1-after-download")
+        for tag in ("front", "background"):
+            if tag == "background":
+                self.ph.key("KEYCODE_HOME"); time.sleep(3)
+            pids = self.ph.pids()
+            if pids:
+                self.adb.sh("kill -9 %d" % pids[0], timeout=20); time.sleep(2)
+            else:
+                self.adb.sh("am force-stop %s" % pkg, timeout=30); time.sleep(2)
+            self.start_app()                                            # cold start: waits for the engine
+            m = self.log.size()
+            time.sleep(10)                                              # the window used to appear within the first seconds
+            lines = self.log.since(m)
+            check("DM2: a cold start (%s kill) shows no 'Download started' banner for the old download" % tag, not health_events(lines, "downloads", "banner"), "lines: %s" % [e["rest"] for e in health_events(lines, "downloads", "banner")])
+            check("DM2: a cold start (%s kill) brings up no download window" % tag, not health_events(lines, "downloads", "window"), "lines: %s" % [e["rest"] for e in health_events(lines, "downloads", "window")])
+            check("DM2: a cold start (%s kill) opens no Downloads list" % tag, not health_events(lines, "downloads", "open-by-tap"), "lines: %s" % [e["rest"] for e in health_events(lines, "downloads", "open-by-tap")])
+            self.shot("dm-2-cold-start-" + tag)
+        # the notification's launch intent: a real tap opens the list; the replay from history does not
+        act = "app.kestrel.browser.MainActivity"
+        m = self.log.size()
+        self.ph.a.sh("am start -n %s/%s --ez app.kestrel.browser.OPEN_DOWNLOADS true" % (pkg, act), timeout=30); time.sleep(4)
+        check("DM1: a launch that carries 'open Downloads' (a tap on a notification) opens the list", bool([e for e in health_events(self.log.since(m), "downloads", "open-by-tap")]), "lines: %s" % [e["rest"] for e in health_events(self.log.since(m), "downloads")])
+        self.shot("dm-3-opened-by-tap")
+        self.ph.key("KEYCODE_BACK"); time.sleep(2)
+        m = self.log.size()
+        self.ph.a.sh("am start -n %s/%s -f 0x00100000 --ez app.kestrel.browser.OPEN_DOWNLOADS true" % (pkg, act), timeout=30); time.sleep(4)   # FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY: the system replaying it
+        ign = health_events(self.log.since(m), "downloads", "open-ignored")
+        check("DM1: the same launch replayed from history is ignored (told in Health, list stays closed)", bool(ign) and not health_events(self.log.since(m), "downloads", "open-by-tap"), "lines: %s" % [e["rest"] for e in health_events(self.log.since(m), "downloads")])
+        self.shot("dm-4-replay-ignored")
+        self.main_pid = (self.ph.pids() or [None])[0]
+        self.record({"kind": "dm", "name": "downloads-ui-at-start", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
+
     # ---- VS1: a vidsrc-style embed (movie page -> player frame -> CDN that wants the PLAYER's Referer, playlists as .txt, parts as .jpg, AES) on the real engine
     def vs_scene(self):
         """VS1 (owner message 2026-11-18: doraby.com + the vidsrc server, 'it can't find the video to download', his other app can): four ways an embed delivers its stream, each opened on its movie page. For each:
@@ -3997,6 +4045,14 @@ class Soak:
             for e in vs:
                 L.append("- %s: %s (the app saw playback: %s, videos the finder counted: %s)%s" % (e["name"], e["status"], e.get("app_saw_playing"), e.get("app_found_videos"), " - " + e["note"] if e.get("note") else ""))
             L.append("")
+        dmr = [e for e in ev if e.get("kind") == "dm"]
+        if dmr:
+            L.append("## The download window and list at a start (DM1 / DM2)")
+            L.append("")
+            for e in dmr:
+                for c in e.get("checks", []):
+                    L.append("- %s: %s%s" % (c["check"], "ok" if c["ok"] else "FAILED", ("  " + c["detail"]) if c["detail"] else ""))
+            L.append("")
         vsr = [e for e in ev if e.get("kind") == "vs"]
         if vsr:
             L.append("## A vidsrc-style embed: found and saved? (VS1)")
@@ -4210,7 +4266,7 @@ _install_daily()
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -4225,7 +4281,7 @@ def main():
         a.profile = "tablet" if a.suite in ("daily", "yt") else "standard"
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
-        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs") else "all")
+        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm") else "all")
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
@@ -4278,6 +4334,8 @@ def main():
             s.compat_round(a.minutes)
         if a.suite in ("ql", "vp"):
             s.ql_scene()                                     # (QL1: the Quality button from the page's own player list: YouTube-style player element on the real engine)
+        if a.suite == "dm":
+            s.dm_scene()                                     # (DM1 / DM2: the download window and list stay away at a start; a new download brings the banner)
         if a.suite == "vs":
             s.vs_scene()                                     # (VS1: a vidsrc-style embed on the real engine: is the stream found and does one pick download it)
         if a.suite == "lr":
