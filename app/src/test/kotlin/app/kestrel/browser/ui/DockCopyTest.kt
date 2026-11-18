@@ -71,7 +71,9 @@ class DockCopyTest {
         assertEquals("nothing in the bar: nothing to copy", View.GONE, dock.copyChip.visibility)
         dock.urlField.setText(full)
         assertEquals(View.VISIBLE, dock.copyChip.visibility)
-        dock.urlField.clearFocus()
+        val other = android.widget.EditText(dock.context); (dock.parent as FrameLayout).addView(other)
+        other.requestFocus()                              // the finger went elsewhere: the bar lost the focus
+        assertFalse(dock.urlField.hasFocus())
         assertEquals(View.GONE, dock.copyChip.visibility)
     }
 
