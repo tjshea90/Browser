@@ -101,6 +101,7 @@ import app.kestrel.browser.ui.BackPictures
 import app.kestrel.core.url.Nav
 import app.kestrel.core.url.Omnibox
 import app.kestrel.core.media.MediaNames
+import app.kestrel.core.ui.ThumbRule
 import app.kestrel.core.url.UrlParts
 import app.kestrel.browser.web.ShieldsBridge
 import app.kestrel.browser.web.TabDelegates
@@ -571,7 +572,7 @@ open class BrowserActivity : Activity(), DockListener {
             // each regular tab's saved engine state (Back stack + scroll position) is read here, off the UI thread; it is parsed only when the tab is opened
             val states = HashMap<Long, String>()
             if (session != null && TabStateStore.useEngine(applicationContext, Flavor.engineVersion)) for (r in session.tabs) TabStateStore.read(applicationContext, r.id)?.let { states[r.id] = it }
-            val selThumb = if (launch == null && session != null) ThumbStore.load(applicationContext, session.selectedId) else null // the preview that covers the page area while the saved page loads
+            val selThumb = if (launch == null && session != null) ThumbStore.load(applicationContext, session.selectedId, session.tabs.firstOrNull { it.id == session.selectedId }?.url ?: "") else null   // (TP1: only when it was taken for the page the tab is on) // the preview that covers the page area while the saved page loads
             Io.ui { restore(session, savedInstanceState, launch, states, selThumb) }
         }
         Io.exec { db?.purge(5000, 90); UpdateJob.schedule(applicationContext); app.kestrel.browser.update.ReleaseCheckJob.schedule(applicationContext) } // after the session read: nothing at launch waits for this
@@ -2020,7 +2021,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (cur != null && cur.homeOverPage) tabGrid.homePreview(cur, homeSnapshot()) // the tab is on the Home screen: its card shows Home, not the page behind it
         val appCtx = applicationContext
         val missing = tabs.filter { it.thumb == null && !it.isPrivateTab && !it.isNewTab }
-        if (missing.isNotEmpty()) Io.fast { for (t in missing) { val b = ThumbStore.load(appCtx, t.id); if (b != null) Io.ui { if (t.thumb == null) { t.thumb = b; t.thumbAt = SystemClock.uptimeMillis(); tabGrid.thumbChanged(t) } } } }
+        if (missing.isNotEmpty()) Io.fast { for (t in missing) { val shownFor = t.url; val b = ThumbStore.load(appCtx, t.id, shownFor); if (b != null) Io.ui { if (t.thumb == null && t.url == shownFor) { t.thumb = b; t.thumbPage = ThumbRule.pageOf(shownFor); t.thumbAt = SystemClock.uptimeMillis(); tabGrid.thumbChanged(t) } } } }
     }
 
     private fun hideTabGrid() { tabGrid.visibility = View.GONE; applyPrivacyFlags() }
@@ -2063,6 +2064,8 @@ open class BrowserActivity : Activity(), DockListener {
         if (tab !== current || homeShown(tab) || tab.error != null || tab.session == null || geckoView.session !== tab.session) return
         val appCtx = applicationContext
         val leftUrl = tab.url // the address the picture belongs to (the tab may already show another one when the capture arrives)
+        val takenFor = ThumbRule.pageOf(leftUrl)         // TP1: the page this picture is for, and which load it was asked in
+        val loadThen = tab.gecko.pageStartedAt
         try {
             (readBack("thumb", force = tabGrid.visibility == View.VISIBLE) ?: return).accept({ full ->
                 val lane: (() -> Unit) -> Unit = if (tabGrid.visibility == View.VISIBLE) Io::fast else Io::exec // the grid is open: the user is waiting for this preview
@@ -2072,9 +2075,13 @@ open class BrowserActivity : Activity(), DockListener {
                     val picture = both?.second
                     if (picture != null) BackPictures.put(tab.id, leftUrl, picture)
                     if (forBack) Health.log("tabs", "leave-shot-done", "picture=${picture != null}")
-                    if (small != null) {
-                        if (!tab.isPrivateTab) ThumbStore.save(appCtx, tab.id, small)
-                        Io.ui { tab.thumb = small; tab.thumbAt = SystemClock.uptimeMillis(); ThumbStore.trim(tabs, tab); if (tabGrid.visibility == View.VISIBLE) tabGrid.thumbChanged(tab) }
+                    if (small != null) Io.ui {
+                        // TP1: kept only if the tab is STILL on the page it was asked for, no new load started meanwhile and the page has settled; otherwise it is another page's picture
+                        if (ThumbRule.accept(takenFor, tab.url, loadThen, tab.gecko.pageStartedAt, tab.loading)) {
+                            tab.thumb = small; tab.thumbPage = takenFor; tab.thumbAt = SystemClock.uptimeMillis(); ThumbStore.trim(tabs, tab)
+                            if (!tab.isPrivateTab) Io.exec { ThumbStore.save(appCtx, tab.id, small, takenFor) }
+                            if (tabGrid.visibility == View.VISIBLE) tabGrid.thumbChanged(tab)
+                        } else Health.log("tabs", "thumb-dropped", "tab=${tab.id} moved=${ThumbRule.pageOf(tab.url) != takenFor} loading=${tab.loading}")
                     }
                 }
             }, { _ -> /* the surface was not ready: keep the previous preview */ })
