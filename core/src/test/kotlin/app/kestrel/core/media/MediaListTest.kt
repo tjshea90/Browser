@@ -362,6 +362,7 @@ class MediaListTest {
 class MediaListFramesTest {
     private fun hls(url: String, frame: String = "") = MediaCandidate(url, MediaKind.HLS, "application/vnd.apple.mpegurl", -1, "https://site.test/watch", frame)
 
+    private fun file(url: String, len: Long) = MediaCandidate(url, MediaKind.FILE, "video/mp4", len, "https://site.test/watch")
     /** An address found only in a page's text: nobody has seen it, it is not counted, so nothing about it is captured. */
     private fun doc(url: String, frame: String = "") = MediaCandidate(url, MediaKind.FILE, "", -1, "https://site.test/watch", frame).also { it.fromMarkup = true }
 
