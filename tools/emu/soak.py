@@ -1334,7 +1334,7 @@ class Soak:
         try:
             time.sleep(4)
             w, h = self.screen
-            for mode in ("mse", "auto", "click", "nest", "worker"):
+            for mode in ("mse", "msel", "msel0", "auto", "click", "nest", "worker"):
                 before = self.ph.downloads(); lm = self.log.size()
                 self.ph.open_url("http://10.0.2.2:8000/watch3?v=%s" % mode)
                 t0 = time.time()
@@ -1342,17 +1342,22 @@ class Soak:
                     time.sleep(1.5)
                 time.sleep(7)                                           # the player frame, its script and (auto, nest, worker) its stream requests
                 r = {"kind": "vs", "name": "vidsrc-style-" + mode}
-                if mode == "mse":                                       # doraby's way: the person taps the page's Play button, the frame loads, its MediaSource player must START without a second tap
-                    self.ph.tap(w // 2, 26 + 34 + 60 + 8); time.sleep(16)
+                if mode.startswith("mse"):                              # doraby's way: the person taps the page's Play button, the frame loads, its MediaSource player must START without a second tap
+                    # mse = the embed builds its player at once; msel = it waits 7 s first (longer than the 5 s a tap's activation lasts: scripts and an API call on a hotspot); msel0 = a slow embed that was in the
+                    # page from the start, nobody pressed anything: the person's rule says it stays held
+                    if mode != "msel0": self.ph.tap(w // 2, 26 + 34 + 60 + 8)
+                    time.sleep(16 if mode == "mse" else 26)
                     try:
                         with open(os.path.join(self.out, "vidlab.log")) as f:
                             states = [ln.split("/state?s=")[1].split("&")[0].split(" ")[0] for ln in f.read().splitlines() if "/state?s=" in ln]
                     except OSError:
                         states = []
                     r["player_states"] = states
-                    ok_start = "playing" in states
+                    ok_start = ("playing" in states) if mode != "msel0" else ("playing" not in states)    # msel0: held is the RIGHT answer
                     r["status"] = "ok" if ok_start else "player-stuck"
-                    if not ok_start:
+                    if not ok_start and mode == "msel0":
+                        self.issue("high", "gate", "VS1d msel0: a slow embed that nobody pressed STARTED (the person's rule is no video without a press): states %s" % (states or "none"))
+                    elif not ok_start:
                         self.issue("high", "finding-video", "VS1d: the embed's MediaSource player never started after the person's tap on the movie page (states seen: %s): 'stuck on loading'" % (states or "none"), shot=True)
                     self.shot("vs-mse")
                     self.record(r)

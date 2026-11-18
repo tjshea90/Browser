@@ -176,29 +176,40 @@ def player_mode(mode):
 # VS1d (owner message 2026-11-18: "Even the vidfast server on doraby.Com can't find the video. it just stays stuck on loading"): doraby's way. The movie page has a big Play / server button; ITS tap sets the iframe's
 # address (servers.min.js: jQuery("#iframe").attr("src", ...)); the embed is another site whose player builds a MediaSource, waits for `sourceopen`, appends the film and plays by itself. The embed tells the lab
 # how far it got through requests to /state (the lab log): sourceopen, playing, playrejected_<name>, stuck (14 s without a picture). A person's tap on the PARENT page is the only press there is.
-PAGE_MSE = b"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Lab movie (mse)</title>
+def page_mse(embed, pressed):
+    """The movie page: a big Play button whose tap sets the iframe's address (doraby's servers.min.js), or - pressed=False - an iframe that is there from the start (nobody pressed anything)."""
+    src = "about:blank" if pressed else "http://10.0.2.2:8003/embed/%s?id=7" % embed
+    js = ("document.getElementById('play').onclick = function () { document.getElementById('iframe').src = 'http://10.0.2.2:8003/embed/%s?id=7'; };" % embed) if pressed else ""
+    return (b"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Lab movie (mse)</title>
 <body style="margin:0;background:#111;color:#eee;font:16px sans-serif"><h3 style="margin:8px;height:34px">Lab movie (mse)</h3>
-<button id=play class="play-btn server" style="display:block;width:100%;height:120px;font-size:30px;background:#136;color:#fff;border:0">Play</button>
-<iframe id=iframe src="about:blank" style="display:block;width:100%;height:230px;border:0"></iframe>
-<script>document.getElementById('play').onclick = function () { document.getElementById('iframe').src = 'http://10.0.2.2:8003/embed/mse?id=7'; };</script></body>"""
+<button id=play class="play-btn server" style="display:block;width:100%%;height:120px;font-size:30px;background:#136;color:#fff;border:0">Play</button>
+<iframe id=iframe src="%s" style="display:block;width:100%%;height:230px;border:0"></iframe>
+<script>%s</script></body>""" % (src.encode(), js.encode()))
 
-PLAYER_MSE = b"""<!doctype html><meta charset=utf-8><title>player mse</title><body style="margin:0;background:#222;color:#9f9;font:14px monospace">
-<video id=v muted playsinline autoplay style="width:100%;height:150px;background:#000"></video><div id=s>Loading...</div>
+def player_mse(delay_ms):
+    """The embed's player: builds a MediaSource after [delay_ms] (a real player loads its scripts and asks its API first: seconds on a hotspot), waits for `sourceopen`, appends a fragmented MP4 and plays.
+    It tells the lab how far it got through requests to /state: sourceopen, playing, playrejected_<name>, stuck (14 s + the delay without a picture)."""
+    return (b"""<!doctype html><meta charset=utf-8><title>player mse</title><body style="margin:0;background:#222;color:#9f9;font:14px monospace">
+<video id=v muted playsinline autoplay style="width:100%%;height:150px;background:#000"></video><div id=s>Loading...</div>
 <script>(function () {
   var v = document.getElementById('v'), s = document.getElementById('s'), played = false;
   function rep(x) { try { new Image().src = 'http://10.0.2.2:8000/state?s=' + x + '&t=' + Date.now(); } catch (e) {} }
   v.addEventListener('playing', function () { played = true; s.textContent = 'playing'; rep('playing'); });
-  var ms = new MediaSource(); v.src = URL.createObjectURL(ms);
-  ms.addEventListener('sourceopen', function () {
-    rep('sourceopen');
-    var sb = ms.addSourceBuffer('video/mp4; codecs="avc1.42E01E,mp4a.40.2"');
-    fetch('http://10.0.2.2:8004/mse/film.mp4').then(function (r) { return r.arrayBuffer(); }).then(function (b) {
-      sb.addEventListener('updateend', function () { try { ms.endOfStream(); } catch (e) {} var p = v.play(); if (p && p.catch) p.catch(function (e) { rep('playrejected_' + e.name); }); }, { once: true });
-      sb.appendBuffer(b);
-    }).catch(function (e) { rep('fetcherror'); });
-  });
-  setTimeout(function () { if (!played) { s.textContent = 'stuck loading'; rep('stuck'); } }, 14000);
-})();</script>"""
+  function start() {
+    var ms = new MediaSource(); v.src = URL.createObjectURL(ms);
+    ms.addEventListener('sourceopen', function () {
+      rep('sourceopen');
+      var sb = ms.addSourceBuffer('video/mp4; codecs="avc1.42E01E,mp4a.40.2"');
+      fetch('http://10.0.2.2:8004/mse/film.mp4').then(function (r) { return r.arrayBuffer(); }).then(function (b) {
+        sb.addEventListener('updateend', function () { try { ms.endOfStream(); } catch (e) {} var p = v.play(); if (p && p.catch) p.catch(function (e) { rep('playrejected_' + e.name); }); }, { once: true });
+        sb.appendBuffer(b);
+      }).catch(function (e) { rep('fetcherror'); });
+    });
+  }
+  setTimeout(start, %d);
+  setTimeout(function () { if (!played) { s.textContent = 'stuck loading'; rep('stuck'); } }, %d);
+})();</script>""" % (delay_ms, delay_ms + 14000))
+
 
 def page_watch3(mode):
     return (b"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Lab movie %s</title>
@@ -221,8 +232,10 @@ class H(http.server.BaseHTTPRequestHandler):
         if port == 8000 and path == "/watch": return self.send(200, "text/html; charset=utf-8", PAGE_A)
         if port == 8003 and path == "/embed/movie": return self.send(200, "text/html; charset=utf-8", PAGE_B)
         if port == 8000 and path == "/watch2": return self.send(200, "text/html; charset=utf-8", PAGE_C)
-        if port == 8000 and path == "/watch3" and "v=mse" in self.path: return self.send(200, "text/html; charset=utf-8", PAGE_MSE)
-        if port == 8003 and path == "/embed/mse": return self.send(200, "text/html; charset=utf-8", PLAYER_MSE)
+        if port == 8000 and path == "/watch3" and "v=mse" in self.path:
+            v = (parse_qs(self.path.partition("?")[2]).get("v") or ["mse"])[0]          # mse, msel (the embed waits 7 s), msel0 (slow embed, already in the page: nobody pressed)
+            return self.send(200, "text/html; charset=utf-8", page_mse("msel" if v.startswith("msel") else "mse", pressed=(v != "msel0")))
+        if port == 8003 and path in ("/embed/mse", "/embed/msel"): return self.send(200, "text/html; charset=utf-8", player_mse(7000 if path.endswith("msel") else 0))
         if port == 8000 and path == "/watch3": return self.send(200, "text/html; charset=utf-8", page_watch3((parse_qs(self.path.partition("?")[2]).get("v") or ["auto"])[0]))
         if port == 8003 and path in ("/embed/auto", "/embed/click", "/embed/nest", "/embed/worker"): return self.send(200, "text/html; charset=utf-8", player_mode(path.rsplit("/", 1)[1]))
         if port == 8000 and path == "/plain": return self.send(200, "text/html; charset=utf-8", PAGE_PLAIN)
