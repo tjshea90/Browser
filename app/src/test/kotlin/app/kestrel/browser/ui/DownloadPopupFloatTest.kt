@@ -80,6 +80,7 @@ class DownloadPopupFloatTest {
         val (p, _) = open(l)
         val box = p.boxForTest()
         val x = (box.left + 60).toFloat(); val y = (box.top + 14).toFloat()
+        System.err.println("DBG box=${box.left},${box.top},${box.right},${box.bottom} view=${p.view.width}x${p.view.height} vis=${box.visibility}/${p.view.visibility} dens=${p.view.resources.displayMetrics.density} hb=${p.headerBottomForTest()}")
         finger(p, x, y, dx = -120f, dy = 150f)
         val g = p.geoForTest()
         assertEquals(128f, g.right, 1f); assertEquals(158f, g.top, 1f)
