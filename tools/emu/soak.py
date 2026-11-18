@@ -3543,9 +3543,11 @@ class Soak:
         background, and the Diagnostics of the NEXT start must say which one it was (core: app/diag/LastRun.kt). Also reads the file the app keeps (files/last-run.txt) after the first kill."""
         pkg = self.a.pkg
         rows = []
-        for tag, in_front in (("front", True), ("background", False)):
+        for tag, in_front in (("front", True), ("background", False), ("freeze", True)):
             self.load_page("lab-text", "lab:/page/text", 1, 1, timeout=60)
             time.sleep(4)                                              # the note is written on the IO thread a moment after the page line
+            if tag == "freeze":                                        # CR1f: the screen thread is blocked for 25 s; the watchdog thread must write the stall (and where it sits) into the note on its own; then the process is killed in the middle of it
+                self.ph.debug("freeze", "25000"); time.sleep(8)
             if not in_front:
                 self.ph.key("KEYCODE_HOME"); time.sleep(3)
             note = self.adb.sh("run-as %s cat files/last-run.txt" % pkg, timeout=30)
@@ -3559,9 +3561,11 @@ class Soak:
                 self.adb.sh("am force-stop %s" % pkg, timeout=30); time.sleep(2)
             self.start_app()                                           # cold start; waits for the engine
             txt = self.dump_diag("lastrun-" + tag)
-            want = "ended WHILE ON SCREEN" if in_front else "in the background when it ended"
+            want = {"front": "ended WHILE ON SCREEN", "background": "in the background when it ended", "freeze": "SCREEN THREAD WAS FROZEN"}[tag]
             ok = want in txt
-            nocrash = ("NO crash note" in txt) if in_front else True
+            nocrash = ("NO crash note" in txt) if tag == "front" else (("NO crash note" not in txt) if tag == "freeze" else True)
+            if tag == "freeze" and "ui STALL" not in note:
+                ok = False
             rows.append((tag, ok and nocrash, "state line in the file: %s" % ([l for l in note.splitlines() if l.startswith("state=")] or ["none"])[0]))
             if not ok:
                 self.issue("high", "lastrun", "after the app was killed while %s the next Diagnostics did not say '%s'" % (tag, want), shot=False)
