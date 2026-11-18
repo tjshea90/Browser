@@ -292,3 +292,47 @@ test('review 5a: an answer that never comes ends the wait after 4 s with a refus
   await page.waitForTimeout(4600);
   assert.equal(await page.evaluate(() => window.__p), 'NotAllowedError');
 });
+
+// ---------------------------------------------------------------- VP2: a frame the person's tap on the page around it started
+const GCFG = (c) => (document) => document.dispatchEvent(new CustomEvent('__kst_gate_cfg_v1', { detail: c }));
+
+test('VP2: told "1p" (the tap on the page around this frame started it) the held MediaSource of a player-sized video goes ahead by itself', async () => {
+  const page = await open(MSE);
+  await settle(page, 300);
+  assert.equal(await page.evaluate(() => window.opened), 0, 'closed first: the person\'s rule');
+  await page.evaluate(() => document.dispatchEvent(new CustomEvent('__kst_gate_cfg_v1', { detail: '1p' })));
+  await settle(page, 500);
+  assert.equal(await page.evaluate(() => window.opened), 1, 'sourceopen came: the embed\'s player is no longer stuck on loading');
+  await page.context().close();
+});
+
+test('VP2: a player that is made AFTER the word (a script player builds its video late) is open at once, and its autoplay and play() work without a tap', async () => {
+  const page = await open(VID, '1p');
+  const r = await page.evaluate(() => { const v = document.createElement('video'); v.style.cssText = 'display:block;width:320px;height:180px'; v.setAttribute('autoplay', ''); document.body.appendChild(v); v.preload = 'auto'; return [v.getAttribute('preload'), v.hasAttribute('autoplay')]; });
+  assert.deepEqual(r, ['auto', true], 'the page\'s own preload and autoplay');
+  await page.context().close();
+});
+
+test('VP2: a banner-sized video (under 240 x 135) in such a frame is not a player: it stays closed', async () => {
+  const page = await open('<video id="v" style="display:block;width:120px;height:68px"></video>', '1p');
+  const r = await page.evaluate(() => { const v = document.getElementById('v'); v.preload = 'auto'; return v.getAttribute('preload'); });
+  assert.equal(r, 'none');
+  await page.context().close();
+});
+
+test('VP2: plain "1" and "1+" stay what they were: nothing is opened', async () => {
+  for (const c of ['1', '1+']) {
+    const page = await open(MSE, c);
+    await settle(page, 400);
+    assert.equal(await page.evaluate(() => window.opened), 0, 'cfg ' + c);
+    await page.context().close();
+  }
+});
+
+test('VP2: the opening lasts 90 s from the word, then the rule is the same as everywhere', async () => {
+  const page = await open(VID, '1p');
+  await page.evaluate(() => { const real = Date.now; Date.now = () => real() + 91000; });
+  const r = await page.evaluate(() => { const v = document.createElement('video'); v.style.cssText = 'display:block;width:320px;height:180px'; document.body.appendChild(v); v.preload = 'auto'; return v.getAttribute('preload'); });
+  assert.equal(r, 'none', 'a player made 91 s later is closed again');
+  await page.context().close();
+});
