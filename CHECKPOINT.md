@@ -1,13 +1,13 @@
-# CHECKPOINT 2687 — read me first, then TASKS.md
+# CHECKPOINT 2688 — read me first, then TASKS.md
 
-**Written:** 2026-11-18T06:50:02Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-587430ac-royssd` · **builds on:** `30a0825b` (this checkpoint is the commit after it)
+**Written:** 2026-11-18T07:00:44Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-587430ac-royssd` · **builds on:** `2e8c8251` (this checkpoint is the commit after it)
 
 ## Just done
-alpha70 GATED locally (ship.sh rc=0: handoff self-test, unit suites, versionCode 171 > 170) and pushed (ckpt 2686) but NOT dispatched. Lab run 44254127252 (suite tb, head caf37927) is running: it must finish FIRST (a release dispatch would cancel it).
+alpha70 DISPATCHED ONCE at 07:00Z: android.yml run 44255522156 (run_number 242, app=gecko full_build=true, head 2e8c8251). Do NOT dispatch again. Lab run 44254127252 (tb) was clean: 3 scenes ok, 0 issues (TP1, UC1, MT1, PV1 proven on the real engine in the simulator).
 
 ## Do this next
-1) WAIT for lab 44254127252 (list_workflow_run_artifacts; ~20 min, ffmpeg step 12 min); read report.md; expect 0 issues for TP1 / UC1 / MT1 / PV1; fix any app fault (then re-run ship.sh); 2) THEN ONE dispatch: mcp__github__actions_run_trigger run_workflow android.yml ref ccr-587430ac-royssd inputs app=gecko full_build=true note=<contents of docs/handoff/ALPHA70_RELEASE_NOTE.txt, identical>; 3) verify tag kestrel-g-v0.3.0-alpha70 (git ls-remote --tags origin), all jobs green, mcp__github__get_release_by_tag; 4) bash tools/record-release.sh kestrel-g-v0.3.0-alpha70 <same note>; 5) answer owner in plain words (TP1 previews, UC1 copy, MT1 tabs in the panel, PV1 private flash, VS2 capture, crash evidence CR1f/g, VS1e) with what is NOT proven on the tablet; release link on its own line
+WAIT for run 44255522156 (list_workflow_jobs; ~12 min: test-jvm ~5, test-js ~8, build-gecko ~4); do not use get_workflow_run (huge). If ALL jobs green: git ls-remote --tags origin kestrel-g-v0.3.0-alpha70, mcp__github__get_release_by_tag (APK asset), then bash tools/record-release.sh kestrel-g-v0.3.0-alpha70 with the IDENTICAL note (cat docs/handoff/ALPHA70_RELEASE_NOTE.txt), tick VS2/TP1/UC1/MT1/PV1 and CR1f/g in TASKS.md, answer the owner in plain words with the Release link on its own line. If a job is red: read it (get_job_logs only after the job ended); a flaky test (BrowserFlowTest.viewIntentOpensTheUrlInTheBrowser, PhoneBackendTest) -> make it deterministic, ship a FRESH dispatch only if no tag exists
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ alpha70 GATED locally (ship.sh rc=0: handoff self-test, unit suites, versionCode
 
 ## Last ten checkpoints
 ```
+  2e8c8251 ckpt 2687: alpha70 GATED locally (ship.sh rc=0: handoff self-test, unit suites, version
   30a0825b ckpt 2686: gated kestrel-g-v0.3.0-alpha70 (gecko code 171) and pushed it: handoff self-
   caf37927 ckpt 2685: Lab run 44252661300 (new2) READ: the app behaved right on every check (UC1 v
   e5fc78d7 ckpt 2684: Lab run 44252661300 (suite new2 = tb + lastrun_round, head d0e7d41d) DISPATC
@@ -25,5 +26,4 @@ alpha70 GATED locally (ship.sh rc=0: handoff self-test, unit suites, versionCode
   51f3e413 ckpt 2680: Owner message PV1 written into TASKS (new private tab flashed an old regular
   92b293d1 ckpt 2679: MT1 coded (mini panel Tabs button + tab tray, TabTrayModel, host wiring, 9 R
   bd1bb9e4 ckpt 2678: UC1 coded + tested: Copy button inside the address pill (Toolbar.copyButton)
-  133164bc ckpt 2677: TP1 coded + tested: Tab.url setter drops the old page's preview, ThumbStore 
 ```
