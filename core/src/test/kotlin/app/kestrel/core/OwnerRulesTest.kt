@@ -706,4 +706,16 @@ class OwnerRulesTest {
         val pt = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt")
         assertTrue("page lines come from PageTimes, which is told whether the tab is private (and then keeps nothing)", pt.contains("PageTimes.start(tab, url, tab.isPrivateTab)"))
     }
+    /** DM1 (owner: "the download manager pops up on browser restart or other times, the download manager shouldn't pop up by itself unless there is a new download"). */
+    @Test fun dm1TheDownloadsPanelOnlyComesUpForANewDownloadOrARealTap() {
+        val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
+        assertTrue("the open-Downloads flag of a notification is read through the one rule, never straight from the intent", !act.contains("getBooleanExtra(Notifier.EXTRA_OPEN_DOWNLOADS, false) == true") && act.contains("openDownloadsAsked(intent, savedInstanceState != null)") && act.contains("openDownloadsAsked(intent, false)"))
+        assertTrue("the flag is taken out of the intent once read (it stays on the task and Android plays it again after a restart)", act.contains("i.removeExtra(Notifier.EXTRA_OPEN_DOWNLOADS)") && act.contains("FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY"))
+        val pop = source("app/src/main/kotlin/app/kestrel/browser/ui/DownloadPopup.kt")
+        assertTrue("the small window waits until the last run's rows are read before it decides what is old news", pop.contains("if (!DownloadController.restored) return") && pop.contains("if (!tracker.began) tracker.begin("))
+        assertTrue("its memory is the process's, not the window's", pop.contains("DownloadController.mini") && !pop.contains("MiniTracker()"))
+        val ctl = source("app/src/main/kotlin/app/kestrel/browser/download/DownloadController.kt")
+        assertTrue("restored turns true after the interrupted downloads were carried on", ctl.indexOf("e.resumeInterrupted()") in 0 until ctl.indexOf("restored = true"))
+        assertTrue("only the person's Resume / Retry / Restart can bring an old row into the window", ctl.contains("fun resume(ctx: Context, id: Long) { mini.requested(id)") && ctl.contains("fun restart(ctx: Context, id: Long) { mini.requested(id)"))
+    }
 }
