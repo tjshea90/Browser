@@ -52,7 +52,7 @@
     function listItems() {
       var out = [];
       try {
-        var nodes = document.querySelectorAll('[data-episode],[data-ep],[data-episode-number],[class*="episode" i],[class*="-ep" i],[class*="ep-" i],[class*="eps" i],[id*="episode" i],[aria-current],option:checked');
+        var nodes = document.querySelectorAll('[data-episode],[data-ep],[data-episode-number],[class~="ep"],[class*="episode" i],[class*="-ep" i],[class*="ep-" i],[class*="eps" i],[id*="episode" i],[aria-current],option:checked');
         for (var i = 0; i < nodes.length && i < MAXNODES; i++) out.push(nodes[i]);
       } catch (e) { /* none */ }
       return out;
