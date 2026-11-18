@@ -4290,7 +4290,7 @@ _install_daily()
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "new"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -4305,7 +4305,7 @@ def main():
         a.profile = "tablet" if a.suite in ("daily", "yt") else "standard"
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
-        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm") else "all")
+        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "new") else "all")
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
@@ -4358,6 +4358,8 @@ def main():
             s.compat_round(a.minutes)
         if a.suite in ("ql", "vp"):
             s.ql_scene()                                     # (QL1: the Quality button from the page's own player list: YouTube-style player element on the real engine)
+        if a.suite == "new":
+            s.dm_scene(); s.ql_scene(); s.vs_scene()         # (one boot for the checks of this session: DM1 / DM2, QL1, VS1 / VP2; the lab runs one job at a time per branch)
         if a.suite == "dm":
             s.dm_scene()                                     # (DM1 / DM2: the download window and list stay away at a start; a new download brings the banner)
         if a.suite == "vs":
