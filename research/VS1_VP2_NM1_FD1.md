@@ -42,3 +42,10 @@ Now (core EpisodeNames, NameClues, MediaNames; geckoapp names.js, ShieldsBridge 
   - at its first place it still sits below the "Download started" banner while the banner shows.
 - Bug found by the new Robolectric test (DownloadPopupFloatTest, 8 tests green): the drag was judged by where the finger was at its FIRST MOVE, so a quick drag from the title bar (already far below the strip by then) was not picked up; now `downOnHeader` is taken at touch-down.
 - NOT proven on the tablet: the feel of the gestures on real hardware (slop, long press time), and no lab scene yet moves the window on the engine (the Robolectric test covers the gesture logic only).
+
+## Lab proof (2026-11-18, run 44236411726, suite new, Android 10 emulator with the real Firefox engine)
+
+- First lab run (44233990309) looked bad on the embed variants (msel0 'started') but the lab had the press-to-play rule OFF for the whole run (Diagnostics said: Videos start only when pressed (OFF)). So it proved nothing about the gate, either way. soak.py vs_scene now sets `vpress 1` for the embed (mse) variants, `vpress 0` for the finder variants, and reads the embed's states per variant (it used to read the whole log).
+- Second run, rule ON: mse = sourceopen, playing; msel (embed waits 7 s) = sourceopen, playing; msel0 (nobody pressed) = stuck, i.e. held, the rule is intact. Finder variants auto / click / nest / worker: stream listed, one pick saved a real file (404422 bytes).
+- Honest limit: there is no BEFORE-fix run with the rule ON, so the lab shows the fix lets a tapped server frame play and an unpressed one stay held, not that the old code was stuck in this exact lab page.
+- DM1 / DM2: 9 checks ok (banner only for a new download; cold start after front / background kill shows no banner, window or list; notification launch opens the list once, replay ignored).
