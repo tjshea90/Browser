@@ -122,12 +122,15 @@ class MediaList(private val max: Int = 48) {
      * of picture), or anything the person opened. A clip, a preview or an advertisement is NOT captured: the clip and advertisement rules keep working for them. @return how many were newly captured.
      */
     fun capture(): Int {
-        var n = 0
+        var n = 0; var liveFilm = false
         for (c in items) {
             if (c.captured || c.live || c.drm || !c.counts()) continue
             if (!(c.interest || filmEvidence(c))) continue
             c.captured = true; n++
+            if (!c.orphan) liveFilm = true
         }
+        // a live player now offers a film of its own: the kept one of the player that went away has done its job (what the owner opened stays)
+        if (liveFilm && items.any { it.orphan }) items.removeAll { it.orphan && !it.interest }
         if (n > 0) version++
         return n
     }
@@ -206,7 +209,6 @@ class MediaList(private val max: Int = 48) {
             return changed
         }
         items.add(0, c)
-        if (items.any { it.orphan } && (c.kind != MediaKind.FILE || c.length >= MIN_WITH_STREAM)) items.removeAll { it.orphan && !it.touched && !it.interest && it !== c }   // VS2: a live player offers a film of its own: the kept one of the player that went away has done its job
         pending.remove(c.key)?.let { applyTo(c, it.width, it.height, it.durationMs, it.label, it.role, it.played, it.element, it.areaPx) }
         while (items.size > max) removeLeastValuable()
         version++
