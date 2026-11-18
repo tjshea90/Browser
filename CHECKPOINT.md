@@ -1,13 +1,13 @@
-# CHECKPOINT 2648 — read me first, then TASKS.md
+# CHECKPOINT 2649 — read me first, then TASKS.md
 
-**Written:** 2026-11-18T01:27:33Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-587430ac-royssd` · **builds on:** `ffe0c069` (this checkpoint is the commit after it)
+**Written:** 2026-11-18T01:28:55Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-587430ac-royssd` · **builds on:** `92109d90` (this checkpoint is the commit after it)
 
 ## Just done
-CR1c CODED: app/diag/LastRun.kt (note of how the last run ended, written only on notable events: life resume/pause/stop, page loaded/error, mem trim, gecko onKill/onCrash/recover-*; read at next start by LastRun.begin in GeckoApp; ProcessLife.exitIfIdle marks exit; Health.log hooks it; Health.report prints LastRun.reportLines; CrashNote.noteTime + newestEngineReportAt added). LastRunTest 7 tests green, CrashNoteTest green, OwnerRulesTest.cr1TheLastRunNoteIsWiredIntoTheRealStartAndEnd green, :geckoapp:compileDebugKotlin green (installed platform android-37.0 with sdkmanager). research/CR1_YOUTUBE_CRASH.md written (facts, the three kinds of crash and what each leaves, code read, lab plan). Full JVM suite running in background (scratchpad/jvm-suite.log).
+CR1: waiting on two things. (1) lab run 44214894368 (yt suite, ends about 02:25Z). (2) full JVM suite in background (scratchpad jvm-suite.log, 'finished rc=0' at the end). Heartbeat: send_later trigger trig_014tWDqpP59iW4BtNv5mT9KD fires 02:24Z into this session.
 
 ## Do this next
-read lab run 44214894368 when green (jobs: list_workflow_jobs 44214894368; artifact emulator-lab-text; report.md section 'YouTube: leaving the app'); read scratchpad jvm-suite.log (finished rc=0?); then decide: if the lab shows a death, fix it; either way ship alpha69 (versionCode 170) with LastRun by the recipe in CLAUDE.md, and answer the owner in plain words with what to send if it happens again
+at 02:24Z (or when the jvm-suite notification arrives): read jvm-suite.log; read lab run 44214894368 (list_workflow_jobs, artifact emulator-lab-text, report.md section 'YouTube: leaving the app'); fill research/CR1_YOUTUBE_CRASH.md 'Lab result'; tick CR1a/b/c; then alpha69 by the CLAUDE.md recipe (versionCode 170, name 0.3.0-alpha69, tools/sync-ext-version.sh, docs/handoff/ALPHA69_RELEASE_NOTE.txt ASCII, bash ship.sh gecko, ONE dispatch app=gecko full_build=true, verify, tools/record-release.sh) and answer the owner in plain words incl. what to send (Diagnostics lines 'Last run', 'EARLIER CRASH', 'Engine crash reports')
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ read lab run 44214894368 when green (jobs: list_workflow_jobs 44214894368; artif
 
 ## Last ten checkpoints
 ```
+  92109d90 ckpt 2648: CR1c CODED: app/diag/LastRun.kt (note of how the last run ended, written onl
   a5cabd37 ckpt 2647: CR1: lab run DISPATCHED ONCE: android.yml run 44214894368 (run_number 223, a
   f346b9f1 ckpt 2646: CR1: added the lab suite 'yt' (tools/emu/soak.py yt_journey + yt_after + mem
   05bdbf31 ckpt 2645: CR1 written into TASKS.md in the owner's words (YouTube crash investigation)
@@ -25,8 +26,4 @@ read lab run 44214894368 when green (jobs: list_workflow_jobs 44214894368; artif
   d8340975 ckpt 2641: gated kestrel-g-v0.3.0-alpha67 (gecko code 168) and pushed it: handoff self-
   fd0ea0b5 ckpt 2640: Diagnostics line 'start oat' added (BrowserActivity.oatSizes: sizes of oat/<
   63fdb931 ckpt 2639: LAB7 CONFIRMATION lab run DISPATCHED ONCE: android.yml run 44137227924 (run_
-  ebd3854a ckpt 2638: LAB7 first lab run 44126148207 READ (research/LAB7_RESULTS.md next): (1) the
 ```
-
-(7 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
