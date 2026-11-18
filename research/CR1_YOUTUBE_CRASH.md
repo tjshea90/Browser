@@ -56,3 +56,16 @@ Tests: `LastRunTest` (7), `OwnerRulesTest.cr1TheLastRunNoteIsWiredIntoTheRealSta
 ## What to ask the owner (one thing)
 
 Open Menu > Diagnostics right after it happens (or now: the crash note is kept 7 days) and send the text. The lines that answer it: `EARLIER CRASH of this app`, `Engine crash reports on disk`, and (from the next release) `Last run ...`.
+
+## CR1f: doraby, alpha69 (owner message 2026-11-18 05:06Z)
+
+Owner: "I went to doraby and the app crashed" + Diagnostics taken 30 s after the next start.
+
+What the Diagnostics says (facts): Last run started 05:04:53, ended while on screen, last note 05:04:54 = `+1.307s life resume`, no crash note, no engine report, 1094 MB free at that note; the next run (05:05:22) restored the doraby tab, loaded doraby.com/ozark in 8.7 s, read the clue `show="Ozark" S1 E1` (NM1 works on the real markup), loaded the vidfast.vc frame and probed three text/plain XHR answers (404).
+
+What it cannot say, and why (my fault): the lazy flush of the note waited on the MAIN looper (`Io.main.postDelayed`). If the screen thread froze 1.3 s after the start, no later line (page loaded, mem trim, ...) could be written and the note would look exactly like this. A crash that left no report looks the same. With 1 GB free the memory killer is the least likely of the three.
+
+Changed (alpha70): own flush thread, the watchdog's STALL lines and stack are kept, start progress lines are kept, three abnormal runs are kept, the cause line names a freeze. The lab scene lr kills the app during a deliberate 25 s freeze and reads the next Diagnostics.
+
+Still unknown: whether alpha69's own code (names.js, the gate inheritance, the floating window layout) can block the screen thread on this page. No evidence yet; the next occurrence will name the stack.
+
