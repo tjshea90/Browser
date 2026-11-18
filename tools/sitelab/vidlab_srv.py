@@ -50,7 +50,7 @@ def build():
     mse = os.path.join(GEN, "mse.mp4")
     try:
         if not os.path.exists(mse):
-            subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", os.path.join(GEN, "v360_0.ts"), "-c", "copy", "-movflags", "frag_keyframe+empty_moov+default_base_moof", "-f", "mp4", mse], check=True)
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", os.path.join(GEN, "v360_0.ts"), "-c", "copy", "-bsf:a", "aac_adtstoasc", "-movflags", "frag_keyframe+empty_moov+default_base_moof", "-f", "mp4", mse], check=True)
         FILES["/mse/film.mp4"] = ("video/mp4", open(mse, "rb").read())
     except Exception as e:
         print("no MSE film:", e, flush=True)
