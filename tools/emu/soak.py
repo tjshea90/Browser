@@ -3839,6 +3839,15 @@ class Soak:
             for e in vs:
                 L.append("- %s: %s (the app saw playback: %s, videos the finder counted: %s)%s" % (e["name"], e["status"], e.get("app_saw_playing"), e.get("app_found_videos"), " - " + e["note"] if e.get("note") else ""))
             L.append("")
+        yl = [e for e in ev if e.get("kind") == "yt-leave"]
+        if yl:
+            L.append("## YouTube: leaving the app with a film page behind it and coming back (CR1)")
+            L.append("")
+            L.append("| step | RAM pressure | result | memory trims seen | engine page process gone | UI stalls |")
+            L.append("| :- | :- | :- | :- | :- | -: |")
+            for e in yl:
+                L.append("| %s | %s | %s | %s | %s | %s |" % (e["name"], "yes" if e.get("pressure") else "no", e["status"], "; ".join(e.get("trims") or []) or "-", "; ".join(e.get("engine_gone") or []) or "-", e.get("ui_stalls", 0)))
+            L.append("")
         if dls:
             L.append("## Downloads")
             L.append("")
@@ -4033,10 +4042,10 @@ def main():
     ap.add_argument("--selftest", action="store_true")
     a = ap.parse_args()
     if a.profile == "auto":
-        a.profile = "tablet" if a.suite == "daily" else "standard"
+        a.profile = "tablet" if a.suite in ("daily", "yt") else "standard"
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
-        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily") else "all")
+        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt") else "all")
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
