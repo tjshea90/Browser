@@ -198,7 +198,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
         tab.loading = true
         tab.progress = maxOf(tab.progress, 5)
         tab.resetPageCounters()
-        a.pageStarted(tab) // a new page: what the old one played is no longer on offer
+        a.pageStarted(tab, url) // a new page: what the old one played is no longer on offer (VS2: unless it is the same page again)
         tab.dialogCount = 0
         tab.slowScriptAt = 0L
         tab.dialogsSuppressed = false

@@ -80,7 +80,19 @@ class VideoFlow(private val a: BrowserActivity) {
         if (!t.isPrivateTab && (was?.toString() ?: "") != (t.nameClues?.toString() ?: "")) Health.log("media", "name-clues", t.nameClues?.toString() ?: "none")
     }
 
-    fun clearTab(tab: Tab) { tab.nameClues = null; tab.gecko.pictureW = 0; tab.gecko.pictureH = 0; tab.gecko.picturePlayed = false; val keys = tab.media.keys(); tab.media.clear(); forget(keys); looks.remove(tab.id); val p = tab.id.toString() + "|"; maybeAsked.removeAll { it.startsWith(p) }; if (lastRefused?.tabId == tab.id) lastRefused = null }
+    /**
+     * The tab starts a page. VS2: the same page again (a reload, another query, a server switch that reloads it) keeps what was captured; a different page forgets everything, as it always did. [newUrl] null = forget all.
+     * Health says what was kept and what went, so a report shows whether a row disappeared because the PAGE changed.
+     */
+    fun clearTab(tab: Tab, newUrl: String? = null) {
+        tab.nameClues = null; tab.gecko.pictureW = 0; tab.gecko.pictureH = 0; tab.gecko.picturePlayed = false
+        val before = tab.media.keys()
+        val dropped = if (newUrl != null) tab.media.onNewPage(newUrl) else { tab.media.clear(); before.size }
+        val kept = tab.media.keys().toSet()
+        forget(before.filter { it !in kept })
+        looks.remove(tab.id); val p = tab.id.toString() + "|"; maybeAsked.removeAll { it.startsWith(p) }; if (lastRefused?.tabId == tab.id) lastRefused = null
+        if (before.isNotEmpty() && !tab.isPrivateTab) Health.log("media", "page-clear", "kept=${kept.size} dropped=$dropped")
+    }
 
     private fun forget(keys: List<String>) {
         for (k in keys) { lookedKeys.remove(k); streamInfo.remove(k); probed.remove(k); sized.remove(k); masterRungs.remove(k); masterAsked.remove(k); childUrls.remove(k)?.forEach { children.remove(it) } }

@@ -1266,7 +1266,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     /** A new page began in [tab]: what the old page offered to save is no longer on offer (TabDelegates.onPageStart). */
-    internal fun pageStarted(tab: Tab) { if (::inline.isInitialized && inline.tabOrNull === tab) inline.stop("the page changed"); video.clearTab(tab); tab.scrollY = 0; tab.gecko.vpOk = false } // (a new page has not told its size yet: the turn wait needs the proof again)
+    internal fun pageStarted(tab: Tab, url: String? = null) { if (::inline.isInitialized && inline.tabOrNull === tab) inline.stop("the page changed"); video.clearTab(tab, url); tab.scrollY = 0; tab.gecko.vpOk = false } // (a new page has not told its size yet: the turn wait needs the proof again)
 
     internal fun newTabAndShow(privateTab: Boolean = false): Tab { val t = newTabInternal(null, privateTab); show(t); focusUrlBar(); return t }
 
@@ -1889,7 +1889,7 @@ open class BrowserActivity : Activity(), DockListener {
         tab.topHost = host
         tab.shields = Shields.effective(prefs, host)
         tab.resetPageCounters()
-        video.clearTab(tab)
+        video.clearTab(tab, url)
         val s = ensureSession(tab, cover = false) // the address typed now replaces whatever the tab held: no preview of the old page
         syncEngineProtection(tab)
         if (current === tab) attachContent(tab)
