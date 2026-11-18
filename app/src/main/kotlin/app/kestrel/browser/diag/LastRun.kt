@@ -107,6 +107,7 @@ object LastRun {
     }
 
     private fun flush(now: Long = System.currentTimeMillis()) {
+        val avail = try { Health.memAvailableMb() } catch (e: Exception) { -1 }   // read before the lock is taken: it opens /proc/meminfo
         val text: String
         val d: File
         synchronized(lock) {
@@ -115,7 +116,7 @@ object LastRun {
             val sb = StringBuilder(2048)
             sb.append(HEADER).append('\n').append("pid=").append(pid).append('\n').append("build=").append(build).append('\n')
                 .append("started=").append(startedAt).append('\n').append("state=").append(state).append('\n').append("stateAt=").append(stateAt).append('\n').append("saved=").append(now).append('\n')
-            sb.append("availMb=").append(try { Health.memAvailableMb() } catch (e: Exception) { -1 }).append('\n')
+            sb.append("availMb=").append(avail).append('\n')
             for (e in events) sb.append("ev=").append(e).append('\n')
             text = sb.toString()
         }
@@ -174,7 +175,7 @@ object LastRun {
         synchronized(lock) { prev = previous; prevAbnormal = previousAbnormal }
         val keptFile = File(ctx.filesDir, ENDED)
         val kept = try { if (keptFile.isFile && now - keptFile.lastModified() <= KEEP_DAYS * 86_400_000L) keptFile.readText() else null } catch (e: Exception) { null }
-        if (prev != null && prevAbnormal) { out.addAll(read(prev).lines.map { if (it.startsWith("Last run")) it else it }) }
+        if (prev != null && prevAbnormal) out.addAll(read(prev).lines)
         else {
             if (prev != null) out.add(read(prev).lines.first())
             if (kept != null) { out.add("An EARLIER run (before the one above) did not end quietly - kept $KEEP_DAYS days:"); out.addAll(read(kept).lines.map { "  $it" }) }

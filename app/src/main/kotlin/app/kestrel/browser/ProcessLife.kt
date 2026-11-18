@@ -37,6 +37,7 @@ object ProcessLife {
     private fun exitIfIdle() {
         if (uiAlive) return
         if (DownloadController.needsService() || UpdateManager.busy()) return
+        app.kestrel.browser.diag.LastRun.markExit() // CR1: the next start must know this end was on purpose
         endSiblings()
         Process.killProcess(Process.myPid())
     }
