@@ -350,7 +350,7 @@
         try {
           if (on && isMediaEl(this)) {
             var r = rec(this);
-            if (!r.open) { r.preload = String(v); r.hasPreload = true; track(this); return s.call(this, 'none'); }
+            if (!r.open) { r.preload = String(v); r.hasPreload = true; track(this); if (r.open) { r.hasPreload = false; return s.call(this, v); } return s.call(this, 'none'); }   // (VP2: track() may open it)
           }
         } catch (e) { /* the engine decides */ }
         return s.call(this, v);
@@ -363,7 +363,7 @@
         try {
           if (on && isMediaEl(this)) {
             var r = rec(this);
-            if (!r.open) { r.autoplay = !!v; r.hasAutoplay = true; track(this); return s.call(this, false); }
+            if (!r.open) { r.autoplay = !!v; r.hasAutoplay = true; track(this); if (r.open) { r.hasAutoplay = false; return s.call(this, v); } return s.call(this, false); }
           }
         } catch (e) { /* the engine decides */ }
         return s.call(this, v);
@@ -381,9 +381,10 @@
           if (!r.open) {
             var n = String(name).toLowerCase();
             if (!r.adopted && (n === 'src' || n === 'autoplay')) adopt(this);
+            if (r.open) return orig.apply(this, arguments);                                          // VP2: adopt() -> track() may have opened it (a frame the person's tap started)
             if (n === 'src' && isBlob(value)) { r.src = String(value); r.hasSrc = true; N.deferred++; track(this); touch(); return; }
-            if (n === 'preload') { r.preload = String(value); r.hasPreload = true; track(this); return orig.call(this, 'preload', 'none'); }
-            if (n === 'autoplay') { r.autoplay = true; r.hasAutoplay = true; track(this); return; }
+            if (n === 'preload') { r.preload = String(value); r.hasPreload = true; track(this); if (r.open) { r.hasPreload = false; return orig.apply(this, arguments); } return orig.call(this, 'preload', 'none'); }
+            if (n === 'autoplay') { r.autoplay = true; r.hasAutoplay = true; track(this); if (r.open) { r.hasAutoplay = false; return orig.apply(this, arguments); } return; }
           }
         }
       } catch (e) { /* the engine decides */ }
