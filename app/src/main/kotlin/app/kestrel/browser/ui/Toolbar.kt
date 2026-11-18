@@ -177,7 +177,7 @@ class Toolbar(ctx: Context, private val pal: Pal, private val l: ToolbarListener
     /** The address to copy: what is in the bar while it is pressed (the whole address when nobody changed it, or what was typed or pasted), else the page's own address. Never the shortened text shown when the bar is at rest. */
     internal fun addressToCopy(): String {
         val typed = urlField.text?.toString()?.trim() ?: ""
-        return if (urlField.hasFocus() && typed.isNotEmpty()) typed else boundUrl
+        return if (urlField.hasFocus()) typed else boundUrl                   // pressed: exactly what the bar holds (nothing in it = nothing to copy)
     }
 
     private fun updateCopyButton() {
