@@ -51,6 +51,9 @@ object MediaNames {
      * The name a plain file download is saved under. Only video files change: one named like a release ("Ozark.S02E05.1080p.WEB-GRP.mkv") becomes "Ozark S02E05.mkv"; one whose own name says nothing
      * ("video.mp4", "get_file") on a page that names the episode gets the episode's name. Everything else keeps the name the server gave.
      */
+    /** The frame addresses the extension sent (`fa`: one per line, nearest first): http(s) only, each at most 400 characters, at most four. */
+    fun frameChainOf(raw: String?): List<String> = (raw ?: "").split('\n').map { it.trim() }.filter { (it.startsWith("http://", true) || it.startsWith("https://", true)) && it.length <= 400 }.take(4)
+
     /** The addresses of the player frames a candidate came through, nearest first: the document that asked for it, then the frames around it (never the top page). */
     private fun framesOf(c: MediaCandidate): List<String> = (listOf(c.frame) + c.frameChain).filter { it.isNotEmpty() && it != c.page }.distinct()
 

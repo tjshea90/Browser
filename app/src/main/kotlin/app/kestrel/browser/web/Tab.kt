@@ -69,6 +69,8 @@ class Tab(@JvmField val id: Long) {
     var dialogsSuppressed = false
     /** Videos, audio files and stream playlists this page has loaded (Gecko build: filled by the Shields extension's sniffer); cleared when a new page starts. UI thread only. */
     val media = MediaList()
+    /** NM1: what this page says about WHICH video is on (the episode its list marks, the show's name): names.js tells it, a new page forgets it. UI thread only. */
+    var nameClues: app.kestrel.core.media.NameClues? = null
 
     val isNewTab: Boolean get() = url.isEmpty() && pendingLoad == null
     val displayTitle: String get() = if (title.isNotBlank()) title else if (url.isEmpty()) "New tab" else url
