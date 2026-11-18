@@ -908,7 +908,10 @@ open class BrowserActivity : Activity(), DockListener {
         if (i == null) return false
         val extra = i.getBooleanExtra(Notifier.EXTRA_OPEN_DOWNLOADS, false)
         if (extra) i.removeExtra(Notifier.EXTRA_OPEN_DOWNLOADS)
-        return app.kestrel.core.download.ManagerIntent.shouldOpen(extra, restoredState, (i.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0)
+        val fromHistory = (i.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
+        val open = app.kestrel.core.download.ManagerIntent.shouldOpen(extra, restoredState, fromHistory)
+        if (extra) Health.log("downloads", if (open) "open-by-tap" else "open-ignored", "restored=$restoredState history=$fromHistory")   // DM1: a replay after a restart is told, not acted on
+        return open
     }
 
     override fun onNewIntent(intent: Intent) {

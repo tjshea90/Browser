@@ -131,6 +131,7 @@ class DownloadPopup(private val ctx: Context, private val pal: Pal, private val 
         val u = tracker.update(DownloadController.views(), now)
         val shown = ProcessLife.uiVisible && !suppressed
         if (u.announce.isNotEmpty()) {
+            app.kestrel.browser.diag.Health.log("downloads", "banner", "new=${u.announce.size} shown=$shown")   // DM1: the evidence for "it popped up by itself" (no names)
             closedByUser = false // a new download brings the window back
             if (shown) {
                 bannerName.text = u.announce.last().name + if (u.announce.size > 1) "  (+${u.announce.size - 1} more)" else ""
@@ -153,6 +154,7 @@ class DownloadPopup(private val ctx: Context, private val pal: Pal, private val 
         }
         for (v in visible) rows[v.id]?.bind(v)
         count.text = if (rowsNow.size > 1) "·  ${rowsNow.size}" else ""
+        if (window.visibility != View.VISIBLE) app.kestrel.browser.diag.Health.log("downloads", "window", "rows=${rowsNow.size} states=" + rowsNow.joinToString(",") { it.state.name })   // DM1
         window.visibility = View.VISIBLE
         refreshContainer()
         // a finished or stopped row leaves by itself a few seconds later: look again then, even if the engines stay quiet

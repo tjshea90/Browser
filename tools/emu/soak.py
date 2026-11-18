@@ -3337,6 +3337,38 @@ class Soak:
         self.dump_diag("smoke")
         return ev
 
+    def lastrun_round(self):
+        """CR1c on the real engine: the app is ended the way Android ends it for memory (kill -9 of the main process, nothing runs in it any more) once while it is in front and once while it is in the
+        background, and the Diagnostics of the NEXT start must say which one it was (core: app/diag/LastRun.kt). Also reads the file the app keeps (files/last-run.txt) after the first kill."""
+        pkg = self.a.pkg
+        rows = []
+        for tag, in_front in (("front", True), ("background", False)):
+            self.load_page("lab-text", "lab:/page/text", 1, 1, timeout=60)
+            time.sleep(4)                                              # the note is written on the IO thread a moment after the page line
+            if not in_front:
+                self.ph.key("KEYCODE_HOME"); time.sleep(3)
+            note = self.adb.sh("run-as %s cat files/last-run.txt" % pkg, timeout=30)
+            pids = self.ph.pids()
+            killed = False
+            if pids:
+                self.adb.sh("kill -9 %d" % pids[0], timeout=20)
+                time.sleep(2)
+                killed = pids[0] not in self.ph.pids()
+            if not killed:
+                self.adb.sh("am force-stop %s" % pkg, timeout=30); time.sleep(2)
+            self.start_app()                                           # cold start; waits for the engine
+            txt = self.dump_diag("lastrun-" + tag)
+            want = "ended WHILE ON SCREEN" if in_front else "in the background when it ended"
+            ok = want in txt
+            nocrash = ("NO crash note" in txt) if in_front else True
+            rows.append((tag, ok and nocrash, "state line in the file: %s" % ([l for l in note.splitlines() if l.startswith("state=")] or ["none"])[0]))
+            if not ok:
+                self.issue("high", "lastrun", "after the app was killed while %s the next Diagnostics did not say '%s'" % (tag, want), shot=False)
+            elif not nocrash:
+                self.issue("medium", "lastrun", "after a kill -9 while in front the Diagnostics found a crash note or engine report it should not have", shot=False)
+        self.main_pid = (self.ph.pids() or [None])[0]
+        self.record({"kind": "lastrun", "name": "last-run-note", "status": "ok" if all(r[1] for r in rows) else "failed", "results": [{"case": r[0], "ok": r[1], "file": r[2]} for r in rows]})
+
     def dump_diag(self, tag):
         self.ph.debug("dump")
         time.sleep(7)   # the app reads the engine's preferences first (2.5 s), then writes the text
@@ -3839,6 +3871,14 @@ class Soak:
             for e in vs:
                 L.append("- %s: %s (the app saw playback: %s, videos the finder counted: %s)%s" % (e["name"], e["status"], e.get("app_saw_playing"), e.get("app_found_videos"), " - " + e["note"] if e.get("note") else ""))
             L.append("")
+        lr = [e for e in ev if e.get("kind") == "lastrun"]
+        if lr:
+            L.append("## How the last run ended (CR1c): the app killed from outside, the next Diagnostics")
+            L.append("")
+            for e in lr:
+                for r in e.get("results", []):
+                    L.append("- killed while %s: %s (%s)" % (r["case"], "the Diagnostics said so" if r["ok"] else "the Diagnostics did NOT say so", r["file"]))
+            L.append("")
         yl = [e for e in ev if e.get("kind") == "yt-leave"]
         if yl:
             L.append("## YouTube: leaving the app with a film page behind it and coming back (CR1)")
@@ -4030,7 +4070,7 @@ _install_daily()
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -4045,7 +4085,7 @@ def main():
         a.profile = "tablet" if a.suite in ("daily", "yt") else "standard"
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
-        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt") else "all")
+        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr") else "all")
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
@@ -4096,6 +4136,8 @@ def main():
             s.audio_round()      # (the sound check rides along: its verdict is the page's own clock now, run 43745675957 showed the old one was wrong)
         if a.suite == "compat":
             s.compat_round(a.minutes)
+        if a.suite == "lr":
+            s.lastrun_round()                                # (CR1c: the app is killed from outside in front and in the background; the next Diagnostics must say how the last run ended)
         if a.suite == "yt":
             s.yt_journey(a.minutes)                          # (CR1, owner message 2026-11-18: the app crashed on YouTube: a YouTube-only journey with leave / return and RAM pressure)
         if a.suite == "daily":
