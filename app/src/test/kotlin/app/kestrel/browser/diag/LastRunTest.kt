@@ -25,6 +25,10 @@ class LastRunTest {
 
     @Before fun clean() { LastRun.resetForTest(); ctx.filesDir.deleteRecursively(); ctx.filesDir.mkdirs() }
 
+    /** The note is a process-wide singleton: leave it switched off so no later test in the same JVM writes files into a folder that is gone (and none shares the IO lane with it). */
+    @org.junit.After fun off() { ioDoneQuiet(); LastRun.resetForTest() }
+    private fun ioDoneQuiet() { try { val l = CountDownLatch(1); Io.exec { l.countDown() }; l.await(5, TimeUnit.SECONDS) } catch (e: Exception) { /* ignore */ } }
+
     /** The IO lane is one thread in order: when this latch opens, every earlier write is on disk. */
     private fun ioDone() { val l = CountDownLatch(1); Io.exec { l.countDown() }; assertTrue("the IO lane answers", l.await(10, TimeUnit.SECONDS)) }
 
