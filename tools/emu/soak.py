@@ -1381,6 +1381,27 @@ class Soak:
                     r["status"] = "not-found"
                     self.issue("high", "finding-video", "VS1 %s: the finder offered NOTHING (%s)" % (mode, r["finder_said"]))
                     self.record(r); continue
+                if mode == "keep":                                      # VS2: only the LIST is under test (the stream has film evidence: its playlist claims 3 minutes): decline the download this pick asks for
+                    if self.wait_dialog(m1, 25):
+                        self.answer(False)
+                    time.sleep(2)
+                    self.ph.tap(w // 10, 26 + 34 + 60 + 8); time.sleep(10)        # the page's Switch server button (left edge: the download window sits at the top RIGHT); the player frame goes to another document
+                    m2 = self.log.size(); self.ph.debug("videodl"); time.sleep(5)
+                    if self.wait_dialog(m2, 12):
+                        self.answer(False)
+                    again = health_events(self.log.since(m2), "lab", "videodl")
+                    gl = health_events(self.log.since(m1), "media", "frame-gone")
+                    r["after_switch"] = again[-1]["rest"] if again else "no answer"
+                    r["frame_gone"] = [e["rest"][:160] for e in gl][-2:]
+                    if not gl:
+                        r["status"] = "unproven"
+                        self.issue("medium", "finding-video", "VS2 keep: no 'media frame-gone' line: the switch did not reach the app, so this run proves nothing about capture", shot=True)
+                    elif not again or "pick=none" in again[-1]["rest"]:
+                        r["status"] = "vanished"
+                        self.issue("high", "finding-video", "VS2 keep: the stream the finder had found DISAPPEARED when the player frame went to another document (%s; frame-gone: %s)" % (r["after_switch"], r["frame_gone"]), shot=True)
+                    else:
+                        r["status"] = "ok"
+                    self.record(r); self.ph.debug("closetabs"); time.sleep(3); continue
                 tapped = self.wait_dialog(m1, 40)                       # (a stream over plain http asks first)
                 if tapped:
                     self.answer(True)
@@ -1402,21 +1423,6 @@ class Soak:
                     self.issue("high", "download-video", "VS1 %s: the finder found it (%s) but the download produced no file (%s)" % (mode, r["finder_said"], r["stream_lines"]))
                 else:
                     r.update(status="ok", file=got[0], size=got[1])
-                    if mode == "keep":                                  # VS2: the player's frame goes to another document AFTER the find: the row must stay (captured)
-                        self.ph.tap(w // 10, 26 + 34 + 60 + 8); time.sleep(8)       # (the left edge: the download window sits at the top RIGHT of the page and eats a tap in the middle; lab run 44245067663)
-                        m2 = self.log.size(); self.ph.debug("videodl"); time.sleep(5)
-                        if self.wait_dialog(m2, 12):                                 # (this second pick asks "Download this video?" again: answer no, or the dialog covers the next variant)
-                            self.answer(False)
-                        again = health_events(self.log.since(m2), "lab", "videodl")
-                        gl = health_events(self.log.since(m1), "media", "frame-gone")
-                        r["after_switch"] = again[-1]["rest"] if again else "no answer"
-                        r["frame_gone"] = [e["rest"][:140] for e in gl][-2:]
-                        if not again or "pick=none" in again[-1]["rest"]:
-                            r["status"] = "vanished"
-                            self.issue("high", "finding-video", "VS2 keep: the stream the finder had found DISAPPEARED when the player frame went to another document (%s; frame-gone: %s)" % (r["after_switch"], r["frame_gone"]), shot=True)
-                        elif not gl:
-                            r["note"] = "no 'media frame-gone' line: the switch did not reach the app, so this run proves nothing about capture"
-                            self.issue("medium", "finding-video", "VS2 keep: " + r["note"], shot=False)
                 self.record(r)
                 self.ph.debug("closetabs"); time.sleep(3)
         finally:

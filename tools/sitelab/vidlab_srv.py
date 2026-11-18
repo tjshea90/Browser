@@ -36,6 +36,11 @@ def build():
         FILES["/hls/abc/v%s.txt" % q] = ("text/plain", pl.encode())
     FILES["/hls/abc/playlist.txt"] = ("text/plain", master.encode())
     FILES["/hls/abc/key"] = ("application/octet-stream", KEY)
+    # VS2: the same three parts under another prefix whose playlist CLAIMS 60 s a part (3 minutes): a stream with film evidence (read, 2 minutes or more), which the capture rule keeps
+    for i in range(3): FILES["/hls/long/v360_%d.jpg" % i] = FILES["/hls/abc/v360_%d.jpg" % i]
+    FILES["/hls/long/key"] = FILES["/hls/abc/key"]
+    FILES["/hls/long/v360.txt"] = ("text/plain", FILES["/hls/abc/v360.txt"][1].replace(b"#EXTINF:4.000000", b"#EXTINF:60.000000").replace(b"TARGETDURATION:4", b"TARGETDURATION:60"))
+    FILES["/hls/long/playlist.txt"] = ("text/plain", ("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,CODECS=\"avc1.42c01e,mp4a.40.2\"\nv360.txt\n").encode())
     # server 2: the same parts under another prefix, but its master lists only the 240p quality
     for i in range(3): FILES["/hls/def/v240_%d.jpg" % i] = FILES["/hls/abc/v240_%d.jpg" % i]
     FILES["/hls/def/v240.txt"] = FILES["/hls/abc/v240.txt"]
@@ -217,7 +222,7 @@ def page_keep():
     return (b"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Lab movie (keep)</title>
 <body style="margin:0;background:#111;color:#eee;font:16px sans-serif"><h3 style="margin:8px;height:34px">Lab movie (keep)</h3>
 <button id=sw style="display:block;width:100%%;height:120px;font-size:30px;background:#613;color:#fff;border:0">Switch server</button>
-<iframe id=iframe src="%s/embed/auto?id=7" style="display:block;width:100%%;height:300px;border:0"></iframe>
+<iframe id=iframe src="%s/embed/autolong?id=7" style="display:block;width:100%%;height:300px;border:0"></iframe>
 <script>document.getElementById('sw').onclick = function () { document.getElementById('iframe').src = '%s/embed/blank?id=7'; };</script></body>""" % (PLAYER.encode(), PLAYER.encode()))
 
 def page_watch3(mode):
@@ -246,6 +251,7 @@ class H(http.server.BaseHTTPRequestHandler):
             return self.send(200, "text/html; charset=utf-8", page_mse("msel" if v.startswith("msel") else "mse", pressed=(v != "msel0")))
         if port == 8003 and path in ("/embed/mse", "/embed/msel"): return self.send(200, "text/html; charset=utf-8", player_mse(7000 if path.endswith("msel") else 0))
         if port == 8000 and path == "/watch3" and "v=keep" in self.path: return self.send(200, "text/html; charset=utf-8", page_keep())
+        if port == 8003 and path == "/embed/autolong": return self.send(200, "text/html; charset=utf-8", player_mode("auto").replace(b"/hls/abc/", b"/hls/long/"))
         if port == 8003 and path == "/embed/blank": return self.send(200, "text/html; charset=utf-8", b"<!doctype html><title>another server</title><body style='background:#222;color:#9f9'>another server: nothing playing yet")
         if port == 8000 and path == "/watch3": return self.send(200, "text/html; charset=utf-8", page_watch3((parse_qs(self.path.partition("?")[2]).get("v") or ["auto"])[0]))
         if port == 8003 and path in ("/embed/auto", "/embed/click", "/embed/nest", "/embed/worker"): return self.send(200, "text/html; charset=utf-8", player_mode(path.rsplit("/", 1)[1]))
