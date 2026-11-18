@@ -254,6 +254,7 @@ class MediaList(private val max: Int = 48) {
         if (heights.isNotEmpty()) c.heights = heights
         for ((e, b) in blobs) matchBlob(e, b)          // RX3-V4: a player that was already waiting for a playlist of its length
         version++
+        capture()                                       // VS2: the look is the evidence that this is (or is not) a film
         return true
     }
 

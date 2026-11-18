@@ -388,7 +388,7 @@ class MediaListFramesTest {
         assertTrue("nothing is removed", l.dropFrames(listOf("https://player-one.test/embed")).isEmpty())
         assertEquals(1, l.usableCount())
         assertTrue(l.find("https://cdn.test/one.m3u8")!!.orphan)
-        l.add(hls("https://cdn.test/page.m3u8"))                                       // the page's own stream arrives too
+        l.add(hls("https://cdn.test/page.m3u8"))                                       // the page's own stream arrives too, nobody has read it yet: no film evidence, the kept one stays
         assertEquals("the live one first, the kept one last", listOf("https://cdn.test/page.m3u8", "https://cdn.test/one.m3u8"), l.usable().map { it.url })
     }
 
@@ -399,7 +399,9 @@ class MediaListFramesTest {
         l.add(MediaCandidate("https://ads.test/pre.mp4", MediaKind.FILE, "video/mp4", 600_000, "https://site.test/watch", "https://player-two.test/e"))
         assertNotNull("a small clip does not replace it", l.find("https://cdn.test/one.m3u8"))
         l.add(hls("https://cdn.test/two.m3u8", "https://player-two.test/e"))
-        assertNull("server two's film replaces the kept one", l.find("https://cdn.test/one.m3u8"))
+        assertNotNull("a stream nobody has read is not yet a film: the kept one stays", l.find("https://cdn.test/one.m3u8"))
+        l.applyStream("https://cdn.test/two.m3u8", live = false, drm = false, durationMs = 2_700_000, adMs = 0, breaks = 0)
+        assertNull("server two's film (read: 45 min) replaces the kept one", l.find("https://cdn.test/one.m3u8"))
         assertNotNull(l.find("https://cdn.test/two.m3u8"))
     }
 
@@ -412,8 +414,8 @@ class MediaListFramesTest {
         assertEquals(1, l.size)
         // what the owner touched is never replaced
         l.dropFrames(listOf("https://player-one-again.test/embed"))
-        l.touch("https://cdn.test/one.m3u8")
-        l.add(hls("https://cdn.test/two.m3u8", "https://player-two.test/e"))
+        l.touch("https://cdn.test/one.m3u8"); l.find("https://cdn.test/one.m3u8")!!.interest = true
+        film(l, "https://cdn.test/two.m3u8", "https://player-two.test/e")
         assertNotNull(l.find("https://cdn.test/one.m3u8"))
     }
 
@@ -541,6 +543,7 @@ class MediaListFramesTest {
         l.dropFrames(listOf("https://player-one.test/embed"))
         assertEquals("VS2: still counted after the frame went away", 1, l.usableCount())
         l.add(hls("https://cdn.test/two.m3u8", "https://player-two.test/e"))
+        l.applyStream("https://cdn.test/two.m3u8", live = false, drm = false, durationMs = 2_700_000, adMs = 0, breaks = 0)
         assertEquals(1, l.usableCount()); assertNull(l.find("https://cdn.test/one.m3u8"))
     }
 }
