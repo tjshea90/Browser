@@ -457,6 +457,21 @@ test('sniffer: a script-fetched response that says nothing about being media is 
   assert.equal(h.of('media').length, 0, 'nothing is claimed to be media before the bytes are read');
 });
 
+test('VS1e: a "maybe" carries the request method so the app does not ask an API POST again as a GET', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  h.listeners.sendHeaders(sent('p1', 'https://player.test/', 'https://player.test'));
+  const r = xhr('p1', 'https://cdn.example/api/stream', 'text/plain', 900); r.method = 'POST';
+  h.listeners.headers(r);
+  const g = xhr('p2', 'https://cdn.example/hls/abc/playlist.txt', 'text/plain', 900); g.method = 'GET';
+  h.listeners.headers(g);
+  const n = xhr('p3', 'https://cdn.example/hls/abc/other', 'text/plain', 900); n.method = 'x<y>"z';
+  h.listeners.headers(n);
+  await tick(10);
+  const m = h.of('maybe');
+  assert.equal(m[0].mt, 'POST'); assert.equal(m[1].mt, 'GET'); assert.equal(m[2].mt, 'xyz', 'only letters, at most 8: ' + JSON.stringify(m[2].mt));
+});
+
 test('sniffer: a "maybe" is rare: not for pages, data, scripts, fonts, tiny or huge replies, <img>, and at most twelve per page', async () => {
   const h = harness(standardApp());
   h.mainFrame(PAGE);
