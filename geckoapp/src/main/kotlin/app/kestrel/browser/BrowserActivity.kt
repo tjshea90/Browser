@@ -101,6 +101,7 @@ import app.kestrel.browser.ui.BackPictures
 import app.kestrel.core.url.Nav
 import app.kestrel.core.url.Omnibox
 import app.kestrel.core.media.MediaNames
+import app.kestrel.core.ui.CurtainRule
 import app.kestrel.core.ui.ThumbRule
 import app.kestrel.core.url.UrlParts
 import app.kestrel.browser.web.ShieldsBridge
@@ -1069,6 +1070,8 @@ open class BrowserActivity : Activity(), DockListener {
         content.addView(geckoView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         restoreOverlay = RestoreOverlay(this, pal)
         content.addView(restoreOverlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) // above the page, below Home / error screens
+        curtain = View(this).apply { setBackgroundColor(pal.windowBg); visibility = View.GONE; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
+        content.addView(curtain, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) // PV1: above the page view, below the restore overlay, Home and the error screens
         pullChip = PullChip(this, pal)
         content.addView(pullChip, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         inline = app.kestrel.browser.web.InlineHost(this, geckoView)   // ANS55f: above the page, below Home / error screens, the mini panel and every sheet (so they cover it)
@@ -1324,6 +1327,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun show(tab: Tab) {
         if (fullscreenOn && fullscreenTab !== tab) endFullScreenOf(null, "another tab came to the front")
         val prev = current
+        if (curtainTab != null && curtainTab !== tab) curtainDown("other-tab")
         if (prev != null && prev !== tab) prev.session?.setActive(false) // HM1 (owner message 41): a tab that was left on the Home screen comes back as the Home screen (its page stays alive underneath; Back returns to it); only a new address, Back or the Home screen's own search shows the page again
         current = tab
         if (restoringTab != null && restoringTab !== tab) hideRestoring("other-tab") // another tab came to the front: the overlay belonged to the one that died
@@ -1390,7 +1394,11 @@ open class BrowserActivity : Activity(), DockListener {
         if (::inline.isInitialized && inline.active && (inline.tabOrNull !== tab || homeShown(tab) || tab.error != null)) inline.stop("another page is in front")   // ANS55f
         if (!tab.isNewTab && !(tab.showHome && tab.session == null)) { // AQ1: a tab restored on Home has no engine session yet and gets none until Back: nothing loads behind the Home screen at start
             val s = ensureSession(tab)
-            if (geckoView.session !== s) { geckoView.releaseSession(); geckoView.setSession(s) }
+            if (geckoView.session !== s) {
+                val prevPrivate = geckoView.session?.let { ps -> tabs.firstOrNull { it.session === ps }?.isPrivateTab }   // PV1: whose last frame is still on the page view
+                geckoView.releaseSession(); geckoView.setSession(s)
+                CurtainRule.needed(tab.gecko.painted, prevPrivate, tab.isPrivateTab)?.let { curtainUp(tab, it) }
+            }
         }
         val homeNow = homeShown(tab)
         if (homeNow) { if (home.visibility != View.VISIBLE) { home.visibility = View.VISIBLE; home.field.setText("") }; refreshNtp() } // Home always starts with an empty field
@@ -3083,6 +3091,29 @@ open class BrowserActivity : Activity(), DockListener {
         Io.main.postDelayed(restoreTimeout, timeoutMs) // never stay up for ever (a page that never paints, a dead connection)
     }
 
+    // ---- PV1: the curtain over the page view while it is handed to another session (see core CurtainRule)
+    private lateinit var curtain: View
+    private var curtainTab: Tab? = null
+    private var curtainWhy: CurtainRule.Why? = null
+    private val curtainTimeout = Runnable { curtainDown("timeout") }
+    private fun curtainUp(tab: Tab, why: CurtainRule.Why) {
+        if (!::curtain.isInitialized) return
+        curtain.setBackgroundColor(pal.windowBg)
+        curtainTab = tab; curtainWhy = why
+        curtain.visibility = View.VISIBLE
+        Io.main.removeCallbacks(curtainTimeout); Io.main.postDelayed(curtainTimeout, CurtainRule.timeoutMs(why))
+        Health.count("tabs.curtain"); Health.log("tabs", "curtain-up", "tab=${tab.id} why=$why private=${tab.isPrivateTab}")     // (no address)
+    }
+    internal fun curtainDown(why: String) {
+        if (curtainTab == null) return
+        Io.main.removeCallbacks(curtainTimeout)
+        Health.log("tabs", "curtain-down", "tab=${curtainTab?.id} why=$why")
+        curtainTab = null; curtainWhy = null
+        curtain.visibility = View.GONE
+    }
+    /** The view drew a frame of this tab's session: the old tab's picture is gone from it (enough for a live tab; a new one waits for its first paint). */
+    internal fun curtainComposite(tab: Tab) { if (tab === curtainTab && curtainWhy?.let { !CurtainRule.untilPaint(it) } == true) curtainDown("first-composite") }
+
     private fun hideRestoring(why: String = "") {
         if (restoringTab != null) Health.log("tabs", "cover-hide", "tab=${restoringTab?.id} why=$why")
         Io.main.removeCallbacks(restoreTimeout); Io.main.removeCallbacks(backCheckTick); backCover = null
@@ -3175,6 +3206,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** The engine painted real content for [tab] (called from ContentDelegate.onFirstContentfulPaint). */
     internal fun firstPaint(tab: Tab) {
+        if (tab === curtainTab) curtainDown("first-paint")
         if (tab === current) StartTimeline.mark("paint")
         if (backLab.openKey() == BackScrollRules.keyOf(tab.url)) backLab.painted(SystemClock.uptimeMillis()) // RX3-BK1: the press this paint belongs to
         if (tab === restoringTab) { if (tab === lookTab) lookPainted() else if (tab === backCover?.tab) backPainted() else hideRestoring("first-paint") }
