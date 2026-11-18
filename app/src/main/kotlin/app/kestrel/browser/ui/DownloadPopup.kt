@@ -95,6 +95,7 @@ class DownloadPopup(private val ctx: Context, private val pal: Pal, private val 
     }
 
     private val density = ctx.resources.displayMetrics.density
+    private fun px(dp: Float) = Math.round(dp * density)
     private val limits = FloatBox.Limits(minW = 200f, maxW = 420f, minH = 90f, maxH = 640f)
     private val defaults = FloatBox.Default(right = 8f, top = 8f, w = WINDOW_DP.toFloat(), h = DEFAULT_LIST_DP.toFloat())
     private var geo: FloatBox.Geo = FloatBox.load(l.geometry(), defaults)
@@ -124,7 +125,7 @@ class DownloadPopup(private val ctx: Context, private val pal: Pal, private val 
         box.addView(window, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
         box.addView(handle, FrameLayout.LayoutParams(ctx.dp(HANDLE_DP), ctx.dp(HANDLE_DP), Gravity.BOTTOM or Gravity.START))
         view.addView(banner, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP).apply { setMargins(ctx.dp(8), ctx.dp(8), ctx.dp(8), 0) })
-        view.addView(box, FrameLayout.LayoutParams(ctx.dp(geo.w), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END))
+        view.addView(box, FrameLayout.LayoutParams(px(geo.w), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END))
         view.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or2, ob -> if (r - l != or2 - ol || b - t != ob - ot) place() }
         place()
     }
@@ -142,8 +143,8 @@ class DownloadPopup(private val ctx: Context, private val pal: Pal, private val 
         val aw = areaW(); val ah = areaH()
         val g = if (aw > 0f && ah > 0f) FloatBox.clamp(geo, aw, ah, boxH(), limits) else geo
         val shift = if (banner.visibility == View.VISIBLE && FloatBox.isDefault(geo, defaults)) banner.height + ctx.dp(8) else 0   // at its first place it sits below the banner while the banner shows
-        lp.width = ctx.dp(g.w); lp.rightMargin = ctx.dp(g.right); lp.topMargin = ctx.dp(g.top) + shift
-        scroll.maxPx = ctx.dp(g.h)
+        lp.width = px(g.w); lp.rightMargin = px(g.right); lp.topMargin = px(g.top) + shift
+        scroll.maxPx = px(g.h)
         box.layoutParams = lp
     }
 
