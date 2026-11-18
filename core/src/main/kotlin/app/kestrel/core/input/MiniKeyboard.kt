@@ -164,6 +164,24 @@ class MiniKeyboardModel {
     }
 
     /**
+     * Owner R23a (held Backspace, shared with the Kestrel keyboard): after a long hold every repeat takes a WHOLE word: the spaces before the cursor and the word (letters, digits, apostrophes) in front of them, or one mark and
+     * the spaces before it. A selected text, a glide just made (as one Backspace does) or nothing before the cursor: one plain Backspace.
+     */
+    fun deleteWord() {
+        if (allSelected || cursor <= 0 || glideTail != null) { press(Key.Backspace); return }
+        val b = before(); var i = b.length
+        while (i > 0 && b[i - 1].isWhitespace()) i--
+        if (i > 0) {
+            if (b[i - 1].isLetterOrDigit() || b[i - 1] == '\'') { while (i > 0 && (b[i - 1].isLetterOrDigit() || b[i - 1] == '\'')) i-- }
+            else i -= if (i >= 2 && Character.isLowSurrogate(b[i - 1]) && Character.isHighSurrogate(b[i - 2])) 2 else 1
+        }
+        if (b.length - i <= 0) { press(Key.Backspace); return }
+        text = b.substring(0, i) + after(); cursor = i
+        keepTight = -1; glideTail = null
+        autoShift()
+    }
+
+    /**
      * The cursor moves [delta] characters (negative = left; one step of the finger sliding over the space key is one character). A selected address is first collapsed to the end the finger went towards;
      * the glide that was just typed stops being "the last thing" (Backspace takes one character from now on). True when something changed.
      */

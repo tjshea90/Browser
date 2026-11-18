@@ -7,6 +7,7 @@ import android.os.SystemClock
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import app.kestrel.core.input.BackspaceRepeat
 import app.kestrel.core.input.glide.GlideTyping
 import app.kestrel.core.input.glide.LexiconFile
 import java.util.concurrent.Executor
@@ -1328,5 +1329,20 @@ class MiniNavTest {
         openPairKeyboard(null)
         assertTrue(nav.pressKeyForTest("a") && nav.pressKeyForTest(".") && nav.pressKeyForTest("c"))
         assertFalse("the address bar has none of the sentence habits: ${nav.barTextForTest}", nav.barTextForTest.contains(' ') || nav.barTextForTest.any { it.isUpperCase() })
+    }
+
+    @Test fun aHeldBackspaceInAPageFieldSpeedsUpAndThenTakesWholeWords() {   // owner R23a
+        val f = FakeField(); openPairKeyboard(f)
+        for (c in "hello big world today") { if (c == ' ') nav.pressKeyForTest("space") else nav.pressKeyForTest(c.toString()) }
+        assertEquals("hello big world today", f.text.toString())
+        val (x, y) = nav.keyCenterForTest("\u232B")!!
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, x, y)
+        assertEquals("one character at once", "hello big world toda", f.text.toString())
+        idle(1500)
+        val letters = f.text.toString()
+        assertTrue("held: letters go, faster and faster: '$letters'", letters.length < 18)
+        idle(BackspaceRepeat.WORDS_AFTER_MS + 1500)
+        nav.touchKeysForTest(MotionEvent.ACTION_UP, x, y); idle(20)
+        assertTrue("after the long hold whole words went: '${f.text}'", f.text.toString().length < letters.length && (f.text.isEmpty() || f.text.toString().endsWith(" ")))
     }
 }

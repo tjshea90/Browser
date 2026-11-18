@@ -86,4 +86,16 @@ class MiniKeyboardSmartTest {
         val off = model(false); off.type("say"); assertTrue(off.insertWord("hello")); assertEquals("say hello ", off.text)
         assertFalse(model().insertWord(""))
     }
+
+    @Test fun aWordGoesAtOnceForTheLongHoldOfBackspace() {   // owner R23a, shared with the Kestrel keyboard
+        val m = model(false).type("hello big world")
+        m.deleteWord(); assertEquals("hello big ", m.text)
+        m.deleteWord(); assertEquals("hello ", m.text)
+        m.deleteWord(); assertEquals("", m.text)
+        m.deleteWord(); assertEquals("nothing left: nothing happens", "", m.text)
+        val p = model(false).type("don't stop!!"); p.deleteWord(); assertEquals("a mark goes alone", "don't stop!", p.text); p.deleteWord(); p.deleteWord(); assertEquals("don't ", p.text)
+        val g = model(false); g.commitGlide("hello"); g.deleteWord(); assertEquals("a glide just made goes whole, as one Backspace does", "", g.text)
+        val mid = model(false).type("one two three"); mid.moveCursor(-6); mid.deleteWord(); assertEquals("only the word before the cursor (the space after it stays)", "one  three", mid.text); assertEquals(4, mid.cursor)
+        val all = MiniKeyboardModel(); all.open("https://example.com"); all.deleteWord(); assertEquals("a selected address goes whole", "", all.text)
+    }
 }

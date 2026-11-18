@@ -33,6 +33,7 @@ import app.kestrel.core.input.KeyResult
 import app.kestrel.core.input.KeySpec
 import app.kestrel.core.input.MiniKeyboardGeometry
 import app.kestrel.core.input.MiniKeyboardLayout
+import app.kestrel.core.input.BackspaceRepeat
 import app.kestrel.core.input.MiniKeyboardModel
 import app.kestrel.core.input.TextEdit
 import app.kestrel.core.input.glide.GlideKeys
@@ -203,6 +204,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         closeTarget.visibility = GONE
         addView(closeTarget, LayoutParams(ctx.dp(CLOSE_SIZE_DP), ctx.dp(CLOSE_SIZE_DP), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = ctx.dp(CLOSE_BOTTOM_DP) }) // above the panel in the stack; it never takes a touch
         keys.onKey = { key -> typed(key) }
+        keys.onDeleteWord = { deleteWordHeld() }
         keys.onCursor = { n -> cursorSlid(n) }
         applyColors()
     }
@@ -698,6 +700,18 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                 if (!model.glideActive) keys.clearCandidates(); bar.invalidate(); keys.invalidate()
             }
         }
+    }
+
+    /** Backspace held for a long time: one repeat takes a whole word (owner R23a). Right after a glide it is the same as one Backspace (the glided word was wrong). */
+    private fun deleteWordHeld() {
+        syncField()
+        if (model.glideActive) { typed(Key.Backspace); return }
+        confirmGlide()
+        val before = model.text
+        model.deleteWord()
+        if (model.text == before) return
+        pageField?.let { sendEdit(it, before, true) }
+        keys.clearCandidates(); bar.invalidate(); keys.invalidate()
     }
 
     /**
@@ -1429,6 +1443,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
      */
     private inner class KeysView(ctx: Context) : View(ctx) {
         var onKey: ((Key) -> Unit)? = null
+        /** Backspace has been held long enough that every repeat takes a whole word (owner R23a). */
+        var onDeleteWord: (() -> Unit)? = null
         /** The space key was slid over (AY3, owner message 39): the text cursor moves this many characters (negative = left). */
         var onCursor: ((Int) -> Unit)? = null
         private var spaceDown = false       // the finger went down on the space key
@@ -1449,7 +1465,16 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         private var down: KeySpec? = null
         private var litKey: KeySpec? = null
         private val unlight = Runnable { litKey = null; invalidate() }
-        private val repeat = object : Runnable { override fun run() { down?.key?.let { onKey?.invoke(it) }; handler.postDelayed(this, REPEAT_MS) } }
+        /** When Backspace went down: how long it has been held decides how fast it repeats and when it starts to take whole words (BackspaceRepeat, owner R23a). */
+        private var repeatStartAt = 0L
+        private val repeat = object : Runnable {
+            override fun run() {
+                val held = SystemClock.uptimeMillis() - repeatStartAt
+                val k = down?.key
+                if (k != null) { if (k === Key.Backspace && BackspaceRepeat.wordMode(held)) onDeleteWord?.invoke() else onKey?.invoke(k) }
+                handler.postDelayed(this, BackspaceRepeat.delayAfter(held))
+            }
+        }
 
         // ---- glide
         private var armed = false                 // the finger went down on a letter: it may turn into a glide
@@ -1762,7 +1787,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
                     spaceDown = (down?.key as? Key.Ch)?.text == " "; sliding = false; slideStartX = e.x; slideAnchorX = e.x
                     clearHold(); if (isBubbleKey(down)) { bubbleKey = down; bubbleText = down!!.label }
                     if (down != null) { haptic(); if (altOf(down) != null) handler.postDelayed(hold, HOLD_MS) }
-                    if (down?.key === Key.Backspace) { onKey?.invoke(Key.Backspace); handler.postDelayed(repeat, REPEAT_FIRST_MS) }
+                    if (down?.key === Key.Backspace) { onKey?.invoke(Key.Backspace); repeatStartAt = SystemClock.uptimeMillis(); handler.postDelayed(repeat, BackspaceRepeat.FIRST_MS) }
                     if (glideUsable() && !model.symbols && isLetter(down)) { armed = true; pressedKey = down; downBox = boxOf(down); addPoint(e.x, e.y) }
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -1859,8 +1884,6 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         const val SLIDE_STEP_DP = 11f
         /** How long a pressed button, key or bar stays lit. */
         const val FLASH_MS = 130L
-        private const val REPEAT_FIRST_MS = 380L
-        private const val REPEAT_MS = 70L
         const val PANEL_W_DP = 208
         const val PANEL_KEYS_W_DP = 304
         /** The frame inside the outline, and the transparent band around the outline that carries the grip and the corner marks. */
