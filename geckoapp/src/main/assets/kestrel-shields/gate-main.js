@@ -30,6 +30,7 @@
   var proto = HTMLMediaElement.prototype, eproto = Element.prototype;
   var dnow = Date.now, later = window.setTimeout;
   var on = true;                                         // closed until the person's setting says the rule is off
+  var INHERIT_MS = (typeof window.__kstGateInheritMs === 'number' && window.__kstGateInheritMs > 0 && window.__kstGateInheritMs < 90000) ? window.__kstGateInheritMs : 90000;   // (the tests shorten it; a page can only make it shorter)
   var inheritUntil = 0;                                 // VP2: this frame was started by the person's tap on the PAGE around it (a server or play button): its first big player may start (see the cfg handler)
   var recs = new WeakMap();                              // element -> what is held for it
   var gated = [];                                        // the elements that hold something back (a tap on their picture opens them)
@@ -515,7 +516,7 @@
         else if (d === '1' || d === '1+' || d === '1p' || d === '1+p') {
           hand = (d.charAt(1) === '+'); on = true;
           if (d.charAt(d.length - 1) === 'p' && inheritUntil === 0) {                    // VP2: the person's tap on the page around this frame started it
-            inheritUntil = dnow.call(Date) + 90000;
+            inheritUntil = dnow.call(Date) + INHERIT_MS;
             for (var gi = 0; gi < gated.length; gi++) { try { var ge = gated[gi]; if (!rec(ge).open && big(ge)) openEl(ge, 'inherit'); } catch (e5) { /* ignore */ } }
           }
           settle();

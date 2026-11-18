@@ -329,10 +329,17 @@ test('VP2: plain "1" and "1+" stay what they were: nothing is opened', async () 
   }
 });
 
-test('VP2: the opening lasts 90 s from the word, then the rule is the same as everywhere', async () => {
-  const page = await open(VID, '1p');
-  await page.evaluate(() => { const real = Date.now; Date.now = () => real() + 91000; });
-  const r = await page.evaluate(() => { const v = document.createElement('video'); v.style.cssText = 'display:block;width:320px;height:180px'; document.body.appendChild(v); v.preload = 'auto'; return v.getAttribute('preload'); });
-  assert.equal(r, 'none', 'a player made 91 s later is closed again');
-  await page.context().close();
+test('VP2: the opening lasts 90 s from the word (a page can only make it shorter), then the rule is the same as everywhere', async () => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await context.route('https://**/*', (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><body></body>' }));
+  await page.addInitScript(() => { window.__kstGateInheritMs = 300; });
+  await page.addInitScript({ content: GATE });
+  await page.addInitScript(() => { document.dispatchEvent(new CustomEvent('__kst_gate_cfg_v1', { detail: '1p' })); });
+  await page.goto('https://site.example/');
+  const mk = () => page.evaluate(() => { const v = document.createElement('video'); v.style.cssText = 'display:block;width:320px;height:180px'; document.body.appendChild(v); v.preload = 'auto'; return v.getAttribute('preload'); });
+  assert.equal(await mk(), 'auto', 'inside the window the player is open');
+  await page.waitForTimeout(450);
+  assert.equal(await mk(), 'none', 'after it a new player is closed again');
+  await context.close();
 });
