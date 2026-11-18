@@ -89,7 +89,10 @@ object EpisodeNames {
 
     /** The show or film name out of a page title ("Watch Ozark Online Free - Doraby" -> "Ozark", "Ozark (TV Series 2017-2022) - Doraby" -> "Ozark"); "" when it names nothing. */
     fun showFromTitle(pageTitle: String, pageHost: String): String =
-        plausible(firstSegmentTitle(pageTitle.replace(Regex("""\s+"""), " ").trim(), pageHost, dropYear = true))
+        plausible(dropSeasonTail(firstSegmentTitle(pageTitle.replace(Regex("""\s+"""), " ").trim(), pageHost, dropYear = true)))
+
+    /** "Ozark Season 2" -> "Ozark": a season label after the name is not part of the show's name. */
+    private fun dropSeasonTail(s: String): String = s.replace(Regex("""\s*[-–—:,]?\s*(?:season|series)\s*\d+.*$""", OPTS), "").trim(' ', '-', '–', '—', ':', ',')
 
     private val SEASON_WORD = Regex("""(?<![A-Za-z])(?:season|series)[ ._-]*(\d{1,3})(?![0-9])""", OPTS)
 
@@ -107,7 +110,7 @@ object EpisodeNames {
         if (episode == 0) return null
         if (season == 0) season = SEASON_WORD.find(pageTitle)?.groupValues?.get(1)?.toIntOrNull() ?: SEASON_WORD.find(slugOf(pageUrl))?.groupValues?.get(1)?.toIntOrNull() ?: 0
         val show = listOf(clues?.show.orEmpty(), showFromTitle(pageTitle, pageHost), showFromUrl(pageUrl, pageHost), titleCaseIfLower(firstSegmentTitle(slugOf(pageUrl), pageHost, dropYear = true)))
-            .map { fileSafe(it).let { s -> plausible(s) } }.firstOrNull { it.isNotEmpty() } ?: return null
+            .map { fileSafe(dropSeasonTail(it)).let { s -> plausible(s) } }.firstOrNull { it.isNotEmpty() } ?: return null
         val tag = (if (season > 0) "S%02d".format(Locale.ROOT, season) else "") + "E%02d".format(Locale.ROOT, episode)
         val title = clues?.episodeTitle.orEmpty().let { t -> if (t.isNotEmpty() && mark(t, withEpisodeOnly = true) == null && !t.equals(show, true)) fileSafe(t) else "" }
         return "$show $tag" + (if (title.isNotEmpty()) " - $title" else "")
