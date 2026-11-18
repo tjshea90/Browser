@@ -23,13 +23,18 @@ import java.util.TimeZone
 object LastRun {
     private const val FILE = "last-run.txt"
     private const val ENDED = "last-run-ended.txt"
+    private val ENDED_FILES = arrayOf("last-run-ended.txt", "last-run-ended-2.txt", "last-run-ended-3.txt")   // CR1f: the three newest runs that did not end quietly (a second abnormal end used to overwrite the first)
     private const val HEADER = "kestrel-last-run 1"
     const val KEEP_DAYS = 7
-    private const val MAX_EVENTS = 24
+    private const val MAX_EVENTS = 40
     private const val LAZY_MS = 1500L
     private const val MAX_CHARS = 6_000
 
     private val lock = Any()
+    /** CR1f (owner 2026-11-18, doraby: the note stopped 1.3 s after the start and could not say crash or freeze): the lazy flush used to wait on the MAIN looper, so a frozen screen thread stopped the note too. It has its own daemon thread now. */
+    private val timer = java.util.concurrent.ScheduledThreadPoolExecutor(1) { r -> Thread(r, "kestrel-lastrun").apply { isDaemon = true; priority = Thread.MIN_PRIORITY } }
+        .apply { setKeepAliveTime(5, java.util.concurrent.TimeUnit.SECONDS); allowCoreThreadTimeOut(true) }
+    @Volatile internal var lazyMs = LAZY_MS
     private var dir: File? = null
     private var pid = 0
     private var build = ""
@@ -47,6 +52,10 @@ object LastRun {
         "mem" -> event == "trim"
         "page" -> event == "loaded" || event == "error"
         "gecko" -> event == "onKill" || event == "onCrash" || event.startsWith("recover-")
+        "ui" -> event == "STALL" || event.trim() == "at"                       // CR1f: the screen thread is blocked, and the stack it is blocked in (written by the watchdog thread, not by the blocked one)
+        "start" -> event == "paint" || event == "runtime"                      // how far the start got
+        "tabs" -> event == "early-cover"
+        "engine" -> event == "warm-start" || event == "runtime-ready"
         else -> false
     }
 
@@ -61,14 +70,14 @@ object LastRun {
                     "pause", "stop" -> { state = "bg"; stateAt = now; urgent = true }
                 }
             }
-            if (layer == "gecko") urgent = true
+            if (layer == "gecko" || (layer == "ui" && event == "STALL")) urgent = true
             if (events.size >= MAX_EVENTS) events.removeFirst()
             events.addLast(line.take(220))
             if (!urgent && flushQueued) return
             if (!urgent) flushQueued = true
         }
         if (urgent) Io.exec { flush() }
-        else Io.main.postDelayed({ Io.exec { flush() } }, LAZY_MS)
+        else try { timer.schedule({ Io.exec { flush() } }, lazyMs, java.util.concurrent.TimeUnit.MILLISECONDS) } catch (e: Exception) { Io.exec { flush() } }
     }
 
     /**
@@ -93,11 +102,21 @@ object LastRun {
                     val text = old.readText().take(MAX_CHARS) + "\nnextStart=$now\nbootAt=$bootAt\ncrashAt=${CrashNote.noteTime(app)}\nengineAt=${CrashNote.newestEngineReportAt(app)}\n"
                     val abnormal = read(text).abnormal
                     synchronized(lock) { previous = text; previousAbnormal = abnormal }
-                    if (abnormal) File(d, ENDED).writeText(text)
+                    if (abnormal) keep(d, text)
                 }
             } catch (e: Exception) { /* the report is a help, never a risk */ }
             flush()
         }
+    }
+
+    /** CR1f: the newest abnormal run goes first; the two before it move down; the oldest falls off. */
+    private fun keep(d: File, text: String) {
+        try {
+            File(d, ENDED_FILES[2]).delete()
+            File(d, ENDED_FILES[1]).renameTo(File(d, ENDED_FILES[2]))
+            File(d, ENDED_FILES[0]).renameTo(File(d, ENDED_FILES[1]))
+            File(d, ENDED_FILES[0]).writeText(text)
+        } catch (e: Exception) { /* the report is a help, never a risk */ }
     }
 
     /** The process ends on purpose (nothing left to do, [app.kestrel.browser.ProcessLife]): written at once, on the caller's thread, because the next line kills the process. */
