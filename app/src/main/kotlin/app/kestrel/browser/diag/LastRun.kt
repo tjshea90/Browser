@@ -22,7 +22,6 @@ import java.util.TimeZone
  */
 object LastRun {
     private const val FILE = "last-run.txt"
-    private const val ENDED = "last-run-ended.txt"
     private val ENDED_FILES = arrayOf("last-run-ended.txt", "last-run-ended-2.txt", "last-run-ended-3.txt")   // CR1f: the three newest runs that did not end quietly (a second abnormal end used to overwrite the first)
     private const val HEADER = "kestrel-last-run 1"
     const val KEEP_DAYS = 7
@@ -174,7 +173,9 @@ object LastRun {
             val crashed = crashAt in started..(if (next > 0) next else Long.MAX_VALUE) && crashAt > 0
             val engine = engineAt in started..(if (next > 0) next else Long.MAX_VALUE) && engineAt > 0
             val rebooted = bootAt > 0 && saved > 0 && bootAt > saved + 5_000   // a tablet that restarted came back at least some seconds after the last note
+            val stalled = text.lineSequence().any { it.startsWith("ev=") && it.contains(" ui STALL ") }
             out.add("  " + when {
+                stalled -> "Cause: the app's SCREEN THREAD WAS FROZEN (a STALL line below names where it was stuck): a freeze, not a crash; the app was probably closed by hand or by Android afterwards."
                 crashed -> "Cause: an uncaught Java exception (the crash note is shown below as EARLIER CRASH)."
                 rebooted -> "Cause: the whole tablet restarted after the last note (empty battery or a restart), not the app."
                 engine -> "Cause: probably the engine: it wrote crash report(s) during this run (see Engine crash reports below; a page process crash alone does not close the app, a main process one does)."
@@ -182,7 +183,7 @@ object LastRun {
             })
         }
         val ev = text.lineSequence().filter { it.startsWith("ev=") }.map { it.substring(3) }.toList()
-        if (ev.isNotEmpty()) { out.add("  last events (newest last):"); for (e in ev.takeLast(12)) out.add("    $e") }
+        if (ev.isNotEmpty()) { out.add("  last events (newest last):"); for (e in ev.takeLast(16)) out.add("    $e") }
         return Ended(out, abnormal)
     }
 
@@ -192,14 +193,19 @@ object LastRun {
         val prev: String?
         val prevAbnormal: Boolean
         synchronized(lock) { prev = previous; prevAbnormal = previousAbnormal }
-        val keptFile = File(ctx.filesDir, ENDED)
-        val kept = try { if (keptFile.isFile && now - keptFile.lastModified() <= KEEP_DAYS * 86_400_000L) keptFile.readText() else null } catch (e: Exception) { null }
-        if (prev != null && prevAbnormal) out.addAll(read(prev).lines)
-        else {
-            if (prev != null) out.add(read(prev).lines.first())
-            if (kept != null) { out.add("An EARLIER run (before the one above) did not end quietly - kept $KEEP_DAYS days:"); out.addAll(read(kept).lines.map { "  $it" }) }
+        val kept = ArrayList<String>()                                              // CR1f: up to three runs that did not end quietly, newest first, each for KEEP_DAYS days
+        for (n in ENDED_FILES) {
+            val f = File(ctx.filesDir, n)
+            try { if (f.isFile && now - f.lastModified() <= KEEP_DAYS * 86_400_000L) kept.add(f.readText()) } catch (e: Exception) { /* skip */ }
         }
-        if (prev == null && kept == null) out.add("Last run: no earlier note (first start since this version, or the files were cleared).")
+        if (prev != null && prevAbnormal) out.addAll(read(prev).lines) else if (prev != null) out.add(read(prev).lines.first())
+        val prevStarted = if (prev != null) kv(prev, "started") else null
+        val earlier = kept.filter { !(prevAbnormal && kv(it, "started") == prevStarted) }       // (the run that just ended is the first kept file when it was abnormal: not told twice)
+        for ((i, k) in earlier.withIndex()) {
+            out.add(if (i == 0) "An EARLIER run (before the one above) did not end quietly - kept $KEEP_DAYS days:" else "An EVEN EARLIER run did not end quietly:")
+            out.addAll(read(k).lines.map { "  $it" })
+        }
+        if (prev == null && kept.isEmpty()) out.add("Last run: no earlier note (first start since this version, or the files were cleared).")
         return out
     }
 
