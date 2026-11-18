@@ -1,21 +1,22 @@
-# CHECKPOINT 2688 — read me first, then TASKS.md
+# CHECKPOINT 2689 — read me first, then TASKS.md
 
-**Written:** 2026-11-18T07:00:44Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-587430ac-royssd` · **builds on:** `2e8c8251` (this checkpoint is the commit after it)
+**Written:** 2026-11-18T07:12:05Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-587430ac-royssd` · **builds on:** `a7fef86c` (this checkpoint is the commit after it)
 
 ## Just done
-alpha70 DISPATCHED ONCE at 07:00Z: android.yml run 44255522156 (run_number 242, app=gecko full_build=true, head 2e8c8251). Do NOT dispatch again. Lab run 44254127252 (tb) was clean: 3 scenes ok, 0 issues (TP1, UC1, MT1, PV1 proven on the real engine in the simulator).
+alpha70 RELEASED: tag kestrel-g-v0.3.0-alpha70, run 44255522156 all jobs green, APK 96 MB on the Release (https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha70), recorded in BUILDLOG.md (b25d7899). TASKS ticked (CR1f/g, VS2a/b, VS1e, TP1, UC1, MT1, PV1); VS2c (vidsrc/111movies themselves) stays OPEN for the owner's Diagnostics. HANDOFF lessons added.
 
 ## Do this next
-WAIT for run 44255522156 (list_workflow_jobs; ~12 min: test-jvm ~5, test-js ~8, build-gecko ~4); do not use get_workflow_run (huge). If ALL jobs green: git ls-remote --tags origin kestrel-g-v0.3.0-alpha70, mcp__github__get_release_by_tag (APK asset), then bash tools/record-release.sh kestrel-g-v0.3.0-alpha70 with the IDENTICAL note (cat docs/handoff/ALPHA70_RELEASE_NOTE.txt), tick VS2/TP1/UC1/MT1/PV1 and CR1f/g in TASKS.md, answer the owner in plain words with the Release link on its own line. If a job is red: read it (get_job_logs only after the job ended); a flaky test (BrowserFlowTest.viewIntentOpensTheUrlInTheBrowser, PhoneBackendTest) -> make it deterministic, ship a FRESH dispatch only if no tag exists
+NOTHING running. Wait for the owner: install alpha70 from https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha70 and try: tab previews (Diagnostics line Tab previews = 0 wrong), Copy button on the address bar, Tabs button + tray in the floating panel, a new private tab (no flash of an old regular tab), doraby rows staying in the list, and on a vanish send Diagnostics (Last run line with memory). VS2c needs Diagnostics taken while vidsrc / 111movies play. No heartbeat trigger exists.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M HANDOFF.md
 
 ## Last ten checkpoints
 ```
+  27d9762c ckpt 2688: alpha70 DISPATCHED ONCE at 07:00Z: android.yml run 44255522156 (run_number 2
   2e8c8251 ckpt 2687: alpha70 GATED locally (ship.sh rc=0: handoff self-test, unit suites, version
   30a0825b ckpt 2686: gated kestrel-g-v0.3.0-alpha70 (gecko code 171) and pushed it: handoff self-
   caf37927 ckpt 2685: Lab run 44252661300 (new2) READ: the app behaved right on every check (UC1 v
@@ -25,5 +26,7 @@ WAIT for run 44255522156 (list_workflow_jobs; ~12 min: test-jvm ~5, test-js ~8, 
   3dda7232 ckpt 2681: PV1 coded: CurtainRule (core, 3 tests) + curtain view over the shared page v
   51f3e413 ckpt 2680: Owner message PV1 written into TASKS (new private tab flashed an old regular
   92b293d1 ckpt 2679: MT1 coded (mini panel Tabs button + tab tray, TabTrayModel, host wiring, 9 R
-  bd1bb9e4 ckpt 2678: UC1 coded + tested: Copy button inside the address pill (Toolbar.copyButton)
 ```
+
+(1 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
