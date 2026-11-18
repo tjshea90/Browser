@@ -30,3 +30,9 @@ The quality list is taken from the page's OWN player and a pick is passed back t
 ## How the owner can help the next round
 
 After the update: open a YouTube film, go full screen, tap the Quality button (top right, left of the exit button). If it shows no list, send Diagnostics: the line "Quality list from the page's own player" and the Health lines `player quality-levels` say whether a list ever arrived. If it shows a list and a pick changes nothing, say which site and what the film did.
+
+## Lab result (2026-11-18)
+
+- Run 44233990309 (suite new, first run of scene ql): FAILED all seven checks. Cause found by reading the code path hop by hop: `background.js` rebuilds the full-screen report (`vst`) from a fixed list of numbers and DROPPED `q` / `qc` / `qf`, so the page player's list never reached the app (the mock web tests started at player.js and the Kotlin tests at the app, so no test crossed that hop). Fixed in background.js (rows cut to 12, ids `[A-Za-z0-9_.:-]{1,24}`, labels 22 characters, family `[a-z]{2,8}`); web-tests/background.test.js has the test that crosses the hop.
+- Lesson: every new field on a message that crosses background.js needs a test THROUGH background.js (the harness `h.message` / `h.of('vst')`).
+- Second lab run (same suite, after the fix): see the end of this file once it is read.
