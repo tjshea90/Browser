@@ -149,7 +149,7 @@ class DownloadPopup(private val ctx: Context, private val pal: Pal, private val 
     }
 
     // tests: the window shown without any download, and where it is
-    internal fun showForTest() { window.visibility = View.VISIBLE; refreshContainer(); place() }
+    internal fun showForTest(rows: Int = 3) { list.removeAllViews(); for (i in 0 until rows) list.addView(View(ctx), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ctx.dp(40))); window.visibility = View.VISIBLE; refreshContainer(); place() }
     internal fun boxForTest(): View = box
     internal fun handleForTest(): View = handle
     internal fun headerBottomForTest(): Int = window.top + ctx.dp(36)
@@ -172,6 +172,7 @@ class DownloadPopup(private val ctx: Context, private val pal: Pal, private val 
         private val slop = ViewConfiguration.get(c).scaledTouchSlop
         private var mode = 0                        // 0 none, 1 a finger is down (a long press may still come), 2 carrying, 3 resizing
         private var downX = 0f; private var downY = 0f
+        private var downOnHeader = false                // where the finger LANDED decides (a quick drag is already far below the title bar at its first move)
         private var start = geo
         private var lastTapAt = 0L
         private val pickRun = Runnable { if (mode == 1) pickUp() }
@@ -181,16 +182,15 @@ class DownloadPopup(private val ctx: Context, private val pal: Pal, private val 
         private fun onHeader(ev: MotionEvent): Boolean = ev.y <= window.top + ctx.dp(44)
 
         override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
-            System.err.println("DBGI act=${ev.actionMasked} x=${ev.x} y=${ev.y} raw=${ev.rawX},${ev.rawY} mode=$mode down=$downX,$downY slop=$slop hdr=${window.top + ctx.dp(44)}")
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    downX = ev.rawX; downY = ev.rawY; start = geo
+                    downX = ev.rawX; downY = ev.rawY; start = geo; downOnHeader = onHeader(ev)
                     if (onHandle(ev)) { mode = 3; lit = true; handle.invalidate(); return true }
                     mode = 1; postDelayed(pickRun, PICK_MS)
                 }
                 MotionEvent.ACTION_MOVE -> if (mode == 1) {
                     val far = Math.hypot((ev.rawX - downX).toDouble(), (ev.rawY - downY).toDouble()) > slop
-                    if (far) { removeCallbacks(pickRun); if (onHeader(ev)) { mode = 2; start = geo; lit = true; handle.invalidate(); return true } else mode = 0 }
+                    if (far) { removeCallbacks(pickRun); if (downOnHeader) { mode = 2; start = geo; lit = true; handle.invalidate(); return true } else mode = 0 }
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { removeCallbacks(pickRun); if (mode == 1) mode = 0 }
             }
@@ -199,7 +199,6 @@ class DownloadPopup(private val ctx: Context, private val pal: Pal, private val 
 
         override fun onTouchEvent(ev: MotionEvent): Boolean {
             val dx = (ev.rawX - downX) / density; val dy = (ev.rawY - downY) / density
-            System.err.println("DBGT act=${ev.actionMasked} raw=${ev.rawX},${ev.rawY} mode=$mode dx=$dx dy=$dy")
             when (ev.actionMasked) {
                 MotionEvent.ACTION_MOVE -> {
                     if (mode == 2) gesture(FloatBox.moved(start, dx, dy, areaW(), areaH(), boxH(), limits))
