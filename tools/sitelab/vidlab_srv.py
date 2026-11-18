@@ -5,6 +5,7 @@ AL1 / AL5 additions: /watch2 (port 8000) has Server 1 / Server 2 / Server 3 butt
 (so its list differs from server 1's), server 3 first loads a short "ad" video and 4 s later the real stream in the SAME document (an ad before the real video must NOT count as a server switch);
 /plain is a page with no video at all (a page change must empty the list)."""
 import http.server, os, struct, subprocess, sys, threading, time, zlib, binascii
+from urllib.parse import parse_qs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GEN = os.environ.get("VIDLAB_GEN") or os.path.join(HERE, "gen")  # the .ts files made by vidlab_gen.sh
@@ -127,6 +128,48 @@ v.addEventListener('error', info); v.addEventListener('loadeddata', info);
 v.addEventListener('play', function () { var st = document.getElementById('st'); st.textContent = 'PLAYING after ' + presses + ' real press(es)'; st.style.color = '#6f6'; });
 </script></body>"""
 
+# VS1 (owner message 2026-11-18: doraby.com + the vidsrc server, the stream is not found): more of the ways a real embed behaves, all reading the SAME Referer-gated stream (base /hls/abc/).
+#   /watch3?v=auto|click|nest|worker  (port 8000) a movie page with ONE iframe to the player page /embed/<v> (port 8003):
+#   auto   = PAGE_B (the playlist is fetched 0.8 s after the load)           click  = nothing is fetched until a tap on the player's big button (a click-to-play embed)
+#   nest   = the player page holds ANOTHER iframe that is the real player (a chain of frames, like vidsrc -> cloudnestra -> player)
+#   worker = the player's script does its fetches inside a Worker made from a blob (a player that keeps its network code off the main thread)
+PLAYER_JS = b"""
+  var base = 'http://10.0.2.2:8004/hls/abc/', out = document.getElementById('s');
+  function get(u, bin) { return fetch(base + u).then(function (r) { if (!r.ok) throw new Error(u + ' ' + r.status); return bin ? r.arrayBuffer() : r.text(); }); }
+  function stream() {
+    get('playlist.txt').then(function (m) {
+      var v = m.split('\\n').filter(function (l) { return l && l[0] !== '#'; });
+      return get(v[0]).then(function (t) {
+        var segs = t.split('\\n').filter(function (l) { return l && l[0] !== '#'; });
+        return get('key', true).then(function () { return get(segs[0], true); }).then(function () { return get(segs[1], true); }).then(function () { out.textContent = 'player loaded: ' + segs.length + ' parts'; });
+      });
+    }).catch(function (e) { out.textContent = 'player error: ' + e; });
+  }
+"""
+WORKER_JS = ("self.onmessage=function(e){var base=e.data;function get(u,bin){return fetch(base+u).then(function(r){if(!r.ok)throw new Error(u+' '+r.status);return bin?r.arrayBuffer():r.text();});}"
+             "get('playlist.txt').then(function(m){var v=m.split('\\n').filter(function(l){return l&&l[0]!=='#';});return get(v[0]).then(function(t){var s=t.split('\\n').filter(function(l){return l&&l[0]!=='#';});"
+             "return get('key',true).then(function(){return get(s[0],true);}).then(function(){return get(s[1],true);}).then(function(){postMessage('worker loaded '+s.length);});});}).catch(function(x){postMessage('worker error '+x);});};")
+def player_mode(mode):
+    head = b"""<!doctype html><meta charset=utf-8><title>player %s</title><body style="margin:0;background:#222;color:#9f9;font:14px monospace"><div id=s>starting</div>""" % mode.encode()
+    if mode == "click":
+        return head + b"""<button id=big style="display:block;width:100%%;height:260px;font-size:34px;background:#136;color:#fff;border:0">Play</button><script>(function () {%s
+  document.getElementById('big').onclick = function () { out.textContent = 'starting'; stream(); this.style.display = 'none'; };
+})();</script>""" % PLAYER_JS
+    if mode == "worker":
+        return head + b"""<video controls muted playsinline style="width:100%%;height:120px;background:#000"></video><script>(function () {
+  var out = document.getElementById('s'), code = %s;
+  setTimeout(function () { try { var w = new Worker(URL.createObjectURL(new Blob([code]))); w.onmessage = function (e) { out.textContent = e.data; }; w.postMessage('http://10.0.2.2:8004/hls/abc/'); } catch (e) { out.textContent = 'no worker: ' + e; } }, 800);
+})();</script>""" % repr(WORKER_JS).encode()
+    if mode == "nest":
+        return head + b"""<iframe src="%s/embed/movie?id=7" style="width:100%%;height:240px;border:0"></iframe>""" % PLAYER.encode()
+    return head + b"""<video controls muted playsinline style="width:100%%;height:120px;background:#000"></video><script>(function () {%s  setTimeout(stream, 800);
+})();</script>""" % PLAYER_JS
+
+def page_watch3(mode):
+    return (b"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Lab movie %s</title>
+<body style="margin:0;background:#111;color:#eee;font:16px sans-serif"><h3 style="margin:8px;height:34px">Lab movie (%s)</h3>
+<iframe src="%s/embed/%s?id=7" style="display:block;width:100%%;height:300px;border:0;border-top:1px solid #444"></iframe></body>""" % (mode.encode(), mode.encode(), PLAYER.encode(), mode.encode()))
+
 class H(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
     def log_message(self, fmt, *a): pass
@@ -143,6 +186,8 @@ class H(http.server.BaseHTTPRequestHandler):
         if port == 8000 and path == "/watch": return self.send(200, "text/html; charset=utf-8", PAGE_A)
         if port == 8003 and path == "/embed/movie": return self.send(200, "text/html; charset=utf-8", PAGE_B)
         if port == 8000 and path == "/watch2": return self.send(200, "text/html; charset=utf-8", PAGE_C)
+        if port == 8000 and path == "/watch3": return self.send(200, "text/html; charset=utf-8", page_watch3((parse_qs(self.path.partition("?")[2]).get("v") or ["auto"])[0]))
+        if port == 8003 and path in ("/embed/auto", "/embed/click", "/embed/nest", "/embed/worker"): return self.send(200, "text/html; charset=utf-8", player_mode(path.rsplit("/", 1)[1]))
         if port == 8000 and path == "/plain": return self.send(200, "text/html; charset=utf-8", PAGE_PLAIN)
         if port == 8000 and path == "/fakeplay": return self.send(200, "text/html; charset=utf-8", PAGE_FAKE)
         if port == 8000 and path == "/clip.mp4": return self.send(200, "video/mp4", FILES["/ads/ad.mp4"][1])

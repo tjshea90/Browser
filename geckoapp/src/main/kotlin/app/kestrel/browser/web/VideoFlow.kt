@@ -787,6 +787,26 @@ class VideoFlow(private val a: BrowserActivity) {
         val c = ranked.main.firstOrNull() ?: ranked.exact
         Health.log("lab", "videodl", "main=${ranked.main.size} other=${ranked.other.size} usable=${tab.media.usableCount()} of ${tab.media.size} pick=${if (c == null) "none" else "${c.kind} ${c.height}p ${c.length / 1024}KB"}")
         if (c != null && c.kind == MediaKind.FILE) pick(tab, c, "lab-found-video")
+        else if (c != null) labStream(tab, c, 0)                  // VS1: a playlist (HLS / DASH) goes the way a tap on its row goes: read, list the pictures, download the first (best) one
+    }
+
+    /** VS1 lab: reads the stream's list, waits (at most 30 s) for the pictures and starts the first row's download; every step is a `lab videodl-stream` line the emulator lab reads. */
+    private fun labStream(tab: Tab, c: MediaCandidate, tries: Int) {
+        val st = streamInfo[c.key]
+        if (st == null) {
+            if (c.kind == MediaKind.DASH) loadDash(tab, c) else loadStream(tab, c)
+            Io.main.postDelayed({ labStream(tab, c, tries + 1) }, 1000)
+            return
+        }
+        when (st) {
+            is Loaded.Loading -> if (tries < 30) Io.main.postDelayed({ labStream(tab, c, tries + 1) }, 1000) else Health.log("lab", "videodl-stream", "gave up: the list was still loading after 30 s")
+            is Loaded.Failed -> Health.log("lab", "videodl-stream", "failed: ${st.message.take(140)}")
+            is Loaded.Ready -> {
+                val first = st.rows.firstOrNull()
+                Health.log("lab", "videodl-stream", "ready rows=${st.rows.size} first=${first?.second?.label ?: "none"}")
+                if (first != null) pickStream(tab, first.second, "lab-found-video")
+            }
+        }
     }
 
     /** LAB (ANS52i): the best row of the Save video sheet, played in Kestrel's own player (the lab cannot press the sheet's button). */
