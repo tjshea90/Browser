@@ -200,6 +200,14 @@ open class BrowserActivity : Activity(), DockListener {
         // where the person put the panel and how big the keyboard is (AV1)
         override fun navKeyHaptics(): Boolean = prefs.keyHaptics
         override fun navGeometry(): IntArray? = prefs.miniGeom
+        // MT1: the tab tray of the panel: the tabs of the kind in front (regular with regular, private with private), in the tab grid's order
+        override fun navTabs(): List<app.kestrel.browser.ui.NavTab> {
+            val priv = current?.isPrivateTab == true
+            return tabs.filter { it.isPrivateTab == priv }.map { t -> app.kestrel.browser.ui.NavTab(t.id, t.title, (UrlParts.hostOf(t.url) ?: "").removePrefix("www."), if (t.homeOverPage) null else t.thumb, t === current, t.isPrivateTab) }
+        }
+        override fun navSwitchTab(id: Long) { tabs.firstOrNull { it.id == id }?.let { if (it !== current) show(it) } }
+        override fun navCloseTab(id: Long) { tabs.firstOrNull { it.id == id }?.let { doCloseTab(it) } }
+        override fun navNewTab() { show(newTabInternal(null, isPrivate)) }      // (no system keyboard: the panel opens its own keys on the new tab's address)
         override fun navGeometryChanged(g: IntArray?) { prefs.miniGeom = g }
         override fun navGlideTitles(done: (List<String>) -> Unit) {
             val d = db ?: return
@@ -2779,6 +2787,7 @@ open class BrowserActivity : Activity(), DockListener {
         val priv = t?.isPrivateTab == true
         dock.bind(t, tabs.count { it.isPrivateTab == priv }, canBack || (t != null && (!t.isNewTab || t.showHome)), homeShown(t))
         miniNav.sync(canBack || (t != null && (!t.isNewTab || t.showHome)), t?.canGoForward == true, homeShown(t), if (t == null || homeShown(t) || !t.url.startsWith("http")) "" else t.url)
+        miniNav.tabsChanged()                                         // MT1: the Tabs button's number and, when the tray is open, its rows
         val p = if (t?.loading == true) t.progress else 0
         if (progress.progress != p) progress.progress = p
         updateNeonBusy()
