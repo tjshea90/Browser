@@ -181,6 +181,7 @@ class DownloadPopup(private val ctx: Context, private val pal: Pal, private val 
         private fun onHeader(ev: MotionEvent): Boolean = ev.y <= window.top + ctx.dp(44)
 
         override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+            System.err.println("DBGI act=${ev.actionMasked} x=${ev.x} y=${ev.y} raw=${ev.rawX},${ev.rawY} mode=$mode down=$downX,$downY slop=$slop hdr=${window.top + ctx.dp(44)}")
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     downX = ev.rawX; downY = ev.rawY; start = geo
@@ -198,6 +199,7 @@ class DownloadPopup(private val ctx: Context, private val pal: Pal, private val 
 
         override fun onTouchEvent(ev: MotionEvent): Boolean {
             val dx = (ev.rawX - downX) / density; val dy = (ev.rawY - downY) / density
+            System.err.println("DBGT act=${ev.actionMasked} raw=${ev.rawX},${ev.rawY} mode=$mode dx=$dx dy=$dy")
             when (ev.actionMasked) {
                 MotionEvent.ACTION_MOVE -> {
                     if (mode == 2) gesture(FloatBox.moved(start, dx, dy, areaW(), areaH(), boxH(), limits))
