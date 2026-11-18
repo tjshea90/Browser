@@ -1373,7 +1373,7 @@ class Soak:
                     m0 = self.log.size(); self.ph.debug("videodl"); time.sleep(3)
                     first = health_events(self.log.since(m0), "lab", "videodl")
                     r["before_press"] = first[-1]["rest"] if first else "no answer"
-                    self.ph.tap(w // 2, 26 + 40 + 150); time.sleep(7)    # the player's big Play button fills the frame
+                    self.ph.tap(w // 10, 26 + 40 + 150); time.sleep(7)    # the player's big Play button fills the frame (left edge: clear of the download window)
                 m1 = self.log.size(); self.ph.debug("videodl"); time.sleep(4)
                 said = health_events(self.log.since(m1), "lab", "videodl")
                 r["finder_said"] = said[-1]["rest"] if said else "no answer"
@@ -1403,8 +1403,10 @@ class Soak:
                 else:
                     r.update(status="ok", file=got[0], size=got[1])
                     if mode == "keep":                                  # VS2: the player's frame goes to another document AFTER the find: the row must stay (captured)
-                        self.ph.tap(w // 2, 26 + 34 + 60 + 8); time.sleep(8)
+                        self.ph.tap(w // 10, 26 + 34 + 60 + 8); time.sleep(8)       # (the left edge: the download window sits at the top RIGHT of the page and eats a tap in the middle; lab run 44245067663)
                         m2 = self.log.size(); self.ph.debug("videodl"); time.sleep(5)
+                        if self.wait_dialog(m2, 12):                                 # (this second pick asks "Download this video?" again: answer no, or the dialog covers the next variant)
+                            self.answer(False)
                         again = health_events(self.log.since(m2), "lab", "videodl")
                         gl = health_events(self.log.since(m1), "media", "frame-gone")
                         r["after_switch"] = again[-1]["rest"] if again else "no answer"
