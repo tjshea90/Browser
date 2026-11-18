@@ -117,17 +117,25 @@ class MediaList(private val max: Int = 48) {
     fun find(url: String): MediaCandidate? = MediaCandidate.keyOf(url).let { k -> items.firstOrNull { it.key == k } }
     fun clear() { items.clear(); pending.clear(); blobs.clear(); version++ }
 
-    /** VS2: what is offered right now is captured (film-sized ones only: a preview or an advertisement of a few MB is not worth a place that nothing can take back). @return how many were newly captured. */
+    /**
+     * VS2: what is offered right now AND looks like a film is captured. Film evidence = a stream whose playlist was read and runs [FILM_EVIDENCE_MS] or more, a file of [BIG_FILE] or more (or 4 MB with that length
+     * of picture), or anything the person opened. A clip, a preview or an advertisement is NOT captured: the clip and advertisement rules keep working for them. @return how many were newly captured.
+     */
     fun capture(): Int {
         var n = 0
-        for (c in usableUnsorted()) {
-            if (c.captured || !c.counts() || c.live || c.drm) continue
-            if (clipNextToFilm(c, items)) continue
-            if (c.kind == MediaKind.FILE && !(c.touched || c.interest || c.length >= MIN_WITH_STREAM || c.durationMs >= 20_000 || c.knownHeight >= 480)) continue
+        for (c in items) {
+            if (c.captured || c.live || c.drm || !c.counts()) continue
+            if (!(c.interest || filmEvidence(c))) continue
             c.captured = true; n++
         }
         if (n > 0) version++
         return n
+    }
+
+    private fun filmEvidence(c: MediaCandidate): Boolean {
+        if (c.decoy) return false
+        if (c.kind != MediaKind.FILE) return c.looked && c.durationMs >= FILM_EVIDENCE_MS
+        return c.length >= BIG_FILE || (c.length >= MIN_WITH_STREAM && c.durationMs >= FILM_EVIDENCE_MS)
     }
 
     /**
@@ -157,8 +165,10 @@ class MediaList(private val max: Int = 48) {
         capture()                                                       // (what the person could see a moment ago is kept: VS2)
         val inFrame = items.filter { it.frame.isNotEmpty() && it.frame in docs }
         if (inFrame.isEmpty()) return emptyList()
-        val gone = inFrame.filter { !it.captured }
-        for (c in inFrame) if (c.captured) c.orphan = true             // kept, last in the list, until a live player offers a film of its own
+        // kept, last in the list, until a live player offers a film of its own: what was captured, and a stream nobody has read yet (it may well be the film; a clip is dropped as before)
+        fun keeps(c: MediaCandidate) = c.captured || (c.kind != MediaKind.FILE && !c.looked && c.counts())
+        val gone = inFrame.filter { !keeps(it) }
+        for (c in inFrame) if (keeps(c)) c.orphan = true
         items.removeAll(gone.toSet()); version++
         return gone.map { it.key }
     }
@@ -370,6 +380,10 @@ class MediaList(private val max: Int = 48) {
         const val MIN_WITH_STREAM = 4L * 1024 * 1024
         /** A stream shorter than this is a clip (an advertisement, a preview), not something to save. */
         const val MIN_STREAM_MS = 20_000L
+        /** VS2: a stream of this length or more (its playlist was read) is a film or an episode, not an advertisement or a preview: it is captured when offered. */
+        const val FILM_EVIDENCE_MS = 120_000L
+        /** VS2: a file of this size is a film whatever else is known. */
+        const val BIG_FILE = 40L * 1024 * 1024
         private const val PENDING_MAX = 32
         /** RX3-V3: a file that played under this long, then replaced on the same element by one three times longer, was an advertisement. */
         private const val AD_MAX_MS = 90_000L
