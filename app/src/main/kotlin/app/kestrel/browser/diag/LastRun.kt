@@ -27,7 +27,7 @@ object LastRun {
     const val KEEP_DAYS = 7
     private const val MAX_EVENTS = 40
     private const val LAZY_MS = 1500L
-    private const val MAX_CHARS = 6_000
+    private const val MAX_CHARS = 12_000
 
     private val lock = Any()
     /** CR1f (owner 2026-11-18, doraby: the note stopped 1.3 s after the start and could not say crash or freeze): the lazy flush used to wait on the MAIN looper, so a frozen screen thread stopped the note too. It has its own daemon thread now. */
