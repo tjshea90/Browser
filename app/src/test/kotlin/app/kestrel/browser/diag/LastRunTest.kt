@@ -15,7 +15,6 @@ import org.robolectric.annotation.Config
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import org.robolectric.shadows.ShadowLooper
 
 /** CR1: the note that says how the last run ended (on screen / in the background / on purpose) and why, written only on notable events. */
 @RunWith(RobolectricTestRunner::class)
@@ -23,17 +22,17 @@ import org.robolectric.shadows.ShadowLooper
 class LastRunTest {
     private val ctx: Context get() = RuntimeEnvironment.getApplication()
 
-    @Before fun clean() { LastRun.resetForTest(); ctx.filesDir.deleteRecursively(); ctx.filesDir.mkdirs() }
+    @Before fun clean() { LastRun.resetForTest(); LastRun.lazyMs = 30; ctx.filesDir.deleteRecursively(); ctx.filesDir.mkdirs() }
 
     /** The note is a process-wide singleton: leave it switched off so no later test in the same JVM writes files into a folder that is gone (and none shares the IO lane with it). */
-    @org.junit.After fun off() { ioDoneQuiet(); LastRun.resetForTest() }
+    @org.junit.After fun off() { ioDoneQuiet(); LastRun.resetForTest(); LastRun.lazyMs = 1500 }
     private fun ioDoneQuiet() { try { val l = CountDownLatch(1); Io.exec { l.countDown() }; l.await(5, TimeUnit.SECONDS) } catch (e: Exception) { /* ignore */ } }
 
     /** The IO lane is one thread in order: when this latch opens, every earlier write is on disk. */
     private fun ioDone() { val l = CountDownLatch(1); Io.exec { l.countDown() }; assertTrue("the IO lane answers", l.await(10, TimeUnit.SECONDS)) }
 
-    /** The lazy flush waits 1.5 s on the main looper: advance its clock, then wait for the write. */
-    private fun lazyFlush() { ShadowLooper.idleMainLooper(2, TimeUnit.SECONDS); ioDone() }
+    /** CR1f: the lazy flush runs on the note's own thread (30 ms in the tests), never on the main looper: wait for it, then for the IO lane. The main looper is NOT idled here on purpose. */
+    private fun lazyFlush() { Thread.sleep(200); ioDone() }
 
     private fun runThatEnds(state: String?, startAt: Long) {
         LastRun.resetForTest()
@@ -127,5 +126,38 @@ class LastRunTest {
         kept.setLastModified(System.currentTimeMillis() - 8L * 86_400_000)
         assertFalse(LastRun.reportLines(ctx).joinToString("\n").contains("did not end quietly"))
         assertNotNull(Health.report(ctx).takeIf { it.contains("Last run") })
+    }
+
+    @Test fun theNoteIsWrittenEvenWhileTheMainThreadIsFrozenAndAStallIsNamedAsTheCause() {
+        LastRun.begin(ctx, 7_000_000L); ioDone()
+        LastRun.note("life", "resume", "+1.0s life resume", 7_001_000L)
+        LastRun.note("page", "loaded", "+9.0s page loaded host=doraby.com paint=1700ms done=6300ms blocked=1 visit=1 ok=true", 7_009_000L)
+        LastRun.note("ui", "STALL", "+12.0s ui STALL 2600ms: the UI thread is blocked at", 7_012_000L)
+        LastRun.note("ui", "  at", "+12.0s ui   at java.lang.Object.wait(Native Method)", 7_012_000L)
+        lazyFlush()                                                   // (the main looper was never idled: a frozen screen thread cannot stop the write)
+        val text = File(ctx.filesDir, "last-run.txt").readText()
+        assertTrue(text, text.contains("host=doraby.com") && text.contains("ui STALL") && text.contains("java.lang.Object.wait"))
+        LastRun.resetForTest(); LastRun.lazyMs = 30
+        LastRun.begin(ctx, 7_100_000L); ioDone()
+        val report = LastRun.reportLines(ctx, 7_200_000L).joinToString("\n")
+        assertTrue(report, report.contains("SCREEN THREAD WAS FROZEN") && report.contains("a freeze, not a crash"))
+        assertFalse(report, report.contains("NO crash note"))
+    }
+
+    @Test fun theStartAndTheStallLinesAreKeptButTouchesAndFramesAreNot() {
+        assertTrue(LastRun.wants("ui", "STALL")); assertTrue(LastRun.wants("ui", "  at")); assertFalse(LastRun.wants("ui", "late-beat")); assertFalse(LastRun.wants("ui", "slow"))
+        assertTrue(LastRun.wants("start", "paint")); assertTrue(LastRun.wants("tabs", "early-cover")); assertTrue(LastRun.wants("engine", "warm-start"))
+        assertFalse(LastRun.wants("start", "frame")); assertFalse(LastRun.wants("tabs", "look-saved"))
+    }
+
+    @Test fun theThreeNewestRunsThatDidNotEndQuietlyAreKeptAndAFourthDropsTheOldest() {
+        val starts = longArrayOf(8_000_000L, 8_500_000L, 9_000_000L, 9_500_000L)
+        for (st in starts) { runThatEnds("fg", st); LastRun.resetForTest(); LastRun.lazyMs = 30; LastRun.begin(ctx, st + 100_000L); ioDone() }
+        val text = LastRun.reportLines(ctx, 9_700_000L).joinToString("\n")
+        assertTrue(text, text.contains("EARLIER run") && text.contains("EVEN EARLIER"))
+        val stamps = Regex("started (\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d)").findAll(text).map { it.groupValues[1] }.toList()
+        assertEquals("the newest three, each told once: $text", 3, stamps.size)
+        assertEquals(3, stamps.toSet().size)
+        assertTrue(File(ctx.filesDir, "last-run-ended-3.txt").isFile)
     }
 }
