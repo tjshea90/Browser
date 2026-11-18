@@ -11,7 +11,7 @@ try { ({ chromium } = require('playwright')); } catch (e) { ({ chromium } = requ
 
 const DIR = path.join(__dirname, '..', 'geckoapp', 'src', 'main', 'assets', 'kestrel-shields');
 const read = (f) => fs.readFileSync(path.join(DIR, f), 'utf8');
-const VFIND = read('vfind.js'), VBAR = read('videobar.js'), CONTENT = read('content.js'), TURN = read('turn.js'), PLAYER = read('player.js');
+const VFIND = read('vfind.js'), VBAR = read('videobar.js'), CONTENT = read('content.js'), TURN = read('turn.js'), PLAYER = read('player.js'), QUALITY = read('quality.js'), QMAIN = read('quality-main.js');
 
 let browser;
 async function launch() { browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required', '--mute-audio'] }); }
@@ -80,6 +80,8 @@ async function open(body, o) {
   if (o.content) await page.addInitScript({ content: CONTENT });
   await page.addInitScript({ content: VBAR });
   if (o.turn) await page.addInitScript({ content: TURN });
+  if (o.qmain) await page.addInitScript({ content: QMAIN });                    // QL1: the page-world hook that notes hls.js / dash.js / Shaka players
+  if (o.quality) await page.addInitScript({ content: QUALITY });                // QL1: the quality list of the film (quality.js), loaded before player.js like the manifest does
   if (o.player) await page.addInitScript({ content: PLAYER });
   await page.goto('https://movie.example/');
   if (o.wait !== false) await page.waitForFunction(() => { const v = document.getElementById('v') || (window.__deepV && window.__deepV()); return v && v.readyState >= 3 && v.duration > 50; }, null, { timeout: 15000 });
