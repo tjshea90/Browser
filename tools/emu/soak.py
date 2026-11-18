@@ -1336,6 +1336,11 @@ class Soak:
             w, h = self.screen
             for mode in ("mse", "msel", "msel0", "auto", "click", "nest", "worker"):
                 before = self.ph.downloads(); lm = self.log.size()
+                # VS1d (lab run 44233990309 found the rule switched OFF for the whole run, so nothing was ever held and msel0 'started'): the embed variants run with the owner's setting, Videos start only when I press play = ON;
+                # the finder variants keep the conditions they have always had (off)
+                self.ph.debug("vpress", "1" if mode.startswith("mse") else "0"); time.sleep(1.5)
+                try: vlog0 = os.path.getsize(os.path.join(self.out, "vidlab.log"))                  # the embed's states are read from here on, per variant (the file keeps every variant's)
+                except OSError: vlog0 = 0
                 self.ph.open_url("http://10.0.2.2:8000/watch3?v=%s" % mode)
                 t0 = time.time()
                 while time.time() - t0 < 25 and not [e for e in health_events(self.log.since(lm), "page", "loaded") if "10.0.2.2" in e["rest"]]:
@@ -1348,8 +1353,9 @@ class Soak:
                     if mode != "msel0": self.ph.tap(w // 2, 26 + 34 + 60 + 8)
                     time.sleep(16 if mode == "mse" else 26)
                     try:
-                        with open(os.path.join(self.out, "vidlab.log")) as f:
-                            states = [ln.split("/state?s=")[1].split("&")[0].split(" ")[0] for ln in f.read().splitlines() if "/state?s=" in ln]
+                        with open(os.path.join(self.out, "vidlab.log"), "rb") as f:
+                            f.seek(vlog0)
+                            states = [ln.split("/state?s=")[1].split("&")[0].split(" ")[0] for ln in f.read().decode("utf-8", "replace").splitlines() if "/state?s=" in ln]
                     except OSError:
                         states = []
                     r["player_states"] = states
