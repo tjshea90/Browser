@@ -761,6 +761,21 @@ VIDEO_PAGES = [
     ("wikimedia-commons", "https://commons.wikimedia.org/wiki/File:Big_Buck_Bunny_4K.webm", 25),
 ]
 
+# CR1 (owner message 2026-11-18: "The app crashed when i went to youtube"): the YouTube-only journey of the `yt` suite. Pages first (what a person meets before a film), then watch pages, each one watched,
+# scrolled under the playing film, left (Home key) and returned to. (name, url, screens to scroll, seconds to stay) / (name, url, seconds to watch)
+YT_PAGES = [
+    ("yt-home", "https://m.youtube.com/", 3, 4),
+    ("yt-results-a", "https://m.youtube.com/results?search_query=android+16", 3, 4),
+    ("yt-results-b", "https://m.youtube.com/results?search_query=relaxing+music", 3, 4),
+    ("yt-desktop-home", "https://www.youtube.com/", 3, 4),
+]
+YT_WATCH = [
+    ("yt-short", "https://m.youtube.com/watch?v=jNQXAC9IVRw", 40),
+    ("yt-long", "https://m.youtube.com/watch?v=aqz-KE-bpKQ", 60),
+    ("yt-music", "https://m.youtube.com/watch?v=dQw4w9WgXcQ", 45),
+    ("yt-api", "https://m.youtube.com/watch?v=M7lc1UVf-VE", 40),
+]
+
 # Safe Browsing test pages (RX4-X3): Mozilla's are answered from the engine's built-in test tables (they prove the machinery is on), Google's from the real lists (they prove the list download
 # and the key work). A page the engine blocks shows the app's warning screen: the Health line "page error ... kind=Dangerous".
 SAFEBROWSING = [
@@ -1254,6 +1269,76 @@ class Soak:
         self.scan_log(lines, name)
         self.check_alive(name)
         self.record(r)
+
+    # ---- CR1: a person's YouTube visit, repeated, with the things that happen around it on a 2 GB tablet
+    def mem_hog(self, mb):
+        """Takes `mb` MB of the emulated phone's RAM the way another app would (a file in the RAM-backed /dev). False when this phone does not let the shell do it."""
+        out = self.ph.a.sh("dd if=/dev/zero of=/dev/kst_hog bs=1048576 count=%d 2>&1; ls -l /dev/kst_hog 2>&1" % mb, timeout=90)
+        return "kst_hog" in out and "No such file" not in out and "Permission denied" not in out and "Read-only" not in out
+
+    def mem_hog_free(self):
+        self.ph.a.sh("rm -f /dev/kst_hog", timeout=20)
+
+    def yt_after(self, name, pressure):
+        """After a film was watched: scroll under it, leave the app with the film on the page, wait, come back, press Back. Every step is checked for a dead app / engine."""
+        w, h = self.screen
+        lmark = self.log.size()
+        for _ in range(2):
+            self.ph.swipe(w // 2, int(h * 0.75), w // 2, int(h * 0.30), 400)
+            time.sleep(1.5)
+        self.ph.key("KEYCODE_HOME")
+        time.sleep(20)                                   # the app is out of sight with a film page behind it: Android may trim it, kill the engine's process or the whole app
+        self.ph.start_app()
+        time.sleep(7)
+        lines = self.log.since(lmark)
+        found, stalls = self.scan_log(lines, name + " (left and returned)")
+        alive = self.check_alive(name + " (left and returned)")
+        trims = health_events(lines, "mem", "trim")
+        gone = [e for e in health_events(lines, "gecko") if e["ev"] in ("onKill", "onCrash", "recover-after-kill", "recover-after-crash", "revive-deferred")]
+        self.ph.key("KEYCODE_BACK")
+        time.sleep(2)
+        self.record({"kind": "yt-leave", "name": name + "-leave", "status": "ok" if alive and not found else ("crash" if found else "restart"), "pressure": pressure,
+                     "trims": [e["rest"][:100] for e in trims][:4], "engine_gone": [e["ev"] + " " + e["rest"][:90] for e in gone][:4], "ui_stalls": len(stalls)})
+        if gone:
+            self.issue("medium", "engine", "%s: the engine's page process went (%s) while the app was left%s" % (name, ", ".join(sorted({e["ev"] for e in gone})), " under RAM pressure" if pressure else ""), shot=False)
+
+    def yt_journey(self, minutes):
+        """The `yt` suite: rounds of (YouTube pages, watch pages with leave + return) until the time is up; every second round runs with `kst_hog` MB of RAM taken (the 2 GB tablet has about 650 MB free
+        with one page open, research/TABLET_DIAG_2026-11-16.md). The report's table says per step: loaded, played, process alive, trims, engine process gone."""
+        deadline = time.time() + minutes * 60
+        rounds = 0
+        hog_ok = None
+        while time.time() < deadline:
+            rounds += 1
+            pressure = rounds % 2 == 0
+            if pressure:
+                pss, avail, procs = self.sample()
+                take = max(150, min(450, avail - 350)) if avail > 0 else 300     # leave about 350 MB: enough to run, little enough that the engine feels it
+                hog_ok = self.mem_hog(take)
+                say("yt round %d: RAM pressure %s (took %d MB, MemAvailable was %d MB)" % (rounds, "ON" if hog_ok else "NOT possible on this phone", take, avail))
+            else:
+                say("yt round %d: normal memory" % rounds)
+            try:
+                for name, url, scrolls, dwell in YT_PAGES:
+                    if time.time() > deadline:
+                        break
+                    self.load_page(name + ("-p" if pressure else ""), url, scrolls, dwell, timeout=90, kind="videosite")
+                    self.check_alive(name)
+                for name, url, watch in YT_WATCH:
+                    if time.time() > deadline:
+                        break
+                    self.video_site(name + ("-p" if pressure else ""), url, watch)
+                    self.yt_after(name + ("-p" if pressure else ""), pressure)
+                    pss, avail, procs = self.sample()
+                    say("yt %s: app PSS %d MB, MemAvailable %d MB, %d app processes, %.0f min left" % (name, pss, avail, procs, (deadline - time.time()) / 60))
+            except Exception as e:                                   # a bug in this script must never end the run
+                self.issue("low", "tooling", "yt round %d raised %r" % (rounds, e))
+            finally:
+                if pressure:
+                    self.mem_hog_free()
+            self.ph.debug("closetabs")
+            time.sleep(3)
+        self.sample()
 
     # ---- RX4-X2: which downloads ask first, and what the question says
     def guard_downloads(self):
@@ -3936,7 +4021,7 @@ _install_daily()
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -4002,6 +4087,8 @@ def main():
             s.audio_round()      # (the sound check rides along: its verdict is the page's own clock now, run 43745675957 showed the old one was wrong)
         if a.suite == "compat":
             s.compat_round(a.minutes)
+        if a.suite == "yt":
+            s.yt_journey(a.minutes)                          # (CR1, owner message 2026-11-18: the app crashed on YouTube: a YouTube-only journey with leave / return and RAM pressure)
         if a.suite == "daily":
             s.daily(a.minutes)                               # (LAB3, owner message 62: a person's day on the app's real defaults, then the report for the build)
         if a.suite in ("soak", "all"):
