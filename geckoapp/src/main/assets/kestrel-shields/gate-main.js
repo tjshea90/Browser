@@ -437,6 +437,7 @@
     r.adopted = true;
     if (r.open || !on) return;
     track(el);
+    if (r.open) return;                                                                              // VP2: a frame the person's tap started opened it in track(): leave its markup as the page wrote it
     var changed = false;
     try {
       var p = oGetAttr.call(el, 'preload');
