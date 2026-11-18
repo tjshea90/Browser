@@ -15,6 +15,7 @@ import org.robolectric.annotation.Config
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import org.robolectric.shadows.ShadowLooper
 
 /** CR1: the note that says how the last run ended (on screen / in the background / on purpose) and why, written only on notable events. */
 @RunWith(RobolectricTestRunner::class)
@@ -26,6 +27,9 @@ class LastRunTest {
 
     /** The IO lane is one thread in order: when this latch opens, every earlier write is on disk. */
     private fun ioDone() { val l = CountDownLatch(1); Io.exec { l.countDown() }; assertTrue("the IO lane answers", l.await(10, TimeUnit.SECONDS)) }
+
+    /** The lazy flush waits 1.5 s on the main looper: advance its clock, then wait for the write. */
+    private fun lazyFlush() { ShadowLooper.idleMainLooper(2, TimeUnit.SECONDS); ioDone() }
 
     private fun runThatEnds(state: String?, startAt: Long) {
         LastRun.resetForTest()
@@ -49,8 +53,7 @@ class LastRunTest {
         runThatEnds("fg", 1_000_000L)
         LastRun.note("page", "loaded", "+12.0s page loaded host=m.youtube.com paint=900ms done=2400ms blocked=3 visit=1 ok=true", 1_012_000L)
         LastRun.note("mem", "trim", "+20.0s mem trim level=15 avail=212MB thr=144MB low=false trim=15@0s", 1_020_000L)
-        ioDone()
-        Thread.sleep(1800); ioDone()                                       // the lazy flush of the two lines above
+        lazyFlush()                                                        // the lazy flush of the two lines above
         LastRun.resetForTest()                                              // the process is gone; the next one starts
         LastRun.begin(ctx, 1_600_000L); ioDone()
         val lines = LastRun.reportLines(ctx, 1_700_000L)
@@ -78,7 +81,7 @@ class LastRunTest {
     @Test fun anUncaughtJavaExceptionDuringTheRunIsNamedAsTheCause() {
         runThatEnds("fg", System.currentTimeMillis() - 60_000L)
         CrashNote.write(ctx, Thread.currentThread(), RuntimeException("boom"))        // written now = inside the run's window
-        LastRun.resetForTest(); LastRun.begin(ctx, System.currentTimeMillis() + 5_000L); ioDone()
+        LastRun.resetForTest(); LastRun.begin(ctx, System.currentTimeMillis()); ioDone()
         val text = LastRun.reportLines(ctx).joinToString("\n")
         assertTrue(text, text.contains("an uncaught Java exception"))
         assertFalse(text, text.contains("NO crash note"))
@@ -89,7 +92,7 @@ class LastRunTest {
         runThatEnds("fg", started)
         val dump = File(ctx.filesDir, "mozilla/abc.default/minidumps").also { it.mkdirs() }
         File(dump, "x.extra").writeText("{\"ProcessType\":\"default\"}")
-        LastRun.resetForTest(); LastRun.begin(ctx, System.currentTimeMillis() + 5_000L); ioDone()
+        LastRun.resetForTest(); LastRun.begin(ctx, System.currentTimeMillis()); ioDone()
         assertTrue(LastRun.reportLines(ctx).joinToString("\n").contains("probably the engine"))
 
         val note = "kestrel-last-run 1\nbuild=x\nstarted=1000\nstate=fg\nstateAt=2000\nsaved=5000\navailMb=300\nnextStart=900000\nbootAt=700000\ncrashAt=0\nengineAt=0\n"
@@ -103,7 +106,7 @@ class LastRunTest {
         assertFalse(File(ctx.filesDir, "last-run.txt").exists())
         LastRun.begin(ctx, 4_000_000L); ioDone()
         for (i in 1..60) LastRun.note("page", "loaded", "+$i.0s page loaded host=h$i.example", 4_000_000L + i * 1000)
-        ioDone(); Thread.sleep(1800); ioDone()
+        lazyFlush()
         val text = File(ctx.filesDir, "last-run.txt").readText()
         assertEquals(24, text.lines().count { it.startsWith("ev=") })
         assertTrue("the newest lines win: $text", text.contains("host=h60.example") && !text.contains("host=h1.example"))

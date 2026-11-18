@@ -154,7 +154,7 @@ object LastRun {
         if (abnormal) {
             val crashed = crashAt in started..(if (next > 0) next else Long.MAX_VALUE) && crashAt > 0
             val engine = engineAt in started..(if (next > 0) next else Long.MAX_VALUE) && engineAt > 0
-            val rebooted = bootAt > 0 && saved > 0 && bootAt > saved
+            val rebooted = bootAt > 0 && saved > 0 && bootAt > saved + 5_000   // a tablet that restarted came back at least some seconds after the last note
             out.add("  " + when {
                 crashed -> "Cause: an uncaught Java exception (the crash note is shown below as EARLIER CRASH)."
                 rebooted -> "Cause: the whole tablet restarted after the last note (empty battery or a restart), not the app."
