@@ -962,6 +962,19 @@ open class BrowserActivity : Activity(), DockListener {
             "minipanel" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); Io.main.post { miniNav.setOpen(arg != "0", animate = false); Health.log("lab", "minipanel", "open=${miniNav.isOpen}") } }   // MT1 lab: the one-hand panel on / off
             "minitabs" -> { i.removeExtra("kestrel_arg"); Io.main.post { miniNav.toggleTray(); Health.log("lab", "minitabs", "tray=${miniNav.trayOpen} tabs=${tabs.size}") } }   // MT1 lab: the panel's tab tray
             "previews" -> { i.removeExtra("kestrel_arg"); Io.main.post { Health.log("lab", "previews", previewLine()); for (t in tabs) Health.log("lab", "preview", "tab=${t.id} host=${UrlParts.hostOf(t.url) ?: "-"} has=${t.thumb != null} forPage=${if (t.thumbPage.isEmpty()) "-" else t.thumbPage.substringBefore('/')} ok=${t.thumb == null || t.thumbPage == ThumbRule.pageOf(t.url)}") } }   // TP1 lab
+            "trayact" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); Io.main.post {          // MT1 lab: "switch:N" / "close:N" / "new" on the open tab tray
+                val ok = miniNav.labTrayAct(arg.substringBefore(':'), arg.substringAfter(':', "0").toIntOrNull() ?: 0)
+                Health.log("lab", "trayact", "ok=$ok kind=${arg.substringBefore(':')} tabs=${tabs.size} current=${tabs.indexOf(current)} tray=${miniNav.trayOpen} keys=${miniNav.keyboardShowing}") } }
+            "copyurl" -> { i.removeExtra("kestrel_arg"); Io.main.post {                                                          // UC1 lab: press the address bar, tap Copy, compare the clipboard with the tab's address
+                val t = current
+                dock.urlField.requestFocus()
+                Io.main.postDelayed({
+                    val vis = dock.copyChip.visibility == View.VISIBLE
+                    dock.copyChip.performClick()
+                    val clip = getSystemService(ClipboardManager::class.java)?.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                    Health.log("lab", "copyurl", "visible=$vis exact=${clip == (t?.url ?: "-")} chars=${clip.length}")
+                    dock.urlField.clearFocus()
+                }, 600) } }
             "opengrid" -> { i.removeExtra("kestrel_arg"); Io.main.post { onTabs() } }   // TP1 lab: the tab grid
             "switchtab" -> { val n = (i.getStringExtra("kestrel_arg") ?: "").toIntOrNull() ?: 0; i.removeExtra("kestrel_arg"); Io.main.post { tabs.getOrNull(n)?.let { hideTabGrid(); show(it) } } }   // TP1 lab: the n-th tab to the front
             "closetabs" -> Io.main.post { for (t in tabs.toList()) doCloseTab(t); Health.log("lab", "closetabs", "tabs=${tabs.size}") }

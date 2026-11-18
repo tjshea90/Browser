@@ -85,7 +85,7 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
         setOnClickListener { l.onReloadOrStop() }
     }
     /** UC1: the Copy button at the right end of the address pill, there only while the bar is pressed. */
-    internal val copyChip: CopyChip by lazy { CopyChip(ctx, pal, urlField) { boundUrl } }
+    val copyChip: CopyChip by lazy { CopyChip(ctx, pal, urlField) { boundUrl } }
     private var boundUrl = ""
     private val spacer = View(ctx) // fills the middle of the one-row layout while the address pill is hidden (Home)
 

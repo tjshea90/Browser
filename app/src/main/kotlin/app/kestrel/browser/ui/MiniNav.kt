@@ -355,6 +355,14 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         applyGeometry()
     }
 
+    /** Lab (debug builds): the tray's actions without a finger: "switch" / "close" on row [n], or "new". @return false when the tray is not open or the row does not exist. */
+    fun labTrayAct(kind: String, n: Int): Boolean {
+        if (!trayOpen) return false
+        val hit = when (kind) { "switch" -> TabTrayModel.Hit.Row(n); "close" -> TabTrayModel.Hit.Close(n); "new" -> TabTrayModel.Hit.New; else -> return false }
+        if (hit !is TabTrayModel.Hit.New && (n < 0 || n >= trayTabs.size)) return false
+        tray.actForLab(hit); return true
+    }
+
     /** The host tells the panel that the tab list, a title or a preview changed: the badge and, when the tray is open, its rows follow (nothing is done while the panel is away). */
     fun tabsChanged() {
         if (!isOpen || panel.visibility != VISIBLE) return
@@ -1136,6 +1144,8 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
             }
             return true
         }
+
+        fun actForLab(h: TabTrayModel.Hit) = act(h)
 
         private fun act(h: TabTrayModel.Hit) {
             when (h) {
