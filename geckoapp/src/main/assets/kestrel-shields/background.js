@@ -335,6 +335,13 @@ function guardAnswer(host, topHost) { // on: the pop-up guard applies; skip (RX3
 onMsg(function (m, sender) {
   if (!m) return undefined;
   var tabId = (sender && sender.tab) ? sender.tab.id : -1;
+  if (m.k === 'nm') { // NM1: names.js (top frame) says what the page claims about WHICH video is on: numbers and two short strings, checked here, with the page's address
+    if (tabId < 0 || !sender || sender.frameId !== 0) return undefined;
+    var nmN = function (x, hi) { x = +x; return (x >= 1 && x <= hi) ? Math.floor(x) : 0; };
+    var nmT = function (x) { return String(x === undefined || x === null ? '' : x).replace(/[\u0000-\u001f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80); };
+    send({ k: 'nm', p: tabTop.get(tabId) || '', sh: nmT(m.sh), s: nmN(m.s, 199), e: nmN(m.e, 9999), et: nmT(m.et) }).catch(function () {});
+    return undefined;
+  }
   if (m.k === 'ptap') { // VP2: a trusted click in the top page (content.js sends it from the top frame only)
     if (tabId >= 0 && sender && sender.frameId === 0) { personTap.set(tabId, Date.now()); if (personTap.size > 60) personTap.delete(personTap.keys().next().value); }
     return undefined;
