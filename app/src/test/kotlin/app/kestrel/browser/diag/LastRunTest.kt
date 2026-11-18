@@ -160,4 +160,31 @@ class LastRunTest {
         assertEquals(3, stamps.toSet().size)
         assertTrue(File(ctx.filesDir, "last-run-ended-3.txt").isFile)
     }
+
+    private fun note(avail: Int, mem: String) = "kestrel-last-run 1\nbuild=x\nstarted=1000\nstate=fg\nstateAt=2000\nsaved=5000\navailMb=$avail\n" + (if (mem.isNotEmpty()) "mem=$mem\n" else "") + "nextStart=900000\nbootAt=0\ncrashAt=0\nengineAt=0\nev=+1.0s life resume\n"
+
+    @Test fun aKillWithLowMemoryIsNamedAsTheMemoryKillerAndTheMemoryOfEveryProcessIsShown() {
+        val low = LastRun.read(note(210, "free=40MB avail=210MB cached=300MB swapfree=0MB psi{some avg10=31.50 avg60=20.10 avg300=9.00 t=123 full avg10=12.00 avg60=7.00 avg300=3.00 t=456} app{main=310MB sandboxed_tab=640MB gpu=250MB utility=120MB sum=1320MB}"))
+        val t = low.lines.joinToString("\n")
+        assertTrue(t, t.contains("memory at the last note: free=40MB") && t.contains("sandboxed_tab=640MB") && t.contains("sum=1320MB"))
+        assertTrue(t, t.contains("memory was LOW") && t.contains("memory killer"))
+        val fine = LastRun.read(note(900, "free=500MB avail=900MB cached=300MB swapfree=0MB app{main=310MB sum=310MB}")).lines.joinToString("\n")
+        assertTrue(fine, fine.contains("ended from outside") && fine.contains("held about 310 MB"))
+        assertFalse(fine, fine.contains("memory was LOW"))
+    }
+
+    @Test fun theNoteGetsAMemorySampleAtMostEveryFifteenSecondsWhileTheAppIsInFront() {
+        LastRun.begin(ctx, 20_000_000L); ioDone()
+        val t0 = System.currentTimeMillis()
+        LastRun.tick(t0 + 100)                                                       // still "starting": nothing
+        ioDone(); assertFalse(File(ctx.filesDir, "last-run.txt").readText().contains("state=fg"))
+        LastRun.note("life", "resume", "+1.0s life resume", t0); ioDone()
+        val first = File(ctx.filesDir, "last-run.txt").readText()
+        assertTrue(first, first.contains("state=fg") && first.contains("mem=free="))
+        LastRun.tick(t0 + 1_000); ioDone()
+        assertEquals("too soon: not written again", first, File(ctx.filesDir, "last-run.txt").readText())
+        LastRun.tick(t0 + 20_000); ioDone()
+        assertTrue("15 s later it is", File(ctx.filesDir, "last-run.txt").readText().contains("saved=${t0 + 20_000}"))
+    }
 }
+
