@@ -1334,7 +1334,7 @@ class Soak:
         try:
             time.sleep(4)
             w, h = self.screen
-            for mode in ("auto", "click", "nest", "worker"):
+            for mode in ("mse", "auto", "click", "nest", "worker"):
                 before = self.ph.downloads(); lm = self.log.size()
                 self.ph.open_url("http://10.0.2.2:8000/watch3?v=%s" % mode)
                 t0 = time.time()
@@ -1342,6 +1342,22 @@ class Soak:
                     time.sleep(1.5)
                 time.sleep(7)                                           # the player frame, its script and (auto, nest, worker) its stream requests
                 r = {"kind": "vs", "name": "vidsrc-style-" + mode}
+                if mode == "mse":                                       # doraby's way: the person taps the page's Play button, the frame loads, its MediaSource player must START without a second tap
+                    self.ph.tap(w // 2, 26 + 34 + 60 + 8); time.sleep(16)
+                    try:
+                        with open(os.path.join(self.out, "vidlab.log")) as f:
+                            states = [ln.split("/state?s=")[1].split("&")[0].split(" ")[0] for ln in f.read().splitlines() if "/state?s=" in ln]
+                    except OSError:
+                        states = []
+                    r["player_states"] = states
+                    ok_start = "playing" in states
+                    r["status"] = "ok" if ok_start else "player-stuck"
+                    if not ok_start:
+                        self.issue("high", "finding-video", "VS1d: the embed's MediaSource player never started after the person's tap on the movie page (states seen: %s): 'stuck on loading'" % (states or "none"), shot=True)
+                    self.shot("vs-mse")
+                    self.record(r)
+                    self.ph.debug("closetabs"); time.sleep(3)
+                    continue
                 if mode == "click":
                     m0 = self.log.size(); self.ph.debug("videodl"); time.sleep(3)
                     first = health_events(self.log.since(m0), "lab", "videodl")
@@ -4058,6 +4074,9 @@ class Soak:
             L.append("## A vidsrc-style embed: found and saved? (VS1)")
             L.append("")
             for e in vsr:
+                if e.get("player_states") is not None:
+                    L.append("- %s: %s; the embedded player reported: %s" % (e["name"], e.get("status"), ", ".join(e["player_states"]) or "nothing"))
+                    continue
                 L.append("- %s: %s; finder: %s%s%s" % (e["name"], e.get("status"), e.get("finder_said"), ("; before the press: %s" % e["before_press"]) if e.get("before_press") else "", ("; saved %s (%s bytes)" % (e.get("file"), e.get("size"))) if e.get("file") else ("; " + e["note"] if e.get("note") else "")))
             L.append("")
             if getattr(self, "vs_log_tail", None):
