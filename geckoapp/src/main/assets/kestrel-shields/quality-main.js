@@ -14,7 +14,8 @@
     try { Object.defineProperty(window, '__kstq1', { value: reg, enumerable: false, configurable: false, writable: false }); } catch (e0) { return; }
     function note(kind, o) {
       try {
-        if (!o || reg.length >= 6) { if (o) reg.shift(); }
+        if (!o) return;
+        if (reg.length >= 6) reg.shift();
         reg.push({ k: kind, o: o });
       } catch (e) { /* never break the page */ }
     }
