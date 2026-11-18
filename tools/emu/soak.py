@@ -3628,6 +3628,18 @@ class Soak:
         check("MT1: New tab opens a tab in front and the panel's keys", "ok=True" in a3 and ("tabs=%d" % n0) in a3 and "keys=True" in a3 and "tray=False" in a3, a3)
         self.shot("tb-3-newtab")
         self.ph.debug("minipanel", "0"); time.sleep(1)
+        # PV1: "I just opened a new private tab, and once i began to load a site, an old regular tab website i visited flashed": the page view keeps the last frame of the tab that used it before; a curtain must
+        # cover it from the moment the private tab's session is put on the view until that session has painted
+        m = self.log.size()
+        self.ph.debug("privtab", "%s/page/images" % base); time.sleep(9)
+        up = health_events(self.log.since(m), "tabs", "curtain-up"); dn = health_events(self.log.since(m), "tabs", "curtain-down")
+        check("PV1: a new private tab raises the curtain over the regular tab's last frame", any("private=true" in e["rest"].lower() and "UNPAINTED" in e["rest"] for e in up), "curtain-up lines: %s" % [e["rest"] for e in up])
+        check("PV1: the curtain comes down again once the private tab has painted", bool(dn) and any(("first-paint" in e["rest"] or "page-stop" in e["rest"] or "first-composite" in e["rest"]) for e in dn), "curtain-down lines: %s" % [e["rest"] for e in dn])
+        self.shot("tb-4-private")
+        m = self.log.size()
+        self.ph.debug("switchtab", "0"); time.sleep(3)
+        up2 = health_events(self.log.since(m), "tabs", "curtain-up")
+        check("PV1: from the private tab back to a regular tab there is a curtain too (the private page is not seen on it)", any("private=false" in e["rest"].lower() for e in up2), "curtain-up lines: %s" % [e["rest"] for e in up2])
         t4, r4 = previews("at the end")
         self.record({"kind": "tb", "name": "previews-copy-tabs", "status": "ok" if all(c["ok"] for c in checks) else "failed", "checks": checks})
         self.check_alive("tb scene")
