@@ -67,6 +67,17 @@
         if (r && (!best || (r.t && !best.t))) best = r;
         if (best && best.t) break;
       }
+      if (best) return best;
+      // a list whose items carry no word of their own (<ul class="episodes"><li class="active">7. Title</li>): look inside the lists the selector found
+      var seen = 0;
+      for (i = 0; i < items.length && seen < 600 && !best; i++) {
+        var kids; try { kids = items[i].querySelectorAll('li, a, button, [role="tab"], [role="option"], option'); } catch (e) { continue; }
+        for (var k = 0; k < kids.length && seen < 600; k++, seen++) {
+          if (!isActive(kids[k])) continue;
+          var r2 = episodeOf(kids[k]);
+          if (r2) { best = r2; break; }
+        }
+      }
       return best;
     }
 
