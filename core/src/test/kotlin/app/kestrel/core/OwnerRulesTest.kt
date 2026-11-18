@@ -694,4 +694,16 @@ class OwnerRulesTest {
         assertTrue("the release workflow runs that gate right after the release build", source(".github/workflows/android.yml").contains("bash tools/check-profile-coverage.sh"))
         assertTrue("Diagnostics says what Android compiled for this install (line `start oat`: the sizes of odex / vdex / art), so the owner can send proof from the tablet", source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("Health.log(\"start\", \"oat\", oatSizes())"))
     }
+    /** CR1 (owner: "The app crashed when i went to youtube ... i'm just concerned that it crashed in the first place. Investigate."): Android 10 gives no exit reason, so how the last run ended is kept on disk. */
+    @Test fun cr1TheLastRunNoteIsWiredIntoTheRealStartAndEnd() {
+        assertTrue("the UI process starts the note before anything else can end it", source("geckoapp/src/main/kotlin/app/kestrel/browser/GeckoApp.kt").contains("diag.LastRun.begin(this)"))
+        assertTrue("every Health line the note wants goes through the one filter", source("app/src/main/kotlin/app/kestrel/browser/diag/Health.kt").contains("if (LastRun.wants(layer, event)) LastRun.note(layer, event, line)"))
+        assertTrue("an end on purpose is written before the process is killed", source("app/src/main/kotlin/app/kestrel/browser/ProcessLife.kt").contains("LastRun.markExit()"))
+        assertTrue("Diagnostics carries the lines", source("app/src/main/kotlin/app/kestrel/browser/diag/Health.kt").contains("LastRun.reportLines(ctx)"))
+        val lr = source("app/src/main/kotlin/app/kestrel/browser/diag/LastRun.kt")
+        assertTrue("only notable events are kept: no touch, frame or scroll line", lr.contains("\"life\" -> true") && lr.contains("event == \"trim\"") && !lr.contains("\"touch\""))
+        assertTrue("no timer of its own (the tablet's rules: no background work)", !lr.contains("Timer(") && !lr.contains("scheduleAtFixedRate") && !lr.contains("AlarmManager"))
+        val pt = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/TabDelegates.kt")
+        assertTrue("page lines come from PageTimes, which is told whether the tab is private (and then keeps nothing)", pt.contains("PageTimes.start(tab, url, tab.isPrivateTab)"))
+    }
 }
