@@ -1,6 +1,12 @@
 package app.kestrel.browser.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import android.view.HapticFeedbackConstants
+import android.widget.TextView
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
@@ -41,6 +47,13 @@ class Toolbar(ctx: Context, private val pal: Pal, private val l: ToolbarListener
     private val tabs = TabsButton(ctx, pal.fg).apply { layoutParams = LayoutParams(ctx.dp(44), ctx.dp(44)); setOnClickListener { l.onTabs() } }
     private val menu: ImageButton = iconButton(ctx, R.drawable.ic_more, "Menu", pal.fg) { }.also { it.setOnClickListener { _ -> l.onMenu(it) } }
     private val pill = LinearLayout(ctx)
+    /** UC1 (owner 2026-11-18: "include a fast way to copy any url in the address bar. For example, a copy button pops up when i press on the url bar"): a Copy button at the right end of the address pill, there only while the bar is pressed (focused) and has an address in it. */
+    internal val copyButton = LinearLayout(ctx)
+    private val copyIcon = ImageView(ctx)
+    private val copyLabel = TextView(ctx)
+    private val handler = Handler(Looper.getMainLooper())
+    private var boundUrl = ""
+    private val copyReset = Runnable { copyLabel.text = "Copy"; copyIcon.setImageResource(R.drawable.ic_copy); copyButton.contentDescription = "Copy the address" }
 
     init {
         orientation = HORIZONTAL
@@ -68,11 +81,12 @@ class Toolbar(ctx: Context, private val pal: Pal, private val l: ToolbarListener
                     l.onSubmit(text.toString()); true
                 } else false
             }
-            setOnFocusChangeListener { _, focused -> l.onUrlFocus(focused) }
+            setOnFocusChangeListener { _, focused -> l.onUrlFocus(focused); updateCopyButton() }
+            setOnClickListener { updateCopyButton() }          // a press on the bar that already has focus (the keyboard was put away): the button is there again
             addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
                 override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-                override fun afterTextChanged(s: Editable?) { if (hasFocus()) l.onUrlText(s?.toString() ?: "") }
+                override fun afterTextChanged(s: Editable?) { if (hasFocus()) l.onUrlText(s?.toString() ?: ""); updateCopyButton() }
             })
         }
         pill.apply {
@@ -83,6 +97,19 @@ class Toolbar(ctx: Context, private val pal: Pal, private val l: ToolbarListener
             addView(lock)
             addView(View(ctx), LayoutParams(ctx.dp(8), 1))
             addView(urlField)
+            copyButton.apply {
+                orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; visibility = GONE
+                background = roundedBg(pal.card, ctx.dpf(14f), pal.accent, ctx.dp(1))
+                setPadding(ctx.dp(8), 0, ctx.dp(10), 0)
+                isClickable = true; isFocusable = false                      // (it must never take the focus, and with it the keyboard, away from the address field)
+                contentDescription = "Copy the address"
+                copyIcon.setImageResource(R.drawable.ic_copy); copyIcon.setColorFilter(pal.accent)
+                addView(copyIcon, LayoutParams(ctx.dp(18), ctx.dp(18)))
+                copyLabel.text = "Copy"; copyLabel.setTextColor(pal.accent); copyLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f); copyLabel.setTypeface(copyLabel.typeface, android.graphics.Typeface.BOLD)
+                addView(copyLabel, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { marginStart = ctx.dp(4) })
+                setOnClickListener { copyAddress() }
+            }
+            addView(copyButton, LayoutParams(LayoutParams.WRAP_CONTENT, ctx.dp(30)).apply { marginStart = ctx.dp(8) })
             val lp = LayoutParams(0, ctx.dp(40), 1f)
             lp.marginStart = ctx.dp(2); lp.marginEnd = ctx.dp(2)
             layoutParams = lp
@@ -106,6 +133,7 @@ class Toolbar(ctx: Context, private val pal: Pal, private val l: ToolbarListener
     private var shown: Shown? = null
 
     fun bind(tab: Tab?, tabCount: Int, canGoBack: Boolean) {
+        boundUrl = tab?.url ?: ""
         val now = Shown(
             tabCount, canGoBack, tab?.canGoForward == true, tab?.loading == true, tab?.shields?.shieldsUp ?: true, tab?.blockedTotal() ?: 0,
             tab == null, tab?.isNewTab == true, display(tab), urlField.hasFocus(),
@@ -144,6 +172,28 @@ class Toolbar(ctx: Context, private val pal: Pal, private val l: ToolbarListener
         val hostShown = (if (p.host.startsWith("www.")) p.host.substring(4) else p.host) + port
         val rest = (if (p.path == "/") "" else p.path) + (p.query?.let { "?$it" } ?: "")
         return if (p.scheme == "https") hostShown + rest else "${p.scheme}://${p.host}$port${p.path}${p.query?.let { "?$it" } ?: ""}"
+    }
+
+    /** The address to copy: what is in the bar while it is pressed (the whole address when nobody changed it, or what was typed or pasted), else the page's own address. Never the shortened text shown when the bar is at rest. */
+    internal fun addressToCopy(): String {
+        val typed = urlField.text?.toString()?.trim() ?: ""
+        return if (urlField.hasFocus() && typed.isNotEmpty()) typed else boundUrl
+    }
+
+    private fun updateCopyButton() {
+        val show = urlField.hasFocus() && addressToCopy().isNotEmpty()
+        if (show) { if (copyButton.visibility != VISIBLE) copyButton.visibility = VISIBLE }
+        else if (copyButton.visibility != GONE) { copyButton.visibility = GONE; handler.removeCallbacks(copyReset); copyReset.run() }
+    }
+
+    /** UC1: put the address on the clipboard at once; the button says so for a moment. The keyboard and the selection stay as they are. */
+    internal fun copyAddress() {
+        val text = addressToCopy()
+        if (text.isEmpty()) return
+        try { context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("address", text)) } catch (e: Exception) { return }
+        copyLabel.text = "Copied"; copyIcon.setImageResource(R.drawable.ic_check); copyButton.contentDescription = "Address copied"
+        copyButton.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+        handler.removeCallbacks(copyReset); handler.postDelayed(copyReset, 1300)
     }
 
     fun fullUrlForEditing(tab: Tab?): String = tab?.url ?: ""
