@@ -3668,8 +3668,9 @@ class Soak:
             self.start_app()                                           # cold start; waits for the engine
             txt = self.dump_diag("lastrun-" + tag)
             want = {"front": "ended WHILE ON SCREEN", "background": "in the background when it ended", "freeze": "SCREEN THREAD WAS FROZEN"}[tag]
-            ok = want in txt
-            nocrash = ("NO crash note" in txt) if tag == "front" else (("NO crash note" not in txt) if tag == "freeze" else True)
+            top = txt.split("An EARLIER run")[0]                  # (the report also lists the earlier runs that ended badly: only the run just before this start counts here)
+            ok = want in top
+            nocrash = ("NO crash note" in top) if tag == "front" else (("NO crash note" not in top) if tag == "freeze" else True)
             if tag == "freeze" and "ui STALL" not in note:
                 ok = False
             if tag in ("front", "freeze") and "memory at the last note" not in txt:       # CR1g: the memory of every process of the app is in the note
@@ -4408,7 +4409,7 @@ _install_daily()
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "new", "tb"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "new", "tb", "new2"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -4423,7 +4424,7 @@ def main():
         a.profile = "tablet" if a.suite in ("daily", "yt") else "standard"
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
-        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "new", "tb") else "all")
+        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "new", "tb", "new2") else "all")
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
@@ -4484,6 +4485,8 @@ def main():
             s.vs_scene()                                     # (VS1: a vidsrc-style embed on the real engine: is the stream found and does one pick download it)
         if a.suite in ("tb", "new2"):
             s.tb_scene()                                     # (TP1 / UC1 / MT1: the right preview on every tab, the Copy button of the address bar, the tab tray of the mini panel)
+        if a.suite == "new2":
+            s.lastrun_round()                                # (CR1f/g again, after the scene fix; tb ran just above)
         if a.suite == "lr":
             s.lastrun_round()                                # (CR1c: the app is killed from outside in front and in the background; the next Diagnostics must say how the last run ended)
         if a.suite == "yt":
