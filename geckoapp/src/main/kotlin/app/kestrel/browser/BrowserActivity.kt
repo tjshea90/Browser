@@ -1089,7 +1089,7 @@ open class BrowserActivity : Activity(), DockListener {
         player = app.kestrel.browser.web.PlayerController(playerView,
             { exitFullscreenFromControls() },
             { shown -> fsTurner.controlledShow(shown) },
-            { fullscreenTab?.let { video.pageFilm(it) } != null },
+            { player.hasPageLevels() || fullscreenTab?.let { video.pageFilm(it) } != null },   // QL1: the page's own quality list first, else the pictures the app knows from a playlist
             { timeS, lengthS -> openPageQuality(timeS, lengthS) },
             { qualitySheet.isOpen })
         fsTurner.ownedByPlayer = { player.active }
@@ -2504,6 +2504,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(app.kestrel.browser.web.WebHandStats.line(prefs.webVideoMode))   // ANS54e
         out.add(strayLine())
         out.add(videoBarLine())
+        if (::player.isInitialized) out.add(player.pageQualityLine())      // QL1
         out.add(videoQuality.line(GeckoEngine.videoPolicyText))
         out.add(app.kestrel.browser.web.NativePlayerStats.line())   // ANS52i
         out.add("Video decoders (what the tablet's own chips declare they can do): " + DeviceVideo.describe(applicationContext))
@@ -2789,6 +2790,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** ANS53d.2: the Quality button was pressed: the pictures the page's film offers, Automatic first; the position is kept for the hand-over. */
     private fun openPageQuality(timeS: Double, lengthS: Double) {
+        if (player.hasPageLevels()) { openPageLevels(); return }
         val t = fullscreenTab ?: return
         val film = video.pageFilm(t) ?: return
         pageQualityStartMs = app.kestrel.core.media.PageQuality.startMs(timeS, lengthS, film.cand.durationMs)
@@ -2801,8 +2803,24 @@ open class BrowserActivity : Activity(), DockListener {
         Health.log("video", "quality-open", "${rows.size} row(s) for the page's film")
     }
 
+    /** QL1: the Quality button for a film whose own player offers a list (YouTube, JW Player, Video.js, hls.js, dash.js, Shaka, <source> lists): the rows are the page's, a pick is passed on to its player and the film goes on. */
+    private fun openPageLevels() {
+        val sel = player.pageSelectedId()
+        val rows = player.pageLevelList().map { lv -> app.kestrel.browser.web.QualitySheet.Row(lv.label, if (lv.id == app.kestrel.core.player.PageLevels.AUTO) "The site's player chooses as the line allows" else "", lv.id == sel, true, lv) }
+        player.pinControls(true)
+        pageQualityRows = rows
+        qualitySheet.show("Quality", rows, "The site's own player switches and the film goes on. A smaller picture is lighter for this tablet and for the hotspot. It can take a few seconds to change.")
+        Health.log("video", "quality-open", "${rows.size} row(s) from the page's own player (${player.pageFamily()})")
+    }
+
     /** ANS53d.2: a row was picked: the page's film stops, Kestrel's own player takes it from the same second. */
     private fun pagePicked(row: app.kestrel.browser.web.QualitySheet.Row) {
+        val level = row.tag as? app.kestrel.core.player.PageLevels.Level
+        if (level != null) {                                                  // QL1: a row of the page's own list: its player switches, nothing else happens
+            qualitySheet.dismiss()
+            if (player.setPageQuality(level.id)) toast("Quality: ${level.label}")
+            return
+        }
         val t = fullscreenTab
         val film = t?.let { video.pageFilm(it) }
         qualitySheet.dismiss()
