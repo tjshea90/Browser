@@ -732,4 +732,12 @@ class OwnerRulesTest {
         val act = source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt")
         assertTrue("the Quality button shows for the page's own list as well as for a known playlist, and the page's list is opened first", act.contains("player.hasPageLevels() || fullscreenTab?.let { video.pageFilm(it) } != null") && act.contains("if (player.hasPageLevels()) { openPageLevels(); return }"))
     }
+    /** FD1 (owner: "make the download manager float and be resizeable and moved around the screen just like the keyboard"). */
+    @Test fun fd1TheDownloadWindowFloatsAndIsRememberedLikeTheKeyboardPanel() {
+        val pop = source("app/src/main/kotlin/app/kestrel/browser/ui/DownloadPopup.kt")
+        assertTrue("the window is moved by the finger, picked up by a long press and resized from a corner through the shared geometry rules", pop.contains("FloatBox.moved(") && pop.contains("FloatBox.resizedFromBottomLeft(") && pop.contains("PICK_MS") && pop.contains("fun resetGeometry()"))
+        assertTrue("where it was left is kept in the preferences and read back", source("geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").contains("prefs.dlGeom") && source("app/src/main/kotlin/app/kestrel/browser/data/Prefs.kt").contains("\"dl_geom\""))
+        assertTrue("Settings can put it back", source("app/src/main/kotlin/app/kestrel/browser/ui/SettingsView.kt").contains("Reset the downloads window"))
+        assertTrue("the frame it floats in lets every touch through where the window is not", pop.contains("val view = FrameLayout(ctx)") && !pop.contains("view.isClickable"))
+    }
 }

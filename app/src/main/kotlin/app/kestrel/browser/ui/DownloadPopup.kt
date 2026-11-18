@@ -148,6 +148,13 @@ class DownloadPopup(private val ctx: Context, private val pal: Pal, private val 
         box.layoutParams = lp
     }
 
+    // tests: the window shown without any download, and where it is
+    internal fun showForTest() { window.visibility = View.VISIBLE; refreshContainer(); place() }
+    internal fun boxForTest(): View = box
+    internal fun handleForTest(): View = handle
+    internal fun headerBottomForTest(): Int = window.top + ctx.dp(36)
+    internal fun geoForTest(): FloatBox.Geo = geo
+
     /** Settings > "Reset the downloads window" and a double tap on its corner: the first place and size. */
     fun resetGeometry() {
         geo = defaults.geo(); l.geometryChanged(null)
