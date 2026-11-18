@@ -344,6 +344,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         tray.visibility = VISIBLE; tray.layoutParams.height = context.dp(trayModel.height.toInt())
         tabsBtn.active = true; tabsBtn.badge = trayTabs.size.toString()
         applyGeometry(); tray.invalidate()
+        app.kestrel.browser.diag.Health.log("panel", "tray-open", "rows=${trayTabs.size}")
     }
 
     fun closeTray() {
@@ -1138,16 +1139,16 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
 
         private fun act(h: TabTrayModel.Hit) {
             when (h) {
-                is TabTrayModel.Hit.Row -> trayTabs.getOrNull(h.index)?.let { performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY); l.navSwitchTab(it.id); closeTray() }
+                is TabTrayModel.Hit.Row -> trayTabs.getOrNull(h.index)?.let { performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY); l.navSwitchTab(it.id); app.kestrel.browser.diag.Health.log("panel", "tray-switch", "row=${h.index}"); closeTray() }
                 is TabTrayModel.Hit.Close -> trayTabs.getOrNull(h.index)?.let { t ->
                     performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                    l.navCloseTab(t.id)
+                    l.navCloseTab(t.id); app.kestrel.browser.diag.Health.log("panel", "tray-close", "row=${h.index}")
                     trayTabs = trayTabs.filter { it.id != t.id }                      // the row goes at once; the host's next tabsChanged() brings the true list
                     val before = trayModel.height
                     trayModel.setCount(trayTabs.size); tabsBtn.badge = trayTabs.size.toString()
                     if (trayModel.height != before) { tray.layoutParams.height = context.dp(trayModel.height.toInt()); applyGeometry() }
                 }
-                TabTrayModel.Hit.New -> { performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY); l.navNewTab(); closeTray(); openKeyboard() }
+                TabTrayModel.Hit.New -> { performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY); l.navNewTab(); app.kestrel.browser.diag.Health.log("panel", "tray-new", ""); closeTray(); openKeyboard() }
                 TabTrayModel.Hit.None -> {}
             }
         }

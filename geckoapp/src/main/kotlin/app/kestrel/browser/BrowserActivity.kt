@@ -959,6 +959,11 @@ open class BrowserActivity : Activity(), DockListener {
                 for (h in hosts) Shields.setOverride(h, if (mode == "off") app.kestrel.core.shield.SiteShields(0, 0).with(app.kestrel.core.shield.ShieldFlag.SHIELDS, false) else app.kestrel.core.shield.SiteShields(0, 0))
                 Io.main.post { for (t in tabs) { t.shields = Shields.effective(prefs, t.topHost); syncEngineProtection(t) }; Health.log("lab", "shields", "$mode ${hosts.size} sites") }
             }
+            "minipanel" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); Io.main.post { miniNav.setOpen(arg != "0", animate = false); Health.log("lab", "minipanel", "open=${miniNav.isOpen}") } }   // MT1 lab: the one-hand panel on / off
+            "minitabs" -> { i.removeExtra("kestrel_arg"); Io.main.post { miniNav.toggleTray(); Health.log("lab", "minitabs", "tray=${miniNav.trayOpen} tabs=${tabs.size}") } }   // MT1 lab: the panel's tab tray
+            "previews" -> { i.removeExtra("kestrel_arg"); Io.main.post { Health.log("lab", "previews", previewLine()); for (t in tabs) Health.log("lab", "preview", "tab=${t.id} host=${UrlParts.hostOf(t.url) ?: "-"} has=${t.thumb != null} forPage=${if (t.thumbPage.isEmpty()) "-" else t.thumbPage.substringBefore('/')} ok=${t.thumb == null || t.thumbPage == ThumbRule.pageOf(t.url)}") } }   // TP1 lab
+            "opengrid" -> { i.removeExtra("kestrel_arg"); Io.main.post { onTabs() } }   // TP1 lab: the tab grid
+            "switchtab" -> { val n = (i.getStringExtra("kestrel_arg") ?: "").toIntOrNull() ?: 0; i.removeExtra("kestrel_arg"); Io.main.post { tabs.getOrNull(n)?.let { hideTabGrid(); show(it) } } }   // TP1 lab: the n-th tab to the front
             "closetabs" -> Io.main.post { for (t in tabs.toList()) doCloseTab(t); Health.log("lab", "closetabs", "tabs=${tabs.size}") }
             "answer" -> { // SOAK1: press a button of the question on screen (debug builds only)
                 val yes = i.getStringExtra("kestrel_arg") == "yes"; i.removeExtra("kestrel_arg")
@@ -2089,7 +2094,7 @@ open class BrowserActivity : Activity(), DockListener {
                             tab.thumb = small; tab.thumbPage = takenFor; tab.thumbAt = SystemClock.uptimeMillis(); ThumbStore.trim(tabs, tab)
                             if (!tab.isPrivateTab) Io.exec { ThumbStore.save(appCtx, tab.id, small, takenFor) }
                             if (tabGrid.visibility == View.VISIBLE) tabGrid.thumbChanged(tab)
-                        } else Health.log("tabs", "thumb-dropped", "tab=${tab.id} moved=${ThumbRule.pageOf(tab.url) != takenFor} loading=${tab.loading}")
+                        } else { Health.count("tabs.thumb.dropped"); Health.log("tabs", "thumb-dropped", "tab=${tab.id} moved=${ThumbRule.pageOf(tab.url) != takenFor} loading=${tab.loading}") }
                     }
                 }
             }, { _ -> /* the surface was not ready: keep the previous preview */ })
@@ -2502,12 +2507,20 @@ open class BrowserActivity : Activity(), DockListener {
     // ------------------------------------------------------------------ freeze evidence + manual recovery (research/FREEZE.md 5)
     private var diagView: DiagnosticsView? = null
 
+    /** TP1: how the tab previews stand. A preview belongs to the page it was taken for; a tab whose preview is for another page than its own is the owner's "wrong preview" (must be 0 here). */
+    private fun previewLine(): String {
+        val withPic = tabs.filter { it.thumb != null }
+        val wrong = withPic.count { it.thumbPage != ThumbRule.pageOf(it.url) }
+        return "Tab previews: ${tabs.size} tabs, ${withPic.size} with a preview, $wrong for the WRONG page (must be 0); late pictures thrown away because the tab had moved on: ${Health.counter("tabs.thumb.dropped")}"
+    }
+
     private fun engineFacts(): List<String> {
         val out = ArrayList<String>()
         val ver = try { Class.forName("org.mozilla.geckoview.BuildConfig").getField("MOZ_APP_VERSION").get(null) } catch (e: Exception) { "?" }
         out.addAll(StartTimeline.lines())
         out.add("Last look (the saved picture of the page, EY-1): " + (if (prefs.lastLook) "on" else "off") + ", ${LastLook.count(applicationContext)} stored, shown at start ${Health.counter("look.start")}, shown after a revive ${Health.counter("look.revive")}, taken ${Health.counter("look.saved")}, hidden ${Health.counter("look.hide")}")
         out.add(backLab.stats.line())
+        out.add(previewLine())
         out.add(adSkipStats.line() + if (prefs.skipVideoAds) "" else " (the Settings switch is off)")
         out.add(playerSkipStats.line() + if (prefs.skipVideoAds) "" else " (the Settings switch is off)")
         out.add(seekStats.line() + if (prefs.tapSeek) "" else " (the Settings switch is off)")
