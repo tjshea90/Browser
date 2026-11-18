@@ -211,6 +211,15 @@ def player_mse(delay_ms):
 })();</script>""" % (delay_ms, delay_ms + 14000))
 
 
+# VS2 (owner 2026-11-18: "it would show a video file can be downloaded in the list, then it would disappear after a few seconds ... capture the video source when it is found"): the movie page has a Switch
+# server button that sends the player's frame to ANOTHER document after the finder has found the stream. Capture means the row is still in the list afterwards.
+def page_keep():
+    return (b"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Lab movie (keep)</title>
+<body style="margin:0;background:#111;color:#eee;font:16px sans-serif"><h3 style="margin:8px;height:34px">Lab movie (keep)</h3>
+<button id=sw style="display:block;width:100%%;height:120px;font-size:30px;background:#613;color:#fff;border:0">Switch server</button>
+<iframe id=iframe src="%s/embed/auto?id=7" style="display:block;width:100%%;height:300px;border:0"></iframe>
+<script>document.getElementById('sw').onclick = function () { document.getElementById('iframe').src = '%s/embed/blank?id=7'; };</script></body>""" % (PLAYER.encode(), PLAYER.encode()))
+
 def page_watch3(mode):
     return (b"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Lab movie %s</title>
 <body style="margin:0;background:#111;color:#eee;font:16px sans-serif"><h3 style="margin:8px;height:34px">Lab movie (%s)</h3>
@@ -236,6 +245,8 @@ class H(http.server.BaseHTTPRequestHandler):
             v = (parse_qs(self.path.partition("?")[2]).get("v") or ["mse"])[0]          # mse, msel (the embed waits 7 s), msel0 (slow embed, already in the page: nobody pressed)
             return self.send(200, "text/html; charset=utf-8", page_mse("msel" if v.startswith("msel") else "mse", pressed=(v != "msel0")))
         if port == 8003 and path in ("/embed/mse", "/embed/msel"): return self.send(200, "text/html; charset=utf-8", player_mse(7000 if path.endswith("msel") else 0))
+        if port == 8000 and path == "/watch3" and "v=keep" in self.path: return self.send(200, "text/html; charset=utf-8", page_keep())
+        if port == 8003 and path == "/embed/blank": return self.send(200, "text/html; charset=utf-8", b"<!doctype html><title>another server</title><body style='background:#222;color:#9f9'>another server: nothing playing yet")
         if port == 8000 and path == "/watch3": return self.send(200, "text/html; charset=utf-8", page_watch3((parse_qs(self.path.partition("?")[2]).get("v") or ["auto"])[0]))
         if port == 8003 and path in ("/embed/auto", "/embed/click", "/embed/nest", "/embed/worker"): return self.send(200, "text/html; charset=utf-8", player_mode(path.rsplit("/", 1)[1]))
         if port == 8000 and path == "/plain": return self.send(200, "text/html; charset=utf-8", PAGE_PLAIN)

@@ -1334,7 +1334,7 @@ class Soak:
         try:
             time.sleep(4)
             w, h = self.screen
-            for mode in ("mse", "msel", "msel0", "auto", "click", "nest", "worker"):
+            for mode in ("mse", "msel", "msel0", "auto", "keep", "click", "nest", "worker"):
                 before = self.ph.downloads(); lm = self.log.size()
                 # VS1d (lab run 44233990309 found the rule switched OFF for the whole run, so nothing was ever held and msel0 'started'): the embed variants run with the owner's setting, Videos start only when I press play = ON;
                 # the finder variants keep the conditions they have always had (off)
@@ -1402,6 +1402,19 @@ class Soak:
                     self.issue("high", "download-video", "VS1 %s: the finder found it (%s) but the download produced no file (%s)" % (mode, r["finder_said"], r["stream_lines"]))
                 else:
                     r.update(status="ok", file=got[0], size=got[1])
+                    if mode == "keep":                                  # VS2: the player's frame goes to another document AFTER the find: the row must stay (captured)
+                        self.ph.tap(w // 2, 26 + 34 + 60 + 8); time.sleep(8)
+                        m2 = self.log.size(); self.ph.debug("videodl"); time.sleep(5)
+                        again = health_events(self.log.since(m2), "lab", "videodl")
+                        gl = health_events(self.log.since(m1), "media", "frame-gone")
+                        r["after_switch"] = again[-1]["rest"] if again else "no answer"
+                        r["frame_gone"] = [e["rest"][:140] for e in gl][-2:]
+                        if not again or "pick=none" in again[-1]["rest"]:
+                            r["status"] = "vanished"
+                            self.issue("high", "finding-video", "VS2 keep: the stream the finder had found DISAPPEARED when the player frame went to another document (%s; frame-gone: %s)" % (r["after_switch"], r["frame_gone"]), shot=True)
+                        elif not gl:
+                            r["note"] = "no 'media frame-gone' line: the switch did not reach the app, so this run proves nothing about capture"
+                            self.issue("medium", "finding-video", "VS2 keep: " + r["note"], shot=False)
                 self.record(r)
                 self.ph.debug("closetabs"); time.sleep(3)
         finally:
