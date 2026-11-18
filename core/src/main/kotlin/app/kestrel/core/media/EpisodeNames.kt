@@ -109,7 +109,7 @@ object EpisodeNames {
         }
         if (episode == 0) return null
         if (season == 0) season = SEASON_WORD.find(pageTitle)?.groupValues?.get(1)?.toIntOrNull() ?: SEASON_WORD.find(slugOf(pageUrl))?.groupValues?.get(1)?.toIntOrNull() ?: 0
-        val show = listOf(clues?.show.orEmpty(), showFromTitle(pageTitle, pageHost), showFromUrl(pageUrl, pageHost), titleCaseIfLower(firstSegmentTitle(slugOf(pageUrl), pageHost, dropYear = true)))
+        val show = listOf(showFromTitle(clues?.show.orEmpty(), pageHost), showFromTitle(pageTitle, pageHost), showFromUrl(pageUrl, pageHost), titleCaseIfLower(firstSegmentTitle(slugOf(pageUrl), pageHost, dropYear = true)))
             .map { fileSafe(dropSeasonTail(it)).let { s -> plausible(s) } }.firstOrNull { it.isNotEmpty() } ?: return null
         val tag = (if (season > 0) "S%02d".format(Locale.ROOT, season) else "") + "E%02d".format(Locale.ROOT, episode)
         val title = clues?.episodeTitle.orEmpty().let { t -> if (t.isNotEmpty() && mark(t, withEpisodeOnly = true) == null && !t.equals(show, true)) fileSafe(t) else "" }
