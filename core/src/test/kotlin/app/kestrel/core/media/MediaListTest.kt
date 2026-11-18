@@ -361,16 +361,96 @@ class MediaListTest {
 class MediaListFramesTest {
     private fun hls(url: String, frame: String = "") = MediaCandidate(url, MediaKind.HLS, "application/vnd.apple.mpegurl", -1, "https://site.test/watch", frame)
 
-    @Test fun whatAGoneDocumentOfferedIsDroppedAndNothingElse() {
+    /** An address found only in a page's text: nobody has seen it, it is not counted, so nothing about it is captured. */
+    private fun doc(url: String, frame: String = "") = MediaCandidate(url, MediaKind.FILE, "", -1, "https://site.test/watch", frame).also { it.fromMarkup = true }
+
+    @Test fun whatAGoneDocumentOfferedAndWasNeverOfferedToThePersonIsDroppedAndNothingElse() {
         val l = MediaList()
-        l.add(hls("https://cdn.test/one.m3u8", "https://player-one.test/embed"))   // server one
-        l.add(hls("https://cdn.test/side.m3u8", "https://sidebar.test/s"))         // another frame, still there
-        l.add(hls("https://cdn.test/page.m3u8"))                                   // the page's own (frame "")
-        assertEquals(listOf("https://cdn.test/one.m3u8"), l.dropFrames(listOf("https://player-one.test/embed")))
-        assertEquals(setOf("https://cdn.test/side.m3u8", "https://cdn.test/page.m3u8"), l.keys().toSet())
+        l.add(doc("https://cdn.test/one.mp4", "https://player-one.test/embed"))     // server one
+        l.add(doc("https://cdn.test/side.mp4", "https://sidebar.test/s"))           // another frame, still there
+        l.add(doc("https://cdn.test/page.mp4"))                                     // the page's own (frame "")
+        assertEquals(listOf("https://cdn.test/one.mp4"), l.dropFrames(listOf("https://player-one.test/embed")))
+        assertEquals(setOf("https://cdn.test/side.mp4", "https://cdn.test/page.mp4"), l.keys().toSet())
         assertTrue(l.dropFrames(listOf("https://player-one.test/embed")).isEmpty())  // already gone
         assertTrue(l.dropFrames(listOf("")).isEmpty())                                 // the page itself is never dropped by a frame
         assertEquals(2, l.size)
+    }
+
+    // ---- VS2 (owner 2026-11-18, doraby + vidsrc / 111movies): "capture the video source when it is found so it doesn't disappear from the list"
+    @Test fun aStreamThatWasOfferedStaysWhenItsPlayerFrameGoesAwayAndComesLastInTheList() {
+        val l = MediaList()
+        l.add(hls("https://cdn.test/one.m3u8", "https://player-one.test/embed"))
+        assertEquals(1, l.usableCount())                                              // offered = captured
+        assertTrue("nothing is removed", l.dropFrames(listOf("https://player-one.test/embed")).isEmpty())
+        assertEquals(1, l.usableCount())
+        assertTrue(l.find("https://cdn.test/one.m3u8")!!.orphan)
+        l.add(hls("https://cdn.test/page.m3u8"))                                       // the page's own stream arrives too
+        assertEquals("the live one first, the kept one last", listOf("https://cdn.test/page.m3u8", "https://cdn.test/one.m3u8"), l.usable().map { it.url })
+    }
+
+    @Test fun aKeptStreamIsReplacedWhenALivePlayerOffersAFilmOfItsOwnButNotByASmallClip() {
+        val l = MediaList()
+        l.add(hls("https://cdn.test/one.m3u8", "https://player-one.test/embed")); l.usableCount()
+        l.dropFrames(listOf("https://player-one.test/embed"))
+        l.add(MediaCandidate("https://ads.test/pre.mp4", MediaKind.FILE, "video/mp4", 600_000, "https://site.test/watch", "https://player-two.test/e"))
+        assertNotNull("a small clip does not replace it", l.find("https://cdn.test/one.m3u8"))
+        l.add(hls("https://cdn.test/two.m3u8", "https://player-two.test/e"))
+        assertNull("server two's film replaces the kept one", l.find("https://cdn.test/one.m3u8"))
+        assertNotNull(l.find("https://cdn.test/two.m3u8"))
+    }
+
+    @Test fun aKeptStreamLivesAgainWhenThePlayerAsksForItAgainAndTheOwnersInterestKeepsItForGood() {
+        val l = MediaList()
+        l.add(hls("https://cdn.test/one.m3u8", "https://player-one.test/embed")); l.usableCount()
+        l.dropFrames(listOf("https://player-one.test/embed"))
+        assertTrue(l.add(hls("https://cdn.test/one.m3u8", "https://player-one-again.test/embed")))      // the reloaded frame asks again
+        assertFalse(l.find("https://cdn.test/one.m3u8")!!.orphan)
+        assertEquals(1, l.size)
+        // what the owner touched is never replaced
+        l.dropFrames(listOf("https://player-one-again.test/embed"))
+        l.touch("https://cdn.test/one.m3u8")
+        l.add(hls("https://cdn.test/two.m3u8", "https://player-two.test/e"))
+        assertNotNull(l.find("https://cdn.test/one.m3u8"))
+    }
+
+    @Test fun aCapturedStreamIsNotHiddenLaterAsAClipOrAnAdvertisement() {
+        val l = MediaList()
+        val a = hls("https://cdn.test/a.m3u8"); l.add(a)
+        l.applyStream(a.url, live = false, drm = false, durationMs = 40_000, adMs = 0, breaks = 0)          // a 40 s stream, readable
+        assertEquals(1, l.usableCount())                                                                      // offered: captured
+        val b = hls("https://cdn.test/b.m3u8"); l.add(b)
+        l.applyStream(b.url, live = false, drm = false, durationMs = 1_200_000, adMs = 0, breaks = 0)       // the film (20 min) arrives: a is "a clip next to a film"
+        assertEquals("both stay counted", 2, l.usableCount())
+        a.role = VideoRole.AD
+        assertTrue("an advertisement label that arrives later does not take it out", a.counts())
+        // a stream that cannot be saved is never kept
+        val live = hls("https://cdn.test/live.m3u8"); l.add(live); l.usableCount()
+        l.applyStream(live.url, live = true, drm = false, durationMs = 0, adMs = 0, breaks = 0)
+        assertFalse(live.counts())
+    }
+
+    @Test fun theSamePageAgainKeepsWhatWasCapturedAnotherPageForgetsEverything() {
+        val l = MediaList()
+        val a = MediaCandidate("https://cdn.test/a.m3u8", MediaKind.HLS, "", -1, "https://doraby.com/ozark/", "https://vidsrc.test/embed/1")
+        l.add(a); l.add(doc("https://cdn.test/never-offered.mp4")); l.usableCount()
+        assertEquals(1, l.onNewPage("https://doraby.com/ozark/"))                       // a reload: the never-offered one goes, the captured one stays
+        assertEquals(listOf("https://cdn.test/a.m3u8"), l.keys())
+        assertTrue(a.orphan); assertFalse(a.played)
+        assertEquals("the www. form, a fragment and a trailing slash are the same page", 0, l.onNewPage("https://www.doraby.com/ozark#player"))
+        assertEquals(1, l.onNewPage("https://doraby.com/ozark/?season=1&episode=2"))     // another film of the same site: forgotten
+        assertTrue(l.isEmpty())
+        val l2 = MediaList(); l2.add(MediaCandidate("https://cdn.test/a.m3u8", MediaKind.HLS, "", -1, "https://doraby.com/ozark/")); l2.usableCount()
+        assertEquals(1, l2.onNewPage("https://other.test/ozark/")); assertTrue(l2.isEmpty())
+        val l3 = MediaList(); l3.add(MediaCandidate("https://cdn.test/a.m3u8", MediaKind.HLS, "", -1, "https://doraby.com/ozark/")); l3.usableCount()
+        assertEquals(1, l3.onNewPage("about:blank")); assertTrue(l3.isEmpty())
+    }
+
+    @Test fun pageIdentityIsHostPathAndQueryWithoutTheFragment() {
+        assertEquals("doraby.com/ozark", PageIdentity.of("https://www.Doraby.com/Ozark/#x"))
+        assertEquals("doraby.com/ozark?s=1", PageIdentity.of("http://doraby.com/ozark/?s=1"))
+        assertEquals("doraby.com", PageIdentity.of("https://doraby.com/"))
+        assertEquals("", PageIdentity.of("about:blank")); assertEquals("", PageIdentity.of("file:///x")); assertEquals("", PageIdentity.of(""))
+        assertTrue(PageIdentity.same("https://a.test/x/", "https://www.a.test/x#top")); assertFalse(PageIdentity.same("https://a.test/x", "https://a.test/y")); assertFalse(PageIdentity.same("", ""))
     }
 
     // ---- EY-17 (research/REVIEW-EXTERNAL-2.md): rank, not age
@@ -433,12 +513,13 @@ class MediaListFramesTest {
         assertEquals("https://player-one.test/embed", a.frame)
     }
 
-    @Test fun theDownloadCountFollowsTheDrop() {
+    @Test fun theDownloadCountKeepsWhatWasOfferedUntilALiveFilmReplacesIt() {
         val l = MediaList()
         l.add(hls("https://cdn.test/one.m3u8", "https://player-one.test/embed"))
         assertEquals(1, l.usableCount())
         l.dropFrames(listOf("https://player-one.test/embed"))
-        assertEquals(0, l.usableCount())
-        assertTrue(l.isEmpty())
+        assertEquals("VS2: still counted after the frame went away", 1, l.usableCount())
+        l.add(hls("https://cdn.test/two.m3u8", "https://player-two.test/e"))
+        assertEquals(1, l.usableCount()); assertNull(l.find("https://cdn.test/one.m3u8"))
     }
 }
