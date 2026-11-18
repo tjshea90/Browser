@@ -26,6 +26,20 @@ Sent about 2.5 hours after the alpha68 Release (2026-11-17T22:25Z), so the table
 - `BrowserActivity.sessionGone` (engine process death): recovers the first death with state, reloads the URL on the second within 15 s, shows the error screen on the third; a recovery that throws would be an uncaught exception, which CrashNote writes down.
 - Nothing in the app keeps a big heap: 24/128 MB on the tablet.
 
+## CR1e: the Diagnostics the owner pasted (2026-11-18 01:00:31 UTC, alpha68, app running 24 s)
+
+Taken 24 s after a COLD start, i.e. the first run after the crash. What it says and does not say:
+
+- **No `EARLIER CRASH of this app` line and no `Engine crash reports on disk` line.** CrashNote catches every uncaught Java/Kotlin exception on any thread of the main process (including OutOfMemoryError), and the engine's crash helper writes a report for a native crash. The previous run left neither. So it was NOT a Java crash and NOT a native crash the engine could report. What is left: the process was ended from outside (Android's low-memory killer, Force stop, the tablet restarting) or died so hard that nothing could write.
+- **`tabs state-mismatch tab=3` / `tabstate.mismatch=1`**: the tab list (session.txt, written 600 ms after a page change) and the engine's own saved state of that tab (written separately) disagreed about the page. The code comment says "a cut-off can leave them apart": the previous run ended abruptly between two writes, not through a normal close. This supports "ended abruptly", not a cause.
+- The early cover on the first frame was `www.google.com` (the last saved address): the run ended before YouTube was saved as the tab's address, i.e. soon after the page change (the owner's words: "when I went to YouTube").
+- No `gecko.kill` / `gecko.crash` counter: those count THIS run only (the new process), so they say nothing about the last one.
+- Memory right after the start: MemAvailable 646-709 MB, low=false, threshold 144 MB, app heap 16/128 MB. The tablet was not short of memory at that moment; YouTube had not loaded yet.
+- **`Cold start ... activity 2591 ms`** is new: every earlier paste has 223 / 293 / 300 ms for the same number (time from process start until the activity was created); `frame 2719`, `runtime 3004` follow it, while `open 2970` and `paint 6310` are much better than before (paint 15-19 s in alpha58). So the 2.3 s sit BEFORE the activity exists (process start, class loading of the activity, Application work). Two readings: (1) a one-off, the system was busy reviving the app right after it had been taken away (memory pressure on a 2 GB Go device: the same cause as the crash); (2) a cost of alpha64-68 (uncompressed libraries, whole-app compile at install, `start oat` line would show what was compiled: it is not in this paste yet, the line comes later in the run). Not decidable from one paste: the next Diagnostics (a normal start, not one right after a crash) answers it. If `activity` is still above 1 s on a normal start, that is a regression to chase.
+- Keyboard is Swoop (`app.swoop.keyboard/.KeysService`): the alpha68 typing link was in use. The crash note would have caught a failure in it (it is all Java); it did not.
+
+**Conclusion so far (honest):** the evidence the app keeps points at "the process was ended without a trace", most likely Android's memory killer on the 2 GB tablet while the YouTube page was loading, but this is a conclusion by elimination, not a proof. `LastRun` (CR1c) turns the next occurrence into a proof: it records free memory and the last events, and says "ended while on screen, no crash note, no engine report".
+
 ## What this session built so that the cause is findable (CR1c)
 
 `app/diag/LastRun.kt`: a small note (about 2 KB, `files/last-run.txt`) written only when something notable happens (the screen comes or goes, a page finished loading, Android sent a memory trim, the engine's page process died), never on a timer; the next start reads it and keeps it 7 days if the run ended in front of the person. Diagnostics line **"Last run ..."** says:
