@@ -49,7 +49,7 @@ class LastRunTest {
         assertTrue(LastRun.wants("mem", "trim")); assertTrue(LastRun.wants("page", "loaded")); assertTrue(LastRun.wants("page", "error"))
         assertTrue(LastRun.wants("gecko", "onKill")); assertTrue(LastRun.wants("gecko", "onCrash")); assertTrue(LastRun.wants("gecko", "recover-after-kill"))
         assertFalse("sizes arrive at every turn", LastRun.wants("gecko", "size"))
-        assertFalse(LastRun.wants("ui", "STALL")); assertFalse(LastRun.wants("touch", "down")); assertFalse(LastRun.wants("mem", "heap")); assertFalse(LastRun.wants("page", "painted"))
+        assertFalse(LastRun.wants("ui", "late-beat")); assertFalse(LastRun.wants("touch", "down")); assertFalse(LastRun.wants("mem", "heap")); assertFalse(LastRun.wants("page", "painted"))
     }
 
     @Test fun aRunThatEndedOnScreenIsReportedAsNotAnOrdinaryCloseWithTheCauseUnknownWhenNothingElseWasLeft() {
@@ -104,16 +104,16 @@ class LastRunTest {
         assertTrue(r.lines.joinToString("\n"), r.lines.joinToString("\n").contains("the whole tablet restarted"))
     }
 
-    @Test fun theFileHoldsAtMostTwentyFourEventsAndNothingBeforeBegin() {
+    @Test fun theFileHoldsAtMostFortyEventsAndNothingBeforeBegin() {
         LastRun.note("life", "resume", "+0.1s life resume")                    // before begin(): ignored, no file
         assertFalse(File(ctx.filesDir, "last-run.txt").exists())
         LastRun.begin(ctx, 4_000_000L); ioDone()
         for (i in 1..60) LastRun.note("page", "loaded", "+$i.0s page loaded host=h$i.example", 4_000_000L + i * 1000)
         lazyFlush()
         val text = File(ctx.filesDir, "last-run.txt").readText()
-        assertEquals(24, text.lines().count { it.startsWith("ev=") })
+        assertEquals(40, text.lines().count { it.startsWith("ev=") })
         assertTrue("the newest lines win: $text", text.contains("host=h60.example") && !text.contains("host=h1.example"))
-        assertTrue(text.length < 6000)
+        assertTrue(text.length < 9000)
     }
 
     @Test fun aNoteIsForgottenAfterAWeekAndTheDiagnosticsReportCarriesTheLines() {
