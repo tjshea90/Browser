@@ -39,22 +39,29 @@ object ThumbStore {
 
     private fun dir(ctx: Context) = File(ctx.cacheDir, "thumbs")
 
+    /** TP1: the preview is stored WITH the page it was taken for (a small text file beside it): a preview whose page is not the tab's page is never shown. */
     @Suppress("DEPRECATION")
-    fun save(ctx: Context, id: Long, bmp: Bitmap) {
+    fun save(ctx: Context, id: Long, bmp: Bitmap, page: String) {
+        if (page.isEmpty()) return
         try {
             val d = dir(ctx); d.mkdirs()
             File(d, "$id.webp").outputStream().use {
                 bmp.compress(if (Build.VERSION.SDK_INT >= 30) Bitmap.CompressFormat.WEBP_LOSSY else Bitmap.CompressFormat.WEBP, 60, it)
             }
+            File(d, "$id.page").writeText(page)
         } catch (e: Exception) { /* a missing preview is harmless */ }
     }
 
-    fun load(ctx: Context, id: Long): Bitmap? = try {
+    /** The stored preview of tab [id] when it was taken for the page the tab is on now ([nowUrl]); otherwise null and the stale files are deleted. */
+    fun load(ctx: Context, id: Long, nowUrl: String): Bitmap? = try {
         val f = File(dir(ctx), "$id.webp")
-        if (!f.isFile) null else BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.RGB_565 })
+        val rec = File(dir(ctx), "$id.page")
+        if (!f.isFile) null
+        else if (!app.kestrel.core.ui.ThumbRule.stillShows(try { if (rec.isFile) rec.readText() else null } catch (e: Exception) { null }, nowUrl)) { delete(ctx, id); null }
+        else BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.RGB_565 })
     } catch (e: Throwable) { null }
 
-    fun delete(ctx: Context, id: Long) { try { File(dir(ctx), "$id.webp").delete() } catch (e: Exception) { /* ignore */ } }
+    fun delete(ctx: Context, id: Long) { try { File(dir(ctx), "$id.webp").delete(); File(dir(ctx), "$id.page").delete() } catch (e: Exception) { /* ignore */ } }
 
     fun clearAll(ctx: Context) { try { dir(ctx).listFiles()?.forEach { it.delete() } } catch (e: Exception) { /* ignore */ } }
 

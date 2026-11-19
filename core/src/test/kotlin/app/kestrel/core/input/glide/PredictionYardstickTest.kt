@@ -26,6 +26,11 @@ class PredictionYardstickTest {
         assertTrue("a neighbouring key / two letters swapped come first: ${r.typoNeighbour} ${r.typoSwap}", r.typoNeighbour.r1 >= 0.95 && r.typoSwap.r1 >= 0.95)
     }
 
+    @Test fun theStripNeverOffersAVulgarWordOnItsOwn() {
+        val (hits, shown) = PredictionEval.vulgarNextGuesses(lex)
+        assertTrue("a vulgar word among the three next-word guesses after the 5000 commonest words: $hits $shown", hits == 0)
+    }
+
     @Test fun theAutomaticFixHelpsWithRealMisspellingsAndLeavesShorthandAndRareWordsAlone() {
         val f = PredictionEval.fixes(lex, keys)
         println(PredictionEval.fixReport(f, verbose = true))
