@@ -3744,7 +3744,7 @@ class Soak:
         when did the first frame / the engine / the first paint / the end of the cover come (`start frame|look|runtime|paint`, `tabs cover-hide`), was the engine's saved state used (`state-restored` / `state-mismatch`).
         Absolute seconds are an x86 emulator's; what counts is WHETHER a picture was there, WHY not, and the order of the marks. Writes reopen.md."""
         pkg = self.a.pkg
-        pages = [("lab-text", "lab:/page/text"), ("wikipedia", "https://en.wikipedia.org/wiki/Firefox")]
+        pages = [("lab-text", "lab:/page/text"), ("wikipedia", "https://en.wikipedia.org/wiki/Firefox"), ("doraby-title", "https://doraby.com/ozark/")]   # (doraby: the owner's own case, a page full of ads and trackers that keeps loading)
         styles = [("home-later", "Home, then Android ends the app 5 s later"), ("home-at-once", "Home, then Android ends the app 0.4 s later (a swipe in Recents)"), ("kill-in-front", "the system kills the app while it is in front")]
         rows = []
         for pname, purl in pages:
@@ -3792,6 +3792,7 @@ class Soak:
                            frame_s=first("start", "frame"), look_mark_s=first("start", "look"), runtime_s=first("start", "runtime"), paint_s=first("start", "paint"), cover_hide_s=first("tabs", "cover-hide"),
                            look_hide_s=first("tabs", "look-hide"), wall_to_paint_s=round(painted, 1) if painted else None)
                 self.shot("reopen-%s-%s-after" % (pname, sid))
+                self.main_pid = (self.ph.pids() or [None])[0]         # (the app was ended on purpose: the next scene's 'did the app die?' check must compare with THIS process, lab run 44434241145 skipped three rounds without it)
                 if not row["look_shown"]:
                     self.issue("high", "reopen", "%s / %s: the app was opened again and the page was NOT shown from its saved picture (pictures saved before leaving: %d; look-none why=%s; skips: %s)" %
                                (pname, sid, row["saved_before_leaving"], ",".join(str(x) for x in nolook) or "(no line)", "; ".join(row["skips_before_leaving"]) or "none"), shot=False)
