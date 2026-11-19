@@ -28,6 +28,14 @@ object LastRun {
     private const val MAX_EVENTS = 40
     private const val LAZY_MS = 1500L
     private const val TICK_MS = 15_000L
+    /** DG1 (owner Diagnostics 2026-11-19: two runs ended 4-9 s after the first start following an install, and "ran about 0 min" could not say more): the first minute of a run is sampled every 2 s, so the note says how many seconds it lived. */
+    private const val FAST_TICK_MS = 2_000L
+    private const val FAST_WINDOW_MS = 60_000L
+    /** DG1: a package update ends the running process some seconds before the new build's install time is stamped; this many ms either side still counts as "the update ended it". */
+    private const val UPDATE_BEFORE_MS = 120_000L
+    private const val UPDATE_AFTER_MS = 5_000L
+    /** DG1: a run that began within this long after its build was installed is "the first start after an install". */
+    private const val FIRST_RUN_MS = 10 * 60_000L
     private const val MAX_CHARS = 12_000
 
     private val lock = Any()
