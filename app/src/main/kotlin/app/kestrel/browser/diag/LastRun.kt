@@ -70,7 +70,7 @@ object LastRun {
         "page" -> event == "loaded" || event == "error"
         "gecko" -> event == "onKill" || event == "onCrash" || event.startsWith("recover-")
         "ui" -> event == "STALL" || event.trim() == "at"                       // CR1f: the screen thread is blocked, and the stack it is blocked in (written by the watchdog thread, not by the blocked one)
-        "start" -> event == "paint" || event == "runtime"                      // how far the start got
+        "start" -> event == "paint" || event == "runtime" || event == "oat" || event == "art"   // how far the start got, and (DG1) whether Android had compiled the app yet in a run that died early
         "tabs" -> event == "early-cover"
         "engine" -> event == "warm-start" || event == "runtime-ready"
         else -> false
