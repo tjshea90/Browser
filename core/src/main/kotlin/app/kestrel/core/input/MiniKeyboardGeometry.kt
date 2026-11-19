@@ -37,4 +37,28 @@ object MiniKeyboardGeometry {
         }
         return out
     }
+
+    /**
+     * The photo's geometry (owner M1): every row has the SAME key pitch, a key is a SLOT minus a gap, and an empty spec (null key) is an empty slot, so the half-key indent of the home row lines up
+     * exactly with the rows above and below it. A key of weight w occupies w * unit pixels of its row ([unit] = (width + [gapX]) / row total) and is drawn [gapX] narrower than that; rows are
+     * [gapY] apart and share [height] (less [top]) by [rowWeights]. [boxes] is kept as it was for the browser's address-bar keyboard.
+     */
+    fun slots(rows: List<List<KeySpec>>, width: Float, height: Float, gapX: Float, gapY: Float, top: Float = 0f, rowWeights: List<Float>? = null): List<List<KeyBox>> {
+        if (rows.isEmpty()) return emptyList()
+        val weights = if (rowWeights != null && rowWeights.size == rows.size) rowWeights else List(rows.size) { 1f }
+        val heightTotal = weights.sum()
+        val usable = height - top - gapY * (rows.size - 1)
+        val out = ArrayList<List<KeyBox>>(rows.size)
+        for ((i, row) in rows.withIndex()) {
+            val rowTotal = row.sumOf { it.weight.toDouble() }.toFloat()
+            val unit = (width + gapX) / rowTotal
+            var x = 0f
+            val y = top + i * gapY + usable * weights.take(i).sum() / heightTotal
+            val rowH = usable * weights[i] / heightTotal
+            val line = ArrayList<KeyBox>(row.size)
+            for (k in row) { val slot = k.weight * unit; line.add(KeyBox(x, y, Math.max(x, x + slot - gapX), y + rowH)); x += slot }
+            out.add(line)
+        }
+        return out
+    }
 }
