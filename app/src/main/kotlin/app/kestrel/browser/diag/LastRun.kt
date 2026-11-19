@@ -106,10 +106,14 @@ object LastRun {
         val d = app.filesDir
         synchronized(lock) {
             dir = d; appCtx = app; pid = android.os.Process.myPid(); startedAt = now; state = "starting"; stateAt = now; events.clear(); flushQueued = false
+            var inst = 0L
             build = try {
                 @Suppress("DEPRECATION") val pi = app.packageManager.getPackageInfo(app.packageName, 0)
+                inst = pi.lastUpdateTime
                 @Suppress("DEPRECATION") "${pi.versionName} (code ${pi.versionCode})"
             } catch (e: Exception) { "?" }
+            buildOverride?.let { build = it }
+            installAt = installAtOverride ?: inst
         }
         Io.exec {
             try {
