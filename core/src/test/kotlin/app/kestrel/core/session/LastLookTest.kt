@@ -54,6 +54,15 @@ class LastLookTest {
         assertEquals("the address is named first when several differ", "page", LastLookRules.whyNot(m, "https://news.test/other", "161.0", "plain", true, true))
     }
 
+    @Test fun aLoadingPageIsPhotographedOnlyWhenLeavingAndOnlyAfterItPaintedThisAddress() {
+        val u = "https://news.test/story"
+        assertTrue("leaving a page that painted and never finishes loading", LastLookRules.mayTakeWhileLoading("pause", u, u))
+        assertTrue("the #fragment is the same page", LastLookRules.mayTakeWhileLoading("pause", u, "$u#comments"))
+        assertFalse("a new navigation under way: the screen still shows the old page", LastLookRules.mayTakeWhileLoading("pause", "https://news.test/old", u))
+        assertFalse("nothing painted yet", LastLookRules.mayTakeWhileLoading("pause", "", u))
+        for (why in listOf("settled", "page-stop", "grid")) assertFalse("$why keeps the old rule", LastLookRules.mayTakeWhileLoading(why, u, u))
+    }
+
     @Test fun thePictureFitsTheWidthExactlyOrScaledOrNotAtAll() {
         assertEquals(LookFit.EXACT, LastLookRules.fit(600, 900, 600, 900))
         assertEquals("two pixels of difference are the same width", LastLookRules.fit(600, 900, 602, 850), LookFit.EXACT)
