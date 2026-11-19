@@ -43,6 +43,17 @@ class LastLookTest {
         assertFalse("desktop site switched on", LastLookRules.usable(m, "https://news.test/story", "160.0", "neon", false, true))
     }
 
+    @Test fun theReasonWhyAPictureCannotBeUsedIsOneWord() {
+        val m = meta()
+        assertNull(LastLookRules.whyNot(m, "https://news.test/story#x", "160.0", "neon", false, false))
+        assertEquals("page", LastLookRules.whyNot(m, "https://news.test/other", "160.0", "neon", false, false))
+        assertEquals("engine", LastLookRules.whyNot(m, "https://news.test/story", "161.0", "neon", false, false))
+        assertEquals("skin", LastLookRules.whyNot(m, "https://news.test/story", "160.0", "plain", false, false))
+        assertEquals("dark", LastLookRules.whyNot(m, "https://news.test/story", "160.0", "neon", true, false))
+        assertEquals("desktop", LastLookRules.whyNot(m, "https://news.test/story", "160.0", "neon", false, true))
+        assertEquals("the address is named first when several differ", "page", LastLookRules.whyNot(m, "https://news.test/other", "161.0", "plain", true, true))
+    }
+
     @Test fun thePictureFitsTheWidthExactlyOrScaledOrNotAtAll() {
         assertEquals(LookFit.EXACT, LastLookRules.fit(600, 900, 600, 900))
         assertEquals("two pixels of difference are the same width", LastLookRules.fit(600, 900, 602, 850), LookFit.EXACT)
