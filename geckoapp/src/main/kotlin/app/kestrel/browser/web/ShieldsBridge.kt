@@ -84,6 +84,8 @@ class ShieldsBridge(
     private val pictureCap: () -> Int = { 0 },
     /** ANS54e: the page's gate asks whether Kestrel's own player takes the film the person pressed (`vh`: y = play | press | kestrel, s = the element's address, b = a blob: source, ... p = the page, f = the frame): true = it was started, keep the page's element closed. UI thread (the answer waits for it). */
     private val handOver: (JSONObject) -> Boolean = { false },
+    /** NM1: what the page says about WHICH video is on (names.js: show, season, episode, episode title) and the page of its tab (p). Text only, cut by the app. Worker thread. */
+    private val nameClues: (JSONObject) -> Unit = {},
 ) : WebExtension.MessageDelegate {
 
     // GeckoView delivers native messages on the Android UI thread and Gecko HOLDS each request until the reply arrives: any work here freezes painting and typing.
@@ -146,6 +148,7 @@ class ShieldsBridge(
                     "bk" -> backPlace(m.optString("p"))
                     "bf" -> { backShown(m.optString("p"), m.optInt("ps") == 1, m.optString("nt"), m.optLong("ts"), m.optInt("y")); "" }
                     "ns" -> { noStore(m.optString("p")); "" }
+                    "nm" -> { nameClues(m); "" }
                     "pend" -> { leftPending(m.optString("p"), m.optInt("n")); "" }
                     "rep" -> { onPageReport(m); "" }
                     else -> ""
@@ -192,6 +195,7 @@ class ShieldsBridge(
         }
         val len = if (kind == app.kestrel.core.media.MediaKind.FILE) m.optLong("l", -1L) else -1L
         val cand = MediaCandidate(url, kind, MediaSniff.baseType(ct), len, page, m.optString("f").takeIf { it != page } ?: "", System.currentTimeMillis())
+        cand.frameChain = app.kestrel.core.media.MediaNames.frameChainOf(m.optString("fa"))   // NM1: the frames around the player that asked (their addresses name the season and episode)
         cand.fromMarkup = m.optString("s") == "dom" // RX3-V2: found in the page's text, never requested: not counted for the badge until it is checked or played
         cand.referer = MediaHeaders.refererOf(m.optString("rf")); cand.origin = MediaHeaders.originOf(m.optString("og")) // what the browser itself sent: the player's own Referer / Origin (origins only)
         cand.sourceName = app.kestrel.core.download.FileNames.fromContentDisposition(m.optString("n").takeIf { it.isNotBlank() })?.let { app.kestrel.core.download.FileNames.sanitize(it) } ?: "" // the name the server gave it

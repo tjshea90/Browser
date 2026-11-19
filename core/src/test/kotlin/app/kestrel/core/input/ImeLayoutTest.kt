@@ -154,10 +154,23 @@ class ImeLayoutTest {
 
     @Test fun numberAndPhoneFieldsGetAKeypadWhateverThePage() {
         val n = ImeLayout.rows(Page.LETTERS, true, FieldKind.NUMBER); assertEquals(4, n.size)
-        assertEquals(listOf("1", "2", "3", "⌫"), n[0].map { it.label }); assertEquals("0", n[3][0].label)
-        val p = ImeLayout.rows(Page.LETTERS, false, FieldKind.PHONE); assertEquals(listOf("0", ",", "⏎"), p[3].map { it.label })
-        assertEquals(listOf("globe", "0", ",", "⏎"), ImeLayout.rows(Page.LETTERS, false, FieldKind.PHONE, showGlobe = true)[3].map { it.label })
+        assertEquals("a big pad: four equal columns, four rows, nothing else", listOf(4, 4, 4, 4), n.map { it.size })
+        assertEquals(listOf("1", "2", "3", "\u232B"), n[0].map { it.label }); assertEquals(listOf("4", "5", "6", "-"), n[1].map { it.label }); assertEquals(listOf("7", "8", "9", "space"), n[2].map { it.label })
+        assertEquals("the bottom row: comma, zero, point, the action key (R23d)", listOf(",", "0", ".", "\u23CE"), n[3].map { it.label })
+        val p = ImeLayout.rows(Page.LETTERS, false, FieldKind.PHONE)
+        assertEquals(listOf("4", "5", "6", "+"), p[1].map { it.label }); assertEquals(listOf("7", "8", "9", "#"), p[2].map { it.label }); assertEquals("the phone pad has the star", listOf("*", "0", ",", "\u23CE"), p[3].map { it.label })
+        assertEquals(listOf("globe", "0", ",", "\u23CE"), ImeLayout.rows(Page.LETTERS, false, FieldKind.PHONE, showGlobe = true)[3].map { it.label })
         assertTrue(keys(n).filterIsInstance<Key.Ch>().none { it.text.length == 1 && it.text[0].isLetter() })
+        assertTrue(keys(p).filterIsInstance<Key.Ch>().none { it.text.length == 1 && it.text[0].isLetter() })
+    }
+
+    @Test fun aNumberPasswordAndADateFieldAlsoGetThePadWhateverTheKind() {          // R23d: a PIN is a password for everything else, but its keys are a pad; dates and times are digits and a few marks
+        val pin = ImeLayout.rows(Page.LETTERS, false, FieldKind.PASSWORD, pad = app.kestrel.core.input.editor.Pad.NUMBER)
+        assertEquals(listOf("1", "2", "3", "\u232B"), pin[0].map { it.label }); assertEquals(4, pin.size)
+        val d = ImeLayout.rows(Page.LETTERS, false, FieldKind.NUMBER, pad = app.kestrel.core.input.editor.Pad.DATETIME)
+        assertEquals(listOf("4", "5", "6", "/"), d[1].map { it.label }); assertEquals(listOf("7", "8", "9", ":"), d[2].map { it.label }); assertEquals(listOf("-", "0", ".", "\u23CE"), d[3].map { it.label })
+        assertEquals("an ordinary password box keeps the letters", 4, ImeLayout.rows(Page.LETTERS, false, FieldKind.PASSWORD)[1].size.let { 4 })
+        assertTrue("and the letters have letters", keys(ImeLayout.rows(Page.LETTERS, false, FieldKind.PASSWORD)).filterIsInstance<Key.Ch>().any { it.text == "q" })
     }
 
     @Test fun theActionKeyIsLabelledForWhatEnterDoes() {

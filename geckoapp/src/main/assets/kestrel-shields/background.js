@@ -309,10 +309,10 @@ var guardBlocked = 0;
 // ANS52g: what the page-side video format policy (codec-main.js) refused, summed over all pages and frames since the extension started; shown in Diagnostics ("Video formats offered to sites")
 var vcx = { reports: 0, asked: 0, size: 0, mode: 0, fps: 0, last: '' };
 // ANS53a / ANS53b: what the page-side gate (gate-main.js) held back and opened, summed over all pages and frames since the extension started ("Videos start only when pressed" in Diagnostics)
-var vgt = { reports: 0, held: 0, opened: 0, play: 0, press: 0, kestrel: 0, deferred: 0, refused: 0 };
+var vgt = { reports: 0, held: 0, opened: 0, play: 0, press: 0, kestrel: 0, deferred: 0, refused: 0, inherit: 0 };
 function vgtText() {
-  if (!vgt.reports) return '';
-  return 'held back ' + vgt.held + ' (preload / autoplay of the markup), ' + vgt.deferred + ' script players kept from starting to fetch, refused ' + vgt.refused + ' plays that nobody pressed; opened by the person: ' + vgt.opened + ' (play button ' + vgt.play + ', a tap on the picture ' + vgt.press + ', Kestrel\'s controls ' + vgt.kestrel + ')';
+  if (!vgt.reports && !vgt.inherit) return '';
+  return 'held back ' + vgt.held + ' (preload / autoplay of the markup), ' + vgt.deferred + ' script players kept from starting to fetch, refused ' + vgt.refused + ' plays that nobody pressed; opened by the person: ' + vgt.opened + ' (play button ' + vgt.play + ', a tap on the picture ' + vgt.press + ', Kestrel\'s controls ' + vgt.kestrel + ')' + (vgt.inherit ? '; player frames started by the person\'s tap on the page around them (a server or play button): ' + vgt.inherit : '');
 }
 // ANS52h: what the picture size cap did to the HLS master playlists the pages asked for (shown in Diagnostics: "Picture size cap")
 var hls = { seen: 0, cut: 0, rungs: 0, media: 0, within: 0, notText: 0, big: 0, err: 0, last: '' };
@@ -335,11 +335,24 @@ function guardAnswer(host, topHost) { // on: the pop-up guard applies; skip (RX3
 onMsg(function (m, sender) {
   if (!m) return undefined;
   var tabId = (sender && sender.tab) ? sender.tab.id : -1;
+  if (m.k === 'nm') { // NM1: names.js (top frame) says what the page claims about WHICH video is on: numbers and two short strings, checked here, with the page's address
+    if (tabId < 0 || !sender || sender.frameId !== 0) return undefined;
+    var nmN = function (x, hi) { x = +x; return (x >= 1 && x <= hi) ? Math.floor(x) : 0; };
+    var nmT = function (x) { return String(x === undefined || x === null ? '' : x).replace(/[\u0000-\u001f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80); };
+    send({ k: 'nm', p: tabTop.get(tabId) || '', sh: nmT(m.sh), s: nmN(m.s, 199), e: nmN(m.e, 9999), et: nmT(m.et) }).catch(function () {});
+    return undefined;
+  }
+  if (m.k === 'ptap') { // VP2: a trusted click in the top page (content.js sends it from the top frame only)
+    if (tabId >= 0 && sender && sender.frameId === 0) { personTap.set(tabId, Date.now()); if (personTap.size > 60) personTap.delete(personTap.keys().next().value); }
+    return undefined;
+  }
   if (m.k === 'guard') {
     var top = tabId >= 0 ? tabTop.get(tabId) : null;
     var gh = (top && pageHost(top)) || m.h;
-    if (m.s !== 1) return guardAnswer(gh, (top && pageHost(top)) || '');
-    return guardAnswer(gh, (top && pageHost(top)) || '').then(function (r) { skipAsked++; if (r && r.skip === true) skipYes++; markStats(); return r; });
+    var pp = tabId >= 0 && sender && personFrame(tabId, sender.frameId);   // VP2: this frame was started by the person's tap on the page around it
+    function withPP(r) { return (pp && r && typeof r === 'object') ? Object.assign({}, r, { pp: true }) : r; }
+    if (m.s !== 1) return guardAnswer(gh, (top && pageHost(top)) || '').then(withPP);
+    return guardAnswer(gh, (top && pageHost(top)) || '').then(function (r) { skipAsked++; if (r && r.skip === true) skipYes++; markStats(); return withPP(r); });
   }
   if (m.k === 'vgt') { // ANS53a / ANS53b: what the page-side gate did (seven numbers: held, opened, by play(), by a tap on the picture, by Kestrel's controls, sources held, plays refused; content.js checked them)
     var gn = Array.isArray(m.n) ? m.n : [], gv = function (i) { var x = +gn[i]; return x >= 0 && x <= 1000000 ? Math.floor(x) : 0; };
@@ -608,7 +621,7 @@ function onRequest(d) {
     rv.pages++;
     var left = pageLog.get(d.tabId);
     if (left && left.page && left.reqs - left.done > 0) send({ k: 'pend', p: left.page, n: left.reqs - left.done }).catch(function () {}); // RX3-BK1: the page that is being left still had requests open
-    navId.set(d.tabId, Number(d.requestId) || 0); frameParent.delete(d.tabId); mediaFrames.delete(d.tabId); frameDoc.delete(d.tabId);
+    navId.set(d.tabId, Number(d.requestId) || 0); frameParent.delete(d.tabId); mediaFrames.delete(d.tabId); frameDoc.delete(d.tabId); personTap.delete(d.tabId); personFrames.delete(d.tabId);
     sniffed.delete(d.tabId); maybeCount.delete(d.tabId); tabTop.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again (delete first: Map keeps the old position of a key, and the OLDEST position is what is dropped)
     verdicts.clear(); // legacy verdicts are only worth keeping while ONE page loads
     newLog(d.tabId, d.url); reportLater(d.tabId); // the page report starts here (4 s after the last news it goes to the app)
@@ -710,6 +723,13 @@ function dedupeKey(url, sized) {
   for (var i = 0; i < parts.length; i++) { var eq = parts[i].indexOf('='); if (!PIECE_PARAMS.test(eq < 0 ? parts[i] : parts[i].slice(0, eq))) keep.push(parts[i]); }
   return url.slice(0, q) + (keep.length ? '?' + keep.join('&') : '') + '|' + sized;
 }
+// VP2 (owner message 2026-11-18: "I selected three different video servers on doraby.Com but none of them would play. It showed no error, it just couldn't load the video"): a trusted click in the TOP page
+// (content.js sends `ptap`, nothing but the fact) followed within PTAP_MS by a frame the page starts is the person's press of that frame: the frame's gate is told (guard answer `pp`) and opens its player.
+// A frame inside such a frame, started within PCHILD_MS of it, is one too (an embed inside an embed). A new page in the tab forgets all of it (the tap that went to another page started nothing here).
+var personTap = new Map();    // tabId -> when the person last clicked in the top page
+var personFrames = new Map(); // tabId -> Map(frameId -> when the frame was started by such a click)
+var PTAP_MS = 8000, PCHILD_MS = 12000, PFRAME_MS = 120000;
+function personFrame(tabId, frameId) { var m = personFrames.get(tabId); return !!(m && m.has(frameId) && Date.now() - m.get(frameId) < PFRAME_MS); }
 var tabTop = new Map(); // tabId -> the address of the page the tab is on (an embedded player's request names its own frame, not this)
 var sniffed = new Map(); // tabId -> Set of "url|sizeKnown" already reported for the tab's CURRENT page (a reload or another page reports the same file again)
 var SNIFFED_TABS = 40;
@@ -733,6 +753,13 @@ function learnTop(d) {
   var a = d.frameAncestors;
   if (a && a.length && a[a.length - 1].url) { tabTop.set(d.tabId, a[a.length - 1].url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); }
 }
+// NM1: the addresses of the frames AROUND the one that asked for a media file, nearest first, never the top page, as one text (an embed inside an embed: the outer address names the season and episode).
+function frameChainOf(d) {
+  var a = d.frameAncestors, out = [];
+  if (!a || a.length < 2) return '';
+  for (var i = 0; i < a.length - 1 && out.length < 4; i++) { var u = a[i] && a[i].url ? docOf(a[i].url) : ''; if (u && u.length <= 400) out.push(u); }
+  return out.join('\n');
+}
 function docOf(u) { return u ? String(u).replace(/#.*$/, '') : ''; } // a document's address without its fragment: the same document is always the same string
 function noteFrame(tabId, frameId, parentId, doc) {
   if (!(frameId > 0) || tabId < 0) return;
@@ -751,6 +778,13 @@ function frameNavigates(d) { // a sub_frame request: the frame [d.frameId] is be
   var tabId = d.tabId, f = d.frameId;
   if (tabId < 0 || !(f > 0)) return;
   learnTop(d);
+  var now = Date.now(), pf = personFrames.get(tabId);                              // VP2: is this frame the person's press?
+  var byTap = d.parentFrameId === 0 && now - (personTap.get(tabId) || 0) < PTAP_MS;
+  var byParent = d.parentFrameId > 0 && !!pf && pf.has(d.parentFrameId) && now - pf.get(d.parentFrameId) < PCHILD_MS;
+  if (byTap || byParent) {
+    if (!pf) { pf = new Map(); personFrames.set(tabId, pf); if (personFrames.size > 40) personFrames.delete(personFrames.keys().next().value); }
+    if (pf.size < 30 || pf.has(f)) { pf.set(f, now); vgt.inherit++; markStats(); }
+  }
   var pm = frameParent.get(tabId); if (!pm) { pm = new Map(); frameParent.set(tabId, pm); }
   if (d.parentFrameId >= 0) pm.set(f, d.parentFrameId);
   var fd = frameDoc.get(tabId); if (!fd) { fd = new Map(); frameDoc.set(tabId, fd); }
@@ -827,7 +861,7 @@ function maybeMedia(d, url, ct, size, ref, org) {
   q.n++;
   noteFrame(d.tabId, d.frameId, d.parentFrameId, d.documentUrl);
   var page = tabTop.get(d.tabId) || ((d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || ''));
-  send({ k: 'maybe', u: url, c: ct, l: size, p: page, f: docOf(d.documentUrl), rf: ref, og: org, ty: d.type }).catch(function () {});
+  send({ k: 'maybe', u: url, c: ct, l: size, p: page, f: docOf(d.documentUrl), fa: frameChainOf(d), rf: ref, og: org, ty: d.type, mt: String(d.method || '').replace(/[^A-Za-z]/g, '').slice(0, 8) }).catch(function () {});
 }
 
 browser.webRequest.onHeadersReceived.addListener(lstTimed(LST.rcv, function (d) {
@@ -866,7 +900,7 @@ browser.webRequest.onHeadersReceived.addListener(lstTimed(LST.rcv, function (d) 
   seen.add(key);
   noteFrame(d.tabId, d.frameId, d.parentFrameId, d.documentUrl);
   var page = tabTop.get(d.tabId) || ((d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || ''));
-  send({ k: 'media', u: url, c: ct, l: size, p: page, f: docOf(d.documentUrl), n: cd, rf: ref, og: org }).catch(function () {});
+  send({ k: 'media', u: url, c: ct, l: size, p: page, f: docOf(d.documentUrl), fa: frameChainOf(d), n: cd, rf: ref, og: org }).catch(function () {});
 }), { urls: ['http://*/*', 'https://*/*'], types: MEDIA_TYPES }, ['responseHeaders']);
 
 // ANS52h (research/VIDEO_ACCELERATION.md section "ANS52h design"): an HLS master playlist the page asks for is answered with the rungs above the picture size cap taken out (hlscap.js), so the site's player never
@@ -1022,6 +1056,16 @@ onMsg(function (m, sender) {
     k: 'vst', t: n(m.t, 0, 1e10), d: (m.d === -1 || m.d === -2) ? m.d : n(m.d, 0, 1e10), b: n(m.b, 0, 1e10), pa: m.p === 1 ? 1 : 0, e: m.e === 1 ? 1 : 0, m: m.m === 1 ? 1 : 0, v: n(m.v, 0, 100),
     r: n(m.r, 0.1, 16), rs: n(m.rs, 0, 4), ms: m.ms === 1 ? 1 : 0, l: m.l === 1 ? 1 : 0, w: n(m.w, 0, 20000), h: n(m.h, 0, 20000), ak: n(m.ak, 0, 2000000000), aw: n(m.aw, 0, 1000), er: m.er === 1 ? 1 : 0,
     lt: n(m.lt, 0, 60000), pc: n(m.pc, 0, 60000), tf: n(m.tf, 0, 2000000000), df: n(m.df, 0, 2000000000), sh: m.sh === 1 ? 1 : 0 };   // ANS51e: lt = how late the page's own timer ran (ms), pc = the player script's own work in a report (ms), tf / df = frames shown / dropped by the film
+  if (m.k === 'vst') {                                      // QL1: the page's OWN quality list (player.js asked quality.js): rows [id, label], the current pick and the family, cut to the same limits the app checks again (PageLevels)
+    var qs = function (v, len) { return typeof v === 'string' ? v.replace(/[\u0000-\u001f<>]/g, ' ').slice(0, len) : ''; };
+    if (Array.isArray(m.q)) {
+      var rows = [];
+      for (var qi = 0; qi < m.q.length && rows.length < 12; qi++) { var qr = m.q[qi]; if (Array.isArray(qr) && typeof qr[0] === 'string' && /^[A-Za-z0-9_.:-]{1,24}$/.test(qr[0])) rows.push([qr[0], qs(qr[1], 22)]); }
+      if (rows.length) o.q = rows;
+    }
+    if (typeof m.qc === 'string') o.qc = qs(m.qc, 24);
+    if (typeof m.qf === 'string' && /^[a-z]{2,8}$/.test(m.qf)) o.qf = m.qf;
+  }
   o.p = String(page).slice(0, 300);                       // (`p` is the page's address in every message the app gets; the film's PAUSED flag is `pa`: lab run 43776782679 found the app reading the address as "not paused" for ever)
   return send(o).then(function (r) { try { return r ? JSON.parse(r) : undefined; } catch (e) { return undefined; } }, function () { return undefined; });
 });

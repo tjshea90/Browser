@@ -225,7 +225,7 @@ def page_fs(lock=""):
             "<button id=unlock style='" + btn + "'>Unlock</button><button id=exit style='" + btn + "'>Exit full screen</button>" + reporter).encode()
 
 
-def page_fsbox(kind, nobar, chrome=False, hls=False):
+def page_fsbox(kind, nobar, chrome=False, hls=False, yt=False):
     """FSB1 / ROT1 / FSC1 (owner message 46): a PLAYER BOX goes full screen (not the bare video), as finance.yahoo.com's player does: kind=shadow puts the box inside a web component's open shadow root (the full-screen
     element is then the host), kind=light is a plain box. The box's bottom edge carries a 6 px RED strip, so a screenshot shows whether the bottom of the full-screen page is hidden under a system bar
     (the strip is gone) or visible (red rows). The clip has sound (a media session opens, so the app can pause it while the screen turns). nobar=1: the box has no controls of its own (Kestrel's bar can show).
@@ -234,7 +234,10 @@ def page_fsbox(kind, nobar, chrome=False, hls=False):
     own = "" if nobar else ('<div id="bar" style="position:absolute;left:0;right:0;bottom:6px;height:44px;background:rgba(0,0,0,.7)"><button class="play-button" aria-label="Play or pause" style="width:44px;height:44px">|&gt;</button>'
                             '<input type="range" aria-label="Seek" value="0" style="width:60%"></div>')
     ytc = '<div id="ytchrome" class="ytp-chrome-bottom" style="position:absolute;left:0;right:0;bottom:30px;height:36px;background:#c0c;color:#fff;display:block">page chrome</div>' if chrome else ""
-    box = ('<div id="box" style="position:relative;width:100%;height:300px;background:#000"><video id="v" src="/clip/landscape.mp4" loop playsinline style="width:100%;height:100%;object-fit:contain"></video>' + own + ytc +
+    vid = '<video id="v" src="/clip/landscape.mp4" loop playsinline style="width:100%;height:100%;object-fit:contain"></video>'
+    if yt:   # QL1: the film sits in YouTube's player element (#movie_player.html5-video-player), which gets the player API the page's script defines below
+        vid = '<div id="movie_player" class="html5-video-player" style="position:absolute;left:0;top:0;width:100%;height:100%">' + vid + '</div>'
+    box = ('<div id="box" style="position:relative;width:100%;height:300px;background:#000">' + vid + own + ytc +
            '<div id="mark" style="position:absolute;left:0;right:0;bottom:0;height:6px;background:#f00"></div></div>')
     css = "#box:fullscreen,:host(:fullscreen) #box{width:100vw !important;height:100vh !important}"
     if kind == "shadow":
@@ -269,11 +272,17 @@ def page_fsbox(kind, nobar, chrome=False, hls=False):
     var p = fsEl.requestFullscreen ? fsEl.requestFullscreen() : null;
     if (p && p.catch) p.catch(function (e) { send('fs-rejected', { why: String(e).slice(0, 60) }); });
   };
+  @YT@
   send('page');
   @HLS@
 })();</script>"""
     hls_js = "setTimeout(function () { try { var x = new XMLHttpRequest(); x.open('GET', '/hls/film/master.m3u8'); x.send(); send('hls-asked'); } catch (e) {} }, 800);" if hls else ""   # ANS53d.2: a page that also loads an HLS stream with two pictures (the lab's own), like hls.js does
-    return page.replace("@KIND@", kind).replace("@BUILD@", build).replace("@HLS@", hls_js).encode()
+    yt_js = ("try { var mp = q('movie_player'), qcur = 'hd720';"
+             "mp.getAvailableQualityLevels = function () { return ['hd1080', 'hd720', 'large', 'medium', 'small', 'tiny', 'auto']; };"
+             "mp.getPlaybackQuality = function () { return qcur; };"
+             "mp.setPlaybackQualityRange = function (a, b) { if (a === b) qcur = a; send('ytcall', { fn: 'range', a: a, b: b }); };"
+             "mp.setPlaybackQuality = function (x) { send('ytcall', { fn: 'one', a: x }); }; } catch (e) {}") if yt else ""
+    return page.replace("@KIND@", kind).replace("@BUILD@", build).replace("@HLS@", hls_js).replace("@YT@", yt_js).encode()
 
 
 def page_dlguard(kind):
@@ -886,7 +895,7 @@ class H(http.server.BaseHTTPRequestHandler):
             if p == "/fs":
                 return self._send(page_fs((q.get("lock") or [""])[0]))
             if p == "/fsbox":
-                return self._send(page_fsbox((q.get("kind") or ["light"])[0], (q.get("nobar") or [""])[0] == "1", (q.get("chrome") or [""])[0] == "1", (q.get("hls") or [""])[0] == "1"))
+                return self._send(page_fsbox((q.get("kind") or ["light"])[0], (q.get("nobar") or [""])[0] == "1", (q.get("chrome") or [""])[0] == "1", (q.get("hls") or [""])[0] == "1", (q.get("yt") or [""])[0] == "1"))
             if p == "/dl/page":
                 return self._send(page_dl())
             if p == "/dl/guard":
