@@ -66,7 +66,33 @@ class VideoFlow(private val a: BrowserActivity) {
     }
 
     /** What the tab's list held is gone (a new page): the list is emptied and everything learned about its entries is forgotten, so the same address on the next page is read afresh. UI thread. */
-    fun clearTab(tab: Tab) { tab.gecko.pictureW = 0; tab.gecko.pictureH = 0; tab.gecko.picturePlayed = false; val keys = tab.media.keys(); tab.media.clear(); forget(keys); looks.remove(tab.id); val p = tab.id.toString() + "|"; maybeAsked.removeAll { it.startsWith(p) }; if (lastRefused?.tabId == tab.id) lastRefused = null }
+    /** NM1: names.js reports what the top page says about the video on (the tab of the page; a private tab keeps it in memory like its media list, nothing is written). Cut and clamped here: the text is a page's. */
+    fun nameClues(m: org.json.JSONObject) = Io.ui {
+        val t = tabOf(m.optString("p")) ?: return@ui
+        val c = app.kestrel.core.media.NameClues(
+            show = app.kestrel.core.media.NameClues.clean(m.optString("sh")),
+            season = app.kestrel.core.media.NameClues.season(m.optInt("s")),
+            episode = app.kestrel.core.media.NameClues.episode(m.optInt("e")),
+            episodeTitle = app.kestrel.core.media.NameClues.clean(m.optString("et")),
+        )
+        val was = t.nameClues
+        t.nameClues = if (c.isEmpty) null else c
+        if (!t.isPrivateTab && (was?.toString() ?: "") != (t.nameClues?.toString() ?: "")) Health.log("media", "name-clues", t.nameClues?.toString() ?: "none")
+    }
+
+    /**
+     * The tab starts a page. VS2: the same page again (a reload, another query, a server switch that reloads it) keeps what was captured; a different page forgets everything, as it always did. [newUrl] null = forget all.
+     * Health says what was kept and what went, so a report shows whether a row disappeared because the PAGE changed.
+     */
+    fun clearTab(tab: Tab, newUrl: String? = null) {
+        tab.nameClues = null; tab.gecko.pictureW = 0; tab.gecko.pictureH = 0; tab.gecko.picturePlayed = false
+        val before = tab.media.keys()
+        val dropped = if (newUrl != null) tab.media.onNewPage(newUrl) else { tab.media.clear(); before.size }
+        val kept = tab.media.keys().toSet()
+        forget(before.filter { it !in kept })
+        looks.remove(tab.id); val p = tab.id.toString() + "|"; maybeAsked.removeAll { it.startsWith(p) }; if (lastRefused?.tabId == tab.id) lastRefused = null
+        if (before.isNotEmpty() && !tab.isPrivateTab) Health.log("media", "page-clear", "kept=${kept.size} dropped=$dropped")
+    }
 
     private fun forget(keys: List<String>) {
         for (k in keys) { lookedKeys.remove(k); streamInfo.remove(k); probed.remove(k); sized.remove(k); masterRungs.remove(k); masterAsked.remove(k); childUrls.remove(k)?.forEach { children.remove(it) } }
@@ -185,23 +211,30 @@ class VideoFlow(private val a: BrowserActivity) {
         if (!maybeAsked.add(t.id.toString() + "|" + frame + "|" + MediaCandidate.keyOf(url))) return@ui
         val seed = MediaCandidate(url, MediaKind.FILE, "", m.optLong("l", -1L), page, frame, System.currentTimeMillis())
         seed.referer = MediaHeaders.refererOf(m.optString("rf")); seed.origin = MediaHeaders.originOf(m.optString("og"))
+        seed.frameChain = MediaNames.frameChainOf(m.optString("fa"))
         val sets = MediaHeaders.sets(seed, t.url)
         val host = UrlParts.hostOf(url) ?: ""
-        Health.log("media", "maybe", "$host type=${m.optString("c").substringBefore(';').take(32)} len=${seed.length} kind=${m.optString("ty")}")
-        fun attempt(i: Int, last: Int) {
-            if (i >= sets.size) { Health.log("media", "maybe-refused", "$host http=$last"); return }
+        val method = m.optString("mt")
+        Health.log("media", "maybe", "$host type=${m.optString("c").substringBefore(';').take(32)} len=${seed.length} kind=${m.optString("ty")} method=${method.ifEmpty { "?" }}")
+        if (!MediaHeaders.replayable(method)) { Health.log("media", "maybe-skipped", "$host the page asked with $method: an API call, not a stream"); return@ui }
+        fun attempt(i: Int, last: Int, notFound: Int) {
+            if (i >= sets.size) { Health.log("media", "maybe-refused", "$host http=$last sets=${sets.size}"); return }
             var status = -1
             DownloadController.fetchBytes(a, url, 0L, 4095L, sets[i], 1, t.isPrivateTab, onStatus = { status = it }) { bytes ->
-                if (bytes == null) { if (status == 401 || status == 403 || status == -1) attempt(i + 1, status.takeIf { it > 0 } ?: last) else Health.log("media", "maybe-refused", "$host http=$status"); return@fetchBytes }
+                if (bytes == null) {
+                    if (MediaHeaders.tryNextSet(status, notFound)) attempt(i + 1, status.takeIf { it > 0 } ?: last, if (status == 404 || status == 406) notFound + 1 else notFound)
+                    else Health.log("media", "maybe-refused", "$host http=$status set=${i + 1}/${sets.size}")
+                    return@fetchBytes
+                }
                 val s = MediaSniff.classifyBytes(bytes)
                 if (s == null) { Health.log("media", "maybe-no", "$host first=${bytes.size}"); return@fetchBytes }
                 val c = MediaCandidate(url, s.kind, s.mime, if (s.kind == MediaKind.FILE) seed.length else -1L, page, frame, System.currentTimeMillis())
-                c.referer = seed.referer; c.origin = seed.origin; c.viaHeaders = sets[i]
+                c.referer = seed.referer; c.origin = seed.origin; c.viaHeaders = sets[i]; c.frameChain = seed.frameChain
                 Health.log("media", "maybe-hit", "$host ${s.kind} ext=${s.ext} set=${i + 1}/${sets.size}")
                 if (t.media.add(c)) a.refreshDownloadButton()
             }
         }
-        attempt(0, 0)
+        attempt(0, 0, 0)
     }
 
     /** Called on the Shields worker thread. */
@@ -484,14 +517,14 @@ class VideoFlow(private val a: BrowserActivity) {
     }
 
     /** The default name (without its extension) of a stream's quality: the page's title and the quality, the same text the download itself uses. */
-    private fun stemFor(tab: Tab, label: String): String = MediaNames.streamStem(tab.title, tab.url, UrlParts.hostOf(tab.url) ?: "", label)
+    private fun stemFor(tab: Tab, label: String, c: MediaCandidate? = null): String = MediaNames.streamStem(tab.title, tab.url, UrlParts.hostOf(tab.url) ?: "", label, c, tab.nameClues)   // NM1: the episode the page marks / the player frame's address names
 
     /** One line under the format (owner request X17): file type, size, length - whatever is known, in that order. */
     private fun rowDetail(vararg parts: String): String = parts.filter { it.isNotEmpty() && it != "size unknown" }.joinToString("  \u00B7  ")
 
     /** A row for one quality of a stream. [key] keeps it the same row when the sheet is drawn again. */
     private fun streamChoice(tab: Tab, c: MediaCandidate, pick: StreamPick, title: String, detail: String, ext: String): VideoPanel.Choice =
-        VideoPanel.Choice("s|" + c.key + "|" + (pick.repId ?: pick.url) + "|" + pick.label, title, detail, stemFor(tab, pick.label), ext, pick)
+        VideoPanel.Choice("s|" + c.key + "|" + (pick.repId ?: pick.url) + "|" + pick.label, title, detail, stemFor(tab, pick.label, c), ext, pick)
 
     /** What the sheet shows: the ranked files (the long-pressed one first), the streams' quality lists as they arrive, and the small or odd files tucked under "Other files". */
     private fun model(tab: Tab): VideoPanel.Model {
@@ -519,7 +552,7 @@ class VideoFlow(private val a: BrowserActivity) {
                         val ext = MediaSniff.saveExtension(c.url, c.mime)
                         val title = if (c.audioOnly) "Audio only" else q.ifEmpty { "Video file" }
                         val detail = rowDetail(MediaLabels.format(c), MediaLabels.size(c.length), MediaLabels.duration(c.durationMs))
-                        val stem = MediaNames.defaultStem(c, tab.title, host, if (c.audioOnly) "audio" else q, tab.url)
+                        val stem = MediaNames.defaultStem(c, tab.title, host, if (c.audioOnly) "audio" else q, tab.url, tab.nameClues)
                         into.add(VideoPanel.Choice("f|" + c.key, title, detail, stem, ext, c, badge = if (c === ranked.exact) "THIS VIDEO" else null))
                     }
                 }
@@ -787,6 +820,26 @@ class VideoFlow(private val a: BrowserActivity) {
         val c = ranked.main.firstOrNull() ?: ranked.exact
         Health.log("lab", "videodl", "main=${ranked.main.size} other=${ranked.other.size} usable=${tab.media.usableCount()} of ${tab.media.size} pick=${if (c == null) "none" else "${c.kind} ${c.height}p ${c.length / 1024}KB"}")
         if (c != null && c.kind == MediaKind.FILE) pick(tab, c, "lab-found-video")
+        else if (c != null) labStream(tab, c, 0)                  // VS1: a playlist (HLS / DASH) goes the way a tap on its row goes: read, list the pictures, download the first (best) one
+    }
+
+    /** VS1 lab: reads the stream's list, waits (at most 30 s) for the pictures and starts the first row's download; every step is a `lab videodl-stream` line the emulator lab reads. */
+    private fun labStream(tab: Tab, c: MediaCandidate, tries: Int) {
+        val st = streamInfo[c.key]
+        if (st == null) {
+            if (c.kind == MediaKind.DASH) loadDash(tab, c) else loadStream(tab, c)
+            Io.main.postDelayed({ labStream(tab, c, tries + 1) }, 1000)
+            return
+        }
+        when (st) {
+            is Loaded.Loading -> if (tries < 30) Io.main.postDelayed({ labStream(tab, c, tries + 1) }, 1000) else Health.log("lab", "videodl-stream", "gave up: the list was still loading after 30 s")
+            is Loaded.Failed -> Health.log("lab", "videodl-stream", "failed: ${st.message.take(140)}")
+            is Loaded.Ready -> {
+                val first = st.rows.firstOrNull()
+                Health.log("lab", "videodl-stream", "ready rows=${st.rows.size} first=${first?.second?.label ?: "none"}")
+                if (first != null) pickStream(tab, first.second, "lab-found-video")
+            }
+        }
     }
 
     /** LAB (ANS52i): the best row of the Save video sheet, played in Kestrel's own player (the lab cannot press the sheet's button). */

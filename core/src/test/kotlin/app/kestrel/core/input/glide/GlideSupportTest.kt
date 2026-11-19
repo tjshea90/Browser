@@ -85,7 +85,7 @@ class GlideSupportTest {
         assertEquals("hello", got!!.candidates.first().text)
         var habit: FloatArray? = null
         g.accepted("hello") { habit = it }
-        assertNotNull(habit); assertEquals(2, habit!!.size)
+        assertNotNull(habit); assertEquals("the thumb habit (x, y) and then the touch plane (R20d)", 2 + TouchField.SIZE, habit!!.size)
         assertTrue(g.stats.line().contains("1 glides"))
     }
 
