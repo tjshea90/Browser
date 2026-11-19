@@ -46,4 +46,4 @@ Lab: suite `ro` / `em` (soak.py `reopen_round`, writes reopen.md): load, scroll,
 | 44432470135 | daily, tablet, full net | de41f802 (alpha70 code) | green; report above |
 | 44434241145 | ro (reopen) | 609d22a7 | green; 3 of 3 pictures shown, 3 rounds skipped by a harness bug (fixed) |
 | 44435517079 | em (ro + dr) | 45da7919 | reopen 3 of 3; dr inconclusive (emulator GPU froze on server 2) |
-| 44436958209 | ro v2 (fixed harness, doraby title page, pause capture) | 32740b2a | running when written |
+| 44436958209 | ro v2 (fixed harness, doraby title page, pause capture) | 32740b2a | green: 9 of 9 reopens drew the picture (look mark 0.33-0.42 s, live paint 2.6-3.3 s, cover gone 2.6-4.1 s; Wikipedia / doraby keep the picture up to ~1 s after the live paint while the page scrolls to its place: designed) |
