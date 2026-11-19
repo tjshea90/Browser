@@ -4539,7 +4539,7 @@ _install_daily()
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "ro", "dr", "new", "tb", "new2"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "ro", "dr", "em", "new", "tb", "new2"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -4554,7 +4554,7 @@ def main():
         a.profile = "tablet" if a.suite in ("daily", "yt") else "standard"
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
-        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "ro", "dr", "new", "tb", "new2") else "all")
+        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "ro", "dr", "em", "new", "tb", "new2") else "all")
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
@@ -4619,10 +4619,10 @@ def main():
             s.lastrun_round()                                # (CR1f/g again, after the scene fix; tb ran just above)
         if a.suite == "lr":
             s.lastrun_round()                                # (CR1c: the app is killed from outside in front and in the background; the next Diagnostics must say how the last run ended)
-        if a.suite == "dr":
-            s.doraby_round()                                 # (EM1i, owner 2026-11-19: the six real doraby servers on the real engine: does the finder offer a stream for each?)
-        if a.suite == "ro":
+        if a.suite in ("ro", "em"):
             s.reopen_round()                                 # (EM1k, owner 2026-11-19: the app opened again must show the page it was left on at once: picture drawn? why not? when does the live page take over?)
+        if a.suite in ("dr", "em"):
+            s.doraby_round()                                 # (EM1i, owner 2026-11-19: the six real doraby servers on the real engine: does the finder offer a stream for each?)
         if a.suite == "yt":
             s.yt_journey(a.minutes)                        # (CR1, owner message 2026-11-18: the app crashed on YouTube: a YouTube-only journey with leave / return and RAM pressure)
         if a.suite == "daily":
