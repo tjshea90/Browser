@@ -3720,7 +3720,7 @@ class Soak:
                 time.sleep(0.6)
                 self.shot("reopen-%s-%s-first" % (pname, sid))        # (what is on the screen about a second after the tap on the icon)
                 painted = None
-                while time.time() - t0 < 60:
+                while time.time() - t0 < (2 if self.a.selftest else 60):
                     lines = self.log.since(mark_start)
                     if health_events(lines, "start", "paint"):
                         painted = time.time() - t0
