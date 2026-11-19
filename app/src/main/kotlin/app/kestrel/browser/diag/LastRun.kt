@@ -50,6 +50,11 @@ object LastRun {
     private var memPrev = ""
     private var pid = 0
     private var build = ""
+    /** DG1: when this build was installed (PackageInfo.lastUpdateTime); written into the note so the NEXT start can tell an update from a crash and a first start from a later one. */
+    private var installAt = 0L
+    /** Test hooks: pretend to be another build / another install time (Robolectric has one fixed package). */
+    @Volatile internal var buildOverride: String? = null
+    @Volatile internal var installAtOverride: Long? = null
     private var startedAt = 0L
     private var state = "starting"
     private var stateAt = 0L
