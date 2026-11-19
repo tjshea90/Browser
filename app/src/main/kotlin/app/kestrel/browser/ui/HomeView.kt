@@ -53,6 +53,7 @@ class HomeView(ctx: Context, private var pal: Pal, private val brand: String, pr
             isSaveEnabled = false
             gravity = Gravity.CENTER_VERTICAL
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+            privateImeOptions = app.kestrel.browser.SwoopLink.OMNIBOX_OPTION
             setOnEditorActionListener { _, id, ev ->
                 if (id == EditorInfo.IME_ACTION_GO || (ev != null && ev.keyCode == KeyEvent.KEYCODE_ENTER && ev.action == KeyEvent.ACTION_DOWN)) {
                     l.onSubmit(text.toString()); true
