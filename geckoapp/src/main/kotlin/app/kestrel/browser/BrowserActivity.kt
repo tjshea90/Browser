@@ -1221,12 +1221,16 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     /** EY-1: the saved picture for tab [id] when it may be shown for [url] now (same page, engine, appearance, desktop-site choice); null otherwise. Reads and decodes on the calling thread. */
-    private fun savedLook(id: Long, url: String, desktop: Boolean): LastLook.Look? {
-        if (!prefs.lastLook || !LastLookRules.worthKeeping(url)) return null
+    private fun savedLook(id: Long, url: String, desktop: Boolean, quiet: Boolean = false): LastLook.Look? {
+        // EM1k: every "no picture" says WHY (counter look.none.<why> and a `tabs look-none` line; the owner's tablet reported only the plain "Opening <host>" cover, with nothing to tell the cause)
+        fun none(why: String): LastLook.Look? { if (!quiet) { Health.count("look.none.$why"); Health.log("tabs", "look-none", "tab=$id why=$why") }; return null }
+        if (!prefs.lastLook) return none("off")
+        if (!LastLookRules.worthKeeping(url)) return none("not-a-page")
         val appCtx = applicationContext
-        val meta = LastLook.meta(appCtx, id) ?: return null
-        if (!LastLookRules.usable(meta, url, Flavor.engineVersion, LastLook.appearance(appCtx, prefs.webDark), prefs.webDark == 1, desktop)) return null
-        return LastLook.load(appCtx, id, meta)
+        val meta = LastLook.meta(appCtx, id) ?: return none("no-file")
+        val why = LastLookRules.whyNot(meta, url, Flavor.engineVersion, LastLook.appearance(appCtx, prefs.webDark), prefs.webDark == 1, desktop)
+        if (why != null) return none(why)
+        return LastLook.load(appCtx, id, meta) ?: none("unreadable")
     }
 
     /** The tab id the early cover's look belongs to until [restore] has made the tab (then it becomes [lookTab]). */
@@ -1460,7 +1464,7 @@ open class BrowserActivity : Activity(), DockListener {
         val s = createSession(tab)
         s.open(GeckoEngine.runtime(this))
         tab.session = s
-        tab.gecko.painted = false                                       // PV1: a session that has not painted yet needs the curtain when it is shown
+        tab.gecko.painted = false; tab.gecko.paintedFor = ""            // PV1: a session that has not painted yet needs the curtain when it is shown (EM1k: and it has painted no address yet)
         if (tab === current) StartTimeline.mark("open")
         var state = tab.gecko.state
         if (state == null) tab.gecko.stateJson?.let { state = stateFromDisk(tab, it) } // a tab that was saved by the last run: its Back stack and scroll position come back
@@ -3140,7 +3144,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun lookFor(tab: Tab, note: String): Boolean {
         val pm = lookMeta
         if (restoreOverlay.showingLook && lookPending == tab.id && pm != null && LastLookRules.samePage(pm.url, tab.url)) { lookTab = tab; lookPending = 0L; Health.log("tabs", "look-adopted", "tab=${tab.id}"); return true }
-        val look = savedLook(tab.id, tab.url, tab.desktop) ?: return false
+        val look = savedLook(tab.id, tab.url, tab.desktop, quiet = tab.isPrivateTab) ?: return false
         restoreOverlay.showLook(look.bitmap, note, note, onDrawn = { Health.log("tabs", "look-drawn", "tab=${tab.id} revive") })
         lookTab = tab; lookMeta = look.meta; lookPending = 0L; lookPaintAt = 0L; lookStopped = false
         Health.count("look.revive"); Health.log("tabs", "look-shown", "tab=${tab.id} revive ${look.meta.w}x${look.meta.h} y=${look.meta.scrollY}")
@@ -3176,19 +3180,38 @@ open class BrowserActivity : Activity(), DockListener {
         if (!lookScrollArmed) { lookScrollArmed = true; Io.main.postDelayed(lookScrollTimer, (LastLookRules.SETTLE_MS - LastLookRules.PAGE_DEBOUNCE_MS).toLong()) }
     }
 
+    /** Why a picture is NOT taken now (null = take it). Same rules as before EM1k, in the same meaning, only named. */
+    private fun lookSkip(tab: Tab, why: String, minGapMs: Long): String? = when {
+        !prefs.lastLook || tab !== current || tab.isPrivateTab -> "quiet"
+        homeShown(tab) -> "home"
+        tab.error != null -> "error"
+        tab.loading && !LastLookRules.mayTakeWhileLoading(why, tab.gecko.paintedFor, tab.url) -> "loading"
+        tab.session == null || geckoView.session !== tab.session -> "no-session"
+        restoringTab != null || lookTab != null -> "cover-up"
+        lookCapturing -> "busy"
+        tabGrid.visibility == View.VISIBLE || sheet.isShowing -> "overlay"
+        !LastLookRules.worthKeeping(tab.url) -> "not-a-page"
+        why != "pause" && typing() -> "typing" // nobody is typing into the address field (leaving the page is the one moment that is taken whatever is on screen: the Recents screen shows the same)
+        SystemClock.uptimeMillis() - lastLookAt < minGapMs -> "gap"
+        geckoView.width <= 0 || geckoView.height <= 0 -> "no-size"
+        else -> null
+    }
+
     /**
      * Take the page's picture for the next start (a regular tab, a real web page, not loading, nothing over it). [why] names the trigger in the Health list. [minGapMs]: how old the last picture must be.
      * The read-back is the tab grid's own call; the encode and the write are on a worker. Never for a private tab.
      */
     private fun captureLook(tab: Tab?, why: String, minGapMs: Long = LastLookRules.MIN_GAP_MS.toLong()) {
         if (fullscreenOn) return // ANS51g (owner message 51: the tablet's log shows 'tabs look-saved' twice WHILE a film was full screen): the picture read back then is the film's frame, not the page's look, and the read-back and the encode compete with the decoder on a slow tablet
-        if (tab == null || !prefs.lastLook || tab !== current || tab.isPrivateTab || homeShown(tab) || tab.error != null || tab.loading || tab.session == null || geckoView.session !== tab.session) return
-        if (restoringTab != null || lookTab != null || lookCapturing || tabGrid.visibility == View.VISIBLE || sheet.isShowing || !LastLookRules.worthKeeping(tab.url)) return
-        if (why != "pause" && typing()) return // nobody is typing into the address field (leaving the page is the one moment that is taken whatever is on screen: the Recents screen shows the same)
-        val now = SystemClock.uptimeMillis()
-        if (now - lastLookAt < minGapMs) return
-        if (geckoView.width <= 0 || geckoView.height <= 0) return
-        lastLookAt = now; lookCapturing = true
+        if (tab == null) return
+        val skip = lookSkip(tab, why, minGapMs)
+        if (skip != null) {
+            // EM1k: the owner's tablet showed the plain "Opening <host>" cover at the next start, with nothing saying whether a picture was ever taken: every skip is counted, and the one that matters most
+            // (the moment of leaving) also gets a line. "quiet" (a private tab, the feature off, not the page in front) and "gap" (too soon after the last one) are normal and say nothing.
+            if (skip != "quiet" && skip != "gap") { Health.count("look.skip.$skip"); if (why == "pause") Health.log("tabs", "look-skip", "pause why=$skip") }
+            return
+        }
+        lastLookAt = SystemClock.uptimeMillis(); lookCapturing = true
         val appCtx = applicationContext
         val id = tab.id; val url = tab.url; val sy = tab.scrollY; val desktop = tab.desktop
         val appearance = LastLook.appearance(appCtx, prefs.webDark); val dark = prefs.webDark == 1
@@ -3209,6 +3232,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** The engine painted real content for [tab] (called from ContentDelegate.onFirstContentfulPaint). */
     internal fun firstPaint(tab: Tab) {
+        tab.gecko.paintedFor = tab.url // EM1k: this address is on the screen now (the last look may be taken at leaving even if the load never ends)
         if (tab === curtainTab) curtainDown("first-paint")
         if (tab === current) StartTimeline.mark("paint")
         if (backLab.openKey() == BackScrollRules.keyOf(tab.url)) backLab.painted(SystemClock.uptimeMillis()) // RX3-BK1: the press this paint belongs to
