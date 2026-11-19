@@ -3184,6 +3184,24 @@ open class BrowserActivity : Activity(), DockListener {
      * Take the page's picture for the next start (a regular tab, a real web page, not loading, nothing over it). [why] names the trigger in the Health list. [minGapMs]: how old the last picture must be.
      * The read-back is the tab grid's own call; the encode and the write are on a worker. Never for a private tab.
      */
+    /** Why a picture is NOT taken now (null = take it). Same rules as before EM1k, in the same meaning, only named. */
+    private fun lookSkip(tab: Tab?, why: String, minGapMs: Long): String? = when {
+        fullscreenOn -> "fullscreen" // ANS51g (owner message 51: the tablet's log shows 'tabs look-saved' twice WHILE a film was full screen): the picture read back then is the film's frame, not the page's look, and the read-back and the encode compete with the decoder on a slow tablet
+        tab == null || !prefs.lastLook || tab !== current || tab.isPrivateTab -> "quiet"
+        homeShown(tab) -> "home"
+        tab.error != null -> "error"
+        tab.loading -> "loading"
+        tab.session == null || geckoView.session !== tab.session -> "no-session"
+        restoringTab != null || lookTab != null -> "cover-up"
+        lookCapturing -> "busy"
+        tabGrid.visibility == View.VISIBLE || sheet.isShowing -> "overlay"
+        !LastLookRules.worthKeeping(tab.url) -> "not-a-page"
+        why != "pause" && typing() -> "typing" // nobody is typing into the address field (leaving the page is the one moment that is taken whatever is on screen: the Recents screen shows the same)
+        SystemClock.uptimeMillis() - lastLookAt < minGapMs -> "gap"
+        geckoView.width <= 0 || geckoView.height <= 0 -> "no-size"
+        else -> null
+    }
+
     private fun captureLook(tab: Tab?, why: String, minGapMs: Long = LastLookRules.MIN_GAP_MS.toLong()) {
         val skip = lookSkip(tab, why, minGapMs)
         if (skip != null) {
