@@ -223,33 +223,45 @@ object LastRun {
         val avail = kvLong(text, "availMb")
         val mem = kv(text, "mem"); val mem0 = kv(text, "mem0")
         val last = maxOf(saved, stateAt)
-        val ranMin = if (last > started && started > 0) (last - started) / 60_000 else 0
+        val ranMs = if (last > started && started > 0) last - started else 0L
+        val ranText = if (ranMs < 120_000) "${ranMs / 1000} s" else "${ranMs / 60_000} min"       // DG1: seconds while the run was young, so "0 min" never hides a 4 s life
+        val myBuild = kv(text, "build"); val nextBuild = kv(text, "nextBuild")
+        val installAt = kvLong(text, "installAt"); val nextInstall = kvLong(text, "nextInstallAt")
+        val sinceInstall = if (installAt > 0 && started >= installAt) started - installAt else -1L
+        val firstRun = sinceInstall in 0..FIRST_RUN_MS
+        val upTo = if (next > 0) next else Long.MAX_VALUE
+        val crashed = crashAt in started..upTo && crashAt > 0
+        val engine = engineAt in started..upTo && engineAt > 0
+        val stalled = text.lineSequence().any { it.startsWith("ev=") && it.contains(" ui STALL ") }
+        // DG1: an update replaces the app and ends the running process; the new build's install time lands just after the old run's last note
+        val updated = st == "fg" && nextBuild != null && myBuild != null && nextBuild != myBuild && nextInstall > 0 && (nextInstall - last) in -UPDATE_AFTER_MS..UPDATE_BEFORE_MS && !crashed && !engine && !stalled
         val out = ArrayList<String>()
-        val abnormal = st == "fg"
-        val head = when (st) {
-            "exit" -> "Last run ended on purpose (the app was closed with nothing left to do)."
-            "bg" -> "Last run was in the background when it ended (Android takes back background apps when it needs the memory: an ordinary end, not a crash)."
-            "starting" -> "Last run never reached the screen (a background job such as the daily check, or it ended while starting)."
+        val abnormal = st == "fg" && !updated
+        val head = when {
+            updated -> "Last run was ended by an UPDATE (a newer build was installed over it while it was on screen: a normal part of updating, not a crash)."
+            st == "exit" -> "Last run ended on purpose (the app was closed with nothing left to do)."
+            st == "bg" -> "Last run was in the background when it ended (Android takes back background apps when it needs the memory: an ordinary end, not a crash)."
+            st == "starting" -> "Last run never reached the screen (a background job such as the daily check, or it ended while starting)."
             else -> "Last run ended WHILE ON SCREEN: that is not an ordinary close."
         }
         out.add(head)
-        out.add("  build ${kv(text, "build") ?: "?"}, started ${stamp(started)}, last note ${stamp(last)} (ran about $ranMin min), memory free at the last note: ${if (avail >= 0) "$avail MB" else "?"}")
+        out.add("  build ${myBuild ?: "?"}, started ${stamp(started)}, last note ${stamp(last)} (ran about $ranText), memory free at the last note: ${if (avail >= 0) "$avail MB" else "?"}")
+        if (firstRun) out.add("  This run was the FIRST START after its build was installed (it started ${sinceInstall / 1000} s after the install at ${stamp(installAt)}).")
         if (mem != null) out.add("  memory at the last note: $mem")
         if (mem0 != null && mem0 != mem) out.add("  memory at the note before: $mem0")
         if (abnormal) {
             val sumMb = Regex("sum=(\\d+)MB").find(mem ?: "")?.groupValues?.get(1)?.toLongOrNull() ?: -1L
             val lowMem = (avail in 0..300) || (Regex("avail=(\\d+)MB").find(mem ?: "")?.groupValues?.get(1)?.toLongOrNull() ?: Long.MAX_VALUE) in 0..300
-            val crashed = crashAt in started..(if (next > 0) next else Long.MAX_VALUE) && crashAt > 0
-            val engine = engineAt in started..(if (next > 0) next else Long.MAX_VALUE) && engineAt > 0
             val rebooted = bootAt > 0 && saved > 0 && bootAt > saved + 5_000   // a tablet that restarted came back at least some seconds after the last note
-            val stalled = text.lineSequence().any { it.startsWith("ev=") && it.contains(" ui STALL ") }
+            val held = if (sumMb >= 0) " The app held about $sumMb MB at the last note." else ""
             out.add("  " + when {
                 stalled -> "Cause: the app's SCREEN THREAD WAS FROZEN (a STALL line below names where it was stuck): a freeze, not a crash; the app was probably closed by hand or by Android afterwards."
                 crashed -> "Cause: an uncaught Java exception (the crash note is shown below as EARLIER CRASH)."
                 rebooted -> "Cause: the whole tablet restarted after the last note (empty battery or a restart), not the app."
                 engine -> "Cause: probably the engine: it wrote crash report(s) during this run (see Engine crash reports below; a page process crash alone does not close the app, a main process one does)."
+                firstRun && ranMs < 120_000 -> "Cause: NO crash note and NO engine crash report, and this was the FIRST START after an install, ended after only about $ranText: look at the install itself (the system compiling the app, the installer, the engine's first start on an app that is not compiled yet) before blaming a page or the memory.$held"
                 lowMem -> "Cause: NO crash note and NO engine crash report, and the memory was LOW at the last note: Android's memory killer ended the app (the memory line above shows who held it)."
-                else -> "Cause: NO crash note and NO engine crash report, so the process was ended from outside (a native crash that left no report, Android's memory killer, or Force stop)." + (if (sumMb >= 0) " The app held about $sumMb MB at the last note." else "")
+                else -> "Cause: NO crash note and NO engine crash report, so the process was ended from outside (a native crash that left no report, Android's memory killer, or Force stop).$held"
             })
         }
         val ev = text.lineSequence().filter { it.startsWith("ev=") }.map { it.substring(3) }.toList()
