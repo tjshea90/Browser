@@ -146,7 +146,7 @@ object LastRun {
      * UI watchdog thread (never the main thread) about every 250 ms while the app is in front; writes the note at most every [TICK_MS].
      */
     fun tick(now: Long = System.currentTimeMillis()) {
-        synchronized(lock) { if (dir == null || state != "fg" || now - lastFlushAt < TICK_MS) return; lastFlushAt = now }
+        synchronized(lock) { if (dir == null || state != "fg" || now - lastFlushAt < (if (now - startedAt in 0 until FAST_WINDOW_MS) FAST_TICK_MS else TICK_MS)) return; lastFlushAt = now }
         Io.exec { flush(now) }
     }
 
