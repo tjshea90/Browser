@@ -195,7 +195,7 @@ object LastRun {
             if (snap != memLine) { memPrev = memLine; memLine = snap }
             val sb = StringBuilder(2048)
             sb.append(HEADER).append('\n').append("pid=").append(pid).append('\n').append("build=").append(build).append('\n')
-                .append("started=").append(startedAt).append('\n').append("state=").append(state).append('\n').append("stateAt=").append(stateAt).append('\n').append("saved=").append(now).append('\n')
+                .append("started=").append(startedAt).append('\n').append("installAt=").append(installAt).append('\n').append("state=").append(state).append('\n').append("stateAt=").append(stateAt).append('\n').append("saved=").append(now).append('\n')
             sb.append("availMb=").append(avail).append('\n')
             if (memPrev.isNotEmpty()) sb.append("mem0=").append(memPrev).append('\n')
             if (memLine.isNotEmpty()) sb.append("mem=").append(memLine).append('\n')
