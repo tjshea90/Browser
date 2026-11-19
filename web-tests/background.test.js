@@ -1153,15 +1153,50 @@ test('RX3-G3: nothing is relayed for a sender without a tab, a place that is not
   assert.equal(h.tabMsgs.length, 0);
 });
 
-test('RX3-G7: the manifest declares the other-players ad skipper for every web page and frame except the YouTube hosts (youtube.js owns those), in the extension world, from the first moment', () => {
+test('RX3-G7: the manifest declares the other-players ad skipper for every web page and frame except the YouTube hosts (youtube.js owns those) and the human-check frames, in the extension world, from the first moment', () => {
   const m = JSON.parse(fs.readFileSync(path.join(SHIELDS, 'manifest.json'), 'utf8'));
   const e = m.content_scripts.filter((c) => c.js.includes('players.js'));
   assert.equal(e.length, 1, 'declared once');
   assert.equal(e[0].run_at, 'document_start'); assert.equal(e[0].all_frames, true); assert.equal(e[0].world, undefined, 'it needs the extension API: not the page world');
   assert.deepEqual(e[0].matches, ['http://*/*', 'https://*/*']);
-  assert.deepEqual(e[0].exclude_matches, ['*://*.youtube.com/*', '*://*.youtube-nocookie.com/*', '*://*.youtubekids.com/*']);
+  const yt = ['*://*.youtube.com/*', '*://*.youtube-nocookie.com/*', '*://*.youtubekids.com/*'];
+  assert.deepEqual(e[0].exclude_matches.slice(-3), yt, 'the YouTube hosts are excluded');
+  // LAB5: the entry used to carry TWO exclude_matches keys, JSON keeps the last one, so the script ran inside the human-check frames (Turnstile, hCaptcha, reCAPTCHA ...)
+  for (const h of ['https://challenges.cloudflare.com/*', 'https://*.hcaptcha.com/*', 'https://www.google.com/recaptcha/*', 'https://*.arkoselabs.com/*', 'https://*.captcha-delivery.com/*']) assert.ok(e[0].exclude_matches.includes(h), 'excluded: ' + h);
   const y = m.content_scripts.filter((c) => c.js.includes('youtube.js'));
-  assert.deepEqual(y[0].matches, e[0].exclude_matches, 'the two scripts split the web between them: exactly the same hosts');
+  assert.deepEqual(y[0].matches, yt, 'the two scripts split the web between them: exactly the same hosts');
+});
+
+test('LAB5: the manifest has no duplicate JSON keys (JSON.parse silently keeps the last one: that hid a missing exclusion once)', () => {
+  const src = fs.readFileSync(path.join(SHIELDS, 'manifest.json'), 'utf8');
+  const stack = []; let i = 0; const dups = [];
+  while (i < src.length) {
+    const c = src[i];
+    if (c === '"') {
+      let j = i + 1; while (src[j] !== '"') { if (src[j] === '\\') j++; j++; }
+      const str = src.slice(i + 1, j); let k = j + 1; while (/\s/.test(src[k])) k++;
+      const top = stack[stack.length - 1];
+      if (src[k] === ':' && top && top.obj) { if (top.keys.has(str)) dups.push(str); top.keys.add(str); }
+      i = j + 1; continue;
+    }
+    if (c === '{') stack.push({ obj: true, keys: new Set() });
+    else if (c === '[') stack.push({ obj: false });
+    else if (c === '}' || c === ']') stack.pop();
+    i++;
+  }
+  assert.deepEqual(dups, []);
+});
+
+test('LAB5: background.js registers exactly ONE runtime.onMessage listener (Firefox deserialises the message and clones the sender once per registered listener) and every handler still answers through it', async () => {
+  const h = harness(standardApp());
+  assert.equal(h.listeners.message.length, 1, 'one listener for the whole file');
+  // a handler that throws must not silence the others: poison the first handler through a message it parses with a getter that throws
+  const bad = { get k() { throw new Error('poisoned'); } };
+  const r = h.message(bad, 1, PAGE, 0);
+  assert.equal(r, undefined);
+  // and the real answers still come through the single listener: 'bk' answers with the app's string
+  const ok = await Promise.resolve(h.message({ k: 'bk', p: PAGE }, 1, PAGE, 0));
+  assert.equal(typeof ok, 'string');
 });
 
 test('RX3-G7: the ad skipper reports are forwarded as numbers with their kind (YouTube y, other players p) and the tab page, nothing else', async () => {

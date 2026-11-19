@@ -178,6 +178,21 @@ open class BrowserActivity : Activity(), DockListener {
             return t.gecko.fieldInput?.probe()
         }
         override fun navKeyboardChanged(showing: Boolean) { if (showing) hideKeyboard() } // the system keyboard goes down while the mini one is up
+        /**
+         * The Swoop keyboard (a separate app, docs/KEYBOARD-LINK.md): when it is the chosen system keyboard the panel's bar opens IT, floating over the page, for the page's focused text field or else the address bar;
+         * what is typed then goes through Android's own input path, so it is learned in Swoop's one memory. Not chosen, or switched off in Settings: false, and the panel's own keys open as before.
+         */
+        override fun navSwoop(open: Boolean): Boolean {
+            if (!prefs.swoopKeyboard) return false
+            val imm = getSystemService(InputMethodManager::class.java) ?: return false
+            if (!app.kestrel.browser.SwoopLink.isChosen(this@BrowserActivity)) return false
+            if (!open) { hideKeyboard(); return true }
+            val target: android.view.View
+            if (navPageField() != null) { target = geckoView; target.requestFocus(); imm.showSoftInput(target, 0) }
+            else { focusUrlBar(); target = activeField }
+            for (delay in longArrayOf(300L, 1100L)) target.postDelayed({ app.kestrel.browser.SwoopLink.sendFloat(imm, target) }, delay) // the keyboard must be bound to the field first; asking twice costs nothing (floating twice is floating once)
+            return true
+        }
         override fun navPrivateTab(): Boolean = current?.isPrivateTab == true
         // where the person put the panel and how big the keyboard is (AV1)
         override fun navKeyHaptics(): Boolean = prefs.keyHaptics
@@ -518,17 +533,23 @@ open class BrowserActivity : Activity(), DockListener {
         // then attach the ad/tracker blocking extension to the app's filter engine.
         android.view.Choreographer.getInstance().postFrameCallback {
             StartTimeline.mark("frame")
-            setRecentsLook() // AO3: the icon and colour of this app's card in the Recents list
             Io.main.post {
                 Health.log("engine", "runtime-create")
+                val burst0 = SystemClock.uptimeMillis() // LAB4b: what each call of this start-up burst costs on the UI thread (the lab and the tablet show a block of about 0.9 s at start)
                 GeckoEngine.runtime(this).orientationController.delegate = object : OrientationController.OrientationDelegate { // FS1: screen.orientation.lock() from a full-screen player
                     override fun onOrientationLock(orientation: Int): GeckoResult<AllowOrDeny>? = GeckoResult.fromValue(if (fsTurner.siteLocked(orientation)) AllowOrDeny.ALLOW else AllowOrDeny.DENY)
                     override fun onOrientationUnlock() { fsTurner.siteUnlocked() }
                 }
+                val burst1 = SystemClock.uptimeMillis()
                 GeckoEngine.executorOrNull() // Firefox's network stack for the download manager (created here on the UI thread)
+                val burst2 = SystemClock.uptimeMillis()
                 GeckoEngine.warmUp(this)
+                val burst3 = SystemClock.uptimeMillis()
                 ShieldsBridge.install(this, ShieldsBridge({ prefs }, { tabForPage(it) }, { shieldCountChanged(it) }, { video.seen(it) }, { p, u, w, h, d, l, f, played, el -> video.info(p, u, w, h, d, l, f, played, el) }, { p, kind, u -> Io.main.post { onPopupBlocked(p, kind, u) } }, { o, p, w -> Io.main.post { onWarmLink(o, p, w) } }, { url -> pageIsPrivate(url) }, mediaMaybe = { video.maybe(it) }, mediaGone = { p, docs -> video.gone(p, docs) }, pageScrolled = { p, y -> Io.main.post { tabForPage(p)?.let { lookScrolled(it, y, p) } } }, openSpace = { p -> Io.main.post { onOpenSpace(p) } }, videoBar = { m -> onVideoBar(m) }, labBuild = { labBuild }, labProbe = { m -> onLabProbe(m) }, viewport = { m -> Io.main.post { onPageViewport(m) } }, player = { m -> playerMessage(m) }, backPlace = { p -> backPlaceFor(p) }, backShown = { p, kept, nt, ts, y -> Io.main.post { onBackShown(p, kept, nt, ts, y) } }, adSkips = { m -> val priv = pageIsPrivate(m.optString("p")); Health.log("ads", "report-in", "w=${m.optString("w")} ads=${m.optInt("a")} ${if (priv) "dropped (private or unknown page)" else "kept"}"); if (!priv) Io.main.post { onAdSkips(m) } }, seekTaps = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onSeekTaps(m) } else Health.count("seekbar.dropped") }, noStore = { p -> if (!pageIsPrivate(p)) Io.main.post { backLab.noStore(p) } }, leftPending = { p, n -> if (!pageIsPrivate(p)) Io.main.post { backLab.pending(p, n) } }, videoQuality = { m -> if (!pageIsPrivate(m.optString("p"))) Io.main.post { onVideoQuality(m) } }, scrollGaps = { m -> if (prefs.measureScroll && !pageIsPrivate(m.optString("p"))) Io.main.post { onScrollGaps(m) } }, videoPolicy = { app.kestrel.browser.web.VideoFormats.policy(applicationContext, prefs) }, pictureCap = { app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs) }, handOver = { m -> video.handOver(m) }))
+                val burst4 = SystemClock.uptimeMillis()
+                Health.log("engine", "burst", "runtime+orientation=${burst1 - burst0}ms executor=${burst2 - burst1}ms warmUp=${burst3 - burst2}ms shields-install=${burst4 - burst3}ms")
                 Health.log("engine", "runtime-ready"); StartTimeline.mark("runtime")
+                Io.main.postDelayed({ if (!isFinishing && !isDestroyed) setRecentsLook() }, 1500) // AO3: the icon and colour of this app's card in the Recents list. LAB5: no longer inside the first-frame callback (a 192 px bitmap and a binder call, 5-15 ms before the first picture); nobody opens Recents in the first second and a half
             }
         }
         val firstTab = Tab(nextTabId++)
@@ -597,7 +618,42 @@ open class BrowserActivity : Activity(), DockListener {
         Io.main.postDelayed({ maybeShowUpdateNotice() }, 2500) // news the background look found while the app was closed
         Io.main.postDelayed({ maybeRefreshLists() }, 90_000)   // well after start-up: the page the owner opened first comes first
         if (!decodersWarmed) Io.main.postDelayed({ if (!decodersWarmed) { decodersWarmed = true; Io.exec { app.kestrel.browser.web.PlayerFactory.warm() } } }, 20_000)     // ANS60d: the first film of a run does not pay for the codec list
+        if (!artNoted) Io.main.postDelayed({ noteArtStatus() }, 30_000)  // LAB5: is this install compiled with the baseline profile yet? (one Health line per run)
         Io.main.removeCallbacks(tidyRunnable); Io.main.postDelayed(tidyRunnable, 25_000) // AO4: old update files, stale cache, closed tabs' pictures; due about once a day and after an update
+    }
+
+    private var artNoted = false
+
+    /**
+     * LAB5: has Android compiled this install with the baseline profile yet? The profile (assets/dexopt/baseline.prof, from the emulator lab's ART profile) is only turned into machine code by Android's idle-and-charging
+     * dexopt (or `cmd package compile -f -m speed-profile`); until then every start runs our code in the interpreter. One Health line per run, read from androidx.profileinstaller's own verifier (its worker thread):
+     * `start art profile-code=<0 none, 1 compiled with the profile, 2 waiting for the idle dexopt ...> embedded=<the APK has one> compiled=<yes/no>`. The owner's Diagnostics shows it, so a tablet that never compiles is visible.
+     */
+    private fun noteArtStatus() {
+        if (artNoted || isFinishing || isDestroyed) return
+        artNoted = true
+        Io.exec { try { Health.log("start", "oat", oatSizes()) } catch (e: Throwable) { Health.log("start", "oat", "unknown: ${e.javaClass.simpleName}") } }
+        try {
+            val fut = androidx.profileinstaller.ProfileVerifier.getCompilationStatusAsync()
+            fut.addListener({
+                try {
+                    val s = fut.get()
+                    Health.log("start", "art", "profile-code=${s.profileInstallResultCode} embedded=${s.appApkHasEmbeddedProfile()} compiled=${if (s.isCompiledWithProfile) "yes" else "no"} waiting=${if (s.hasProfileEnqueuedForCompilation()) "yes" else "no"}")
+                } catch (e: Throwable) { Health.log("start", "art", "unknown: ${e.javaClass.simpleName}") }
+            }, java.util.concurrent.Executor { r -> Io.exec { r.run() } })
+        } catch (e: Throwable) { Health.log("start", "art", "unavailable: ${e.javaClass.simpleName}") }
+    }
+
+    /**
+     * LAB7: what Android compiled for this install = the files in oat/<isa>/ next to the base APK (odex = compiled code, vdex = verified dex, art = app image). With the catch-all profile rule the whole app is compiled
+     * while it installs: an odex of roughly 4 times the size of the one the lab's own hot methods gave (about 3 MB on the emulator; 12 MB for everything). Diagnostics line `start oat`; "none" = not compiled yet (the idle
+     * dexopt will do it) or the folder is not readable.
+     */
+    private fun oatSizes(): String {
+        val oat = java.io.File(java.io.File(applicationInfo.sourceDir).parentFile ?: return "unknown", "oat")
+        val parts = ArrayList<String>()
+        oat.listFiles()?.sortedBy { it.name }?.forEach { isa -> isa.listFiles()?.sortedBy { it.name }?.forEach { f -> parts.add("${isa.name}/${f.name}=${f.length() / 1024}KB") } }
+        return if (parts.isEmpty()) "none" else parts.joinToString(" ")
     }
 
     private val tidyRunnable = Runnable { runStorageTidy(false) }
@@ -893,6 +949,7 @@ open class BrowserActivity : Activity(), DockListener {
             "privtab" -> { val u = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); Io.main.post { val t = newTabInternal(null, privateTab = true); show(t); navigateTo(t, u); Health.log("lab", "privtab", "a private tab opened tab=${t.id}") } }   // ANS58c lab: a private tab on this address
             "normtab" -> { val u = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); Io.main.post { val t = newTabInternal(null, privateTab = false); show(t); navigateTo(t, u); Health.log("lab", "normtab", "a normal tab opened tab=${t.id}") } }
             "webinline" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); prefs.webInline = arg != "0"; Health.log("lab", "webinline", "inside the page: ${prefs.webInline}") }   // ANS55f lab: Settings > Play web videos inside the page
+            "handreset" -> { i.removeExtra("kestrel_arg"); NativePlayerActivity.lastUrl = ""; NativePlayerActivity.lastPositionMs = 0L; NativePlayerActivity.lastDurationMs = 0L; NativePlayerActivity.lastStoppedAt = 0L; Health.log("lab", "handreset", "Kestrel's player forgets the clip it played to its end (alpha62's loop breaker: a short clip pressed again within 10 minutes goes to the page; the lab replays the same clips scene after scene)") }
             "fsturn" -> { val arg = (i.getStringExtra("kestrel_arg") ?: "").toIntOrNull() ?: 1; i.removeExtra("kestrel_arg"); prefs.fullscreenTurn = arg; Health.log("lab", "fsturn", "mode $arg (0 automatic, 1 follow the tablet = the default, 2 off)") }   // ANS54e.1 lab: the full-screen turn mode
             "vpress" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); prefs.videoPressToPlay = arg != "0"; GeckoEngine.applyVideo(applicationContext, prefs); Health.log("lab", "vpress", if (prefs.videoPressToPlay) "on: videos start only when pressed" else "off") } // ANS53: the lab plays both settings (the lab turns the rule off for every suite but its own)
             "vcap" -> { val arg = i.getStringExtra("kestrel_arg") ?: ""; i.removeExtra("kestrel_arg"); prefs.videoCap = arg.toIntOrNull() ?: 0; Health.log("lab", "vcap", "mode ${prefs.videoCap} -> ${app.kestrel.browser.web.VideoFormats.cap(applicationContext, prefs)} px") } // ANS52h: the lab plays the picture size cap setting (0 Automatic, 1 off, 2 480p, 3 720p, 4 1080p)
@@ -1972,6 +2029,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (!force && t0 < readBackBlockedUntil) { if (!priv) Health.count("look.readBackSkipped"); return null }
         val r = geckoView.capturePixels()
         val took = SystemClock.uptimeMillis() - t0
+        if (!priv) { Health.count("look.readBack"); if (took >= 15) Health.log("look", "read-back", "$why ${took}ms") } // LAB4b: lab run 44017705030 measured 38 of them at 1-10 ms (median 2 ms): only the 15 ms and slower ones get a line, all of them are counted
         val back = LastLookRules.readBackBackoffMs(took)
         if (back > 0) { readBackBlockedUntil = t0 + took + back; if (!priv) { Health.count("look.readBackSlow"); Health.log("look", "slow-read-back", "$why took ${took} ms: no more read-backs for ${back / 1000} s") } }
         return r
