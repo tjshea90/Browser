@@ -3185,14 +3185,14 @@ open class BrowserActivity : Activity(), DockListener {
      * The read-back is the tab grid's own call; the encode and the write are on a worker. Never for a private tab.
      */
     private fun captureLook(tab: Tab?, why: String, minGapMs: Long = LastLookRules.MIN_GAP_MS.toLong()) {
-        if (fullscreenOn) return // ANS51g (owner message 51: the tablet's log shows 'tabs look-saved' twice WHILE a film was full screen): the picture read back then is the film's frame, not the page's look, and the read-back and the encode compete with the decoder on a slow tablet
-        if (tab == null || !prefs.lastLook || tab !== current || tab.isPrivateTab || homeShown(tab) || tab.error != null || tab.loading || tab.session == null || geckoView.session !== tab.session) return
-        if (restoringTab != null || lookTab != null || lookCapturing || tabGrid.visibility == View.VISIBLE || sheet.isShowing || !LastLookRules.worthKeeping(tab.url)) return
-        if (why != "pause" && typing()) return // nobody is typing into the address field (leaving the page is the one moment that is taken whatever is on screen: the Recents screen shows the same)
-        val now = SystemClock.uptimeMillis()
-        if (now - lastLookAt < minGapMs) return
-        if (geckoView.width <= 0 || geckoView.height <= 0) return
-        lastLookAt = now; lookCapturing = true
+        val skip = lookSkip(tab, why, minGapMs)
+        if (skip != null) {
+            // EM1k: the owner's tablet showed the plain "Opening <host>" cover at the next start, with nothing saying whether a picture was ever taken: every skip is counted, and the one that matters most
+            // (the moment of leaving) also gets a line. "quiet" (a private tab, the feature off, not the page in front) and "gap" (too soon after the last one) are normal and say nothing.
+            if (skip != "quiet" && skip != "gap") { Health.count("look.skip.$skip"); if (why == "pause") Health.log("tabs", "look-skip", "pause why=$skip") }
+            return
+        }
+        lastLookAt = SystemClock.uptimeMillis(); lookCapturing = true
         val appCtx = applicationContext
         val id = tab.id; val url = tab.url; val sy = tab.scrollY; val desktop = tab.desktop
         val appearance = LastLook.appearance(appCtx, prefs.webDark); val dark = prefs.webDark == 1
