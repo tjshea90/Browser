@@ -14,6 +14,7 @@ class GlideStats {
     private var shapes = 0; private var shapeWords = 0; private var shapeLifts = 0; private var shapeFlips = 0
     private var previews = 0; private var previewMs = 0L; private var shown = 0; private var shownMs = 0L; private var shownMax = 0L
     private var retries = 0
+    private var suggested = 0; private var suggestMs = 0L; private var suggestMax = 0L; private var suggPicked = 0; private var typedLearned = 0; private var autoFixed = 0; private var autoUndone = 0; private var retyped = 0
 
     @Synchronized fun onDecoded(millis: Long, found: Boolean) { glides++; if (!found) noMatch++; ms += millis; if (millis > msMax) msMax = millis; if (found) pending = true }
     /** Whatever the person did next that was not a correction: the word stays. */
@@ -35,9 +36,20 @@ class GlideStats {
     @Synchronized fun onLearnedTop() { learnedTop++ }
     /** The glide was a retry of a deleted word that came up first again: the deleted word was moved to second place. */
     @Synchronized fun onRetryDemoted() { retries++ }
+    /** The strip was filled for tapped letters (or for the next word) in [millis]. */
+    @Synchronized fun onSuggested(millis: Long) { suggested++; suggestMs += millis; if (millis > suggestMax) suggestMax = millis }
+    /** A word from the strip was tapped while typing with taps. */
+    @Synchronized fun onSuggestionPicked() { suggPicked++ }
+    /** A word typed with taps was learned. */
+    @Synchronized fun onTypedLearned() { typedLearned++ }
+    /** A space put in the keyboard's fix for a typo; [undone]: the person took it back with Backspace right away. */
+    @Synchronized fun onAutoCorrected() { autoFixed++ }
+    @Synchronized fun onAutoCorrectUndone() { autoUndone++ }
+    /** A word was erased and another typed in its place (the new one was meant). */
+    @Synchronized fun onRetyped() { retyped++ }
 
     @Synchronized fun line(): String {
-        if (loadMs < 0 && glides == 0) return "Glide typing: not used yet this run"
+        if (loadMs < 0 && glides == 0 && typedLearned == 0 && suggested == 0) return "Glide typing: not used yet this run"
         val sb = StringBuilder("Glide typing: ")
         if (glides == 0) sb.append("no glide yet")
         else {
@@ -56,6 +68,8 @@ class GlideStats {
         if (learnedWords > 0 || learnedTop > 0) sb.append("; learned $learnedWords words and $learnedPairs word pairs from your typing, a learned word was the first guess $learnedTop times")
         if (learnedCorrections > 0 || learnedTriples > 0) sb.append("; $learnedCorrections corrections and $learnedTriples three-word phrases remembered")
         if (shapes > 0 || shapeLifts > 0) sb.append("; $shapes glide shapes of $shapeWords words remembered, a remembered shape helped $shapeLifts times and changed the first guess $shapeFlips times")
+        if (typedLearned > 0 || suggested > 0) sb.append("; tap typing: $typedLearned words learned, suggestions made $suggested times (avg ${if (suggested > 0) suggestMs / suggested else 0} ms, worst $suggestMax ms), $suggPicked picked from the strip, $retyped erased and retyped")
+        if (autoFixed > 0) sb.append("; automatic fixes $autoFixed, taken back $autoUndone")
         if (retries > 0) sb.append("; a deleted word came up first again and went to second place $retries times")
         return sb.toString()
     }
@@ -79,12 +93,26 @@ class UserWords(private val cap: Int = 800) {
 
     @Synchronized fun contains(word: String) = counts.containsKey(word.lowercase())
 
+    /** Forgets every word (Settings > Forget what the keyboard learned). */
+    @Synchronized fun clear() { counts.clear() }
+
     /** The list to glide into: [total] is the shipped list's total count, so the probabilities are on the same scale. */
-    @Synchronized fun lexicon(total: Double): ArrayLexicon = ArrayLexicon(counts.map { (w, n) -> w to (30_000_000L + 25_000_000L * minOf(n, 12)) }, total)
+    @Synchronized fun lexicon(total: Double): ArrayLexicon = lexicon(total, emptyCollection())
+    private fun emptyCollection(): Collection<String> = emptyList()
+
+    /** As above, and the words of the person's dictionary join at the level of a word used a dozen times: they are meant to be found. */
+    @Synchronized fun lexicon(total: Double, extra: Collection<String>): ArrayLexicon {
+        val m = LinkedHashMap<String, Long>()
+        for ((w, n) in counts) m[w] = 30_000_000L + 25_000_000L * minOf(n, 12)
+        for (w in extra) m[w] = maxOf(m[w] ?: 0L, DICTIONARY_COUNT)
+        return ArrayLexicon(m.map { (w, c) -> w to c }, total)
+    }
 
     @Synchronized fun serialize(): String = counts.entries.joinToString("\n") { "${it.key} ${it.value}" }
 
     companion object {
+        /** What a word of the person's dictionary counts for (the level of a word used twelve times). */
+        const val DICTIONARY_COUNT = 30_000_000L + 25_000_000L * 12
         /** A word a finger can draw: lowercase letters, three to 24, with at least two different letters in a row, none of them three times in a row ("awwww" is noise). */
         fun glideable(w: String): Boolean {
             if (w.length !in 3..24 || !w.all { it in 'a'..'z' } || PersonalModel.stretched(w)) return false
@@ -131,7 +159,60 @@ class GlideTyping(
     private val savePersonal: (String) -> Unit = {},
     /** Where the live previews are decoded (the finger is still moving): another thread than [executor], so a preview never holds up the real decode when the finger lifts. */
     private val previewExecutor: Executor = executor,
+    /** Stores the person's own words (the words typed that the shipped list lacks), on the executor's thread. */
+    private val saveOwn: (String) -> Unit = {},
+    /** Reads / stores the person's dictionary (the text [UserDictionary.serialize] wrote). */
+    private val loadDictionary: () -> String? = { null },
+    private val saveDictionary: (String) -> Unit = {},
 ) {
+    /** The person's dictionary: words added (predicted when their pattern is glided) and words removed (never offered). Loaded on first use. */
+    @Volatile var dictionary = UserDictionary(); private set
+    @Volatile private var dictionaryLoaded = false
+    private fun ensureDictionary() {
+        if (dictionaryLoaded) return
+        dictionaryLoaded = true
+        try { dictionary = UserDictionary.parse(loadDictionary()) } catch (e: Exception) { /* a damaged file is just forgotten */ }
+    }
+
+    /** Words the keyboard must not offer are taken out of an answer (the engine asked for a few more than it shows, so three remain). */
+    private fun cleaned(r: List<GlideCandidate>, max: Int): List<GlideCandidate> { val d = dictionary; return if (d.blockedCount == 0) r.take(max) else r.filter { !d.isBlocked(it.text) }.take(max) }
+    private fun cleaned(r: Suggestions, limit: Int): Suggestions {
+        val d = dictionary
+        if (d.blockedCount == 0) return if (r.words.size <= limit) r else Suggestions(r.words.take(limit), r.typedKnown, r.autoCorrect, r.typed)
+        return Suggestions(r.words.filter { !d.isBlocked(it) }.take(limit), r.typedKnown, r.autoCorrect?.takeIf { !d.isBlocked(it) }, r.typed)
+    }
+
+    /** Never offer [word] again (a long press on a guess; Settings > My dictionary). [done] gets the result on the engine thread. */
+    fun blockWord(word: String, done: (UserDictionary.Result) -> Unit = {}) { executor.execute { ensureDictionary(); val r = dictionary.block(word); if (r == UserDictionary.Result.OK) { rebuildUserLexicon(); persistDictionary() }; done(r) } }
+    /** Offer [word] again after it was removed. */
+    fun unblockWord(word: String, done: (Boolean) -> Unit = {}) { executor.execute { ensureDictionary(); val ok = dictionary.unblock(word); if (ok) persistDictionary(); done(ok) } }
+    /** Adds [word] to the dictionary: it is predicted when its pattern is glided. */
+    fun addDictionaryWord(word: String, done: (UserDictionary.Result) -> Unit = {}) { executor.execute { ensureDictionary(); val r = dictionary.add(word); if (r == UserDictionary.Result.OK) { rebuildUserLexicon(); persistDictionary() }; done(r) } }
+    fun removeDictionaryWord(word: String, done: (Boolean) -> Unit = {}) { executor.execute { ensureDictionary(); val ok = dictionary.removeAdded(word); if (ok) { rebuildUserLexicon(); persistDictionary() }; done(ok) } }
+    /** The two lists, for the settings screen. */
+    fun dictionarySnapshot(done: (added: List<String>, blocked: List<String>) -> Unit) { executor.execute { ensureDictionary(); done(dictionary.addedWords(), dictionary.blockedWords()) } }
+    private fun persistDictionary() { try { saveDictionary(dictionary.serialize()) } catch (e: Exception) { /* a full disk must never break typing */ } }
+    private fun rebuildUserLexicon() { ownRef?.let { setOwn(it) } ?: run { userLex = if (dictionary.addedCount == 0) null else UserWords(1).lexicon(main?.totalCount ?: 5.4e11, dictionary.addedWords()) } }
+
+    /** Loads the shipped word list if no keyboard has done it yet (the settings screen can search the dictionary before the keyboard was ever opened). [done] runs on the engine thread. */
+    fun ensureListLoaded(done: () -> Unit = {}) {
+        executor.execute {
+            try { if (main == null && !loading) { loading = true; val t0 = System.nanoTime(); val b = loadMain(); if (b != null) { main = LexiconFile.read(b); stats.onLoaded((System.nanoTime() - t0) / 1_000_000, main!!.size) }; loading = false } } catch (e: Exception) { loading = false }
+            ensureDictionary(); done()
+        }
+    }
+
+    /** What the dictionary search of the settings screen shows: whether [word] is in the shipped list, and the most common words that start with [prefix]. Runs on the preview thread. */
+    fun lookup(prefix: String, limit: Int, done: (known: Boolean, words: List<String>) -> Unit) {
+        previewExecutor.execute {
+            val m = main
+            val p = prefix.trim().lowercase()
+            if (m == null || p.isEmpty() || !p.all { it in 'a'..'z' }) { done(false, emptyList()); return@execute }
+            val range = m.prefixIds(p)
+            val top = range.sortedByDescending { m.logProb(it) }.take(limit * 2).map { m.text(it) }
+            done(m.idOf(p) >= 0, top.take(limit))
+        }
+    }
     @Volatile private var main: BinaryLexicon? = null
     @Volatile private var userLex: ArrayLexicon? = null
     @Volatile private var decoder: GlideDecoder? = null
@@ -141,8 +222,10 @@ class GlideTyping(
     private var bx = 0f; private var by = 0f
     private var loading = false
     private var lastUserWords = 0
-    private var personal = PersonalModel()
+    @Volatile private var personal = PersonalModel()
     private var personalLoaded = false
+    private var ownRef: UserWords? = null
+    private val suggestSeq = java.util.concurrent.atomic.AtomicInteger()
 
     /** What was saved is read once, before anything is learned, exported or imported (on the executor's thread): an import must add to what is on disk, not replace it with an empty table that was never loaded. */
     private fun ensurePersonal() {
@@ -180,7 +263,8 @@ class GlideTyping(
                 keys = k
                 decoder = GlideDecoder(k).also { it.biasX = bx; it.biasY = by; it.personal = personal }
                 previewDecoder = GlideDecoder(k).also { it.biasX = bx; it.biasY = by; it.personal = personal }
-                if (own != null) setOwn(own)
+                ensureDictionary()
+                if (own != null) { ownRef = own; setOwn(own) } else rebuildUserLexicon()
                 ready = main != null
                 if (!warmed && ready) { warmed = true; warmUp(k) }
             } catch (e: Exception) { loading = false; ready = false }
@@ -214,7 +298,9 @@ class GlideTyping(
 
     private fun setOwn(own: UserWords) {
         val m = main
-        userLex = if (own.size == 0) null else own.lexicon(m?.totalCount ?: 5.4e11)
+        ensureDictionary()
+        val dict = dictionary.addedWords()
+        userLex = if (own.size == 0 && dict.isEmpty()) null else own.lexicon(m?.totalCount ?: 5.4e11, dict)
         lastUserWords = own.size
         stats.onOwnWords(own.size)
     }
@@ -227,7 +313,7 @@ class GlideTyping(
             if (d == null || m == null) { done(GlideResult(emptyList(), 0)); return@execute }
             val t0 = System.nanoTime()
             val lexicons = ArrayList<GlideLexicon>(2); lexicons.add(m); userLex?.let { lexicons.add(it) }
-            val r = try { d.decode(px, py, count, lexicons, prev, 3, prev2) } catch (e: Exception) { emptyList() }
+            val r = try { cleaned(d.decode(px, py, count, lexicons, prev, 3 + EXTRA_FOR_BLOCKED, prev2), 3) } catch (e: Exception) { emptyList() }
             val ms = (System.nanoTime() - t0) / 1_000_000
             stats.onDecoded(ms, r.isNotEmpty())
             if (r.isNotEmpty() && personal.weightOf(r[0].text) > 0f) stats.onLearnedTop()
@@ -252,12 +338,66 @@ class GlideTyping(
                     decoder?.let { d.biasX = it.biasX; d.biasY = it.biasY }
                     val t0 = System.nanoTime()
                     val lexicons = ArrayList<GlideLexicon>(2); lexicons.add(m); userLex?.let { lexicons.add(it) }
-                    val r = try { d.decode(px, py, count, lexicons, prev, 3, prev2) } catch (e: Exception) { emptyList() }
+                    val r = try { cleaned(d.decode(px, py, count, lexicons, prev, 3 + EXTRA_FOR_BLOCKED, prev2), 3) } catch (e: Exception) { emptyList() }
                     val ms = (System.nanoTime() - t0) / 1_000_000
                     stats.onPreview(ms)
                     done(GlideResult(r, ms))
                 }
             } finally { previewBusy.set(false) }
+        }
+    }
+
+    /**
+     * Tap typing (N4): the words to offer for the letters [typed] so far (completions and typo fixes), or the likely next words when [typed] is empty. [done] is called on a worker thread, unless a newer
+     * request has been made by then (the latest letter always wins: an answer for an older word is dropped, never shown late).
+     */
+    fun suggest(typed: String, prev: String?, prev2: String?, limit: Int, done: (Suggestions) -> Unit) {
+        val my = suggestSeq.incrementAndGet()
+        previewExecutor.execute {
+            if (my != suggestSeq.get()) return@execute
+            val m = main
+            if (m == null || !ready) return@execute
+            val t0 = System.nanoTime()
+            val r = try { cleaned(Suggester.suggest(m, personal, keys, typed, prev, prev2, limit + EXTRA_FOR_BLOCKED), limit) } catch (e: Exception) { Suggestions.NONE }
+            stats.onSuggested((System.nanoTime() - t0) / 1_000_000)
+            if (my == suggestSeq.get()) done(r)
+        }
+    }
+
+    /** What the strip shows is no longer wanted (a glide started, the field changed): an answer on its way is dropped. */
+    fun cancelSuggest() { suggestSeq.incrementAndGet() }
+
+    /**
+     * A word the person TYPED was completed (space, punctuation, Enter) or chosen from the strip: it is learned like a glided one (the word, the pair, the triple). [weight] 1 for an ordinary word, more for a
+     * chosen or retyped one; [guessed] is what the keyboard had (or the person had typed first) when they meant [word]. A word the shipped list lacks that was used twice joins the person's own words
+     * (so glides can find it too).
+     */
+    fun learnWord(prev: String?, word: String, weight: Float, prev2: String? = null, guessed: String? = null, guessedWeight: Float = 1f) {
+        executor.execute {
+            ensurePersonal(); ensureDictionary()
+            if (dictionary.isBlocked(word)) return@execute                        // a word the person removed is not learned again
+            personal.add(prev, word, weight, prev2)
+            if (guessed != null) personal.addConfusion(guessed, word, guessedWeight)
+            val n = PersonalModel.norm(word)
+            val m = main; val o = ownRef
+            if (n != null && m != null && o != null && personal.weightOf(n) >= Suggester.OWN_WORD_USES && !o.contains(n) && m.idOf(n).let { it < 0 || m.text(it).lowercase() != n } && UserWords.glideable(n)) {
+                o.add(n); setOwn(o); try { saveOwn(o.serialize()) } catch (e: Exception) { /* a full disk must never break typing */ }
+            }
+            stats.onTypedLearned()
+            personalDirty = true
+            stats.onLearned(personal.wordCount, personal.pairCount, personal.confusionCount, personal.tripleCount, personal.patterns.patternCount, personal.patterns.wordCount)
+            if (System.nanoTime() / 1_000_000 - lastSaveAt > SAVE_EVERY_MS) saveNow()
+        }
+    }
+
+    /** A word the person deleted after it was learned: what it earned is taken back (a slip that was typed once and erased must not become a favourite). */
+    fun unlearnWord(prev: String?, word: String, weight: Float, prev2: String? = null) {
+        executor.execute {
+            ensurePersonal()
+            personal.unlearn(prev, word, weight, prev2)
+            personalDirty = true
+            stats.onLearned(personal.wordCount, personal.pairCount, personal.confusionCount, personal.tripleCount, personal.patterns.patternCount, personal.patterns.wordCount)
+            if (System.nanoTime() / 1_000_000 - lastSaveAt > SAVE_EVERY_MS) saveNow()
         }
     }
 
@@ -277,7 +417,8 @@ class GlideTyping(
      */
     fun learn(prev: String?, word: String, weight: Float, prev2: String? = null, guessed: String? = null, guessedWeight: Float = 1f, fromGlide: Boolean = false, afterUndo: Boolean = false) {
         executor.execute {
-            ensurePersonal()
+            ensurePersonal(); ensureDictionary()
+            if (dictionary.isBlocked(word)) return@execute
             personal.add(prev, word, weight, prev2)
             if (guessed != null) personal.addConfusion(guessed, word, guessedWeight) // the keyboard guessed [guessed] and the person meant [word]: a correction
             if (fromGlide) learnShape(word, weight, guessed != null, afterUndo)
@@ -391,7 +532,9 @@ class GlideTyping(
     }
 
     companion object {
-        private const val SAVE_EVERY_MS = 30_000L
+        private const val SAVE_EVERY_MS = 10_000L
+        /** The engine is asked for this many more guesses than are shown, so that removing the words the person blocked still leaves a full strip. */
+        private const val EXTRA_FOR_BLOCKED = 4
         /** A deleted glide can have meant the word typed in its place when the straight line through that word's letters is within this many key units of it (a careful glide is about 0.3 away, a sloppy one 0.6 to 0.9, another word more than 1.3). */
         const val FIT_D = 1.15f
     }
