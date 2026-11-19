@@ -1,13 +1,13 @@
-# CHECKPOINT 2700 — read me first, then TASKS.md
+# CHECKPOINT 2701 — read me first, then TASKS.md
 
-**Written:** 2026-11-19T01:43:22Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/kestrel-browser-optimization-h6y8u2` · **builds on:** `395e186e` (this checkpoint is the commit after it)
+**Written:** 2026-11-19T01:46:22Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/kestrel-browser-optimization-h6y8u2` · **builds on:** `6b27444b` (this checkpoint is the commit after it)
 
 ## Just done
-Lab run 44435517079 (em) READ: reopen 3/3 drew the picture again; dr INCONCLUSIVE: vidfast.vc IS reachable from the runner and its 3 text/plain POST XHR were correctly skipped as API calls (no stream request followed = the player never started = the owner's 'stuck on loading'), the 2nd server (111movies) froze the emulator's SOFTWARE GPU (ui STALL 2.1 s, ANR, then system UI crash) so servers 3-6 ran on a dead phone. dr scene now marks such a server inconclusive and brings the phone back. Also: appearance key counts system night only while Dark pages follows the system (core appearanceKey + 'night' reason + tests), ANS51g rule text restored in captureLook (OwnerRulesTest), compat order puts Yahoo last. core 1825 tests (1 fixed), app tests green.
+dr scene: Vidfast also tried with press-to-play OFF (tells the rule from the site), restart-safe after a frozen emulator; research/EM1_RESULTS.md + EM1_DORABY_SERVERS.md hold the em results; ALPHA71_RELEASE_NOTE.txt drafted with the real dr result.
 
 ## Do this next
-Check lab ro v2 (queued after em; fixed harness + doraby title page + pause capture): read reopen rows; then dispatch dr again (restart-safe) and compat; then ship alpha71: bump geckoapp/build.gradle.kts versionCode 172 / 0.3.0-alpha71, bash tools/sync-ext-version.sh, bash ship.sh gecko with docs/handoff/ALPHA71_RELEASE_NOTE.txt text (fix its dr sentence to the real result), ONE dispatch app=gecko full_build=true. Heartbeat trig_018ZFUWQpV3dBUPXUvKDiXwQ.
+Dispatch dr v2 (android.yml app=lab lab_suite=dr lab_profile=tablet) now = pending behind ro v2 run 44436958209; then compat (lab_minutes 45, profile standard) once dr v2 starts; read ro v2 -> if reopen rows are good ship alpha71 (see earlier next). Heartbeat trig_018ZFUWQpV3dBUPXUvKDiXwQ.
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ Check lab ro v2 (queued after em; fixed harness + doraby title page + pause capt
 
 ## Last ten checkpoints
 ```
+  378e887d ckpt 2700: Lab run 44435517079 (em) READ: reopen 3/3 drew the picture again; dr INCONCL
   1476784b ckpt 2699: EM1i naming: the REAL rendered doraby title page (headless Chromium) gives O
   abb85ece ckpt 2698: Lab run 44434241145 (suite ro, commit 609d22a7) READ: the 3 reopens that ran
   0853cfea ckpt 2697: EM1k step 2 CODED + tests green + Gecko module compiles: a page that painted
@@ -25,8 +26,7 @@ Check lab ro v2 (queued after em; fixed harness + doraby title page + pause capt
   54c9c34f ckpt 2693: EM1a: baseline lab DISPATCHED 2026-11-19 00:52Z: android.yml run 44432470135
   ce7436f4 ckpt 2692: Owner request 2026-11-19 (11 improvement areas + start GitHub emulator labs)
   06160983 ckpt 2691: Handoff saved (.handoff/handoff.md + archive; CLAUDE.md and AGENTS.md learni
-  7cfac9cf ckpt 2690: VS1e ticked (shipped in alpha70, tested, not proven on the real site).
 ```
 
-(8 automatic checkpoint(s) since the last deliberate one — the
+(3 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
