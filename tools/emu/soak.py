@@ -3451,7 +3451,9 @@ class Soak:
         done = []
         t_start = time.time()
         self.shields_mode = "on"
-        for i, (name, url, scrolls, dwell) in enumerate(COMPAT_SITES):
+        # LAB2f (research/COMPAT_RUN1.md): the heavy Yahoo pages froze the emulated phone and everything after them timed out: they go LAST now, so what they do can only cost the end of the list
+        sites = [x for x in COMPAT_SITES if not x[0].startswith("yahoo")] + [x for x in COMPAT_SITES if x[0].startswith("yahoo")]
+        for i, (name, url, scrolls, dwell) in enumerate(sites):
             if time.time() - t_start > budget:
                 break
             try:
