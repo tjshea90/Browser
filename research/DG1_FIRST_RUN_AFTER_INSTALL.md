@@ -41,3 +41,13 @@ Not proven an ANR: run C's `start paint cold 8343 ms` line was written by the sc
 ## Not done / not proven
 
 Nothing here was run on the tablet. The JVM tests (Robolectric) prove the classification and the sampling rate, not what Android does after an install.
+
+## The rest of the paste (DG1d)
+
+- **Cut line (fixed):** `Videos start only when pressed ... (a server or pla` ended mid-word because `ShieldsBridge.EngineStats` clipped the page-gate text to 300 characters; the full text is about 340 once a player frame was started by a tap on the page around it. That trailing number is the evidence for the "tap on the server button leads to the frame" rule (EM1 / vidfast). Clip is 600 now.
+- **Health ring (fixed):** `pull down ...` was logged for every touch-down: 130 of the last 400 events. One line per 8 s now; `Health.counter("pull.down")` stays exact.
+- **Tab previews 0 of 3 (by design):** 9 times `tabs thumb-dropped moved=false loading=true`: the picture taken while a tab leaves a page is kept for the Back gesture (`BackPictures`) and thrown away as a tab preview, because the tab already started loading the next page (a Google result's picture would label the YouTube page). A tab that is always left by navigating gets its preview when the tab grid opens. The WRONG-page count is 0 as required.
+- **Jank burst:** `frames 10s frames=191 jank=100 worst=679ms` then `368 / 102 / 115 ms`, right after `gecko size 600x418 (was 600x824)` -> `600x824` and a Google AI Mode page (54 blocked requests, 16.7 s to finish) streaming into a window that had just been resized; CPU `RenderThread 59 %`. A one-off; the other 10-s windows in the paste are 1-10 jank frames. No change.
+- **`ui slow 800ms HardwareRenderer.nSetStopped`** at the resume after 47 s in the background: inside Android's renderer restart, not our code (one occurrence, `ui.late=1`). No change.
+- **Page height 418 for 25 s after a resume:** nothing in the paste says why (no `win typing-mode` line). If the soft keyboard came up by itself on returning to the app, that is a real bug to chase; asked the owner.
+- **Everything else is healthy:** heap 16/128 MB, MemAvailable 712 MB, storage 1.12 GB free (an update needs 887 MB: fits), blocker 970 us average per request, 0 errors, YouTube/video lines clean, current run 2892 s with no crash.
