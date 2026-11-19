@@ -25,7 +25,7 @@ class LastRunTest {
     @Before fun clean() { LastRun.resetForTest(); LastRun.lazyMs = 30; ctx.filesDir.deleteRecursively(); ctx.filesDir.mkdirs() }
 
     /** The note is a process-wide singleton: leave it switched off so no later test in the same JVM writes files into a folder that is gone (and none shares the IO lane with it). */
-    @org.junit.After fun off() { ioDoneQuiet(); LastRun.resetForTest(); LastRun.lazyMs = 1500 }
+    @org.junit.After fun off() { ioDoneQuiet(); LastRun.resetForTest(); LastRun.lazyMs = 1500; LastRun.buildOverride = null; LastRun.installAtOverride = null }
     private fun ioDoneQuiet() { try { val l = CountDownLatch(1); Io.exec { l.countDown() }; l.await(5, TimeUnit.SECONDS) } catch (e: Exception) { /* ignore */ } }
 
     /** The IO lane is one thread in order: when this latch opens, every earlier write is on disk. */
@@ -186,5 +186,64 @@ class LastRunTest {
         LastRun.tick(t0 + 20_000); ioDone()
         assertTrue("15 s later it is", File(ctx.filesDir, "last-run.txt").readText().contains("saved=${t0 + 20_000}"))
     }
-}
 
+    /** DG1: a stored note of a run that was on screen, with the facts the NEXT start adds (its build and the time that build was installed). */
+    private fun runNote(build: String = "0.3.0-alpha70 (code 171)", started: Long, installAt: Long, stateAt: Long, saved: Long, nextStart: Long, nextBuild: String, nextInstallAt: Long, crashAt: Long = 0L, extra: String = "") =
+        "kestrel-last-run 1\npid=1\nbuild=$build\nstarted=$started\ninstallAt=$installAt\nstate=fg\nstateAt=$stateAt\nsaved=$saved\navailMb=959\nmem=free=51MB avail=959MB cached=966MB swapfree=1473MB app{main=300MB sum=300MB}\n$extra" +
+            "ev=+1.2s life resume\nnextStart=$nextStart\nnextBuild=$nextBuild\nnextInstallAt=$nextInstallAt\nbootAt=0\ncrashAt=$crashAt\nengineAt=0\n"
+
+    @Test fun aRunThatWasOnScreenWhenTheNextBuildWasInstalledOverItIsAnUpdateAndNotACrash() {
+        val r = LastRun.read(runNote(started = 1_000_000L, installAt = 900_000L, stateAt = 1_001_000L, saved = 1_500_000L, nextStart = 1_507_000L, nextBuild = "0.3.0-alpha71 (code 172)", nextInstallAt = 1_503_000L))
+        val t = r.lines.joinToString("\n")
+        assertFalse("an update is not an abnormal end, so it is not kept as one: $t", r.abnormal)
+        assertTrue(t, t.contains("ended by an UPDATE") && t.contains("not a crash"))
+        assertFalse(t, t.contains("WHILE ON SCREEN") || t.contains("NO crash note"))
+    }
+
+    @Test fun aNewerBuildThatWasInstalledMuchLaterOrAfterACrashDoesNotHideTheEnd() {
+        val later = LastRun.read(runNote(started = 1_000_000L, installAt = 900_000L, stateAt = 1_001_000L, saved = 1_500_000L, nextStart = 9_000_000L, nextBuild = "0.3.0-alpha71 (code 172)", nextInstallAt = 8_990_000L))
+        assertTrue("the install came hours after the last note: nothing says the update ended it", later.abnormal)
+        val crash = LastRun.read(runNote(started = 1_000_000L, installAt = 900_000L, stateAt = 1_001_000L, saved = 1_500_000L, nextStart = 1_507_000L, nextBuild = "0.3.0-alpha71 (code 172)", nextInstallAt = 1_503_000L, crashAt = 1_400_000L))
+        assertTrue("a crash note inside the run wins over the update", crash.abnormal && crash.lines.joinToString("\n").contains("an uncaught Java exception"))
+        val same = LastRun.read(runNote(started = 1_000_000L, installAt = 900_000L, stateAt = 1_001_000L, saved = 1_500_000L, nextStart = 1_507_000L, nextBuild = "0.3.0-alpha70 (code 171)", nextInstallAt = 1_503_000L))
+        assertTrue("the same build started again: no update", same.abnormal)
+    }
+
+    @Test fun aRunThatLivedSecondsAfterTheFirstStartFollowingAnInstallIsToldAsThatWithItsRealLifeInSeconds() {
+        val r = LastRun.read(runNote(started = 2_000_000L, installAt = 1_996_000L, stateAt = 2_001_000L, saved = 2_009_000L, nextStart = 9_000_000L, nextBuild = "0.3.0-alpha70 (code 171)", nextInstallAt = 1_996_000L))
+        val t = r.lines.joinToString("\n")
+        assertTrue(t, r.abnormal)
+        assertTrue("seconds, never '0 min': $t", t.contains("ran about 9 s"))
+        assertTrue(t, t.contains("FIRST START after its build was installed") && t.contains("4 s after the install"))
+        assertTrue(t, t.contains("look at the install itself") && t.contains("held about 300 MB"))
+        val longRun = LastRun.read(runNote(started = 2_000_000L, installAt = 100_000L, stateAt = 2_001_000L, saved = 2_000_000L + 27 * 60_000L, nextStart = 9_000_000L, nextBuild = "0.3.0-alpha70 (code 171)", nextInstallAt = 100_000L)).lines.joinToString("\n")
+        assertTrue(longRun, longRun.contains("ran about 27 min") && !longRun.contains("FIRST START") && longRun.contains("ended from outside"))
+    }
+
+    @Test fun theNextStartWritesItsOwnBuildAndInstallTimeIntoTheNoteAndAnUpdateIsRecognisedEndToEnd() {
+        LastRun.buildOverride = "0.3.0-alpha70 (code 171)"; LastRun.installAtOverride = System.currentTimeMillis() - 3_600_000L
+        val t0 = System.currentTimeMillis() - 30_000L
+        LastRun.begin(ctx, t0); ioDone()
+        LastRun.note("life", "resume", "+1.0s life resume", t0 + 1000); ioDone()
+        assertTrue(File(ctx.filesDir, "last-run.txt").readText().let { it.contains("build=0.3.0-alpha70 (code 171)") && it.contains("installAt=") })
+        LastRun.resetForTest(); LastRun.lazyMs = 30
+        LastRun.buildOverride = "0.3.0-alpha71 (code 172)"; LastRun.installAtOverride = System.currentTimeMillis() - 1_000L
+        LastRun.begin(ctx, System.currentTimeMillis()); ioDone()
+        val text = LastRun.reportLines(ctx).joinToString("\n")
+        assertTrue(text, text.contains("ended by an UPDATE"))
+        assertFalse("an update is not kept as an abnormal end: $text", File(ctx.filesDir, "last-run-ended.txt").exists())
+    }
+
+    @Test fun theFirstMinuteOfARunIsSampledEveryTwoSecondsAndTheLaterOnesEveryFifteen() {
+        val t0 = System.currentTimeMillis()
+        LastRun.begin(ctx, t0); ioDone()
+        LastRun.note("life", "resume", "+1.0s life resume", t0); ioDone()
+        LastRun.tick(t0 + 1_000); ioDone()
+        assertFalse("1 s after the flush: too soon even in the first minute", File(ctx.filesDir, "last-run.txt").readText().contains("saved=${t0 + 1_000}"))
+        LastRun.tick(t0 + 2_600); ioDone()
+        assertTrue("2 s later it is written while the run is young", File(ctx.filesDir, "last-run.txt").readText().contains("saved=${t0 + 2_600}"))
+        LastRun.tick(t0 + 70_000); ioDone()
+        LastRun.tick(t0 + 73_000); ioDone()
+        assertFalse("after the first minute it is every 15 s again", File(ctx.filesDir, "last-run.txt").readText().contains("saved=${t0 + 73_000}"))
+    }
+}
