@@ -3186,7 +3186,6 @@ open class BrowserActivity : Activity(), DockListener {
      */
     /** Why a picture is NOT taken now (null = take it). Same rules as before EM1k, in the same meaning, only named. */
     private fun lookSkip(tab: Tab, why: String, minGapMs: Long): String? = when {
-        fullscreenOn -> "fullscreen" // ANS51g (owner message 51: the tablet's log shows 'tabs look-saved' twice WHILE a film was full screen): the picture read back then is the film's frame, not the page's look, and the read-back and the encode compete with the decoder on a slow tablet
         !prefs.lastLook || tab !== current || tab.isPrivateTab -> "quiet"
         homeShown(tab) -> "home"
         tab.error != null -> "error"
@@ -3203,6 +3202,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     private fun captureLook(tab: Tab?, why: String, minGapMs: Long = LastLookRules.MIN_GAP_MS.toLong()) {
+        if (fullscreenOn) return // ANS51g (owner message 51: the tablet's log shows 'tabs look-saved' twice WHILE a film was full screen): the picture read back then is the film's frame, not the page's look, and the read-back and the encode compete with the decoder on a slow tablet
         if (tab == null) return
         val skip = lookSkip(tab, why, minGapMs)
         if (skip != null) {
