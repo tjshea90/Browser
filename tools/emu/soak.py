@@ -4565,8 +4565,10 @@ def main():
             s.lastrun_round()                                # (CR1f/g again, after the scene fix; tb ran just above)
         if a.suite == "lr":
             s.lastrun_round()                                # (CR1c: the app is killed from outside in front and in the background; the next Diagnostics must say how the last run ended)
+        if a.suite == "ro":
+            s.reopen_round()                                 # (EM1k, owner 2026-11-19: the app opened again must show the page it was left on at once: picture drawn? why not? when does the live page take over?)
         if a.suite == "yt":
-            s.yt_journey(a.minutes)                          # (CR1, owner message 2026-11-18: the app crashed on YouTube: a YouTube-only journey with leave / return and RAM pressure)
+            s.yt_journey(a.minutes)                        # (CR1, owner message 2026-11-18: the app crashed on YouTube: a YouTube-only journey with leave / return and RAM pressure)
         if a.suite == "daily":
             s.daily(a.minutes)                               # (LAB3, owner message 62: a person's day on the app's real defaults, then the report for the build)
         if a.suite in ("soak", "all"):
