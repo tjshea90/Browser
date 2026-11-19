@@ -3190,7 +3190,7 @@ open class BrowserActivity : Activity(), DockListener {
         !prefs.lastLook || tab !== current || tab.isPrivateTab -> "quiet"
         homeShown(tab) -> "home"
         tab.error != null -> "error"
-        tab.loading -> "loading"
+        tab.loading && !LastLookRules.mayTakeWhileLoading(why, tab.gecko.paintedFor, tab.url) -> "loading"
         tab.session == null || geckoView.session !== tab.session -> "no-session"
         restoringTab != null || lookTab != null -> "cover-up"
         lookCapturing -> "busy"
