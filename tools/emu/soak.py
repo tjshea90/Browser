@@ -3683,6 +3683,82 @@ class Soak:
         self.main_pid = (self.ph.pids() or [None])[0]
         self.record({"kind": "lastrun", "name": "last-run-note", "status": "ok" if all(r[1] for r in rows) else "failed", "results": [{"case": r[0], "ok": r[1], "file": r[2]} for r in rows]})
 
+    def reopen_round(self):
+        """EM1k (owner 2026-11-19: "when i close the browser then reopen it, it lags on the 'opening xyz.com' dialog"). The page a person leaves, and what the screen shows when the app is opened again.
+        For each page and each way of leaving (Home and Android ends the app later / Home and Android ends it at once = a swipe in Recents / the system kills it in front) the lab loads the page, reads it
+        (scrolls), leaves, starts the app cold and reads the app's OWN Health lines: was a saved picture of the page drawn (`tabs look-shown`) or only the plain cover (`early-cover` + `look-none why=...`),
+        when did the first frame / the engine / the first paint / the end of the cover come (`start frame|look|runtime|paint`, `tabs cover-hide`), was the engine's saved state used (`state-restored` / `state-mismatch`).
+        Absolute seconds are an x86 emulator's; what counts is WHETHER a picture was there, WHY not, and the order of the marks. Writes reopen.md."""
+        pkg = self.a.pkg
+        pages = [("lab-text", "lab:/page/text"), ("wikipedia", "https://en.wikipedia.org/wiki/Firefox")]
+        styles = [("home-later", "Home, then Android ends the app 5 s later"), ("home-at-once", "Home, then Android ends the app 0.4 s later (a swipe in Recents)"), ("kill-in-front", "the system kills the app while it is in front")]
+        rows = []
+        for pname, purl in pages:
+            for sid, sdesc in styles:
+                mark_load = self.log.size()
+                ev = self.load_page("ro-" + pname, purl, 3, 1, timeout=75)
+                if ev is None or ev.get("status") not in ("ok", "slow"):
+                    rows.append({"page": pname, "style": sid, "skipped": "the page did not load (%s)" % (ev or {}).get("status")})
+                    continue
+                time.sleep(3)                                          # the 'settled' picture is asked 700 ms after the last scroll, the page-stop one 1.5 s after the load ended
+                pre = self.log.since(mark_load)
+                saved = health_events(pre, "tabs", "look-saved")
+                row = {"page": pname, "style": sid, "saved_before_leaving": len([e for e in saved if "ok=true" in e["rest"]]), "skips_before_leaving": sorted(set(e["rest"] for e in health_events(pre, "tabs", "look-skip")))}
+                if sid == "kill-in-front":
+                    pids = self.ph.pids()
+                    if pids:
+                        self.adb.sh("kill -9 %d" % pids[0], timeout=20)
+                    time.sleep(2)
+                else:
+                    self.ph.key("KEYCODE_HOME")
+                    time.sleep(5 if sid == "home-later" else 0.4)
+                self.adb.sh("am force-stop %s" % pkg, timeout=30)
+                time.sleep(2)
+                mark_start = self.log.size()
+                t0 = time.time()
+                self.ph.start_app()
+                time.sleep(0.6)
+                self.shot("reopen-%s-%s-first" % (pname, sid))        # (what is on the screen about a second after the tap on the icon)
+                painted = None
+                while time.time() - t0 < 60:
+                    lines = self.log.since(mark_start)
+                    if health_events(lines, "start", "paint"):
+                        painted = time.time() - t0
+                        break
+                    time.sleep(1.0)
+                time.sleep(2.5)
+                lines = self.log.since(mark_start)
+
+                def first(layer, evn):
+                    es = health_events(lines, layer, evn)
+                    return es[0]["t"] if es else None
+                nolook = [e["kv"].get("why") for e in health_events(lines, "tabs", "look-none")]
+                states = [e["ev"] for e in health_events(lines, "tabs") if e["ev"] in ("state-restored", "state-mismatch")]
+                row.update(early_cover=bool(health_events(lines, "tabs", "early-cover")), look_shown=bool(health_events(lines, "tabs", "look-shown")), look_none=nolook, state=states[:1],
+                           frame_s=first("start", "frame"), look_mark_s=first("start", "look"), runtime_s=first("start", "runtime"), paint_s=first("start", "paint"), cover_hide_s=first("tabs", "cover-hide"),
+                           look_hide_s=first("tabs", "look-hide"), wall_to_paint_s=round(painted, 1) if painted else None)
+                self.shot("reopen-%s-%s-after" % (pname, sid))
+                if not row["look_shown"]:
+                    self.issue("high", "reopen", "%s / %s: the app was opened again and the page was NOT shown from its saved picture (pictures saved before leaving: %d; look-none why=%s; skips: %s)" %
+                               (pname, sid, row["saved_before_leaving"], ",".join(str(x) for x in nolook) or "(no line)", "; ".join(row["skips_before_leaving"]) or "none"), shot=False)
+                elif row.get("look_mark_s") is not None and row.get("paint_s") is not None and row["look_mark_s"] > 1.5:
+                    self.issue("medium", "reopen", "%s / %s: the saved picture came late (%.1f s after the process started)" % (pname, sid, row["look_mark_s"]), shot=False)
+                rows.append(row)
+        try:
+            with open(os.path.join(self.out, "reopen.md"), "w") as f:
+                f.write("# Reopen (EM1k)\n\n| page | leave | pictures before | look shown | why not | frame s | look s | runtime s | paint s | cover gone s | state |\n| - | - | -: | - | - | -: | -: | -: | -: | -: | - |\n")
+                for r in rows:
+                    if "skipped" in r:
+                        f.write("| %s | %s | - | - | %s | | | | | | |\n" % (r["page"], r["style"], r["skipped"]))
+                    else:
+                        f.write("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n" % (r["page"], r["style"], r["saved_before_leaving"], "yes" if r["look_shown"] else "NO", ",".join(str(x) for x in r["look_none"]) or "", r["frame_s"], r["look_mark_s"], r["runtime_s"], r["paint_s"], r["cover_hide_s"], ",".join(r["state"])))
+        except Exception as e:
+            say("reopen.md not written:", e)
+        done = [r for r in rows if "skipped" not in r]
+        self.main_pid = (self.ph.pids() or [None])[0]
+        self.record({"kind": "reopen", "name": "reopen-look", "status": "ok" if done and all(r["look_shown"] for r in done) else "failed", "results": rows,
+                     "note": "%d of %d reopens showed the saved picture" % (len([r for r in done if r["look_shown"]]), len(done))})
+
     def dump_diag(self, tag):
         self.ph.debug("dump")
         time.sleep(7)   # the app reads the engine's preferences first (2.5 s), then writes the text
