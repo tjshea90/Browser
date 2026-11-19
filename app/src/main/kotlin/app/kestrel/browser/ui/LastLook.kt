@@ -23,7 +23,7 @@ object LastLook {
 
     /** What the page looked like under: the skin, the "Dark pages" choice and the system's night mode. A picture taken under another appearance is not shown. */
     fun appearance(ctx: Context, webDark: Int): String =
-        SKIN + ":" + webDark + ":" + (ctx.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+        LastLookRules.appearanceKey(SKIN, webDark, ctx.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK)  // (EM1k: the night bit only counts while "Dark pages" follows the system)
 
     private fun dir(ctx: Context) = File(ctx.filesDir, "lastlook")
 

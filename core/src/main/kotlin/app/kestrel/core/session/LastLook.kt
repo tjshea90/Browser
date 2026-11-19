@@ -75,6 +75,12 @@ object LastLookRules {
 
     private fun bare(url: String): String = url.substringBefore('#')
 
+    /**
+     * EM1k: what a picture was taken under. The system's night mode ([systemNight], Android's UI_MODE_NIGHT bits) changes how a page looks ONLY while "Dark pages" follows the system ([webDark] 0);
+     * with dark forced (1) or never (2) a page looks the same by day and by night, so a picture taken by day was refused after sunset for nothing (an automatic dark theme on the tablet would do that every evening).
+     */
+    fun appearanceKey(skin: String, webDark: Int, systemNight: Int): String = skin + ":" + webDark + ":" + (if (webDark == 0) systemNight else 0)
+
     /** The same page (the #fragment aside). */
     fun samePage(a: String, b: String): Boolean = bare(a) == bare(b)
 
@@ -101,13 +107,13 @@ object LastLookRules {
 
     /**
      * EM1k (owner 2026-11-19: at the next start he still sees the plain "Opening <host>" cover): null when the saved picture may be used, else the ONE word that says what is different
-     * ("page" = the picture shows another address than the tab's, "engine", "skin", "dark", "desktop"). The start-up path writes the word into the Health list, so the next Diagnostics
+     * ("page" = the picture shows another address than the tab's, "engine", "night" = only the system's night mode differs, "skin", "dark", "desktop"). The start-up path writes the word into the Health list, so the next Diagnostics
      * names the cause instead of leaving a guess. Same order as the old rule: address first.
      */
     fun whyNot(meta: LastLookMeta, tabUrl: String, engine: String, skin: String, dark: Boolean, desktop: Boolean): String? = when {
         !samePage(meta.url, tabUrl) -> "page"
         meta.engine != engine -> "engine"
-        meta.skin != skin -> "skin"
+        meta.skin != skin -> if (meta.skin.substringBeforeLast(':', "?") == skin.substringBeforeLast(':', "!")) "night" else "skin"
         meta.dark != dark -> "dark"
         meta.desktop != desktop -> "desktop"
         else -> null
