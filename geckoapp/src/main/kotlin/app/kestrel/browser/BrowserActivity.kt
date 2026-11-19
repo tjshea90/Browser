@@ -1464,7 +1464,7 @@ open class BrowserActivity : Activity(), DockListener {
         val s = createSession(tab)
         s.open(GeckoEngine.runtime(this))
         tab.session = s
-        tab.gecko.painted = false                                       // PV1: a session that has not painted yet needs the curtain when it is shown
+        tab.gecko.painted = false; tab.gecko.paintedFor = ""            // PV1: a session that has not painted yet needs the curtain when it is shown (EM1k: and it has painted no address yet)
         if (tab === current) StartTimeline.mark("open")
         var state = tab.gecko.state
         if (state == null) tab.gecko.stateJson?.let { state = stateFromDisk(tab, it) } // a tab that was saved by the last run: its Back stack and scroll position come back
