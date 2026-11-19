@@ -88,7 +88,21 @@ object LastLookRules {
 
     /** True when the saved picture may be shown for a tab that is on [tabUrl] now: the same page (the #fragment aside), engine, skin, dark-pages and desktop-site choice. */
     fun usable(meta: LastLookMeta, tabUrl: String, engine: String, skin: String, dark: Boolean, desktop: Boolean): Boolean =
-        samePage(meta.url, tabUrl) && meta.engine == engine && meta.skin == skin && meta.dark == dark && meta.desktop == desktop
+        whyNot(meta, tabUrl, engine, skin, dark, desktop) == null
+
+    /**
+     * EM1k (owner 2026-11-19: at the next start he still sees the plain "Opening <host>" cover): null when the saved picture may be used, else the ONE word that says what is different
+     * ("page" = the picture shows another address than the tab's, "engine", "skin", "dark", "desktop"). The start-up path writes the word into the Health list, so the next Diagnostics
+     * names the cause instead of leaving a guess. Same order as the old rule: address first.
+     */
+    fun whyNot(meta: LastLookMeta, tabUrl: String, engine: String, skin: String, dark: Boolean, desktop: Boolean): String? = when {
+        !samePage(meta.url, tabUrl) -> "page"
+        meta.engine != engine -> "engine"
+        meta.skin != skin -> "skin"
+        meta.dark != dark -> "dark"
+        meta.desktop != desktop -> "desktop"
+        else -> null
+    }
 
     /** [metaW] x [metaH] is the picture, [viewW] x [viewH] the page area it has to fill. */
     fun fit(metaW: Int, metaH: Int, viewW: Int, viewH: Int): LookFit {
