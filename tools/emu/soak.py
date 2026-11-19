@@ -3683,6 +3683,60 @@ class Soak:
         self.main_pid = (self.ph.pids() or [None])[0]
         self.record({"kind": "lastrun", "name": "last-run-note", "status": "ok" if all(r[1] for r in rows) else "failed", "results": [{"case": r[0], "ok": r[1], "file": r[2]} for r in rows]})
 
+    def doraby_round(self):
+        """EM1i (owner 2026-11-19: "finding and properly loading videos from different servers (try doraby.com various movie servers)"). The REAL doraby.com player chain on the real engine: the title page offers six
+        servers; each one is a doraby wrapper page (`/?player_tv=..&sv=<server>`) holding `getPlayTV.php`, which sends the frame to the server's own player (3 to 5 frames deep). For each server: open the wrapper,
+        tap the player the way a person does (press-to-play stays ON, the owner's setting), wait, ask the finder what it offers (`videodl`), decline the save, and keep the finder's own Health lines (media maybe /
+        maybe-hit / maybe-no / maybe-refused http=..). The sandbox survey (research/EM1_DORABY_SERVERS.md) found: Vidsrc = text/plain playlists at an extension-less address and MPEG-TS parts served as .html;
+        Vidzee = a normal HLS master with extension-less parts; 111movies = hls.js behind a token API. Nothing is played to the end and nothing is kept: a decline is always answered."""
+        w, h = self.screen
+        servers = [("vidfast", "Vidfast"), ("111movies", "Openvid"), ("vidsrc", "movieclub"), ("videasy", "vidlink"), ("vidzee", "vidsrc2"), ("vidcore", "Vidsrc")]
+        rows = []
+        self.ph.debug("vpress", "1"); time.sleep(1.5)                # the owner's setting: videos start only when pressed
+        for name, sv in servers:
+            url = "https://doraby.com/?player_tv=275&s=1&e=1&sv=%s&tv=true" % sv
+            up, upn = self.upstream(url)
+            if up == "unreachable":
+                rows.append({"server": name, "status": "upstream", "note": "the runner gets no answer from doraby.com (%s)" % upn}); continue
+            lm = self.log.size()
+            self.ph.open_url(url)
+            t0 = time.time()
+            while time.time() - t0 < 40 and not [e for e in health_events(self.log.since(lm), "page", "loaded") if "doraby" in e["rest"]]:
+                time.sleep(1.5)
+            time.sleep(8)                                              # getPlayTV.php sends the frame on to the server's own player
+            self.ph.tap(w // 2, h // 2); time.sleep(8)               # the player's play button (a first tap often only dismisses an overlay)
+            self.ph.tap(w // 2, h // 2); time.sleep(14)
+            m1 = self.log.size(); self.ph.debug("videodl"); time.sleep(5)
+            said = health_events(self.log.since(m1), "lab", "videodl")
+            if self.wait_dialog(m1, 15):
+                self.answer(False)
+            lines = self.log.since(lm)
+            med = health_events(lines, "media")
+            cnt = {}
+            for e in med:
+                cnt[e["ev"]] = cnt.get(e["ev"], 0) + 1
+            refused = sorted(set(e["rest"][:90] for e in med if e["ev"] == "maybe-refused"))[:4]
+            hits = sorted(set(e["rest"][:110] for e in med if e["ev"] == "maybe-hit"))[:3]
+            r = {"server": name, "finder_said": said[-1]["rest"] if said else "no answer", "media_events": cnt, "refused": refused, "hits": hits}
+            found = bool(said) and "pick=none" not in said[-1]["rest"]
+            r["status"] = "found" if found else "not-found"
+            if not found:
+                self.issue("medium", "finding-video", "doraby server %s: the finder offered nothing after a tap on the player (media events: %s; refused: %s)" % (name, cnt or "none", "; ".join(refused) or "none"), shot=True)
+            else:
+                self.shot("doraby-" + name)
+            rows.append(r)
+            self.ph.debug("closetabs"); time.sleep(3)
+        try:
+            with open(os.path.join(self.out, "doraby.md"), "w") as f:
+                f.write("# doraby servers on the real engine (EM1i)\n\n| server | result | finder said | media events | refused |\n| - | - | - | - | - |\n")
+                for r in rows:
+                    f.write("| %s | %s | %s | %s | %s |\n" % (r["server"], r["status"], str(r.get("finder_said", r.get("note", "")))[:120], json.dumps(r.get("media_events", {})), "; ".join(r.get("refused", []))))
+        except Exception as e:
+            say("doraby.md not written:", e)
+        self.main_pid = (self.ph.pids() or [None])[0]
+        self.record({"kind": "doraby", "name": "doraby-servers", "status": "ok" if rows and all(r["status"] in ("found", "upstream") for r in rows) else "failed", "results": rows,
+                     "note": "%d of %d servers found by the finder" % (len([r for r in rows if r["status"] == "found"]), len(rows))})
+
     def reopen_round(self):
         """EM1k (owner 2026-11-19: "when i close the browser then reopen it, it lags on the 'opening xyz.com' dialog"). The page a person leaves, and what the screen shows when the app is opened again.
         For each page and each way of leaving (Home and Android ends the app later / Home and Android ends it at once = a swipe in Recents / the system kills it in front) the lab loads the page, reads it
@@ -4485,7 +4539,7 @@ _install_daily()
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "ro", "new", "tb", "new2"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "ro", "dr", "new", "tb", "new2"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -4500,7 +4554,7 @@ def main():
         a.profile = "tablet" if a.suite in ("daily", "yt") else "standard"
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
-        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "ro", "new", "tb", "new2") else "all")
+        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "ro", "dr", "new", "tb", "new2") else "all")
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
@@ -4565,6 +4619,8 @@ def main():
             s.lastrun_round()                                # (CR1f/g again, after the scene fix; tb ran just above)
         if a.suite == "lr":
             s.lastrun_round()                                # (CR1c: the app is killed from outside in front and in the background; the next Diagnostics must say how the last run ended)
+        if a.suite == "dr":
+            s.doraby_round()                                 # (EM1i, owner 2026-11-19: the six real doraby servers on the real engine: does the finder offer a stream for each?)
         if a.suite == "ro":
             s.reopen_round()                                 # (EM1k, owner 2026-11-19: the app opened again must show the page it was left on at once: picture drawn? why not? when does the live page take over?)
         if a.suite == "yt":
