@@ -3687,8 +3687,8 @@ class Soak:
 
     def doraby_round(self):
         """EM1i (owner 2026-11-19: "finding and properly loading videos from different servers (try doraby.com various movie servers)"). The REAL doraby.com player chain on the real engine: the title page offers six
-        servers; each one is a doraby wrapper page (`/?player_tv=..&sv=<server>`) holding `getPlayTV.php`, which sends the frame to the server's own player (3 to 5 frames deep). For each server: open the wrapper,
-        tap the player the way a person does (press-to-play stays ON, the owner's setting), wait, ask the finder what it offers (`videodl`), decline the save, and keep the finder's own Health lines (media maybe /
+        servers; each one is a doraby wrapper page (`/?player_tv=..&sv=<server>`) holding `getPlayTV.php`, which sends the frame to the server's own player (3 to 5 frames deep). For each server: open the TITLE page
+        and TAP the server's button like the owner does (press-to-play stays ON, the owner's setting), wait, ask the finder what it offers (`videodl`), decline the save, and keep the finder's own Health lines (media maybe /
         maybe-hit / maybe-no / maybe-refused http=..). The sandbox survey (research/EM1_DORABY_SERVERS.md) found: Vidsrc = text/plain playlists at an extension-less address and MPEG-TS parts served as .html;
         Vidzee = a normal HLS master with extension-less parts; 111movies = hls.js behind a token API. Nothing is played to the end and nothing is kept: a decline is always answered."""
         w, h = self.screen
