@@ -3713,6 +3713,9 @@ class Soak:
             if self.wait_dialog(m1, 15):
                 self.answer(False)
             lines = self.log.since(lm)
+            # lab run 44435517079: the second server's player froze the emulator's SOFTWARE GPU (UI thread in HardwareRenderer.nSyncAndDrawFrame, an ANR, then the emulated phone's own system UI died) and the other
+            # four servers ran on a dead phone: "no answer" then says nothing about the finder. A server during which that happened is INCONCLUSIVE, the phone / app is brought back before the next one.
+            froze = any(("am_anr" in l and self.a.pkg in l) or "ui STALL" in l for l in lines) or not self.system_ok()
             med = health_events(lines, "media")
             cnt = {}
             for e in med:
@@ -3721,8 +3724,14 @@ class Soak:
             hits = sorted(set(e["rest"][:110] for e in med if e["ev"] == "maybe-hit"))[:3]
             r = {"server": name, "finder_said": said[-1]["rest"] if said else "no answer", "media_events": cnt, "refused": refused, "hits": hits}
             found = bool(said) and "pick=none" not in said[-1]["rest"]
-            r["status"] = "found" if found else "not-found"
-            if not found:
+            r["status"] = "found" if found else ("inconclusive" if froze else "not-found")
+            if froze:
+                r["note"] = "the emulated phone froze or its system died while this server's player ran (software GPU): not a finder result"
+                self.ph.a.sh("am force-stop %s" % self.a.pkg, timeout=30); time.sleep(2)
+                if not self.system_ok():
+                    self.recover_system("doraby server %s" % name)
+                self.start_app()
+            if not found and not froze:
                 self.issue("medium", "finding-video", "doraby server %s: the finder offered nothing after a tap on the player (media events: %s; refused: %s)" % (name, cnt or "none", "; ".join(refused) or "none"), shot=True)
             else:
                 self.shot("doraby-" + name)
@@ -3736,8 +3745,8 @@ class Soak:
         except Exception as e:
             say("doraby.md not written:", e)
         self.main_pid = (self.ph.pids() or [None])[0]
-        self.record({"kind": "doraby", "name": "doraby-servers", "status": "ok" if rows and all(r["status"] in ("found", "upstream") for r in rows) else "failed", "results": rows,
-                     "note": "%d of %d servers found by the finder" % (len([r for r in rows if r["status"] == "found"]), len(rows))})
+        self.record({"kind": "doraby", "name": "doraby-servers", "status": "ok" if rows and all(r["status"] in ("found", "upstream", "inconclusive") for r in rows) else "failed", "results": rows,
+                     "note": "%d of %d servers found by the finder, %d inconclusive (the phone froze)" % (len([r for r in rows if r["status"] == "found"]), len(rows), len([r for r in rows if r["status"] == "inconclusive"]))})
 
     def reopen_round(self):
         """EM1k (owner 2026-11-19: "when i close the browser then reopen it, it lags on the 'opening xyz.com' dialog"). The page a person leaves, and what the screen shows when the app is opened again.
