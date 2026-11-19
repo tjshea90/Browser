@@ -8,8 +8,18 @@ import java.io.File
  * (research/GECKO_SPEED.md section 1). Rewritten at every start, but only when its content changed.
  */
 object GeckoPrefs {
-    /** `name = value` lines -> `prefs:` YAML. Blank lines and `#` comments are skipped; a malformed line is skipped (never fatal). */
-    fun yaml(text: String): String {
+    /**
+     * `name = value` lines -> `prefs:` YAML. Blank lines and `#` comments are skipped; a malformed line is skipped (never fatal).
+     * [overrides] (the emulator's pref sweep, DEBUG builds only, see [writeConfig]) are `name=value` lines in the same grammar: an override replaces the base line of the same name (a duplicate YAML key would
+     * be an error), and the value `-` removes the pref (the engine's own default applies).
+     */
+    fun yaml(text: String, overrides: List<String> = emptyList()): String {
+        val over = LinkedHashMap<String, String>()
+        for (raw in overrides) {
+            val eq = raw.indexOf('=')
+            if (eq <= 0) continue
+            over[raw.substring(0, eq).trim()] = raw.substring(eq + 1).trim()
+        }
         val sb = StringBuilder("prefs:\n")
         for (raw in text.lineSequence()) {
             val line = raw.trim()
@@ -17,13 +27,16 @@ object GeckoPrefs {
             val eq = line.indexOf('=')
             if (eq <= 0) continue
             val name = line.substring(0, eq).trim()
+            if (over.containsKey(name)) continue
             val value = line.substring(eq + 1).trim()
             if (!NAME.matches(name)) continue
-            val ok = value == "true" || value == "false" || INT.matches(value) || (value.length >= 2 && value.startsWith("\"") && value.endsWith("\"") && !value.substring(1, value.length - 1).contains('"'))
-            if (ok) sb.append("  ").append(name).append(": ").append(value).append('\n')
+            if (valueOk(value)) sb.append("  ").append(name).append(": ").append(value).append('\n')
         }
+        for ((name, value) in over) if (value != "-" && NAME.matches(name) && valueOk(value)) sb.append("  ").append(name).append(": ").append(value).append('\n')
         return sb.toString()
     }
+
+    private fun valueOk(value: String): Boolean = value == "true" || value == "false" || INT.matches(value) || (value.length >= 2 && value.startsWith("\"") && value.endsWith("\"") && !value.substring(1, value.length - 1).contains('"'))
 
     /**
      * The Network lab switches that are ON, as `prefs:` entries: a preference that the engine reads only once is not changed by a live `setGeckoPref` after start-up, so the switches are also
@@ -37,9 +50,13 @@ object GeckoPrefs {
     }
 
     /** Writes filesDir/gecko-config.yaml (if the content differs) and returns its path. */
-    fun writeConfig(ctx: Context): String {
+    @Synchronized fun writeConfig(ctx: Context): String { // (the config warm-up thread of GeckoEngine.prewarmConfig and the UI thread both call it)
         val text = try { ctx.assets.open("gecko-prefs.txt").bufferedReader().use { it.readText() } } catch (e: Exception) { "" }
-        var yaml = yaml(text) + labLines(app.kestrel.browser.data.Prefs.get(ctx))
+        // DEBUG builds only (the emulator's pref sweep, LAB5b): `setprop debug.kestrel.gp1 "javascript.options.parallel_marking=true"` .. gp8 (one pref per property: a system property holds 91 characters),
+        // then a restart. The same grammar as gecko-prefs.txt; `name=-` removes a pref. A release build never reads a property (DebugProps.get answers null).
+        val sweep = (1..8).mapNotNull { app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.gp$it") }
+        if (sweep.isNotEmpty()) app.kestrel.browser.diag.Health.log("engine", "sweep", sweep.joinToString(" ; "))
+        var yaml = yaml(text, sweep) + labLines(app.kestrel.browser.data.Prefs.get(ctx))
         // DEBUG builds only (the emulator rig): `setprop debug.kestrel.moz_log "nsHttp:5,nsSocketTransport:5"` and restart makes Gecko log those modules to files/gecko-moz.log
         // (adb: run-as <package> cat files/gecko-moz.log). The value is restricted to module:level pairs so nothing else can ride into the engine's environment.
         app.kestrel.browser.diag.DebugProps.get(ctx, "debug.kestrel.moz_log")?.takeIf { LOG_SPEC.matches(it) }?.let {

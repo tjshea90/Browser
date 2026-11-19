@@ -6,6 +6,9 @@ import app.kestrel.browser.shield.Engine
 class GeckoApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        // LAB5 (research/LAB5_STARTUP.md row 1): ask for the preference files the first screen reads NOW. Android parses a file on its own thread from the first request, so the XML is read while the activity is being built
+        // instead of the UI thread waiting for the rest of it inside onCreate (kestrel = the settings, kestrel_update = the update check, kestrel_video = the decoder list). Only the UI process: the engine's child processes never read them.
+        if (getProcessName() == packageName) for (n in arrayOf("kestrel", "kestrel_update", "kestrel_video")) getSharedPreferences(n, MODE_PRIVATE)
         app.kestrel.browser.diag.Health.mirror = (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
         Flavor.secureDnsBuiltIn = true
         Flavor.updateTagPrefix = "kestrel-g-v"
@@ -30,5 +33,6 @@ class GeckoApp : Application() {
         if (getProcessName() == packageName) app.kestrel.browser.diag.StartTimeline.appCreated()
         if (getProcessName() == packageName) ProcessLife.init(this)
         if (getProcessName() == packageName) Engine.start(this) // background thread: filter snapshot + Public Suffix List (malware list, per-site Shields)
+        if (getProcessName() == packageName) GeckoEngine.prewarmConfig(this) // LAB5: SnakeYAML (GeckoView's config reader) is loaded off the UI thread while the activity is being built
     }
 }
