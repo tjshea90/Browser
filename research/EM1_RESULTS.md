@@ -34,11 +34,16 @@ Reading: (1) the plain "Opening doraby.com" cover was used (`picture=false`, no 
 What this build now records so the NEXT paste says why (EM1k step 1, shipped in the next alpha): `tabs look-none why=<off|not-a-page|no-file|page|engine|skin|dark|desktop|unreadable>` at the cover, `tabs look-skip pause why=<...>` when leaving, counters `look.none.*` and `look.skip.*`.
 Lab: suite `ro` / `em` (soak.py `reopen_round`, writes reopen.md): load, scroll, leave three ways (Home + Android ends the app 5 s later / 0.4 s later = a swipe in Recents / the system kills it in front), start cold, read the app's own Health lines.
 
+## Lab run 44434241145 (suite ro, code of ckpt 2694) and 44435517079 (suite em = ro + dr, code of ckpt 2695)
+- ro: the 3 reopens that ran (lab-text Home+later, lab-text kill in front, Wikipedia Home+0.4 s) ALL drew the saved picture: `start look` mark 0.27-0.33 s after the process start, `start runtime` 1.14-1.17 s, live paint 2.0-2.6 s, cover gone 2.0-2.9 s; `state-restored` when the app had time to flush. The other 3 rounds were skipped by a lab bug (stale main_pid after the deliberate kill: the next page load was labelled a crash); fixed, doraby title page added as the third page. Em's reopen part (same old harness): 3 of 3 again.
+- dr: INCONCLUSIVE. Server 1 (Vidfast, label 'Vidfast'): the page chain loaded on the runner (so vidfast.vc IS reachable from GitHub's runners, not from the sandbox); the finder logged `media maybe vidfast.vc type=text/plain kind=xmlhttprequest method=POST` x3, each `maybe-skipped: the page asked with POST: an API call, not a stream` (the VS1e rule); after two taps on the player no stream was ever requested, `lab videodl ... pick=none`. Server 2 (111movies): the player froze the emulator's SOFTWARE GPU (`ui STALL 2103 ms` in HardwareRenderer.nSyncAndDrawFrame, an ANR at 01:28:07, then FATAL EXCEPTION in the phone's own system UI at 01:30:12); servers 3-6 ran on a dead phone (no media events, no answer). `doraby_round` now marks a server during which the phone froze as inconclusive and brings the phone back before the next.
+
 ## EM1i - the six real doraby servers: research/EM1_DORABY_SERVERS.md (measured from the sandbox) and lab suite `dr` / `em` (soak.py `doraby_round`, writes doraby.md).
 
 ## Runs
 | Run | Suite | Commit | Result |
 | :- | :- | :- | :- |
 | 44432470135 | daily, tablet, full net | de41f802 (alpha70 code) | green; report above |
-| 44434241145 | ro (reopen) | 609d22a7 | running when written |
-| 44435517079 | em (ro + dr) | 45da7919 | pending behind it |
+| 44434241145 | ro (reopen) | 609d22a7 | green; 3 of 3 pictures shown, 3 rounds skipped by a harness bug (fixed) |
+| 44435517079 | em (ro + dr) | 45da7919 | reopen 3 of 3; dr inconclusive (emulator GPU froze on server 2) |
+| 44436958209 | ro v2 (fixed harness, doraby title page, pause capture) | 32740b2a | running when written |

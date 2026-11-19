@@ -30,3 +30,7 @@ content types and the first 12 bytes of each response. No media was played to th
 
 ## Lab
 `android.yml app=lab lab_suite=dr` (or `em` = `ro` + `dr`): tools/emu/soak.py `doraby_round`, writes doraby.md and events.jsonl (kind `doraby`): per server the finder's answer after the tap and its own Health lines (`media maybe-hit`, `maybe-no`, `maybe-refused http=..`).
+
+## Result of the first real-engine run (lab run 44435517079, 2026-11-19): inconclusive, one useful fact
+- vidfast.vc answers from GitHub's runners (the sandbox cannot reach it). Its player makes three `POST` requests with `text/plain` answers to its own host; the finder logs them as `media maybe ... method=POST` and `maybe-skipped (an API call, not a stream)`. After two taps no stream request followed: the player did not get as far as asking for a stream (the owner's 'stuck on loading', VS1d / VP2). What gates it (press-to-play on a cross-origin frame, an anti-bot check, a missing click on the player's own button) is NOT known yet: the next step is the same scene with press-to-play OFF to see whether a stream request appears.
+- The second server's player (embed.vidrift.net, hls.js, a Cloudflare challenge) froze the emulator's software GPU and the phone's system died: the scene is restart-safe now; servers 2-6 still have no result. A software-GL emulator is a poor judge of heavy video players: for those, the owner's Diagnostics (`media maybe`, `maybe-hit`, `maybe-refused http=`) from the tablet stay the real evidence.
