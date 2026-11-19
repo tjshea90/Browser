@@ -3692,10 +3692,11 @@ class Soak:
         maybe-hit / maybe-no / maybe-refused http=..). The sandbox survey (research/EM1_DORABY_SERVERS.md) found: Vidsrc = text/plain playlists at an extension-less address and MPEG-TS parts served as .html;
         Vidzee = a normal HLS master with extension-less parts; 111movies = hls.js behind a token API. Nothing is played to the end and nothing is kept: a decline is always answered."""
         w, h = self.screen
-        servers = [("vidfast", "Vidfast"), ("111movies", "Openvid"), ("vidsrc", "movieclub"), ("videasy", "vidlink"), ("vidzee", "vidsrc2"), ("vidcore", "Vidsrc")]
+        # (label, sv=, press-to-play): the owner's setting is ON ("1"); Vidfast is tried a second time with the rule OFF to tell the rule from the site (lab run 44435517079: its player never asked for a stream)
+        servers = [("vidfast", "Vidfast", "1"), ("vidfast-rule-off", "Vidfast", "0"), ("111movies", "Openvid", "1"), ("vidsrc", "movieclub", "1"), ("videasy", "vidlink", "1"), ("vidzee", "vidsrc2", "1"), ("vidcore", "Vidsrc", "1")]
         rows = []
-        self.ph.debug("vpress", "1"); time.sleep(1.5)                # the owner's setting: videos start only when pressed
-        for name, sv in servers:
+        for name, sv, vp in servers:
+            self.ph.debug("vpress", vp); time.sleep(1.5)
             url = "https://doraby.com/?player_tv=275&s=1&e=1&sv=%s&tv=true" % sv
             up, upn = self.upstream(url)
             if up == "unreachable":
