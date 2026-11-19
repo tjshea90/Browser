@@ -3203,6 +3203,7 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     private fun captureLook(tab: Tab?, why: String, minGapMs: Long = LastLookRules.MIN_GAP_MS.toLong()) {
+        if (tab == null) return
         val skip = lookSkip(tab, why, minGapMs)
         if (skip != null) {
             // EM1k: the owner's tablet showed the plain "Opening <host>" cover at the next start, with nothing saying whether a picture was ever taken: every skip is counted, and the one that matters most
