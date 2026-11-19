@@ -3692,12 +3692,15 @@ class Soak:
         maybe-hit / maybe-no / maybe-refused http=..). The sandbox survey (research/EM1_DORABY_SERVERS.md) found: Vidsrc = text/plain playlists at an extension-less address and MPEG-TS parts served as .html;
         Vidzee = a normal HLS master with extension-less parts; 111movies = hls.js behind a token API. Nothing is played to the end and nothing is kept: a decline is always answered."""
         w, h = self.screen
-        # (label, sv=, press-to-play): the owner's setting is ON ("1"); Vidfast is tried a second time with the rule OFF to tell the rule from the site (lab run 44435517079: its player never asked for a stream)
-        servers = [("vidfast", "Vidfast", "1"), ("vidfast-rule-off", "Vidfast", "0"), ("111movies", "Openvid", "1"), ("vidsrc", "movieclub", "1"), ("videasy", "vidlink", "1"), ("vidzee", "vidsrc2", "1"), ("vidcore", "Vidsrc", "1")]
+        # EM1i v3 (lab run 44439418098 found that opening the WRAPPER page directly gives the gate no 'person tapped a server' to inherit, so it said nothing about the owner's flow): the TITLE page is opened and the
+        # server button is TAPPED, like the owner does. The button positions are the real page's at the app's viewport (560 x 769 CSS px, 1.0714 dpr; measured in headless Chromium, stable over loads): the list sits at the
+        # very top of the page, two buttons per row. (label, button centre in CSS px, press-to-play): the owner's setting is ON ("1"); Vidfast is also tried with the rule OFF as the control; the heavy 111movies player
+        # (it froze the emulator's software GPU in lab run 44435517079) goes LAST.
+        servers = [("vidfast", (145, 45), "1"), ("vidfast-rule-off", (145, 45), "0"), ("vidzee", (145, 137), "1"), ("vidsrc", (145, 91), "1"), ("videasy", (415, 91), "1"), ("vidcore", (415, 137), "1"), ("111movies", (415, 45), "1")]
         rows = []
-        for name, sv, vp in servers:
+        for name, (bx, by), vp in servers:
             self.ph.debug("vpress", vp); time.sleep(1.5)
-            url = "https://doraby.com/?player_tv=275&s=1&e=1&sv=%s&tv=true" % sv
+            url = "https://doraby.com/ozark/"
             up, upn = self.upstream(url)
             if up == "unreachable":
                 rows.append({"server": name, "status": "upstream", "note": "the runner gets no answer from doraby.com (%s)" % upn}); continue
@@ -3706,9 +3709,9 @@ class Soak:
             t0 = time.time()
             while time.time() - t0 < 40 and not [e for e in health_events(self.log.since(lm), "page", "loaded") if "doraby" in e["rest"]]:
                 time.sleep(1.5)
-            time.sleep(8)                                              # getPlayTV.php sends the frame on to the server's own player
-            self.ph.tap(w // 2, h // 2); time.sleep(8)               # the player's play button (a first tap often only dismisses an overlay)
-            self.ph.tap(w // 2, h // 2); time.sleep(14)
+            time.sleep(6)                                              # the title page's own script builds the server list and the episode list
+            k = w / 560.0
+            self.ph.tap(int(bx * k), int(26 + by * k)); time.sleep(30)     # the person's tap on the server button: the wrapper, getPlayTV.php and the server's own player load, the player may ask for a stream
             m1 = self.log.size(); self.ph.debug("videodl"); time.sleep(5)
             said = health_events(self.log.since(m1), "lab", "videodl")
             if self.wait_dialog(m1, 15):
