@@ -3180,10 +3180,6 @@ open class BrowserActivity : Activity(), DockListener {
         if (!lookScrollArmed) { lookScrollArmed = true; Io.main.postDelayed(lookScrollTimer, (LastLookRules.SETTLE_MS - LastLookRules.PAGE_DEBOUNCE_MS).toLong()) }
     }
 
-    /**
-     * Take the page's picture for the next start (a regular tab, a real web page, not loading, nothing over it). [why] names the trigger in the Health list. [minGapMs]: how old the last picture must be.
-     * The read-back is the tab grid's own call; the encode and the write are on a worker. Never for a private tab.
-     */
     /** Why a picture is NOT taken now (null = take it). Same rules as before EM1k, in the same meaning, only named. */
     private fun lookSkip(tab: Tab, why: String, minGapMs: Long): String? = when {
         !prefs.lastLook || tab !== current || tab.isPrivateTab -> "quiet"
@@ -3201,6 +3197,10 @@ open class BrowserActivity : Activity(), DockListener {
         else -> null
     }
 
+    /**
+     * Take the page's picture for the next start (a regular tab, a real web page, not loading, nothing over it). [why] names the trigger in the Health list. [minGapMs]: how old the last picture must be.
+     * The read-back is the tab grid's own call; the encode and the write are on a worker. Never for a private tab.
+     */
     private fun captureLook(tab: Tab?, why: String, minGapMs: Long = LastLookRules.MIN_GAP_MS.toLong()) {
         if (fullscreenOn) return // ANS51g (owner message 51: the tablet's log shows 'tabs look-saved' twice WHILE a film was full screen): the picture read back then is the film's frame, not the page's look, and the read-back and the encode compete with the decoder on a slow tablet
         if (tab == null) return
