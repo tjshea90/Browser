@@ -148,6 +148,7 @@ class LastRunTest {
         assertTrue(LastRun.wants("ui", "STALL")); assertTrue(LastRun.wants("ui", "  at")); assertFalse(LastRun.wants("ui", "late-beat")); assertFalse(LastRun.wants("ui", "slow"))
         assertTrue(LastRun.wants("start", "paint")); assertTrue(LastRun.wants("tabs", "early-cover")); assertTrue(LastRun.wants("engine", "warm-start"))
         assertFalse(LastRun.wants("start", "frame")); assertFalse(LastRun.wants("tabs", "look-saved"))
+        assertTrue("DG1: whether the app was compiled rides along in the note of a run that died early", LastRun.wants("start", "oat") && LastRun.wants("start", "art"))
     }
 
     @Test fun theThreeNewestRunsThatDidNotEndQuietlyAreKeptAndAFourthDropsTheOldest() {
