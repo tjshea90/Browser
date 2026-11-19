@@ -162,7 +162,18 @@ class Prefs private constructor(ctx: Context) {
         get() = sp.getString("dl_geom", null)?.split(',')?.mapNotNull { it.trim().toIntOrNull() }?.takeIf { it.size == 4 }?.toIntArray()
         set(v) { if (v == null || v.size != 4) sp.edit().remove("dl_geom").apply() else put("dl_geom", v.joinToString(",")) }
     /** AT1: how this thumb lands beside the key it aims at (in key pitches, x then y), learned from the words that were kept. */
-    var glideHabit: FloatArray get() = floatArrayOf(sp.getFloat("glide_bx", 0f), sp.getFloat("glide_by", 0f)); set(v) { if (v.size == 2) sp.edit().putFloat("glide_bx", v[0]).putFloat("glide_by", v[1]).apply() }
+    var glideHabit: FloatArray
+        get() {
+            val h = floatArrayOf(sp.getFloat("glide_bx", 0f), sp.getFloat("glide_by", 0f))
+            val plane = sp.getString("glide_touch", "") ?: ""
+            if (plane.isEmpty()) return h
+            val t = plane.split(',').mapNotNull { it.toFloatOrNull() }.filter { it.isFinite() }                    // R20d: where the thumb lands on each part of the keyboard (the touch plane), after the two habit numbers
+            return if (t.size == app.kestrel.core.input.glide.TouchField.SIZE) h + t.toFloatArray() else h
+        }
+        set(v) {
+            if (v.size == 2) sp.edit().putFloat("glide_bx", v[0]).putFloat("glide_by", v[1]).remove("glide_touch").apply()   // two numbers = no plane (a reset, or an old engine)
+            else if (v.size == 2 + app.kestrel.core.input.glide.TouchField.SIZE && v.all { it.isFinite() }) sp.edit().putFloat("glide_bx", v[0]).putFloat("glide_by", v[1]).putString("glide_touch", v.drop(2).joinToString(",")).apply()
+        }
     /** AT1: words typed letter by letter that the word list does not have ("word count" per line), so they can be glided next time. */
     var glideWords: String get() = sp.getString("glide_words", "") ?: ""; set(v) = put("glide_words", v)
 

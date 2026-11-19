@@ -16,6 +16,9 @@ package app.kestrel.core.input.glide
  *   t <b2> <b1> <word> <weight> ... and the two words before it
  *   c <guessed> <meant> <weight>  the keyboard guessed the first and the person meant the second
  *   r <word> <recency>         how lately the word was used (fades)
+ *   b <word> <weight>          how often the person began a sentence with the word
+ *   f <made> <undone>          automatic fixes the keyboard made and how many the person took back with Backspace
+ *   k <word> <Form> <weight>   the way the word is written inside a sentence (a name with its capital; or small when the keyboard's capital was taken back)
  *   s <word> <n> u0 v0 ... u15 v15  the SHAPE of a glide the person drew for the word, 16 points in tenths of a key (u: right of the centre of Q, v: rows below it), n = times confirmed
  *   end <number of entry lines>
  *
@@ -45,7 +48,7 @@ object LearnedExport {
         private fun count(n: Int, one: String, many: String) = if (n == 1) "1 $one" else "$n $many"
     }
 
-    class Parsed(val model: PersonalModel, val habit: FloatArray?, val ownWords: List<Pair<String, Int>>, val summary: Summary)
+    class Parsed(val model: PersonalModel, val habit: FloatArray?, val ownWords: List<Pair<String, Int>>, val summary: Summary, val touch: FloatArray? = null)
 
     /** The export text for [model], with the thumb [habit] (in key widths) and the person's [own] words. */
     fun write(model: PersonalModel, habit: FloatArray?, own: UserWords?): String {
@@ -55,7 +58,9 @@ object LearnedExport {
         sb.append("# What the Kestrel keyboard learned from your typing: your words, word pairs, corrections and the shapes of your glides.\n")
         sb.append("# It lists words you typed. Keep this file private. Format: docs/KEYBOARD-EXPORT.md in the Kestrel repository.\n")
         var entries = 0
-        if (habit != null && habit.size == 2 && !habit[0].isNaN() && !habit[1].isNaN()) { sb.append("habit ").append(PersonalModel.f3(habit[0])).append(' ').append(PersonalModel.f3(habit[1])).append('\n'); entries++ }
+        if (habit != null && habit.size >= 2 && !habit[0].isNaN() && !habit[1].isNaN()) { sb.append("habit ").append(PersonalModel.f3(habit[0])).append(' ').append(PersonalModel.f3(habit[1])).append('\n'); entries++ }
+        // R20d: where the thumb lands on each part of the keyboard (the TouchField numbers after the two habit numbers); older readers skip the line
+        if (habit != null && habit.size == 2 + TouchField.SIZE && habit.drop(2).all { it.isFinite() } && habit.drop(2).any { it != 0f }) { sb.append("touch"); for (v in habit.drop(2)) sb.append(' ').append(PersonalModel.f3(v)); sb.append('\n'); entries++ }
         if (own != null) for (line in own.serialize().lineSequence()) { val p = line.trim().split(' '); if (p.size == 2 && p[1].toIntOrNull() != null) { sb.append("own ").append(p[0]).append(' ').append(p[1]).append('\n'); entries++ } }
         for (line in body.lineSequence()) { if (line.isBlank()) continue; sb.append(line).append('\n'); entries++ }
         sb.append("end ").append(entries).append('\n')
@@ -73,6 +78,7 @@ object LearnedExport {
         if (ver < 1 || ver > VERSION) return null
         val body = StringBuilder()
         var habit: FloatArray? = null
+        var touch: FloatArray? = null
         val own = ArrayList<Pair<String, Int>>()
         var entries = 0; var declared = -1
         var w = 0; var p = 0; var t = 0; var c = 0; var s = 0
@@ -82,14 +88,15 @@ object LearnedExport {
             val f = line.split(' ')
             when (f[0]) {
                 "habit" -> if (f.size == 3) { val x = f[1].toFloatOrNull(); val y = f[2].toFloatOrNull(); if (x != null && y != null && x.isFinite() && y.isFinite()) { habit = floatArrayOf(x.coerceIn(-MAX_BIAS, MAX_BIAS), y.coerceIn(-MAX_BIAS, MAX_BIAS)); entries++ } }
+                "touch" -> { val a = FloatArray(f.size - 1) { f[it + 1].toFloatOrNull() ?: Float.NaN }; if (a.size == TouchField.SIZE && a.all { it.isFinite() }) { touch = a; entries++ } }
                 "own" -> if (f.size == 3 && own.size < MAX_OWN) { val n = f[2].toIntOrNull(); val word = f[1].lowercase(); if (n != null && n in 1..1000 && UserWords.glideable(word)) { own.add(word to n); entries++ } }
-                "w", "p", "t", "c", "r" -> { body.append(line).append('\n'); entries++; when (f[0]) { "w" -> w++; "p" -> p++; "t" -> t++; "c" -> c++ } }
+                "w", "p", "t", "c", "r", "k", "b", "f" -> { body.append(line).append('\n'); entries++; when (f[0]) { "w" -> w++; "p" -> p++; "t" -> t++; "c" -> c++ } }
                 "s" -> { body.append(line).append('\n'); entries++; s++; if (f.size > 1) shapeWords.add(f[1]) }
                 "end" -> { declared = f.getOrNull(1)?.toIntOrNull() ?: -1 }
             }
         }
         val model = PersonalModel.parse(body.toString())
         val sum = Summary(model.wordCount, model.pairCount, model.tripleCount, model.confusionCount, model.patterns.patternCount, model.patterns.wordCount, own.size, habit != null, declared >= 0 && declared == entries)
-        return Parsed(model, habit, own, sum)
+        return Parsed(model, habit, own, sum, touch)
     }
 }
