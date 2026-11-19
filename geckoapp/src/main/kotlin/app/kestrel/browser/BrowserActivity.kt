@@ -3144,7 +3144,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun lookFor(tab: Tab, note: String): Boolean {
         val pm = lookMeta
         if (restoreOverlay.showingLook && lookPending == tab.id && pm != null && LastLookRules.samePage(pm.url, tab.url)) { lookTab = tab; lookPending = 0L; Health.log("tabs", "look-adopted", "tab=${tab.id}"); return true }
-        val look = savedLook(tab.id, tab.url, tab.desktop) ?: return false
+        val look = savedLook(tab.id, tab.url, tab.desktop, quiet = tab.isPrivateTab) ?: return false
         restoreOverlay.showLook(look.bitmap, note, note, onDrawn = { Health.log("tabs", "look-drawn", "tab=${tab.id} revive") })
         lookTab = tab; lookMeta = look.meta; lookPending = 0L; lookPaintAt = 0L; lookStopped = false
         Health.count("look.revive"); Health.log("tabs", "look-shown", "tab=${tab.id} revive ${look.meta.w}x${look.meta.h} y=${look.meta.scrollY}")
