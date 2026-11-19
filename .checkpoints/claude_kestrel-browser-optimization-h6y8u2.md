@@ -1,13 +1,13 @@
-# CHECKPOINT 2702 — read me first, then TASKS.md
+# CHECKPOINT 2703 — read me first, then TASKS.md
 
-**Written:** 2026-11-19T01:51:33Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/kestrel-browser-optimization-h6y8u2` · **builds on:** `a0838b62` (this checkpoint is the commit after it)
+**Written:** 2026-11-19T02:05:24Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/kestrel-browser-optimization-h6y8u2` · **builds on:** `434b5ea7` (this checkpoint is the commit after it)
 
 ## Just done
-alpha71 PREPARED: versionCode 172 / 0.3.0-alpha71, extension manifest 1.0.172, release note docs/handoff/ALPHA71_RELEASE_NOTE.txt (ASCII). Gates already green on this code: core 1825 tests, app unit tests, web 618/618, Gecko module compiles; lab ro v2 9 of 9 reopens drew the picture.
+alpha71 gates: first ship.sh run stopped on two documented timing-flaky download-engine tests (ServerTest.manyClientsAtOnce, EngineTest.anOutageInTheMiddle; both pass alone, rc=0, and in the earlier full run), ship.sh rerun in progress. Lab dr v2 run 44439418098 running; compat run (EM1f/EM1h) queued behind it.
 
 ## Do this next
-Run bash ship.sh gecko with the note text of docs/handoff/ALPHA71_RELEASE_NOTE.txt (background, log in scratchpad), then ONE dispatch android.yml app=gecko full_build=true note=same, verify tag kestrel-g-v0.3.0-alpha71 + all jobs + release, then bash tools/record-release.sh kestrel-g-v0.3.0-alpha71 with the identical note. dr v2 lab run is pending/queued meanwhile; dispatch compat after it. Heartbeat trig_018ZFUWQpV3dBUPXUvKDiXwQ.
+When ship.sh finishes rc=0 (log in scratchpad ship.log): dispatch android.yml app=gecko full_build=true note=docs/handoff/ALPHA71_RELEASE_NOTE.txt text ONCE, verify tag kestrel-g-v0.3.0-alpha71 (git ls-remote), list jobs, get_release_by_tag, bash tools/record-release.sh kestrel-g-v0.3.0-alpha71 with identical note. Then read dr v2 (44439418098) and compat -> research/EM1_RESULTS.md. Heartbeat trig_018ZFUWQpV3dBUPXUvKDiXwQ (delete when EM1 ships).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ Run bash ship.sh gecko with the note text of docs/handoff/ALPHA71_RELEASE_NOTE.t
 
 ## Last ten checkpoints
 ```
+  434b5ea7 ckpt 2702: alpha71 PREPARED: versionCode 172 / 0.3.0-alpha71, extension manifest 1.0.17
   ab9af2b4 ckpt 2701: dr scene: Vidfast also tried with press-to-play OFF (tells the rule from the
   378e887d ckpt 2700: Lab run 44435517079 (em) READ: reopen 3/3 drew the picture again; dr INCONCL
   1476784b ckpt 2699: EM1i naming: the REAL rendered doraby title page (headless Chromium) gives O
@@ -25,8 +26,4 @@ Run bash ship.sh gecko with the note text of docs/handoff/ALPHA71_RELEASE_NOTE.t
   69bb5648 ckpt 2695: EM1i research: real doraby chain measured from the sandbox (6 servers, resea
   609d22a7 ckpt 2694: EM1k step 1 CODED + compiled: core LastLookRules.whyNot (+test, green) names
   54c9c34f ckpt 2693: EM1a: baseline lab DISPATCHED 2026-11-19 00:52Z: android.yml run 44432470135
-  ce7436f4 ckpt 2692: Owner request 2026-11-19 (11 improvement areas + start GitHub emulator labs)
 ```
-
-(3 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
