@@ -3185,9 +3185,9 @@ open class BrowserActivity : Activity(), DockListener {
      * The read-back is the tab grid's own call; the encode and the write are on a worker. Never for a private tab.
      */
     /** Why a picture is NOT taken now (null = take it). Same rules as before EM1k, in the same meaning, only named. */
-    private fun lookSkip(tab: Tab?, why: String, minGapMs: Long): String? = when {
+    private fun lookSkip(tab: Tab, why: String, minGapMs: Long): String? = when {
         fullscreenOn -> "fullscreen" // ANS51g (owner message 51: the tablet's log shows 'tabs look-saved' twice WHILE a film was full screen): the picture read back then is the film's frame, not the page's look, and the read-back and the encode compete with the decoder on a slow tablet
-        tab == null || !prefs.lastLook || tab !== current || tab.isPrivateTab -> "quiet"
+        !prefs.lastLook || tab !== current || tab.isPrivateTab -> "quiet"
         homeShown(tab) -> "home"
         tab.error != null -> "error"
         tab.loading -> "loading"
