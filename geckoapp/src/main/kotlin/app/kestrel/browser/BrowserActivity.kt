@@ -1221,12 +1221,16 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     /** EY-1: the saved picture for tab [id] when it may be shown for [url] now (same page, engine, appearance, desktop-site choice); null otherwise. Reads and decodes on the calling thread. */
-    private fun savedLook(id: Long, url: String, desktop: Boolean): LastLook.Look? {
-        if (!prefs.lastLook || !LastLookRules.worthKeeping(url)) return null
+    private fun savedLook(id: Long, url: String, desktop: Boolean, quiet: Boolean = false): LastLook.Look? {
+        // EM1k: every "no picture" says WHY (counter look.none.<why> and a `tabs look-none` line; the owner's tablet reported only the plain "Opening <host>" cover, with nothing to tell the cause)
+        fun none(why: String): LastLook.Look? { if (!quiet) { Health.count("look.none.$why"); Health.log("tabs", "look-none", "tab=$id why=$why") }; return null }
+        if (!prefs.lastLook) return none("off")
+        if (!LastLookRules.worthKeeping(url)) return none("not-a-page")
         val appCtx = applicationContext
-        val meta = LastLook.meta(appCtx, id) ?: return null
-        if (!LastLookRules.usable(meta, url, Flavor.engineVersion, LastLook.appearance(appCtx, prefs.webDark), prefs.webDark == 1, desktop)) return null
-        return LastLook.load(appCtx, id, meta)
+        val meta = LastLook.meta(appCtx, id) ?: return none("no-file")
+        val why = LastLookRules.whyNot(meta, url, Flavor.engineVersion, LastLook.appearance(appCtx, prefs.webDark), prefs.webDark == 1, desktop)
+        if (why != null) return none(why)
+        return LastLook.load(appCtx, id, meta) ?: none("unreadable")
     }
 
     /** The tab id the early cover's look belongs to until [restore] has made the tab (then it becomes [lookTab]). */
