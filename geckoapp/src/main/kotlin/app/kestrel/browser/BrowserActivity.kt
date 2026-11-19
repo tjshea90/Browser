@@ -3232,6 +3232,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     /** The engine painted real content for [tab] (called from ContentDelegate.onFirstContentfulPaint). */
     internal fun firstPaint(tab: Tab) {
+        tab.gecko.paintedFor = tab.url // EM1k: this address is on the screen now (the last look may be taken at leaving even if the load never ends)
         if (tab === curtainTab) curtainDown("first-paint")
         if (tab === current) StartTimeline.mark("paint")
         if (backLab.openKey() == BackScrollRules.keyOf(tab.url)) backLab.painted(SystemClock.uptimeMillis()) // RX3-BK1: the press this paint belongs to
