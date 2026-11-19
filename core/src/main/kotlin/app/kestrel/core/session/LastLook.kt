@@ -78,6 +78,15 @@ object LastLookRules {
     /** The same page (the #fragment aside). */
     fun samePage(a: String, b: String): Boolean = bare(a) == bare(b)
 
+    /**
+     * EM1k: a page that never reports "load finished" (ads, streams and trackers keep it busy) was never photographed, so at the next start there was no picture of it and the plain cover showed. At the
+     * moment of LEAVING ([why] = "pause") a page that is still loading may be photographed when it has painted AS THIS ADDRESS: [paintedFor] is the address of the engine's last first contentful paint,
+     * and a navigation that has started but not painted yet still shows the old page under the new address (that picture would be stored under the wrong address, TP1), so then it stays a no.
+     * Every other trigger keeps the old rule (a loading page is not photographed while the person reads: a read-back during a heavy load costs frames).
+     */
+    fun mayTakeWhileLoading(why: String, paintedFor: String, tabUrl: String): Boolean =
+        why == "pause" && paintedFor.isNotEmpty() && samePage(paintedFor, tabUrl)
+
     /** Only real web pages: not about:, data:, a blank page, the new-tab page or an error page (the caller has already left those out), and no address with a password in it. */
     fun worthKeeping(url: String): Boolean {
         val u = url.trim()
