@@ -120,7 +120,8 @@ object LastRun {
                 val old = File(d, FILE)
                 if (old.isFile) {
                     val bootAt = now - SystemClock.elapsedRealtime()
-                    val text = old.readText().take(MAX_CHARS) + "\nnextStart=$now\nbootAt=$bootAt\ncrashAt=${CrashNote.noteTime(app)}\nengineAt=${CrashNote.newestEngineReportAt(app)}\n"
+                    val (myBuild, myInstall) = synchronized(lock) { build to installAt }
+                    val text = old.readText().take(MAX_CHARS) + "\nnextStart=$now\nnextBuild=$myBuild\nnextInstallAt=$myInstall\nbootAt=$bootAt\ncrashAt=${CrashNote.noteTime(app)}\nengineAt=${CrashNote.newestEngineReportAt(app)}\n"
                     val abnormal = read(text).abnormal
                     synchronized(lock) { previous = text; previousAbnormal = abnormal }
                     if (abnormal) keep(d, text)
