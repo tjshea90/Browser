@@ -2,6 +2,7 @@ package app.kestrel.browser
 
 import android.content.Context
 import app.kestrel.browser.web.ExternalIntents
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
