@@ -432,6 +432,28 @@ test('RVW1 F4: a piece answered with Content-Range reports the TOTAL as the leng
   assert.equal(m[1].l, 7_000_000);
 });
 
+test('RVW1 F22: a cache-buster in the query does not make a new candidate for every request', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  for (let i = 0; i < 12; i++) h.listeners.headers(hdr(`https://cdn.example/v/stream.mp4?_=${1700000000 + i}&cb=${i}&nocache=${i}`, 'video/mp4', 2_000_000));
+  await tick(10);
+  assert.equal(h.of('media').length, 1);
+});
+
+test('RVW1 F18: a stream fetched by a service worker (no tab) is news again after the next page load, not suppressed for ever', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  const U = 'https://cdn.example/sw/movie.mp4';
+  h.listeners.headers(hdr(U, 'video/mp4', 5_000_000, { tabId: -1 }));
+  h.listeners.headers(hdr(U, 'video/mp4', 5_000_000, { tabId: -1 }));
+  await tick(10);
+  assert.equal(h.of('media').length, 1, 'the same request twice is one candidate');
+  h.mainFrame('https://other.example/next', { requestId: '9' });
+  h.listeners.headers(hdr(U, 'video/mp4', 5_000_000, { tabId: -1 }));
+  await tick(10);
+  assert.equal(h.of('media').length, 2, 'after a page load it is reported again');
+});
+
 test('sniffer: headers that matter are still read when they come after many that do not', async () => {
   const h = harness(standardApp());
   h.mainFrame(PAGE);
