@@ -26,6 +26,7 @@ class FakeCdn : Fetcher {
     @Volatile var chunkDelayMs = 0L
     @Volatile var chunk = 8 * 1024
     @Volatile var ignoreRange = false
+    val redirects = ConcurrentHashMap<String, String>()   // url -> the address the answer really comes from (a 302 the fetcher followed): [FetchResponse.finalUrl] says it
     @Volatile override var windowBytes = 0L
     val concurrent = AtomicInteger()
     val maxConcurrent = AtomicInteger()
@@ -39,13 +40,14 @@ class FakeCdn : Fetcher {
         gate?.invoke(req)?.let { return Resp(it, req.url, emptyMap(), ByteArray(0), 0, 0, this) }
         denyFirst[req.url]?.let { n -> if (n > 0) { denyFirst[req.url] = n - 1; return Resp(403, req.url, emptyMap(), ByteArray(0), 0, 0, this) } }
         statusFor[req.url]?.let { return Resp(it, req.url, emptyMap(), ByteArray(0), 0, 0, this) }
-        val d = files[req.url] ?: return Resp(404, req.url, emptyMap(), ByteArray(0), 0, 0, this)
+        val eff = redirects[req.url] ?: req.url
+        val d = files[eff] ?: return Resp(404, eff, emptyMap(), ByteArray(0), 0, 0, this)
         if (req.from >= 0 && !ignoreRange) {
-            if (req.from >= d.size) return Resp(416, req.url, mapOf("Content-Range" to "bytes */${d.size}"), ByteArray(0), 0, 0, this)
+            if (req.from >= d.size) return Resp(416, eff, mapOf("Content-Range" to "bytes */${d.size}"), ByteArray(0), 0, 0, this)
             val last = if (req.toInclusive >= 0) minOf(req.toInclusive, d.size - 1L) else d.size - 1L
-            return Resp(206, req.url, mapOf("Content-Range" to "bytes ${req.from}-$last/${d.size}"), d, req.from.toInt(), (last - req.from + 1).toInt(), this)
+            return Resp(206, eff, mapOf("Content-Range" to "bytes ${req.from}-$last/${d.size}"), d, req.from.toInt(), (last - req.from + 1).toInt(), this)
         }
-        return Resp(200, req.url, emptyMap(), d, 0, d.size, this)
+        return Resp(200, eff, emptyMap(), d, 0, d.size, this)
     }
 
     class Resp(override val status: Int, override val finalUrl: String, private val headers: Map<String, String>, data: ByteArray, off: Int, len: Int, private val cdn: FakeCdn) : FetchResponse {
