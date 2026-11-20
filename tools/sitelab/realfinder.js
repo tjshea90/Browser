@@ -71,6 +71,13 @@ async function probe(browser, url, waitMs) {
       if (/mpegurl|dash\+xml|video\/|audio\//i.test(rh['content-type'] || '') || /\.(m3u8|mpd|mp4|webm|m4a|mp3)(\?|$)/i.test(rq.url())) seen.set(rq.url(), (rh['content-type'] || '') + ' ' + (rh['content-length'] || '?'));
     } catch (e) { /* a page may close while answers still arrive */ }
   });
+  // the DOM half: the real content scripts run in every frame against a fake `browser`; what they report to the background page is collected
+  await ctx.addInitScript(() => {
+    window.__ksent = [];
+    const noop = () => {};
+    window.browser = { runtime: { sendMessage: (m) => { try { window.__ksent.push(JSON.parse(JSON.stringify(m))); } catch (e) { /* ignore */ } return Promise.resolve(undefined); }, onMessage: { addListener: noop }, getURL: (p) => 'moz-extension://x/' + p }, i18n: {} };
+  });
+  const DOM_SCRIPTS = ['vfind.js', 'content.js'].map((f) => fs.readFileSync(path.join(SHIELDS, f), 'utf8'));
   let nav = 'ok';
   try { await page.goto(url, { timeout: 30000, waitUntil: 'domcontentloaded' }); } catch (e) { nav = 'goto: ' + e.message.slice(0, 80); }
   await page.waitForTimeout(2500);
@@ -81,10 +88,18 @@ async function probe(browser, url, waitMs) {
   for (const fr of page.frames()) {
     try { dom.push(...(await fr.evaluate(() => Array.from(document.querySelectorAll('video,audio')).map((v) => ({ src: (v.currentSrc || v.src || '').slice(0, 160), w: v.videoWidth, d: Math.round(v.duration || 0), rs: v.readyState })))) ); } catch (e) { /* frame gone */ }
   }
+  const domSent = [];
+  for (const fr of page.frames()) {
+    try {
+      for (const code of DOM_SCRIPTS) await fr.evaluate(code);
+      await fr.waitForTimeout(1500);
+      domSent.push(...(await fr.evaluate(() => (window.__ksent || []).filter((m) => m.k === 'vid' || m.k === 'maybe' || m.k === 'media' || m.k === 'vhand')))); 
+    } catch (e) { /* frame gone or a page that refuses the scripts */ }
+  }
   const title = await page.title().catch(() => '');
   await ctx.close();
   const found = h.sent.filter((m) => m.k === 'media' || m.k === 'maybe').map((m) => ({ k: m.k, u: m.u, c: m.c, l: m.l, ty: m.ty }));
-  return { url, title: title.slice(0, 70), nav, requests: n, videoElements: dom, mediaLike: [...seen.entries()].slice(0, 12), told: found };
+  return { url, title: title.slice(0, 70), nav, requests: n, videoElements: dom, mediaLike: [...seen.entries()].slice(0, 12), told: found, domSent };
 }
 
 (async () => {
@@ -99,6 +114,7 @@ async function probe(browser, url, waitMs) {
     console.log('\n== ' + u + '\n   title: ' + (r.title || '') + ' | nav: ' + (r.nav || r.error) + ' | requests: ' + (r.requests || 0));
     for (const v of r.videoElements || []) console.log('   <video> ' + v.src + ' w=' + v.w + ' d=' + v.d + ' rs=' + v.rs);
     for (const m of r.told || []) console.log('   TOLD ' + m.k + ' ' + (m.u || '').slice(0, 150) + ' | ' + (m.c || '') + ' | ' + m.l);
+    for (const m of r.domSent || []) console.log('   DOM ' + m.k + ' ' + JSON.stringify(m).slice(0, 220));
     if (!(r.told || []).length) for (const [k, v] of r.mediaLike || []) console.log('   (seen on the wire, NOT told) ' + k.slice(0, 130) + ' | ' + v);
   }
   await browser.close();
