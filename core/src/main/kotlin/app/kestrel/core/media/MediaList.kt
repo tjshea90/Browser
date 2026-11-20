@@ -72,6 +72,10 @@ class MediaCandidate(
      * A part is never counted and is not offered unless the person showed interest in it or a player really played it.
      */
     var part = false
+    private var serialMemo: SerialName.Of? = null
+    private var serialKnown = false
+    /** RVW5: [SerialName] of the address, worked out once (the list is looked at again on every sighting). */
+    val serial: SerialName.Of? get() { if (!serialKnown) { serialMemo = SerialName.of(url); serialKnown = true }; return serialMemo }
     /** RX3-V1: what the page's own element says it is for ([VideoRole]); null = no element said anything yet (or an older extension). The latest report wins. */
     var role: VideoRole? = null
     /** The OWNER showed interest (long-pressed, opened in the sheet, downloaded): it counts and shows whatever the page's element says it is. */
@@ -253,22 +257,21 @@ class MediaList(private val max: Int = 48) {
      */
     private fun markParts(c: MediaCandidate) {
         if (c.kind != MediaKind.FILE) return
-        val mine = SerialName.of(c.url) ?: return
-        var n = 0; var lo = mine.no; var hi = mine.no
+        val mine = c.serial ?: return
+        var near = 0; var known = false
         for (o in items) {
             if (o === c || o.kind != MediaKind.FILE) continue
-            val t = SerialName.of(o.url) ?: continue
-            if (t.family != mine.family) continue
-            n++; if (t.no < lo) lo = t.no; if (t.no > hi) hi = t.no
+            val t = o.serial ?: continue
+            if (t.family != mine.family || Math.abs(t.no - mine.no) > PART_SPAN) continue   // only the neighbours: a live stream's counter runs far past 100 over a long session
+            near++; if (o.part) known = true
         }
-        if (n < 2 || hi - lo > PART_SPAN) return
-        var changed = false
+        if (!known && near < 2) return
         for (o in items) {
             if (o.kind != MediaKind.FILE || o.part) continue
-            val t = SerialName.of(o.url) ?: continue
-            if (t.family == mine.family && t.no in lo..hi) { o.part = true; changed = true }
+            val t = o.serial ?: continue
+            if (t.family == mine.family && Math.abs(t.no - mine.no) <= PART_SPAN) o.part = true
         }
-        if (changed) version++
+        version++
     }
 
     /**
@@ -548,7 +551,7 @@ object MediaLabels {
  * RVW5: the part of an address that tells numbered parts of one stream apart from separate files: the directory and the name with its LAST number (five to twelve digits, right before the extension) taken out,
  * and that number. `https://cdn.test/out/v1/abc/live-08-mp-channel_video_3_5979705.mp4?m=1` -> family "cdn.test/out/v1/abc/live-08-mp-channel_video_3_#.mp4", no 5979705. Null for any other name. Pure.
  */
-internal object SerialName {
+object SerialName {
     class Of(val family: String, val no: Long)
     private val NAME = Regex("""^(.*[^0-9])?([0-9]{5,12})(\.[A-Za-z0-9]{2,5})$""")
 
