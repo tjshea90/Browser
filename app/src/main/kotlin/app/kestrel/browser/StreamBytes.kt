@@ -20,3 +20,21 @@ fun InputStream.readAllSized(): ByteArray {
     System.arraycopy(b, 0, out, 0, n); out[n] = extra.toByte(); System.arraycopy(rest, 0, out, n + 1, rest.size)
     return out
 }
+
+/**
+ * RVW3 SC6: at most [max] bytes of a stream whose size nobody promised (an answer over the network). A longer one is an error, so an endless or hostile body can never fill the 128 MB heap
+ * ([readBytes] would grow until it did). The release data of GitHub is a few hundred KB at most.
+ */
+fun InputStream.readCapped(max: Int): ByteArray {
+    val out = java.io.ByteArrayOutputStream(minOf(max, 64 * 1024))
+    val buf = ByteArray(8192)
+    var total = 0
+    while (true) {
+        val r = read(buf)
+        if (r < 0) break
+        total += r
+        if (total > max) throw java.io.IOException("the answer is larger than $max bytes")
+        out.write(buf, 0, r)
+    }
+    return out.toByteArray()
+}

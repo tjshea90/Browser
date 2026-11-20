@@ -187,4 +187,17 @@ class WebHandOverTest {
         assertEquals("length unknown", false, WebHandOver.playedThrough(ad, ad, 30_000L, 0L, 5_000L))
         assertEquals("no address", false, WebHandOver.playedThrough("", "", 30_000L, 30_000L, 5_000L))
     }
+
+    @Test fun aPublicPageCannotPointKestrelsPlayerAtTheOwnersNetwork() {
+        // RVW3 SC1: the film's address comes from the page; the player is the APP (no engine local-network blocking)
+        val page = "https://site.example/watch/1"
+        for (film in listOf("http://192.168.1.1/cgi-bin/reboot.mp4", "http://127.0.0.1:8080/x.mp4", "http://localhost/x.mp4", "http://nas.local/v.mp4", "http://10.0.0.5/live.m3u8",
+            "http://[::ffff:192.168.1.1]/x.mp4", "http://[::1]/x.mp4", "http://127.1/x.mp4", "http://0x7f.0.0.1/x.mp4", "http://2130706433/x.mp4", "http://169.254.169.254/latest/x.mp4", "not a url", ""))
+            assertEquals("refused: $film", true, WebHandOver.hostRefused(page, film))
+        for (film in listOf("https://cdn.example.com/v/1.mp4", "http://8.8.8.8/x.mp4", "https://[2606:4700:4700::1111]/a.m3u8", "https://v.example/film/master.m3u8"))
+            assertEquals("allowed: $film", false, WebHandOver.hostRefused(page, film))
+        assertEquals("a page on the router may play its own files", false, WebHandOver.hostRefused("http://192.168.1.1/player.html", "http://192.168.1.1/media/film.mp4"))
+        assertEquals("a NAS page may play NAS files", false, WebHandOver.hostRefused("http://nas.local/app", "http://nas.local/v/film.mp4"))
+        assertEquals("no page known counts as public", true, WebHandOver.hostRefused("", "http://192.168.1.1/x.mp4"))
+    }
 }
