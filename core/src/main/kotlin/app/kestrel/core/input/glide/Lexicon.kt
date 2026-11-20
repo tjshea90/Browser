@@ -174,7 +174,24 @@ class BinaryLexicon internal constructor(
     val bigramCount: Int get() = biId.size
 
     /** The words known to follow word [prevId] (for the accuracy tests, which need typical contexts). */
-    fun successors(prevId: Int): IntArray = biId.copyOfRange(biOff[prevId], biOff[prevId + 1])
+    fun successors(prevId: Int): IntArray = if (prevId < 0 || prevId >= len.size) IntArray(0) else biId.copyOfRange(biOff[prevId], biOff[prevId + 1])
+
+    /** The ids of every word whose letters start with [prefix] (letters a-z of it; anything else is dropped): one contiguous run, because the words are stored alphabetically. Empty for an empty prefix. */
+    fun prefixIds(prefix: String): IntRange {
+        val key = GlideLetters.keyOf(prefix)
+        if (key.isEmpty()) return IntRange.EMPTY
+        val lo = lowerBound(key)
+        var hi = lo
+        while (hi < len.size && startsWith(hi, key)) hi++
+        return lo until hi
+    }
+
+    private fun startsWith(id: Int, key: ByteArray): Boolean {
+        if (len[id] < key.size) return false
+        val o = off[id]
+        for (i in key.indices) if (blob[o + i] != key[i]) return false
+        return true
+    }
 
     companion object { const val SCALE = 128f }
 }
