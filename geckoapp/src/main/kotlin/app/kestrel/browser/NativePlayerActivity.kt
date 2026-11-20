@@ -68,6 +68,7 @@ import app.kestrel.core.player.PlayerRules
  */
 class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Listener {
     private val main = Handler(Looper.getMainLooper())
+    private val recovery = app.kestrel.browser.web.PlayerRecovery(main) { e, t -> say(e, t) }     // RVW3 PB1: a link that drops in the middle of a film is tried again, the film does not end
     private lateinit var stage: FrameLayout
     private lateinit var surface: SurfaceView
     private lateinit var controls: PlayerControlsView
@@ -172,6 +173,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         p.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) { ended = true }
+                if (state == Player.STATE_READY) recovery.onReady()
                 sample()
             }
             override fun onPlayerError(error: PlaybackException) {
@@ -179,6 +181,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
                 say("error", "${error.errorCodeName}: ${error.message.orEmpty().take(120)}")
                 sample()
                 if (fromPage && firstPictureAt == 0L) { setResult(RESULT_FAILED); say("back-to-page", "failed before the first picture: the page's own player takes over"); finish() }   // ANS54e
+                else if (firstPictureAt != 0L && recovery.onError(p, error)) sample()          // RVW3 PB1: the ring, not "stopped", while a try waits
             }
             override fun onVideoSizeChanged(size: VideoSize) {
                 if (size.width > 0 && size.height > 0) {
@@ -200,6 +203,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
             override fun onRenderedFirstFrame(eventTime: AnalyticsListener.EventTime, output: Any, renderTimeMs: Long) {
                 if (firstPictureAt == 0L) {
                     firstPictureAt = SystemClock.uptimeMillis()
+                    built.settled.set(true)                                    // RVW3 PB1: from now on a failed load is retried longer (PlayerFactory)
                     val ms = firstPictureAt - startedAt
                     if (!priv) NativePlayerStats.firstPictureMs = ms
                     say("first-picture", "the first picture came $ms ms after the start")
@@ -259,7 +263,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
             timeS = p.currentPosition / 1000.0, lengthS = lengthS, bufferedS = p.bufferedPosition / 1000.0,
             paused = !p.playWhenReady, ended = state == Player.STATE_ENDED, muted = muted, volume = if (muted) 0 else 100, rate = p.playbackParameters.speed.toDouble(),
             ready = when (state) { Player.STATE_READY, Player.STATE_ENDED -> 4; Player.STATE_BUFFERING -> 2; else -> 0 }, mse = false, live = live,
-            width = size.width, height = size.height, atMs = SystemClock.uptimeMillis(), ack = ack, error = p.playerError != null))
+            width = size.width, height = size.height, atMs = SystemClock.uptimeMillis(), ack = ack, error = p.playerError != null && !recovery.pending))
         controls.update(model.view())
     }
 
@@ -272,7 +276,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
         val p = player ?: return
         try {
             when (c.a) {
-                "play" -> { if (p.playbackState == Player.STATE_ENDED) p.seekTo(0L); ended = false; p.play() }
+                "play" -> { if (p.playbackState == Player.STATE_ENDED) p.seekTo(0L); ended = false; recovery.playPressed(p); p.play() }    // RVW3 PB1: Play after an error prepares again (play() alone does nothing on an idle player)
                 "pause" -> p.pause()
                 "seek" -> p.seekTo((c.t * 1000).toLong().coerceAtLeast(0L))
                 "skip" -> {
@@ -395,7 +399,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     override fun onDestroy() {
         if (android.os.Build.VERSION.SDK_INT >= 33) backCb?.let { try { onBackInvokedDispatcher.unregisterOnBackInvokedCallback(it) } catch (e: Throwable) { /* already gone */ } }
         app.kestrel.browser.web.DebugTouch.detach(this, debugTouch); debugTouch = null
-        main.removeCallbacks(ticker); main.removeCallbacks(controlsTick)
+        main.removeCallbacks(ticker); main.removeCallbacks(controlsTick); recovery.stop()
         if (::gestures.isInitialized) gestures.stop()                          // ANS57: the window's brightness is the tablet's again
         val p = player
         player = null
