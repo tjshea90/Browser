@@ -26,13 +26,14 @@ D="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; cd "$D" || exit 0
 while IFS= read -r F; do
   [ -z "$F" ] && continue
   BADWHY=""
-  if printf '%s\n' "$F" | grep -E '(^|/)(keystore\.properties|\.env(\..*)?|id_rsa[^/]*|local\.properties)$|\.(pem|p12|key|jks|keystore)$' | grep -qv '^signing/dev/'; then BADWHY="key material"; fi
+  # RVW1 S7: case-insensitive (KEY.JKS), and the other keystore / credential shapes: .pfx .bks .jceks .asc .gpg .netrc .npmrc .pypirc
+  if printf '%s\n' "$F" | grep -iE '(^|/)(keystore\.properties|\.env(\..*)?|id_rsa[^/]*|id_ed25519[^/]*|local\.properties|\.netrc|\.npmrc|\.pypirc)$|\.(pem|p12|pfx|key|jks|bks|jceks|keystore|asc|gpg)$' | grep -qv '^signing/dev/'; then BADWHY="key material"; fi
   if [ -z "$BADWHY" ] && [ -f "$F" ] && [ "$(stat -c %s "$F" 2>/dev/null || echo 0)" -gt 94371840 ]; then BADWHY="over 90 MB (GitHub refuses files over 100 MB)"; fi
   if [ -n "$BADWHY" ]; then
     git reset -q HEAD -- "$F" 2>/dev/null
     echo "  secretscan: left $F out of the commit ($BADWHY)" >&2
   fi
-done < <(git diff --cached --name-only 2>/dev/null)
+done < <(git -c core.quotepath=off diff --cached --name-only 2>/dev/null)   # RVW1 S7: quotepath off: a non-ASCII name (\303\251) was printed quoted and escaped the name rules above
 
 # Added lines only. An existing line that already looked like this was already
 # pushed long ago; re-flagging it would wedge every future checkpoint.
@@ -63,6 +64,12 @@ HITS="$(printf '%s\n' "$ADDED" | grep -nE \
   -e 'sk-[A-Za-z0-9_-]{32,}' \
   -e 'ghp_[A-Za-z0-9]{30,}' \
   -e 'gho_[A-Za-z0-9]{30,}' \
+  -e 'gh[usr]_[A-Za-z0-9]{30,}' \
+  -e 'glpat-[A-Za-z0-9_-]{20,}' \
+  -e 'ya29\.[0-9A-Za-z_-]{30,}' \
+  -e 'npm_[A-Za-z0-9]{36}' \
+  -e 'sk_live_[A-Za-z0-9]{20,}' \
+  -e '/u3\+7QAAAA' \
   -e 'github_pat_[A-Za-z0-9_]{30,}' \
   -e 'AIza[0-9A-Za-z_-]{30,}' \
   -e 'AKIA[0-9A-Z]{16}' \

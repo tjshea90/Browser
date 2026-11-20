@@ -154,6 +154,9 @@
     function report() {
       try {
         if (document.hidden) return;
+        // RVW1 P1: a page with no video, audio or frame has nothing the app could name a download after. This ran a whole-document scan (selectors over every class, up to 500 text reads) 2.5 s and 6 s after EVERY page load
+        // and 0.6 s and 2 s after every trusted tap (about 12-15 ms each on the tablet at 3000 nodes, while menus and page transitions animate). Live collections: nearly free.
+        if (!document.getElementsByTagName('video').length && !document.getElementsByTagName('iframe').length && !document.getElementsByTagName('audio').length) return;
         var c = collect(), sig = c.sh + '|' + c.s + '|' + c.e + '|' + c.et;
         if (sig === last) return;
         last = sig;

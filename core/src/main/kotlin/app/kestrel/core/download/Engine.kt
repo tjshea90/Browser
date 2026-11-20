@@ -38,6 +38,7 @@ class Engine(
     private class Worker { @Volatile var resp: FetchResponse? = null; var seg: Seg? = null }
 
     private inner class Job(val rec: Rec) {
+        @Volatile var noWindow = false   // RVW2 V3: a 206 that did not say the total size: ask the old way (one plain GET) from now on
         @Volatile var stop = false
         var stopState: DlState? = null
         var stopReason = Reason.NONE
@@ -466,7 +467,7 @@ class Engine(
         while (true) {
             checkStop(job)
             val f = fetcherFor(job)
-            val win = f.probeWindow
+            val win = if (job.noWindow) 0L else f.probeWindow
             val resp = try {
                 f.open(FetchRequest(rec.url, if (win > 0) 0 else -1, if (win > 0) win - 1 else -1, null, headersFor(rec), priv = rec.priv))
             } catch (e: FetchException) { fetchFailure(job, e); transient(job, null, attempt++, 0, 0); continue }
@@ -481,6 +482,9 @@ class Engine(
             }
             val ranged = resp.status == 206
             val cr = if (ranged) HttpSemantics.parseContentRange(resp.header("Content-Range")) else null
+            // RVW2 V3: a windowed request answered with `206 Content-Range: bytes 0-N/*` (a transcoding or on-the-fly server) does not say how big the file is: the reply ended after the window and the download was called
+            // complete at that size. Without a total this server cannot be resumed in windows: the same request again as one plain GET.
+            if (ranged && win > 0 && (cr?.total ?: -1L) < 0) { quiet(resp); job.noWindow = true; continue }
             val encoded = HttpSemantics.isEncoded(resp.header("Content-Encoding"))
             val total = when {
                 encoded -> -1L

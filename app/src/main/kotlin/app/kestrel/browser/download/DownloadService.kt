@@ -138,5 +138,17 @@ class DownloadService : Service() {
         super.onDestroy()
     }
 
+    /**
+     * RVW2 download S1: Android 15 and later limit a dataSync foreground service to about six hours in 24. When the limit is reached the system calls this and gives the service a few seconds to stop; a service that does not
+     * is killed with an exception (a crash report, and the downloads are left half-written). The downloads are paused (not failed), the service stops and a notification says why and what to do.
+     */
+    @android.annotation.TargetApi(35)
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        try { DownloadController.pauseAllSystem() } catch (e: Exception) { /* stop anyway */ }
+        try { Notifier.timeLimit(this) } catch (e: Exception) { /* a notification is a help */ }
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 }

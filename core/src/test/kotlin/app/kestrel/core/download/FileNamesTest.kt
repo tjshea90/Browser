@@ -59,4 +59,34 @@ class FileNamesTest {
         assertEquals("a (2).txt", FileNames.dedupe("a.txt") { it == "a.txt" || it == "a (1).txt" })
         assertEquals("b.txt", FileNames.dedupe("b.txt") { false })
     }
+
+    // ---- RVW1 N4 / N5
+
+    @Test fun joinersThatSpellRealWordsStayWhileInvisibleAndBidiControlsGo() {
+        assertEquals("\u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645.mp4", FileNames.sanitize("\u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645.mp4"))   // Persian "mikhaham": the half-space (ZWNJ) is part of the spelling
+        assertEquals("\uD83D\uDC68\u200D\uD83D\uDC69.mp4", FileNames.sanitize("\uD83D\uDC68\u200D\uD83D\uDC69.mp4"))                   // an emoji ZWJ sequence stays one picture
+        assertEquals("ab.mp4", FileNames.sanitize("a\u200Bb.mp4"))                                                                  // zero-width space: gone
+        assertEquals("ab.mp4", FileNames.sanitize("a\u200Eb.mp4"))                                                                  // left-to-right mark: gone
+        assertEquals("evilfdp.exe", FileNames.sanitize("evil\u202Efdp.exe"))
+    }
+
+    @Test fun cuttingByCharactersNeverSplitsASurrogatePair() {
+        assertEquals("abc", FileNames.cutChars("abc", 5))
+        assertEquals("abcd", FileNames.cutChars("abcd\uD83D\uDE00x", 5))              // the cut would fall between the two halves: go back one
+        assertEquals("abcd\uD83D\uDE00", FileNames.cutChars("abcd\uD83D\uDE00x", 6))
+        assertEquals("", FileNames.cutChars("abc", 0))
+    }
+
+    @Test fun aDotInAVideoNameIsNotProofOfAnExtension() {
+        // RVW2 N7
+        assertEquals("Dune.Part.Two.2024.mp4", FileNames.withExtensionFor("video/mp4", "Dune.Part.Two.2024"))
+        assertEquals("download.mp4", FileNames.withExtensionFor("video/mp4", "download.php"))
+        assertEquals("stream.mp4", FileNames.withExtensionFor("video/mp4", "stream.m3u8"))
+        assertEquals("Song.Title.Live.mp3", FileNames.withExtensionFor("audio/mpeg", "Song.Title.Live"))
+        assertEquals("noext.mp4", FileNames.withExtensionFor("video/mp4", "noext"))
+        assertEquals("a known extension stays, in any case", "clip.MKV", FileNames.withExtensionFor("video/mp4", "clip.MKV"))
+        assertEquals("clip.mp4", FileNames.withExtensionFor("video/mp4", "clip.mp4"))
+        assertEquals("other types keep the old rule", "report.xyz", FileNames.withExtensionFor("application/pdf", "report.xyz"))
+        assertEquals("an unknown type leaves the name alone", "x.php", FileNames.withExtensionFor("application/octet-stream", "x.php"))
+    }
 }
