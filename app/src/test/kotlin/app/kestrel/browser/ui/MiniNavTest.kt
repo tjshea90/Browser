@@ -51,6 +51,8 @@ class MiniNavTest {
         override fun navPageField(): PageField? = field
         override fun navKeyboardChanged(showing: Boolean) { keyboard.add(showing) }
         override fun navPrivateTab() = privateTab
+        var swoop = false; val swoopCalls = ArrayList<Boolean>()
+        override fun navSwoop(open: Boolean): Boolean { swoopCalls.add(open); return swoop }
         var learnedText: String? = null; var wordsText = ""; var habit: FloatArray? = null
         override fun navGlideLearned(): String? = learnedText
         override fun navGlideLearnedSave(text: String) { learnedText = text.ifEmpty { null } }
@@ -183,9 +185,10 @@ class MiniNavTest {
         nav.setOpen(true, animate = false); relayout()
         nav.pressBarForTest()
         assertTrue(nav.pressKeyForTest("⇧")); assertTrue("the keys are upper case now", nav.pressKeyForTest("Q"))
-        assertTrue(nav.pressKeyForTest("123")); assertTrue(nav.pressKeyForTest("7")); assertTrue(nav.pressKeyForTest("?"))
-        assertTrue(nav.pressKeyForTest("abc")); assertTrue(nav.pressKeyForTest("q"))
-        assertEquals("Q7?q", nav.barTextForTest)
+        assertTrue(nav.pressKeyForTest("123")); assertTrue(nav.pressKeyForTest("7")); assertTrue("a digit keeps the symbols page", nav.pressKeyForTest("?"))
+        assertTrue("one special character and the letters are back at once (Swoop M5, like Gboard)", nav.pressKeyForTest("q"))
+        assertTrue(nav.pressKeyForTest("123")); assertTrue(nav.pressKeyForTest("abc")); assertTrue("abc still goes back by hand", nav.pressKeyForTest("w"))
+        assertEquals("Q7?qw", nav.barTextForTest)
     }
 
     @Test fun theBackKeyClosesTheKeyboardBeforeAnythingElse() {
@@ -194,6 +197,31 @@ class MiniNavTest {
         nav.pressBarForTest(); assertTrue(nav.keyboardShowing)
         assertTrue(nav.onBackPressed()); assertFalse(nav.keyboardShowing)
         assertFalse(nav.onBackPressed())
+    }
+
+    @Test fun withSwoopTheBarOpensTheFloatingSystemKeyboardInsteadOfTheOwnKeysAndAnotherTapPutsItAway() {
+        rec.swoop = true
+        nav.setOpen(true, animate = false); relayout()
+        nav.pressBarForTest(); relayout()
+        assertTrue(nav.swoopUp); assertFalse("the panel's own keys stay away", nav.keyboardShowing); assertEquals(listOf(true), rec.swoopCalls)
+        assertEquals("Typing with the Swoop keyboard. Tap to put it away.", nav.barDescriptionForTest)
+        nav.pressBarForTest(); assertFalse(nav.swoopUp); assertEquals(listOf(true, false), rec.swoopCalls)
+        nav.pressBarForTest(); assertTrue("and again", nav.swoopUp)
+        nav.setOpen(false, animate = false); assertFalse("hiding the panel puts Swoop away", nav.swoopUp); assertEquals(false, rec.swoopCalls.last())
+    }
+
+    @Test fun whenSwoopIsNotTheChosenKeyboardTheBarOpensTheOwnKeysAsBefore() {
+        rec.swoop = false
+        nav.setOpen(true, animate = false); relayout()
+        nav.pressBarForTest(); relayout()
+        assertTrue(nav.keyboardShowing); assertFalse(nav.swoopUp); assertEquals("asked once, said no", listOf(true), rec.swoopCalls)
+        nav.pressBarForTest(); assertFalse(nav.keyboardShowing)
+    }
+
+    @Test fun backIsNotSwallowedForSwoopBecauseAndroidClosesItsKeyboardFirst() {
+        rec.swoop = true
+        nav.setOpen(true, animate = false); relayout(); nav.pressBarForTest(); assertTrue(nav.swoopUp)
+        assertFalse(nav.onBackPressed()); assertFalse("the panel forgets Swoop was up", nav.swoopUp)
     }
 
     @Test fun pressingTheBarAgainClosesTheKeyboardAndHidingThePanelDoesToo() {

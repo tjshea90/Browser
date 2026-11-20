@@ -20,14 +20,17 @@ class Correction(val typed: String, val word: String, val tail: String)
  *  1. PREDICT, THEN VALIDATE. After each own edit it predicts where the selection will be and remembers that in [pending]. Android reports every
  *     selection change back through onUpdateSelection; a report that matches a prediction is "ours". Anything else means the user or the app
  *     changed the text: composing, glide and anything else that assumed the old text is dropped and the window is re-read. (Updates arrive
- *     late, batched or merged, so several predictions may be outstanding and one report may confirm several.)
+ *     late, batched or merged, so several predictions may be outstanding and one report may confirm several; an editor in this keyboard's own
+ *     process on Android 10 even reports INSIDE the edit call, before the edit is noted: see [early].)
  *  2. VERIFY BEFORE REPLACING. Removing or replacing the last glide first reads the text before the cursor and refuses when it is not what was
  *     put there. A wrong belief therefore costs a missed shortcut, never someone else's text.
  *  3. NEVER ASSUME SUCCESS. Every editor call can fail; a failure re-reads the editor and forgets what was assumed.
  *
  * All offsets are UTF-16 units. Single-threaded: call from the keyboard's UI thread only.
  */
-class InputController(private val ed: EditorBridge, val stats: InputStats = InputStats()) {
+class InputController(editor: EditorBridge, val stats: InputStats = InputStats()) {
+    /** Every call into the editor goes through [Guarded], so a selection report that arrives INSIDE a call can be told from a late one (see [early]). */
+    private val ed: EditorBridge = Guarded(editor)
     var field: FieldInfo = FieldInfo(); private set
     /** The text before the cursor (at most [WINDOW_BEFORE] units; the composing word, if any, is at its end). */
     var before = ""; private set
@@ -60,6 +63,20 @@ class InputController(private val ed: EditorBridge, val stats: InputStats = Inpu
     private var batchDepth = 0
     /** After Enter (or a failed move) the next few reports are taken as the truth instead of being compared: the result of Enter is unknown (newline, action, nothing). */
     private var adopt = 0
+    /** > 0 while one of this keyboard's own calls into the editor is running. */
+    private var inCall = 0
+    /**
+     * Selection reports that arrived while one of our own calls into the editor was still running: (selection start, selection end, composing start, composing end). Android 10 and older run an editor's calls INLINE when the editor
+     * lives in the keyboard's own process (the Setup screen's try-it field, the Dictionary screen's field), so the report of the new cursor position comes BEFORE the call returns, before the keyboard has noted the edit. It is the
+     * report of that very edit: [expect] matches it as soon as the edit is noted. What no edit explains is handled like a late report at the next opportunity ([drainEarly]). (An editor in another process never gets here.)
+     */
+    private val early = ArrayList<IntArray>(4)
+    /**
+     * True once a report has come inside one of our calls: this editor reports inline, so an edit it did not report inside its call will never be reported (an edit that changed nothing, a composing region that stayed
+     * where it was). Nothing is then left waiting in [pending] (an entry that is never answered would make a later move of the cursor to the same offset look like our own edit), and every report that comes OUTSIDE a
+     * call is somebody else's. Forgotten at the start of every field (the next editor may be in another process).
+     */
+    private var inlineEditor = false
 
     // ------------------------------------------------------------------------------------------------------------ session
 
@@ -67,7 +84,7 @@ class InputController(private val ed: EditorBridge, val stats: InputStats = Inpu
     fun startInput(info: FieldInfo) {
         field = info
         composing = null; lastGlide = null; shift = ShiftState.OFF; composingUnknown = true; adopt = 0
-        clearPending("c1")
+        clearPending("c1"); early.clear(); inlineEditor = false
         selStart = info.initialSelStart; selEnd = info.initialSelEnd
         refresh()
         autoCaps()
@@ -96,6 +113,11 @@ class InputController(private val ed: EditorBridge, val stats: InputStats = Inpu
      * own edits, false when the user or the app moved or changed the text (everything assumed about the old text was dropped).
      */
     fun onSelectionUpdate(newSelStart: Int, newSelEnd: Int, candStart: Int = -1, candEnd: Int = -1): Boolean {
+        if (inCall > 0) {                                                       // inside our own edit call: the report of that edit, matched when the edit is noted
+            if (!inlineEditor) { inlineEditor = true; clearPending("inline") }
+            early.add(intArrayOf(newSelStart, newSelEnd, candStart, candEnd)); return true
+        }
+        if (early.isNotEmpty()) drainEarly()
         if (candStart >= 0 && composing == null) composingUnknown = true           // the editor shows a composing word this keyboard does not know about
         if (pending.matchAndDrop(newSelStart, newSelEnd)) {
             // an older edit was confirmed: while newer own edits are still outstanding the keyboard is AHEAD of this report and keeps what it predicted
@@ -264,12 +286,12 @@ class InputController(private val ed: EditorBridge, val stats: InputStats = Inpu
         lastGlide = null
         if (selStart != selEnd) {                       // a selection: the editor deletes it, the cursor ends where the selection began
             if (!ed.sendKey(KeyCodes.DEL)) { resync(); return }
-            selEnd = selStart; pending.push(selStart, selEnd)
+            selEnd = selStart; expect(selStart, selEnd)
         } else {
             val n = lastCodePointLength(before)
             if (!ed.sendKey(KeyCodes.DEL)) { resync(); return }
             before = before.dropLast(n)
-            moveSel(-n)
+            if (n > 0) moveSel(-n)                          // (Backspace at the very start of the text changes nothing and the editor reports nothing: no report to wait for, or the entry would stay and make a later move to the same offset look like ours)
         }
         ensureWindow()
     }
@@ -422,11 +444,11 @@ class InputController(private val ed: EditorBridge, val stats: InputStats = Inpu
             if (left) {
                 if (before.isEmpty()) { if (selStart != 0) predicted = false; continue }
                 val n = lastCodePointLength(before)
-                after = (before.takeLast(n) + after).take(WINDOW_AFTER); before = before.dropLast(n); if (selStart >= 0) { selStart -= n; selEnd = selStart; pending.push(selStart, selEnd) }   // every arrow key is reported on its own
+                after = (before.takeLast(n) + after).take(WINDOW_AFTER); before = before.dropLast(n); if (selStart >= 0) { selStart -= n; selEnd = selStart; expect(selStart, selEnd) }   // every arrow key is reported on its own
             } else {
                 if (after.isEmpty()) { predicted = false; continue }       // we cannot tell whether the field ends here
                 val n = firstCodePointLength(after)
-                before = (before + after.take(n)).takeLast(WINDOW_BEFORE); after = after.drop(n); if (selStart >= 0) { selStart += n; selEnd = selStart; pending.push(selStart, selEnd) }
+                before = (before + after.take(n)).takeLast(WINDOW_BEFORE); after = after.drop(n); if (selStart >= 0) { selStart += n; selEnd = selStart; expect(selStart, selEnd) }
             }
         }
         if (selStart >= 0 && predicted) { selEnd = selStart; ensureWindow() }
@@ -488,7 +510,7 @@ class InputController(private val ed: EditorBridge, val stats: InputStats = Inpu
     }
 
     /** Ending composition changes only the composing region, but the editor still reports it (with the unchanged selection): that report is ours too, even when it arrives after later edits. */
-    private fun expectReportOfSameSelection() { if (selStart >= 0 && batchDepth == 0) pending.push(selStart, selEnd) }
+    private fun expectReportOfSameSelection() { if (selStart >= 0 && batchDepth == 0) expect(selStart, selEnd) }
 
     /** Inserts [text] at the cursor (replacing a selection) and updates what is believed. */
     private fun commit(text: String): Boolean {
@@ -506,7 +528,20 @@ class InputController(private val ed: EditorBridge, val stats: InputStats = Inpu
     }
 
     /** The editor will report the current selection (outside a batch; inside one only the final state is reported, see [endBatch]). */
-    private fun expectNow() { if (batchDepth == 0) pending.push(selStart, selEnd) }
+    private fun expectNow() { if (batchDepth == 0) expect(selStart, selEnd) }
+
+    /** The editor will report the selection ([s], [e]) for an edit just made, unless it already did, inside the call ([early]): then there is nothing to wait for (the oldest match wins, older reports are explained too). */
+    private fun expect(s: Int, e: Int) {
+        for (k in early.indices) { val r = early[k]; if (r[0] == s && r[1] == e) { repeat(k + 1) { early.removeAt(0) }; return } }
+        if (!inlineEditor) pending.push(s, e)
+    }
+
+    /** Reports that arrived inside a call and that no edit explained are taken now like any report (a foreign change is noticed, an unknown selection is adopted). */
+    private fun drainEarly() {
+        if (early.isEmpty()) return
+        val list = ArrayList(early); early.clear()
+        for (r in list) onSelectionUpdate(r[0], r[1], r[2], r[3])
+    }
 
     private fun beginBatch() { batchDepth++; ed.beginBatch() }
 
@@ -514,7 +549,7 @@ class InputController(private val ed: EditorBridge, val stats: InputStats = Inpu
     private fun endBatch(s0: Int, e0: Int) {
         if (batchDepth > 0) batchDepth--
         ed.endBatch()
-        if (batchDepth == 0 && selStart >= 0 && (selStart != s0 || selEnd != e0)) pending.push(selStart, selEnd)
+        if (batchDepth == 0 && selStart >= 0 && (selStart != s0 || selEnd != e0)) expect(selStart, selEnd)
     }
 
     /** A cheap look at the editor: the few units around the cursor are still what the window says. */
@@ -541,6 +576,7 @@ class InputController(private val ed: EditorBridge, val stats: InputStats = Inpu
 
     /** Called before every edit: closes a composing region the keyboard lost track of, so an edit can never replace somebody's composing word by accident. */
     private fun settle() {
+        drainEarly()
         if (composingUnknown && composing == null && ed.finishComposing()) { composingUnknown = false; expectReportOfSameSelection() }
     }
 
@@ -552,6 +588,23 @@ class InputController(private val ed: EditorBridge, val stats: InputStats = Inpu
     private fun isLetter(s: String): Boolean = isSingleCodePoint(s) && Character.isLetter(s.codePointAt(0))
     private fun isWordConnector(s: String): Boolean = s == "'" || (isSingleCodePoint(s) && Character.isDigit(s.codePointAt(0)))
     private fun isSingleCodePoint(s: String) = s.isNotEmpty() && s.codePointCount(0, s.length) == 1
+
+    /** The editor with a count of the calls in flight ([inCall]): a report that arrives while the count is above zero came inside the call (see [early]). */
+    private inner class Guarded(private val e: EditorBridge) : EditorBridge {
+        private inline fun <T> call(f: () -> T): T { inCall++; try { return f() } finally { inCall-- } }
+        override fun textBefore(max: Int): String? = call { e.textBefore(max) }
+        override fun textAfter(max: Int): String? = call { e.textAfter(max) }
+        override fun commitText(text: String): Boolean = call { e.commitText(text) }
+        override fun setComposingText(text: String): Boolean = call { e.setComposingText(text) }
+        override fun finishComposing(): Boolean = call { e.finishComposing() }
+        override fun deleteSurrounding(before: Int, after: Int): Boolean = call { e.deleteSurrounding(before, after) }
+        override fun setSelection(start: Int, end: Int): Boolean = call { e.setSelection(start, end) }
+        override fun sendKey(code: Int): Boolean = call { e.sendKey(code) }
+        override fun performAction(action: Int): Boolean = call { e.performAction(action) }
+        override fun cursorCapsMode(reqModes: Int): Int = call { e.cursorCapsMode(reqModes) }
+        override fun beginBatch(): Boolean = call { e.beginBatch() }
+        override fun endBatch(): Boolean = call { e.endBatch() }
+    }
 
     /** The selections this keyboard expects the editor to report back for its own edits, oldest first (a small ring: reports can arrive late or merged). */
     private class Pending {
