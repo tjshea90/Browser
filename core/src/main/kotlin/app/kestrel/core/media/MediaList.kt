@@ -52,7 +52,8 @@ class MediaCandidate(
     /** RX3-V4: the picture heights of the stream's variants (an HLS master's variants, a DASH manifest's video representations) the early look read; empty = not known. A player that feeds a blob: address is matched by them. */
     var heights: IntArray = IntArray(0)
     /** RX3-V5: a stream whose playlist was read and that cannot be saved (live, protected) or is only a clip (under 20 s: an ad, a preview) is not offered to the badge. Before the look nothing is known and it counts as before. */
-    val unfit: Boolean get() = kind != MediaKind.FILE && looked && (live || drm || (durationMs in 1 until MediaList.MIN_STREAM_MS))
+    // RVW1 F7: a short stream that REALLY PLAYED (an element played it for 3 s) or that the owner showed interest in is a video, not a preview: X / Twitter clips, Reels, Streamable HLS are 5-20 s long and were hidden for ever
+    val unfit: Boolean get() = kind != MediaKind.FILE && looked && (live || drm || (durationMs in 1 until MediaList.MIN_STREAM_MS && !played && !interest))
     /**
      * VS2 (owner 2026-11-18, doraby + vidsrc / 111movies: "it would show a video file can be downloaded in the list, then it would disappear after a few seconds ... is there a way to capture the video source when it is
      * found so it doesn't disappear"): once a film-sized candidate was OFFERED (the badge counted it) it is CAPTURED: a frame that reloads or goes away, a clip rule or an advertisement label that arrives later cannot
