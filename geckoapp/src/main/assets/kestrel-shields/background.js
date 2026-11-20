@@ -723,6 +723,18 @@ function dedupeKey(url, sized) {
   for (var i = 0; i < parts.length; i++) { var eq = parts[i].indexOf('='); if (!PIECE_PARAMS.test(eq < 0 ? parts[i] : parts[i].slice(0, eq))) keep.push(parts[i]); }
   return url.slice(0, q) + (keep.length ? '?' + keep.join('&') : '') + '|' + sized;
 }
+// RVW1 F4: the address the app is TOLD about. A site that fetches a file in pieces by putting the byte range in the query (Facebook / Instagram `...mp4?...&bytestart=0&byteend=N`) was reported with the FIRST piece's range,
+// so the app showed the size of one slice and Download saved only that slice. Only keys that are certainly byte positions are taken out (not start / end / offset, which may be times); null = the address had none.
+var BYTE_PARAMS = /^(range|bytestart|byteend|byte_range|bytes)$/i;
+function pieceFree(url) {
+  var q = url.indexOf('?');
+  if (q < 0) return null;
+  var rest = url.slice(q + 1), frag = '', hash = rest.indexOf('#');
+  if (hash >= 0) { frag = rest.slice(hash); rest = rest.slice(0, hash); }
+  var parts = rest.split('&'), keep = [], cut = false;
+  for (var i = 0; i < parts.length; i++) { var eq = parts[i].indexOf('='); if (BYTE_PARAMS.test(eq < 0 ? parts[i] : parts[i].slice(0, eq))) cut = true; else keep.push(parts[i]); }
+  return cut ? url.slice(0, q) + (keep.length ? '?' + keep.join('&') : '') + frag : null;
+}
 // VP2 (owner message 2026-11-18: "I selected three different video servers on doraby.Com but none of them would play. It showed no error, it just couldn't load the video"): a trusted click in the TOP page
 // (content.js sends `ptap`, nothing but the fact) followed within PTAP_MS by a frame the page starts is the person's press of that frame: the frame's gate is told (guard answer `pp`) and opens its player.
 // A frame inside such a frame, started within PCHILD_MS of it, is one too (an embed inside an embed). A new page in the tab forgets all of it (the tap that went to another page started nothing here).
