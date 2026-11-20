@@ -27,6 +27,7 @@ async function open(body, opts) {
     window.browser = { runtime: { sendMessage: (m) => { window.__msgs.push(m); return Promise.resolve(undefined); } } };
     window.requestIdleCallback = (f) => setTimeout(f, 30);   // headless Chromium may wait for the full 3 s timeout of an idle callback: the tests do not
   });
+  if (o.pre) await page.addInitScript(o.pre);
   await page.addInitScript({ content: VFIND });
   await page.addInitScript({ content: CONTENT });
   await page.goto(o.url || 'https://site.example/');
@@ -114,4 +115,40 @@ test('F7: a muted autoplay clip reported as decoration is reported AGAIN, once, 
   await page.evaluate(() => { const v = document.getElementById('v'); v.muted = true; v.muted = false; });
   await page.waitForTimeout(300);
   assert.equal((await vids(page)).length, 2, 'once per element: another unmute is not another report');
+});
+
+// ---------------------------------------------------------------- RVW1 P6: the generic-hiding scan on a foreground return
+const appWithMarker = () => {
+  window.__gen = [];
+  window.requestIdleCallback = (f) => setTimeout(f, 30);
+  window.browser.runtime.sendMessage = (m) => {
+    window.__msgs.push(m);
+    if (m.k === 'css') return Promise.resolve('/*kg*/.site-rule{display:none!important}');
+    if (m.k === 'gen') { window.__gen.push(m.t); return Promise.resolve(''); }
+    return Promise.resolve(undefined);
+  };
+};
+
+test('P6: returning to a page that did not change while hidden does not scan the whole page again; one that did change is scanned once', async () => {
+  const page = await open('<div class="a b">x</div><p id="p1">y</p>', { pre: appWithMarker });
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => {
+    window.__scans = 0;
+    const o = Document.prototype.querySelectorAll;
+    Document.prototype.querySelectorAll = function (s) { if (s === '[id],[class]') window.__scans++; return o.apply(this, arguments); };
+  });
+  const setHidden = (h) => page.evaluate((hh) => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => hh }); document.dispatchEvent(new Event('visibilitychange')); }, h);
+  const scans = () => page.evaluate(() => window.__scans);
+  await setHidden(true); await setHidden(false);
+  await page.waitForTimeout(300);
+  assert.equal(await scans(), 0, 'nothing changed while hidden: no scan on return (was one scan at every unlock)');
+  await setHidden(true);
+  await page.evaluate(() => { const d = document.createElement('div'); d.className = 'added-while-hidden'; document.body.appendChild(d); });
+  await page.waitForTimeout(300);                                                 // the observer saw it and dropped the record
+  await setHidden(false);
+  await page.waitForTimeout(300);
+  assert.equal(await scans(), 1, 'something changed while hidden: one scan on return');
+  await setHidden(true); await setHidden(false);
+  await page.waitForTimeout(300);
+  assert.equal(await scans(), 1, 'and the next plain return scans nothing');
 });

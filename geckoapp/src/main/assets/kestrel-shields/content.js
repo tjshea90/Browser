@@ -62,10 +62,11 @@
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', first); else first();
       // LAB5: the second whole-page pass (classes that scripts gave to EXISTING elements after DOMContentLoaded; the observer below only sees new nodes) runs when the page is idle, not inside the busiest moment of the load
       window.addEventListener('load', function () { if (window.requestIdleCallback) requestIdleCallback(first, { timeout: 1000 }); else setTimeout(first, 300); });
+      var missed = false;   // RVW1 P6: the page changed while it was hidden (the observer saw it and dropped it)
       if (window.MutationObserver) {
         var mo = new MutationObserver(function (recs) {
           if (off) { mo.disconnect(); return; }
-          if (document.hidden) return;                                        // nobody sees the page: visibilitychange looks again when it is shown
+          if (document.hidden) { missed = true; return; }                     // nobody sees the page: visibilitychange looks again when it is shown (RVW1 P6: only if something changed meanwhile)
           var t0 = nowMs();
           if (spent > BUDGET_MS || (startedAt && t0 - startedAt > WINDOW_MS)) { off = true; mo.disconnect(); return; }
           for (var r = 0; r < recs.length && r < 200; r++) {
@@ -83,7 +84,8 @@
           spent += nowMs() - t0;
         });
         mo.observe(document, { childList: true, subtree: true }); // the document itself: its root element may not exist yet
-        document.addEventListener('visibilitychange', function () { if (!document.hidden && !off) { scan(document); later(); } });
+        // RVW1 P6: this rescanned the WHOLE page (querySelectorAll over every id / class, up to 6000 elements: 2-3 ms on a desktop, 15-25 ms on the tablet) at every unlock and tab return even when nothing had changed while it was hidden
+        document.addEventListener('visibilitychange', function () { if (!document.hidden && !off && missed) { missed = false; scan(document); later(); } });
       }
     } catch (e) { /* never break the page */ }
   }
