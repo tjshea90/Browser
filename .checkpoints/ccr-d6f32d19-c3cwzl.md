@@ -1,21 +1,22 @@
-# CHECKPOINT 2716 — read me first, then TASKS.md
+# CHECKPOINT 2717 — read me first, then TASKS.md
 
-**Written:** 2026-11-20T03:51:52Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-d6f32d19-c3cwzl` · **builds on:** `d1eee4a4` (this checkpoint is the commit after it)
+**Written:** 2026-11-20T03:53:57Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-d6f32d19-c3cwzl` · **builds on:** `75d84d6b` (this checkpoint is the commit after it)
 
 ## Just done
-RVW1a DONE: all four review lanes saved (research/REVIEW_2026-11-20{,_FINDER,_DOWNLOAD,_SECURITY,_SPEED}.md); first fix IN THE TREE: background.js vid handler uses the tab's page + a per-frame element number (F1), test not written yet
+RVW1b: F1 (vid reports name the tab page + per-frame element numbers, 2 web tests), F4 (ranged files report the whole-file URL, 2 web tests; background.test.js 110/110), F2 (MediaList.add clears fromMarkup on a wire sighting, core test written), F3 (VideoFlow looks at DASH + maybe() streams, compile-only) are IN THE TREE; core MediaListTest run in background (scratchpad ml.log)
 
 ## Do this next
-Add the F1 test to web-tests/background.test.js (message from frameId 5 with p = the frame's own address must come out with p = tabTop page and el = 1000000 * n + el), run: cd web-tests && node --test --test-timeout=60000 background.test.js; then F2/F3 in core MediaList + VideoFlow; baseline core test log is in the scratchpad core-test.log
+Read scratchpad ml.log for EXIT 0 (MediaListTest + FinderCorpusTest); then compile :geckoapp:compileDebugKotlin (needs platforms;android-37.0 per CLAUDE.md if missing); then F9 + F12 + F6 in content.js/manifest.json with tests in web-tests/content.test.js (60 s per-file limit: put new tests in a NEW file web-tests/finder2.test.js)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M TASKS.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  edc76eba ckpt 2716: RVW1a DONE: all four review lanes saved (research/REVIEW_2026-11-20{,_FINDER
   64f64826 ckpt 2715: RVW1a finder lane saved to research/REVIEW_2026-11-20_FINDER.md (F1-F24: F1 
   d9a44bf6 ckpt 2714: RVW1a speed lane saved to research/REVIEW_2026-11-20_SPEED.md (P1-P11); secu
   cf89270d ckpt 2713: RVW1a security lane saved to research/REVIEW_2026-11-20_SECURITY.md (S1-S10,
@@ -25,8 +26,7 @@ Add the F1 test to web-tests/background.test.js (message from frameId 5 with p =
   34502e99 ckpt 2709: DG1a-d DONE in code: LastRun.kt tells an update from a crash and marks the f
   e8adf8c4 ckpt 2708: DG1 written into TASKS (owner Diagnostics paste, alpha71): finding 1 = every
   4acfe271 ckpt 2707: alpha71 RELEASED and RECORDED: https://github.com/tjshea90/Browser/releases/
-  1aa1cf0c ckpt 2706: Lab dr v2 (run 44439418098) READ: wrapper-direct rows are NOT the owner's fl
 ```
 
-(3 automatic checkpoint(s) since the last deliberate one — the
+(8 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
