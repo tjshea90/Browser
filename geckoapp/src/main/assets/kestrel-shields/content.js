@@ -689,8 +689,11 @@
     }
     function scan() {
       try {
-        var i, e, list = document.querySelectorAll('video, audio, source[src]');
-        for (i = 0; i < list.length; i++) { e = list[i]; report(e.currentSrc || e.src || e.getAttribute('src'), labelOfSource(e)); }
+        // RVW1 F11: the <source> elements FIRST, each with its label: the video element's own currentSrc is usually one of them, and whoever reports an address first wins (the label was lost to the label-less report)
+        var i, e, list = document.querySelectorAll('source[src]');
+        for (i = 0; i < list.length; i++) { e = list[i]; report(e.src || e.getAttribute('src'), labelOfSource(e)); }
+        list = document.querySelectorAll('video, audio');
+        for (i = 0; i < list.length; i++) { e = list[i]; report(e.currentSrc || e.src || e.getAttribute('src')); }
         var holders = document.querySelectorAll(ATTR_SELECTOR), j, v;
         for (i = 0; i < holders.length && i < 200 && n < 40; i++) {
           e = holders[i];
