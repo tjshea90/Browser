@@ -110,6 +110,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
     private val ticker = object : Runnable {
         override fun run() {
             sample()
+            player?.let { pl -> if (pl.playWhenReady && pl.playbackState != Player.STATE_ENDED && pl.playbackState != Player.STATE_IDLE) app.kestrel.browser.download.DownloadController.filmPlaying() }   // RVW3 PB3
             if (player != null) main.postDelayed(this, if (model.shown) 250L else 1000L)
         }
     }
@@ -209,7 +210,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
         val p = player ?: return
         player = null
         quality = null; controls.showQuality = false
-        main.removeCallbacks(ticker); main.removeCallbacks(controlsTick); main.removeCallbacks(longPressRun); recovery.stop()
+        main.removeCallbacks(ticker); main.removeCallbacks(controlsTick); main.removeCallbacks(longPressRun); recovery.stop(); app.kestrel.browser.download.DownloadController.filmStopped()
         gestures?.stop()                                                           // ANS57: a gesture in progress ends, the window's brightness is the tablet's again
         var pos = 0L
         try { meter?.finish(p) } catch (e: Throwable) { /* gone */ }

@@ -102,6 +102,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     private val ticker = object : Runnable {
         override fun run() {
             sample()
+            player?.let { pl -> if (pl.playWhenReady && pl.playbackState != Player.STATE_ENDED && pl.playbackState != Player.STATE_IDLE) app.kestrel.browser.download.DownloadController.filmPlaying() }   // RVW3 PB3
             main.postDelayed(this, if (model.shown) 250L else 1000L)
         }
     }
@@ -399,7 +400,7 @@ class NativePlayerActivity : Activity(), PlayerModel.Host, PlayerControlsView.Li
     override fun onDestroy() {
         if (android.os.Build.VERSION.SDK_INT >= 33) backCb?.let { try { onBackInvokedDispatcher.unregisterOnBackInvokedCallback(it) } catch (e: Throwable) { /* already gone */ } }
         app.kestrel.browser.web.DebugTouch.detach(this, debugTouch); debugTouch = null
-        main.removeCallbacks(ticker); main.removeCallbacks(controlsTick); recovery.stop()
+        main.removeCallbacks(ticker); main.removeCallbacks(controlsTick); recovery.stop(); app.kestrel.browser.download.DownloadController.filmStopped()
         if (::gestures.isInitialized) gestures.stop()                          // ANS57: the window's brightness is the tablet's again
         val p = player
         player = null
