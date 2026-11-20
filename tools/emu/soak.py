@@ -3451,7 +3451,9 @@ class Soak:
         done = []
         t_start = time.time()
         self.shields_mode = "on"
-        for i, (name, url, scrolls, dwell) in enumerate(COMPAT_SITES):
+        # LAB2f (research/COMPAT_RUN1.md): the heavy Yahoo pages froze the emulated phone and everything after them timed out: they go LAST now, so what they do can only cost the end of the list
+        sites = [x for x in COMPAT_SITES if not x[0].startswith("yahoo")] + [x for x in COMPAT_SITES if x[0].startswith("yahoo")]
+        for i, (name, url, scrolls, dwell) in enumerate(sites):
             if time.time() - t_start > budget:
                 break
             try:
@@ -3682,6 +3684,150 @@ class Soak:
                 self.issue("medium", "lastrun", "after a kill -9 while in front the Diagnostics found a crash note or engine report it should not have", shot=False)
         self.main_pid = (self.ph.pids() or [None])[0]
         self.record({"kind": "lastrun", "name": "last-run-note", "status": "ok" if all(r[1] for r in rows) else "failed", "results": [{"case": r[0], "ok": r[1], "file": r[2]} for r in rows]})
+
+    def doraby_round(self):
+        """EM1i (owner 2026-11-19: "finding and properly loading videos from different servers (try doraby.com various movie servers)"). The REAL doraby.com player chain on the real engine: the title page offers six
+        servers; each one is a doraby wrapper page (`/?player_tv=..&sv=<server>`) holding `getPlayTV.php`, which sends the frame to the server's own player (3 to 5 frames deep). For each server: open the TITLE page
+        and TAP the server's button like the owner does (press-to-play stays ON, the owner's setting), wait, ask the finder what it offers (`videodl`), decline the save, and keep the finder's own Health lines (media maybe /
+        maybe-hit / maybe-no / maybe-refused http=..). The sandbox survey (research/EM1_DORABY_SERVERS.md) found: Vidsrc = text/plain playlists at an extension-less address and MPEG-TS parts served as .html;
+        Vidzee = a normal HLS master with extension-less parts; 111movies = hls.js behind a token API. Nothing is played to the end and nothing is kept: a decline is always answered."""
+        w, h = self.screen
+        # EM1i v3 (lab run 44439418098 found that opening the WRAPPER page directly gives the gate no 'person tapped a server' to inherit, so it said nothing about the owner's flow): the TITLE page is opened and the
+        # server button is TAPPED, like the owner does. The button positions are the real page's at the app's viewport (560 x 769 CSS px, 1.0714 dpr; measured in headless Chromium, stable over loads): the list sits at the
+        # very top of the page, two buttons per row. (label, button centre in CSS px, press-to-play): the owner's setting is ON ("1"); Vidfast is also tried with the rule OFF as the control; the heavy 111movies player
+        # (it froze the emulator's software GPU in lab run 44435517079) goes LAST.
+        servers = [("vidfast", (145, 45), "1"), ("vidfast-rule-off", (145, 45), "0"), ("vidzee", (145, 137), "1"), ("vidsrc", (145, 91), "1"), ("videasy", (415, 91), "1"), ("vidcore", (415, 137), "1"), ("111movies", (415, 45), "1")]
+        rows = []
+        for name, (bx, by), vp in servers:
+            self.ph.debug("vpress", vp); time.sleep(1.5)
+            url = "https://doraby.com/ozark/"
+            up, upn = self.upstream(url)
+            if up == "unreachable":
+                rows.append({"server": name, "status": "upstream", "note": "the runner gets no answer from doraby.com (%s)" % upn}); continue
+            lm = self.log.size()
+            self.ph.open_url(url)
+            t0 = time.time()
+            while time.time() - t0 < 40 and not [e for e in health_events(self.log.since(lm), "page", "loaded") if "doraby" in e["rest"]]:
+                time.sleep(1.5)
+            time.sleep(6)                                              # the title page's own script builds the server list and the episode list
+            k = w / 560.0
+            self.ph.tap(int(bx * k), int(26 + by * k)); time.sleep(30)     # the person's tap on the server button: the wrapper, getPlayTV.php and the server's own player load, the player may ask for a stream
+            m1 = self.log.size(); self.ph.debug("videodl"); time.sleep(5)
+            said = health_events(self.log.since(m1), "lab", "videodl")
+            if self.wait_dialog(m1, 15):
+                self.answer(False)
+            lines = self.log.since(lm)
+            # lab run 44435517079: the second server's player froze the emulator's SOFTWARE GPU (UI thread in HardwareRenderer.nSyncAndDrawFrame, an ANR, then the emulated phone's own system UI died) and the other
+            # four servers ran on a dead phone: "no answer" then says nothing about the finder. A server during which that happened is INCONCLUSIVE, the phone / app is brought back before the next one.
+            froze = any(("am_anr" in l and self.a.pkg in l) or "ui STALL" in l for l in lines) or not self.system_ok()
+            med = health_events(lines, "media")
+            cnt = {}
+            for e in med:
+                cnt[e["ev"]] = cnt.get(e["ev"], 0) + 1
+            refused = sorted(set(e["rest"][:90] for e in med if e["ev"] == "maybe-refused"))[:4]
+            hits = sorted(set(e["rest"][:110] for e in med if e["ev"] == "maybe-hit"))[:3]
+            r = {"server": name, "finder_said": said[-1]["rest"] if said else "no answer", "media_events": cnt, "refused": refused, "hits": hits}
+            found = bool(said) and "pick=none" not in said[-1]["rest"]
+            r["status"] = "found" if found else ("inconclusive" if froze else "not-found")
+            if froze:
+                r["note"] = "the emulated phone froze or its system died while this server's player ran (software GPU): not a finder result"
+                self.ph.a.sh("am force-stop %s" % self.a.pkg, timeout=30); time.sleep(2)
+                if not self.system_ok():
+                    self.recover_system("doraby server %s" % name)
+                self.start_app()
+            if not found and not froze:
+                self.issue("medium", "finding-video", "doraby server %s: the finder offered nothing after a tap on the player (media events: %s; refused: %s)" % (name, cnt or "none", "; ".join(refused) or "none"), shot=True)
+            else:
+                self.shot("doraby-" + name)
+            rows.append(r)
+            self.ph.debug("closetabs"); time.sleep(3)
+        try:
+            with open(os.path.join(self.out, "doraby.md"), "w") as f:
+                f.write("# doraby servers on the real engine (EM1i)\n\n| server | result | finder said | media events | refused |\n| - | - | - | - | - |\n")
+                for r in rows:
+                    f.write("| %s | %s | %s | %s | %s |\n" % (r["server"], r["status"], str(r.get("finder_said", r.get("note", "")))[:120], json.dumps(r.get("media_events", {})), "; ".join(r.get("refused", []))))
+        except Exception as e:
+            say("doraby.md not written:", e)
+        self.main_pid = (self.ph.pids() or [None])[0]
+        self.record({"kind": "doraby", "name": "doraby-servers", "status": "ok" if rows and all(r["status"] in ("found", "upstream", "inconclusive") for r in rows) else "failed", "results": rows,
+                     "note": "%d of %d servers found by the finder, %d inconclusive (the phone froze)" % (len([r for r in rows if r["status"] == "found"]), len(rows), len([r for r in rows if r["status"] == "inconclusive"]))})
+
+    def reopen_round(self):
+        """EM1k (owner 2026-11-19: "when i close the browser then reopen it, it lags on the 'opening xyz.com' dialog"). The page a person leaves, and what the screen shows when the app is opened again.
+        For each page and each way of leaving (Home and Android ends the app later / Home and Android ends it at once = a swipe in Recents / the system kills it in front) the lab loads the page, reads it
+        (scrolls), leaves, starts the app cold and reads the app's OWN Health lines: was a saved picture of the page drawn (`tabs look-shown`) or only the plain cover (`early-cover` + `look-none why=...`),
+        when did the first frame / the engine / the first paint / the end of the cover come (`start frame|look|runtime|paint`, `tabs cover-hide`), was the engine's saved state used (`state-restored` / `state-mismatch`).
+        Absolute seconds are an x86 emulator's; what counts is WHETHER a picture was there, WHY not, and the order of the marks. Writes reopen.md."""
+        pkg = self.a.pkg
+        pages = [("lab-text", "lab:/page/text"), ("wikipedia", "https://en.wikipedia.org/wiki/Firefox"), ("doraby-title", "https://doraby.com/ozark/")]   # (doraby: the owner's own case, a page full of ads and trackers that keeps loading)
+        styles = [("home-later", "Home, then Android ends the app 5 s later"), ("home-at-once", "Home, then Android ends the app 0.4 s later (a swipe in Recents)"), ("kill-in-front", "the system kills the app while it is in front")]
+        rows = []
+        for pname, purl in pages:
+            for sid, sdesc in styles:
+                mark_load = self.log.size()
+                ev = self.load_page("ro-" + pname, purl, 3, 1, timeout=75)
+                if ev is None or ev.get("status") not in ("ok", "slow"):
+                    rows.append({"page": pname, "style": sid, "skipped": "the page did not load (%s)" % (ev or {}).get("status")})
+                    continue
+                time.sleep(3)                                          # the 'settled' picture is asked 700 ms after the last scroll, the page-stop one 1.5 s after the load ended
+                pre = self.log.since(mark_load)
+                saved = health_events(pre, "tabs", "look-saved")
+                row = {"page": pname, "style": sid, "saved_before_leaving": len([e for e in saved if "ok=true" in e["rest"]]), "skips_before_leaving": sorted(set(e["rest"] for e in health_events(pre, "tabs", "look-skip")))}
+                if sid == "kill-in-front":
+                    pids = self.ph.pids()
+                    if pids:
+                        self.adb.sh("kill -9 %d" % pids[0], timeout=20)
+                    time.sleep(2)
+                else:
+                    self.ph.key("KEYCODE_HOME")
+                    time.sleep(5 if sid == "home-later" else 0.4)
+                self.adb.sh("am force-stop %s" % pkg, timeout=30)
+                time.sleep(2)
+                mark_start = self.log.size()
+                t0 = time.time()
+                self.ph.start_app()
+                time.sleep(0.6)
+                self.shot("reopen-%s-%s-first" % (pname, sid))        # (what is on the screen about a second after the tap on the icon)
+                painted = None
+                while time.time() - t0 < (2 if self.a.selftest else 60):
+                    lines = self.log.since(mark_start)
+                    if health_events(lines, "start", "paint"):
+                        painted = time.time() - t0
+                        break
+                    time.sleep(1.0)
+                time.sleep(2.5)
+                lines = self.log.since(mark_start)
+
+                def first(layer, evn):
+                    es = health_events(lines, layer, evn)
+                    return es[0]["t"] if es else None
+                nolook = [e["kv"].get("why") for e in health_events(lines, "tabs", "look-none")]
+                states = [e["ev"] for e in health_events(lines, "tabs") if e["ev"] in ("state-restored", "state-mismatch")]
+                row.update(early_cover=bool(health_events(lines, "tabs", "early-cover")), look_shown=bool(health_events(lines, "tabs", "look-shown")), look_none=nolook, state=states[:1],
+                           frame_s=first("start", "frame"), look_mark_s=first("start", "look"), runtime_s=first("start", "runtime"), paint_s=first("start", "paint"), cover_hide_s=first("tabs", "cover-hide"),
+                           look_hide_s=first("tabs", "look-hide"), wall_to_paint_s=round(painted, 1) if painted else None)
+                self.shot("reopen-%s-%s-after" % (pname, sid))
+                self.main_pid = (self.ph.pids() or [None])[0]         # (the app was ended on purpose: the next scene's 'did the app die?' check must compare with THIS process, lab run 44434241145 skipped three rounds without it)
+                if not row["look_shown"]:
+                    self.issue("high", "reopen", "%s / %s: the app was opened again and the page was NOT shown from its saved picture (pictures saved before leaving: %d; look-none why=%s; skips: %s)" %
+                               (pname, sid, row["saved_before_leaving"], ",".join(str(x) for x in nolook) or "(no line)", "; ".join(row["skips_before_leaving"]) or "none"), shot=False)
+                elif row.get("look_mark_s") is not None and row.get("paint_s") is not None and row["look_mark_s"] > 1.5:
+                    self.issue("medium", "reopen", "%s / %s: the saved picture came late (%.1f s after the process started)" % (pname, sid, row["look_mark_s"]), shot=False)
+                rows.append(row)
+        try:
+            with open(os.path.join(self.out, "reopen.md"), "w") as f:
+                f.write("# Reopen (EM1k)\n\n| page | leave | pictures before | look shown | why not | frame s | look s | runtime s | paint s | cover gone s | state |\n| - | - | -: | - | - | -: | -: | -: | -: | -: | - |\n")
+                for r in rows:
+                    if "skipped" in r:
+                        f.write("| %s | %s | - | - | %s | | | | | | |\n" % (r["page"], r["style"], r["skipped"]))
+                    else:
+                        f.write("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n" % (r["page"], r["style"], r["saved_before_leaving"], "yes" if r["look_shown"] else "NO", ",".join(str(x) for x in r["look_none"]) or "", r["frame_s"], r["look_mark_s"], r["runtime_s"], r["paint_s"], r["cover_hide_s"], ",".join(r["state"])))
+        except Exception as e:
+            say("reopen.md not written:", e)
+        done = [r for r in rows if "skipped" not in r]
+        self.main_pid = (self.ph.pids() or [None])[0]
+        self.record({"kind": "reopen", "name": "reopen-look", "status": "ok" if done and all(r["look_shown"] for r in done) else "failed", "results": rows,
+                     "note": "%d of %d reopens showed the saved picture" % (len([r for r in done if r["look_shown"]]), len(done))})
 
     def dump_diag(self, tag):
         self.ph.debug("dump")
@@ -4409,7 +4555,7 @@ _install_daily()
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="soak-out")
-    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "new", "tb", "new2"])
+    ap.add_argument("--suite", default="soak", choices=["smoke", "fs", "soak", "all", "vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "ro", "dr", "em", "new", "tb", "new2"])
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--pkg", default=PKG_DEFAULT)
     ap.add_argument("--port", type=int, default=8091)
@@ -4424,7 +4570,7 @@ def main():
         a.profile = "tablet" if a.suite in ("daily", "yt") else "standard"
     os.makedirs(a.out, exist_ok=True)
     if a.selftest:
-        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "new", "tb", "new2") else "all")
+        a.minutes, a.suite = 0.4, (a.suite if a.suite in ("vc", "snd", "compat", "fsy", "kp", "yh", "np", "cp", "ap", "ho", "ip", "gp", "pv", "gv", "vp", "daily", "yt", "lr", "ql", "vs", "dm", "ro", "dr", "em", "new", "tb", "new2") else "all")
         _sleep = time.sleep
         time.sleep = lambda s: _sleep(min(s, 0.05))   # the fake phone needs no waiting
     s = Soak(a)
@@ -4489,8 +4635,12 @@ def main():
             s.lastrun_round()                                # (CR1f/g again, after the scene fix; tb ran just above)
         if a.suite == "lr":
             s.lastrun_round()                                # (CR1c: the app is killed from outside in front and in the background; the next Diagnostics must say how the last run ended)
+        if a.suite in ("ro", "em"):
+            s.reopen_round()                                 # (EM1k, owner 2026-11-19: the app opened again must show the page it was left on at once: picture drawn? why not? when does the live page take over?)
+        if a.suite in ("dr", "em"):
+            s.doraby_round()                                 # (EM1i, owner 2026-11-19: the six real doraby servers on the real engine: does the finder offer a stream for each?)
         if a.suite == "yt":
-            s.yt_journey(a.minutes)                          # (CR1, owner message 2026-11-18: the app crashed on YouTube: a YouTube-only journey with leave / return and RAM pressure)
+            s.yt_journey(a.minutes)                        # (CR1, owner message 2026-11-18: the app crashed on YouTube: a YouTube-only journey with leave / return and RAM pressure)
         if a.suite == "daily":
             s.daily(a.minutes)                               # (LAB3, owner message 62: a person's day on the app's real defaults, then the report for the build)
         if a.suite in ("soak", "all"):
