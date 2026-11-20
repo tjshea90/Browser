@@ -648,10 +648,29 @@
       sent[u] = 1; n++;
       browser.runtime.sendMessage({ k: 'dom', u: u, p: location.href }).catch(function () {});
     }
+    // the text of a script, a JSON blob or a configuration attribute: every media address it names (escaped slashes undone first)
+    function scanText(t) {
+      if (!HINT.test(t)) return;
+      t = t.replace(/\\u002f/gi, '/').replace(/\\u0026/gi, '&').replace(/\\\//g, '/');
+      var m; FIND.lastIndex = 0;
+      while ((m = FIND.exec(t)) !== null && n < 40) report(m[0]);
+      FINDREL.lastIndex = 0;
+      while ((m = FINDREL.exec(t)) !== null && n < 40) report(m[1]);
+      if (t.indexOf('%3A%2F%2F') >= 0 || t.indexOf('%3a%2f%2f') >= 0) {
+        FINDENC.lastIndex = 0;
+        while ((m = FINDENC.exec(t)) !== null && n < 40) { try { report(decodeURIComponent(m[0])); } catch (x) { /* a broken escape: not an address */ } }
+      }
+    }
     function scan() {
       try {
         var i, e, list = document.querySelectorAll('video, audio, source[src]');
         for (i = 0; i < list.length; i++) { e = list[i]; report(e.currentSrc || e.src || e.getAttribute('src')); }
+        var holders = document.querySelectorAll(ATTR_SELECTOR), j, v;
+        for (i = 0; i < holders.length && i < 200 && n < 40; i++) {
+          e = holders[i];
+          for (j = 0; j < SRC_ATTRS.length; j++) { v = e.getAttribute(SRC_ATTRS[j]); if (v && v.length < 2000) report(v); }
+          for (j = 0; j < CFG_ATTRS.length; j++) { v = e.getAttribute(CFG_ATTRS[j]); if (v && v.length < 20000) scanText(v); }
+        }
         var metas = document.querySelectorAll('meta[property^="og:video"], meta[property^="og:audio"], meta[name="twitter:player:stream"], link[rel="preload"][as="video"]');
         for (i = 0; i < metas.length; i++) report(metas[i].getAttribute('content') || metas[i].getAttribute('href'));
         var links = document.links; // a live collection: no list of a few thousand anchors is built just to read the first 600
