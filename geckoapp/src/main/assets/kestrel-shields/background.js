@@ -622,7 +622,7 @@ function onRequest(d) {
     var left = pageLog.get(d.tabId);
     if (left && left.page && left.reqs - left.done > 0) send({ k: 'pend', p: left.page, n: left.reqs - left.done }).catch(function () {}); // RX3-BK1: the page that is being left still had requests open
     navId.set(d.tabId, Number(d.requestId) || 0); frameParent.delete(d.tabId); mediaFrames.delete(d.tabId); frameDoc.delete(d.tabId); personTap.delete(d.tabId); personFrames.delete(d.tabId);
-    sniffed.delete(d.tabId); maybeCount.delete(d.tabId); tabTop.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again (delete first: Map keeps the old position of a key, and the OLDEST position is what is dropped)
+    sniffed.delete(d.tabId); sniffed.delete(-1); maybeCount.delete(d.tabId); tabTop.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again (delete first: Map keeps the old position of a key, and the OLDEST position is what is dropped)
     verdicts.clear(); // legacy verdicts are only worth keeping while ONE page loads
     newLog(d.tabId, d.url); reportLater(d.tabId); // the page report starts here (4 s after the last news it goes to the app)
     var h = pageHost(d.url);
@@ -713,7 +713,7 @@ var SEGMENT = /\.(ts|m4s|cmfv|cmfa|cmft|m4f|mts)(?:$|[?#])/i;
 var PLAYLIST = /mpegurl|dash\+xml|\.(?:m3u8|m3u|mpd)(?:$|[?#])/i; // playlists are small by nature; only plain files are judged by their size
 var MIN_FILE_BYTES = 102400; // the app never offers a plain file under 100 KB (core MediaList.MIN_FILE): not worth a message to it
 // Sites that fetch a video in pieces by putting the byte range in the QUERY make every piece a new address: those parameters do not make a different file.
-var PIECE_PARAMS = /^(range|bytestart|byteend|start|end|sq|seg|segment|rn|rbuf|offset|byte_range|bytes)$/i;
+var PIECE_PARAMS = /^(range|bytestart|byteend|start|end|sq|seg|segment|rn|rbuf|offset|byte_range|bytes|_|cb|nocache|cachebuster|rnd|rand)$/i; // RVW1 F22: and the cache-busters (`_=1700000000`, `cb=`, `nocache=`): every request of a player that adds one was a new address
 function dedupeKey(url, sized) {
   var q = url.indexOf('?');
   if (q < 0) return url + '|' + sized;
@@ -816,7 +816,7 @@ function frameNavigates(d) { // a sub_frame request: the frame [d.frameId] is be
 // What the browser itself sent with a request that may turn out to be media: its Referer and Origin. A video server often wants the embedded PLAYER's (the page the player sits in is not who asks), so the app
 // repeats these when it reads the playlist and fetches the parts. Kept briefly, by request id; a request that never gets an answer is pushed out by the next ones.
 var reqHdr = new Map();
-var REQ_HDR_MAX = 160;
+var REQ_HDR_MAX = 320; // RVW1 F20: was 160; an entry is dropped when its response is read, so only a burst of unanswered requests ever pushes one out, and a busy page's burst was enough
 browser.webRequest.onBeforeSendHeaders.addListener(lstTimed(LST.snd, function (d) {
   var h = d.requestHeaders;
   if (!h) return;
