@@ -52,7 +52,8 @@ object Dash {
             val f = javax.xml.parsers.DocumentBuilderFactory.newInstance()
             try { f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true) } catch (e: Exception) { /* not every parser knows it; none of them fetches external entities by default here */ }
             f.isNamespaceAware = false
-            f.newDocumentBuilder().parse(org.xml.sax.InputSource(java.io.StringReader(text))).documentElement
+            // RVW1 V7: a byte-order mark or blank lines in front of the XML prolog (IIS and some packagers send them) make the parser throw "content is not allowed in prolog": the manifest was "bad"
+            f.newDocumentBuilder().parse(org.xml.sax.InputSource(java.io.StringReader(text.trimStart('\uFEFF', ' ', '\n', '\r', '\t')))).documentElement
         } catch (e: Exception) { return null }
         if (root.tagName.substringAfter(':') != "MPD") return null
         val isLive = root.getAttribute("type").equals("dynamic", true)
@@ -109,13 +110,19 @@ object Dash {
                 if (timeline != null) {
                     var t = 0L
                     var first = true
-                    for (s in children(timeline, "S")) {
+                    val ss = children(timeline, "S")
+                    for ((idx, s) in ss.withIndex()) {
                         val st0 = s.getAttribute("t").toLongOrNull()
                         if (st0 != null) t = st0 else if (first) t = 0
                         first = false
                         val d = s.getAttribute("d").toLongOrNull() ?: continue
                         val r = s.getAttribute("r").toIntOrNull() ?: 0
-                        val repeats: Int = if (r >= 0) r else maxOf(0L, (periodMs * timescale / 1000 - t) / maxOf(d, 1L) - 1).toInt() // r=-1: repeat to the end of the period
+                        // r=-1: repeat to the end of the period, or to the next <S t=...> when one follows. RVW1 V6: the division ROUNDS UP (a 101 s period of 2 s segments needs 51, it built 50 and lost the last second), and with no
+                        // end known at all the stream is not played down to one segment that "succeeds": it is not supported
+                        val repeats: Int = if (r >= 0) r else {
+                            val endTicks = ss.getOrNull(idx + 1)?.getAttribute("t")?.toLongOrNull() ?: if (periodMs > 0) periodMs * timescale / 1000 else return null
+                            maxOf(0L, (endTicks - t + maxOf(d, 1L) - 1) / maxOf(d, 1L) - 1).toInt()
+                        }
                         for (i in 0..repeats) {
                             segs.add(Hls.Seg(Hls.resolve(baseUrl, fill(mediaT, id, bandwidth, number, t)), d * 1000 / timescale, -1, -1, -1, number, false))
                             t += d; number++
