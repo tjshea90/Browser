@@ -960,4 +960,19 @@ class StreamEngineTest {
         assertArrayEquals(expected, h.out(v))
         assertEquals("nothing was asked for under the address before the redirect", 0, h.cdn.requests.count { it.startsWith("https://api.site/stream/9/s") })
     }
+
+    @Test(timeout = 60_000) fun anInitSectionThatTheKeyTagEncryptsIsDecryptedBeforeItIsWritten() {
+        // RVW2 V11: fMP4 with EXT-X-KEY before EXT-X-MAP (RFC 8216 4.3.2.5): the init section is cipher text too
+        val h = H()
+        val key = testBytes(16, 31); val iv = byteArrayOf(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
+        h.cdn.files["https://cdn.test/v/key.bin"] = key
+        fun enc(p: ByteArray): ByteArray { val c = Cipher.getInstance("AES/CBC/PKCS5Padding"); c.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(iv)); return c.doFinal(p) }
+        val plain = java.io.ByteArrayOutputStream()
+        val init = testBytes(700, 41); plain.write(init); h.cdn.files["https://cdn.test/v/init.mp4"] = enc(init)
+        val sb = StringBuilder("#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-KEY:METHOD=AES-128,URI=\"key.bin\",IV=0x000102030405060708090A0B0C0D0E0F\n#EXT-X-MAP:URI=\"init.mp4\"\n")
+        for (i in 0 until 3) { val p = testBytes(9_000 + i, 50L + i); plain.write(p); h.cdn.files["https://cdn.test/v/f$i.m4s"] = enc(p); sb.append("#EXTINF:4,\nf$i.m4s\n") }
+        sb.append("#EXT-X-ENDLIST\n")
+        val v = h.completed(h.enqueue(sb.toString()))
+        assertArrayEquals("the init section and the fragments are plain in the saved file", plain.toByteArray(), h.out(v))
+    }
 }

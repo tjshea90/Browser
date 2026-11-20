@@ -169,4 +169,19 @@ class DashTest {
         val two = Dash.parse(mpd.replace("<Role schemeIdUri=\"urn:mpeg:dash:role:2011\" value=\"main\"/>", ""), url)!!
         assertEquals("without a Role the first listed language is the default", "en", two.audio.first().id)
     }
+
+    @Test fun aSegmentTemplateOnThePeriodIsUsedByRepresentationsThatHaveNone() {
+        // RVW2 V8: ISO 23009-1 lets the addressing sit on the Period; it was only looked for on the Representation and the AdaptationSet
+        val mpd = """<?xml version="1.0"?><MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT20S"><Period>
+          <SegmentTemplate timescale="1000" initialization="${'$'}RepresentationID${'$'}/i.mp4" media="${'$'}RepresentationID${'$'}/s-${'$'}Number${'$'}.m4s" startNumber="1"><SegmentTimeline><S t="0" d="4000" r="4"/></SegmentTimeline></SegmentTemplate>
+          <AdaptationSet contentType="video" mimeType="video/mp4"><Representation id="v1" bandwidth="800000" width="640" height="360" codecs="avc1.4d401e"/></AdaptationSet>
+          <AdaptationSet contentType="audio" mimeType="audio/mp4" lang="en"><Representation id="a1" bandwidth="96000" codecs="mp4a.40.2"/></AdaptationSet>
+        </Period></MPD>"""
+        val m = Dash.parse(mpd, url)!!
+        val v = m.video[0].media!!
+        assertEquals(5, v.segments.size)
+        assertEquals("https://cdn.example.com/v/abc/v1/s-1.m4s", v.segments[0].url)
+        assertEquals("https://cdn.example.com/v/abc/v1/i.mp4", v.init?.url)
+        assertEquals("a1", m.audio.single().id); assertEquals(5, m.audio.single().media!!.segments.size)
+    }
 }
