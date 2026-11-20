@@ -232,7 +232,9 @@ class VideoFlow(private val a: BrowserActivity) {
                 val c = MediaCandidate(url, s.kind, s.mime, if (s.kind == MediaKind.FILE) seed.length else -1L, page, frame, System.currentTimeMillis())
                 c.referer = seed.referer; c.origin = seed.origin; c.viaHeaders = sets[i]; c.frameChain = seed.frameChain
                 Health.log("media", "maybe-hit", "$host ${s.kind} ext=${s.ext} set=${i + 1}/${sets.size}")
-                if (t.media.add(c)) a.refreshDownloadButton()
+                // RVW1 F3: a stream found by its first bytes (the doraby / vidsrc playlist under .txt, a DASH manifest under .bin) gets the early look like one found by name: without it it was never `looked`, so live / protected / clip
+                // rules never applied to it, a blob: player never matched it, and `capture()` (a read stream is the film evidence) never kept it
+                if (t.media.add(c)) { a.refreshDownloadButton(); if (c.kind != MediaKind.FILE) lookSoon(t) }
             }
         }
         attempt(0, 0, 0)
