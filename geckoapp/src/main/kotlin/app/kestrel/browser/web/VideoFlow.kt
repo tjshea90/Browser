@@ -118,7 +118,8 @@ class VideoFlow(private val a: BrowserActivity) {
     /** Called on the Shields worker thread. */
     fun seen(c: MediaCandidate) = Io.ui {
         val t = tabOf(c.page) ?: return@ui
-        if (t.media.add(c)) { a.refreshDownloadButton(); if (c.fromMarkup) verifySoon(t); if (c.kind == MediaKind.HLS) lookSoon(t) }
+        // RVW1 F3: a DASH manifest gets the early look too (lookNow already handles it: its length, its picture heights, "protected"); only HLS used to trigger it, so a DRM or live .mpd counted for the badge and was never matched to a blob: player
+        if (t.media.add(c)) { a.refreshDownloadButton(); if (c.fromMarkup) verifySoon(t); if (c.kind == MediaKind.HLS || c.kind == MediaKind.DASH) lookSoon(t) }
     }
 
     // ---- RX3-V5 (research/FINDER_LAB.md section 3): the early look. A stream playlist the page asked for is read at idle (a few KB: the master and its lowest quality) so that live, protected and clip-sized streams
