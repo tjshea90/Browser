@@ -29,6 +29,34 @@ object Health {
 
     const val WARN_MS = 700L
     const val STALL_MS = 2000L
+    @Volatile private var stackBudget = 24   // LAB4b: stack samples of slow (not yet stalled) UI beats, per process
+    private var profiled = false
+
+    /**
+     * LAB4b, LAB BUILDS ONLY (Health lines are mirrored to logcat only in a debuggable build, [mirror]): the first four seconds of the process, the main thread's stack every 40 ms, summed per 250 ms into
+     * `ui prof t=<ms> n=<samples> <count>x <top 5 frames> || ...`. The emulator lab and the tablet both show a 0.9-1.4 s block right after the first frame; one sample per block (slow-at) named
+     * GeckoRuntime.create once and the renderer's first draw once: this says where the whole block goes. No release build ever starts it.
+     */
+    private fun startupProfile() {
+        if (!mirror) return
+        Thread({
+            val t0 = SystemClock.uptimeMillis()
+            val mainThread = Looper.getMainLooper().thread
+            val buckets = java.util.TreeMap<Int, HashMap<String, Int>>()
+            while (SystemClock.uptimeMillis() - t0 < 4000L) {
+                try {
+                    val key = mainThread.stackTrace.take(5).joinToString(" < ") { it.className.substringAfterLast('.') + "." + it.methodName + ":" + it.lineNumber }
+                    val m = buckets.getOrPut(((SystemClock.uptimeMillis() - t0) / 250L).toInt()) { HashMap() }
+                    m[key] = (m[key] ?: 0) + 1
+                } catch (e: Exception) { /* best effort */ }
+                try { Thread.sleep(40) } catch (e: InterruptedException) { break }
+            }
+            for ((b, m) in buckets) {
+                val top = m.entries.sortedByDescending { it.value }.take(2)
+                log("ui", "prof", "t=${b * 250}ms n=${m.values.sum()} " + top.joinToString(" || ") { "${it.value}x ${it.key}" })
+            }
+        }, "kestrel-startprof").apply { isDaemon = true; priority = Thread.MIN_PRIORITY; start() }
+    }
 
     fun log(layer: String, event: String, detail: String = "") {
         val ms = SystemClock.elapsedRealtime() - startedAt // "+12.345s ...": built by hand, String.format costs about 50-100 us on this CPU and this runs for every touch that may start a pull
@@ -59,8 +87,9 @@ object Health {
     fun startWatchdog() {
         if (dog != null) return
         watching = true
+        if (!profiled) { profiled = true; startupProfile() }
         dog = Thread({
-            var postedAt = 0L; var warned = false; var stacked = false
+            var postedAt = 0L; var warned = false; var stacked = false; var blockSamples = 0; var lastSampleAt = 0L
             while (watching) {
                 val now = SystemClock.uptimeMillis()
                 if (postedAt == 0L) { postedAt = now; ackAt = 0L; main.post { ackAt = SystemClock.uptimeMillis() } }
@@ -69,7 +98,7 @@ object Health {
                 if (ackAt != 0L) {
                     val lag = ackAt - postedAt
                     if (lag >= WARN_MS) { log("ui", "late-beat", "${lag}ms"); count("ui.late") }
-                    postedAt = 0L; warned = false; stacked = false
+                    postedAt = 0L; warned = false; stacked = false; blockSamples = 0
                     try { Thread.sleep(250) } catch (e: InterruptedException) { break }
                 } else {
                     val waiting = n - postedAt
@@ -78,6 +107,11 @@ object Health {
                         log("ui", "STALL", "${waiting}ms: the UI thread is blocked at")
                         try { Looper.getMainLooper().thread.stackTrace.take(12).forEach { log("ui", "  at", it.toString()) } } catch (e: Exception) { /* best effort */ }
                     } else if (waiting >= WARN_MS && !warned) { warned = true; log("ui", "slow", "${waiting}ms") }
+                    // LAB4b: a block between 0.7 s and 2 s used to leave no stack (the lab and the tablet both show about 0.9 s at start-up): name it. At most 3 samples per block, 24 per process.
+                    if (waiting >= WARN_MS && !stacked && blockSamples < 3 && stackBudget > 0 && n - lastSampleAt >= 350) {
+                        blockSamples++; stackBudget--; lastSampleAt = n
+                        try { log("ui", "slow-at", "${waiting}ms " + Looper.getMainLooper().thread.stackTrace.take(9).joinToString(" < ") { it.className.substringAfterLast('.') + "." + it.methodName + ":" + it.lineNumber }) } catch (e: Exception) { /* best effort */ }
+                    }
                 }
             }
         }, "kestrel-watchdog").apply { isDaemon = true; priority = Thread.MIN_PRIORITY; start() }
