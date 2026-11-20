@@ -57,6 +57,20 @@ abstract class PrepareWebcompat : DefaultTask() {
         val listener = File(base, "lib/remote_settings_update_check.js")
         check(listener.isFile && File(base, "manifest.json").isFile && File(base, "run.js").isFile) { "feature-webcompat no longer has the expected layout: re-check research/REVIEW_2026-11-22_NEWLEVERS.md NL1" }
         listener.writeText("/* Kestrel: no Remote Settings listener (no new background traffic); the interventions baked into this build are used. See research/REVIEW_2026-11-22_NEWLEVERS.md NL1. */\nfunction listenForRemoteSettingsUpdates() {}\n")
+        // YTC2 (owner 2026-11-20: "The player controls on YouTube ... pop up then disappear immediately", first seen after alpha75 brought this extension): Mozilla's three YouTube fixes (a back/forward timer patch, a
+        // picture-in-picture fix and background playback) were written for stock Firefox for Android, which has picture-in-picture and a background-audio path; Kestrel has neither, and they change the page's own
+        // `document.hidden`, `visibilitychange`, `window.outerWidth` and `exitFullscreen` on the most used video site. YouTube had never run with them before alpha75, so they stay out until proven harmless: their match
+        // patterns are pointed at a host that does not exist (still a valid pattern, so the extension registers as before). Every other site keeps its fixes.
+        val run = File(base, "run.js")
+        var text = run.readText()
+        var swapped = 0
+        for (host in listOf("www.youtube.com", "m.youtube.com")) {
+            val pattern = "\"*://$host/*\""
+            swapped += text.split(pattern).size - 1
+            text = text.replace(pattern, "\"*://${host.replace("youtube.com", "youtube.invalid")}/*\"")
+        }
+        check(swapped >= 3) { "the YouTube interventions are no longer where research/YTC2 expects them (found $swapped match patterns): re-check the exclusion" }
+        run.writeText(text)
     }
 }
 
