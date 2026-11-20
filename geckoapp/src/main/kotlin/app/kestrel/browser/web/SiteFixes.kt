@@ -26,6 +26,9 @@ object SiteFixes {
     @Volatile private var scheduled = false
     @Volatile private var line = "Site fixes: not started yet (they start ${DELAY_MS / 1000} s after the first page has loaded)"
 
+    /** True once the first page has started the timer (the Settings switch only acts after that). */
+    fun started(): Boolean = scheduled
+
     /** One line for Diagnostics. */
     fun statusLine(): String = line
 
