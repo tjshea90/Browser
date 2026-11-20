@@ -28,6 +28,8 @@ interface SettingsListener {
     /** Settings > "Send what the keyboard learned to Swoop" (owner request 17): one explicit hand-over of the mini keyboard's memory to the Swoop app. */
     fun handOverToSwoop() {}
     fun resetMiniGeometry() {}
+    /** Settings > "Reset the downloads window" (FD1): the small download window goes back to the top right corner at its first size. */
+    fun resetDownloadWindow() {}
     fun resetSiteShields()
     fun updateFiltersNow()
     fun resetDataCounter()
@@ -140,6 +142,7 @@ class SettingsView(private val ctx: Context, private val pal: Pal, private val p
         if (app.kestrel.browser.Flavor.hasMiniNav) toggle("Glide typing on the mini keyboard", "Slide your finger over the letters of a word without lifting it, then lift: the word is typed with a space after it, and two other guesses show above the keys (tap one to swap it). Tapping single letters still works. The keyboard learns how your thumb lands and the words you type or the sites you visit. Backspace right after a glide removes the whole word.", prefs.glideTyping) { prefs.glideTyping = it; l.prefsChanged() }
         if (app.kestrel.browser.Flavor.hasMiniNav) toggle("Key vibration on the mini keyboard", "A short tick when a key is pressed. It follows the system's touch feedback setting, and a tablet without a vibration motor feels nothing.", prefs.keyHaptics) { prefs.keyHaptics = it }
         if (app.kestrel.browser.Flavor.hasMiniNav) toggle("Always use the Swoop keyboard (recommended)", "On (default): Kestrel types with your Swoop keyboard whenever the Swoop app is installed, so what you type here and in other apps feeds ONE learned memory. If Swoop is installed but not your chosen keyboard, tapping the panel's bar asks Android to switch to it. Off, or Swoop not installed: the panel's own small keyboard opens (a separate memory).", prefs.swoopKeyboard) { prefs.swoopKeyboard = it }
+        if (app.kestrel.browser.Flavor.hasMiniNav) button("Reset the downloads window", "The small downloads window floats: press its title bar or long press it and drag to move it anywhere, drag the mark at its bottom left corner to make it bigger or smaller, double tap that mark to put it back. This puts it back at the top right at its first size.") { l.resetDownloadWindow() }
         if (app.kestrel.browser.Flavor.hasMiniNav) button("Reset the mini keyboard's size and position", "Long press the panel and drag to move it anywhere (or drag the small bar on top of it); drag a corner of the open keyboard to make it bigger or smaller. This puts it back under the top right corner at its first size.") { l.resetMiniGeometry() }
         if (app.kestrel.browser.Flavor.hasPullRefresh) toggle("Pull down to refresh", "Drag a page down from its top edge to reload it", prefs.pullRefresh) { prefs.pullRefresh = it }
         choice("Dark pages", listOf("Automatic", "Always", "Never"), prefs.webDark) { prefs.webDark = it }

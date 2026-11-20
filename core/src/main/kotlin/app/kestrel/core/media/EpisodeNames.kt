@@ -66,6 +66,56 @@ object EpisodeNames {
         return null
     }
 
+    // ---- NM1: the clues of the page's own player and episode list
+
+    /** A season and an episode in the address of a player frame or of a media file: `/tv/69740/1/2`, `/embed/tv/69740/1-2`, `?season=1&episode=2`, `&s=1&e=2`, `/tv/ozark/season-1/episode-2`, `Ozark.S01E02`. */
+    class UrlMark(val season: Int, val episode: Int)
+
+    private val TV_PATH = Regex("""/(?:tv|tvshow|tvshows|series|serie|show|shows|episode)/[^/?#]+/(\d{1,3})(?:/|-|x)(\d{1,4})(?![0-9A-Za-z])""", OPTS)
+    private val TV_PATH_DASH = Regex("""/(?:tv|tvshow|series|serie|show)/[^/?#]*?-(\d{1,3})-(\d{1,4})(?:[/?#]|$)""", OPTS)
+    private val Q_SEASON = Regex("""[?&](?:season|season_number|seasonnumber|ss|s)=(\d{1,3})(?![0-9])""", OPTS)
+    private val Q_EPISODE = Regex("""[?&](?:episode|episode_number|episodenumber|ep|epi|e)=(\d{1,4})(?![0-9])""", OPTS)
+
+    fun urlMark(url: String): UrlMark? {
+        if (url.isEmpty()) return null
+        TV_PATH.find(url)?.let { return UrlMark(it.groupValues[1].toInt(), it.groupValues[2].toInt()) }
+        TV_PATH_DASH.find(url)?.let { return UrlMark(it.groupValues[1].toInt(), it.groupValues[2].toInt()) }
+        val qs = Q_SEASON.find(url)?.groupValues?.get(1)?.toIntOrNull()
+        val qe = Q_EPISODE.find(url)?.groupValues?.get(1)?.toIntOrNull()
+        if (qs != null && qe != null) return UrlMark(qs, qe)
+        mark(slugOf(url), withEpisodeOnly = false)?.let { if (it.season > 0) return UrlMark(it.season, it.episode) }
+        return null
+    }
+
+    /** The show or film name out of a page title ("Watch Ozark Online Free - Doraby" -> "Ozark", "Ozark (TV Series 2017-2022) - Doraby" -> "Ozark"); "" when it names nothing. */
+    fun showFromTitle(pageTitle: String, pageHost: String): String =
+        plausible(dropSeasonTail(firstSegmentTitle(pageTitle.replace(Regex("""\s+"""), " ").trim(), pageHost, dropYear = true)))
+
+    /** "Ozark Season 2" -> "Ozark": a season label after the name is not part of the show's name. */
+    private fun dropSeasonTail(s: String): String = s.replace(Regex("""\s*[-–—:,]?\s*(?:season|series)\s*\d+.*$""", OPTS), "").trim(' ', '-', '–', '—', ':', ',')
+
+    private val SEASON_WORD = Regex("""(?<![A-Za-z])(?:season|series)[ ._-]*(\d{1,3})(?![0-9])""", OPTS)
+
+    /**
+     * The name the page's own clues give, nearest to the person's press first: the episode the page marks as the one in front (its active list item), else the season and episode in the address of the player's
+     * frame or frames (every doraby server's embed address names them: /tv/<id>/<season>/<episode>) or of the file itself. The SHOW comes from the page's own heading / og:title / JSON-LD, else its title, else
+     * its address. A season the clues give but the episode not ("Season 2" in the title, "Episode 4" in the list) is joined. Null when no episode can be made out (a film: the old rules decide).
+     */
+    fun fromClues(clues: NameClues?, frameUrls: List<String>, mediaUrl: String, pageTitle: String, pageUrl: String, pageHost: String): String? {
+        var season = clues?.season ?: 0
+        var episode = clues?.episode ?: 0
+        if (episode == 0) {
+            for (u in frameUrls + mediaUrl) { val m = urlMark(u) ?: continue; season = if (season > 0) season else m.season; episode = m.episode; break }
+        }
+        if (episode == 0) return null
+        if (season == 0) season = SEASON_WORD.find(pageTitle)?.groupValues?.get(1)?.toIntOrNull() ?: SEASON_WORD.find(slugOf(pageUrl))?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        val show = listOf(showFromTitle(clues?.show.orEmpty(), pageHost), showFromTitle(pageTitle, pageHost), showFromUrl(pageUrl, pageHost), titleCaseIfLower(firstSegmentTitle(slugOf(pageUrl), pageHost, dropYear = true)))
+            .map { fileSafe(dropSeasonTail(it)).let { s -> plausible(s) } }.firstOrNull { it.isNotEmpty() } ?: return null
+        val tag = (if (season > 0) "S%02d".format(Locale.ROOT, season) else "") + "E%02d".format(Locale.ROOT, episode)
+        val title = clues?.episodeTitle.orEmpty().let { t -> if (t.isNotEmpty() && mark(t, withEpisodeOnly = true) == null && !t.equals(show, true)) fileSafe(t) else "" }
+        return "$show $tag" + (if (title.isNotEmpty()) " - $title" else "")
+    }
+
     /**
      * A page title without the site's noise: "Watch Dune: Part Two (2024) Full Movie Online Free - Doraby" -> "Dune - Part Two (2024)". The first part of the title that is not the site's name or only noise
      * words; "" when nothing is left (the caller falls back to the plain title).
