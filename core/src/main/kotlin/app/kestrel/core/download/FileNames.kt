@@ -145,11 +145,28 @@ object FileNames {
     }
 
     fun withExtensionFor(mime: String?, name: String): String {
-        val ext = MIME_EXT[mime?.substringBefore(';')?.trim()?.lowercase(Locale.ROOT)] ?: return name
+        val m = mime?.substringBefore(';')?.trim()?.lowercase(Locale.ROOT)
+        val ext = MIME_EXT[m] ?: return name
         val dot = name.lastIndexOf('.')
         val has = dot > 0 && name.length - dot - 1 in 1..8
-        return if (has) name else "$name.$ext"
+        if (!has) return "$name.$ext"
+        // RVW2 N7: for a VIDEO or AUDIO type, a "." in the name is not proof of an extension: "Dune.Part.Two.2024" ends in a year, and "download.php" in the script that served the file. Only a known file extension is kept;
+        // a script extension is replaced by the type's own; anything else gets the type's extension added. (Other types keep the old rule: any short ending counts.)
+        if (m != null && (m.startsWith("video/") || m.startsWith("audio/"))) {
+            val last = name.substring(dot + 1).lowercase(Locale.ROOT)
+            if (last in KNOWN_EXT) return name
+            if (last in SCRIPT_EXT) return name.substring(0, dot) + "." + ext
+            return "$name.$ext"
+        }
+        return name
     }
+
+    private val SCRIPT_EXT = setOf("php", "php3", "php4", "php5", "asp", "aspx", "cgi", "jsp", "jspx", "html", "htm", "shtml", "do", "action", "pl", "py", "cfm", "bin", "dat", "tmp", "download", "file", "stream", "mpd", "m3u8")
+    private val KNOWN_EXT = setOf(
+        "mp4", "m4v", "mov", "webm", "mkv", "avi", "wmv", "flv", "f4v", "3gp", "3g2", "mpg", "mpeg", "ts", "m2ts", "mts", "ogv", "vob", "divx", "asf", "rm", "rmvb", "mxf",
+        "mp3", "m4a", "m4b", "aac", "wav", "flac", "ogg", "oga", "opus", "weba", "mka", "wma", "amr", "mid", "ac3", "aif", "aiff",
+        "srt", "vtt", "ass", "ssa", "sub", "jpg", "jpeg", "png", "gif", "webp", "zip", "rar", "7z", "pdf", "txt",
+    )
 
     /** "name.ext" -> "name (1).ext", "name (2).ext" ... until [exists] says the name is free. */
     fun dedupe(name: String, exists: (String) -> Boolean): String {

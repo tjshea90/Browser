@@ -76,4 +76,17 @@ class FileNamesTest {
         assertEquals("abcd\uD83D\uDE00", FileNames.cutChars("abcd\uD83D\uDE00x", 6))
         assertEquals("", FileNames.cutChars("abc", 0))
     }
+
+    @Test fun aDotInAVideoNameIsNotProofOfAnExtension() {
+        // RVW2 N7
+        assertEquals("Dune.Part.Two.2024.mp4", FileNames.withExtensionFor("video/mp4", "Dune.Part.Two.2024"))
+        assertEquals("download.mp4", FileNames.withExtensionFor("video/mp4", "download.php"))
+        assertEquals("stream.mp4", FileNames.withExtensionFor("video/mp4", "stream.m3u8"))
+        assertEquals("Song.Title.Live.mp3", FileNames.withExtensionFor("audio/mpeg", "Song.Title.Live"))
+        assertEquals("noext.mp4", FileNames.withExtensionFor("video/mp4", "noext"))
+        assertEquals("a known extension stays, in any case", "clip.MKV", FileNames.withExtensionFor("video/mp4", "clip.MKV"))
+        assertEquals("clip.mp4", FileNames.withExtensionFor("video/mp4", "clip.mp4"))
+        assertEquals("other types keep the old rule", "report.xyz", FileNames.withExtensionFor("application/pdf", "report.xyz"))
+        assertEquals("an unknown type leaves the name alone", "x.php", FileNames.withExtensionFor("application/octet-stream", "x.php"))
+    }
 }
