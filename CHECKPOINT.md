@@ -1,22 +1,25 @@
-# CHECKPOINT 2736 — read me first, then TASKS.md
+# CHECKPOINT 2737 — read me first, then TASKS.md
 
-**Written:** 2026-11-20T05:57:41Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-d6f32d19-c3cwzl` · **builds on:** `26745261` (this checkpoint is the commit after it)
+**Written:** 2026-11-20T05:58:20Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-d6f32d19-c3cwzl` · **builds on:** `b754bfa7` (this checkpoint is the commit after it)
 
 ## Just done
-STANDING RULE recorded (owner: Always ship new versions and release without stopping to ask me): CLAUDE.md GitHub Actions section + TASKS REL-STANDING; REL73 (alpha73) opened
+REL73a done: versionCode 174 / 0.3.0-alpha73, ext synced, ALPHA73 release note written
 
 ## Do this next
-Bump geckoapp/build.gradle.kts versionCode 174 / 0.3.0-alpha73, bash tools/sync-ext-version.sh, write docs/handoff/ALPHA73_RELEASE_NOTE.txt, bash ship.sh gecko with the note, ONE dispatch (mcp__github__actions_run_trigger android.yml app=gecko full_build=true ref ccr-d6f32d19-c3cwzl), wait for tag + jobs, record-release identical note, answer the owner with the Release link
+bash ship.sh gecko with the ALPHA73 note (tr newlines to spaces), then ONE dispatch, wait, record-release identical note
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M CLAUDE.md
      M TASKS.md
+     M geckoapp/build.gradle.kts
+     M geckoapp/src/main/assets/kestrel-shields/manifest.json
+    ?? docs/handoff/ALPHA73_RELEASE_NOTE.txt
 
 ## Last ten checkpoints
 ```
+  b754bfa7 ckpt 2736: STANDING RULE recorded (owner: Always ship new versions and release without 
   26745261 ckpt 2735: RVW2 DONE: all code items from today's review (F13 F16 F17 F19 F24 V3 V4 V8 
   3b61bea3 ckpt 2734: RVW2 batch 2 in the tree: V3 (Engine noWindow), V4 (resume big unknown-lengt
   3b6d5f14 ckpt 2733: RVW2 batch 1 in the tree: F13 F16 (JS + core tested), F17 F19 F24 S2 P8 P9 (
@@ -26,5 +29,4 @@ Bump geckoapp/build.gradle.kts versionCode 174 / 0.3.0-alpha73, bash tools/sync-
   78e8423a ckpt 2729: REL72b: alpha72 DISPATCHED ONCE (android.yml app=gecko full_build=true ref c
   8b8e8faa ckpt 2728: gated kestrel-g-v0.3.0-alpha72 (gecko code 173) and pushed it: handoff self-
   2cae13e7 ckpt 2727: REL72a done: geckoapp versionCode 173 / 0.3.0-alpha72, ext version synced, d
-  10fe1a32 ckpt 2726: REL72 written into TASKS (owner said: Release the next version and tell me w
 ```
