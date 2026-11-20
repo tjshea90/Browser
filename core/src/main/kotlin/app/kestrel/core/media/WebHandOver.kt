@@ -142,6 +142,14 @@ object WebHandOver {
      */
     fun pressWindowMs(why: Why): Long = if (why == Why.FULLSCREEN || why == Why.LATE) 30_000L else 15_000L
 
+    /**
+     * RVW3 SC1: the film's address comes from the page (the element's own `src`, or a list the page asked for), and Kestrel's own player is the APP, not the engine: the engine's local-network blocking does not
+     * apply to it. A page on the public internet must not be able to point it, after one innocent tap, at the router, a NAS or a camera of the owner's network ([NetHosts.reachesLocalNetwork]: every spelling).
+     * A page that is itself on the local network (the hotspot gateway, a NAS) may play its own files. An address that has no host counts as refused.
+     */
+    fun hostRefused(pageUrl: String, filmUrl: String): Boolean =
+        !NetHosts.probeAllowed(UrlParts.hostOf(filmUrl).orEmpty(), UrlParts.hostOf(pageUrl).orEmpty())
+
     const val RESUME_WINDOW_MS = 30 * 60_000L      // a film pressed again within this long after Kestrel's player ended continues where the person stopped
 
     /**
