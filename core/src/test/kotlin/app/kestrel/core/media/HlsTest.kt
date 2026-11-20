@@ -215,4 +215,26 @@ class HlsTest {
         val m = vod("#EXT-X-DISCONTINUITY", "#EXTINF:6,", "f0.ts", "#EXT-X-ASSET:CAID=0x1", "#EXT-X-SPLICEPOINT:1", "#EXTINF:6,", "f1.ts")
         assertEquals(listOf(false, false), ads(m)); assertEquals(1, m.discontinuities)
     }
+
+    // ---- RVW1 S4: a hostile page must not be able to make the app build millions of strings and segment objects
+
+    @Test fun aPlaylistWithAbsurdlyManyLinesIsRefusedNotParsed() {
+        val sb = StringBuilder("#EXTM3U\n#EXT-X-TARGETDURATION:1\n")
+        for (i in 0 until 100_000) sb.append("#EXTINF:1,\na\n")            // 200,000 lines: no real VOD list is anywhere near
+        sb.append("#EXT-X-ENDLIST\n")
+        assertNull(Hls.parse(sb.toString(), base))
+        val ok = StringBuilder("#EXTM3U\n#EXT-X-TARGETDURATION:2\n")
+        for (i in 0 until 40_000) ok.append("#EXTINF:2,\ns$i.ts\n")         // 24 hours of 2 s segments is still fine
+        ok.append("#EXT-X-ENDLIST\n")
+        assertEquals(40_000, media(ok.toString()).segments.size)
+    }
+
+    @Test fun aPlaylistThatNamesAThousandsOfKeysIsNotSupportedInsteadOfBuildingThemAll() {
+        val sb = StringBuilder("#EXTM3U\n#EXT-X-TARGETDURATION:2\n")
+        for (i in 0 until 5_000) sb.append("#EXT-X-KEY:METHOD=AES-128,URI=\"k$i.bin\"\n#EXTINF:2,\ns$i.ts\n")
+        sb.append("#EXT-X-ENDLIST\n")
+        val m = media(sb.toString())
+        assertEquals(Hls.Problem.UNSUPPORTED, m.problem)
+        assertTrue(m.keys.size <= Hls.MAX_KEYS)
+    }
 }

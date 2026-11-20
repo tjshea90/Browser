@@ -301,9 +301,20 @@
       }
     }
   }
+  // RVW2 P5b: is any frame of the page one that could be a fake layer at all (fixed or absolute, and see-through or hidden: the same two tests fakeFrameOver makes first)? The sweep used to start with a whole-document
+  // query (video, canvas, every class and id with "player" in it) and up to twelve layout reads on EVERY page that had one frame of any kind, six times while the page loaded: most pages have an ad frame.
+  function hasSuspectFrame() {
+    var fr = document.getElementsByTagName('iframe');
+    for (var i = 0; i < fr.length && i < 40; i++) {
+      var cs = getComputedStyle(fr[i]);
+      if ((cs.position === 'fixed' || cs.position === 'absolute') && frameHidden(cs)) return true;
+    }
+    return false;
+  }
   function sweepFrames() {
     try {
-      if (!on || !document.elementsFromPoint || !document.querySelector('iframe')) return;
+      if (offFrames.length) giveBack();
+      if (!on || !document.elementsFromPoint || !hasSuspectFrame()) return;
       giveBack();
       var cands = document.querySelectorAll('video, canvas, [class*="player" i], [id*="player" i]');
       for (var i = 0; i < cands.length && i < 12; i++) {

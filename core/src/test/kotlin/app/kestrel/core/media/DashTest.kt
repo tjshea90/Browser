@@ -113,4 +113,75 @@ class DashTest {
         assertEquals(90_000L, Dash.parseDuration("PT1M30S"))
         assertEquals(0L, Dash.parseDuration(""))
     }
+
+    // ---- RVW1 (research/REVIEW_2026-11-20_DOWNLOAD.md): V6 the r=-1 repeat rounds up and stops at the next S, V7 a byte-order mark in front of the prolog
+
+    private fun mpd(duration: String, timelineXml: String, timescale: Int = 1000) = """<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static"${if (duration.isEmpty()) "" else " mediaPresentationDuration=\"$duration\""}>
+  <Period><AdaptationSet contentType="video" mimeType="video/mp4">
+    <SegmentTemplate timescale="$timescale" initialization="i.mp4" media="s-${'$'}Number${'$'}.m4s" startNumber="1"><SegmentTimeline>$timelineXml</SegmentTimeline></SegmentTemplate>
+    <Representation id="v" bandwidth="800000" width="640" height="360" codecs="avc1.4d401e"/>
+  </AdaptationSet></Period>
+</MPD>"""
+
+    @Test fun aRepeatToTheEndOfThePeriodRoundsUpSoTheLastSecondIsNotLost() {
+        // 101 s of 2 s segments needs 51 (the last one is 1 s long): 50 were built and the end of the film was cut off
+        val m = Dash.parse(mpd("PT101S", """<S t="0" d="2000" r="-1"/>"""), url)!!
+        assertNull(m.problem)
+        assertEquals(51, m.video[0].media!!.segments.size)
+        val exact = Dash.parse(mpd("PT100S", """<S t="0" d="2000" r="-1"/>"""), url)!!
+        assertEquals("an exact multiple is not given one extra", 50, exact.video[0].media!!.segments.size)
+    }
+
+    @Test fun aRepeatToTheEndStopsAtTheNextTimelineEntry() {
+        val m = Dash.parse(mpd("PT30S", """<S t="0" d="2000" r="-1"/><S t="10000" d="5000" r="-1"/>"""), url)!!
+        val segs = m.video[0].media!!.segments
+        assertEquals("5 of 2 s up to 10 s, then 4 of 5 s up to 30 s", 5 + 4, segs.size)
+        assertEquals(2000L, segs[0].durationMs); assertEquals(5000L, segs[5].durationMs)
+    }
+
+    @Test fun aRepeatToTheEndWithNoEndKnownIsNotPlayedDownToOneSegment() {
+        // before: one segment, "completed", a 2 second file of a film
+        val m = Dash.parse(mpd("", """<S t="0" d="2000" r="-1"/>"""), url)
+        assertTrue("not supported, never a one-segment success", m == null || m.video.isEmpty() || m.video[0].media == null)
+    }
+
+    @Test fun aManifestWithAByteOrderMarkOrBlankLinesInFrontOfTheXmlIsStillRead() {
+        val body = mpd("PT20S", """<S t="0" d="4000" r="4"/>""")
+        assertNotNull(Dash.parse("\uFEFF" + body, url))
+        assertNotNull(Dash.parse("\n\r\n  " + body, url))
+        assertEquals(5, Dash.parse("\uFEFF\n" + body, url)!!.video[0].media!!.segments.size)
+    }
+
+    @Test fun theSoundTrackSavedFirstIsTheStreamsOwnLanguageNotTheBiggestBitRate() {
+        // RVW1 V9: English (listed first, 96 kbps), Spanish (128 kbps) and an English audio-description track (192 kbps, the biggest)
+        fun audioSet(lang: String, role: String?, id: String, bw: Int) = """<AdaptationSet contentType="audio" lang="$lang" mimeType="audio/mp4">${if (role == null) "" else """<Role schemeIdUri="urn:mpeg:dash:role:2011" value="$role"/>"""}
+          <SegmentTemplate timescale="1000" initialization="$id/i.mp4" media="$id/s-${'$'}Number${'$'}.m4s" startNumber="1"><SegmentTimeline><S t="0" d="4000" r="4"/></SegmentTimeline></SegmentTemplate>
+          <Representation id="$id" bandwidth="$bw" codecs="mp4a.40.2"/></AdaptationSet>"""
+        val mpd = """<?xml version="1.0"?><MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT20S"><Period>
+          <AdaptationSet contentType="video" mimeType="video/mp4"><SegmentTemplate timescale="1000" initialization="v/i.mp4" media="v/s-${'$'}Number${'$'}.m4s" startNumber="1"><SegmentTimeline><S t="0" d="4000" r="4"/></SegmentTimeline></SegmentTemplate>
+            <Representation id="v" bandwidth="800000" width="640" height="360" codecs="avc1.4d401e"/></AdaptationSet>
+          ${audioSet("en", "main", "en", 96000)}${audioSet("es", "dub", "es", 128000)}${audioSet("en", "description", "ad", 192000)}
+        </Period></MPD>"""
+        val m = Dash.parse(mpd, url)!!
+        assertEquals(listOf("en", "es", "ad"), m.audio.map { it.id })
+        assertEquals("description", m.audio.last().role)
+        val two = Dash.parse(mpd.replace("<Role schemeIdUri=\"urn:mpeg:dash:role:2011\" value=\"main\"/>", ""), url)!!
+        assertEquals("without a Role the first listed language is the default", "en", two.audio.first().id)
+    }
+
+    @Test fun aSegmentTemplateOnThePeriodIsUsedByRepresentationsThatHaveNone() {
+        // RVW2 V8: ISO 23009-1 lets the addressing sit on the Period; it was only looked for on the Representation and the AdaptationSet
+        val mpd = """<?xml version="1.0"?><MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT20S"><Period>
+          <SegmentTemplate timescale="1000" initialization="${'$'}RepresentationID${'$'}/i.mp4" media="${'$'}RepresentationID${'$'}/s-${'$'}Number${'$'}.m4s" startNumber="1"><SegmentTimeline><S t="0" d="4000" r="4"/></SegmentTimeline></SegmentTemplate>
+          <AdaptationSet contentType="video" mimeType="video/mp4"><Representation id="v1" bandwidth="800000" width="640" height="360" codecs="avc1.4d401e"/></AdaptationSet>
+          <AdaptationSet contentType="audio" mimeType="audio/mp4" lang="en"><Representation id="a1" bandwidth="96000" codecs="mp4a.40.2"/></AdaptationSet>
+        </Period></MPD>"""
+        val m = Dash.parse(mpd, url)!!
+        val v = m.video[0].media!!
+        assertEquals(5, v.segments.size)
+        assertEquals("https://cdn.example.com/v/abc/v1/s-1.m4s", v.segments[0].url)
+        assertEquals("https://cdn.example.com/v/abc/v1/i.mp4", v.init?.url)
+        assertEquals("a1", m.audio.single().id); assertEquals(5, m.audio.single().media!!.segments.size)
+    }
 }

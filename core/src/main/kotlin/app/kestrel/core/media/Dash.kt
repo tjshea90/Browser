@@ -21,6 +21,8 @@ object Dash {
         val lang: String?,
         /** The segment plan of this representation (or null when it cannot be built). */
         val media: Hls.Media?,
+        /** RVW1 V9: the adaptation set's <Role value=...> ("main", "alternate", "dub", "commentary", "description", ...); "" = none. */
+        val role: String = "",
     ) {
         /** "1080p", "720p60", "Audio 128 kbps". */
         val label: String get() = when {
@@ -43,7 +45,17 @@ object Dash {
 
     class Manifest(val durationMs: Long, val reps: List<Rep>, val problem: Hls.Problem?) {
         val video: List<Rep> get() = reps.filter { !it.audio }.sortedWith(compareByDescending<Rep> { it.height }.thenByDescending { it.bandwidth })
-        val audio: List<Rep> get() = reps.filter { it.audio }.sortedByDescending { it.bandwidth }
+        /**
+         * RVW1 V9: the sound tracks, the one to save FIRST. It was the highest bit rate: in a manifest with an English track, a Spanish one and an audio-description track, the Spanish (or the description, which is
+         * usually the biggest) went into the file. Now: tracks that are extras (description, commentary, emergency, supplementary) come last; the stream's own default language (that of the first track the manifest lists
+         * that is not an extra) comes before other languages; then the highest bit rate.
+         */
+        val audio: List<Rep> get() {
+            val all = reps.filter { it.audio }
+            fun extra(r: Rep) = r.role == "description" || r.role == "commentary" || r.role == "emergency" || r.role == "supplementary"
+            val own = all.firstOrNull { !extra(it) }?.lang
+            return all.sortedWith(compareBy<Rep>({ extra(it) }, { it.lang != own }).thenByDescending { it.bandwidth })
+        }
     }
 
     /** @return null when [text] is not an MPD. */
@@ -52,7 +64,8 @@ object Dash {
             val f = javax.xml.parsers.DocumentBuilderFactory.newInstance()
             try { f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true) } catch (e: Exception) { /* not every parser knows it; none of them fetches external entities by default here */ }
             f.isNamespaceAware = false
-            f.newDocumentBuilder().parse(org.xml.sax.InputSource(java.io.StringReader(text))).documentElement
+            // RVW1 V7: a byte-order mark or blank lines in front of the XML prolog (IIS and some packagers send them) make the parser throw "content is not allowed in prolog": the manifest was "bad"
+            f.newDocumentBuilder().parse(org.xml.sax.InputSource(java.io.StringReader(text.trimStart('\uFEFF', ' ', '\n', '\r', '\t')))).documentElement
         } catch (e: Exception) { return null }
         if (root.tagName.substringAfter(':') != "MPD") return null
         val isLive = root.getAttribute("type").equals("dynamic", true)
@@ -80,9 +93,10 @@ object Dash {
                 val rBase = baseOf(r, asBase, mpdUrl)
                 val id = r.getAttribute("id")
                 val bw = r.getAttribute("bandwidth").toLongOrNull() ?: 0L
-                val media = try { plan(aset, r, id, bw, rBase, periodMs, mime, problem) } catch (e: Exception) { null }
+                val media = try { plan(period, aset, r, id, bw, rBase, periodMs, mime, problem) } catch (e: Exception) { null }
                 reps.add(Rep(id, bw, r.getAttribute("width").toIntOrNull() ?: aset.getAttribute("width").toIntOrNull() ?: 0, r.getAttribute("height").toIntOrNull() ?: aset.getAttribute("height").toIntOrNull() ?: 0,
-                    codecs, mime, frameRate(r.getAttribute("frameRate").ifEmpty { aset.getAttribute("frameRate") }), audio, aset.getAttribute("lang").takeIf { it.isNotEmpty() }, media))
+                    codecs, mime, frameRate(r.getAttribute("frameRate").ifEmpty { aset.getAttribute("frameRate") }), audio, aset.getAttribute("lang").takeIf { it.isNotEmpty() }, media,
+                    role = children(aset, "Role").firstOrNull()?.getAttribute("value")?.lowercase().orEmpty()))
             }
         }
         return Manifest(periodMs, reps, problem)
@@ -90,10 +104,11 @@ object Dash {
 
     // ------------------------------------------------------------------------------------------ one representation's segments
 
-    private fun plan(aset: Element, rep: Element, id: String, bandwidth: Long, baseUrl: String, periodMs: Long, mime: String, problem: Hls.Problem?): Hls.Media? {
-        val st = child(rep, "SegmentTemplate") ?: child(aset, "SegmentTemplate")
-        val sl = child(rep, "SegmentList") ?: child(aset, "SegmentList")
-        val sb = child(rep, "SegmentBase") ?: child(aset, "SegmentBase")
+    private fun plan(period: Element, aset: Element, rep: Element, id: String, bandwidth: Long, baseUrl: String, periodMs: Long, mime: String, problem: Hls.Problem?): Hls.Media? {
+        // RVW2 V8: the addressing may sit on the Representation, the AdaptationSet or (ISO 23009-1 allows it, some packagers write it) the PERIOD: it was only looked for on the first two, and such a manifest was refused
+        val st = child(rep, "SegmentTemplate") ?: child(aset, "SegmentTemplate") ?: child(period, "SegmentTemplate")
+        val sl = child(rep, "SegmentList") ?: child(aset, "SegmentList") ?: child(period, "SegmentList")
+        val sb = child(rep, "SegmentBase") ?: child(aset, "SegmentBase") ?: child(period, "SegmentBase")
         val format = if (mime.contains("webm")) "webm" else "mp4"
         val segs = ArrayList<Hls.Seg>()
         var init: Hls.Init? = null
@@ -109,13 +124,19 @@ object Dash {
                 if (timeline != null) {
                     var t = 0L
                     var first = true
-                    for (s in children(timeline, "S")) {
+                    val ss = children(timeline, "S")
+                    for ((idx, s) in ss.withIndex()) {
                         val st0 = s.getAttribute("t").toLongOrNull()
                         if (st0 != null) t = st0 else if (first) t = 0
                         first = false
                         val d = s.getAttribute("d").toLongOrNull() ?: continue
                         val r = s.getAttribute("r").toIntOrNull() ?: 0
-                        val repeats: Int = if (r >= 0) r else maxOf(0L, (periodMs * timescale / 1000 - t) / maxOf(d, 1L) - 1).toInt() // r=-1: repeat to the end of the period
+                        // r=-1: repeat to the end of the period, or to the next <S t=...> when one follows. RVW1 V6: the division ROUNDS UP (a 101 s period of 2 s segments needs 51, it built 50 and lost the last second), and with no
+                        // end known at all the stream is not played down to one segment that "succeeds": it is not supported
+                        val repeats: Int = if (r >= 0) r else {
+                            val endTicks = ss.getOrNull(idx + 1)?.getAttribute("t")?.toLongOrNull() ?: if (periodMs > 0) periodMs * timescale / 1000 else return null
+                            maxOf(0L, (endTicks - t + maxOf(d, 1L) - 1) / maxOf(d, 1L) - 1).toInt()
+                        }
                         for (i in 0..repeats) {
                             segs.add(Hls.Seg(Hls.resolve(baseUrl, fill(mediaT, id, bandwidth, number, t)), d * 1000 / timescale, -1, -1, -1, number, false))
                             t += d; number++
@@ -143,7 +164,7 @@ object Dash {
             }
             else -> {
                 // one file: the whole Representation is its BaseURL (an initialisation range, if any, is part of the file)
-                if (child(rep, "BaseURL") == null && child(aset, "BaseURL") == null && sb == null) return null
+                if (child(rep, "BaseURL") == null && child(aset, "BaseURL") == null && child(period, "BaseURL") == null && sb == null) return null
                 segs.add(Hls.Seg(baseUrl, periodMs, -1, -1, -1, 0, false))
             }
         }
