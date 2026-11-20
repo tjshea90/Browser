@@ -300,7 +300,9 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
 
     override fun onAuthPrompt(session: GeckoSession, prompt: PromptDelegate.AuthPrompt): GeckoResult<PromptDelegate.PromptResponse>? {
         val r = GeckoResult<PromptDelegate.PromptResponse>()
-        a.askAuth(UrlParts.hostOf(tab.url) ?: "this site", prompt.message ?: "", { u, p -> r.complete(prompt.confirm(u, p)) }, { r.complete(prompt.dismiss()) })
+        // RVW2 S2: the dialog names the server that ASKED (the request's own address), not the page the tab happens to be on: a link or a picture of another site can answer 401 with a bank-like realm
+        val who = app.kestrel.core.url.AuthNames.label(prompt.authOptions.uri, tab.url)
+        a.askAuth(who.host, who.note + (prompt.message ?: ""), { u, p -> r.complete(prompt.confirm(u, p)) }, { r.complete(prompt.dismiss()) })
         return r
     }
 
