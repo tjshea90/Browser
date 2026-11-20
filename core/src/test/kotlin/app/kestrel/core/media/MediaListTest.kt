@@ -546,4 +546,19 @@ class MediaListFramesTest {
         l.applyStream("https://cdn.test/two.m3u8", live = false, drm = false, durationMs = 2_700_000, adMs = 0, breaks = 0)
         assertEquals(1, l.usableCount()); assertNull(l.find("https://cdn.test/one.m3u8"))
     }
+
+    @Test fun anAddressNamedInThePageTextAndThenReallyRequestedIsVerifiedByTheRequest() {
+        // RVW1 F2: inline JSON names the stream, hls.js then asks for it. The request is the proof: before the fix `fromMarkup` stayed true for ever and the badge never lit.
+        val u = "https://c.test/s/master.m3u8"
+        val l = MediaList()
+        assertTrue(l.add(markup(u, kind = MediaKind.HLS)))
+        assertEquals("only named in a script so far: not counted", 0, l.usableCount())
+        assertTrue("the player's request is news for the list", l.add(hls(u)))
+        assertEquals("a request with a media type verifies it", 1, l.usableCount())
+        assertFalse("and is only news once", l.add(hls(u)))
+        val other = MediaList()
+        assertTrue(other.add(hls(u)))
+        other.add(markup(u, kind = MediaKind.HLS))                       // the other order: the request already proved it, the later text does not take that back
+        assertEquals(1, other.usableCount())
+    }
 }
