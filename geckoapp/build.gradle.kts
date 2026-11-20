@@ -1,4 +1,6 @@
+import java.io.File
 import java.util.Properties
+import java.util.zip.ZipFile
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 // Kestrel G: the same Kestrel UI / data / filter engine as :app, but pages are drawn by Firefox's engine (GeckoView) instead of the tablet's
@@ -39,21 +41,21 @@ abstract class PrepareWebcompat : DefaultTask() {
         val root = out.get().asFile
         root.deleteRecursively()
         val prefix = "assets/extensions/webcompat/"
-        val base = java.io.File(root, "webcompat").canonicalFile
-        java.util.zip.ZipFile(aar.singleFile).use { zip ->
+        val base = File(root, "webcompat").canonicalFile
+        ZipFile(aar.singleFile).use { zip ->
             for (e in zip.entries().asSequence()) {
                 if (e.isDirectory || !e.name.startsWith(prefix)) continue
                 val rel = e.name.removePrefix(prefix)
                 // build-time leftovers of Mozilla's tree, never read by the extension
                 if (rel.contains("__pycache__") || rel.startsWith(".deps/") || rel.endsWith(".md") || rel.endsWith(".py") || rel.endsWith(".toml") || rel.endsWith(".mozbuild") || rel == "jar.mn" || rel == "intervention_schema.json") continue
-                val f = java.io.File(base, rel).canonicalFile
-                require(f.path.startsWith(base.path + java.io.File.separator)) { "unsafe path in the archive: ${e.name}" }
+                val f = File(base, rel).canonicalFile
+                require(f.path.startsWith(base.path + File.separator)) { "unsafe path in the archive: ${e.name}" }
                 f.parentFile.mkdirs()
                 zip.getInputStream(e).use { i -> f.outputStream().use { o -> i.copyTo(o) } }
             }
         }
-        val listener = java.io.File(base, "lib/remote_settings_update_check.js")
-        check(listener.isFile && java.io.File(base, "manifest.json").isFile && java.io.File(base, "run.js").isFile) { "feature-webcompat no longer has the expected layout: re-check research/REVIEW_2026-11-22_NEWLEVERS.md NL1" }
+        val listener = File(base, "lib/remote_settings_update_check.js")
+        check(listener.isFile && File(base, "manifest.json").isFile && File(base, "run.js").isFile) { "feature-webcompat no longer has the expected layout: re-check research/REVIEW_2026-11-22_NEWLEVERS.md NL1" }
         listener.writeText("/* Kestrel: no Remote Settings listener (no new background traffic); the interventions baked into this build are used. See research/REVIEW_2026-11-22_NEWLEVERS.md NL1. */\nfunction listenForRemoteSettingsUpdates() {}\n")
     }
 }
