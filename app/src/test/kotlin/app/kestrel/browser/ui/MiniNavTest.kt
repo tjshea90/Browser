@@ -210,6 +210,16 @@ class MiniNavTest {
         nav.setOpen(false, animate = false); assertFalse("hiding the panel puts Swoop away", nav.swoopUp); assertEquals(false, rec.swoopCalls.last())
     }
 
+    /** Owner request 17: Swoop installed but not yet chosen: the activity asks Android to let the person choose it and then says so; the bar must not claim that Swoop is up. */
+    @Test fun whileThePersonIsStillChoosingSwoopTheBarDoesNotClaimItIsUp() {
+        rec.swoop = true
+        nav.setOpen(true, animate = false); nav.pressBarForTest()
+        assertTrue(nav.swoopUp)
+        nav.swoopNotUp()
+        assertFalse(nav.swoopUp); assertEquals("Address. Tap to type a new one.", nav.barDescriptionForTest)
+        nav.pressBarForTest(); assertTrue("one tap opens it once Swoop is chosen", nav.swoopUp)
+    }
+
     @Test fun whenSwoopIsNotTheChosenKeyboardTheBarOpensTheOwnKeysAsBefore() {
         rec.swoop = false
         nav.setOpen(true, animate = false); relayout()

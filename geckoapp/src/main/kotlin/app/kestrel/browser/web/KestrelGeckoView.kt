@@ -3,6 +3,8 @@ package app.kestrel.browser.web
 import android.content.Context
 import android.view.MotionEvent
 import android.view.ViewConfiguration
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
 import org.mozilla.geckoview.GeckoView
 import org.mozilla.geckoview.PanZoomController
 import app.kestrel.browser.diag.Health
@@ -24,6 +26,18 @@ class KestrelGeckoView(ctx: Context) : GeckoView(ctx) {
         fun pullMove(dyPx: Float)
         /** The gesture ended: [released] = the finger was lifted (false = cancelled or turned into something else: a second finger, an upward drag). */
         fun pullEnd(released: Boolean)
+    }
+
+    /**
+     * Asked every time a page's text field gets the keyboard: true in a private tab. The keyboard is then told to learn nothing from it (IME_FLAG_NO_PERSONALIZED_LEARNING, the standard flag Swoop honours): a private
+     * tab must not teach the keyboard what was typed there. (Until now this relied on GeckoView doing it for private sessions, which was never proven.)
+     */
+    var privateTab: () -> Boolean = { false }
+
+    override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
+        val ic = super.onCreateInputConnection(outAttrs)
+        if (privateTab()) outAttrs.imeOptions = outAttrs.imeOptions or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
+        return ic
     }
 
     var pull: PullListener? = null
