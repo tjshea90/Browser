@@ -45,6 +45,8 @@ class KestrelGeckoView(ctx: Context) : GeckoView(ctx) {
     var pullEnabled: () -> Boolean = { false }
 
     private var gesture = 0 // counts touch-downs: a late engine answer for an earlier gesture is ignored
+
+    private var pullLoggedAt = 0L
     private val tracker = PullTracker(ViewConfiguration.get(ctx).scaledTouchSlop.toFloat(), object : PullTracker.Listener {
         override fun start() { pull?.pullStart() }
         override fun move(dy: Float) { pull?.pullMove(dy) }
@@ -70,7 +72,10 @@ class KestrelGeckoView(ctx: Context) : GeckoView(ctx) {
             result.accept { d ->
                 if (d == null || g != gesture) return@accept
                 val up = (d.scrollableDirections() and PanZoomController.SCROLLABLE_FLAG_TOP) != 0
-                Health.log("pull", "down", "scrollable=${d.scrollableDirections()} overscroll=${d.overscrollDirections()} handled=${d.handledResult()} -> canScrollUp=$up")
+                // DG1: one line per touch-down filled a third of the Health ring in a long session (owner paste 2026-11-19: 130 of the last 400 events), pushing out the lines that matter; the count stays exact
+                val nowMs = android.os.SystemClock.uptimeMillis()
+                Health.count("pull.down")
+                if (nowMs - pullLoggedAt >= 8_000L) { pullLoggedAt = nowMs; Health.log("pull", "down", "scrollable=${d.scrollableDirections()} overscroll=${d.overscrollDirections()} handled=${d.handledResult()} -> canScrollUp=$up") }
                 tracker.answer(up, d.handledResult() == PanZoomController.INPUT_RESULT_HANDLED_CONTENT, (d.overscrollDirections() and PanZoomController.OVERSCROLL_FLAG_VERTICAL) != 0)
             }
         }
