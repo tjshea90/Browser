@@ -986,6 +986,7 @@ class StreamEngine(
                 while (!job.stop && job.failure == null && synchronized(lock) { job.recovering } > 0) pause(job, 100) // another worker is asking the server again for a refused part: no new request meanwhile
                 if (job.stop || job.failure != null) break
                 val idx = claim(job, media.segments.size) ?: break
+                if (idx == WAIT) { pause(job, 100); continue }   // RVW1 V13: the read-ahead is full: look again in a moment (the segment everybody waits for is being fetched)
                 try {
                     val seg = media.segments[idx]
                     fetchTo(job, fetcher, seg.url, seg.from, if (seg.len >= 0) seg.from + seg.len - 1 else -1, File(dir, "$idx.seg"), count = true)
@@ -1007,8 +1008,11 @@ class StreamEngine(
     /** The lowest segment nobody has and nobody is fetching: in order, so the output can grow as soon as the first ones are in. */
     private fun claim(job: Job, n: Int): Int? = synchronized(lock) {
         var i = job.rec.next
-        while (i < n) { if (!job.staged.get(i) && !job.claimed.get(i) && !job.skipped.get(i)) { job.claimed.set(i); return i }; i++ }
-        null
+        // RVW1 V13: no further than [READ_AHEAD] segments past the one the output waits for. While that one sat in its back-off the other workers carried on to the END of the stream (staging up to the whole video next to
+        // the output: twice the disk, on a tablet with little of it). When everything inside the reach is staged or taken but more is wanted, the answer is [WAIT], not "nothing left".
+        val reach = minOf(n.toLong(), i.toLong() + READ_AHEAD).toInt()
+        while (i < reach) { if (!job.staged.get(i) && !job.claimed.get(i) && !job.skipped.get(i)) { job.claimed.set(i); return i }; i++ }
+        if (reach < n) WAIT else null
     }
 
     /** Append every staged segment from the output's position onward, in order. One worker does it at a time; the others carry on fetching. */
@@ -1419,6 +1423,8 @@ class StreamEngine(
 
     companion object {
         private const val MAX_TRIES = 6
+        private const val READ_AHEAD = 16     // RVW1 V13
+        private const val WAIT = -2            // RVW1 V13: [claim] says "nothing to take right now"
 
         /**
          * The runs of a joined file between discontinuities, from the "index:offset;" pairs the engine kept while appending ([StreamRec.breaks]): the byte range and the playlist's own length of each.
