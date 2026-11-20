@@ -999,7 +999,7 @@ Real engine, Keep mode: sound stops when the app is left (page clock frozen 0.0 
 
 ## Owner request 2026-11-20 (STANDING RULE, after alpha72 and RVW2) {ccr-d6f32d19-c3cwzl 2026-11-20}
 - [x] REL-STANDING (owner, verbatim) "Always ship new versions and release without stopping to ask me" -> written into CLAUDE.md (GitHub Actions section): after real work is tested and checkpointed, bump the version, ship.sh, ONE dispatch, record-release and give the Release link; never wait for a go
-- [~] REL73 ship the RVW2 work as alpha73 (versionCode 174) {ccr-d6f32d19-c3cwzl 2026-11-20}
+- [x] REL73 (alpha73 RELEASED AND RECORDED 2026-11-20: https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha73) ship the RVW2 work as alpha73 (versionCode 174) {ccr-d6f32d19-c3cwzl 2026-11-20}
   - [x] REL73a (versionCode 174 / alpha73, ext version synced, note written) bump geckoapp versionCode 174 / 0.3.0-alpha73, bash tools/sync-ext-version.sh, write docs/handoff/ALPHA73_RELEASE_NOTE.txt
-  - [ ] REL73b bash ship.sh gecko, ONE dispatch (app=gecko full_build=true), wait for tag + all jobs + Release with APK
-  - [ ] REL73c bash tools/record-release.sh with the IDENTICAL note; tell the owner with the Release link on its own line
+  - [x] REL73b (run 44686179919 all jobs green, certificate verified, Release with the APK) bash ship.sh gecko, ONE dispatch (app=gecko full_build=true), wait for tag + all jobs + Release with APK
+  - [x] REL73c (recorded in BUILDLOG.md) bash tools/record-release.sh with the IDENTICAL note; tell the owner with the Release link on its own line
