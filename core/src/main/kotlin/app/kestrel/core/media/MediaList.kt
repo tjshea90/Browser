@@ -207,6 +207,7 @@ class MediaList(private val max: Int = 48) {
             var changed = false
             if (old.length < 0 && c.length >= 0) { old.length = c.length; changed = true }
             if (old.mime.isEmpty() && c.mime.isNotEmpty()) { old.mime = c.mime; changed = true }
+            if (old.label.isNullOrBlank() && !c.label.isNullOrBlank()) { old.label = c.label; changed = true }     // RVW1 F11: the label of a <source> found in the page text names the row the wire saw first
             if (old.referer.isEmpty() && c.referer.isNotEmpty()) { old.referer = c.referer; changed = true }
             if (old.origin.isEmpty() && c.origin.isNotEmpty()) { old.origin = c.origin; changed = true }
             // the newest sighting names who asks NOW: an address found in a player's script, asked for later by the next server's player, belongs to the second one (a server switch drops by document)
@@ -304,7 +305,8 @@ class MediaList(private val max: Int = 48) {
     /** RX3-V2: up to [n] addresses found only in the page's text, newest first, worth one cheap check - but only when the page has nothing verified yet. */
     fun unverifiedToCheck(n: Int): List<MediaCandidate> {
         if (items.any { it.verified && !it.decoy }) return emptyList()
-        return items.filter { !it.verified && it.kind == MediaKind.FILE }.take(n)
+        // RVW1 F11: the best-looking first (a picture height the page's label or the address names), then the newest: with four qualities listed best-first the LAST three were checked and the best never was
+        return items.filter { !it.verified && it.kind == MediaKind.FILE }.sortedByDescending { it.knownHeight }.take(n)
     }
 
     /** Somebody showed interest in this address (long-pressed, opened in the sheet, downloaded): it is kept when the list is full and shown even when it looks like a preview. @return true if that changed the list. */

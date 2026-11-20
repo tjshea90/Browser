@@ -187,7 +187,7 @@ class VideoFlow(private val a: BrowserActivity) {
         verifyPending.remove(t.id)
         if (t.isNewTab || t.loading) return
         var asked = 0
-        for (c in t.media.unverifiedToCheck(3)) {
+        for (c in t.media.unverifiedToCheck(4)) {
             if (c.length >= 0 || !sized.add(c.key)) continue
             asked++
             DownloadController.fetchBytes(a, c.url, 0L, 0L, requestHeaders(t, c), 1, t.isPrivateTab, onTotal = { n -> if (t.media.setLength(c.url, n)) { a.refreshDownloadButton(); refresh(t); Health.log("media", "verified", "length=${n / 1024} KB counted=${t.media.usableCount()} of ${t.media.size}") } }) { }

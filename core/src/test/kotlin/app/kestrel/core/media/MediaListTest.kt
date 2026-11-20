@@ -585,4 +585,19 @@ class MediaListFramesTest {
         l4.applyInfo(u, 0, 0, 12_000, null, VideoRole.PLAYER, played = true, element = 3, areaPx = 90_000)
         assertEquals("a protected stream is never offered", 0, l4.usableCount())
     }
+
+    @Test fun theBestLookingUnverifiedSourceIsCheckedFirstAndALabelFromTheMarkupNamesTheRow() {
+        // RVW1 F11: <source> elements listed best-first; the page text names them with their labels, the wire may see one of them first
+        fun src(url: String, label: String?) = MediaCandidate(url, MediaKind.FILE, "", -1, "https://site.test/watch").also { it.fromMarkup = true; it.label = label }
+        val l = MediaList()
+        l.add(src("https://c.test/v1080.mp4", "1080p")); l.add(src("https://c.test/v720.mp4", "720p")); l.add(src("https://c.test/v480.mp4", "480")); l.add(src("https://c.test/v360.mp4", null)); l.add(src("https://c.test/v240_240p.mp4", null))
+        val check = l.unverifiedToCheck(3).map { it.url.substringAfterLast('/') }
+        assertEquals("the best three, not the last three listed", listOf("v1080.mp4", "v720.mp4", "v480.mp4"), check)
+        val wire = MediaList()
+        wire.add(MediaCandidate("https://c.test/clip.mp4", MediaKind.FILE, "video/mp4", 9_000_000, "https://site.test/watch"))
+        assertTrue("the label arrives later and is learned", wire.add(MediaCandidate("https://c.test/clip.mp4", MediaKind.FILE, "", -1, "https://site.test/watch").also { it.label = "720p" }))
+        assertEquals("720p", wire.find("https://c.test/clip.mp4")!!.label)
+        assertEquals("a label already known is kept", false, wire.add(MediaCandidate("https://c.test/clip.mp4", MediaKind.FILE, "", -1, "https://site.test/watch").also { it.label = "480p" }))
+        assertEquals("720p", wire.find("https://c.test/clip.mp4")!!.label)
+    }
 }
