@@ -148,6 +148,20 @@ class MediaSniffTest {
         assertEquals("", MediaSniff.queryExtension("https://cdn.test/a?x=1&y=2"))
     }
 
+    // ---- RVW5 (measured with tools/sitelab/realfinder.js on the real ted.com talk page)
+
+    @Test fun aGoogleAdVideoIsNotACandidateButAFilmOnAnotherHostIs() {
+        val ad = "https://rr1---sn-2op5q5-52.gvt1.com/videoplayback/id/6604b31c74264201/aitags/15,18,22,106,109/source/dclk_video_ads/requiressl/yes/xpc/EgVovf3BOg%3D%3D/acao/yes/ctier/L/expire/1795289728"
+        assertNull(kind(ad, "video/mp4"))
+        assertNull(kind("https://redirector.gvt1.com/videoplayback/id/6604b31c74264201/source/dclk_video_ads/requiressl/yes", "video/mp4"))
+        assertNull("the marker in the query on a googlevideo host", kind("https://rr2.googlevideo.com/x.mp4?source=DCLK_VIDEO_ADS&itag=18", "video/mp4"))
+        assertTrue(MediaSniff.isGoogleAdVideo(ad))
+        assertFalse("the marker on a host that is not Google's: left to the other rules", MediaSniff.isGoogleAdVideo("https://cdn.test/videoplayback/source/dclk_video_ads/a.mp4"))
+        assertFalse("a Google host without the marker is not an ad", MediaSniff.isGoogleAdVideo("https://redirector.gvt1.com/edgedl/chrome/x.mp4"))
+        assertFalse("a look-alike host", MediaSniff.isGoogleAdVideo("https://notgvt1.com/a/dclk_video_ads/x.mp4"))
+        assertEquals(MediaKind.HLS, kind("https://hls.ted.com/project_masters/1253/manifest.m3u8?intro_master_id=9294", "application/vnd.apple.mpegurl; charset=utf-8"))
+    }
+
     @Test fun youtubeVideoplaybackSlicesAreNotCandidates() {
         assertNull(kind("https://rr3---sn-abc.googlevideo.com/videoplayback?expire=1&id=o-AB&itag=137&range=0-999999", "video/mp4"))
         assertNull(kind("https://rr1---sn-xyz.googlevideo.com/videoplayback?itag=140", "audio/mp4"))
