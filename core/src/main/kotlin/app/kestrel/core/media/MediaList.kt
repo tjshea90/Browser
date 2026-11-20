@@ -16,6 +16,8 @@ class MediaCandidate(
     var frame: String = "",
     val seenAt: Long = 0,
 ) {
+    /** NM1: the addresses of the frames AROUND the one that asked (an embed inside an embed), nearest first, never the top page: each doraby server's embed address names the season and episode. */
+    var frameChain: List<String> = emptyList()
     /** The file name the SERVER gave it (Content-Disposition), "" when it gave none: the best name to offer when saving it. */
     var sourceName: String = ""
     var width = 0
@@ -51,8 +53,16 @@ class MediaCandidate(
     var heights: IntArray = IntArray(0)
     /** RX3-V5: a stream whose playlist was read and that cannot be saved (live, protected) or is only a clip (under 20 s: an ad, a preview) is not offered to the badge. Before the look nothing is known and it counts as before. */
     val unfit: Boolean get() = kind != MediaKind.FILE && looked && (live || drm || (durationMs in 1 until MediaList.MIN_STREAM_MS))
-    /** What the dock badge counts: not decoration or an advertisement, not an address nobody has seen, not a stream that cannot be saved. */
-    fun counts(): Boolean = !decoy && verified && !unfit
+    /**
+     * VS2 (owner 2026-11-18, doraby + vidsrc / 111movies: "it would show a video file can be downloaded in the list, then it would disappear after a few seconds ... is there a way to capture the video source when it is
+     * found so it doesn't disappear"): once a film-sized candidate was OFFERED (the badge counted it) it is CAPTURED: a frame that reloads or goes away, a clip rule or an advertisement label that arrives later cannot
+     * take it out of the list any more. Only the person leaving the page ([MediaList.onNewPage]) or a stream that cannot be saved (live, protected) ends it.
+     */
+    var captured = false
+    /** VS2: a captured entry whose player frame went away (or whose page was loaded again): still offered, last in the list, until a new film-sized find of a live player takes its place ([MediaList.add]). */
+    var orphan = false
+    /** What the dock badge counts: not decoration or an advertisement, not an address nobody has seen, not a stream that cannot be saved. A captured one counts whatever is learned later (unless it cannot be saved). */
+    fun counts(): Boolean = (captured && !live && !drm) || (!decoy && verified && !unfit)
     /** RX3-V1: what the page's own element says it is for ([VideoRole]); null = no element said anything yet (or an older extension). The latest report wins. */
     var role: VideoRole? = null
     /** The OWNER showed interest (long-pressed, opened in the sheet, downloaded): it counts and shows whatever the page's element says it is. */
@@ -106,6 +116,44 @@ class MediaList(private val max: Int = 48) {
     /** The candidate for exactly this address (the #fragment aside), or null. */
     fun find(url: String): MediaCandidate? = MediaCandidate.keyOf(url).let { k -> items.firstOrNull { it.key == k } }
     fun clear() { items.clear(); pending.clear(); blobs.clear(); version++ }
+
+    /**
+     * VS2: what is offered right now AND looks like a film is captured. Film evidence = a stream whose playlist was read and runs [FILM_EVIDENCE_MS] or more, a file of [BIG_FILE] or more (or 4 MB with that length
+     * of picture), or anything the person opened. A clip, a preview or an advertisement is NOT captured: the clip and advertisement rules keep working for them. @return how many were newly captured.
+     */
+    fun capture(): Int {
+        var n = 0; var liveFilm = false
+        for (c in items) {
+            if (c.captured || c.live || c.drm || !c.counts()) continue
+            if (!(c.interest || filmEvidence(c))) continue
+            c.captured = true; n++
+            if (!c.orphan) liveFilm = true
+        }
+        // a live player now offers a film of its own: the kept one of the player that went away has done its job (what the owner opened stays)
+        if (liveFilm && items.any { it.orphan }) items.removeAll { it.orphan && !it.interest }
+        if (n > 0) version++
+        return n
+    }
+
+    private fun filmEvidence(c: MediaCandidate): Boolean {
+        if (c.decoy) return false
+        if (c.kind != MediaKind.FILE) return c.looked && c.durationMs >= FILM_EVIDENCE_MS
+        return c.length >= BIG_FILE || (c.length >= MIN_WITH_STREAM && c.durationMs >= FILM_EVIDENCE_MS)
+    }
+
+    /**
+     * VS2: the tab starts [url]. The same page again (a reload, the same address with another query, a server switch that reloads the page) keeps what was captured, a different page forgets everything as before.
+     * The facts that belonged to the old document's elements (which element played, how much of it was on screen) are forgotten: the new document numbers its elements again. @return how many entries were dropped.
+     */
+    fun onNewPage(url: String): Int {
+        capture()
+        val id = PageIdentity.of(url)
+        val keep = if (id.isEmpty()) emptyList() else items.filter { it.captured && !it.live && !it.drm && PageIdentity.of(it.page) == id }
+        val dropped = items.size - keep.size
+        for (c in keep) { c.played = false; c.element = 0; c.areaPx = 0L; c.playedSeq = 0; c.orphan = true }
+        items.clear(); items.addAll(keep); pending.clear(); blobs.clear(); version++
+        return dropped
+    }
     /** The addresses of everything in the list (for forgetting what was learned about them). */
     fun keys(): List<String> = items.map { it.key }
 
@@ -117,8 +165,13 @@ class MediaList(private val max: Int = 48) {
      */
     fun dropFrames(docs: Collection<String>): List<String> {
         if (docs.isEmpty()) return emptyList()
-        val gone = items.filter { it.frame.isNotEmpty() && it.frame in docs }
-        if (gone.isEmpty()) return emptyList()
+        capture()                                                       // (what the person could see a moment ago is kept: VS2)
+        val inFrame = items.filter { it.frame.isNotEmpty() && it.frame in docs }
+        if (inFrame.isEmpty()) return emptyList()
+        // kept, last in the list, until a live player offers a film of its own: what was captured, and a stream nobody has read yet (it may well be the film; a clip is dropped as before)
+        fun keeps(c: MediaCandidate) = c.captured || (c.kind != MediaKind.FILE && !c.looked && c.counts())
+        val gone = inFrame.filter { !keeps(it) }
+        for (c in inFrame) if (keeps(c)) c.orphan = true
         items.removeAll(gone.toSet()); version++
         return gone.map { it.key }
     }
@@ -131,7 +184,10 @@ class MediaList(private val max: Int = 48) {
     fun hasStream(): Boolean = items.any { it.kind != MediaKind.FILE }
 
     fun usableCount(): Int {
-        if (countVersion != version) { countCache = usableUnsorted().count { it.counts() && !clipNextToFilm(it, items) }; countVersion = version }
+        if (countVersion != version) {
+            capture()
+            countCache = usableUnsorted().count { it.counts() && (it.captured || !clipNextToFilm(it, items)) }; countVersion = version
+        }
         return countCache
     }
 
@@ -147,6 +203,7 @@ class MediaList(private val max: Int = 48) {
             if (old.origin.isEmpty() && c.origin.isNotEmpty()) { old.origin = c.origin; changed = true }
             // the newest sighting names who asks NOW: an address found in a player's script, asked for later by the next server's player, belongs to the second one (a server switch drops by document)
             if (c.frame.isNotEmpty() && old.frame != c.frame) { old.frame = c.frame; old.page = c.page; changed = true }
+            if (old.orphan) { old.orphan = false; changed = true }                        // VS2: the player asked for it again: it is live again
             if (c.seenAt > old.lastSeenAt) old.lastSeenAt = c.seenAt                       // (ANS55: not a change of the list, only of its order of news)
             if (changed) version++
             return changed
@@ -197,6 +254,7 @@ class MediaList(private val max: Int = 48) {
         if (heights.isNotEmpty()) c.heights = heights
         for ((e, b) in blobs) matchBlob(e, b)          // RX3-V4: a player that was already waiting for a playlist of its length
         version++
+        capture()                                       // VS2: the look is the evidence that this is (or is not) a film
         return true
     }
 
@@ -297,12 +355,13 @@ class MediaList(private val max: Int = 48) {
     /**
      * What is worth offering: playlists and big files first. Tiny files (sounds, tracking clips) and, when the page has a stream, small clips next to it (ads, previews) are left out.
      */
-    fun usable(): List<MediaCandidate> = usableUnsorted().sortedWith(compareBy<MediaCandidate> { kindRank(it) }.thenByDescending { it.knownHeight }.thenByDescending { it.length })
+    fun usable(): List<MediaCandidate> = usableUnsorted().sortedWith(compareBy<MediaCandidate> { if (it.orphan) 1 else 0 }.thenBy { kindRank(it) }.thenByDescending { it.knownHeight }.thenByDescending { it.length })
 
     private fun usableUnsorted(): List<MediaCandidate> {
         val hasStream = items.any { it.kind != MediaKind.FILE }
         return items.filter { c ->
             when {
+                c.captured && !c.live && !c.drm -> true                      // VS2
                 c.kind != MediaKind.FILE -> true
                 c.touched || (!c.decoy && (c.durationMs >= 20_000 || c.knownHeight >= 480)) -> true // played, long, or sharp: never hidden as a preview or an ad (unless the page itself calls it decoration or an ad)
                 c.length in 0 until MIN_FILE -> false
@@ -324,6 +383,10 @@ class MediaList(private val max: Int = 48) {
         const val MIN_WITH_STREAM = 4L * 1024 * 1024
         /** A stream shorter than this is a clip (an advertisement, a preview), not something to save. */
         const val MIN_STREAM_MS = 20_000L
+        /** VS2: a stream of this length or more (its playlist was read) is a film or an episode, not an advertisement or a preview: it is captured when offered. */
+        const val FILM_EVIDENCE_MS = 120_000L
+        /** VS2: a file of this size is a film whatever else is known. */
+        const val BIG_FILE = 40L * 1024 * 1024
         private const val PENDING_MAX = 32
         /** RX3-V3: a file that played under this long, then replaced on the same element by one three times longer, was an advertisement. */
         private const val AD_MAX_MS = 90_000L

@@ -7,6 +7,7 @@ import android.os.SystemClock
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import app.kestrel.core.input.BackspaceRepeat
 import app.kestrel.core.input.glide.GlideTyping
 import app.kestrel.core.input.glide.LexiconFile
 import java.util.concurrent.Executor
@@ -393,15 +394,14 @@ class MiniNavTest {
         assertTrue(nav.glideLine(), nav.glideLine().contains("another candidate picked 1"))
     }
 
-    @Test fun aPathThatMakesNoWordTypesNothingAndSaysSo() {
+    @Test fun aPathThatFitsNoWordStillTypesTheClosestOneNeverNoWordFits() {   // owner R19d: a glide always answers
         openGlideKeyboard()
         val (px, py) = nav.keyCenterForTest("p")!!; val (mx, my) = nav.keyCenterForTest("z")!!
         nav.touchKeysForTest(MotionEvent.ACTION_DOWN, px, py)
         for (s in 1..20) nav.touchKeysForTest(MotionEvent.ACTION_MOVE, px + (mx - px) * s / 20, py + (my - py) * s / 20)
         nav.touchKeysForTest(MotionEvent.ACTION_UP, mx, my); idle(20)
-        assertEquals("", nav.barTextForTest)
-        assertTrue(nav.candidatesForTest.isEmpty())
-        assertTrue(nav.glideLine(), nav.glideLine().contains("no word fitted 1"))
+        assertTrue("the closest word is typed, with its space: '${nav.barTextForTest}'", nav.barTextForTest.endsWith(" ") && nav.barTextForTest.trim().isNotEmpty())
+        assertTrue("and the strip has guesses to pick from", nav.candidatesForTest.isNotEmpty())
     }
 
     @Test fun withGlideTypingOffThereIsNoStripAndTheKeysBehaveAsBefore() {
@@ -1283,5 +1283,66 @@ class MiniNavTest {
         openKeyboardWith(null)
         assertTrue("in the address bar the slash and .com are back", nav.pressKeyForTest("/") && nav.pressKeyForTest(".com"))
     }
-}
 
+    // ------------------------------------------------------------------ the updates of the Swoop keyboard (R22)
+
+    private val pairBytes = LexiconFile.build(
+        listOf("hello" to 500L, "help" to 800L, "held" to 300L, "hell" to 300L, "world" to 900L, "word" to 1200L, "the" to 9000L, "she" to 2000L, "good" to 2000L, "to" to 7000L, "go" to 2500L)
+            .map { LexiconFile.Entry(it.first, it.second) },
+        listOf(LexiconFile.Pair("hello", "world", 400L)),
+    )
+
+    private fun openPairKeyboard(f: PageField?) {
+        rec.field = f
+        nav.glideFactory = { GlideTyping({ pairBytes }, Executor { it.run() }) }; nav.setGlideEnabled(true)
+        nav.setOpen(true, animate = false); relayout()
+        nav.pressBarForTest(); relayout(); idle(50)
+    }
+
+    @Test fun afterAGlideInAPageFieldTheMiddleBoxPredictsTheNextWordAndOneTapAddsIt() {
+        val f = FakeField(); openPairKeyboard(f)
+        glideWord("hello"); idle(100)
+        assertEquals("hello ", f.text.toString())
+        val c = nav.candidatesForTest
+        assertEquals("three boxes: $c", 3, c.size); assertEquals("the middle box is the predicted next word: $c", "world", c[1])
+        val (x, y) = nav.chipCenterForTest(1)!!
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, x, y); nav.touchKeysForTest(MotionEvent.ACTION_UP, x, y); idle(20)
+        assertEquals("hello world ", f.text.toString())
+        assertTrue("the next word is not a glide: the strip is empty again", nav.candidatesForTest.isEmpty())
+    }
+
+    @Test fun inTheAddressBarTheStripAfterAGlideStaysThePlainGuesses() {
+        openPairKeyboard(null)
+        glideWord("hello"); idle(100)
+        val c = nav.candidatesForTest
+        assertEquals("hello", c.first()); assertTrue("no blank box and no predicted word in the address bar: $c", c.none { it.isEmpty() } && "world" !in c)
+    }
+
+    @Test fun aWordGlidedAfterAFullStopInAPageFieldStartsASentence() {
+        val f = FakeField(); openPairKeyboard(f)
+        glideWord("hello"); nav.pressKeyForTest("."); idle(20)
+        glideWord("good"); idle(100)
+        assertTrue("capital after a full stop: ${f.text}", f.text.toString().endsWith("Good "))
+    }
+
+    @Test fun anAddressIsNeverCapitalisedOrSpaced() {
+        openPairKeyboard(null)
+        assertTrue(nav.pressKeyForTest("a") && nav.pressKeyForTest(".") && nav.pressKeyForTest("c"))
+        assertFalse("the address bar has none of the sentence habits: ${nav.barTextForTest}", nav.barTextForTest.contains(' ') || nav.barTextForTest.any { it.isUpperCase() })
+    }
+
+    @Test fun aHeldBackspaceInAPageFieldSpeedsUpAndThenTakesWholeWords() {   // owner R23a
+        val f = FakeField(); openPairKeyboard(f)
+        for (c in "hello big world today") { if (c == ' ') nav.pressKeyForTest("space") else nav.pressKeyForTest(c.toString()) }
+        assertEquals("hello big world today", f.text.toString())
+        val (x, y) = nav.keyCenterForTest("\u232B")!!
+        nav.touchKeysForTest(MotionEvent.ACTION_DOWN, x, y)
+        assertEquals("one character at once", "hello big world toda", f.text.toString())
+        idle(1500)
+        val letters = f.text.toString()
+        assertTrue("held: letters go, faster and faster: '$letters'", letters.length < 18)
+        idle(BackspaceRepeat.WORDS_AFTER_MS + 1500)
+        nav.touchKeysForTest(MotionEvent.ACTION_UP, x, y); idle(20)
+        assertTrue("after the long hold whole words went: '${f.text}'", f.text.toString().length < letters.length && (f.text.isEmpty() || f.text.toString().endsWith(" ")))
+    }
+}

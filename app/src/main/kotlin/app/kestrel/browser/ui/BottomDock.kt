@@ -84,6 +84,9 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
         setImageResource(R.drawable.ic_refresh); contentDescription = "Reload"; scaleType = ImageView.ScaleType.CENTER
         setOnClickListener { l.onReloadOrStop() }
     }
+    /** UC1: the Copy button at the right end of the address pill, there only while the bar is pressed. */
+    val copyChip: CopyChip by lazy { CopyChip(ctx, pal, urlField) { boundUrl } }
+    private var boundUrl = ""
     private val spacer = View(ctx) // fills the middle of the one-row layout while the address pill is hidden (Home)
 
     private var wide = false
@@ -111,11 +114,12 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
                     l.onSubmit(text.toString()); true
                 } else false
             }
-            setOnFocusChangeListener { _, focused -> paintPill(focused); l.onUrlFocus(focused) }
+            setOnFocusChangeListener { _, focused -> paintPill(focused); l.onUrlFocus(focused); copyChip.refresh() }
+            setOnClickListener { copyChip.refresh() }                // a press on the bar that already has focus (the keyboard was put away): the button is there again
             addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
                 override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-                override fun afterTextChanged(s: Editable?) { if (hasFocus()) l.onUrlText(s?.toString() ?: "") }
+                override fun afterTextChanged(s: Editable?) { if (hasFocus()) l.onUrlText(s?.toString() ?: ""); copyChip.refresh() }
             })
         }
         pill.apply {
@@ -126,7 +130,9 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
         mask.layoutParams = LayoutParams(ctx.dp(22), ctx.dp(22)).apply { marginEnd = ctx.dp(8) }
         lock.layoutParams = LayoutParams(ctx.dp(20), ctx.dp(20)).apply { marginEnd = ctx.dp(10) }
         reload.layoutParams = LayoutParams(ctx.dp(46), ctx.dp(46))
-        pill.addView(mask); pill.addView(lock); pill.addView(urlField); pill.addView(chip); pill.addView(reload)
+        pill.addView(mask); pill.addView(lock); pill.addView(urlField)
+        pill.addView(copyChip, LayoutParams(LayoutParams.WRAP_CONTENT, ctx.dp(30)).apply { marginStart = ctx.dp(6); marginEnd = ctx.dp(4) })
+        pill.addView(chip); pill.addView(reload)
         pillHolder.clipChildren = false
         pillHolder.addView(pillGlow, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         pillHolder.addView(pill, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, ctx.dp(44), Gravity.CENTER).apply { marginStart = ctx.dp(GLOW_DP); marginEnd = ctx.dp(GLOW_DP) })
@@ -200,6 +206,7 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
         mask.setColorFilter(pal.accent)
         menu.dotColor = pal.accent
         chip.setPal(pal)
+        copyChip.setPal(pal)
         urlField.setTextColor(pal.fg)
         urlField.setHintTextColor(pal.muted)
         urlField.hint = if (pal.isPrivate) "Private: search or type address" else "Search or type address"
@@ -227,6 +234,7 @@ class BottomDock(ctx: Context, private var pal: Pal, private val l: DockListener
 
     /** [tabCount]: the tabs of the CURRENT mode (regular or private). [homeShown]: the Home screen covers the page. */
     fun bind(tab: Tab?, tabCount: Int, canGoBack: Boolean, homeShown: Boolean) {
+        boundUrl = tab?.url ?: ""
         val now = Shown(
             tabCount, canGoBack, tab?.canGoForward == true, tab?.loading == true, tab?.shields?.shieldsUp ?: true, tab?.blockedTotal() ?: 0,
             tab == null, prettyUrl(tab?.url ?: ""), urlField.hasFocus(),

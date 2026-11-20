@@ -20,15 +20,31 @@ class MiniTrackerTest {
         assertTrue("the same download is not announced again", u2.announce.isEmpty()); assertEquals(listOf(1L), ids(u2))
     }
 
-    @Test fun downloadsRestoredFromTheLastRunAreNotAnnouncedOrListedUntilTheyMove() {
+    @Test fun downloadsRestoredFromTheLastRunAreNeverAnnouncedOrListedNotEvenWhenTheyCarryOnByThemselves() {
         val t = MiniTracker()
         t.begin(listOf(v(1, DlState.PAUSED_SYSTEM), v(2, DlState.COMPLETED), v(3, DlState.RUNNING)))
         val u = t.update(listOf(v(1, DlState.PAUSED_SYSTEM), v(2, DlState.COMPLETED), v(3, DlState.RUNNING)), 1000)
         assertTrue(u.announce.isEmpty())
-        assertEquals("only the one that is moving (a rotation recreated the window)", listOf(3L), ids(u))
+        assertTrue("DM1: a download that was already running when the app started does not bring the window up", ids(u).isEmpty())
         val resumed = t.update(listOf(v(1, DlState.RUNNING), v(2, DlState.COMPLETED), v(3, DlState.RUNNING)), 1250)
-        assertTrue("resuming is not a new download", resumed.announce.isEmpty())
-        assertEquals(listOf(3L, 1L), ids(resumed))
+        assertTrue("resuming by itself is not a new download", resumed.announce.isEmpty())
+        assertTrue("and not a reason to show the window", ids(resumed).isEmpty())
+    }
+
+    @Test fun anOldDownloadJoinsTheWindowOnlyWhenThePersonAskedForIt() {
+        val t = MiniTracker()
+        t.begin(listOf(v(1, DlState.PAUSED_USER), v(2, DlState.PAUSED_SYSTEM)))
+        t.requested(1)                                                   // Resume pressed in the Downloads list
+        val u = t.update(listOf(v(1, DlState.RUNNING), v(2, DlState.RUNNING)), 1000)
+        assertTrue(u.announce.isEmpty())
+        assertEquals("only the one the person resumed", listOf(1L), ids(u))
+    }
+
+    @Test fun theWindowDoesNotBeginUntilTheRowsOfTheLastRunHaveBeenRead() {
+        val t = MiniTracker()
+        assertFalse(t.began)
+        t.begin(listOf(v(1, DlState.COMPLETED)))
+        assertTrue(t.began)
     }
 
     @Test fun aPausedRowStaysSoItCanBeResumed() {
