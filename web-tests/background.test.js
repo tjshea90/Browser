@@ -1744,11 +1744,13 @@ test('RVW1 N6: a long percent-encoded file name in Content-Disposition is not cu
 
 test('RVW1 P10: the per-tab maps of the sniffer do not grow with the number of tabs ever opened', async () => {
   const h = harness(standardApp());
+  await ready(h);
   for (let t = 1; t <= 300; t++) {
-    h.listeners.before({ type: 'sub_frame', url: 'https://player.example/e/' + t, tabId: t, frameId: 7, parentFrameId: 0, documentUrl: PAGE, requestId: String(t) });
     h.listeners.before({ type: 'main_frame', url: 'https://page.example/' + t, tabId: t, frameId: 0, requestId: String(1000 + t) });
+    h.listeners.before({ type: 'sub_frame', url: 'https://player.example/e/' + t, tabId: t, frameId: 7, parentFrameId: 0, documentUrl: 'https://page.example/' + t, requestId: String(2000 + t), frameAncestors: [{ url: 'https://page.example/' + t, frameId: 0 }] });
   }
-  await tick(10);
-  const sizes = h.ctx.__sizes ? h.ctx.__sizes() : null;
-  assert.ok(true, 'listeners ran for 300 tabs without error' + (sizes ? ' ' + JSON.stringify(sizes) : ''));
+  await tick(20);
+  const sz = { navId: h.ctx.navId.size, frameParent: h.ctx.frameParent.size, frameDoc: h.ctx.frameDoc.size };
+  assert.ok(sz.navId > 0 && sz.frameParent > 0 && sz.frameDoc > 0, 'the code path ran: ' + JSON.stringify(sz));
+  assert.ok(sz.navId <= 80 && sz.frameParent <= 60 && sz.frameDoc <= 60, 'bounded: ' + JSON.stringify(sz));
 });
