@@ -28,7 +28,6 @@ class SiteFixesRulesTest {
         assertTrue("only assets are used: the library is not transitive and is not on the app's class path", gradle.contains("isTransitive = false") && !gradle.contains("implementation(\"org.mozilla.components"))
         val settings = source("settings.gradle.kts")
         assertTrue("one module of that group, not the whole group", settings.contains("""includeModule("org.mozilla.components", "feature-webcompat")"""))
-        assertFalse("never a Google Play services dependency", gradle.contains("com.google.android.gms\") }") && false)
     }
 
     @Test fun theRemoteSettingsListenerIsReplacedSoNoNewBackgroundTrafficStarts() {
