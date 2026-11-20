@@ -1,5 +1,7 @@
 package app.kestrel.browser.download
 
+import app.kestrel.core.url.NetHosts
+import app.kestrel.core.url.UrlParts
 import android.app.ActivityManager
 import android.content.Context
 import android.net.ConnectivityManager
@@ -228,12 +230,12 @@ object DownloadController {
     /** [fetchText] that also says what the server answered: the HTTP status (-1 = no answer at all: a network error, a timeout). Lets the caller try other request headers after a 401 / 403. */
     /**
      * RVW1 S3: these two helpers are the finder's own probes (a playlist read, a size question, a first-bytes look) at addresses a PAGE named, with the profile's cookies and no click. Not at a device on the owner's own
-     * network unless the page asking is itself local ([app.kestrel.core.url.NetHosts.probeAllowed]); the page's host is the Referer / Origin the probe repeats.
+     * network unless the page asking is itself local ([NetHosts.probeAllowed]); the page's host is the Referer / Origin the probe repeats.
      */
     private fun probeAllowed(url: String, headers: Map<String, String>): Boolean {
-        val target = app.kestrel.core.url.UrlParts.hostOf(url) ?: return false
-        val page = app.kestrel.core.url.UrlParts.hostOf(headers["Referer"] ?: headers["Origin"] ?: "") ?: ""
-        return app.kestrel.core.url.NetHosts.probeAllowed(target, page)
+        val target = UrlParts.hostOf(url) ?: return false
+        val page = UrlParts.hostOf(headers["Referer"] ?: headers["Origin"] ?: "") ?: ""
+        return NetHosts.probeAllowed(target, page)
     }
 
     fun fetchTextStatus(ctx: Context, url: String, headers: Map<String, String>, kind: Int, priv: Boolean, onDone: (String?, Int) -> Unit) = fetchTextFinal(ctx, url, headers, kind, priv) { text, status, _ -> onDone(text, status) }
