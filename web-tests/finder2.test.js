@@ -152,3 +152,22 @@ test('P6: returning to a page that did not change while hidden does not scan the
   await page.waitForTimeout(300);
   assert.equal(await scans(), 1, 'and the next plain return scans nothing');
 });
+
+test('F11: the quality label of each <source> travels with its address (label, title, res, size); an unlabeled one sends none', async () => {
+  const page = await open(`<video controls>
+    <source src="https://cdn.example/q/v1080.mp4" label="1080p">
+    <source src="https://cdn.example/q/v720.mp4" title="720p HD">
+    <source src="https://cdn.example/q/v480.mp4" res="480">
+    <source src="https://cdn.example/q/v360.mp4" size="360">
+    <source src="https://cdn.example/q/plain.mp4">
+    <source src="https://cdn.example/q/long.mp4" label="a very long label that is not a quality at all">
+  </video>`);
+  const got = await page.evaluate(() => window.__msgs.filter((m) => m.k === 'dom').map((m) => [m.u.split('/').pop(), m.lb === undefined ? null : m.lb]));
+  const byName = Object.fromEntries(got);
+  assert.equal(byName['v1080.mp4'], '1080p');
+  assert.equal(byName['v720.mp4'], '720p HD');
+  assert.equal(byName['v480.mp4'], '480');
+  assert.equal(byName['v360.mp4'], '360');
+  assert.equal(byName['plain.mp4'], null);
+  assert.equal(byName['long.mp4'], null, 'a long text is not a quality label');
+});

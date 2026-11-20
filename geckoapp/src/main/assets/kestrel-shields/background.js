@@ -373,7 +373,9 @@ onMsg(function (m, sender) {
     if (fid === 0 && tabId >= 0 && mp && !tabTop.has(tabId)) tabTop.set(tabId, mp); // the top frame's own address is the page (see learnTop)
     var dp = (tabId >= 0 && tabTop.get(tabId)) || (fid > 0 ? '' : mp);        // the page the tab is on; a frame never names the page by ITS address (the app then takes the tab in front)
     if (fid > 0) noteFrame(tabId, fid, undefined, mp);
-    send({ k: 'media', u: String(m.u || ''), c: '', l: -1, p: dp, f: mp !== docOf(dp) ? mp : '', s: 'dom' }).catch(function () {});
+    var dmsg = { k: 'media', u: String(m.u || ''), c: '', l: -1, p: dp, f: mp !== docOf(dp) ? mp : '', s: 'dom' };
+    if (typeof m.lb === 'string' && m.lb) dmsg.lb = m.lb.slice(0, 24);          // RVW1 F11: the quality label the <source> carried
+    send(dmsg).catch(function () {});
     return undefined;
   }
   if (m.k === 'pop') {

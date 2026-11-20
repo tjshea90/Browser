@@ -655,12 +655,24 @@
     var SRC_ATTRS = ['data-src', 'data-video-src', 'data-hls', 'data-hls-url', 'data-mp4', 'data-stream', 'data-video-url', 'data-file', 'src', 'data'];
     var CFG_ATTRS = ['data-setup', 'data-config', 'data-sources', 'data-player-config'];
     var ATTR_SELECTOR = '[data-src]:not(img):not(picture), [data-video-src], [data-hls], [data-hls-url], [data-mp4], [data-stream], [data-video-url], [data-file], embed[src], object[data], [data-setup], [data-config], [data-sources], [data-player-config]';
-    function report(u) {
+    // RVW1 F11: the quality a <source> says it is ("720p", "HD", "1080"): video.js and plain markup put it in label / title / res / size. Sent with the address so a list of several qualities is not nameless (and the best
+    // one is checked first, not the last one the page happened to list).
+    function labelOfSource(e) {
+      try {
+        if (!e || e.tagName !== 'SOURCE') return '';
+        var v = e.getAttribute('label') || e.getAttribute('title') || e.getAttribute('res') || e.getAttribute('data-res') || e.getAttribute('data-quality') || e.getAttribute('size') || '';
+        v = String(v).replace(/\s+/g, ' ').trim();
+        return (v.length > 0 && v.length <= 24) ? v : '';
+      } catch (x) { return ''; }
+    }
+    function report(u, label) {
       if (!u || n >= 40) return;
       try { u = new URL(u.replace(/&amp;/g, '&'), location.href).href; } catch (e) { return; }
       if (u.indexOf('http') !== 0 || sent[u] || !EXT.test(u)) return;
       sent[u] = 1; n++;
-      browser.runtime.sendMessage({ k: 'dom', u: u, p: location.href }).catch(function () {});
+      var msg = { k: 'dom', u: u, p: location.href };
+      if (label) msg.lb = label;
+      browser.runtime.sendMessage(msg).catch(function () {});
     }
     // the text of a script, a JSON blob or a configuration attribute: every media address it names (escaped slashes undone first)
     function scanText(t) {
@@ -678,7 +690,7 @@
     function scan() {
       try {
         var i, e, list = document.querySelectorAll('video, audio, source[src]');
-        for (i = 0; i < list.length; i++) { e = list[i]; report(e.currentSrc || e.src || e.getAttribute('src')); }
+        for (i = 0; i < list.length; i++) { e = list[i]; report(e.currentSrc || e.src || e.getAttribute('src'), labelOfSource(e)); }
         var holders = document.querySelectorAll(ATTR_SELECTOR), j, v;
         for (i = 0; i < holders.length && i < 200 && n < 40; i++) {
           e = holders[i];

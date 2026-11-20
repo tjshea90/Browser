@@ -1827,3 +1827,16 @@ test('RVW1 F8: a stream filter that is not available, or that fails half way, ne
   f2.onerror();
   assert.ok(f2.disconnected);
 });
+
+
+test('RVW1 F11: the label of a page-text source is passed on with the address (only when there is one)', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '1' });
+  h.message({ k: 'dom', u: 'https://cdn.example/v/a.mp4', p: PAGE, lb: '1080p' }, 1, PAGE, 0);
+  h.message({ k: 'dom', u: 'https://cdn.example/v/b.mp4', p: PAGE }, 1, PAGE, 0);
+  h.message({ k: 'dom', u: 'https://cdn.example/v/c.mp4', p: PAGE, lb: 'x'.repeat(100) }, 1, PAGE, 0);
+  await tick(10);
+  const m = h.of('media');
+  assert.equal(m.length, 3);
+  assert.equal(m[0].lb, '1080p'); assert.equal('lb' in m[1], false); assert.equal(m[2].lb.length, 24);
+});
