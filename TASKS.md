@@ -996,3 +996,10 @@ Real engine, Keep mode: sound stops when the app is left (page clock frozen 0.0 
   - [x] RVW2d (DONE: P5b P8 P9; P5a decided not to, with a measurement) speed: P5a (scriptlets-main.js builds its library only when an event has calls), P5b (guard-main.js sweepFrames gate), P8 (session write on Io.fast), P9 (idle wake-ups: one beat for watchdog / LastRun / CpuMeter)
   - [x] RVW2e (said plainly in the answer) NOT CODE or not doable here, to be said plainly: P3 (needs the tablet), P4 (owner decision on Firefox background traffic), S7 marker exemption (kept on purpose), N3 'Watch Dogs' leading-verb rule and og:title names (trade-off, no real-site evidence)
   - [x] RVW2f (:core:test 1890 tests, :app + :geckoapp unit tests, lint, web npm test 646 of 646: all green 2026-11-20) whole suite green (core + app + geckoapp + web npm test + lint), review STATUS columns updated, answer the owner; NO release unless the owner asks
+
+## Owner request 2026-11-20 (STANDING RULE, after alpha72 and RVW2) {ccr-d6f32d19-c3cwzl 2026-11-20}
+- [x] REL-STANDING (owner, verbatim) "Always ship new versions and release without stopping to ask me" -> written into CLAUDE.md (GitHub Actions section): after real work is tested and checkpointed, bump the version, ship.sh, ONE dispatch, record-release and give the Release link; never wait for a go
+- [~] REL73 ship the RVW2 work as alpha73 (versionCode 174) {ccr-d6f32d19-c3cwzl 2026-11-20}
+  - [ ] REL73a bump geckoapp versionCode 174 / 0.3.0-alpha73, bash tools/sync-ext-version.sh, write docs/handoff/ALPHA73_RELEASE_NOTE.txt
+  - [ ] REL73b bash ship.sh gecko, ONE dispatch (app=gecko full_build=true), wait for tag + all jobs + Release with APK
+  - [ ] REL73c bash tools/record-release.sh with the IDENTICAL note; tell the owner with the Release link on its own line
