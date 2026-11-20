@@ -13,6 +13,12 @@ import kotlin.math.sign
 object GestureMath {
     enum class Level { BRIGHTNESS, VOLUME }
 
+    /**
+     * RVW5 (PB11 of research/REVIEW_2026-11-21_PLAYBACK.md): the tablet's brightness has 256 steps (Settings.System.SCREEN_BRIGHTNESS is 0..255), so a window write that lands on the step already shown changes nothing
+     * on the glass but still costs a relayout of the window (a binder call, about 0.5-3 ms on this CPU) at every touch event of a drag, 60 times a second, while the level bar and the controls animate.
+     */
+    fun sameBrightnessStep(a: Float, b: Float): Boolean = Math.round(a * 255f) == Math.round(b * 255f)
+
     /** A horizontal move under this many centimetres on the glass is no seek (VLC: ignored under 1 cm). */
     const val SEEK_MIN_CM = 1.0
     /** The jump of a drag of [SEEK_REF_CM] is [SEEK_SCALE_MS] (ten minutes at 8 cm); every jump starts at [SEEK_BASE_MS] (three seconds). The curve between is the fourth power: small drags move in small steps, long drags run. */

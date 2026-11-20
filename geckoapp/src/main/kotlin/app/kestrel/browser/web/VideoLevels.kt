@@ -37,17 +37,22 @@ class VideoLevels(private val activity: Activity) {
         } catch (e: Exception) { 0.5f }
     }
 
+    private var written = -1f
+
     fun setBrightness(f: Float) {
+        val v = f.coerceIn(0.01f, 1f)
+        if (written >= 0f && app.kestrel.core.player.GestureMath.sameBrightnessStep(v, written)) return    // RVW5 PB11: the same step of the 256 the screen has: no window relayout
         val lp = activity.window.attributes
-        lp.screenBrightness = f.coerceIn(0.01f, 1f)
+        lp.screenBrightness = v
         activity.window.attributes = lp
+        written = v
         changed = true
     }
 
     /** The film ended: the window is the tablet's again (its own brightness setting rules). */
     fun restore() {
         if (!changed) return
-        changed = false
+        changed = false; written = -1f
         try {
             val lp = activity.window.attributes
             lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
