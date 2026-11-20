@@ -20,6 +20,7 @@ import app.kestrel.browser.download.MediaStoreSinks
 import app.kestrel.core.download.Sink
 import app.kestrel.browser.data.Prefs
 import app.kestrel.browser.ProcessLife
+import app.kestrel.browser.readCapped
 import app.kestrel.core.update.DexMetadata
 import app.kestrel.core.update.Release
 import app.kestrel.core.update.ReleaseAsset
@@ -193,6 +194,8 @@ object UpdateManager {
         setRequestProperty("User-Agent", "Kestrel-updater/1") // GitHub requires one; it names the app, nothing about the user or device
     }
 
+    /** RVW3 SC6: the most bytes of one answer of the release API that are read (the real ones are a few hundred KB). */
+    private const val MAX_ANSWER = 2_000_000
     private class RateLimited : IOException("rate limited")
     private class HttpError(val code: Int) : IOException("HTTP $code")
 
