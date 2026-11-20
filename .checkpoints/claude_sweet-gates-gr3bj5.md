@@ -1,21 +1,25 @@
-# CHECKPOINT 2764 — read me first, then TASKS.md
+# CHECKPOINT 2765 — read me first, then TASKS.md
 
-**Written:** 2026-11-20T20:45:28Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/sweet-gates-gr3bj5` · **builds on:** `61ca6460` (this checkpoint is the commit after it)
+**Written:** 2026-11-20T20:52:29Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/sweet-gates-gr3bj5` · **builds on:** `49992212` (this checkpoint is the commit after it)
 
 ## Just done
-YTC1 written into TASKS.md in the owner's words (mid-turn owner message: YouTube controls flash and vanish on tap; laggy playback; slow buffering; unsure if only YouTube). alpha76 tag kestrel-g-v0.3.0-alpha76 EXISTS (run 44811598154): still to confirm all jobs green + Release APK, then record-release with the identical note (docs/handoff/ALPHA76_RELEASE_NOTE.txt).
+YTC1: not reproduced (the YouTube film does not start behind its bot check in the sandbox); research/YTC1_YOUTUBE_CONTROLS.md written; ControlsMachine.lifeLine diagnostic coded + tested (core player tests + OwnerRulesTest 130 of 130, :geckoapp compile EXIT 0; the guarded line 'if (shown) hide(false) else show(hideAfterMs, false)' kept verbatim). alpha76 RELEASED AND RECORDED (run 44811598154, Release kestrel-g-v0.3.0-alpha76). Bumped to code 178 / alpha77, note written. NOT shipped yet.
 
 ## Do this next
-1) mcp__github__actions_list list_workflow_jobs 44811598154 until build-gecko etc. are all success, get_release_by_tag kestrel-g-v0.3.0-alpha76 shows the APK, then bash tools/record-release.sh kestrel-g-v0.3.0-alpha76 "$(cat docs/handoff/ALPHA76_RELEASE_NOTE.txt)". 2) YTC1a: read geckoapp/src/main/assets/kestrel-shields/youtube.js videobar.js player.js seekbar.js and the tap path (BrowserActivity touch handling) for a YouTube tap that shows then hides controls at once; YTC1b measure lag/buffering cost of our scripts on youtube.com (headless Chromium gets 429: use the modelled pages in tools/sitelab/ytlab.py and research/YOUTUBE_ADS.md)
+REL77: bash ship.sh gecko "$(cat docs/handoff/ALPHA77_RELEASE_NOTE.txt)" then ONE dispatch (android.yml app=gecko full_build=true ref claude/sweet-gates-gr3bj5 note same text), wait tag kestrel-g-v0.3.0-alpha77 + all jobs, get_release_by_tag, bash tools/record-release.sh kestrel-g-v0.3.0-alpha77 with the IDENTICAL note; then answer the owner (YTC1c + RVW5g: both Release links each on its own line, the two questions about YouTube, private-clone denial, open items)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
      M TASKS.md
+     M geckoapp/build.gradle.kts
+     M geckoapp/src/main/assets/kestrel-shields/manifest.json
+    ?? docs/handoff/ALPHA77_RELEASE_NOTE.txt
 
 ## Last ten checkpoints
 ```
+  1cfd914e ckpt 2764: YTC1 written into TASKS.md in the owner's words (mid-turn owner message: You
   61ca6460 ckpt 2763: REL76b: alpha76 DISPATCHED ONCE (android.yml app=gecko full_build=true ref c
   5eb5e6aa ckpt 2762: gated kestrel-g-v0.3.0-alpha76 (gecko code 177) and pushed it: handoff self-
   7df4d1c8 ckpt 2761: RVW5 gates all green: :core:test 1916 (OwnerRulesTest guard kept: VideoLevel
@@ -25,5 +29,7 @@ YTC1 written into TASKS.md in the owner's words (mid-turn owner message: YouTube
   a0ad95ec ckpt 2757: REL75b: alpha75 DISPATCHED ONCE (android.yml app=gecko full_build=true ref c
   eebefd5f ckpt 2756: gated kestrel-g-v0.3.0-alpha75 (gecko code 176) and pushed it: handoff self-
   9e99464e ckpt 2755: RVW4: whole JVM suite GREEN (:core:test 1907 tests 0 failures 12 skipped as 
-  b1ec2fd4 ckpt 2754: NL1 PROVEN on the real engine: lab run 44787922316 (daily, 62 scenes, 12 min
 ```
+
+(3 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
