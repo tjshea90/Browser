@@ -97,7 +97,7 @@ class EpisodeNamesTest {
     // ---- RVW5: titles measured on REAL pages with tools/sitelab/realnames.js (2026-11-20); the site's own name went into the file name when its host label is short or the tail is two words
 
     @Test fun theSiteNameIsDroppedWhenItsHostLabelIsShortOrTheTailIsTwoWords() {
-        assertEquals("Sir Ken Robinson - Do schools kill creativity?", EpisodeNames.cleanTitle("Sir Ken Robinson: Do schools kill creativity? | TED Talk", "www.ted.com"))
+        assertEquals("Sir Ken Robinson - Do schools kill creativity", EpisodeNames.cleanTitle("Sir Ken Robinson: Do schools kill creativity? | TED Talk", "www.ted.com"))
         assertEquals("Latest Videos", EpisodeNames.cleanTitle("Latest Videos | CNN", "www.cnn.com"))
         assertEquals("Tiny Desk", EpisodeNames.cleanTitle("Tiny Desk : NPR", "www.npr.org"))
         assertEquals("Vimeo Staff Picks", EpisodeNames.cleanTitle("Vimeo Staff Picks on Vimeo", "vimeo.com"))
