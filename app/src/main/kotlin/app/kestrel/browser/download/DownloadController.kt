@@ -21,6 +21,7 @@ import app.kestrel.core.download.Config
 import app.kestrel.core.download.DEST_APP_PRIVATE
 import app.kestrel.core.download.DlState
 import app.kestrel.core.download.DownloadView
+import app.kestrel.core.download.MiniTracker
 import app.kestrel.core.download.Engine
 import app.kestrel.core.download.FetchRequest
 import app.kestrel.core.download.Fetcher
@@ -185,6 +186,7 @@ object DownloadController {
         control.execute {
             e.restore(); st.restore(); e.resumeInterrupted(); st.resumeInterrupted()
             pb.restore(); if (PhoneBridge.wanted(app)) pb.start()            // after the engines: the rows from the last run find their downloads again
+            restored = true                                                  // DM1: now the small window may take the list as "old news"
             uiChanged()
         } // what the last run was in the middle of carries on by itself
         return e
@@ -303,17 +305,24 @@ object DownloadController {
         v.id, v.state, v.reason, v.detail, v.name, v.mime, host ?: v.host, v.total, v.done, v.bytesPerSec, v.etaSec, v.connections, v.priv, v.destUri, created ?: v.created, v.updated, v.actions, v.kind, v.estimated,
         if (v.note.isNullOrEmpty()) note else note + ". " + v.note,
     )
+    /**
+     * The small download window's memory lives as long as the PROCESS (DM1): a window re-created with the activity keeps what it knew, and a new process starts from "everything in the list is old news".
+     * [restored] turns true once the rows of the last run have been read and the interrupted downloads have been carried on: until then the list is incomplete and must not be taken as the starting point.
+     */
+    val mini = MiniTracker()
+    @Volatile var miniHidden = false
+    @Volatile var restored = false
     @Volatile private var viewCache: List<DownloadView>? = null
     @Volatile private var viewCacheAt = 0L
     private fun isPhone(id: Long) = phone?.owns(id) == true
     fun view(id: Long): DownloadView? = if (isPhone(id)) phone?.view(id) else if (isStream(id)) streams?.view(id) else engine?.view(id)
     fun pause(id: Long) { if (isPhone(id)) phone?.pause(id) else if (isStream(id)) streams?.pause(id) else engine?.pause(id) }
-    fun resume(ctx: Context, id: Long) { init(ctx); if (isPhone(id)) phone?.resume(id) else if (isStream(id)) streams?.resume(id) else engine?.resume(id); DownloadService.start(ctx) }
+    fun resume(ctx: Context, id: Long) { mini.requested(id); init(ctx); if (isPhone(id)) phone?.resume(id) else if (isStream(id)) streams?.resume(id) else engine?.resume(id); DownloadService.start(ctx) }
     /** "Start now": jump the waiting line (the tablet's own byte downloads only; videos and phone downloads have no line of their own). */
     fun startNow(ctx: Context, id: Long) { init(ctx); if (!isPhone(id) && !isStream(id)) engine?.startNow(id); DownloadService.start(ctx) }
     fun move(id: Long, up: Boolean) { if (!isPhone(id) && !isStream(id)) engine?.move(id, up) }
     fun cancel(id: Long) { if (isPhone(id)) phone?.cancel(id) else if (isStream(id)) streams?.cancel(id) else engine?.cancel(id) }
-    fun restart(ctx: Context, id: Long) { init(ctx); if (isPhone(id)) phone?.restart(id) else if (isStream(id)) streams?.restart(id) else engine?.restart(id); DownloadService.start(ctx) }
+    fun restart(ctx: Context, id: Long) { mini.requested(id); init(ctx); if (isPhone(id)) phone?.restart(id) else if (isStream(id)) streams?.restart(id) else engine?.restart(id); DownloadService.start(ctx) }
     fun remove(id: Long, deleteFile: Boolean) { if (isPhone(id)) phone?.remove(id) else if (isStream(id)) streams?.remove(id, deleteFile) else engine?.remove(id, deleteFile) }
     /** "Make MP4" on a finished stream that was kept as a .ts. */
     fun makeMp4(ctx: Context, id: Long) { init(ctx); if (isStream(id)) streams?.makeMp4(id); DownloadService.start(ctx) }   // the service keeps the process alive while the file is converted
@@ -335,7 +344,7 @@ object DownloadController {
         return bytes
     }
     fun pauseAll() { engine?.pauseAll(); streams?.pauseAll() }
-    fun resumeAll(ctx: Context) { init(ctx).resumeAll(); streams?.resumeAll(); DownloadService.start(ctx) }
+    fun resumeAll(ctx: Context) { for (v in views()) mini.requested(v.id); init(ctx).resumeAll(); streams?.resumeAll(); DownloadService.start(ctx) }
     fun tick() { engine?.tick(); streams?.tick() }
     fun needsService(): Boolean = (engine?.needsService() ?: false) || (streams?.needsService() ?: false) || (phone?.needsService() ?: false)
     fun counts(): IntArray {

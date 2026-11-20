@@ -1,6 +1,7 @@
 package app.kestrel.core.input
 
 import app.kestrel.core.input.editor.FieldKind
+import app.kestrel.core.input.editor.Pad
 import app.kestrel.core.input.editor.ImeActions
 
 /** The letters, the first page of symbols (digits and the everyday ones) and the second page of symbols (the rest). */
@@ -66,8 +67,8 @@ object ImeLayout {
     /** The width of the round keys (?123 / abc at the left, Enter at the right of the bottom row) and of Shift and Backspace: the photo has them 1.5 letter keys wide. */
     const val WIDE_KEY = 1.5f
 
-    fun rows(page: Page, shift: Boolean, kind: FieldKind, actionLabel: String = "⏎", numberRow: Boolean = false, showGlobe: Boolean = false): List<List<KeySpec>> {
-        if (kind == FieldKind.NUMBER || kind == FieldKind.PHONE) return keypad(kind, actionLabel, showGlobe)
+    fun rows(page: Page, shift: Boolean, kind: FieldKind, actionLabel: String = "⏎", numberRow: Boolean = false, showGlobe: Boolean = false, pad: Pad = Pad.of(kind)): List<List<KeySpec>> {
+        if (pad != Pad.NONE) return keypad(pad, actionLabel, showGlobe)
         val digits = if (numberRow) listOf(chars("1234567890")) else emptyList()
         fun letters(s: String) = chars(if (shift) s.uppercase() else s)
         // the bottom row, as in the photo: [?123 / abc, round] [globe if asked] [small keys] [space: ALL the rest] [small keys] [action key, round]
@@ -115,15 +116,24 @@ object ImeLayout {
         )
     }
 
-    private fun keypad(kind: FieldKind, actionLabel: String, showGlobe: Boolean): List<List<KeySpec>> {
-        val phone = kind == FieldKind.PHONE
-        val g = if (showGlobe) listOf(KeySpec(GLOBE, Key.NextKeyboard, 1f)) else emptyList()
+    /**
+     * The number pad (owner R23d: "a full size number pad comparable to other popular keyboards"): three columns of digits as on a phone, a fourth column for Backspace and the marks the field may need, all keys as
+     * wide and as tall as the keyboard allows, no letters. NUMBER: 1 2 3 / 4 5 6 / 7 8 9 and, - space . ; PHONE: + # * , ; DATETIME: / : - space. The globe (when asked for) takes the place of the bottom-left mark.
+     */
+    private fun keypad(pad: Pad, actionLabel: String, showGlobe: Boolean): List<List<KeySpec>> {
+        val side: List<String>; val bottomLeft: String; val bottomRight: String
+        when (pad) {
+            Pad.PHONE -> { side = listOf("+", "#"); bottomLeft = "*"; bottomRight = "," }
+            Pad.DATETIME -> { side = listOf("/", ":"); bottomLeft = "-"; bottomRight = "." }
+            else -> { side = listOf("-", " "); bottomLeft = ","; bottomRight = "." }
+        }
+        fun mark(s: String) = if (s == " ") KeySpec("space", Key.Ch(" "), 1f) else ch(s)
+        val first = if (showGlobe) KeySpec(GLOBE, Key.NextKeyboard, 1f) else mark(bottomLeft)
         return listOf(
             listOf(ch("1"), ch("2"), ch("3"), KeySpec("⌫", Key.Backspace, 1f)),
-            listOf(ch("4"), ch("5"), ch("6"), ch(if (phone) "+" else "-")),
-            listOf(ch("7"), ch("8"), ch("9"), ch(if (phone) "#" else ".")),
-            if (showGlobe) g + listOf(ch("0"), if (phone) ch(",") else KeySpec("space", Key.Ch(" "), 1f), action(actionLabel, 1f))
-            else listOf(ch("0", if (phone) 1.5f else 2f), if (phone) ch(",", 1f) else KeySpec("space", Key.Ch(" "), 1f), action(actionLabel, if (phone) 1.5f else 1f)),
+            listOf(ch("4"), ch("5"), ch("6"), mark(side[0])),
+            listOf(ch("7"), ch("8"), ch("9"), mark(side[1])),
+            listOf(first, ch("0"), mark(bottomRight), action(actionLabel, 1f)),
         )
     }
 }
