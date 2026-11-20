@@ -141,14 +141,14 @@ class VideoFlow(private val a: BrowserActivity) {
             if ((c.kind != MediaKind.HLS && c.kind != MediaKind.DASH) || !lookedKeys.add(c.key)) continue
             looks[t.id] = n + 1
             if (c.kind == MediaKind.DASH) { // RX3-V4: a DASH manifest says its length and its picture heights in its first bytes
-                fetchPlaylist(t, c, c.url, { Dash.parse(it, c.url) != null }) { text, _ ->
-                    val m = text?.let { Dash.parse(it, c.url) }
+                fetchPlaylist(t, c, c.url, { Dash.parse(it, c.base) != null }) { text, _ ->
+                    val m = text?.let { Dash.parse(it, c.base) }
                     if (m != null) noteStream(t, c, m.problem, m.durationMs, 0L, 0, m.video.map { it.height }.filter { it > 0 }.distinct().toIntArray())
                 }
                 continue
             }
-            fetchPlaylist(t, c, c.url, { Hls.parse(it, c.url) != null }) { text, _ ->
-                when (val pl = text?.let { Hls.parse(it, c.url) }) {
+            fetchPlaylist(t, c, c.url, { Hls.parse(it, c.base) != null }) { text, _ ->
+                when (val pl = text?.let { Hls.parse(it, c.base) }) {
                     is Hls.MediaPlaylist -> noteLook(t, c, pl.media, IntArray(0))
                     is Hls.MasterPlaylist -> {
                         c.master = true
@@ -357,7 +357,7 @@ class VideoFlow(private val a: BrowserActivity) {
         val c = tab.media.primary()?.takeIf { it.kind == MediaKind.HLS } ?: tab.media.usable().filter { it.kind == MediaKind.HLS }.maxByOrNull { it.durationMs } ?: return null   // (clip-sized streams are not counted: the longest counted one is the film)
         val r = masterRungs[c.key]
         if (r == null) {
-            if (masterAsked.add(c.key)) fetchPlaylist(tab, c, c.url, { Hls.parse(it, c.url) != null }) { text, _ -> (text?.let { Hls.parse(it, c.url) } as? Hls.MasterPlaylist)?.let { noteMaster(c, it.master) } }
+            if (masterAsked.add(c.key)) fetchPlaylist(tab, c, c.url, { Hls.parse(it, c.base) != null }) { text, _ -> (text?.let { Hls.parse(it, c.base) } as? Hls.MasterPlaylist)?.let { noteMaster(c, it.master) } }
             return null
         }
         return if (PageQuality.hasChoice(r)) PageFilm(c, r) else null
@@ -601,7 +601,8 @@ class VideoFlow(private val a: BrowserActivity) {
         val host = UrlParts.hostOf(url) ?: ""
         fun attempt(i: Int, last: Int) {
             if (i >= sets.size) { Health.log("media", "list-failed", "$host http=$last tried=${sets.size}"); done(null, last); return }
-            DownloadController.fetchTextStatus(a, url, sets[i], 1, tab.isPrivateTab) { text, status ->
+            DownloadController.fetchTextFinal(a, url, sets[i], 1, tab.isPrivateTab) { text, status, finalUrl ->
+                if (finalUrl != null && finalUrl != url && url == c.url) c.playlistBase = finalUrl   // RVW1 V10: relative addresses in this playlist resolve against where it really came from (set before the callers parse)
                 if (text != null && valid(text)) {
                     if (c.viaHeaders != sets[i]) c.viaHeaders = sets[i]
                     Health.log("media", "list-ok", "$host http=$status set=${i + 1}/${sets.size} referer=${UrlParts.hostOf(sets[i]["Referer"] ?: "") ?: "none"}")
@@ -614,8 +615,8 @@ class VideoFlow(private val a: BrowserActivity) {
 
     private fun loadStream(tab: Tab, c: MediaCandidate): Loaded {
         streamInfo[c.key] = Loaded.Loading
-        fetchPlaylist(tab, c, c.url, { Hls.parse(it, c.url) != null }) { text, status ->
-            val pl = text?.let { Hls.parse(it, c.url) }
+        fetchPlaylist(tab, c, c.url, { Hls.parse(it, c.base) != null }) { text, status ->
+            val pl = text?.let { Hls.parse(it, c.base) }
             when (pl) {
                 null -> { streamInfo[c.key] = Loaded.Failed(whyNotRead(status)); refresh(tab) }
                 is Hls.MediaPlaylist -> { streamInfo[c.key] = ready(tab, c, null, pl.media, text, null); refresh(tab); sizeBareStream(tab, c, pl.media, text) }
@@ -716,7 +717,7 @@ class VideoFlow(private val a: BrowserActivity) {
         if (master == null) {
             val audio = media.container == "aac" || media.container == "mp3" || media.container == "m4a"
             val est = if (media.exactBytes >= 0) media.exactBytes else sizeGuess
-            val pick = StreamPick(if (audio) "audio" else "", c.url, mediaText, est, null, audio, media.container, headers = requestHeaders(tab, c), cand = c)
+            val pick = StreamPick(if (audio) "audio" else "", c.base, mediaText, est, null, audio, media.container, headers = requestHeaders(tab, c), cand = c)
             val ext = if (audio) media.container else "mp4"          // a video stream is saved as one MP4 file
             rows.add(streamChoice(tab, c, pick, if (audio) "Audio only" else "Video", rowDetail(ext.uppercase(), MediaLabels.size(est, estimate = media.exactBytes < 0 && est > 0), dur), ext) to pick)
             return Loaded.Ready(rows, null)
@@ -740,8 +741,8 @@ class VideoFlow(private val a: BrowserActivity) {
 
     private fun loadDash(tab: Tab, c: MediaCandidate): Loaded {
         streamInfo[c.key] = Loaded.Loading
-        fetchPlaylist(tab, c, c.url, { Dash.parse(it, c.url) != null }) { text, status ->
-            val man = text?.let { Dash.parse(it, c.url) }
+        fetchPlaylist(tab, c, c.url, { Dash.parse(it, c.base) != null }) { text, status ->
+            val man = text?.let { Dash.parse(it, c.base) }
             streamInfo[c.key] = if (man == null || text == null) Loaded.Failed(whyNotRead(status)) else dashReady(tab, c, man, text)
             refresh(tab)
         }

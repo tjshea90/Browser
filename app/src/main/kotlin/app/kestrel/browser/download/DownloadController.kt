@@ -226,16 +226,21 @@ object DownloadController {
     fun fetchText(ctx: Context, url: String, headers: Map<String, String>, kind: Int, priv: Boolean, onDone: (String?) -> Unit) = fetchTextStatus(ctx, url, headers, kind, priv) { text, _ -> onDone(text) }
 
     /** [fetchText] that also says what the server answered: the HTTP status (-1 = no answer at all: a network error, a timeout). Lets the caller try other request headers after a 401 / 403. */
-    fun fetchTextStatus(ctx: Context, url: String, headers: Map<String, String>, kind: Int, priv: Boolean, onDone: (String?, Int) -> Unit) {
+    fun fetchTextStatus(ctx: Context, url: String, headers: Map<String, String>, kind: Int, priv: Boolean, onDone: (String?, Int) -> Unit) = fetchTextFinal(ctx, url, headers, kind, priv) { text, status, _ -> onDone(text, status) }
+
+    /** [fetchTextStatus] that also says the address the answer really came from after redirects (RVW1 V10: relative addresses in a playlist resolve against it); null when the request got no answer. */
+    fun fetchTextFinal(ctx: Context, url: String, headers: Map<String, String>, kind: Int, priv: Boolean, onDone: (String?, Int, String?) -> Unit) {
         init(ctx)
         Io.exec {
             var text: String? = null
             var status = -1
+            var finalUrl: String? = null
             try {
                 val f = fetchers[kind] ?: fetchers[0]!!
                 val resp = f.open(FetchRequest(url, -1, -1, null, headers, 15_000, 20_000, priv))
                 try {
                     status = resp.status
+                    finalUrl = resp.finalUrl
                     if (resp.status in 200..299) {
                         val out = java.io.ByteArrayOutputStream()
                         val buf = ByteArray(16 * 1024)
@@ -245,7 +250,7 @@ object DownloadController {
                     }
                 } finally { try { resp.close() } catch (e: Exception) { /* ignore */ } }
             } catch (e: Exception) { /* null: the caller says so */ }
-            Io.ui { onDone(text, status) }
+            Io.ui { onDone(text, status, finalUrl) }
         }
     }
 

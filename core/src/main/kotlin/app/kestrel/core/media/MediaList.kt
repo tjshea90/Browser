@@ -79,6 +79,13 @@ class MediaCandidate(
     /** The request headers that were seen to WORK for this address (its playlist was read with them): every later request of the download repeats them. Null until one worked. */
     var viaHeaders: Map<String, String>? = null
 
+    /**
+     * RVW1 V10: where the playlist really CAME FROM after redirects (a stream API address that 302s to a CDN edge): relative addresses inside it resolve against that, as every player does. Null = it was not redirected.
+     * [url] stays the address the page used (identity, de-duplication, what is asked for first).
+     */
+    var playlistBase: String? = null
+    val base: String get() = playlistBase ?: url
+
     val key: String get() = keyOf(url)
     val audioOnly: Boolean get() = kind == MediaKind.FILE && MediaSniff.isAudio(url, mime)
 

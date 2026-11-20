@@ -222,6 +222,7 @@ class StreamEngine(
         val responses = CopyOnWriteArrayList<FetchResponse>()
         val drain = ReentrantLock()
         val keys = HashMap<Int, ByteArray>()
+        @Volatile var finalUrl: String? = null         // RVW1 V10: where the playlist read by [fetchSmall] came from after redirects
         val keysByUrl = HashMap<String, ByteArray>()   // RVW1 V1: the same key address named by many tags is fetched once
         @Volatile var lastBytesAt = 0L
         /** RX3-D1: some byte of this download arrived since this job object exists; with [StreamRec.next] and the staged parts it says "this is not a fresh download from a dead host". */
@@ -700,12 +701,13 @@ class StreamEngine(
                 if (!net.online) throw Stopped().also { synchronized(lock) { job.stopState = DlState.WAITING_NETWORK } }
                 text = readText(job, fetcher, rec.url)
             }
+            val base = if (rec.playlistText == null) job.finalUrl ?: rec.url else rec.url   // RVW1 V10: relative addresses resolve against where a playlist we read ourselves came from
             val media: Hls.Media = if (text.trimStart('\uFEFF', ' ', '\n', '\r', '\t').startsWith("<")) {
-                val man = Dash.parse(text, rec.url) ?: throw Failed(Reason.BAD_PLAYLIST)
+                val man = Dash.parse(text, base) ?: throw Failed(Reason.BAD_PLAYLIST)
                 when (man.problem) { Hls.Problem.LIVE -> throw Failed(Reason.LIVE); Hls.Problem.DRM -> throw Failed(Reason.DRM); Hls.Problem.UNSUPPORTED -> throw Failed(Reason.UNSUPPORTED); else -> {} }
                 val rep = man.reps.firstOrNull { it.id == (rec.repId ?: it.id) } ?: throw Failed(Reason.BAD_PLAYLIST)
                 rep.media ?: throw Failed(Reason.UNSUPPORTED)
-            } else (Hls.parse(text, rec.url) as? Hls.MediaPlaylist ?: throw Failed(Reason.BAD_PLAYLIST)).media
+            } else (Hls.parse(text, base) as? Hls.MediaPlaylist ?: throw Failed(Reason.BAD_PLAYLIST)).media
             when (media.problem) {
                 Hls.Problem.LIVE -> throw Failed(Reason.LIVE)
                 Hls.Problem.DRM -> throw Failed(Reason.DRM)
@@ -841,6 +843,7 @@ class StreamEngine(
             try {
                 resp = open(job, fetcher, FetchRequest(url, -1, -1, null, job.rec.headers, priv = job.rec.priv))
                 if (resp.status !in 200..299) throw statusFailure(resp.status, resp)
+                job.finalUrl = resp.finalUrl.takeIf { it.isNotEmpty() }
                 val body = resp.body ?: throw Failed(Reason.BAD_PLAYLIST)
                 val out = java.io.ByteArrayOutputStream()
                 val buf = ByteArray(minOf(16 * 1024, limit + 1))
