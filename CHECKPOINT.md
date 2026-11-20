@@ -1,13 +1,13 @@
-# CHECKPOINT 2713 — read me first, then TASKS.md
+# CHECKPOINT 2714 — read me first, then TASKS.md
 
-**Written:** 2026-11-20T03:48:32Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-d6f32d19-c3cwzl` · **builds on:** `e351615a` (this checkpoint is the commit after it)
+**Written:** 2026-11-20T03:49:11Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-d6f32d19-c3cwzl` · **builds on:** `90c64bfb` (this checkpoint is the commit after it)
 
 ## Just done
-RVW1a security lane saved to research/REVIEW_2026-11-20_SECURITY.md (S1-S10, none fixed yet); other three lanes (finder, downloader+naming, speed) still running
+RVW1a speed lane saved to research/REVIEW_2026-11-20_SPEED.md (P1-P11); security lane saved earlier; finder and downloader/naming lanes still running
 
 ## Do this next
-Wait for the other three review agents; then verify S1 (Notifier.kt:118), S3 (fetch of page-chosen URLs), S4 (Hls.parse caps), S5, S6 by reading the lines, and fix them with tests
+Wait for the finder + downloader/naming agents; then fix in this order: S4/S5 (Hls.parse caps, key read cap), S1 (Notifier Open gate), S6 (private URL logging), P7 (clearTab on close), P1 (names.js media gate), P6, P2
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ Wait for the other three review agents; then verify S1 (Notifier.kt:118), S3 (fe
 
 ## Last ten checkpoints
 ```
+  cf89270d ckpt 2713: RVW1a security lane saved to research/REVIEW_2026-11-20_SECURITY.md (S1-S10,
   6a9b6024 ckpt 2712: RVW1 written into TASKS.md in the owner's words (whole-browser review + vide
   9bdcb1ba ckpt 2711: DG2: owner pasted the tail of the same Diagnostics (events +2892..+2925 s): 
   79448c72 ckpt 2710: DG1e answered to the owner; DG1 stays open until alpha72 ships and the next 
@@ -25,7 +26,6 @@ Wait for the other three review agents; then verify S1 (Notifier.kt:118), S3 (fe
   1aa1cf0c ckpt 2706: Lab dr v2 (run 44439418098) READ: wrapper-direct rows are NOT the owner's fl
   5b20c111 ckpt 2705: alpha71 DISPATCHED ONCE: android.yml app=gecko full_build=true on branch tip
   f314d5ed ckpt 2704: gated kestrel-g-v0.3.0-alpha71 (gecko code 172) and pushed it: handoff self-
-  c1463b83 ckpt 2703: alpha71 gates: first ship.sh run stopped on two documented timing-flaky down
 ```
 
 (1 automatic checkpoint(s) since the last deliberate one — the
