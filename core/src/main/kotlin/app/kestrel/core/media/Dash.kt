@@ -93,7 +93,7 @@ object Dash {
                 val rBase = baseOf(r, asBase, mpdUrl)
                 val id = r.getAttribute("id")
                 val bw = r.getAttribute("bandwidth").toLongOrNull() ?: 0L
-                val media = try { plan(aset, r, id, bw, rBase, periodMs, mime, problem) } catch (e: Exception) { null }
+                val media = try { plan(period, aset, r, id, bw, rBase, periodMs, mime, problem) } catch (e: Exception) { null }
                 reps.add(Rep(id, bw, r.getAttribute("width").toIntOrNull() ?: aset.getAttribute("width").toIntOrNull() ?: 0, r.getAttribute("height").toIntOrNull() ?: aset.getAttribute("height").toIntOrNull() ?: 0,
                     codecs, mime, frameRate(r.getAttribute("frameRate").ifEmpty { aset.getAttribute("frameRate") }), audio, aset.getAttribute("lang").takeIf { it.isNotEmpty() }, media,
                     role = children(aset, "Role").firstOrNull()?.getAttribute("value")?.lowercase().orEmpty()))
@@ -104,10 +104,11 @@ object Dash {
 
     // ------------------------------------------------------------------------------------------ one representation's segments
 
-    private fun plan(aset: Element, rep: Element, id: String, bandwidth: Long, baseUrl: String, periodMs: Long, mime: String, problem: Hls.Problem?): Hls.Media? {
-        val st = child(rep, "SegmentTemplate") ?: child(aset, "SegmentTemplate")
-        val sl = child(rep, "SegmentList") ?: child(aset, "SegmentList")
-        val sb = child(rep, "SegmentBase") ?: child(aset, "SegmentBase")
+    private fun plan(period: Element, aset: Element, rep: Element, id: String, bandwidth: Long, baseUrl: String, periodMs: Long, mime: String, problem: Hls.Problem?): Hls.Media? {
+        // RVW2 V8: the addressing may sit on the Representation, the AdaptationSet or (ISO 23009-1 allows it, some packagers write it) the PERIOD: it was only looked for on the first two, and such a manifest was refused
+        val st = child(rep, "SegmentTemplate") ?: child(aset, "SegmentTemplate") ?: child(period, "SegmentTemplate")
+        val sl = child(rep, "SegmentList") ?: child(aset, "SegmentList") ?: child(period, "SegmentList")
+        val sb = child(rep, "SegmentBase") ?: child(aset, "SegmentBase") ?: child(period, "SegmentBase")
         val format = if (mime.contains("webm")) "webm" else "mp4"
         val segs = ArrayList<Hls.Seg>()
         var init: Hls.Init? = null
@@ -163,7 +164,7 @@ object Dash {
             }
             else -> {
                 // one file: the whole Representation is its BaseURL (an initialisation range, if any, is part of the file)
-                if (child(rep, "BaseURL") == null && child(aset, "BaseURL") == null && sb == null) return null
+                if (child(rep, "BaseURL") == null && child(aset, "BaseURL") == null && child(period, "BaseURL") == null && sb == null) return null
                 segs.add(Hls.Seg(baseUrl, periodMs, -1, -1, -1, 0, false))
             }
         }

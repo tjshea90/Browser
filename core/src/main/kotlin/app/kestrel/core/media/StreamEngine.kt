@@ -750,6 +750,7 @@ class StreamEngine(
             if (!net.online) throw Stopped().also { synchronized(lock) { job.stopState = DlState.WAITING_NETWORK } }
             val f = File(dir, "init.seg")
             fetchTo(job, fetcher, init.url, init.from, if (init.len >= 0) init.from + init.len - 1 else -1, f, count = false)
+            if (init.key >= 0 && init.key < media.keys.size) decryptInit(job, media, init, f)   // RVW2 V11
             FileInputStream(f).use { input ->
                 val buf = ByteArray(64 * 1024)
                 while (true) { val r = input.read(buf); if (r < 0) break; sink.pwrite(synchronized(lock) { job.written }, buf, 0, r); synchronized(lock) { job.written += r } }
@@ -758,6 +759,22 @@ class StreamEngine(
             synchronized(lock) { rec.initDone = true; rec.appended = job.written }
         }
         synchronized(lock) { job.base = job.written + job.stagedBytes; job.inflight.set(0) }
+    }
+
+    /**
+     * RVW2 V11: an EXT-X-KEY before the EXT-X-MAP encrypts the initialization section too (AES-128, the tag's IV; RFC 8216 4.3.2.5). It was written to the file as it came, so the saved fMP4 began with cipher text and no
+     * player could open it. An init section is small (a few KB): it is decrypted in memory and the file replaced. A section that is not a multiple of 16 bytes is left as it is (not encrypted after all).
+     */
+    private fun decryptInit(job: Job, media: Hls.Media, init: Hls.Init, f: File) {
+        if (f.length() <= 0 || f.length() > 4L * 1024 * 1024 || f.length() % 16 != 0L) return
+        val key = keyBytes(job, media, init.key)
+        val iv = media.keys[init.key].iv ?: Hls.sequenceIv(media.segments.firstOrNull()?.seq ?: 0L)
+        val plain = try {
+            val c = Cipher.getInstance("AES/CBC/PKCS5Padding")
+            c.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(iv))
+            c.doFinal(f.readBytes())
+        } catch (e: Exception) { throw Failed(Reason.UNSUPPORTED) }
+        f.writeBytes(plain)
     }
 
     private fun applyName(rec: StreamRec, media: Hls.Media) {

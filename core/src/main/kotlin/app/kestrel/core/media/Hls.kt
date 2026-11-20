@@ -51,7 +51,8 @@ object Hls {
     }
 
     /** The initialization section of fragmented MP4 (EXT-X-MAP): written once, before the first segment. */
-    class Init(val url: String, val from: Long, val len: Long)
+    /** [key]: the index into [Media.keys] of the EXT-X-KEY that applies to this EXT-X-MAP (RVW2 V11: RFC 8216 4.3.2.5 encrypts the initialization section with it), -1 = clear. */
+    class Init(val url: String, val from: Long, val len: Long, val key: Int = -1)
     /** [ad]: the playlist's own markers (CUE-OUT .. CUE-IN, SCTE-35, DATERANGE) put this segment inside an advertising break (RX3-V5, [AdMarkers]); false when it says nothing. */
     class Seg(val url: String, val durationMs: Long, val from: Long, val len: Long, val key: Int, val seq: Long, val discontinuity: Boolean, val ad: Boolean = false)
     /** An AES-128 key: its address and the IV the playlist names (null = derive it from the segment's sequence number). */
@@ -180,7 +181,7 @@ object Hls {
                     val uri = a["URI"]
                     if (uri != null) {
                         val (len, off) = parseRange(a["BYTERANGE"], null, 0)
-                        val m = Init(resolve(base, uri), if (len >= 0) off else -1, len)
+                        val m = Init(resolve(base, uri), if (len >= 0) off else -1, len, curKey)
                         if (init == null) init = m else if (init.url != m.url || init.from != m.from) problem = problem ?: Problem.UNSUPPORTED
                     }
                 }
