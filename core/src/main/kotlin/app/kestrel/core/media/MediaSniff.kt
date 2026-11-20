@@ -45,6 +45,18 @@ object MediaSniff {
     }
 
     /**
+     * RVW5: Google's ad servers hand a video ad out of their own CDN names, `https://rr1---sn-x.gvt1.com/videoplayback/.../source/dclk_video_ads/...` (measured on ted.com with tools/sitelab/realfinder.js: a 15 s mp4 of
+     * 899 KB reported as `media` next to the real HLS film). The marker `dclk_video_ads` ("DoubleClick video ads") on a Google video host is never what a person wants to save. Narrow on purpose: the host must be
+     * Google's and the marker must be there, so no film host and no other path is touched.
+     */
+    fun isGoogleAdVideo(url: String): Boolean {
+        val rest = url.substringAfter("://", "")
+        val host = rest.substringBefore('/').substringBefore('?').substringBefore('#').substringAfterLast('@').substringBefore(':').lowercase()
+        val google = host == "gvt1.com" || host.endsWith(".gvt1.com") || host == "gvt2.com" || host.endsWith(".gvt2.com") || host == "googlevideo.com" || host.endsWith(".googlevideo.com")
+        return google && url.contains("dclk_video_ads", ignoreCase = true)
+    }
+
+    /**
      * RVW1 F10: the extension that decides what a response is. The URL's PATH extension when it is a media one; else a media file name that a query value ends with (`/dl.php?file=movie.mp4`, `/get?f=x.m3u8`: a
      * download script names the file in the query); else the path's own. The browser extension tests the whole address, so it called these media while [classify] read only the path and dropped them silently.
      */
