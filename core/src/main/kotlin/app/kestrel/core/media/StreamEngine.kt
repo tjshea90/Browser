@@ -824,16 +824,48 @@ class StreamEngine(
         }
     }
 
-    private fun readText(job: Job, fetcher: Fetcher, url: String): String {
-        val resp = open(job, fetcher, FetchRequest(url, -1, -1, null, job.rec.headers, priv = job.rec.priv))
-        try {
-            if (resp.status !in 200..299) throw statusFailure(resp.status)
-            val body = resp.body ?: throw Failed(Reason.BAD_PLAYLIST)
-            val out = java.io.ByteArrayOutputStream()
-            val buf = ByteArray(16 * 1024)
-            while (true) { if (job.stop) throw Stopped(); val r = body.read(buf); if (r < 0) break; out.write(buf, 0, r); if (out.size() > 8 * 1024 * 1024) throw Failed(Reason.BAD_PLAYLIST) }
-            return out.toString("UTF-8")
-        } catch (e: IOException) { if (job.stop) throw Stopped(); throw Failed(Reason.NETWORK) } finally { job.responses.remove(resp); try { resp.close() } catch (e: Exception) { /* ignore */ } }
+    private fun readText(job: Job, fetcher: Fetcher, url: String): String = fetchSmall(job, fetcher, url, 8 * 1024 * 1024, Reason.BAD_PLAYLIST).toString(Charsets.UTF_8)
+
+    /**
+     * RVW1 V1 (research/REVIEW_2026-11-20_DOWNLOAD.md): a playlist or an AES key is read with the patience a segment has. It used to be ONE try: only the lowest-quality variant arrives with its text, so every other
+     * variant, every separate-audio rendition and every key started with a read of its own, and a single reset, timeout, 429 or 5xx failed the whole job (a FetchException is no IOException and a Retry is no Failed, so
+     * both fell through to "Could not write the file"). Refusals that cannot get better (TLS, a bad or local address, 4xx) fail at once with their own reason; the rest are tried [MAX_TRIES] times with the segment back-off
+     * and the server's own Retry-After (bounded). [limit] is the most a good answer can be: more than that fails with [tooBig] without being kept.
+     */
+    private fun fetchSmall(job: Job, fetcher: Fetcher, url: String, limit: Int, tooBig: Reason): ByteArray {
+        var tries = 0
+        while (true) {
+            if (job.stop) throw Stopped()
+            var resp: FetchResponse? = null
+            try {
+                resp = open(job, fetcher, FetchRequest(url, -1, -1, null, job.rec.headers, priv = job.rec.priv))
+                if (resp.status !in 200..299) throw statusFailure(resp.status, resp)
+                val body = resp.body ?: throw Failed(Reason.BAD_PLAYLIST)
+                val out = java.io.ByteArrayOutputStream()
+                val buf = ByteArray(minOf(16 * 1024, limit + 1))
+                while (true) { if (job.stop) throw Stopped(); val r = body.read(buf); if (r < 0) break; out.write(buf, 0, r); if (out.size() > limit) throw Failed(tooBig) }
+                return out.toByteArray()
+            } catch (e: FetchException) {
+                if (job.stop) throw Stopped()
+                when (e.kind) {
+                    FetchException.Kind.TLS -> throw Failed(Reason.TLS)
+                    FetchException.Kind.LOCAL_NET -> throw Failed(Reason.LOCAL_NET)
+                    FetchException.Kind.INSECURE_REDIRECT -> throw Failed(Reason.INSECURE_REDIRECT)
+                    FetchException.Kind.BAD_URL -> throw Failed(Reason.BAD_URL)
+                    else -> {}
+                }
+                if (++tries >= MAX_TRIES) throw Failed(Reason.NETWORK)
+                backoff(job, tries)
+            } catch (e: Retry) {
+                if (job.stop) throw Stopped()
+                if (++tries >= MAX_TRIES) throw Failed(if (e.status > 0) Reason.HTTP else Reason.NETWORK, e.status)
+                backoff(job, tries, e.retryAfterMs)
+            } catch (e: IOException) {
+                if (job.stop) throw Stopped()
+                if (++tries >= MAX_TRIES) throw Failed(Reason.NETWORK)
+                backoff(job, tries)
+            } finally { if (resp != null) { job.responses.remove(resp); try { resp.close() } catch (e: Exception) { /* ignore */ } } }
+        }
     }
 
     private fun finish(job: Job): DlState {
