@@ -40,12 +40,11 @@ class VideoLevels(private val activity: Activity) {
     private var written = -1f
 
     fun setBrightness(f: Float) {
-        val v = f.coerceIn(0.01f, 1f)
-        if (written >= 0f && app.kestrel.core.player.GestureMath.sameBrightnessStep(v, written)) return    // RVW5 PB11: the same step of the 256 the screen has: no window relayout
+        if (written >= 0f && app.kestrel.core.player.GestureMath.sameBrightnessStep(f.coerceIn(0.01f, 1f), written)) return    // RVW5 PB11: the same step of the 256 the screen has: no window relayout
         val lp = activity.window.attributes
-        lp.screenBrightness = v
+        lp.screenBrightness = f.coerceIn(0.01f, 1f)
         activity.window.attributes = lp
-        written = v
+        written = lp.screenBrightness
         changed = true
     }
 
