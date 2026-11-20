@@ -153,7 +153,7 @@ class InlinePlayer(ctx: Context) : FrameLayout(ctx), PlayerModel.Host, PlayerCon
                     say("error", "${error.errorCodeName}: ${error.message.orEmpty().take(120)}")
                     sample()
                     if (firstPictureAt == 0L) stop("failed before the first picture", failed = true)         // ANS54e rule: the page's own player takes the film
-                    else if (recovery.onError(p, error)) sample()                                              // RVW3 PB1: the ring, not "stopped", while a try waits
+                    else if (recovery.onError(built.player, error)) sample()                                              // RVW3 PB1: the ring, not "stopped", while a try waits
                 }
                 override fun onVideoSizeChanged(size: VideoSize) {
                     if (size.width > 0 && size.height > 0) {
