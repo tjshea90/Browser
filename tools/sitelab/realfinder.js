@@ -93,7 +93,7 @@ async function probe(browser, url, waitMs) {
     try {
       for (const code of DOM_SCRIPTS) await fr.evaluate(code);
       await fr.waitForTimeout(1500);
-      domSent.push(...(await fr.evaluate(() => (window.__ksent || []).filter((m) => m.k === 'vid' || m.k === 'maybe' || m.k === 'media' || m.k === 'vhand')))); 
+      domSent.push(...(await fr.evaluate(() => (window.__ksent || []).filter((m) => ['gen','css','guard','scroll','bk','bf','warm','sl','proc','probe'].indexOf(m.k) < 0)))); 
     } catch (e) { /* frame gone or a page that refuses the scripts */ }
   }
   const title = await page.title().catch(() => '');
