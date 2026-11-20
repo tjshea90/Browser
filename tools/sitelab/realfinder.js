@@ -44,6 +44,7 @@ function harness() {
   return { sent, listeners };
 }
 
+const MEDIA_TYPES = ['media', 'xmlhttprequest', 'other', 'object', 'sub_frame', 'main_frame']; // keep equal to background.js
 const TYPE = { document: 'sub_frame', xhr: 'xmlhttprequest', fetch: 'xmlhttprequest', media: 'media', script: 'script', stylesheet: 'stylesheet', image: 'image', font: 'font', other: 'other', websocket: 'websocket', ping: 'ping' };
 
 async function probe(browser, url, waitMs) {
@@ -65,7 +66,8 @@ async function probe(browser, url, waitMs) {
       h.listeners.before && h.listeners.before(base);
       h.listeners.sendHeaders && h.listeners.sendHeaders(Object.assign({}, base, { requestHeaders: Object.keys(reqH).map((k) => ({ name: k, value: reqH[k] })) }));
       const responseHeaders = Object.keys(rh).map((k) => ({ name: k, value: rh[k] }));
-      h.listeners.headers && h.listeners.headers(Object.assign({}, base, { statusCode: resp.status(), responseHeaders }));
+      // Firefox only calls the sniffer for the resource types it registered for (background.js MEDIA_TYPES)
+      if (MEDIA_TYPES.indexOf(type) >= 0 && /^https?:/i.test(rq.url())) h.listeners.headers && h.listeners.headers(Object.assign({}, base, { statusCode: resp.status(), responseHeaders }));
       if (/mpegurl|dash\+xml|video\/|audio\//i.test(rh['content-type'] || '') || /\.(m3u8|mpd|mp4|webm|m4a|mp3)(\?|$)/i.test(rq.url())) seen.set(rq.url(), (rh['content-type'] || '') + ' ' + (rh['content-length'] || '?'));
     } catch (e) { /* a page may close while answers still arrive */ }
   });
