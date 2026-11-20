@@ -8,7 +8,7 @@ package app.kestrel.core.input.glide
  * statistics: a word the person uses a lot gets the probability of a more common word (growing slowly: ten uses make an ordinary word, a hundred a very common one), and a pair the person
  * writes often makes the second word much more likely after the first. Nothing here can take over: the boost has a ceiling and old habits fade (all weights halve when the total gets large).
  */
-class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int = 8000, private val capTriples: Int = 6000, private val capConfusions: Int = 3000, private val recency: Boolean = true) {
+class PersonalModel(private val capWords: Int = 6000, private val capPairs: Int = 14000, private val capTriples: Int = 10000, private val capConfusions: Int = 3000, private val recency: Boolean = true) {
     private val words = HashMap<String, Float>()
     private val pairs = HashMap<String, Float>()      // "previous word" -> weight
     private val pairTotals = HashMap<String, Float>() // previous word -> weight of everything seen after it
@@ -52,6 +52,46 @@ class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int 
         if (total > DECAY_AT) decay()
     }
 
+    /**
+     * The person took a word back (deleted it after it was learned): what [add] gave it is removed again, so a typo that was typed once and erased does not become a favourite. Never below zero.
+     */
+    @Synchronized fun unlearn(prev: String?, word: String, weight: Float = 1f, prev2: String? = null) {
+        val w = norm(word) ?: return
+        if (weight <= 0f) return
+        val have = words[w] ?: return
+        val take = Math.min(weight, have)
+        if (have - take < 0.05f) words.remove(w) else words[w] = have - take
+        total = Math.max(0f, total - take)
+        val p = prev?.let { ctx(it) } ?: return
+        val k = "$p $w"
+        pairs[k]?.let { v -> val t = Math.min(weight, v); if (v - t < 0.05f) pairs.remove(k) else pairs[k] = v - t; pairTotals[p] = Math.max(0f, (pairTotals[p] ?: 0f) - t) }
+        val p2 = prev2?.let { ctx(it) } ?: return
+        val tk = "$p2 $p $w"
+        triples[tk]?.let { v -> val t = Math.min(weight, v); if (v - t < 0.05f) triples.remove(tk) else triples[tk] = v - t; tripleTotals["$p2 $p"] = Math.max(0f, (tripleTotals["$p2 $p"] ?: 0f) - t) }
+    }
+
+    /** Words the person used that start with [prefix] (lowercase; apostrophes allowed), most used (and most lately used) first, only those used at least [minWeight] times: up to [limit]. */
+    @Synchronized fun completions(prefix: String, limit: Int, minWeight: Float = 1f): List<String> {
+        val out = ArrayList<Pair<String, Float>>()
+        for ((k, v) in words) if (v >= minWeight && k.startsWith(prefix)) out.add(k to (v + 3f * (recent[k] ?: 0f)))
+        out.sortByDescending { it.second }
+        return out.take(limit).map { it.first }
+    }
+
+    /** What the person wrote after [prev] (and after the pair [prev2] [prev], counted double), most often first: up to [limit]. */
+    @Synchronized fun nextWords(prev: String, prev2: String?, limit: Int): List<String> {
+        val p = ctx(prev) ?: return emptyList()
+        val acc = HashMap<String, Float>()
+        val pre = "$p "
+        for ((k, v) in pairs) if (k.startsWith(pre)) acc[k.substring(pre.length)] = v
+        val p2 = prev2?.let { ctx(it) }
+        if (p2 != null) { val tp = "$p2 $p "; for ((k, v) in triples) if (k.startsWith(tp)) { val w = k.substring(tp.length); acc[w] = (acc[w] ?: 0f) + 2f * v } }
+        return acc.entries.sortedByDescending { it.value }.take(limit).map { it.key }
+    }
+
+    /** The words used most (and most lately), for a start-of-sentence guess when nothing came before. */
+    @Synchronized fun topWords(limit: Int): List<String> = words.entries.sortedByDescending { it.value + 3f * (recent[it.key] ?: 0f) }.take(limit).map { it.key }
+
     /** The keyboard guessed [guessed] and the person meant [meant] (they picked it from the strip, or deleted the guess and wrote this): the next time [guessed] is the first guess and [meant] is among the others, [meant] gets a lift. */
     @Synchronized fun addConfusion(guessed: String, meant: String, weight: Float = 1f) {
         val a = norm(guessed) ?: return; val b = norm(meant) ?: return
@@ -59,6 +99,15 @@ class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int 
         val k = "$a $b"
         confusions[k] = (confusions[k] ?: 0f) + weight
         if (confusions.size > capConfusions) { val cut = confusions.values.sorted()[confusions.size / 10]; val it = confusions.entries.iterator(); while (it.hasNext()) { val e = it.next(); if (e.value <= cut && confusions.size > capConfusions * 9 / 10) it.remove() } }
+    }
+
+    /** What the person meant when the keyboard offered or typed [guessed] (or they typed it and corrected it): the words and how often, most often first. */
+    @Synchronized fun correctionsOf(guessed: String): List<Pair<String, Float>> {
+        val pre = "$guessed "
+        val out = ArrayList<Pair<String, Float>>()
+        for ((k, v) in confusions) if (k.startsWith(pre)) out.add(k.substring(pre.length) to v)
+        out.sortByDescending { it.second }
+        return out.take(4)
     }
 
     /** How often [meant] was meant when [guessed] was the first guess. */
@@ -196,7 +245,7 @@ class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int 
         const val MAX_USES = 200f
         const val MAX_PAIR_TRUST = 0.7f
         const val PAIR_HALF = 4f
-        const val DECAY_AT = 6000f
+        const val DECAY_AT = 15000f
         /** The short memory: every word the person writes fades all the recent ones by this much (a half-life of about 86 words), and a word used lately counts like [RECENT_COUNT] occurrences per use. */
         const val RECENT_FADE = 0.992f
         const val RECENT_COUNT = 1.5e7
@@ -236,7 +285,7 @@ class PersonalModel(private val capWords: Int = 4000, private val capPairs: Int 
          * Reads what [serialize] wrote (or an export file's body). Every kind of line is bounded by its table's cap and every number must be finite and positive, so a damaged or hand-made file can
          * fill the tables only as far as the person's own use could.
          */
-        fun parse(text: String, capWords: Int = 4000, capPairs: Int = 8000): PersonalModel {
+        fun parse(text: String, capWords: Int = 6000, capPairs: Int = 14000): PersonalModel {
             val m = PersonalModel(capWords, capPairs)
             synchronized(m) {
                 var nw = 0; var np = 0; var nt = 0; var nc = 0; var nr = 0
