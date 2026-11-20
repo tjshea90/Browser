@@ -2776,7 +2776,7 @@ open class BrowserActivity : Activity(), DockListener {
                 }
             } else if (g.stateWritten != null && g.stateWrittenUrl != t.url) { stale.add(t.id); g.stateWritten = null } // it shows another page now and the engine has not sent a newer state yet
         }
-        Io.exec {
+        Io.fast {   // RVW2 P8: the interactive lane, not the nice-13 one (Io.exec sits in Android's BACKGROUND group, shared with thumbnail saves and the CPU meter): this write is what survives a kill, and onPause may be the last moment
             val tmp = File(f.parentFile, "session.tmp")
             tmp.writeText(text)
             if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
