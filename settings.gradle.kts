@@ -13,7 +13,8 @@ dependencyResolutionManagement {
         // about that group at all (Maven Central answers such probes with 429 rate-limit errors in the build sandbox).
         exclusiveContent {
             forRepository { maven { url = uri("https://maven.mozilla.org/maven2/") } }
-            filter { includeGroup("org.mozilla.geckoview") }
+            // feature-webcompat: Mozilla's site-compatibility extension (research/REVIEW_2026-11-22_NEWLEVERS.md NL1); only its assets are used, no class of it enters the app
+            filter { includeGroup("org.mozilla.geckoview"); includeModule("org.mozilla.components", "feature-webcompat") }
         }
         google()
         mavenCentral()
