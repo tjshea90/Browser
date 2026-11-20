@@ -151,6 +151,8 @@ class Prefs private constructor(ctx: Context) {
     var glideTyping: Boolean get() = bool("glide_typing", true); set(v) = put("glide_typing", v)
     /** A short tick on every key of the mini keyboard (the system's touch feedback still applies). */
     var keyHaptics: Boolean get() = bool("key_haptics", true); set(v) = put("key_haptics", v)
+    /** The panel's bar opens the Swoop keyboard (the owner's own keyboard app, floating over the page) when Swoop is the chosen keyboard (docs/KEYBOARD-LINK.md); off = always the panel's own small keyboard. */
+    var swoopKeyboard: Boolean get() = bool("swoop_keyboard", true); set(v) = put("swoop_keyboard", v)
     /** AV1: where the person put the mini panel and how big the keyboard is (distance from the right edge, from the top, keyboard width, height of the keys, in dp); null = docked at the first size. */
     var miniGeom: IntArray?
         get() = sp.getString("mini_geom", null)?.split(',')?.mapNotNull { it.trim().toIntOrNull() }?.takeIf { it.size == 4 }?.toIntArray()
