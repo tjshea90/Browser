@@ -104,6 +104,7 @@ class VideoFlow(private val a: BrowserActivity) {
      */
     fun gone(page: String, docs: List<String>) = Io.ui {
         val t = tabOf(page) ?: run { Health.log("media", "frame-gone-no-tab", "docs=${docs.size}"); return@ui }
+        for (d in docs) goneDocs.gone(t.id.toString() + "|" + d, System.currentTimeMillis())   // RVW2 F19
         val keys = t.media.dropFrames(docs)
         // those documents are gone: an address asked about in one of them (even one that turned out not to be media) is news again when a new document asks for it
         val p = t.id.toString() + "|"
@@ -154,6 +155,7 @@ class VideoFlow(private val a: BrowserActivity) {
                         c.master = true
                         noteMaster(c, pl.master)
                         val vs = pl.master.variants
+                        t.media.noteChildren(vs.map { it.url } + pl.master.renditions.mapNotNull { it.url })   // RVW2 F17: the rungs are not videos of their own, and not looked at
                         val heights = vs.filter { !it.audioOnly }.map { it.height }.filter { it > 0 }.distinct().toIntArray()   // RX3-V4: what a blob: player's picture height is matched against
                         val probe = vs.filter { !it.audioOnly }.minByOrNull { it.bandwidth } ?: vs.minByOrNull { it.bandwidth }
                         if (probe != null) DownloadController.fetchText(a, probe.url, requestHeaders(t, c), 1, t.isPrivateTab) { txt -> (txt?.let { Hls.parse(it, probe.url) } as? Hls.MediaPlaylist)?.media?.let { noteLook(t, c, it, heights) } }
@@ -197,6 +199,8 @@ class VideoFlow(private val a: BrowserActivity) {
 
     /** "tab id|document|address" already read, so a player that asks for the same playlist again does not make us read it again. Per DOCUMENT: another server (another document) that asks for the same address is news ([gone] forgets the replaced document's entries, [clearTab] a tab's). */
     private val maybeAsked = HashSet<String>()
+    /** RVW2 F19: when each player document went away (core [GoneDocs]): a first-bytes probe that STARTED before that must not bring its row back. */
+    private val goneDocs = app.kestrel.core.media.GoneDocs()
 
     /**
      * The extension saw a response that says nothing about being media (text/plain, octet-stream, a "picture" or "stylesheet" a script fetched): stream sites disguise their playlists that way. Read its first
@@ -216,6 +220,7 @@ class VideoFlow(private val a: BrowserActivity) {
         val sets = MediaHeaders.sets(seed, t.url)
         val host = UrlParts.hostOf(url) ?: ""
         val method = m.optString("mt")
+        val probeStartedAt = System.currentTimeMillis()                                                    // RVW2 F19
         Health.log("media", "maybe", "$host type=${m.optString("c").substringBefore(';').take(32)} len=${seed.length} kind=${m.optString("ty")} method=${method.ifEmpty { "?" }}")
         if (!MediaHeaders.replayable(method)) { Health.log("media", "maybe-skipped", "$host the page asked with $method: an API call, not a stream"); return@ui }
         fun attempt(i: Int, last: Int, notFound: Int) {
@@ -232,6 +237,7 @@ class VideoFlow(private val a: BrowserActivity) {
                 val c = MediaCandidate(url, s.kind, s.mime, if (s.kind == MediaKind.FILE) seed.length else -1L, page, frame, System.currentTimeMillis())
                 c.referer = seed.referer; c.origin = seed.origin; c.viaHeaders = sets[i]; c.frameChain = seed.frameChain
                 Health.log("media", "maybe-hit", "$host ${s.kind} ext=${s.ext} set=${i + 1}/${sets.size}")
+                if (frame.isNotEmpty() && goneDocs.goneSince(t.id.toString() + "|" + frame, probeStartedAt)) { Health.log("media", "maybe-gone", "$host the document that asked went away meanwhile"); return@fetchBytes }   // RVW2 F19
                 // RVW1 F3: a stream found by its first bytes (the doraby / vidsrc playlist under .txt, a DASH manifest under .bin) gets the early look like one found by name: without it it was never `looked`, so live / protected / clip
                 // rules never applied to it, a blob: player never matched it, and `capture()` (a read stream is the film evidence) never kept it
                 if (t.media.add(c)) { a.refreshDownloadButton(); if (c.kind != MediaKind.FILE) lookSoon(t) }
@@ -631,6 +637,7 @@ class VideoFlow(private val a: BrowserActivity) {
         val vs = master.variants
         for (v in vs) children.add(v.url)
         for (r in master.renditions) r.url?.let { children.add(it) }
+        tab.media.noteChildren(vs.map { it.url } + master.renditions.mapNotNull { it.url })   // RVW2 F17
         childUrls[c.key] = vs.map { it.url } + master.renditions.mapNotNull { it.url }
         if (vs.isEmpty()) { streamInfo[c.key] = Loaded.Failed("This stream lists no qualities."); refresh(tab); return }
         val probe = vs.filter { !it.audioOnly }.minByOrNull { it.bandwidth } ?: vs.minByOrNull { it.bandwidth }!!

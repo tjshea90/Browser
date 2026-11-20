@@ -130,8 +130,21 @@ object MediaRank {
             val old = best[k]
             if (old == null || c.length > old.length || (c.length == old.length && c.height > old.height)) best[k] = c
         }
-        return best.values.toList()
+        // RVW2 F24: the same file on two CDN hosts (mirrors, a failover) or under two signed tokens is one file: the same path of at least 8 characters with the same KNOWN length. Equal lengths are required: the
+        // same path with an unknown length proves nothing, and two different films never share a path and a byte count.
+        val byFile = LinkedHashMap<String, MediaCandidate>()
+        var loose = 0
+        for (c in best.values) {
+            val path = pathOnly(c.url)
+            if (c.length <= 0 || path.length < 8) { byFile["#" + loose++] = c; continue }
+            val k = path + "|" + c.length
+            val old = byFile[k]
+            if (old == null || c.height > old.height) byFile[k] = c
+        }
+        return byFile.values.toList()
     }
+
+    private fun pathOnly(url: String): String = url.substringAfter("://", url).substringAfter('/', "").substringBefore('?').substringBefore('#')
 
     internal fun normKey(url: String): String {
         val base = url.substringBefore('#')

@@ -621,4 +621,21 @@ class MediaListFramesTest {
         assertEquals(1, m.size)
         assertEquals("720p", m.find(fin)!!.label); assertEquals("a request that really happened verifies it", false, m.find(fin)!!.fromMarkup)
     }
+
+    @Test fun theRungsOfAMasterAreNeverCountedNorLookedAtNextToIt() {
+        // RVW2 F17: the player asks for the master, then for its rungs (or the rungs arrive first, with the master read later)
+        fun h(u: String) = MediaCandidate(u, MediaKind.HLS, "application/vnd.apple.mpegurl", -1, "https://site.test/watch")
+        val master = "https://c.test/m/master.m3u8"; val r1 = "https://c.test/m/720/index.m3u8"; val r2 = "https://c.test/m/360/index.m3u8"
+        val l = MediaList()
+        for (u in listOf(master, r1, r2)) { l.add(h(u)); l.applyStream(u, live = false, drm = false, durationMs = 5_400_000, adMs = 0, breaks = 0) }
+        assertEquals("three playlists look like three films", 3, l.usableCount())
+        l.noteChildren(listOf(r1, r2))
+        assertEquals("only the master counts", 1, l.usableCount())
+        val late = MediaList()                                       // the master was read before the player asked for the rung
+        late.add(h(master)); late.noteChildren(listOf(r1))
+        late.add(h(r1)); late.applyStream(r1, live = false, drm = false, durationMs = 5_400_000, adMs = 0, breaks = 0)
+        assertEquals(listOf(master), late.streamsToLook(5).map { it.url })
+        late.applyStream(master, live = false, drm = false, durationMs = 5_400_000, adMs = 0, breaks = 0)
+        assertEquals(1, late.usableCount())
+    }
 }

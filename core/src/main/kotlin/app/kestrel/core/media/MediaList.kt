@@ -63,7 +63,9 @@ class MediaCandidate(
     /** VS2: a captured entry whose player frame went away (or whose page was loaded again): still offered, last in the list, until a new film-sized find of a live player takes its place ([MediaList.add]). */
     var orphan = false
     /** What the dock badge counts: not decoration or an advertisement, not an address nobody has seen, not a stream that cannot be saved. A captured one counts whatever is learned later (unless it cannot be saved). */
-    fun counts(): Boolean = (captured && !live && !drm) || (!decoy && verified && !unfit)
+    fun counts(): Boolean = !child && ((captured && !live && !drm) || (!decoy && verified && !unfit))
+    /** RVW2 F17: a variant or audio playlist of a master the finder read: one rung of a film, not a film. It is listed under its master and never counted next to it. */
+    var child = false
     /** RX3-V1: what the page's own element says it is for ([VideoRole]); null = no element said anything yet (or an older extension). The latest report wins. */
     var role: VideoRole? = null
     /** The OWNER showed interest (long-pressed, opened in the sheet, downloaded): it counts and shows whatever the page's element says it is. */
@@ -129,7 +131,7 @@ class MediaList(private val max: Int = 48) {
     fun isEmpty(): Boolean = items.isEmpty()
     /** The candidate for exactly this address (the #fragment aside), or null. */
     fun find(url: String): MediaCandidate? = MediaCandidate.keyOf(url).let { k -> items.firstOrNull { it.key == k } ?: items.firstOrNull { it.alias.isNotEmpty() && it.aliasKey == k } }   // RVW2 F16: also by the address before a redirect
-    fun clear() { items.clear(); pending.clear(); blobs.clear(); version++ }
+    fun clear() { items.clear(); pending.clear(); blobs.clear(); childKeys.clear(); version++ }
 
     /**
      * VS2: what is offered right now AND looks like a film is captured. Film evidence = a stream whose playlist was read and runs [FILM_EVIDENCE_MS] or more, a file of [BIG_FILE] or more (or 4 MB with that length
@@ -165,7 +167,7 @@ class MediaList(private val max: Int = 48) {
         val keep = if (id.isEmpty()) emptyList() else items.filter { it.captured && !it.live && !it.drm && PageIdentity.of(it.page) == id }
         val dropped = items.size - keep.size
         for (c in keep) { c.played = false; c.element = 0; c.areaPx = 0L; c.playedSeq = 0; c.orphan = true }
-        items.clear(); items.addAll(keep); pending.clear(); blobs.clear(); version++
+        items.clear(); items.addAll(keep); pending.clear(); blobs.clear(); childKeys.clear(); version++
         return dropped
     }
     /** The addresses of everything in the list (for forgetting what was learned about them). */
@@ -230,6 +232,7 @@ class MediaList(private val max: Int = 48) {
             val j = items.indexOfFirst { it.key == c.aliasKey && it !== c }
             if (j >= 0) inherit(c, items.removeAt(j))
         }
+        if (c.key in childKeys) c.child = true                                         // RVW2 F17: the master was read before the player asked for this rung
         items.add(0, c)
         (pending.remove(c.key) ?: if (c.alias.isNotEmpty()) pending.remove(c.aliasKey) else null)?.let { applyTo(c, it.width, it.height, it.durationMs, it.label, it.role, it.played, it.element, it.areaPx) }
         while (items.size > max) removeLeastValuable()
@@ -310,7 +313,7 @@ class MediaList(private val max: Int = 48) {
     }
 
     /** RX3-V5: up to [n] stream playlists nobody has read yet, newest first. */
-    fun streamsToLook(n: Int): List<MediaCandidate> = items.filter { it.kind != MediaKind.FILE && !it.looked }.take(n)
+    fun streamsToLook(n: Int): List<MediaCandidate> = items.filter { it.kind != MediaKind.FILE && !it.looked && !it.child }.take(n)   // RVW2 F17: a rung of a master already read is not looked at again (the budget is for masters)
 
     /** RX3-V2: up to [n] addresses found only in the page's text, newest first, worth one cheap check - but only when the page has nothing verified yet. */
     fun unverifiedToCheck(n: Int): List<MediaCandidate> {
@@ -325,6 +328,19 @@ class MediaList(private val max: Int = 48) {
         if (c.touched && c.interest) return false
         c.touched = true; c.interest = true; version++
         return true
+    }
+
+    /** RVW2 F17: these addresses are the variant / audio playlists of a master that was read: they never count as videos of their own, whenever the player asks for them (before or after the master was read). */
+    private val childKeys = HashSet<String>()
+    fun noteChildren(urls: Collection<String>) {
+        var changed = false
+        for (u in urls) {
+            val k = MediaCandidate.keyOf(u)
+            if (childKeys.size < 2000) childKeys.add(k)
+            val c = items.firstOrNull { it.key == k }
+            if (c != null && !c.child) { c.child = true; changed = true }
+        }
+        if (changed) version++
     }
 
     /** What the page's own `<video>` / `<source>` told us about a URL (picture size, length in time, the label it shows). */
