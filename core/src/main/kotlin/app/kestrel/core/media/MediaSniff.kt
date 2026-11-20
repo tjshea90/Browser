@@ -117,7 +117,7 @@ object MediaSniff {
 
     /** The file extension to save a [kind]/[contentType] under: from the URL when it has a media one, else from the type. */
     fun saveExtension(url: String, contentType: String?): String {
-        val e = extension(url)
+        val e = effectiveExtension(url)
         if (e in fileExts) return e
         return when (baseType(contentType)) {
             "video/mp4", "application/mp4" -> "mp4"
