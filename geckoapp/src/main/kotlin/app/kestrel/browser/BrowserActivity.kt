@@ -2021,7 +2021,7 @@ open class BrowserActivity : Activity(), DockListener {
 
     private fun pullRefresh() {
         val t = current ?: return
-        Health.log("pull", "refresh", t.url.take(60)); Health.count("pull.refresh")
+        Health.log("pull", "refresh", Health.where(t.isPrivateTab, t.url, 60)); Health.count("pull.refresh")
         if (t.error != null) retry(t) else t.session?.reload()
     }
 
@@ -3069,7 +3069,7 @@ open class BrowserActivity : Activity(), DockListener {
         val withState = saved != null && tab.crashCount <= 1
         tab.gecko.state = if (withState) saved else null
         tab.pendingLoad = if (withState) null else url.takeIf { it.startsWith("http") }
-        Health.log("gecko", if (crashed) "recover-after-crash" else "recover-after-kill", "n=${tab.crashCount} state=$withState current=${tab === current} ${memFacts()} ${url.take(60)}")
+        Health.log("gecko", if (crashed) "recover-after-crash" else "recover-after-kill", "n=${tab.crashCount} state=$withState current=${tab === current} ${memFacts()} ${Health.where(tab.isPrivateTab, url, 60)}")
         Health.count(if (withState) "gecko.recover.state" else "gecko.recover.url")
         if (tab === current) {
             if (tab.crashCount >= 3) { tab.error = ErrorScreen.Crashed(url); tab.pendingLoad = null; hideRestoring("crash-loop") }

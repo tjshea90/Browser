@@ -231,11 +231,11 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
     override fun onCloseRequest(session: GeckoSession) { a.closeTab(tab) }
     override fun onFullScreen(session: GeckoSession, fullScreen: Boolean) { a.fullScreenChanged(tab, fullScreen) }
     override fun onContextMenu(session: GeckoSession, screenX: Int, screenY: Int, element: ContentDelegate.ContextElement) { a.longPress(tab, element) }
-    override fun onCrash(session: GeckoSession) { Health.log("gecko", "onCrash", tab.url.take(80)); Health.count("gecko.crash"); a.sessionGone(tab, true) }
+    override fun onCrash(session: GeckoSession) { Health.log("gecko", "onCrash", Health.where(tab.isPrivateTab, tab.url, 80)); Health.count("gecko.crash"); a.sessionGone(tab, true) }
     override fun onFirstComposite(session: GeckoSession) { if (a.isCurrentTab(tab)) { Health.log("gecko", "first-composite", a.sinceTrim()); Health.count("gecko.firstComposite"); a.curtainComposite(tab) } } // a repeat without a navigation = the compositor restarted
     override fun onPaintStatusReset(session: GeckoSession) { if (a.isCurrentTab(tab)) { Health.log("gecko", "paint-reset", a.sinceTrim()); Health.count("gecko.paintReset") } }
     override fun onFirstContentfulPaint(session: GeckoSession) { tab.gecko.painted = true; app.kestrel.browser.diag.PageTimes.paint(tab); a.firstPaint(tab) } // a page that is coming back after its process died: take the preview down
-    override fun onKill(session: GeckoSession) { Health.log("gecko", "onKill", tab.url.take(80)); Health.count("gecko.kill"); a.sessionGone(tab, false) }
+    override fun onKill(session: GeckoSession) { Health.log("gecko", "onKill", Health.where(tab.isPrivateTab, tab.url, 80)); Health.count("gecko.kill"); a.sessionGone(tab, false) }
 
     override fun onExternalResponse(session: GeckoSession, response: WebResponse) {
         val h = response.headers

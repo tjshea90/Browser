@@ -27,6 +27,12 @@ object Health {
     private val startedAt = SystemClock.elapsedRealtime()
     private val counters = ConcurrentHashMap<String, AtomicInteger>()
 
+    /**
+     * RVW1 S6: how a page is named in a log line. A private tab never names its address (the last-run note is written to disk and Diagnostics is pasted into public repositories); any other tab names it without the
+     * query and fragment (tokens live there), cut at [max] characters.
+     */
+    fun where(isPrivate: Boolean, url: String, max: Int = 60): String = if (isPrivate) "private tab" else url.substringBefore('#').substringBefore('?').take(max)
+
     const val WARN_MS = 700L
     const val STALL_MS = 2000L
     @Volatile private var stackBudget = 24   // LAB4b: stack samples of slow (not yet stalled) UI beats, per process
