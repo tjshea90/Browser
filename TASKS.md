@@ -1003,3 +1003,7 @@ Real engine, Keep mode: sound stops when the app is left (page clock frozen 0.0 
   - [x] REL73a (versionCode 174 / alpha73, ext version synced, note written) bump geckoapp versionCode 174 / 0.3.0-alpha73, bash tools/sync-ext-version.sh, write docs/handoff/ALPHA73_RELEASE_NOTE.txt
   - [x] REL73b (run 44686179919 all jobs green, certificate verified, Release with the APK) bash ship.sh gecko, ONE dispatch (app=gecko full_build=true), wait for tag + all jobs + Release with APK
   - [x] REL73c (recorded in BUILDLOG.md) bash tools/record-release.sh with the IDENTICAL note; tell the owner with the Release link on its own line
+
+## Owner message 2026-11-20 (after alpha73) {ccr-d6f32d19-c3cwzl 2026-11-20}
+- [x] P4DEC (owner, verbatim) "Explain p3, and keep the p4 traffic" -> DECISION: Firefox's own background traffic (Remote Settings poll, Safe Browsing lists, CRLite, the portal check) STAYS AS IT IS: no pref change, Safe Browsing stays on; research/REVIEW_2026-11-20_SPEED.md P4 and SECURITY.md B14 / B18 are closed by this decision
+- [x] P3EXPL (answered in plain words, no code) P3 = gfx.webrender.precache-shaders = true (gecko-prefs.txt:32): what it does, why it was never measured, what the owner's tablet would have to measure
