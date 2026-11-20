@@ -1107,15 +1107,15 @@ class StreamEngine(
 
     private fun keyBytes(job: Job, media: Hls.Media, ki: Int): ByteArray {
         synchronized(lock) { job.keys[ki]?.let { return it } }
+        val url = media.keys[ki].url
+        // RVW1 V1: a playlist that repeats the same EXT-X-KEY before every segment names ONE key many times: it is asked for once (each tag used to be a serial request inside the drain lock, each one fatal on failure)
+        synchronized(lock) { job.keysByUrl[url]?.let { job.keys[ki] = it; return it } }
         val fetcher = fetchers(job.rec.fetcher) ?: fetchers(0) ?: throw Failed(Reason.NETWORK)
-        val resp = open(job, fetcher, FetchRequest(media.keys[ki].url, -1, -1, null, job.rec.headers, priv = job.rec.priv))
-        try {
-            if (resp.status !in 200..299) throw statusFailure(resp.status)
-            val b = resp.body?.readBytes() ?: throw Failed(Reason.BAD_PLAYLIST)
-            if (b.size != 16) throw Failed(Reason.UNSUPPORTED) // an AES-128 key is exactly 16 bytes; anything else is a licence server's answer
-            synchronized(lock) { job.keys[ki] = b }
-            return b
-        } catch (e: IOException) { throw Failed(Reason.NETWORK) } finally { job.responses.remove(resp); try { resp.close() } catch (e: Exception) { /* ignore */ } }
+        // RVW1 S5: at most 17 bytes are ever kept (an AES-128 key is exactly 16; a bigger answer is a licence server's, or an endless body that a malicious playlist points at)
+        val b = fetchSmall(job, fetcher, url, 16, Reason.UNSUPPORTED)
+        if (b.size != 16) throw Failed(Reason.UNSUPPORTED)
+        synchronized(lock) { job.keys[ki] = b; job.keysByUrl[url] = b }
+        return b
     }
 
     // ---- one segment: fetched into [dest] (".part" first, renamed when whole), retried with back-off
