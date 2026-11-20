@@ -152,10 +152,16 @@ object MediaSniff {
     /** Resolution hinted by the URL ("clip_720p.mp4", "/1080p/x.mp4", "x-480.mp4"): the picture height, or 0. */
     fun heightFromUrl(url: String): Int {
         val p = pathOf(url) + "?" + (url.substringAfter('?', "").substringBefore('#'))
-        val m = heightP.find(p) ?: heightUnderscore.find(p) ?: return 0
+        val m = heightP.find(p) ?: heightUnderscore.find(p)
+        if (m == null) { // RVW1 F22: "/1280x720/", "_1280x720.mp4" (twimg, Vimeo): the second number is the height
+            val hh = heightWxH.find(p)?.groupValues?.get(2)?.toIntOrNull() ?: return 0
+            return if (hh in knownHeights) hh else 0
+        }
         val h = m.groupValues[1].toIntOrNull() ?: return 0
         return if (h in knownHeights) h else 0
     }
+
+    private val heightWxH = Regex("""(?<![0-9a-zA-Z])(\d{3,4})x(\d{3,4})(?![0-9a-zA-Z])""", RegexOption.IGNORE_CASE)
 
     private val heightP = Regex("""(?<![0-9a-zA-Z])(\d{3,4})p(?![0-9a-zA-Z])""", RegexOption.IGNORE_CASE)
     private val heightUnderscore = Regex("""[_\-/](\d{3,4})[_\-.](?:mp4|webm|m4v|mov)""", RegexOption.IGNORE_CASE)
