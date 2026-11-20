@@ -63,9 +63,15 @@ class MediaCandidate(
     /** VS2: a captured entry whose player frame went away (or whose page was loaded again): still offered, last in the list, until a new film-sized find of a live player takes its place ([MediaList.add]). */
     var orphan = false
     /** What the dock badge counts: not decoration or an advertisement, not an address nobody has seen, not a stream that cannot be saved. A captured one counts whatever is learned later (unless it cannot be saved). */
-    fun counts(): Boolean = !child && ((captured && !live && !drm) || (!decoy && verified && !unfit))
+    fun counts(): Boolean = !child && !part && ((captured && !live && !drm) || (!decoy && verified && !unfit))
     /** RVW2 F17: a variant or audio playlist of a master the finder read: one rung of a film, not a film. It is listed under its master and never counted next to it. */
     var child = false
+    /**
+     * RVW5: one of a RUN of numbered parts of a stream that a server hands out under a plain media name (measured on abcnews.com's live stream: `..._video_3_5979705.mp4`, `..._5979706.mp4`, ... one 1.1 MB file a
+     * few seconds, each listed as a video of its own). Set by [MediaList.markParts] when at least three addresses of one directory differ only in a number of five or more digits that lies within a span of 100.
+     * A part is never counted and is not offered unless the person showed interest in it or a player really played it.
+     */
+    var part = false
     /** RX3-V1: what the page's own element says it is for ([VideoRole]); null = no element said anything yet (or an older extension). The latest report wins. */
     var role: VideoRole? = null
     /** The OWNER showed interest (long-pressed, opened in the sheet, downloaded): it counts and shows whatever the page's element says it is. */
@@ -234,10 +240,35 @@ class MediaList(private val max: Int = 48) {
         }
         if (c.key in childKeys) c.child = true                                         // RVW2 F17: the master was read before the player asked for this rung
         items.add(0, c)
+        markParts(c)
         (pending.remove(c.key) ?: if (c.alias.isNotEmpty()) pending.remove(c.aliasKey) else null)?.let { applyTo(c, it.width, it.height, it.durationMs, it.label, it.role, it.played, it.element, it.areaPx) }
         while (items.size > max) removeLeastValuable()
         version++
         return true
+    }
+
+    /**
+     * RVW5: [c] was just added. When it is the third (or later) FILE of one directory whose name differs from the others only in a number of five or more digits within a span of [PART_SPAN], the whole run is
+     * the parts of a stream, not videos: every one of them is flagged [MediaCandidate.part]. Quality names (`movie_1080.mp4`: four digits), years and separate films (numbers far apart) are never taken.
+     */
+    private fun markParts(c: MediaCandidate) {
+        if (c.kind != MediaKind.FILE) return
+        val mine = SerialName.of(c.url) ?: return
+        var n = 0; var lo = mine.no; var hi = mine.no
+        for (o in items) {
+            if (o === c || o.kind != MediaKind.FILE) continue
+            val t = SerialName.of(o.url) ?: continue
+            if (t.family != mine.family) continue
+            n++; if (t.no < lo) lo = t.no; if (t.no > hi) hi = t.no
+        }
+        if (n < 2 || hi - lo > PART_SPAN) return
+        var changed = false
+        for (o in items) {
+            if (o.kind != MediaKind.FILE || o.part) continue
+            val t = SerialName.of(o.url) ?: continue
+            if (t.family == mine.family && t.no in lo..hi) { o.part = true; changed = true }
+        }
+        if (changed) version++
     }
 
     /**
@@ -253,6 +284,7 @@ class MediaList(private val max: Int = 48) {
     /** What an entry is worth keeping: playlists and manifests, anything somebody showed interest in, big and long files, a playlist that was really read. Equal worth: the newer stays. */
     private fun value(c: MediaCandidate, index: Int): Int {
         if (c.decoy) return -1_000_000 - index                      // RX3-V1: a hover preview or an ad goes before anything else
+        if (c.part && !c.touched) return -900_000 - index           // RVW5: one more numbered part of a stream
         var v = 0
         if (c.kind != MediaKind.FILE) v += 100
         if (c.touched) v += 80
@@ -413,6 +445,7 @@ class MediaList(private val max: Int = 48) {
         val hasStream = items.any { it.kind != MediaKind.FILE }
         return items.filter { c ->
             when {
+                c.part && !c.touched && !c.played -> false                   // RVW5: a numbered part of a stream is not a video
                 c.captured && !c.live && !c.drm -> true                      // VS2
                 c.kind != MediaKind.FILE -> true
                 c.touched || (!c.decoy && (c.durationMs >= 20_000 || c.knownHeight >= 480)) -> true // played, long, or sharp: never hidden as a preview or an ad (unless the page itself calls it decoration or an ad)
@@ -432,6 +465,8 @@ class MediaList(private val max: Int = 48) {
 
     companion object {
         const val MIN_FILE = 100L * 1024
+        /** RVW5: numbered parts of one stream lie this close together (consecutive numbers; a live stream's counter); separate films do not. */
+        const val PART_SPAN = 100L
         const val MIN_WITH_STREAM = 4L * 1024 * 1024
         /** A stream shorter than this is a clip (an advertisement, a preview), not something to save. */
         const val MIN_STREAM_MS = 20_000L
@@ -506,5 +541,24 @@ object MediaLabels {
     fun fileLabel(label: String): String {
         val first = label.substringBefore('·').replace(Regex("""\s+"""), " ").trim()
         return if (first.isEmpty() || first.equals("Stream", ignoreCase = true) || first.endsWith("px wide")) "" else first
+    }
+}
+
+/**
+ * RVW5: the part of an address that tells numbered parts of one stream apart from separate files: the directory and the name with its LAST number (five to twelve digits, right before the extension) taken out,
+ * and that number. `https://cdn.test/out/v1/abc/live-08-mp-channel_video_3_5979705.mp4?m=1` -> family "cdn.test/out/v1/abc/live-08-mp-channel_video_3_#.mp4", no 5979705. Null for any other name. Pure.
+ */
+internal object SerialName {
+    class Of(val family: String, val no: Long)
+    private val NAME = Regex("""^(.*[^0-9])?([0-9]{5,12})(\.[A-Za-z0-9]{2,5})$""")
+
+    fun of(url: String): Of? {
+        val rest = url.substringAfter("://", "")
+        val path = rest.substringBefore('?').substringBefore('#')
+        val slash = path.lastIndexOf('/')
+        if (slash < 0) return null
+        val m = NAME.find(path.substring(slash + 1)) ?: return null
+        val no = m.groupValues[2].toLongOrNull() ?: return null
+        return Of(path.substring(0, slash + 1).lowercase() + (m.groupValues[1]) + "#" + m.groupValues[3].lowercase(), no)
     }
 }
