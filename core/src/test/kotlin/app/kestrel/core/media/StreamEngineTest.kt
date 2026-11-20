@@ -934,4 +934,19 @@ class StreamEngineTest {
         val v = h.completed(h.enqueue(pl))
         assertArrayEquals(file, h.out(v))
     }
+
+    @Test(timeout = 60_000) fun aStuckSegmentDoesNotLetTheOtherWorkersStageTheWholeStream() {
+        // RVW1 V13: segment 0 hangs; the others used to run to the end of the stream, leaving a second copy of the video on disk
+        val h = H()
+        val (pl, expected) = plainStream(h, 80, 5_000)
+        val release = java.util.concurrent.CountDownLatch(1)
+        h.cdn.gate = { req -> if (req.url.endsWith("/s0.ts")) release.await(25, java.util.concurrent.TimeUnit.SECONDS); null }
+        val id = h.enqueue(pl)
+        Thread.sleep(1_500)
+        val staged = h.store.stagedFiles(id).count { it.endsWith(".seg") }
+        assertTrue("read-ahead is bounded: $staged staged of 80 while the first is stuck", staged in 8..20)
+        release.countDown()
+        val v = h.completed(id)
+        assertArrayEquals("and the stream is whole once the first segment comes", expected, h.out(v))
+    }
 }
