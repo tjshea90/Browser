@@ -562,4 +562,27 @@ class MediaListFramesTest {
         other.add(markup(u, MediaKind.HLS))                       // the other order: the request already proved it, the later text does not take that back
         assertEquals(1, other.usableCount())
     }
+
+    @Test fun aShortStreamThatReallyPlayedOrWasChosenIsAVideoNotAPreview() {
+        // RVW1 F7: X / Twitter clips, Reels and Streamable HLS are 5-20 s long; the 20 s floor hid them for ever, even when the person played one
+        val u = "https://video.test/clip/master.m3u8"
+        val l = MediaList()
+        l.add(hls(u))
+        l.applyStream(u, live = false, drm = false, durationMs = 12_000, adMs = 0, breaks = 0)
+        assertEquals("a 12 s stream nobody played is a preview or an ad", 0, l.usableCount())
+        assertTrue(l.applyInfo(u, 0, 0, 12_000, null, VideoRole.PLAYER, played = true, element = 3, areaPx = 90_000))
+        assertEquals("it played for 3 s: it is the video of this page", 1, l.usableCount())
+        val l2 = MediaList()
+        l2.add(hls(u)); l2.applyStream(u, live = false, drm = false, durationMs = 12_000, adMs = 0, breaks = 0)
+        l2.markInterest(u)
+        assertEquals("the owner chose it", 1, l2.usableCount())
+        val l3 = MediaList()
+        l3.add(hls(u)); l3.applyStream(u, live = true, drm = false, durationMs = 0, adMs = 0, breaks = 0)
+        l3.applyInfo(u, 0, 0, 0, null, VideoRole.PLAYER, played = true, element = 3, areaPx = 90_000)
+        assertEquals("a live stream cannot be saved however long it played", 0, l3.usableCount())
+        val l4 = MediaList()
+        l4.add(hls(u)); l4.applyStream(u, live = false, drm = true, durationMs = 12_000, adMs = 0, breaks = 0)
+        l4.applyInfo(u, 0, 0, 12_000, null, VideoRole.PLAYER, played = true, element = 3, areaPx = 90_000)
+        assertEquals("a protected stream is never offered", 0, l4.usableCount())
+    }
 }
