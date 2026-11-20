@@ -159,6 +159,14 @@ object NetHosts {
      * names and single-label (intranet) names. The HTTPS upgrade and its warnings never apply to these
      * (e.g. the phone-hotspot gateway page, a NAS, a dev server).
      */
+    /**
+     * RVW1 S3: may the APP itself (not the page) send a request to [targetHost] on behalf of a page on [pageHost]? The finder reads the first bytes of addresses a page only NAMES (a `<video src>`, an og tag, a script
+     * response): with the profile's cookies, with no click. A page on the public internet must not be able to aim that at a device on the owner's own network (the router at 192.168.1.1, a NAS, a camera): refused.
+     * A page that is itself on a local host (the hotspot gateway, a NAS, a dev server) may name local files. No page host known = public.
+     */
+    @JvmStatic
+    fun probeAllowed(targetHost: String, pageHost: String): Boolean = !isLocal(targetHost) || (pageHost.isNotEmpty() && isLocal(pageHost))
+
     @JvmStatic
     fun isLocal(h: String): Boolean {
         if (h.isEmpty()) return true
