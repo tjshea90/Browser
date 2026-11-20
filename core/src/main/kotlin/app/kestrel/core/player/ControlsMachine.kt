@@ -32,6 +32,12 @@ class ControlsMachine(private val h: Host) {
     private var pinned = false
     private var turning = false
     private var deadline = 0L
+    private var shownAt = 0L
+    /** RVW6 (owner 2026-11-20: "the player controls pop up very fast then disappear"): how often the controls showed, and how often they went away again within [SHORT_LIFE_MS] and why (Diagnostics). */
+    var shows = 0; private set
+    var shortLives = 0; private set
+    var lastShort = ""; private set
+    fun lifeLine(): String = "controls shown $shows times, $shortLives of them hid again within ${SHORT_LIFE_MS / 1000.0} s" + (if (lastShort.isNotEmpty()) " (last: $lastShort)" else "")
 
     /** Full screen with a video began: the controls show for [PlayerRules.AFTER_ENTER_MS]. */
     fun start(playingNow: Boolean) {
@@ -49,7 +55,7 @@ class ControlsMachine(private val h: Host) {
     /** A tap on the picture (already told apart from a double tap and from a tap on a control). ANS53c: they come and go AT ONCE, no fade (the owner: "zero delay"); only the clock's own hide fades. */
     fun tap() {
         if (!active || turning) return
-        if (shown) hide(false) else show(hideAfterMs, false)
+        if (shown) hide(false, "tap") else show(hideAfterMs, false)
     }
 
     /**
@@ -59,13 +65,13 @@ class ControlsMachine(private val h: Host) {
      */
     fun seekGesture() {
         if (!active || turning) return
-        hide(false)
+        hide(false, "seek-gesture", count = false)       // by design (ANS57a): the first tap of a double tap had shown them
     }
 
     /** ANS53c: the app showed or hid the controls at once for a tap, and the page then said that tap was on one of ITS OWN buttons (skip ad ...): they go back to what they were, at once. */
     fun restore(was: Boolean) {
         if (!active || turning) return
-        if (was && !shown) show(hideAfterMs, false) else if (!was && shown) hide(false)
+        if (was && !shown) show(hideAfterMs, false) else if (!was && shown) hide(false, "put-back")
     }
 
     /** What the video does now; only a CHANGE is acted on. */
@@ -98,7 +104,7 @@ class ControlsMachine(private val h: Host) {
         if (!active || !shown || turning) return
         if (!autoHide()) return
         val left = deadline - h.now()
-        if (left <= 0L) hide(true) else h.schedule(left)
+        if (left <= 0L) hide(true, "clock") else h.schedule(left)
     }
 
     private fun autoHide() = playing && !pinned && !buffering && !ended
@@ -108,7 +114,7 @@ class ControlsMachine(private val h: Host) {
 
     private fun show(forMs: Long, animate: Boolean = true) {
         deadline = h.now() + forMs
-        if (!shown) { shown = true; h.apply(true, animate) }
+        if (!shown) { shown = true; shownAt = h.now(); shows++; h.apply(true, animate) }
         if (forMs > 0L && autoHide()) h.schedule(forMs) else h.cancel()
     }
 
@@ -117,8 +123,17 @@ class ControlsMachine(private val h: Host) {
         if (autoHide()) h.schedule(hideAfterMs) else h.cancel()
     }
 
-    private fun hide(animate: Boolean) {
+    private fun hide(animate: Boolean, why: String, count: Boolean = true) {
         h.cancel()
-        if (shown) { shown = false; h.apply(false, animate) }
+        if (shown) {
+            val life = h.now() - shownAt
+            if (count && life < SHORT_LIFE_MS) { shortLives++; lastShort = "$why after $life ms" }
+            shown = false; h.apply(false, animate)
+        }
+    }
+
+    companion object {
+        /** Controls that go away within this long of showing cannot have been used by a person. */
+        const val SHORT_LIFE_MS = 1500L
     }
 }

@@ -82,6 +82,8 @@ class PlayerModel(private val h: Host) {
 
     // what Diagnostics says
     var sessions = 0; private set
+    /** RVW6: one Diagnostics sentence about how long the controls stayed up after showing ([ControlsMachine.lifeLine]). */
+    fun controlsLife(): String = controls.lifeLine()
     var singles = 0; private set
     var seeks = 0; private set
     var commands = 0; private set

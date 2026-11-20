@@ -326,5 +326,5 @@ class PlayerController(
 
     /** One Diagnostics line. */
     fun line(): String = "Full-screen video controls (Kestrel's own): ${model.sessions} full screens, taps on the picture: ${model.singles} single and ${model.seeks} double-tap seeks, ${model.commands} commands sent to the page; " +
-        "the last full screen: $reports reports, $taps taps; taps answered on the screen itself $appTaps (average ${if (appTaps > 0) appTapMsTotal / appTaps else 0} ms from the finger lifting, worst $appTapMsWorst ms), the page's own copies dropped $dupTaps, put back after a page button $undoneTaps; ${health.line()}; last: $last"
+        "the last full screen: $reports reports, $taps taps; taps answered on the screen itself $appTaps (average ${if (appTaps > 0) appTapMsTotal / appTaps else 0} ms from the finger lifting, worst $appTapMsWorst ms), the page's own copies dropped $dupTaps, put back after a page button $undoneTaps; ${model.controlsLife()}; ${health.line()}; last: $last"
 }
