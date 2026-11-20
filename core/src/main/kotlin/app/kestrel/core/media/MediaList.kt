@@ -454,7 +454,16 @@ object MediaLabels {
 
     /** A readable file name stem for a video: "Page title - 720p", falling back to the host. No extension, nothing a file system dislikes beyond what [app.kestrel.core.download.FileNames.sanitize] cleans. */
     fun fileStem(pageTitle: String, pageHost: String, qualityLabel: String): String {
-        val base = pageTitle.trim().ifEmpty { pageHost.ifEmpty { "video" } }.replace(Regex("""\s+"""), " ").take(80).trim()
-        return if (qualityLabel.isEmpty()) base else "$base - $qualityLabel"
+        val base = app.kestrel.core.download.FileNames.cutChars(pageTitle.trim().ifEmpty { pageHost.ifEmpty { "video" } }.replace(Regex("""\s+"""), " "), 80).trim()   // RVW1 N5: never in the middle of a surrogate pair
+        val q = fileLabel(qualityLabel)
+        return if (q.isEmpty()) base else "$base - $q"
+    }
+
+    /**
+     * RVW1 N8: the quality word for a FILE NAME. The row label "2160p  ·  4K" is for the screen: the name gets "2160p"; "Stream" (no picture size known) and "1280px wide" say nothing worth keeping in a name, "Audio only" does.
+     */
+    fun fileLabel(label: String): String {
+        val first = label.substringBefore('·').replace(Regex("""\s+"""), " ").trim()
+        return if (first.isEmpty() || first.equals("Stream", ignoreCase = true) || first.endsWith("px wide")) "" else first
     }
 }
