@@ -1,24 +1,24 @@
-# CHECKPOINT 2737 — read me first, then TASKS.md
+# CHECKPOINT 2738 — read me first, then TASKS.md
 
-**Written:** 2026-11-20T05:58:20Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-d6f32d19-c3cwzl` · **builds on:** `b754bfa7` (this checkpoint is the commit after it)
+**Written:** 2026-11-20T06:12:13Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-d6f32d19-c3cwzl` · **builds on:** `f2a9d669` (this checkpoint is the commit after it)
 
 ## Just done
-REL73a done: versionCode 174 / 0.3.0-alpha73, ext synced, ALPHA73 release note written
+gated kestrel-g-v0.3.0-alpha73 (gecko code 174) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
 
 ## Do this next
-bash ship.sh gecko with the ALPHA73 note (tr newlines to spaces), then ONE dispatch, wait, record-release identical note
+TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref ccr-d6f32d19-c3cwzl, inputs {"app":"gecko","full_build":"true","note":"alpha73: the rest of the code tasks from the whole-browser review that came with alpha72, and from now on every finished version is released without asking. VIDEO FINDING: a player frame that a site removes and replaces now takes its download rows with it (the old server no longer stays listed); what the page says about a video that redirects (its length, its picture, that it played) now reaches the file; the variant and audio playlists of a stream are no longer counted as extra videos and no longer use up the early check; a slow check started by a server you already left can no longer bring its row back; the same file on two hosts is one row. DOWNLOADING: a server that answers in pieces without saying the total size no longer ends the download after the first piece; a big single part that dies in the middle (a one file stream) continues where it stopped instead of starting over; DASH manifests that put the part rules on the Period work, and when a stream cannot be listed the message says whether it is the layout or the format; an encrypted start section of a stream is decrypted before it is written; file names like Dune.Part.Two.2024 get .mp4 and download.php served as a video becomes download.mp4; on Android 15 and later the downloads pause cleanly when the system reaches its 6 hour background limit, with a notification saying why (instead of the app being killed). SECURITY: the login prompt now names the server that is really asking, and says so when it is not the page you are on. SPEED: the pop-up guard only looks over a page when it has a frame that could be a fake layer, the session save runs on the faster lane so it survives a kill better, and the watchdog wakes half as often while the app is calm. DECIDED NOT TO DO, with reasons in research/REVIEW_2026-11-20*.md: lazy loading of the scriptlet library (measured: parsing is 1.6 ms and cannot be avoided), the Watch Dogs title rule, and the secret scanner exemption. WHAT I COULD NOT PROVE ON THE TABLET: the video finder fixes are tested on pages modelled on real players, not on the real Vimeo, vidsrc or doraby; the login prompt, the redirect wiring and the Android 15 limit notification are compiled, linted and unit tested only (the Android 15 limit needs an Android 15 device); the speed changes are not measured on the tablet. Still open and not code: your decision on the engine own background traffic (Firefox settings and Safe Browsing lists), and the one shader setting that only your tablet can judge."}.
+When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha73), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha73 "alpha73: the rest of the code tasks from the whole-browser review that came with alpha72, and from now on every finished version is released without asking. VIDEO FINDING: a player frame that a site removes and replaces now takes its download rows with it (the old server no longer stays listed); what the page says about a video that redirects (its length, its picture, that it played) now reaches the file; the variant and audio playlists of a stream are no longer counted as extra videos and no longer use up the early check; a slow check started by a server you already left can no longer bring its row back; the same file on two hosts is one row. DOWNLOADING: a server that answers in pieces without saying the total size no longer ends the download after the first piece; a big single part that dies in the middle (a one file stream) continues where it stopped instead of starting over; DASH manifests that put the part rules on the Period work, and when a stream cannot be listed the message says whether it is the layout or the format; an encrypted start section of a stream is decrypted before it is written; file names like Dune.Part.Two.2024 get .mp4 and download.php served as a video becomes download.mp4; on Android 15 and later the downloads pause cleanly when the system reaches its 6 hour background limit, with a notification saying why (instead of the app being killed). SECURITY: the login prompt now names the server that is really asking, and says so when it is not the page you are on. SPEED: the pop-up guard only looks over a page when it has a frame that could be a fake layer, the session save runs on the faster lane so it survives a kill better, and the watchdog wakes half as often while the app is calm. DECIDED NOT TO DO, with reasons in research/REVIEW_2026-11-20*.md: lazy loading of the scriptlet library (measured: parsing is 1.6 ms and cannot be avoided), the Watch Dogs title rule, and the secret scanner exemption. WHAT I COULD NOT PROVE ON THE TABLET: the video finder fixes are tested on pages modelled on real players, not on the real Vimeo, vidsrc or doraby; the login prompt, the redirect wiring and the Android 15 limit notification are compiled, linted and unit tested only (the Android 15 limit needs an Android 15 device); the speed changes are not measured on the tablet. Still open and not code: your decision on the engine own background traffic (Firefox settings and Safe Browsing lists), and the one shader setting that only your tablet can judge."
+NEVER ship kestrel-g-v0.3.0-alpha73 twice (check BUILDLOG.md and the Releases first).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M TASKS.md
-     M geckoapp/build.gradle.kts
-     M geckoapp/src/main/assets/kestrel-shields/manifest.json
-    ?? docs/handoff/ALPHA73_RELEASE_NOTE.txt
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  f2a9d669 ckpt 2737: REL73a done: versionCode 174 / 0.3.0-alpha73, ext synced, ALPHA73 release no
   b754bfa7 ckpt 2736: STANDING RULE recorded (owner: Always ship new versions and release without 
   26745261 ckpt 2735: RVW2 DONE: all code items from today's review (F13 F16 F17 F19 F24 V3 V4 V8 
   3b61bea3 ckpt 2734: RVW2 batch 2 in the tree: V3 (Engine noWindow), V4 (resume big unknown-lengt
@@ -28,5 +28,4 @@ bash ship.sh gecko with the ALPHA73 note (tr newlines to spaces), then ONE dispa
   e8a65c13 ckpt 2730: REL72: alpha72 build running (run 44678143468: check + test-js green, test-j
   78e8423a ckpt 2729: REL72b: alpha72 DISPATCHED ONCE (android.yml app=gecko full_build=true ref c
   8b8e8faa ckpt 2728: gated kestrel-g-v0.3.0-alpha72 (gecko code 173) and pushed it: handoff self-
-  2cae13e7 ckpt 2727: REL72a done: geckoapp versionCode 173 / 0.3.0-alpha72, ext version synced, d
 ```
