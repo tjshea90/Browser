@@ -152,4 +152,21 @@ class DashTest {
         assertNotNull(Dash.parse("\n\r\n  " + body, url))
         assertEquals(5, Dash.parse("\uFEFF\n" + body, url)!!.video[0].media!!.segments.size)
     }
+
+    @Test fun theSoundTrackSavedFirstIsTheStreamsOwnLanguageNotTheBiggestBitRate() {
+        // RVW1 V9: English (listed first, 96 kbps), Spanish (128 kbps) and an English audio-description track (192 kbps, the biggest)
+        fun audioSet(lang: String, role: String?, id: String, bw: Int) = """<AdaptationSet contentType="audio" lang="$lang" mimeType="audio/mp4">${if (role == null) "" else """<Role schemeIdUri="urn:mpeg:dash:role:2011" value="$role"/>"""}
+          <SegmentTemplate timescale="1000" initialization="$id/i.mp4" media="$id/s-${'$'}Number${'$'}.m4s" startNumber="1"><SegmentTimeline><S t="0" d="4000" r="4"/></SegmentTimeline></SegmentTemplate>
+          <Representation id="$id" bandwidth="$bw" codecs="mp4a.40.2"/></AdaptationSet>"""
+        val mpd = """<?xml version="1.0"?><MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT20S"><Period>
+          <AdaptationSet contentType="video" mimeType="video/mp4"><SegmentTemplate timescale="1000" initialization="v/i.mp4" media="v/s-${'$'}Number${'$'}.m4s" startNumber="1"><SegmentTimeline><S t="0" d="4000" r="4"/></SegmentTimeline></SegmentTemplate>
+            <Representation id="v" bandwidth="800000" width="640" height="360" codecs="avc1.4d401e"/></AdaptationSet>
+          ${audioSet("en", "main", "en", 96000)}${audioSet("es", "dub", "es", 128000)}${audioSet("en", "description", "ad", 192000)}
+        </Period></MPD>"""
+        val m = Dash.parse(mpd, url)!!
+        assertEquals(listOf("en", "es", "ad"), m.audio.map { it.id })
+        assertEquals("description", m.audio.last().role)
+        val two = Dash.parse(mpd.replace("<Role schemeIdUri=\"urn:mpeg:dash:role:2011\" value=\"main\"/>", ""), url)!!
+        assertEquals("without a Role the first listed language is the default", "en", two.audio.first().id)
+    }
 }

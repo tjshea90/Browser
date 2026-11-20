@@ -21,6 +21,8 @@ object Dash {
         val lang: String?,
         /** The segment plan of this representation (or null when it cannot be built). */
         val media: Hls.Media?,
+        /** RVW1 V9: the adaptation set's <Role value=...> ("main", "alternate", "dub", "commentary", "description", ...); "" = none. */
+        val role: String = "",
     ) {
         /** "1080p", "720p60", "Audio 128 kbps". */
         val label: String get() = when {
@@ -43,7 +45,17 @@ object Dash {
 
     class Manifest(val durationMs: Long, val reps: List<Rep>, val problem: Hls.Problem?) {
         val video: List<Rep> get() = reps.filter { !it.audio }.sortedWith(compareByDescending<Rep> { it.height }.thenByDescending { it.bandwidth })
-        val audio: List<Rep> get() = reps.filter { it.audio }.sortedByDescending { it.bandwidth }
+        /**
+         * RVW1 V9: the sound tracks, the one to save FIRST. It was the highest bit rate: in a manifest with an English track, a Spanish one and an audio-description track, the Spanish (or the description, which is
+         * usually the biggest) went into the file. Now: tracks that are extras (description, commentary, emergency, supplementary) come last; the stream's own default language (that of the first track the manifest lists
+         * that is not an extra) comes before other languages; then the highest bit rate.
+         */
+        val audio: List<Rep> get() {
+            val all = reps.filter { it.audio }
+            fun extra(r: Rep) = r.role == "description" || r.role == "commentary" || r.role == "emergency" || r.role == "supplementary"
+            val own = all.firstOrNull { !extra(it) }?.lang
+            return all.sortedWith(compareBy<Rep>({ extra(it) }, { it.lang != own }).thenByDescending { it.bandwidth })
+        }
     }
 
     /** @return null when [text] is not an MPD. */
@@ -83,7 +95,8 @@ object Dash {
                 val bw = r.getAttribute("bandwidth").toLongOrNull() ?: 0L
                 val media = try { plan(aset, r, id, bw, rBase, periodMs, mime, problem) } catch (e: Exception) { null }
                 reps.add(Rep(id, bw, r.getAttribute("width").toIntOrNull() ?: aset.getAttribute("width").toIntOrNull() ?: 0, r.getAttribute("height").toIntOrNull() ?: aset.getAttribute("height").toIntOrNull() ?: 0,
-                    codecs, mime, frameRate(r.getAttribute("frameRate").ifEmpty { aset.getAttribute("frameRate") }), audio, aset.getAttribute("lang").takeIf { it.isNotEmpty() }, media))
+                    codecs, mime, frameRate(r.getAttribute("frameRate").ifEmpty { aset.getAttribute("frameRate") }), audio, aset.getAttribute("lang").takeIf { it.isNotEmpty() }, media,
+                    role = children(aset, "Role").firstOrNull()?.getAttribute("value")?.lowercase().orEmpty()))
             }
         }
         return Manifest(periodMs, reps, problem)
