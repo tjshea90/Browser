@@ -1,21 +1,23 @@
-# CHECKPOINT 2744 — read me first, then TASKS.md
+# CHECKPOINT 2745 — read me first, then TASKS.md
 
-**Written:** 2026-11-20T07:07:22Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-4efedacd-v3co75` · **builds on:** `9aa97e09` (this checkpoint is the commit after it)
+**Written:** 2026-11-20T07:30:22Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-4efedacd-v3co75` · **builds on:** `ebada8d2` (this checkpoint is the commit after it)
 
 ## Just done
-RVW3: security lane back and VERIFIED by me against the code (SC1 SC2 SC4 SC6 SC7 real; SC4 timed: 131 KB hostile body 1015 ms unbounded vs 31 ms bounded). Fix list written into TASKS RVW3b-sec. Baseline gradle run 1 failed only on the missing android-37.0 platform (documented quirk, installed with sdkmanager); baseline 2 running
+RVW3 fixes CODED + compile green (:geckoapp:compileDebugKotlin EXIT 0): security SC1 SC2 SC4 SC6 SC7 SC11, playback PB1 PB3 PB5 PB7, speed SP1. Proven so far: web background.test.js 122/122 (SC4 test fails on the old regex: 4099 ms), finder2.test.js 13/13, engine.test.js 10/10; real-list old-vs-new engine differential 11.8 M checks 0 differences (-33 % per check). Baseline before my edits: :core:test :app:testDebugUnitTest :geckoapp:testDebugUnitTest EXIT 0. Full suite with my edits RUNNING in background (log in the session scratchpad full.log, ends with an EXIT line)
 
 ## Do this next
-WAIT for baseline2 (/tmp scratchpad baseline2.log EXIT line; do not start a second gradle). Then fix in order SC1 SC2 SC4 SC6 SC7 SC11 (TASKS RVW3b-sec), one test each; playback + speed lane files research/REVIEW_2026-11-21_{PLAYBACK,SPEED}.md may arrive meanwhile: verify those by reading code before fixing. Heartbeat trig_012BwCyPqhi5Dfz8amdBigFo
+1) Wait for the full gradle run (:core:test :app:testDebugUnitTest :geckoapp:testDebugUnitTest :app:lintDebug --continue) to print EXIT in scratchpad full.log; fix any failure it names. 2) then cd web-tests && npm test (NOT while gradle runs: CPU flakes). 3) tick RVW3b/RVW3c in TASKS.md with that evidence, bump geckoapp versionCode 175 / 0.3.0-alpha74, bash tools/sync-ext-version.sh, write docs/handoff/ALPHA74_RELEASE_NOTE.txt, bash ship.sh gecko, ONE dispatch (app=gecko full_build=true), record-release, answer the owner, delete heartbeat trig_012BwCyPqhi5Dfz8amdBigFo
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
+     M research/REVIEW_2026-11-21_SECURITY.md
 
 ## Last ten checkpoints
 ```
+  7496a10a ckpt 2744: RVW3: security lane back and VERIFIED by me against the code (SC1 SC2 SC4 SC
   fe77b529 ckpt 2743: RVW3a launched: three read-only review lanes running as background agents (p
   e4b18cd0 ckpt 2742: RVW3 written into TASKS.md in the owner's words (review + improve speed, vid
   23e83be6 ckpt 2741: Owner decision recorded: keep Firefox's background traffic (P4) as it is; P3
@@ -25,8 +27,7 @@ WAIT for baseline2 (/tmp scratchpad baseline2.log EXIT line; do not start a seco
   f2a9d669 ckpt 2737: REL73a done: versionCode 174 / 0.3.0-alpha73, ext synced, ALPHA73 release no
   b754bfa7 ckpt 2736: STANDING RULE recorded (owner: Always ship new versions and release without 
   26745261 ckpt 2735: RVW2 DONE: all code items from today's review (F13 F16 F17 F19 F24 V3 V4 V8 
-  3b61bea3 ckpt 2734: RVW2 batch 2 in the tree: V3 (Engine noWindow), V4 (resume big unknown-lengt
 ```
 
-(4 automatic checkpoint(s) since the last deliberate one — the
+(43 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
