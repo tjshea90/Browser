@@ -19,7 +19,7 @@ object MediaSniff {
     fun classify(url: String, contentType: String?, status: Int = 200): MediaKind? {
         if (status != 0 && status != 200 && status != 206) return null
         if (!(url.startsWith("http://", true) || url.startsWith("https://", true))) return null
-        if (isVideoPlaybackSlice(url)) return null   // RVW1 F14
+        if (isVideoPlaybackSlice(url) || isGoogleAdVideo(url)) return null   // RVW1 F14, RVW5 (a Google ad video)
         val ct = baseType(contentType)
         val ext = effectiveExtension(url)
         if (ct.startsWith("text/html") || ct.startsWith("image/") || ct.startsWith("font/") || ct == "application/json" || ct.contains("javascript") || ct == "text/css") return null
