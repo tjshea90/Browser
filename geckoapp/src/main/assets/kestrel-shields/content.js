@@ -628,9 +628,19 @@
 (function () {
   try {
     var EXT = /\.(m3u8|mpd|mp4|webm|mkv|m4v|mov|mp3|m4a|aac|ogg|opus|flac)(?:$|[?#])/i;
-    var FIND = /https?:\/\/[^\s"'<>()\\]+?\.(?:m3u8|mpd|mp4|webm|mkv|m4v|mov|mp3|m4a|aac|ogg|opus|flac)(?:\?[^\s"'<>()\\]*)?/gi;
+    // RVW1 F9: the extension must END the file name: `.../a.mp4/index.m3u8` (Kaltura, Wowza) and `vid.mp4.m3u8` were cut at the FIRST `.mp4` and the app was told about a path that is not a video. The lookahead
+    // refuses a name that goes on (a letter, a digit, `_`, `/`, `%`, `-` or `.` plus a letter), so the lazy match grows to the next extension instead; a full stop after it (end of a sentence) is still the end.
+    var FIND = /https?:\/\/[^\s"'<>()\\]+?\.(?:m3u8|mpd|mp4|webm|mkv|m4v|mov|mp3|m4a|aac|ogg|opus|flac)(?![A-Za-z0-9_\/%-]|\.[A-Za-z0-9])(?:\?[^\s"'<>()\\]*)?/gi;
+    // RVW1 F9: a player configuration's relative or scheme-relative address (JW Player `file:"//cdn.example/x.mp4"`, `src: "/media/b.m3u8"`): only after a key that says "this is the media", so a stylesheet or a picture path is never run
+    var FINDREL = /(?:file|src|source|url|hls|dash|mp4|stream|video|contentUrl|playlist|manifest)["']?\s*[:=]\s*["'](\/[^"'\s\\<>]+?\.(?:m3u8|mpd|mp4|webm|mkv|m4v|mov|mp3|m4a|aac|ogg|opus|flac)(?![A-Za-z0-9_\/%-]|\.[A-Za-z0-9])(?:\?[^"'\s\\<>]*)?)/gi;
+    // RVW1 F9: the same address percent-encoded inside another address (`player.php?url=https%3A%2F%2Fcdn.example%2Fa.m3u8`): decoded on its own, the text around it is never decoded
+    var FINDENC = /https?%3A%2F%2F[^\s"'<>()\\&]+?\.(?:m3u8|mpd|mp4|webm|mkv|m4v|mov|mp3|m4a|aac|ogg|opus|flac)(?![A-Za-z0-9_-]|\.[A-Za-z0-9]|%2F)(?:%3F[^\s"'<>()\\&]*)?/gi;
     var HINT = /\.(?:m3u8|mpd|mp4|webm|mkv|m4v|mov|mp3|m4a|aac|ogg|opus|flac)/i; // a script that names no media file at all is not run through the three replaces and FIND below
     var sent = {}, n = 0, scriptsDone = 0, linksDone = 0; // the scan at load only looks at what appeared since the first one
+    // RVW1 F12: attributes that hold a source or a player configuration (lazy-loaded players, video.js data-setup, Reddit-style custom elements): an address, or JSON that names the files
+    var SRC_ATTRS = ['data-src', 'data-video-src', 'data-hls', 'data-hls-url', 'data-mp4', 'data-stream', 'data-video-url', 'data-file', 'src', 'data'];
+    var CFG_ATTRS = ['data-setup', 'data-config', 'data-sources', 'data-player-config'];
+    var ATTR_SELECTOR = '[data-src]:not(img):not(picture), [data-video-src], [data-hls], [data-hls-url], [data-mp4], [data-stream], [data-video-url], [data-file], embed[src], object[data], [data-setup], [data-config], [data-sources], [data-player-config]';
     function report(u) {
       if (!u || n >= 40) return;
       try { u = new URL(u.replace(/&amp;/g, '&'), location.href).href; } catch (e) { return; }
