@@ -1531,7 +1531,7 @@ class MiniNav(ctx: Context, private var pal: Pal, private val l: Listener) : Fra
         fun glideKeys(): GlideKeys? {
             if (width <= 0 || height <= 0) return null
             val letters = MiniKeyboardLayout.rows(false)
-            return try { GlideKeys.from(letters, MiniKeyboardGeometry.boxes(letters, width.toFloat(), height.toFloat(), context.dpf(3f), stripPx())) } catch (e: IllegalArgumentException) { null }
+            return try { GlideKeys.from(letters, MiniKeyboardGeometry.boxes(letters, width.toFloat(), height.toFloat(), context.dpf(3f), stripPx())).also { it.pitchDp = it.pitch / context.resources.displayMetrics.density } } catch (e: IllegalArgumentException) { null }   // (Swoop R24b: the decoder is tuned on real swipes for phone-sized keys: it needs the key pitch in dp, not pixels)
         }
 
         private fun keyAt(x: Float, y: Float): KeySpec? {
