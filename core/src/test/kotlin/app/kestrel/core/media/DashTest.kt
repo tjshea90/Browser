@@ -113,4 +113,43 @@ class DashTest {
         assertEquals(90_000L, Dash.parseDuration("PT1M30S"))
         assertEquals(0L, Dash.parseDuration(""))
     }
+
+    // ---- RVW1 (research/REVIEW_2026-11-20_DOWNLOAD.md): V6 the r=-1 repeat rounds up and stops at the next S, V7 a byte-order mark in front of the prolog
+
+    private fun mpd(duration: String, timelineXml: String, timescale: Int = 1000) = """<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static"${if (duration.isEmpty()) "" else " mediaPresentationDuration=\"$duration\""}>
+  <Period><AdaptationSet contentType="video" mimeType="video/mp4">
+    <SegmentTemplate timescale="$timescale" initialization="i.mp4" media="s-${'$'}Number${'$'}.m4s" startNumber="1"><SegmentTimeline>$timelineXml</SegmentTimeline></SegmentTemplate>
+    <Representation id="v" bandwidth="800000" width="640" height="360" codecs="avc1.4d401e"/>
+  </AdaptationSet></Period>
+</MPD>"""
+
+    @Test fun aRepeatToTheEndOfThePeriodRoundsUpSoTheLastSecondIsNotLost() {
+        // 101 s of 2 s segments needs 51 (the last one is 1 s long): 50 were built and the end of the film was cut off
+        val m = Dash.parse(mpd("PT101S", """<S t="0" d="2000" r="-1"/>"""), url)!!
+        assertNull(m.problem)
+        assertEquals(51, m.video[0].media!!.segments.size)
+        val exact = Dash.parse(mpd("PT100S", """<S t="0" d="2000" r="-1"/>"""), url)!!
+        assertEquals("an exact multiple is not given one extra", 50, exact.video[0].media!!.segments.size)
+    }
+
+    @Test fun aRepeatToTheEndStopsAtTheNextTimelineEntry() {
+        val m = Dash.parse(mpd("PT30S", """<S t="0" d="2000" r="-1"/><S t="10000" d="5000" r="-1"/>"""), url)!!
+        val segs = m.video[0].media!!.segments
+        assertEquals("5 of 2 s up to 10 s, then 4 of 5 s up to 30 s", 5 + 4, segs.size)
+        assertEquals(2000L, segs[0].durationMs); assertEquals(5000L, segs[5].durationMs)
+    }
+
+    @Test fun aRepeatToTheEndWithNoEndKnownIsNotPlayedDownToOneSegment() {
+        // before: one segment, "completed", a 2 second file of a film
+        val m = Dash.parse(mpd("", """<S t="0" d="2000" r="-1"/>"""), url)
+        assertTrue("not supported, never a one-segment success", m == null || m.video.isEmpty() || m.video[0].media == null)
+    }
+
+    @Test fun aManifestWithAByteOrderMarkOrBlankLinesInFrontOfTheXmlIsStillRead() {
+        val body = mpd("PT20S", """<S t="0" d="4000" r="4"/>""")
+        assertNotNull(Dash.parse("\uFEFF" + body, url))
+        assertNotNull(Dash.parse("\n\r\n  " + body, url))
+        assertEquals(5, Dash.parse("\uFEFF\n" + body, url)!!.video[0].media!!.segments.size)
+    }
 }
