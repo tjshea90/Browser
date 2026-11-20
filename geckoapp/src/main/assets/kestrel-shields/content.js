@@ -264,7 +264,8 @@
       var x = factsOf(v);
       browser.runtime.sendMessage({ k: 'vid', u: blob ? 'blob' : src, w: v.videoWidth || 0, h: v.videoHeight || 0, d: isFinite(v.duration) ? v.duration : 0, l: blob ? '' : labelOf(v, src), p: location.href, f: x.f, rw: x.rw, rh: x.rh, vp: x.vp, el: elId(v) }).catch(function () {});
     }
-    document.addEventListener('loadedmetadata', function (e) { var t = e.target; if (t && (t.tagName === 'VIDEO' || t.tagName === 'AUDIO')) report(t); }, true);
+    function onMeta(e) { var t = e.target; if (t && (t.tagName === 'VIDEO' || t.tagName === 'AUDIO')) report(t); }
+    document.addEventListener('loadedmetadata', onMeta, true);
     // RVW1 F7: the role of an element is sent once per file; a muted autoplay clip with no controls (a feed's preview, X / Reels) says "decoration", and when the person UNMUTES it, it is the video they came for: say it
     // again, once per element, so the app stops hiding it. (volumechange also fires when a script unmutes: the app only learns the element's facts, the 'played' proof still needs 3 s of real playback.)
     var unmuted = {};
@@ -281,7 +282,7 @@
     // 15 s clip to the film" (a pre-roll) from "two different videos". After 3 s of real playback of a file, once per element and file, the same report goes again with ev:'played'.
     var elIds = (typeof WeakMap === 'function') ? new WeakMap() : null, elNext = 1, playedKeys = {};
     function elId(v) { try { if (!elIds) return 0; var i = elIds.get(v); if (!i) { i = elNext++; elIds.set(v, i); } return i; } catch (e) { return 0; } }
-    document.addEventListener('playing', function (e) {
+    function onPlaying(e) {
       try {
         var v = e.target;
         if (!v || (v.tagName !== 'VIDEO' && v.tagName !== 'AUDIO') || !e.isTrusted) return;
@@ -303,7 +304,31 @@
         };
         setTimeout(check, 3000);
       } catch (err) { /* ignore */ }
-    }, true);
+    }
+    document.addEventListener('playing', onPlaying, true);
+
+    // RVW1 F5: a video INSIDE A SHADOW ROOT (Reddit's shreddit-player, Vidstack / Media Chrome, Yahoo's player) never told the document: media events do not cross a shadow boundary, so the two document-level listeners above never
+    // saw it (no picture size, no length, no "it played", no match with its playlist). The page's videos are looked for in the shadow trees (KestrelVF, bounded) at most three times per page: once after load and once
+    // after each of the first two real taps (the player is often built when it is pressed); each one found gets the same two listeners and, when it already has its metadata, reports at once.
+    var watched = (typeof WeakMap === 'function') ? new WeakMap() : null, shadowRuns = 0, shadowTimer = 0;
+    function watchShadow() {
+      try {
+        if (!watched || !window.KestrelVF || shadowRuns >= 3) return;
+        shadowRuns++;
+        var vs = window.KestrelVF.all('video');
+        for (var i = 0; i < vs.length; i++) {
+          var v = vs[i];
+          if (watched.has(v) || v.getRootNode() === document) continue;              // a light-DOM video is covered by the document-level listeners
+          watched.set(v, 1);
+          v.addEventListener('loadedmetadata', onMeta, true);
+          v.addEventListener('playing', onPlaying, true);
+          if (v.readyState >= 1) report(v);
+        }
+      } catch (x) { /* never break the page */ }
+    }
+    function shadowSoon(ms) { if (shadowRuns >= 3 || shadowTimer) return; shadowTimer = setTimeout(function () { shadowTimer = 0; watchShadow(); }, ms); }
+    window.addEventListener('load', function () { shadowSoon((window.__kstVfCfg && window.__kstVfCfg.shadowMs) || 3000); });
+    window.addEventListener('click', function (e) { if (e && e.isTrusted) shadowSoon((window.__kstVfCfg && window.__kstVfCfg.shadowTapMs) || 1500); }, { capture: true, passive: true });
 
     // RX4-M0a (research/REVIEW-EXTERNAL-4.md): how smoothly do REAL videos play on this tablet? While an element plays, every 15 s (and when it pauses or ends, or the page is hidden) its
     // getVideoPlaybackQuality() is read and only the DIFFERENCE since the last look is sent: frames shown, dropped, corrupted, seconds, picture size. Numbers; never an address. One timer for
