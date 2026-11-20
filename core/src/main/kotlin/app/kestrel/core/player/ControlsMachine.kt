@@ -55,7 +55,7 @@ class ControlsMachine(private val h: Host) {
     /** A tap on the picture (already told apart from a double tap and from a tap on a control). ANS53c: they come and go AT ONCE, no fade (the owner: "zero delay"); only the clock's own hide fades. */
     fun tap() {
         if (!active || turning) return
-        if (shown) hide(false, "tap") else show(hideAfterMs, false)
+        if (shown) hide(false) else show(hideAfterMs, false)
     }
 
     /**
@@ -123,7 +123,7 @@ class ControlsMachine(private val h: Host) {
         if (autoHide()) h.schedule(hideAfterMs) else h.cancel()
     }
 
-    private fun hide(animate: Boolean, why: String, count: Boolean = true) {
+    private fun hide(animate: Boolean, why: String = "tap", count: Boolean = true) {
         h.cancel()
         if (shown) {
             val life = h.now() - shownAt
