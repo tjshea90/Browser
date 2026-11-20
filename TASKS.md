@@ -982,7 +982,7 @@ Real engine, Keep mode: sound stops when the app is left (page clock frozen 0.0 
 
 ## Owner request 2026-11-20 (second message of this session, the GO for alpha72) {ccr-d6f32d19-c3cwzl 2026-11-20}
 - [~] REL72 (owner, verbatim) "Release the next version and tell me what is still open tasks" -> alpha72 = RVW1 review fixes + EM1k + DG1 code that waited for the go (versionCode 173)
-  - [ ] REL72a bump geckoapp versionCode 173 / 0.3.0-alpha72, bash tools/sync-ext-version.sh, write docs/handoff/ALPHA72_RELEASE_NOTE.txt (ASCII, no double quotes or backslashes)
+  - [x] REL72a (versionCode 173 / 0.3.0-alpha72, extension version synced, note written) bump geckoapp versionCode 173 / 0.3.0-alpha72, bash tools/sync-ext-version.sh, write docs/handoff/ALPHA72_RELEASE_NOTE.txt (ASCII, no double quotes or backslashes)
   - [ ] REL72b bash ship.sh gecko with that note (local gates), ONE dispatch of android.yml app=gecko full_build=true, wait for tag + all jobs + Release with APK
   - [ ] REL72c bash tools/record-release.sh <tag> with the IDENTICAL note after the run is green; the Release link goes to the owner on its own line
   - [ ] REL72d tell the owner what is still open (from TASKS.md [ ] / [~] and the RVW1b-8 not-done list), in plain words
