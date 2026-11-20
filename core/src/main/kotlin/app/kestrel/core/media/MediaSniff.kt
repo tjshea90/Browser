@@ -33,6 +33,44 @@ object MediaSniff {
         return null
     }
 
+    /**
+     * RVW1 F14: YouTube's own `videoplayback` requests are slices of an adaptive stream (the `range` query piece is dropped for de-duplication, the length is one slice's, audio and video are separate requests): every one
+     * listed would be a row that saves a fragment. YouTube is refused plainly (research/VIDEO_DOWNLOADER.md section 8), so these are not offered as sources.
+     */
+    fun isVideoPlaybackSlice(url: String): Boolean {
+        val rest = url.substringAfter("://", "")
+        val host = rest.substringBefore('/').substringBefore('?').substringBefore('#').substringAfterLast('@').substringBefore(':').lowercase()
+        return (host == "googlevideo.com" || host.endsWith(".googlevideo.com")) && rest.substringAfter('/', "").substringBefore('?').startsWith("videoplayback")
+    }
+
+    /**
+     * RVW1 F10: the extension that decides what a response is. The URL's PATH extension when it is a media one; else a media file name that a query value ends with (`/dl.php?file=movie.mp4`, `/get?f=x.m3u8`: a
+     * download script names the file in the query); else the path's own. The browser extension tests the whole address, so it called these media while [classify] read only the path and dropped them silently.
+     */
+    fun effectiveExtension(url: String): String {
+        val e = extension(url)
+        if (e in fileExts || e in segmentExts || e == "m3u8" || e == "mpd" || e == "m3u") return e
+        return queryExtension(url).ifEmpty { e }
+    }
+
+    /** The media extension a QUERY value ends with ("?file=movie.MP4&x=1" -> "mp4", "?u=https%3A%2F%2Fa%2Fb.m3u8" -> "m3u8"); the last such value wins; "" if none. */
+    fun queryExtension(url: String): String {
+        val q = url.substringAfter('?', "").substringBefore('#')
+        if (q.isEmpty() || q.length > 4096) return ""
+        var found = ""
+        for (kv in q.split('&')) {
+            var v = kv.substringAfter('=', "")
+            if (v.isEmpty()) continue
+            if (v.contains('%')) v = try { java.net.URLDecoder.decode(v, "UTF-8") } catch (e: Exception) { v }
+            val name = v.substringBefore('?').substringBefore('#').substringAfterLast('/')
+            val dot = name.lastIndexOf('.')
+            if (dot < 1 || name.length - dot > 8) continue
+            val ext = name.substring(dot + 1).lowercase()
+            if (ext in fileExts || ext == "m3u8" || ext == "mpd") found = ext
+        }
+        return found
+    }
+
     /** What the first bytes of a response say it is, with the type and the file extension to use for it. */
     class Sniffed(val kind: MediaKind, val mime: String, val ext: String)
 
