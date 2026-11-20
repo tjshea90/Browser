@@ -158,6 +158,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:$media3Version")
     // LAB5: already inside the APK (GeckoView pulls it in at runtime: it installs the baseline profile 5 s after the first frame); declared so the app can read ProfileVerifier (has Android compiled this install with the profile yet? Health line `start art`)
     implementation("androidx.profileinstaller:profileinstaller:1.4.0")
+    webcompatAar("org.mozilla.components:feature-webcompat:$webcompatVersion@aar")
     implementation("org.mozilla.geckoview:geckoview-$geckoAbi:$geckoVersion") {
         exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
         exclude(group = "com.google.android.gms") // WebAuthn via Google Play services: this tablet has none, and this project never depends on GMS
