@@ -33,3 +33,13 @@ Ran: node micro-benchmarks only, on the REAL bundled list (app/src/main/assets/f
 - DNS: `trustedRecursiveResolverMode(TRR_MODE_FIRST)` (GeckoEngine.kt create()) needs a TLS connection to mozilla.cloudflare-dns.com (plus a native bootstrap lookup) before the first answer of a session and falls back after a timeout; on a flaky carrier hotspot each timeout is a delay before the page can even connect. The Network lab A/B (A9) exists and the owner has sent no numbers; I did not change or rank it (it is a privacy choice).
 - Idea, sign unknown: a cold start on this tablet is dominated by paging the 118 MB libxul.so in from eMMC (LAB5_PACKAGING, COLD_START). A background thread started in Application.onCreate that reads the extracted library sequentially (Chrome's LibraryPrefetcher does the equivalent) would turn 128 KB-readahead demand faults into one stream, at the price of up to 118 MB of reads on a 2 GB device. Needs an A/B with a dropped page cache on the tablet or a lab start (marks `runtime`, `paint`); do not ship unmeasured.
 - Nothing here ran on a device; the WebView build (:app) was not reviewed beyond the shared code.
+
+
+## Fixing session status (RVW3b, 2026-11-20; nothing here ran on the tablet)
+| ID | Status |
+| :- | :- |
+| SP1 | FIXED (engine.js): the 455 token-less rules are filed under the hash of every include entry of their $domain= list and a page host looks up its own candidates once (memoized, 64 hosts), evaluated in their original order. MEASURED here on the REAL 6.8 MB list: 11.8 million checks over 678 page hosts, 0 verdict differences old vs new, 5.57 -> 3.76 us per check under V8's JIT (-33 %); the repo's own real-diff.js against Kotlin's verdicts: 0 mismatches on 67,655 requests. Tests: engine.test.js parity on regenerated Kotlin fixtures (ExtImageTest now has 9 options-only $domain= rules) and 'SP1' (rules tried per page). The tablet saving (the lane estimates about -45 % at interpreter speed) is an estimate, not measured. |
+| SP2 | PARTLY: engine.lastEvals() (rules tried by the last check) exists and is tested; it is NOT yet reported in the stats message / Diagnostics. |
+| SP3 | NOT DONE (measure first: the two GPU read-backs per page need tablet numbers). |
+| SP4 SP5 SP6 SP7 | NOT DONE (low; each trades a small start-up gain against a change in how the app starts, which cannot be timed here). |
+| SP8 | NOT DONE: dropping libcrashtools.so (2.6 MB smaller update) needs one lab start of the built APK to prove nothing references it. |

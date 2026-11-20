@@ -40,3 +40,18 @@ Tags: [read] = the line was read in the tree, [est] = reasoning not proven. Stat
 - The real SPKI hashes for the SC5 pin-set (no network here), and what Gecko's own TLS stack does with the update and list hosts (it is not used for them).
 - Anything on a device: timings of SC4 on the Cortex-A53, Android 16 behaviour of the PendingIntent and install flow, whether a runaway parent-process script triggers any engine watchdog.
 - DNS rebinding against the probe guard (Ssrf.check resolves once; the connection resolves again).
+
+
+## Fixing session status (RVW3b, 2026-11-20; every finding was re-read against the code by the fixer before anything was changed)
+| ID | Status |
+| :- | :- |
+| SC1 | FIXED: core WebHandOver.hostRefused (NetHosts.probeAllowed, every spelling) + VideoFlow.start declines before any player starts; PlayerFactory feeds the player from the HTTP data source only (no DefaultDataSource: no file: / content: segments). Cross-protocol redirects kept on purpose (a film is not secret; the FIRST address is checked). Tests: WebHandOverTest, SecurityRulesTest (source reading). Not run on a device. |
+| SC2 | FIXED: NetHosts.reachesLocalNetwork (IPv4-mapped, compatible, NAT64, 6to4, site-local, link-local, unique-local, multicast, inet_aton short / hex / octal forms, fail closed on an unparsable IPv6 literal); probeAllowed uses it; isLocal (address bar, HTTPS policy) deliberately unchanged. Test: UrlPartsTest (about 90 spellings). Not done: the fetcher-level guard that checks the RESOLVED address at connect time (DNS names that resolve to a private address; rebinding): open. |
+| SC3 | NOT CHANGED, OWNER DECISION: a path deny-list in tools/sync.sh would stop legitimate tools/*.sh and workflow updates from reaching other lanes, which is the point of the multi-session system. The risk is real (a poisoned lane reaches every lane in one checkpoint). Suggested rule if wanted: sync refuses a branch that touches .claude/, .github/, tools/*.sh, ship.sh, bootstrap.sh, gradle wrapper or signing/ and prints NEEDS A HUMAN LOOK; owner merges by hand. |
+| SC4 | FIXED: JSON_FIND / FIND / FINDENC bounded ({1,600} / {1,1500}), the JSON body cut at 128 KB before the scan. Tests: background.test.js 'RVW3 SC4' (old regex: 4099 ms, fixed: a few ms) and finder2.test.js 'SC4' (old 2370 + 1154 ms). The content-process half of the CHALLENGE (slow script is always CONTINUE, processCount 1) is NOT changed: it needs the owner's yes. |
+| SC5 | NOT DONE, needs a PC: certificate pins need the real SPKI hashes of the CURRENT GitHub intermediates (no network here), and a wrong pin would also block the in-app update that repairs it. |
+| SC6 | FIXED (a) UpdateLogic.plainFileName: an asset name with a path or any character outside [A-Za-z0-9._+-] is not an update; (c) the release JSON is read with a 2 MB cap (readCapped). Tests: UpdateLogicTest, StreamBytesTest. (b) NOT changed on purpose: a MITM that controls the release text also controls the checksum, so refusing a release without one adds little and could block real updates. |
+| SC7 | FIXED: the seven Health.log lines now say "private tab". Guard: SecurityRulesTest.noHealthLineNamesTheHostOfAPrivateTab (every Health.log with hostOf( / url.take( in BrowserActivity.kt and TabDelegates.kt must name isPrivateTab or use Health.where). |
+| SC8 | NOT DONE (low): the install-extra nonce for the exported MainActivity; Android still asks the person to confirm an install. |
+| SC9, SC10, SC12 | NOT CHANGED, OWNER DECISIONS (Courier reply authentication; a pinned Swoop certificate digest; keeping streaming-site names out of the public research notes). |
+| SC11 | DOCUMENTED: research/SECURITY.md B16 now says prefetch-next was reversed on purpose. |

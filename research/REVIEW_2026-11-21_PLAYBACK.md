@@ -44,3 +44,16 @@ Ranked by impact for THIS device. Every row: where, what and why (a concrete sce
 6. **CA store:** HttpURLConnection uses the system store frozen at July 2021; Gecko uses its own newer roots. A film host whose chain needs a newer root fails in the player (before the first picture the page's own player takes over, so only a second host mid-film would hit the PB1 path).
 7. **HWC layers** of the MT8168 for the inline view (Gecko surface, overlay surface, window, bars) and the one-frame lag of the overlay behind a fast fling: unprovable without the tablet (already listed in ANS55).
 8. **No tablet numbers:** the repo holds no "Kestrel's own player" stats lines from the tablet after alpha61; every [est] above needs the owner's next Diagnostics (stalls, link estimate, picture bitrate, buffered ahead, dropped).
+
+
+## Fixing session status (RVW3b, 2026-11-20; every finding was re-read against the code by the fixer; nothing here ran on the tablet)
+| ID | Status |
+| :- | :- |
+| PB1 | FIXED in code (compile + core tests only; Media3 behaviour is from the reviewer's memory and the documented prepare() rule): core RetryPlan (4 automatic tries after 2, 4, 8, 8 s, only for network errors; 403 / 404 / 410 final), geckoapp PlayerRecovery in BOTH players (full screen and inside the page), PlayerFactory load policy retries a failed load 8 times once a picture was shown, the Play button of the error state calls prepare(), the ring (not "stopped") shows while a try waits. Diagnostics lines: recover-wait / recover-try / recovered / recover-gave-up. Test: RetryPlanTest. STILL TO PROVE on the emulator or tablet: that the error surfaces while buffered film remains (reviewer's Not verified 1). |
+| PB2 | NOT DONE: a thread-name based ProxySelector for the Media3 loader threads cannot be verified here (loader thread name, CONNECT fallback) and could break playback; needs the emulator with the Courier proxy. |
+| PB3 | FIXED: downloads yield to a playing film (250 KB/s on the capped hotspot, the profile's page rate behind the fast tunnel), a 5 s lease renewed once a second by both players' ticks, ended at once on stop; same Settings switch, whose wording now says so ("Slow downloads while a page loads or a video plays"). Tests: PageYieldTest. |
+| PB4 | NOT DONE: handing the live player to the full-screen activity is a larger change with a state-handover risk; measure NativePlayerStats.firstPictureMs for the inline full-screen press first. |
+| PB5 | FIXED: core PictureCap.longSide rounds UP (854 for 480, not 853); applyCap uses it. Effect: "at most 480p" now lets the usual 854x480 rung play (it fell to 360p before), and a remembered 480p pick plays 480p. The inline player's constant 480 cap is unchanged (box-based cap not done). Test: PictureCapTest. |
+| PB6 | NOT DONE on purpose: the whole-subtree rescan exists so that player controls built late are still hidden; throttling it risks a visible regression on sites that cannot be tried here, for an estimated few percent of the page thread. |
+| PB7 | FIXED: the 4 Mbit/s first bandwidth guess applies to every network type (setInitialBitrateEstimate(long)), so the fast-tunnel (VPN) state no longer starts from Media3's low default for "other" networks. |
+| PB8, PB9, PB10, PB11 | NOT DONE (measure first): release() time, byte ceiling vs bitrate, onStop release, brightness-drag coalescing. |
