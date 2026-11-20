@@ -114,16 +114,16 @@ object UpdateLogic {
     }
 
     /**
-     * The newest release of THIS app (its [tagPrefix]) whose versionCode is above [currentCode] and that has an APK; null when the app is up to date.
-     * Drafts are never offered. Pre-releases are offered (every Kestrel G build so far is an alpha).
-     */
-    /**
      * RVW3 SC6: the release's asset name becomes a file name in the app's own folder ([UpdateOffer.apkName] is used in File(dir, name) at several places), so only a plain one is accepted: letters, digits and
      * . _ + - (what the build writes: kestrel-g-0.3.0-alpha73.apk), at most 120 characters, no leading dot. A name with a slash, a backslash, "..", a space or any other character is not an update.
      */
     fun plainFileName(name: String): Boolean =
         name.isNotEmpty() && name.length <= 120 && name[0] != '.' && name.all { (it in 'a'..'z') || (it in 'A'..'Z') || (it in '0'..'9') || it == '.' || it == '_' || it == '+' || it == '-' }
 
+    /**
+     * The newest release of THIS app (its [tagPrefix]) whose versionCode is above [currentCode] and that has an APK; null when the app is up to date.
+     * Drafts are never offered. Pre-releases are offered (every Kestrel G build so far is an alpha).
+     */
     fun choose(releases: List<Release>, tagPrefix: String, currentCode: Long): UpdateOffer? {
         var best: UpdateOffer? = null
         for (r in releases) {
