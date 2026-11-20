@@ -16,6 +16,9 @@ import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.upstream.DefaultAllocator
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
+import app.kestrel.core.player.RetryPlan
+import java.util.concurrent.atomic.AtomicBoolean
 import app.kestrel.browser.Flavor
 
 /**
@@ -23,7 +26,19 @@ import app.kestrel.browser.Flavor
  * (HLS or a file, with the page's request headers), the tablet's hardware decoders first, the small buffers of this 2 GB tablet. No surface, no listeners and not prepared: the caller adds those.
  */
 object PlayerFactory {
-    class Built(val player: ExoPlayer, val source: MediaSource)
+    /** [settled]: set by the caller at the first picture; from then on a failed load is retried longer (RVW3 PB1, [RetryAfterPicture]). */
+    class Built(val player: ExoPlayer, val source: MediaSource, val settled: AtomicBoolean = AtomicBoolean(false))
+
+    /**
+     * RVW3 PB1: Media3 tries a failed load three times (waits of 0, 1 and 2 s) and then raises a fatal error: a 15-second dropout on the carrier hotspot ended the film in about three seconds. Once a picture has
+     * been shown ([settled]) the same load is tried [RetryPlan.SETTLED_LOAD_RETRIES] times (about 25 s with the same waits); before the first picture nothing changes (a failure then hands the film back to the page).
+     */
+    private class RetryAfterPicture(private val settled: AtomicBoolean) : DefaultLoadErrorHandlingPolicy() {
+        override fun getMinimumLoadableRetryCount(dataType: Int): Int {
+            val own = super.getMinimumLoadableRetryCount(dataType)
+            return if (settled.get()) maxOf(RetryPlan.SETTLED_LOAD_RETRIES, own) else own
+        }
+    }
 
     /** Is this address a HLS playlist? (the same test for both players) */
     fun isHls(url: String): Boolean = url.substringBefore('?').lowercase().endsWith(".m3u8") || url.contains(".m3u8?", true) || url.contains("/hls/", true)
@@ -37,7 +52,10 @@ object PlayerFactory {
         // redirect above stays: some CDNs send https to http on purpose and a film is not secret; the host of the FIRST address is checked before the player starts, WebHandOver.hostRefused)
         val data: DataSource.Factory = http
         val item = MediaItem.fromUri(url)
-        val source: MediaSource = if (isHls(url)) HlsMediaSource.Factory(data).createMediaSource(item) else ProgressiveMediaSource.Factory(data).createMediaSource(item)
+        val settled = AtomicBoolean(false)
+        val policy = RetryAfterPicture(settled)
+        val source: MediaSource = if (isHls(url)) HlsMediaSource.Factory(data).setLoadErrorHandlingPolicy(policy).createMediaSource(item)
+            else ProgressiveMediaSource.Factory(data).setLoadErrorHandlingPolicy(policy).createMediaSource(item)
         // hardware decoders first (a software one only when nothing else decodes the format); no extension decoders (software FFmpeg / AV1 on four A53 cores is not a plan)
         val selector = MediaCodecSelector { mime, secure, tunneling -> MediaCodecUtil.getDecoderInfos(mime, secure, tunneling).sortedBy { if (it.hardwareAccelerated && !it.softwareOnly) 0 else 1 } }
         val renderers = DefaultRenderersFactory(ctx).setEnableDecoderFallback(true).setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF).setMediaCodecSelector(selector)
@@ -50,7 +68,7 @@ object PlayerFactory {
         val meter = bandwidthMeter(ctx)
         // WAKE_MODE_NETWORK: while it plays the player holds a Wi-Fi lock (and a CPU wake lock) so that the Wi-Fi chip does not drop into power save between two segments (WAKE_LOCK is in the manifest)
         val p = ExoPlayer.Builder(ctx, renderers).setLoadControl(load).setBandwidthMeter(meter).setWakeMode(C.WAKE_MODE_NETWORK).setHandleAudioBecomingNoisy(true).setAudioAttributes(AudioAttributes.DEFAULT, true).build()
-        return Built(p, source)
+        return Built(p, source, settled)
     }
 
     // ONE meter for the whole run (like ExoPlayer's own singleton): what the first film measured is the next film's first guess, instead of the fixed one
