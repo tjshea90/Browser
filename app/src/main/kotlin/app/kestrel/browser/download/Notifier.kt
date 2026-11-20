@@ -19,6 +19,7 @@ object Notifier {
     const val CH_PROGRESS = "dl_progress"
     const val CH_DONE = "dl_done"
     const val ID_PROGRESS = 4711
+    const val ID_TIME_LIMIT = 4712   // RVW2 download S1
     const val EXTRA_OPEN_DOWNLOADS = "app.kestrel.browser.OPEN_DOWNLOADS"
 
     fun channels(ctx: Context) {
