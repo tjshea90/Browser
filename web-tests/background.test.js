@@ -1320,6 +1320,37 @@ test('RX3-V3: the played report and the element number are relayed as small whol
   assert.equal(got[2].el, 1000000, 'clamped');
 });
 
+test('RVW1 F1: a report from a cross-origin player FRAME names the tab\'s page, not the frame\'s own address, and its element number cannot collide with another frame\'s', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '1' });
+  await ready(h);
+  const FRAME = 'https://player.example/embed/9', FRAME2 = 'https://other.example/e';
+  h.message({ k: 'vid', ev: 'played', el: 1, u: 'blob', w: 1280, h: 720, d: 300, l: '', p: FRAME }, 1, FRAME, 5);          // the player in an iframe: element 1 of ITS document
+  h.message({ k: 'vid', el: 1, u: 'https://cdn.example/a.mp4', w: 640, h: 360, d: 90, l: '', p: PAGE }, 1, PAGE, 0);       // the page's own video: element 1 of ITS document
+  h.message({ k: 'vid', el: 1, u: 'https://cdn.example/b.mp4', w: 640, h: 360, d: 90, l: '', p: FRAME2 }, 1, FRAME2, 6);   // another frame, element 1 again
+  h.message({ k: 'vid', el: 1, u: 'https://cdn.example/c.mp4', w: 640, h: 360, d: 90, l: '', p: FRAME }, 1, FRAME, 5);     // the same frame again: the same number
+  await tick(20);
+  const got = h.of('vid');
+  assert.equal(got.length, 4);
+  assert.deepEqual(got.map((g) => g.p), [PAGE, PAGE, PAGE, PAGE], 'every report names the page the tab is on');
+  assert.equal(got[1].el, 1, 'the top page keeps its own numbers');
+  assert.ok(got[0].el > 1000000 && got[0].el % 1000000 === 1, 'a frame\'s element number sits above the page\'s: ' + got[0].el);
+  assert.notEqual(got[0].el, got[2].el, 'two frames do not share a number');
+  assert.equal(got[0].el, got[3].el, 'one frame keeps its number');
+  assert.ok(got.every((g) => g.el <= 1999999999), 'it fits the app\'s Int');
+});
+
+test('RVW1 F1: a frame report with no page known for the tab names none (the app then takes the tab in front); a top-frame report keeps its own address', async () => {
+  const h = harness(standardApp());                       // no main-frame request seen: tabTop is empty
+  h.message({ k: 'vid', u: 'https://cdn.example/a.mp4', w: 640, h: 360, d: 90, l: '', p: 'https://player.example/embed/9' }, 1, 'https://player.example/embed/9', 5);
+  h.message({ k: 'vid', u: 'https://cdn.example/b.mp4', w: 640, h: 360, d: 90, l: '', p: PAGE }, 1, PAGE, 0);
+  await tick(20);
+  const got = h.of('vid');
+  assert.equal(got.length, 2);
+  assert.equal(got[0].p, '');
+  assert.equal(got[1].p, PAGE);
+});
+
 test('RX3-S2: the numbers for Diagnostics say how often each web request listener ran and how long it held the thread', async () => {
   const h = harness(standardApp());
   h.mainFrame(PAGE, { requestId: '1' });
