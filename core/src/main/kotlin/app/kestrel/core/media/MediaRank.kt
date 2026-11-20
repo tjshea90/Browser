@@ -130,21 +130,21 @@ object MediaRank {
             val old = best[k]
             if (old == null || c.length > old.length || (c.length == old.length && c.height > old.height)) best[k] = c
         }
-        // RVW2 F24: the same file on two CDN hosts (mirrors, a failover) or under two signed tokens is one file: the same path of at least 8 characters with the same KNOWN length. Equal lengths are required: the
-        // same path with an unknown length proves nothing, and two different films never share a path and a byte count.
-        val byFile = LinkedHashMap<String, MediaCandidate>()
-        var loose = 0
+        // RVW2 F24: the same file on two CDN hosts (mirrors, a failover) or under two signed tokens is one file: the same path of at least 8 characters, the same KNOWN length and a DIFFERENT host. The same host with another
+        // query is another file (movie.mp4?id=7 and ?id=8), an unknown length proves nothing, and two different films never share a path and a byte count on two hosts.
+        val out = ArrayList<MediaCandidate>()
         for (c in best.values) {
             val path = pathOnly(c.url)
-            if (c.length <= 0 || path.length < 8) { byFile["#" + loose++] = c; continue }
-            val k = path + "|" + c.length
-            val old = byFile[k]
-            if (old == null || c.height > old.height) byFile[k] = c
+            if (c.length <= 0 || path.length < 8) { out.add(c); continue }
+            val host = hostOnly(c.url)
+            val twin = out.indexOfFirst { o -> o.length == c.length && pathOnly(o.url) == path && hostOnly(o.url) != host }
+            if (twin < 0) out.add(c) else if (c.height > out[twin].height) out[twin] = c
         }
-        return byFile.values.toList()
+        return out
     }
 
     private fun pathOnly(url: String): String = url.substringAfter("://", url).substringAfter('/', "").substringBefore('?').substringBefore('#')
+    private fun hostOnly(url: String): String = url.substringAfter("://", url).substringBefore('/').substringBefore('?').substringAfterLast('@').lowercase()
 
     internal fun normKey(url: String): String {
         val base = url.substringBefore('#')
