@@ -1,13 +1,13 @@
-# CHECKPOINT 2721 — read me first, then TASKS.md
+# CHECKPOINT 2722 — read me first, then TASKS.md
 
-**Written:** 2026-11-20T04:12:02Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-d6f32d19-c3cwzl` · **builds on:** `e63451b9` (this checkpoint is the commit after it)
+**Written:** 2026-11-20T04:16:53Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-d6f32d19-c3cwzl` · **builds on:** `8f59c511` (this checkpoint is the commit after it)
 
 ## Just done
-RVW1b-4: P1 names.js gate, P10 map caps, N6 disposition cut done with web tests (names 10/10, background RVW1 tests); :geckoapp + :app compile EXIT 0 (V10, F3 edits compile)
+RVW1b-5 CODED: naming N1-N5 N8, security S1 S3 S6 S7 S8 S9 S10; full core+app+geckoapp suite started in background (scratchpad full.log, EXIT line at the end)
 
 ## Do this next
-Next: naming batch in core: N1 EpisodeNames.firstSegmentTitle join of up to 2 non-site segments (stop at a year) + leading '(3)' counter strip (N3), N2 MediaNames.isRealName (quality tags, UUID/hex, digit-heavy, GENERIC + hd sd hq lq high low medium normal original source mobile), N4 FileNames.sanitize keeps U+200C/U+200D, N5 FileNames.cutChars for take(120)/take(80), N8 file-name label without 4K dot; tests EpisodeNamesTest MediaNamesTest FileNamesTest; then security batch (Notifier open gate S1, private URL logs S6, UrlParts backslash S9, secretscan S7)
+Next: read scratchpad full.log (EXIT 0?) and fix failures (use core/build/test-results XML for names); then P6 content.js visibility rescan, P2 engine.js gram pair bitmap (web-tests/engine.test.js parity), P7 (VideoFlow.clearTab on doCloseTab), P11 readFully assets; then Release decision (alpha72 waits for the owner's go: CHECKPOINT 2711) and the owner answer RVW1h
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ Next: naming batch in core: N1 EpisodeNames.firstSegmentTitle join of up to 2 no
 
 ## Last ten checkpoints
 ```
+  e4c77795 ckpt 2721: RVW1b-4: P1 names.js gate, P10 map caps, N6 disposition cut done with web te
   e139e52d ckpt 2720: RVW1b-3 DONE: download engine V1 V2 V6 V7 V10 V12 V13 + S4 S5 fixed with tes
   25206010 ckpt 2719: RVW1b-2 DONE: F7 F10 F14 F15 F18 F20 F22 fixed with tests (core MediaSniff/M
   5364b783 ckpt 2718: RVW1b-1 DONE: finder F1 F2 F3 F4 F9 F12 fixed with tests (finder2.test.js 6/
@@ -25,8 +26,7 @@ Next: naming batch in core: N1 EpisodeNames.firstSegmentTitle join of up to 2 no
   d9a44bf6 ckpt 2714: RVW1a speed lane saved to research/REVIEW_2026-11-20_SPEED.md (P1-P11); secu
   cf89270d ckpt 2713: RVW1a security lane saved to research/REVIEW_2026-11-20_SECURITY.md (S1-S10,
   6a9b6024 ckpt 2712: RVW1 written into TASKS.md in the owner's words (whole-browser review + vide
-  9bdcb1ba ckpt 2711: DG2: owner pasted the tail of the same Diagnostics (events +2892..+2925 s): 
 ```
 
-(5 automatic checkpoint(s) since the last deliberate one — the
+(12 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
