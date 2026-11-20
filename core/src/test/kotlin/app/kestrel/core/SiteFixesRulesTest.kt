@@ -53,6 +53,7 @@ class SiteFixesRulesTest {
         assertTrue(fixes.contains("""EXTENSION_ID = "webcompat@mozilla.org""""))
         assertTrue(fixes.contains("""ASSET_URI = "resource://android/assets/webcompat/""""))
         assertTrue("Diagnostics shows the line", activity.contains("SiteFixes.statusLine()"))
+        assertTrue("the switch follows at once, but only a change of THIS switch reaches the engine", activity.contains("SiteFixes.settingsChanged(applicationContext)") && fixes.contains("if (applied == Prefs.get(ctx).siteFixes) return"))
     }
 
     @Test fun theSwitchIsOnByDefaultAndPartOfBackups() {
