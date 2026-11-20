@@ -1001,7 +1001,7 @@ browser.webRequest.onBeforeRedirect.addListener(function (d) {
 }, { urls: ['http://*/*', 'https://*/*'], types: ['media', 'xmlhttprequest', 'other'] });
 var jsonSeen = new Map();   // tabId -> JSON answers read on this page
 function jsonUrlsOf(text) {
-  var t = text.replace(/\\u002f/gi, '/').replace(/\\u0026/gi, '&').replace(/\\\//g, '/'), out = [], seen = {}, m;
+  var t = (text.length > JSON_SCAN_MAX ? text.slice(0, JSON_SCAN_MAX) : text).replace(/\\u002f/gi, '/').replace(/\\u0026/gi, '&').replace(/\\\//g, '/'), out = [], seen = {}, m;
   JSON_FIND.lastIndex = 0;
   while ((m = JSON_FIND.exec(t)) !== null && out.length < JSON_MAX_URLS) { if (!seen[m[0]]) { seen[m[0]] = 1; out.push(m[0]); } }
   return out;
