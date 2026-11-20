@@ -985,7 +985,10 @@ var JSON_WORDS = ['video', 'player', 'config', 'playlist', 'manifest', 'media', 
 var JSON_URLS = [];
 (function () { for (var i = 0; i < JSON_WORDS.length; i++) { JSON_URLS.push('http://*/*' + JSON_WORDS[i] + '*'); JSON_URLS.push('https://*/*' + JSON_WORDS[i] + '*'); } })();
 var JSON_CT = /^(?:application\/(?:[a-z0-9.+-]*\+)?json|text\/(?:plain|json|javascript)|application\/javascript)\b/i;
-var JSON_FIND = /https?:\/\/[^\s"'<>()\\]+?\.(?:m3u8|mpd|mp4|webm|m4v|mov|mp3|m4a)(?![A-Za-z0-9_\/%-]|\.[A-Za-z0-9])(?:\?[^\s"'<>()\\]*)?/gi;
+// RVW3 SC4: the part before the extension is BOUNDED ({1,600}). Unbounded, a body made of `http://` repeated followed by `.mp4x` starts a scan at every 7th character and each scan runs to the end before the
+// look-ahead refuses it: quadratic (measured: 131 KB = 1.0 s on a desktop, 4x per doubling, this runs in the PARENT process where every page load waits). Bounded it is linear; no real media address has 600 characters before its extension.
+var JSON_FIND = /https?:\/\/[^\s"'<>()\\]{1,600}?\.(?:m3u8|mpd|mp4|webm|m4v|mov|mp3|m4a)(?![A-Za-z0-9_\/%-]|\.[A-Za-z0-9])(?:\?[^\s"'<>()\\]*)?/gi;
+var JSON_SCAN_MAX = 131072;   // RVW3 SC4: of an answer that may be 256 KB only the first 128 KB is searched (a player configuration is far smaller)
 // RVW2 F16: media / script requests that were REDIRECTED: final address -> the address the page first asked for. The page's own <video> reports its currentSrc (the first address); the response that is sniffed carries
 // the last one. The first address goes along with the final one (`ru`) so the app can match what the element said.
 var redirFrom = new Map();
