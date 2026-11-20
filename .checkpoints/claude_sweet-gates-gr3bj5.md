@@ -1,21 +1,22 @@
-# CHECKPOINT 2759 — read me first, then TASKS.md
+# CHECKPOINT 2760 — read me first, then TASKS.md
 
-**Written:** 2026-11-20T19:31:27Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/sweet-gates-gr3bj5` · **builds on:** `acdd3825` (this checkpoint is the commit after it)
+**Written:** 2026-11-20T19:55:48Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/sweet-gates-gr3bj5` · **builds on:** `7810b2fc` (this checkpoint is the commit after it)
 
 ## Just done
-RVW5 written into TASKS.md in the owner's words (new levers: speed, playback, finder, naming, efficiency). Private clone ../kestrel-private is MISSING: add_repo kestrel-private was denied twice by the permission classifier, so INBOX/OUTBOX capture is off this session (told to the owner at the end).
+RVW5: coded + tested in core (media tests 524 of 524 green): NA1 title cleaning drops the site tail for short host labels / 'Video Dailymotion' / 'Wikimedia Commons' / ' on Vimeo' / 'File:' + extension (EpisodeNames, real titles from tools/sitelab/realnames.js); FD1 MediaSniff.isGoogleAdVideo (ted.com dclk_video_ads); FD2 MediaList.markParts + SerialName (abcnews live: numbered .mp4 parts); PB11 brightness window write only when the 1/255 step changes (GestureMath.sameBrightnessStep + VideoLevels, test written, run pending); research/REVIEW_2026-11-23_RVW5.md written; new tools realnames.js reqbench.js. NOT yet run: :app/:geckoapp unit tests, lint, web npm test, PlayerGesturesTest.
 
 ## Do this next
-RVW5a: run tools/sitelab/realfinder.js on real video pages for naming + finder evidence (NODE_PATH=$(npm root -g) node tools/sitelab/realfinder.js url ...; max 3 urls per call), write research/REVIEW_2026-11-23_RVW5.md; then RVW5b PB9 PB10 PB11 PB8 with tests
+RVW5e/f: run the whole suite in the background (./gradlew --offline -q :core:test :app:testDebugUnitTest :geckoapp:testDebugUnitTest :app:lintDebug; cd web-tests && npm test), then tick RVW5a-d in TASKS.md with evidence, bump geckoapp versionCode 177 / 0.3.0-alpha76, bash tools/sync-ext-version.sh, write docs/handoff/ALPHA76_RELEASE_NOTE.txt, bash ship.sh gecko, ONE dispatch (android.yml app=gecko full_build=true ref claude/sweet-gates-gr3bj5), record-release, answer the owner
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M TASKS.md
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  58b7c173 ckpt 2759: RVW5 written into TASKS.md in the owner's words (new levers: speed, playback
   80ae116d ckpt 2758: RVW4 DONE AND SHIPPED: alpha75 RELEASED AND RECORDED = kestrel-g-v0.3.0-alph
   a0ad95ec ckpt 2757: REL75b: alpha75 DISPATCHED ONCE (android.yml app=gecko full_build=true ref c
   eebefd5f ckpt 2756: gated kestrel-g-v0.3.0-alpha75 (gecko code 176) and pushed it: handoff self-
@@ -25,5 +26,7 @@ RVW5a: run tools/sitelab/realfinder.js on real video pages for naming + finder e
   d637614b ckpt 2752: NL1: licence row (docs/FILTER-LISTS.md) + HANDOFF engine step written; emula
   85af50a4 ckpt 2751: RVW4-NL1 code done and compiling: Gradle prepareWebcompat (AAR from Mozilla 
   934b8dad ckpt 2750: RVW4a: researched. Engine prefs / downloads / finder are saturated (all chea
-  8d40d448 ckpt 2749: RVW4 written into TASKS.md in the owner's words (new levers for speed, compa
 ```
+
+(14 automatic checkpoint(s) since the last deliberate one — the
+session was still mid-step. `git diff` against it shows what changed.)
