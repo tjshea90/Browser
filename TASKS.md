@@ -986,3 +986,12 @@ Real engine, Keep mode: sound stops when the app is left (page clock frozen 0.0 
   - [x] REL72b (DONE 2026-11-20: gates passed here, ONE dispatch, run 44678143468 all jobs green, certificate verified on the APK, Release kestrel-g-v0.3.0-alpha72 with the APK) bash ship.sh gecko with that note (local gates), ONE dispatch of android.yml app=gecko full_build=true, wait for tag + all jobs + Release with APK
   - [x] REL72c (recorded in BUILDLOG.md, identical note) bash tools/record-release.sh <tag> with the IDENTICAL note after the run is green; the Release link goes to the owner on its own line
   - [ ] REL72d tell the owner what is still open (from TASKS.md [ ] / [~] and the RVW1b-8 not-done list), in plain words
+
+## Owner request 2026-11-20 (after alpha72 shipped) {ccr-d6f32d19-c3cwzl 2026-11-20}
+- [~] RVW2 (owner, verbatim) "Do all the code tasks from today's review" = every item in research/REVIEW_2026-11-20*.md whose STATUS is still OPEN or NOT DONE and that is CODE (not owner decisions, not tablet-only measurements)
+  - [ ] RVW2a finder: F13 (iframe element replaced = old server's rows stay), F16 (redirecting video endpoint: facts attach to the wrong address), F17 (variant / audio playlists counted as videos, master looked at first), F19 (a late probe brings back a dropped server's row), F24 (same file on two CDN hosts = two rows)
+  - [ ] RVW2b download: V3 (206 with an unknown total ends the file after the first window), V4 (single-file DASH / big segment resumes instead of restarting at byte 0), V8 (Period-level SegmentTemplate / List / Base + a true error message), V11 (init segment encrypted by EXT-X-KEY is decrypted), N7 (extension rules: Dune.Part.Two.2024, download.php with video/mp4), download S1 (foreground service onTimeout on Android 15/16)
+  - [ ] RVW2c security: S2 (auth prompt names the challenging server: read the GeckoView 160 AuthOptions API first)
+  - [ ] RVW2d speed: P5a (scriptlets-main.js builds its library only when an event has calls), P5b (guard-main.js sweepFrames gate), P8 (session write on Io.fast), P9 (idle wake-ups: one beat for watchdog / LastRun / CpuMeter)
+  - [ ] RVW2e NOT CODE or not doable here, to be said plainly: P3 (needs the tablet), P4 (owner decision on Firefox background traffic), S7 marker exemption (kept on purpose), N3 'Watch Dogs' leading-verb rule and og:title names (trade-off, no real-site evidence)
+  - [ ] RVW2f whole suite green (core + app + geckoapp + web npm test + lint), review STATUS columns updated, answer the owner; NO release unless the owner asks
