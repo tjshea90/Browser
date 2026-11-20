@@ -188,7 +188,11 @@ object EpisodeNames {
     private fun firstSegmentTitle(text: String, host: String, last: Boolean = false, dropYear: Boolean, join: Boolean = false): String {
         var t = COUNTER.replace(SERIES_NOTE.replace(text, " "), "")
         if (dropYear) t = PAREN_WITH_YEAR.replace(t, " ")
-        val segments = t.split(SEPARATOR).map { it.trim() }.filter { it.isNotEmpty() }.filterNot { isSite(it, host) }
+        val labels = registrableLabel(host)
+        // RVW5: measured on real pages (research/REVIEW_2026-11-23_RVW5.md): "Latest Videos | CNN", "Tiny Desk : NPR", "... | TED Talk", "... - Video Dailymotion", "... - Wikimedia Commons", "Vimeo Staff Picks on Vimeo"
+        // kept the site in the file name because the host's label is under four letters or the site's name is one word of a longer tail. Only pieces AFTER the first are judged that way: the first is the title.
+        val segments = t.split(SEPARATOR).map { dropOnSite(it.trim(), labels) }.filter { it.isNotEmpty() }
+            .filterIndexed { i, s -> !isSite(s, host) && !(i > 0 && isSiteTail(s, labels)) }
         if (join && !last) {
             val parts = ArrayList<String>()
             for (seg in segments) {
