@@ -75,8 +75,23 @@ object LastLookRules {
 
     private fun bare(url: String): String = url.substringBefore('#')
 
+    /**
+     * EM1k: what a picture was taken under. The system's night mode ([systemNight], Android's UI_MODE_NIGHT bits) changes how a page looks ONLY while "Dark pages" follows the system ([webDark] 0);
+     * with dark forced (1) or never (2) a page looks the same by day and by night, so a picture taken by day was refused after sunset for nothing (an automatic dark theme on the tablet would do that every evening).
+     */
+    fun appearanceKey(skin: String, webDark: Int, systemNight: Int): String = skin + ":" + webDark + ":" + (if (webDark == 0) systemNight else 0)
+
     /** The same page (the #fragment aside). */
     fun samePage(a: String, b: String): Boolean = bare(a) == bare(b)
+
+    /**
+     * EM1k: a page that never reports "load finished" (ads, streams and trackers keep it busy) was never photographed, so at the next start there was no picture of it and the plain cover showed. At the
+     * moment of LEAVING ([why] = "pause") a page that is still loading may be photographed when it has painted AS THIS ADDRESS: [paintedFor] is the address of the engine's last first contentful paint,
+     * and a navigation that has started but not painted yet still shows the old page under the new address (that picture would be stored under the wrong address, TP1), so then it stays a no.
+     * Every other trigger keeps the old rule (a loading page is not photographed while the person reads: a read-back during a heavy load costs frames).
+     */
+    fun mayTakeWhileLoading(why: String, paintedFor: String, tabUrl: String): Boolean =
+        why == "pause" && paintedFor.isNotEmpty() && samePage(paintedFor, tabUrl)
 
     /** Only real web pages: not about:, data:, a blank page, the new-tab page or an error page (the caller has already left those out), and no address with a password in it. */
     fun worthKeeping(url: String): Boolean {
@@ -88,7 +103,21 @@ object LastLookRules {
 
     /** True when the saved picture may be shown for a tab that is on [tabUrl] now: the same page (the #fragment aside), engine, skin, dark-pages and desktop-site choice. */
     fun usable(meta: LastLookMeta, tabUrl: String, engine: String, skin: String, dark: Boolean, desktop: Boolean): Boolean =
-        samePage(meta.url, tabUrl) && meta.engine == engine && meta.skin == skin && meta.dark == dark && meta.desktop == desktop
+        whyNot(meta, tabUrl, engine, skin, dark, desktop) == null
+
+    /**
+     * EM1k (owner 2026-11-19: at the next start he still sees the plain "Opening <host>" cover): null when the saved picture may be used, else the ONE word that says what is different
+     * ("page" = the picture shows another address than the tab's, "engine", "night" = only the system's night mode differs, "skin", "dark", "desktop"). The start-up path writes the word into the Health list, so the next Diagnostics
+     * names the cause instead of leaving a guess. Same order as the old rule: address first.
+     */
+    fun whyNot(meta: LastLookMeta, tabUrl: String, engine: String, skin: String, dark: Boolean, desktop: Boolean): String? = when {
+        !samePage(meta.url, tabUrl) -> "page"
+        meta.engine != engine -> "engine"
+        meta.skin != skin -> if (meta.skin.substringBeforeLast(':', "?") == skin.substringBeforeLast(':', "!")) "night" else "skin"
+        meta.dark != dark -> "dark"
+        meta.desktop != desktop -> "desktop"
+        else -> null
+    }
 
     /** [metaW] x [metaH] is the picture, [viewW] x [viewH] the page area it has to fill. */
     fun fit(metaW: Int, metaH: Int, viewW: Int, viewH: Int): LookFit {
