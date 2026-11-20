@@ -23,6 +23,17 @@ class SuggesterTest {
     private val main = lex()
     private fun s(typed: String, prev: String? = null, prev2: String? = null, pm: PersonalModel? = null, n: Int = 3) = Suggester.suggest(main, pm, keys, typed, prev, prev2, n)
 
+    @Test fun aVulgarWordIsNeverOfferedAsTheNextWordUnlessThePersonUsesIt() {
+        val l = LexiconFile.read(LexiconFile.build(listOf("pink", "floyd", "pussy", "cat", "zzfiller").mapIndexed { i, w -> LexiconFile.Entry(w, if (w == "zzfiller") 400_000_000_000L else 50_000_000L - i * 1_000_000L) },
+            listOf(LexiconFile.Pair("pink", "pussy", 900_000L), LexiconFile.Pair("pink", "floyd", 500_000L), LexiconFile.Pair("pink", "cat", 100_000L))))
+        val plain = Suggester.nextWords(l, null, "pink", null, 3).words
+        assertEquals(listOf("floyd", "cat"), plain)
+        // letters the person typed still complete it, and a word they use themselves is theirs
+        assertTrue(Suggester.suggest(l, null, keys, "pus", null, null, 3).words.contains("pussy"))
+        val pm = PersonalModel(); repeat(3) { pm.add("pink", "pussy", 1f, null) }
+        assertTrue(Suggester.nextWords(l, pm, "pink", null, 3).words.contains("pussy"))
+    }
+
     @Test fun completionsAreTheMostCommonWordsThatStartWithTheLetters() {
         val r = s("th")
         assertEquals("the", r.words.first()); assertTrue(r.words.containsAll(listOf("that", "this")))
