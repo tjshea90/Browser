@@ -18,7 +18,7 @@ class SecurityRulesTest {
     // SC1: the film's address is the page's word and the player is the APP (the engine's local-network blocking does not apply to it)
     @Test fun kestrelsPlayerOpensOnlyHttpAddressesAndNeverOnTheWordOfAPageOnTheLocalNetwork() {
         val factory = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/PlayerFactory.kt")
-        val code = factory.lines().filterNot { it.trimStart().startsWith("//") && !it.trimStart().startsWith("import") }.joinToString("\n")
+        val code = factory.lines().filterNot { it.trimStart().startsWith("//") }.joinToString("\n")       // (comments may name what was removed)
         assertFalse("the player must not use DefaultDataSource (it opens file:, content:, asset: and rawresource: addresses a page's playlist can name)", code.contains("DefaultDataSource"))
         assertTrue("the sources are fed by the HTTP data source", code.contains("val data: DataSource.Factory = http"))
         val flow = source("geckoapp/src/main/kotlin/app/kestrel/browser/web/VideoFlow.kt")
