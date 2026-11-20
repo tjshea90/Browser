@@ -84,6 +84,6 @@ class PageYieldTest {
     @Test fun noFilmAndNoPageChangesNothing() {
         assertEquals(0, DownloadController.effectiveKBps(0, pageBusy = false, yieldToPages = true, filmBusy = false))
         assertEquals(1024, DownloadController.effectiveKBps(1024, pageBusy = false, yieldToPages = true, filmBusy = false))
-        assertEquals(0, DownloadController.effectiveKBps(-5, pageBusy = false, yieldToPages = true, filmBusy = true).coerceAtMost(0).let { 0 })
+        assertEquals("a negative owner limit means no limit, so the film rate applies", DownloadController.FILM_KBPS, DownloadController.effectiveKBps(-5, pageBusy = false, yieldToPages = true, filmBusy = true))
     }
 }
