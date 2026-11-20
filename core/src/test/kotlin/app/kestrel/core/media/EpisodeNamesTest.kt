@@ -102,7 +102,7 @@ class EpisodeNamesTest {
         assertEquals("Tiny Desk", EpisodeNames.cleanTitle("Tiny Desk : NPR", "www.npr.org"))
         assertEquals("Vimeo Staff Picks", EpisodeNames.cleanTitle("Vimeo Staff Picks on Vimeo", "vimeo.com"))
         assertEquals("Big Buck Bunny", EpisodeNames.cleanTitle("Big Buck Bunny - Video Dailymotion", "www.dailymotion.com"))
-        assertEquals("File - Big Buck Bunny 4K.webm", EpisodeNames.cleanTitle("File:Big Buck Bunny 4K.webm - Wikimedia Commons", "commons.wikimedia.org"))
+        assertEquals("Big Buck Bunny 4K", EpisodeNames.cleanTitle("File:Big Buck Bunny 4K.webm - Wikimedia Commons", "commons.wikimedia.org"))
         assertEquals("Popeye for President - Paramount Pictures", EpisodeNames.cleanTitle("Popeye for President : Paramount Pictures : Free Download, Borrow, and Streaming : Internet Archive", "archive.org"))
     }
 

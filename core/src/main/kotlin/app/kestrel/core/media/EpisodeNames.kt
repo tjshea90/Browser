@@ -208,7 +208,8 @@ object EpisodeNames {
 
     /** One piece of a title without the words around a title that are not part of it (a leading "Watch", "online free" at the end, an "HD" tag); "" when nothing is left. */
     private fun tidySegment(piece: String): String {
-        var s = LEADING_NOISE.replace(piece, "")
+        var s = FILE_NAMESPACE.replace(LEADING_NOISE.replace(piece, ""), "")
+        s = FILE_EXT_TAIL.replace(s, "")   // RVW5: a file page's title ends in the file's own extension ("Big Buck Bunny 4K.webm")
         var changed = true
         while (changed) {
             changed = false
@@ -233,6 +234,10 @@ object EpisodeNames {
         }
         return false
     }
+
+    /** RVW5: MediaWiki's "File:" in front of a file page's title (commons.wikimedia.org), and a media file extension at the end of a title. */
+    private val FILE_NAMESPACE = Regex("""^File:\s*""")
+    private val FILE_EXT_TAIL = Regex("""(?<=.{3})\.(?:mp4|m4v|webm|mkv|ogv|ogg|mov|avi|m3u8|mpd)$""", OPTS)
 
     /** Words that sit next to a site's own name in a title tail: "TED Talk", "CNN Video", "BBC News", "Wikimedia Commons", "Video Dailymotion". */
     private val SITE_FILLER = setOf("video", "videos", "talk", "talks", "news", "official", "channel", "the", "tv", "app", "network", "home", "online", "site", "plus", "commons", "archive", "library", "watch", "player")
