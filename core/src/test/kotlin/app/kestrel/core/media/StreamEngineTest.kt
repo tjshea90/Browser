@@ -943,6 +943,7 @@ class StreamEngineTest {
         h.cdn.gate = { req -> if (req.url.endsWith("/s0.ts")) release.await(25, java.util.concurrent.TimeUnit.SECONDS); null }
         val id = h.enqueue(pl)
         Thread.sleep(1_500)
+        println("DEBUG-V13 state=${h.view(id)?.state} done=${h.view(id)?.done} requests=${h.cdn.requests.size} first=${h.cdn.requests.take(6)} files=${h.store.stagedFiles(id).take(10)}")
         val staged = h.store.stagedFiles(id).count { it.endsWith(".seg") }
         assertTrue("read-ahead is bounded: $staged staged of 80 while the first is stuck", staged in 8..20)
         release.countDown()
