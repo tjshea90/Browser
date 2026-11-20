@@ -2667,7 +2667,7 @@ open class BrowserActivity : Activity(), DockListener {
         override fun prefsChanged() {
             for (t in tabs) { t.shields = Shields.effective(prefs, t.topHost); syncEngineProtection(t) }
             GeckoEngine.applyPrefs(applicationContext)
-            if (app.kestrel.browser.web.SiteFixes.started()) app.kestrel.browser.web.SiteFixes.apply(applicationContext) // NL1: the Settings switch follows at once once the first page has started the timer
+            app.kestrel.browser.web.SiteFixes.settingsChanged(applicationContext) // NL1: the Settings switch follows at once once the first page has started the timer
             miniNav.available = prefs.miniNavToggle && !fullscreenOn
             miniNav.setGlideEnabled(prefs.glideTyping)
             app.kestrel.browser.net.WifiBoost.set(this@BrowserActivity, prefs.labWifiBoost) // the Network lab switch takes effect at once (the browser is on screen: this is its Settings)

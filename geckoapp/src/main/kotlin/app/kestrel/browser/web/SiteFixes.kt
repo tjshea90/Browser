@@ -26,8 +26,15 @@ object SiteFixes {
     @Volatile private var scheduled = false
     @Volatile private var line = "Site fixes: not started yet (they start ${DELAY_MS / 1000} s after the first page has loaded)"
 
-    /** True once the first page has started the timer (the Settings switch only acts after that). */
-    fun started(): Boolean = scheduled
+    /** The state the engine was last asked for (null = never): the Settings screen calls [settingsChanged] for EVERY switch, only a change of this one is passed on. */
+    @Volatile private var applied: Boolean? = null
+
+    /** A Settings switch changed. Acts only once the first page has started the timer, and only when this switch's value is not the one already applied. Main thread. */
+    fun settingsChanged(ctx: Context) {
+        if (!scheduled) return
+        if (applied == Prefs.get(ctx).siteFixes) return
+        apply(ctx)
+    }
 
     /** One line for Diagnostics. */
     fun statusLine(): String = line
@@ -43,6 +50,7 @@ object SiteFixes {
     /** Starts or stops the extension to match Settings; also what the switch calls. Main thread. */
     fun apply(ctx: Context) {
         val on = Prefs.get(ctx).siteFixes
+        applied = on
         val controller = try { GeckoEngine.runtime(ctx).webExtensionController } catch (e: Throwable) { line = "Site fixes: engine not ready"; return }
         if (on) install(controller) else stopIfRunning(controller)
     }
