@@ -978,11 +978,11 @@ Real engine, Keep mode: sound stops when the app is left (page clock frozen 0.0 
   - [~] RVW1e (V1 V2 V6 V7 V9 V10 V12 V13 S4 S5 done; V3 V4 V8 V11 open) DOWNLOAD engine: more sources saved correctly (HLS fMP4 + separate audio, DASH multi-period / SegmentBase+sidx, subtitles, byte-range, expired links), resume/pause, never a half-file called finished
   - [~] RVW1f (P1 P2 P6 P7 P10 P11 done; P2 measured at only 2-9 percent; P3 P4 P5 P8 P9 open) SPEED and LIGHTNESS: startup, hot-path allocations, memory, battery, only changes a measurement or a test proves
   - [~] RVW1g (S1 S3 S4 S5 S6 S8 S9 S10 done, S7 partly; S2 open) SECURITY: findings of the security lane fixed or documented in research/SECURITY.md
-  - [ ] RVW1h answer the owner in plain words (found / fixed / NOT run on the tablet), re-list open items, Release link only if a build ships (alpha72 is still waiting for the owner's go per CHECKPOINT 2711)
+  - [x] RVW1h (answered in the reply that followed the review, then again with the Release link) answer the owner in plain words (found / fixed / NOT run on the tablet), re-list open items, Release link only if a build ships (alpha72 is still waiting for the owner's go per CHECKPOINT 2711)
 
 ## Owner request 2026-11-20 (second message of this session, the GO for alpha72) {ccr-d6f32d19-c3cwzl 2026-11-20}
-- [~] REL72 (owner, verbatim) "Release the next version and tell me what is still open tasks" -> alpha72 = RVW1 review fixes + EM1k + DG1 code that waited for the go (versionCode 173)
+- [x] REL72 (alpha72 RELEASED AND RECORDED 2026-11-20: https://github.com/tjshea90/Browser/releases/tag/kestrel-g-v0.3.0-alpha72) (owner, verbatim) "Release the next version and tell me what is still open tasks" -> alpha72 = RVW1 review fixes + EM1k + DG1 code that waited for the go (versionCode 173)
   - [x] REL72a (versionCode 173 / 0.3.0-alpha72, extension version synced, note written) bump geckoapp versionCode 173 / 0.3.0-alpha72, bash tools/sync-ext-version.sh, write docs/handoff/ALPHA72_RELEASE_NOTE.txt (ASCII, no double quotes or backslashes)
-  - [ ] REL72b bash ship.sh gecko with that note (local gates), ONE dispatch of android.yml app=gecko full_build=true, wait for tag + all jobs + Release with APK
-  - [ ] REL72c bash tools/record-release.sh <tag> with the IDENTICAL note after the run is green; the Release link goes to the owner on its own line
+  - [x] REL72b (DONE 2026-11-20: gates passed here, ONE dispatch, run 44678143468 all jobs green, certificate verified on the APK, Release kestrel-g-v0.3.0-alpha72 with the APK) bash ship.sh gecko with that note (local gates), ONE dispatch of android.yml app=gecko full_build=true, wait for tag + all jobs + Release with APK
+  - [x] REL72c (recorded in BUILDLOG.md, identical note) bash tools/record-release.sh <tag> with the IDENTICAL note after the run is green; the Release link goes to the owner on its own line
   - [ ] REL72d tell the owner what is still open (from TASKS.md [ ] / [~] and the RVW1b-8 not-done list), in plain words
