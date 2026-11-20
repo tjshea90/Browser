@@ -1744,6 +1744,7 @@ test('RVW1 N6: a long percent-encoded file name in Content-Disposition is not cu
 
 test('RVW1 P10: the per-tab maps of the sniffer do not grow with the number of tabs ever opened', async () => {
   const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '1' });
   await ready(h);
   for (let t = 1; t <= 300; t++) {
     h.listeners.before({ type: 'main_frame', url: 'https://page.example/' + t, tabId: t, frameId: 0, requestId: String(1000 + t) });
