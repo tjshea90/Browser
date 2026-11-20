@@ -1007,3 +1007,10 @@ Real engine, Keep mode: sound stops when the app is left (page clock frozen 0.0 
 ## Owner message 2026-11-20 (after alpha73) {ccr-d6f32d19-c3cwzl 2026-11-20}
 - [x] P4DEC (owner, verbatim) "Explain p3, and keep the p4 traffic" -> DECISION: Firefox's own background traffic (Remote Settings poll, Safe Browsing lists, CRLite, the portal check) STAYS AS IT IS: no pref change, Safe Browsing stays on; research/REVIEW_2026-11-20_SPEED.md P4 and SECURITY.md B14 / B18 are closed by this decision
 - [x] P3EXPL (answered in plain words, no code) P3 = gfx.webrender.precache-shaders = true (gecko-prefs.txt:32): what it does, why it was never measured, what the owner's tablet would have to measure
+
+## Owner request 2026-11-20 (new session, branch ccr-4efedacd-v3co75) {ccr-4efedacd-v3co75 2026-11-20}
+- [~] RVW3 (owner, 2026-11-20, verbatim) "Review and improve this app for speed, video playback smoothness, and security" {ccr-4efedacd-v3co75 2026-11-20}
+  - [ ] RVW3a three read-only review lanes on the CURRENT tree (playback smoothness of Kestrel's own player AND page video in Gecko; security; speed), each finding with file:line, skipping everything REVIEW-EXTERNAL-1..4, REVIEW_ALPHA48, AUDIT-2026-11, RVW1 (research/REVIEW_2026-11-20*.md) and ANS60 already closed; written to research/REVIEW_2026-11-21*.md with a STATUS column
+  - [ ] RVW3b read every finding against the code myself (reviewers can be wrong), drop the false ones, fix every VERIFIED one with the smallest safe change + one test each (core JVM test, web-tests, or app/geckoapp unit test)
+  - [ ] RVW3c whole suite green (:core:test :app:testDebugUnitTest :geckoapp:testDebugUnitTest :app:lintDebug, web-tests npm test), then ship (standing rule REL-STANDING: bump versionCode 175 / alpha74, sync-ext-version, ship.sh gecko, ONE dispatch, record-release)
+  - [ ] RVW3d answer the owner in plain words: found / fixed / NOT run on the tablet; Release link on its own line; re-list open items
