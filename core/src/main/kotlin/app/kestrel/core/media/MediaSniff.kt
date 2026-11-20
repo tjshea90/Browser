@@ -27,6 +27,7 @@ object MediaSniff {
         if (ext == "m3u" && (ct in genericTypes || ct == "text/plain" || ct.startsWith("audio/"))) return MediaKind.HLS
         if (ct == "application/dash+xml" || ext == "mpd") return MediaKind.DASH
         if (ct in segmentTypes || ext in segmentExts) return null
+        if (isSegmentName(url)) return null   // RVW1 F15
         if (ct.startsWith("video/") || ct.startsWith("audio/")) return MediaKind.FILE
         if (ct == "application/ogg" || ct == "application/mp4" || ct == "application/x-matroska") return MediaKind.FILE
         if (ct in genericTypes && ext in fileExts) return MediaKind.FILE
@@ -70,6 +71,14 @@ object MediaSniff {
         }
         return found
     }
+
+    /**
+     * RVW1 F15: a numbered part of a stream that is served under a media extension (fMP4 / CMAF parts "seg_00012.mp4", "chunk-3-v1-a1.m4s", "frag12.webm"): each distinct address was a row of its own, one more for every
+     * part the player fetched. Only names that say "segment" are taken (never "part1.mp4" or "video1.mp4": a person's own split files); the playlist that lists the parts is the candidate.
+     */
+    fun isSegmentName(url: String): Boolean = segmentName.matches(pathOf(url).substringAfterLast('/'))
+
+    private val segmentName = Regex("^(?:seg|segment|chunk|frag|fragment)s?[-_.]?[0-9]{1,8}(?:[-_.][A-Za-z0-9]{1,8}){0,3}\\.(?:mp4|m4s|m4v|m4a|webm|aac|mp3|cmfv|cmfa)$", RegexOption.IGNORE_CASE)
 
     /** What the first bytes of a response say it is, with the type and the file extension to use for it. */
     class Sniffed(val kind: MediaKind, val mime: String, val ext: String)
