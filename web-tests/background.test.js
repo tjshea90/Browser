@@ -86,7 +86,7 @@ function harness(app, opts) {
         onBeforeRequest: { addListener: (f) => { listeners.before = f; } },
         onBeforeSendHeaders: { addListener: (f) => { listeners.sendHeaders = f; } },
         // the sniffer's listener is not blocking; ANS52h's (the picture size cap of HLS master playlists) is: kept apart so the old tests keep calling `listeners.headers`
-        onHeadersReceived: { addListener: (f, filter, spec) => { if (spec && spec.indexOf('blocking') >= 0) { listeners.hlsHeaders = f; listeners.hlsFilter = filter; listeners.hlsSpec = spec; } else listeners.headers = f; } },
+        onHeadersReceived: { addListener: (f, filter, spec) => { if (spec && spec.indexOf('blocking') >= 0) { if (filter && filter.urls && filter.urls.some((u) => u.indexOf('video*') >= 0)) { listeners.jsonHeaders = f; listeners.jsonFilter = filter; } else { listeners.hlsHeaders = f; listeners.hlsFilter = filter; listeners.hlsSpec = spec; } } else listeners.headers = f; } },
         filterResponseData: (id) => { if (opts.noFilter) throw new Error('no stream filters here'); const fl = fakeStreamFilter(id); filters.push(fl); return fl; },
         onErrorOccurred: { addListener: (f) => { listeners.error = f; } },
         onCompleted: { addListener: (f) => { listeners.completed = f; } },
@@ -1754,4 +1754,76 @@ test('RVW1 P10: the per-tab maps of the sniffer do not grow with the number of t
   const sz = { navId: h.ctx.navId.size, frameParent: h.ctx.frameParent.size, frameDoc: h.ctx.frameDoc.size };
   assert.ok(sz.navId > 0 && sz.frameParent > 0 && sz.frameDoc > 0, 'the code path ran: ' + JSON.stringify(sz));
   assert.ok(sz.navId <= 80 && sz.frameParent <= 60 && sz.frameDoc <= 60, 'bounded: ' + JSON.stringify(sz));
+});
+
+
+// ---------------------------------------------------------------- RVW1 F8: JSON answers that name media (Vimeo's player configuration and its kind)
+const jsonReq = (id, extra) => Object.assign({ requestId: id, tabId: 1, statusCode: 200, method: 'GET', url: 'https://player.example/video/123/config', frameId: 5, parentFrameId: 0, documentUrl: 'https://player.example/embed/123', frameAncestors: [{ url: PAGE, frameId: 0 }, { url: 'https://player.example/embed/123', frameId: 5 }], responseHeaders: [{ name: 'Content-Type', value: 'application/json; charset=utf-8' }] }, extra || {});
+const feed = (fl, text, chunk) => { const b = Buffer.from(text); for (let i = 0; i < b.length; i += chunk || b.length) { const part = b.subarray(i, i + (chunk || b.length)); fl.ondata({ data: part.buffer.slice(part.byteOffset, part.byteOffset + part.byteLength) }); } fl.onstop(); };
+const VIMEO = JSON.stringify({ request: { files: { progressive: [{ url: 'https://vod-progressive.example/exp=1/video/a/720.mp4?x=1', quality: '720p' }, { url: 'https://vod-progressive.example/exp=1/video/a/360.mp4?x=1', quality: '360p' }], hls: { cdns: { fire: { url: 'https://vod.example/a/playlist.m3u8?z=1' } } } } }, title: 'A film' }).replace(/\//g, '\\/');
+
+test('RVW1 F8: the answer of a video-looking endpoint is passed through to the page untouched and every media address in it is reported like one found in the page text', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '1' });
+  assert.ok(h.listeners.jsonHeaders, 'the listener is registered');
+  assert.ok(h.listeners.jsonFilter.urls.every((u) => /^https?:\/\/\*\/\*[a-z]+\*$/.test(u)), 'only narrow video-word patterns reach it: ' + h.listeners.jsonFilter.urls.slice(0, 3));
+  assert.deepEqual(h.listeners.jsonFilter.types, ['xmlhttprequest']);
+  eq(h.listeners.jsonHeaders(jsonReq('j1')), {});
+  const fl = h.filters[h.filters.length - 1];
+  feed(fl, VIMEO, 50);                                          // arrives in pieces
+  assert.equal(fl.body(), VIMEO, 'the page gets exactly the bytes the server sent');
+  assert.ok(fl.closed && !fl.disconnected);
+  await tick(10);
+  const m = h.of('media');
+  assert.deepEqual(m.map((x) => x.u).sort(), ['https://vod-progressive.example/exp=1/video/a/360.mp4?x=1', 'https://vod-progressive.example/exp=1/video/a/720.mp4?x=1', 'https://vod.example/a/playlist.m3u8?z=1']);
+  assert.ok(m.every((x) => x.s === 'dom' && x.p === PAGE && x.l === -1 && x.f === 'https://player.example/embed/123'), JSON.stringify(m[0]));
+});
+
+test('RVW1 F8: not JSON, too big, a failed answer or a request without a tab: no filter is taken at all', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '1' });
+  const n0 = h.filters.length;
+  eq(h.listeners.jsonHeaders(jsonReq('a', { responseHeaders: [{ name: 'Content-Type', value: 'text/html' }] })), {});
+  eq(h.listeners.jsonHeaders(jsonReq('b', { responseHeaders: [{ name: 'Content-Type', value: 'application/json' }, { name: 'Content-Length', value: '900000' }] })), {});
+  eq(h.listeners.jsonHeaders(jsonReq('c', { statusCode: 404 })), {});
+  eq(h.listeners.jsonHeaders(jsonReq('d', { tabId: -1 })), {});
+  eq(h.listeners.jsonHeaders(jsonReq('e', { method: 'PUT' })), {});
+  assert.equal(h.filters.length, n0);
+  eq(h.listeners.jsonHeaders(jsonReq('f', { responseHeaders: [{ name: 'Content-Type', value: 'application/vnd.api+json' }] })), {});
+  assert.equal(h.filters.length, n0 + 1, 'a +json type is read');
+});
+
+test('RVW1 F8: a body over 256 KB is still passed through whole but never scanned; at most 24 answers per page, a new page starts afresh', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '1' });
+  h.listeners.jsonHeaders(jsonReq('big'));
+  const big = h.filters[h.filters.length - 1];
+  const body = '{"u":"https://cdn.example/x.mp4","pad":"' + 'x'.repeat(300000) + '"}';
+  feed(big, body, 65536);
+  assert.equal(big.body().length, body.length, 'everything went through');
+  await tick(10);
+  assert.equal(h.of('media').length, 0, 'too big: not scanned');
+  const n0 = h.filters.length;
+  for (let i = 0; i < 40; i++) h.listeners.jsonHeaders(jsonReq('p' + i));
+  assert.equal(h.filters.length - n0, 23, 'the budget of 24 per page (one was used above)');
+  h.mainFrame('https://other.example/next', { requestId: '50' });
+  const n1 = h.filters.length;
+  h.listeners.jsonHeaders(jsonReq('q1', { requestId: '60' }));
+  assert.equal(h.filters.length, n1 + 1, 'a new page: a fresh budget');
+});
+
+test('RVW1 F8: a stream filter that is not available, or that fails half way, never breaks the answer', async () => {
+  const none = harness(standardApp(), { noFilter: true });
+  none.mainFrame(PAGE, { requestId: '1' });
+  eq(none.listeners.jsonHeaders(jsonReq('n1')), {});
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '1' });
+  h.listeners.jsonHeaders(jsonReq('x1'));
+  const fl = h.filters[h.filters.length - 1];
+  fl.ondata({ data: null });
+  assert.ok(fl.disconnected, 'no data: the filter lets go');
+  h.listeners.jsonHeaders(jsonReq('x2'));
+  const f2 = h.filters[h.filters.length - 1];
+  f2.onerror();
+  assert.ok(f2.disconnected);
 });
