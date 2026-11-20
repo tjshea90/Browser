@@ -23,7 +23,7 @@ async function show(html, o) {
 const collect = (page) => page.evaluate(() => window.KestrelNM.collect());
 const sentNm = (page) => page.evaluate(() => window.__msgs.filter((m) => m && m.k === 'nm'));
 
-const LIST = (act) => `<h1>Ozark</h1><select id="season"><option>Season 1</option><option selected>Season 2</option></select>
+const LIST = (act) => `<iframe></iframe><h1>Ozark</h1><select id="season"><option>Season 1</option><option selected>Season 2</option></select>
   <ul class="episodes"><li class="episode-item ${act === 1 ? 'active' : ''}"><a>Episode 1: Sugarwood</a></li>
   <li class="episode-item ${act === 2 ? 'active' : ''}"><a>Episode 2: Blue Cat</a></li><li class="episode-item ${act === 3 ? 'current' : ''}"><a>Episode 3: My Dripping Sleep</a></li></ul>`;
 
@@ -72,10 +72,27 @@ test('NM1: JSON-LD of a TVEpisode names the show, season, episode and title when
 });
 
 test('NM1: a film page (no episode anywhere) sends nothing; a show heading alone is not enough to send an episode', async () => {
-  const page = await show('<h1>Dune: Part Two</h1><p>A film.</p>');
+  const page = await show('<iframe></iframe><h1>Dune: Part Two</h1><p>A film.</p>');
   await page.waitForTimeout(400);
   assert.equal((await sentNm(page)).length, 1, 'the heading is told (the app ignores a name with no episode)');
   assert.equal((await sentNm(page))[0].e, 0);
+  await page.context().close();
+});
+
+test('RVW1 P1: a page with no video, audio or frame is never scanned (no selector runs after a load or a tap); the moment a player appears the next look reports', async () => {
+  const page = await show('<h1>Ozark</h1><ul class="episodes"><li class="episode-item active"><a>Episode 1: Sugarwood</a></li></ul><p>just a blog post</p>');
+  await page.evaluate(() => {
+    window.__sel = 0;
+    ['querySelectorAll', 'querySelector'].forEach((n) => { [Document.prototype, Element.prototype].forEach((P) => { const o = P[n]; P[n] = function () { window.__sel++; return o.apply(this, arguments); }; }); });
+  });
+  await page.mouse.click(10, 10);
+  await page.waitForTimeout(600);
+  assert.equal(await page.evaluate(() => window.__sel), 0, 'no selector ran');
+  assert.equal((await sentNm(page)).length, 0);
+  await page.evaluate(() => { document.body.appendChild(document.createElement('iframe')); });
+  await page.mouse.click(10, 10);
+  await page.waitForFunction(() => window.__msgs.some((m) => m && m.k === 'nm'), null, { timeout: 5000 });
+  assert.equal((await sentNm(page))[0].e, 1);
   await page.context().close();
 });
 
