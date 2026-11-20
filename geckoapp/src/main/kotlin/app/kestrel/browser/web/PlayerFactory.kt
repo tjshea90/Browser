@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
-import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -16,6 +16,9 @@ import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.upstream.DefaultAllocator
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
+import app.kestrel.core.player.RetryPlan
+import java.util.concurrent.atomic.AtomicBoolean
 import app.kestrel.browser.Flavor
 
 /**
@@ -23,7 +26,19 @@ import app.kestrel.browser.Flavor
  * (HLS or a file, with the page's request headers), the tablet's hardware decoders first, the small buffers of this 2 GB tablet. No surface, no listeners and not prepared: the caller adds those.
  */
 object PlayerFactory {
-    class Built(val player: ExoPlayer, val source: MediaSource)
+    /** [settled]: set by the caller at the first picture; from then on a failed load is retried longer (RVW3 PB1, [RetryAfterPicture]). */
+    class Built(val player: ExoPlayer, val source: MediaSource, val settled: AtomicBoolean = AtomicBoolean(false))
+
+    /**
+     * RVW3 PB1: Media3 tries a failed load three times (waits of 0, 1 and 2 s) and then raises a fatal error: a 15-second dropout on the carrier hotspot ended the film in about three seconds. Once a picture has
+     * been shown ([settled]) the same load is tried [RetryPlan.SETTLED_LOAD_RETRIES] times (about 25 s with the same waits); before the first picture nothing changes (a failure then hands the film back to the page).
+     */
+    private class RetryAfterPicture(private val settled: AtomicBoolean) : DefaultLoadErrorHandlingPolicy() {
+        override fun getMinimumLoadableRetryCount(dataType: Int): Int {
+            val own = super.getMinimumLoadableRetryCount(dataType)
+            return if (settled.get()) maxOf(RetryPlan.SETTLED_LOAD_RETRIES, own) else own
+        }
+    }
 
     /** Is this address a HLS playlist? (the same test for both players) */
     fun isHls(url: String): Boolean = url.substringBefore('?').lowercase().endsWith(".m3u8") || url.contains(".m3u8?", true) || url.contains("/hls/", true)
@@ -33,9 +48,14 @@ object PlayerFactory {
         for (l in headerLines) { val c = l.indexOf(':'); if (c > 0) headers[l.substring(0, c).trim()] = l.substring(c + 1).trim() }
         // ANS60d: a connection that goes quiet on the carrier-routed hotspot is given up after 10 s (it was 20) and the player asks again: the wait before a stalled segment is tried again halves
         val http = DefaultHttpDataSource.Factory().setUserAgent(userAgent()).setDefaultRequestProperties(headers).setAllowCrossProtocolRedirects(true).setConnectTimeoutMs(10_000).setReadTimeoutMs(10_000)
-        val data = DefaultDataSource.Factory(ctx, http)
+        // RVW3 SC1: HTTP(S) only. DefaultDataSource.Factory would also open file:, content:, asset: and rawresource: addresses, and a playlist the PAGE serves can name any of them as a segment or a key (the cross-protocol
+        // redirect above stays: some CDNs send https to http on purpose and a film is not secret; the host of the FIRST address is checked before the player starts, WebHandOver.hostRefused)
+        val data: DataSource.Factory = http
         val item = MediaItem.fromUri(url)
-        val source: MediaSource = if (isHls(url)) HlsMediaSource.Factory(data).createMediaSource(item) else ProgressiveMediaSource.Factory(data).createMediaSource(item)
+        val settled = AtomicBoolean(false)
+        val policy = RetryAfterPicture(settled)
+        val source: MediaSource = if (isHls(url)) HlsMediaSource.Factory(data).setLoadErrorHandlingPolicy(policy).createMediaSource(item)
+            else ProgressiveMediaSource.Factory(data).setLoadErrorHandlingPolicy(policy).createMediaSource(item)
         // hardware decoders first (a software one only when nothing else decodes the format); no extension decoders (software FFmpeg / AV1 on four A53 cores is not a plan)
         val selector = MediaCodecSelector { mime, secure, tunneling -> MediaCodecUtil.getDecoderInfos(mime, secure, tunneling).sortedBy { if (it.hardwareAccelerated && !it.softwareOnly) 0 else 1 } }
         val renderers = DefaultRenderersFactory(ctx).setEnableDecoderFallback(true).setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF).setMediaCodecSelector(selector)
@@ -48,13 +68,14 @@ object PlayerFactory {
         val meter = bandwidthMeter(ctx)
         // WAKE_MODE_NETWORK: while it plays the player holds a Wi-Fi lock (and a CPU wake lock) so that the Wi-Fi chip does not drop into power save between two segments (WAKE_LOCK is in the manifest)
         val p = ExoPlayer.Builder(ctx, renderers).setLoadControl(load).setBandwidthMeter(meter).setWakeMode(C.WAKE_MODE_NETWORK).setHandleAudioBecomingNoisy(true).setAudioAttributes(AudioAttributes.DEFAULT, true).build()
-        return Built(p, source)
+        return Built(p, source, settled)
     }
 
     // ONE meter for the whole run (like ExoPlayer's own singleton): what the first film measured is the next film's first guess, instead of the fixed one
+    // RVW3 PB7: the guess is for EVERY network type, not only Wi-Fi: Media3 files a VPN (the Fast Wi-Fi tunnel, the normal state of this tablet) under "other" and would start from its own much lower default there
     private var sharedMeter: DefaultBandwidthMeter? = null
     @Synchronized private fun bandwidthMeter(ctx: Context): DefaultBandwidthMeter =
-        sharedMeter ?: DefaultBandwidthMeter.Builder(ctx.applicationContext).setInitialBitrateEstimate(C.NETWORK_TYPE_WIFI, INITIAL_LINK_BPS).build().also { sharedMeter = it }
+        sharedMeter ?: DefaultBandwidthMeter.Builder(ctx.applicationContext).setInitialBitrateEstimate(INITIAL_LINK_BPS).build().also { sharedMeter = it }
 
     /** ANS60d: how much already-played film is kept for backward seeks, and the link speed assumed until the player has measured one (bit/s). */
     const val BACK_BUFFER_MS = 10_000
@@ -77,7 +98,7 @@ object PlayerFactory {
 
     /** The size cap for Automatic: both sides at most 16:9 of [capH], so portrait and landscape films fall in the same class. */
     fun applyCap(p: ExoPlayer, capH: Int) {
-        val longCap = capH * 16 / 9
+        val longCap = app.kestrel.core.media.PictureCap.longSide(capH)        // RVW3 PB5: 854 for 480 (capH * 16 / 9 gave 853 and left the usual 854 x 480 rung out)
         p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setMaxVideoSize(longCap, longCap).setMaxVideoFrameRate(60).build()
     }
 

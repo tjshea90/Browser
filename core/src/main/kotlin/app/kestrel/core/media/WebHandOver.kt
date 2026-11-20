@@ -1,5 +1,8 @@
 package app.kestrel.core.media
 
+import app.kestrel.core.url.NetHosts
+import app.kestrel.core.url.UrlParts
+
 /**
  * ANS54e (owner message 54, on alpha57: "When I play a video from the web page, the video player is very slow and laggy ... when I press the download button and select play in kestrel's player (test), it is
  * nearly perfect ... I want the web video players to use this"): decides whether the film a page is about to play is played by KESTREL'S OWN PLAYER (Media3 on a SurfaceView) instead of the page's player.
@@ -141,6 +144,14 @@ object WebHandOver {
      * Full screen and a playlist that comes late follow the tap by a while.
      */
     fun pressWindowMs(why: Why): Long = if (why == Why.FULLSCREEN || why == Why.LATE) 30_000L else 15_000L
+
+    /**
+     * RVW3 SC1: the film's address comes from the page (the element's own `src`, or a list the page asked for), and Kestrel's own player is the APP, not the engine: the engine's local-network blocking does not
+     * apply to it. A page on the public internet must not be able to point it, after one innocent tap, at the router, a NAS or a camera of the owner's network ([NetHosts.reachesLocalNetwork]: every spelling).
+     * A page that is itself on the local network (the hotspot gateway, a NAS) may play its own files. An address that has no host counts as refused.
+     */
+    fun hostRefused(pageUrl: String, filmUrl: String): Boolean =
+        !NetHosts.probeAllowed(UrlParts.hostOf(filmUrl).orEmpty(), UrlParts.hostOf(pageUrl).orEmpty())
 
     const val RESUME_WINDOW_MS = 30 * 60_000L      // a film pressed again within this long after Kestrel's player ended continues where the person stopped
 
