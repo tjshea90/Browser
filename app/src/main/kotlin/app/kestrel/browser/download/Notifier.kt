@@ -114,7 +114,8 @@ object Notifier {
             .setContentIntent(openApp(ctx))
         if (!ok && !v.priv) b.addAction(Notification.Action.Builder(null, "Retry", serviceAction(ctx, DownloadService.ACTION_RESUME_ID, 7 + (v.id and 0xff).toInt(), v.id)).build())
         val uri = v.destUri
-        if (ok && uri != null && !v.priv) {
+        // RVW1 S1: "Open" goes straight to the system, so it is not offered for a file the package installer would take (a page chooses a file's name and type): those open from the Downloads list, which looks inside first
+        if (ok && uri != null && !v.priv && !app.kestrel.core.download.ApkIdentity.installerMaybe(v.name, v.mime)) {
             val open = Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse(uri), v.mime ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             b.addAction(Notification.Action.Builder(null, "Open", PendingIntent.getActivity(ctx, (v.id and 0xffff).toInt() + 100, open, PendingIntent.FLAG_IMMUTABLE)).build())
         }
