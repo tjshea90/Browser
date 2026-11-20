@@ -419,6 +419,9 @@ class VideoFlow(private val a: BrowserActivity) {
         if (!pressed) return decline(tab, "no tap of the person just before")   // a page's script can fake the question, not a finger (the tap counts once: it is used up below)
         val known = knownIn(tab, frame).let { k -> if (why == WebHandOver.Why.LATE) k.filter { it.durationMs >= WebHandOver.FILM_MS } else k }   // (a playlist that comes late must be known to be as long as a film: it may be an advertisement)
         val d = WebHandOver.decide(mode, why, el, known)
+        // RVW3 SC1: the film's address is the PAGE's word (the element's own src, or a list it asked for) and Kestrel's player is the APP, not the engine, so the engine's local-network blocking does not apply:
+        // after one innocent tap a public page must not be able to point it at the router, a NAS or a camera of the owner's network (every spelling of such an address: NetHosts.reachesLocalNetwork)
+        if (d != null && WebHandOver.hostRefused(tab.url, d.url)) { lastRefused = null; return decline(tab, "a page on the public internet named a device on the local network") }
         // ANS61 (owner message 61: "it played an advertisement video and I couldn't get to the real video"): an advertisement is never handed over, and a clip Kestrel's player played to its end is not handed over a second
         // time (the same ad for ever): the page plays it itself, so its ad plugin can finish and go on to the film. The finder's own verdict on that very file (an ad box / decoration) counts like the page's ad state.
         val adWhy = when {
