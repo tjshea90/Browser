@@ -411,7 +411,25 @@ test('sniffer: pieces of one file fetched by byte range in the query are one can
   await tick(10);
   const m = h.of('media');
   assert.equal(m.length, 3, 'id=7 once, id=8 once, other.mp4 once');
-  assert.ok(m[0].u.includes('bytestart=0&byteend=999999') && m[0].u.includes('id=7'), 'the first sighting is the one reported');
+  // RVW1 F4: the FILE is reported, not the first piece (its range would save one slice, and its length is the slice's)
+  assert.equal(m[0].u, 'https://cdn.example/v/clip.mp4?id=7', 'the address without the byte range is reported');
+  assert.equal(m[0].l, -1, 'a slice\'s length is not the file\'s');
+  assert.equal(m[1].u, 'https://cdn.example/v/clip.mp4?id=8');
+  assert.equal(m[2].u, 'https://cdn.example/v/other.mp4');
+});
+
+test('RVW1 F4: a piece answered with Content-Range reports the TOTAL as the length, and a plain file keeps its address and length', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  h.listeners.headers(hdr('https://cdn.example/v/a.mp4?oh=ab12&bytestart=0&byteend=999999#frag', 'video/mp4', 1_000_000, { statusCode: 206, responseHeaders: [{ name: 'Content-Type', value: 'video/mp4' }, { name: 'Content-Range', value: 'bytes 0-999999/52428800' }] }));
+  h.listeners.headers(hdr('https://cdn.example/v/b.mp4?token=x&start=30', 'video/mp4', 7_000_000));   // `start` may be a time: left alone
+  await tick(10);
+  const m = h.of('media');
+  assert.equal(m.length, 2);
+  assert.equal(m[0].u, 'https://cdn.example/v/a.mp4?oh=ab12#frag');
+  assert.equal(m[0].l, 52428800, 'the total from Content-Range');
+  assert.equal(m[1].u, 'https://cdn.example/v/b.mp4?token=x&start=30');
+  assert.equal(m[1].l, 7_000_000);
 });
 
 test('sniffer: headers that matter are still read when they come after many that do not', async () => {
