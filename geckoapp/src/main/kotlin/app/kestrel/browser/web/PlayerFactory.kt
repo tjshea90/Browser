@@ -54,9 +54,10 @@ object PlayerFactory {
     }
 
     // ONE meter for the whole run (like ExoPlayer's own singleton): what the first film measured is the next film's first guess, instead of the fixed one
+    // RVW3 PB7: the guess is for EVERY network type, not only Wi-Fi: Media3 files a VPN (the Fast Wi-Fi tunnel, the normal state of this tablet) under "other" and would start from its own much lower default there
     private var sharedMeter: DefaultBandwidthMeter? = null
     @Synchronized private fun bandwidthMeter(ctx: Context): DefaultBandwidthMeter =
-        sharedMeter ?: DefaultBandwidthMeter.Builder(ctx.applicationContext).setInitialBitrateEstimate(C.NETWORK_TYPE_WIFI, INITIAL_LINK_BPS).build().also { sharedMeter = it }
+        sharedMeter ?: DefaultBandwidthMeter.Builder(ctx.applicationContext).setInitialBitrateEstimate(INITIAL_LINK_BPS).build().also { sharedMeter = it }
 
     /** ANS60d: how much already-played film is kept for backward seeks, and the link speed assumed until the player has measured one (bit/s). */
     const val BACK_BUFFER_MS = 10_000
@@ -79,7 +80,7 @@ object PlayerFactory {
 
     /** The size cap for Automatic: both sides at most 16:9 of [capH], so portrait and landscape films fall in the same class. */
     fun applyCap(p: ExoPlayer, capH: Int) {
-        val longCap = capH * 16 / 9
+        val longCap = app.kestrel.core.media.PictureCap.longSide(capH)        // RVW3 PB5: 854 for 480 (capH * 16 / 9 gave 853 and left the usual 854 x 480 rung out)
         p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setMaxVideoSize(longCap, longCap).setMaxVideoFrameRate(60).build()
     }
 
