@@ -402,7 +402,33 @@ var KestrelEngine = (function () {
           if (cEvals - start > MAX_GRAM_EVALS) break;
         }
       }
-      for (var z = 0; z < noToken.length; z++) { evalRule(noToken[z]); if (cImportant) return; }
+      var nt = noTokenFor(cPageHost);   // RVW3 SP1: only the token-less rules this page can reach, in their original order
+      for (var z = 0; z < nt.length; z++) { evalRule(noToken[nt[z]]); if (cImportant) return; }
+    }
+
+    /** RVW3 SP1: the positions (in noToken, ascending) of the token-less rules that can act on [host]: those with no include list plus those filed under one of the page's own suffix / entity hashes. */
+    function noTokenFor(host) {
+      if (noToken.length === 0) return ntPlain;
+      var key = (host === null || host === undefined) ? '' : host;
+      var hit = ntForHost.get(key);
+      if (hit !== undefined) return hit;
+      var pos = ntPlain.slice();
+      if (key !== '') {
+        var ph = pageHashes();
+        for (var k = 0; k < ph.length; k += 2) {
+          var b = ntByDomain.get(ph[k] ^ Math.imul(ph[k + 1], 31));
+          if (b !== undefined) for (var m = 0; m < b.length; m++) pos.push(b[m]);
+        }
+        if (pos.length > ntPlain.length) {
+          pos.sort(function (x, y) { return x - y; });
+          var out = [];
+          for (var q = 0; q < pos.length; q++) if (q === 0 || pos[q] !== pos[q - 1]) out.push(pos[q]);   // (a rule with several include entries that all match is listed once)
+          pos = out;
+        }
+      }
+      if (ntForHost.size >= 64) ntForHost.clear();
+      ntForHost.set(key, pos);
+      return pos;
     }
 
     function domainOk(off) {
