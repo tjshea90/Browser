@@ -600,4 +600,25 @@ class MediaListFramesTest {
         assertEquals("a label already known is kept", false, wire.add(MediaCandidate("https://c.test/clip.mp4", MediaKind.FILE, "", -1, "https://site.test/watch").also { it.label = "480p" }))
         assertEquals("720p", wire.find("https://c.test/clip.mp4")!!.label)
     }
+
+    @Test fun whatThePagesElementSaidAboutARedirectedAddressReachesTheFileTheWireSaw() {
+        // RVW2 F16: <video src="/play?id=1"> answers 302 to a signed CDN file; the element says currentSrc = the first address
+        val first = "https://site.test/play?id=1"; val fin = "https://cdn.test/signed/movie.mp4?sig=abc"
+        fun wire() = MediaCandidate(fin, MediaKind.FILE, "video/mp4", 80_000_000, "https://site.test/watch").also { it.alias = first }
+        val a = MediaList()
+        assertTrue(a.applyInfo(first, 1280, 720, 5_400_000, null, VideoRole.PLAYER, played = true, element = 2, areaPx = 90_000) == false)    // nobody listed it yet: it waits
+        assertTrue(a.add(wire()))
+        val c = a.find(fin)!!
+        assertEquals(720, c.height); assertEquals(5_400_000L, c.durationMs); assertTrue("it played", c.played)
+        assertEquals("found under the address before the redirect too", c, a.find(first))
+        val b = MediaList()                                          // the other order: the wire first, then the element
+        b.add(wire())
+        assertTrue(b.applyInfo(first, 1280, 720, 5_400_000, null, VideoRole.PLAYER, played = true, element = 2, areaPx = 90_000))
+        assertEquals(720, b.find(fin)!!.height)
+        val m = MediaList()                                          // the page's markup listed the first address; the wire then sees the final one: ONE row, with what was learned
+        m.add(MediaCandidate(first, MediaKind.FILE, "", -1, "https://site.test/watch").also { it.fromMarkup = true; it.label = "720p" })
+        m.add(wire())
+        assertEquals(1, m.size)
+        assertEquals("720p", m.find(fin)!!.label); assertEquals("a request that really happened verifies it", false, m.find(fin)!!.fromMarkup)
+    }
 }

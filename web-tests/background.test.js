@@ -88,6 +88,7 @@ function harness(app, opts) {
         // the sniffer's listener is not blocking; ANS52h's (the picture size cap of HLS master playlists) is: kept apart so the old tests keep calling `listeners.headers`
         onHeadersReceived: { addListener: (f, filter, spec) => { if (spec && spec.indexOf('blocking') >= 0) { if (filter && filter.urls && filter.urls.some((u) => u.indexOf('video*') >= 0)) { listeners.jsonHeaders = f; listeners.jsonFilter = filter; } else { listeners.hlsHeaders = f; listeners.hlsFilter = filter; listeners.hlsSpec = spec; } } else listeners.headers = f; } },
         filterResponseData: (id) => { if (opts.noFilter) throw new Error('no stream filters here'); const fl = fakeStreamFilter(id); filters.push(fl); return fl; },
+        onBeforeRedirect: { addListener: (f) => { listeners.redirect = f; } },
         onErrorOccurred: { addListener: (f) => { listeners.error = f; } },
         onCompleted: { addListener: (f) => { listeners.completed = f; } },
       },
@@ -1862,4 +1863,21 @@ test('RVW2 F13: a frame that offered media and is then unloaded (its element rem
   h.listeners.headers(frameHdr('https://cdn.example/s/movie.mp4', 9, FR2));   // the replacement frame (a new id) offers the same file
   await tick(10);
   assert.equal(h.of('media').length, 2, 'news again');
+});
+
+
+test('RVW2 F16: a redirected media request reports the FINAL address and the address the page first asked for', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '1' });
+  assert.ok(h.listeners.redirect, 'the redirect listener is registered');
+  const A = 'https://site.example/play?id=1', B = 'https://edge.example/r/1', C = 'https://cdn.example/signed/movie.mp4?sig=abc';
+  h.listeners.redirect({ type: 'media', url: A, redirectUrl: B, tabId: 1 });
+  h.listeners.redirect({ type: 'media', url: B, redirectUrl: C, tabId: 1 });                   // a chain: the FIRST address is kept
+  h.listeners.headers(hdr(C, 'video/mp4', 9_000_000));
+  h.listeners.headers(hdr('https://cdn.example/plain/other.mp4', 'video/mp4', 9_000_000));     // not redirected: no `ru`
+  await tick(10);
+  const m = h.of('media');
+  assert.equal(m.length, 2);
+  assert.equal(m[0].u, C); assert.equal(m[0].ru, A);
+  assert.equal('ru' in m[1], false);
 });

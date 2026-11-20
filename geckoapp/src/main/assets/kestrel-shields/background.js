@@ -925,8 +925,11 @@ browser.webRequest.onHeadersReceived.addListener(lstTimed(LST.rcv, function (d) 
   seen.add(key);
   noteFrame(d.tabId, d.frameId, d.parentFrameId, d.documentUrl);
   var page = tabTop.get(d.tabId) || ((d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || ''));
+  var ru = redirFrom.get(url);                                  // RVW2 F16
   var whole = pieceFree(url);                                  // RVW1 F4: a piece's range is not the file: report the file, and its length only when the server said the TOTAL (Content-Range)
-  send({ k: 'media', u: whole || url, c: ct, l: (whole && total < 0) ? -1 : size, p: page, f: docOf(d.documentUrl), fa: frameChainOf(d), n: cd, rf: ref, og: org }).catch(function () {});
+  var mmsg = { k: 'media', u: whole || url, c: ct, l: (whole && total < 0) ? -1 : size, p: page, f: docOf(d.documentUrl), fa: frameChainOf(d), n: cd, rf: ref, og: org };
+  if (ru && ru !== url) mmsg.ru = ru.slice(0, 1000);
+  send(mmsg).catch(function () {});
 }), { urls: ['http://*/*', 'https://*/*'], types: MEDIA_TYPES }, ['responseHeaders']);
 
 // ANS52h (research/VIDEO_ACCELERATION.md section "ANS52h design"): an HLS master playlist the page asks for is answered with the rungs above the picture size cap taken out (hlscap.js), so the site's player never
@@ -983,6 +986,16 @@ var JSON_URLS = [];
 (function () { for (var i = 0; i < JSON_WORDS.length; i++) { JSON_URLS.push('http://*/*' + JSON_WORDS[i] + '*'); JSON_URLS.push('https://*/*' + JSON_WORDS[i] + '*'); } })();
 var JSON_CT = /^(?:application\/(?:[a-z0-9.+-]*\+)?json|text\/(?:plain|json|javascript)|application\/javascript)\b/i;
 var JSON_FIND = /https?:\/\/[^\s"'<>()\\]+?\.(?:m3u8|mpd|mp4|webm|m4v|mov|mp3|m4a)(?![A-Za-z0-9_\/%-]|\.[A-Za-z0-9])(?:\?[^\s"'<>()\\]*)?/gi;
+// RVW2 F16: media / script requests that were REDIRECTED: final address -> the address the page first asked for. The page's own <video> reports its currentSrc (the first address); the response that is sniffed carries
+// the last one. The first address goes along with the final one (`ru`) so the app can match what the element said.
+var redirFrom = new Map();
+browser.webRequest.onBeforeRedirect.addListener(function (d) {
+  try {
+    if (!d.redirectUrl) return;
+    var root = redirFrom.get(d.url) || d.url;
+    redirFrom.delete(d.redirectUrl); redirFrom.set(d.redirectUrl, root); trimMap(redirFrom, 120);
+  } catch (e) { /* never break a request */ }
+}, { urls: ['http://*/*', 'https://*/*'], types: ['media', 'xmlhttprequest', 'other'] });
 var jsonSeen = new Map();   // tabId -> JSON answers read on this page
 function jsonUrlsOf(text) {
   var t = text.replace(/\\u002f/gi, '/').replace(/\\u0026/gi, '&').replace(/\\\//g, '/'), out = [], seen = {}, m;

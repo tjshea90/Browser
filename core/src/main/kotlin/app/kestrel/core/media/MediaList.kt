@@ -84,6 +84,12 @@ class MediaCandidate(
      * [url] stays the address the page used (identity, de-duplication, what is asked for first).
      */
     var playlistBase: String? = null
+    /**
+     * RVW2 F16: the address the PAGE asked for when the request was REDIRECTED (a `<video src="/play?id=1">` that answers 302 to a signed CDN file): the wire reports the final address, the page's own element reports
+     * `currentSrc` = this one, so what the element says (length, picture, "it played") waited for ever under an address nobody listed. "" = not redirected.
+     */
+    var alias: String = ""
+    val aliasKey: String get() = if (alias.isEmpty()) "" else keyOf(alias)
     val base: String get() = playlistBase ?: url
 
     val key: String get() = keyOf(url)
@@ -122,7 +128,7 @@ class MediaList(private val max: Int = 48) {
     val size: Int get() = items.size
     fun isEmpty(): Boolean = items.isEmpty()
     /** The candidate for exactly this address (the #fragment aside), or null. */
-    fun find(url: String): MediaCandidate? = MediaCandidate.keyOf(url).let { k -> items.firstOrNull { it.key == k } }
+    fun find(url: String): MediaCandidate? = MediaCandidate.keyOf(url).let { k -> items.firstOrNull { it.key == k } ?: items.firstOrNull { it.alias.isNotEmpty() && it.aliasKey == k } }   // RVW2 F16: also by the address before a redirect
     fun clear() { items.clear(); pending.clear(); blobs.clear(); version++ }
 
     /**
@@ -220,8 +226,12 @@ class MediaList(private val max: Int = 48) {
             if (changed) version++
             return changed
         }
+        if (c.alias.isNotEmpty()) {   // RVW2 F16: the page's own address of this file was listed first (found in its markup): it is the same file; what was learned about it moves to the one the wire saw
+            val j = items.indexOfFirst { it.key == c.aliasKey && it !== c }
+            if (j >= 0) inherit(c, items.removeAt(j))
+        }
         items.add(0, c)
-        pending.remove(c.key)?.let { applyTo(c, it.width, it.height, it.durationMs, it.label, it.role, it.played, it.element, it.areaPx) }
+        (pending.remove(c.key) ?: if (c.alias.isNotEmpty()) pending.remove(c.aliasKey) else null)?.let { applyTo(c, it.width, it.height, it.durationMs, it.label, it.role, it.played, it.element, it.areaPx) }
         while (items.size > max) removeLeastValuable()
         version++
         return true
@@ -320,7 +330,7 @@ class MediaList(private val max: Int = 48) {
     /** What the page's own `<video>` / `<source>` told us about a URL (picture size, length in time, the label it shows). */
     fun applyInfo(url: String, width: Int, height: Int, durationMs: Long, label: String?, role: VideoRole? = null, played: Boolean = false, element: Int = 0, areaPx: Long = 0L): Boolean {
         val key = MediaCandidate.keyOf(url)
-        val c = items.firstOrNull { it.key == key }
+        val c = items.firstOrNull { it.key == key } ?: items.firstOrNull { it.alias.isNotEmpty() && it.aliasKey == key }   // RVW2 F16
         if (c == null) { // the file has not been reported yet: what the element said waits for it
             pending[key] = Said(width, height, durationMs, label, role, played, element, areaPx)
             while (pending.size > PENDING_MAX) pending.remove(pending.keys.first())
@@ -329,6 +339,19 @@ class MediaList(private val max: Int = 48) {
         val changed = applyTo(c, width, height, durationMs, label, role, played, element, areaPx)
         if (changed) version++
         return changed
+    }
+
+    /** RVW2 F16: [c] is the same file as [o] under another address: it keeps what it knows and takes what only [o] knew. */
+    private fun inherit(c: MediaCandidate, o: MediaCandidate) {
+        if (c.width == 0) c.width = o.width
+        if (c.height == 0) c.height = o.height
+        if (c.durationMs == 0L) c.durationMs = o.durationMs
+        if (c.label.isNullOrBlank()) c.label = o.label
+        if (c.role == null) c.role = o.role
+        if (c.length < 0 && o.length >= 0) c.length = o.length
+        c.touched = c.touched || o.touched; c.interest = c.interest || o.interest
+        if (o.played && !c.played) { c.played = true; c.playedSeq = o.playedSeq; if (c.element == 0) c.element = o.element; if (c.areaPx == 0L) c.areaPx = o.areaPx }
+        c.fromMarkup = c.fromMarkup && o.fromMarkup                     // a request that really happened verifies it
     }
 
     private fun applyTo(c: MediaCandidate, width: Int, height: Int, durationMs: Long, label: String?, role: VideoRole?, played: Boolean = false, element: Int = 0, areaPx: Long = 0L): Boolean {
