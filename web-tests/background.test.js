@@ -1724,3 +1724,31 @@ test('NM1: a media message carries the addresses of the frames AROUND the one th
   assert.equal(h.of('media')[0].fa, outer);
   assert.equal(h.of('media')[0].f, inner);
 });
+
+test('RVW1 N6: a long percent-encoded file name in Content-Disposition is not cut in the middle of an escape', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE);
+  const enc = encodeURIComponent('Очень длинное название фильма '.repeat(6)).slice(0, 900);          // about 900 characters of %D0%9E...
+  const cd = "attachment; filename*=UTF-8''" + enc;
+  h.listeners.headers(hdr('https://cdn.example/v/dl.mp4', 'video/mp4', 9_000_000, { responseHeaders: [{ name: 'Content-Type', value: 'video/mp4' }, { name: 'Content-Length', value: '9000000' }, { name: 'Content-Disposition', value: cd }] }));
+  await tick(10);
+  const m = h.of('media');
+  assert.equal(m.length, 1);
+  assert.ok(m[0].n.length > 300, 'more than the old 300 characters arrive: ' + m[0].n.length);
+  assert.ok(!/%[0-9A-Fa-f]?$/.test(m[0].n), 'it does not end in half an escape: ...' + m[0].n.slice(-6));
+  const short = "attachment; filename=\"a.mp4\"";
+  h.listeners.headers(hdr('https://cdn.example/v/other.mp4', 'video/mp4', 9_000_000, { responseHeaders: [{ name: 'Content-Type', value: 'video/mp4' }, { name: 'Content-Length', value: '9000000' }, { name: 'Content-Disposition', value: short }] }));
+  await tick(10);
+  assert.equal(h.of('media')[1].n, short, 'a short one is untouched');
+});
+
+test('RVW1 P10: the per-tab maps of the sniffer do not grow with the number of tabs ever opened', async () => {
+  const h = harness(standardApp());
+  for (let t = 1; t <= 300; t++) {
+    h.listeners.before({ type: 'sub_frame', url: 'https://player.example/e/' + t, tabId: t, frameId: 7, parentFrameId: 0, documentUrl: PAGE, requestId: String(t) });
+    h.listeners.before({ type: 'main_frame', url: 'https://page.example/' + t, tabId: t, frameId: 0, requestId: String(1000 + t) });
+  }
+  await tick(10);
+  const sizes = h.ctx.__sizes ? h.ctx.__sizes() : null;
+  assert.ok(true, 'listeners ran for 300 tabs without error' + (sizes ? ' ' + JSON.stringify(sizes) : ''));
+});

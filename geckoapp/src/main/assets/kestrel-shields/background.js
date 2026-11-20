@@ -621,7 +621,7 @@ function onRequest(d) {
     rv.pages++;
     var left = pageLog.get(d.tabId);
     if (left && left.page && left.reqs - left.done > 0) send({ k: 'pend', p: left.page, n: left.reqs - left.done }).catch(function () {}); // RX3-BK1: the page that is being left still had requests open
-    navId.set(d.tabId, Number(d.requestId) || 0); frameParent.delete(d.tabId); mediaFrames.delete(d.tabId); frameDoc.delete(d.tabId); personTap.delete(d.tabId); personFrames.delete(d.tabId);
+    navId.set(d.tabId, Number(d.requestId) || 0); trimMap(navId, 80); frameParent.delete(d.tabId); mediaFrames.delete(d.tabId); frameDoc.delete(d.tabId); personTap.delete(d.tabId); personFrames.delete(d.tabId);
     sniffed.delete(d.tabId); sniffed.delete(-1); maybeCount.delete(d.tabId); tabTop.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again (delete first: Map keeps the old position of a key, and the OLDEST position is what is dropped)
     verdicts.clear(); // legacy verdicts are only worth keeping while ONE page loads
     newLog(d.tabId, d.url); reportLater(d.tabId); // the page report starts here (4 s after the last news it goes to the app)
@@ -725,6 +725,8 @@ function dedupeKey(url, sized) {
 }
 // RVW1 F4: the address the app is TOLD about. A site that fetches a file in pieces by putting the byte range in the query (Facebook / Instagram `...mp4?...&bytestart=0&byteend=N`) was reported with the FIRST piece's range,
 // so the app showed the size of one slice and Download saved only that slice. Only keys that are certainly byte positions are taken out (not start / end / offset, which may be times); null = the address had none.
+// RVW1 N6: a Content-Disposition is cut at 1000 characters (was 300: a percent-encoded `filename*` of 50 Cyrillic letters is 300 characters and ended in half an escape = U+FFFD in the file name); a cut in the middle of `%XX` goes back to before it
+function cdCut(v) { v = v.slice(0, 1000); var p = v.lastIndexOf('%'); if (p >= v.length - 2 && p >= 0) v = v.slice(0, p); return v; }
 var BYTE_PARAMS = /^(range|bytestart|byteend|byte_range|bytes)$/i;
 function pieceFree(url) {
   var q = url.indexOf('?');
@@ -776,8 +778,8 @@ function docOf(u) { return u ? String(u).replace(/#.*$/, '') : ''; } // a docume
 function noteFrame(tabId, frameId, parentId, doc) {
   if (!(frameId > 0) || tabId < 0) return;
   doc = docOf(doc);
-  var pm = frameParent.get(tabId); if (!pm) { pm = new Map(); frameParent.set(tabId, pm); }
-  if (parentId !== undefined && parentId >= 0 && !pm.has(frameId)) pm.set(frameId, parentId);
+  var pm = frameParent.get(tabId); if (!pm) { pm = new Map(); frameParent.set(tabId, pm); trimMap(frameParent, 60); } // RVW1 P10: the per-tab maps are capped too (a closed tab's entry used to stay until the extension process died)
+  if (parentId !== undefined && parentId >= 0 && !pm.has(frameId) && pm.size < 120) pm.set(frameId, parentId);
   var mf = mediaFrames.get(tabId); if (!mf) { if (mediaFrames.size >= SNIFFED_TABS) mediaFrames.delete(mediaFrames.keys().next().value); mf = new Map(); mediaFrames.set(tabId, mf); }
   if (mf.size < 60 || mf.has(frameId)) mf.set(frameId, doc || '');
 }
@@ -797,9 +799,9 @@ function frameNavigates(d) { // a sub_frame request: the frame [d.frameId] is be
     if (!pf) { pf = new Map(); personFrames.set(tabId, pf); if (personFrames.size > 40) personFrames.delete(personFrames.keys().next().value); }
     if (pf.size < 30 || pf.has(f)) { pf.set(f, now); vgt.inherit++; markStats(); }
   }
-  var pm = frameParent.get(tabId); if (!pm) { pm = new Map(); frameParent.set(tabId, pm); }
-  if (d.parentFrameId >= 0) pm.set(f, d.parentFrameId);
-  var fd = frameDoc.get(tabId); if (!fd) { fd = new Map(); frameDoc.set(tabId, fd); }
+  var pm = frameParent.get(tabId); if (!pm) { pm = new Map(); frameParent.set(tabId, pm); trimMap(frameParent, 60); }
+  if (d.parentFrameId >= 0 && (pm.size < 120 || pm.has(f))) pm.set(f, d.parentFrameId);
+  var fd = frameDoc.get(tabId); if (!fd) { fd = new Map(); frameDoc.set(tabId, fd); trimMap(frameDoc, 60); }
   if (fd.size < 80 || fd.has(f)) fd.set(f, docOf(d.url));
   var mf = mediaFrames.get(tabId);
   if (!mf || !mf.size) return;
@@ -862,7 +864,7 @@ function maybeMedia(d, url, ct, size, ref, org) {
     seen = new Set(); sniffed.set(d.tabId, seen);
   }
   if (seen.has(key)) return;
-  var fc = maybeCount.get(d.tabId); if (!fc) { fc = new Map(); maybeCount.set(d.tabId, fc); }
+  var fc = maybeCount.get(d.tabId); if (!fc) { fc = new Map(); maybeCount.set(d.tabId, fc); trimMap(maybeCount, 60); }
   var now = Date.now(), total = 0;
   fc.forEach(function (v) { topUp(v, now); total += v.n; });
   var q = fc.get(d.frameId);
@@ -892,7 +894,7 @@ browser.webRequest.onHeadersReceived.addListener(lstTimed(LST.rcv, function (d) 
     var n = h[i].name.toLowerCase();
     if (n === 'content-type') ct = (h[i].value || '').toLowerCase();
     else if (n === 'content-length') len = parseInt(h[i].value, 10);
-    else if (n === 'content-disposition') cd = String(h[i].value || '').slice(0, 300); // the file name the server gave (the sheet offers it as the name)
+    else if (n === 'content-disposition') cd = cdCut(String(h[i].value || '')); // the file name the server gave (the sheet offers it as the name)
     else if (n === 'content-range') { var m = /\/(\d+)\s*$/.exec(h[i].value || ''); if (m) total = parseInt(m[1], 10); }
     else if (n === 'cache-control' && d.type === 'main_frame' && /no-store/i.test(h[i].value || '')) nostore = true; // 13 letters like content-range: it passes the length filter above
   }
