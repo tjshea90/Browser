@@ -12,7 +12,9 @@ object MediaNames {
     private val GENERIC = setOf(
         "index", "master", "playlist", "video", "videos", "videoplayback", "get", "get_file", "getfile", "download", "downloads", "dl", "stream", "file", "media", "play", "player", "manifest",
         "chunklist", "segment", "init", "embed", "source", "content", "data", "vod", "hls", "mp4", "watch", "view", "v", "audio", "track", "clip", "movie", "main", "default", "out", "output", "temp", "tmp",
+        "hd", "sd", "hq", "lq", "high", "low", "medium", "normal", "original", "mobile", "full", "best", "web", "preview",   // RVW1 N2: quality words
     )
+    private val QUALITY_STEM = Regex("""^\d{3,4}p?(?:[_.-].*)?$""", RegexOption.IGNORE_CASE)
     private val EXT = Regex("""\.[A-Za-z0-9]{2,5}$""")
 
     /** The name the SOURCE gave, without its extension; "" when it gave none worth showing. */
@@ -79,6 +81,11 @@ object MediaNames {
         // a long run of letters and digits with no separator at all is a token / hash, not a name
         if (s.length >= 20 && s.none { it == ' ' || it == '_' || it == '-' || it == '.' } && s.any { it.isDigit() }) return false
         if (s.length >= 12 && s.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }) return false
+        // RVW1 N2: a quality tag ("720p", "1080p_h264", "480"), a UUID or any other hex-with-dashes token, and an id that is mostly digits ("10000000_1234567890_n") are no names: the page's title is better
+        if (QUALITY_STEM.matches(s)) return false
+        val alnum = s.filter { it.isLetterOrDigit() }
+        if (alnum.length >= 16 && alnum.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }) return false
+        if (s.length >= 10 && s.count { it.isDigit() } * 10 >= s.length * 4) return false
         return true
     }
 
@@ -89,5 +96,5 @@ object MediaNames {
     }
 
     /** Safe and tidy for a file system, one line, no longer than a screen can show. */
-    fun clean(stem: String): String = FileNames.sanitize(stem.replace(Regex("""\s+"""), " ").trim()).take(120).trimEnd('.', ' ')
+    fun clean(stem: String): String = FileNames.cutChars(FileNames.sanitize(stem.replace(Regex("""\s+"""), " ").trim()), 120).trimEnd('.', ' ')   // RVW1 N5: by code points
 }

@@ -79,4 +79,19 @@ class EpisodeNamesTest {
         assertEquals("Dune - Part Two S01E02", n)
         assert(n.none { it in "\\/:*?\"<>|" })
     }
+
+    // ---- RVW1 N1 / N3 (research/REVIEW_2026-11-20_DOWNLOAD.md): a film or clip title keeps its two main pieces; a tab counter and a leading verb that belongs to the title
+
+    @Test fun aTitleWithAnArtistAndASongKeepsBothAndDropsTheSite() {
+        assertEquals("Rick Astley - Never Gonna Give You Up (Official Music Video)", EpisodeNames.cleanTitle("Rick Astley - Never Gonna Give You Up (Official Music Video) - YouTube", "www.youtube.com"))
+        assertEquals("keeps two pieces when the host does not match the site name", "Rick Astley - Never Gonna Give You Up", EpisodeNames.cleanTitle("Rick Astley - Never Gonna Give You Up - Some Site", "example.org"))
+        assertEquals("Mission - Impossible - Fallout (2018)", EpisodeNames.cleanTitle("Mission: Impossible - Fallout (2018) - Site Name", "site.example"))
+        assertEquals("a complete film title (it ends with its year) stops the join", "Dune - Part Two (2024)", EpisodeNames.cleanTitle("Dune: Part Two (2024) - Action Movies - Doraby", "doraby.com"))
+    }
+
+    @Test fun aNotificationCounterInFrontOfATitleIsNotPartOfTheName() {
+        assertEquals("Funny cat video", EpisodeNames.cleanTitle("(3) Funny cat video - YouTube", "youtube.com"))
+        assertEquals("Inbox clip", EpisodeNames.cleanTitle("[12] Inbox clip", "site.example"))
+        assertEquals("a year in brackets later in the title stays", "Free Guy (2021)", EpisodeNames.cleanTitle("(2) Free Guy (2021) - Watch Online | Doraby", "doraby.com"))
+    }
 }

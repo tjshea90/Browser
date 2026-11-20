@@ -19,6 +19,7 @@ object Notifier {
     const val CH_PROGRESS = "dl_progress"
     const val CH_DONE = "dl_done"
     const val ID_PROGRESS = 4711
+    const val ID_TIME_LIMIT = 4712   // RVW2 download S1
     const val EXTRA_OPEN_DOWNLOADS = "app.kestrel.browser.OPEN_DOWNLOADS"
 
     fun channels(ctx: Context) {
@@ -100,6 +101,20 @@ object Notifier {
         return b.build()
     }
 
+    /** RVW2 download S1: the system's time limit for background downloads was reached: the downloads are paused; tap opens the app, which continues them. */
+    @android.annotation.SuppressLint("NotificationPermission")
+    fun timeLimit(ctx: Context) {
+        val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
+        channels(ctx)
+        val b = Notification.Builder(ctx, CH_DONE)
+            .setSmallIcon(R.drawable.ic_download)
+            .setContentTitle("Downloads paused")
+            .setContentText("Android limits background downloads to about 6 hours a day. Open Kestrel to continue.")
+            .setAutoCancel(true)
+            .setContentIntent(openApp(ctx))
+        try { nm.notify(ID_TIME_LIMIT, b.build()) } catch (e: Exception) { /* notifications may be switched off */ }
+    }
+
     /** One per finished or failed file; tap opens the Downloads screen, "Open" opens the file. */
     @android.annotation.SuppressLint("NotificationPermission") // POST_NOTIFICATIONS is declared in the Kestrel G manifest; a denied permission just means no notification (caught below)
     fun finished(ctx: Context, v: DownloadView) {
@@ -114,7 +129,8 @@ object Notifier {
             .setContentIntent(openApp(ctx))
         if (!ok && !v.priv) b.addAction(Notification.Action.Builder(null, "Retry", serviceAction(ctx, DownloadService.ACTION_RESUME_ID, 7 + (v.id and 0xff).toInt(), v.id)).build())
         val uri = v.destUri
-        if (ok && uri != null && !v.priv) {
+        // RVW1 S1: "Open" goes straight to the system, so it is not offered for a file the package installer would take (a page chooses a file's name and type): those open from the Downloads list, which looks inside first
+        if (ok && uri != null && !v.priv && !app.kestrel.core.download.ApkIdentity.installerMaybe(v.name, v.mime)) {
             val open = Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse(uri), v.mime ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             b.addAction(Notification.Action.Builder(null, "Open", PendingIntent.getActivity(ctx, (v.id and 0xffff).toInt() + 100, open, PendingIntent.FLAG_IMMUTABLE)).build())
         }

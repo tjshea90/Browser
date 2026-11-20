@@ -49,6 +49,7 @@ Every session has its own branch; the owner may run several accounts in parallel
 
 ## GitHub Actions does the building (the owner's rule on all repos: "Claude codes the app, GitHub makes the apk")
 `.github/workflows/android.yml` tests, builds, signs and releases the APKs. **Minutes are scarce: never add a `push:` branch trigger to any workflow** (autosave pushes after every tool call; `tools/test_handoff.sh` fails if you do). Tags and manual dispatch only.
+- **OWNER STANDING RULE (2026-11-20, verbatim: "Always ship new versions and release without stopping to ask me"):** when work is tested and checkpointed, SHIP IT: bump the version, run the release order below and give the owner the Release link. Never end a turn with "say go and I will ship"; an older note that says "wait for the owner's go" is void. Still never ship a tag twice, never ship red tests, and always say what was NOT run on the tablet.
 - Release order: bump versionCode/versionName -> `bash ship.sh <web|gecko> "note"` -> dispatch the workflow (`mcp__github__actions_run_trigger`, `run_workflow`, `ref` = current branch, inputs `app` web|gecko|both, `full_build` true, `note`) ->
   wait (background `until` loop, a foreground `sleep` is blocked; `get_job_logs` answers 404 until the job ends, so polling it is waste) -> Release shows the APK -> `bash tools/record-release.sh <tag> "note"` ONLY after the run is green ->
   give the owner the Release link as plain tappable text on its own line. `full_build=false` is a ~1 min check of the gates. Full recipe: `HANDOFF.md` section 2.

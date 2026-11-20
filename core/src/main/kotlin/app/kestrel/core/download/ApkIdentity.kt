@@ -75,6 +75,17 @@ object ApkIdentity {
         append(" Only continue if you trust the site it came from.")
     }
 
+    /**
+     * RVW1 S1: a file that Android would hand to the PACKAGE INSTALLER when it is opened: named .apk / .xapk / .apks / .apkm, or declared as an Android package (a page chooses both the name and the type). The in-app
+     * Downloads list inspects such a file before it opens (who signed it, does it pretend to be Kestrel); the notification's "Open" button goes straight to the system and must not offer these.
+     */
+    fun installerMaybe(name: String, mime: String?): Boolean {
+        val ext = name.substringAfterLast('.', "").lowercase()
+        if (ext == "apk" || ext == "xapk" || ext == "apks" || ext == "apkm") return true
+        val m = mime?.substringBefore(';')?.trim()?.lowercase() ?: return false
+        return m == "application/vnd.android.package-archive" || m == "application/x-authorware-bin" || m == "application/vnd.apkm" || m == "application/xapk-package-archive"
+    }
+
     /** Extensions of files that are not programs: a file with one of them that is really an installer is disguised. */
     fun extensionCanLie(name: String): Boolean = name.substringAfterLast('.', "").lowercase() in HARMLESS_LOOKING
 

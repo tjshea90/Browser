@@ -19,18 +19,66 @@ object MediaSniff {
     fun classify(url: String, contentType: String?, status: Int = 200): MediaKind? {
         if (status != 0 && status != 200 && status != 206) return null
         if (!(url.startsWith("http://", true) || url.startsWith("https://", true))) return null
+        if (isVideoPlaybackSlice(url)) return null   // RVW1 F14
         val ct = baseType(contentType)
-        val ext = extension(url)
+        val ext = effectiveExtension(url)
         if (ct.startsWith("text/html") || ct.startsWith("image/") || ct.startsWith("font/") || ct == "application/json" || ct.contains("javascript") || ct == "text/css") return null
         if (ct in hlsTypes || ext == "m3u8") return MediaKind.HLS
         if (ext == "m3u" && (ct in genericTypes || ct == "text/plain" || ct.startsWith("audio/"))) return MediaKind.HLS
         if (ct == "application/dash+xml" || ext == "mpd") return MediaKind.DASH
         if (ct in segmentTypes || ext in segmentExts) return null
+        if (isSegmentName(url)) return null   // RVW1 F15
         if (ct.startsWith("video/") || ct.startsWith("audio/")) return MediaKind.FILE
         if (ct == "application/ogg" || ct == "application/mp4" || ct == "application/x-matroska") return MediaKind.FILE
         if (ct in genericTypes && ext in fileExts) return MediaKind.FILE
         return null
     }
+
+    /**
+     * RVW1 F14: YouTube's own `videoplayback` requests are slices of an adaptive stream (the `range` query piece is dropped for de-duplication, the length is one slice's, audio and video are separate requests): every one
+     * listed would be a row that saves a fragment. YouTube is refused plainly (research/VIDEO_DOWNLOADER.md section 8), so these are not offered as sources.
+     */
+    fun isVideoPlaybackSlice(url: String): Boolean {
+        val rest = url.substringAfter("://", "")
+        val host = rest.substringBefore('/').substringBefore('?').substringBefore('#').substringAfterLast('@').substringBefore(':').lowercase()
+        return (host == "googlevideo.com" || host.endsWith(".googlevideo.com")) && rest.substringAfter('/', "").substringBefore('?').startsWith("videoplayback")
+    }
+
+    /**
+     * RVW1 F10: the extension that decides what a response is. The URL's PATH extension when it is a media one; else a media file name that a query value ends with (`/dl.php?file=movie.mp4`, `/get?f=x.m3u8`: a
+     * download script names the file in the query); else the path's own. The browser extension tests the whole address, so it called these media while [classify] read only the path and dropped them silently.
+     */
+    fun effectiveExtension(url: String): String {
+        val e = extension(url)
+        if (e in fileExts || e in segmentExts || e == "m3u8" || e == "mpd" || e == "m3u") return e
+        return queryExtension(url).ifEmpty { e }
+    }
+
+    /** The media extension a QUERY value ends with ("?file=movie.MP4&x=1" -> "mp4", "?u=https%3A%2F%2Fa%2Fb.m3u8" -> "m3u8"); the last such value wins; "" if none. */
+    fun queryExtension(url: String): String {
+        val q = url.substringAfter('?', "").substringBefore('#')
+        if (q.isEmpty() || q.length > 4096) return ""
+        var found = ""
+        for (kv in q.split('&')) {
+            var v = kv.substringAfter('=', "")
+            if (v.isEmpty()) continue
+            if (v.contains('%')) v = try { java.net.URLDecoder.decode(v, "UTF-8") } catch (e: Exception) { v }
+            val name = v.substringBefore('?').substringBefore('#').substringAfterLast('/')
+            val dot = name.lastIndexOf('.')
+            if (dot < 1 || name.length - dot > 8) continue
+            val ext = name.substring(dot + 1).lowercase()
+            if (ext in fileExts || ext == "m3u8" || ext == "mpd") found = ext
+        }
+        return found
+    }
+
+    /**
+     * RVW1 F15: a numbered part of a stream that is served under a media extension (fMP4 / CMAF parts "seg_00012.mp4", "chunk-3-v1-a1.m4s", "frag12.webm"): each distinct address was a row of its own, one more for every
+     * part the player fetched. Only names that say "segment" are taken (never "part1.mp4" or "video1.mp4": a person's own split files); the playlist that lists the parts is the candidate.
+     */
+    fun isSegmentName(url: String): Boolean = segmentName.matches(pathOf(url).substringAfterLast('/'))
+
+    private val segmentName = Regex("^(?:seg|segment|chunk|frag|fragment)s?[-_.]?[0-9]{1,8}(?:[-_.][A-Za-z0-9]{1,8}){0,3}\\.(?:mp4|m4s|m4v|m4a|webm|aac|mp3|cmfv|cmfa)$", RegexOption.IGNORE_CASE)
 
     /** What the first bytes of a response say it is, with the type and the file extension to use for it. */
     class Sniffed(val kind: MediaKind, val mime: String, val ext: String)
@@ -78,7 +126,7 @@ object MediaSniff {
 
     /** The file extension to save a [kind]/[contentType] under: from the URL when it has a media one, else from the type. */
     fun saveExtension(url: String, contentType: String?): String {
-        val e = extension(url)
+        val e = effectiveExtension(url)
         if (e in fileExts) return e
         return when (baseType(contentType)) {
             "video/mp4", "application/mp4" -> "mp4"
@@ -113,10 +161,16 @@ object MediaSniff {
     /** Resolution hinted by the URL ("clip_720p.mp4", "/1080p/x.mp4", "x-480.mp4"): the picture height, or 0. */
     fun heightFromUrl(url: String): Int {
         val p = pathOf(url) + "?" + (url.substringAfter('?', "").substringBefore('#'))
-        val m = heightP.find(p) ?: heightUnderscore.find(p) ?: return 0
+        val m = heightP.find(p) ?: heightUnderscore.find(p)
+        if (m == null) { // RVW1 F22: "/1280x720/", "_1280x720.mp4" (twimg, Vimeo): the second number is the height
+            val hh = heightWxH.find(p)?.groupValues?.get(2)?.toIntOrNull() ?: return 0
+            return if (hh in knownHeights) hh else 0
+        }
         val h = m.groupValues[1].toIntOrNull() ?: return 0
         return if (h in knownHeights) h else 0
     }
+
+    private val heightWxH = Regex("""(?<![0-9a-zA-Z])(\d{3,4})x(\d{3,4})(?![0-9a-zA-Z])""", RegexOption.IGNORE_CASE)
 
     private val heightP = Regex("""(?<![0-9a-zA-Z])(\d{3,4})p(?![0-9a-zA-Z])""", RegexOption.IGNORE_CASE)
     private val heightUnderscore = Regex("""[_\-/](\d{3,4})[_\-.](?:mp4|webm|m4v|mov)""", RegexOption.IGNORE_CASE)
