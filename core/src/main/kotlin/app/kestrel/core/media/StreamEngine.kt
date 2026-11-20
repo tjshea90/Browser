@@ -222,6 +222,7 @@ class StreamEngine(
         val responses = CopyOnWriteArrayList<FetchResponse>()
         val drain = ReentrantLock()
         val keys = HashMap<Int, ByteArray>()
+        val keysByUrl = HashMap<String, ByteArray>()   // RVW1 V1: the same key address named by many tags is fetched once
         @Volatile var lastBytesAt = 0L
         /** RX3-D1: some byte of this download arrived since this job object exists; with [StreamRec.next] and the staged parts it says "this is not a fresh download from a dead host". */
         @Volatile var gotBytes = false
@@ -1318,16 +1319,19 @@ class StreamEngine(
     /** The answer to a PART of a stream: refusals are tried again first ([Denied]); everything else is judged as before ([statusFailure]). */
     private fun partFailure(job: Job, status: Int, resp: FetchResponse?, sent: Map<String, String>): RuntimeException =
         if (status == 401 || status == 403 || status == 410 || (status == 404 && partsFetched(job)))
-            Denied(status, sent, resp?.header("Retry-After")?.trim()?.toLongOrNull()?.times(1000) ?: 0)
+            Denied(status, sent, retryAfterOf(resp))
         else statusFailure(status, resp)
 
     /** True once any part of this download came in (in this run or an earlier one): a refusal after that is more likely an edge hiccup or an expiry than a wrong address. */
     private fun partsFetched(job: Job): Boolean = synchronized(lock) { job.stagedCount > 0 || job.rec.next > 0 || job.written > 0 }
 
+    /** RVW1 V12: the server's Retry-After as milliseconds: seconds or an HTTP date, never more than 10 minutes (`Retry-After: 3600` used to stall a worker for an hour, and a date was read as 0). */
+    private fun retryAfterOf(resp: FetchResponse?): Long = app.kestrel.core.download.HttpSemantics.retryAfterMs(resp?.header("Retry-After"), clock.now()) ?: 0L
+
     private fun statusFailure(status: Int, resp: FetchResponse? = null): RuntimeException = when {
         status == 401 || status == 403 || status == 410 -> Failed(Reason.LINK_EXPIRED, status)
         status == 404 || status in 400..499 && status != 408 && status != 429 -> Failed(Reason.HTTP, status)
-        else -> Retry(status, resp?.header("Retry-After")?.trim()?.toLongOrNull()?.times(1000) ?: 0)
+        else -> Retry(status, retryAfterOf(resp))
     }
 
     private fun totalOf(contentRange: String?): Long = contentRange?.substringAfterLast('/')?.trim()?.toLongOrNull() ?: -1L
