@@ -574,7 +574,7 @@ class MediaListFramesTest {
         assertEquals("it played for 3 s: it is the video of this page", 1, l.usableCount())
         val l2 = MediaList()
         l2.add(hls(u)); l2.applyStream(u, live = false, drm = false, durationMs = 12_000, adMs = 0, breaks = 0)
-        l2.markInterest(u)
+        l2.touch(u)
         assertEquals("the owner chose it", 1, l2.usableCount())
         val l3 = MediaList()
         l3.add(hls(u)); l3.applyStream(u, live = true, drm = false, durationMs = 0, adMs = 0, breaks = 0)
