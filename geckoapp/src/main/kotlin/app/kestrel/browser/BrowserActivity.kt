@@ -1859,6 +1859,7 @@ open class BrowserActivity : Activity(), DockListener {
         val idx = tabs.indexOf(tab)
         if (idx < 0) return
         endFullScreenOf(tab, "the tab was closed")
+        video.clearTab(tab)                                                      // RVW1 P7: what the video finder learned for this tab (the playlists' text among it, 0.3-3 MB for a tab that opened "Save video") went with the tab only when the process died
         tabs.removeAt(idx)
         syncPrivateAnchor()                                                      // ANS58c: the last private tab is gone: the anchor goes too
         if (tab === restoringTab) hideRestoring("closed")
