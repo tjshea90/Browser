@@ -1840,3 +1840,26 @@ test('RVW1 F11: the label of a page-text source is passed on with the address (o
   assert.equal(m.length, 3);
   assert.equal(m[0].lb, '1080p'); assert.equal('lb' in m[1], false); assert.equal(m[2].lb.length, 24);
 });
+
+test('RVW2 F13: a frame that offered media and is then unloaded (its element removed) takes its rows with it; a bye from the top page or from a frame that offered nothing does nothing', async () => {
+  const h = harness(standardApp());
+  h.mainFrame(PAGE, { requestId: '1' });
+  const FR = 'https://player.example/embed/1', FR2 = 'https://player.example/embed/2';
+  const frameHdr = (url, frameId, doc) => hdr(url, 'video/mp4', 9_000_000, { frameId, parentFrameId: 0, documentUrl: doc, frameAncestors: [{ url: PAGE, frameId: 0 }, { url: doc, frameId }] });
+  h.listeners.headers(frameHdr('https://cdn.example/s/movie.mp4', 5, FR));
+  await tick(10);
+  assert.equal(h.of('media').length, 1);
+  h.message({ k: 'bye' }, 1, PAGE, 0);                      // the top page
+  h.message({ k: 'bye' }, 1, 'https://other.example/x', 7); // a frame that offered nothing
+  await tick(10);
+  assert.equal(h.of('gone').length, 0);
+  h.message({ k: 'bye' }, 1, FR, 5);
+  await tick(10);
+  const g = h.of('gone');
+  assert.equal(g.length, 1, JSON.stringify(g));
+  assert.deepEqual(Array.from(g[0].d), [FR]);
+  assert.equal(g[0].p, PAGE);
+  h.listeners.headers(frameHdr('https://cdn.example/s/movie.mp4', 9, FR2));   // the replacement frame (a new id) offers the same file
+  await tick(10);
+  assert.equal(h.of('media').length, 2, 'news again');
+});

@@ -201,3 +201,16 @@ test('F5: a player that is built when it is pressed is found after the tap (the 
   await page.waitForTimeout(150);
   assert.deepEqual((await vids(page)).map((x) => x.u), ['https://cdn.example/s/late.mp4']);
 });
+
+test('F13: a FRAME that offered a video says bye when it is unloaded; a frame that offered nothing, and the top page, say nothing', async () => {
+  const page = await open(`<iframe id="f1" srcdoc='<video src="https://cdn.example/f/clip.mp4"></video>'></iframe><iframe id="f2" srcdoc='<p>nothing here</p>'></iframe><video src="https://cdn.example/top/own.mp4"></video>`);
+  await page.waitForTimeout(500);
+  const frames = page.frames().filter((f) => f !== page.mainFrame());
+  assert.equal(frames.length, 2);
+  const bye = (f) => f.evaluate(() => { window.__msgs.length = 0; window.dispatchEvent(new Event('pagehide')); return window.__msgs.filter((m) => m.k === 'bye').length; });
+  const counts = [];
+  for (const f of frames) counts.push([await f.evaluate(() => document.querySelectorAll('video').length), await bye(f)]);
+  counts.sort();
+  assert.deepEqual(counts, [[0, 0], [1, 1]], 'only the frame with the video says bye');
+  assert.equal(await bye(page.mainFrame()), 0, 'the top page never does');
+});
