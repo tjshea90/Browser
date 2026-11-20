@@ -840,7 +840,7 @@ class StreamEngine(
         job.staged.clear(); job.claimed.clear(); job.stagedBytes = 0; job.stagedCount = 0
         for (i in job.rec.next until media.segments.size) {
             val f = File(dir, "$i.seg")
-            if (f.isFile) { job.staged.set(i); job.stagedBytes += f.length(); job.stagedCount++ } else File(dir, "$i.part").delete()
+            if (f.isFile) { job.staged.set(i); job.stagedBytes += f.length(); job.stagedCount++ } else File(dir, "$i.part").let { pf -> if (pf.length() < RESUME_MIN) pf.delete() }   // RVW2 V4: a big part is kept: the next try continues it
         }
     }
 

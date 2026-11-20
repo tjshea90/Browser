@@ -975,4 +975,15 @@ class StreamEngineTest {
         val v = h.completed(h.enqueue(sb.toString()))
         assertArrayEquals("the init section and the fragments are plain in the saved file", plain.toByteArray(), h.out(v))
     }
+
+    @Test(timeout = 60_000) fun aBigPartThatDiesInTheMiddleIsContinuedNotStartedOver() {
+        // RVW2 V4: a single big part of unknown length (a single-file stream): the connection resets after 2 MiB of 3; the retry asks for the rest
+        val h = H()
+        val big = testBytes(3 shl 20, 61)
+        h.cdn.files["https://cdn.test/v/big.ts"] = big
+        h.cdn.resetAfter["https://cdn.test/v/big.ts"] = 2 shl 20
+        val v = h.completed(h.enqueue("#EXTM3U\n#EXT-X-TARGETDURATION:60\n#EXTINF:60,\nbig.ts\n#EXT-X-ENDLIST\n"))
+        assertArrayEquals(big, h.out(v))
+        assertTrue("the retry asked for the rest only: ${h.cdn.requests}", h.cdn.requests.any { it.startsWith("https://cdn.test/v/big.ts ") && it.substringAfter(' ').startsWith((2 shl 20).toString() + "-") })
+    }
 }

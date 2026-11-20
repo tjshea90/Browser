@@ -100,6 +100,20 @@ object Notifier {
         return b.build()
     }
 
+    /** RVW2 download S1: the system's time limit for background downloads was reached: the downloads are paused; tap opens the app, which continues them. */
+    @android.annotation.SuppressLint("NotificationPermission")
+    fun timeLimit(ctx: Context) {
+        val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
+        channels(ctx)
+        val b = Notification.Builder(ctx, CH_DONE)
+            .setSmallIcon(R.drawable.ic_download)
+            .setContentTitle("Downloads paused")
+            .setContentText("Android limits background downloads to about 6 hours a day. Open Kestrel to continue.")
+            .setAutoCancel(true)
+            .setContentIntent(openApp(ctx))
+        try { nm.notify(ID_TIME_LIMIT, b.build()) } catch (e: Exception) { /* notifications may be switched off */ }
+    }
+
     /** One per finished or failed file; tap opens the Downloads screen, "Open" opens the file. */
     @android.annotation.SuppressLint("NotificationPermission") // POST_NOTIFICATIONS is declared in the Kestrel G manifest; a denied permission just means no notification (caught below)
     fun finished(ctx: Context, v: DownloadView) {

@@ -363,6 +363,8 @@ object DownloadController {
         return bytes
     }
     fun pauseAll() { engine?.pauseAll(); streams?.pauseAll() }
+    /** RVW2: pause everything because the SYSTEM asked (the foreground-service time limit): they resume by themselves when the app is opened or the system allows. */
+    fun pauseAllSystem() { engine?.pauseAllSystem(); streams?.pauseAllSystem() }
     fun resumeAll(ctx: Context) { for (v in views()) mini.requested(v.id); init(ctx).resumeAll(); streams?.resumeAll(); DownloadService.start(ctx) }
     fun tick() { engine?.tick(); streams?.tick() }
     fun needsService(): Boolean = (engine?.needsService() ?: false) || (streams?.needsService() ?: false) || (phone?.needsService() ?: false)
