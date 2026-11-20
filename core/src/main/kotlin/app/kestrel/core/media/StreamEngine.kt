@@ -1175,7 +1175,10 @@ class StreamEngine(
             if (!net.online) { synchronized(lock) { if (job.stopState == null) job.stopState = DlState.WAITING_NETWORK; job.stop = true }; throw Stopped() }
             val ctr = LongArray(1)
             try {
-                FileOutputStream(part).use { out -> readInto(job, fetcher, url, from, toInclusive, out, count, ctr) }
+                // RVW2 V4: a part of unknown length that already holds a megabyte or more (a single-file DASH stream, a big segment) is CONTINUED where it stopped, not started over at byte 0 after a reset, a pause or a kill:
+                // the next request asks for `bytes=<have>-` (a server that ignores it sends everything: the first <have> bytes are skipped). Parts with a known byte range, and small ones, start afresh as before.
+                val have = if (from < 0 && toInclusive < 0 && part.isFile && part.length() >= RESUME_MIN) part.length() else 0L
+                FileOutputStream(part, have > 0).use { out -> readInto(job, fetcher, url, from, toInclusive, out, count, ctr, have) }
                 // a web page where a video part should be (an expired or blocked link that answers 200): never let its text into the video
                 if (looksLikeHtmlFile(part)) { part.delete(); if (count) job.inflight.addAndGet(-ctr[0]); throw Failed(Reason.BAD_CONTENT) }
                 if (!part.renameTo(dest)) throw Failed(Reason.STORAGE)
@@ -1284,17 +1287,17 @@ class StreamEngine(
     }
 
     /** Streams one segment (in bounded windows when the fetcher wants them, resuming after a short reply) into [out]; [ctr] counts the bytes added to the progress. */
-    private fun readInto(job: Job, fetcher: Fetcher, url: String, from: Long, toInclusive: Long, out: FileOutputStream, count: Boolean, ctr: LongArray) {
+    private fun readInto(job: Job, fetcher: Fetcher, url: String, from: Long, toInclusive: Long, out: FileOutputStream, count: Boolean, ctr: LongArray, startPos: Long = 0L) {
         val window = fetcher.windowBytes
         val known = from >= 0 && toInclusive >= 0
         val segLen = if (known) toInclusive - from + 1 else -1L
-        var pos = 0L                                   // bytes of this segment stored so far
+        var pos = startPos                             // bytes of this segment stored so far (RVW2 V4: those of an earlier try included)
         while (true) {
             val rf: Long; val rt: Long
             when {
                 known -> { rf = from + pos; rt = if (window > 0) minOf(toInclusive, rf + window - 1) else toInclusive }
                 window > 0 -> { rf = pos; rt = pos + window - 1 }
-                else -> { rf = -1; rt = -1 }
+                else -> { rf = if (pos > 0) pos else -1; rt = -1 }   // RVW2 V4: a continued part asks for the rest
             }
             val sent = job.rec.headers
             val resp = open(job, fetcher, FetchRequest(url, rf, rt, null, sent, priv = job.rec.priv))
@@ -1444,6 +1447,7 @@ class StreamEngine(
     companion object {
         private const val MAX_TRIES = 6
         private const val READ_AHEAD = 16     // RVW1 V13
+        private const val RESUME_MIN = 1L shl 20   // RVW2 V4: a part of this size or more is continued, not restarted
         private const val WAIT = -2            // RVW1 V13: [claim] says "nothing to take right now"
 
         /**
