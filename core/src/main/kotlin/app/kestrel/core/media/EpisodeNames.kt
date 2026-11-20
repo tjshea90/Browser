@@ -234,6 +234,38 @@ object EpisodeNames {
         return false
     }
 
+    /** Words that sit next to a site's own name in a title tail: "TED Talk", "CNN Video", "BBC News", "Wikimedia Commons", "Video Dailymotion". */
+    private val SITE_FILLER = setOf("video", "videos", "talk", "talks", "news", "official", "channel", "the", "tv", "app", "network", "home", "online", "site", "plus", "commons", "archive", "library", "watch", "player")
+    private val SECOND_LEVEL = setOf("co", "com", "org", "net", "gov", "edu", "ac")
+
+    /** The site's own name from its host: the label in front of the top-level domain ("www.ted.com" -> "ted", "commons.wikimedia.org" -> "wikimedia", "news.bbc.co.uk" -> "bbc"); "" when there is none. */
+    private fun registrableLabel(host: String): String {
+        val parts = host.lowercase(Locale.ROOT).substringBefore(':').split('.').filter { it.isNotEmpty() }
+        if (parts.size < 2) return ""
+        var i = parts.size - 2
+        if (parts[i] in SECOND_LEVEL && i >= 1) i--
+        return parts[i].filter { it.isLetterOrDigit() }
+    }
+
+    /**
+     * A piece AFTER the first that is the site's own name with at most two words around it: "TED Talk", "Wikimedia Commons", "Video Dailymotion", "CNN". The site's label (at least four letters) may stand with any two words
+     * ("Internet Archive"); a SHORT label (two or three letters: ted, cnn, npr, ign, bbc) only with the filler words of [SITE_FILLER], so "Ted Lasso" on ted.com is not cut.
+     */
+    private fun isSiteTail(segment: String, label: String): Boolean {
+        if (label.length < 2) return false
+        val words = segment.lowercase(Locale.ROOT).split(Regex("""[^\p{L}\p{N}]+""")).filter { it.isNotEmpty() }
+        if (words.isEmpty() || words.size > 3 || label !in words) return false
+        return label.length >= 4 || words.all { it == label || it in SITE_FILLER }
+    }
+
+    /** "Vimeo Staff Picks on Vimeo" -> "Vimeo Staff Picks": a trailing " on <the site>" is the site's own tag line. Only when the last word IS the site's label. */
+    private fun dropOnSite(segment: String, label: String): String {
+        if (label.length < 3) return segment
+        val m = ON_SITE.find(segment) ?: return segment
+        return if (m.groupValues[1].lowercase(Locale.ROOT).filter { it.isLetterOrDigit() } == label) segment.substring(0, m.range.first).trim() else segment
+    }
+    private val ON_SITE = Regex("""\s+on\s+([A-Za-z0-9][A-Za-z0-9.]*)$""", OPTS)
+
     private fun titleCaseIfLower(s: String): String =
         if (s.isNotEmpty() && s == s.lowercase(Locale.ROOT)) s.split(' ').joinToString(" ") { w -> w.replaceFirstChar { it.titlecase(Locale.ROOT) } } else s
 
