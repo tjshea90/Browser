@@ -52,9 +52,12 @@ class UrlParts private constructor(
             val scheme = url.substring(0, i).lowercase()
             val authStart = i + 3
             var j = authStart
+            // RVW1 S9: for the web schemes a backslash ends the authority exactly like a slash (the engine reads "https://evil.com\@good.com/" as the host evil.com; this parser read userinfo "evil.com\" and the host good.com,
+            // so the address bar, Shields and the HTTPS policy judged a different site than the one being loaded)
+            val special = scheme == "http" || scheme == "https" || scheme == "ws" || scheme == "wss" || scheme == "ftp" || scheme == "file"
             while (j < n) {
                 val c = url[j]
-                if (c == '/' || c == '?' || c == '#') break
+                if (c == '/' || c == '?' || c == '#' || (special && c == '\\')) break
                 j++
             }
             val authority = url.substring(authStart, j)

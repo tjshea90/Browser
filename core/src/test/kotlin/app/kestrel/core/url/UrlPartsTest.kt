@@ -100,4 +100,13 @@ class UrlPartsTest {
         }
         assertNotNull(UrlParts.parse("http://192.168.43.1/"))
     }
+
+    @Test fun aBackslashEndsTheAuthorityOfAWebAddressLikeTheEngineReadsIt() {
+        // RVW1 S9: "https://evil.com\\@good.com/" is the site evil.com to the engine
+        assertEquals("evil.com", UrlParts.parse("https://evil.com\\@good.com/")!!.host)
+        assertEquals("evil.com", UrlParts.parse("http://evil.com\\path")!!.host)
+        assertEquals("good.com", UrlParts.parse("https://user@good.com/a\\b")!!.host)
+        assertEquals("a backslash later in the path changes nothing", "good.com", UrlParts.parse("https://good.com/a\\@evil.com")!!.host)
+        assertEquals("another scheme keeps its own rules", "evil.com\\@good.com", UrlParts.parse("foo://evil.com\\@good.com/")!!.let { it.userInfo?.plus("@")?.plus(it.host) ?: it.host })
+    }
 }
