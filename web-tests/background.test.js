@@ -1767,7 +1767,7 @@ test('RVW1 F8: the answer of a video-looking endpoint is passed through to the p
   h.mainFrame(PAGE, { requestId: '1' });
   assert.ok(h.listeners.jsonHeaders, 'the listener is registered');
   assert.ok(h.listeners.jsonFilter.urls.every((u) => /^https?:\/\/\*\/\*[a-z]+\*$/.test(u)), 'only narrow video-word patterns reach it: ' + h.listeners.jsonFilter.urls.slice(0, 3));
-  assert.deepEqual(h.listeners.jsonFilter.types, ['xmlhttprequest']);
+  eq(h.listeners.jsonFilter.types, ['xmlhttprequest']);
   eq(h.listeners.jsonHeaders(jsonReq('j1')), {});
   const fl = h.filters[h.filters.length - 1];
   feed(fl, VIMEO, 50);                                          // arrives in pieces
