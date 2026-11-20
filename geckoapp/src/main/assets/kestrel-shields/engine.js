@@ -170,6 +170,24 @@ var KestrelEngine = (function () {
     var gramPair = new Uint8Array(8192);
     for (var gs = 0; gs < gramKey.length; gs++) if (gramLen[gs] !== 0) { var gk = gramKey[gs] >>> 16; gramPair[gk >> 3] |= 1 << (gk & 7); }
 
+    // RVW3 SP1: the rules without a token or gram (455 in the bundled list; 449 of them are options-only lines such as `$script,domain=a.com|b.com`) were ALL evaluated for EVERY request. A rule whose $domain= list
+    // names include entries can only act on a page that matches one of them (evalRule returns at domainOk otherwise, before it changes anything), so each such rule is filed under the hash of every include entry
+    // and a page host looks up its own candidates once (memoized per host): about 1 rule instead of 455 per request. A key collision only adds a candidate (evalRule still runs domainOk), never drops one. The
+    // candidates are evaluated in their ORIGINAL order (the first rule to name a stand-in or a category wins), so the verdicts are exactly the old ones (web-tests/engine.test.js parity + RVW3 SP1 tests).
+    var ntPlain = [], ntByDomain = new Map(), ntForHost = new Map();
+    for (var nz = 0; nz < noToken.length; nz++) {
+      var nd = dom[noToken[nz]];
+      var nInc = nd !== 0 ? domPool[2 * (nd - 1)] : 0;
+      if (nInc === 0) { ntPlain.push(nz); continue; }     // no include list (none at all, or exclusions only): applies to every page
+      for (var nk = 0; nk < nInc; nk++) {
+        var np = 2 * (nd - 1 + 2 + nk);
+        var nkey = domPool[np + 1] ^ Math.imul(domPool[np], 31);   // (hi, lo) of the entry, the same pair pageHas() compares
+        var nb = ntByDomain.get(nkey);
+        if (nb === undefined) { nb = []; ntByDomain.set(nkey, nb); }
+        if (nb[nb.length - 1] !== nz) nb.push(nz);
+      }
+    }
+
     // ---- Public Suffix List (Psl.kt)
     var siteCache = new Map();
     function siteOf(host) {
