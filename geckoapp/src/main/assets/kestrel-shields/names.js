@@ -45,7 +45,14 @@
         else if ((m = NUMTITLE.exec(text))) { e = num(m[1], 9999); t = m[2]; }
       }
       if (!e) return null;
-      if (!t) { var mt = /(?:episode|ep)\s*\.?\s*\d{1,4}\s*[:.\-–|]\s*(.{2,80})$/i.exec(text); if (mt) t = mt[1]; else { var tt = attr(el, 'title') || attr(el, 'data-title'); if (tt && !EP.test(tt)) t = tt; } }
+      if (!t) {
+        var mt = /(?:episode|ep)\s*\.?\s*\d{1,4}\s*[:.\-–|]\s*(.{2,80})$/i.exec(text);
+        // EM1i: doraby's real list item is "Episode 2" + two spaces + "Blue Cat" in a second <span>: no separator at all. A title that follows by spaces only counts when it starts with a letter and is no
+        // filler ("of 10", "season 2", a rating or a year in brackets never starts with a letter).
+        var mw = !mt ? /^\s*(?:episode|ep)\s*\.?\s*\d{1,4}\s+([A-Za-zÀ-ɏ][^\n]{1,79})$/i.exec(text) : null;
+        if (mw && /^(?:of|out of|season|series|s\d|ep\b|episode\b|min\b|mins\b)/i.test(mw[1])) mw = null;
+        if (mt) t = mt[1]; else if (mw) t = mw[1]; else { var tt = attr(el, 'title') || attr(el, 'data-title'); if (tt && !EP.test(tt)) t = tt; }
+      }
       return { s: s, e: e, t: clean(t) };
     }
 
