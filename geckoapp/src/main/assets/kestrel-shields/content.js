@@ -684,10 +684,7 @@
           if (!tn || s.childNodes.length !== 1 || tn.nodeType !== 3 || tn.length > 200000) continue;
           var t = tn.data;
           budget -= t.length;
-          if (!HINT.test(t)) continue;
-          t = t.replace(/\\u002f/gi, '/').replace(/\\u0026/gi, '&').replace(/\\\//g, '/');
-          var m; FIND.lastIndex = 0;
-          while ((m = FIND.exec(t)) !== null && n < 40) report(m[0]);
+          scanText(t);
         }
         scriptsDone = i;
       } catch (x) { /* never break the page */ }
