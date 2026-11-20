@@ -104,3 +104,11 @@ See the `OWNER` lines in TASKS.md: tablet feedback on Kestrel G, the Cromite com
 - Never run two gradle commands at once (the second run loses the first's XML results: "Could not write XML test results").
 - The ffmpeg install step of the lab can take 12 minutes on a slow runner; a lab run is 15-25 minutes wall clock. Dispatch ONE at a time per branch (a second one cancels the first).
 - Open for the owner's tablet test of alpha69: the Last run line after any crash, the Quality list on real YouTube, doraby servers (vidsrc, vidfast), episode names on the real doraby markup, moving / resizing the download window by finger.
+
+### Lessons from alpha70 (2026-11-18)
+- The app's real address bar is `ui/BottomDock` (the `Toolbar` class is not used by either build): put address-bar features there. Check which class is constructed (`grep -rn "BottomDock(\|Toolbar("`) before building UI.
+- Do not run two gradle commands at once, not even a targeted test beside the full suite: the full run then fails with "Could not write XML test results".
+- A lab scene must compare the app's lowercase Kotlin booleans (`true`) case-insensitively; the download window sits at the top RIGHT and eats a tap in the middle of the page (tap at the left edge); a scene that raises a "Download this video?" dialog must answer it.
+- Debug commands in BrowserActivity.labIntent are delivered by `am start`, which pauses and resumes the activity: anything that must happen while the app is in front (a freeze, a watchdog test) has to be POSTED to the main looper.
+- `Io.main.postDelayed` waits on the main thread: evidence that must survive a hung screen thread is written from its own thread (LastRun).
+- Owner-facing open items for alpha70: the Last run line with memory after any vanish; vidsrc / 111movies Diagnostics (media lines) taken while they play; the feel of the 4-button panel and the tab tray; the Tab previews line must say 0 for the wrong page.
