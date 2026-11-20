@@ -1,21 +1,22 @@
-# CHECKPOINT 2747 — read me first, then TASKS.md
+# CHECKPOINT 2748 — read me first, then TASKS.md
 
-**Written:** 2026-11-20T07:44:38Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `ccr-4efedacd-v3co75` · **builds on:** `4c5ff5b3` (this checkpoint is the commit after it)
+**Written:** 2026-11-20T07:58:00Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `ccr-4efedacd-v3co75` · **builds on:** `1598245a` (this checkpoint is the commit after it)
 
 ## Just done
-REL74b: alpha74 DISPATCHED ONCE (android.yml app=gecko full_build=true ref ccr-4efedacd-v3co75, note = docs/handoff/ALPHA74_RELEASE_NOTE.txt, gecko code 175). DO NOT DISPATCH AGAIN. Gates passed locally (handoff self-test, versionCode 175 > 174, :core:test :app:testDebugUnitTest compile, push)
+RVW3 DONE AND SHIPPED: alpha74 RELEASED AND RECORDED = kestrel-g-v0.3.0-alpha74 (gecko code 175, run 44697177781 all jobs green, APK + sha256 + .dm in the Release, BUILDLOG.md line pushed). Heartbeat trig_012BwCyPqhi5Dfz8amdBigFo deleted. Suites before ship: 2351 JVM tests 0 failures, lint clean, web 649/649
 
 ## Do this next
-Find the run id (mcp__github__actions_list list_workflow_runs android.yml branch ccr-4efedacd-v3co75), wait until all jobs succeed AND the tag kestrel-g-v0.3.0-alpha74 exists (git ls-remote --tags origin) and mcp__github__get_release_by_tag shows the APK; ONLY THEN bash tools/record-release.sh kestrel-g-v0.3.0-alpha74 with the IDENTICAL note ($(cat docs/handoff/ALPHA74_RELEASE_NOTE.txt)); then answer the owner with the Release link on its own line, tick RVW3c/RVW3d, delete heartbeat trig_012BwCyPqhi5Dfz8amdBigFo. If the run FAILED: read the failed job (mcp__github__get_job_logs), fix, and ship alpha75 (never re-ship the same tag)
+NOTHING is running. Waiting for the owner's tablet test of alpha74 (video retry needs a real hotspot dropout; downloads-yield-to-film needs a download during a film; SP1 per-request time shows in Diagnostics Blocker line). Open, said plainly in research/REVIEW_2026-11-21_*.md: PB2 PB4 PB6 PB8-11, SP2 (lastEvals not yet in Diagnostics) SP3-SP8 (libcrashtools.so, double read-back), SC3 (sync.sh path deny-list: owner decision) SC5 (cert pins need a PC) SC8-SC10 SC12; DNS-rebinding connect-time guard for the probe fetchers
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  a1da4068 ckpt 2747: REL74b: alpha74 DISPATCHED ONCE (android.yml app=gecko full_build=true ref c
   4c5ff5b3 ckpt 2746: gated kestrel-g-v0.3.0-alpha74 (gecko code 175) and pushed it: handoff self-
   6ab74f37 ckpt 2745: RVW3 fixes CODED + compile green (:geckoapp:compileDebugKotlin EXIT 0): secu
   7496a10a ckpt 2744: RVW3: security lane back and VERIFIED by me against the code (SC1 SC2 SC4 SC
@@ -25,5 +26,4 @@ Find the run id (mcp__github__actions_list list_workflow_runs android.yml branch
   94c87088 ckpt 2740: alpha73 RELEASED AND RECORDED: kestrel-g-v0.3.0-alpha73 (gecko code 174, run
   7f06c310 ckpt 2739: REL73b: alpha73 DISPATCHED ONCE (android.yml app=gecko full_build=true ref c
   5bf338a5 ckpt 2738: gated kestrel-g-v0.3.0-alpha73 (gecko code 174) and pushed it: handoff self-
-  f2a9d669 ckpt 2737: REL73a done: versionCode 174 / 0.3.0-alpha73, ext synced, ALPHA73 release no
 ```
