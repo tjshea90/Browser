@@ -14,7 +14,7 @@ class AuthNamesTest {
         assertEquals("", AuthNames.label("https://router.local/admin", "http://router.local/").note)
         assertEquals("router.local", AuthNames.label("https://Router.Local/admin", "http://router.local/").host)
         assertEquals("bank.example", AuthNames.label(null, "https://bank.example/a").host)
-        assertEquals("bank.example", AuthNames.label("", "https://bank.example/a").note.let { "bank.example" })
+        assertEquals("", AuthNames.label(null, "https://bank.example/a").note)
         assertEquals("evil.example", AuthNames.label("https://evil.example/x", null).host)
         assertEquals("this site", AuthNames.label(null, null).host)
         assertEquals("", AuthNames.label("not a url", "also not").note)
