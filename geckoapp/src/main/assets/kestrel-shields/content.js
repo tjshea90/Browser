@@ -252,17 +252,29 @@
     // RX3-V4: a player that feeds a blob: address (a MediaSource: hls.js, shaka, dash.js, most embeds) has no address worth sending, but its length and picture height can be matched to a playlist the app has read. Only the
     // word "blob" goes (never the blob: address); the app's core MediaList.applyBlob does the matching.
     function isBlob(src) { return src.indexOf('blob:') === 0; }
-    function report(v) {
+    function report(v, force) {
       var src = v.currentSrc || v.src || '';
       var blob = isBlob(src);
       if (!src || (!blob && src.indexOf('http') !== 0)) return;
       var key = (blob ? 'blob|' + elId(v) : src) + '|' + v.videoHeight + '|' + Math.round(v.duration || 0);
-      if (sent[key]) return;
+      if (sent[key] && !force) return;
       sent[key] = true;
       var x = factsOf(v);
       browser.runtime.sendMessage({ k: 'vid', u: blob ? 'blob' : src, w: v.videoWidth || 0, h: v.videoHeight || 0, d: isFinite(v.duration) ? v.duration : 0, l: blob ? '' : labelOf(v, src), p: location.href, f: x.f, rw: x.rw, rh: x.rh, vp: x.vp, el: elId(v) }).catch(function () {});
     }
     document.addEventListener('loadedmetadata', function (e) { var t = e.target; if (t && (t.tagName === 'VIDEO' || t.tagName === 'AUDIO')) report(t); }, true);
+    // RVW1 F7: the role of an element is sent once per file; a muted autoplay clip with no controls (a feed's preview, X / Reels) says "decoration", and when the person UNMUTES it, it is the video they came for: say it
+    // again, once per element, so the app stops hiding it. (volumechange also fires when a script unmutes: the app only learns the element's facts, the 'played' proof still needs 3 s of real playback.)
+    var unmuted = {};
+    document.addEventListener('volumechange', function (e) {
+      try {
+        var t = e.target;
+        if (!t || t.tagName !== 'VIDEO' || t.muted || !(t.volume > 0)) return;
+        var id = elId(t);
+        if (!id || unmuted[id]) return;
+        unmuted[id] = 1; report(t, true);
+      } catch (x) { /* never break the page */ }
+    }, true);
     // RX3-V3 (research/FINDER_LAB.md section 4): which element really PLAYS. `el` names an element for the page's lifetime (a small whole number, nothing else about it), so the app can tell "the same player went from a
     // 15 s clip to the film" (a pre-roll) from "two different videos". After 3 s of real playback of a file, once per element and file, the same report goes again with ev:'played'.
     var elIds = (typeof WeakMap === 'function') ? new WeakMap() : null, elNext = 1, playedKeys = {};

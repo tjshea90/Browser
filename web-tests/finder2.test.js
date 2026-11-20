@@ -97,3 +97,21 @@ test('F12: a page with hundreds of lazy pictures still finds the lazy video afte
   const page = await open(`${imgs}<div data-video-src="https://cdn.example/late/last.mp4"></div>`);
   assert.deepEqual(await doms(page), ['https://cdn.example/late/last.mp4']);
 });
+
+const vids = (page) => page.evaluate(() => window.__msgs.filter((m) => m.k === 'vid').map((m) => ({ u: m.u, f: m.f, el: m.el })));
+
+test('F7: a muted autoplay clip reported as decoration is reported AGAIN, once, when the person unmutes it', async () => {
+  const page = await open(`<video id="v" src="https://cdn.example/clip/short.mp4" muted autoplay loop playsinline style="width:300px;height:200px"></video>`);
+  await page.evaluate(() => { document.getElementById('v').dispatchEvent(new Event('loadedmetadata')); });   // the page's clip announces itself (no real file behind the address in this test)
+  await page.waitForTimeout(100);
+  const first = await vids(page);
+  assert.equal(first.length, 1, JSON.stringify(first));
+  await page.evaluate(() => { const v = document.getElementById('v'); v.muted = false; v.volume = 1; });
+  await page.waitForTimeout(300);
+  const second = await vids(page);
+  assert.equal(second.length, 2, 'the unmute made it say so again: ' + JSON.stringify(second));
+  assert.equal(second[1].u, 'https://cdn.example/clip/short.mp4');
+  await page.evaluate(() => { const v = document.getElementById('v'); v.muted = true; v.muted = false; });
+  await page.waitForTimeout(300);
+  assert.equal((await vids(page)).length, 2, 'once per element: another unmute is not another report');
+});
