@@ -544,6 +544,7 @@ var KestrelEngine = (function () {
 
     return {
       check: check, siteOf: siteOf, isSameSite: isSameSite,
+      lastEvals: function () { return cEvals; },   // RVW3 SP1 / SP2a: how many rules the LAST check tried (deterministic, no clock): the regression guard of the token-less index
       generation: all[2], bytes: buf.byteLength, hostRules: nHost, hostExceptions: nExc, patternRules: nRules, tokenRules: ruleIds.length, gramRules: gramIds.length, tokenlessRules: noToken.length,
     };
   }
