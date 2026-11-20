@@ -33,7 +33,9 @@ object PlayerFactory {
         for (l in headerLines) { val c = l.indexOf(':'); if (c > 0) headers[l.substring(0, c).trim()] = l.substring(c + 1).trim() }
         // ANS60d: a connection that goes quiet on the carrier-routed hotspot is given up after 10 s (it was 20) and the player asks again: the wait before a stalled segment is tried again halves
         val http = DefaultHttpDataSource.Factory().setUserAgent(userAgent()).setDefaultRequestProperties(headers).setAllowCrossProtocolRedirects(true).setConnectTimeoutMs(10_000).setReadTimeoutMs(10_000)
-        val data = DefaultDataSource.Factory(ctx, http)
+        // RVW3 SC1: HTTP(S) only. DefaultDataSource.Factory would also open file:, content:, asset: and rawresource: addresses, and a playlist the PAGE serves can name any of them as a segment or a key (the cross-protocol
+        // redirect above stays: some CDNs send https to http on purpose and a film is not secret; the host of the FIRST address is checked before the player starts, WebHandOver.hostRefused)
+        val data: DataSource.Factory = http
         val item = MediaItem.fromUri(url)
         val source: MediaSource = if (isHls(url)) HlsMediaSource.Factory(data).createMediaSource(item) else ProgressiveMediaSource.Factory(data).createMediaSource(item)
         // hardware decoders first (a software one only when nothing else decodes the format); no extension decoders (software FFmpeg / AV1 on four A53 cores is not a plan)
