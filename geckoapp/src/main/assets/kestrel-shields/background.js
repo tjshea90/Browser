@@ -622,7 +622,7 @@ function onRequest(d) {
     var left = pageLog.get(d.tabId);
     if (left && left.page && left.reqs - left.done > 0) send({ k: 'pend', p: left.page, n: left.reqs - left.done }).catch(function () {}); // RX3-BK1: the page that is being left still had requests open
     navId.set(d.tabId, Number(d.requestId) || 0); trimMap(navId, 80); frameParent.delete(d.tabId); mediaFrames.delete(d.tabId); frameDoc.delete(d.tabId); personTap.delete(d.tabId); personFrames.delete(d.tabId);
-    sniffed.delete(d.tabId); sniffed.delete(-1); maybeCount.delete(d.tabId); tabTop.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again (delete first: Map keeps the old position of a key, and the OLDEST position is what is dropped)
+    sniffed.delete(d.tabId); sniffed.delete(-1); jsonSeen.delete(d.tabId); maybeCount.delete(d.tabId); tabTop.delete(d.tabId); tabTop.set(d.tabId, d.url); if (tabTop.size > 60) tabTop.delete(tabTop.keys().next().value); // a new page in this tab: what it loads is news again (delete first: Map keeps the old position of a key, and the OLDEST position is what is dropped)
     verdicts.clear(); // legacy verdicts are only worth keeping while ONE page loads
     newLog(d.tabId, d.url); reportLater(d.tabId); // the page report starts here (4 s after the last news it goes to the app)
     var h = pageHost(d.url);
@@ -960,6 +960,70 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
   } catch (e) { hls.err++; }
   return {};
 }, { urls: ['http://*/*.m3u8*', 'https://*/*.m3u8*'], types: ['xmlhttprequest', 'media', 'other'] }, ['blocking', 'responseHeaders']);
+
+// RVW1 F8: JSON answers that NAME media. Vimeo's player configuration (`progressive` MP4 files and `hls` playlists), JW Player's `v2/media/ID`, Wistia's `ID.json`, Dailymotion's metadata, Brightcove's playback API and
+// the like never show a media address on the wire: the player reads them from a JSON answer and then fetches the pieces through MSE, so the finder saw nothing. The answers of video-looking endpoints are READ here
+// (written straight through to the page as they arrive, so the page is not slowed; the first 256 KB are kept) and every media address in them is reported like one found in the page's text (verified before it
+// counts). Narrow on purpose, like the HLS filter above: only URLs whose path names a video-ish word reach this listener at all (the pattern match is done before the extension is called), only JSON or plain-text
+// answers, at most JSON_PER_PAGE per page, and nothing for a body that says it is big.
+var JSON_MAX = 262144, JSON_PER_PAGE = 24, JSON_MAX_URLS = 12;
+var JSON_WORDS = ['video', 'player', 'config', 'playlist', 'manifest', 'media', 'embed', 'stream', 'vod', 'clip', 'oembed', 'sources', 'metadata'];
+var JSON_URLS = [];
+(function () { for (var i = 0; i < JSON_WORDS.length; i++) { JSON_URLS.push('http://*/*' + JSON_WORDS[i] + '*'); JSON_URLS.push('https://*/*' + JSON_WORDS[i] + '*'); } })();
+var JSON_CT = /^(?:application\/(?:[a-z0-9.+-]*\+)?json|text\/(?:plain|json|javascript)|application\/javascript)\b/i;
+var JSON_FIND = /https?:\/\/[^\s"'<>()\\]+?\.(?:m3u8|mpd|mp4|webm|m4v|mov|mp3|m4a)(?![A-Za-z0-9_\/%-]|\.[A-Za-z0-9])(?:\?[^\s"'<>()\\]*)?/gi;
+var jsonSeen = new Map();   // tabId -> JSON answers read on this page
+function jsonUrlsOf(text) {
+  var t = text.replace(/\\u002f/gi, '/').replace(/\\u0026/gi, '&').replace(/\\\//g, '/'), out = [], seen = {}, m;
+  JSON_FIND.lastIndex = 0;
+  while ((m = JSON_FIND.exec(t)) !== null && out.length < JSON_MAX_URLS) { if (!seen[m[0]]) { seen[m[0]] = 1; out.push(m[0]); } }
+  return out;
+}
+browser.webRequest.onHeadersReceived.addListener(function (d) {
+  try {
+    if (d.tabId < 0 || d.statusCode !== 200 || (d.method !== 'GET' && d.method !== 'POST') || stale(d)) return {};
+    var rh = d.responseHeaders || [], ct = '', len = -1, i;
+    for (i = 0; i < rh.length; i++) {
+      var nl = rh[i].name.length;
+      if (nl === 12 && rh[i].name.toLowerCase() === 'content-type') ct = String(rh[i].value || '');
+      else if (nl === 14 && rh[i].name.toLowerCase() === 'content-length') len = parseInt(rh[i].value, 10);
+    }
+    if (!JSON_CT.test(ct) || len > JSON_MAX) return {};
+    var n = jsonSeen.get(d.tabId) || 0;
+    if (n >= JSON_PER_PAGE) return {};
+    jsonSeen.set(d.tabId, n + 1); trimMap(jsonSeen, 60);
+    var f = browser.webRequest.filterResponseData(d.requestId), chunks = [], total = 0, over = false;
+    f.ondata = function (e) {
+      try {
+        if (!e || !e.data) { f.disconnect(); return; }
+        f.write(e.data);                                                   // straight through: the page gets its bytes at once
+        if (!over) { total += e.data.byteLength; if (total > JSON_MAX) { over = true; chunks = []; } else chunks.push(new Uint8Array(e.data.slice(0))); }
+      } catch (x) { try { f.disconnect(); } catch (y) { /* gone */ } }
+    };
+    f.onstop = function () {
+      try {
+        if (!over && total > 0) {
+          var all = new Uint8Array(total), at = 0;
+          for (var c = 0; c < chunks.length; c++) { all.set(chunks[c], at); at += chunks[c].length; }
+          var urls = jsonUrlsOf(new TextDecoder('utf-8').decode(all));
+          if (urls.length) {
+            var page = tabTop.get(d.tabId) || ((d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || ''));
+            var fr = docOf(d.documentUrl), rhd = reqHdr.get(d.requestId), ref = '', org = '';
+            if (rhd !== undefined) { var nlp = rhd.indexOf('\n'); ref = rhd.slice(0, nlp); org = rhd.slice(nlp + 1); }
+            noteFrame(d.tabId, d.frameId, d.parentFrameId, d.documentUrl);
+            for (var k = 0; k < urls.length; k++) send({ k: 'media', u: urls[k], c: '', l: -1, p: page, f: fr !== docOf(page) ? fr : '', s: 'dom', rf: ref, og: org }).catch(function () {});
+            jsonStat.found += urls.length;
+          }
+          jsonStat.read++;
+        }
+      } catch (x) { jsonStat.err++; }
+      try { f.close(); } catch (x) { /* gone */ }
+    };
+    f.onerror = function () { jsonStat.err++; try { f.disconnect(); } catch (x) { /* gone */ } };
+  } catch (e) { jsonStat.err++; }
+  return {};
+}, { urls: JSON_URLS, types: ['xmlhttprequest'] }, ['blocking', 'responseHeaders']);
+var jsonStat = { read: 0, found: 0, err: 0 };
 
 // What the page's own <video> says about the file it plays (picture size, length, the label next to a <source>): relayed by content.js.
 // RVW1 F1: a frame's number for the element ids. content.js numbers its elements per DOCUMENT (1, 2, ...), so the player in an iframe and the one in the page both said "el 1" and the app took them for one element
