@@ -262,6 +262,7 @@
       if (sent[key] && !force) return;
       sent[key] = true;
       var x = factsOf(v);
+      try { if (window.top !== window && window.KestrelVF) window.KestrelVF.offered = true; } catch (e) { /* ignore */ }
       browser.runtime.sendMessage({ k: 'vid', u: blob ? 'blob' : src, w: v.videoWidth || 0, h: v.videoHeight || 0, d: isFinite(v.duration) ? v.duration : 0, l: blob ? '' : labelOf(v, src), p: location.href, f: x.f, rw: x.rw, rh: x.rh, vp: x.vp, el: elId(v) }).catch(function () {});
     }
     function onMeta(e) { var t = e.target; if (t && (t.tagName === 'VIDEO' || t.tagName === 'AUDIO')) report(t); }
@@ -682,6 +683,11 @@
     var ATTR_SELECTOR = '[data-src]:not(img):not(picture), [data-video-src], [data-hls], [data-hls-url], [data-mp4], [data-stream], [data-video-url], [data-file], embed[src], object[data], [data-setup], [data-config], [data-sources], [data-player-config]';
     // RVW1 F11: the quality a <source> says it is ("720p", "HD", "1080"): video.js and plain markup put it in label / title / res / size. Sent with the address so a list of several qualities is not nameless (and the best
     // one is checked first, not the last one the page happened to list).
+    // RVW2 F13: a FRAME that offered something says so when it is unloaded (pagehide): the player iframe REMOVED by a server switch never gets a request of its own that would tell the extension
+    function offered() { try { if (window.top !== window && window.KestrelVF) window.KestrelVF.offered = true; } catch (e) { /* ignore */ } }
+    window.addEventListener('pagehide', function () {
+      try { if (window.top !== window && window.KestrelVF && window.KestrelVF.offered) browser.runtime.sendMessage({ k: 'bye' }).catch(function () {}); } catch (e) { /* never break the page */ }
+    });
     function labelOfSource(e) {
       try {
         if (!e || e.tagName !== 'SOURCE') return '';
@@ -696,6 +702,7 @@
       if (u.indexOf('http') !== 0 || sent[u] || !EXT.test(u)) return;
       sent[u] = 1; n++;
       var msg = { k: 'dom', u: u, p: location.href };
+      offered();
       if (label) msg.lb = label;
       browser.runtime.sendMessage(msg).catch(function () {});
     }

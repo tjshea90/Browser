@@ -378,6 +378,10 @@ onMsg(function (m, sender) {
     send(dmsg).catch(function () {});
     return undefined;
   }
+  if (m.k === 'bye') {                                                        // RVW2 F13: a frame that offered media is being unloaded (its element was removed, or it navigates itself)
+    if (tabId >= 0 && sender && sender.frameId > 0) frameGone(tabId, sender.frameId);
+    return undefined;
+  }
   if (m.k === 'pop') {
     var d = String(m.d || ''), c = d.indexOf('|'), kind = c > 0 ? d.slice(0, c) : d, url = c > 0 ? d.slice(c + 1) : '';
     var page = (tabId >= 0 && tabTop.get(tabId)) || m.p || '';
@@ -805,6 +809,11 @@ function frameNavigates(d) { // a sub_frame request: the frame [d.frameId] is be
   if (d.parentFrameId >= 0 && (pm.size < 120 || pm.has(f))) pm.set(f, d.parentFrameId);
   var fd = frameDoc.get(tabId); if (!fd) { fd = new Map(); frameDoc.set(tabId, fd); trimMap(frameDoc, 60); }
   if (fd.size < 80 || fd.has(f)) fd.set(f, docOf(d.url));
+  frameGone(tabId, f);
+}
+// The frame [f] (and the frames inside it) no longer shows the document that offered media: what they offered is dropped (the app is told which documents are gone). Called when a sub_frame request replaces the frame and,
+// RVW2 F13, when the frame's own script says it is being unloaded (`bye`): a site that REMOVES the player iframe and inserts a new one (a different frame id) never sent a request for the old id.
+function frameGone(tabId, f) {
   var mf = mediaFrames.get(tabId);
   if (!mf || !mf.size) return;
   var gone = [], ids = [];
