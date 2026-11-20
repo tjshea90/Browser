@@ -1,21 +1,22 @@
-# CHECKPOINT 2757 — read me first, then TASKS.md
+# CHECKPOINT 2758 — read me first, then TASKS.md
 
-**Written:** 2026-11-20T18:40:25Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/adoring-hamilton-58trdj` · **builds on:** `eebefd5f` (this checkpoint is the commit after it)
+**Written:** 2026-11-20T18:56:10Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/adoring-hamilton-58trdj` · **builds on:** `4f2a143a` (this checkpoint is the commit after it)
 
 ## Just done
-REL75b: alpha75 DISPATCHED ONCE (android.yml app=gecko full_build=true ref claude/adoring-hamilton-58trdj, note = docs/handoff/ALPHA75_RELEASE_NOTE.txt, gecko code 176) at about 18:41Z. DO NOT DISPATCH AGAIN. Gates before it: handoff self-test, versionCode 176 > 175, :core:test :app:testDebugUnitTest compile green, web npm test 649/649, lint clean, emulator lab run 44787922316 green with the site fixes running.
+RVW4 DONE AND SHIPPED: alpha75 RELEASED AND RECORDED = kestrel-g-v0.3.0-alpha75 (gecko code 176, run 44794938085 all jobs green incl. certificate pin + APK audit + gecko pref check, APK 96.6 MB + sha256 + .dm in the Release, BUILDLOG.md line pushed). Contents: NL1 Mozilla site fixes (webcompat 160.0.1, proven starting on the real engine in lab run 44787922316), NL2 real-page finder tool + HTML probe guard. Suites: core 1907 / app 450 / web 649 / lint 0 failures.
 
 ## Do this next
-wait for the run (find its id: mcp__github__actions_list list_workflow_runs android.yml perPage 1; NEVER perPage>1: huge output), then list_workflow_jobs perPage 8: all jobs success; git ls-remote --tags origin | grep alpha75; mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha75 shows the APK; then bash tools/record-release.sh kestrel-g-v0.3.0-alpha75 "$(cat docs/handoff/ALPHA75_RELEASE_NOTE.txt)" (IDENTICAL note); tick RVW4 rows in TASKS.md; answer the owner with the Release link on its own line + what is still open
+NOTHING is running. Waiting for the owner's tablet test of alpha75 (Diagnostics must show 'Site fixes: Mozilla's compatibility fixes 160.4.0 running'; watch memory) and still alpha74's (video retry needs a real dropout; downloads yield to a film). Open ideas, none started: PB2 own player through the phone proxy (needs emulator + Courier), PB4 keep the inline player when going full screen, PB9 buffer bytes by bitrate, PB10 release a backgrounded paused player, a dclk_video_ads / gvt1 ad-video address rule (seen on ted.com: a 15 s ad mp4 listed next to the film), real-page probes for Reddit/X/TikTok need a login the sandbox lacks. Re-run tools/sitelab/realfinder.js (NODE_PATH=$(npm root -g) node tools/sitelab/realfinder.js url ...; at most 3 urls per call) whenever the finder changes
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M TASKS.md
 
 ## Last ten checkpoints
 ```
+  a0ad95ec ckpt 2757: REL75b: alpha75 DISPATCHED ONCE (android.yml app=gecko full_build=true ref c
   eebefd5f ckpt 2756: gated kestrel-g-v0.3.0-alpha75 (gecko code 176) and pushed it: handoff self-
   9e99464e ckpt 2755: RVW4: whole JVM suite GREEN (:core:test 1907 tests 0 failures 12 skipped as 
   b1ec2fd4 ckpt 2754: NL1 PROVEN on the real engine: lab run 44787922316 (daily, 62 scenes, 12 min
@@ -25,5 +26,4 @@ wait for the run (find its id: mcp__github__actions_list list_workflow_runs andr
   934b8dad ckpt 2750: RVW4a: researched. Engine prefs / downloads / finder are saturated (all chea
   8d40d448 ckpt 2749: RVW4 written into TASKS.md in the owner's words (new levers for speed, compa
   aeef6973 ckpt 2748: RVW3 DONE AND SHIPPED: alpha74 RELEASED AND RECORDED = kestrel-g-v0.3.0-alph
-  a1da4068 ckpt 2747: REL74b: alpha74 DISPATCHED ONCE (android.yml app=gecko full_build=true ref c
 ```
