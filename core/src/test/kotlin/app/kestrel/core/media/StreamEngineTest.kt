@@ -843,4 +843,95 @@ class StreamEngineTest {
         assertTrue(r, r.startsWith("#1 shown ") && r.contains("(+25%)") && expected.size == 400_000)
         assertFalse("no name of any video in what is pasted around", r.contains("My clip"))
     }
+
+    // ---- RVW1 (research/REVIEW_2026-11-20_DOWNLOAD.md): V1 patience for playlist and key reads, V2 servers that ignore Range, S5 the key answer is bounded
+
+    @Test(timeout = 60_000) fun aResetOnTheFirstReadOfThePlaylistIsTriedAgainInsteadOfFailingTheDownload() {
+        val h = H()
+        val (pl, expected) = plainStream(h, 4, 20_000)
+        h.cdn.files["https://cdn.test/v/index.m3u8"] = pl.toByteArray()
+        h.cdn.failFirst["https://cdn.test/v/index.m3u8"] = 2                       // a reset, a reset, then the list (every variant but the first arrives without its text)
+        val v = h.completed(h.engine.enqueue(StreamSource("https://cdn.test/v/index.m3u8", null, null, "Clip - 720p")))
+        assertArrayEquals(expected, h.out(v))
+        assertEquals(3, h.cdn.count("https://cdn.test/v/index.m3u8"))
+    }
+
+    @Test(timeout = 60_000) fun aPlaylistThatStaysUnreachableFailsAsANetworkProblemNotAsAStorageProblem() {
+        val h = H()
+        h.cdn.files["https://cdn.test/v/index.m3u8"] = "#EXTM3U\n#EXTINF:4,\na.ts\n#EXT-X-ENDLIST\n".toByteArray()
+        h.cdn.failFirst["https://cdn.test/v/index.m3u8"] = 100
+        val v = h.await(h.engine.enqueue(StreamSource("https://cdn.test/v/index.m3u8", null, null, "Clip")), "failure") { it?.state == DlState.FAILED }!!
+        assertEquals("was 'could not write the file' (STORAGE) before", Reason.NETWORK, v.reason)
+    }
+
+    @Test(timeout = 60_000) fun aServerAnsweringTheListWith503ThenTheListIsAskedAgain() {
+        val h = H()
+        val (pl, expected) = plainStream(h, 3, 10_000)
+        h.cdn.files["https://cdn.test/v/index.m3u8"] = pl.toByteArray()
+        val n = java.util.concurrent.atomic.AtomicInteger()
+        h.cdn.gate = { req -> if (req.url.endsWith("index.m3u8") && n.getAndIncrement() < 2) 503 else null }
+        val v = h.completed(h.engine.enqueue(StreamSource("https://cdn.test/v/index.m3u8", null, null, "Clip")))
+        assertArrayEquals(expected, h.out(v))
+    }
+
+    @Test(timeout = 60_000) fun aResetOnTheKeyRequestIsTriedAgain() {
+        val h = H()
+        val key = testBytes(16, 7)
+        h.cdn.files["https://cdn.test/v/key.bin"] = key
+        h.cdn.failFirst["https://cdn.test/v/key.bin"] = 2
+        val plain = java.io.ByteArrayOutputStream()
+        val sb = StringBuilder("#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-KEY:METHOD=AES-128,URI=\"key.bin\"\n")
+        for (i in 0 until 3) {
+            val p = testBytes(9_000 + i, 500L + i); plain.write(p)
+            val c = Cipher.getInstance("AES/CBC/PKCS5Padding"); c.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(Hls.sequenceIv(i.toLong())))
+            h.cdn.files["https://cdn.test/v/e$i.ts"] = c.doFinal(p); sb.append("#EXTINF:4,\ne$i.ts\n")
+        }
+        sb.append("#EXT-X-ENDLIST\n")
+        val v = h.completed(h.enqueue(sb.toString()))
+        assertArrayEquals(plain.toByteArray(), h.out(v))
+    }
+
+    @Test(timeout = 60_000) fun aPlaylistThatRepeatsTheSameKeyTagBeforeEverySegmentAsksForTheKeyOnce() {
+        val h = H()
+        val key = testBytes(16, 8)
+        h.cdn.files["https://cdn.test/v/key.bin"] = key
+        val plain = java.io.ByteArrayOutputStream()
+        val sb = StringBuilder("#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n")
+        for (i in 0 until 8) {
+            val p = testBytes(6_000 + i, 700L + i); plain.write(p)
+            val c = Cipher.getInstance("AES/CBC/PKCS5Padding"); c.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(Hls.sequenceIv(i.toLong())))
+            h.cdn.files["https://cdn.test/v/r$i.ts"] = c.doFinal(p)
+            sb.append("#EXT-X-KEY:METHOD=AES-128,URI=\"key.bin\"\n#EXTINF:4,\nr$i.ts\n")   // the same tag again before each segment
+        }
+        sb.append("#EXT-X-ENDLIST\n")
+        val v = h.completed(h.enqueue(sb.toString()))
+        assertArrayEquals(plain.toByteArray(), h.out(v))
+        assertEquals("eight tags, one address, one request (was eight serial requests inside the drain lock)", 1, h.cdn.count("https://cdn.test/v/key.bin"))
+    }
+
+    @Test(timeout = 60_000) fun aKeyAnswerLargerThanAKeyIsRefusedWithoutBeingKept() {
+        val h = H()
+        h.cdn.files["https://cdn.test/v/key.bin"] = testBytes(5_000_000, 3)       // a licence server's page, or an endless body a hostile playlist points at
+        h.cdn.files["https://cdn.test/v/e0.ts"] = testBytes(1000, 4)
+        val v = h.await(h.enqueue("#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"key.bin\"\n#EXTINF:4,\ne0.ts\n#EXT-X-ENDLIST\n"), "failure") { it?.state == DlState.FAILED }!!
+        assertEquals(Reason.UNSUPPORTED, v.reason)
+    }
+
+    @Test(timeout = 60_000) fun aServerThatIgnoresRangeNoLongerCutsEachSegmentAtTheWindow() {
+        // Gecko fetches in 4 MiB windows; a proxy that answers every Range request with a plain 200 sent the whole segment, and the engine stopped reading at the window and called the part complete
+        val h = H(config = cfg(window = 4096)); h.cdn.windowBytes = 4096; h.cdn.ignoreRange = true
+        val (pl, expected) = plainStream(h, 4, 10_000)                                  // each segment is 2.4 windows
+        val v = h.completed(h.enqueue(pl))
+        assertEquals(expected.size.toLong(), h.out(v).size.toLong())
+        assertArrayEquals(expected, h.out(v))
+    }
+
+    @Test(timeout = 60_000) fun aServerThatIgnoresRangeStillGivesTheRightBytesOfByteRangeSegmentsBiggerThanTheWindow() {
+        val h = H(config = cfg(window = 1024)); h.cdn.windowBytes = 1024; h.cdn.ignoreRange = true
+        val file = testBytes(9_000, 21)
+        h.cdn.files["https://cdn.test/v/main.mp4"] = file
+        val pl = "#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6,\n#EXT-X-BYTERANGE:3000@0\nmain.mp4\n#EXTINF:6,\n#EXT-X-BYTERANGE:4000@3000\nmain.mp4\n#EXTINF:2,\n#EXT-X-BYTERANGE:2000@7000\nmain.mp4\n#EXT-X-ENDLIST\n"
+        val v = h.completed(h.enqueue(pl))
+        assertArrayEquals(file, h.out(v))
+    }
 }
