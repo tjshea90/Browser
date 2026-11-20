@@ -947,13 +947,29 @@ browser.webRequest.onHeadersReceived.addListener(function (d) {
 }, { urls: ['http://*/*.m3u8*', 'https://*/*.m3u8*'], types: ['xmlhttprequest', 'media', 'other'] }, ['blocking', 'responseHeaders']);
 
 // What the page's own <video> says about the file it plays (picture size, length, the label next to a <source>): relayed by content.js.
-onMsg(function (m) {
+// RVW1 F1: a frame's number for the element ids. content.js numbers its elements per DOCUMENT (1, 2, ...), so the player in an iframe and the one in the page both said "el 1" and the app took them for one element
+// (blob matching, "played", ad runs). The frame's small number (1..1999, 0 = the page itself) goes above the element's: el = n * 1000000 + element, at most 1 999 999 999 (an Int on the app side).
+var frameNos = new Map(), frameNoNext = 0;
+function frameNo(tabId, fid) {
+  if (!(fid > 0) || !(tabId >= 0)) return 0;
+  var k = tabId + ':' + fid, n = frameNos.get(k);
+  if (!n) { n = (frameNoNext++ % 1999) + 1; frameNos.set(k, n); if (frameNos.size > 300) frameNos.delete(frameNos.keys().next().value); }
+  return n;
+}
+onMsg(function (m, sender) {
   if (!m || m.k !== 'vid' || !m.u) return undefined;
   // RX3-V1: what the element is for (content.js factsOf): small whole numbers, clamped here again because the message comes from a web page's frame
   function ci(v, max) { v = v | 0; return v < 0 ? 0 : (v > max ? max : v); }
-  var o = { k: 'vid', u: m.u, w: m.w | 0, h: m.h | 0, d: Math.round((m.d || 0) * 1000), l: m.l || '', p: m.p || '' };
+  // RVW1 F1: the PAGE the tab is on, not the frame's own address: a cross-origin player frame (doraby's vidsrc / vidfast embeds, Vimeo, Dailymotion) names its own address in `p`, and the app finds no tab for it and
+  // dropped the whole report (role, played, heights, length, blob match). Same rule as the `dom` report: the tab's page; a frame without a known page names none (the app then takes the tab in front).
+  var tabId = (sender && sender.tab) ? sender.tab.id : -1, fid = sender ? (sender.frameId | 0) : 0;
+  var page = (tabId >= 0 && tabTop.get(tabId)) || (fid > 0 ? '' : String(m.p || ''));
+  var o = { k: 'vid', u: m.u, w: m.w | 0, h: m.h | 0, d: Math.round((m.d || 0) * 1000), l: m.l || '', p: page };
   if (typeof m.f === 'number') { o.f = ci(m.f, 63); o.rw = ci(m.rw, 20000); o.rh = ci(m.rh, 20000); o.vp = ci(m.vp, 100); }
-  if (typeof m.el === 'number') o.el = ci(m.el, 1000000);          // RX3-V3: the element's number on its page
+  if (typeof m.el === 'number') {                                   // RX3-V3: the element's number on its page
+    var fn = frameNo(tabId, fid);
+    o.el = fn ? ci(m.el, 999999) + 1000000 * fn : ci(m.el, 1000000);
+  }
   if (m.ev === 'played') o.ev = 'played';                            // RX3-V3: it really played for 3 s
   send(o).catch(function () {});
   return undefined;
