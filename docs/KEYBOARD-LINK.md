@@ -25,6 +25,16 @@ A ContentProvider or bound service between the apps would have to be protected b
 * The panel's own keyboard keeps its learned file in Kestrel's storage (`glide_personal.txt`, format `KESTREL-KEYBOARD-LEARNING`): Export in one app and Import in the other moves it, and section 2's hand-over does it in one tap.
 
 ## 5. Tested here / not proven on a device
-* Tested: `KeyboardPresenterTest`, `FieldInfosTest`, `TypingOptionsTest`, `ImeLayoutTest` (omnibox), `ReceiveLearnedActivityTest` (hand-over screen), `KeysServiceTest` (private command); Kestrel `SwoopLinkTest`, `SwoopInstalledTest`, `MiniNavTest`.
-* The daily-use simulation (`.github/workflows/daily-sim.yml`, `tools/sim/`): an Android 10 tablet-shaped emulator with both apps, Swoop chosen, typing and gliding into Kestrel's address box and into web page fields (the page's own report is the proof); its reports are the evidence in TASKS R17.
-* NOT proven on a real tablet or phone: the panel -> Swoop floating round trip, the keyboard picker flow, the hand-over, Swoop's behaviour in GeckoView fields on the MT8168B (speed, memory).
+* Unit-tested: `KeyboardPresenterTest`, `FieldInfosTest`, `TypingOptionsTest`, `ImeLayoutTest` (omnibox), `ReceiveLearnedActivityTest` (hand-over screen), `KeysServiceTest` (private command); Kestrel `SwoopLinkTest`, `SwoopInstalledTest`, `MiniNavTest`, `HandOverProviderTest`.
+* **Run on an emulator** (2026-11-17, `.github/workflows/daily-sim.yml`, `tools/sim/`; an Android 10 tablet-shaped KVM emulator, 600 x 1024 at 170 dpi, 2 GB, low-RAM flag; Swoop chosen as THE keyboard; Kestrel G built from the Browser branch with the real Firefox engine; the link at full speed, the way the owner mostly browses):
+  * Swoop shows in all six kinds of web-page text box (text, search, textarea, contenteditable, url, e-mail): 7 of 7 tapped phrases exact (capital, digit, apostrophe, comma, question mark through ?123 / Shift), 20 of 20 glided words right in each kind, also with a thumb landing 0.2 key off the centre; the word is on the page within about 0.2 s of the lift (the page's own report is the proof, not a screenshot).
+  * Autocorrect inside Gecko: teh -> the, dont -> don't, recieve -> receive, im -> I'm; one Backspace gives the typed word back.
+  * Kestrel's address box: Swoop's debug line reads `startInput kind=OMNIBOX ... omnibox=true`, the browser keys (slash, full stop, Go) are there; example.com loads in 1.0 s and en.wikipedia.org in 3.3 s.
+  * A private tab: `noLearn=true`; a normal tab: `noLearn=false`.
+  * Memory: Swoop 40 to 44 MB PSS (debug build), Kestrel 238 to 257 MB with a page open.
+  * 10 real sites loaded in Kestrel at full speed: first paint 0.2 to 2.8 s, load finished 0.25 to 5.9 s (apnews.com, with 54 requests blocked, is the slowest).
+  * A 10 second film pressed to play: Kestrel's own player started inside the page, first picture after 1.2 s, 0 stalls, 5 dropped frames of about 300 (a software decoder on the emulator, not the tablet's hardware).
+  * The emulator's own graphics (SwiftShader) gave up twice, on one particular web page and on a 1080p film (Android's system_server watchdog restart loop): an emulator limit, not shown to be a Kestrel defect; those two were taken out of the test lists.
+  * A Google results page asked Kestrel for the location: Kestrel showed its own Block / Allow question (the simulation taps Block).
+  * Emulator numbers are NOT the tablet's (x86_64, software GPU, fast CPU): they are relative to other runs of the same kind.
+* NOT proven on a real tablet or phone: the panel -> Swoop floating round trip, the keyboard picker flow, the hand-over of the old learned file, Swoop's speed and memory in GeckoView fields on the MT8168B, real-thumb accuracy.

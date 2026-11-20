@@ -265,4 +265,49 @@ object LexiconFile {
         val pairLp = ShortArray(nPairs); b.asShortBuffer().get(pairLp)
         return BinaryLexicon(len, blob, lp, dIds, dTexts, pairOff, pairId, pairLp, total)
     }
+
+    // ------------------------------------------------------------------------------------------------------------ building a new list from an old one (docs/DICTIONARY.md, "Casual pairs")
+
+    /** Every word of [lex] with the count that gives back its probability (so a list can be compiled again with other pairs). */
+    fun entriesOf(lex: BinaryLexicon): List<Entry> =
+        List(lex.size) { id -> Entry(lex.text(id), maxOf(1L, Math.round(Math.exp(lex.logProb(id).toDouble()) * lex.totalCount))) }
+
+    /** Every pair [lex] lists, as a count on a fixed scale (1e9 = certain): the chance of the second word after the first among the pairs listed for it. */
+    fun pairsOf(lex: BinaryLexicon): List<Pair> {
+        val out = ArrayList<Pair>(lex.bigramCount)
+        for (a in 0 until lex.size) for (b in lex.successors(a)) {
+            val p = Math.exp(lex.bigramLogProb(a, b).toDouble())
+            out.add(Pair(lex.text(a), lex.text(b), maxOf(1L, Math.round(p * PAIR_SCALE))))
+        }
+        return out
+    }
+
+    const val PAIR_SCALE = 1.0e9
+
+    /**
+     * The pairs of an old list mixed with the pair counts of a second corpus ([extra], e.g. everyday sentences): for every first word the chance of each second word becomes
+     * (1 - w) * (its chance in [base]) + w * (its share in [extra]) with w = [maxWeight] * n / (n + [k]), n = how often [extra] saw words after this first word: a word the corpus has
+     * hardly seen keeps the old list's pairs, one it has seen a lot follows the corpus. A second word only one of the two knows keeps its side's share.
+     */
+    fun mergePairs(base: List<Pair>, extra: List<Pair>, maxWeight: Double, k: Double): List<Pair> {
+        val oldBy = HashMap<String, MutableMap<String, Long>>()
+        for (p in base) if (p.count > 0L) oldBy.getOrPut(p.first) { HashMap() }.merge(p.second, p.count) { x, y -> x + y }
+        val newBy = HashMap<String, MutableMap<String, Long>>()
+        for (p in extra) if (p.count > 0L) newBy.getOrPut(p.first) { HashMap() }.merge(p.second, p.count) { x, y -> x + y }
+        val out = ArrayList<Pair>(base.size + extra.size)
+        for (first in (oldBy.keys + newBy.keys).toSortedSet()) {
+            val o = oldBy[first]; val n = newBy[first]
+            val oldSum = o?.values?.sum()?.toDouble() ?: 0.0
+            val newSum = n?.values?.sum()?.toDouble() ?: 0.0
+            val w = if (n == null || newSum <= 0.0) 0.0 else if (o == null) 1.0 else maxWeight * newSum / (newSum + k)
+            val seconds = HashSet<String>(); o?.let { seconds.addAll(it.keys) }; n?.let { seconds.addAll(it.keys) }
+            for (second in seconds) {
+                val pOld = if (o == null || oldSum <= 0.0) 0.0 else (o[second] ?: 0L) / oldSum
+                val pNew = if (n == null || newSum <= 0.0) 0.0 else (n[second] ?: 0L) / newSum
+                val p = (1.0 - w) * pOld + w * pNew
+                if (p > 0.0) out.add(Pair(first, second, maxOf(1L, Math.round(p * PAIR_SCALE))))
+            }
+        }
+        return out
+    }
 }
