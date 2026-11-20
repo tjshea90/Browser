@@ -1,5 +1,8 @@
 package app.kestrel.core.media
 
+import app.kestrel.core.url.NetHosts
+import app.kestrel.core.url.UrlParts
+
 /**
  * ANS54e (owner message 54, on alpha57: "When I play a video from the web page, the video player is very slow and laggy ... when I press the download button and select play in kestrel's player (test), it is
  * nearly perfect ... I want the web video players to use this"): decides whether the film a page is about to play is played by KESTREL'S OWN PLAYER (Media3 on a SurfaceView) instead of the page's player.
