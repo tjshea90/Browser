@@ -315,7 +315,7 @@
       try {
         if (!watched || !window.KestrelVF || shadowRuns >= 3) return;
         shadowRuns++;
-        var vs = window.KestrelVF.all('video');
+        var vs = window.KestrelVF.all('video', true);
         for (var i = 0; i < vs.length; i++) {
           var v = vs[i];
           if (watched.has(v) || v.getRootNode() === document) continue;              // a light-DOM video is covered by the document-level listeners
