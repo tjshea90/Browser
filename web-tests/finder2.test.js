@@ -171,3 +171,33 @@ test('F11: the quality label of each <source> travels with its address (label, t
   assert.equal(byName['plain.mp4'], null);
   assert.equal(byName['long.mp4'], null, 'a long text is not a quality label');
 });
+
+test('F5: a video inside a shadow root reports its metadata like any other (the media events do not cross the shadow boundary, so a listener on the element itself is needed); a light-DOM video is not double-watched', async () => {
+  const page = await open(`<div id="host"></div><video id="lv" src="https://cdn.example/s/light.mp4" style="width:200px;height:100px"></video><script>
+    var sr = document.getElementById('host').attachShadow({ mode: 'open' });
+    sr.innerHTML = '<video id="sv" src="https://cdn.example/s/clip.mp4" style="width:320px;height:180px"></video>';
+  </script>`, { pre: () => { window.__kstVfCfg = { shadowMs: 80, shadowTapMs: 60 }; } });
+  await page.waitForTimeout(900);
+  await page.evaluate(() => {
+    document.getElementById('host').shadowRoot.getElementById('sv').dispatchEvent(new Event('loadedmetadata'));
+    document.getElementById('lv').dispatchEvent(new Event('loadedmetadata'));
+  });
+  await page.waitForTimeout(200);
+  const got = (await vids(page)).map((x) => x.u).sort();
+  assert.deepEqual(got, ['https://cdn.example/s/clip.mp4', 'https://cdn.example/s/light.mp4']);
+});
+
+test('F5: a player that is built when it is pressed is found after the tap (the second look)', async () => {
+  const page = await open(`<div id="host"></div><script>
+    document.addEventListener('click', function () { setTimeout(function () {
+      var sr = document.getElementById('host').attachShadow({ mode: 'open' });
+      sr.innerHTML = '<video id="late" src="https://cdn.example/s/late.mp4" style="width:320px;height:180px"></video>';
+    }, 10); });
+  </script>`, { pre: () => { window.__kstVfCfg = { shadowMs: 80, shadowTapMs: 80 }; } });
+  await page.waitForTimeout(500);                                   // the first look (after load) found nothing
+  await page.mouse.click(5, 5);
+  await page.waitForTimeout(600);                                   // 10 ms to build, 80 ms to look again
+  await page.evaluate(() => { document.getElementById('host').shadowRoot.getElementById('late').dispatchEvent(new Event('loadedmetadata')); });
+  await page.waitForTimeout(150);
+  assert.deepEqual((await vids(page)).map((x) => x.u), ['https://cdn.example/s/late.mp4']);
+});
