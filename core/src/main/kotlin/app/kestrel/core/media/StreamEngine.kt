@@ -1283,7 +1283,9 @@ class StreamEngine(
                 if (st == 206) total = totalOf(resp.header("Content-Range"))
                 val body = resp.body ?: throw FetchException(FetchException.Kind.PROTOCOL, "no body")
                 var skip = if (whole && rf > 0) rf else 0L // a server that ignored Range sent everything: drop what is before the part we asked for
-                var limit = if (whole && rt >= 0) rt - maxOf(rf, 0L) + 1 else Long.MAX_VALUE // and stop after it
+                // RVW1 V2: and stop after it ONLY when the part's own end is known (a byte-range part: its last byte). The request's end `rt` is just the end of this WINDOW: a segment of unknown length asked for in windows
+                // (the Gecko fetcher asks for 4 MiB at a time) that a PHP / worker proxy answered with a plain 200 was cut at the window, renamed, appended and shown as a finished video with no error.
+                var limit = if (whole && known) toInclusive - maxOf(rf, 0L) + 1 else Long.MAX_VALUE
                 val buf = ByteArray(32 * 1024)
                 while (limit > 0) {
                     if (job.stop) throw Stopped()
