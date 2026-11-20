@@ -767,10 +767,11 @@ class VideoFlow(private val a: BrowserActivity) {
         val dur = MediaLabels.duration(man.durationMs)
         val sound = man.audio.firstOrNull { it.mp4Friendly && it.media != null }
         val rows = ArrayList<Pair<VideoPanel.Choice, StreamPick>>()
-        var skipped = 0
+        var skipped = 0; var noPlan = 0; var badFormat = 0   // RVW2 V8: say WHICH reason it was
         val seen = HashSet<String>()
         for (v in man.video) {
-            if (v.media == null || !v.mp4Friendly) { skipped++; continue }
+            if (v.media == null) { skipped++; noPlan++; continue }
+            if (!v.mp4Friendly) { skipped++; badFormat++; continue }
             if (!seen.add("${v.height}|${v.bandwidth / 100_000}")) continue
             val est = (v.bytesPerSecond + (sound?.bytesPerSecond ?: 0L)) * (man.durationMs / 1000)
             val pick = StreamPick(v.label, c.url, text, est, null, false, "mp4", repId = v.id, audioRepId = sound?.id, headers = requestHeaders(tab, c), cand = c)
@@ -781,8 +782,10 @@ class VideoFlow(private val a: BrowserActivity) {
             val pick = StreamPick("audio", c.url, text, est, null, true, "m4a", repId = au.id, ext = "m4a", headers = requestHeaders(tab, c), cand = c)
             rows.add(streamChoice(tab, c, pick, "Audio only", rowDetail("M4A", MediaLabels.size(est, estimate = true), dur), "m4a") to pick)
         }
-        if (rows.isEmpty()) return Loaded.Failed("This stream's qualities use a format (WebM / VP9) that Kestrel cannot save yet.")
-        return Loaded.Ready(rows, if (skipped > 0) "Some qualities use a format (WebM / VP9) that Kestrel cannot save yet." else null)
+        val noPlanText = "Kestrel could not work out the list of parts of this stream (its manifest is laid out in a way Kestrel does not read yet)."
+        val formatText = "use a format (WebM / VP9) that Kestrel cannot save yet."
+        if (rows.isEmpty()) return Loaded.Failed(if (badFormat == 0 && noPlan > 0) noPlanText else "This stream's qualities $formatText")
+        return Loaded.Ready(rows, if (skipped > 0) (if (badFormat == 0) "Some qualities could not be listed: their manifest is laid out in a way Kestrel does not read yet." else "Some qualities $formatText") else null)
     }
 
     private fun pickStream(tab: Tab, p: StreamPick, stem: String) {

@@ -161,11 +161,11 @@ object FileNames {
         return name
     }
 
-    private val SCRIPT_EXT = setOf("php", "php3", "php4", "php5", "asp", "aspx", "cgi", "jsp", "jspx", "html", "htm", "shtml", "do", "action", "pl", "py", "cfm", "bin", "dat", "tmp", "download", "file", "stream", "mpd", "m3u8")
+    private val SCRIPT_EXT = setOf("php", "php3", "php4", "php5", "asp", "aspx", "cgi", "jsp", "jspx", "html", "htm", "shtml", "do", "action", "pl", "py", "cfm", "tmp", "download", "file", "stream", "mpd", "m3u8")
     private val KNOWN_EXT = setOf(
         "mp4", "m4v", "mov", "webm", "mkv", "avi", "wmv", "flv", "f4v", "3gp", "3g2", "mpg", "mpeg", "ts", "m2ts", "mts", "ogv", "vob", "divx", "asf", "rm", "rmvb", "mxf",
         "mp3", "m4a", "m4b", "aac", "wav", "flac", "ogg", "oga", "opus", "weba", "mka", "wma", "amr", "mid", "ac3", "aif", "aiff",
-        "srt", "vtt", "ass", "ssa", "sub", "jpg", "jpeg", "png", "gif", "webp", "zip", "rar", "7z", "pdf", "txt",
+        "srt", "vtt", "ass", "ssa", "sub", "jpg", "jpeg", "png", "gif", "webp", "zip", "rar", "7z", "pdf", "txt", "bin", "dat",   // bin / dat: a name the SERVER chose stays (aFixedNameBeatsTheServersName)
     )
 
     /** "name.ext" -> "name (1).ext", "name (2).ext" ... until [exists] says the name is free. */
