@@ -912,7 +912,8 @@ browser.webRequest.onHeadersReceived.addListener(lstTimed(LST.rcv, function (d) 
   seen.add(key);
   noteFrame(d.tabId, d.frameId, d.parentFrameId, d.documentUrl);
   var page = tabTop.get(d.tabId) || ((d.frameAncestors && d.frameAncestors.length) ? d.frameAncestors[d.frameAncestors.length - 1].url : (d.documentUrl || d.originUrl || ''));
-  send({ k: 'media', u: url, c: ct, l: size, p: page, f: docOf(d.documentUrl), fa: frameChainOf(d), n: cd, rf: ref, og: org }).catch(function () {});
+  var whole = pieceFree(url);                                  // RVW1 F4: a piece's range is not the file: report the file, and its length only when the server said the TOTAL (Content-Range)
+  send({ k: 'media', u: whole || url, c: ct, l: (whole && total < 0) ? -1 : size, p: page, f: docOf(d.documentUrl), fa: frameChainOf(d), n: cd, rf: ref, og: org }).catch(function () {});
 }), { urls: ['http://*/*', 'https://*/*'], types: MEDIA_TYPES }, ['responseHeaders']);
 
 // ANS52h (research/VIDEO_ACCELERATION.md section "ANS52h design"): an HLS master playlist the page asks for is answered with the rungs above the picture size cap taken out (hlscap.js), so the site's player never
