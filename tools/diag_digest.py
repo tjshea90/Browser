@@ -1,4 +1,4 @@
-#!/usr/bin/env python3 -B -I
+#!/usr/bin/env python3
 """LD1d: read the live-diagnostics files the tablet uploaded to the PRIVATE repo and print what Claude should act on.
 
   python3 -B -I tools/diag_digest.py [--dir ../kestrel-private/diag] [--days 14] [--brief]
@@ -61,7 +61,7 @@ def analyse(batches):
         r['dropped'] += int(b.get('dropped', 0) or 0)
         lines = [('snap',) + split(x) for x in b.get('snapshot', []) if isinstance(x, str)] + [('ev',) + split(x) for x in b.get('events', []) if isinstance(x, str)]
         for kind, layer, event, detail in lines:
-            text = layer + ' ' + event + ' ' + detail
+            text = detail if layer == '?' else layer + ' ' + event + ' ' + detail     # a snapshot line is plain text, an event line starts '+12.3s layer event'
             if kind == 'ev':
                 r['events'] += 1
             if CRASH.search(text) and kind == 'ev' or (kind == 'snap' and re.search(r'^(last run|crash|previous run)', text, re.I) and CRASH.search(text)):
