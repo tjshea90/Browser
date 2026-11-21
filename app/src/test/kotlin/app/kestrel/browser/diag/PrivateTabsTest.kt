@@ -200,4 +200,14 @@ class PrivateTabsTest {
         val sb = gecko("web/ShieldsBridge.kt")
         for (k in listOf("vgh" to "videoGate", "vch" to "videoCodec", "verr" to "videoError")) assertTrue(k.first, sb.contains("\"${k.first}\" -> { ${k.second}(m); \"\" }"))
     }
+
+    /** IMG1: the facts about a picked file are looked at only for a normal tab, with no private tab anywhere, and carry no file name. */
+    @Test fun thePickedFileFactsAreTakenOnlyOutsideAPrivateTabAndNameNoFile() {
+        val b = gecko("BrowserActivity.kt")
+        assertTrue(b.contains("if (given.isNotEmpty() && current?.isPrivateTab != true && !PrivateGuard.active())"))
+        val f = b.substringAfter("private fun pickedFacts(").substringBefore("internal fun requestAndroidPermissions(")
+        assertTrue("only the size and the type are read from the provider, the display name only for its extension", f.contains("OpenableColumns.DISPLAY_NAME") && f.contains("lastIndexOf('.')"))
+        assertFalse("the name itself never goes into a line", Regex("Health\\.log\\([^\\n]*(getString|displayName)").containsMatchIn(f))
+        assertTrue(f.contains("FilePickFacts.logLine(f)"))
+    }
 }
