@@ -105,6 +105,85 @@ class LiveDiagTest {
         assertFalse(LiveDiag.hasToken())
     }
 
+    // ---- LD2: asleep when off, the tables, the settings snapshot, the advisor
+
+    private fun appPrefs() = ctx.getSharedPreferences("kestrel", Context.MODE_PRIVATE)
+
+    @Test fun offIsAsleepEveryEntryPointDoesNothingAndNothingStaysWaiting() {
+        LiveDiag.saveToken("github_pat_FAKE" + "A".repeat(40))
+        var asked = 0
+        var extra = 0
+        LiveDiag.setExtraFacts { extra++; mapOf("slowFrames" to 99L) }
+        LiveDiag.onFront { asked++; "" }
+        assertTrue("on: a send is waiting for its 2 minutes", LiveDiag.queuedForTest())
+        LiveDiag.setEnabled(false)
+        assertFalse("off: nothing is left waiting", LiveDiag.queuedForTest())
+        org.robolectric.shadows.ShadowLooper.idleMainLooper(130, TimeUnit.SECONDS)
+        assertEquals("the delayed send never ran", 0, asked)
+        LiveDiag.onFront { asked++; "" }
+        assertFalse(LiveDiag.queuedForTest())
+        var said = ""
+        LiveDiag.sendNow({ asked++; "" }) { said = it }
+        assertTrue(said, said.contains("off"))
+        assertEquals(emptyList<Any>(), LiveDiag.advice())
+        assertEquals(emptyMap<String, Long>(), LiveDiag.facts()); assertEquals(emptyMap<String, String>(), LiveDiag.settingsMap())
+        LiveDiag.observe("page", "loaded", "+1.0s page loaded host=example.org paint=10ms done=20ms blocked=0 visit=1 ok=true")
+        assertTrue(LiveDiag.statsForTest().isEmpty())
+        assertEquals("no supplier was asked", 0, asked); assertEquals("the activity's numbers were not read", 0, extra)
+        assertFalse(LiveDiag.applyAdvice(app.kestrel.core.livediag.Advice("x", 1, "w", "s", "a", "b", "tabs_kept", 1, "y")))
+        assertFalse("the setting was not touched", appPrefs().contains("tabs_kept"))
+    }
+
+    @Test fun finishedLoadsAndEventKindsAreTalliedWhileOn() {
+        LiveDiag.observe("page", "loaded", "+1.0s page loaded host=news.example.org paint=500ms done=9000ms blocked=2 visit=1 ok=true")
+        LiveDiag.observe("gecko", "onKill", "+2.0s gecko onKill example.org")
+        assertEquals("news.example.org", LiveDiag.statsForTest().sites().single().site)
+        assertEquals(1L, LiveDiag.statsForTest().count("gecko onKill"))
+    }
+
+    @Test fun turningOffErasesTheTablesAndTheirFileToo() {
+        repeat(30) { LiveDiag.observe("page", "loaded", "+1.0s page loaded host=a.example.org paint=1ms done=2ms blocked=0 visit=$it ok=true") }
+        ioDone()
+        val f = File(ctx.filesDir, "livediag.stats")
+        assertTrue("the tables are on disk", f.isFile)
+        LiveDiag.setEnabled(false)
+        assertFalse(f.exists()); assertTrue(LiveDiag.statsForTest().isEmpty())
+    }
+
+    @Test fun theSettingsSnapshotHasSwitchesAndNumbersOnlyNeverCodesAddressesOrCounters() {
+        appPrefs().edit().putBoolean("sh_ads", false).putInt("tabs_kept", 1).putString("search", "google").putString("phone_code", "ABCD-EFGH-JKLM-NPQR").putInt("phone_port", 5000)
+            .putString("glide_words", "secret words here").putLong("blocked_total", 99L).putString("upd_note", "free text").putString("home_url", "https://x.example/").commit()
+        val m = LiveDiag.settingsMap()
+        assertEquals("false", m["sh_ads"]); assertEquals("1", m["tabs_kept"]); assertEquals("google", m["search"])
+        for (bad in listOf("phone_code", "phone_port", "glide_words", "blocked_total", "upd_note", "home_url")) assertFalse(bad, m.containsKey(bad))
+        assertFalse(m.values.any { it.contains("ABCD") || it.contains("secret") })
+    }
+
+    @Test fun theAdvisorSeesTheTalliesAndATapChangesOnlyAWhitelistedSetting() {
+        repeat(2) { LiveDiag.observe("gecko", "onKill", "+2.0s gecko onKill example.org") }
+        val a = LiveDiag.advice().first { it.id == "kills-tabs" }
+        assertTrue(LiveDiag.applyAdvice(a))
+        assertEquals(1, appPrefs().getInt("tabs_kept", 0))
+        assertFalse(LiveDiag.applyAdvice(app.kestrel.core.livediag.Advice("x", 1, "w", "s", "a", "b", "phone_code", "x", "y")))
+        assertFalse(LiveDiag.applyAdvice(app.kestrel.core.livediag.Advice("x", 1, "w", "s", "a", "b", "tabs_kept", 9, "y")))
+        assertFalse("no key: nothing to apply", LiveDiag.applyAdvice(app.kestrel.core.livediag.Advice("x", 1, "w", "s", "a", "b", null, null, "y")))
+    }
+
+    @Test fun theFactsCarryNumbersOnlyAndSayWhetherThePhoneIsPairedWithoutItsCode() {
+        appPrefs().edit().putString("phone_code", "ABCD-EFGH-JKLM-NPQR").commit()
+        LiveDiag.setExtraFacts { mapOf("slowFrames" to 7L) }
+        val f = LiveDiag.facts()
+        assertEquals(1L, f["phonePaired"]); assertEquals(7L, f["slowFrames"]); assertTrue(f.containsKey("storageFreeMb"))
+    }
+
+    @Test fun sleepingAndTheLastCheckBeforeTheSendArePinnedInTheSource() {
+        val s = src("diag/LiveDiag.kt")
+        assertTrue("off cancels the delayed send", s.substringAfter("private fun sleep()").substringBefore("}\n").contains("removeCallbacks(sendTask)"))
+        val up = s.substringAfter("private fun upload(")
+        assertTrue("the switch is looked at again just before the bytes go", up.indexOf("if (!enabled) return", up.indexOf("DiagBatch(")) in 0 until up.indexOf("put(DiagBatch.path"))
+        for (entry in listOf("fun facts()", "fun settingsMap()", "fun advice()")) assertTrue(entry, s.substringAfter(entry).trimStart().let { it.startsWith("{") || it.startsWith(":") }.and(s.substringAfter(entry).substringAfter("{").trimStart().startsWith("if (!enabled)")))
+    }
+
     // ---- the rules, pinned by reading the source (a later edit that breaks one fails here)
 
     @Test fun observeLooksAtTheSwitchBeforeAnythingElse() {
