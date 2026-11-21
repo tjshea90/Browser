@@ -54,3 +54,11 @@ Changes (alpha80):
 4. The `Back:` Diagnostics line now also says how many pages were made cacheable.
 Lab (new suite `back`, tools/emu/soak.py back_scene + back_emu + backlab `/login/back-nostore`): static baseline, a no-store page with Instant Back on, and the same page under a sign-in path (the control that must still load again from the network). Result: see the end of this section once the run is read.
 Not known / not done: the glitch (no evidence: the app's Health lines `back-arm` / `back-picture` / `cover-hide` and `Last run` of the tablet would show it); the real mix of Back presses on the tablet (the `Back:` line); the bfcache blockers REQUEST / PAGE_LOADING for a page left with open requests on the hotspot (BK3: needs lab pages with a pending fetch / XHR / WebSocket before any experiment).
+
+### BK10 lab result (real GeckoView 160, Android 10 emulator, run 44873006097, suite `back`, commit 08d2776b; the first run 44872447722 failed before any Back press: the driver had the sandbox's adb path)
+| Round | What Back did |
+| :- | :- |
+| static (cacheable page) | KEPT by the engine's back/forward cache: `pageshow persisted=true`, no request, place 1800 exact |
+| no-store page, Instant Back ON (default) | **KEPT: `persisted=true`, no new GET, place 1800 exact** (before BK10 the same page was loaded again from the network, section 2) |
+| the SAME no-store page under `/login/` (control) | loaded again FROM THE NETWORK (`persisted=false`, nav `back_forward`, a new GET): Instant Back leaves a sign-in path alone, as designed |
+So rewriting `Cache-Control: no-store` -> `no-cache` in the extension DOES reach the engine's bfcache decision (the research's open assumption). Emulator timings are not the tablet's (wall times include adb). The same run printed `back-arm no state` for every press: the app's copy of the history (`tab.gecko.state`) was not there yet, so no picture was armed; the stale-copy guard (`BackScrollRules.sameAddress`: the copy's current entry must be the page on screen) closes the other side of that race (a copy one page behind would put the WRONG page's picture over the target) = the only candidate found for the owner's "glitch"; not proven to be what he saw.
