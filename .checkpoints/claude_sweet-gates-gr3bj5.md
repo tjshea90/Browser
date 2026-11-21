@@ -1,25 +1,24 @@
-# CHECKPOINT 2783 — read me first, then TASKS.md
+# CHECKPOINT 2784 — read me first, then TASKS.md
 
-**Written:** 2026-11-21T06:02:37Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/sweet-gates-gr3bj5` · **builds on:** `cabd24e2` (this checkpoint is the commit after it)
+**Written:** 2026-11-21T06:14:41Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/sweet-gates-gr3bj5` · **builds on:** `0f713e4a` (this checkpoint is the commit after it)
 
 ## Just done
-BK10 PROVEN on the real engine (lab run 44873006097): no-store page + Instant Back = KEPT on Back, control under /login = loaded again from the network. Added the stale-history-copy guard (BackScrollRules.sameAddress, tested) for the owner's glitch. Bumped code 181 / alpha80, note written. NOT shipped yet.
+gated kestrel-g-v0.3.0-alpha80 (gecko code 181) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
 
 ## Do this next
-REL80: bash ship.sh gecko "$(cat docs/handoff/ALPHA80_RELEASE_NOTE.txt)" (WAIT for it to finish, then confirm the commit is pushed BEFORE dispatching), ONE dispatch (android.yml app=gecko full_build=true ref claude/sweet-gates-gr3bj5, same note), wait tag kestrel-g-v0.3.0-alpha80 + all jobs (a flaky PhoneBackendTest may need rerun_failed_jobs, see FLK1), get_release_by_tag, bash tools/record-release.sh kestrel-g-v0.3.0-alpha80 with the identical note; answer the owner (BK10)
+TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref claude/sweet-gates-gr3bj5, inputs {"app":"gecko","full_build":"true","note":"alpha80: the Back button. You said Back sometimes takes long while it sits on a picture of the page, that it glitched once, and that caching pages for instant reloading may be the answer. It was: the slow Backs were pages that tell the browser not to keep them (feeds, chat sites such as Gemini, dashboards, many news pages): the engine cannot keep those, so it loaded them again over the hotspot while Kestrel showed a saved picture. INSTANT BACK (Settings, Instant Back, on by default): such a page is now kept anyway, so Back shows it at once. Every normal visit still asks the site for the newest page; only Back and Forward use the kept copy. It is never used in a private tab, and never for mail, banking, payment, sign-in, account or health pages (and a list of well-known bank, payment, health-insurance and mail names). The kept copy lives in the browser cache on the tablet; Clear browsing data removes it. This was checked on the real Firefox engine in an emulator: the same page that used to be loaded again from the network on Back was kept and shown instantly, and the same page under a sign-in address was still loaded again, as intended. The picture is also better: it now shows a thin line along the top edge after one second and a note, Still loading and the site name, after four seconds, so it no longer looks frozen, and Kestrel keeps eight pictures instead of four so older pages have one too. THE GLITCH: one cause I could find and fix: the app copy of the page history can be one page behind right after a page opens, which could put the picture of the wrong page over the page you were going back to; the picture is now only used when that copy matches the page on screen. I cannot say that was your glitch. STILL SLOW: a page that was still loading when you left it, a page with a video player, and a page whose tab was freed to save memory cannot be kept and still load again. Diagnostics, line Back, now also says how many pages were made cacheable and how often Back was instant. NOT run on the tablet."}.
+When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha80), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha80 "alpha80: the Back button. You said Back sometimes takes long while it sits on a picture of the page, that it glitched once, and that caching pages for instant reloading may be the answer. It was: the slow Backs were pages that tell the browser not to keep them (feeds, chat sites such as Gemini, dashboards, many news pages): the engine cannot keep those, so it loaded them again over the hotspot while Kestrel showed a saved picture. INSTANT BACK (Settings, Instant Back, on by default): such a page is now kept anyway, so Back shows it at once. Every normal visit still asks the site for the newest page; only Back and Forward use the kept copy. It is never used in a private tab, and never for mail, banking, payment, sign-in, account or health pages (and a list of well-known bank, payment, health-insurance and mail names). The kept copy lives in the browser cache on the tablet; Clear browsing data removes it. This was checked on the real Firefox engine in an emulator: the same page that used to be loaded again from the network on Back was kept and shown instantly, and the same page under a sign-in address was still loaded again, as intended. The picture is also better: it now shows a thin line along the top edge after one second and a note, Still loading and the site name, after four seconds, so it no longer looks frozen, and Kestrel keeps eight pictures instead of four so older pages have one too. THE GLITCH: one cause I could find and fix: the app copy of the page history can be one page behind right after a page opens, which could put the picture of the wrong page over the page you were going back to; the picture is now only used when that copy matches the page on screen. I cannot say that was your glitch. STILL SLOW: a page that was still loading when you left it, a page with a video player, and a page whose tab was freed to save memory cannot be kept and still load again. Diagnostics, line Back, now also says how many pages were made cacheable and how often Back was instant. NOT run on the tablet."
+NEVER ship kestrel-g-v0.3.0-alpha80 twice (check BUILDLOG.md and the Releases first).
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-     M TASKS.md
-     M geckoapp/build.gradle.kts
-     M geckoapp/src/main/assets/kestrel-shields/manifest.json
-     M research/BACK_SCROLL.md
-    ?? docs/handoff/ALPHA80_RELEASE_NOTE.txt
+    (nothing — the tree is clean as of this checkpoint)
 
 ## Last ten checkpoints
 ```
+  0f713e4a ckpt 2783: BK10 PROVEN on the real engine (lab run 44873006097): no-store page + Instan
   08d2776b ckpt 2782: BK10 lab run 44872447722 (suite back): all three rounds failed before any Ba
   2a29901b ckpt 2781: BK10 coded + tested: (1) extension: blocking main_frame listener turns Cache
   d91a5fd5 ckpt 2780: BK10 written into TASKS.md in the owner's words (Back button: slow load whil
@@ -29,8 +28,4 @@ REL80: bash ship.sh gecko "$(cat docs/handoff/ALPHA80_RELEASE_NOTE.txt)" (WAIT f
   e04b99e6 ckpt 2776: gated kestrel-g-v0.3.0-alpha79 (gecko code 180) and pushed it: handoff self-
   79a107c9 ckpt 2775: ATT1: file-chooser hardening coded + tested (core FilePickRulesTest + OwnerR
   299f3c4b ckpt 2774: ATT1 written into TASKS.md in the owner's words (new owner message: attachin
-  9a0d1e24 ckpt 2773: alpha78 RELEASED AND RECORDED (kestrel-g-v0.3.0-alpha78, gecko code 179, run
 ```
-
-(1 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
