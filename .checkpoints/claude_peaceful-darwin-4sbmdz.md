@@ -1,13 +1,13 @@
-# CHECKPOINT 2821 — read me first, then TASKS.md
+# CHECKPOINT 2822 — read me first, then TASKS.md
 
-**Written:** 2026-11-21T17:31:56Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `c09b850d` (this checkpoint is the commit after it)
+**Written:** 2026-11-21T17:35:38Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `fe709ae7` (this checkpoint is the commit after it)
 
 ## Just done
-LD4b extension side done: pagetime.js (ES5, top frame, document_start, lateness timer + PerformanceObserver for requests past the 250-entry buffer + nav/paint/LCP, ONE message, stops its timer, protocol guard), manifest entry, background.js k=pt validated; web-tests: pagetime.test.js 5/5 (real Chromium), background.test.js 127/127 incl. new LD4 test
+LD4b app side done and compiling: GeckoEngine.networkProfileCode, ShieldsBridge pageTiming + 'pt' dispatch, BrowserActivity.onPageTiming (host from the TAB, never private, context shields/net/avail/cpu/tabs) -> Health 'page timing' line (core PageTimingLine), liveDiagExtraFacts adds extension cost (ExtCost), CPU (CpuMeter.numbers), memory (LastRun.memoryNumbers), start marks (StartTimeline.numbers), jankFrames; LiveDiag snapshot lines keep 1600 chars; geckoapp compile green, app diag tests green; core livediag 65
 
 ## Do this next
-Next: app side. ShieldsBridge: add pageTiming callback + 'pt' -> pageTiming(m); BrowserActivity.onPageTiming (Io.main.post; host from the TAB page url not the script; skip private; Health.log('page','timing', line) with shields/net/avail/cpu/tabs) wired in ShieldsBridge.install call; CpuMeter accessor for last parent/tab pct; liveDiagExtraFacts numbers (extReqCalls/extReqUs, judged avg/max/over2ms from ShieldsBridge stats, cpu avg/peak, pss, cold start phases, jank); LiveDiag snapshot lines use DiagScrub.MAX_SNAPSHOT_LINE; then digest LOAD ANALYSIS; gate; alpha85
+Next: (1) app test for the new facts (LiveDiagTest: extra facts in the batch are numbers only) - optional; (2) tools/diag_digest.py LOAD ANALYSIS: parse 'page timing' event lines + sites timing fields + Blocker numbers: per site loads, median load, fcp, ttfb, lag share, requests, classification NETWORK / CPU / SHIELDS with numbers; show device ext numbers; test_handoff checks; (3) full gate (:core:test :app:testDebugUnitTest :geckoapp:testDebugUnitTest :app:lintDebug, web-tests npm test), (4) bump 0.3.0-alpha85 code 186, sync-ext-version, note file docs/handoff/ALPHA85_RELEASE_NOTE.txt, ship.sh gecko, ONE dispatch, record-release; (5) answer owner
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ Next: app side. ShieldsBridge: add pageTiming callback + 'pt' -> pageTiming(m); 
 
 ## Last ten checkpoints
 ```
+  ca1f0fe2 ckpt 2821: LD4b extension side done: pagetime.js (ES5, top frame, document_start, laten
   029be5ca ckpt 2820: LD4b core done: DiagScrub caps (event 480, snapshot lines 1600: the CPU/Bloc
   0b7be92b ckpt 2819: LD4a done: research/SLOW_LOADS.md written from the real uploads: claude.ai 1
   a6b43548 ckpt 2818: LD4 written into TASKS.md in the owner's words (richer live diagnostics + cl
@@ -25,8 +26,7 @@ Next: app side. ShieldsBridge: add pageTiming callback + 'pt' -> pageTiming(m); 
   2cf128f4 ckpt 2814: gated kestrel-g-v0.3.0-alpha84 (gecko code 185) and pushed it: handoff self-
   0efd4ff7 ckpt 2813: ALPHA84 release note written (docs/handoff/ALPHA84_RELEASE_NOTE.txt); platfo
   c4318ee7 ckpt 2812: LD3 docs + TASKS ticks (a-d) written; digest prints sends automatic/manual +
-  7369e028 ckpt 2811: LD3 code done and green: core DiagJournal (exact commit, honest lost/thinned
 ```
 
-(6 automatic checkpoint(s) since the last deliberate one — the
+(4 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
