@@ -242,6 +242,104 @@ def run_endings(batches):
     return c
 
 
+TKV = re.compile(r'(\w+)=([^\s|]+)')
+
+
+def parse_timing(ev):
+    """One `page timing` event line -> a dict of numbers (lag as three numbers, slow as host:kind:ms), the tablet's state after ' | ', or None."""
+    if not isinstance(ev, str) or ' page timing ' not in ev:
+        return None
+    body = ev.split(' page timing ', 1)[1]
+    head, _, ctx = body.partition(' | ')
+    t = {'ctx': dict(TKV.findall(ctx))}
+    for k, v in TKV.findall(head):
+        if k == 'lag':
+            parts = v.split('/')
+            try:
+                t['lagMax'], t['lagTot'], t['lagN'] = int(parts[0]), int(parts[1]), int(parts[2])
+            except (ValueError, IndexError):
+                pass
+        elif k == 'slow':
+            t['slow'] = [x.split(':') for x in v.split(',') if x.count(':') == 2]
+        elif k == 'host':
+            t['host'] = v
+        else:
+            try:
+                t[k] = int(v)
+            except ValueError:
+                pass
+    return t if t.get('host') else None
+
+
+def median(xs):
+    xs = sorted(xs)
+    return xs[len(xs) // 2] if xs else None
+
+
+def verdict(loads, judge_us):
+    """CPU-bound / network-bound / Shields-heavy for one site's loads (the numbers are in the row; the thresholds are first guesses, said so in research/SLOW_LOADS.md)."""
+    ok = [t for t in loads if t.get('hid') != 1 and t.get('load', -1) > 0]
+    if len(ok) < 1:
+        return 'too few full loads', None
+    load = median([t['load'] for t in ok])
+    lag = sum(t.get('lagTot', 0) for t in ok) * 100.0 / max(1, sum(t['load'] for t in ok))
+    fb = median([t['fb'] for t in ok if t.get('fb', -1) >= 0]) or 0
+    r3 = sum(t.get('r3', 0) for t in ok) / float(len(ok))
+    rn = sum(max(0, t.get('rn', 0)) for t in ok) / float(len(ok))
+    shield_ms = rn * judge_us / 1000.0 if judge_us else 0
+    why = []
+    if shield_ms >= 1500 and shield_ms * 100.0 >= load * 8:
+        why.append('SHIELDS-heavy (~%.1f s of the load is the blocker: %d requests x %.1f ms)' % (shield_ms / 1000.0, rn, judge_us / 1000.0))
+    if lag >= 40:
+        why.append('CPU-bound (the page was too busy to answer for %d %% of its load)' % lag)
+    elif lag < 20 and (fb * 100.0 >= load * 25 or r3 >= 2):
+        why.append('NETWORK-bound (first byte after %.1f s, %.1f requests took 3 s or more per load)' % (fb / 1000.0, r3))
+    return ('; '.join(why) if why else 'unclear (lag %d %%, first byte %.1f s, %d requests)' % (lag, fb / 1000.0, rn)), lag
+
+
+def load_analysis(batches, r):
+    """LD4: where the time of each site's page loads went, from the pages' own timing lines (pagetime.js) and the tablet's numbers."""
+    by = defaultdict(list)
+    for b in batches:
+        for e in b.get('events', []):
+            t = parse_timing(e)
+            if t:
+                by[t['host']].append(t)
+    dev = r.get('device') or {}
+    calls, us = dev.get('extReqCalls', 0), dev.get('extReqUs', 0)
+    judge_us = (us / calls) if calls else 0
+    print('\n== LOAD ANALYSIS: where the time of a page load went (the pages\' own timing, %d load(s) in %d site(s); thresholds are first guesses) ==' % (sum(len(v) for v in by.values()), len(by)))
+    if not by:
+        print('  (no `page timing` lines yet: the tablet needs alpha85 or newer and some browsing; the older uploads only have the app\'s own paint/done times)')
+    for host, loads in sorted(by.items(), key=lambda kv: -len(kv[1]))[:12]:
+        full = [t for t in loads if t.get('hid') != 1]
+        v, lag = verdict(loads, judge_us)
+        def m(k):
+            x = median([t[k] for t in full if t.get(k, -1) >= 0])
+            return '-' if x is None else '%.1f' % (x / 1000.0) if k in ('load', 'fcp', 'lcp', 'fb', 'dcl') else str(x)
+        cached = sum(max(0, t.get('rc', 0)) for t in full) * 100 // max(1, sum(max(0, t.get('rn', 0)) for t in full))
+        print('  %-26s %2d loads: load %ss, first paint %ss, first byte %ss, requests %s (%d %% cached), took 3 s+ %s, lateness %s %%  -> %s' % (
+            host[:26], len(full), m('load'), m('fcp'), m('fb'), m('rn'), cached, m('r3'), '-' if lag is None else int(lag), v))
+        slows = Counter()
+        for t in full:
+            for h, k, ms in t.get('slow', []):
+                slows['%s (%s)' % (h, k)] += 1
+        if slows:
+            print('      slowest requests, most often: ' + ', '.join('%s x%d' % kv for kv in slows.most_common(4)))
+        ups = [t['load'] for t in full if t['ctx'].get('shields') == 'up' and t.get('load', -1) > 0]
+        downs = [t['load'] for t in full if t['ctx'].get('shields') == 'down' and t.get('load', -1) > 0]
+        if ups and downs:
+            print('      Shields A/B: up %.1f s (%d loads) vs down %.1f s (%d loads)' % (median(ups) / 1000.0, len(ups), median(downs) / 1000.0, len(downs)))
+    if judge_us:
+        print('  Shields cost per request (extension listener, newest file): %.2f ms; judge average %s us, worst %s us, %s over 2 ms; total held %.1f s over %s requests' % (
+            judge_us / 1000.0, dev.get('judgeAvgUs', '-'), dev.get('judgeMaxUs', '-'), dev.get('judgeOver2ms', '-'), us / 1e6, calls))
+    state = [('memAvailMb', 'free memory MB'), ('psiSome10', 'memory pressure x100'), ('rssParentMb', 'app main MB'), ('rssTabMb', 'engine content process MB'), ('cpuParentAvg', 'CPU parent avg %'),
+             ('cpuParentPeak', 'parent peak %'), ('cpuTabAvg', 'CPU page process avg %'), ('cpuTabPeak', 'page process peak %'), ('jankFrames', 'slow frames'), ('coldPaint', 'cold start to first paint ms'), ('coldRuntime', 'engine ready ms'), ('uptimeS', 'app up s')]
+    got = ['%s %s' % (dev[k], name) for k, name in state if k in dev]
+    if got:
+        print('  The tablet (newest file): ' + ', '.join(got))
+
+
 def brief(r, batches):
     if not batches:
         return ''
@@ -359,6 +457,7 @@ def main(argv):
         print('  %5.1f %5.1f %3d  %s' % (avg, worst, n, k))
     if not sh:
         print('  (none)')
+    load_analysis(batches, r)
     if r['sitetab']:
         print('\n== Sites over all files (loads, failed, avg median s, worst s) ==')
         rows = sorted(r['sitetab'].items(), key=lambda kv: -kv[1]['loads'])[:10]
