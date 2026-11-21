@@ -12,7 +12,7 @@ import app.kestrel.core.livediag.PrivateWindow
  * The counters tell it is working without telling anything private: `private.masked` (lines that had a site name masked) and `private.holds` (sends held back).
  */
 object PrivateGuard {
-    private val window = PrivateWindow()
+    @Volatile private var window = PrivateWindow()
     @Volatile internal var clock: () -> Long = { SystemClock.elapsedRealtime() }
 
     /** BrowserActivity: is there a private tab now? Called when a private tab is created and whenever tabs go away. */
@@ -31,5 +31,5 @@ object PrivateGuard {
         return t
     }
 
-    internal fun resetForTest() { setOpen(false); window.setOpen(false, Long.MIN_VALUE / 4); clock = { SystemClock.elapsedRealtime() } }
+    internal fun resetForTest() { window = PrivateWindow(); clock = { SystemClock.elapsedRealtime() } }
 }

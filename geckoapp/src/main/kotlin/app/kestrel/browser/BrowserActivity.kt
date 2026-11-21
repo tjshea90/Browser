@@ -34,6 +34,7 @@ import app.kestrel.browser.R
 import app.kestrel.browser.web.KestrelGeckoView
 import app.kestrel.browser.ui.DiagnosticsView
 import app.kestrel.browser.ui.DownloadPopup
+import app.kestrel.browser.diag.PrivateGuard
 import app.kestrel.browser.diag.Health
 import app.kestrel.browser.diag.StartTimeline
 import app.kestrel.browser.data.BrowserDb
@@ -1271,6 +1272,7 @@ open class BrowserActivity : Activity(), DockListener {
     private fun newTabInternal(parent: Tab? = null, privateTab: Boolean = false): Tab {
         val t = Tab(nextTabId++)
         t.gecko.privateTab = privateTab
+        if (privateTab) PrivateGuard.setOpen(true)                               // PV1: from this moment no site name goes into the event ring, and the live diagnostics hold back
         t.parentId = parent?.id ?: 0L
         tabs.add(t)
         return t
@@ -1423,6 +1425,7 @@ open class BrowserActivity : Activity(), DockListener {
     private var debugTouch: android.content.BroadcastReceiver? = null
     private fun syncPrivateAnchor() {
         val need = tabs.any { it.isPrivateTab }
+        PrivateGuard.setOpen(need)                                                // PV1: the last private tab gone starts the two minutes in which late events are still masked
         if (need && privateAnchor == null) {
             try {
                 val a = GeckoSession(GeckoSessionSettings.Builder().usePrivateMode(true).build())
@@ -2559,6 +2562,7 @@ open class BrowserActivity : Activity(), DockListener {
      * line. Lines that name the page in front are left out while a private tab is in front.
      */
     private fun liveDiagSnapshot(): String {
+        if (PrivateGuard.active()) return ""                                      // PV1: nothing is built for the live diagnostics while a private tab exists (LiveDiag does not ask either)
         val inPrivate = current?.isPrivateTab == true
         val facts = engineFacts().filter { !(inPrivate && (it.startsWith("Firefox's own tracking protection, this page") || it.contains("this page"))) }
         return try { Health.report(this, facts, 0) } catch (e: Throwable) { "" }
@@ -2588,7 +2592,7 @@ open class BrowserActivity : Activity(), DockListener {
             val span = maxOf(m.optLong("at", 0L), 5_000L) + 2_000L                 // the CPU over the load itself (readings come every 5 s), not the newest single reading
             val cpuP = app.kestrel.browser.diag.CpuMeter.recentMean("parent", span); val cpuT = app.kestrel.browser.diag.CpuMeter.recentMean("tab", span)
             val ctx = "shields=" + (if (eff.shieldsUp) "up" else "down") + " ads=" + (if (eff.shieldsUp && eff.blockAds) 1 else 0) + " net=" + GeckoEngine.networkProfileCode + " avail=" + avail +
-                " cpuP=" + cpuP + " cpuT=" + cpuT + " tabs=" + tabs.size + " live=" + tabs.count { it.session != null }
+                " cpuP=" + cpuP + " cpuT=" + cpuT + " tabs=" + tabs.count { !it.isPrivateTab } + " live=" + tabs.count { it.session != null && !it.isPrivateTab }
             Health.log("page", "timing", app.kestrel.core.livediag.PageTimingLine.build(host, v, lag, sl, ctx))
         }
     }
@@ -2599,7 +2603,7 @@ open class BrowserActivity : Activity(), DockListener {
         val n = app.kestrel.browser.web.NativePlayerStats
         m["plays"] = n.plays.toLong(); m["playErrors"] = n.errors.toLong(); m["framesShown"] = n.framesShown; m["framesDropped"] = n.framesDropped
         m["playStalls"] = n.stalls.toLong(); m["playStalledMs"] = n.stalledMs; m["linkKbps"] = n.linkBps / 1000L; m["decoderHw"] = when (n.decoderHardware) { true -> 1L; false -> 0L; else -> -1L }
-        m["tabs"] = tabs.size.toLong(); m["liveTabs"] = tabs.count { it.session != null }.toLong()
+        m["tabs"] = tabs.count { !it.isPrivateTab }.toLong(); m["liveTabs"] = tabs.count { it.session != null && !it.isPrivateTab }.toLong()   // PV1: private tabs are not even counted
         // LD4: the numbers behind the Diagnostics screen's long text lines, as numbers: the extension's cost, the CPU, the memory of every process, the start-up marks, the slow-frame counter
         try { ShieldsBridge.stats?.let { st -> m.putAll(app.kestrel.core.livediag.ExtCost.numbers(st.listeners, st.checks, st.totalUs, st.maxUs, st.slow)); m["extLoadMs"] = st.loadMs } } catch (e: Exception) { /* optional */ }
         try { m.putAll(app.kestrel.browser.diag.CpuMeter.numbers()) } catch (e: Exception) { /* optional */ }
@@ -2640,7 +2644,7 @@ open class BrowserActivity : Activity(), DockListener {
         out.add(scrollGaps.line(prefs.measureScroll))
         out.add(app.kestrel.browser.shield.ScriptletSummary.read(applicationContext).ifEmpty { "Scriptlets in the lists: no compile report yet (the bundled lists are used until the first update)" })
         Engine.peek()?.let { fs -> out.add("YouTube scriptlet calls loaded: www.youtube.com " + fs.scriptletsFor("www.youtube.com").size + ", m.youtube.com " + fs.scriptletsFor("m.youtube.com").size) }
-        out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null }} of ${tabs.size} tabs (the memory budget keeps up to ${liveBudget()} ready, MemAvailable ${Health.memAvailableMb()} MB, setting ${listOf("automatic", "few", "many")[prefs.tabsKept]}); current ${current?.url?.take(60) ?: "-"}")
+        out.add("Engine: GeckoView $ver; live sessions ${tabs.count { it.session != null && !it.isPrivateTab }} of ${tabs.count { !it.isPrivateTab }} tabs (private tabs are not counted or named here; the memory budget keeps up to ${liveBudget()} ready, MemAvailable ${Health.memAvailableMb()} MB, setting ${listOf("automatic", "few", "many")[prefs.tabsKept]}); current ${if (current?.isPrivateTab == true) "a private tab" else (current?.url?.take(60) ?: "-")}")   // PV1: this line goes into the live diagnostics too
         out.add("Network: ${GeckoEngine.networkProfile} (VPN active: ${NetworkMonitor.vpn}, LinkMeter tunnel recognised: ${NetworkMonitor.fastTunnel}, downloads yield to a loading page at ${DownloadController.pageYieldKBps} KB/s)")
         out.add(app.kestrel.browser.download.DownloadService.wifiLockLine() + ". " + app.kestrel.browser.net.WifiBoost.line())
         out.add(DownloadController.windowGapLine())
@@ -3561,7 +3565,7 @@ open class BrowserActivity : Activity(), DockListener {
         val on = tab.shields.let { it.shieldsUp && it.blockAds } && app.kestrel.browser.diag.DebugProps.get(this, "debug.kestrel.notp") != "1"
         if (st.useTrackingProtection != on) {
             st.useTrackingProtection = on
-            Health.log("engine", "etp", "${tab.topHost ?: "?"} ${if (on) "on" else "off"}")
+            Health.log("engine", "etp", "${if (tab.isPrivateTab) "private tab" else (tab.topHost ?: "?")} ${if (on) "on" else "off"}")   // PV1: a private tab's site is never named
         }
     }
 
