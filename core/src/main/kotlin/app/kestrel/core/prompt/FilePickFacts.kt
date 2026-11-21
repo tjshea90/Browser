@@ -9,9 +9,14 @@ object FilePickFacts {
     /** One picked file: [type] as the content provider says (may be empty), [bytes] (-1 = unknown), [w] x [h] from the picture's header (0 = could not read), [nameExt] the display name has an extension, [freeMb] free room in the cache (-1 = unknown). */
     data class Picked(val type: String, val bytes: Long, val w: Int, val h: Int, val nameExt: Boolean, val freeMb: Long)
 
+    private val MIME = Regex("^[a-z0-9]+/[a-z0-9.+-]{1,40}$")
+
+    /** A real "kind/subtype" is kept; nothing else is (a provider's odd answer could carry a path or a name): "none" for empty, "odd" otherwise. */
+    fun typeWord(t: String): String { val x = t.trim().lowercase(); return if (x.isEmpty()) "none" else if (MIME.matches(x)) x else "odd" }
+
     /** The one-line account for the Health ring / the live diagnostics: numbers and a type, nothing else. */
     fun logLine(p: Picked): String =
-        "type=" + (p.type.lowercase().filter { it.isLetterOrDigit() || it == '/' || it == '+' || it == '.' || it == '-' }.take(40).ifEmpty { "none" }) +
+        "type=" + typeWord(p.type) +
             " kb=" + (if (p.bytes < 0) -1 else (p.bytes + 1023) / 1024) + " size=${p.w}x${p.h} decodes=" + (if (p.w > 0 && p.h > 0) 1 else 0) + " ext=" + (if (p.nameExt) 1 else 0) + " freeMb=${p.freeMb}"
 
     /** The plain-words verdict the Diagnostics screen shows for the last pick, said so a person (or the next session) can tell the file from the page. */

@@ -23,9 +23,10 @@ class FilePickFactsTest {
 
     @Test fun theLineCarriesOnlyNumbersAndATypeNeverAPathOrAName() {
         val l = FilePickFacts.logLine(p(type = "image/png; name=/storage/emulated/0/Pictures/Secret Name.png"))
-        assertFalse(l, l.contains("Secret") || l.contains("Pictures") || l.contains(' ').let { false })
-        assertTrue(l, l.startsWith("type=image/pngnamestorage"))      // the filter drops spaces, semicolons and equal signs; it is cut at 40 characters
+        assertEquals("type=odd kb=811 size=600x973 decodes=1 ext=1 freeMb=300", l)
+        assertFalse(l, l.contains("Secret") || l.contains("Pictures"))
         assertTrue(FilePickFacts.logLine(p(type = "")).startsWith("type=none "))
+        assertTrue(FilePickFacts.logLine(p(type = "image/svg+xml")).startsWith("type=image/svg+xml "))
         assertTrue(FilePickFacts.logLine(p(bytes = -1)).contains("kb=-1"))
     }
 }
