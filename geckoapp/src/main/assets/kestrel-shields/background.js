@@ -344,6 +344,21 @@ onMsg(function (m, sender) {
     send({ k: 'nm', p: tabTop.get(tabId) || '', sh: nmT(m.sh), s: nmN(m.s, 199), e: nmN(m.e, 9999), et: nmT(m.et) }).catch(function () {});
     return undefined;
   }
+  if (m.k === 'pt') { // LD4: pagetime.js (top frame) tells where one page load's time went: numbers and three [host, kind, ms] triples, all checked here; the app adds what only it knows and drops a private tab
+    if (tabId < 0 || !sender || sender.frameId !== 0) return undefined;
+    var ptN = function (x, hi) { x = +x; return (x >= 0 && x <= hi) ? Math.round(x) : -1; };
+    var ptC = function (x) { x = +x; return (x >= 0 && x <= 1e5) ? Math.round(x) : 0; };
+    var ptK = { js: 1, css: 1, img: 1, xhr: 1, oth: 1 }, ptSl = [], ptI, ptL = m.lm && m.lm.length === 3 ? m.lm : [0, 0, 0];
+    if (m.sl && m.sl.length) for (ptI = 0; ptI < m.sl.length && ptSl.length < 3; ptI++) {
+      var ptE = m.sl[ptI];
+      if (ptE && typeof ptE[0] === 'string' && /^[a-z0-9.-]{1,60}$/.test(ptE[0]) && ptK[ptE[1]] === 1) ptSl.push([ptE[0], ptE[1], ptN(ptE[2], 6e5)]);
+    }
+    send({ k: 'pt', p: tabTop.get(tabId) || '', nt: ptC(m.nt) % 4, dns: ptN(m.dns, 6e5), con: ptN(m.con, 6e5), tls: ptN(m.tls, 6e5), fb: ptN(m.fb, 6e5), ttfb: ptN(m.ttfb, 6e5),
+      dcl: ptN(m.dcl, 6e5), load: ptN(m.load, 6e5), fcp: ptN(m.fcp, 6e5), lcp: ptN(m.lcp, 6e5), rn: ptC(m.rn), rc: ptC(m.rc), kb: ptC(m.kb), r1: ptC(m.r1), r3: ptC(m.r3), rsum: ptN(m.rsum, 1e7),
+      h2: ptC(m.h2), h1: ptC(m.h1), h3: ptC(m.h3), js: ptC(m.js), css: ptC(m.css), img: ptC(m.img), xhr: ptC(m.xhr), oth: ptC(m.oth),
+      lm: [ptN(ptL[0], 6e5), ptN(ptL[1], 6e6), ptC(ptL[2])], nodes: ptC(m.nodes), scr: ptC(m.scr), fr: ptC(m.fr), hid: m.hid === 1 ? 1 : 0, pt: m.pt === 1 ? 1 : 0, rd: ptC(m.rd) % 20, at: ptN(m.at, 6e5), sl: ptSl }).catch(function () {});
+    return undefined;
+  }
   if (m.k === 'ptap') { // VP2: a trusted click in the top page (content.js sends it from the top frame only)
     if (tabId >= 0 && sender && sender.frameId === 0) { personTap.set(tabId, Date.now()); if (personTap.size > 60) personTap.delete(personTap.keys().next().value); }
     return undefined;
