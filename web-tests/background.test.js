@@ -1967,3 +1967,27 @@ test('BK10: the plain "this page forbids caching" report is not sent for a page 
   await tick(20);
   eq(h.of('ns').map((m) => [m.p, m.rx || 0]), [[PAGE, 1], ['https://mail.google.com/mail/', 0]]);
 });
+
+test('LD4: a page-timing report is checked in the background page, carries the page of its tab, and only the top frame of a real tab may send one', async () => {
+  const h = await onPage();
+  const good = { k: 'pt', h: 'claude.ai', nt: 0, dns: 40, con: 300, tls: 200, fb: 800, ttfb: 700, dcl: 9000, load: 28000, fcp: 14000, lcp: 15000, rn: 1044, rc: 900, kb: 4100, r1: 12, r3: 3, rsum: 95000, h2: 150, h1: 12, h3: 0,
+    js: 40, css: 3, img: 80, xhr: 60, oth: 5, lm: [2400, 11000, 60], nodes: 3400, scr: 45, fr: 3, hid: 0, pt: 0, at: 31000, rd: 1,
+    sl: [['cdn.example.com', 'js', 9800], ['bad host/path', 'js', 5], ['a.example', 'evil', 3], ['x'.repeat(70) + '.com', 'js', 1]] };
+  h.message(good, 1, undefined, 0);
+  await tick(10);
+  const pt = h.of('pt');
+  assert.equal(pt.length, 1);
+  assert.equal(pt[0].p, PAGE, 'the page of the tab, from the background page, not from the page script');
+  assert.equal(pt[0].rn, 1044); assert.equal(pt[0].load, 28000); assert.equal(pt[0].fcp, 14000); assert.equal(pt[0].hid, 0);
+  eq(pt[0].lm, [2400, 11000, 60]);
+  eq(pt[0].sl, [['cdn.example.com', 'js', 9800]]);                        // an odd host, an unknown kind and a long name are dropped
+  h.message({ k: 'pt', load: 1e12, rn: -5, lm: [1, 2], sl: 'x', fcp: 'abc', hid: 5, nt: 9 }, 1, undefined, 0);
+  await tick(10);
+  const bad = h.of('pt')[1];
+  assert.equal(bad.load, -1); assert.equal(bad.rn, 0); assert.equal(bad.fcp, -1); assert.equal(bad.hid, 0); eq(bad.lm, [0, 0, 0]); eq(bad.sl, []);
+  assert.ok(bad.nt >= 0 && bad.nt <= 3);
+  h.message(good, 1, undefined, 5);                                         // a sub-frame
+  h.message(good, -1);                                                      // no tab at all
+  await tick(10);
+  assert.equal(h.of('pt').length, 2, 'only the top frame of a tab may report');
+});
