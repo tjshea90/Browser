@@ -95,7 +95,7 @@ test('VD2c: an element that is trying to play and never gets data (no error even
   const m = msgs(got).filter((x) => x.c === 99);
   assert.equal(m.length, 1, 'told once: ' + JSON.stringify(m));
   assert.equal(m[0].s, 'http'); assert.equal(m[0].e, 'v'); assert.equal(m[0].f, 1); assert.ok(m[0].rs < 3, 'no data: readyState ' + m[0].rs);
-  assert.ok(typeof m[0].ns === 'number' && m[0].pa === 0 && typeof m[0].b === 'number', JSON.stringify(m[0]));
+  assert.ok(typeof m[0].ns === 'number' && (m[0].pa === 0 || m[0].pa === 1) && typeof m[0].b === 'number', JSON.stringify(m[0]));   // (an autoplay element is still paused until its first data)
   assert.ok(JSON.stringify(got).indexOf('secret') < 0 && JSON.stringify(got).indexOf('token') < 0, 'no address leaves the page');
   await context.close();
 });
