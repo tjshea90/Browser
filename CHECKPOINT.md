@@ -1,13 +1,13 @@
-# CHECKPOINT 2843 — read me first, then TASKS.md
+# CHECKPOINT 2844 — read me first, then TASKS.md
 
-**Written:** 2026-11-21T22:33:13Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `7c87ac96` (this checkpoint is the commit after it)
+**Written:** 2026-11-21T22:37:40Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `202d02da` (this checkpoint is the commit after it)
 
 ## Just done
-IMG1 picked-file facts written (core FilePickFacts + FilePickStats.lastPick + tests, BrowserActivity.pickedFacts on Io never private, PrivateTabsTest pin), ALPHA87_RELEASE_NOTE.txt drafted; the VD1 gate (g2.log) still in lint, NOT yet seen green; new tests (core FilePickFactsTest/FilePickRulesTest, PrivateTabsTest pin) not yet run
+Digest FILE PICKS section (+2 checks, handoff 88/88); OwnerRulesTest pins updated for the VD1 per-site exception (the first full gate failed only there: 2001/2002 core tests); rerun of :core:test :app:testDebugUnitTest :geckoapp:compileDebugKotlin running (g3.log), lint not yet run on this change
 
 ## Do this next
-Next: wait g2.log GRADLE_EXIT=0 (lint), then ONE more gradle run: :core:test :app:testDebugUnitTest :geckoapp:compileDebugKotlin for the IMG1 additions; web-tests npm test; test_handoff.sh; versionCode 188 / 0.3.0-alpha87 + sync-ext-version.sh; ship.sh gecko with the ALPHA87 note; ONE dispatch; verify; record-release; tick VD1/IMG1 boxes; answer owner (IMG1, VD1, VD2, GL1)
+Next: g3.log GRADLE_EXIT=0 then ONE lint run (:app:lintDebug), web-tests npm test, bump geckoapp/build.gradle.kts 188 / 0.3.0-alpha87, sync-ext-version.sh, ship.sh gecko with docs/handoff/ALPHA87_RELEASE_NOTE.txt, ONE dispatch, verify, record-release, tick VD1/IMG1 boxes, answer the owner (VD1, IMG1, VD2, GL1: GL1 needs screenshots + steps)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -16,6 +16,7 @@ Next: wait g2.log GRADLE_EXIT=0 (lint), then ONE more gradle run: :core:test :ap
 
 ## Last ten checkpoints
 ```
+  0a054723 ckpt 2843: IMG1 picked-file facts written (core FilePickFacts + FilePickStats.lastPick 
   39f5dc40 ckpt 2842: Research notes written for the 3 new owner requests (IMG1_UPLOAD.md, VD2 sec
   a0c4325f ckpt 2841: Owner sent 3 more requests mid-gate (IMG1 screenshots 'can't process images'
   6ed63137 ckpt 2840: VD1c/d part 2 written (gate running): core VideoSites + test (4 pass), Shiel
@@ -25,8 +26,7 @@ Next: wait g2.log GRADLE_EXIT=0 (lint), then ONE more gradle run: :core:test :ap
   cb695e57 ckpt 2836: alpha86 RELEASED AND RECORDED: https://github.com/tjshea90/Browser/releases/
   2f0f8b2b ckpt 2835: alpha86 gated (core + app full suites via ship.sh, lint 0 errors, test_hando
   0df22017 ckpt 2834: gated kestrel-g-v0.3.0-alpha86 (gecko code 187) and pushed it: handoff self-
-  620bf412 ckpt 2833: pre-ship: alpha86: private tabs checked end to end, and every hole found is 
 ```
 
-(9 automatic checkpoint(s) since the last deliberate one — the
+(2 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
