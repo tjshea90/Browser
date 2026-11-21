@@ -1,21 +1,23 @@
-# CHECKPOINT 2844 — read me first, then TASKS.md
+# CHECKPOINT 2845 — read me first, then TASKS.md
 
-**Written:** 2026-11-21T22:37:40Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `202d02da` (this checkpoint is the commit after it)
+**Written:** 2026-11-21T22:51:29Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `a3480ef8` (this checkpoint is the commit after it)
 
 ## Just done
-Digest FILE PICKS section (+2 checks, handoff 88/88); OwnerRulesTest pins updated for the VD1 per-site exception (the first full gate failed only there: 2001/2002 core tests); rerun of :core:test :app:testDebugUnitTest :geckoapp:compileDebugKotlin running (g3.log), lint not yet run on this change
+pre-ship: alpha87: why videos do not load, and a test you can run today. I could not watch Instagram or pornhub from here, so none of this is proven on your tablet. Reading the code, the strongest suspect for Reels (and any video that a page starts by script) is your own rule that videos start only when you press play: a Reel starts itself as it scrolls into view, the rule holds or refuses it, and the page can sit on its loading circle. So there is now a switch for ONE site: tap the shield, then Videos may start by themselves, and reload. If instagram.com or pornhub.com plays after that, that was the cause, and only that site is exempt (the rule stays for every other site; sound still needs a tap; a private tab keeps it session-only). pornhub is a good test because Kestrel's own player already plays the same film, which means the film, the chip and the hotspot are fine and only the page player waits. The app also now records, per site and only outside private tabs, what the rule held back, which video formats were refused and which video elements failed, so the next live upload names the cause in the digest instead of guessing. Screenshots: the file picker in your uploads works (it opens and hands the file to the page); what happens after that is not visible to Kestrel, so alpha87 records what the picked file looks like to Android (type, size, readable, free storage; no name). To tell browser from Claude: attach the same screenshot to claude.ai in another browser; if only Kestrel fails, it is Kestrel and the new line will say why. Undrawn page parts: no cause yet; I need your screenshots, the site, what you did just before, and whether Shields down for that site fixes it. Not run on the tablet: everything above.
 
 ## Do this next
-Next: g3.log GRADLE_EXIT=0 then ONE lint run (:app:lintDebug), web-tests npm test, bump geckoapp/build.gradle.kts 188 / 0.3.0-alpha87, sync-ext-version.sh, ship.sh gecko with docs/handoff/ALPHA87_RELEASE_NOTE.txt, ONE dispatch, verify, record-release, tick VD1/IMG1 boxes, answer the owner (VD1, IMG1, VD2, GL1: GL1 needs screenshots + steps)
+ship.sh gates and releases this (gecko)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M geckoapp/build.gradle.kts
+     M geckoapp/src/main/assets/kestrel-shields/manifest.json
 
 ## Last ten checkpoints
 ```
+  a3480ef8 ckpt 2844: Digest FILE PICKS section (+2 checks, handoff 88/88); OwnerRulesTest pins up
   0a054723 ckpt 2843: IMG1 picked-file facts written (core FilePickFacts + FilePickStats.lastPick 
   39f5dc40 ckpt 2842: Research notes written for the 3 new owner requests (IMG1_UPLOAD.md, VD2 sec
   a0c4325f ckpt 2841: Owner sent 3 more requests mid-gate (IMG1 screenshots 'can't process images'
@@ -25,8 +27,4 @@ Next: g3.log GRADLE_EXIT=0 then ONE lint run (:app:lintDebug), web-tests npm tes
   ddf1d945 ckpt 2837: VD1 written into TASKS.md in the owner's words (diagnose why Instagram reels
   cb695e57 ckpt 2836: alpha86 RELEASED AND RECORDED: https://github.com/tjshea90/Browser/releases/
   2f0f8b2b ckpt 2835: alpha86 gated (core + app full suites via ship.sh, lint 0 errors, test_hando
-  0df22017 ckpt 2834: gated kestrel-g-v0.3.0-alpha86 (gecko code 187) and pushed it: handoff self-
 ```
-
-(2 automatic checkpoint(s) since the last deliberate one — the
-session was still mid-step. `git diff` against it shows what changed.)
