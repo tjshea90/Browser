@@ -88,14 +88,14 @@ class DiagJournalTest {
         j.commit(j.cut(600))
         fill(j, 10, kind = "video quality", from = 100)
         assertEquals(3, j.size())
-        assertEquals(0, j.cut(600).thinned.let { 0 } + (j.cut(600).thinned - 7))
+        assertEquals("7 of the 10 new lines were thinned: the first window's three did not count against this one", 7, j.cut(600).thinned)
     }
 
     @Test fun storedLinesComeBackAndKeepTheNoisyKindCount() {
         val j = DiagJournal(800, 3)
         j.restore((0 until 10).map { "+$it.0s video quality m.example.com frames=1" } + listOf("+11.0s gecko onKill x"))
         assertEquals(11, j.size())
-        assertFalse("the window knows 3 were already shown... and the rest were stored before the limit existed", j.add("video quality", "+12.0s video quality x"))
+        assertFalse("10 noisy lines were already stored, so the window is full and one more is thinned", j.add("video quality", "+12.0s video quality x"))
         assertTrue(j.add("gecko onKill", "+13.0s gecko onKill y"))
     }
 
