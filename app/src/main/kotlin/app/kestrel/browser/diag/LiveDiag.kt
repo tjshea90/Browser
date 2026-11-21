@@ -7,12 +7,15 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.PowerManager
+import android.os.Process
+import android.os.SystemClock
 import android.os.StatFs
 import android.util.Base64
 import app.kestrel.browser.Io
 import app.kestrel.core.livediag.Advice
 import app.kestrel.core.livediag.Advisor
 import app.kestrel.core.livediag.DiagBatch
+import app.kestrel.core.livediag.DiagJournal
 import app.kestrel.core.livediag.DiagStats
 import app.kestrel.core.livediag.DiagPolicy
 import app.kestrel.core.livediag.DiagSchedule
@@ -21,7 +24,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
-import java.util.ArrayDeque
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
@@ -35,13 +38,17 @@ import java.util.UUID
  *    not named, passwords, tokens, card numbers, e-mail and phone numbers are removed). Private tabs never name a site. Nothing is read from a page, a form or a download.
  *  - where it goes: ONLY the private repo [REPO], through GitHub's contents API with the owner's own fine-grained token (typed into Settings once, kept in this app's private storage, never in the APK, never in a
  *    backup, never in a log). Before the first send of a run the repo is asked whether it is PRIVATE; if it is not, nothing is sent.
- *  - how often: [DiagSchedule] (at most 4 files a day, 6 hours apart, a crash sooner, a failed send waits a day), once the app is in front for 2 minutes. No timer runs while the app is not in use.
+ *  - how often: [DiagSchedule] (at most 4 AUTOMATIC files a day, 6 hours apart, a crash sooner, a failed send waits a day), once the app is in front for 2 minutes; a check that is refused only because of time is asked
+ *    again later while the app stays in front (LD3: it was asked once, so a long session sent nothing). "Send now" is the owner's button: it does not use up the automatic day. No timer is re-armed while the app is not in front.
+ *  - never an overwrite (LD3): every file is a NEW path, sent WITHOUT the `sha` of an old file (GitHub then refuses to replace one), a taken name gets the next free one, there is no delete, and one upload runs at a time.
  */
 object LiveDiag {
     const val REPO = "tjshea90/kestrel-private"
     private const val MAX_JOURNAL = 800
     private const val FLUSH_EVERY = 25
     private const val SEND_DELAY_MS = 120_000L
+    private const val RECHECK_MAX_MS = 30 * 60_000L          // while the app stays in front, a time-refused send is looked at again at least this often
+    private const val WEEK_MS = 7L * 86_400_000L
 
     @Volatile private var enabled = true
     @Volatile private var hasToken = false
@@ -52,10 +59,13 @@ object LiveDiag {
     private val stats = DiagStats()
     @Volatile private var extraFacts: (() -> Map<String, Long>)? = null
     @Volatile private var snapshotSupplier: (() -> String)? = null
-    private val journal = ArrayDeque<String>()
+    private val journal = DiagJournal(MAX_JOURNAL)          // LD3: exact bookkeeping of what is waiting, what was sent, what was left out (core DiagJournal)
+    private val roll = DiagStats()                          // LD3: the rolling week the advisor reads (every send folds the table of that upload into it)
+    private var rollSince = 0L
     private val lock = Any()
-    private var dropped = 0
     private var sinceFlush = 0
+    private val uploading = AtomicBoolean(false)            // one upload at a time: a double tap or a timer meeting a button cannot send a window twice
+    @Volatile private var inFront = false
     @Volatile private var sendQueued = false
     @Volatile private var repoChecked = 0L
     @Volatile private var status = "not started"
@@ -81,7 +91,7 @@ object LiveDiag {
     fun setEnabled(on: Boolean) {
         enabled = on
         sp?.edit()?.putBoolean("on", on)?.apply()
-        if (!on) sleep()
+        if (!on) sleep() else Io.exec { markRun("recording-on") }
         status = describe()
     }
 
@@ -89,6 +99,7 @@ object LiveDiag {
     private fun sleep() {
         Io.main.removeCallbacks(sendTask)
         sendQueued = false
+        inFront = false
         snapshotSupplier = null
         erase()
     }
@@ -102,13 +113,10 @@ object LiveDiag {
         if (!DiagPolicy.allows(layer, event)) return
         stats.observe(layer, event, line)                // numbers, code-made names and non-sensitive host names only (core DiagStats)
         val t = DiagScrub.line(line)
+        if (t == null) { journal.lose(); return }
+        journal.add(layer + " " + event, t)              // a noisy kind is thinned and counted, trouble never (core DiagJournal)
         var flush = false
-        synchronized(lock) {
-            if (t == null) { dropped++; return }
-            journal.addLast(t)
-            while (journal.size > MAX_JOURNAL) { journal.removeFirst(); dropped++ }
-            if (++sinceFlush >= FLUSH_EVERY) { sinceFlush = 0; flush = true }
-        }
+        synchronized(lock) { if (++sinceFlush >= FLUSH_EVERY) { sinceFlush = 0; flush = true } }
         if (flush) Io.exec { save() }
     }
 
@@ -131,11 +139,16 @@ object LiveDiag {
 
     /** The app is in front: if the schedule allows, a send follows 2 minutes later (one pending at a time). */
     fun onFront(snapshotOnMain: () -> String) {
-        if (!enabled || !hasToken || sendQueued) return
+        if (!enabled || !hasToken) return
+        inFront = true
+        if (sendQueued) return
         snapshotSupplier = snapshotOnMain
         sendQueued = true
         Io.main.postDelayed(sendTask, SEND_DELAY_MS)
     }
+
+    /** The app left the front: no check is set again from now on (one that is already queued may still run and answer). */
+    fun onBack() { inFront = false }
 
     private val sendTask = Runnable {
         sendQueued = false
@@ -143,7 +156,15 @@ object LiveDiag {
         if (enabled && sup != null) request(false, sup, null)
     }
 
-    /** "Send now": ignores the 6-hour gap, never the switch or the token. [done] gets one plain sentence. */
+    /** A check refused only because of TIME is asked again later while the app is in front (at most every 30 minutes; the wait is re-computed each time). */
+    private fun rearm(waitMs: Long, sup: () -> String) {
+        if (!enabled || !hasToken || !inFront || waitMs < 0L || sendQueued) return
+        snapshotSupplier = sup
+        sendQueued = true
+        Io.main.postDelayed(sendTask, minOf(waitMs, RECHECK_MAX_MS) + 5_000L)
+    }
+
+    /** "Send now": ignores the 6-hour gap, never the switch or the token. [done] gets one plain sentence. Does not use up the automatic day. */
     fun sendNow(snapshotOnMain: () -> String, done: (String) -> Unit) = request(true, snapshotOnMain, done)
 
     private fun request(manual: Boolean, snapshotOnMain: () -> String, done: ((String) -> Unit)?) {
@@ -151,22 +172,26 @@ object LiveDiag {
         if (!enabled) { done?.invoke("Live diagnostics is off: nothing is sent."); return }
         if (!hasToken) { done?.invoke("No token yet."); return }
         val now = System.currentTimeMillis()
-        val pending = synchronized(lock) { journal.size }
+        val pending = journal.size()
         if (!manual) {
             val day = dayOf(now)
             val st = DiagSchedule.State(true, true, p.getLong("lastSentAt", 0L), if (p.getString("day", "") == day) p.getInt("today", 0) else 0, p.getLong("lastFailAt", 0L), p.getInt("fails", 0), pending, LastRun.previousEndedBadly())
             val why = DiagSchedule.whyNot(st, now)
-            if (why != null) { status = describe(why); return }
+            if (why != null) { status = describe(why); rearm(DiagSchedule.waitMs(st, now), snapshotOnMain); return }
         }
-        val text = try { snapshotOnMain() } catch (e: Throwable) { "" }       // built on the UI thread by the caller
-        val extras = Extras(settingsMap(), facts(), stats.kindCounts(), stats.sites())
-        val advice = Advisor.advise(extras.settings, extras.kinds, extras.sites, extras.device).mapNotNull { DiagScrub.line(it.text()) }
-        Io.exec { upload(text, extras, advice, now, done) }
+        if (!uploading.compareAndSet(false, true)) { done?.invoke("A send is already running. Wait a moment."); return }
+        try {
+            val text = try { snapshotOnMain() } catch (e: Throwable) { "" }       // built on the UI thread by the caller
+            val extras = Extras(settingsMap(), facts() + ("manualSend" to (if (manual) 1L else 0L)), stats.kindCounts(), stats.sites())
+            val week = weekView()
+            val advice = Advisor.advise(extras.settings, week.kindCounts(), week.sites(), extras.device).mapNotNull { DiagScrub.line(it.text()) }
+            Io.exec { try { upload(text, extras, advice, now, manual, done) } finally { uploading.set(false) } }
+        } catch (e: Throwable) { uploading.set(false); done?.invoke("Could not start the send.") }
     }
 
     private class Extras(val settings: Map<String, String>, val device: Map<String, Long>, val kinds: Map<String, Long>, val sites: List<app.kestrel.core.livediag.SiteStat>)
 
-    private fun upload(snapshotText: String, x: Extras, advice: List<String>, now: Long, done: ((String) -> Unit)?) {
+    private fun upload(snapshotText: String, x: Extras, advice: List<String>, now: Long, manual: Boolean, done: ((String) -> Unit)?) {
         val p = sp ?: return
         val token = p.getString("token", "") ?: ""
         var msg: String
@@ -181,18 +206,30 @@ object LiveDiag {
                 }
             }
             val lines = snapshotText.lineSequence().mapNotNull { DiagScrub.line(it) }.take(DiagSchedule.MAX_SNAPSHOT).toList()
-            val (events, drop) = synchronized(lock) { DiagSchedule.newest(journal.toList(), DiagSchedule.MAX_EVENTS) to dropped }
+            val cut = journal.cut(DiagSchedule.MAX_EVENTS)                         // the newest lines + exactly where they end (LD3: what did not fit is counted, not forgotten)
+            val events = cut.lines
             if (events.isEmpty() && lines.isEmpty() && x.kinds.isEmpty()) { done?.invoke("Nothing to send yet."); return }
             val at = utc(now)
-            val batch = DiagBatch(installId(p), appVersion(), appCode(), Build.VERSION.SDK_INT, Build.MODEL ?: "?", at, lines, events, drop, x.settings, x.device, x.kinds, x.sites, advice)
+            val batch = DiagBatch(installId(p), appVersion(), appCode(), Build.VERSION.SDK_INT, Build.MODEL ?: "?", at, lines, events, cut.lost, x.settings, x.device, x.kinds, x.sites, advice, cut.thinned)
             if (!enabled) return                                                   // switched off while the repository was being asked: not one byte goes
-            val code = put(DiagBatch.path(at, installId(p)), batch.toJson(), token)
+            val json = batch.toJson()
+            var code: Int
+            var attempt = 0
+            var conflicts = 0
+            while (true) {
+                code = put(DiagBatch.path(at, installId(p), attempt), json, token)   // a NEW path, no `sha`: GitHub refuses to replace an existing file (422) and the next free name is tried
+                if (code == 422 && attempt < 2) { attempt++; continue }
+                if (code == 409 && conflicts < 1) { conflicts++; Thread.sleep(700); continue }       // the branch moved while the file was being written: once more, same name
+                break
+            }
             if (code in 200..299) {
-                synchronized(lock) { repeat(events.size) { if (journal.isNotEmpty()) journal.removeFirst() }; dropped = 0 }
-                stats.reset()                                                          // the tables are a delta: what was sent is not counted again
+                journal.commit(cut)                                                    // exactly what was sent (and what was counted as left out) is gone; newer lines stay
+                foldIntoWeek()                                                         // the table of this upload joins the rolling week; the file carried only what was new
                 save()
                 val day = dayOf(now)
-                p.edit().putLong("lastSentAt", now).putString("day", day).putInt("today", (if (p.getString("day", "") == day) p.getInt("today", 0) else 0) + 1).putInt("fails", 0).putInt("lastLines", lines.size + events.size).apply()
+                val e = p.edit().putLong("lastSentAt", now).putInt("fails", 0).putInt("lastLines", lines.size + events.size)
+                if (!manual) e.putString("day", day).putInt("today", (if (p.getString("day", "") == day) p.getInt("today", 0) else 0) + 1)   // the owner's own button does not use up the automatic day
+                e.apply()
                 status = describe(); msg = "Sent ${lines.size + events.size} lines to the private repository."
             } else {
                 fail(p, now, "GitHub answered $code"); msg = if (code == 401 || code == 403) "GitHub refused the token ($code): it may have expired or lacks Contents: read and write." else "GitHub answered $code: nothing was sent; it will try again later."
