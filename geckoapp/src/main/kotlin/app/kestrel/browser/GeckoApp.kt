@@ -22,6 +22,7 @@ class GeckoApp : Application() {
         Flavor.hasScriptlets = true
         Flavor.hasAdSkipper = true
         Flavor.hasTapSeek = true
+        Flavor.hasInstantBack = true
         Flavor.hasFullscreenTurn = true
         Flavor.hasVideoBar = true
         Flavor.hasNetworkLab = true

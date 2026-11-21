@@ -34,6 +34,8 @@ object Flavor {
     @JvmField var hasAdSkipper = false
     /** Kestrel G (YS1): a tap on a video player's progress bar moves the video when the page does not (seekbar.js): Settings shows its switch. */
     @JvmField var hasTapSeek = false
+    /** Kestrel G (BK10): Back is instant for pages that forbid caching (background.js): Settings shows the "Instant Back" switch. */
+    @JvmField var hasInstantBack = false
     /** Kestrel G (FS1): the screen turns with the tablet while a video is full screen, and a small rotate button shows there: Settings shows the "Turn the screen for full-screen video" choice. */
     @JvmField var hasFullscreenTurn = false
     /** Kestrel G (VC1): a video that has no controls of its own gets Kestrel's bar (videobar.js): Settings shows the "Video controls" choice. */

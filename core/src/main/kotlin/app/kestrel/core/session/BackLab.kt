@@ -17,6 +17,8 @@ enum class BackKind(val label: String) {
 /** Totals of all presses since the app started (RAM only; nothing about a page address is kept here). */
 class BackStats {
     var presses = 0; var kept = 0; var fromCache = 0; var fromNetwork = 0; var other = 0
+    /** BK10: pages whose `Cache-Control: no-store` was changed to `no-cache` so that Back can keep them (Settings > Instant Back). */
+    var relaxed = 0
     /** Presses whose place was known AND measured, and how many of those were back within 4 px. */
     var scrollKnown = 0; var scrollOk = 0
     private val paint = ArrayList<Long>()
@@ -30,19 +32,20 @@ class BackStats {
         return if (n % 2 == 1) s[n / 2] else (s[n / 2 - 1] + s[n / 2]) / 2
     }
 
-    fun reset() { presses = 0; kept = 0; fromCache = 0; fromNetwork = 0; other = 0; scrollKnown = 0; scrollOk = 0; paint.clear() }
+    fun reset() { presses = 0; kept = 0; fromCache = 0; fromNetwork = 0; other = 0; relaxed = 0; scrollKnown = 0; scrollOk = 0; paint.clear() }
 
     private fun pct(n: Int): Int = Math.round(100.0 * n / presses).toInt()
 
     /** The Diagnostics line (plain words: the owner copies and pastes it). */
     fun line(): String {
-        if (presses == 0) return "Back: no presses yet"
+        val made = if (relaxed > 0) " (instant Back: $relaxed page" + (if (relaxed == 1) "" else "s") + " that forbid caching were made cacheable)" else ""
+        if (presses == 0) return "Back: no presses yet$made"
         val sb = StringBuilder("Back: ").append(presses).append(if (presses == 1) " press" else " presses")
         sb.append(", ").append(pct(kept)).append("% kept (instant), ").append(pct(fromCache)).append("% reloaded from the cache, ").append(pct(fromNetwork)).append("% from the network")
         if (other > 0) sb.append(", ").append(pct(other)).append("% other")
         medianPaintMs()?.let { sb.append(", median ").append(it).append(" ms to first paint") }
         if (scrollKnown > 0) sb.append(", scroll kept in ").append(scrollOk).append(" of ").append(scrollKnown)
-        return sb.toString()
+        return sb.append(made).toString()
     }
 }
 
@@ -158,6 +161,9 @@ class BackLab(private val log: (String) -> Unit = {}) {
 
     /** The engine reported `Cache-Control: no-store` on the main response of this page: no cache of any kind may keep it. */
     fun noStore(url: String) { val k = BackScrollRules.keyOf(url); if (k.isNotEmpty()) noStoreKeys.add(k) }
+
+    /** BK10: the extension made this page's response cacheable (no-store -> no-cache): the engine CAN keep it now, so it is not a page "that will certainly load again". Counted for Diagnostics. */
+    fun noStoreRelaxed(url: String) { val k = BackScrollRules.keyOf(url); if (k.isNotEmpty()) { noStoreKeys.remove(k); notKeptKeys.remove(k); stats.relaxed++ } }
 
     fun noStoreSeen(url: String): Boolean = noStoreKeys.contains(BackScrollRules.keyOf(url))
 
