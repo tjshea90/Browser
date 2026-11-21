@@ -2010,12 +2010,17 @@ test('VD1: what the gate held, what the format policy refused and what failed ar
   assert.equal(c.length, 1);
   assert.equal(c[0].p, PAGE); assert.equal(c[0].s, 1); assert.equal(c[0].f, 2); assert.equal(c[0].w, 'avc 60fps b');
   h.message({ k: 'verr', c: 4, ns: 3, rs: 0, s: 'blob', f: 1, e: 'v' }, 1, undefined, 0);
-  h.message({ k: 'verr', c: 99, ns: -2, rs: 'x', s: 'https://evil.example/a.mp4', f: 7, e: 'q' }, 1, undefined, 2);
+  h.message({ k: 'verr', c: 98, ns: -2, rs: 'x', s: 'https://evil.example/a.mp4', f: 7, e: 'q', pa: 5, b: 99 }, 1, undefined, 2);
   await tick(10);
   const e = h.of('verr');
   assert.equal(e.length, 2);
   assert.equal(e[0].p, PAGE); assert.equal(e[0].c, 4); assert.equal(e[0].s, 'blob'); assert.equal(e[0].f, 1);
+  assert.equal(e[1].pa, 0, 'paused is 0 or 1'); assert.equal(e[1].b, 0, 'buffered pieces are 0..9');
   assert.equal(e[1].c, 0); assert.equal(e[1].ns, 0); assert.equal(e[1].rs, 0); assert.equal(e[1].s, 'none'); assert.equal(e[1].f, 0); assert.equal(e[1].e, 'v', 'an address, a wild number or a letter is never passed on');
+  h.message({ k: 'verr', c: 99, ns: 2, rs: 0, s: 'http', f: 1, e: 'v', pa: 1, b: 3 }, 1, undefined, 3);
+  await tick(10);
+  const st = h.of('verr').filter((x) => x.c === 99);
+  assert.equal(st.length, 1, 'code 99 = stuck loading is passed on'); assert.equal(st[0].pa, 1); assert.equal(st[0].b, 3); assert.equal(st[0].ns, 2);
   for (let i = 0; i < 20; i++) h.message({ k: 'verr', c: 4, s: 'http', e: 'v' }, 1, undefined, 0);
   await tick(10);
   assert.ok(h.of('verr').length <= 8, 'rationed: ' + h.of('verr').length);
