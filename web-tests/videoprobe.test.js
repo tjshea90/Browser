@@ -23,7 +23,7 @@ async function open(body, o) {
     const u = new URL(r.request().url());
     if (u.hostname === 'sink.example') { got.push(JSON.parse(r.request().postData())); return r.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } }); }
     if (u.pathname.endsWith('.mp4') || u.pathname.endsWith('.mp3')) return r.fulfill({ contentType: u.pathname.endsWith('.mp3') ? 'audio/mpeg' : 'video/mp4', body: Buffer.from('this is not a media file at all, just text that no decoder will accept '.repeat(40)) });
-    if (u.pathname === '/hang.bin') return new Promise(() => {});                         // VD2c: a file that never answers
+    if (u.pathname.endsWith('/hang.bin')) return new Promise(() => {});                         // VD2c: a file that never answers
     if (u.pathname === '/frame') return r.fulfill({ contentType: 'text/html', body: '<!doctype html><body><video src="/inner-bad.mp4" muted></video>' });
     return r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>t</title><body>' + (body || '') + '</body>' });
   });
