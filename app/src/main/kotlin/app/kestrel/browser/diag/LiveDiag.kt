@@ -226,6 +226,10 @@ object LiveDiag {
         status = describe()
     }
 
+    /** Tests only: what is kept right now, and a clean slate. */
+    internal fun journalForTest(): List<String> = synchronized(lock) { journal.toList() }
+    internal fun resetForTest() { synchronized(lock) { journal.clear(); dropped = 0; sinceFlush = 0 }; enabled = true; hasToken = false; sp = null; dir = null }
+
     // ---- words for Settings / Diagnostics
 
     fun statusLine(): String = describe()
