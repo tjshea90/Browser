@@ -20,6 +20,15 @@ class DiagScrubTest {
         assertEquals("a link with a token in its query is a sensitive site: not named", "page <sensitive-site> end", s("page https://news.example.org/story?id=7&token=abc#top end"))
     }
 
+    @Test fun aBareHostWithAPathKeepsOnlyTheHost() {
+        // BrowserActivity "media frame-gone docs=<host/path, cut at 40>" writes this form (no https:// in front)
+        assertEquals("+5.0s media frame-gone docs=video.example.net,cdn.example.org dropped=2", s("+5.0s media frame-gone docs=video.example.net/watch/some-private-name-123,cdn.example.org/a/b?x=1 dropped=2"))
+        assertEquals("seen cdn.example.org ok", s("seen cdn.example.org/segments/00042.ts ok"))
+        assertEquals("a path of our own code is left alone", "dump at /data/user/0/app.kestrel.browser/files/x.json", s("dump at /data/user/0/app.kestrel.browser/files/x.json"))
+        assertEquals("a code name keeps its slash text", "Activity app.kestrel.browser/.MainActivity ok", s("Activity app.kestrel.browser/.MainActivity ok"))
+        assertEquals("<sensitive-site> end", s("secure.example.org/account/42 end"))
+    }
+
     @Test fun aSensitiveSiteIsNeverNamedNotEvenAsABareHost() {
         assertEquals("page loaded <sensitive-site> in 900 ms", s("page loaded https://mail.google.com/mail/u/0/#inbox in 900 ms"))
         assertEquals("to=<sensitive-site> reload", s("to=www.chase.com reload"))
