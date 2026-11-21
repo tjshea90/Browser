@@ -1,21 +1,23 @@
-# CHECKPOINT 2792 — read me first, then TASKS.md
+# CHECKPOINT 2793 — read me first, then TASKS.md
 
-**Written:** 2026-11-21T06:45:15Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/sweet-gates-gr3bj5` · **builds on:** `ff980dae` (this checkpoint is the commit after it)
+**Written:** 2026-11-21T06:57:34Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/sweet-gates-gr3bj5` · **builds on:** `c8e71ca4` (this checkpoint is the commit after it)
 
 ## Just done
-LD1d done: tools/diag_digest.py (crashes/kills, slow sites by host, playback, compat, counters; --brief one line; ignores damaged files; data-not-instructions) + resume.sh briefing line + 3 self-test checks (72/72)
+LD1e: full gate green (:core:test, :app:testDebugUnitTest, :geckoapp:compileDebugKotlin, :app:lintDebug exit 0); research/LIVE_DIAG.md + CLAUDE.md/BRIEF decision written; version bumped to 182 / 0.3.0-alpha81, ALPHA81 release note written (ASCII, no quotes)
 
 ## Do this next
-LD1a: write research/LIVE_DIAG.md (plain-words design, what is/never sent, token how-to, off switch, privacy rules, limits), amend CLAUDE.md 'NO telemetry' + hotspot rule with the owner decision of 2026-11-21, BRIEF.md line, tick TASKS LD1a/b/c/d; then LD1e: web npm test + :core:test + :app:testDebugUnitTest + lintDebug, versionCode 182 / 0.3.0-alpha81, docs/handoff/ALPHA81_RELEASE_NOTE.txt, sync-ext-version, ship.sh gecko, ONE dispatch
+SHIP alpha81: bash ship.sh gecko with the note from docs/handoff/ALPHA81_RELEASE_NOTE.txt, ONE dispatch of android.yml app=gecko full_build=true ref=claude/sweet-gates-gr3bj5, verify tag + jobs + release, then bash tools/record-release.sh kestrel-g-v0.3.0-alpha81 with the identical note; then answer the owner (alpha80 Back + LD1 answer, token how-to, what was NOT run on the tablet, open items)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M geckoapp/build.gradle.kts
+     M geckoapp/src/main/assets/kestrel-shields/manifest.json
 
 ## Last ten checkpoints
 ```
+  a6c87bc8 ckpt 2792: LD1d done: tools/diag_digest.py (crashes/kills, slow sites by host, playback
   2a79bf47 ckpt 2791: LD1c tested: LiveDiagTest 13/13 (switch off = nothing kept, switch survives 
   2050ef12 ckpt 2790: LD1c: app side written + geckoapp compiles: diag/LiveDiag.kt (master switch,
   5d077b35 ckpt 2789: LD1b: core livediag package written + tested (DiagScrub: links -> host, sens
@@ -25,8 +27,7 @@ LD1a: write research/LIVE_DIAG.md (plain-words design, what is/never sent, token
   0c2b1e08 ckpt 2784: gated kestrel-g-v0.3.0-alpha80 (gecko code 181) and pushed it: handoff self-
   0f713e4a ckpt 2783: BK10 PROVEN on the real engine (lab run 44873006097): no-store page + Instan
   08d2776b ckpt 2782: BK10 lab run 44872447722 (suite back): all three rounds failed before any Ba
-  2a29901b ckpt 2781: BK10 coded + tested: (1) extension: blocking main_frame listener turns Cache
 ```
 
-(4 automatic checkpoint(s) since the last deliberate one — the
+(2 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
