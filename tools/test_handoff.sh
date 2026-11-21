@@ -273,9 +273,9 @@ check "resume shows the recorded codes of both apps" 'printf "%s" "$OUT" | grep 
 DG="$T/diag/$(date -u +%F)"; mkdir -p "$DG"
 printf '%s' '{"v":1,"install":"abc123def456","app":"0.3.0-alpha81","code":182,"android":29,"model":"Alps 711","at":"2026-11-21T10:00:00Z","dropped":0,"snapshot":["Last run: ended abnormally (killed in the background after 61 s)","Counters: back.hit=4"],"events":["+10.000s page slow www.example.com took 9.4 s","+30.000s page slow www.example.com took 12.1 s","+40.000s video stall stall 4.2 s on cdn.example.net","+60.000s life crash native crash in content process"]}' > "$DG/100000-abc123def456.json"
 printf '%s' 'not json at all {' > "$DG/110000-broken.json"
-check "digest names the crash, the slow site and the playback stall" 'python3 -B -I tools/diag_digest.py --dir "$T/diag" | grep -q "native crash" && python3 -B -I tools/diag_digest.py --dir "$T/diag" | grep -q "www.example.com" && python3 -B -I tools/diag_digest.py --dir "$T/diag" | grep -q "stall N s"'
-check "digest ignores a damaged file" 'python3 -B -I tools/diag_digest.py --dir "$T/diag" | grep -q "1 file(s)"'
-check "digest --brief is one line, and silent with no data" '[ "$(python3 -B -I tools/diag_digest.py --brief --dir "$T/diag" | wc -l)" = 1 ] && [ -z "$(python3 -B -I tools/diag_digest.py --brief --dir "$T/nothing")" ]'
+check "digest names the crash, the slow site and the playback stall" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "native crash" && python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "www.example.com" && python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "stall N s"'
+check "digest ignores a damaged file" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "1 file(s)"'
+check "digest --brief is one line, and silent with no data" '[ "$(python3 -B -I "$D/tools/diag_digest.py" --brief --dir "$T/diag" | wc -l)" = 1 ] && [ -z "$(python3 -B -I "$D/tools/diag_digest.py" --brief --dir "$T/nothing")" ]'
 
 echo "handoff self-test: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
