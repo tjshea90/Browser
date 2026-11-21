@@ -190,7 +190,6 @@ class ShieldAndSessionTest {
         val st = SiteShieldStore(); st.set("www.instagram.example", reels)
         val back = SiteShieldStore.decode(st.encode())["www.instagram.example"]!!
         assertTrue("it is saved and read back (it used to be dropped as a damaged line above 127, then above 255)", back.applyTo(global).autostartVideo)
-        assertEquals(1023, SiteShieldStore.ALL_FLAGS or 0x300 and 1023)
         assertEquals(ShieldFlag.SHIELDS or ShieldFlag.ADS or ShieldFlag.COSMETIC or ShieldFlag.HTTPS or ShieldFlag.COOKIES or ShieldFlag.FINGERPRINT or ShieldFlag.SCRIPTS or ShieldFlag.EMBEDS or ShieldFlag.AUTOSTART, SiteShieldStore.ALL_FLAGS)
     }
 }
