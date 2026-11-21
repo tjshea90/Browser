@@ -150,6 +150,38 @@ object LastRun {
         Io.exec { flush(now) }
     }
 
+    /** LD4: the memory picture as plain numbers: `memFreeMb`, `memAvailMb`, `memCachedMb`, `swapFreeMb`, the kernel's memory pressure (`psiSome10` / `psiFull10` = avg10 x 100, when the kernel has it) and the resident memory of each of this app's processes (`rss<Name>Mb`, `rssSumMb`). */
+    internal fun memoryNumbers(ctx: Context?): Map<String, Long> {
+        val out = LinkedHashMap<String, Long>()
+        try {
+            val mi = java.io.File("/proc/meminfo").readLines()
+            fun kb(key: String): Long = mi.firstOrNull { it.startsWith("$key:") }?.substringAfter(':')?.trim()?.substringBefore(' ')?.toLongOrNull() ?: -1L
+            for ((k, f) in listOf("memFreeMb" to "MemFree", "memAvailMb" to "MemAvailable", "memCachedMb" to "Cached", "swapFreeMb" to "SwapFree")) kb(f).let { if (it >= 0) out[k] = it / 1024 }
+        } catch (e: Exception) { /* none */ }
+        try {
+            val psi = java.io.File("/proc/pressure/memory")
+            if (psi.canRead()) for (l in psi.readLines()) {
+                val a = Regex("avg10=([0-9.]+)").find(l)?.groupValues?.get(1)?.toDoubleOrNull() ?: continue
+                out[if (l.startsWith("some")) "psiSome10" else "psiFull10"] = (a * 100).toLong()
+            }
+        } catch (e: Exception) { /* none on this kernel */ }
+        try {
+            val am = ctx?.getSystemService(android.app.ActivityManager::class.java)
+            val prefix = (ctx?.packageName ?: "") + ":"
+            var total = 0L
+            for (p in am?.runningAppProcesses ?: emptyList()) {
+                if (!(p.processName == ctx?.packageName || p.processName.startsWith(prefix))) continue
+                val rss = try { java.io.File("/proc/${p.pid}/status").readLines().firstOrNull { it.startsWith("VmRSS:") }?.substringAfter(':')?.trim()?.substringBefore(' ')?.toLongOrNull() ?: -1L } catch (e: Exception) { -1L }
+                if (rss < 0) continue
+                total += rss
+                val n = p.processName.substringAfter(':', "main").substringBefore('_').filter { it.isLetterOrDigit() }.replaceFirstChar { it.uppercase() }.take(12)
+                if (n.isNotEmpty() && !out.containsKey("rss${n}Mb")) out["rss${n}Mb"] = rss / 1024
+            }
+            if (total > 0) out["rssSumMb"] = total / 1024
+        } catch (e: Exception) { /* best effort */ }
+        return out
+    }
+
     /** What the memory looks like right now, in one line: free / available / swap, the kernel's pressure figure when it has one, and the resident memory of every process of this app. */
     internal fun memorySnapshot(ctx: Context?): String {
         val sb = StringBuilder()

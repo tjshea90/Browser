@@ -138,6 +138,20 @@ object CpuMeter {
         return out
     }
 
+    /** LD4: the numbers of the Diagnostics CPU line for the live diagnostics: per process (parent, tab, gpu ...) `cpu<Name>Avg` and `cpu<Name>Peak` over the last 5 minutes and `cpu<Name>Now` (the newest reading), in percent of ONE core. */
+    fun numbers(): Map<String, Long> {
+        val now = SystemClock.elapsedRealtime()
+        val out = LinkedHashMap<String, Long>()
+        synchronized(lock) {
+            for (p in procs.values.filter { it.series.size > 0 }.sortedByDescending { it.series.mean(now, WINDOW_MS) }.take(6)) {
+                val n = short(p.name).filter { it.isLetterOrDigit() }.replaceFirstChar { it.uppercase() }.take(12)
+                if (n.isEmpty() || out.containsKey("cpu${n}Avg")) continue
+                out["cpu${n}Avg"] = p.series.mean(now, WINDOW_MS).toLong(); out["cpu${n}Peak"] = (p.series.peak()?.second ?: 0.0).toLong(); out["cpu${n}Now"] = (p.series.last() ?: 0.0).toLong()
+            }
+        }
+        return out
+    }
+
     /** The Diagnostics line. */
     fun line(): String {
         val now = SystemClock.elapsedRealtime()

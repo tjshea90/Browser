@@ -50,6 +50,13 @@ object StartTimeline {
     private fun line(r: Run, title: String): String =
         title + ": " + NAMES.indices.joinToString(" | ") { NAMES[it] + " " + (if (r.at[it] >= 0) r.at[it].toString() else "-") }
 
+    /** LD4: the marks of the cold start as plain numbers (`cold<Mark>`, ms since the process started; a mark not reached is left out) and of the latest warm start (`warm<Mark>`, ms since the activity was created). */
+    @Synchronized fun numbers(): Map<String, Long> {
+        val out = LinkedHashMap<String, Long>()
+        for ((prefix, r) in listOf("cold" to lastCold, "warm" to lastWarm)) if (r != null) for (i in NAMES.indices) if (r.at[i] >= 0) out[prefix + NAMES[i].replaceFirstChar { it.uppercase() }] = r.at[i]
+        return out
+    }
+
     /** The Diagnostics lines: the cold start (ms since the process started) and the latest warm start (ms since the activity was created). */
     @Synchronized fun lines(): List<String> {
         val out = ArrayList<String>(2)
