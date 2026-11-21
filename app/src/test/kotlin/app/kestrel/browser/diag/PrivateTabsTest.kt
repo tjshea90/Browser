@@ -179,4 +179,25 @@ class PrivateTabsTest {
         val t = gecko("web/TabDelegates.kt")
         assertEquals(2, Regex("scrubCrashReports\\(\\) \\}").findAll(t).count())
     }
+
+    /** VD1 (owner 2026-11-21, per-site video lines): the new `video gate|codec-no|error` lines name a site; with a private tab open the safety net masks it, and the handler drops a private, unknown or sensitive page before anything is kept. */
+    @Test fun theVideoLinesNameNoSiteWhileAPrivateTabExistsAndTheirHandlerDropsPrivateAndSensitivePages() {
+        PrivateGuard.setOpen(true)
+        Health.log("video", "gate", "$canary held=1 kept=6 refused=14 opened=0 frame=top rule=on")
+        Health.log("video", "codec-no", "$canary size=0 mode=0 fps=4 last=avc_60fps")
+        Health.log("video", "error", "$canary code=4 net=3 ready=0 src=blob frame=top el=v")
+        val r = ring()
+        assertFalse(r, r.contains("canary"))
+        assertTrue("the lines still say what happened: $r", r.contains("video gate <site> held=1 kept=6 refused=14"))
+        val j = LiveDiag.journalForTest().joinToString("\n")
+        assertFalse(j, j.contains("canary"))
+        assertTrue("the journal keeps the video problems (masked): $j", j.contains("video gate") && j.contains("video error"))
+        val b = gecko("BrowserActivity.kt")
+        val h = b.substringAfter("private fun onVideoSite(").substringBefore("private fun liveDiagExtraFacts()")
+        assertTrue("an unknown or private page is dropped before the post", h.contains("if (page.isEmpty() || pageIsPrivate(page)) return"))
+        assertTrue("the tab's own kind and a sensitive site are checked again on the main thread", h.contains("tab.isPrivateTab || app.kestrel.core.livediag.SensitiveSites.isSensitive(host)"))
+        assertTrue("the host is the TAB's, not the script's", h.contains("tab.topHost") && !h.contains("m.optString(\"h\")"))
+        val sb = gecko("web/ShieldsBridge.kt")
+        for (k in listOf("vgh" to "videoGate", "vch" to "videoCodec", "verr" to "videoError")) assertTrue(k.first, sb.contains("\"${k.first}\" -> { ${k.second}(m); \"\" }"))
+    }
 }
