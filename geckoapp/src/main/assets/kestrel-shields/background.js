@@ -311,6 +311,15 @@ var guardBlocked = 0;
 // ANS52g: what the page-side video format policy (codec-main.js) refused, summed over all pages and frames since the extension started; shown in Diagnostics ("Video formats offered to sites")
 var vcx = { reports: 0, asked: 0, size: 0, mode: 0, fps: 0, last: '' };
 // ANS53a / ANS53b: what the page-side gate (gate-main.js) held back and opened, summed over all pages and frames since the extension started ("Videos start only when pressed" in Diagnostics)
+// VD1: the per-PAGE lines about videos (what the gate held, what the format policy refused, what failed) are rationed per tab and page, so a page that keeps failing cannot flood the app
+var vhSent = new Map();
+function vhAllow(key, max) {
+  var n = vhSent.get(key) || 0;
+  if (n >= max) return false;
+  vhSent.set(key, n + 1);
+  if (vhSent.size > 200) vhSent.delete(vhSent.keys().next().value);
+  return true;
+}
 var vgt = { reports: 0, held: 0, opened: 0, play: 0, press: 0, kestrel: 0, deferred: 0, refused: 0, inherit: 0 };
 function vgtText() {
   if (!vgt.reports && !vgt.inherit) return '';
@@ -375,6 +384,9 @@ onMsg(function (m, sender) {
     var gn = Array.isArray(m.n) ? m.n : [], gv = function (i) { var x = +gn[i]; return x >= 0 && x <= 1000000 ? Math.floor(x) : 0; };
     vgt.reports++; vgt.held += gv(0); vgt.opened += gv(1); vgt.play += gv(2); vgt.press += gv(3); vgt.kestrel += gv(4); vgt.deferred += gv(5); vgt.refused += gv(6);
     markStats();
+    // VD1: the same numbers WITH the page (the sums above cannot say which site was held back): only when the gate held or refused something, at most six per tab and page
+    if (tabId >= 0 && gv(0) + gv(5) + gv(6) > 0 && vhAllow('g|' + tabId + '|' + (tabTop.get(tabId) || ''), 6))
+      send({ k: 'vgh', p: tabTop.get(tabId) || '', n: [gv(0), gv(1), gv(2), gv(3), gv(4), gv(5), gv(6)], f: (sender && sender.frameId === 0) ? 1 : 0 }).catch(function () {});
     return undefined;
   }
   if (m.k === 'vcx') { // ANS52g: what the page-side video format policy refused (numbers and one short word; content.js checked them), summed over all pages and frames
