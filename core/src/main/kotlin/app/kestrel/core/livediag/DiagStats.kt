@@ -28,9 +28,12 @@ class DiagStats(private val maxKinds: Int = 150, private val maxSites: Int = 60)
         if (!LAYER.matches(layer) || !EVENT.matches(event)) return
         val key = "$layer $event"
         var k = kinds[key]
-        if (k == null) { if (kinds.size >= maxKinds) { other++; return }; k = Kind(); kinds[key] = k }
-        k.n++
-        MS.find(line.substringAfter(event, ""))?.let { m -> val v = m.groupValues[1].toLongOrNull() ?: 0L; if (v > k.maxMs) k.maxMs = v }
+        if (k == null && kinds.size < maxKinds) { k = Kind(); kinds[key] = k }
+        if (k == null) other++                               // the table is full: counted, not named (the site table below does not depend on it)
+        else {
+            k.n++
+            MS.find(line.substringAfter(event, ""))?.let { m -> val v = m.groupValues[1].toLongOrNull() ?: 0L; if (v > k.maxMs) k.maxMs = v }
+        }
         if (layer == "page" && event == "loaded") loaded(line)
     }
 
