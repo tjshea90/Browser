@@ -1,21 +1,23 @@
-# CHECKPOINT 2824 — read me first, then TASKS.md
+# CHECKPOINT 2825 — read me first, then TASKS.md
 
-**Written:** 2026-11-21T17:53:33Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `4b822ec8` (this checkpoint is the commit after it)
+**Written:** 2026-11-21T17:58:50Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `9c28fc78` (this checkpoint is the commit after it)
 
 ## Just done
-LD4 gate so far: core 1991 tests (1 failed = FLK1 PhoneBackendTest flake, passes alone 19/19), app 478 green, lint 0 errors; CpuMeter.recentMean (CPU over the load window) in the page timing line; geckoapp compiles
+pre-ship: alpha85: the live diagnostics now explain WHY a page is slow, which you asked for after Claude.ai and YouTube felt slow even on fast Wi-Fi. What the tablet's own numbers already said: a Claude.ai load took 28 to 35 seconds, in one earlier visit about nine in ten of its requests (over a thousand) came from the cache, so the link is probably not what is slow; the ad blocker costs about 1.6 milliseconds per request, which would be roughly 6 percent of a thousand-request load, so it is probably not the main cause either. What was missing was where the rest goes, so each page load now sends one small scrubbed line from the page itself: time to the first byte, first and largest paint, how many requests and how many were slow, which hosts were slowest (names only, never an address path), and how long the page was too busy to answer, which tells a page busy with its own scripts from one that is waiting for the network. Also sent now as numbers instead of cut-off text: the blocker's cost, processor use of the browser and of the page engine, memory of every process, start-up times and slow-frame counts. The suggestions in Settings, Live diagnostics, now say when a slow site is busy with its own scripts (a faster link will not help) or when the blocker is a large part of its load. Claude reads all of it with one command and sorts every slow site into busy, waiting or blocker-heavy. Nothing about the engine settings was changed because the cause is not proven yet; after a day of normal browsing the next files will name it. Same privacy as before: only your private repository, only your token, never a private tab, sensitive sites never named, and the master switch off means nothing is recorded, kept or sent. NOT run on the tablet: the new timing has only been tested in a desktop browser.
 
 ## Do this next
-Run cd web-tests && npm test in the background (log scratchpad web3.log, ends with WEB_EXIT=n; ProxyLinkTest-like flakes: rerun a failing file alone); then bump alpha85 (versionCode 186), sync-ext-version, ALPHA85_RELEASE_NOTE.txt, ship.sh gecko, ONE dispatch, record-release; tick LD4a-e; research notes; answer owner
+ship.sh gates and releases this (gecko)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
 ## Uncommitted right now
-    (nothing — the tree is clean as of this checkpoint)
+     M geckoapp/build.gradle.kts
+     M geckoapp/src/main/assets/kestrel-shields/manifest.json
 
 ## Last ten checkpoints
 ```
+  4cf115af ckpt 2824: LD4 gate so far: core 1991 tests (1 failed = FLK1 PhoneBackendTest flake, pa
   a1863e08 ckpt 2823: LD4c done: diag_digest.py LOAD ANALYSIS (per site: loads, load/first paint/f
   0c525795 ckpt 2822: LD4b app side done and compiling: GeckoEngine.networkProfileCode, ShieldsBri
   ca1f0fe2 ckpt 2821: LD4b extension side done: pagetime.js (ES5, top frame, document_start, laten
@@ -25,8 +27,7 @@ Run cd web-tests && npm test in the background (log scratchpad web3.log, ends wi
   db4c9602 ckpt 2817: alpha84 RELEASED AND RECORDED: https://github.com/tjshea90/Browser/releases/
   bcfe8a73 ckpt 2816: alpha84 build running: run id 44924979560 (run_number 265, head 2cf128f4), d
   4a42d19d ckpt 2815: alpha84 gated (core+app tests, gecko compile, lint 0 errors, self-test 80/80
-  2cf128f4 ckpt 2814: gated kestrel-g-v0.3.0-alpha84 (gecko code 185) and pushed it: handoff self-
 ```
 
-(1 automatic checkpoint(s) since the last deliberate one — the
+(2 automatic checkpoint(s) since the last deliberate one — the
 session was still mid-step. `git diff` against it shows what changed.)
