@@ -697,6 +697,7 @@ open class BrowserActivity : Activity(), DockListener {
         onScreenNow = false; turnSettler.abandon(); releaseGeckoHold("the app was left"); turnResizeAwaited = false; stopFrameWatch()
         if (::inline.isInitialized) inline.stop("the app was left")      // ANS55f: SND1: no sound when the app is not in front
         Health.log("life", "pause"); fsTurner.paused()
+        app.kestrel.browser.diag.LiveDiag.onBack()                          // LD3: no live-diagnostics check is set again while the app is not in front
         captureLook(current, "pause", LastLookRules.LEAVE_MIN_AGE_MS.toLong()) // EY-1: the page as it is left, before anything else (the read-back is a few hundred ms at most)
         app.kestrel.browser.net.WifiBoost.set(this, false)
         pausedAt = SystemClock.uptimeMillis()
