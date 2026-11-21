@@ -67,7 +67,7 @@ class ShieldsPrivateTest {
 
     @Test fun thePanelAndTheEndOfThePrivateWindowAreWiredInTheSource() {
         val panel = File("src/main/kotlin/app/kestrel/browser/ui/ShieldsPanel.kt").readText()
-        assertTrue(panel.contains("Shields.setOverride(host, current, fromPrivate = tab.isPrivateTab)"))
+        assertTrue(panel.contains("Shields.setOverride(host, current, fromPrivate = pal.isPrivate)"))
         val b = File("../geckoapp/src/main/kotlin/app/kestrel/browser/BrowserActivity.kt").readText()
         assertTrue(b.substringAfter("private fun syncPrivateAnchor()").substringBefore("if (need && privateAnchor == null)").contains("if (!need) Shields.endPrivate()"))
     }
