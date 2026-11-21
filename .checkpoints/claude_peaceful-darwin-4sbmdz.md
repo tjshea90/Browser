@@ -1,15 +1,13 @@
-# CHECKPOINT 2834 — read me first, then TASKS.md
+# CHECKPOINT 2835 — read me first, then TASKS.md
 
-**Written:** 2026-11-21T20:07:22Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
-**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `620bf412` (this checkpoint is the commit after it)
+**Written:** 2026-11-21T20:08:01Z · **tests:** all 1 fast checks green (gradle suite: see ship.sh)
+**Branch:** `claude/peaceful-darwin-4sbmdz` · **builds on:** `0df22017` (this checkpoint is the commit after it)
 
 ## Just done
-gated kestrel-g-v0.3.0-alpha86 (gecko code 187) and pushed it: handoff self-test, unit suites and the versionCode check passed here. NOT yet built - GitHub has not been asked.
+alpha86 gated (core + app full suites via ship.sh, lint 0 errors, test_handoff 83/83, check-gecko-prefs 51/51) and DISPATCHED ONCE at 20:07Z on 2026-11-21: android.yml app=gecko full_build=true ref claude/peaceful-darwin-4sbmdz. DO NOT DISPATCH AGAIN.
 
 ## Do this next
-TRIGGER THE BUILD: mcp__github__actions_run_trigger, method run_workflow, workflow_id android.yml, ref claude/peaceful-darwin-4sbmdz, inputs {"app":"gecko","full_build":"true","note":"alpha86: private tabs checked end to end, and every hole found is closed. Most of it was already safe (history, saved tabs, page pictures, the downloads list, keyboard words, the Recents picture, warm-up connections), but I found seven places where something from a private tab could be saved or sent. (1) Changing Shields for a site from a private tab saved that site's name on the tablet; now the change lasts only while a private tab is open and is never written or backed up. (2) The Diagnostics Engine line printed the address of the front page even in a private tab, and the live diagnostics could have uploaded it to your private GitHub repository; now nothing is built or sent while a private tab is open or for two minutes after the last one closes. (3) Other diagnostic lines could name sites; now a safety net hides every site name and address in them while a private tab exists, and private tabs are not even counted. (4) The engine's crash reports kept a memory copy and the page address for up to 7 days; they are now deleted or cut at start and after every engine crash. (5) The keyboard learned where your thumb lands even in a private tab; not any more. (6) The find-in-page box and the video rename box now tell the keyboard not to learn. (7) Firefox's Safe Browsing asks Google about a short code of an address, in private tabs too; it is now paused while a private tab exists, which also means regular tabs have no malware or phishing address check during that time. What cannot be closed: the website you visit and its helpers see your visit, DNS lookups, your phone hotspot carries all traffic, and the Firefox engine's own private storage is relied on rather than tested here. Diagnostics now has a Private tabs line that shows the safety net working. NOT run on the tablet."}.
-When the run is green, confirm the Release shows the APK (mcp__github__get_release_by_tag kestrel-g-v0.3.0-alpha86), then:  bash tools/record-release.sh kestrel-g-v0.3.0-alpha86 "alpha86: private tabs checked end to end, and every hole found is closed. Most of it was already safe (history, saved tabs, page pictures, the downloads list, keyboard words, the Recents picture, warm-up connections), but I found seven places where something from a private tab could be saved or sent. (1) Changing Shields for a site from a private tab saved that site's name on the tablet; now the change lasts only while a private tab is open and is never written or backed up. (2) The Diagnostics Engine line printed the address of the front page even in a private tab, and the live diagnostics could have uploaded it to your private GitHub repository; now nothing is built or sent while a private tab is open or for two minutes after the last one closes. (3) Other diagnostic lines could name sites; now a safety net hides every site name and address in them while a private tab exists, and private tabs are not even counted. (4) The engine's crash reports kept a memory copy and the page address for up to 7 days; they are now deleted or cut at start and after every engine crash. (5) The keyboard learned where your thumb lands even in a private tab; not any more. (6) The find-in-page box and the video rename box now tell the keyboard not to learn. (7) Firefox's Safe Browsing asks Google about a short code of an address, in private tabs too; it is now paused while a private tab exists, which also means regular tabs have no malware or phishing address check during that time. What cannot be closed: the website you visit and its helpers see your visit, DNS lookups, your phone hotspot carries all traffic, and the Firefox engine's own private storage is relied on rather than tested here. Diagnostics now has a Private tabs line that shows the safety net working. NOT run on the tablet."
-NEVER ship kestrel-g-v0.3.0-alpha86 twice (check BUILDLOG.md and the Releases first).
+Wait for tag kestrel-g-v0.3.0-alpha86 (git ls-remote --tags origin), then actions_list list_workflow_jobs for the run (find it: list_workflow_runs android.yml branch claude/peaceful-darwin-4sbmdz event workflow_dispatch) all success, get_release_by_tag shows the APK, bash tools/record-release.sh kestrel-g-v0.3.0-alpha86 with the IDENTICAL note from docs/handoff/ALPHA86_RELEASE_NOTE.txt (cat | tr -d newline); tick PV1d; answer the owner in plain words: what was already safe, 7 holes fixed, Safe Browsing trade-off + offer a Settings switch (PV1g), what cannot be closed, NOT run on tablet; re-list open items (LD3f, LD4f, LD4g, YTC1/2, ATT1, FLK1, PB8)
 
 *(resuming? CLAUDE.md's "FIRST ACTION OF EVERY SESSION" says how; the briefing is tools/resume.sh. Do that first, or autosave may stay off all session.)*
 
@@ -18,6 +16,7 @@ NEVER ship kestrel-g-v0.3.0-alpha86 twice (check BUILDLOG.md and the Releases fi
 
 ## Last ten checkpoints
 ```
+  0df22017 ckpt 2834: gated kestrel-g-v0.3.0-alpha86 (gecko code 187) and pushed it: handoff self-
   620bf412 ckpt 2833: pre-ship: alpha86: private tabs checked end to end, and every hole found is 
   253c10df ckpt 2832: PV1: audit written (research/PRIVATE_TABS.md, 26 rows), 7 holes fixed: Shiel
   dcf47bcb ckpt 2831: PV1: tests (PrivateTabsTest 12 incl. canary leak scans of ring / live journa
@@ -27,5 +26,4 @@ NEVER ship kestrel-g-v0.3.0-alpha86 twice (check BUILDLOG.md and the Releases fi
   0f2cd29a ckpt 2827: alpha85 gated (core 1991 incl. FLK1 flake passing alone, app 478, lint 0 err
   b9f6b0b0 ckpt 2826: gated kestrel-g-v0.3.0-alpha85 (gecko code 186) and pushed it: handoff self-
   495ef4db ckpt 2825: pre-ship: alpha85: the live diagnostics now explain WHY a page is slow, whic
-  4cf115af ckpt 2824: LD4 gate so far: core 1991 tests (1 failed = FLK1 PhoneBackendTest flake, pa
 ```
