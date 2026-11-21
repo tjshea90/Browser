@@ -341,7 +341,7 @@ open class BrowserActivity : Activity(), DockListener {
             val quiet = SystemClock.uptimeMillis() - lookScrollAt
             if (quiet < LastLookRules.SETTLE_MS) { Io.main.postDelayed(this, LastLookRules.SETTLE_MS - quiet); return }
             lookScrollArmed = false
-            captureLook(current, "settled")
+            captureLook(current, "settled", LastLookRules.SETTLED_MIN_GAP_MS.toLong())   // PERF2: a convenience for the next start: rare, never during a video or Battery Saver
         }
     }
     private val restoreTimeout = Runnable { hideRestoring("timeout") }
@@ -3297,8 +3297,11 @@ open class BrowserActivity : Activity(), DockListener {
     }
 
     /** Why a picture is NOT taken now (null = take it). Same rules as before EM1k, in the same meaning, only named. */
+    private fun powerSaveOn(): Boolean = try { (getSystemService(android.os.PowerManager::class.java))?.isPowerSaveMode == true } catch (e: Exception) { false }
+
     private fun lookSkip(tab: Tab, why: String, minGapMs: Long): String? = when {
         !prefs.lastLook || tab !== current || tab.isPrivateTab -> "quiet"
+        why == "settled" && LastLookRules.settledSkip(tab.gecko.videoPlaying, powerSaveOn()) != null -> LastLookRules.settledSkip(tab.gecko.videoPlaying, powerSaveOn())
         homeShown(tab) -> "home"
         tab.error != null -> "error"
         tab.loading && !LastLookRules.mayTakeWhileLoading(why, tab.gecko.paintedFor, tab.url) -> "loading"
