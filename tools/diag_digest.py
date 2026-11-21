@@ -307,6 +307,17 @@ def load_analysis(batches, r):
                 by[t['host']].append(t)
     dev = r.get('device') or {}
     calls, us = dev.get('extReqCalls', 0), dev.get('extReqUs', 0)
+    if not calls:                                           # files before alpha85 only have the text of the Diagnostics screen: read the same numbers from it (newest file that has them)
+        for b in reversed(batches):
+            txt = '\n'.join(x for x in b.get('snapshot', []) if isinstance(x, str) and x.startswith('Blocker:'))
+            m = re.search(r'\breq (\d+) \((\d+) us\)', txt)
+            if m:
+                calls, us = int(m.group(1)), int(m.group(2))
+                j = re.search(r'(\d+) requests judged in the engine \(average (\d+) us, slowest (\d+) us, (\d+) over 2 ms\)', txt)
+                dev = dict(dev)
+                if j:
+                    dev.update({'judged': int(j.group(1)), 'judgeAvgUs': int(j.group(2)), 'judgeMaxUs': int(j.group(3)), 'judgeOver2ms': int(j.group(4))})
+                break
     judge_us = (us / calls) if calls else 0
     print('\n== LOAD ANALYSIS: where the time of a page load went (the pages\' own timing, %d load(s) in %d site(s); thresholds are first guesses) ==' % (sum(len(v) for v in by.values()), len(by)))
     if not by:

@@ -297,5 +297,29 @@ mkdir -p "$LP/rp/Browser/tools" "$LP/rp/Kestrel-Private/.git"; cp "$D/tools/priv
 check "private.sh finds the clone whatever its letter case (the cloud harness makes ../Kestrel-Private)" '[ "$(bash "$LP/rp/Browser/tools/private.sh" path)" = "$LP/rp/Kestrel-Private" ]'
 check "private.sh: KESTREL_PRIVATE still wins" '[ "$(KESTREL_PRIVATE=/x/y bash "$LP/rp/Browser/tools/private.sh" path)" = "/x/y" ]'
 
+# ---------------------------------------------------------------- LD4: the digest's LOAD ANALYSIS from the pages' own timing lines (synthetic)
+T4="$T/ld4/diag/$(date -u +%F)"; mkdir -p "$T4"
+python3 -I - "$T4" <<'PY'
+import json, sys, datetime
+d = sys.argv[1]
+def line(host, load, fb, lag, rn, r3, shields='up', hid=0, slow='cdn.example.com:js:9000'):
+    return ('+90.0s page timing host=%s nt=0 dns=40 con=300 tls=200 fb=%d ttfb=%d fcp=%d lcp=%d dcl=%d load=%d rn=%d rc=%d kb=4100 r1=12 r3=%d rsum=95000 h2=150 h1=12 h3=0 js=40 css=3 img=80 xhr=60 oth=5 lag=2400/%d/60 nodes=3400 scr=45 fr=3 rd=0 hid=%d pt=0 at=%d slow=%s | shields=%s ads=1 net=fast-wifi avail=420 cpuP=88 cpuT=95 tabs=1 live=1'
+            % (host, fb, fb - 100, load // 2, load // 2 + 500, load // 2, load, rn, rn * 9 // 10, r3, lag, hid, load + 3000, slow, shields))
+ev = []
+for i in range(3): ev.append(line('busy.example.com', 28000, 900, 16800, 1000, 0))
+for i in range(3): ev.append(line('far.example.net', 20000, 9000, 800, 120, 4, slow='slowcdn.example.org:xhr:8000'))
+for i in range(3): ev.append(line('huge.example.org', 24000, 800, 1000, 2500, 0, shields='up'))
+for i in range(2): ev.append(line('huge.example.org', 12000, 800, 900, 2500, 0, shields='down'))
+ev.append(line('busy.example.com', 5000, 100, 4000, 10, 0, hid=1))
+now = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+b = {'v': 3, 'install': 'abc123', 'app': '0.3.0-alpha85', 'code': 186, 'android': 29, 'model': '711', 'at': now, 'dropped': 0, 'thinned': 0, 'settings': {}, 'kinds': {}, 'sites': [], 'advice': [],
+     'device': {'extReqCalls': 2425, 'extReqUs': 3948000, 'judgeAvgUs': 1242, 'judgeMaxUs': 53000, 'judgeOver2ms': 279, 'judged': 2423, 'memAvailMb': 420, 'cpuParentAvg': 24, 'cpuTabAvg': 70, 'coldPaint': 6456, 'manualSend': 0},
+     'snapshot': ['Kestrel diagnostics'], 'events': ev}
+json.dump(b, open(d + '/120000-abc123.json', 'w'))
+PY
+check "digest LOAD ANALYSIS calls the busy page CPU-bound, the far site NETWORK-bound and the 2500-request page SHIELDS-heavy" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/ld4/diag" > "$T/ld4/out.txt"; grep -E "busy.example.com.*CPU-bound" "$T/ld4/out.txt" && grep -E "far.example.net.*NETWORK-bound" "$T/ld4/out.txt" && grep -E "huge.example.org.*SHIELDS-heavy" "$T/ld4/out.txt"'
+check "digest LOAD ANALYSIS leaves out a load the person looked away from and prints the Shields A/B and the cost per request" 'grep -q "busy.example.com  *3 loads" "$T/ld4/out.txt" && grep -q "Shields A/B: up 24.0 s (3 loads) vs down 12.0 s (2 loads)" "$T/ld4/out.txt" && grep -q "Shields cost per request.*1.63 ms" "$T/ld4/out.txt" && grep -q "Sends: 1 automatic" "$T/ld4/out.txt" && grep -q "slowcdn.example.org (xhr) x3" "$T/ld4/out.txt"'
+check "digest LOAD ANALYSIS says plainly when there are no timing lines yet" 'python3 -B -I "$D/tools/diag_digest.py" --dir "$T/diag" | grep -q "no .page timing. lines yet"'
+
 echo "handoff self-test: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
