@@ -43,7 +43,7 @@ class PrivateWindowTest {
         w.setOpen(true, 1_000L)
         assertTrue(w.active(1_000L)); assertTrue(w.active(10_000_000L)); assertEquals(-1L, w.msLeft(5L))
         w.setOpen(false, 50_000L)
-        assertTrue(w.active(50_000L)); assertTrue(w.active(169_999L)); assertEquals(70_001L, w.msLeft(100_000L))
+        assertTrue(w.active(50_000L)); assertTrue(w.active(169_999L)); assertEquals(70_000L, w.msLeft(100_000L))
         assertFalse(w.active(170_000L)); assertEquals(0L, w.msLeft(200_000L))
     }
 

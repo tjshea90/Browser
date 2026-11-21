@@ -18,8 +18,8 @@ object PrivateScrub {
 
     fun line(raw: String): String {
         if (raw.isEmpty()) return raw
-        var s = URL.replace(raw, SITE)
-        s = LOCAL.replace(s, "<local>")
+        var s = LOCAL.replace(raw, "<local>")                    // first: a blob:https://site/id is one local address, not a site with a prefix
+        s = URL.replace(s, SITE)
         s = EMAIL.replace(s, "<email>")
         s = IPV4.replace(s, "<ip>")
         s = HOSTISH.replace(s) { m -> val h = m.groupValues[1]; if (CODE_PREFIX.containsMatchIn(h) || h.all { it.isDigit() || it == '.' }) m.value else SITE }
