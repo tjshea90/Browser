@@ -316,7 +316,21 @@ def main(argv):
         print('  %d line(s) that an older app version sent twice were counted once.' % resent)
     print('\n== FILES (oldest first; each upload is its own file, never replaced) ==')
     for b in batches:
-        print('  %-28s v%s %-18s %4d events, dropped %s%s' % (b['_file'], b.get('v', '?'), b.get('app', '?'), len(b.get('events', [])), b.get('dropped', 0), ('  [%d re-sent lines removed]' % b['_resent']) if b.get('_resent') else ''))
+        dev = b.get('device') if isinstance(b.get('device'), dict) else {}
+        how = {1: 'sent by the owner (Send now)', 0: 'sent AUTOMATICALLY'}.get(dev.get('manualSend'), 'sender unknown (older app)')
+        print('  %-28s v%s %-18s %4d events, left out %s, thinned %s; %s%s' % (b['_file'], b.get('v', '?'), b.get('app', '?'), len(b.get('events', [])), b.get('dropped', 0), b.get('thinned', 0), how, ('  [%d re-sent lines removed]' % b['_resent']) if b.get('_resent') else ''))
+    auto = sum(1 for b in batches if isinstance(b.get('device'), dict) and b['device'].get('manualSend') == 0)
+    hand = sum(1 for b in batches if isinstance(b.get('device'), dict) and b['device'].get('manualSend') == 1)
+    print('  Sends: %d automatic, %d by the owner\'s Send now button, %d unknown (before alpha84 the file did not say). %s' % (auto, hand, len(batches) - auto - hand,
+          'The automatic path is PROVEN.' if auto else 'The automatic path has NOT been seen yet: ask the owner to leave the browser open for a few minutes on a new day, then look again.'))
+    runs = []
+    for b in batches:
+        for e in b.get('events', []):
+            m = re.search(r'run (start|recording-on) utc=(\S+) build=(\S+)', e) if isinstance(e, str) else None
+            if m:
+                runs.append((m.group(2), m.group(3), m.group(1)))
+    if runs:
+        print('  Runs seen (from the run markers): %d; newest %s (%s)' % (len(runs), max(runs)[0], max(runs)[1]))
     problems = file_checks(batches)
     if hist is not None:
         bad = hist['bad']
