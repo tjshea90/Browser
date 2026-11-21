@@ -50,6 +50,7 @@ class FilePickStats {
     var folders = 0; private set
     var failed = 0; private set
     var last = "no file chooser yet"; private set
+    var lastPick = ""; private set        // IMG1: what the last picked file looked like to Android (core FilePickFacts.verdict): no name, no path
 
     fun asked(detail: String) { asked++; last = "asked ($detail)" }
     fun opened(how: String) { opened++; last = "opened with $how" }
@@ -57,6 +58,8 @@ class FilePickStats {
     fun folder() { folders++; last = "the page asked for a whole folder: refused" }
     fun failed(why: String) { failed++; last = "could not open the picker: ${why.take(80)}" }
     fun result(files: Int, code: Int) { if (files > 0) { gave += files; last = "gave $files file(s) to the page" } else { cancelled++; last = "nothing chosen (result code $code)" } }
+
+    fun picked(verdict: String) { lastPick = verdict.take(200) }
 
     fun line(): String = "File chooser (attach a file on a page): asked $asked, opened $opened, no picker app $noPicker, nothing chosen $cancelled, files given to the page $gave, whole-folder asks refused $folders, failed $failed; last: $last"
 }
