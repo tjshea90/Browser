@@ -2587,6 +2587,7 @@ open class BrowserActivity : Activity(), DockListener {
         if (::miniNav.isInitialized) { out.add(miniNav.glideLine()); out.add(miniNav.fieldLine()) }
         out.add(ShieldsBridge.statsLine())
         out.add(app.kestrel.browser.web.SiteFixes.statusLine())
+        out.add(filePicks.line())
         out.add(ShieldsBridge.pageReports.text(System.currentTimeMillis()))
         current?.takeIf { !it.isNewTab }?.let { t -> val b = ArrayList(t.engineBlocks); out.add("Firefox's own tracking protection, this page: " + (if (t.session?.settings?.useTrackingProtection == false) "OFF (Shields are down for this site); " else "on; ") + if (b.isEmpty()) "blocked nothing" else "blocked ${b.size}: " + b.take(12).joinToString("; ") + " (a page that is missing pictures or buttons: switch Shields off for this site from the shield icon)") }
         val animScale = try { android.provider.Settings.Global.getFloat(contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) } catch (e: Exception) { 1f }
@@ -3515,13 +3516,50 @@ open class BrowserActivity : Activity(), DockListener {
 
     // ================================================================== files, permissions
 
+    /** ATT1: what the file chooser has done (Diagnostics). */
+    internal val filePicks = app.kestrel.core.prompt.FilePickStats()
+
+    private fun pickerCanHandle(i: Intent): Boolean = try { packageManager.queryIntentActivities(i, 0).isNotEmpty() } catch (e: Exception) { true }   // (a check that cannot be made must not stop the picker)
+
+    /** ATT1: a page asked for a whole folder (`webkitdirectory`): Kestrel attaches files only. The page is answered at once instead of being left waiting. */
+    internal fun refuseFolder() {
+        filePicks.asked("a whole folder"); filePicks.folder()
+        Health.log("filepick", "folder-refused", "the page asked for a whole folder")
+        toast("This page asked for a whole folder. Kestrel can attach files only.")
+    }
+
     internal fun pickFiles(mimeTypes: Array<String>?, multiple: Boolean, done: (List<Uri>) -> Unit) {
         pendingFilePick?.invoke(emptyList())
         pendingFilePick = done
-        val i = Intent(Intent.ACTION_GET_CONTENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*").putExtra(Intent.EXTRA_ALLOW_MULTIPLE, multiple)
-        val types = mimeTypes?.filter { it.isNotBlank() && it.contains('/') }?.takeIf { it.isNotEmpty() }
-        if (types != null) i.putExtra(Intent.EXTRA_MIME_TYPES, types.toTypedArray())
-        try { startActivityForResult(Intent.createChooser(i, "Choose file"), REQ_FILE) } catch (e: Exception) { pendingFilePick = null; done(emptyList()) }
+        val types = app.kestrel.core.prompt.FilePickRules.mimeTypes(mimeTypes)
+        filePicks.asked((if (multiple) "several files" else "one file") + ", " + (if (types == null) "no filter" else "${types.size} kind(s)"))
+        Health.log("filepick", "asked", "multiple=$multiple accept=${mimeTypes?.size ?: 0} filter=${types?.size ?: 0}")
+        fun intentFor(action: String): Intent {
+            val i = Intent(action).addCategory(Intent.CATEGORY_OPENABLE).setType(if (types != null && types.size == 1) types[0] else "*/*").putExtra(Intent.EXTRA_ALLOW_MULTIPLE, multiple)
+            if (types != null && types.size > 1) i.putExtra(Intent.EXTRA_MIME_TYPES, types.toTypedArray())
+            return i
+        }
+        val get = intentFor(Intent.ACTION_GET_CONTENT)
+        val open = intentFor(Intent.ACTION_OPEN_DOCUMENT)
+        val viaGet = pickerCanHandle(get)
+        if (!viaGet && !pickerCanHandle(open)) {
+            // nothing on this device can choose a file: say so (it used to open an empty chooser, or nothing, and the page waited for ever)
+            filePicks.noPicker(); Health.log("filepick", "no-handler", "neither GET_CONTENT nor OPEN_DOCUMENT has an app")
+            pendingFilePick = null
+            toast("No app on this tablet can pick a file. Install a file manager.")
+            done(emptyList())
+            return
+        }
+        val how = if (viaGet) "GET_CONTENT" else "OPEN_DOCUMENT"
+        try {
+            startActivityForResult(if (viaGet) Intent.createChooser(get, "Choose file") else open, REQ_FILE)
+            filePicks.opened(how); Health.log("filepick", "opened", how)
+        } catch (e: Exception) {
+            filePicks.failed(e.toString()); Health.log("filepick", "open-failed", e.toString().take(100))
+            pendingFilePick = null
+            toast("Could not open the file picker.")
+            done(emptyList())
+        }
     }
 
     @Deprecated("framework callback")
@@ -3540,7 +3578,9 @@ open class BrowserActivity : Activity(), DockListener {
                 if (clip != null) for (k in 0 until clip.itemCount) clip.getItemAt(k).uri?.let { uris.add(it) }
             }
             // content:// only: a rogue picker app could answer with file:///data/data/<this app>/... and the page would upload the browser's own files
-            cb?.invoke(uris.filter { it.scheme == "content" }.distinct())
+            val given = uris.filter { it.scheme == "content" }.distinct()
+            filePicks.result(given.size, resultCode); Health.log("filepick", "result", "code=$resultCode files=${given.size} dropped=${uris.size - given.size} answered=${cb != null}")
+            cb?.invoke(given)
         }
     }
 
