@@ -47,13 +47,21 @@ class LiveDiagTest {
     }
 
     @Test fun anEventIsScrubbedBeforeItIsKept() {
-        LiveDiag.observe("page", "slow", "load of https://www.example.com/account/42?token=abc123def456 took 9.1 s, mail me at someone@example.org")
+        LiveDiag.observe("page", "slow", "load of https://www.example.com/watch/42?token=abc123def456 took 9.1 s, mail me at someone@example.org")
         val j = LiveDiag.journalForTest()
         assertEquals(1, j.size)
         assertTrue(j[0], j[0].contains("example.com"))
-        assertFalse(j[0], j[0].contains("/account/42"))
+        assertFalse(j[0], j[0].contains("/watch/42"))
         assertFalse(j[0], j[0].contains("abc123def456"))
         assertFalse(j[0], j[0].contains("someone@example.org"))
+    }
+
+    @Test fun aSensitiveSiteIsNeverNamed() {
+        LiveDiag.observe("page", "slow", "load of https://www.example.com/account/42 took 9.1 s")
+        LiveDiag.observe("page", "slow", "load of https://login.examplebank.com/home took 4 s")
+        val j = LiveDiag.journalForTest()
+        assertEquals(2, j.size)
+        for (l in j) { assertTrue(l, l.contains("<sensitive-site>")); assertFalse(l, l.contains("example")) }
     }
 
     @Test fun aLayerOrEventTheOwnerNeverWantedIsNotKept() {
