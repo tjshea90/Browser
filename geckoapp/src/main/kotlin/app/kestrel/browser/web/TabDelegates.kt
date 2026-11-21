@@ -339,7 +339,7 @@ class TabDelegates(private val a: BrowserActivity, private val tab: Tab) :
             // ANS53a (owner message 53: "Never, on any site, ever, anywhere in the app, automatically load a video and start playing it"): with the rule on (the default) a muted start is refused too; the old Settings row only counts with the rule off
             PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE -> {
                 // VD1: a site the person allowed to start its videos by themselves (Shields panel) gets a muted start (the page-side gate is open there too); every other site follows the rule as before
-                val siteOk = Shields.effective(a.prefs, UrlParts.hostOf(perm.uri)).autostartVideo && !perm.privateMode.let { false }
+                val siteOk = Shields.effective(a.prefs, UrlParts.hostOf(perm.uri)).autostartVideo
                 return GeckoResult.fromValue(if (siteOk || (!a.prefs.videoPressToPlay && a.prefs.videoMutedAutoplay)) PermissionDelegate.ContentPermission.VALUE_ALLOW else PermissionDelegate.ContentPermission.VALUE_DENY)
             }
             PermissionDelegate.PERMISSION_AUTOPLAY_AUDIBLE -> return GeckoResult.fromValue(PermissionDelegate.ContentPermission.VALUE_DENY)

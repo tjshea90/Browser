@@ -177,4 +177,20 @@ class ShieldAndSessionTest {
         val many = (1L..500L).map { TabRecord(it, "https://e.example/$it", "t", it, 0, false) }
         assertEquals(SessionCodec.MAX_TABS, SessionCodec.decode(SessionCodec.encode(Session(many, 1)))!!.tabs.size)
     }
+
+    @Test fun aSiteMayBeAllowedToStartItsVideosByItselfWhileTheRuleStaysForEveryOtherSite() {
+        val global = ShieldSettings()
+        assertFalse("off by default: the owner's press-to-play rule (message 53) holds everywhere", global.autostartVideo)
+        val reels = SiteShields(0, 0).with(ShieldFlag.AUTOSTART, true)
+        assertTrue(reels.applyTo(global).autostartVideo)
+        assertFalse("another site is untouched", SiteShields(0, 0).applyTo(global).autostartVideo)
+        assertEquals("a flag of its own, no clash with the others", 256, ShieldFlag.AUTOSTART)
+        assertTrue("not a Shields feature: it survives Shields being turned down for the site", reels.with(ShieldFlag.SHIELDS, false).applyTo(global).effective().autostartVideo)
+        assertFalse("and Shields down does not switch it on", SiteShields(0, 0).with(ShieldFlag.SHIELDS, false).applyTo(global).effective().autostartVideo)
+        val st = SiteShieldStore(); st.set("www.instagram.example", reels)
+        val back = SiteShieldStore.decode(st.encode())["www.instagram.example"]!!
+        assertTrue("it is saved and read back (it used to be dropped as a damaged line above 127, then above 255)", back.applyTo(global).autostartVideo)
+        assertEquals(1023, SiteShieldStore.ALL_FLAGS or 0x300 and 1023)
+        assertEquals(ShieldFlag.SHIELDS or ShieldFlag.ADS or ShieldFlag.COSMETIC or ShieldFlag.HTTPS or ShieldFlag.COOKIES or ShieldFlag.FINGERPRINT or ShieldFlag.SCRIPTS or ShieldFlag.EMBEDS or ShieldFlag.AUTOSTART, SiteShieldStore.ALL_FLAGS)
+    }
 }
